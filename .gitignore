@@ -1,0 +1,24 @@
+# 忽略编译生成目录和文件
+build/
+out/
+bin/
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.obj
+
+# CMake 产生的垃圾
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+*.cmake
+*_autogen/
+*.ninja_deps
+*.ninja_log
+build.ninja
+compile_commands.json
+
+# VS Code 产生的
+.vscode/
+.cache/

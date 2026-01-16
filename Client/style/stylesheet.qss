@@ -1,0 +1,22 @@
+QDialog {
+    background-color: rgb(255, 255, 255);
+}
+
+/* 稍微美化一下输入框和按钮，虽然文档没写，但太丑了你也写不下去 */
+QLineEdit {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 5px;
+    min-height: 25px;
+}
+
+QPushButton {
+    background-color: #0078d7;
+    color: white;
+    border-radius: 4px;
+    min-height: 30px;
+}
+
+QPushButton:hover {
+    background-color: #0063b1;
+}
