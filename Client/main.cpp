@@ -12,7 +12,6 @@ int main(int argc, char *argv[])
         a.setStyleSheet(qss.readAll());
         qss.close();
     } else {
-        // 实际开发中可以加一个日志
         // qDebug() << "Open qss failed";
     }
 

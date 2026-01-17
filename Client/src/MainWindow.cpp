@@ -5,7 +5,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     // 设置窗口固定大小 300x500
     setFixedSize(300, 500);
-    setWindowTitle("llfcchat");
+    setWindowTitle("MemoChat");
     setWindowIcon(QIcon(":/res/ice.png")); // 设置图标
 
     // 1. 创建堆栈部件作为中心部件
