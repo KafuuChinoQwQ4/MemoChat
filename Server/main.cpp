@@ -1,39 +1,29 @@
+// D:\MemoChat\Server\main.cpp
 #include <iostream>
-#include <string>
-#include <boost/lexical_cast.hpp>
-#include <json/json.h>
+#include "CServer.h"
 
 int main()
 {
-    // --- 测试 Boost ---
-    using namespace std;
-    cout << "=== Boost Test ===" << endl;
-    float weight = 10.5;
-    try {
-        // 使用 boost::lexical_cast 将 float 转 string
-        string wt_str = boost::lexical_cast<string>(weight);
-        cout << "Weight (float): " << weight << ", String: " << wt_str << endl;
-    } catch (const boost::bad_lexical_cast &e) {
-        cerr << "Boost error: " << e.what() << endl;
+    try
+    {
+        unsigned short port = static_cast<unsigned short>(8080);
+        net::io_context ioc{ 1 };
+        
+        boost::asio::signal_set signals(ioc, SIGINT, SIGTERM);
+        signals.async_wait([&ioc](const boost::system::error_code& error, int signal_number) {
+            if (error) {
+                return;
+            }
+            ioc.stop();
+        });
+
+        std::make_shared<CServer>(ioc, port)->Start();
+        std::cout << "GateServer listen on port: " << port << std::endl;
+        ioc.run();
     }
-
-    // --- 测试 JsonCpp ---
-    cout << "\n=== JsonCpp Test ===" << endl;
-    Json::Value root;
-    root["id"] = 1001;
-    root["data"] = "Hello MemoChat Server";
-    
-    // 序列化
-    string json_str = root.toStyledString();
-    cout << "Serialized JSON: \n" << json_str;
-
-    // 反序列化
-    Json::Value parsed_root;
-    Json::Reader reader;
-    if (reader.parse(json_str, parsed_root)) {
-        cout << "Parsed ID: " << parsed_root["id"].asInt() << endl;
-        cout << "Parsed Data: " << parsed_root["data"].asString() << endl;
+    catch (std::exception const& e)
+    {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return EXIT_FAILURE;
     }
-
-    return 0;
 }
