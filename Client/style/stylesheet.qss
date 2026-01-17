@@ -20,3 +20,11 @@ QPushButton {
 QPushButton:hover {
     background-color: #0063b1;
 }
+
+#m_errTip[state='normal'] {
+    color: green;
+}
+
+#m_errTip[state='err'] {
+    color: red;
+}

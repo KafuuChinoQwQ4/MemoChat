@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 查找 Qt6 组件
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
 
 # 自动处理 Qt 元对象系统
 set(CMAKE_AUTOMOC ON)
@@ -24,6 +24,11 @@ set(PROJECT_SOURCES
     src/LoginDialog.h
     src/RegisterDialog.cpp
     src/RegisterDialog.h
+    src/global.h
+    src/global.cpp
+    src/Singleton.h
+    src/HttpMgr.cpp
+    src/HttpMgr.h
     ${RESOURCES}
 )
 
@@ -34,7 +39,7 @@ qt_add_executable(MemoChat
 )
 
 # 链接库
-target_link_libraries(MemoChat PRIVATE Qt6::Widgets)
+target_link_libraries(MemoChat PRIVATE Qt6::Widgets Qt6::Network)
 
 # Windows 子系统设置 (发布时去掉黑框，调试时可以注释掉以便看 qDebug)
 if(WIN32)
