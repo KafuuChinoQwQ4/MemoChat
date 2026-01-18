@@ -1,6 +1,7 @@
 #include "LogicSystem.h"
 #include "HttpConnection.h"
 #include "VerifyGrpcClient.h"
+#include "RedisMgr.h"
 
 // 注册 GET 路由
 void LogicSystem::RegGet(std::string url, HttpHandler handler) {
@@ -45,6 +46,13 @@ LogicSystem::LogicSystem() {
             // 虽然这里还没有真正发邮件，但我们通过 RPC 拿到了假数据
             std::cout << "RPC Success, code: " << rsp.code() << std::endl;
         }
+
+        bool b_set = RedisMgr::GetInstance()->Set(email, rsp.code());
+            if(b_set) {
+                std::cout << "Saved code to Redis success!" << std::endl;
+            } else {
+                std::cout << "Failed to save code to Redis!" << std::endl;
+            }
         
         beast::ostream(connection->_response.body()) << root.toStyledString();
         return true;

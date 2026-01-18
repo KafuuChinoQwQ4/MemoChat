@@ -4,7 +4,7 @@
 
 # 1. 定义 gRPC 的安装路径
 set(GRPC_DIR "D:/cppsoft/grpc/install")
-
+set(REDIS_DIR "D:/cppsoft/redis")
 # 2. 头文件路径 (包含 JsonCpp)
 include_directories(
     ${Boost_INC_DIR}
@@ -12,12 +12,14 @@ include_directories(
     ${CMAKE_CURRENT_BINARY_DIR}
     "${GRPC_DIR}/include"
     "${CMAKE_BINARY_DIR}/_deps/jsoncpp-src/include"
+    "${REDIS_DIR}/include"
 )
 
 # 3. 库文件路径
 link_directories(
     "${GRPC_DIR}/lib"
     "D:/cppsoft/boost_1_90_0/lib64-msvc-14.3"
+    "${REDIS_DIR}/lib"
 )
 
 # 4. === 自动查找所有依赖库 ===
@@ -61,6 +63,7 @@ set(SERVER_SOURCES
     VerifyGrpcClient.cpp
     ConfigMgr.cpp
     AsioIOServicePool.cpp
+    RedisMgr.cpp
     ${PROTO_SRCS}
 )
 
@@ -101,6 +104,8 @@ target_link_libraries(GateServer PRIVATE
     ws2_32 
     crypt32
     mswsock
+
+    hiredis.lib
 )
 
 configure_file(
