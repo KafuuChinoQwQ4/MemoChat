@@ -75,25 +75,27 @@ void RegisterDialog::showTip(QString str, bool b_ok) {
     repolish(m_errTip); // 刷新样式
 }
 
-void RegisterDialog::onGetCodeClicked() {
+void RegisterDialog::onGetCodeClicked()
+{
     auto email = m_emailEdit->text();
-    // 简单的邮箱正则验证
+    // 邮箱正则验证
     QRegularExpression regex(R"((\w+)(\.|_)?(\w*)@(\w+)(\.(\w+))+)");
     bool match = regex.match(email).hasMatch();
 
-    if (match) {
-        // 发送 HTTP 请求
-        QJsonObject json;
-        json["email"] = email;
-        // 注意：这里 URL 暂时写死，后续我们会配合服务器修改
+    if(match){
+        // 构造 JSON 对象
+        QJsonObject json_obj;
+        json_obj["email"] = email;
+
+        // 发送 POST 请求 (使用读取到的 gate_url_prefix)
         HttpMgr::GetInstance()->PostHttpReq(
-            QUrl("http://localhost:8080/get_varify_code"), 
-            json, 
+            QUrl(gate_url_prefix + "/get_varifycode"),
+            json_obj, 
             ReqId::ID_GET_VARIFY_CODE, 
             Modules::REGISTERMOD
         );
     } else {
-        showTip("邮箱地址不正确", false);
+        showTip(tr("邮箱地址不正确"), false);
     }
 }
 

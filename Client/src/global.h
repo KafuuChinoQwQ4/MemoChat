@@ -9,6 +9,7 @@
  * @brief 刷新 QSS 样式
  */
 extern std::function<void(QWidget*)> repolish;
+extern QString gate_url_prefix;
 
 /**
  * @brief 请求 ID 枚举

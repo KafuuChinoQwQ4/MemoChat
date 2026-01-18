@@ -128,6 +128,22 @@ void HttpConnection::HandleReq() {
         WriteResponse();
         return;
     }
+
+    if (_request.method() == http::verb::post) {
+        bool success = LogicSystem::GetInstance()->HandlePost(_request.target(), shared_from_this());
+        if (!success) {
+            _response.result(http::status::not_found);
+            _response.set(http::field::content_type, "text/plain");
+            beast::ostream(_response.body()) << "url not found\r\n";
+            WriteResponse();
+            return;
+        }
+
+        _response.result(http::status::ok);
+        _response.set(http::field::server, "GateServer");
+        WriteResponse();
+        return;
+    }
 }
 
 void HttpConnection::WriteResponse() {
