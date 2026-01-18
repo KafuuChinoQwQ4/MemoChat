@@ -169,3 +169,7 @@ void HttpConnection::CheckDeadline() {
             }
         });
 }
+
+HttpConnection::HttpConnection(net::io_context& ioc)
+    : _socket(ioc) {
+}

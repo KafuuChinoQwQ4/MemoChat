@@ -8,7 +8,8 @@ int main()
     {
         // 2. 从配置中读取端口 (不再写死 8080)
         // gCfgMgr 是我们在 ConfigMgr.cpp 里定义的全局变量
-        std::string port_str = gCfgMgr["GateServer"]["Port"];
+        //std::string port_str = gCfgMgr["GateServer"]["Port"];
+        std::string port_str = ConfigMgr::Inst()["GateServer"]["Port"];
         
         if (port_str.empty()) {
             port_str = "8080"; // 如果没读到，给个默认值防止崩

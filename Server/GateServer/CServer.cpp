@@ -1,22 +1,27 @@
-// D:\MemoChat\Server\CServer.cpp
 #include "CServer.h"
 #include "HttpConnection.h"
+#include "AsioIOServicePool.h" // 引入头文件
 
-CServer::CServer(boost::asio::io_context& ioc, unsigned short port) 
+CServer::CServer(boost::asio::io_context& ioc, unsigned short port)
     : _ioc(ioc), _acceptor(ioc, tcp::endpoint(tcp::v4(), port)), _socket(ioc) {
 }
 
 void CServer::Start()
 {
     auto self = shared_from_this();
-    _acceptor.async_accept(_socket, [self](beast::error_code ec) {
+    // 核心修改：Acceptor 用主线程 context，但新 socket 用线程池的 context
+    auto& io_context = AsioIOServicePool::GetInstance()->GetIOService();
+    
+    // 注意：这里需要创建一个新socket绑定到io_context上，原来的 _socket 是绑定在主 _ioc 上的
+    std::shared_ptr<HttpConnection> new_con = std::make_shared<HttpConnection>(io_context);
+
+    _acceptor.async_accept(new_con->GetSocket(), [self, new_con](beast::error_code ec) {
         try {
             if (ec) {
                 self->Start();
                 return;
             }
-            // 创建 HttpConnection 管理新连接
-            std::make_shared<HttpConnection>(std::move(self->_socket))->Start();
+            new_con->Start();
             self->Start();
         }
         catch (std::exception& exp) {

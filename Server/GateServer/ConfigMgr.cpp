@@ -1,6 +1,7 @@
 #include "ConfigMgr.h"
 
-ConfigMgr gCfgMgr; // 全局实例
+// 【修改点】：删除或注释掉这行全局变量
+// ConfigMgr gCfgMgr; 
 
 ConfigMgr::ConfigMgr() {
     // 获取当前路径下的 config.ini

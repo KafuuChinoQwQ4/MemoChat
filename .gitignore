@@ -22,3 +22,6 @@ compile_commands.json
 # VS Code 产生的
 .vscode/
 .cache/
+
+node_modules/
+*.log

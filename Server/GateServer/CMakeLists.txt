@@ -1,89 +1,117 @@
 # ==========================================
-# GateServer - CMake 配置 (集成 gRPC)
+# GateServer - CMake 配置 (最终通过版)
 # ==========================================
 
-# 1. 定义 gRPC 的安装路径 (Day 6 编译的结果)
+# 1. 定义 gRPC 的安装路径
 set(GRPC_DIR "D:/cppsoft/grpc/install")
 
-# 2. 查找并设置头文件路径
+# 2. 头文件路径 (包含 JsonCpp)
 include_directories(
     ${Boost_INC_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_BINARY_DIR} # 生成的 .pb.h 文件会在这里
-    "${GRPC_DIR}/include"       # gRPC 头文件
+    ${CMAKE_CURRENT_BINARY_DIR}
+    "${GRPC_DIR}/include"
+    "${CMAKE_BINARY_DIR}/_deps/jsoncpp-src/include"
 )
 
-# 3. 查找并设置库文件路径
+# 3. 库文件路径
 link_directories(
     "${GRPC_DIR}/lib"
+    "D:/cppsoft/boost_1_90_0/lib64-msvc-14.3"
 )
 
-# 4. 自动生成 gRPC 代码的命令
-# 定义 proto 文件位置
-set(PROTO_FILE "${CMAKE_CURRENT_SOURCE_DIR}/../message.proto") # 放在 Server 根目录方便共享
-# 或者如果你的 proto 就在 GateServer 目录下：
-set(PROTO_FILE "${CMAKE_CURRENT_SOURCE_DIR}/message.proto") 
+# 4. === 自动查找所有依赖库 ===
+# Abseil
+file(GLOB ABSL_LIBS "${GRPC_DIR}/lib/absl_*.lib")
+# UPB (Micro Protobuf)
+file(GLOB UPB_LIBS "${GRPC_DIR}/lib/upb_*.lib")
+# UTF8 Range
+file(GLOB UTF8_LIBS "${GRPC_DIR}/lib/utf8_*.lib")
+# Address Sorting
+file(GLOB ADDR_SORT_LIB "${GRPC_DIR}/lib/address_sorting.lib")
+# === [修复] C-Ares (DNS解析库) ===
+file(GLOB CARES_LIB "${GRPC_DIR}/lib/cares.lib")
 
-# 定义生成工具路径
+# 5. 自动生成 gRPC 代码
+set(PROTO_FILE "${CMAKE_CURRENT_SOURCE_DIR}/message.proto")
 set(PROTOC "${GRPC_DIR}/bin/protoc.exe")
 set(GRPC_CPP_PLUGIN "${GRPC_DIR}/bin/grpc_cpp_plugin.exe")
 
-# 定义生成的源文件名
 set(PROTO_SRCS "${CMAKE_CURRENT_BINARY_DIR}/message.pb.cc" "${CMAKE_CURRENT_BINARY_DIR}/message.grpc.pb.cc")
 set(PROTO_HDRS "${CMAKE_CURRENT_BINARY_DIR}/message.pb.h" "${CMAKE_CURRENT_BINARY_DIR}/message.grpc.pb.h")
 
-# 添加自定义命令：每次构建前自动生成 .pb.cc 和 .pb.h
 add_custom_command(
     OUTPUT ${PROTO_SRCS} ${PROTO_HDRS}
     COMMAND ${PROTOC}
     ARGS --cpp_out=${CMAKE_CURRENT_BINARY_DIR}
          --grpc_out=${CMAKE_CURRENT_BINARY_DIR}
          --plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN}
-         -I "${CMAKE_CURRENT_SOURCE_DIR}" # proto 文件所在目录
+         -I "${CMAKE_CURRENT_SOURCE_DIR}"
          ${PROTO_FILE}
     DEPENDS ${PROTO_FILE}
     COMMENT "Generating gRPC files from message.proto"
 )
 
-# 5. 定义源代码列表 (加入新写的类和生成的 proto 代码)
+# 6. 源代码列表
 set(SERVER_SOURCES
     main.cpp
     CServer.cpp
     HttpConnection.cpp
     LogicSystem.cpp
-    VerifyGrpcClient.cpp  # 新增：gRPC 客户端类
-    ConfigMgr.cpp         # 新增：配置管理类
-    ${PROTO_SRCS}         # 新增：生成的 gRPC 代码
+    VerifyGrpcClient.cpp
+    ConfigMgr.cpp
+    AsioIOServicePool.cpp
+    ${PROTO_SRCS}
 )
 
-# 6. 生成可执行文件
+# 7. 生成可执行文件
 add_executable(GateServer ${SERVER_SOURCES})
 
-# 7. 编译选项
+# 8. 编译选项 (UTF-8)
+if (MSVC)
+    add_compile_options("/utf-8")
+endif()
+
 target_compile_definitions(GateServer PRIVATE 
     BOOST_ERROR_CODE_HEADER_ONLY
     WIN32_LEAN_AND_MEAN
 )
 
-# 8. 链接库 (顺序很重要，gRPC 依赖较多)
+# 9. 链接库
 target_link_libraries(GateServer PRIVATE 
-    # Boost & Json
     Boost::system 
     jsoncpp_lib
     
-    # gRPC & Protobuf
     libprotobuf 
     gpr 
     grpc 
     grpc++ 
-    # 如果 Day 6 编译生成了 reflection 库，可以加上: grpc++_reflection
     
-    # gRPC 依赖的 SSL 库 (Day 6 编译生成的)
+    ${ABSL_LIBS}
+    ${UPB_LIBS}
+    ${UTF8_LIBS}
+    ${ADDR_SORT_LIB}
+    ${CARES_LIB}      # <--- 加上这一行，解决 ares_xxx 报错
+    
+    re2
     ssl 
     crypto 
+    zlib
     
-    # gRPC 依赖的 Windows 系统库
     ws2_32 
     crypt32
     mswsock
+)
+
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/config.ini"
+    "${CMAKE_CURRENT_BINARY_DIR}/config.ini"
+    COPYONLY
+)
+
+add_custom_command(TARGET GateServer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/config.ini"
+        "$<TARGET_FILE_DIR:GateServer>/config.ini"
+    COMMENT "Copying config.ini to output directory"
 )
