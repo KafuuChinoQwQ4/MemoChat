@@ -4,6 +4,11 @@
       "user": "kafu_chino@qq.com",
       "pass": "rpbocooibnrodcdi"
     },
+    "redis":{
+      "host": "127.0.0.1",
+      "port": 6379,
+      "passwd": "123456"
+    },
     "server": {
         "port": "0.0.0.0:50051"
     }
