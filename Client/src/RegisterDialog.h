@@ -17,6 +17,7 @@ public:
 private slots:
     void onGetCodeClicked(); // 获取验证码按钮点击
     void slot_reg_mod_finish(ReqId id, QString res, ErrorCodes err); // 接收 HTTP 回包
+    void onRegisterClicked();
 
 signals:
     void switchLogin();

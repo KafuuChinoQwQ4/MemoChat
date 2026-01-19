@@ -5,6 +5,7 @@
 # 1. 定义 gRPC 的安装路径
 set(GRPC_DIR "D:/cppsoft/grpc/install")
 set(REDIS_DIR "D:/cppsoft/redis")
+set(MYSQL_DIR "D:/cppsoft/mysql_connector")
 # 2. 头文件路径 (包含 JsonCpp)
 include_directories(
     ${Boost_INC_DIR}
@@ -13,6 +14,8 @@ include_directories(
     "${GRPC_DIR}/include"
     "${CMAKE_BINARY_DIR}/_deps/jsoncpp-src/include"
     "${REDIS_DIR}/include"
+    "${MYSQL_DIR}/include"
+    "${MYSQL_DIR}/include/jdbc"
 )
 
 # 3. 库文件路径
@@ -20,6 +23,7 @@ link_directories(
     "${GRPC_DIR}/lib"
     "D:/cppsoft/boost_1_90_0/lib64-msvc-14.3"
     "${REDIS_DIR}/lib"
+    "${MYSQL_DIR}/lib64/vs14"
 )
 
 # 4. === 自动查找所有依赖库 ===
@@ -64,6 +68,8 @@ set(SERVER_SOURCES
     ConfigMgr.cpp
     AsioIOServicePool.cpp
     RedisMgr.cpp
+    MysqlDao.cpp
+    MysqlMgr.cpp
     ${PROTO_SRCS}
 )
 
@@ -106,6 +112,8 @@ target_link_libraries(GateServer PRIVATE
     mswsock
 
     hiredis.lib
+
+    mysqlcppconn.lib
 )
 
 configure_file(
