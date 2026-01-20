@@ -38,6 +38,14 @@ enum ErrorCodes {
     SUCCESS = 0,
     ERR_JSON = 1,
     ERR_NETWORK = 2,
+    RPC_FAILED = 1002,
+    VARIFY_EXPIRED = 1003,
+    VARIFY_CODE_ERR = 1004,
+    USER_EXIST = 1005,
+    PASSWD_ERR = 1006,
+    EMAIL_NOT_MATCH = 1007,  // <--- 核心：邮箱不匹配
+    PASSWD_UP_FAILED = 1008,
+    USER_NOT_EXIST = 1009
 };
 
 /**

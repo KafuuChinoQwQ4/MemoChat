@@ -148,20 +148,45 @@ void ResetDialog::onReturnClicked() {
 }
 
 void ResetDialog::initHttpHandlers() {
+    // 1. 获取验证码回包 (保持不变)
     m_handlers.insert(ReqId::ID_GET_VARIFY_CODE, [this](QJsonObject jsonObj){
         int error = jsonObj["error"].toInt();
         if(error != ErrorCodes::SUCCESS){
-            showTip("参数错误", false); return;
+            showTip(tr("参数错误"), false); 
+            return;
         }
-        showTip("验证码已发送", true);
+        showTip(tr("验证码已发送"), true);
     });
 
+    // 2. 重置密码回包 (=== 修改这里 ===)
     m_handlers.insert(ReqId::ID_RESET_PWD, [this](QJsonObject jsonObj){
         int error = jsonObj["error"].toInt();
         if(error != ErrorCodes::SUCCESS){
-            showTip("重置失败", false); return;
+            QString errStr = tr("重置失败");
+            
+            // 根据错误码显示具体提示
+            switch(error){
+                case ErrorCodes::EMAIL_NOT_MATCH: 
+                    errStr = tr("用户邮箱不匹配"); 
+                    break;
+                case ErrorCodes::VARIFY_CODE_ERR: 
+                    errStr = tr("验证码错误"); 
+                    break;
+                case ErrorCodes::VARIFY_EXPIRED: 
+                    errStr = tr("验证码已过期"); 
+                    break;
+                case ErrorCodes::USER_NOT_EXIST:
+                    errStr = tr("用户不存在");
+                    break;
+                default:
+                    errStr = tr("未知错误: ") + QString::number(error);
+                    break;
+            }
+            showTip(errStr, false); 
+            return;
         }
-        showTip("重置成功，点击返回登录", true);
+        
+        showTip(tr("重置成功，点击返回登录"), true);
     });
 }
 
