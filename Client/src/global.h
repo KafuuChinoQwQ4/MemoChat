@@ -34,3 +34,25 @@ enum ErrorCodes {
     ERR_JSON = 1,
     ERR_NETWORK = 2,
 };
+
+/**
+ * @brief 点击状态
+ */
+
+enum ClickLbState{
+    Normal = 0,
+    Selected = 1
+};
+
+/**
+ * @brief 错误状态枚举
+ */
+
+enum TipErr{
+    TIP_SUCCESS = 0,
+    TIP_EMAIL_ERR = 1,
+    TIP_PWD_ERR = 2,
+    TIP_CONFIRM_ERR = 3,
+    TIP_VARIFY_ERR = 4,
+    TIP_USER_ERR = 5
+};

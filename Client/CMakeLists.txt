@@ -16,6 +16,10 @@ set(CLIENT_SOURCES
     src/HttpMgr.cpp
     src/HttpMgr.h
     src/Singleton.h
+    src/TimerBtn.cpp
+    src/TimerBtn.h
+    src/ClickedLabel.cpp
+    src/ClickedLabel.h
     resources.qrc
 )
 
