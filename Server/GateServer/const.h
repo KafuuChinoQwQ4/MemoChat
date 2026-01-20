@@ -21,6 +21,13 @@ using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 // --- 新增错误码枚举 ---
 enum ErrorCodes {
     Success = 0,
-    Error_Json = 1001,  // Json解析错误
-    RPCFailed = 1002,   // RPC请求错误
+    Error_Json = 1001,
+    RPCFailed = 1002,
+    VarifyExpired = 1003,
+    VarifyCodeErr = 1004,
+    UserExist = 1005,
+    PasswdErr = 1006,
+    EmailNotMatch = 1007,
+    PasswdUpFailed = 1008,
+    UserNotExist = 1009
 };

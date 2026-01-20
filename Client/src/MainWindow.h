@@ -3,6 +3,7 @@
 #include <QStackedWidget>
 #include "LoginDialog.h"
 #include "RegisterDialog.h"
+#include "ResetDialog.h" // <--- 必须包含这个
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -12,13 +13,14 @@ public:
     ~MainWindow();
 
 public slots:
-    void SlotSwitchReg(); // 切换到注册
-    void SlotSwitchLogin(); // 切换回登录
+    void SlotSwitchReg();
+    void SlotSwitchLogin();
+    void SlotSwitchReset(); // <--- 切换重置槽函数
 
 private:
-    // 使用 QStackedWidget 管理页面
     QStackedWidget *m_stackedWidget;
     
     LoginDialog *m_loginDlg;
     RegisterDialog *m_regDlg;
+    ResetDialog *m_resetDlg; // <--- 声明成员变量
 };

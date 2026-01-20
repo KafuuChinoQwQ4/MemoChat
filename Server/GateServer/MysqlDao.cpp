@@ -55,3 +55,45 @@ int MysqlDao::RegUser(const std::string& name, const std::string& email, const s
         return -1;
     }
 }
+
+bool MysqlDao::CheckEmail(const std::string& name, const std::string& email) {
+    auto con = pool_->getConnection();
+    try {
+        if (con == nullptr) return false;
+        std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("SELECT email FROM user WHERE name = ?"));
+        pstmt->setString(1, name);
+        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+        while (res->next()) {
+            if (email != res->getString("email")) {
+                pool_->returnConnection(std::move(con));
+                return false;
+            }
+            pool_->returnConnection(std::move(con));
+            return true;
+        }
+        pool_->returnConnection(std::move(con));
+        return false;
+    } catch (sql::SQLException& e) {
+        pool_->returnConnection(std::move(con));
+        std::cerr << "SQLException: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool MysqlDao::UpdatePwd(const std::string& name, const std::string& newpwd) {
+    auto con = pool_->getConnection();
+    try {
+        if (con == nullptr) return false;
+        std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("UPDATE user SET pwd = ? WHERE name = ?"));
+        pstmt->setString(1, newpwd);
+        pstmt->setString(2, name);
+        int updateCount = pstmt->executeUpdate();
+        std::cout << "Updated rows: " << updateCount << std::endl;
+        pool_->returnConnection(std::move(con));
+        return true;
+    } catch (sql::SQLException& e) {
+        pool_->returnConnection(std::move(con));
+        std::cerr << "SQLException: " << e.what() << std::endl;
+        return false;
+    }
+}

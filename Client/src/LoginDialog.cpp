@@ -8,6 +8,7 @@ LoginDialog::LoginDialog(QWidget *parent) : QDialog(parent) {
     
     // 连接信号：点击注册按钮 -> 发送 switchRegister 信号
     connect(m_regBtn, &QPushButton::clicked, this, &LoginDialog::switchRegister);
+    connect(m_forgetLabel, &ClickedLabel::clicked, this, [this](){emit switchReset();});
 }
 
 void LoginDialog::initUI() {
@@ -31,6 +32,10 @@ void LoginDialog::initUI() {
     m_loginBtn = new QPushButton("登录", this);
     m_regBtn = new QPushButton("注册", this);
 
+    m_forgetLabel = new ClickedLabel(this);
+    m_forgetLabel->setText("忘记密码");
+    m_forgetLabel->SetState("normal","hover","","selected","selected_hover","");
+
     // 4. 添加到布局 (增加弹簧 addStretch 让布局更好看)
     mainLayout->addStretch();
     mainLayout->addWidget(m_logoLabel);
@@ -41,4 +46,6 @@ void LoginDialog::initUI() {
     mainLayout->addWidget(m_loginBtn);
     mainLayout->addWidget(m_regBtn);
     mainLayout->addStretch();
+    mainLayout->addWidget(m_forgetLabel, 0, Qt::AlignRight);
+
 }

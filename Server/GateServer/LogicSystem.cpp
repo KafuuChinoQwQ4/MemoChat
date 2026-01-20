@@ -93,6 +93,61 @@ LogicSystem::LogicSystem() {
         return true;
     }); 
 
+    RegPost("/reset_pwd", [](std::shared_ptr<HttpConnection> connection) {
+        auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
+        std::cout << "receive body is " << body_str << std::endl;
+        connection->_response.set(http::field::content_type, "text/json");
+        Json::Value root;
+        Json::Reader reader;
+        Json::Value src_root;
+        if (!reader.parse(body_str, src_root)) {
+            root["error"] = ErrorCodes::Error_Json;
+            beast::ostream(connection->_response.body()) << root.toStyledString();
+            return true;
+        }
+    
+        auto email = src_root["email"].asString();
+        auto name = src_root["user"].asString();
+        auto pwd = src_root["passwd"].asString();
+        auto varify_code_user = src_root["varifycode"].asString();
+    
+        // 1. 验证码检查
+        std::string varify_code_redis;
+        bool b_get_varify = RedisMgr::GetInstance()->Get(email, varify_code_redis);
+        if (!b_get_varify) {
+            root["error"] = ErrorCodes::VarifyExpired;
+            beast::ostream(connection->_response.body()) << root.toStyledString();
+            return true;
+        }
+        if (varify_code_user != varify_code_redis) {
+            root["error"] = ErrorCodes::VarifyCodeErr;
+            beast::ostream(connection->_response.body()) << root.toStyledString();
+            return true;
+        }
+    
+        // 2. 检查邮箱匹配
+        bool email_valid = MysqlMgr::GetInstance()->CheckEmail(name, email);
+        if (!email_valid) {
+            root["error"] = ErrorCodes::EmailNotMatch;
+            beast::ostream(connection->_response.body()) << root.toStyledString();
+            return true;
+        }
+    
+        // 3. 更新密码
+        bool b_up = MysqlMgr::GetInstance()->UpdatePwd(name, pwd);
+        if (!b_up) {
+            root["error"] = ErrorCodes::PasswdUpFailed;
+            beast::ostream(connection->_response.body()) << root.toStyledString();
+            return true;
+        }
+    
+        root["error"] = ErrorCodes::Success;
+        root["email"] = email;
+        root["user"] = name;
+        beast::ostream(connection->_response.body()) << root.toStyledString();
+        return true;
+    });
+
 } // <--- ！！！关键点：这里必须有一个右大括号，结束构造函数！！！
 
 // 下面是其他函数的定义，必须在构造函数外面

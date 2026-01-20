@@ -21,12 +21,16 @@ MainWindow::MainWindow(QWidget *parent)
 
     // 3. 初始显示登录页
     m_stackedWidget->setCurrentWidget(m_loginDlg);
+    m_resetDlg = new ResetDialog(this);
+    m_stackedWidget->addWidget(m_resetDlg);   // Index 2
 
     // 4. 连接信号槽
     // 登录界面 -> 切换注册
     connect(m_loginDlg, &LoginDialog::switchRegister, this, &MainWindow::SlotSwitchReg);
     // 注册界面 -> 返回登录
     connect(m_regDlg, &RegisterDialog::switchLogin, this, &MainWindow::SlotSwitchLogin);
+    connect(m_loginDlg, &LoginDialog::switchReset, this, &MainWindow::SlotSwitchReset);
+    connect(m_resetDlg, &ResetDialog::switchLogin, this, &MainWindow::SlotSwitchLogin);
 }
 
 MainWindow::~MainWindow() {
@@ -39,4 +43,8 @@ void MainWindow::SlotSwitchReg() {
 
 void MainWindow::SlotSwitchLogin() {
     m_stackedWidget->setCurrentWidget(m_loginDlg);
+}
+
+void MainWindow::SlotSwitchReset() {
+    m_stackedWidget->setCurrentWidget(m_resetDlg);
 }

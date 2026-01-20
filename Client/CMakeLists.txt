@@ -20,6 +20,8 @@ set(CLIENT_SOURCES
     src/TimerBtn.h
     src/ClickedLabel.cpp
     src/ClickedLabel.h
+    src/ResetDialog.cpp
+    src/ResetDialog.h
     resources.qrc
 )
 

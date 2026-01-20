@@ -5,6 +5,9 @@
 #include <QRegularExpression>
 #include <QByteArray>
 
+extern std::function<void(QWidget*)> repolish;
+extern QString gate_url_prefix;
+
 /**
  * @brief 刷新 QSS 样式
  */
@@ -16,7 +19,8 @@ extern QString gate_url_prefix;
  */
 enum ReqId {
     ID_GET_VARIFY_CODE = 1001, // 获取验证码
-    ID_REG_USER = 1002,        // 注册用户
+    ID_REG_USER = 1002,   
+    ID_RESET_PWD = 1003,   
 };
 
 /**
@@ -24,6 +28,7 @@ enum ReqId {
  */
 enum Modules {
     REGISTERMOD = 0,
+    RESETMOD = 1,
 };
 
 /**

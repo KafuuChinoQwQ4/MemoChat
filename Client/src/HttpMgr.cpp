@@ -50,4 +50,8 @@ void HttpMgr::slot_http_finish(ReqId id, QString res, ErrorCodes err, Modules mo
         // 转发给注册模块
         emit sig_reg_mod_finish(id, res, err);
     }
+    else if (mod == Modules::RESETMOD) {
+        // [新增] 转发给重置模块
+        emit sig_reset_mod_finish(id, res, err);
+    }
 }
