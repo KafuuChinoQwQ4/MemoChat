@@ -180,7 +180,7 @@ LogicSystem::LogicSystem() {
         root["user"] = name;
         root["token"] = "dummy_token_for_test"; // 暂时用假 token
         root["host"] = "127.0.0.1";
-        root["port"] = "50051"; // 假设的 ChatServer 端口
+        root["port"] = "50052"; // 假设的 ChatServer 端口
         
         beast::ostream(connection->_response.body()) << root.toStyledString();
         return true;

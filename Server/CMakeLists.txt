@@ -1,5 +1,3 @@
 add_subdirectory(GateServer)
-# add_subdirectory(ChatServer1)
-# add_subdirectory(ChatServer2)
-# add_subdirectory(StatusServer)
-# add_subdirectory(VServer)
+# === [新增] 添加 ChatServer ===
+add_subdirectory(ChatServer)
