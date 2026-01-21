@@ -123,6 +123,8 @@ target_link_libraries(GateServer PRIVATE
 target_sources(GateServer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/config.ini")
 
 # 1. 创建复制任务 (保持 ALL，确保每次都检查)
+# ... 前面的代码不变 ...
+
 add_custom_target(CopyGateServerConfig ALL
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/config.ini"
@@ -130,8 +132,7 @@ add_custom_target(CopyGateServerConfig ALL
     COMMENT "Updating GateServer config.ini..."
 )
 
-# 2. 【关键修改】让复制任务等待 GateServer 编译完成
-# 之前是反过来的，导致了死循环
+# [正确写法] 让复制任务等待 GateServer 编译完成
 add_dependencies(CopyGateServerConfig GateServer)
 
 # === [修改结束] ===

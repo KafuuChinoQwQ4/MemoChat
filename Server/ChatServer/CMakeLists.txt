@@ -1,12 +1,26 @@
 # 定义 ChatServer 项目
 project(ChatServer)
 
+# === [关键新增 1] 定义依赖库路径 (必须与 GateServer 一致) ===
+set(REDIS_DIR "D:/cppsoft/redis")
+set(MYSQL_DIR "D:/cppsoft/mysql_connector")
+
 # 包含路径 (复用 GateServer 的部分头文件路径)
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../GateServer
     ${Boost_INCLUDE_DIRS}
     ${CMAKE_BINARY_DIR}/_deps/jsoncpp-src/include
+    # === [关键新增 2] Redis 和 MySQL 头文件路径 ===
+    "${REDIS_DIR}/include"
+    "${MYSQL_DIR}/include"
+    "${MYSQL_DIR}/include/jdbc"
+)
+
+# === [关键新增 3] 库文件路径 ===
+link_directories(
+    "${REDIS_DIR}/lib"
+    "${MYSQL_DIR}/lib64/vs14"
 )
 
 # 源文件列表
@@ -15,7 +29,7 @@ set(CHAT_SERVER_SOURCES
     CServer.cpp
     CSession.cpp
     LogicSystem.cpp
-    # 复用 GateServer 的通用类 (建议直接拷贝过来，或者在这里引用)
+    # 复用 GateServer 的通用类
     ../GateServer/ConfigMgr.cpp
     ../GateServer/AsioIOServicePool.cpp
     ../GateServer/RedisMgr.cpp
@@ -45,6 +59,5 @@ add_custom_target(CopyChatConfig ALL
     COMMENT "Updating ChatServer config.ini..."
 )
 
-# 【关键修改】让 Copy 任务依赖于 ChatServer，而不是反过来
-# 之前写成了 add_dependencies(ChatServer CopyChatConfig) -> 导致死循环
+# 让 Copy 任务依赖于 ChatServer
 add_dependencies(CopyChatConfig ChatServer)
