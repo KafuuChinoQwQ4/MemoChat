@@ -116,15 +116,22 @@ target_link_libraries(GateServer PRIVATE
     mysqlcppconn.lib
 )
 
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/config.ini"
-    "${CMAKE_CURRENT_BINARY_DIR}/config.ini"
-    COPYONLY
-)
+# ... (保留上面的 target_link_libraries 等代码)
 
-add_custom_command(TARGET GateServer POST_BUILD
+# === [修改开始] 配置文件自动复制策略 ===
+
+target_sources(GateServer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/config.ini")
+
+# 1. 创建复制任务 (保持 ALL，确保每次都检查)
+add_custom_target(CopyGateServerConfig ALL
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/config.ini"
         "$<TARGET_FILE_DIR:GateServer>/config.ini"
-    COMMENT "Copying config.ini to output directory"
+    COMMENT "Updating GateServer config.ini..."
 )
+
+# 2. 【关键修改】让复制任务等待 GateServer 编译完成
+# 之前是反过来的，导致了死循环
+add_dependencies(CopyGateServerConfig GateServer)
+
+# === [修改结束] ===

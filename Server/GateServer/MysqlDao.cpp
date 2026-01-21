@@ -97,3 +97,32 @@ bool MysqlDao::UpdatePwd(const std::string& name, const std::string& newpwd) {
         return false;
     }
 }
+
+bool MysqlDao::CheckPwd(const std::string& name, const std::string& pwd, std::string& userInfo) {
+    auto con = pool_->getConnection();
+    try {
+        if (con == nullptr) return false;
+        
+        // 准备查询
+        std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("SELECT * FROM user WHERE name = ?"));
+        pstmt->setString(1, name);
+        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+
+        while (res->next()) {
+            if (pwd != res->getString("pwd")) {
+                std::cout << "Password incorrect" << std::endl;
+                pool_->returnConnection(std::move(con));
+                return false;
+            }
+            userInfo = res->getString("email"); // 这里简单返回email，实际可能返回更多
+            pool_->returnConnection(std::move(con));
+            return true;
+        }
+        pool_->returnConnection(std::move(con));
+        return false;
+    } catch (sql::SQLException& e) {
+        pool_->returnConnection(std::move(con));
+        std::cerr << "SQLException: " << e.what() << std::endl;
+        return false;
+    }
+}

@@ -148,6 +148,44 @@ LogicSystem::LogicSystem() {
         return true;
     });
 
+    RegPost("/user_login", [](std::shared_ptr<HttpConnection> connection) {
+        auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
+        std::cout << "receive body is " << body_str << std::endl;
+        connection->_response.set(http::field::content_type, "text/json");
+        Json::Value root;
+        Json::Reader reader;
+        Json::Value src_root;
+        if (!reader.parse(body_str, src_root)) {
+            root["error"] = ErrorCodes::Error_Json;
+            beast::ostream(connection->_response.body()) << root.toStyledString();
+            return true;
+        }
+    
+        auto name = src_root["user"].asString();
+        auto pwd = src_root["passwd"].asString();
+        
+        // 1. 验证密码
+        std::string userInfo;
+        bool b_check = MysqlMgr::GetInstance()->CheckPwd(name, pwd, userInfo);
+        if (!b_check) {
+            std::cout << "User pwd verify failed" << std::endl;
+            root["error"] = ErrorCodes::PasswdErr; // 或者 UserNotExist
+            beast::ostream(connection->_response.body()) << root.toStyledString();
+            return true;
+        }
+    
+        // 2. (Day 14 文档后续部分) 获取 StatusServer 分配的 ChatServer
+        // 如果你还没有实现 StatusServer，这里先返回成功，后续再补 grpc 调用
+        root["error"] = ErrorCodes::Success;
+        root["user"] = name;
+        root["token"] = "dummy_token_for_test"; // 暂时用假 token
+        root["host"] = "127.0.0.1";
+        root["port"] = "50051"; // 假设的 ChatServer 端口
+        
+        beast::ostream(connection->_response.body()) << root.toStyledString();
+        return true;
+    });
+
 } // <--- ！！！关键点：这里必须有一个右大括号，结束构造函数！！！
 
 // 下面是其他函数的定义，必须在构造函数外面

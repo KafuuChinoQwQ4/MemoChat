@@ -30,17 +30,17 @@ qt_add_executable(MemoChatClient
     ${CLIENT_SOURCES}
 )
 
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/config.ini"
-    "${CMAKE_CURRENT_BINARY_DIR}/config.ini"
-    COPYONLY
-)
+target_sources(MemoChatClient PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/config.ini")
 
-add_custom_command(TARGET MemoChatClient POST_BUILD
+add_custom_target(CopyClientConfig ALL
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/config.ini"
         "$<TARGET_FILE_DIR:MemoChatClient>/config.ini"
+    COMMENT "Updating Client config.ini..."
 )
+
+# 【关键修改】让复制任务等待 MemoChatClient 编译完成
+add_dependencies(CopyClientConfig MemoChatClient)
 
 target_link_libraries(MemoChatClient PRIVATE Qt6::Widgets Qt6::Network)
 

@@ -25,6 +25,7 @@ signals:
     void sig_http_finish(ReqId id, QString res, ErrorCodes err, Modules mod);
     void sig_reg_mod_finish(ReqId id, QString res, ErrorCodes err);
     void sig_reset_mod_finish(ReqId id, QString res, ErrorCodes err); // [新增]
+    void sig_login_mod_finish(ReqId id, QString res, ErrorCodes err);
 
 private slots:
     void slot_http_finish(ReqId id, QString res, ErrorCodes err, Modules mod);

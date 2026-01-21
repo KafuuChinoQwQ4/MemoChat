@@ -16,3 +16,7 @@ bool MysqlMgr::CheckEmail(const std::string& name, const std::string& email) {
 bool MysqlMgr::UpdatePwd(const std::string& name, const std::string& pwd) {
     return _dao.UpdatePwd(name, pwd);
 }
+
+bool MysqlMgr::CheckPwd(const std::string& name, const std::string& pwd, std::string& userInfo) {
+    return _dao.CheckPwd(name, pwd, userInfo);
+}

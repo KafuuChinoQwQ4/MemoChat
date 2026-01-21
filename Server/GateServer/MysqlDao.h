@@ -83,6 +83,7 @@ public:
     // === [关键] 新增的两个函数声明 ===
     bool CheckEmail(const std::string& name, const std::string& email);
     bool UpdatePwd(const std::string& name, const std::string& pwd);
+    bool CheckPwd(const std::string& name, const std::string& pwd, std::string& userInfo);
 
 private:
     std::unique_ptr<MySqlPool> pool_;
