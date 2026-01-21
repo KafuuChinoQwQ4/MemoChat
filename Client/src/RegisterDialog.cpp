@@ -51,6 +51,7 @@ void RegisterDialog::initUI() {
     m_passEdit->setEchoMode(QLineEdit::Password);
     
     m_passVisible = new ClickedLabel(this);
+    m_passVisible->setObjectName("pass_visible");
     m_passVisible->setFixedSize(20, 20); // 根据图标大小调整
     // 设置初始状态 (需要在 stylesheet.qss 中定义 visible/unvisible 样式)
     m_passVisible->SetState("unvisible", "unvisible_hover", "", "visible", "visible_hover", "");
@@ -65,6 +66,7 @@ void RegisterDialog::initUI() {
     m_confirmEdit->setEchoMode(QLineEdit::Password);
     
     m_confirmVisible = new ClickedLabel(this);
+    m_confirmVisible->setObjectName("confirm_visible");
     m_confirmVisible->setFixedSize(20, 20);
     m_confirmVisible->SetState("unvisible", "unvisible_hover", "", "visible", "visible_hover", "");
     

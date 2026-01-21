@@ -36,8 +36,8 @@ void LoginDialog::initUI() {
     m_passEdit->setEchoMode(QLineEdit::Password); // 默认密文
 
     m_passVisible = new ClickedLabel(this);
+    m_passVisible->setObjectName("pass_visible");
     m_passVisible->setFixedSize(20, 20);
-    // 设置眼睛图标状态 (需要在 qss 定义 visible/unvisible)
     m_passVisible->SetState("unvisible", "unvisible_hover", "", "visible", "visible_hover", "");
 
     passLayout->addWidget(m_passEdit);
