@@ -23,6 +23,8 @@ set(CLIENT_SOURCES
     src/ResetDialog.cpp
     src/ResetDialog.h
     resources.qrc
+    src/TcpMgr.cpp
+    src/TcpMgr.h
 )
 
 qt_add_executable(MemoChatClient

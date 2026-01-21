@@ -29,22 +29,24 @@ QPushButton:hover {
     color: red;
 }
 
+/* ... 前面的代码不变 ... */
+
 /* 状态：不可见 (闭眼) */
-#m_passVisible[state='unvisible'], #m_confirmVisible[state='unvisible'] {
+#pass_visible[state='unvisible'], #confirm_visible[state='unvisible'] {
     border-image: url(:/res/unvisible.png);
- }
- 
- /* 状态：不可见-悬停 */
- #m_passVisible[state='unvisible_hover'], #m_confirmVisible[state='unvisible_hover'] {
-    border-image: url(:/res/unvisible.png); /* 如果没有hover图，就用原图 */
- }
- 
- /* 状态：可见 (睁眼) */
- #m_passVisible[state='visible'], #m_confirmVisible[state='visible'] {
+}
+
+/* 状态：不可见-悬停 */
+#pass_visible[state='unvisible_hover'], #confirm_visible[state='unvisible_hover'] {
+    border-image: url(:/res/unvisible.png);
+}
+
+/* 状态：可见 (睁眼) */
+#pass_visible[state='visible'], #confirm_visible[state='visible'] {
     border-image: url(:/res/visible.png);
- }
- 
- /* 状态：可见-悬停 */
- #m_passVisible[state='visible_hover'], #m_confirmVisible[state='visible_hover'] {
+}
+
+/* 状态：可见-悬停 */
+#pass_visible[state='visible_hover'], #confirm_visible[state='visible_hover'] {
     border-image: url(:/res/visible.png);
- }
+}

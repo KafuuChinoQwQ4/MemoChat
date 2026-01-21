@@ -18,10 +18,12 @@ public:
 private slots:
     void onLoginClicked(); // 登录按钮槽函数
     void slot_login_mod_finish(ReqId id, QString res, ErrorCodes err); // 登录回包处理
+    void slot_tcp_con_finish(bool bsuccess);
 
 signals:
     void switchRegister();
     void switchReset();
+    void sig_connect_tcp(ServerInfo si);
 
 private:
     void initUI();
@@ -48,4 +50,7 @@ private:
     // 错误状态管理
     QMap<TipErr, QString> _tip_errs;
     QMap<ReqId, std::function<void(const QJsonObject&)>> m_handlers;
+
+    int _uid;
+    QString _token;
 };

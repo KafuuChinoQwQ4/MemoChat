@@ -71,3 +71,10 @@ enum TipErr{
     TIP_VARIFY_ERR = 4,
     TIP_USER_ERR = 5
 };
+
+struct ServerInfo {
+    int Uid;
+    QString Host;
+    QString Port;
+    QString Token;
+};
