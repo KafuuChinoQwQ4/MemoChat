@@ -29,5 +29,6 @@ enum ErrorCodes {
     PasswdErr = 1006,
     EmailNotMatch = 1007,
     PasswdUpFailed = 1008,
-    UserNotExist = 1009
+    UserNotExist = 1009,
+    TokenInvalid = 1010
 };

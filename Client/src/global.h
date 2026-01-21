@@ -22,6 +22,8 @@ enum ReqId {
     ID_REG_USER = 1002,   
     ID_RESET_PWD = 1003,   
     ID_LOGIN_USER = 1004,
+    ID_CHAT_LOGIN = 1005,      // [新增] 聊天登录请求
+    ID_CHAT_LOGIN_RSP = 1006,
 };
 
 /**
@@ -47,7 +49,8 @@ enum ErrorCodes {
     PASSWD_ERR = 1006,
     EMAIL_NOT_MATCH = 1007,  // <--- 核心：邮箱不匹配
     PASSWD_UP_FAILED = 1008,
-    USER_NOT_EXIST = 1009
+    USER_NOT_EXIST = 1009,
+    TOKEN_INVALID = 1010
 };
 
 /**

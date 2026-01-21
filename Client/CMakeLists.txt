@@ -25,6 +25,12 @@ set(CLIENT_SOURCES
     resources.qrc
     src/TcpMgr.cpp
     src/TcpMgr.h
+    src/UserMgr.cpp
+    src/UserMgr.h
+    src/ClickedBtn.cpp
+    src/ClickedBtn.h
+    src/ChatDialog.cpp
+    src/ChatDialog.h
 )
 
 qt_add_executable(MemoChatClient

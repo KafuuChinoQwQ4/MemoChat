@@ -50,3 +50,48 @@ QPushButton:hover {
 #pass_visible[state='visible_hover'], #confirm_visible[state='visible_hover'] {
     border-image: url(:/res/visible.png);
 }
+
+/* 侧边栏 */
+#side_bar {
+    background-color: #2e2e2e;
+}
+#side_avatar {
+    border: none;
+    border-radius: 5px;
+    background-color: #ddd; 
+}
+/* 侧边栏按钮 - 普通 */
+#side_chat_btn[state='normal'] {
+    background-color: transparent;
+    border-image: url(:/res/chat_icon.png); /* 你需要自己找图 */
+}
+#side_chat_btn[state='hover'] {
+    background-color: #3e3e3e;
+}
+
+/* 聊天列表 */
+#chat_list_wid {
+    background-color: #f7f7f7;
+    border-right: 1px solid #e5e5e5;
+}
+#search_edit {
+    border: 1px solid #ddd;
+    border-radius: 15px;
+    padding-left: 10px;
+    background-color: #fff;
+}
+#chat_list {
+    background-color: transparent;
+    border: none;
+}
+
+/* 聊天框 */
+#chat_box_wid {
+    background-color: #ffffff;
+}
+#chat_title_bar {
+    border-bottom: 1px solid #e5e5e5;
+}
+#msg_list {
+    border: none;
+}

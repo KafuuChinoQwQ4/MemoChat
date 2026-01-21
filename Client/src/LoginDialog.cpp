@@ -21,6 +21,20 @@ LoginDialog::LoginDialog(QWidget *parent) : QDialog(parent) {
     
     // 2. TcpMgr 发出"连接结果"信号 -> 本界面处理 (如果成功则发送登录包)
     connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_con_success, this, &LoginDialog::slot_tcp_con_finish);
+
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_login_failed, this, [this](int err){
+        QString result = QString("登录失败, err is %1").arg(err);
+        showTip(result, false);
+    });
+
+    // [新增] 连接 TCP 登录成功跳转信号
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_swich_chatdlg, this, [this](){
+        qDebug() << "Login ChatServer Success, switching to ChatDialog...";
+        showTip("登录成功，进入聊天...", true);
+        // 这里暂时先隐藏窗口，Day 18 会讲创建 ChatDialog
+        this->hide(); 
+        // emit switchChat(); // 将来这里会发信号给 MainWindow 切换页面
+    });
 }
 
 LoginDialog::~LoginDialog() {}

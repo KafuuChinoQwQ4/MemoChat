@@ -4,26 +4,21 @@
 #include <string>
 #include <json/json.h>
 
-// 消息 ID 定义
+// [关键修改] 引用 GateServer 的 const.h 来获取 ErrorCodes 定义
+// 这样就不会报 "enum类型重定义" 错误了
+#include "../GateServer/const.h"
+
 enum MessageId {
-    MSG_CHAT_LOGIN = 1005, // 登录聊天服务器
+    MSG_CHAT_LOGIN = 1005, 
     MSG_CHAT_LOGIN_RSP = 1006,
 };
 
-// 错误码 (复用 GateServer)
-enum ErrorCodes {
-    Success = 0,
-    Error_Json = 1001,
-    RPCFailed = 1002,
-    VarifyExpired = 1003,
-    VarifyCodeErr = 1004,
-    UserExist = 1005,
-    PasswdErr = 1006,
-    EmailNotMatch = 1007,
-    PasswdUpFailed = 1008,
-    UserNotExist = 1009,
-    TokenInvalid = 1010
-};
+// [关键修改] 删除这里的 ErrorCodes 定义，因为上面include已经有了
+// 删掉下面这段：
+// enum ErrorCodes {
+//     Success = 0,
+//     ...
+// };
 
 #define MAX_LENGTH  1024 * 2
 #define HEAD_TOTAL_LEN 4
