@@ -2,5 +2,7 @@
     <qresource prefix="/">
         <file>style/stylesheet.qss</file>
         <file>res/KafuuChino.png</file>
+        <file>res/visible.png</file>
+        <file>res/unvisible.png</file>
     </qresource>
 </RCC>
