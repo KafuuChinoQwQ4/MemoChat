@@ -95,3 +95,57 @@ QPushButton:hover {
 #msg_list {
     border: none;
 }
+
+ChatUserWid {
+    background-color: transparent; /* 背景透明，由 QListWidget 控制 */
+}
+ChatUserWid:hover {
+    background-color: #e0e0e0;
+}
+
+#user_chat_lb {
+    color: rgb(153,153,153);
+    font-size: 12px;
+    font-family: "Microsoft YaHei";
+}
+
+#user_name_lb {
+    color: rgb(0,0,0);
+    font-size: 14px;
+    font-weight: normal;
+    font-family: "Microsoft YaHei";
+}
+
+#time_lb {
+    color: rgb(140,140,140);
+    font-size: 12px;
+    font-family: "Microsoft YaHei";
+}
+
+/* 列表选中样式 */
+#chat_list::item:selected {
+    background-color: #d0d0d0;
+    border: none;
+}
+#chat_list::item:hover {
+    background-color: #e0e0e0;
+    border: none;
+}
+#chat_list {
+    outline: none; /* 去掉选中时的虚线框 */
+}
+
+/* 滚动条样式 (可选) */
+QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 0px;
+}
+QScrollBar::handle:vertical {
+    background: rgb(173,170,169);
+    min-height: 10px;
+    border-radius: 4px;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
