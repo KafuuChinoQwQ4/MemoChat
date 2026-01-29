@@ -11,7 +11,7 @@ using boost::asio::ip::tcp;
 class CServer
 {
 public:
-    CServer(boost::asio::io_context& io_context, short port);
+    CServer(boost::asio::io_context& io_context, unsigned short port);
     ~CServer();
     void ClearSession(std::string session_id);
 

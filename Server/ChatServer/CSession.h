@@ -34,6 +34,8 @@ private:
     CServer* _server;
     bool _b_close;
     bool _b_head_parse;
+
+    short _msg_id;
     
     // 收发相关
     std::shared_ptr<MsgNode> _recv_msg_node;

@@ -77,7 +77,7 @@ void CSession::AsyncReadHead(int total_len) {
             short msg_id = 0;
             memcpy(&msg_id, _recv_head_node->_data, HEAD_ID_LEN);
             msg_id = boost::asio::detail::socket_ops::network_to_host_short(msg_id); // 网络序转主机序
-
+            _msg_id = msg_id;
             short msg_len = 0;
             memcpy(&msg_len, _recv_head_node->_data + HEAD_ID_LEN, HEAD_DATA_LEN);
             msg_len = boost::asio::detail::socket_ops::network_to_host_short(msg_len);
@@ -113,15 +113,13 @@ void CSession::AsyncReadBody(int length) {
 
             // 包体收完，处理逻辑
             _recv_msg_node->_cur_len = 0; // 重置，准备下一次
-            
-            // 投递到逻辑队列 (这里暂时简单拿到 MsgId，实际上 MsgId 应该存起来)
-            // 在这一天，我们先简单假设 LogicSystem 能处理 raw data
-            // 这里的 _recv_msg_node 其实只存了 Body，Head 里的 MsgId 没传过来
-            // **改进**：需要在 AsyncReadHead 里把 MsgId 存到 CSession 成员变量里
-            
-            // 简单处理：把收到的数据塞给 LogicSystem
             std::cout << "Receive Body: " << _recv_msg_node->_data << endl;
             
+            LogicSystem::GetInstance()->PostMsgToQue(
+                shared_from_this(), 
+                _msg_id, 
+                std::string(_recv_msg_node->_data, length)
+            );
             // 下次读取头部
             AsyncReadHead(HEAD_TOTAL_LEN);
         });

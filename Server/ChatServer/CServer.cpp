@@ -1,7 +1,7 @@
 #include "CServer.h"
 #include <iostream>
 
-CServer::CServer(boost::asio::io_context& io_context, short port)
+CServer::CServer(boost::asio::io_context& io_context, unsigned short port)
     : _io_context(io_context), _acceptor(io_context, tcp::endpoint(tcp::v4(), port))
 {
     std::cout << "ChatServer listen on port: " << port << endl;

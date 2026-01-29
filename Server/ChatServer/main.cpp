@@ -13,7 +13,7 @@ int main()
         boost::asio::io_context io_context;
         
         // 启动服务器
-        CServer s(io_context, atoi(port_str.c_str()));
+        CServer s(io_context, static_cast<unsigned short>(std::atoi(port_str.c_str())));
         
         io_context.run();
     }
