@@ -63,7 +63,7 @@ QPushButton:hover {
 /* 侧边栏按钮 - 普通 */
 #side_chat_btn[state='normal'] {
     background-color: transparent;
-    border-image: url(:/res/chat_icon.png); /* 你需要自己找图 */
+    border-image: url(:/res/drag.png); /* 你需要自己找图 */
 }
 #side_chat_btn[state='hover'] {
     background-color: #3e3e3e;
@@ -75,11 +75,20 @@ QPushButton:hover {
     border-right: 1px solid #e5e5e5;
 }
 #search_edit {
-    border: 1px solid #ddd;
-    border-radius: 15px;
-    padding-left: 10px;
-    background-color: #fff;
+    background: transparent;
+    border: none;
+    color: #333333;
+    font-family: "Microsoft YaHei";
+    font-size: 13px;
+    padding: 0px; /* 去掉内边距，位置由 Layout 控制 */
 }
+
+#search_back {
+    background-color: #f7f7f7; /* 浅灰背景 */
+    border-radius: 15px;       /* 圆角半径设为高度的一半，形成胶囊状 */
+    border: 1px solid #e5e5e5; /* 淡淡的边框 */
+}
+
 #chat_list {
     background-color: transparent;
     border: none;
@@ -148,4 +157,121 @@ QScrollBar::handle:vertical {
 }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     height: 0px;
+}
+
+/* === 追加的内容 === */
+
+LoadingDlg{
+    background: #f2eada;
+}
+
+#title_lb{
+    font-family: "Microsoft YaHei";
+    font-size: 18px;
+    font-weight: normal;
+}
+
+#chatEdit{
+    background: #ffffff;
+    border: none; /* 隐藏边框 */
+    font-family: "Microsoft YaHei"; /* 设置字体 */
+    font-size: 18px; /* 设置字体大小 */
+    padding: 5px; /* 设置内边距 */
+}
+
+#send_wid{
+    background: #ffffff;
+    border: none; /* 隐藏边框 */
+}
+
+/* 注意：你需要把对应的图片资源放到 res 目录并添加到 qrc 文件中 */
+/* 这里假设你已经有了 add_friend_normal.png 等图片 */
+#add_btn[state='normal']{
+    border-image: url(:/res/add_friend_normal.png);
+}
+
+#add_btn[state='hover']{
+    border-image: url(:/res/add_friend_hover.png);
+
+}
+
+#add_btn[state='press']{
+    border-image: url(:/res/add_friend_press.png);
+}
+
+#receive_btn[state='normal']{
+   background: #f0f0f0;
+   color: #2cb46e;
+   font-size: 16px; 
+   font-family: "Microsoft YaHei"; 
+   border-radius: 20px; 
+}
+
+#receive_btn[state='hover']{
+   background: #d2d2d2;
+   color: #2cb46e;
+   font-size: 16px; 
+   font-family: "Microsoft YaHei"; 
+   border-radius: 20px; 
+}
+
+#receive_btn[state='press']{
+   background: #c6c6c6;
+   color: #2cb46e;
+   font-size: 16px; 
+   font-family: "Microsoft YaHei"; 
+   border-radius: 20px; 
+}
+
+#send_btn[state='normal']{
+    background: #f0f0f0;
+    color: #2cb46e;
+    font-size: 16px; 
+    font-family: "Microsoft YaHei"; 
+    border-radius: 20px; 
+}
+
+#send_btn[state='hover']{
+   background: #d2d2d2;
+   color: #2cb46e;
+   font-size: 16px; 
+   font-family: "Microsoft YaHei"; 
+   border-radius: 20px; 
+}
+
+#send_btn[state='press']{
+   background: #c6c6c6;
+   color: #2cb46e;
+   font-size: 16px; 
+   font-family: "Microsoft YaHei"; 
+   border-radius: 20px; 
+}
+
+#tool_wid{
+    background: #ffffff;
+    border-bottom: 0.5px solid #ececec; 
+}
+
+#emo_lb[state='normal']{
+    border-image: url(:/res/smile_normal.png);
+}
+
+#emo_lb[state='hover']{
+    border-image: url(:/res/smile_hover.png);
+}
+
+#emo_lb[state='press']{
+    border-image: url(:/res/smile_press.png);
+}
+
+#file_lb[state='normal']{
+    border-image: url(:/res/filedir_normal.png);
+}
+
+#file_lb[state='hover']{
+    border-image: url(:/res/filedir_hover.png);
+}
+
+#file_lb[state='press']{
+    border-image: url(:/res/filedir_press.png);
 }

@@ -9,6 +9,10 @@
 #include <QRandomGenerator> // 用于生成随机数据
 #include "ClickedBtn.h"
 #include "ChatUserWid.h" // [新增]
+#include <QStackedWidget> // [关键] 必须包含
+#include <QTimer>
+#include "CustomizeEdit.h"
+#include <QPixmap>
 
 ChatDialog::ChatDialog(QWidget *parent) : QDialog(parent) {
     setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
@@ -27,11 +31,13 @@ void ChatDialog::initUI() {
 
     addSideBar();
     addChatList();
-    addChatBox();
+    addChatBox(); // 初始化右侧区域
 
     mainLayout->addWidget(_side_bar);
     mainLayout->addWidget(_chat_list_wid);
-    mainLayout->addWidget(_chat_box_wid);
+    
+    // [修改] 添加 stacked widget 到布局
+    mainLayout->addWidget(_stacked_widget); 
 }
 
 // ... addSideBar 保持不变 ...
@@ -67,88 +73,108 @@ void ChatDialog::addSideBar() {
 
 void ChatDialog::addChatList() {
     _chat_list_wid = new QWidget(this);
-    _chat_list_wid->setFixedWidth(250); 
+    _chat_list_wid->setFixedWidth(250);
     _chat_list_wid->setObjectName("chat_list_wid");
 
     QVBoxLayout *layout = new QVBoxLayout(_chat_list_wid);
     layout->setContentsMargins(0, 10, 0, 0);
     layout->setSpacing(10);
 
+    // === 搜索区域 ===
     QWidget *searchArea = new QWidget(_chat_list_wid);
+    searchArea->setFixedHeight(40); // 限制搜索区整体高度
     QHBoxLayout *searchLayout = new QHBoxLayout(searchArea);
     searchLayout->setContentsMargins(10, 0, 10, 0);
-    
-    // [修改] 使用 CustomizeEdit
-    _search_edit = new CustomizeEdit(searchArea);
+    searchLayout->setSpacing(10); // 搜索框和添加按钮之间的间距
+
+    // 1. 搜索框容器 (用于绘制圆角灰色背景)
+    QWidget *search_back = new QWidget(searchArea);
+    search_back->setObjectName("search_back"); // 用于QSS样式
+    search_back->setFixedHeight(30); // 搜索框扁一点
+
+    QHBoxLayout *search_back_layout = new QHBoxLayout(search_back);
+    search_back_layout->setContentsMargins(10, 0, 0, 0); // 左边距留给图标
+    search_back_layout->setSpacing(5);
+
+    // 1.1 放大镜图标
+    QLabel *search_icon = new QLabel(search_back);
+    search_icon->setFixedSize(15, 15);
+    // 请确保 qrc 中有 search.png，否则这里不显示或显示空白
+    QPixmap searchPix(":/res/search.png"); 
+    search_icon->setPixmap(searchPix.scaled(15, 15, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    search_icon->setAttribute(Qt::WA_TranslucentBackground);
+
+    // 1.2 输入框 (CustomizeEdit)
+    _search_edit = new CustomizeEdit(search_back);
+    _search_edit->setObjectName("search_edit"); // 用于QSS去边框
     _search_edit->setPlaceholderText("搜索");
-    _search_edit->setFixedHeight(30);
-    _search_edit->SetMaxLength(20);
+    _search_edit->setMaxLength(20);
 
-    QPushButton *addBtn = new QPushButton(searchArea);
-    addBtn->setFixedSize(30, 30);
-    addBtn->setText("+"); 
+    search_back_layout->addWidget(search_icon);
+    search_back_layout->addWidget(_search_edit);
 
-    searchLayout->addWidget(_search_edit);
+    // 2. 添加好友按钮 (使用 ClickedBtn)
+    ClickedBtn *addBtn = new ClickedBtn(searchArea);
+    addBtn->setObjectName("add_btn");
+    addBtn->setFixedSize(25, 25);
+    // 设置三态 (需要QSS中对应图片)
+    addBtn->SetState("normal", "hover", "press");
+
+    // 将控件加入搜索布局
+    searchLayout->addWidget(search_back);
     searchLayout->addWidget(addBtn);
 
-    _chat_list = new QListWidget(_chat_list_wid);
+    // === 列表区域 ===
+    _chat_list = new ChatUserList(_chat_list_wid);
     _chat_list->setObjectName("chat_list");
-    // [新增] 隐藏滚动条但保留功能 (可选)
-    _chat_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    _chat_list->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    connect(_chat_list, &ChatUserList::sig_loading_chat_user, 
+            this, &ChatDialog::slot_loading_chat_user);
 
     layout->addWidget(searchArea);
     layout->addWidget(_chat_list);
 }
 
-// ... addChatBox 保持不变 ...
 void ChatDialog::addChatBox() {
-    _chat_box_wid = new QWidget(this);
-    _chat_box_wid->setObjectName("chat_box_wid");
-
-    QVBoxLayout *layout = new QVBoxLayout(_chat_box_wid);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(0);
-
-    QWidget *titleBar = new QWidget(_chat_box_wid);
-    titleBar->setFixedHeight(50);
-    titleBar->setObjectName("chat_title_bar");
-    QHBoxLayout *titleLayout = new QHBoxLayout(titleBar);
-    _chat_title = new QLabel("这里是聊天对象", titleBar);
-    titleLayout->addWidget(_chat_title);
-    titleLayout->addStretch();
-
-    _msg_show_list = new QListWidget(_chat_box_wid);
-    _msg_show_list->setObjectName("msg_list");
-
-    QWidget *toolBar = new QWidget(_chat_box_wid);
-    toolBar->setFixedHeight(30);
-    QHBoxLayout *toolLayout = new QHBoxLayout(toolBar);
-    toolLayout->setContentsMargins(10, 0, 0, 0);
-    QPushButton *emojiBtn = new QPushButton("😊", toolBar);
-    emojiBtn->setFixedSize(25, 25);
-    emojiBtn->setFlat(true);
-    toolLayout->addWidget(emojiBtn);
-    toolLayout->addStretch();
-
-    _chat_edit = new QTextEdit(_chat_box_wid);
-    _chat_edit->setFixedHeight(100);
-
-    QWidget *bottomBar = new QWidget(_chat_box_wid);
-    bottomBar->setFixedHeight(50);
-    QHBoxLayout *bottomLayout = new QHBoxLayout(bottomBar);
-    bottomLayout->setContentsMargins(0, 0, 20, 10);
-    bottomLayout->addStretch();
+    // [修改] 使用 QStackedWidget 和 ChatPage
+    _stacked_widget = new QStackedWidget(this);
+    _stacked_widget->setObjectName("chat_stacked_wid"); // 也可以设置样式
     
-    QPushButton *sendBtn = new QPushButton("发送", bottomBar);
-    sendBtn->setFixedSize(80, 30);
-    bottomLayout->addWidget(sendBtn);
+    // 创建聊天页面
+    _chat_page = new ChatPage(this);
+    
+    // 创建一个空的默认页面 (可选)
+    QWidget *emptyPage = new QWidget(this);
+    emptyPage->setStyleSheet("background-color: #f0f0f0;");
+    
+    _stacked_widget->addWidget(emptyPage); // Index 0
+    _stacked_widget->addWidget(_chat_page); // Index 1
+    
+    // 默认显示聊天页
+    _stacked_widget->setCurrentWidget(_chat_page);
+}
 
-    layout->addWidget(titleBar);
-    layout->addWidget(_msg_show_list);
-    layout->addWidget(toolBar);
-    layout->addWidget(_chat_edit);
-    layout->addWidget(bottomBar);
+void ChatDialog::slot_loading_chat_user()
+{
+    if(_b_loading){
+        return;
+    }
+
+    _b_loading = true;
+    
+    // 显示加载框
+    LoadingDlg *loadingDialog = new LoadingDlg(this);
+    loadingDialog->setModal(true);
+    loadingDialog->show(); // 非模态显示，或者使用 exec() 模态显示
+    
+    qDebug() << "add new data to list.....";
+    
+    // 模拟耗时操作，实际上这里应该去请求网络
+    // 这里我们用 QTimer 模拟一下延时，否则太快了看不见效果
+    QTimer::singleShot(1000, [this, loadingDialog](){
+        addChatUserList(); // 添加模拟数据
+        loadingDialog->deleteLater(); // 关闭加载框
+        _b_loading = false;
+    });
 }
 
 // [新增] 填充测试数据

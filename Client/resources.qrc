@@ -4,5 +4,16 @@
         <file>res/KafuuChino.png</file>
         <file>res/visible.png</file>
         <file>res/unvisible.png</file>
+        <file>res/search.png</file>
+        <file>res\add_friend_hover.png</file>
+        <file>res\add_friend_normal.png</file>
+        <file>res\add_friend_press.png</file>
+        <file>res\filedir_normal.png</file>
+        <file>res\filedir_hover.png</file>
+        <file>res\filedir_press.png</file>
+        <file>res\smile_normal.png</file>
+        <file>res\smile_hover.png</file>
+        <file>res\smile_press.png</file>
+        
     </qresource>
 </RCC>

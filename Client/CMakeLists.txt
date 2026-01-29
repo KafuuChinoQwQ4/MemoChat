@@ -35,6 +35,13 @@ set(CLIENT_SOURCES
     src/CustomizeEdit.h
     src/ChatUserWid.cpp
     src/ChatUserWid.h
+    src/ChatUserList.cpp
+    src/ChatUserList.h
+    src/LoadingDlg.cpp
+    src/LoadingDlg.h
+    src/ChatPage.cpp
+    src/ChatPage.h
+    
 )
 
 qt_add_executable(MemoChatClient

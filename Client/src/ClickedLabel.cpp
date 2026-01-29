@@ -14,24 +14,42 @@ void ClickedLabel::mousePressEvent(QMouseEvent *ev)
     // 仅响应左键点击
     if (ev->button() == Qt::LeftButton) {
         if(_curstate == ClickLbState::Normal){
+             qDebug()<<"clicked , change to selected hover: "<< _selected_hover;
              _curstate = ClickLbState::Selected;
-             // 点击后鼠标肯定还在控件上，所以设置为选中悬停状态
-             setProperty("state", _selected_hover); 
+             setProperty("state", _selected_press); 
+             repolish(this);
+             update();
         } else {
+             qDebug()<<"clicked , change to normal hover: "<< _normal_hover;
              _curstate = ClickLbState::Normal;
-             // 同理，设置为普通悬停状态
-             setProperty("state", _normal_hover);
+             setProperty("state", _normal_press);
+             repolish(this);
+             update();
         }
-        
-        // 刷新 QSS 样式 (repolish 在 global.h 中定义)
-        repolish(this);
-        
-        // 发送点击信号，供外部槽函数调用
-        emit clicked();
+        return;
     }
-    
-    // 调用父类处理（保持默认行为）
+    // 调用父类处理
     QLabel::mousePressEvent(ev);
+}
+
+void ClickedLabel::mouseReleaseEvent(QMouseEvent *ev)
+{
+    if (ev->button() == Qt::LeftButton) {
+        if(_curstate == ClickLbState::Normal){
+             // 恢复到悬停状态（因为鼠标还在上面）
+             setProperty("state", _normal_hover);
+             repolish(this);
+             update();
+        } else {
+             setProperty("state", _selected_hover);
+             repolish(this);
+             update();
+        }
+        // 发送点击信号
+        emit clicked();
+        return;
+    }
+    QLabel::mouseReleaseEvent(ev);
 }
 
 // 鼠标进入事件：切换到悬停样式
