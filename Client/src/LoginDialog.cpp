@@ -203,7 +203,6 @@ void LoginDialog::slot_tcp_con_finish(bool bsuccess) {
         QJsonDocument doc(jsonObj);
         QString jsonString = doc.toJson(QJsonDocument::Indented);
         
-        // 发送给 TcpMgr (ReqId 暂时复用 ID_LOGIN_USER，服务端需对应处理)
         TcpMgr::GetInstance()->slot_send_data(ReqId::ID_CHAT_LOGIN, jsonString);
         
     } else {
