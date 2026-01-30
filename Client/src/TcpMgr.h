@@ -2,6 +2,7 @@
 #include <QTcpSocket>
 #include "Singleton.h"
 #include "global.h"
+#include "userdata.h"
 #include <memory>
 #include <functional>
 #include <QMap>
@@ -44,4 +45,5 @@ signals:
     void sig_login_failed(int err); 
     void sig_swich_chatdlg(); // [关键] 切换到聊天窗口信号
     void sig_user_search(std::shared_ptr<SearchInfo>);
+    void sig_auth_rsp(std::shared_ptr<AuthRsp>);
 };

@@ -7,6 +7,8 @@
 #include "StateWidget.h" // [Changed] 引入 StateWidget
 #include "SearchList.h"  // [New] 引入 SearchList
 #include <QMouseEvent>
+#include "ContactUserList.h" // [New]
+#include "ApplyFriendPage.h"
 
 class QStackedWidget;
 class CustomizeEdit;
@@ -23,6 +25,7 @@ private slots:
     void slot_side_chat();
     void slot_side_contact();
     void slot_text_changed(const QString &str);
+    void slot_switch_apply_friend_page();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -57,6 +60,9 @@ private:
     QList<StateWidget*> _lb_list; // 管理按钮组
 
     bool _b_loading;
+
+    ContactUserList *_contact_list; // [New]
+    ApplyFriendPage *_apply_friend_page;
     
     // UI 模式枚举
     enum ChatUIMode {

@@ -590,3 +590,51 @@ LoadingDlg{
     font-family: "Microsoft YaHei"; /* 设置字体 */
     border-radius: 20px; /* 设置圆角 */
 }
+
+/* Contact List */
+#con_user_list {
+    background-color: rgb(247,247,248);
+    border: none;
+}
+#con_user_list::item:selected {
+    background-color: #d3d7d4;
+    border: none;
+    outline: none;
+}
+#con_user_list::item:hover {
+    background-color: rgb(206,207,208);
+    border: none;
+    outline: none;
+}
+#con_user_list::focus {
+    border: none;
+    outline: none;
+}
+
+/* Group Tip */
+#new_friend_item {
+     border-bottom: 1px solid #eaeaea;
+}
+
+/* Apply Friend Page */
+#friend_apply_lb {
+    font-family: "Microsoft YaHei";
+    font-size: 18px;
+    font-weight: normal;
+}
+#friend_apply_wid {
+    background-color: #f1f2f3;
+    border-bottom: 1px solid #ede9e7;
+}
+#apply_friend_list {
+    background-color: #f1f2f3;
+    border-left: 1px solid #ede9e7;
+    border-top: none;
+    border-right: none;
+    border-bottom: none;
+}
+#already_add_lb{
+    color:rgb(153,153,153);
+    font-size: 12px;
+    font-family: "Microsoft YaHei";
+}

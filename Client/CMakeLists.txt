@@ -67,6 +67,19 @@ set(CLIENT_SOURCES
     src/FriendLabel.h
     src/ApplyFriend.cpp
     src/ApplyFriend.h
+    src/GroupTipItem.cpp 
+    src/GroupTipItem.h
+    src/ConUserItem.cpp 
+    src/ConUserItem.h
+    src/ContactUserList.cpp 
+    src/ContactUserList.h
+    src/ApplyFriendItem.cpp 
+    src/ApplyFriendItem.h
+    src/ApplyFriendList.cpp 
+    src/ApplyFriendList.h
+    src/ApplyFriendPage.cpp 
+    src/ApplyFriendPage.h
+    src/userdata.h
 )
 
 qt_add_executable(MemoChatClient

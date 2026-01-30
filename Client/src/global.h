@@ -95,10 +95,12 @@ struct ServerInfo {
  */
  enum ListItemType {
     Pp_CHAT_USER_ITEM = 0,
-    Pp_CONTACT_USER_ITEM = 1,
+    Pp_CONTACT_USER_ITEM = 1, // [Modified] 确保有这个
     Pp_SEARCH_USER_ITEM = 2,
     Pp_ADD_USER_TIP_ITEM = 3,
-    Pp_INVALID_ITEM = 4
+    Pp_INVALID_ITEM = 4,
+    Pp_GROUP_TIP_ITEM = 5,    // [New] 分组标题
+    Pp_APPLY_FRIEND_ITEM = 6  // [New] 好友申请
 };
 
 /**
@@ -113,3 +115,4 @@ struct SearchInfo {
     QString _desc;
     int _sex;
 };
+

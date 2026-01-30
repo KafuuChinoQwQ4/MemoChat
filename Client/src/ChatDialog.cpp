@@ -129,6 +129,12 @@ void ChatDialog::addChatList() {
     _chat_list = new ChatUserList(_chat_list_wid);
     _chat_list->setObjectName("chat_list");
     connect(_chat_list, &ChatUserList::sig_loading_chat_user, this, &ChatDialog::slot_loading_chat_user);
+
+    // [New] 联系人列表 (默认隐藏)
+    _contact_list = new ContactUserList(_chat_list_wid);
+    _contact_list->setObjectName("con_user_list");
+    _contact_list->hide();
+    connect(_contact_list, &ContactUserList::sig_switch_apply_friend_page, this, &ChatDialog::slot_switch_apply_friend_page);
     
     // [New] 搜索列表 (初始隐藏)
     _search_list = new SearchList(_chat_list_wid);
@@ -136,7 +142,8 @@ void ChatDialog::addChatList() {
     _search_list->hide();
 
     layout->addWidget(searchArea);
-    layout->addWidget(_chat_list);   // 两个列表都加入布局
+    layout->addWidget(_chat_list);  
+    layout->addWidget(_contact_list); 
     layout->addWidget(_search_list); 
 }
 
@@ -147,6 +154,9 @@ void ChatDialog::addChatBox() {
     _chat_page = new ChatPage(this);
     QWidget *emptyPage = new QWidget(this);
     emptyPage->setStyleSheet("background-color: #f0f0f0;");
+
+    _apply_friend_page = new ApplyFriendPage(this); // [New]
+    _stacked_widget->addWidget(_apply_friend_page);
     
     _stacked_widget->addWidget(emptyPage); 
     _stacked_widget->addWidget(_chat_page); 
@@ -183,16 +193,25 @@ void ChatDialog::slot_side_chat() {
     ClearLabelState(_side_chat_btn);
     _stacked_widget->setCurrentWidget(_chat_page);
     _state = ChatUIMode::ChatMode;
+    _contact_list->hide();
+    _chat_list->show();
     ShowSearch(false);
 }
 
 void ChatDialog::slot_side_contact() {
     qDebug()<< "receive side contact clicked";
     ClearLabelState(_side_contact_btn);
-    // 这里暂时切换到空白页，后续可以做联系人页面
-    _stacked_widget->setCurrentWidget(_stacked_widget->widget(0)); 
+    
+    // 切换列表显示
+    _chat_list->hide();
+    _contact_list->show();
+    _search_list->hide();
+    
     _state = ChatUIMode::ContactMode;
     ShowSearch(false);
+    
+    // 默认显示一个空白页或者保持当前页，这里暂时不做处理，或者跳转到联系人默认页
+    _stacked_widget->setCurrentWidget(_stacked_widget->widget(0)); // 空白页
 }
 
 void ChatDialog::slot_text_changed(const QString &str) {
@@ -201,6 +220,12 @@ void ChatDialog::slot_text_changed(const QString &str) {
     } else {
         ShowSearch(false);
     }
+}
+
+void ChatDialog::slot_switch_apply_friend_page() {
+    qDebug() << "Switch to apply friend page";
+    _stacked_widget->setCurrentWidget(_apply_friend_page);
+    _contact_list->ShowRedPoint(false); // 清除红点
 }
 
 // ... existing slot_loading_chat_user & addChatUserList ...
