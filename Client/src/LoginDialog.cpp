@@ -41,6 +41,20 @@ LoginDialog::~LoginDialog() {}
 
 void LoginDialog::initUI() {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
+
+    // === Logo 图片 ===
+    m_logoLabel = new QLabel(this);
+    m_logoLabel->setFixedSize(150, 250); // 设置图片显示区域大小 (根据需要调整)
+    
+    // 加载图片 (确保路径跟 qrc 里的一致)
+    QPixmap pix(":/res/KafuuChino.png"); 
+    
+    // 缩放图片以适应 Label 大小，保持比例，平滑缩放
+    if(!pix.isNull()){
+        pix = pix.scaled(m_logoLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        m_logoLabel->setPixmap(pix);
+    }
+    m_logoLabel->setAlignment(Qt::AlignCenter); // 让图片在 Label 里居中
     
     // 1. 错误提示标签
     m_errTip = new QLabel(this);
@@ -52,19 +66,27 @@ void LoginDialog::initUI() {
     m_userEdit = new QLineEdit(this);
     m_userEdit->setPlaceholderText("用户名");
 
-    // 2. 密码输入框 + 小眼睛布局
-    QHBoxLayout *passLayout = new QHBoxLayout();
+    // === [修改开始] 2. 密码输入框 (包含小眼睛) ===
     m_passEdit = new QLineEdit(this);
     m_passEdit->setPlaceholderText("密码");
     m_passEdit->setEchoMode(QLineEdit::Password); // 默认密文
+    
+    // [关键] 设置文本边距：右边留出 25px 给图标，防止文字被挡住
+    m_passEdit->setTextMargins(0, 0, 25, 0); 
 
-    m_passVisible = new ClickedLabel(this);
+    // 创建小眼睛图标，父对象设为 m_passEdit
+    m_passVisible = new ClickedLabel(m_passEdit);
     m_passVisible->setObjectName("pass_visible");
     m_passVisible->setFixedSize(20, 20);
+    m_passVisible->setCursor(Qt::PointingHandCursor);
     m_passVisible->SetState("unvisible", "unvisible_hover", "", "visible", "visible_hover", "");
 
-    passLayout->addWidget(m_passEdit);
-    passLayout->addWidget(m_passVisible);
+    // 在输入框内部创建一个布局，将图标固定在最右侧
+    QHBoxLayout *editLayout = new QHBoxLayout(m_passEdit);
+    editLayout->setContentsMargins(0, 0, 5, 0); // 布局右边距设为 5px
+    editLayout->addStretch();                   // 弹簧占位，把图标挤到右边
+    editLayout->addWidget(m_passVisible);       // 添加图标
+    // === [修改结束] ===
 
     // 忘记密码标签
     m_forgetLabel = new ClickedLabel(this);
@@ -77,9 +99,11 @@ void LoginDialog::initUI() {
     m_regBtn = new QPushButton("注册", this);
 
     // 添加到主布局
+    mainLayout->addWidget(m_logoLabel, 0, Qt::AlignCenter);
     mainLayout->addWidget(m_errTip);
     mainLayout->addWidget(m_userEdit);
-    mainLayout->addLayout(passLayout); // 加入密码布局
+    // [修改] 直接添加 m_passEdit，不再需要 passLayout
+    mainLayout->addWidget(m_passEdit); 
     mainLayout->addWidget(m_forgetLabel, 0, Qt::AlignRight);
     mainLayout->addWidget(m_loginBtn);
     mainLayout->addWidget(m_regBtn);

@@ -41,6 +41,8 @@ set(CLIENT_SOURCES
     src/LoadingDlg.h
     src/ChatPage.cpp
     src/ChatPage.h
+    src/ChatView.cpp
+    src/ChatView.h
     
 )
 
