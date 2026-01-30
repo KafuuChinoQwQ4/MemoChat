@@ -43,6 +43,10 @@ set(CLIENT_SOURCES
     src/ChatPage.h
     src/ChatView.cpp
     src/ChatView.h
+    src/ChatItemBase.cpp
+    src/ChatItemBase.h
+    src/BubbleFrame.cpp
+    src/BubbleFrame.h
     
 )
 

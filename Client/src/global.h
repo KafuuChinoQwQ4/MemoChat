@@ -81,3 +81,11 @@ struct ServerInfo {
     QString Port;
     QString Token;
 };
+
+/**
+ * @brief 聊天角色
+ */
+ enum ChatRole {
+    Self,
+    Other
+};

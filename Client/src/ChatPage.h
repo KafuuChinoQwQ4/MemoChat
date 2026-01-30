@@ -3,10 +3,10 @@
 #include "global.h"
 
 class QLabel;
-class QListWidget;
 class QTextEdit;
 class ClickedBtn;
 class ClickedLabel;
+class ChatView; // [新增] 前向声明
 
 class ChatPage : public QWidget
 {
@@ -15,19 +15,20 @@ public:
     explicit ChatPage(QWidget *parent = nullptr);
     void paintEvent(QPaintEvent *event) override;
 
+private slots:
+    void on_send_btn_clicked(); // [新增]
+
 private:
     void initUI();
 
 private:
     QLabel *_chat_title;
-    QListWidget *_msg_show_list;
+    ChatView *_chat_view; // [修改] 替换 QListWidget
     QTextEdit *_chat_edit;
     
-    // 工具栏按钮
     ClickedLabel *_emo_lb;
     ClickedLabel *_file_lb;
     
-    // 发送接收按钮
     ClickedBtn *_send_btn;
-    ClickedBtn *_receive_btn; // 示例用，虽然实际只有发送
+    ClickedBtn *_receive_btn;
 };
