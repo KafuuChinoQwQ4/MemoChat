@@ -61,6 +61,12 @@ set(CLIENT_SOURCES
     src/ListItemBase.h
     src/FindSuccessDlg.cpp
     src/FindSuccessDlg.h
+    src/ClickedOnceLabel.cpp
+    src/ClickedOnceLabel.h
+    src/FriendLabel.cpp
+    src/FriendLabel.h
+    src/ApplyFriend.cpp
+    src/ApplyFriend.h
 )
 
 qt_add_executable(MemoChatClient
