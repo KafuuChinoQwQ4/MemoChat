@@ -176,25 +176,33 @@ void ChatDialog::ClearLabelState(StateWidget *lb) {
 }
 
 void ChatDialog::ShowSearch(bool bsearch) {
-    if(bsearch){
+    if (bsearch) {
         _chat_list->hide();
+        _contact_list->hide();
         _search_list->show();
         _state = ChatUIMode::SearchMode;
     } else {
-        _chat_list->show();
         _search_list->hide();
-        _state = ChatUIMode::ChatMode;
+        // [新增逻辑] 根据侧边栏按钮的状态决定显示哪一个列表
+        // 如果联系人按钮是选中状态，就显示联系人列表
+        if (_side_contact_btn->GetCurState() == ClickLbState::Selected) {
+             _state = ChatUIMode::ContactMode;
+             _contact_list->show();
+             _chat_list->hide();
+        } else {
+             // 否则默认显示聊天列表
+             _state = ChatUIMode::ChatMode;
+             _chat_list->show();
+             _contact_list->hide();
+        }
     }
 }
 
-// [New] 槽函数实现
 void ChatDialog::slot_side_chat() {
     qDebug()<< "receive side chat clicked";
     ClearLabelState(_side_chat_btn);
     _stacked_widget->setCurrentWidget(_chat_page);
     _state = ChatUIMode::ChatMode;
-    _contact_list->hide();
-    _chat_list->show();
     ShowSearch(false);
 }
 
@@ -202,16 +210,8 @@ void ChatDialog::slot_side_contact() {
     qDebug()<< "receive side contact clicked";
     ClearLabelState(_side_contact_btn);
     
-    // 切换列表显示
-    _chat_list->hide();
-    _contact_list->show();
-    _search_list->hide();
-    
     _state = ChatUIMode::ContactMode;
-    ShowSearch(false);
-    
-    // 默认显示一个空白页或者保持当前页，这里暂时不做处理，或者跳转到联系人默认页
-    _stacked_widget->setCurrentWidget(_stacked_widget->widget(0)); // 空白页
+    ShowSearch(false); // 现在 ShowSearch 会负责显示 _contact_list 并隐藏其他
 }
 
 void ChatDialog::slot_text_changed(const QString &str) {
