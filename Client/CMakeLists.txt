@@ -3,6 +3,10 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
+if(MSVC)
+    add_compile_options(/wd4819 /utf-8)
+endif()
+
 set(CLIENT_SOURCES
     main.cpp
     src/MainWindow.cpp
@@ -55,7 +59,8 @@ set(CLIENT_SOURCES
     src/AddUserItem.h
     src/ListItemBase.cpp
     src/ListItemBase.h
-    
+    src/FindSuccessDlg.cpp
+    src/FindSuccessDlg.h
 )
 
 qt_add_executable(MemoChatClient

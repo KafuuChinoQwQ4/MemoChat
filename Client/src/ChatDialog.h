@@ -6,6 +6,7 @@
 #include "ChatPage.h"
 #include "StateWidget.h" // [Changed] 引入 StateWidget
 #include "SearchList.h"  // [New] 引入 SearchList
+#include <QMouseEvent>
 
 class QStackedWidget;
 class CustomizeEdit;
@@ -23,6 +24,9 @@ private slots:
     void slot_side_contact();
     void slot_text_changed(const QString &str);
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private:
     void initUI(); 
     void addSideBar(); 
@@ -34,6 +38,7 @@ private:
     void ClearLabelState(StateWidget *lb);
     void AddLBGroup(StateWidget *lb);
     void ShowSearch(bool bsearch);
+    void handleGlobalMousePress(QMouseEvent *event);
 
 private:
     QWidget *_side_bar;

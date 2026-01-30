@@ -378,3 +378,36 @@ LoadingDlg{
     font-family: "Microsoft YaHei";
     font-size: 12pt;
 }
+
+/* === 搜索结果弹窗样式 (Day 24) === */
+#find_success_bg {
+    background-color: #ffffff;
+    border: 1px solid #e5e5e5;
+    border-radius: 5px;
+}
+
+#find_user_name {
+    font-family: "Microsoft YaHei";
+    font-size: 14px;
+    font-weight: bold;
+    color: #333333;
+}
+
+/* 弹窗中的添加好友按钮 */
+#find_add_btn[state='normal'] {
+    background-color: #2cb46e;
+    color: white;
+    border-radius: 5px;
+    font-family: "Microsoft YaHei";
+    font-size: 12px;
+}
+
+#find_add_btn[state='hover'] {
+    background-color: #27a363;
+    color: white;
+}
+
+#find_add_btn[state='press'] {
+    background-color: #228f57;
+    color: white;
+}

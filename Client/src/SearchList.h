@@ -6,7 +6,8 @@
 #include <memory>
 #include "global.h"
 
-class LoadingDlg; // 前向声明
+class LoadingDlg;
+class FindSuccessDlg; // [New] 前向声明
 
 class SearchList: public QListWidget
 {
@@ -26,6 +27,7 @@ private:
     bool _send_pending;
     QWidget* _search_edit;
     LoadingDlg * _loadingDialog;
+    std::shared_ptr<FindSuccessDlg> _find_dlg; // [New] 添加成员变量
 
 private slots:
     void slot_item_clicked(QListWidgetItem *item);

@@ -15,6 +15,7 @@ ChatDialog::ChatDialog(QWidget *parent)
     setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
     initUI();
     addChatUserList();
+    this->installEventFilter(this);
 }
 
 ChatDialog::~ChatDialog() {}
@@ -227,5 +228,33 @@ void ChatDialog::addChatUserList() {
         QListWidgetItem *item = new QListWidgetItem(_chat_list);
         item->setSizeHint(chat_user_wid->sizeHint()); 
         _chat_list->setItemWidget(item, chat_user_wid); 
+    }
+}
+
+bool ChatDialog::eventFilter(QObject *watched, QEvent *event)
+{
+    if (event->type() == QEvent::MouseButtonPress) {
+       QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
+       handleGlobalMousePress(mouseEvent);
+    }
+    return QDialog::eventFilter(watched, event);
+}
+
+// [New] 点击逻辑判断
+void ChatDialog::handleGlobalMousePress(QMouseEvent *event)
+{
+    // 1. 判断是否处于搜索模式
+    if( _state != ChatUIMode::SearchMode){ // 注意：变量名是 _state 而不是文档里的 _mode
+        return;
+    }
+
+    // 2. 将鼠标点击位置转换为搜索列表坐标系中的位置
+    QPoint posInSearchList = _search_list->mapFromGlobal(event->globalPos());
+    
+    // 3. 判断点击位置是否在搜索列表的范围内
+    if (!_search_list->rect().contains(posInSearchList)) {
+        // 如果不在搜索列表内，清空输入框并隐藏
+        _search_edit->clear();
+        ShowSearch(false);
     }
 }

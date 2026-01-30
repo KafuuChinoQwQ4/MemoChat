@@ -2,6 +2,8 @@
 #include "AddUserItem.h"
 #include "TcpMgr.h"
 #include "LoadingDlg.h"
+#include "FindSuccessDlg.h"
+#include "ListItemBase.h"
 #include <QDebug>
 
 SearchList::SearchList(QWidget *parent)
@@ -39,17 +41,41 @@ void SearchList::addTipItem()
 
 void SearchList::slot_item_clicked(QListWidgetItem *item)
 {
-    QWidget *widget = this->itemWidget(item);
-    if(!widget) return;
-    
-    ListItemBase *customItem = qobject_cast<ListItemBase*>(widget);
-    if(!customItem) return;
-
-    if(customItem->GetItemType() == ListItemType::Pp_ADD_USER_TIP_ITEM) {
-        // 点击了“添加好友”，后续这里会弹出查找用户对话框
-        qDebug() << "Clicked Add User Tip Item";
-        // CloseFindDlg(); // 暂时还没有 FindDlg
+    QWidget *widget = this->itemWidget(item); 
+    if(!widget){
+        qDebug()<< "slot item clicked widget is nullptr";
+        return;
     }
+
+    // 对自定义widget进行操作， 将item 转化为基类ListItemBase
+    ListItemBase *customItem = qobject_cast<ListItemBase*>(widget);
+    if(!customItem){
+        qDebug()<< "slot item clicked widget is nullptr";
+        return;
+    }
+
+    auto itemType = customItem->GetItemType();
+    
+    // [修改] 这里加上 Pp_ 前缀，与 global.h 保持一致
+    if(itemType == ListItemType::Pp_INVALID_ITEM){
+        qDebug()<< "slot invalid item clicked ";
+        return;
+    }
+
+    // [修改] 这里也要确认是 Pp_ADD_USER_TIP_ITEM
+    if(itemType == ListItemType::Pp_ADD_USER_TIP_ITEM){ 
+        // 创建并显示对话框
+        if(_find_dlg == nullptr) { // 加上判空是个好习惯
+            _find_dlg = std::make_shared<FindSuccessDlg>(this);
+        }
+        auto si = std::make_shared<SearchInfo>(0,"llfc","llfc","hello , my friend!",0);
+        _find_dlg->SetSearchInfo(si);
+        _find_dlg->show();
+        return;
+    }
+
+    // 清除弹出框 (如果有逻辑的话)
+    CloseFindDlg();
 }
 
 void SearchList::slot_user_search(std::shared_ptr<SearchInfo> si)
