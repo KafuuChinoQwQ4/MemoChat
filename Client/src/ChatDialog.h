@@ -1,9 +1,11 @@
 #pragma once
 #include <QDialog>
 #include "global.h"
-#include "ChatUserList.h" // 引入新列表头文件
-#include "LoadingDlg.h"   // 引入加载弹窗
-#include "ChatPage.h"     // 引入聊天页
+#include "ChatUserList.h"
+#include "LoadingDlg.h"
+#include "ChatPage.h"
+#include "StateWidget.h" // [Changed] 引入 StateWidget
+#include "SearchList.h"  // [New] 引入 SearchList
 
 class QStackedWidget;
 class CustomizeEdit;
@@ -15,31 +17,47 @@ public:
     ~ChatDialog();
 
 private slots:
-    // [新增] 加载更多用户的槽函数
     void slot_loading_chat_user();
+    // [New] 侧边栏和搜索槽函数
+    void slot_side_chat();
+    void slot_side_contact();
+    void slot_text_changed(const QString &str);
 
 private:
     void initUI(); 
     void addSideBar(); 
     void addChatList(); 
-    void addChatBox(); // 这个函数现在用来初始化 StackedWidget
-    
+    void addChatBox(); 
     void addChatUserList(); 
+    
+    // [New] 状态管理函数
+    void ClearLabelState(StateWidget *lb);
+    void AddLBGroup(StateWidget *lb);
+    void ShowSearch(bool bsearch);
 
 private:
     QWidget *_side_bar;
     QWidget *_chat_list_wid;
-    // QWidget *_chat_box_wid; // 这个不再需要，用 StackedWidget 代替
-
     CustomizeEdit *_search_edit;
     
-    // [修改] 使用自定义的列表类
     ChatUserList *_chat_list;
+    SearchList *_search_list; // [New] 搜索列表
     
-    // [新增] 右侧页面管理
     QStackedWidget *_stacked_widget;
     ChatPage *_chat_page;
 
-    // [新增] 加载状态标志
+    // 侧边栏按钮 [Changed]
+    StateWidget *_side_chat_btn;
+    StateWidget *_side_contact_btn;
+    QList<StateWidget*> _lb_list; // 管理按钮组
+
     bool _b_loading;
+    
+    // UI 模式枚举
+    enum ChatUIMode {
+        ChatMode,
+        ContactMode,
+        SearchMode
+    };
+    ChatUIMode _state;
 };

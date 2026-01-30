@@ -89,3 +89,27 @@ struct ServerInfo {
     Self,
     Other
 };
+
+/**
+ * @brief 列表条目类型
+ */
+ enum ListItemType {
+    Pp_CHAT_USER_ITEM = 0,
+    Pp_CONTACT_USER_ITEM = 1,
+    Pp_SEARCH_USER_ITEM = 2,
+    Pp_ADD_USER_TIP_ITEM = 3,
+    Pp_INVALID_ITEM = 4
+};
+
+/**
+ * @brief 搜索到的用户信息
+ */
+struct SearchInfo {
+    SearchInfo(int uid, QString name, QString nick, QString desc, int sex)
+        : _uid(uid), _name(name), _nick(nick), _desc(desc), _sex(sex) {}
+    int _uid;
+    QString _name;
+    QString _nick;
+    QString _desc;
+    int _sex;
+};

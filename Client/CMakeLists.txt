@@ -47,6 +47,14 @@ set(CLIENT_SOURCES
     src/ChatItemBase.h
     src/BubbleFrame.cpp
     src/BubbleFrame.h
+    src/StateWidget.cpp
+    src/StateWidget.h
+    src/SearchList.cpp
+    src/SearchList.h
+    src/AddUserItem.cpp
+    src/AddUserItem.h
+    src/ListItemBase.cpp
+    src/ListItemBase.h
     
 )
 

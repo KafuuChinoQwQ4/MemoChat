@@ -43,4 +43,5 @@ signals:
     void sig_send_data(ReqId reqId, QString data); 
     void sig_login_failed(int err); 
     void sig_swich_chatdlg(); // [关键] 切换到聊天窗口信号
+    void sig_user_search(std::shared_ptr<SearchInfo>);
 };

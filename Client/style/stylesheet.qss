@@ -275,3 +275,106 @@ LoadingDlg{
 #file_lb[state='press']{
     border-image: url(:/res/filedir_press.png);
 }
+
+/* === 侧边栏按钮样式 (Day 23 新增) === */
+#chat_user_name {
+    color:rgb(153,153,153);
+    font-size: 14px;
+    font-family: "Microsoft YaHei";
+}
+
+/* 聊天按钮状态 */
+#side_chat_lb[state='normal']{
+    border-image: url(:/res/chat_icon.png);
+}
+
+#side_chat_lb[state='hover']{
+    border-image: url(:/res/chat_icon_hover.png);
+}
+
+#side_chat_lb[state='pressed']{
+    border-image: url(:/res/chat_icon_press.png);
+}
+
+#side_chat_lb[state='selected_normal']{
+    border-image: url(:/res/chat_icon_press.png);
+}
+
+#side_chat_lb[state='selected_hover']{
+    border-image: url(:/res/chat_icon_press.png);
+}
+
+#side_chat_lb[state='selected_pressed']{
+    border-image: url(:/res/chat_icon_press.png);
+}
+
+/* 联系人按钮状态 */
+#side_contact_lb[state='normal']{
+    border-image: url(:/res/contact_list.png);
+}
+
+#side_contact_lb[state='hover']{
+    border-image: url(:/res/contact_list_hover.png);
+}
+
+#side_contact_lb[state='pressed']{
+    border-image: url(:/res/contact_list_press.png);
+}
+
+#side_contact_lb[state='selected_normal']{
+    border-image: url(:/res/contact_list_press.png);
+}
+
+#side_contact_lb[state='selected_hover']{
+    border-image: url(:/res/contact_list_press.png);
+}
+
+#side_contact_lb[state='selected_pressed']{
+    border-image: url(:/res/contact_list_press.png);
+}
+
+/* === 搜索列表与添加好友提示样式 (Day 23 新增) === */
+#search_edit {
+    border: 2px solid #f1f1f1;
+}
+
+#search_list {
+    background-color: rgb(247,247,248);
+    border: none;
+}
+
+#search_list::item:selected {
+    background-color: #d3d7d4;
+    border: none;
+    outline: none;
+}
+
+#search_list::item:hover {
+    background-color: rgb(206,207,208);
+    border: none;
+    outline: none;
+}
+
+#search_list::focus {
+    border: none;
+    outline: none;
+}
+
+#invalid_item {
+    background-color: #eaeaea;
+    border: none;
+}
+
+#add_tip {
+    border-image: url(:/res/addtip.png);
+}
+
+#right_tip{
+    border-image: url(:/res/right_tip.png);
+}
+
+#message_tip{
+    text-align: center;
+    font-family: "Microsoft YaHei";
+    font-size: 12pt;
+}
