@@ -128,6 +128,26 @@ bool RedisMgr::RPush(const std::string& key, const std::string& value) { return 
 bool RedisMgr::RPop(const std::string& key, std::string& value) { return false; }
 bool RedisMgr::HSet(const std::string& key, const std::string& hkey, const std::string& value) { return false; }
 bool RedisMgr::HSet(const char* key, const char* hkey, const char* hvalue, size_t hvaluelen) { return false; }
+bool RedisMgr::HDel(const std::string& key, const std::string& field) {
+    if (_con == nullptr) return false;
+    
+    // 使用 redisCommand 执行 HDEL 命令
+    redisReply* reply = (redisReply*)redisCommand(_con, "HDEL %s %s", key.c_str(), field.c_str());
+    
+    if (reply == nullptr) {
+        std::cerr << "HDel command failed" << std::endl;
+        return false;
+    }
+    
+    // HDEL 返回删除的个数，>=0 即为成功（即使不存在返回0也算执行成功）
+    bool success = false;
+    if (reply->type == REDIS_REPLY_INTEGER) {
+        success = true;
+    }
+    
+    freeReplyObject(reply);
+    return success;
+}
 std::string RedisMgr::HGet(const std::string& key, const std::string& hkey) { return ""; }
 bool RedisMgr::Del(const std::string& key) { return false; }
 bool RedisMgr::ExistsKey(const std::string& key) { return false; }

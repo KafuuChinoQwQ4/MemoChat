@@ -4,6 +4,14 @@ project(MemoChat VERSION 0.1 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(WIN32)
+    add_definitions(-D_WIN32_WINNT=0x0601)
+endif()
+
+if(MSVC)
+	add_compile_options(/wd4819)
+endif()
+
 # === [关键修复 1] 配置 Boost 路径和库目录 ===
 set(BOOST_ROOT_DIR "D:/cppsoft/boost_1_90_0")
 set(BOOST_LIB_DIR "D:/cppsoft/boost_1_90_0/lib64-msvc-14.3")

@@ -39,6 +39,8 @@ public:
     ConfigMgr(const ConfigMgr&) = delete;
     ConfigMgr& operator=(const ConfigMgr&) = delete;
 
+    std::string GetValue(const std::string& section, const std::string& key);
+
 private:
     // 3. 构造函数私有化
     ConfigMgr(); 

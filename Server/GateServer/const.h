@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <map>
 #include <string>
+#include <functional>
 
 // --- 新增 JsonCpp 头文件 ---
 #include <json/json.h>
@@ -29,6 +30,39 @@ enum ErrorCodes {
     PasswdErr = 1006,
     EmailNotMatch = 1007,
     PasswdUpFailed = 1008,
-    UserNotExist = 1009,
-    TokenInvalid = 1010
+    PasswdInvalid = 1009,
+    TokenInvalid = 1010,
+    UidInvalid = 1011, // [新增]
 };
+
+#ifndef USER_INFO_DEF
+#define USER_INFO_DEF
+struct UserInfo {
+    int uid = 0;
+    std::string name;
+    std::string pwd;
+    std::string email;
+    std::string nick;
+    std::string desc;
+    int sex = 0;
+    std::string icon;
+    int back = 0;
+};
+#endif
+
+// 2. 定义 Defer 类 (解决 MysqlDao 报错)
+class Defer {
+public:
+    Defer(std::function<void()> func) : _func(func) {}
+    ~Defer() {
+        if (_func) {
+            _func();
+        }
+    }
+private:
+    std::function<void()> _func;
+};
+
+inline const std::string LOGIN_COUNT = "login_count";
+inline const std::string USERTOKENPREFIX = "utoken_";
+inline const std::string USERIPPREFIX = "uip_";

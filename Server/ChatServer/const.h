@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <json/json.h>
+#include <functional>
 
 // [关键修改] 引用 GateServer 的 const.h 来获取 ErrorCodes 定义
 // 这样就不会报 "enum类型重定义" 错误了

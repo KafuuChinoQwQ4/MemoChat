@@ -29,31 +29,28 @@ public:
     char* _data;
 };
 
-// 消息发送节点 (构造时就封包好)
-class SendNode {
+// 2. [新增] 定义 RecvNode (接收包体) - 解决报错的关键
+class RecvNode : public MsgNode {
+public:
+    RecvNode(short max_len, short msg_id) : MsgNode(max_len), _msg_id(msg_id) {}
+    short _msg_id;
+};
+
+// 3. 定义 SendNode (发送包体)
+class SendNode : public MsgNode {
 public:
     SendNode(const char* msg, short max_len, short msg_id) 
-        : _msg_id(msg_id), _total_len(max_len + HEAD_TOTAL_LEN) 
-    {
-        _data = new char[_total_len + 1]();
-        // 1. 写 ID (网络字节序: 大端)
+        : MsgNode(max_len + HEAD_TOTAL_LEN), _msg_id(msg_id) {
+        // 先写消息ID (2字节, 网络序)
         short msg_id_host = boost::asio::detail::socket_ops::host_to_network_short(msg_id);
         memcpy(_data, &msg_id_host, HEAD_ID_LEN);
         
-        // 2. 写长度
+        // 再写长度 (2字节, 网络序)
         short max_len_host = boost::asio::detail::socket_ops::host_to_network_short(max_len);
         memcpy(_data + HEAD_ID_LEN, &max_len_host, HEAD_DATA_LEN);
         
-        // 3. 写数据
+        // 最后写数据
         memcpy(_data + HEAD_TOTAL_LEN, msg, max_len);
-        _data[_total_len] = '\0';
     }
-
-    ~SendNode() {
-        delete[] _data;
-    }
-
     short _msg_id;
-    short _total_len;
-    char* _data;
 };

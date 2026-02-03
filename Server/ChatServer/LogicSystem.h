@@ -3,17 +3,19 @@
 #include <functional>
 #include <map>
 #include "CSession.h"
-
-// 用户信息结构
-struct UserInfo {
-    std::string name;
-    std::string pwd;
-    int uid;
-    std::string email;
-    // ... 其他字段
-};
+#include "const.h" // 确保包含这个，UserInfo 就在这里面
+#include "CSession.h"
+#include "MsgNode.h"
 
 typedef std::function<void(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data)> FunCallBack;
+
+class LogicNode {
+public:
+    LogicNode(std::shared_ptr<CSession> session, std::shared_ptr<RecvNode> recvnode)
+        : _session(session), _recvnode(recvnode) {}
+    std::shared_ptr<CSession> _session;
+    std::shared_ptr<RecvNode> _recvnode;
+};
 
 class LogicSystem : public Singleton<LogicSystem>
 {

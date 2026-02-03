@@ -85,6 +85,12 @@ public:
     bool UpdatePwd(const std::string& name, const std::string& pwd);
     bool CheckPwd(const std::string& name, const std::string& pwd, std::string& userInfo);
 
+    // 新增：通过UID获取用户信息
+    std::shared_ptr<UserInfo> GetUser(int uid);
+    
+    // 新增：通过Name获取用户信息 (LoginHandler可能会用到)
+    std::shared_ptr<UserInfo> GetUser(std::string name);
+
 private:
     std::unique_ptr<MySqlPool> pool_;
 };
