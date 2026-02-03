@@ -3,7 +3,8 @@
 #include "VerifyGrpcClient.h"
 #include "RedisMgr.h"
 #include "MysqlMgr.h"
-#include "const.h"  // 确保包含 ErrorCodes 定义
+#include "const.h"
+#include "StatusGrpcClient.h" // [新增] 必须包含此头文件
 
 // 构造函数开始
 LogicSystem::LogicSystem() {
@@ -37,7 +38,7 @@ LogicSystem::LogicSystem() {
         return true;
     });
 
-    // 2. 用户注册路由 (我们刚才加的)
+    // 2. 用户注册路由
     RegPost("/user_register", [](std::shared_ptr<HttpConnection> connection) {
         auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
         std::cout << "receive body is " << body_str << std::endl;
@@ -93,6 +94,7 @@ LogicSystem::LogicSystem() {
         return true;
     }); 
 
+    // 3. 重置密码路由
     RegPost("/reset_pwd", [](std::shared_ptr<HttpConnection> connection) {
         auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
         std::cout << "receive body is " << body_str << std::endl;
@@ -148,6 +150,7 @@ LogicSystem::LogicSystem() {
         return true;
     });
 
+    // 4. 用户登录路由 (核心修改部分)
     RegPost("/user_login", [](std::shared_ptr<HttpConnection> connection) {
         auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
         std::cout << "receive body is " << body_str << std::endl;
@@ -155,6 +158,7 @@ LogicSystem::LogicSystem() {
         Json::Value root;
         Json::Reader reader;
         Json::Value src_root;
+        
         if (!reader.parse(body_str, src_root)) {
             root["error"] = ErrorCodes::Error_Json;
             beast::ostream(connection->_response.body()) << root.toStyledString();
@@ -165,30 +169,52 @@ LogicSystem::LogicSystem() {
         auto pwd = src_root["passwd"].asString();
         
         // 1. 验证密码
-        std::string userInfo;
-        bool b_check = MysqlMgr::GetInstance()->CheckPwd(name, pwd, userInfo);
+        // 这里的 userInfo 只是为了占位，因为 MysqlDao::CheckPwd 可能会写入数据
+        // 但我们主要依赖 MysqlMgr::GetUser 来获取详细信息（如 UID）
+        std::string dummy_info; 
+        bool b_check = MysqlMgr::GetInstance()->CheckPwd(name, pwd, dummy_info);
+        
         if (!b_check) {
             std::cout << "User pwd verify failed" << std::endl;
-            root["error"] = ErrorCodes::PasswdErr; // 或者 UserNotExist
+            root["error"] = ErrorCodes::PasswdErr;
+            beast::ostream(connection->_response.body()) << root.toStyledString();
+            return true;
+        }
+
+        // [核心修复] 2. 从数据库获取完整的用户信息（包含 UID 和 Email）
+        auto user_info = MysqlMgr::GetInstance()->GetUser(name);
+        if (user_info == nullptr) {
+            std::cout << "User info missing even if pwd passed" << std::endl;
+            root["error"] = ErrorCodes::UidInvalid;
             beast::ostream(connection->_response.body()) << root.toStyledString();
             return true;
         }
     
-        // 2. (Day 14 文档后续部分) 获取 StatusServer 分配的 ChatServer
-        // 如果你还没有实现 StatusServer，这里先返回成功，后续再补 grpc 调用
+        // [核心修复] 3. 调用 StatusServer 获取 ChatServer 信息
+        auto reply = StatusGrpcClient::GetInstance()->GetChatServer(user_info->uid);
+        if (reply.error()) {
+            std::cout << " grpc get chat server failed, error is " << reply.error() << std::endl;
+            root["error"] = ErrorCodes::RPCFailed;
+            beast::ostream(connection->_response.body()) << root.toStyledString();
+            return true;
+        }
+        
+        std::cout << "succeed to load userinfo uid is " << user_info->uid << std::endl;
         root["error"] = ErrorCodes::Success;
         root["user"] = name;
-        root["token"] = "dummy_token_for_test"; // 暂时用假 token
-        root["host"] = "127.0.0.1";
-        root["port"] = "50052"; // 假设的 ChatServer 端口
+        root["email"] = user_info->email; // 现在 user_info 已定义，可以获取 email
+        root["uid"] = user_info->uid;     // 现在 user_info 已定义，可以获取 uid
+        root["token"] = reply.token();
+        root["host"] = reply.host();
+        root["port"] = reply.port();
         
         beast::ostream(connection->_response.body()) << root.toStyledString();
         return true;
     });
 
-} // <--- ！！！关键点：这里必须有一个右大括号，结束构造函数！！！
+} 
 
-// 下面是其他函数的定义，必须在构造函数外面
+// 下面是其他函数的定义
 bool LogicSystem::HandleGet(std::string path, std::shared_ptr<HttpConnection> con) {
     if (_get_handlers.find(path) == _get_handlers.end()) {
         return false;

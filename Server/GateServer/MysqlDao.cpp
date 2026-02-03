@@ -3,205 +3,208 @@
 
 MysqlDao::MysqlDao()
 {
-    auto& cfg = ConfigMgr::Inst();
-    const auto& host = cfg["Mysql"]["Host"];
-    const auto& port = cfg["Mysql"]["Port"];
-    const auto& pwd = cfg["Mysql"]["Passwd"];
-    const auto& schema = cfg["Mysql"]["Schema"];
-    const auto& user = cfg["Mysql"]["User"];
-    
-    // 初始化连接池
-    pool_.reset(new MySqlPool(host + ":" + port, user, pwd, schema, 5));
+	auto& cfg = ConfigMgr::Inst();
+	const auto& host = cfg["Mysql"]["Host"];
+	const auto& port = cfg["Mysql"]["Port"];
+	const auto& pwd = cfg["Mysql"]["Passwd"];
+	const auto& schema = cfg["Mysql"]["Schema"];
+	const auto& user = cfg["Mysql"]["User"];
+	pool_.reset(new MySqlPool(host + ":" + port, user, pwd, schema, 5));
 }
 
 MysqlDao::~MysqlDao() {
-    pool_->Close();
+	pool_->Close();
 }
 
 int MysqlDao::RegUser(const std::string& name, const std::string& email, const std::string& pwd)
 {
-    auto con = pool_->getConnection();
-    try {
-        if (con == nullptr) {
-            return false;
-        }
-        
-        // 准备调用存储过程 reg_user
-        std::unique_ptr<sql::PreparedStatement> stmt(con->prepareStatement("CALL reg_user(?,?,?,@result)"));
-        stmt->setString(1, name);
-        stmt->setString(2, email);
-        stmt->setString(3, pwd);
-        stmt->execute();
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return 0;
+	}
+	
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
 
-        // 获取输出参数 @result
-        std::unique_ptr<sql::Statement> stmtResult(con->createStatement());
-        std::unique_ptr<sql::ResultSet> res(stmtResult->executeQuery("SELECT @result AS result"));
-        
-        if (res->next()) {
-            int result = res->getInt("result");
-            std::cout << "RegUser Result: " << result << std::endl;
-            pool_->returnConnection(std::move(con));
-            return result;
-        }
-        
-        pool_->returnConnection(std::move(con));
-        return -1;
-    }
-    catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
-        std::cerr << "SQLException: " << e.what();
-        std::cerr << " (MySQL error code: " << e.getErrorCode();
-        std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
-        return -1;
-    }
+	try {
+		if (con == nullptr) {
+			return 0;
+		}
+		
+		// 1. 先检查是否存在
+		std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("SELECT 1 FROM user WHERE name = ? OR email = ?"));
+		pstmt->setString(1, name);
+		pstmt->setString(2, email);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		
+		if (res->next()) {
+			return 0; // 用户已存在
+		}
+
+		// 2. 插入新用户
+		// 注意：这里使用了 user_id 调用存储过程 reg_user
+		std::unique_ptr<sql::PreparedStatement> pstmt_reg(con->prepareStatement("CALL reg_user(?,?,?,@result)"));
+		pstmt_reg->setString(1, name);
+		pstmt_reg->setString(2, email);
+		pstmt_reg->setString(3, pwd);
+		pstmt_reg->execute();
+
+		std::unique_ptr<sql::Statement> stmtResult(con->createStatement());
+		std::unique_ptr<sql::ResultSet> resResult(stmtResult->executeQuery("SELECT @result"));
+		if (resResult->next()) {
+			int uid = resResult->getInt(1); // 获取生成的 UID
+			return uid;
+		}
+		return 0;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what() << std::endl;
+		return 0;
+	}
 }
 
-bool MysqlDao::CheckEmail(const std::string& name, const std::string& email) {
-    auto con = pool_->getConnection();
-    try {
-        if (con == nullptr) return false;
-        std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("SELECT email FROM user WHERE name = ?"));
-        pstmt->setString(1, name);
-        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-        while (res->next()) {
-            if (email != res->getString("email")) {
-                pool_->returnConnection(std::move(con));
-                return false;
-            }
-            pool_->returnConnection(std::move(con));
-            return true;
-        }
-        pool_->returnConnection(std::move(con));
-        return false;
-    } catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
-        std::cerr << "SQLException: " << e.what() << std::endl;
-        return false;
-    }
-}
+// [核心修复] 必须正确实现这个函数，GateServer 分布式登录逻辑强依赖它
+std::shared_ptr<UserInfo> MysqlDao::GetUser(std::string name)
+{
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return nullptr;
+	}
 
-bool MysqlDao::UpdatePwd(const std::string& name, const std::string& newpwd) {
-    auto con = pool_->getConnection();
-    try {
-        if (con == nullptr) return false;
-        std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("UPDATE user SET pwd = ? WHERE name = ?"));
-        pstmt->setString(1, newpwd);
-        pstmt->setString(2, name);
-        int updateCount = pstmt->executeUpdate();
-        std::cout << "Updated rows: " << updateCount << std::endl;
-        pool_->returnConnection(std::move(con));
-        return true;
-    } catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
-        std::cerr << "SQLException: " << e.what() << std::endl;
-        return false;
-    }
-}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
 
-bool MysqlDao::CheckPwd(const std::string& name, const std::string& pwd, std::string& userInfo) {
-    auto con = pool_->getConnection();
-    try {
-        if (con == nullptr) return false;
-        
-        // 准备查询
-        std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("SELECT * FROM user WHERE name = ?"));
-        pstmt->setString(1, name);
-        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-
-        while (res->next()) {
-            if (pwd != res->getString("pwd")) {
-                std::cout << "Password incorrect" << std::endl;
-                pool_->returnConnection(std::move(con));
-                return false;
-            }
-            userInfo = res->getString("email"); // 这里简单返回email，实际可能返回更多
-            pool_->returnConnection(std::move(con));
-            return true;
-        }
-        pool_->returnConnection(std::move(con));
-        return false;
-    } catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
-        std::cerr << "SQLException: " << e.what() << std::endl;
-        return false;
-    }
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("SELECT * FROM user WHERE name = ?"));
+		pstmt->setString(1, name);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		
+		if (res->next()) {
+			auto user_ptr = std::make_shared<UserInfo>();
+			user_ptr->uid = res->getInt("uid");
+			user_ptr->name = res->getString("name");
+			user_ptr->email = res->getString("email");
+			user_ptr->pwd = res->getString("pwd");
+			// user_ptr->icon = res->getString("icon"); // 如果数据库有icon字段
+			return user_ptr;
+		}
+		return nullptr;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what() << std::endl;
+		return nullptr;
+	}
 }
 
 std::shared_ptr<UserInfo> MysqlDao::GetUser(int uid)
 {
-    auto con = pool_->getConnection();
-    if (con == nullptr) {
-        return nullptr;
-    }
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return nullptr;
+	}
 
-    Defer defer([this, &con]() {
-        pool_->returnConnection(std::move(con));
-    });
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
 
-    try {
-        std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("SELECT * FROM user WHERE uid = ?"));
-        pstmt->setInt(1, uid); 
-
-        // 执行查询
-        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-        std::shared_ptr<UserInfo> user_ptr = nullptr;
-        
-        // 遍历结果集
-        while (res->next()) {
-            user_ptr.reset(new UserInfo);
-            user_ptr->pwd = res->getString("pwd");
-            user_ptr->email = res->getString("email");
-            user_ptr->name = res->getString("name");
-            user_ptr->nick = res->getString("nick");
-            user_ptr->desc = res->getString("desc");
-            user_ptr->sex = res->getInt("sex");
-            user_ptr->icon = res->getString("icon");
-            user_ptr->uid = uid;
-            break; // 查到一个就退出
-        }
-        return user_ptr;
-    }
-    catch (sql::SQLException& e) {
-        std::cerr << "SQLException: " << e.what();
-        std::cerr << " (MySQL error code: " << e.getErrorCode();
-        std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
-        return nullptr;
-    }
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("SELECT * FROM user WHERE uid = ?"));
+		pstmt->setInt(1, uid);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		
+		if (res->next()) {
+			auto user_ptr = std::make_shared<UserInfo>();
+			user_ptr->uid = res->getInt("uid");
+			user_ptr->name = res->getString("name");
+			user_ptr->email = res->getString("email");
+			user_ptr->pwd = res->getString("pwd");
+			return user_ptr;
+		}
+		return nullptr;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what() << std::endl;
+		return nullptr;
+	}
 }
 
-std::shared_ptr<UserInfo> MysqlDao::GetUser(std::string name)
-{
-    auto con = pool_->getConnection();
-    if (con == nullptr) {
-        return nullptr;
-    }
+bool MysqlDao::CheckPwd(const std::string& name, const std::string& pwd, std::string& userInfo) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
 
-    Defer defer([this, &con]() {
-        pool_->returnConnection(std::move(con));
-    });
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
 
-    try {
-        std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("SELECT * FROM user WHERE uid = ?"));
-        pstmt->setString(1, name);
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("SELECT * FROM user WHERE name = ?"));
+		pstmt->setString(1, name);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 
-        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-        std::shared_ptr<UserInfo> user_ptr = nullptr;
-        
-        while (res->next()) {
-            user_ptr.reset(new UserInfo);
-            user_ptr->pwd = res->getString("pwd");
-            user_ptr->email = res->getString("email");
-            user_ptr->name = res->getString("name");
-            user_ptr->nick = res->getString("nick");
-            user_ptr->desc = res->getString("desc");
-            user_ptr->sex = res->getInt("sex");
-            user_ptr->uid = res->getInt("uid");
-            break;
-        }
-        return user_ptr;
-    }
-    catch (sql::SQLException& e) {
-        std::cerr << "SQLException: " << e.what() << std::endl;
-        return nullptr;
-    }
+		if (res->next()) {
+			if (pwd == res->getString("pwd")) {
+				return true;
+			}
+		}
+		return false;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::CheckEmail(const std::string& name, const std::string& email) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("SELECT email FROM user WHERE name = ?"));
+		pstmt->setString(1, name);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+
+		if (res->next()) {
+			if (email == res->getString("email")) {
+				return true;
+			}
+		}
+		return false;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::UpdatePwd(const std::string& name, const std::string& newpwd) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("UPDATE user SET pwd = ? WHERE name = ?"));
+		pstmt->setString(1, newpwd);
+		pstmt->setString(2, name);
+		int updateCount = pstmt->executeUpdate();
+		return updateCount > 0;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what() << std::endl;
+		return false;
+	}
 }

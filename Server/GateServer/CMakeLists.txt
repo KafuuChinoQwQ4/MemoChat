@@ -70,6 +70,7 @@ set(SERVER_SOURCES
     RedisMgr.cpp
     MysqlDao.cpp
     MysqlMgr.cpp
+    StatusGrpcClient.cpp
     ${PROTO_SRCS}
 )
 
