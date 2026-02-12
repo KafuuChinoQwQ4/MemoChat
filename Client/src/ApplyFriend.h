@@ -10,6 +10,8 @@ class ClickedLabel;
 class FriendLabel;
 class ClickedOnceLabel;
 class QScrollArea;
+class ClickedBtn;
+struct SearchInfo;
 
 class ApplyFriend : public QDialog
 {
@@ -40,8 +42,8 @@ private:
     QWidget *_gridWidget; // 顶部已选标签容器
     CustomizeEdit *_name_ed;
     CustomizeEdit *_back_ed;
-    QPushButton *_sure_btn;
-    QPushButton *_cancel_btn;
+    ClickedBtn *_sure_btn;   // 修改这里
+    ClickedBtn *_cancel_btn;
 
     // 数据
     QMap<QString, ClickedLabel*> _add_labels;

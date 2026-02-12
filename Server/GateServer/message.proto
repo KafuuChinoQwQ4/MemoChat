@@ -2,7 +2,6 @@ syntax = "proto3";
 
 package message;
 
-// --- 原有的验证码服务 ---
 service VarifyService {
   rpc GetVarifyCode (GetVarifyReq) returns (GetVarifyRsp) {}
 }
@@ -17,7 +16,6 @@ message GetVarifyRsp {
   string code = 3;
 }
 
-// --- 新增: StatusServer 服务 (负载均衡与登录) ---
 message GetChatServerReq {
   int32 uid = 1;
 }
@@ -45,12 +43,14 @@ service StatusService {
 	rpc Login(LoginReq) returns(LoginRsp);
 }
 
-// --- 新增: ChatServer 服务 (服务器间通信) ---
 message AddFriendReq {
 	int32  applyuid = 1;
 	string name = 2;
 	string desc = 3;
-	int32  touid = 4;
+	string icon = 4;
+	string nick = 5;
+	int32  sex = 6;
+	int32  touid = 7;
 }
 
 message AddFriendRsp {
@@ -72,15 +72,15 @@ message RplyFriendRsp {
 }
 
 message SendChatMsgReq{
-	int32 fromuid = 1;
-	int32 touid = 2;
-	string message = 3;
+		int32 fromuid = 1;
+		int32 touid = 2;
+		string message = 3;
 }
 
 message SendChatMsgRsp{
-	int32 error = 1;
-	int32 fromuid = 2;
-	int32 touid = 3;
+		int32 error = 1;
+		int32 fromuid = 2;
+		int32 touid = 3;
 }
 
 message AuthFriendReq{
@@ -94,15 +94,15 @@ message AuthFriendRsp{
 	int32 touid = 3;
 }
 
+message TextChatMsgReq {
+	int32 fromuid = 1;
+    int32 touid = 2;
+	repeated TextChatData textmsgs = 3;
+}
+
 message TextChatData{
 	string msgid = 1;
 	string msgcontent = 2;
-}
-
-message TextChatMsgReq {
-	int32 fromuid = 1;
-	int32 touid = 2;
-	repeated TextChatData textmsgs = 3;
 }
 
 message TextChatMsgRsp {

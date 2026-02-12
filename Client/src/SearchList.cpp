@@ -4,7 +4,12 @@
 #include "LoadingDlg.h"
 #include "FindSuccessDlg.h"
 #include "ListItemBase.h"
+#include "CustomizeEdit.h" // [新增] 需要引入 Edit 头文件以便获取文本
+#include <QJsonObject>     // [新增]
+#include <QJsonDocument>   // [新增]
 #include <QDebug>
+#include "FindFailDlg.h"
+#include "ApplyFriend.h"
 
 SearchList::SearchList(QWidget *parent)
     : QListWidget(parent), _search_edit(nullptr), _send_pending(false), _loadingDialog(nullptr)
@@ -64,13 +69,38 @@ void SearchList::slot_item_clicked(QListWidgetItem *item)
 
     // [修改] 这里也要确认是 Pp_ADD_USER_TIP_ITEM
     if(itemType == ListItemType::Pp_ADD_USER_TIP_ITEM){ 
-        // 创建并显示对话框
-        if(_find_dlg == nullptr) { // 加上判空是个好习惯
-            _find_dlg = std::make_shared<FindSuccessDlg>(this);
+        
+        if(_send_pending){
+            return;
         }
-        auto si = std::make_shared<SearchInfo>(0,"llfc","llfc","hello , my friend!",0);
-        _find_dlg->SetSearchInfo(si);
-        _find_dlg->show();
+
+        if (!_search_edit) {
+            return;
+        }
+
+        // 显示加载框
+        waitPending(true);
+
+        // 获取搜索框内容
+        auto search_edit = dynamic_cast<CustomizeEdit*>(_search_edit);
+        if(!search_edit) {
+            qDebug() << "Search edit cast failed";
+            waitPending(false);
+            return;
+        }
+        
+        auto uid_str = search_edit->text();
+
+        // 构建 JSON 请求
+        QJsonObject jsonObj;
+        jsonObj["uid"] = uid_str;
+
+        QJsonDocument doc(jsonObj);
+        QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
+
+        // 发送请求
+        // 注意：这里使用了 ReqId::ID_SEARCH_USER_REQ，请确保在 global.h 中添加了它
+        emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_SEARCH_USER_REQ, jsonData);
         return;
     }
 
@@ -80,8 +110,20 @@ void SearchList::slot_item_clicked(QListWidgetItem *item)
 
 void SearchList::slot_user_search(std::shared_ptr<SearchInfo> si)
 {
-    // 处理搜索结果
-    qDebug() << "Search User Result: " << si->_name;
+    waitPending(false); // 关闭加载动画
+
+    if(si == nullptr){
+        // 搜索失败或未找到
+        _find_dlg = std::make_shared<FindFailDlg>(this);
+    }else{
+        // 搜索成功
+        // [Todo] 此处未来可以增加逻辑判断是否已经是好友
+        auto dlg = std::make_shared<FindSuccessDlg>(this);
+        dlg->SetSearchInfo(si);
+        _find_dlg = dlg;
+    }
+
+    _find_dlg->show();
 }
 
 void SearchList::SetSearchEdit(QWidget* edit) {
@@ -89,18 +131,27 @@ void SearchList::SetSearchEdit(QWidget* edit) {
 }
 
 void SearchList::CloseFindDlg() {
-    // 关闭搜索弹窗逻辑
+    if(_find_dlg){
+        _find_dlg->hide();
+    }
 }
 
 void SearchList::waitPending(bool pending) {
     if(pending) {
-        _loadingDialog = new LoadingDlg(this);
+        if(_loadingDialog == nullptr){
+            _loadingDialog = new LoadingDlg(this);
+        }
         _loadingDialog->setModal(true);
         _loadingDialog->show();
         _send_pending = true;
     } else {
-        _loadingDialog->hide();
-        _loadingDialog->deleteLater();
+        if(_loadingDialog){
+            _loadingDialog->hide();
+            // 注意：deleteLater 交给 Qt 事件循环处理，避免重复创建开销也可以不 delete，看你需求
+            // 这里为了匹配你给的代码，我们选择 deleteLater
+             _loadingDialog->deleteLater(); 
+             _loadingDialog = nullptr;
+        }
         _send_pending = false;
     }
 }

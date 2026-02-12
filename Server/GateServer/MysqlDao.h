@@ -13,6 +13,7 @@
 #include <mutex>              // [新增] 必须包含
 #include <condition_variable> // [新增] 必须包含
 #include <atomic>
+#include <vector>
 
 // 简单的连接池实现
 class MySqlPool {
@@ -91,6 +92,11 @@ public:
 	bool CheckEmail(const std::string& name, const std::string& email);
 	bool UpdatePwd(const std::string& name, const std::string& pwd);
 	bool CheckPwd(const std::string& name, const std::string& pwd, std::string& userInfo);
+	bool AddFriendApply(const int& from, const int& to);
+	bool AuthFriendApply(const int& from, const int& to);
+	bool AddFriend(const int& from, const int& to, std::string back_name);
+	bool GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo>>& user_info_list);
+	bool GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& applyList, int begin, int limit);
 	
 	std::shared_ptr<UserInfo> GetUser(int uid);
 	std::shared_ptr<UserInfo> GetUser(std::string name); // [重点] 确保这个声明存在

@@ -2,20 +2,14 @@
 #include "Singleton.h"
 #include <functional>
 #include <map>
+#include <string>
+#include <json/json.h> // 确保包含 json
 #include "CSession.h"
-#include "const.h" // 确保包含这个，UserInfo 就在这里面
-#include "CSession.h"
+#include <vector>
+#include "const.h"
 #include "MsgNode.h"
 
 typedef std::function<void(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data)> FunCallBack;
-
-class LogicNode {
-public:
-    LogicNode(std::shared_ptr<CSession> session, std::shared_ptr<RecvNode> recvnode)
-        : _session(session), _recvnode(recvnode) {}
-    std::shared_ptr<CSession> _session;
-    std::shared_ptr<RecvNode> _recvnode;
-};
 
 class LogicSystem : public Singleton<LogicSystem>
 {
@@ -29,9 +23,21 @@ private:
     LogicSystem();
     std::map<short, FunCallBack> _fun_callbacks;
     
-    // [新增] 登录处理函数
+    // 业务处理函数
     void LoginHandler(std::shared_ptr<CSession> session, const short &msg_id, const std::string &msg_data);
+    void SearchInfo(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
+    void AddFriendApply(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
+    void AuthFriendApply(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
+    void DealChatTextMsg(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
+
+    // 辅助函数
+    bool isPureDigit(const std::string& str);
+    void GetUserByUid(const std::string& uid_str, Json::Value& rtvalue);
+    void GetUserByName(const std::string& name_str, Json::Value& rtvalue);
+    bool GetBaseInfo(std::string base_key, int uid, std::shared_ptr<UserInfo>& user_info);
+    bool GetFriendApplyInfo(int to_uid, std::vector<std::shared_ptr<ApplyInfo>>& list);
+    bool GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo>>& user_list);
     
-    // [新增] 内存中缓存的用户信息
+    // 内存用户缓存
     std::map<int, std::shared_ptr<UserInfo>> _users;
 };

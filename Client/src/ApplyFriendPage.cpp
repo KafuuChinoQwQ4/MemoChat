@@ -9,6 +9,7 @@
 #include <QStyleOption>
 #include <QRandomGenerator>
 #include <QDebug>
+#include "AuthenFriend.h"
 
 ApplyFriendPage::ApplyFriendPage(QWidget *parent) : QWidget(parent)
 {
@@ -71,7 +72,27 @@ void ApplyFriendPage::loadApplyList()
 
 void ApplyFriendPage::AddNewApply(std::shared_ptr<AddFriendApply> apply)
 {
-    // ... 逻辑同文档，略微简化 ...
+    //先模拟头像随机，以后头像资源增加资源服务器后再显示
+    QStringList heads = { ":/res/head_1.jpg", ":/res/head_2.jpg", ":/res/head_3.jpg" };
+    int randomValue = QRandomGenerator::global()->bounded(100); // 生成0到99之间的随机整数
+    int head_i = randomValue % heads.size();
+    auto* apply_item = new ApplyFriendItem();
+    auto apply_info = std::make_shared<ApplyInfo>(apply->_from_uid,
+        apply->_name, apply->_desc, heads[head_i], apply->_name, 0, 0);
+    apply_item->SetInfo(apply_info);
+    QListWidgetItem* item = new QListWidgetItem;
+    item->setSizeHint(apply_item->sizeHint());
+    item->setFlags(item->flags() & ~Qt::ItemIsEnabled & ~Qt::ItemIsSelectable);
+    _apply_friend_list->insertItem(0, item);
+    _apply_friend_list->setItemWidget(item, apply_item);
+    apply_item->ShowAddBtn(true);
+    //收到审核好友信号
+    connect(apply_item, &ApplyFriendItem::sig_auth_friend, [this](std::shared_ptr<ApplyInfo> apply_info) {
+        auto* authFriend = new AuthenFriend(this);
+        authFriend->setModal(true);
+        authFriend->SetApplyInfo(apply_info);
+        authFriend->show();
+        });
 }
 
 void ApplyFriendPage::slot_auth_rsp(std::shared_ptr<AuthRsp> auth_rsp)

@@ -33,6 +33,7 @@ enum ErrorCodes {
     PasswdInvalid = 1009,
     TokenInvalid = 1010,
     UidInvalid = 1011, // [新增]
+    UserNotExist = 1012,
 };
 
 #ifndef USER_INFO_DEF
@@ -46,9 +47,23 @@ struct UserInfo {
     std::string desc;
     int sex = 0;
     std::string icon;
-    int back = 0;
+    std::string back;
 };
 #endif
+
+struct ApplyInfo {
+    ApplyInfo(int uid, std::string name, std::string desc,
+        std::string icon, std::string nick, int sex, int status)
+        : _uid(uid), _name(name), _desc(desc),
+        _icon(icon), _nick(nick), _sex(sex), _status(status) {}
+    int _uid;
+    std::string _name;
+    std::string _desc;
+    std::string _icon;
+    std::string _nick;
+    int _sex;
+    int _status;
+};
 
 // 2. 定义 Defer 类 (解决 MysqlDao 报错)
 class Defer {

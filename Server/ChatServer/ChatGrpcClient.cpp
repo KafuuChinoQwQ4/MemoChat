@@ -30,22 +30,24 @@ void ChatGrpcClient::Initialize() {
 
 AddFriendRsp ChatGrpcClient::NotifyAddFriend(std::string server_name, const AddFriendReq& req) {
     AddFriendRsp rsp;
-    rsp.set_error(ErrorCodes::Error_Json);
+    Defer defer([&rsp, &req]() {
+        rsp.set_error(ErrorCodes::Success);
+        rsp.set_applyuid(req.applyuid());
+        rsp.set_touid(req.touid());
+        });
 
     auto iter = _pools.find(server_name);
     if (iter == _pools.end()) {
         return rsp;
     }
 
-    auto stub = iter->second->getConnection();
-    if (!stub) {
-        return rsp;
-    }
-
+    auto& pool = iter->second;
     ClientContext context;
+    auto stub = pool->getConnection();
     Status status = stub->NotifyAddFriend(&context, req, &rsp);
-    
-    iter->second->returnConnection(std::move(stub));
+    Defer defercon([&stub, this, &pool]() {
+        pool->returnConnection(std::move(stub));
+        });
 
     if (!status.ok()) {
         rsp.set_error(ErrorCodes::RPCFailed);
@@ -55,23 +57,27 @@ AddFriendRsp ChatGrpcClient::NotifyAddFriend(std::string server_name, const AddF
     return rsp;
 }
 
-AuthFriendRsp ChatGrpcClient::NotifyAuthFriend(std::string server_name, const AuthFriendReq& req) {
+AuthFriendRsp ChatGrpcClient::NotifyAuthFriend(std::string server_ip, const AuthFriendReq& req) {
     AuthFriendRsp rsp;
-    rsp.set_error(ErrorCodes::Error_Json);
+    rsp.set_error(ErrorCodes::Success);
 
-    auto iter = _pools.find(server_name);
-    if (iter == _pools.end()) {
+    Defer defer([&rsp, &req]() {
+        rsp.set_fromuid(req.fromuid());
+        rsp.set_touid(req.touid());
+    });
+
+    auto find_iter = _pools.find(server_ip);
+    if (find_iter == _pools.end()) {
         return rsp;
     }
 
-    auto stub = iter->second->getConnection();
-    if (!stub) {
-        return rsp;
-    }
-
+    auto& pool = find_iter->second;
     ClientContext context;
+    auto stub = pool->getConnection();
     Status status = stub->NotifyAuthFriend(&context, req, &rsp);
-    iter->second->returnConnection(std::move(stub));
+    Defer defercon([&stub, this, &pool]() {
+        pool->returnConnection(std::move(stub));
+    });
 
     if (!status.ok()) {
         rsp.set_error(ErrorCodes::RPCFailed);
@@ -81,23 +87,25 @@ AuthFriendRsp ChatGrpcClient::NotifyAuthFriend(std::string server_name, const Au
     return rsp;
 }
 
-TextChatMsgRsp ChatGrpcClient::NotifyTextChatMsg(std::string server_name, const TextChatMsgReq& req, const Json::Value& rtvalue) {
+TextChatMsgRsp ChatGrpcClient::NotifyTextChatMsg(std::string server_ip,
+	const TextChatMsgReq& req, const Json::Value& rtvalue) {
+
     TextChatMsgRsp rsp;
-    rsp.set_error(ErrorCodes::Error_Json);
-    
-    auto iter = _pools.find(server_name);
-    if (iter == _pools.end()) {
-        return rsp;
-    }
-    
-    auto stub = iter->second->getConnection();
-    if (!stub) {
-        return rsp;
-    }
-    
-    ClientContext context;
+	rsp.set_error(ErrorCodes::Success);
+
+	auto find_iter = _pools.find(server_ip);
+	if (find_iter == _pools.end()) {
+		return rsp;
+	}
+
+	auto& pool = find_iter->second;
+	ClientContext context;
+	auto stub = pool->getConnection();
+	Defer defercon([&stub, this, &pool]() {
+		pool->returnConnection(std::move(stub));
+		});
+
     Status status = stub->NotifyTextChatMsg(&context, req, &rsp);
-    iter->second->returnConnection(std::move(stub));
     
     if (!status.ok()) {
          rsp.set_error(ErrorCodes::RPCFailed);

@@ -80,6 +80,10 @@ set(CLIENT_SOURCES
     src/ApplyFriendPage.cpp 
     src/ApplyFriendPage.h
     src/userdata.h
+    src/AuthenFriend.cpp
+    src/AuthenFriend.h
+    src/FindFailDlg.cpp
+    src/FindFailDlg.h
 )
 
 qt_add_executable(MemoChatClient

@@ -19,11 +19,12 @@ private slots:
     void on_add_friend_btn_clicked();
 
 private:
-    void initUI(); // 手动初始化UI
+    void initUI(); 
 
     QLabel * _head_lb;
     QLabel * _name_lb;
-    ClickedBtn * _add_friend_btn; // 使用自定义按钮
+    ClickedBtn * _add_friend_btn; 
     
     std::shared_ptr<SearchInfo> _si;
+    QWidget * _parent; // 保存父窗口指针，用于创建 ApplyFriend
 };
