@@ -38,7 +38,6 @@ file(GLOB ADDR_SORT_LIB "${GRPC_DIR}/lib/address_sorting.lib")
 # === [修复] C-Ares (DNS解析库) ===
 file(GLOB CARES_LIB "${GRPC_DIR}/lib/cares.lib")
 
-# 5. 自动生成 gRPC 代码
 set(PROTO_FILE "${CMAKE_CURRENT_SOURCE_DIR}/message.proto")
 set(PROTOC "${GRPC_DIR}/bin/protoc.exe")
 set(GRPC_CPP_PLUGIN "${GRPC_DIR}/bin/grpc_cpp_plugin.exe")
@@ -58,7 +57,6 @@ add_custom_command(
     COMMENT "Generating gRPC files from message.proto"
 )
 
-# 6. 源代码列表
 set(SERVER_SOURCES
     main.cpp
     CServer.cpp
@@ -74,10 +72,9 @@ set(SERVER_SOURCES
     ${PROTO_SRCS}
 )
 
-# 7. 生成可执行文件
+
 add_executable(GateServer ${SERVER_SOURCES})
 
-# 8. 编译选项 (UTF-8)
 if (MSVC)
     add_compile_options("/utf-8")
 endif()
@@ -86,8 +83,6 @@ target_compile_definitions(GateServer PRIVATE
     BOOST_ERROR_CODE_HEADER_ONLY
     WIN32_LEAN_AND_MEAN
 )
-
-# 9. 链接库
 target_link_libraries(GateServer PRIVATE 
     Boost::system 
     jsoncpp_lib
@@ -101,7 +96,7 @@ target_link_libraries(GateServer PRIVATE
     ${UPB_LIBS}
     ${UTF8_LIBS}
     ${ADDR_SORT_LIB}
-    ${CARES_LIB}      # <--- 加上这一行，解决 ares_xxx 报错
+    ${CARES_LIB}
     
     re2
     ssl 
@@ -117,14 +112,7 @@ target_link_libraries(GateServer PRIVATE
     mysqlcppconn.lib
 )
 
-# ... (保留上面的 target_link_libraries 等代码)
-
-# === [修改开始] 配置文件自动复制策略 ===
-
 target_sources(GateServer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/config.ini")
-
-# 1. 创建复制任务 (保持 ALL，确保每次都检查)
-# ... 前面的代码不变 ...
 
 add_custom_target(CopyGateServerConfig ALL
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -133,7 +121,4 @@ add_custom_target(CopyGateServerConfig ALL
     COMMENT "Updating GateServer config.ini..."
 )
 
-# [正确写法] 让复制任务等待 GateServer 编译完成
 add_dependencies(CopyGateServerConfig GateServer)
-
-# === [修改结束] ===
