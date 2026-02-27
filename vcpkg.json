@@ -1,0 +1,35 @@
+{
+  "name": "memochat-qml",
+  "version-string": "0.1.0",
+  "builtin-baseline": "2fa7118fb2ce0c27ab73e08ab1991f4cb67af880",
+  "default-features": [
+    "server"
+  ],
+  "features": {
+    "server": {
+      "description": "Server-side dependencies",
+      "dependencies": [
+        {
+          "name": "grpc",
+          "features": [
+            "codegen"
+          ]
+        },
+        "protobuf",
+        "hiredis",
+        "jsoncpp",
+        "boost-asio",
+        "boost-beast",
+        "boost-filesystem",
+        "boost-property-tree",
+        "boost-uuid",
+        {
+          "name": "mysql-connector-cpp",
+          "features": [
+            "jdbc"
+          ]
+        }
+      ]
+    }
+  }
+}

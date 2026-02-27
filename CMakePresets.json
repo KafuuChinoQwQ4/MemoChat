@@ -1,0 +1,93 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 16,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "msvc2022-all",
+      "displayName": "MSVC2022 All (vcpkg)",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build",
+      "environment": {
+        "PATH": "D:/VS2026stable/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin;D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64;C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64;$penv{PATH}",
+        "LIB": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64",
+        "INCLUDE": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/include;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/um;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/shared;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/winrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/cppwinrt",
+        "VCPKG_ROOT": "D:/vcpkg",
+        "VCPKG_DOWNLOADS": "D:/vcpkg/downloads",
+        "VCPKG_DEFAULT_BINARY_CACHE": "D:/vcpkg/bincache",
+        "HTTP_PROXY": "",
+        "HTTPS_PROXY": "",
+        "NO_PROXY": ""
+      },
+      "cacheVariables": {
+        "BUILD_CLIENT": "ON",
+        "BUILD_SERVER": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_MAKE_PROGRAM": "D:/ninja-win/ninja.exe",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "VCPKG_HOST_TRIPLET": "x64-windows",
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed",
+        "VCPKG_MANIFEST_FEATURES": "server",
+        "CMAKE_CXX_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe"
+      }
+    },
+    {
+      "name": "msvc2022-vcpkg-server",
+      "displayName": "MSVC2022 Server (vcpkg static)",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build-vcpkg-server",
+      "environment": {
+        "PATH": "D:/VS2026stable/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin;D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64;C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64;$penv{PATH}",
+        "LIB": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64",
+        "INCLUDE": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/include;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/um;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/shared;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/winrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/cppwinrt",
+        "VCPKG_ROOT": "D:/vcpkg",
+        "VCPKG_DOWNLOADS": "D:/vcpkg/downloads",
+        "VCPKG_DEFAULT_BINARY_CACHE": "D:/vcpkg/bincache",
+        "HTTP_PROXY": "",
+        "HTTPS_PROXY": "",
+        "NO_PROXY": ""
+      },
+      "cacheVariables": {
+        "BUILD_CLIENT": "OFF",
+        "BUILD_SERVER": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_MAKE_PROGRAM": "D:/ninja-win/ninja.exe",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "VCPKG_HOST_TRIPLET": "x64-windows",
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed",
+        "CMAKE_CXX_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "msvc2022-release",
+      "displayName": "Build Release (Client + Server via vcpkg)",
+      "configurePreset": "msvc2022-all",
+      "configuration": "Release",
+      "jobs": 8
+    },
+    {
+      "name": "msvc2022-debug-client",
+      "displayName": "Build Debug (Client via vcpkg)",
+      "configurePreset": "msvc2022-all",
+      "configuration": "Debug",
+      "targets": [
+        "MemoChat"
+      ],
+      "jobs": 8
+    },
+    {
+      "name": "msvc2022-vcpkg-server-release",
+      "displayName": "Build Release (Server via vcpkg)",
+      "configurePreset": "msvc2022-vcpkg-server",
+      "configuration": "Release",
+      "jobs": 8
+    }
+  ]
+}
