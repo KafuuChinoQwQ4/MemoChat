@@ -1,0 +1,40 @@
+add_executable(ChatServer2
+    AsioIOServicePool.cpp
+    ChatGrpcClient.cpp
+    ChatServer.cpp
+    ChatServiceImpl.cpp
+    ConfigMgr.cpp
+    CServer.cpp
+    CSession.cpp
+    DistLock.cpp
+    LogicSystem.cpp
+    MsgNode.cpp
+    MysqlDao.cpp
+    MysqlMgr.cpp
+    RedisMgr.cpp
+    StatusGrpcClient.cpp
+    UserMgr.cpp
+    AsioIOServicePool.h
+    ChatGrpcClient.h
+    ChatServiceImpl.h
+    ConfigMgr.h
+    const.h
+    CServer.h
+    CSession.h
+    data.h
+    DistLock.h
+    LogicSystem.h
+    MsgNode.h
+    MysqlDao.h
+    MysqlMgr.h
+    RedisMgr.h
+    Singleton.h
+    StatusGrpcClient.h
+    UserMgr.h
+    message.proto
+    config.ini
+)
+
+memochat_add_proto_sources(ChatServer2 message.proto)
+set_target_properties(ChatServer2 PROPERTIES FOLDER "Server")
+memochat_configure_server_target(ChatServer2)

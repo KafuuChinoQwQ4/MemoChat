@@ -1,0 +1,21 @@
+{
+  "email": {
+    "host": "smtp.qq.com",
+    "port": 465,
+    "secure": true,
+    "user": "kafu_chino@qq.com",
+    "pass": "hrkhkvgptixfdfja",
+    "from": "kafu_chino@qq.com"
+  },
+  "mysql": {
+    "host": "127.0.0.1",
+    "port": 3306,
+    "passwd": "123456",
+    "schema": "memo"
+  },
+  "redis": {
+    "host": "127.0.0.1",
+    "port": 6379,
+    "passwd": "123456"
+  }
+}
