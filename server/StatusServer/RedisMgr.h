@@ -20,15 +20,15 @@ public:
 
 			auto reply = (redisReply*)redisCommand(context, "AUTH %s", pwd);
 			if (reply->type == REDIS_REPLY_ERROR) {
-				std::cout << "ÈÏÖ¤Ê§°Ü" << std::endl;
-				//Ö´ÐÐ³É¹¦ ÊÍ·ÅredisCommandÖ´ÐÐºó·µ»ØµÄredisReplyËùÕ¼ÓÃµÄÄÚ´æ
+				std::cout << "redis auth failed" << std::endl;
+				//Ö´ï¿½Ð³É¹ï¿½ ï¿½Í·ï¿½redisCommandÖ´ï¿½Ðºó·µ»Øµï¿½redisReplyï¿½ï¿½Õ¼ï¿½Ãµï¿½ï¿½Ú´ï¿½
 				freeReplyObject(reply);
 				continue;
 			}
 
-			//Ö´ÐÐ³É¹¦ ÊÍ·ÅredisCommandÖ´ÐÐºó·µ»ØµÄredisReplyËùÕ¼ÓÃµÄÄÚ´æ
+			//Ö´ï¿½Ð³É¹ï¿½ ï¿½Í·ï¿½redisCommandÖ´ï¿½Ðºó·µ»Øµï¿½redisReplyï¿½ï¿½Õ¼ï¿½Ãµï¿½ï¿½Ú´ï¿½
 			freeReplyObject(reply);
-			std::cout << "ÈÏÖ¤³É¹¦" << std::endl;
+			std::cout << "redis auth success" << std::endl;
 			connections_.push(context);
 		}
 
@@ -40,7 +40,7 @@ public:
 					counter_ = 0;
 				}
 
-				std::this_thread::sleep_for(std::chrono::seconds(1)); // Ã¿¸ô 30 Ãë·¢ËÍÒ»´Î PING ÃüÁî
+				std::this_thread::sleep_for(std::chrono::seconds(1)); // Ã¿ï¿½ï¿½ 30 ï¿½ë·¢ï¿½ï¿½Ò»ï¿½ï¿½ PING ï¿½ï¿½ï¿½ï¿½
 			}	
 		});
 
@@ -67,7 +67,7 @@ public:
 			}
 			return !connections_.empty(); 
 			});
-		//Èç¹ûÍ£Ö¹ÔòÖ±½Ó·µ»Ø¿ÕÖ¸Õë
+		//ï¿½ï¿½ï¿½Í£Ö¹ï¿½ï¿½Ö±ï¿½Ó·ï¿½ï¿½Ø¿ï¿½Ö¸ï¿½ï¿½
 		if (b_stop_) {
 			return  nullptr;
 		}
@@ -111,14 +111,14 @@ private:
 	void checkThreadPro() {
 		size_t pool_size;
 		{
-			//ÏÈÄÃµ½µ±Ç°µÄÁ¬½ÓÊý
+			//ï¿½ï¿½ï¿½Ãµï¿½ï¿½ï¿½Ç°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 			std::lock_guard<std::mutex> lock(mutex_);
 			pool_size = connections_.size();
 		}
 
 		for (int i = 0; i < pool_size && !b_stop_; i++) {
 			redisContext* context = nullptr;
-			//1 È¡³öÒ»¸öÁ¬½Ó(³ÖÓÐËø)
+			//1 È¡ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½(ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
 			context = getConNonBlock();
 			if (context == nullptr) {
 				break;
@@ -127,7 +127,7 @@ private:
 			redisReply* reply = nullptr;
 			try {
 				reply = (redisReply*)redisCommand(context, "PING");
-				//2. ÏÈ¿´µ×²ã I/O Ð­Òé²ãÓÐÃ»ÓÐ´í
+				//2. ï¿½È¿ï¿½ï¿½×²ï¿½ I/O Ð­ï¿½ï¿½ï¿½ï¿½ï¿½Ã»ï¿½Ð´ï¿½
 				if (context->err) {
 					std::cout << "Connection error:" << context->err << std::endl;
 					if (reply) {
@@ -139,7 +139,7 @@ private:
 					continue;
 				}
 
-				//3. ÔÙ¿´Redis×ÔÉí·µ»ØµÄÊÇ²»ÊÇERROR
+				//3. ï¿½Ù¿ï¿½Redisï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Øµï¿½ï¿½Ç²ï¿½ï¿½ï¿½ERROR
 				if (!reply || reply->type == REDIS_REPLY_ERROR) {
 					std::cout << "reply is null,  redis ping failed: " << std::endl;
 					if (reply) {
@@ -151,7 +151,7 @@ private:
 					continue;
 				}
 
-				//4.Èç¹û¶¼Ã»ÓÐÎÊÌâ£¬Ôò°ÑÁ¬½Ó·µ»ØÁ¬½Ó³Ø
+				//4.ï¿½ï¿½ï¿½ï¿½ï¿½Ã»ï¿½ï¿½ï¿½ï¿½ï¿½â£¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó³ï¿½
 				//std::cout << "connection alive" << std::endl;
 				freeReplyObject(reply);
 				returnConnection(context);
@@ -165,14 +165,14 @@ private:
 			}
 		}
 
-		//Ö´ÐÐÖØÁ¬²Ù×÷
+		//Ö´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 		while (fail_count_ > 0) {
 			auto res = reconnect();
 			if (res) {
 					fail_count_--;
 			}
 			else {
-				//Áô¸øÒ»´ÎÔÙ³¢ÊÔ
+				//ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½Ù³ï¿½ï¿½ï¿½
 				break;
 			}
 		}
@@ -189,16 +189,16 @@ private:
 
 		auto reply = (redisReply*)redisCommand(context, "AUTH %s", pwd_);
 		if (reply->type == REDIS_REPLY_ERROR) {
-			std::cout << "ÈÏÖ¤Ê§°Ü" << std::endl;
-			//Ö´ÐÐÊÍ·Å²Ù×÷
+			std::cout << "redis auth failed" << std::endl;
+			//Ö´ï¿½ï¿½ï¿½Í·Å²ï¿½ï¿½ï¿½
 			freeReplyObject(reply);
 			redisFree(context);
 			return false;
 		}
 
-		//Ö´ÐÐ³É¹¦£¬ÊÍ·ÅredisCommandÖ´ÐÐºó·µ»ØµÄredisReplyËùÕ¼ÓÃµÄÄÚ´æ
+		//Ö´ï¿½Ð³É¹ï¿½ï¿½ï¿½ï¿½Í·ï¿½redisCommandÖ´ï¿½Ðºó·µ»Øµï¿½redisReplyï¿½ï¿½Õ¼ï¿½Ãµï¿½ï¿½Ú´ï¿½
 		freeReplyObject(reply);
-		std::cout << "ÈÏÖ¤³É¹¦" << std::endl;
+		std::cout << "redis auth success" << std::endl;
 		returnConnection(context);
 		return true;
 	}
@@ -235,15 +235,15 @@ private:
 
 				auto reply = (redisReply*)redisCommand(context, "AUTH %s", pwd_);
 				if (reply->type == REDIS_REPLY_ERROR) {
-					std::cout << "ÈÏÖ¤Ê§°Ü" << std::endl;
-					//Ö´ÐÐ³É¹¦ ÊÍ·ÅredisCommandÖ´ÐÐºó·µ»ØµÄredisReplyËùÕ¼ÓÃµÄÄÚ´æ
+					std::cout << "redis auth failed" << std::endl;
+					//Ö´ï¿½Ð³É¹ï¿½ ï¿½Í·ï¿½redisCommandÖ´ï¿½Ðºó·µ»Øµï¿½redisReplyï¿½ï¿½Õ¼ï¿½Ãµï¿½ï¿½Ú´ï¿½
 					freeReplyObject(reply);
 					continue;
 				}
 
-				//Ö´ÐÐ³É¹¦ ÊÍ·ÅredisCommandÖ´ÐÐºó·µ»ØµÄredisReplyËùÕ¼ÓÃµÄÄÚ´æ
+				//Ö´ï¿½Ð³É¹ï¿½ ï¿½Í·ï¿½redisCommandÖ´ï¿½Ðºó·µ»Øµï¿½redisReplyï¿½ï¿½Õ¼ï¿½Ãµï¿½ï¿½Ú´ï¿½
 				freeReplyObject(reply);
-				std::cout << "ÈÏÖ¤³É¹¦" << std::endl;
+				std::cout << "redis auth success" << std::endl;
 				connections_.push(context);
 			}
 		}
@@ -295,4 +295,5 @@ private:
 	RedisMgr();
 	unique_ptr<RedisConPool>  _con_pool;
 };
+
 

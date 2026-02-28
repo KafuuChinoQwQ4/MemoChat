@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <vector>
 struct UserInfo {
 	UserInfo():name(""), pwd(""),uid(0),email(""),nick(""),desc(""),sex(0), icon(""), back("") {}
 	std::string name;
@@ -11,6 +12,7 @@ struct UserInfo {
 	int sex;
 	std::string icon;
 	std::string back;
+	std::vector<std::string> labels;
 };
 
 struct ApplyInfo {
@@ -26,5 +28,5 @@ struct ApplyInfo {
 	std::string _nick;
 	int _sex;
 	int _status;
+	std::vector<std::string> _labels;
 };
-

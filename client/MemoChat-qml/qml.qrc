@@ -1,0 +1,28 @@
+<RCC>
+    <qresource prefix="/">
+        <file>qml/Main.qml</file>
+        <file>qml/LoginPage.qml</file>
+        <file>qml/RegisterPage.qml</file>
+        <file>qml/ResetPage.qml</file>
+        <file>qml/ChatShellPage.qml</file>
+        <file>qml/chat/ChatSideBar.qml</file>
+        <file>qml/chat/ChatLeftPanel.qml</file>
+        <file>qml/chat/ChatConversationPane.qml</file>
+        <file>qml/chat/ChatContactPane.qml</file>
+        <file>qml/chat/ChatSettingsPane.qml</file>
+        <file>qml/chat/conversation/ChatMessageDelegate.qml</file>
+        <file>qml/chat/conversation/ChatComposerBar.qml</file>
+        <file>qml/chat/contact/ApplyRequestDelegate.qml</file>
+        <file>qml/chat/contact/ApplyRequestList.qml</file>
+        <file>qml/chat/contact/AuthFriendDialog.qml</file>
+        <file>qml/chat/contact/AddFriendDialog.qml</file>
+        <file>qml/chat/contact/TagEditor.qml</file>
+        <file>qml/chat/contact/ChatFriendInfoPane.qml</file>
+        <file>qml/chat/contact/ContactActionIconButton.qml</file>
+        <file>qml/chat/contact/ContactListPane.qml</file>
+        <file>qml/chat/settings/SettingsAvatarCard.qml</file>
+        <file>qml/chat/settings/SettingsProfileForm.qml</file>
+        <file alias="icons/settings.png">src/设置.png</file>
+        <file alias="icons/close.png">src/关闭.png</file>
+    </qresource>
+</RCC>

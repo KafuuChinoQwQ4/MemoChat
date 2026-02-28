@@ -18,6 +18,9 @@ bool MysqlMgr::UpdatePwd(const std::string& name, const std::string& pwd) {
 	return _dao.UpdatePwd(name, pwd);
 }
 
+bool MysqlMgr::UpdateUserProfile(int uid, const std::string& nick, const std::string& desc, const std::string& icon) {
+	return _dao.UpdateUserProfile(uid, nick, desc, icon);
+}
 MysqlMgr::MysqlMgr() {
 }
 

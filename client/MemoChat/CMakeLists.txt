@@ -18,6 +18,32 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets Network)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets Network)
 
+set(CORE_SOURCES
+    global.cpp
+    httpmgr.cpp
+    tcpmgr.cpp
+    userdata.cpp
+    usermgr.cpp
+)
+
+set(CORE_HEADERS
+    global.h
+    httpmgr.h
+    tcpmgr.h
+    userdata.h
+    usermgr.h
+    singleton.h
+)
+
+add_library(MemoChatCore STATIC ${CORE_SOURCES} ${CORE_HEADERS})
+target_include_directories(MemoChatCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(MemoChatCore PUBLIC
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Gui
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Network
+)
+
 set(SOURCES
     BubbleFrame.cpp
     ChatItemBase.cpp
@@ -46,9 +72,7 @@ set(SOURCES
     findsuccessdlg.cpp
     friendinfopage.cpp
     friendlabel.cpp
-    global.cpp
     grouptipitem.cpp
-    httpmgr.cpp
     imagecropperlabel.cpp
     invaliditem.cpp
     lineitem.cpp
@@ -62,11 +86,8 @@ set(SOURCES
     searchlist.cpp
     statelabel.cpp
     statewidget.cpp
-    tcpmgr.cpp
     timerbtn.cpp
-    userdata.cpp
     userinfopage.cpp
-    usermgr.cpp
 )
 
 set(HEADERS
@@ -97,9 +118,7 @@ set(HEADERS
     findsuccessdlg.h
     friendinfopage.h
     friendlabel.h
-    global.h
     grouptipitem.h
-    httpmgr.h
     imagecropperdialog.h
     imagecropperlabel.h
     invaliditem.h
@@ -111,14 +130,10 @@ set(HEADERS
     registerdialog.h
     resetdialog.h
     searchlist.h
-    singleton.h
     statelabel.h
     statewidget.h
-    tcpmgr.h
     timerbtn.h
-    userdata.h
     userinfopage.h
-    usermgr.h
 )
 
 set(FORMS
@@ -152,7 +167,13 @@ set(RESOURCES
 add_executable(MemoChat WIN32 MACOSX_BUNDLE ${SOURCES} ${HEADERS} ${FORMS} ${RESOURCES})
 
 target_include_directories(MemoChat PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(MemoChat PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Gui Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
+target_link_libraries(MemoChat PRIVATE
+    MemoChatCore
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Gui
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Network
+)
 
 # Copy config.ini to the output directory
 add_custom_command(TARGET MemoChat POST_BUILD
