@@ -38,6 +38,21 @@ bool MysqlMgr::AddFriend(const int& from, const int& to, std::string back_name) 
 	return _dao.AddFriend(from, to, back_name);
 }
 
+bool MysqlMgr::ReplaceApplyTags(const int& from, const int& to, const std::vector<std::string>& tags) {
+	return _dao.ReplaceApplyTags(from, to, tags);
+}
+
+bool MysqlMgr::ReplaceFriendTags(const int& self_id, const int& friend_id, const std::vector<std::string>& tags) {
+	return _dao.ReplaceFriendTags(self_id, friend_id, tags);
+}
+
+std::vector<std::string> MysqlMgr::GetApplyTags(const int& from, const int& to) {
+	return _dao.GetApplyTags(from, to);
+}
+
+std::vector<std::string> MysqlMgr::GetFriendTags(const int& self_id, const int& friend_id) {
+	return _dao.GetFriendTags(self_id, friend_id);
+}
 std::shared_ptr<UserInfo> MysqlMgr::GetUser(int uid)
 {
 	return _dao.GetUser(uid);

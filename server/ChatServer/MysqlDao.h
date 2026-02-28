@@ -28,9 +28,9 @@ public:
 				sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
 				auto*  con = driver->connect(url_, user_, pass_);
 				con->setSchema(schema_);
-				// »ñÈ¡µ±Ç°Ê±¼ä´Á
+				// ï¿½ï¿½È¡ï¿½ï¿½Ç°Ê±ï¿½ï¿½ï¿½
 				auto currentTime = std::chrono::system_clock::now().time_since_epoch();
-				// ½«Ê±¼ä´Á×ª»»ÎªÃë
+				// ï¿½ï¿½Ê±ï¿½ï¿½ï¿½×ªï¿½ï¿½Îªï¿½ï¿½
 				long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
 				pool_.push(std::make_unique<SqlConnection>(con, timestamp));
 				std::cout << "mysql connection init success" << std::endl;
@@ -51,23 +51,23 @@ public:
 			_check_thread.detach();
 		}
 		catch (sql::SQLException& e) {
-			// ´¦ÀíÒì³£
+			// ï¿½ï¿½ï¿½ï¿½ï¿½ì³£
 			std::cout << "mysql pool init failed, error is " << e.what()<< std::endl;
 		}
 	}
 
 	void checkConnectionPro() {
-		// 1)ÏÈ¶ÁÈ¡¡°Ä¿±ê´¦ÀíÊý¡±
+		// 1)ï¿½È¶ï¿½È¡ï¿½ï¿½Ä¿ï¿½ê´¦ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 		size_t targetCount;
 		{
 			std::lock_guard<std::mutex> guard(mutex_);
 			targetCount = pool_.size();
 		}
 
-		//2 µ±Ç°ÒÑ¾­´¦ÀíµÄÊýÁ¿
+		//2 ï¿½ï¿½Ç°ï¿½Ñ¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 		size_t processed = 0;
 
-		//3 Ê±¼ä´Á
+		//3 Ê±ï¿½ï¿½ï¿½
 		auto now = std::chrono::system_clock::now().time_since_epoch();
 		long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(now).count();
 
@@ -83,7 +83,7 @@ public:
 			}
 
 			bool healthy = true;
-			//½âËøºó×ö¼ì²é/ÖØÁ¬Âß¼­
+			//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½ï¿½ß¼ï¿½
 			if (timestamp - con->_last_oper_time >= 5) {
 				try {
 					std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
@@ -145,9 +145,9 @@ public:
 	void checkConnection() {
 		std::lock_guard<std::mutex> guard(mutex_);
 		int poolsize = pool_.size();
-		// »ñÈ¡µ±Ç°Ê±¼ä´Á
+		// ï¿½ï¿½È¡ï¿½ï¿½Ç°Ê±ï¿½ï¿½ï¿½
 		auto currentTime = std::chrono::system_clock::now().time_since_epoch();
-		// ½«Ê±¼ä´Á×ª»»ÎªÃë
+		// ï¿½ï¿½Ê±ï¿½ï¿½ï¿½×ªï¿½ï¿½Îªï¿½ï¿½
 		long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
 		for (int i = 0; i < poolsize; i++) {
 			auto con = std::move(pool_.front());
@@ -168,7 +168,7 @@ public:
 			}
 			catch (sql::SQLException& e) {
 				std::cout << "Error keeping connection alive: " << e.what() << std::endl;
-				// ÖØÐÂ´´½¨Á¬½Ó²¢Ìæ»»¾ÉµÄÁ¬½Ó
+				// ï¿½ï¿½ï¿½Â´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó²ï¿½ï¿½æ»»ï¿½Éµï¿½ï¿½ï¿½ï¿½ï¿½
 				sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
 				auto* newcon = driver->connect(url_, user_, pass_);
 				newcon->setSchema(schema_);
@@ -242,6 +242,10 @@ public:
 	bool AddFriendApply(const int& from, const int& to);
 	bool AuthFriendApply(const int& from, const int& to);
 	bool AddFriend(const int& from, const int& to, std::string back_name);
+	bool ReplaceApplyTags(const int& from, const int& to, const std::vector<std::string>& tags);
+	bool ReplaceFriendTags(const int& self_id, const int& friend_id, const std::vector<std::string>& tags);
+	std::vector<std::string> GetApplyTags(const int& from, const int& to);
+	std::vector<std::string> GetFriendTags(const int& self_id, const int& friend_id);
 	std::shared_ptr<UserInfo> GetUser(int uid);
 	std::shared_ptr<UserInfo> GetUser(std::string name);
 	bool GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& applyList, int offset, int limit );

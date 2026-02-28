@@ -31,27 +31,29 @@ using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
 enum ErrorCodes {
 	Success = 0,
-	Error_Json = 1001,  //Json╜т╬Ў┤э╬є
-	RPCFailed = 1002,  //RPC╟ы╟є┤э╬є
-	VarifyExpired = 1003, //╤щ╓д┬ы╣¤╞┌
-	VarifyCodeErr = 1004, //╤щ╓д┬ы┤э╬є
-	UserExist = 1005,       //╙├╗з╥╤╛н┤ц╘┌
-	PasswdErr = 1006,    //├▄┬ы┤э╬є
-	EmailNotMatch = 1007,  //╙╩╧ф▓╗╞е┼ф
-	PasswdUpFailed = 1008,  //╕№╨┬├▄┬ы╩з░▄
-	PasswdInvalid = 1009,   //├▄┬ы╕№╨┬╩з░▄
+	Error_Json = 1001,  //Jsonя┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜
+	RPCFailed = 1002,  //RPCя┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜
+	VarifyExpired = 1003, //я┐╜я┐╜╓дя┐╜я┐╜я┐╜я┐╜я┐╜
+	VarifyCodeErr = 1004, //я┐╜я┐╜╓дя┐╜я┐╜я┐╜я┐╜я┐╜
+	UserExist = 1005,       //я┐╜├╗я┐╜я┐╜╤╛я┐╜я┐╜я┐╜я┐╜я┐╜
+	PasswdErr = 1006,    //я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜
+	EmailNotMatch = 1007,  //я┐╜я┐╜я┐╜ф▓╗╞ея┐╜я┐╜
+	PasswdUpFailed = 1008,  //я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜╩зя┐╜я┐╜
+	PasswdInvalid = 1009,   //я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜╩зя┐╜я┐╜
 	TokenInvalid = 1010,   //Token╩з╨з
-	UidInvalid = 1011,  //uid╬▐╨з
+	UidInvalid = 1011,  //uidя┐╜я┐╜╨з
+	ProfileUpFailed = 1012, //я┐╜├╗я┐╜я┐╜я┐╜я┐╜╧╕я┐╜я┐╜я┐╜╩зя┐╜я┐╜
+	MediaUploadFailed = 1013, //├╜я┐╜я┐╜я┐╜╧┤я┐╜╩зя┐╜я┐╜
 };
 
 
-// Defer└р
+// Deferя┐╜я┐╜
 class Defer {
 public:
-	// ╜╙╩▄╥╗╕Ўlambda▒э┤я╩╜╗Є╒▀║п╩¤╓╕╒ы
+	// я┐╜я┐╜я┐╜я┐╜╥╗я┐╜я┐╜lambdaя┐╜я┐╜я┐╜╩╜я┐╜я┐╜я┐╜▀║я┐╜я┐╜я┐╜╓╕я┐╜я┐╜
 	Defer(std::function<void()> func) : func_(func) {}
 
-	// ╬Ў╣╣║п╩¤╓╨╓┤╨╨┤л╚ы╡─║п╩¤
+	// я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜╓┤я┐╜╨┤я┐╜я┐╜я┐╜─║я┐╜я┐╜я┐╜
 	~Defer() {
 		func_();
 	}
@@ -61,5 +63,4 @@ private:
 };
 
 #define CODEPREFIX  "code_"
-
 

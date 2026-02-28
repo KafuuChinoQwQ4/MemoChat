@@ -16,6 +16,10 @@ public:
 	bool AddFriendApply(const int& from, const int& to);
 	bool AuthFriendApply(const int& from, const int& to);
 	bool AddFriend(const int& from, const int& to, std::string back_name);
+	bool ReplaceApplyTags(const int& from, const int& to, const std::vector<std::string>& tags);
+	bool ReplaceFriendTags(const int& self_id, const int& friend_id, const std::vector<std::string>& tags);
+	std::vector<std::string> GetApplyTags(const int& from, const int& to);
+	std::vector<std::string> GetFriendTags(const int& self_id, const int& friend_id);
 	std::shared_ptr<UserInfo> GetUser(int uid);
 	std::shared_ptr<UserInfo> GetUser(std::string name);
 	bool GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& applyList, int begin, int limit=10);

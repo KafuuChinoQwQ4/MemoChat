@@ -14,11 +14,14 @@ set "BUILD_BIN=%SERVER_BIN_PRIMARY%"
 set "CLIENT_BIN=%ROOT%\build\bin\Release"
 set "RUN_ROOT=%ROOT%\build\run"
 set "WITH_CLIENT=1"
+set "CONSOLE_CP=936"
 
 if /I "%~1"=="--no-client" set "WITH_CLIENT=0"
 
-if not exist "%BUILD_BIN%\GateServer.exe" (
-  if exist "%SERVER_BIN_FALLBACK%\GateServer.exe" (
+call :has_all_servers "%BUILD_BIN%"
+if errorlevel 1 (
+  call :has_all_servers "%SERVER_BIN_FALLBACK%"
+  if not errorlevel 1 (
     set "BUILD_BIN=%SERVER_BIN_FALLBACK%"
   )
 )
@@ -26,6 +29,7 @@ if not exist "%BUILD_BIN%\GateServer.exe" (
 echo [INFO] Root: %ROOT%
 echo [INFO] Server bin: %BUILD_BIN%
 echo [INFO] Client bin: %CLIENT_BIN%
+echo [INFO] Console code page: %CONSOLE_CP%
 echo.
 
 if not exist "%BUILD_BIN%\GateServer.exe" (
@@ -91,35 +95,35 @@ call :prepare_service GateServer "%ROOT%\server\GateServer\config.ini" "%BUILD_B
 if errorlevel 1 exit /b 1
 
 echo [INFO] Starting VarifyServer (Node)...
-start "VarifyServer" cmd /k "cd /d ""%ROOT%\server\VarifyServer"" && npm run serve"
+start "VarifyServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%ROOT%\server\VarifyServer"" && npm run serve"
 timeout /t 2 >nul
 
 echo [INFO] Starting StatusServer...
-start "StatusServer" cmd /k "cd /d ""%RUN_ROOT%\StatusServer"" && StatusServer.exe"
+start "StatusServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\StatusServer"" && StatusServer.exe"
 timeout /t 2 >nul
 
 echo [INFO] Starting ChatServer...
-start "ChatServer" cmd /k "cd /d ""%RUN_ROOT%\ChatServer"" && ChatServer.exe"
+start "ChatServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\ChatServer"" && ChatServer.exe"
 timeout /t 2 >nul
 
 echo [INFO] Starting ChatServer2...
-start "ChatServer2" cmd /k "cd /d ""%RUN_ROOT%\ChatServer2"" && ChatServer2.exe"
+start "ChatServer2" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\ChatServer2"" && ChatServer2.exe"
 timeout /t 2 >nul
 
 echo [INFO] Starting GateServer...
-start "GateServer" cmd /k "cd /d ""%RUN_ROOT%\GateServer"" && GateServer.exe"
+start "GateServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\GateServer"" && GateServer.exe"
 timeout /t 2 >nul
 
 if "%WITH_CLIENT%"=="1" (
-  if not exist "%CLIENT_BIN%\MemoChat.exe" (
-    if exist "%BUILD_BIN%\MemoChat.exe" set "CLIENT_BIN=%BUILD_BIN%"
+  if not exist "%CLIENT_BIN%\MemoChatQml.exe" (
+    if exist "%BUILD_BIN%\MemoChatQml.exe" set "CLIENT_BIN=%BUILD_BIN%"
   )
-  if exist "%CLIENT_BIN%\MemoChat.exe" (
-    echo [INFO] Starting MemoChat client...
-    start "MemoChat" cmd /k "cd /d ""%CLIENT_BIN%"" && MemoChat.exe"
+  if exist "%CLIENT_BIN%\MemoChatQml.exe" (
+    echo [INFO] Starting MemoChat QML client...
+    start "MemoChatQml" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%CLIENT_BIN%"" && MemoChatQml.exe"
   ) else (
-    echo [WARN] MemoChat.exe not found, skip client start.
-    echo [HINT] Build client first: cmake --preset msvc2022-all ^&^& cmake --build --preset msvc2022-release --target MemoChat
+    echo [WARN] MemoChatQml.exe not found, skip client start.
+    echo [HINT] Build client first: cmake --preset msvc2022-all ^&^& cmake --build --preset msvc2022-release --target MemoChatQml
   )
 )
 
@@ -194,4 +198,12 @@ copy /Y "%SVC_EXE%" "%SVC_DIR%\%~nx3" >nul
 copy /Y "%SVC_CFG%" "%SVC_DIR%\config.ini" >nul
 
 echo [INFO] Prepared %SVC_NAME% in %SVC_DIR%
+exit /b 0
+
+:has_all_servers
+set "CHK_DIR=%~1"
+if not exist "%CHK_DIR%\GateServer.exe" exit /b 1
+if not exist "%CHK_DIR%\StatusServer.exe" exit /b 1
+if not exist "%CHK_DIR%\ChatServer.exe" exit /b 1
+if not exist "%CHK_DIR%\ChatServer2.exe" exit /b 1
 exit /b 0

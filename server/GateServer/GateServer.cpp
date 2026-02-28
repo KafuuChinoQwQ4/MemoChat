@@ -1,4 +1,4 @@
-﻿// GateServer.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
+// GateServer.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
 //
 
 #include <iostream>
@@ -27,9 +27,9 @@ void TestRedis() {
 	std::string redis_password = "123456";
 	redisReply* r = (redisReply*)redisCommand(c, "AUTH %s", redis_password.c_str());
 	 if (r->type == REDIS_REPLY_ERROR) {
-		 printf("Redis认证失败！\n");
+		 printf("Redis auth failed!\n");
 	}else {
-		printf("Redis认证成功！\n");
+		printf("Redis auth success!\n");
 		 }
 
 	//为redis设置key
@@ -159,4 +159,5 @@ int main()
 	}
 
 }
+
 
