@@ -60,7 +60,18 @@ ApplicationWindow {
 
     Component {
         id: loginPage
-        LoginPage { }
+        LoginPage {
+            tipText: controller.tipText
+            tipError: controller.tipError
+            busy: controller.busy
+
+            onClearTipRequested: controller.clearTip()
+            onSwitchToRegisterRequested: controller.switchToRegister()
+            onSwitchToResetRequested: controller.switchToReset()
+            onLoginRequested: function(email, password) {
+                controller.login(email, password)
+            }
+        }
     }
 
     Component {
