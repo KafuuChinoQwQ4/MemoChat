@@ -1,10 +1,12 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "../../components"
 
 Item {
     id: root
 
+    property Item backdrop: null
     property var selectedTags: []
     property var suggestionTags: [
         "Classmates", "Family", "Guide", "C++ Primer", "Rust",
@@ -49,10 +51,18 @@ Item {
         anchors.fill: parent
         spacing: 8
 
-        TextField {
+        GlassTextField {
             id: inputField
             Layout.fillWidth: true
-            placeholderText: "Search or add labels"
+            Layout.preferredHeight: 34
+            backdrop: root.backdrop
+            blurRadius: 30
+            cornerRadius: 9
+            textHorizontalAlignment: TextInput.AlignLeft
+            leftInset: 12
+            rightInset: 12
+            textPixelSize: 13
+            placeholderText: "搜索或添加标签"
             onAccepted: {
                 root.addTag(text)
                 text = ""
@@ -68,10 +78,10 @@ Item {
                 model: root.selectedTags
                 delegate: Rectangle {
                     radius: 12
-                    color: "#daf6e7"
-                    border.color: "#b9e5cb"
+                    color: Qt.rgba(0.56, 0.85, 0.70, 0.30)
+                    border.color: Qt.rgba(0.50, 0.79, 0.66, 0.56)
                     height: 24
-                    width: tagLabel.implicitWidth + 26
+                    width: tagLabel.implicitWidth + 30
 
                     Text {
                         id: tagLabel
@@ -79,16 +89,24 @@ Item {
                         anchors.left: parent.left
                         anchors.leftMargin: 8
                         text: modelData
-                        color: "#2f3a4a"
+                        color: "#2d3b50"
                         font.pixelSize: 12
                     }
 
-                    Button {
+                    Text {
+                        id: removeLabel
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        anchors.rightMargin: 2
-                        text: "x"
-                        flat: true
+                        anchors.rightMargin: 8
+                        text: "\u00D7"
+                        color: "#45566f"
+                        font.pixelSize: 12
+                    }
+
+                    MouseArea {
+                        anchors.fill: removeLabel
+                        anchors.margins: -4
+                        cursorShape: Qt.PointingHandCursor
                         onClicked: root.removeTag(modelData)
                     }
                 }
@@ -97,7 +115,7 @@ Item {
 
         Label {
             text: "建议标签"
-            color: "#6f7d91"
+            color: "#5e7088"
             font.pixelSize: 12
         }
 
@@ -107,11 +125,27 @@ Item {
 
             Repeater {
                 model: root.suggestionTags
-                delegate: Button {
+                delegate: GlassButton {
+                    id: suggestionBtn
+                    property bool selected: root.selectedTags.indexOf(modelData) !== -1
                     text: modelData
-                    highlighted: root.selectedTags.indexOf(modelData) !== -1
+                    textPixelSize: 12
+                    cornerRadius: 12
+                    implicitHeight: 28
+                    implicitWidth: tagMetrics.advanceWidth + 24
+                    normalColor: selected ? Qt.rgba(0.52, 0.82, 0.67, 0.30) : Qt.rgba(1, 1, 1, 0.22)
+                    hoverColor: selected ? Qt.rgba(0.52, 0.82, 0.67, 0.38) : Qt.rgba(1, 1, 1, 0.30)
+                    pressedColor: selected ? Qt.rgba(0.52, 0.82, 0.67, 0.46) : Qt.rgba(1, 1, 1, 0.40)
+                    disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+
+                    TextMetrics {
+                        id: tagMetrics
+                        text: suggestionBtn.text
+                        font.pixelSize: suggestionBtn.textPixelSize
+                    }
+
                     onClicked: {
-                        if (root.selectedTags.indexOf(modelData) !== -1) {
+                        if (selected) {
                             root.removeTag(modelData)
                         } else {
                             root.addTag(modelData)

@@ -5,8 +5,9 @@ import "contact"
 
 Rectangle {
     id: root
-    color: "#f1f2f3"
+    color: "transparent"
 
+    property Item backdrop: null
     property int paneIndex: 0
     property string contactName: ""
     property string contactNick: ""
@@ -31,15 +32,16 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 52
-            color: "#f1f2f3"
-            border.color: "#ede9e7"
+            radius: 10
+            color: Qt.rgba(1, 1, 1, 0.22)
+            border.color: Qt.rgba(1, 1, 1, 0.44)
 
             Label {
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.left: parent.left
                 anchors.leftMargin: 12
                 text: root.paneIndex === 0 ? "新的朋友" : "联系人信息"
-                color: "#2f3a4a"
+                color: "#2a374b"
                 font.pixelSize: 18
             }
         }
@@ -47,7 +49,9 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: authTip.visible ? authTip.implicitHeight + 12 : 0
-            color: "#f1f2f3"
+            radius: 8
+            color: Qt.rgba(1, 1, 1, 0.16)
+            border.color: Qt.rgba(1, 1, 1, 0.34)
             visible: authTip.visible
 
             Label {
@@ -70,6 +74,7 @@ Rectangle {
             currentIndex: root.paneIndex
 
             ApplyRequestList {
+                backdrop: root.backdrop
                 applyModel: root.applyModel
                 onApproveClicked: authDialog.openFor(uid, name)
             }
@@ -91,6 +96,7 @@ Rectangle {
     AuthFriendDialog {
         id: authDialog
         anchors.centerIn: Overlay.overlay
+        backdrop: root.backdrop
         onSubmitted: {
             root.authStatusCleared()
             root.approveFriendRequested(uid, backName, tags)

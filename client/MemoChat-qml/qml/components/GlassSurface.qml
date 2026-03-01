@@ -66,22 +66,6 @@ Item {
         }
     }
 
-    Rectangle {
-        anchors.fill: parent
-        radius: root.cornerRadius
-        gradient: Gradient {
-            GradientStop { position: 0.0; color: root.glowTopColor }
-            GradientStop { position: 1.0; color: root.glowBottomColor }
-        }
-
-        Behavior on opacity {
-            NumberAnimation {
-                duration: 160
-                easing.type: Easing.InOutQuad
-            }
-        }
-    }
-
     Behavior on blurRadius {
         NumberAnimation {
             duration: 220

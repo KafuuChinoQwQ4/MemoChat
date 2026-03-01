@@ -4,7 +4,7 @@ import QtQuick.Layouts 1.15
 
 Rectangle {
     id: root
-    color: "#f5f7fa"
+    color: "transparent"
 
     property bool hasContact: false
     property string contactName: ""
@@ -34,7 +34,7 @@ Rectangle {
                 Layout.preferredHeight: 85
                 radius: 6
                 clip: true
-                color: "#e1e6ef"
+                color: Qt.rgba(0.73, 0.83, 0.93, 0.54)
 
                 Image {
                     anchors.fill: parent
@@ -49,7 +49,7 @@ Rectangle {
 
                 Label {
                     text: root.contactName
-                    color: "#161616"
+                    color: "#243246"
                     font.pixelSize: 22
                     font.bold: true
                 }
@@ -68,12 +68,12 @@ Rectangle {
                     spacing: 8
                     Label {
                         text: "备注:"
-                        color: "#161616"
+                        color: "#243246"
                         font.pixelSize: 14
                     }
                     Label {
                         text: root.contactBack.length > 0 ? root.contactBack : root.contactNick
-                        color: "#161616"
+                        color: "#243246"
                         font.pixelSize: 14
                     }
                 }
@@ -116,7 +116,7 @@ Rectangle {
         Label {
             visible: !root.hasContact
             text: "请选择联系人"
-            color: "#8b97a8"
+            color: "#62758d"
             font.pixelSize: 14
             Layout.alignment: Qt.AlignHCenter
         }

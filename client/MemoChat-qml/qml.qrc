@@ -9,6 +9,7 @@
         <file>qml/components/GlassSurface.qml</file>
         <file>qml/components/GlassTextField.qml</file>
         <file>qml/components/GlassButton.qml</file>
+        <file>qml/components/GlassScrollBar.qml</file>
         <file>qml/components/LoginIconButton.qml</file>
         <file>qml/components/LoginTopBar.qml</file>
         <file>qml/components/LoginAvatar.qml</file>
@@ -33,6 +34,8 @@
         <file>qml/chat/contact/ContactListPane.qml</file>
         <file>qml/chat/settings/SettingsAvatarCard.qml</file>
         <file>qml/chat/settings/SettingsProfileForm.qml</file>
+        <file alias="icons/emoji.png">src/表情.png</file>
+        <file alias="icons/file.png">src/文件.png</file>
         <file alias="icons/settings.png">src/设置.png</file>
         <file alias="icons/close.png">src/关闭.png</file>
     </qresource>

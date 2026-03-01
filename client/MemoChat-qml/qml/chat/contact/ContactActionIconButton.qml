@@ -12,8 +12,27 @@ Item {
 
     signal clicked()
 
-    Image {
+    Rectangle {
         anchors.fill: parent
+        radius: width / 2
+        color: !root.enabled ? Qt.rgba(1, 1, 1, 0.08)
+                             : mouse.pressed ? Qt.rgba(0.55, 0.72, 0.94, 0.34)
+                                             : mouse.containsMouse ? Qt.rgba(0.55, 0.72, 0.94, 0.24)
+                                                                  : Qt.rgba(1, 1, 1, 0.16)
+        border.color: Qt.rgba(1, 1, 1, 0.40)
+
+        Behavior on color {
+            ColorAnimation {
+                duration: 120
+                easing.type: Easing.OutQuad
+            }
+        }
+    }
+
+    Image {
+        anchors.centerIn: parent
+        width: parent.width - 14
+        height: parent.height - 14
         fillMode: Image.PreserveAspectFit
         source: {
             if (!root.enabled) {
@@ -35,6 +54,7 @@ Item {
         anchors.fill: parent
         enabled: root.enabled
         hoverEnabled: true
+        cursorShape: root.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: root.clicked()
     }
 }
