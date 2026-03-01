@@ -10,6 +10,16 @@ Rectangle {
     clip: false
     color: "transparent"
 
+    RegularExpressionValidator {
+        id: emailInputValidator
+        regularExpression: /^[A-Za-z0-9@._%+\-]*$/
+    }
+
+    RegularExpressionValidator {
+        id: passwordInputValidator
+        regularExpression: /^[A-Za-z0-9!@#$%^&*._+\-=~?]{0,15}$/
+    }
+
     GlassBackdrop {
         id: backdropLayer
         anchors.fill: parent
@@ -74,6 +84,9 @@ Rectangle {
                 Layout.preferredHeight: 38
                 backdrop: backdropLayer
                 placeholderText: "输入邮箱"
+                inputMethodHints: Qt.ImhEmailCharactersOnly | Qt.ImhNoPredictiveText | Qt.ImhPreferLatin
+                maximumLength: 128
+                validator: emailInputValidator
                 onTextChanged: controller.clearTip()
             }
         }
@@ -126,6 +139,9 @@ Rectangle {
                 Layout.preferredHeight: 38
                 backdrop: backdropLayer
                 placeholderText: "输入新密码"
+                inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhPreferLatin
+                maximumLength: 15
+                validator: passwordInputValidator
                 echoMode: TextInput.Password
                 onTextChanged: controller.clearTip()
             }

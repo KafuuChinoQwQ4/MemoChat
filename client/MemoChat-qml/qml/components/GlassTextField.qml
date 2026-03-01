@@ -8,6 +8,9 @@ Item {
 
     property alias text: input.text
     property alias readOnly: input.readOnly
+    property alias validator: input.validator
+    property alias inputMethodHints: input.inputMethodHints
+    property alias maximumLength: input.maximumLength
     property string placeholderText: ""
     property int echoMode: TextInput.Normal
     property int textPixelSize: 15

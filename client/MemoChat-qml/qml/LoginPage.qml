@@ -7,6 +7,7 @@ Rectangle {
     property string tipText: ""
     property bool tipError: false
     property bool busy: false
+    property bool pwdVisible: false
 
     signal loginRequested(string email, string password)
     signal switchToRegisterRequested()
@@ -18,6 +19,16 @@ Rectangle {
     antialiasing: false
     clip: false
     color: "transparent"
+
+    RegularExpressionValidator {
+        id: emailInputValidator
+        regularExpression: /^[A-Za-z0-9@._%+\-]*$/
+    }
+
+    RegularExpressionValidator {
+        id: passwordInputValidator
+        regularExpression: /^[A-Za-z0-9!@#$%^&*._+\-=~?]{0,15}$/
+    }
 
     function stageValue(start, span) {
         return Math.max(0, Math.min(1, (revealProgress - start) / span))
@@ -106,27 +117,56 @@ Rectangle {
             rightInset: 16
             textPixelSize: 17
             placeholderText: "输入邮箱"
+            inputMethodHints: Qt.ImhEmailCharactersOnly | Qt.ImhNoPredictiveText | Qt.ImhPreferLatin
+            maximumLength: 128
+            validator: emailInputValidator
             opacity: loginRoot.stageValue(0.19, 0.18)
             scale: 0.97 + 0.03 * opacity
             onTextChanged: loginRoot.clearTipRequested()
         }
 
-        GlassTextField {
-            id: pwdField
+        Item {
             width: parent.width
             height: 46
-            backdrop: backdropLayer
-            blurRadius: 28
-            cornerRadius: 11
-            leftInset: 16
-            rightInset: 16
-            textPixelSize: 17
-            placeholderText: "输入密码"
-            echoMode: TextInput.Password
             opacity: loginRoot.stageValue(0.28, 0.18)
             scale: 0.97 + 0.03 * opacity
-            onTextChanged: loginRoot.clearTipRequested()
-            onAccepted: loginBtn.triggerLogin()
+
+            GlassTextField {
+                id: pwdField
+                anchors.fill: parent
+                backdrop: backdropLayer
+                blurRadius: 28
+                cornerRadius: 11
+                leftInset: 16
+                rightInset: 44
+                textPixelSize: 17
+                placeholderText: "输入密码"
+                inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhPreferLatin
+                maximumLength: 15
+                validator: passwordInputValidator
+                echoMode: loginRoot.pwdVisible ? TextInput.Normal : TextInput.Password
+                onTextChanged: loginRoot.clearTipRequested()
+                onAccepted: loginBtn.triggerLogin()
+            }
+
+            Image {
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                anchors.rightMargin: 12
+                width: 20
+                height: 20
+                source: loginRoot.pwdVisible ? "qrc:/res/visible.png" : "qrc:/res/unvisible.png"
+            }
+
+            MouseArea {
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                anchors.rightMargin: 10
+                width: 24
+                height: 24
+                cursorShape: Qt.PointingHandCursor
+                onClicked: loginRoot.pwdVisible = !loginRoot.pwdVisible
+            }
         }
 
         LoginAgreementRow {
