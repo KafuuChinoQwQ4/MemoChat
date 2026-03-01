@@ -81,6 +81,10 @@ target_link_libraries(MemoChatQml PRIVATE
     Qt${QT_VERSION_MAJOR}::QuickControls2
 )
 
+if(WIN32)
+    target_link_libraries(MemoChatQml PRIVATE dwmapi)
+endif()
+
 add_custom_command(TARGET MemoChatQml POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
     ${LEGACY_CLIENT_DIR}/config.ini
