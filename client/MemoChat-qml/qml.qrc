@@ -5,6 +5,10 @@
         <file>qml/RegisterPage.qml</file>
         <file>qml/ResetPage.qml</file>
         <file>qml/ChatShellPage.qml</file>
+        <file>qml/components/GlassBackdrop.qml</file>
+        <file>qml/components/GlassSurface.qml</file>
+        <file>qml/components/GlassTextField.qml</file>
+        <file>qml/components/GlassButton.qml</file>
         <file>qml/chat/ChatSideBar.qml</file>
         <file>qml/chat/ChatLeftPanel.qml</file>
         <file>qml/chat/ChatConversationPane.qml</file>

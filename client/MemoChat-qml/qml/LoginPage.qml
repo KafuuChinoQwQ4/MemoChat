@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import Qt5Compat.GraphicalEffects
+import "components"
 
 Rectangle {
     id: loginRoot
@@ -9,23 +10,9 @@ Rectangle {
     clip: false
     color: "transparent"
 
-    Item {
+    GlassBackdrop {
         id: backdropLayer
         anchors.fill: parent
-
-        Rectangle {
-            anchors.fill: parent
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: Qt.rgba(0.62, 0.79, 0.97, 0.11) }
-                GradientStop { position: 1.0; color: Qt.rgba(0.96, 0.66, 0.90, 0.10) }
-            }
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            color: Qt.rgba(1, 1, 1, 0.04)
-            border.width: 0
-        }
     }
 
     Popup {
@@ -59,101 +46,40 @@ Rectangle {
         onAboutToShow: reposition()
         onOpened: Qt.callLater(function() { reposition() })
 
-        background: Item {
-            id: morePopupBg
+        background: GlassSurface {
             anchors.fill: parent
-            clip: true
-
-            ShaderEffectSource {
-                id: morePopupBlurSource
-                anchors.fill: parent
-                sourceItem: backdropLayer
-                sourceRect: {
-                    var p = morePopupBg.mapToItem(backdropLayer, 0, 0)
-                    return Qt.rect(p.x, p.y, morePopupBg.width, morePopupBg.height)
-                }
-                live: true
-                hideSource: true
-                visible: false
-            }
-
-            FastBlur {
-                anchors.fill: parent
-                source: morePopupBlurSource
-                radius: 24
-                transparentBorder: true
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: 10
-                color: Qt.rgba(1, 1, 1, 0.20)
-                border.color: Qt.rgba(1, 1, 1, 0.56)
-                border.width: 1
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: 10
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.24) }
-                    GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0.05) }
-                }
-            }
+            backdrop: backdropLayer
+            blurRadius: 24
+            cornerRadius: 10
+            fillColor: Qt.rgba(1, 1, 1, 0.20)
+            strokeColor: Qt.rgba(1, 1, 1, 0.56)
+            strokeWidth: 1
+            glowTopColor: Qt.rgba(1, 1, 1, 0.24)
+            glowBottomColor: Qt.rgba(1, 1, 1, 0.05)
         }
 
         Column {
             anchors.fill: parent
             spacing: 6
 
-            Button {
+            GlassButton {
                 id: registerBtn
                 width: parent.width
                 height: 34
+                cornerRadius: 7
                 text: "注册账号"
-                hoverEnabled: true
-                focusPolicy: Qt.NoFocus
-                background: Rectangle {
-                    radius: 7
-                    color: registerBtn.down ? Qt.rgba(1, 1, 1, 0.24)
-                                            : registerBtn.hovered ? Qt.rgba(1, 1, 1, 0.20)
-                                                                  : Qt.rgba(1, 1, 1, 0.16)
-                    border.width: 0
-                }
-                contentItem: Text {
-                    text: registerBtn.text
-                    color: "#6a6f79"
-                    font.pixelSize: 15
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
                 onClicked: {
                     morePopup.close()
                     controller.switchToRegister()
                 }
             }
 
-            Button {
+            GlassButton {
                 id: resetBtn
                 width: parent.width
                 height: 34
+                cornerRadius: 7
                 text: "忘记密码"
-                hoverEnabled: true
-                focusPolicy: Qt.NoFocus
-                background: Rectangle {
-                    radius: 7
-                    color: resetBtn.down ? Qt.rgba(1, 1, 1, 0.24)
-                                         : resetBtn.hovered ? Qt.rgba(1, 1, 1, 0.20)
-                                                            : Qt.rgba(1, 1, 1, 0.16)
-                    border.width: 0
-                }
-                contentItem: Text {
-                    text: resetBtn.text
-                    color: "#6a6f79"
-                    font.pixelSize: 15
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
                 onClicked: {
                     morePopup.close()
                     controller.switchToReset()
@@ -280,122 +206,34 @@ Rectangle {
             font.pixelSize: 13
         }
 
-        Item {
-            id: emailPanel
+        GlassTextField {
+            id: emailField
             width: parent.width
             height: 46
-            clip: true
-
-            ShaderEffectSource {
-                id: emailBlurSource
-                anchors.fill: parent
-                sourceItem: backdropLayer
-                sourceRect: {
-                    var p = emailPanel.mapToItem(backdropLayer, 0, 0)
-                    return Qt.rect(p.x, p.y, emailPanel.width, emailPanel.height)
-                }
-                live: true
-                hideSource: true
-                visible: false
-            }
-
-            FastBlur {
-                anchors.fill: parent
-                source: emailBlurSource
-                radius: 28
-                transparentBorder: true
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: 11
-                color: Qt.rgba(1, 1, 1, 0.15)
-                border.color: Qt.rgba(1, 1, 1, 0.50)
-                border.width: 1
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: 11
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.24) }
-                    GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0.06) }
-                }
-            }
-
-            TextField {
-                id: emailField
-                anchors.fill: parent
-                anchors.leftMargin: 16
-                anchors.rightMargin: 16
-                placeholderText: "输入邮箱"
-                font.pixelSize: 17
-                horizontalAlignment: TextInput.AlignHCenter
-                verticalAlignment: TextInput.AlignVCenter
-                selectByMouse: true
-                background: Item { }
-                onTextChanged: controller.clearTip()
-            }
+            backdrop: backdropLayer
+            blurRadius: 28
+            cornerRadius: 11
+            leftInset: 16
+            rightInset: 16
+            textPixelSize: 17
+            placeholderText: "输入邮箱"
+            onTextChanged: controller.clearTip()
         }
 
-        Item {
-            id: pwdPanel
+        GlassTextField {
+            id: pwdField
             width: parent.width
             height: 46
-            clip: true
-
-            ShaderEffectSource {
-                id: pwdBlurSource
-                anchors.fill: parent
-                sourceItem: backdropLayer
-                sourceRect: {
-                    var p = pwdPanel.mapToItem(backdropLayer, 0, 0)
-                    return Qt.rect(p.x, p.y, pwdPanel.width, pwdPanel.height)
-                }
-                live: true
-                hideSource: true
-                visible: false
-            }
-
-            FastBlur {
-                anchors.fill: parent
-                source: pwdBlurSource
-                radius: 28
-                transparentBorder: true
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: 11
-                color: Qt.rgba(1, 1, 1, 0.15)
-                border.color: Qt.rgba(1, 1, 1, 0.50)
-                border.width: 1
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: 11
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.24) }
-                    GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0.06) }
-                }
-            }
-
-            TextField {
-                id: pwdField
-                anchors.fill: parent
-                anchors.leftMargin: 16
-                anchors.rightMargin: 16
-                placeholderText: "输入密码"
-                font.pixelSize: 17
-                horizontalAlignment: TextInput.AlignHCenter
-                verticalAlignment: TextInput.AlignVCenter
-                echoMode: TextInput.Password
-                selectByMouse: true
-                background: Item { }
-                onTextChanged: controller.clearTip()
-                onAccepted: loginBtn.triggerLogin()
-            }
+            backdrop: backdropLayer
+            blurRadius: 28
+            cornerRadius: 11
+            leftInset: 16
+            rightInset: 16
+            textPixelSize: 17
+            placeholderText: "输入密码"
+            echoMode: TextInput.Password
+            onTextChanged: controller.clearTip()
+            onAccepted: loginBtn.triggerLogin()
         }
 
         Row {
@@ -478,45 +316,20 @@ Rectangle {
             height: 48
             clip: true
 
-            ShaderEffectSource {
-                id: loginBlurSource
+            GlassSurface {
                 anchors.fill: parent
-                sourceItem: backdropLayer
-                sourceRect: {
-                    var p = loginBtn.mapToItem(backdropLayer, 0, 0)
-                    return Qt.rect(p.x, p.y, loginBtn.width, loginBtn.height)
-                }
-                live: true
-                hideSource: true
-                visible: false
-            }
-
-            FastBlur {
-                anchors.fill: parent
-                source: loginBlurSource
-                radius: 32
-                transparentBorder: true
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: 10
-                color: !loginBtn.loginReady ? Qt.rgba(0.60, 0.67, 0.74, 0.24)
-                                            : loginBtn.pressed ? Qt.rgba(0.25, 0.50, 0.72, 0.45)
-                                                               : loginBtn.hovering ? Qt.rgba(0.35, 0.62, 0.82, 0.40)
-                                                                                  : Qt.rgba(0.45, 0.70, 0.88, 0.36)
-                border.color: !loginBtn.loginReady ? Qt.rgba(1, 1, 1, 0.30)
+                backdrop: backdropLayer
+                blurRadius: 32
+                cornerRadius: 10
+                fillColor: !loginBtn.loginReady ? Qt.rgba(0.60, 0.67, 0.74, 0.24)
+                                                : loginBtn.pressed ? Qt.rgba(0.25, 0.50, 0.72, 0.45)
+                                                                   : loginBtn.hovering ? Qt.rgba(0.35, 0.62, 0.82, 0.40)
+                                                                                      : Qt.rgba(0.45, 0.70, 0.88, 0.36)
+                strokeColor: !loginBtn.loginReady ? Qt.rgba(1, 1, 1, 0.30)
                                                    : Qt.rgba(1, 1, 1, 0.56)
-                border.width: 1
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: 10
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.24) }
-                    GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0.04) }
-                }
+                strokeWidth: 1
+                glowTopColor: Qt.rgba(1, 1, 1, 0.24)
+                glowBottomColor: Qt.rgba(1, 1, 1, 0.04)
             }
 
             function triggerLogin() {
