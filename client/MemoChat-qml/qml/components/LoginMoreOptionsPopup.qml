@@ -10,6 +10,7 @@ Popup {
 
     signal registerClicked()
     signal resetClicked()
+    property real popupScale: 1.0
 
     parent: popupHost
     z: 1000
@@ -21,6 +22,46 @@ Popup {
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     x: 10
     y: 10
+    opacity: 1.0
+    scale: root.popupScale
+    transformOrigin: Item.Center
+
+    enter: Transition {
+        ParallelAnimation {
+            NumberAnimation {
+                property: "opacity"
+                from: 0.0
+                to: 1.0
+                duration: 140
+                easing.type: Easing.OutQuad
+            }
+            NumberAnimation {
+                property: "popupScale"
+                from: 0.92
+                to: 1.0
+                duration: 180
+                easing.type: Easing.OutCubic
+            }
+        }
+    }
+    exit: Transition {
+        ParallelAnimation {
+            NumberAnimation {
+                property: "opacity"
+                from: 1.0
+                to: 0.0
+                duration: 110
+                easing.type: Easing.InQuad
+            }
+            NumberAnimation {
+                property: "popupScale"
+                from: 1.0
+                to: 0.96
+                duration: 110
+                easing.type: Easing.InQuad
+            }
+        }
+    }
 
     function reposition() {
         if (!root.anchorItem) {
@@ -58,6 +99,7 @@ Popup {
 
     Column {
         anchors.fill: parent
+        anchors.margins: 1
         spacing: 6
 
         GlassButton {
