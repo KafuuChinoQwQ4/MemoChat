@@ -22,10 +22,11 @@ bool AuthController::parseJson(const QString &res, QJsonObject &obj) const
 
 bool AuthController::checkEmail(const QString &email, QString *errorText) const
 {
-    const QRegularExpression regex(R"((\w+)(\.|_)?(\w*)@(\w+)(\.(\w+))+)");
+    static const QRegularExpression regex(
+        R"(^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,63}$)");
     if (!regex.match(email.trimmed()).hasMatch()) {
         if (errorText) {
-            *errorText = "邮箱地址不正确";
+            *errorText = "邮箱格式不正确，仅支持英文数字与常用符号";
         }
         return false;
     }
@@ -41,10 +42,11 @@ bool AuthController::checkPassword(const QString &password, QString *errorText) 
         return false;
     }
 
-    const QRegularExpression regExp("^[a-zA-Z0-9!@#$%^&*.]{6,15}$");
+    static const QRegularExpression regExp(
+        R"(^[A-Za-z0-9!@#$%^&*._+\-=~?]{6,15}$)");
     if (!regExp.match(password).hasMatch()) {
         if (errorText) {
-            *errorText = "不能包含非法字符且长度为6~15";
+            *errorText = "密码仅支持英文、数字和常用符号";
         }
         return false;
     }

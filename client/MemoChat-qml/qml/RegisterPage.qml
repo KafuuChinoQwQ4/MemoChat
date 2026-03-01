@@ -12,6 +12,16 @@ Rectangle {
     property bool pwdVisible: false
     property bool confirmVisible: false
 
+    RegularExpressionValidator {
+        id: emailInputValidator
+        regularExpression: /^[A-Za-z0-9@._%+\-]*$/
+    }
+
+    RegularExpressionValidator {
+        id: passwordInputValidator
+        regularExpression: /^[A-Za-z0-9!@#$%^&*._+\-=~?]{0,15}$/
+    }
+
     GlassBackdrop {
         id: backdropLayer
         anchors.fill: parent
@@ -81,6 +91,9 @@ Rectangle {
                         Layout.preferredHeight: 38
                         backdrop: backdropLayer
                         placeholderText: "输入邮箱"
+                        inputMethodHints: Qt.ImhEmailCharactersOnly | Qt.ImhNoPredictiveText | Qt.ImhPreferLatin
+                        maximumLength: 128
+                        validator: emailInputValidator
                         onTextChanged: controller.clearTip()
                     }
                 }
@@ -105,6 +118,9 @@ Rectangle {
                             anchors.fill: parent
                             backdrop: backdropLayer
                             placeholderText: "输入密码"
+                            inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhPreferLatin
+                            maximumLength: 15
+                            validator: passwordInputValidator
                             rightInset: 38
                             echoMode: registerRoot.pwdVisible ? TextInput.Normal : TextInput.Password
                             onTextChanged: controller.clearTip()
@@ -151,6 +167,9 @@ Rectangle {
                             anchors.fill: parent
                             backdrop: backdropLayer
                             placeholderText: "确认密码"
+                            inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhPreferLatin
+                            maximumLength: 15
+                            validator: passwordInputValidator
                             rightInset: 38
                             echoMode: registerRoot.confirmVisible ? TextInput.Normal : TextInput.Password
                             onTextChanged: controller.clearTip()
