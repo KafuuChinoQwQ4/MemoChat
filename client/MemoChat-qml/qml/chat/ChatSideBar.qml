@@ -3,7 +3,7 @@ import QtQuick.Controls 2.15
 
 Rectangle {
     id: root
-    color: "#2f3844"
+    color: "transparent"
     width: 56
 
     property int currentTab: 0
@@ -21,11 +21,18 @@ Rectangle {
         return selected ? "qrc:/res/settings_select_press.png" : "qrc:/res/settings.png"
     }
 
+    Rectangle {
+        anchors.fill: parent
+        radius: 12
+        color: Qt.rgba(0.16, 0.22, 0.31, 0.44)
+        border.color: Qt.rgba(1, 1, 1, 0.16)
+    }
+
     Column {
         anchors.left: parent.left
         anchors.top: parent.top
         anchors.leftMargin: 10
-        anchors.topMargin: 28
+        anchors.topMargin: 24
         spacing: 28
 
         Rectangle {
@@ -33,7 +40,7 @@ Rectangle {
             height: 35
             radius: 17
             clip: true
-            color: "#415164"
+            color: Qt.rgba(0.47, 0.63, 0.83, 0.36)
             Image {
                 anchors.fill: parent
                 fillMode: Image.PreserveAspectCrop
@@ -50,7 +57,9 @@ Rectangle {
                 Rectangle {
                     anchors.fill: parent
                     radius: 8
-                    color: root.currentTab === modelData ? "#455469" : "transparent"
+                    color: root.currentTab === modelData
+                           ? Qt.rgba(0.75, 0.87, 1.0, 0.28)
+                           : "transparent"
                 }
 
                 Image {
@@ -73,6 +82,7 @@ Rectangle {
 
                 MouseArea {
                     anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
                     onClicked: root.tabSelected(modelData)
                 }
             }

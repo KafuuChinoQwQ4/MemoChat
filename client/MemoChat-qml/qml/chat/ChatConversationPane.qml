@@ -1,12 +1,14 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "../components"
 import "conversation"
 
 Rectangle {
     id: root
-    color: "#f5f7fa"
+    color: "transparent"
 
+    property Item backdrop: null
     property string peerName: ""
     property bool hasCurrentChat: false
     property var messageModel
@@ -22,14 +24,15 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 64
-            color: "#ffffff"
-            border.color: "#e3e8ef"
+            radius: 10
+            color: Qt.rgba(1, 1, 1, 0.24)
+            border.color: Qt.rgba(1, 1, 1, 0.46)
             Label {
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.left: parent.left
                 anchors.leftMargin: 20
                 text: root.peerName.length > 0 ? root.peerName : "聊天"
-                color: "#2f3a4a"
+                color: "#2a3649"
                 font.pixelSize: 18
                 font.bold: true
             }
@@ -38,8 +41,9 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: "#f8fafc"
-            border.color: "#e3e8ef"
+            radius: 10
+            color: Qt.rgba(1, 1, 1, 0.16)
+            border.color: Qt.rgba(1, 1, 1, 0.42)
 
             ListView {
                 id: messageList
@@ -48,6 +52,7 @@ Rectangle {
                 spacing: 8
                 clip: true
                 model: root.messageModel
+                ScrollBar.vertical: GlassScrollBar { }
                 onCountChanged: {
                     if (count > 0) {
                         positionViewAtEnd()
@@ -69,16 +74,37 @@ Rectangle {
                     }
                 }
             }
+
+            GlassSurface {
+                anchors.centerIn: parent
+                width: 210
+                height: 86
+                visible: messageList.count === 0
+                backdrop: root.backdrop !== null ? root.backdrop : root
+                cornerRadius: 10
+                blurRadius: 28
+                fillColor: Qt.rgba(1, 1, 1, 0.20)
+                strokeColor: Qt.rgba(1, 1, 1, 0.42)
+
+                Label {
+                    anchors.centerIn: parent
+                    text: root.hasCurrentChat ? "还没有消息，开始聊吧" : "请选择一个会话"
+                    color: "#6a7b92"
+                    font.pixelSize: 13
+                }
+            }
         }
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 140
-            color: "#ffffff"
-            border.color: "#e3e8ef"
+            Layout.preferredHeight: 206
+            radius: 10
+            color: Qt.rgba(1, 1, 1, 0.22)
+            border.color: Qt.rgba(1, 1, 1, 0.46)
 
             ChatComposerBar {
                 anchors.fill: parent
+                backdrop: root.backdrop
                 enabledComposer: root.hasCurrentChat
                 onSendText: root.sendText(text)
                 onSendImage: root.sendImage()

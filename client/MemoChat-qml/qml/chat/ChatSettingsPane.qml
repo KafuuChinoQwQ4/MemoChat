@@ -4,8 +4,10 @@ import QtQuick.Layouts 1.15
 import "settings"
 
 Rectangle {
-    color: "#f8f9fb"
+    id: root
+    color: "transparent"
 
+    property Item backdrop: null
     property string userIcon: "qrc:/res/head_1.jpg"
     property string userNick: ""
     property string userName: ""
@@ -18,12 +20,13 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        anchors.margins: 26
+        anchors.margins: 20
         spacing: 18
 
         SettingsAvatarCard {
             Layout.preferredWidth: 260
             Layout.fillHeight: true
+            backdrop: root.backdrop
             iconSource: root.userIcon
             onChooseAvatarRequested: root.chooseAvatarRequested()
         }
@@ -31,6 +34,7 @@ Rectangle {
         SettingsProfileForm {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            backdrop: root.backdrop
             userName: root.userName
             userNick: root.userNick
             userDesc: root.userDesc
