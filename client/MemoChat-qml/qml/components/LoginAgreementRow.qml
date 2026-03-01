@@ -31,6 +31,20 @@ Row {
             border.width: 1
             border.color: "#8ea0b4"
             color: termsCheck.checked ? "#4f9edd" : "transparent"
+            scale: termsCheck.checked ? 1.0 : 0.94
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 130
+                    easing.type: Easing.OutQuad
+                }
+            }
+            Behavior on scale {
+                NumberAnimation {
+                    duration: 130
+                    easing.type: Easing.OutBack
+                }
+            }
 
             Canvas {
                 anchors.fill: parent

@@ -45,6 +45,25 @@ Item {
         color: root.fillColor
         border.color: root.strokeColor
         border.width: root.strokeWidth
+
+        Behavior on color {
+            ColorAnimation {
+                duration: 180
+                easing.type: Easing.InOutQuad
+            }
+        }
+        Behavior on border.color {
+            ColorAnimation {
+                duration: 180
+                easing.type: Easing.InOutQuad
+            }
+        }
+        Behavior on border.width {
+            NumberAnimation {
+                duration: 160
+                easing.type: Easing.InOutQuad
+            }
+        }
     }
 
     Rectangle {
@@ -53,6 +72,20 @@ Item {
         gradient: Gradient {
             GradientStop { position: 0.0; color: root.glowTopColor }
             GradientStop { position: 1.0; color: root.glowBottomColor }
+        }
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 160
+                easing.type: Easing.InOutQuad
+            }
+        }
+    }
+
+    Behavior on blurRadius {
+        NumberAnimation {
+            duration: 220
+            easing.type: Easing.InOutQuad
         }
     }
 }

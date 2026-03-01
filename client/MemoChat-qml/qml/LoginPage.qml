@@ -12,11 +12,25 @@ Rectangle {
     signal switchToRegisterRequested()
     signal switchToResetRequested()
     signal clearTipRequested()
+    property real revealProgress: 0.0
 
     radius: 0
     antialiasing: false
     clip: false
     color: "transparent"
+
+    function stageValue(start, span) {
+        return Math.max(0, Math.min(1, (revealProgress - start) / span))
+    }
+
+    Component.onCompleted: revealProgress = 1.0
+
+    Behavior on revealProgress {
+        NumberAnimation {
+            duration: 760
+            easing.type: Easing.OutCubic
+        }
+    }
 
     GlassBackdrop {
         id: backdropLayer
@@ -46,7 +60,10 @@ Rectangle {
         spacing: 14
 
         LoginTopBar {
+            id: topBar
             width: parent.width
+            opacity: loginRoot.stageValue(0.02, 0.16)
+            scale: 0.97 + 0.03 * opacity
             onSettingsClicked: loginRoot.clearTipRequested()
             onCloseClicked: Qt.quit()
         }
@@ -54,16 +71,28 @@ Rectangle {
         Item { width: parent.width; height: 12 }
 
         LoginAvatar {
+            id: avatarSection
             anchors.horizontalCenter: parent.horizontalCenter
+            opacity: loginRoot.stageValue(0.09, 0.16)
+            scale: 0.96 + 0.04 * opacity
         }
 
         Label {
+            id: tipLabel
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             text: loginRoot.tipText
             visible: text.length > 0
             color: loginRoot.tipError ? "#d64545" : "#2a7f62"
             font.pixelSize: 13
+            opacity: loginRoot.stageValue(0.20, 0.16)
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 150
+                    easing.type: Easing.OutQuad
+                }
+            }
         }
 
         GlassTextField {
@@ -77,6 +106,8 @@ Rectangle {
             rightInset: 16
             textPixelSize: 17
             placeholderText: "输入邮箱"
+            opacity: loginRoot.stageValue(0.19, 0.18)
+            scale: 0.97 + 0.03 * opacity
             onTextChanged: loginRoot.clearTipRequested()
         }
 
@@ -92,6 +123,8 @@ Rectangle {
             textPixelSize: 17
             placeholderText: "输入密码"
             echoMode: TextInput.Password
+            opacity: loginRoot.stageValue(0.28, 0.18)
+            scale: 0.97 + 0.03 * opacity
             onTextChanged: loginRoot.clearTipRequested()
             onAccepted: loginBtn.triggerLogin()
         }
@@ -99,6 +132,8 @@ Rectangle {
         LoginAgreementRow {
             id: termsRow
             width: parent.width
+            opacity: loginRoot.stageValue(0.36, 0.18)
+            scale: 0.98 + 0.02 * opacity
             onLinkActivated: function(link) { Qt.openUrlExternally(link) }
         }
 
@@ -111,6 +146,8 @@ Rectangle {
                    && termsRow.checked
                    && !loginRoot.busy
             busy: loginRoot.busy
+            opacity: loginRoot.stageValue(0.44, 0.18)
+            scale: 0.97 + 0.03 * opacity
 
             function triggerLogin() {
                 if (!ready) {
@@ -127,6 +164,8 @@ Rectangle {
         LoginFooterLinks {
             id: footerLinks
             anchors.horizontalCenter: parent.horizontalCenter
+            opacity: loginRoot.stageValue(0.54, 0.18)
+            scale: 0.98 + 0.02 * opacity
             onScanLoginClicked: loginRoot.clearTipRequested()
             onMoreOptionsClicked: {
                 if (morePopup.visible) {
