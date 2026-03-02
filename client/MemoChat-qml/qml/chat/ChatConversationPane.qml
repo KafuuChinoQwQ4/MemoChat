@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import QtQuick.Window 2.15
 import "../components"
 import "conversation"
 
@@ -27,14 +28,76 @@ Rectangle {
             radius: 10
             color: Qt.rgba(1, 1, 1, 0.24)
             border.color: Qt.rgba(1, 1, 1, 0.46)
-            Label {
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.left: parent.left
+
+            RowLayout {
+                anchors.fill: parent
                 anchors.leftMargin: 20
-                text: root.peerName.length > 0 ? root.peerName : "聊天"
-                color: "#2a3649"
-                font.pixelSize: 18
-                font.bold: true
+                anchors.rightMargin: 18
+                spacing: 0
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    Layout.fillHeight: true
+
+                    Label {
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.left: parent.left
+                        text: root.peerName.length > 0 ? root.peerName : "聊天"
+                        color: "#2a3649"
+                        font.pixelSize: 18
+                        font.bold: true
+                        elide: Text.ElideRight
+                        width: parent.width
+                    }
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    Layout.fillHeight: true
+
+                    Row {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 22
+
+                        LoginIconButton {
+                            iconSource: "qrc:/icons/minimize.png"
+                            onClicked: {
+                                const window = root.Window.window
+                                if (window) {
+                                    window.showMinimized()
+                                }
+                            }
+                        }
+
+                        LoginIconButton {
+                            iconSource: "qrc:/icons/maximize.png"
+                            onClicked: {
+                                const window = root.Window.window
+                                if (!window) {
+                                    return
+                                }
+                                if (window.visibility === Window.Maximized) {
+                                    window.showNormal()
+                                } else {
+                                    window.showMaximized()
+                                }
+                            }
+                        }
+
+                        LoginIconButton {
+                            iconSource: "qrc:/icons/close.png"
+                            onClicked: {
+                                const window = root.Window.window
+                                if (window) {
+                                    window.close()
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
