@@ -32,11 +32,29 @@ Item {
         visible: false
     }
 
-    FastBlur {
+    Item {
+        id: blurLayer
         anchors.fill: parent
-        source: blurSource
-        radius: root.blurRadius
-        transparentBorder: true
+
+        FastBlur {
+            id: blurEffect
+            anchors.fill: parent
+            source: blurSource
+            radius: root.blurRadius
+            transparentBorder: true
+            visible: false
+        }
+
+        OpacityMask {
+            anchors.fill: parent
+            source: blurEffect
+            maskSource: Rectangle {
+                width: blurLayer.width
+                height: blurLayer.height
+                radius: root.cornerRadius
+                color: "black"
+            }
+        }
     }
 
     Rectangle {
