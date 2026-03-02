@@ -1,5 +1,6 @@
 #include "ChatMessageModel.h"
 #include "MessageContentCodec.h"
+#include <limits>
 
 ChatMessageModel::ChatMessageModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -37,6 +38,8 @@ QVariant ChatMessageModel::data(const QModelIndex &index, int role) const
         return entry.msgType;
     case FileNameRole:
         return entry.fileName;
+    case ShowAvatarRole:
+        return entry.showAvatar;
     default:
         return {};
     }
@@ -51,7 +54,8 @@ QHash<int, QByteArray> ChatMessageModel::roleNames() const
         {ToUidRole, "toUid"},
         {OutgoingRole, "outgoing"},
         {MsgTypeRole, "msgType"},
-        {FileNameRole, "fileName"}
+        {FileNameRole, "fileName"},
+        {ShowAvatarRole, "showAvatar"}
     };
 }
 
@@ -73,11 +77,15 @@ void ChatMessageModel::setMessages(const std::vector<std::shared_ptr<TextChatDat
     _items.clear();
     _items.reserve(messages.size());
 
+    int previousSenderUid = std::numeric_limits<int>::min();
     for (const auto &message : messages) {
         if (!message) {
             continue;
         }
-        _items.push_back(toEntry(message, selfUid));
+        MessageEntry entry = toEntry(message, selfUid);
+        entry.showAvatar = (entry.fromUid != previousSenderUid);
+        previousSenderUid = entry.fromUid;
+        _items.push_back(std::move(entry));
     }
 
     endResetModel();
@@ -91,6 +99,7 @@ void ChatMessageModel::appendMessage(const std::shared_ptr<TextChatData> &messag
     }
 
     MessageEntry entry = toEntry(message, selfUid);
+    entry.showAvatar = _items.empty() || _items.back().fromUid != entry.fromUid;
 
     beginInsertRows(QModelIndex(), rowCount(), rowCount());
     _items.push_back(entry);
@@ -109,5 +118,6 @@ ChatMessageModel::MessageEntry ChatMessageModel::toEntry(const std::shared_ptr<T
     entry.fromUid = message->_from_uid;
     entry.toUid = message->_to_uid;
     entry.outgoing = (message->_from_uid == selfUid);
+    entry.showAvatar = true;
     return entry;
 }

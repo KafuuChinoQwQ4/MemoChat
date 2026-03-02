@@ -8,6 +8,7 @@ import "chat"
 Rectangle {
     id: root
     color: "transparent"
+    property int topInset: 0
     property real revealProgress: 0.0
 
     function stageValue(start, span) {
@@ -30,7 +31,10 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        anchors.margins: 12
+        anchors.leftMargin: 12
+        anchors.rightMargin: 12
+        anchors.bottomMargin: 12
+        anchors.topMargin: 12 + root.topInset
         spacing: 10
 
         GlassSurface {
@@ -115,6 +119,8 @@ Rectangle {
                 ChatConversationPane {
                     backdrop: backdropLayer
                     peerName: controller.currentChatPeerName
+                    selfAvatar: controller.currentUserIcon
+                    peerAvatar: controller.currentChatPeerIcon
                     hasCurrentChat: controller.hasCurrentChat
                     messageModel: controller.messageModel
                     onSendText: controller.sendTextMessage(text)
