@@ -192,6 +192,9 @@ static const char* ChatService_method_names[] = {
   "/message.ChatService/NotifyAuthFriend",
   "/message.ChatService/NotifyTextChatMsg",
   "/message.ChatService/NotifyKickUser",
+  "/message.ChatService/NotifyGroupMessage",
+  "/message.ChatService/NotifyGroupEvent",
+  "/message.ChatService/NotifyGroupMemberBatch",
 };
 
 std::unique_ptr< ChatService::Stub> ChatService::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
@@ -207,6 +210,9 @@ ChatService::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channe
   , rpcmethod_NotifyAuthFriend_(ChatService_method_names[3], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_NotifyTextChatMsg_(ChatService_method_names[4], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_NotifyKickUser_(ChatService_method_names[5], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_NotifyGroupMessage_(ChatService_method_names[6], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_NotifyGroupEvent_(ChatService_method_names[7], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_NotifyGroupMemberBatch_(ChatService_method_names[8], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
 
 ::grpc::Status ChatService::Stub::NotifyAddFriend(::grpc::ClientContext* context, const ::message::AddFriendReq& request, ::message::AddFriendRsp* response) {
@@ -347,6 +353,75 @@ void ChatService::Stub::async::NotifyKickUser(::grpc::ClientContext* context, co
   return result;
 }
 
+::grpc::Status ChatService::Stub::NotifyGroupMessage(::grpc::ClientContext* context, const ::message::GroupMessageNotifyReq& request, ::message::GroupMessageNotifyRsp* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::message::GroupMessageNotifyReq, ::message::GroupMessageNotifyRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_NotifyGroupMessage_, context, request, response);
+}
+
+void ChatService::Stub::async::NotifyGroupMessage(::grpc::ClientContext* context, const ::message::GroupMessageNotifyReq* request, ::message::GroupMessageNotifyRsp* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::message::GroupMessageNotifyReq, ::message::GroupMessageNotifyRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyGroupMessage_, context, request, response, std::move(f));
+}
+
+void ChatService::Stub::async::NotifyGroupMessage(::grpc::ClientContext* context, const ::message::GroupMessageNotifyReq* request, ::message::GroupMessageNotifyRsp* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyGroupMessage_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::message::GroupMessageNotifyRsp>* ChatService::Stub::PrepareAsyncNotifyGroupMessageRaw(::grpc::ClientContext* context, const ::message::GroupMessageNotifyReq& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::message::GroupMessageNotifyRsp, ::message::GroupMessageNotifyReq, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_NotifyGroupMessage_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::message::GroupMessageNotifyRsp>* ChatService::Stub::AsyncNotifyGroupMessageRaw(::grpc::ClientContext* context, const ::message::GroupMessageNotifyReq& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncNotifyGroupMessageRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status ChatService::Stub::NotifyGroupEvent(::grpc::ClientContext* context, const ::message::GroupEventNotifyReq& request, ::message::GroupEventNotifyRsp* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::message::GroupEventNotifyReq, ::message::GroupEventNotifyRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_NotifyGroupEvent_, context, request, response);
+}
+
+void ChatService::Stub::async::NotifyGroupEvent(::grpc::ClientContext* context, const ::message::GroupEventNotifyReq* request, ::message::GroupEventNotifyRsp* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::message::GroupEventNotifyReq, ::message::GroupEventNotifyRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyGroupEvent_, context, request, response, std::move(f));
+}
+
+void ChatService::Stub::async::NotifyGroupEvent(::grpc::ClientContext* context, const ::message::GroupEventNotifyReq* request, ::message::GroupEventNotifyRsp* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyGroupEvent_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::message::GroupEventNotifyRsp>* ChatService::Stub::PrepareAsyncNotifyGroupEventRaw(::grpc::ClientContext* context, const ::message::GroupEventNotifyReq& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::message::GroupEventNotifyRsp, ::message::GroupEventNotifyReq, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_NotifyGroupEvent_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::message::GroupEventNotifyRsp>* ChatService::Stub::AsyncNotifyGroupEventRaw(::grpc::ClientContext* context, const ::message::GroupEventNotifyReq& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncNotifyGroupEventRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status ChatService::Stub::NotifyGroupMemberBatch(::grpc::ClientContext* context, const ::message::GroupMemberBatchReq& request, ::message::GroupMemberBatchRsp* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::message::GroupMemberBatchReq, ::message::GroupMemberBatchRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_NotifyGroupMemberBatch_, context, request, response);
+}
+
+void ChatService::Stub::async::NotifyGroupMemberBatch(::grpc::ClientContext* context, const ::message::GroupMemberBatchReq* request, ::message::GroupMemberBatchRsp* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::message::GroupMemberBatchReq, ::message::GroupMemberBatchRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyGroupMemberBatch_, context, request, response, std::move(f));
+}
+
+void ChatService::Stub::async::NotifyGroupMemberBatch(::grpc::ClientContext* context, const ::message::GroupMemberBatchReq* request, ::message::GroupMemberBatchRsp* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyGroupMemberBatch_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::message::GroupMemberBatchRsp>* ChatService::Stub::PrepareAsyncNotifyGroupMemberBatchRaw(::grpc::ClientContext* context, const ::message::GroupMemberBatchReq& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::message::GroupMemberBatchRsp, ::message::GroupMemberBatchReq, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_NotifyGroupMemberBatch_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::message::GroupMemberBatchRsp>* ChatService::Stub::AsyncNotifyGroupMemberBatchRaw(::grpc::ClientContext* context, const ::message::GroupMemberBatchReq& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncNotifyGroupMemberBatchRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
 ChatService::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       ChatService_method_names[0],
@@ -408,6 +483,36 @@ ChatService::Service::Service() {
              ::message::KickUserRsp* resp) {
                return service->NotifyKickUser(ctx, req, resp);
              }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      ChatService_method_names[6],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< ChatService::Service, ::message::GroupMessageNotifyReq, ::message::GroupMessageNotifyRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ChatService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::message::GroupMessageNotifyReq* req,
+             ::message::GroupMessageNotifyRsp* resp) {
+               return service->NotifyGroupMessage(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      ChatService_method_names[7],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< ChatService::Service, ::message::GroupEventNotifyReq, ::message::GroupEventNotifyRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ChatService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::message::GroupEventNotifyReq* req,
+             ::message::GroupEventNotifyRsp* resp) {
+               return service->NotifyGroupEvent(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      ChatService_method_names[8],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< ChatService::Service, ::message::GroupMemberBatchReq, ::message::GroupMemberBatchRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ChatService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::message::GroupMemberBatchReq* req,
+             ::message::GroupMemberBatchRsp* resp) {
+               return service->NotifyGroupMemberBatch(ctx, req, resp);
+             }, this)));
 }
 
 ChatService::Service::~Service() {
@@ -449,6 +554,27 @@ ChatService::Service::~Service() {
 }
 
 ::grpc::Status ChatService::Service::NotifyKickUser(::grpc::ServerContext* context, const ::message::KickUserReq* request, ::message::KickUserRsp* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status ChatService::Service::NotifyGroupMessage(::grpc::ServerContext* context, const ::message::GroupMessageNotifyReq* request, ::message::GroupMessageNotifyRsp* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status ChatService::Service::NotifyGroupEvent(::grpc::ServerContext* context, const ::message::GroupEventNotifyReq* request, ::message::GroupEventNotifyRsp* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status ChatService::Service::NotifyGroupMemberBatch(::grpc::ServerContext* context, const ::message::GroupMemberBatchReq* request, ::message::GroupMemberBatchRsp* response) {
   (void) context;
   (void) request;
   (void) response;

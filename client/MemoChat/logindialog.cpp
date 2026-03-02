@@ -73,6 +73,12 @@ void LoginDialog::initHttpHandlers()
     _handlers.insert(ReqId::ID_LOGIN_USER, [this](QJsonObject jsonObj){
         int error = jsonObj["error"].toInt();
         if(error != ErrorCodes::SUCCESS){
+            if (error == ErrorCodes::ERR_VERSION_TOO_LOW) {
+                const QString minVersion = jsonObj.value("min_version").toString(QStringLiteral("2.0.0"));
+                showTip(tr("客户端版本过低，请升级到 %1 或以上").arg(minVersion), false);
+                enableBtn(true);
+                return;
+            }
             showTip(tr("参数错误"),false);
             enableBtn(true);
             return;
@@ -175,6 +181,7 @@ void LoginDialog::on_login_btn_clicked()
     QJsonObject json_obj;
     json_obj["email"] = email;
     json_obj["passwd"] = xorString(pwd);
+    json_obj["client_ver"] = QStringLiteral(MEMOCHAT_CLIENT_VERSION);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix+"/user_login"),
                                         json_obj, ReqId::ID_LOGIN_USER,Modules::LOGINMOD);
 }

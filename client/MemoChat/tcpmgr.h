@@ -7,6 +7,7 @@
 #include <QObject>
 #include "userdata.h"
 #include <QJsonArray>
+#include <QJsonObject>
 
 class TcpMgr:public QObject, public Singleton<TcpMgr>,
         public std::enable_shared_from_this<TcpMgr>
@@ -42,6 +43,12 @@ signals:
     void sig_add_auth_friend(std::shared_ptr<AuthInfo>);
     void sig_auth_rsp(std::shared_ptr<AuthRsp>);
     void sig_text_chat_msg(std::shared_ptr<TextChatMsg> msg);
+    void sig_group_list_updated();
+    void sig_group_invite(qint64 groupId, QString groupName, int operatorUid);
+    void sig_group_apply(qint64 groupId, int applicantUid, QString reason);
+    void sig_group_member_changed(QJsonObject payload);
+    void sig_group_chat_msg(std::shared_ptr<GroupChatMsg> msg);
+    void sig_group_rsp(ReqId reqId, int error, QJsonObject payload);
     void sig_notify_offline();
     void sig_connection_closed();
 };

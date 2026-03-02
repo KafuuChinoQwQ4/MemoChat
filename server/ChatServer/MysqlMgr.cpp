@@ -73,3 +73,76 @@ bool MysqlMgr::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo> 
 	return _dao.GetFriendList(self_id, user_info);
 }
 
+bool MysqlMgr::IsFriend(const int& self_id, const int& friend_id) {
+	return _dao.IsFriend(self_id, friend_id);
+}
+
+bool MysqlMgr::CreateGroup(const int& owner_uid, const std::string& name, const std::string& announcement,
+	const int& member_limit, const std::vector<int>& initial_members, int64_t& out_group_id) {
+	return _dao.CreateGroup(owner_uid, name, announcement, member_limit, initial_members, out_group_id);
+}
+
+bool MysqlMgr::GetUserGroupList(const int& uid, std::vector<std::shared_ptr<GroupInfo>>& group_list) {
+	return _dao.GetUserGroupList(uid, group_list);
+}
+
+bool MysqlMgr::GetGroupMemberList(const int64_t& group_id, std::vector<std::shared_ptr<GroupMemberInfo>>& member_list) {
+	return _dao.GetGroupMemberList(group_id, member_list);
+}
+
+bool MysqlMgr::InviteGroupMember(const int64_t& group_id, const int& inviter_uid, const int& target_uid, const std::string& reason) {
+	return _dao.InviteGroupMember(group_id, inviter_uid, target_uid, reason);
+}
+
+bool MysqlMgr::ApplyJoinGroup(const int64_t& group_id, const int& applicant_uid, const std::string& reason) {
+	return _dao.ApplyJoinGroup(group_id, applicant_uid, reason);
+}
+
+bool MysqlMgr::ReviewGroupApply(const int64_t& apply_id, const int& reviewer_uid, const bool& agree, std::shared_ptr<GroupApplyInfo>& apply_info) {
+	return _dao.ReviewGroupApply(apply_id, reviewer_uid, agree, apply_info);
+}
+
+bool MysqlMgr::SaveGroupMessage(const GroupMessageInfo& msg) {
+	return _dao.SaveGroupMessage(msg);
+}
+
+bool MysqlMgr::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts, const int& limit,
+	std::vector<std::shared_ptr<GroupMessageInfo>>& messages) {
+	return _dao.GetGroupHistory(group_id, before_ts, limit, messages);
+}
+
+bool MysqlMgr::UpdateGroupAnnouncement(const int64_t& group_id, const int& operator_uid, const std::string& announcement) {
+	return _dao.UpdateGroupAnnouncement(group_id, operator_uid, announcement);
+}
+
+bool MysqlMgr::SetGroupAdmin(const int64_t& group_id, const int& operator_uid, const int& target_uid, const bool& is_admin) {
+	return _dao.SetGroupAdmin(group_id, operator_uid, target_uid, is_admin);
+}
+
+bool MysqlMgr::MuteGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid, const int64_t& mute_until) {
+	return _dao.MuteGroupMember(group_id, operator_uid, target_uid, mute_until);
+}
+
+bool MysqlMgr::KickGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid) {
+	return _dao.KickGroupMember(group_id, operator_uid, target_uid);
+}
+
+bool MysqlMgr::QuitGroup(const int64_t& group_id, const int& uid) {
+	return _dao.QuitGroup(group_id, uid);
+}
+
+bool MysqlMgr::GetGroupById(const int64_t& group_id, std::shared_ptr<GroupInfo>& group_info) {
+	return _dao.GetGroupById(group_id, group_info);
+}
+
+bool MysqlMgr::GetUserRoleInGroup(const int64_t& group_id, const int& uid, int& role) {
+	return _dao.GetUserRoleInGroup(group_id, uid, role);
+}
+
+bool MysqlMgr::IsUserInGroup(const int64_t& group_id, const int& uid) {
+	return _dao.IsUserInGroup(group_id, uid);
+}
+
+bool MysqlMgr::GetPendingGroupApplyForReviewer(const int& reviewer_uid, std::vector<std::shared_ptr<GroupApplyInfo>>& applies, int limit) {
+	return _dao.GetPendingGroupApplyForReviewer(reviewer_uid, applies, limit);
+}

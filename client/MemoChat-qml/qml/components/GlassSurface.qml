@@ -4,7 +4,7 @@ import Qt5Compat.GraphicalEffects
 Item {
     id: root
 
-    required property Item backdrop
+    property Item backdrop: null
     property int blurRadius: 26
     property real cornerRadius: 10
 
@@ -32,9 +32,10 @@ Item {
     ShaderEffectSource {
         id: blurSource
         anchors.fill: parent
-        sourceItem: root.backdrop
+        readonly property Item sourceBackdrop: root.backdrop !== null ? root.backdrop : root
+        sourceItem: sourceBackdrop
         sourceRect: {
-            var p = root.mapToItem(root.backdrop, 0, 0)
+            var p = root.mapToItem(sourceBackdrop, 0, 0)
             return Qt.rect(p.x, p.y, root.width, root.height)
         }
         live: true

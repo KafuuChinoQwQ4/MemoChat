@@ -80,6 +80,7 @@ void AuthController::sendLogin(const QString &email, const QString &password) co
     QJsonObject payload;
     payload["email"] = email.trimmed();
     payload["passwd"] = xorString(password);
+    payload["client_ver"] = QStringLiteral(MEMOCHAT_CLIENT_VERSION);
     _gateway->httpMgr()->PostHttpReq(
         QUrl(gate_url_prefix + "/user_login"), payload, ReqId::ID_LOGIN_USER, Modules::LOGINMOD);
 }

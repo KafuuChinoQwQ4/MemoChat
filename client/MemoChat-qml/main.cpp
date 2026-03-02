@@ -1,13 +1,19 @@
 #include <QApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQmlError>
 #include <QCoreApplication>
 #include <QSettings>
 #include <QDir>
+#include <QFile>
+#include <QTextStream>
+#include <QDateTime>
+#include <QStandardPaths>
 #include <QSurfaceFormat>
 #include <QWindow>
 #include <QQuickWindow>
 #include <QTimer>
+#include <QQuickStyle>
 #include "AppController.h"
 #include "global.h"
 
@@ -113,11 +119,43 @@ void applyWindowsAcrylic(QQuickWindow *window)
 }
 #endif
 
+namespace {
+void fileMessageHandler(QtMsgType type, const QMessageLogContext &, const QString &msg)
+{
+    QString level;
+    switch (type) {
+    case QtDebugMsg: level = "DEBUG"; break;
+    case QtInfoMsg: level = "INFO"; break;
+    case QtWarningMsg: level = "WARN"; break;
+    case QtCriticalMsg: level = "ERROR"; break;
+    case QtFatalMsg: level = "FATAL"; break;
+    }
+
+    const QString logDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir().mkpath(logDir);
+    QFile file(logDir + "/qml_runtime.log");
+    if (file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        QTextStream out(&file);
+        out << QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss.zzz")
+            << " [" << level << "] " << msg << "\n";
+    }
+
+    if (type == QtFatalMsg) {
+        abort();
+    }
+}
+}
+
 int main(int argc, char *argv[])
 {
     QSurfaceFormat format;
     format.setSamples(8);
     QSurfaceFormat::setDefaultFormat(format);
+
+    // Avoid stale QML cache after frequent qrc/page changes.
+    qputenv("QML_DISABLE_DISK_CACHE", "1");
+    qInstallMessageHandler(fileMessageHandler);
+    QQuickStyle::setStyle("Basic");
 
     QApplication app(argc, argv);
 
@@ -150,6 +188,11 @@ int main(int argc, char *argv[])
 
     AppController controller;
     QQmlApplicationEngine engine;
+    QObject::connect(&engine, &QQmlApplicationEngine::warnings, [](const QList<QQmlError> &warnings) {
+        for (const auto &warning : warnings) {
+            qWarning().noquote() << warning.toString();
+        }
+    });
     engine.rootContext()->setContextProperty("controller", &controller);
 
     const QUrl main_url(QStringLiteral("qrc:/qml/Main.qml"));

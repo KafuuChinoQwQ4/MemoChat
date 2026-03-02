@@ -32,6 +32,20 @@ private:
 	void AuthFriendApply(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void DealChatTextMsg(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void HeartBeatHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void CreateGroupHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void GetGroupListHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void InviteGroupMemberHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void ApplyJoinGroupHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void ReviewGroupApplyHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void DealGroupChatMsg(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void GroupHistoryHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void UpdateGroupAnnouncementHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void SetGroupAdminHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void MuteGroupMemberHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void KickGroupMemberHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void QuitGroupHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void PushGroupPayload(const std::vector<int>& recipients, short msgid, const Json::Value& payload, int exclude_uid = 0);
+	void BuildGroupListJson(int uid, Json::Value& out);
 	bool isPureDigit(const std::string& str);
 	void GetUserByUid(std::string uid_str, Json::Value& rtvalue);
 	void GetUserByName(std::string name, Json::Value& rtvalue);
@@ -46,4 +60,3 @@ private:
 	std::map<short, FunCallBack> _fun_callbacks;
 	std::shared_ptr<CServer> _p_server;
 };
-

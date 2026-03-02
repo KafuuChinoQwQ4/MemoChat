@@ -1,4 +1,4 @@
-import QtQuick 2.15
+﻿import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "../components"
@@ -12,6 +12,7 @@ Rectangle {
 
     property int currentTab: 0
     property var chatModel
+    property var groupModel
     property var contactModel
     property var searchModel
     property bool searchPending: false
@@ -22,8 +23,12 @@ Rectangle {
     property bool hasPendingApply: false
     property bool canLoadMoreContacts: false
     property bool contactLoadingMore: false
+    property string groupStatusText: ""
+    property bool groupStatusError: false
+    property bool groupMode: false
 
     signal chatIndexSelected(int index)
+    signal groupIndexSelected(int index)
     signal requestChatLoadMore()
     signal searchRequested(string uidText)
     signal searchCleared()
@@ -31,6 +36,14 @@ Rectangle {
     signal openApplyRequested()
     signal contactIndexSelected(int index)
     signal requestContactLoadMore()
+    signal createGroupRequested()
+    signal refreshGroupRequested()
+
+    onCurrentTabChanged: {
+        if (currentTab !== 0) {
+            groupMode = false
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -59,12 +72,8 @@ Rectangle {
                     textPixelSize: 14
                     textHorizontalAlignment: TextInput.AlignLeft
                     placeholderText: "搜索 UID"
-                    onTextChanged: {
-                        root.searchCleared()
-                    }
-                    onAccepted: {
-                        root.searchRequested(searchField.text)
-                    }
+                    onTextChanged: root.searchCleared()
+                    onAccepted: root.searchRequested(searchField.text)
                 }
 
                 GlassButton {
@@ -226,97 +235,191 @@ Rectangle {
                     Layout.fillHeight: true
                     visible: searchField.text.length === 0 && root.currentTab === 0
 
-                    ListView {
-                        id: chatList
+                    ColumnLayout {
                         anchors.fill: parent
-                        clip: true
-                        model: root.chatModel
-                        ScrollBar.vertical: GlassScrollBar { }
-                        onContentYChanged: {
-                            if (!root.canLoadMoreChats || root.chatLoadingMore) {
-                                return
-                            }
-                            if (contentHeight <= height + 1) {
-                                return
-                            }
-                            if (contentY + height >= contentHeight - 48) {
-                                root.requestChatLoadMore()
-                            }
-                        }
-                        onCountChanged: {
-                            if (count > 0 && currentIndex < 0) {
-                                currentIndex = 0
-                                root.chatIndexSelected(0)
-                            }
-                        }
+                        spacing: 0
 
-                        footer: Item {
-                            width: chatList.width
-                            height: (root.chatLoadingMore || root.canLoadMoreChats) ? 40 : 0
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 76
+                            color: Qt.rgba(1, 1, 1, 0.08)
+                            border.color: Qt.rgba(1, 1, 1, 0.22)
 
-                            Label {
-                                anchors.centerIn: parent
-                                text: root.chatLoadingMore ? "加载中..." : (root.canLoadMoreChats ? "上滑加载更多" : "")
-                                color: "#8e9aac"
-                                font.pixelSize: 12
-                            }
-                        }
-
-                        delegate: Rectangle {
-                            width: ListView.view.width
-                            height: 64
-                            color: ListView.isCurrentItem ? Qt.rgba(0.77, 0.86, 0.97, 0.32) : "transparent"
-
-                            RowLayout {
+                            ColumnLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 10
-                                anchors.rightMargin: 10
-                                spacing: 8
+                                anchors.margins: 8
+                                spacing: 6
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 6
+
+                                    GlassButton {
+                                        Layout.fillWidth: true
+                                        implicitHeight: 30
+                                        text: "会话"
+                                        cornerRadius: 8
+                                        normalColor: root.groupMode ? Qt.rgba(0.48, 0.56, 0.66, 0.20) : Qt.rgba(0.36, 0.62, 0.92, 0.28)
+                                        hoverColor: root.groupMode ? Qt.rgba(0.48, 0.56, 0.66, 0.28) : Qt.rgba(0.36, 0.62, 0.92, 0.38)
+                                        pressedColor: root.groupMode ? Qt.rgba(0.48, 0.56, 0.66, 0.34) : Qt.rgba(0.36, 0.62, 0.92, 0.45)
+                                        disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                                        onClicked: root.groupMode = false
+                                    }
+
+                                    GlassButton {
+                                        Layout.fillWidth: true
+                                        implicitHeight: 30
+                                        text: "群聊"
+                                        cornerRadius: 8
+                                        normalColor: root.groupMode ? Qt.rgba(0.36, 0.62, 0.92, 0.28) : Qt.rgba(0.48, 0.56, 0.66, 0.20)
+                                        hoverColor: root.groupMode ? Qt.rgba(0.36, 0.62, 0.92, 0.38) : Qt.rgba(0.48, 0.56, 0.66, 0.28)
+                                        pressedColor: root.groupMode ? Qt.rgba(0.36, 0.62, 0.92, 0.45) : Qt.rgba(0.48, 0.56, 0.66, 0.34)
+                                        disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                                        onClicked: root.groupMode = true
+                                    }
+
+                                    GlassButton {
+                                        implicitWidth: 42
+                                        implicitHeight: 30
+                                        text: "+"
+                                        visible: root.groupMode
+                                        cornerRadius: 8
+                                        normalColor: Qt.rgba(0.28, 0.70, 0.58, 0.24)
+                                        hoverColor: Qt.rgba(0.28, 0.70, 0.58, 0.34)
+                                        pressedColor: Qt.rgba(0.28, 0.70, 0.58, 0.42)
+                                        disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                                        onClicked: root.createGroupRequested()
+                                    }
+
+                                    GlassButton {
+                                        implicitWidth: 42
+                                        implicitHeight: 30
+                                        text: "刷"
+                                        visible: root.groupMode
+                                        cornerRadius: 8
+                                        normalColor: Qt.rgba(0.54, 0.70, 0.93, 0.24)
+                                        hoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.34)
+                                        pressedColor: Qt.rgba(0.54, 0.70, 0.93, 0.42)
+                                        disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                                        onClicked: root.refreshGroupRequested()
+                                    }
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: root.groupStatusText
+                                    visible: root.groupMode && text.length > 0
+                                    color: root.groupStatusError ? "#cc4a4a" : "#2a7f62"
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+
+                        ListView {
+                            id: sessionList
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            model: root.groupMode ? root.groupModel : root.chatModel
+                            ScrollBar.vertical: GlassScrollBar { }
+                            onContentYChanged: {
+                                if (root.groupMode) {
+                                    return
+                                }
+                                if (!root.canLoadMoreChats || root.chatLoadingMore) {
+                                    return
+                                }
+                                if (contentHeight <= height + 1) {
+                                    return
+                                }
+                                if (contentY + height >= contentHeight - 48) {
+                                    root.requestChatLoadMore()
+                                }
+                            }
+                            onCountChanged: {
+                                if (count <= 0 || currentIndex >= 0) {
+                                    return
+                                }
+                                currentIndex = 0
+                                if (root.groupMode) {
+                                    root.groupIndexSelected(0)
+                                } else {
+                                    root.chatIndexSelected(0)
+                                }
+                            }
+
+                            footer: Item {
+                                width: sessionList.width
+                                height: (!root.groupMode && (root.chatLoadingMore || root.canLoadMoreChats)) ? 40 : 0
+
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: root.chatLoadingMore ? "加载中..." : (root.canLoadMoreChats ? "上滑加载更多" : "")
+                                    color: "#8e9aac"
+                                    font.pixelSize: 12
+                                }
+                            }
+
+                            delegate: Rectangle {
+                                width: ListView.view.width
+                                height: 64
+                                color: ListView.isCurrentItem ? Qt.rgba(0.77, 0.86, 0.97, 0.32) : "transparent"
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    spacing: 8
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 42
+                                        Layout.preferredHeight: 42
+                                        radius: 4
+                                        clip: true
+                                        color: Qt.rgba(0.73, 0.82, 0.92, 0.46)
+                                        Image {
+                                            anchors.fill: parent
+                                            fillMode: Image.PreserveAspectCrop
+                                            source: icon
+                                        }
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 3
+                                        Label { text: name; font.bold: true; color: "#273449" }
+                                        Label {
+                                            text: (lastMsg && lastMsg.length > 0) ? lastMsg : desc
+                                            color: "#647489"
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        sessionList.currentIndex = index
+                                        if (root.groupMode) {
+                                            root.groupIndexSelected(index)
+                                        } else {
+                                            root.chatIndexSelected(index)
+                                        }
+                                    }
+                                }
 
                                 Rectangle {
-                                    Layout.preferredWidth: 42
-                                    Layout.preferredHeight: 42
-                                    radius: 4
-                                    clip: true
-                                    color: Qt.rgba(0.73, 0.82, 0.92, 0.46)
-                                    Image {
-                                        anchors.fill: parent
-                                        fillMode: Image.PreserveAspectCrop
-                                        source: icon
-                                    }
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    height: 1
+                                    color: Qt.rgba(1, 1, 1, 0.28)
+                                    visible: index < (sessionList.count - 1)
                                 }
-
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 3
-                                    Label { text: name; font.bold: true; color: "#273449" }
-                                    Label {
-                                        text: (lastMsg && lastMsg.length > 0) ? lastMsg : desc
-                                        color: "#647489"
-                                        elide: Text.ElideRight
-                                        Layout.fillWidth: true
-                                    }
-                                }
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    chatList.currentIndex = index
-                                    root.chatIndexSelected(index)
-                                }
-                            }
-
-                            Rectangle {
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.bottom: parent.bottom
-                                anchors.leftMargin: 10
-                                anchors.rightMargin: 10
-                                height: 1
-                                color: Qt.rgba(1, 1, 1, 0.28)
-                                visible: index < (chatList.count - 1)
                             }
                         }
                     }
@@ -325,7 +428,7 @@ Rectangle {
                         anchors.centerIn: parent
                         width: 180
                         height: 64
-                        visible: chatList.count === 0 && !root.chatLoadingMore
+                        visible: sessionList.count === 0 && !root.chatLoadingMore
                         backdrop: root.backdrop !== null ? root.backdrop : root
                         cornerRadius: 10
                         blurRadius: 28
@@ -334,7 +437,7 @@ Rectangle {
 
                         Label {
                             anchors.centerIn: parent
-                            text: "暂无聊天记录"
+                            text: root.groupMode ? "暂无群聊" : "暂无聊天记录"
                             color: "#6a7b92"
                             font.pixelSize: 13
                         }

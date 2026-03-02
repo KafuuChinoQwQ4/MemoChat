@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include <boost/beast/http.hpp>
 #include <boost/beast.hpp>
 #include <boost/asio.hpp>
@@ -17,59 +17,48 @@
 #include <jdbc/cppconn/resultset.h>
 #include <jdbc/cppconn/statement.h>
 #include <jdbc/cppconn/exception.h>
-#include <iostream>
 #include <functional>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <string>
 
-namespace beast = boost::beast;         // from <boost/beast.hpp>
-namespace http = beast::http;           // from <boost/beast/http.hpp>
-namespace net = boost::asio;            // from <boost/asio.hpp>
-using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
+namespace beast = boost::beast;
+namespace http = beast::http;
+namespace net = boost::asio;
+using tcp = boost::asio::ip::tcp;
 
 enum ErrorCodes {
-	Success = 0,
-	Error_Json = 1001,  //Json½âÎö´íÎó
-	RPCFailed = 1002,  //RPCÇëÇó´íÎó
-	VarifyExpired = 1003, //ÑéÖ¤Âë¹ıÆÚ
-	VarifyCodeErr = 1004, //ÑéÖ¤Âë´íÎó
-	UserExist = 1005,       //ÓÃ»§ÒÑ¾­´æÔÚ
-	PasswdErr = 1006,    //ÃÜÂë´íÎó
-	EmailNotMatch = 1007,  //ÓÊÏä²»Æ¥Åä
-	PasswdUpFailed = 1008,  //¸üĞÂÃÜÂëÊ§°Ü
-	PasswdInvalid = 1009,   //ÃÜÂë¸üĞÂÊ§°Ü
-	TokenInvalid = 1010,   //TokenÊ§Ğ§
-	UidInvalid = 1011,  //uidÎŞĞ§
+    Success = 0,
+    Error_Json = 1001,
+    RPCFailed = 1002,
+    VarifyExpired = 1003,
+    VarifyCodeErr = 1004,
+    UserExist = 1005,
+    PasswdErr = 1006,
+    EmailNotMatch = 1007,
+    PasswdUpFailed = 1008,
+    PasswdInvalid = 1009,
+    TokenInvalid = 1010,
+    UidInvalid = 1011,
+    ClientVersionTooLow = 1014,
 };
 
-
-// DeferÀà
 class Defer {
 public:
-	// ½ÓÊÜÒ»¸ölambda±í´ïÊ½»òÕßº¯ÊıÖ¸Õë
-	Defer(std::function<void()> func) : func_(func) {}
-
-	// Îö¹¹º¯ÊıÖĞÖ´ĞĞ´«ÈëµÄº¯Êı
-	~Defer() {
-		func_();
-	}
+    Defer(std::function<void()> func) : func_(func) {}
+    ~Defer() { func_(); }
 
 private:
-	std::function<void()> func_;
+    std::function<void()> func_;
 };
 
-#define USERIPPREFIX  "uip_"
-#define USERTOKENPREFIX  "utoken_"
-#define IPCOUNTPREFIX  "ipcount_"
+#define USERIPPREFIX "uip_"
+#define USERTOKENPREFIX "utoken_"
+#define IPCOUNTPREFIX "ipcount_"
 #define USER_BASE_INFO "ubaseinfo_"
-#define LOGIN_COUNT  "logincount"
+#define LOGIN_COUNT "logincount"
 #define LOCK_COUNT "lockcount"
 
-//·Ö²¼Ê½ËøµÄ³ÖÓĞÊ±¼ä
 #define LOCK_TIME_OUT 10
-//·Ö²¼Ê½ËøµÄÖØÊÔÊ±¼ä
 #define ACQUIRE_TIME_OUT 5
-
-

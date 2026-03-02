@@ -11,13 +11,15 @@ Item {
     property string msgType: "text"
     property string content: ""
     property string fileName: ""
+    property string senderName: ""
     property bool showAvatar: true
     property string avatarSource: "qrc:/res/head_1.jpg"
     signal openUrlRequested(string url)
 
     property int avatarSize: 34
     property int avatarSlotWidth: 42
-    property int topSpacing: showAvatar ? 8 : 2
+    readonly property bool showSenderName: (!outgoing && senderName.length > 0 && showAvatar)
+    property int topSpacing: (showAvatar ? 8 : 2) + (showSenderName ? 16 : 0)
     property int bottomSpacing: 2
     readonly property real bubbleMaxWidth: Math.max(120, width - avatarSlotWidth - 20)
     readonly property real messageHeight: Math.max(bubble.implicitHeight, showAvatar ? avatarSize : 0)
@@ -113,6 +115,16 @@ Item {
                 return textComp
             }
         }
+    }
+
+    Text {
+        visible: root.showSenderName
+        anchors.left: bubble.left
+        anchors.bottom: bubble.top
+        anchors.bottomMargin: 2
+        text: root.senderName
+        color: "#4f6078"
+        font.pixelSize: 11
     }
 
     Component {

@@ -107,6 +107,29 @@ struct FriendInfo {
     std::vector<std::shared_ptr<TextChatData>> _chat_msgs;
 };
 
+struct GroupMemberData {
+    int _uid = 0;
+    QString _name;
+    QString _nick;
+    QString _icon;
+    int _role = 1;
+    qint64 _mute_until = 0;
+};
+
+struct GroupInfoData {
+    qint64 _group_id = 0;
+    QString _name;
+    QString _announcement;
+    int _owner_uid = 0;
+    int _member_limit = 200;
+    int _member_count = 0;
+    int _role = 1;
+    int _is_all_muted = 0;
+    QString _last_msg;
+    std::vector<std::shared_ptr<TextChatData>> _chat_msgs;
+    std::vector<std::shared_ptr<GroupMemberData>> _members;
+};
+
 struct UserInfo {
     UserInfo(int uid, QString name, QString nick, QString icon, int sex, QString last_msg = "", QString desc=""):
         _uid(uid),_name(name),_nick(nick),_icon(icon),_sex(sex),_last_msg(last_msg),_desc(desc){}
@@ -148,14 +171,54 @@ struct UserInfo {
 };
 
 struct TextChatData{
-    TextChatData(QString msg_id, QString msg_content, int fromuid, int touid)
-        :_msg_id(msg_id),_msg_content(msg_content),_from_uid(fromuid),_to_uid(touid){
+    TextChatData(QString msg_id, QString msg_content, int fromuid, int touid,
+                 const QString &from_name = QString())
+        :_msg_id(msg_id),_msg_content(msg_content),_from_uid(fromuid),_to_uid(touid),
+         _from_name(from_name){
 
     }
     QString _msg_id;
     QString _msg_content;
     int _from_uid;
     int _to_uid;
+    QString _from_name;
+};
+
+struct GroupChatData {
+    GroupChatData(QString msg_id, QString msg_content, int fromuid, qint64 groupid,
+                  QString msg_type = "text", qint64 created_at = 0,
+                  QString file_name = "", QString mime = "", int size = 0)
+        : _msg_id(msg_id), _msg_content(msg_content), _from_uid(fromuid), _group_id(groupid),
+          _msg_type(msg_type), _created_at(created_at), _file_name(file_name), _mime(mime), _size(size) {}
+
+    QString _msg_id;
+    QString _msg_content;
+    int _from_uid;
+    qint64 _group_id;
+    QString _msg_type;
+    qint64 _created_at;
+    QString _file_name;
+    QString _mime;
+    int _size;
+};
+
+struct GroupChatMsg {
+    GroupChatMsg(qint64 groupid, int fromuid, QJsonObject msg_obj, const QString &from_name = QString())
+        : _group_id(groupid), _from_uid(fromuid), _from_name(from_name) {
+        auto content = msg_obj.value("content").toString();
+        auto msgid = msg_obj.value("msgid").toString();
+        auto msgtype = msg_obj.value("msgtype").toString("text");
+        auto created_at = msg_obj.value("created_at").toVariant().toLongLong();
+        auto file_name = msg_obj.value("file_name").toString();
+        auto mime = msg_obj.value("mime").toString();
+        auto size = msg_obj.value("size").toInt();
+        _msg = std::make_shared<GroupChatData>(msgid, content, fromuid, groupid, msgtype, created_at, file_name, mime, size);
+    }
+
+    qint64 _group_id;
+    int _from_uid;
+    QString _from_name;
+    std::shared_ptr<GroupChatData> _msg;
 };
 
 struct TextChatMsg{
