@@ -37,6 +37,8 @@
         <file alias="icons/emoji.png">src/表情.png</file>
         <file alias="icons/file.png">src/文件.png</file>
         <file alias="icons/settings.png">src/设置.png</file>
+        <file alias="icons/minimize.png">src/reduce.png</file>
+        <file alias="icons/maximize.png">src/square.png</file>
         <file alias="icons/close.png">src/关闭.png</file>
     </qresource>
 </RCC>

@@ -18,6 +18,16 @@ Item {
     implicitWidth: 100
     implicitHeight: 38
     clip: true
+    layer.enabled: true
+    layer.smooth: true
+    layer.effect: OpacityMask {
+        maskSource: Rectangle {
+            width: root.width
+            height: root.height
+            radius: root.cornerRadius
+            color: "black"
+        }
+    }
 
     ShaderEffectSource {
         id: blurSource

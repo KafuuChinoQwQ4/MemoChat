@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import QtQuick.Window 2.15
 import MemoChat 1.0
 import "components"
 import "chat"
@@ -153,6 +154,50 @@ Rectangle {
                     onChooseAvatarRequested: controller.chooseAvatar()
                     onSaveProfileRequested: controller.saveProfile(nick, desc)
                     onStatusCleared: controller.clearSettingsStatus()
+                }
+            }
+        }
+    }
+
+    Row {
+        z: 20
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: 18
+        anchors.rightMargin: 18
+        spacing: 16
+
+        LoginIconButton {
+            iconSource: "qrc:/icons/minimize.png"
+            onClicked: {
+                const window = root.Window.window
+                if (window) {
+                    window.showMinimized()
+                }
+            }
+        }
+
+        LoginIconButton {
+            iconSource: "qrc:/icons/maximize.png"
+            onClicked: {
+                const window = root.Window.window
+                if (!window) {
+                    return
+                }
+                if (window.visibility === Window.Maximized) {
+                    window.showNormal()
+                } else {
+                    window.showMaximized()
+                }
+            }
+        }
+
+        LoginIconButton {
+            iconSource: "qrc:/icons/close.png"
+            onClicked: {
+                const window = root.Window.window
+                if (window) {
+                    window.close()
                 }
             }
         }
