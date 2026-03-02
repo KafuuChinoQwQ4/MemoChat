@@ -42,15 +42,27 @@ public:
     std::shared_ptr<FriendInfo> GetFriendById(int uid);
     std::vector<std::shared_ptr<FriendInfo>> GetFriendListSnapshot() const;
     void AppendFriendChatMsg(int friend_id,std::vector<std::shared_ptr<TextChatData>>);
+    void SetGroupList(const QJsonArray &array);
+    std::vector<std::shared_ptr<GroupInfoData>> GetGroupListPerPage();
+    bool IsLoadGroupFin();
+    void UpdateGroupLoadedCount();
+    std::shared_ptr<GroupInfoData> GetGroupById(qint64 groupId);
+    bool CheckGroupById(qint64 groupId);
+    void UpsertGroup(const std::shared_ptr<GroupInfoData>& groupInfo);
+    void AppendGroupChatMsg(qint64 group_id, const std::shared_ptr<TextChatData>& msg);
+    std::vector<std::shared_ptr<GroupInfoData>> GetGroupListSnapshot() const;
 private:
     UserMgr();
     std::shared_ptr<UserInfo> _user_info;
     std::vector<std::shared_ptr<ApplyInfo>> _apply_list;
     std::vector<std::shared_ptr<FriendInfo>> _friend_list;
     QMap<int, std::shared_ptr<FriendInfo>> _friend_map;
+    std::vector<std::shared_ptr<GroupInfoData>> _group_list;
+    QMap<qint64, std::shared_ptr<GroupInfoData>> _group_map;
     QString _token;
     int _chat_loaded;
     int _contact_loaded;
+    int _group_loaded;
 
 public slots:
     void SlotAddFriendRsp(std::shared_ptr<AuthRsp> rsp);

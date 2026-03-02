@@ -250,8 +250,19 @@ bool MysqlDao::UpdateUserProfile(int uid, const std::string& nick, const std::st
 		pstmt->setInt(4, uid);
 
 		int updateCount = pstmt->executeUpdate();
+		if (updateCount > 0) {
+			pool_->returnConnection(std::move(con));
+			return true;
+		}
+
+		// MySQL may report 0 rows affected when values are unchanged.
+		std::unique_ptr<sql::PreparedStatement> checkStmt(
+			con->_con->prepareStatement("SELECT 1 FROM user WHERE uid = ? LIMIT 1"));
+		checkStmt->setInt(1, uid);
+		std::unique_ptr<sql::ResultSet> checkRes(checkStmt->executeQuery());
+		const bool uidExists = checkRes->next();
 		pool_->returnConnection(std::move(con));
-		return updateCount > 0;
+		return uidExists;
 	}
 	catch (sql::SQLException& e) {
 		pool_->returnConnection(std::move(con));

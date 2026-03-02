@@ -82,6 +82,7 @@ Rectangle {
                     msgType: model.msgType
                     content: model.content
                     fileName: model.fileName
+                    senderName: model.senderName
                     showAvatar: model.showAvatar
                     avatarSource: model.outgoing ? root.selfAvatar : root.peerAvatar
                     onOpenUrlRequested: root.openAttachment(url)

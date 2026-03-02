@@ -10,8 +10,61 @@
 #include <fstream>
 #include <vector>
 #include <unordered_map>
+#include <sstream>
 
 namespace {
+const char* kMinClientVersion = "2.0.0";
+
+bool ParseSemVer(const std::string& ver, int& major, int& minor, int& patch) {
+	major = 0;
+	minor = 0;
+	patch = 0;
+	if (ver.empty()) {
+		return false;
+	}
+
+	std::stringstream ss(ver);
+	std::string token;
+	std::vector<int> parts;
+	while (std::getline(ss, token, '.')) {
+		if (token.empty()) {
+			return false;
+		}
+		for (char c : token) {
+			if (!std::isdigit(static_cast<unsigned char>(c))) {
+				return false;
+			}
+		}
+		parts.push_back(std::stoi(token));
+	}
+	if (parts.empty() || parts.size() > 3) {
+		return false;
+	}
+	major = parts[0];
+	minor = (parts.size() >= 2) ? parts[1] : 0;
+	patch = (parts.size() >= 3) ? parts[2] : 0;
+	return true;
+}
+
+bool IsClientVersionAllowed(const std::string& clientVer, const std::string& minVer) {
+	int cMaj = 0, cMin = 0, cPatch = 0;
+	int mMaj = 0, mMin = 0, mPatch = 0;
+	if (!ParseSemVer(clientVer, cMaj, cMin, cPatch)) {
+		return false;
+	}
+	if (!ParseSemVer(minVer, mMaj, mMin, mPatch)) {
+		return true;
+	}
+
+	if (cMaj != mMaj) {
+		return cMaj > mMaj;
+	}
+	if (cMin != mMin) {
+		return cMin > mMin;
+	}
+	return cPatch >= mPatch;
+}
+
 std::string SanitizeFileName(const std::string& fileName) {
 	std::string safe;
 	safe.reserve(fileName.size());
@@ -340,6 +393,15 @@ LogicSystem::LogicSystem() {
 
 		auto email = src_root["email"].asString();
 		auto pwd = src_root["passwd"].asString();
+		auto client_ver = src_root.get("client_ver", "").asString();
+		root["min_version"] = kMinClientVersion;
+		root["feature_group_chat"] = true;
+		if (!IsClientVersionAllowed(client_ver, kMinClientVersion)) {
+			root["error"] = ErrorCodes::ClientVersionTooLow;
+			std::string jsonstr = root.toStyledString();
+			beast::ostream(connection->_response.body()) << jsonstr;
+			return true;
+		}
 		UserInfo userInfo;
 		//��ѯ���ݿ��ж��û����������Ƿ�ƥ��
 		bool pwd_valid = MysqlMgr::GetInstance()->CheckPwd(email, pwd, userInfo);

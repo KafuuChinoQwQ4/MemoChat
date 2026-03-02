@@ -5,6 +5,7 @@
 #include <QTimer>
 #include <QJsonObject>
 #include <QVariantList>
+#include <QMap>
 #include "global.h"
 #include "AuthController.h"
 #include "ChatController.h"
@@ -40,7 +41,10 @@ class AppController : public QObject
     Q_PROPERTY(QString currentChatPeerName READ currentChatPeerName NOTIFY currentChatPeerChanged)
     Q_PROPERTY(QString currentChatPeerIcon READ currentChatPeerIcon NOTIFY currentChatPeerChanged)
     Q_PROPERTY(bool hasCurrentChat READ hasCurrentChat NOTIFY currentChatPeerChanged)
+    Q_PROPERTY(bool hasCurrentGroup READ hasCurrentGroup NOTIFY currentGroupChanged)
+    Q_PROPERTY(QString currentGroupName READ currentGroupName NOTIFY currentGroupChanged)
     Q_PROPERTY(FriendListModel* chatListModel READ chatListModel CONSTANT)
+    Q_PROPERTY(FriendListModel* groupListModel READ groupListModel CONSTANT)
     Q_PROPERTY(FriendListModel* contactListModel READ contactListModel CONSTANT)
     Q_PROPERTY(ChatMessageModel* messageModel READ messageModel CONSTANT)
     Q_PROPERTY(SearchResultModel* searchResultModel READ searchResultModel CONSTANT)
@@ -57,6 +61,8 @@ class AppController : public QObject
     Q_PROPERTY(bool authStatusError READ authStatusError NOTIFY authStatusChanged)
     Q_PROPERTY(QString settingsStatusText READ settingsStatusText NOTIFY settingsStatusChanged)
     Q_PROPERTY(bool settingsStatusError READ settingsStatusError NOTIFY settingsStatusChanged)
+    Q_PROPERTY(QString groupStatusText READ groupStatusText NOTIFY groupStatusChanged)
+    Q_PROPERTY(bool groupStatusError READ groupStatusError NOTIFY groupStatusChanged)
 
 public:
     enum Page {
@@ -103,7 +109,10 @@ public:
     QString currentChatPeerName() const;
     QString currentChatPeerIcon() const;
     bool hasCurrentChat() const;
+    bool hasCurrentGroup() const;
+    QString currentGroupName() const;
     FriendListModel *chatListModel();
+    FriendListModel *groupListModel();
     FriendListModel *contactListModel();
     ChatMessageModel *messageModel();
     SearchResultModel *searchResultModel();
@@ -120,6 +129,8 @@ public:
     bool authStatusError() const;
     QString settingsStatusText() const;
     bool settingsStatusError() const;
+    QString groupStatusText() const;
+    bool groupStatusError() const;
 
     Q_INVOKABLE void switchToLogin();
     Q_INVOKABLE void switchToRegister();
@@ -127,6 +138,7 @@ public:
     Q_INVOKABLE void switchChatTab(int tab);
     Q_INVOKABLE void clearTip();
     Q_INVOKABLE void selectChatIndex(int index);
+    Q_INVOKABLE void selectGroupIndex(int index);
     Q_INVOKABLE void selectContactIndex(int index);
     Q_INVOKABLE void showApplyRequests();
     Q_INVOKABLE void jumpChatWithCurrentContact();
@@ -146,6 +158,21 @@ public:
     Q_INVOKABLE void chooseAvatar();
     Q_INVOKABLE void saveProfile(const QString &nick, const QString &desc);
     Q_INVOKABLE void clearSettingsStatus();
+    Q_INVOKABLE void refreshGroupList();
+    Q_INVOKABLE void createGroup(const QString &name, const QVariantList &memberUidList = QVariantList());
+    Q_INVOKABLE void inviteGroupMember(int uid, const QString &reason = QString());
+    Q_INVOKABLE void applyJoinGroup(qint64 groupId, const QString &reason = QString());
+    Q_INVOKABLE void reviewGroupApply(qint64 applyId, bool agree);
+    Q_INVOKABLE void sendGroupTextMessage(const QString &text);
+    Q_INVOKABLE void sendGroupImageMessage();
+    Q_INVOKABLE void sendGroupFileMessage();
+    Q_INVOKABLE void loadGroupHistory();
+    Q_INVOKABLE void updateGroupAnnouncement(const QString &announcement);
+    Q_INVOKABLE void setGroupAdmin(int uid, bool isAdmin);
+    Q_INVOKABLE void muteGroupMember(int uid, int muteSeconds);
+    Q_INVOKABLE void kickGroupMember(int uid);
+    Q_INVOKABLE void quitCurrentGroup();
+    Q_INVOKABLE void clearGroupStatus();
 
     Q_INVOKABLE void login(const QString &email, const QString &password);
     Q_INVOKABLE void requestRegisterCode(const QString &email);
@@ -175,6 +202,8 @@ signals:
     void canLoadMoreContactsChanged();
     void authStatusChanged();
     void settingsStatusChanged();
+    void currentGroupChanged();
+    void groupStatusChanged();
 
 private slots:
     void onLoginHttpFinished(ReqId id, QString res, ErrorCodes err);
@@ -193,6 +222,12 @@ private slots:
     void onFriendApply(std::shared_ptr<AddFriendApply> applyInfo);
     void onNotifyOffline();
     void onConnectionClosed();
+    void onGroupListUpdated();
+    void onGroupInvite(qint64 groupId, QString groupName, int operatorUid);
+    void onGroupApply(qint64 groupId, int applicantUid, QString reason);
+    void onGroupMemberChanged(QJsonObject payload);
+    void onGroupChatMsg(std::shared_ptr<GroupChatMsg> msg);
+    void onGroupRsp(ReqId reqId, int error, QJsonObject payload);
 
 private:
     bool parseJson(const QString &res, QJsonObject &obj);
@@ -201,6 +236,7 @@ private:
     bool checkUserValid(const QString &user);
     bool checkVerifyCodeValid(const QString &code);
     bool dispatchChatContent(const QString &content, const QString &previewText);
+    bool dispatchGroupChatContent(const QString &content, const QString &previewText);
     void sendCallInvite(const QString &callType);
     QString buildCallJoinUrl(const QString &callType) const;
     void setTip(const QString &tip, bool isError);
@@ -209,6 +245,7 @@ private:
     QString normalizeIconPath(QString icon) const;
     void refreshFriendModels();
     void refreshApplyModel();
+    void refreshGroupModel();
     void refreshChatLoadMoreState();
     void refreshContactLoadMoreState();
     void loadCurrentChatMessages();
@@ -225,6 +262,8 @@ private:
     void setContactLoadingMore(bool loading);
     void setAuthStatus(const QString &text, bool isError);
     void setSettingsStatus(const QString &text, bool isError);
+    void setCurrentGroup(qint64 groupId, const QString &name);
+    void setGroupStatus(const QString &text, bool isError);
 
     Page _page;
     QString _tip_text;
@@ -250,8 +289,11 @@ private:
     QString _current_chat_peer_name;
     QString _current_chat_peer_icon;
     int _current_chat_uid;
+    qint64 _current_group_id;
+    QString _current_group_name;
 
     FriendListModel _chat_list_model;
+    FriendListModel _group_list_model;
     FriendListModel _contact_list_model;
     ChatMessageModel _message_model;
     SearchResultModel _search_result_model;
@@ -267,6 +309,9 @@ private:
     bool _auth_status_error;
     QString _settings_status_text;
     bool _settings_status_error;
+    QString _group_status_text;
+    bool _group_status_error;
+    QMap<int, qint64> _group_uid_map;
 
     ClientGateway _gateway;
     AuthController _auth_controller;

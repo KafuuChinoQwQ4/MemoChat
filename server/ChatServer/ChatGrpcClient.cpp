@@ -1,205 +1,268 @@
-#include "ChatGrpcClient.h"
+ï»¿#include "ChatGrpcClient.h"
 #include "RedisMgr.h"
 #include "ConfigMgr.h"
 #include "UserMgr.h"
-
 #include "CSession.h"
 #include "MysqlMgr.h"
+#include <sstream>
 
 ChatGrpcClient::ChatGrpcClient()
 {
-	auto& cfg = ConfigMgr::Inst();
-	auto server_list = cfg["PeerServer"]["Servers"];
+    auto& cfg = ConfigMgr::Inst();
+    auto server_list = cfg["PeerServer"]["Servers"];
 
-	std::vector<std::string> words;
+    std::vector<std::string> words;
+    std::stringstream ss(server_list);
+    std::string word;
 
-	std::stringstream ss(server_list);
-	std::string word;
+    while (std::getline(ss, word, ',')) {
+        words.push_back(word);
+    }
 
-	while (std::getline(ss, word, ',')) {
-		words.push_back(word);
-	}
-
-	for (auto& word : words) {
-		if (cfg[word]["Name"].empty()) {
-			continue;
-		}
-		_pools[cfg[word]["Name"]] = std::make_unique<ChatConPool>(5, cfg[word]["Host"], cfg[word]["Port"]);
-	}
-
+    for (auto& one : words) {
+        if (cfg[one]["Name"].empty()) {
+            continue;
+        }
+        _pools[cfg[one]["Name"]] = std::make_unique<ChatConPool>(5, cfg[one]["Host"], cfg[one]["Port"]);
+    }
 }
 
 AddFriendRsp ChatGrpcClient::NotifyAddFriend(std::string server_ip, const AddFriendReq& req)
 {
-	AddFriendRsp rsp;
-	Defer defer([&rsp, &req]() {
-		rsp.set_error(ErrorCodes::Success);
-		rsp.set_applyuid(req.applyuid());
-		rsp.set_touid(req.touid());
-		});
+    AddFriendRsp rsp;
+    Defer defer([&rsp, &req]() {
+        rsp.set_error(ErrorCodes::Success);
+        rsp.set_applyuid(req.applyuid());
+        rsp.set_touid(req.touid());
+        });
 
-	auto find_iter = _pools.find(server_ip);
-	if (find_iter == _pools.end()) {
-		return rsp;
-	}
-	
-	auto &pool = find_iter->second;
-	ClientContext context;
-	auto stub = pool->getConnection();
-	Status status = stub->NotifyAddFriend(&context, req, &rsp);
-	Defer defercon([&stub, this, &pool]() {
-		pool->returnConnection(std::move(stub));
-		});
+    auto find_iter = _pools.find(server_ip);
+    if (find_iter == _pools.end()) {
+        return rsp;
+    }
 
-	if (!status.ok()) {
-		rsp.set_error(ErrorCodes::RPCFailed);
-		return rsp;
-	}
+    auto& pool = find_iter->second;
+    ClientContext context;
+    auto stub = pool->getConnection();
+    Status status = stub->NotifyAddFriend(&context, req, &rsp);
+    Defer defercon([&stub, this, &pool]() {
+        pool->returnConnection(std::move(stub));
+        });
 
-	return rsp;
+    if (!status.ok()) {
+        rsp.set_error(ErrorCodes::RPCFailed);
+        return rsp;
+    }
+
+    return rsp;
 }
-
 
 bool ChatGrpcClient::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<UserInfo>& userinfo)
 {
-	//ÓÅÏÈ²éredisÖÐ²éÑ¯ÓÃ»§ÐÅÏ¢
-	std::string info_str = "";
-	bool b_base = RedisMgr::GetInstance()->Get(base_key, info_str);
-	if (b_base) {
-		Json::Reader reader;
-		Json::Value root;
-		reader.parse(info_str, root);
-		userinfo->uid = root["uid"].asInt();
-		userinfo->name = root["name"].asString();
-		userinfo->pwd = root["pwd"].asString();
-		userinfo->email = root["email"].asString();
-		userinfo->nick = root["nick"].asString();
-		userinfo->desc = root["desc"].asString();
-		userinfo->sex = root["sex"].asInt();
-		userinfo->icon = root["icon"].asString();
-		std::cout << "user login uid is  " << userinfo->uid << " name  is "
-			<< userinfo->name << " pwd is " << userinfo->pwd << " email is " << userinfo->email << endl;
-	}
-	else {
-		//redisÖÐÃ»ÓÐÔò²éÑ¯mysql
-		//²éÑ¯Êý¾Ý¿â
-		std::shared_ptr<UserInfo> user_info = nullptr;
-		user_info = MysqlMgr::GetInstance()->GetUser(uid);
-		if (user_info == nullptr) {
-			return false;
-		}
+    std::string info_str = "";
+    bool b_base = RedisMgr::GetInstance()->Get(base_key, info_str);
+    if (b_base) {
+        Json::Reader reader;
+        Json::Value root;
+        reader.parse(info_str, root);
+        userinfo->uid = root["uid"].asInt();
+        userinfo->name = root["name"].asString();
+        userinfo->pwd = root["pwd"].asString();
+        userinfo->email = root["email"].asString();
+        userinfo->nick = root["nick"].asString();
+        userinfo->desc = root["desc"].asString();
+        userinfo->sex = root["sex"].asInt();
+        userinfo->icon = root["icon"].asString();
+    }
+    else {
+        std::shared_ptr<UserInfo> user_info = nullptr;
+        user_info = MysqlMgr::GetInstance()->GetUser(uid);
+        if (user_info == nullptr) {
+            return false;
+        }
 
-		userinfo = user_info;
+        userinfo = user_info;
 
-		//½«Êý¾Ý¿âÄÚÈÝÐ´Èëredis»º´æ
-		Json::Value redis_root;
-		redis_root["uid"] = uid;
-		redis_root["pwd"] = userinfo->pwd;
-		redis_root["name"] = userinfo->name;
-		redis_root["email"] = userinfo->email;
-		redis_root["nick"] = userinfo->nick;
-		redis_root["desc"] = userinfo->desc;
-		redis_root["sex"] = userinfo->sex;
-		redis_root["icon"] = userinfo->icon;
-		RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
-	}
+        Json::Value redis_root;
+        redis_root["uid"] = uid;
+        redis_root["pwd"] = userinfo->pwd;
+        redis_root["name"] = userinfo->name;
+        redis_root["email"] = userinfo->email;
+        redis_root["nick"] = userinfo->nick;
+        redis_root["desc"] = userinfo->desc;
+        redis_root["sex"] = userinfo->sex;
+        redis_root["icon"] = userinfo->icon;
+        RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
+    }
 
-	return true;
+    return true;
 }
 
 AuthFriendRsp ChatGrpcClient::NotifyAuthFriend(std::string server_ip, const AuthFriendReq& req) {
-	AuthFriendRsp rsp;
-	rsp.set_error(ErrorCodes::Success);
+    AuthFriendRsp rsp;
+    rsp.set_error(ErrorCodes::Success);
 
-	Defer defer([&rsp, &req]() {
-		rsp.set_fromuid(req.fromuid());
-		rsp.set_touid(req.touid());
-		});
+    Defer defer([&rsp, &req]() {
+        rsp.set_fromuid(req.fromuid());
+        rsp.set_touid(req.touid());
+        });
 
-	auto find_iter = _pools.find(server_ip);
-	if (find_iter == _pools.end()) {
-		return rsp;
-	}
+    auto find_iter = _pools.find(server_ip);
+    if (find_iter == _pools.end()) {
+        return rsp;
+    }
 
-	auto& pool = find_iter->second;
-	ClientContext context;
-	auto stub = pool->getConnection();
-	Status status = stub->NotifyAuthFriend(&context, req, &rsp);
-	Defer defercon([&stub, this, &pool]() {
-		pool->returnConnection(std::move(stub));
-		});
+    auto& pool = find_iter->second;
+    ClientContext context;
+    auto stub = pool->getConnection();
+    Status status = stub->NotifyAuthFriend(&context, req, &rsp);
+    Defer defercon([&stub, this, &pool]() {
+        pool->returnConnection(std::move(stub));
+        });
 
-	if (!status.ok()) {
-		rsp.set_error(ErrorCodes::RPCFailed);
-		return rsp;
-	}
+    if (!status.ok()) {
+        rsp.set_error(ErrorCodes::RPCFailed);
+        return rsp;
+    }
 
-	return rsp;
+    return rsp;
 }
 
-TextChatMsgRsp ChatGrpcClient::NotifyTextChatMsg(std::string server_ip, 
-	const TextChatMsgReq& req, const Json::Value& rtvalue) {
-	
-	TextChatMsgRsp rsp;
-	rsp.set_error(ErrorCodes::Success);
+TextChatMsgRsp ChatGrpcClient::NotifyTextChatMsg(std::string server_ip,
+    const TextChatMsgReq& req, const Json::Value& rtvalue) {
 
-	Defer defer([&rsp, &req]() {
-		rsp.set_fromuid(req.fromuid());
-		rsp.set_touid(req.touid());
-		for (const auto& text_data : req.textmsgs()) {
-			TextChatData* new_msg = rsp.add_textmsgs();
-			new_msg->set_msgid(text_data.msgid());
-			new_msg->set_msgcontent(text_data.msgcontent());
-		}
-		
-		});
+    TextChatMsgRsp rsp;
+    rsp.set_error(ErrorCodes::Success);
 
-	auto find_iter = _pools.find(server_ip);
-	if (find_iter == _pools.end()) {
-		return rsp;
-	}
+    Defer defer([&rsp, &req]() {
+        rsp.set_fromuid(req.fromuid());
+        rsp.set_touid(req.touid());
+        for (const auto& text_data : req.textmsgs()) {
+            TextChatData* new_msg = rsp.add_textmsgs();
+            new_msg->set_msgid(text_data.msgid());
+            new_msg->set_msgcontent(text_data.msgcontent());
+        }
 
-	auto& pool = find_iter->second;
-	ClientContext context;
-	auto stub = pool->getConnection();
-	Status status = stub->NotifyTextChatMsg(&context, req, &rsp);
-	Defer defercon([&stub, this, &pool]() {
-		pool->returnConnection(std::move(stub));
-		});
+        });
 
-	if (!status.ok()) {
-		rsp.set_error(ErrorCodes::RPCFailed);
-		return rsp;
-	}
+    auto find_iter = _pools.find(server_ip);
+    if (find_iter == _pools.end()) {
+        return rsp;
+    }
 
-	return rsp;
+    auto& pool = find_iter->second;
+    ClientContext context;
+    auto stub = pool->getConnection();
+    Status status = stub->NotifyTextChatMsg(&context, req, &rsp);
+    Defer defercon([&stub, this, &pool]() {
+        pool->returnConnection(std::move(stub));
+        });
+
+    if (!status.ok()) {
+        rsp.set_error(ErrorCodes::RPCFailed);
+        return rsp;
+    }
+
+    return rsp;
 }
 
 KickUserRsp ChatGrpcClient::NotifyKickUser(std::string server_ip, const KickUserReq& req)
 {
-	KickUserRsp rsp;
-	Defer defer([&rsp, &req]() {
-		rsp.set_error(ErrorCodes::Success);
-		rsp.set_uid(req.uid());
-		});
+    KickUserRsp rsp;
+    Defer defer([&rsp, &req]() {
+        rsp.set_error(ErrorCodes::Success);
+        rsp.set_uid(req.uid());
+        });
 
-	auto find_iter = _pools.find(server_ip);
-	if (find_iter == _pools.end()) {
-		return rsp;
-	}
+    auto find_iter = _pools.find(server_ip);
+    if (find_iter == _pools.end()) {
+        return rsp;
+    }
 
-	auto& pool = find_iter->second;
-	ClientContext context;
-	auto stub = pool->getConnection();
-	Defer defercon([&stub, this, &pool]() {
-		pool->returnConnection(std::move(stub));
-		});
-	Status status = stub->NotifyKickUser(&context, req, &rsp);
+    auto& pool = find_iter->second;
+    ClientContext context;
+    auto stub = pool->getConnection();
+    Defer defercon([&stub, this, &pool]() {
+        pool->returnConnection(std::move(stub));
+        });
+    Status status = stub->NotifyKickUser(&context, req, &rsp);
 
-	if (!status.ok()) {
-		rsp.set_error(ErrorCodes::RPCFailed);
-		return rsp;
-	}
+    if (!status.ok()) {
+        rsp.set_error(ErrorCodes::RPCFailed);
+        return rsp;
+    }
 
-	return rsp;
+    return rsp;
+}
+
+GroupMessageNotifyRsp ChatGrpcClient::NotifyGroupMessage(std::string server_ip, const GroupMessageNotifyReq& req)
+{
+    GroupMessageNotifyRsp rsp;
+    rsp.set_error(ErrorCodes::Success);
+
+    auto find_iter = _pools.find(server_ip);
+    if (find_iter == _pools.end()) {
+        return rsp;
+    }
+
+    auto& pool = find_iter->second;
+    ClientContext context;
+    auto stub = pool->getConnection();
+    Status status = stub->NotifyGroupMessage(&context, req, &rsp);
+    Defer defercon([&stub, this, &pool]() {
+        pool->returnConnection(std::move(stub));
+        });
+
+    if (!status.ok()) {
+        rsp.set_error(ErrorCodes::RPCFailed);
+    }
+    return rsp;
+}
+
+GroupEventNotifyRsp ChatGrpcClient::NotifyGroupEvent(std::string server_ip, const GroupEventNotifyReq& req)
+{
+    GroupEventNotifyRsp rsp;
+    rsp.set_error(ErrorCodes::Success);
+
+    auto find_iter = _pools.find(server_ip);
+    if (find_iter == _pools.end()) {
+        return rsp;
+    }
+
+    auto& pool = find_iter->second;
+    ClientContext context;
+    auto stub = pool->getConnection();
+    Status status = stub->NotifyGroupEvent(&context, req, &rsp);
+    Defer defercon([&stub, this, &pool]() {
+        pool->returnConnection(std::move(stub));
+        });
+
+    if (!status.ok()) {
+        rsp.set_error(ErrorCodes::RPCFailed);
+    }
+    return rsp;
+}
+
+GroupMemberBatchRsp ChatGrpcClient::NotifyGroupMemberBatch(std::string server_ip, const GroupMemberBatchReq& req)
+{
+    GroupMemberBatchRsp rsp;
+    rsp.set_error(ErrorCodes::Success);
+
+    auto find_iter = _pools.find(server_ip);
+    if (find_iter == _pools.end()) {
+        return rsp;
+    }
+
+    auto& pool = find_iter->second;
+    ClientContext context;
+    auto stub = pool->getConnection();
+    Status status = stub->NotifyGroupMemberBatch(&context, req, &rsp);
+    Defer defercon([&stub, this, &pool]() {
+        pool->returnConnection(std::move(stub));
+        });
+
+    if (!status.ok()) {
+        rsp.set_error(ErrorCodes::RPCFailed);
+    }
+    return rsp;
 }

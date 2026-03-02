@@ -4,7 +4,7 @@ import QtQuick.Controls 2.15
 Item {
     id: root
 
-    required property Item backdrop
+    property Item backdrop: null
 
     property alias text: input.text
     property alias readOnly: input.readOnly
@@ -42,7 +42,7 @@ Item {
     GlassSurface {
         id: fieldSurface
         anchors.fill: parent
-        backdrop: root.backdrop
+        backdrop: root.backdrop !== null ? root.backdrop : root
         blurRadius: root.focusAccentEnabled && input.activeFocus ? root.focusBlurRadius : root.blurRadius
         cornerRadius: root.cornerRadius
         fillColor: root.focusAccentEnabled && input.activeFocus ? root.focusFillColor : root.fillColor

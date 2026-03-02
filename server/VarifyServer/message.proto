@@ -42,3 +42,134 @@ service StatusService {
 	rpc GetChatServer (GetChatServerReq) returns (GetChatServerRsp) {}
 	rpc Login(LoginReq) returns(LoginRsp);
 }
+
+message AddFriendReq {
+	int32  applyuid = 1;
+	string name = 2;
+	string desc = 3;
+	string icon = 4;
+	string nick = 5;
+	int32  sex = 6;
+	int32  touid = 7;
+}
+
+message AddFriendRsp {
+	int32 error = 1;
+	int32 applyuid = 2;
+	int32 touid = 3;
+}
+
+message RplyFriendReq {
+	int32 rplyuid = 1;
+	bool  agree = 2;
+	int32 touid = 3;
+}
+
+message RplyFriendRsp {
+	int32 error = 1;
+	int32 rplyuid = 2;
+	int32 touid = 3;
+}
+
+message SendChatMsgReq{
+		int32 fromuid = 1;
+		int32 touid = 2;
+		string message = 3;
+}
+
+message SendChatMsgRsp{
+		int32 error = 1;
+		int32 fromuid = 2;
+		int32 touid = 3;
+}
+
+message AuthFriendReq{
+	int32 fromuid = 1;
+	int32 touid = 2;
+}
+
+message AuthFriendRsp{
+	int32 error = 1;
+	int32 fromuid = 2;
+	int32 touid = 3;
+}
+
+message TextChatMsgReq {
+	int32 fromuid = 1;
+    int32 touid = 2;
+	repeated TextChatData textmsgs = 3;
+}
+
+message TextChatData{
+	string msgid = 1;
+	string msgcontent = 2;
+}
+
+message TextChatMsgRsp {
+	int32 error = 1;
+	int32 fromuid = 2;
+	int32 touid = 3; 
+	repeated TextChatData textmsgs = 4;
+}
+
+message KickUserReq{
+	int32 uid = 1;
+}
+
+message KickUserRsp{
+	int32 error = 1;
+	int32 uid = 2;
+}
+
+message GroupMessageNotifyReq {
+	int32 tcp_msgid = 1;
+	string payload_json = 2;
+	repeated int32 touids = 3;
+}
+
+message GroupMessageNotifyRsp {
+	int32 error = 1;
+	int32 delivered = 2;
+}
+
+message GroupEventNotifyReq {
+	int32 tcp_msgid = 1;
+	string payload_json = 2;
+	repeated int32 touids = 3;
+}
+
+message GroupEventNotifyRsp {
+	int32 error = 1;
+	int32 delivered = 2;
+}
+
+message GroupMemberState {
+	int32 uid = 1;
+	int32 role = 2;
+	int64 mute_until = 3;
+	int32 status = 4;
+}
+
+message GroupMemberBatchReq {
+	int32 tcp_msgid = 1;
+	string payload_json = 2;
+	repeated int32 touids = 3;
+	repeated GroupMemberState members = 4;
+}
+
+message GroupMemberBatchRsp {
+	int32 error = 1;
+	int32 delivered = 2;
+}
+
+service ChatService {
+	rpc NotifyAddFriend(AddFriendReq) returns (AddFriendRsp) {}
+	rpc RplyAddFriend(RplyFriendReq) returns (RplyFriendRsp) {}
+	rpc SendChatMsg(SendChatMsgReq) returns (SendChatMsgRsp) {}
+	rpc NotifyAuthFriend(AuthFriendReq) returns (AuthFriendRsp) {}
+	rpc NotifyTextChatMsg(TextChatMsgReq) returns (TextChatMsgRsp){}
+	rpc NotifyKickUser(KickUserReq) returns (KickUserRsp){}
+	rpc NotifyGroupMessage(GroupMessageNotifyReq) returns (GroupMessageNotifyRsp){}
+	rpc NotifyGroupEvent(GroupEventNotifyReq) returns (GroupEventNotifyRsp){}
+	rpc NotifyGroupMemberBatch(GroupMemberBatchReq) returns (GroupMemberBatchRsp){}
+}

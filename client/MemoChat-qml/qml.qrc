@@ -32,6 +32,10 @@
         <file>qml/chat/contact/ChatFriendInfoPane.qml</file>
         <file>qml/chat/contact/ContactActionIconButton.qml</file>
         <file>qml/chat/contact/ContactListPane.qml</file>
+        <file>qml/chat/group/CreateGroupDialog.qml</file>
+        <file>qml/chat/group/GroupInfoPane.qml</file>
+        <file>qml/chat/group/GroupManagePane.qml</file>
+        <file>qml/chat/group/GroupApplyReviewPane.qml</file>
         <file>qml/chat/settings/SettingsAvatarCard.qml</file>
         <file>qml/chat/settings/SettingsProfileForm.qml</file>
         <file alias="icons/emoji.png">src/表情.png</file>

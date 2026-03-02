@@ -121,6 +121,47 @@ message KickUserRsp{
 	int32 uid = 2;
 }
 
+message GroupMessageNotifyReq {
+	int32 tcp_msgid = 1;
+	string payload_json = 2;
+	repeated int32 touids = 3;
+}
+
+message GroupMessageNotifyRsp {
+	int32 error = 1;
+	int32 delivered = 2;
+}
+
+message GroupEventNotifyReq {
+	int32 tcp_msgid = 1;
+	string payload_json = 2;
+	repeated int32 touids = 3;
+}
+
+message GroupEventNotifyRsp {
+	int32 error = 1;
+	int32 delivered = 2;
+}
+
+message GroupMemberState {
+	int32 uid = 1;
+	int32 role = 2;
+	int64 mute_until = 3;
+	int32 status = 4;
+}
+
+message GroupMemberBatchReq {
+	int32 tcp_msgid = 1;
+	string payload_json = 2;
+	repeated int32 touids = 3;
+	repeated GroupMemberState members = 4;
+}
+
+message GroupMemberBatchRsp {
+	int32 error = 1;
+	int32 delivered = 2;
+}
+
 service ChatService {
 	rpc NotifyAddFriend(AddFriendReq) returns (AddFriendRsp) {}
 	rpc RplyAddFriend(RplyFriendReq) returns (RplyFriendRsp) {}
@@ -128,4 +169,7 @@ service ChatService {
 	rpc NotifyAuthFriend(AuthFriendReq) returns (AuthFriendRsp) {}
 	rpc NotifyTextChatMsg(TextChatMsgReq) returns (TextChatMsgRsp){}
 	rpc NotifyKickUser(KickUserReq) returns (KickUserRsp){}
+	rpc NotifyGroupMessage(GroupMessageNotifyReq) returns (GroupMessageNotifyRsp){}
+	rpc NotifyGroupEvent(GroupEventNotifyReq) returns (GroupEventNotifyRsp){}
+	rpc NotifyGroupMemberBatch(GroupMemberBatchReq) returns (GroupMemberBatchRsp){}
 }

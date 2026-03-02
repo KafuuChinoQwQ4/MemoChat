@@ -26,7 +26,9 @@ AppController::AppController(QObject *parent)
       _current_contact_icon("qrc:/res/head_1.jpg"),
       _current_chat_peer_icon("qrc:/res/head_1.jpg"),
       _current_chat_uid(0),
+      _current_group_id(0),
       _chat_list_model(this),
+      _group_list_model(this),
       _contact_list_model(this),
       _message_model(this),
       _search_result_model(this),
@@ -39,6 +41,7 @@ AppController::AppController(QObject *parent)
       _can_load_more_contacts(false),
       _auth_status_error(false),
       _settings_status_error(false),
+      _group_status_error(false),
       _auth_controller(&_gateway),
       _chat_controller(&_gateway),
       _contact_controller(&_gateway),
@@ -73,6 +76,18 @@ AppController::AppController(QObject *parent)
             this, &AppController::onNotifyOffline);
     connect(_gateway.tcpMgr().get(), &TcpMgr::sig_connection_closed,
             this, &AppController::onConnectionClosed);
+    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_group_list_updated,
+            this, &AppController::onGroupListUpdated);
+    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_group_invite,
+            this, &AppController::onGroupInvite);
+    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_group_apply,
+            this, &AppController::onGroupApply);
+    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_group_member_changed,
+            this, &AppController::onGroupMemberChanged);
+    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_group_chat_msg,
+            this, &AppController::onGroupChatMsg);
+    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_group_rsp,
+            this, &AppController::onGroupRsp);
     connect(&_apply_request_model, &ApplyRequestModel::unapprovedCountChanged,
             this, &AppController::pendingApplyChanged);
 
@@ -184,12 +199,27 @@ QString AppController::currentChatPeerIcon() const
 
 bool AppController::hasCurrentChat() const
 {
-    return _current_chat_uid > 0;
+    return _current_chat_uid > 0 || _current_group_id > 0;
+}
+
+bool AppController::hasCurrentGroup() const
+{
+    return _current_group_id > 0;
+}
+
+QString AppController::currentGroupName() const
+{
+    return _current_group_name;
 }
 
 FriendListModel *AppController::chatListModel()
 {
     return &_chat_list_model;
+}
+
+FriendListModel *AppController::groupListModel()
+{
+    return &_group_list_model;
 }
 
 FriendListModel *AppController::contactListModel()
@@ -272,6 +302,16 @@ bool AppController::settingsStatusError() const
     return _settings_status_error;
 }
 
+QString AppController::groupStatusText() const
+{
+    return _group_status_text;
+}
+
+bool AppController::groupStatusError() const
+{
+    return _group_status_error;
+}
+
 void AppController::switchToLogin()
 {
     _register_countdown_timer.stop();
@@ -285,6 +325,7 @@ void AppController::switchToLogin()
     setPage(LoginPage);
     setTip("", false);
     _chat_list_model.clear();
+    _group_list_model.clear();
     _contact_list_model.clear();
     _message_model.clear();
     _search_result_model.clear();
@@ -295,6 +336,7 @@ void AppController::switchToLogin()
     setContactLoadingMore(false);
     setAuthStatus("", false);
     setSettingsStatus("", false);
+    setGroupStatus("", false);
     setContactPane(ApplyRequestPane);
     _can_load_more_chats = false;
     emit canLoadMoreChatsChanged();
@@ -302,6 +344,10 @@ void AppController::switchToLogin()
     emit canLoadMoreContactsChanged();
     setCurrentContact(0, "", "", "qrc:/res/head_1.jpg", "", 0);
     _current_chat_uid = 0;
+    _current_group_id = 0;
+    _current_group_name.clear();
+    emit currentGroupChanged();
+    _group_uid_map.clear();
     setCurrentChatPeerName("");
     setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
     _current_user_desc.clear();
@@ -352,6 +398,7 @@ void AppController::selectChatIndex(int index)
     const QVariantMap item = _chat_list_model.get(index);
     if (item.isEmpty()) {
         _current_chat_uid = 0;
+        setCurrentGroup(0, "");
         setCurrentChatPeerName("");
         setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
         _message_model.clear();
@@ -359,6 +406,7 @@ void AppController::selectChatIndex(int index)
     }
 
     _current_chat_uid = item.value("uid").toInt();
+    setCurrentGroup(0, "");
     setCurrentChatPeerName(item.value("name").toString());
     setCurrentChatPeerIcon(item.value("icon").toString());
     loadCurrentChatMessages();
@@ -385,6 +433,37 @@ void AppController::selectContactIndex(int index)
                       item.value("sex").toInt());
     setContactPane(FriendInfoPane);
     setAuthStatus("", false);
+}
+
+void AppController::selectGroupIndex(int index)
+{
+    const QVariantMap item = _group_list_model.get(index);
+    if (item.isEmpty()) {
+        setCurrentGroup(0, "");
+        _message_model.clear();
+        return;
+    }
+
+    const int pseudoUid = item.value("uid").toInt();
+    const qint64 groupId = _group_uid_map.value(pseudoUid, 0);
+    if (groupId <= 0) {
+        setCurrentGroup(0, "");
+        _message_model.clear();
+        return;
+    }
+
+    setCurrentGroup(groupId, item.value("name").toString());
+    _current_chat_uid = 0;
+    setCurrentChatPeerName(_current_group_name);
+    setCurrentChatPeerIcon("qrc:/res/chat_icon.png");
+
+    auto groupInfo = _gateway.userMgr()->GetGroupById(groupId);
+    if (!groupInfo) {
+        _message_model.clear();
+        return;
+    }
+
+    _message_model.setMessages(groupInfo->_chat_msgs, _gateway.userMgr()->GetUid());
 }
 
 void AppController::showApplyRequests()
@@ -443,7 +522,7 @@ void AppController::loadMoreContacts()
 
 void AppController::sendTextMessage(const QString &text)
 {
-    if (_current_chat_uid <= 0) {
+    if (_current_chat_uid <= 0 && _current_group_id <= 0) {
         return;
     }
 
@@ -457,6 +536,13 @@ void AppController::sendTextMessage(const QString &text)
         return;
     }
 
+    if (_current_group_id > 0) {
+        if (!dispatchGroupChatContent(content, content)) {
+            setTip("群消息发送失败", true);
+        }
+        return;
+    }
+
     if (!dispatchChatContent(content, content)) {
         setTip("消息发送失败", true);
     }
@@ -464,7 +550,7 @@ void AppController::sendTextMessage(const QString &text)
 
 void AppController::sendImageMessage()
 {
-    if (_current_chat_uid <= 0) {
+    if (_current_chat_uid <= 0 && _current_group_id <= 0) {
         return;
     }
 
@@ -490,6 +576,12 @@ void AppController::sendImageMessage()
     }
 
     const QString encoded = MessageContentCodec::encodeImage(uploaded.remoteUrl);
+    if (_current_group_id > 0) {
+        if (!dispatchGroupChatContent(encoded, "[图片]")) {
+            setTip("群图片发送失败", true);
+        }
+        return;
+    }
     if (!dispatchChatContent(encoded, "[图片]")) {
         setTip("图片发送失败", true);
     }
@@ -497,7 +589,7 @@ void AppController::sendImageMessage()
 
 void AppController::sendFileMessage()
 {
-    if (_current_chat_uid <= 0) {
+    if (_current_chat_uid <= 0 && _current_group_id <= 0) {
         return;
     }
 
@@ -526,6 +618,12 @@ void AppController::sendFileMessage()
     const QString remoteName = uploaded.fileName.isEmpty() ? fileName : uploaded.fileName;
     const QString encoded = MessageContentCodec::encodeFile(uploaded.remoteUrl, remoteName);
     const QString preview = remoteName.isEmpty() ? "[文件]" : QString("[文件] %1").arg(remoteName);
+    if (_current_group_id > 0) {
+        if (!dispatchGroupChatContent(encoded, preview)) {
+            setTip("群文件发送失败", true);
+        }
+        return;
+    }
     if (!dispatchChatContent(encoded, preview)) {
         setTip("文件发送失败", true);
     }
@@ -686,6 +784,228 @@ void AppController::clearSettingsStatus()
     setSettingsStatus("", false);
 }
 
+void AppController::refreshGroupList()
+{
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo) {
+        setGroupStatus("用户状态异常，请重新登录", true);
+        return;
+    }
+    QJsonObject obj;
+    obj["fromuid"] = selfInfo->_uid;
+    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_GET_GROUP_LIST_REQ, payload);
+}
+
+void AppController::createGroup(const QString &name, const QVariantList &memberUidList)
+{
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo) {
+        setGroupStatus("用户状态异常，请重新登录", true);
+        return;
+    }
+    const QString trimmedName = name.trimmed();
+    if (trimmedName.isEmpty() || trimmedName.size() > 64) {
+        setGroupStatus("群名称长度需在1-64之间", true);
+        return;
+    }
+
+    QJsonArray members;
+    for (const auto &one : memberUidList) {
+        const int uid = one.toInt();
+        if (uid > 0 && uid != selfInfo->_uid) {
+            members.append(uid);
+        }
+    }
+
+    QJsonObject obj;
+    obj["fromuid"] = selfInfo->_uid;
+    obj["name"] = trimmedName;
+    obj["member_limit"] = 200;
+    obj["members"] = members;
+    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_CREATE_GROUP_REQ, payload);
+    setGroupStatus("正在创建群聊...", false);
+}
+
+void AppController::inviteGroupMember(int uid, const QString &reason)
+{
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || _current_group_id <= 0 || uid <= 0) {
+        setGroupStatus("邀请参数非法", true);
+        return;
+    }
+    if (!_gateway.userMgr()->CheckFriendById(uid)) {
+        setGroupStatus("仅支持邀请好友入群", true);
+        return;
+    }
+
+    QJsonObject obj;
+    obj["fromuid"] = selfInfo->_uid;
+    obj["touid"] = uid;
+    obj["groupid"] = static_cast<qint64>(_current_group_id);
+    obj["reason"] = reason;
+    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_INVITE_GROUP_MEMBER_REQ, payload);
+    setGroupStatus("邀请已发送", false);
+}
+
+void AppController::applyJoinGroup(qint64 groupId, const QString &reason)
+{
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || groupId <= 0) {
+        setGroupStatus("申请参数非法", true);
+        return;
+    }
+    QJsonObject obj;
+    obj["fromuid"] = selfInfo->_uid;
+    obj["groupid"] = groupId;
+    obj["reason"] = reason;
+    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_APPLY_JOIN_GROUP_REQ, payload);
+    setGroupStatus("申请已发送", false);
+}
+
+void AppController::reviewGroupApply(qint64 applyId, bool agree)
+{
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || applyId <= 0) {
+        setGroupStatus("审核参数非法", true);
+        return;
+    }
+
+    QJsonObject obj;
+    obj["fromuid"] = selfInfo->_uid;
+    obj["apply_id"] = applyId;
+    obj["agree"] = agree;
+    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_REVIEW_GROUP_APPLY_REQ, payload);
+    setGroupStatus("审核请求已发送", false);
+}
+
+void AppController::sendGroupTextMessage(const QString &text)
+{
+    if (_current_group_id <= 0) {
+        setGroupStatus("请选择群聊", true);
+        return;
+    }
+    sendTextMessage(text);
+}
+
+void AppController::sendGroupImageMessage()
+{
+    if (_current_group_id <= 0) {
+        setGroupStatus("请选择群聊", true);
+        return;
+    }
+    sendImageMessage();
+}
+
+void AppController::sendGroupFileMessage()
+{
+    if (_current_group_id <= 0) {
+        setGroupStatus("请选择群聊", true);
+        return;
+    }
+    sendFileMessage();
+}
+
+void AppController::loadGroupHistory()
+{
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || _current_group_id <= 0) {
+        return;
+    }
+    QJsonObject obj;
+    obj["fromuid"] = selfInfo->_uid;
+    obj["groupid"] = static_cast<qint64>(_current_group_id);
+    obj["before_ts"] = 0;
+    obj["limit"] = 50;
+    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_GROUP_HISTORY_REQ, payload);
+}
+
+void AppController::updateGroupAnnouncement(const QString &announcement)
+{
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || _current_group_id <= 0) {
+        setGroupStatus("请选择群聊", true);
+        return;
+    }
+    QJsonObject obj;
+    obj["fromuid"] = selfInfo->_uid;
+    obj["groupid"] = static_cast<qint64>(_current_group_id);
+    obj["announcement"] = announcement.left(1000);
+    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_UPDATE_GROUP_ANNOUNCEMENT_REQ, payload);
+}
+
+void AppController::setGroupAdmin(int uid, bool isAdmin)
+{
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || _current_group_id <= 0 || uid <= 0) {
+        setGroupStatus("设置管理员参数非法", true);
+        return;
+    }
+    QJsonObject obj;
+    obj["fromuid"] = selfInfo->_uid;
+    obj["groupid"] = static_cast<qint64>(_current_group_id);
+    obj["touid"] = uid;
+    obj["is_admin"] = isAdmin;
+    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_SET_GROUP_ADMIN_REQ, payload);
+}
+
+void AppController::muteGroupMember(int uid, int muteSeconds)
+{
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || _current_group_id <= 0 || uid <= 0) {
+        setGroupStatus("禁言参数非法", true);
+        return;
+    }
+    QJsonObject obj;
+    obj["fromuid"] = selfInfo->_uid;
+    obj["groupid"] = static_cast<qint64>(_current_group_id);
+    obj["touid"] = uid;
+    obj["mute_seconds"] = qMax(0, muteSeconds);
+    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_MUTE_GROUP_MEMBER_REQ, payload);
+}
+
+void AppController::kickGroupMember(int uid)
+{
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || _current_group_id <= 0 || uid <= 0) {
+        setGroupStatus("踢人参数非法", true);
+        return;
+    }
+    QJsonObject obj;
+    obj["fromuid"] = selfInfo->_uid;
+    obj["groupid"] = static_cast<qint64>(_current_group_id);
+    obj["touid"] = uid;
+    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_KICK_GROUP_MEMBER_REQ, payload);
+}
+
+void AppController::quitCurrentGroup()
+{
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || _current_group_id <= 0) {
+        setGroupStatus("请选择群聊", true);
+        return;
+    }
+    QJsonObject obj;
+    obj["fromuid"] = selfInfo->_uid;
+    obj["groupid"] = static_cast<qint64>(_current_group_id);
+    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_QUIT_GROUP_REQ, payload);
+}
+
+void AppController::clearGroupStatus()
+{
+    setGroupStatus("", false);
+}
+
 void AppController::login(const QString &email, const QString &password)
 {
     if (!checkEmailValid(email)) {
@@ -787,6 +1107,11 @@ void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
     const int error = obj.value("error").toInt(ErrorCodes::ERR_JSON);
     if (error != ErrorCodes::SUCCESS) {
         setBusy(false);
+        if (error == ErrorCodes::ERR_VERSION_TOO_LOW) {
+            const QString minVersion = obj.value("min_version").toString(QStringLiteral("2.0.0"));
+            setTip(QString("客户端版本过低，请升级到 %1 或以上").arg(minVersion), true);
+            return;
+        }
         setTip("参数错误", true);
         return;
     }
@@ -987,6 +1312,7 @@ void AppController::onSwitchToChat()
 
     refreshFriendModels();
     refreshApplyModel();
+    refreshGroupList();
     if (_chat_list_model.count() > 0) {
         selectChatIndex(0);
     } else {
@@ -1171,6 +1497,175 @@ void AppController::onConnectionClosed()
     setTip("心跳超时或连接断开，请重新登录", true);
 }
 
+void AppController::onGroupListUpdated()
+{
+    refreshGroupModel();
+    if (_current_group_id > 0) {
+        auto groupInfo = _gateway.userMgr()->GetGroupById(_current_group_id);
+        if (groupInfo) {
+            _message_model.setMessages(groupInfo->_chat_msgs, _gateway.userMgr()->GetUid());
+            return;
+        }
+
+        setCurrentGroup(0, "");
+        if (_current_chat_uid > 0) {
+            loadCurrentChatMessages();
+        } else {
+            _message_model.clear();
+            setCurrentChatPeerName("");
+            setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
+        }
+    }
+}
+
+void AppController::onGroupInvite(qint64 groupId, QString groupName, int operatorUid)
+{
+    Q_UNUSED(operatorUid);
+    setGroupStatus(QString("收到群邀请：%1").arg(groupName), false);
+    QJsonObject req;
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo) {
+        return;
+    }
+    req["fromuid"] = selfInfo->_uid;
+    const QByteArray payload = QJsonDocument(req).toJson(QJsonDocument::Compact);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_GET_GROUP_LIST_REQ, payload);
+    if (_current_group_id <= 0) {
+        setCurrentGroup(groupId, groupName);
+    }
+}
+
+void AppController::onGroupApply(qint64 groupId, int applicantUid, QString reason)
+{
+    Q_UNUSED(groupId);
+    setGroupStatus(QString("收到入群申请：UID %1 %2").arg(applicantUid).arg(reason), false);
+}
+
+void AppController::onGroupMemberChanged(QJsonObject payload)
+{
+    const QString event = payload.value("event").toString();
+    if (!event.isEmpty()) {
+        setGroupStatus(QString("群事件：%1").arg(event), false);
+    }
+    refreshGroupList();
+}
+
+void AppController::onGroupChatMsg(std::shared_ptr<GroupChatMsg> msg)
+{
+    if (!msg || !msg->_msg) {
+        return;
+    }
+
+    auto textMsg = std::make_shared<TextChatData>(msg->_msg->_msg_id, msg->_msg->_msg_content,
+                                                  msg->_msg->_from_uid, static_cast<int>(msg->_group_id),
+                                                  msg->_from_name);
+    _gateway.userMgr()->AppendGroupChatMsg(msg->_group_id, textMsg);
+
+    int pseudoUid = 0;
+    for (auto it = _group_uid_map.cbegin(); it != _group_uid_map.cend(); ++it) {
+        if (it.value() == msg->_group_id) {
+            pseudoUid = it.key();
+            break;
+        }
+    }
+    if (pseudoUid != 0) {
+        const QString preview = MessageContentCodec::toPreviewText(msg->_msg->_msg_content);
+        _group_list_model.updateLastMessage(pseudoUid, preview);
+    }
+
+    if (msg->_group_id != _current_group_id) {
+        return;
+    }
+    _message_model.appendMessage(textMsg, _gateway.userMgr()->GetUid());
+}
+
+void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
+{
+    auto action_text = [](ReqId id) -> QString {
+        switch (id) {
+        case ID_CREATE_GROUP_RSP: return "建群";
+        case ID_GET_GROUP_LIST_RSP: return "刷新群列表";
+        case ID_INVITE_GROUP_MEMBER_RSP: return "邀请成员";
+        case ID_APPLY_JOIN_GROUP_RSP: return "申请入群";
+        case ID_REVIEW_GROUP_APPLY_RSP: return "审核申请";
+        case ID_GROUP_CHAT_MSG_RSP: return "发送群消息";
+        case ID_GROUP_HISTORY_RSP: return "拉取群历史";
+        case ID_UPDATE_GROUP_ANNOUNCEMENT_RSP: return "更新群公告";
+        case ID_MUTE_GROUP_MEMBER_RSP: return "禁言成员";
+        case ID_SET_GROUP_ADMIN_RSP: return "设置管理员";
+        case ID_KICK_GROUP_MEMBER_RSP: return "踢出成员";
+        case ID_QUIT_GROUP_RSP: return "退出群聊";
+        default: return "群操作";
+        }
+    };
+
+    if (error != ErrorCodes::SUCCESS) {
+        setGroupStatus(QString("%1失败（错误码:%2）").arg(action_text(reqId)).arg(error), true);
+        return;
+    }
+
+    switch (reqId) {
+    case ID_CREATE_GROUP_RSP: {
+        const QString groupName = payload.value("name").toString();
+        setGroupStatus(groupName.isEmpty() ? "群聊创建成功" : QString("群聊创建成功：%1").arg(groupName), false);
+        refreshGroupList();
+        break;
+    }
+    case ID_INVITE_GROUP_MEMBER_RSP:
+        setGroupStatus("邀请成员成功", false);
+        refreshGroupList();
+        break;
+    case ID_APPLY_JOIN_GROUP_RSP:
+        setGroupStatus("入群申请已提交", false);
+        break;
+    case ID_REVIEW_GROUP_APPLY_RSP:
+        setGroupStatus("审核操作已完成", false);
+        refreshGroupList();
+        break;
+    case ID_GROUP_HISTORY_RSP: {
+        if (_current_group_id > 0) {
+            auto groupInfo = _gateway.userMgr()->GetGroupById(_current_group_id);
+            if (groupInfo) {
+                _message_model.setMessages(groupInfo->_chat_msgs, _gateway.userMgr()->GetUid());
+            }
+        }
+        setGroupStatus("历史消息已加载", false);
+        break;
+    }
+    case ID_UPDATE_GROUP_ANNOUNCEMENT_RSP:
+        setGroupStatus("群公告已更新", false);
+        refreshGroupList();
+        break;
+    case ID_MUTE_GROUP_MEMBER_RSP:
+        setGroupStatus("禁言设置已生效", false);
+        break;
+    case ID_SET_GROUP_ADMIN_RSP:
+        setGroupStatus("管理员设置已更新", false);
+        refreshGroupList();
+        break;
+    case ID_KICK_GROUP_MEMBER_RSP:
+        setGroupStatus("成员已移出群聊", false);
+        refreshGroupList();
+        break;
+    case ID_QUIT_GROUP_RSP:
+        setGroupStatus("已退出当前群聊", false);
+        refreshGroupList();
+        setCurrentGroup(0, "");
+        if (_current_chat_uid > 0) {
+            loadCurrentChatMessages();
+        } else {
+            _message_model.clear();
+            setCurrentChatPeerName("");
+            setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
+        }
+        break;
+    case ID_GROUP_CHAT_MSG_RSP:
+    case ID_GET_GROUP_LIST_RSP:
+    default:
+        break;
+    }
+}
+
 void AppController::refreshFriendModels()
 {
     _chat_list_model.clear();
@@ -1184,12 +1679,43 @@ void AppController::refreshFriendModels()
     _contact_list_model.setFriends(contactList);
     _gateway.userMgr()->UpdateContactLoadedCount();
     refreshContactLoadMoreState();
+
+    refreshGroupModel();
 }
 
 void AppController::refreshApplyModel()
 {
     const auto applyList = _gateway.userMgr()->GetApplyListSnapshot();
     _apply_request_model.setApplies(applyList);
+}
+
+void AppController::refreshGroupModel()
+{
+    _group_list_model.clear();
+    _group_uid_map.clear();
+
+    const auto groups = _gateway.userMgr()->GetGroupListPerPage();
+    std::vector<std::shared_ptr<FriendInfo>> converted;
+    converted.reserve(groups.size());
+    for (const auto &group : groups) {
+        if (!group || group->_group_id <= 0) {
+            continue;
+        }
+        const int pseudoUid = -static_cast<int>(group->_group_id);
+        auto info = std::make_shared<FriendInfo>(pseudoUid,
+                                                 group->_name,
+                                                 group->_name,
+                                                 "qrc:/res/chat_icon.png",
+                                                 0,
+                                                 group->_announcement,
+                                                 group->_announcement,
+                                                 group->_last_msg);
+        converted.push_back(info);
+        _group_uid_map.insert(pseudoUid, group->_group_id);
+    }
+
+    _group_list_model.setFriends(converted);
+    _gateway.userMgr()->UpdateGroupLoadedCount();
 }
 
 void AppController::loadCurrentChatMessages()
@@ -1340,6 +1866,29 @@ void AppController::setSettingsStatus(const QString &text, bool isError)
     emit settingsStatusChanged();
 }
 
+void AppController::setCurrentGroup(qint64 groupId, const QString &name)
+{
+    const QString normalizedName = (groupId > 0) ? name : QString();
+    if (_current_group_id == groupId && _current_group_name == normalizedName) {
+        return;
+    }
+
+    _current_group_id = groupId;
+    _current_group_name = normalizedName;
+    emit currentGroupChanged();
+}
+
+void AppController::setGroupStatus(const QString &text, bool isError)
+{
+    if (_group_status_text == text && _group_status_error == isError) {
+        return;
+    }
+
+    _group_status_text = text;
+    _group_status_error = isError;
+    emit groupStatusChanged();
+}
+
 void AppController::refreshChatLoadMoreState()
 {
     const bool canLoad = !_gateway.userMgr()->IsLoadChatFin();
@@ -1438,6 +1987,57 @@ bool AppController::dispatchChatContent(const QString &content, const QString &p
 
     const QString resolvedPreview = previewText.isEmpty() ? MessageContentCodec::toPreviewText(content) : previewText;
     _chat_list_model.updateLastMessage(_current_chat_uid, resolvedPreview);
+    return true;
+}
+
+bool AppController::dispatchGroupChatContent(const QString &content, const QString &previewText)
+{
+    if (_current_group_id <= 0) {
+        return false;
+    }
+
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo) {
+        return false;
+    }
+
+    const QString msgId = QUuid::createUuid().toString();
+    const DecodedMessageContent decoded = MessageContentCodec::decode(content);
+
+    QJsonObject msgObj;
+    msgObj["msgid"] = msgId;
+    msgObj["content"] = content;
+    msgObj["msgtype"] = decoded.type.isEmpty() ? "text" : decoded.type;
+    msgObj["mentions"] = QJsonArray();
+    if (!decoded.fileName.isEmpty()) {
+        msgObj["file_name"] = decoded.fileName;
+    }
+
+    QJsonObject payloadObj;
+    payloadObj["fromuid"] = selfInfo->_uid;
+    payloadObj["groupid"] = static_cast<qint64>(_current_group_id);
+    payloadObj["msg"] = msgObj;
+    const QByteArray payload = QJsonDocument(payloadObj).toJson(QJsonDocument::Compact);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_GROUP_CHAT_MSG_REQ, payload);
+
+    const QString senderName = selfInfo->_nick.isEmpty() ? selfInfo->_name : selfInfo->_nick;
+    auto msg = std::make_shared<TextChatData>(msgId, content, selfInfo->_uid, 0, senderName);
+    _gateway.userMgr()->AppendGroupChatMsg(_current_group_id, msg);
+    _message_model.appendMessage(msg, selfInfo->_uid);
+
+    int pseudoUid = 0;
+    for (auto it = _group_uid_map.cbegin(); it != _group_uid_map.cend(); ++it) {
+        if (it.value() == _current_group_id) {
+            pseudoUid = it.key();
+            break;
+        }
+    }
+
+    if (pseudoUid != 0) {
+        const QString resolvedPreview = previewText.isEmpty() ? MessageContentCodec::toPreviewText(content) : previewText;
+        _group_list_model.updateLastMessage(pseudoUid, resolvedPreview);
+    }
+
     return true;
 }
 

@@ -20,6 +20,7 @@ public:
         OutgoingRole,
         MsgTypeRole,
         FileNameRole,
+        SenderNameRole,
         ShowAvatarRole
     };
 
@@ -45,6 +46,7 @@ private:
         bool outgoing;
         QString msgType;
         QString fileName;
+        QString senderName;
         bool showAvatar;
     };
 

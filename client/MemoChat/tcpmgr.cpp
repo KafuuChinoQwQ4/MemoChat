@@ -1,57 +1,62 @@
 #include "tcpmgr.h"
+#include <limits>
 #include <QAbstractSocket>
+#include <QtEndian>
 #include "usermgr.h"
 
 TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_message_id(0),_message_len(0)
 {
     QObject::connect(&_socket, &QTcpSocket::connected, [&]() {
            qDebug() << "Connected to server!";
+           _buffer.clear();
+           _b_recv_pending = false;
+           _message_id = 0;
+           _message_len = 0;
            // 连接建立后发送消息
             emit sig_con_success(true);
        });
 
        QObject::connect(&_socket, &QTcpSocket::readyRead, [&]() {
-           // 当有数据可读时，读取所有数据
-           // 读取所有数据并追加到缓冲区
+           static constexpr int kHeaderLen = sizeof(quint16) * 2;
+           static constexpr quint16 kMaxBodyLen = std::numeric_limits<quint16>::max();
+
            _buffer.append(_socket.readAll());
 
-           QDataStream stream(&_buffer, QIODevice::ReadOnly);
-           stream.setVersion(QDataStream::Qt_5_0);
-
-           forever {
-                //先解析头部
-               if(!_b_recv_pending){
-                   // 检查缓冲区中的数据是否足够解析出一个消息头（消息ID + 消息长度）
-                   if (_buffer.size() < static_cast<int>(sizeof(quint16) * 2)) {
-                       return; // 数据不够，等待更多数据
+           while (true) {
+               if (!_b_recv_pending) {
+                   if (_buffer.size() < kHeaderLen) {
+                       break;
                    }
 
-                   // 预读取消息ID和消息长度，但不从缓冲区中移除
-                   stream >> _message_id >> _message_len;
+                   const auto* raw = reinterpret_cast<const uchar*>(_buffer.constData());
+                   _message_id = qFromBigEndian<quint16>(raw);
+                   _message_len = qFromBigEndian<quint16>(raw + sizeof(quint16));
+                   _buffer.remove(0, kHeaderLen);
 
-                   //将buffer 中的前四个字节移除
-                   _buffer = _buffer.mid(sizeof(quint16) * 2);
+                   if (_message_len > kMaxBodyLen) {
+                       qWarning() << "invalid message length:" << _message_len << ", reset parser";
+                       _buffer.clear();
+                       _b_recv_pending = false;
+                       _message_id = 0;
+                       _message_len = 0;
+                       break;
+                   }
 
-                   // 输出读取的数据
                    qDebug() << "Message ID:" << _message_id << ", Length:" << _message_len;
-
+                   _b_recv_pending = true;
                }
 
-                //buffer剩余长读是否满足消息体长度，不满足则退出继续等待接受
-               if(_buffer.size() < _message_len){
-                    _b_recv_pending = true;
-                    return;
+               if (_buffer.size() < _message_len) {
+                   break;
                }
 
+               QByteArray messageBody = _buffer.left(_message_len);
+               _buffer.remove(0, _message_len);
                _b_recv_pending = false;
-               // 读取消息体
-               QByteArray messageBody = _buffer.mid(0, _message_len);
-               qDebug() << "receive body msg is " << messageBody ;
 
-               _buffer = _buffer.mid(_message_len);
-               handleMsg(ReqId(_message_id),_message_len, messageBody);
+               qDebug() << "receive body msg is " << messageBody;
+               handleMsg(ReqId(_message_id), _message_len, messageBody);
            }
-
        });
 
        //5.15 之后版本
@@ -92,6 +97,10 @@ TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_message_id(0),_messa
         // 处理连接断开
         QObject::connect(&_socket, &QTcpSocket::disconnected, [&]() {
             qDebug() << "Disconnected from server.";
+            _buffer.clear();
+            _b_recv_pending = false;
+            _message_id = 0;
+            _message_len = 0;
             //并且发送通知到界面
             emit sig_connection_closed();
         });
@@ -408,6 +417,179 @@ void TcpMgr::initHandlers()
         emit sig_text_chat_msg(msg_ptr);
       });
 
+    auto parse_group_rsp = [this](ReqId reqId, const QByteArray &data, QJsonObject &jsonObj) -> bool {
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+        if (jsonDoc.isNull() || !jsonDoc.isObject()) {
+            qDebug() << "Group rsp parse failed, req id is " << reqId;
+            emit sig_group_rsp(reqId, ErrorCodes::ERR_JSON, QJsonObject());
+            return false;
+        }
+
+        jsonObj = jsonDoc.object();
+        const int err = jsonObj.value("error").toInt(ErrorCodes::ERR_JSON);
+        emit sig_group_rsp(reqId, err, jsonObj);
+        return err == ErrorCodes::SUCCESS;
+    };
+
+    _handlers.insert(ID_CREATE_GROUP_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        if (!parse_group_rsp(id, data, jsonObj)) {
+            return;
+        }
+        if (jsonObj.contains("group_list")) {
+            UserMgr::GetInstance()->SetGroupList(jsonObj.value("group_list").toArray());
+        }
+        emit sig_group_list_updated();
+      });
+
+    _handlers.insert(ID_GET_GROUP_LIST_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        if (!parse_group_rsp(id, data, jsonObj)) {
+            return;
+        }
+        if (jsonObj.contains("group_list")) {
+            UserMgr::GetInstance()->SetGroupList(jsonObj.value("group_list").toArray());
+        }
+        emit sig_group_list_updated();
+      });
+
+    _handlers.insert(ID_INVITE_GROUP_MEMBER_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_APPLY_JOIN_GROUP_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_REVIEW_GROUP_APPLY_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_GROUP_CHAT_MSG_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_GROUP_HISTORY_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        if (!parse_group_rsp(id, data, jsonObj)) {
+            return;
+        }
+
+        const qint64 groupId = jsonObj.value("groupid").toVariant().toLongLong();
+        const QJsonArray messages = jsonObj.value("messages").toArray();
+        for (int i = messages.size() - 1; i >= 0; --i) {
+            const QJsonObject one = messages.at(i).toObject();
+            auto msg = std::make_shared<TextChatData>(one.value("msgid").toString(),
+                                                      one.value("content").toString(),
+                                                      one.value("fromuid").toInt(),
+                                                      0);
+            UserMgr::GetInstance()->AppendGroupChatMsg(groupId, msg);
+        }
+        emit sig_group_list_updated();
+      });
+
+    _handlers.insert(ID_UPDATE_GROUP_ANNOUNCEMENT_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_MUTE_GROUP_MEMBER_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_SET_GROUP_ADMIN_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_KICK_GROUP_MEMBER_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_QUIT_GROUP_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_NOTIFY_GROUP_INVITE_REQ, [this](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+        if (jsonDoc.isNull() || !jsonDoc.isObject()) {
+            return;
+        }
+        const QJsonObject jsonObj = jsonDoc.object();
+        if (jsonObj.value("error").toInt(ErrorCodes::ERR_JSON) != ErrorCodes::SUCCESS) {
+            return;
+        }
+        emit sig_group_invite(jsonObj.value("groupid").toVariant().toLongLong(),
+                              jsonObj.value("name").toString(),
+                              jsonObj.value("operator_uid").toInt());
+      });
+
+    _handlers.insert(ID_NOTIFY_GROUP_APPLY_REQ, [this](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+        if (jsonDoc.isNull() || !jsonDoc.isObject()) {
+            return;
+        }
+        const QJsonObject jsonObj = jsonDoc.object();
+        if (jsonObj.value("error").toInt(ErrorCodes::ERR_JSON) != ErrorCodes::SUCCESS) {
+            return;
+        }
+        emit sig_group_apply(jsonObj.value("groupid").toVariant().toLongLong(),
+                             jsonObj.value("applicant_uid").toInt(),
+                             jsonObj.value("reason").toString());
+      });
+
+    _handlers.insert(ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, [this](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+        if (jsonDoc.isNull() || !jsonDoc.isObject()) {
+            return;
+        }
+        const QJsonObject jsonObj = jsonDoc.object();
+        if (jsonObj.value("error").toInt(ErrorCodes::ERR_JSON) != ErrorCodes::SUCCESS) {
+            return;
+        }
+        emit sig_group_member_changed(jsonObj);
+      });
+
+    _handlers.insert(ID_NOTIFY_GROUP_CHAT_MSG_REQ, [this](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+        if (jsonDoc.isNull() || !jsonDoc.isObject()) {
+            return;
+        }
+        const QJsonObject jsonObj = jsonDoc.object();
+        if (jsonObj.value("error").toInt(ErrorCodes::ERR_JSON) != ErrorCodes::SUCCESS) {
+            return;
+        }
+        const qint64 groupId = jsonObj.value("groupid").toVariant().toLongLong();
+        const int fromUid = jsonObj.value("fromuid").toInt();
+        const QJsonObject msgObj = jsonObj.value("msg").toObject();
+        const QString fromName = jsonObj.value("from_nick").toString(jsonObj.value("from_name").toString());
+        auto groupMsg = std::make_shared<GroupChatMsg>(groupId, fromUid, msgObj, fromName);
+        emit sig_group_chat_msg(groupMsg);
+      });
+
     _handlers.insert(ID_NOTIFY_OFF_LINE_REQ,[this](ReqId id, int len, QByteArray data){
         Q_UNUSED(len);
         qDebug() << "handle id is " << id << " data is " << data;
@@ -519,4 +701,3 @@ void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
     _socket.write(block);
     qDebug() << "tcp mgr send byte data is " << block ;
 }
-

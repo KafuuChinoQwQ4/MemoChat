@@ -38,6 +38,8 @@ QVariant ChatMessageModel::data(const QModelIndex &index, int role) const
         return entry.msgType;
     case FileNameRole:
         return entry.fileName;
+    case SenderNameRole:
+        return entry.senderName;
     case ShowAvatarRole:
         return entry.showAvatar;
     default:
@@ -55,6 +57,7 @@ QHash<int, QByteArray> ChatMessageModel::roleNames() const
         {OutgoingRole, "outgoing"},
         {MsgTypeRole, "msgType"},
         {FileNameRole, "fileName"},
+        {SenderNameRole, "senderName"},
         {ShowAvatarRole, "showAvatar"}
     };
 }
@@ -115,6 +118,7 @@ ChatMessageModel::MessageEntry ChatMessageModel::toEntry(const std::shared_ptr<T
     entry.content = decoded.content;
     entry.msgType = decoded.type;
     entry.fileName = decoded.fileName;
+    entry.senderName = message->_from_name;
     entry.fromUid = message->_from_uid;
     entry.toUid = message->_to_uid;
     entry.outgoing = (message->_from_uid == selfUid);

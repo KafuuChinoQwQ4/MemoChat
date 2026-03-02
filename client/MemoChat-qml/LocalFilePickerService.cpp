@@ -9,6 +9,7 @@
 #include <QPixmap>
 #include <QStandardPaths>
 #include <QUrl>
+#include <QUuid>
 
 namespace {
 QString storeAvatarImage(const QImage &image)
@@ -23,7 +24,9 @@ QString storeAvatarImage(const QImage &image)
         return {};
     }
 
-    const QString avatarPath = dir.filePath("avatars/head.png");
+    const QString uniqueName = QStringLiteral("head_%1.png")
+                                   .arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
+    const QString avatarPath = dir.filePath(QStringLiteral("avatars/%1").arg(uniqueName));
     if (!image.save(avatarPath, "PNG")) {
         return {};
     }
