@@ -77,6 +77,8 @@ AppController::AppController(QObject *parent)
 
     connect(&_register_countdown_timer, &QTimer::timeout,
             this, &AppController::onRegisterCountdownTimeout);
+    connect(&_heartbeat_timer, &QTimer::timeout,
+            this, &AppController::onHeartbeatTimeout);
 }
 
 AppController::Page AppController::page() const
@@ -267,6 +269,7 @@ bool AppController::settingsStatusError() const
 void AppController::switchToLogin()
 {
     _register_countdown_timer.stop();
+    _heartbeat_timer.stop();
     _gateway.userMgr()->ResetSession();
     if (_register_success_page) {
         _register_success_page = false;
@@ -300,6 +303,7 @@ void AppController::switchToLogin()
 void AppController::switchToRegister()
 {
     _register_countdown_timer.stop();
+    _heartbeat_timer.stop();
     if (_register_success_page) {
         _register_success_page = false;
         emit registerSuccessPageChanged();
@@ -311,6 +315,7 @@ void AppController::switchToRegister()
 void AppController::switchToReset()
 {
     _register_countdown_timer.stop();
+    _heartbeat_timer.stop();
     if (_register_success_page) {
         _register_success_page = false;
         emit registerSuccessPageChanged();
@@ -979,6 +984,10 @@ void AppController::onSwitchToChat()
         _current_chat_uid = 0;
         setCurrentChatPeerName("");
     }
+
+    // Keep chat session alive; server considers session expired after heartbeat timeout.
+    _heartbeat_timer.start(10000);
+    onHeartbeatTimeout();
 }
 
 void AppController::onRegisterCountdownTimeout()
@@ -994,6 +1003,23 @@ void AppController::onRegisterCountdownTimeout()
         emit registerSuccessPageChanged();
         switchToLogin();
     }
+}
+
+void AppController::onHeartbeatTimeout()
+{
+    if (_page != ChatPage) {
+        return;
+    }
+
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo) {
+        return;
+    }
+
+    QJsonObject hb;
+    hb["fromuid"] = selfInfo->_uid;
+    const QByteArray payload = QJsonDocument(hb).toJson(QJsonDocument::Compact);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_HEART_BEAT_REQ, payload);
 }
 
 void AppController::onAddAuthFriend(std::shared_ptr<AuthInfo> authInfo)
@@ -1118,6 +1144,7 @@ void AppController::onNotifyOffline()
         return;
     }
 
+    _heartbeat_timer.stop();
     _gateway.tcpMgr()->CloseConnection();
     switchToLogin();
     setTip("同账号异地登录，该终端下线", true);
@@ -1129,6 +1156,7 @@ void AppController::onConnectionClosed()
         return;
     }
 
+    _heartbeat_timer.stop();
     switchToLogin();
     setTip("心跳超时或连接断开，请重新登录", true);
 }

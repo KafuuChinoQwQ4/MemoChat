@@ -7,6 +7,9 @@ const emailModule = require('./email');
 const config_module = require('./config');
 const redis_module = require('./redis')
 
+let grpcServer = null;
+let shuttingDown = false;
+
 /**
  * GetVarifyCode grpc响应获取验证码的服务
  * @param {*} call 为grpc请求 
@@ -65,11 +68,11 @@ async function GetVarifyCode(call, callback) {
 }
 
 function main() {
-    const server = new grpc.Server();
+    grpcServer = new grpc.Server();
     const bindAddress = '0.0.0.0:50051';
-    server.addService(message_proto.VarifyService.service, { GetVarifyCode: GetVarifyCode });
+    grpcServer.addService(message_proto.VarifyService.service, { GetVarifyCode: GetVarifyCode });
 
-    server.bindAsync(bindAddress, grpc.ServerCredentials.createInsecure(), (err, port) => {
+    grpcServer.bindAsync(bindAddress, grpc.ServerCredentials.createInsecure(), (err, port) => {
         if (err) {
             console.error(`[FATAL] Failed to bind gRPC server on ${bindAddress}:`, err.message || err);
             process.exit(1);
@@ -86,5 +89,29 @@ function main() {
         console.log(`varify server started on ${bindAddress}`);
     });
 }
+
+function stopGrpcServer() {
+    return new Promise((resolve) => {
+        if (!grpcServer) {
+            resolve();
+            return;
+        }
+        grpcServer.tryShutdown(() => resolve());
+    });
+}
+
+async function shutdown(signal) {
+    if (shuttingDown) {
+        return;
+    }
+    shuttingDown = true;
+    console.log(`[INFO] Received ${signal}, shutting down VarifyServer...`);
+    await stopGrpcServer();
+    await redis_module.closeRedis();
+    process.exit(0);
+}
+
+process.on('SIGINT', () => { shutdown('SIGINT').catch(console.error); });
+process.on('SIGTERM', () => { shutdown('SIGTERM').catch(console.error); });
 
 main()

@@ -76,15 +76,9 @@ function(memochat_configure_server_target target_name)
     target_include_directories(${target_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     set_target_properties(${target_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/config.ini")
-        add_custom_command(
-            TARGET ${target_name}
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/config.ini"
-            "$<TARGET_FILE_DIR:${target_name}>/config.ini"
-        )
-    endif()
+    # Services share one output folder; copying config.ini here causes collisions
+    # between targets (and with client config). start_test_services.bat already
+    # prepares per-service run directories with matching config.ini files.
 
     file(GLOB local_dlls "${CMAKE_CURRENT_SOURCE_DIR}/*.dll")
     foreach(local_dll IN LISTS local_dlls)

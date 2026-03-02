@@ -77,6 +77,9 @@ if not exist "%ROOT%\server\GateServer\config.ini" (
   exit /b 1
 )
 
+call :stop_existing_services
+if errorlevel 1 exit /b 1
+
 call :ensure_varify_deps
 if errorlevel 1 exit /b 1
 
@@ -95,7 +98,7 @@ call :prepare_service GateServer "%ROOT%\server\GateServer\config.ini" "%BUILD_B
 if errorlevel 1 exit /b 1
 
 echo [INFO] Starting VarifyServer (Node)...
-start "VarifyServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%ROOT%\server\VarifyServer"" && npm run serve"
+start "VarifyServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%ROOT%\server\VarifyServer"" && node server.js"
 timeout /t 2 >nul
 
 echo [INFO] Starting StatusServer...
@@ -131,6 +134,15 @@ echo.
 echo [DONE] Services started.
 echo [INFO] GateServer HTTP: http://127.0.0.1:8080
 echo [INFO] Close each opened window to stop each service.
+exit /b 0
+
+:stop_existing_services
+echo [INFO] Stopping existing MemoChat service processes...
+for %%P in (GateServer.exe StatusServer.exe ChatServer.exe ChatServer2.exe) do (
+  taskkill /F /IM %%P >nul 2>nul
+)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ports=@(8080,50051,50052,8090,8091,50055,50056); Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue ^| Where-Object { $ports -contains $_.LocalPort } ^| Select-Object -ExpandProperty OwningProcess -Unique ^| ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }" >nul 2>nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" ^| Where-Object { $_.CommandLine -like '*VarifyServer*server.js*' } ^| ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>nul
 exit /b 0
 
 :ensure_varify_deps
