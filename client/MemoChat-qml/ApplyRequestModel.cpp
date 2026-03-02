@@ -1,4 +1,5 @@
 #include "ApplyRequestModel.h"
+#include "IconPathUtils.h"
 
 ApplyRequestModel::ApplyRequestModel(QObject *parent)
     : QAbstractListModel(parent),
@@ -227,20 +228,7 @@ QString ApplyRequestModel::nameByUid(int uid) const
 
 QString ApplyRequestModel::normalizeIcon(QString icon)
 {
-    if (icon.startsWith("qrc:/")) {
-        return icon;
-    }
-
-    if (icon.startsWith(":/")) {
-        icon.replace(0, 1, "qrc");
-        return icon;
-    }
-
-    if (icon.isEmpty()) {
-        return "qrc:/res/head_1.jpg";
-    }
-
-    return icon;
+    return normalizeIconForQml(icon);
 }
 
 void ApplyRequestModel::upsert(const ApplyEntry &entry)

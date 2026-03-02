@@ -2,6 +2,7 @@
 #include "LocalFilePickerService.h"
 #include "MediaUploadService.h"
 #include "MessageContentCodec.h"
+#include "IconPathUtils.h"
 #include "httpmgr.h"
 #include "tcpmgr.h"
 #include "usermgr.h"
@@ -1461,19 +1462,6 @@ void AppController::setPage(Page newPage)
 
 QString AppController::normalizeIconPath(QString icon) const
 {
-    if (icon.startsWith("qrc:/")) {
-        return icon;
-    }
-
-    if (icon.startsWith(":/")) {
-        icon.replace(0, 1, "qrc");
-        return icon;
-    }
-
-    if (icon.isEmpty()) {
-        return "qrc:/res/head_1.jpg";
-    }
-
-    return icon;
+    return normalizeIconForQml(icon);
 }
 

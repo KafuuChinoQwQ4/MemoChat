@@ -1,4 +1,5 @@
 #include "SearchResultModel.h"
+#include "IconPathUtils.h"
 
 SearchResultModel::SearchResultModel(QObject *parent)
     : QAbstractListModel(parent),
@@ -79,14 +80,7 @@ void SearchResultModel::setResult(const std::shared_ptr<SearchInfo> &result)
     _name = result->_name;
     _nick = result->_nick;
     _desc = result->_desc;
-    _icon = result->_icon;
-    if (_icon.startsWith(":/")) {
-        _icon.replace(0, 1, "qrc");
-    }
-    if (_icon.isEmpty()) {
-        _icon = "qrc:/res/head_1.jpg";
-    }
+    _icon = normalizeIconForQml(result->_icon);
     endResetModel();
     emit countChanged();
 }
-

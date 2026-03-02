@@ -54,6 +54,7 @@ set(HEADERS
     LocalFilePickerService.h
     MediaUploadService.h
     WindowShapeService.h
+    IconPathUtils.h
     ${LEGACY_CLIENT_DIR}/imagecropperdialog.h
     ${LEGACY_CLIENT_DIR}/imagecropperlabel.h
 )
