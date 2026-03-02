@@ -10,28 +10,33 @@ const RedisCli = new Redis({
 
   enableOfflineQueue: false, // 禁用离线队列
   enableReadyCheck: true,    // 启用连接就绪检查
+  maxRetriesPerRequest: 2,
+  retryStrategy(times) {
+    return Math.min(times * 200, 3000);
+  },
 });
 
 
 // 监听连接错误事件
 RedisCli.on("error", function (err) {
   console.error("Redis connection error:", err);
-  // 尝试重新连接
-  RedisCli.connect();
 });
 
 // 监听连接断开事件
 RedisCli.on("end", function () {
   console.log("Redis connection closed");
-  // 尝试重新连接
-  RedisCli.connect();
 });
 
 // 心跳机制：定时发送心跳消息
-setInterval(() => {
+const heartbeatTimer = setInterval(() => {
   // 发送心跳消息，比如向一个特定的 key 写入当前时间戳
-  RedisCli.set("heartbeat", Date.now());
-}, 60000); // 每 5 秒发送一次心跳消息
+  RedisCli.set("heartbeat", Date.now()).catch((error) => {
+    console.log("heartbeat set failed:", error);
+  });
+}, 60000); // 每 60 秒发送一次心跳消息
+if (typeof heartbeatTimer.unref === "function") {
+  heartbeatTimer.unref();
+}
 
 /**
  * 根据key获取value
@@ -97,5 +102,14 @@ async function SetRedisExpire(key,value, exptime){
     }
 }
 
+async function closeRedis() {
+  clearInterval(heartbeatTimer);
+  try {
+    await RedisCli.quit();
+  } catch (error) {
+    console.log("Redis quit failed, disconnect directly:", error);
+    RedisCli.disconnect();
+  }
+}
 
-module.exports = {GetRedis, QueryRedis,SetRedisExpire,}
+module.exports = {GetRedis, QueryRedis,SetRedisExpire, closeRedis}

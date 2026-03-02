@@ -20,7 +20,11 @@ MysqlDao::MysqlDao()
 	const auto& pwd = cfg["Mysql"]["Passwd"];
 	const auto& schema = cfg["Mysql"]["Schema"];
 	const auto& user = cfg["Mysql"]["User"];
-	pool_.reset(new MySqlPool(host+":"+port, user, pwd,schema, 5));
+	std::string mysql_url = host;
+	if (mysql_url.find("://") == std::string::npos) {
+		mysql_url = "tcp://" + mysql_url;
+	}
+	pool_.reset(new MySqlPool(mysql_url + ":" + port, user, pwd, schema, 5));
 }
 
 MysqlDao::~MysqlDao(){

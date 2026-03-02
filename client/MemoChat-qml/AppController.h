@@ -183,6 +183,7 @@ private slots:
     void onChatLoginFailed(int err);
     void onSwitchToChat();
     void onRegisterCountdownTimeout();
+    void onHeartbeatTimeout();
     void onAddAuthFriend(std::shared_ptr<AuthInfo> authInfo);
     void onAuthRsp(std::shared_ptr<AuthRsp> authRsp);
     void onTextChatMsg(std::shared_ptr<TextChatMsg> msg);
@@ -269,6 +270,7 @@ private:
     ContactController _contact_controller;
     ProfileController _profile_controller;
     QTimer _register_countdown_timer;
+    QTimer _heartbeat_timer;
 };
 
 #endif // APPCONTROLLER_H
