@@ -76,7 +76,6 @@ Rectangle {
             opacity: loginRoot.stageValue(0.02, 0.16)
             scale: 0.97 + 0.03 * opacity
             onSettingsClicked: loginRoot.clearTipRequested()
-            onCloseClicked: Qt.quit()
         }
 
         Item { width: parent.width; height: 12 }

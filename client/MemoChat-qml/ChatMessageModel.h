@@ -19,7 +19,8 @@ public:
         ToUidRole,
         OutgoingRole,
         MsgTypeRole,
-        FileNameRole
+        FileNameRole,
+        ShowAvatarRole
     };
 
     explicit ChatMessageModel(QObject *parent = nullptr);
@@ -44,6 +45,7 @@ private:
         bool outgoing;
         QString msgType;
         QString fileName;
+        bool showAvatar;
     };
 
     MessageEntry toEntry(const std::shared_ptr<TextChatData> &message, int selfUid) const;

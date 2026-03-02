@@ -24,6 +24,7 @@ AppController::AppController(QObject *parent)
       _current_contact_uid(0),
       _current_contact_sex(0),
       _current_contact_icon("qrc:/res/head_1.jpg"),
+      _current_chat_peer_icon("qrc:/res/head_1.jpg"),
       _current_chat_uid(0),
       _chat_list_model(this),
       _contact_list_model(this),
@@ -176,6 +177,11 @@ QString AppController::currentChatPeerName() const
     return _current_chat_peer_name;
 }
 
+QString AppController::currentChatPeerIcon() const
+{
+    return _current_chat_peer_icon;
+}
+
 bool AppController::hasCurrentChat() const
 {
     return _current_chat_uid > 0;
@@ -297,6 +303,7 @@ void AppController::switchToLogin()
     setCurrentContact(0, "", "", "qrc:/res/head_1.jpg", "", 0);
     _current_chat_uid = 0;
     setCurrentChatPeerName("");
+    setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
     _current_user_desc.clear();
 }
 
@@ -346,12 +353,14 @@ void AppController::selectChatIndex(int index)
     if (item.isEmpty()) {
         _current_chat_uid = 0;
         setCurrentChatPeerName("");
+        setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
         _message_model.clear();
         return;
     }
 
     _current_chat_uid = item.value("uid").toInt();
     setCurrentChatPeerName(item.value("name").toString());
+    setCurrentChatPeerIcon(item.value("icon").toString());
     loadCurrentChatMessages();
 }
 
@@ -983,6 +992,7 @@ void AppController::onSwitchToChat()
     } else {
         _current_chat_uid = 0;
         setCurrentChatPeerName("");
+        setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
     }
 
     // Keep chat session alive; server considers session expired after heartbeat timeout.
@@ -1196,6 +1206,8 @@ void AppController::loadCurrentChatMessages()
         return;
     }
 
+    setCurrentChatPeerName(friendInfo->_name);
+    setCurrentChatPeerIcon(friendInfo->_icon);
     _message_model.setMessages(friendInfo->_chat_msgs, selfInfo->_uid);
 }
 
@@ -1238,6 +1250,17 @@ void AppController::setCurrentChatPeerName(const QString &name)
     }
 
     _current_chat_peer_name = name;
+    emit currentChatPeerChanged();
+}
+
+void AppController::setCurrentChatPeerIcon(const QString &icon)
+{
+    const QString normalizedIcon = normalizeIconPath(icon);
+    if (_current_chat_peer_icon == normalizedIcon) {
+        return;
+    }
+
+    _current_chat_peer_icon = normalizedIcon;
     emit currentChatPeerChanged();
 }
 
@@ -1431,6 +1454,7 @@ void AppController::sendCallInvite(const QString &callType)
     if (_current_chat_uid != _current_contact_uid) {
         _current_chat_uid = _current_contact_uid;
         setCurrentChatPeerName(_current_contact_name);
+        setCurrentChatPeerIcon(_current_contact_icon);
         loadCurrentChatMessages();
     }
 

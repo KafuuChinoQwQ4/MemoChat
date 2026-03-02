@@ -1,7 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import QtQuick.Window 2.15
 import "../components"
 import "conversation"
 
@@ -11,6 +10,8 @@ Rectangle {
 
     property Item backdrop: null
     property string peerName: ""
+    property string selfAvatar: "qrc:/res/head_1.jpg"
+    property string peerAvatar: "qrc:/res/head_1.jpg"
     property bool hasCurrentChat: false
     property var messageModel
     signal sendText(string text)
@@ -37,65 +38,18 @@ Rectangle {
 
                 Item {
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 1
                     Layout.fillHeight: true
 
                     Label {
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.rightMargin: 8
                         text: root.peerName.length > 0 ? root.peerName : "聊天"
                         color: "#2a3649"
                         font.pixelSize: 18
                         font.bold: true
                         elide: Text.ElideRight
-                        width: parent.width
-                    }
-                }
-
-                Item {
-                    Layout.fillWidth: true
-                    Layout.preferredWidth: 1
-                    Layout.fillHeight: true
-
-                    Row {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 22
-
-                        LoginIconButton {
-                            iconSource: "qrc:/icons/minimize.png"
-                            onClicked: {
-                                const window = root.Window.window
-                                if (window) {
-                                    window.showMinimized()
-                                }
-                            }
-                        }
-
-                        LoginIconButton {
-                            iconSource: "qrc:/icons/maximize.png"
-                            onClicked: {
-                                const window = root.Window.window
-                                if (!window) {
-                                    return
-                                }
-                                if (window.visibility === Window.Maximized) {
-                                    window.showNormal()
-                                } else {
-                                    window.showMaximized()
-                                }
-                            }
-                        }
-
-                        LoginIconButton {
-                            iconSource: "qrc:/icons/close.png"
-                            onClicked: {
-                                const window = root.Window.window
-                                if (window) {
-                                    window.close()
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -112,7 +66,7 @@ Rectangle {
                 id: messageList
                 anchors.fill: parent
                 anchors.margins: 14
-                spacing: 8
+                spacing: 0
                 clip: true
                 model: root.messageModel
                 ScrollBar.vertical: GlassScrollBar { }
@@ -122,19 +76,15 @@ Rectangle {
                     }
                 }
 
-                delegate: Item {
-                    width: ListView.view.width
-                    height: delegateRoot.height
-
-                    ChatMessageDelegate {
-                        id: delegateRoot
-                        width: parent.width
-                        outgoing: model.outgoing
-                        msgType: model.msgType
-                        content: model.content
-                        fileName: model.fileName
-                        onOpenUrlRequested: root.openAttachment(url)
-                    }
+                delegate: ChatMessageDelegate {
+                    width: messageList.width
+                    outgoing: model.outgoing
+                    msgType: model.msgType
+                    content: model.content
+                    fileName: model.fileName
+                    showAvatar: model.showAvatar
+                    avatarSource: model.outgoing ? root.selfAvatar : root.peerAvatar
+                    onOpenUrlRequested: root.openAttachment(url)
                 }
             }
 

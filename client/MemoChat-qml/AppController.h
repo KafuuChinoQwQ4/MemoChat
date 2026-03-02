@@ -38,6 +38,7 @@ class AppController : public QObject
     Q_PROPERTY(int currentContactSex READ currentContactSex NOTIFY currentContactChanged)
     Q_PROPERTY(bool hasCurrentContact READ hasCurrentContact NOTIFY currentContactChanged)
     Q_PROPERTY(QString currentChatPeerName READ currentChatPeerName NOTIFY currentChatPeerChanged)
+    Q_PROPERTY(QString currentChatPeerIcon READ currentChatPeerIcon NOTIFY currentChatPeerChanged)
     Q_PROPERTY(bool hasCurrentChat READ hasCurrentChat NOTIFY currentChatPeerChanged)
     Q_PROPERTY(FriendListModel* chatListModel READ chatListModel CONSTANT)
     Q_PROPERTY(FriendListModel* contactListModel READ contactListModel CONSTANT)
@@ -100,6 +101,7 @@ public:
     int currentContactSex() const;
     bool hasCurrentContact() const;
     QString currentChatPeerName() const;
+    QString currentChatPeerIcon() const;
     bool hasCurrentChat() const;
     FriendListModel *chatListModel();
     FriendListModel *contactListModel();
@@ -214,6 +216,7 @@ private:
     void setCurrentContact(int uid, const QString &name, const QString &nick, const QString &icon,
                            const QString &back, int sex);
     void setCurrentChatPeerName(const QString &name);
+    void setCurrentChatPeerIcon(const QString &icon);
     void selectChatByUid(int uid);
     void setSearchPending(bool pending);
     void setSearchStatus(const QString &text, bool isError);
@@ -245,6 +248,7 @@ private:
     QString _current_contact_back;
     int _current_contact_sex;
     QString _current_chat_peer_name;
+    QString _current_chat_peer_icon;
     int _current_chat_uid;
 
     FriendListModel _chat_list_model;
