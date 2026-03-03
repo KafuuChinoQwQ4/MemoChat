@@ -9,6 +9,7 @@ Rectangle {
     property int currentTab: 0
     property string userIcon: "qrc:/res/head_1.jpg"
     property bool hasPendingApply: false
+    signal avatarClicked()
     signal tabSelected(int tab)
 
     function iconForTab(tab, selected) {
@@ -19,6 +20,16 @@ Rectangle {
             return selected ? "qrc:/res/contact_list_press.png" : "qrc:/res/contact_list.png"
         }
         return selected ? "qrc:/res/settings_select_press.png" : "qrc:/res/settings.png"
+    }
+
+    function titleForTab(tab) {
+        if (tab === 0) {
+            return "聊天"
+        }
+        if (tab === 1) {
+            return "联系人"
+        }
+        return "更多"
     }
 
     Rectangle {
@@ -41,11 +52,25 @@ Rectangle {
             radius: 17
             clip: true
             color: Qt.rgba(0.47, 0.63, 0.83, 0.36)
+            border.width: avatarHover.containsMouse ? 1 : 0
+            border.color: Qt.rgba(1, 1, 1, 0.6)
             Image {
                 anchors.fill: parent
                 fillMode: Image.PreserveAspectCrop
                 source: root.userIcon
             }
+
+            MouseArea {
+                id: avatarHover
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.avatarClicked()
+            }
+
+            ToolTip.visible: avatarHover.containsMouse
+            ToolTip.delay: 120
+            ToolTip.text: "个人中心"
         }
 
         Repeater {
@@ -81,10 +106,16 @@ Rectangle {
                 }
 
                 MouseArea {
+                    id: tabArea
                     anchors.fill: parent
+                    hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.tabSelected(modelData)
                 }
+
+                ToolTip.visible: tabArea.containsMouse
+                ToolTip.delay: 120
+                ToolTip.text: root.titleForTab(modelData)
             }
         }
     }
