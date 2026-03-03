@@ -1,5 +1,6 @@
 #include "usermgr.h"
 #include <QJsonArray>
+#include <algorithm>
 #include "tcpmgr.h"
 
 UserMgr::~UserMgr()
@@ -466,6 +467,46 @@ void UserMgr::AppendGroupChatMsg(qint64 group_id, const std::shared_ptr<TextChat
         }
     }
     chatMsgs.push_back(msg);
+    iter.value()->_last_msg = msg->_msg_content;
+}
+
+void UserMgr::UpsertGroupChatMsg(qint64 group_id, const std::shared_ptr<TextChatData> &msg)
+{
+    auto iter = _group_map.find(group_id);
+    if (iter == _group_map.end() || !iter.value() || !msg) {
+        return;
+    }
+
+    auto &chatMsgs = iter.value()->_chat_msgs;
+    bool found = false;
+    for (auto &one : chatMsgs) {
+        if (!one || one->_msg_id != msg->_msg_id) {
+            continue;
+        }
+        one->_msg_content = msg->_msg_content;
+        one->_from_uid = msg->_from_uid;
+        one->_to_uid = msg->_to_uid;
+        one->_from_name = msg->_from_name;
+        one->_from_icon = msg->_from_icon;
+        one->_created_at = msg->_created_at;
+        found = true;
+        break;
+    }
+
+    if (!found) {
+        chatMsgs.push_back(msg);
+    }
+
+    std::sort(chatMsgs.begin(), chatMsgs.end(),
+              [](const std::shared_ptr<TextChatData> &lhs, const std::shared_ptr<TextChatData> &rhs) {
+                  if (!lhs || !rhs) {
+                      return static_cast<bool>(lhs);
+                  }
+                  if (lhs->_created_at != rhs->_created_at) {
+                      return lhs->_created_at < rhs->_created_at;
+                  }
+                  return lhs->_msg_id < rhs->_msg_id;
+              });
     iter.value()->_last_msg = msg->_msg_content;
 }
 

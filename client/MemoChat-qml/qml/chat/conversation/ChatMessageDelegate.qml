@@ -14,6 +14,7 @@ Item {
     property string senderName: ""
     property bool showAvatar: true
     property string avatarSource: "qrc:/res/head_1.jpg"
+    property string defaultAvatarSource: "qrc:/res/head_1.jpg"
     signal openUrlRequested(string url)
 
     property int avatarSize: 34
@@ -52,8 +53,16 @@ Item {
 
                 Image {
                     anchors.fill: parent
-                    source: root.avatarSource.length > 0 ? root.avatarSource : "qrc:/res/head_1.jpg"
+                    property string baseSource: root.avatarSource.length > 0 ? root.avatarSource : root.defaultAvatarSource
+                    property bool loadFailed: false
+                    source: loadFailed ? root.defaultAvatarSource : baseSource
                     fillMode: Image.PreserveAspectCrop
+                    onBaseSourceChanged: loadFailed = false
+                    onStatusChanged: {
+                        if (status === Image.Error) {
+                            loadFailed = true
+                        }
+                    }
                 }
             }
         }
@@ -77,8 +86,16 @@ Item {
 
                 Image {
                     anchors.fill: parent
-                    source: root.avatarSource.length > 0 ? root.avatarSource : "qrc:/res/head_1.jpg"
+                    property string baseSource: root.avatarSource.length > 0 ? root.avatarSource : root.defaultAvatarSource
+                    property bool loadFailed: false
+                    source: loadFailed ? root.defaultAvatarSource : baseSource
                     fillMode: Image.PreserveAspectCrop
+                    onBaseSourceChanged: loadFailed = false
+                    onStatusChanged: {
+                        if (status === Image.Error) {
+                            loadFailed = true
+                        }
+                    }
                 }
             }
         }

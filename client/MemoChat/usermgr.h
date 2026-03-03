@@ -50,6 +50,7 @@ public:
     bool CheckGroupById(qint64 groupId);
     void UpsertGroup(const std::shared_ptr<GroupInfoData>& groupInfo);
     void AppendGroupChatMsg(qint64 group_id, const std::shared_ptr<TextChatData>& msg);
+    void UpsertGroupChatMsg(qint64 group_id, const std::shared_ptr<TextChatData>& msg);
     std::vector<std::shared_ptr<GroupInfoData>> GetGroupListSnapshot() const;
 private:
     UserMgr();

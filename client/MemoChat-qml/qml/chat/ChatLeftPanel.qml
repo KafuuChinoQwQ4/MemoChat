@@ -11,6 +11,7 @@ Rectangle {
     property Item backdrop: null
 
     property int currentTab: 0
+    property var dialogModel
     property var chatModel
     property var groupModel
     property var contactModel
@@ -25,8 +26,9 @@ Rectangle {
     property bool contactLoadingMore: false
     property string groupStatusText: ""
     property bool groupStatusError: false
-    property bool groupMode: false
+    property int sessionFilter: 0 // 0 all, 1 private, 2 group
 
+    signal dialogUidSelected(int uid)
     signal chatIndexSelected(int index)
     signal groupIndexSelected(int index)
     signal requestChatLoadMore()
@@ -39,11 +41,8 @@ Rectangle {
     signal createGroupRequested()
     signal refreshGroupRequested()
 
-    onCurrentTabChanged: {
-        if (currentTab !== 0) {
-            groupMode = false
-        }
-    }
+    onCurrentTabChanged: if (currentTab !== 0) { sessionFilter = 0 }
+    onSessionFilterChanged: sessionList.currentIndex = -1
 
     ColumnLayout {
         anchors.fill: parent
@@ -174,7 +173,16 @@ Rectangle {
                                             Image {
                                                 anchors.fill: parent
                                                 fillMode: Image.PreserveAspectCrop
-                                                source: icon
+                                                property string fallbackSource: "qrc:/res/head_1.jpg"
+                                                property string baseSource: (icon && icon.length > 0) ? icon : fallbackSource
+                                                property bool loadFailed: false
+                                                source: loadFailed ? fallbackSource : baseSource
+                                                onBaseSourceChanged: loadFailed = false
+                                                onStatusChanged: {
+                                                    if (status === Image.Error) {
+                                                        loadFailed = true
+                                                    }
+                                                }
                                             }
                                         }
 
@@ -257,32 +265,44 @@ Rectangle {
                                     GlassButton {
                                         Layout.fillWidth: true
                                         implicitHeight: 30
-                                        text: "会话"
+                                        text: "全部"
                                         cornerRadius: 8
-                                        normalColor: root.groupMode ? Qt.rgba(0.48, 0.56, 0.66, 0.20) : Qt.rgba(0.36, 0.62, 0.92, 0.28)
-                                        hoverColor: root.groupMode ? Qt.rgba(0.48, 0.56, 0.66, 0.28) : Qt.rgba(0.36, 0.62, 0.92, 0.38)
-                                        pressedColor: root.groupMode ? Qt.rgba(0.48, 0.56, 0.66, 0.34) : Qt.rgba(0.36, 0.62, 0.92, 0.45)
+                                        normalColor: root.sessionFilter === 0 ? Qt.rgba(0.36, 0.62, 0.92, 0.28) : Qt.rgba(0.48, 0.56, 0.66, 0.20)
+                                        hoverColor: root.sessionFilter === 0 ? Qt.rgba(0.36, 0.62, 0.92, 0.38) : Qt.rgba(0.48, 0.56, 0.66, 0.28)
+                                        pressedColor: root.sessionFilter === 0 ? Qt.rgba(0.36, 0.62, 0.92, 0.45) : Qt.rgba(0.48, 0.56, 0.66, 0.34)
                                         disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                                        onClicked: root.groupMode = false
+                                        onClicked: root.sessionFilter = 0
                                     }
 
                                     GlassButton {
                                         Layout.fillWidth: true
                                         implicitHeight: 30
-                                        text: "群聊"
+                                        text: "私聊"
                                         cornerRadius: 8
-                                        normalColor: root.groupMode ? Qt.rgba(0.36, 0.62, 0.92, 0.28) : Qt.rgba(0.48, 0.56, 0.66, 0.20)
-                                        hoverColor: root.groupMode ? Qt.rgba(0.36, 0.62, 0.92, 0.38) : Qt.rgba(0.48, 0.56, 0.66, 0.28)
-                                        pressedColor: root.groupMode ? Qt.rgba(0.36, 0.62, 0.92, 0.45) : Qt.rgba(0.48, 0.56, 0.66, 0.34)
+                                        normalColor: root.sessionFilter === 1 ? Qt.rgba(0.36, 0.62, 0.92, 0.28) : Qt.rgba(0.48, 0.56, 0.66, 0.20)
+                                        hoverColor: root.sessionFilter === 1 ? Qt.rgba(0.36, 0.62, 0.92, 0.38) : Qt.rgba(0.48, 0.56, 0.66, 0.28)
+                                        pressedColor: root.sessionFilter === 1 ? Qt.rgba(0.36, 0.62, 0.92, 0.45) : Qt.rgba(0.48, 0.56, 0.66, 0.34)
                                         disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                                        onClicked: root.groupMode = true
+                                        onClicked: root.sessionFilter = 1
+                                    }
+
+                                    GlassButton {
+                                        Layout.fillWidth: true
+                                        implicitHeight: 30
+                                        text: "群组"
+                                        cornerRadius: 8
+                                        normalColor: root.sessionFilter === 2 ? Qt.rgba(0.36, 0.62, 0.92, 0.28) : Qt.rgba(0.48, 0.56, 0.66, 0.20)
+                                        hoverColor: root.sessionFilter === 2 ? Qt.rgba(0.36, 0.62, 0.92, 0.38) : Qt.rgba(0.48, 0.56, 0.66, 0.28)
+                                        pressedColor: root.sessionFilter === 2 ? Qt.rgba(0.36, 0.62, 0.92, 0.45) : Qt.rgba(0.48, 0.56, 0.66, 0.34)
+                                        disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                                        onClicked: root.sessionFilter = 2
                                     }
 
                                     GlassButton {
                                         implicitWidth: 42
                                         implicitHeight: 30
                                         text: "+"
-                                        visible: root.groupMode
+                                        visible: root.sessionFilter === 2
                                         cornerRadius: 8
                                         normalColor: Qt.rgba(0.28, 0.70, 0.58, 0.24)
                                         hoverColor: Qt.rgba(0.28, 0.70, 0.58, 0.34)
@@ -295,7 +315,7 @@ Rectangle {
                                         implicitWidth: 42
                                         implicitHeight: 30
                                         text: "刷"
-                                        visible: root.groupMode
+                                        visible: root.sessionFilter === 2
                                         cornerRadius: 8
                                         normalColor: Qt.rgba(0.54, 0.70, 0.93, 0.24)
                                         hoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.34)
@@ -308,7 +328,7 @@ Rectangle {
                                 Label {
                                     Layout.fillWidth: true
                                     text: root.groupStatusText
-                                    visible: root.groupMode && text.length > 0
+                                    visible: root.sessionFilter === 2 && text.length > 0
                                     color: root.groupStatusError ? "#cc4a4a" : "#2a7f62"
                                     elide: Text.ElideRight
                                 }
@@ -320,10 +340,11 @@ Rectangle {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             clip: true
-                            model: root.groupMode ? root.groupModel : root.chatModel
+                            model: root.sessionFilter === 0 ? root.dialogModel
+                                  : (root.sessionFilter === 1 ? root.chatModel : root.groupModel)
                             ScrollBar.vertical: GlassScrollBar { }
                             onContentYChanged: {
-                                if (root.groupMode) {
+                                if (root.sessionFilter !== 1) {
                                     return
                                 }
                                 if (!root.canLoadMoreChats || root.chatLoadingMore) {
@@ -341,16 +362,22 @@ Rectangle {
                                     return
                                 }
                                 currentIndex = 0
-                                if (root.groupMode) {
+                                if (root.sessionFilter === 2) {
                                     root.groupIndexSelected(0)
-                                } else {
+                                } else if (root.sessionFilter === 1) {
                                     root.chatIndexSelected(0)
+                                } else {
+                                    const firstItem = root.dialogModel ? root.dialogModel.get(0) : {}
+                                    const firstUid = firstItem.uid !== undefined ? firstItem.uid : 0
+                                    if (firstUid !== 0) {
+                                        root.dialogUidSelected(firstUid)
+                                    }
                                 }
                             }
 
                             footer: Item {
                                 width: sessionList.width
-                                height: (!root.groupMode && (root.chatLoadingMore || root.canLoadMoreChats)) ? 40 : 0
+                                height: (root.sessionFilter === 1 && (root.chatLoadingMore || root.canLoadMoreChats)) ? 40 : 0
 
                                 Label {
                                     anchors.centerIn: parent
@@ -380,7 +407,17 @@ Rectangle {
                                         Image {
                                             anchors.fill: parent
                                             fillMode: Image.PreserveAspectCrop
-                                            source: icon
+                                            property bool isGroupDialog: root.sessionFilter === 2 || (root.sessionFilter === 0 && uid < 0)
+                                            property string fallbackSource: isGroupDialog ? "qrc:/res/chat_icon.png" : "qrc:/res/head_1.jpg"
+                                            property string baseSource: (icon && icon.length > 0) ? icon : fallbackSource
+                                            property bool loadFailed: false
+                                            source: loadFailed ? fallbackSource : baseSource
+                                            onBaseSourceChanged: loadFailed = false
+                                            onStatusChanged: {
+                                                if (status === Image.Error) {
+                                                    loadFailed = true
+                                                }
+                                            }
                                         }
                                     }
 
@@ -402,10 +439,12 @@ Rectangle {
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
                                         sessionList.currentIndex = index
-                                        if (root.groupMode) {
+                                        if (root.sessionFilter === 2) {
                                             root.groupIndexSelected(index)
-                                        } else {
+                                        } else if (root.sessionFilter === 1) {
                                             root.chatIndexSelected(index)
+                                        } else {
+                                            root.dialogUidSelected(uid)
                                         }
                                     }
                                 }
@@ -437,7 +476,8 @@ Rectangle {
 
                         Label {
                             anchors.centerIn: parent
-                            text: root.groupMode ? "暂无群聊" : "暂无聊天记录"
+                            text: root.sessionFilter === 2 ? "暂无群聊"
+                                  : (root.sessionFilter === 1 ? "暂无私聊" : "暂无会话")
                             color: "#6a7b92"
                             font.pixelSize: 13
                         }

@@ -1,6 +1,7 @@
 #include "tcpmgr.h"
 #include <limits>
 #include <QAbstractSocket>
+#include <QDateTime>
 #include <QtEndian>
 #include "usermgr.h"
 
@@ -524,7 +525,17 @@ void TcpMgr::initHandlers()
         parse_group_rsp(id, data, jsonObj);
       });
 
-    _handlers.insert(ID_GROUP_HISTORY_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+    auto normalize_group_created_at = [](qint64 createdAt) -> qint64 {
+        if (createdAt <= 0) {
+            return QDateTime::currentMSecsSinceEpoch();
+        }
+        if (createdAt < 100000000000LL) {
+            return createdAt * 1000;
+        }
+        return createdAt;
+    };
+
+    _handlers.insert(ID_GROUP_HISTORY_RSP, [this, parse_group_rsp, normalize_group_created_at](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
         QJsonObject jsonObj;
         if (!parse_group_rsp(id, data, jsonObj)) {
@@ -537,16 +548,16 @@ void TcpMgr::initHandlers()
             const QJsonObject one = messages.at(i).toObject();
             const QString fromName = one.value("from_nick").toString(one.value("from_name").toString());
             const QString fromIcon = one.value("from_icon").toString();
+            const qint64 createdAt = normalize_group_created_at(one.value("created_at").toVariant().toLongLong());
             auto msg = std::make_shared<TextChatData>(one.value("msgid").toString(),
                                                       one.value("content").toString(),
                                                       one.value("fromuid").toInt(),
                                                       0,
                                                       fromName,
-                                                      one.value("created_at").toVariant().toLongLong(),
+                                                      createdAt,
                                                       fromIcon);
-            UserMgr::GetInstance()->AppendGroupChatMsg(groupId, msg);
+            UserMgr::GetInstance()->UpsertGroupChatMsg(groupId, msg);
         }
-        emit sig_group_list_updated();
       });
 
     _handlers.insert(ID_UPDATE_GROUP_ANNOUNCEMENT_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
@@ -644,7 +655,7 @@ void TcpMgr::initHandlers()
         emit sig_group_member_changed(jsonObj);
       });
 
-    _handlers.insert(ID_NOTIFY_GROUP_CHAT_MSG_REQ, [this](ReqId id, int len, QByteArray data) {
+    _handlers.insert(ID_NOTIFY_GROUP_CHAT_MSG_REQ, [this, normalize_group_created_at](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
         if (jsonDoc.isNull() || !jsonDoc.isObject()) {
@@ -656,7 +667,10 @@ void TcpMgr::initHandlers()
         }
         const qint64 groupId = jsonObj.value("groupid").toVariant().toLongLong();
         const int fromUid = jsonObj.value("fromuid").toInt();
-        const QJsonObject msgObj = jsonObj.value("msg").toObject();
+        QJsonObject msgObj = jsonObj.value("msg").toObject();
+        const qint64 topCreatedAt = normalize_group_created_at(jsonObj.value("created_at").toVariant().toLongLong());
+        const qint64 msgCreatedAt = msgObj.value("created_at").toVariant().toLongLong();
+        msgObj["created_at"] = normalize_group_created_at(msgCreatedAt <= 0 ? topCreatedAt : msgCreatedAt);
         const QString fromName = jsonObj.value("from_nick").toString(jsonObj.value("from_name").toString());
         const QString fromIcon = jsonObj.value("from_icon").toString();
         auto groupMsg = std::make_shared<GroupChatMsg>(groupId, fromUid, msgObj, fromName, fromIcon);

@@ -32,6 +32,7 @@ set(SOURCES
     ApplyRequestModel.cpp
     MessageContentCodec.cpp
     PrivateChatCacheStore.cpp
+    GroupChatCacheStore.cpp
     ProfileController.cpp
     LocalFilePickerService.cpp
     MediaUploadService.cpp
@@ -52,6 +53,7 @@ set(HEADERS
     ApplyRequestModel.h
     MessageContentCodec.h
     PrivateChatCacheStore.h
+    GroupChatCacheStore.h
     ProfileController.h
     LocalFilePickerService.h
     MediaUploadService.h

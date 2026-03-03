@@ -59,10 +59,19 @@ GlassSurface {
 
                 Image {
                     anchors.fill: parent
-                    source: (root.groupIcon && root.groupIcon.length > 0)
-                            ? root.groupIcon
-                            : "qrc:/res/chat_icon.png"
+                    property string fallbackSource: "qrc:/res/chat_icon.png"
+                    property string baseSource: (root.groupIcon && root.groupIcon.length > 0)
+                                                ? root.groupIcon
+                                                : fallbackSource
+                    property bool loadFailed: false
+                    source: loadFailed ? fallbackSource : baseSource
                     fillMode: Image.PreserveAspectCrop
+                    onBaseSourceChanged: loadFailed = false
+                    onStatusChanged: {
+                        if (status === Image.Error) {
+                            loadFailed = true
+                        }
+                    }
                 }
             }
 

@@ -108,6 +108,9 @@ void LogicSystem::RegisterCallBacks() {
 	_fun_callbacks[ID_GET_GROUP_LIST_REQ] = std::bind(&LogicSystem::GetGroupListHandler, this,
 		placeholders::_1, placeholders::_2, placeholders::_3);
 
+	_fun_callbacks[ID_GET_DIALOG_LIST_REQ] = std::bind(&LogicSystem::GetDialogListHandler, this,
+		placeholders::_1, placeholders::_2, placeholders::_3);
+
 	_fun_callbacks[ID_INVITE_GROUP_MEMBER_REQ] = std::bind(&LogicSystem::InviteGroupMemberHandler, this,
 		placeholders::_1, placeholders::_2, placeholders::_3);
 
@@ -152,6 +155,7 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 	reader.parse(msg_data, root);
 	auto uid = root["uid"].asInt();
 	auto token = root["token"].asString();
+	const int protocol_version = root.get("protocol_version", 1).asInt();
 	auto trace_id = root.get("trace_id", "").asString();
 	if (trace_id.empty()) {
 		trace_id = memolog::TraceContext::NewId();
@@ -176,6 +180,12 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 		session->Send(return_str, MSG_CHAT_LOGIN_RSP);
 		});
 	rtvalue["trace_id"] = trace_id;
+	rtvalue["protocol_version"] = 2;
+
+	if (protocol_version != 2) {
+		rtvalue["error"] = ErrorCodes::ProtocolVersionMismatch;
+		return;
+	}
 
 
 
@@ -907,6 +917,74 @@ void LogicSystem::BuildGroupListJson(int uid, Json::Value& out)
 	}
 }
 
+void LogicSystem::BuildDialogListJson(int uid, Json::Value& out)
+{
+	std::vector<std::shared_ptr<UserInfo>> friend_list;
+	GetFriendList(uid, friend_list);
+	for (const auto& peer : friend_list) {
+		if (!peer) {
+			continue;
+		}
+		Json::Value one;
+		one["dialog_id"] = std::string("u_") + std::to_string(peer->uid);
+		one["dialog_type"] = "private";
+		one["peer_uid"] = peer->uid;
+		one["title"] = peer->nick.empty() ? peer->name : peer->nick;
+		one["avatar"] = peer->icon;
+		one["last_msg_preview"] = "";
+		one["last_msg_ts"] = static_cast<Json::Int64>(0);
+		one["unread_count"] = 0;
+		one["pinned_rank"] = 0;
+		one["draft_text"] = "";
+		one["mute_state"] = 0;
+		out["dialogs"].append(one);
+	}
+
+	std::vector<std::shared_ptr<GroupInfo>> groups;
+	MysqlMgr::GetInstance()->GetUserGroupList(uid, groups);
+	for (const auto& group : groups) {
+		if (!group) {
+			continue;
+		}
+		Json::Value one;
+		one["dialog_id"] = std::string("g_") + std::to_string(group->group_id);
+		one["dialog_type"] = "group";
+		one["group_id"] = static_cast<Json::Int64>(group->group_id);
+		one["title"] = group->name;
+		one["avatar"] = group->icon;
+		one["last_msg_preview"] = "";
+		one["last_msg_ts"] = static_cast<Json::Int64>(0);
+		one["unread_count"] = 0;
+		one["pinned_rank"] = 0;
+		one["draft_text"] = "";
+		one["mute_state"] = 0;
+		out["dialogs"].append(one);
+	}
+}
+
+void LogicSystem::GetDialogListHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
+{
+	(void)msg_id;
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	const int uid = root.get("fromuid", root.get("uid", 0)).asInt();
+
+	Json::Value rtvalue;
+	rtvalue["error"] = ErrorCodes::Success;
+	rtvalue["uid"] = uid;
+	Defer defer([&rtvalue, session]() {
+		session->Send(rtvalue.toStyledString(), ID_GET_DIALOG_LIST_RSP);
+		});
+
+	if (uid <= 0) {
+		rtvalue["error"] = ErrorCodes::Error_Json;
+		return;
+	}
+
+	BuildDialogListJson(uid, rtvalue);
+}
+
 void LogicSystem::PushGroupPayload(const std::vector<int>& recipients, short msgid, const Json::Value& payload, int exclude_uid)
 {
 	if (recipients.empty()) {
@@ -1275,10 +1353,12 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
 	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
-	const auto now = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
+	const auto now_sec = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
+		std::chrono::system_clock::now().time_since_epoch()).count());
+	const auto now_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::system_clock::now().time_since_epoch()).count());
 	for (const auto& member : members) {
-		if (member && member->uid == from_uid && member->mute_until > now) {
+		if (member && member->uid == from_uid && member->mute_until > now_sec) {
 			rtvalue["error"] = ErrorCodes::GroupMuted;
 			return;
 		}
@@ -1300,7 +1380,7 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 	info.file_name = msg.get("file_name", "").asString();
 	info.mime = msg.get("mime", "").asString();
 	info.size = msg.get("size", 0).asInt();
-	info.created_at = now;
+	info.created_at = now_ms;
 	if (info.msg_id.empty() || info.content.empty()) {
 		rtvalue["error"] = ErrorCodes::Error_Json;
 		return;
@@ -1312,7 +1392,7 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 	}
 
 	rtvalue["msg"] = msg;
-	rtvalue["created_at"] = static_cast<Json::Int64>(now);
+	rtvalue["created_at"] = static_cast<Json::Int64>(now_ms);
 
 	auto sender_info = MysqlMgr::GetInstance()->GetUser(from_uid);
 	std::shared_ptr<GroupInfo> group_info;
