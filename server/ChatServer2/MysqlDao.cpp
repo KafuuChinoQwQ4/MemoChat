@@ -3,8 +3,43 @@
 #include <set>
 #include <algorithm>
 #include <chrono>
+#include <cctype>
 #include <unordered_set>
+#include <random>
+#include <stdexcept>
 #include <limits>
+
+namespace {
+bool IsValidUserPublicId(const std::string& user_id) {
+	if (user_id.size() != 10 || user_id[0] != 'u') {
+		return false;
+	}
+	if (user_id[1] < '1' || user_id[1] > '9') {
+		return false;
+	}
+	for (size_t i = 2; i < user_id.size(); ++i) {
+		if (!std::isdigit(static_cast<unsigned char>(user_id[i]))) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool IsValidGroupCode(const std::string& group_code) {
+	if (group_code.size() != 10 || group_code[0] != 'g') {
+		return false;
+	}
+	if (group_code[1] < '1' || group_code[1] > '9') {
+		return false;
+	}
+	for (size_t i = 2; i < group_code.size(); ++i) {
+		if (!std::isdigit(static_cast<unsigned char>(group_code[i]))) {
+			return false;
+		}
+	}
+	return true;
+}
+}
 
 MysqlDao::MysqlDao()
 {
@@ -33,14 +68,16 @@ MysqlDao::MysqlDao()
 				"UNIQUE KEY uq_friend_tag(self_id, friend_id, tag)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 			stmt->execute("CREATE TABLE IF NOT EXISTS chat_group ("
 				"group_id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+				"group_code VARCHAR(10) NULL,"
 				"name VARCHAR(64) NOT NULL,"
 				"owner_uid INT NOT NULL,"
-				"announcement TEXT DEFAULT '',"
+				"announcement TEXT,"
 				"member_limit INT NOT NULL DEFAULT 200,"
 				"is_all_muted TINYINT NOT NULL DEFAULT 0,"
 				"status TINYINT NOT NULL DEFAULT 1,"
 				"created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
 				"updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,"
+				"UNIQUE KEY uk_group_code(group_code),"
 				"KEY idx_owner_uid(owner_uid),"
 				"KEY idx_status(status)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 			stmt->execute("CREATE TABLE IF NOT EXISTS chat_group_member ("
@@ -76,7 +113,7 @@ MysqlDao::MysqlDao()
 				"from_uid INT NOT NULL,"
 				"msg_type VARCHAR(16) NOT NULL,"
 				"content TEXT NOT NULL,"
-				"mentions_json TEXT DEFAULT '',"
+				"mentions_json TEXT,"
 				"created_at BIGINT NOT NULL,"
 				"KEY idx_group_created(group_id, created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 			stmt->execute("CREATE TABLE IF NOT EXISTS chat_group_msg_ext ("
@@ -101,6 +138,10 @@ MysqlDao::MysqlDao()
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "init tag tables failed: " << e.what() << std::endl;
+	}
+
+	if (!EnsureGroupCodeSchemaAndBackfill()) {
+		throw std::runtime_error("failed to ensure/backfill chat_group.group_code");
 	}
 }
 
@@ -232,21 +273,19 @@ bool MysqlDao::CheckPwd(const std::string& name, const std::string& pwd, UserInf
 
 		// ִ�в�ѯ
 		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-		std::string origin_pwd = "";
-		// ���������
-		while (res->next()) {
-			origin_pwd = res->getString("pwd");
-			// �����ѯ��������
-			std::cout << "Password: " << origin_pwd << std::endl;
-			break;
+		if (!res->next()) {
+			return false;
 		}
 
+		const std::string origin_pwd = res->getString("pwd");
 		if (pwd != origin_pwd) {
 			return false;
 		}
+
 		userInfo.name = name;
 		userInfo.email = res->getString("email");
 		userInfo.uid = res->getInt("uid");
+		userInfo.user_id = res->isNull("user_id") ? "" : res->getString("user_id");
 		userInfo.pwd = origin_pwd;
 		return true;
 	}
@@ -598,6 +637,7 @@ std::shared_ptr<UserInfo> MysqlDao::GetUser(int uid)
 			user_ptr->desc = res->getString("desc");
 			user_ptr->sex = res->getInt("sex");
 			user_ptr->icon = res->getString("icon");
+			user_ptr->user_id = res->isNull("user_id") ? "" : res->getString("user_id");
 			user_ptr->uid = uid;
 			break;
 		}
@@ -639,6 +679,8 @@ std::shared_ptr<UserInfo> MysqlDao::GetUser(std::string name)
 			user_ptr->nick = res->getString("nick");
 			user_ptr->desc = res->getString("desc");
 			user_ptr->sex = res->getInt("sex");
+			user_ptr->icon = res->getString("icon");
+			user_ptr->user_id = res->isNull("user_id") ? "" : res->getString("user_id");
 			user_ptr->uid = res->getInt("uid");
 			break;
 		}
@@ -649,6 +691,40 @@ std::shared_ptr<UserInfo> MysqlDao::GetUser(std::string name)
 		std::cerr << " (MySQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return nullptr;
+	}
+}
+
+bool MysqlDao::GetUidByUserId(const std::string& user_id, int& uid) {
+	uid = 0;
+	if (!IsValidUserPublicId(user_id)) {
+		return false;
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement("SELECT uid FROM user WHERE user_id = ? LIMIT 1"));
+		pstmt->setString(1, user_id);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		if (!res->next()) {
+			return false;
+		}
+		uid = res->getInt("uid");
+		return uid > 0;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
 	}
 }
 
@@ -667,7 +743,7 @@ bool MysqlDao::GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& 
 		try {
 		// ׼��SQL���, ������ʼid���������������б�
 		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("select apply.from_uid, apply.status, user.name, "
-				"user.nick, user.sex from friend_apply as apply join user on apply.from_uid = user.uid where apply.to_uid = ? "
+				"user.nick, user.sex, user.user_id from friend_apply as apply join user on apply.from_uid = user.uid where apply.to_uid = ? "
 			"and apply.id > ? order by apply.id ASC LIMIT ? "));
 
 		pstmt->setInt(1, touid); // ��uid�滻Ϊ��Ҫ��ѯ��uid
@@ -682,7 +758,8 @@ bool MysqlDao::GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& 
 			auto status = res->getInt("status");
 			auto nick = res->getString("nick");
 			auto sex = res->getInt("sex");
-			auto apply_ptr = std::make_shared<ApplyInfo>(uid, name, "", "", nick, sex, status);
+			auto user_id = res->isNull("user_id") ? "" : res->getString("user_id");
+			auto apply_ptr = std::make_shared<ApplyInfo>(uid, name, "", "", nick, sex, status, user_id);
 			apply_ptr->_labels = GetApplyTags(uid, touid);
 			applyList.push_back(apply_ptr);
 		}
@@ -918,8 +995,9 @@ bool MysqlDao::IsFriend(const int& self_id, const int& friend_id) {
 }
 
 bool MysqlDao::CreateGroup(const int& owner_uid, const std::string& name, const std::string& announcement,
-	const int& member_limit, const std::vector<int>& initial_members, int64_t& out_group_id) {
+	const int& member_limit, const std::vector<int>& initial_members, int64_t& out_group_id, std::string& out_group_code) {
 	out_group_id = 0;
+	out_group_code.clear();
 	if (owner_uid <= 0 || name.empty()) {
 		return false;
 	}
@@ -947,13 +1025,31 @@ bool MysqlDao::CreateGroup(const int& owner_uid, const std::string& name, const 
 
 		con->_con->setAutoCommit(false);
 
+		std::string group_code;
+		for (int i = 0; i < 20; ++i) {
+			const std::string candidate = GenerateRandomGroupCode();
+			std::unique_ptr<sql::PreparedStatement> check_group_code(
+				con->_con->prepareStatement("SELECT 1 FROM chat_group WHERE group_code = ? LIMIT 1"));
+			check_group_code->setString(1, candidate);
+			std::unique_ptr<sql::ResultSet> check_group_code_res(check_group_code->executeQuery());
+			if (!check_group_code_res->next()) {
+				group_code = candidate;
+				break;
+			}
+		}
+		if (group_code.empty()) {
+			con->_con->rollback();
+			return false;
+		}
+
 		std::unique_ptr<sql::PreparedStatement> ins_group(
-			con->_con->prepareStatement("INSERT INTO chat_group(name, owner_uid, announcement, member_limit, is_all_muted, status) "
-				"VALUES(?,?,?,?,0,1)"));
-		ins_group->setString(1, name);
-		ins_group->setInt(2, owner_uid);
-		ins_group->setString(3, announcement);
-		ins_group->setInt(4, final_limit);
+			con->_con->prepareStatement("INSERT INTO chat_group(group_code, name, owner_uid, announcement, member_limit, is_all_muted, status) "
+				"VALUES(?,?,?,?,?,0,1)"));
+		ins_group->setString(1, group_code);
+		ins_group->setString(2, name);
+		ins_group->setInt(3, owner_uid);
+		ins_group->setString(4, announcement);
+		ins_group->setInt(5, final_limit);
 		if (ins_group->executeUpdate() <= 0) {
 			con->_con->rollback();
 			return false;
@@ -991,12 +1087,46 @@ bool MysqlDao::CreateGroup(const int& owner_uid, const std::string& name, const 
 		}
 
 		con->_con->commit();
+		out_group_code = group_code;
 		return true;
 	}
 	catch (sql::SQLException& e) {
 		if (con) {
 			con->_con->rollback();
 		}
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::GetGroupIdByCode(const std::string& group_code, int64_t& out_group_id) {
+	out_group_id = 0;
+	if (!IsValidGroupCode(group_code)) {
+		return false;
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement("SELECT group_id FROM chat_group WHERE group_code = ? AND status = 1 LIMIT 1"));
+		pstmt->setString(1, group_code);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		if (!res->next()) {
+			return false;
+		}
+		out_group_id = static_cast<int64_t>(std::stoll(res->getString("group_id")));
+		return out_group_id > 0;
+	}
+	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
 		std::cerr << " (MySQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
@@ -1016,7 +1146,7 @@ bool MysqlDao::GetUserGroupList(const int& uid, std::vector<std::shared_ptr<Grou
 	try {
 		std::unique_ptr<sql::PreparedStatement> pstmt(
 			con->_con->prepareStatement(
-				"SELECT g.group_id, g.name, g.owner_uid, g.announcement, g.member_limit, g.is_all_muted, g.status, m.role, "
+				"SELECT g.group_id, g.group_code, g.name, g.owner_uid, g.announcement, g.member_limit, g.is_all_muted, g.status, m.role, "
 				"(SELECT COUNT(1) FROM chat_group_member gm WHERE gm.group_id = g.group_id AND gm.status = 1) AS member_count "
 				"FROM chat_group_member m JOIN chat_group g ON m.group_id = g.group_id "
 				"WHERE m.uid = ? AND m.status = 1 AND g.status = 1 ORDER BY g.updated_at DESC"));
@@ -1025,6 +1155,7 @@ bool MysqlDao::GetUserGroupList(const int& uid, std::vector<std::shared_ptr<Grou
 		while (res->next()) {
 			auto info = std::make_shared<GroupInfo>();
 			info->group_id = static_cast<int64_t>(std::stoll(res->getString("group_id")));
+			info->group_code = res->isNull("group_code") ? "" : res->getString("group_code");
 			info->name = res->getString("name");
 			info->owner_uid = res->getInt("owner_uid");
 			info->announcement = res->getString("announcement");
@@ -1057,7 +1188,7 @@ bool MysqlDao::GetGroupMemberList(const int64_t& group_id, std::vector<std::shar
 	try {
 		std::unique_ptr<sql::PreparedStatement> pstmt(
 			con->_con->prepareStatement(
-				"SELECT m.group_id, m.uid, m.role, m.mute_until, m.status, u.name, u.nick, u.icon "
+				"SELECT m.group_id, m.uid, m.role, m.mute_until, m.status, u.name, u.nick, u.icon, u.user_id "
 				"FROM chat_group_member m LEFT JOIN user u ON m.uid = u.uid "
 				"WHERE m.group_id = ? AND m.status = 1 ORDER BY m.role DESC, m.id ASC"));
 		pstmt->setInt64(1, group_id);
@@ -1072,6 +1203,7 @@ bool MysqlDao::GetGroupMemberList(const int64_t& group_id, std::vector<std::shar
 			info->name = res->isNull("name") ? "" : res->getString("name");
 			info->nick = res->isNull("nick") ? "" : res->getString("nick");
 			info->icon = res->isNull("icon") ? "" : res->getString("icon");
+			info->user_id = res->isNull("user_id") ? "" : res->getString("user_id");
 			member_list.push_back(info);
 		}
 		return true;
@@ -1516,7 +1648,7 @@ bool MysqlDao::GetGroupById(const int64_t& group_id, std::shared_ptr<GroupInfo>&
 		});
 	try {
 		std::unique_ptr<sql::PreparedStatement> pstmt(
-			con->_con->prepareStatement("SELECT group_id, name, owner_uid, announcement, member_limit, is_all_muted, status "
+			con->_con->prepareStatement("SELECT group_id, group_code, name, owner_uid, announcement, member_limit, is_all_muted, status "
 				"FROM chat_group WHERE group_id = ? LIMIT 1"));
 		pstmt->setInt64(1, group_id);
 		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
@@ -1525,6 +1657,7 @@ bool MysqlDao::GetGroupById(const int64_t& group_id, std::shared_ptr<GroupInfo>&
 		}
 		auto info = std::make_shared<GroupInfo>();
 		info->group_id = static_cast<int64_t>(std::stoll(res->getString("group_id")));
+		info->group_code = res->isNull("group_code") ? "" : res->getString("group_code");
 		info->name = res->getString("name");
 		info->owner_uid = res->getInt("owner_uid");
 		info->announcement = res->getString("announcement");
@@ -1574,6 +1707,121 @@ bool MysqlDao::GetUserRoleInGroup(const int64_t& group_id, const int& uid, int& 
 bool MysqlDao::IsUserInGroup(const int64_t& group_id, const int& uid) {
 	int role = 0;
 	return GetUserRoleInGroup(group_id, uid, role);
+}
+
+std::string MysqlDao::GenerateRandomGroupCode() {
+	static thread_local std::mt19937_64 rng(std::random_device{}());
+	std::uniform_int_distribution<int> dist(100000000, 999999999);
+	return "g" + std::to_string(dist(rng));
+}
+
+bool MysqlDao::EnsureGroupCodeSchemaAndBackfill() {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
+		try {
+			stmt->execute("ALTER TABLE chat_group ADD COLUMN group_code VARCHAR(10) NULL");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("CREATE UNIQUE INDEX uk_chat_group_code ON chat_group(group_code)");
+		}
+		catch (sql::SQLException&) {
+		}
+
+		std::unique_ptr<sql::PreparedStatement> query(
+			con->_con->prepareStatement("SELECT group_id, group_code FROM chat_group ORDER BY group_id ASC"));
+		std::unique_ptr<sql::ResultSet> rows(query->executeQuery());
+
+		struct GroupRow {
+			int64_t group_id = 0;
+			std::string group_code;
+		};
+		std::vector<GroupRow> all_rows;
+		std::unordered_set<std::string> used_codes;
+		int duplicate_fixed = 0;
+
+		while (rows->next()) {
+			GroupRow row;
+			row.group_id = static_cast<int64_t>(std::stoll(rows->getString("group_id")));
+			row.group_code = rows->isNull("group_code") ? "" : rows->getString("group_code");
+			if (IsValidGroupCode(row.group_code)) {
+				if (used_codes.find(row.group_code) == used_codes.end()) {
+					used_codes.insert(row.group_code);
+				}
+				else {
+					row.group_code.clear();
+					++duplicate_fixed;
+				}
+			}
+			else {
+				row.group_code.clear();
+			}
+			all_rows.push_back(row);
+		}
+
+		int backfilled = 0;
+		int retries = 0;
+		con->_con->setAutoCommit(false);
+		std::unique_ptr<sql::PreparedStatement> update_stmt(
+			con->_con->prepareStatement("UPDATE chat_group SET group_code = ? WHERE group_id = ?"));
+
+		for (auto& row : all_rows) {
+			if (!row.group_code.empty()) {
+				continue;
+			}
+
+			std::string new_code;
+			for (int i = 0; i < 20; ++i) {
+				const std::string candidate = GenerateRandomGroupCode();
+				if (used_codes.find(candidate) == used_codes.end()) {
+					new_code = candidate;
+					break;
+				}
+				++retries;
+			}
+
+			if (new_code.empty()) {
+				con->_con->rollback();
+				return false;
+			}
+
+			update_stmt->setString(1, new_code);
+			update_stmt->setInt64(2, row.group_id);
+			update_stmt->executeUpdate();
+			used_codes.insert(new_code);
+			++backfilled;
+		}
+
+		con->_con->commit();
+		std::cout << "[ChatServer] group_code backfill done. total=" << all_rows.size()
+			<< " backfilled=" << backfilled
+			<< " duplicate_fixed=" << duplicate_fixed
+			<< " retries=" << retries << std::endl;
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		if (con && con->_con) {
+			try {
+				con->_con->rollback();
+			}
+			catch (...) {
+			}
+		}
+		std::cerr << "EnsureGroupCodeSchemaAndBackfill SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
 }
 
 bool MysqlDao::GetPendingGroupApplyForReviewer(const int& reviewer_uid, std::vector<std::shared_ptr<GroupApplyInfo>>& applies, int limit) {

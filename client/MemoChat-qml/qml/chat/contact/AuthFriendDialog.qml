@@ -48,7 +48,7 @@ Popup {
         }
 
         Label {
-            text: "通过 " + (root.targetName.length > 0 ? root.targetName : ("UID " + root.targetUid)) + " 的好友申请"
+            text: "通过 " + (root.targetName.length > 0 ? root.targetName : ("ID " + root.targetUid)) + " 的好友申请"
             color: "#5f7088"
             wrapMode: Text.Wrap
             Layout.fillWidth: true

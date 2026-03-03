@@ -1,4 +1,9 @@
 #include "httpmgr.h"
+#include <QTimer>
+
+namespace {
+constexpr int kHttpTimeoutMs = 10000;
+}
 
 HttpMgr::~HttpMgr()
 {
@@ -13,11 +18,26 @@ void HttpMgr::PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod)
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setHeader(QNetworkRequest::ContentLengthHeader, QByteArray::number(data.length()));
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    request.setTransferTimeout(kHttpTimeoutMs);
+#endif
     //发送请求，并处理响应, 获取自己的智能指针，构造伪闭包并增加智能指针引用计数
     auto self = shared_from_this();
     QNetworkReply * reply = _manager.post(request, data);
+
+    QTimer *timeoutTimer = new QTimer(reply);
+    timeoutTimer->setSingleShot(true);
+    QObject::connect(timeoutTimer, &QTimer::timeout, reply, [reply]() {
+        if (reply->isRunning()) {
+            qWarning() << "HTTP request timeout, aborting:" << reply->url();
+            reply->abort();
+        }
+    });
+    timeoutTimer->start(kHttpTimeoutMs);
+
     //设置信号和槽等待发送完成
-    QObject::connect(reply, &QNetworkReply::finished, [reply, self, req_id, mod](){
+    QObject::connect(reply, &QNetworkReply::finished, [reply, self, req_id, mod, timeoutTimer](){
+        timeoutTimer->stop();
         //处理错误的情况
         if(reply->error() != QNetworkReply::NoError){
             qDebug() << reply->errorString();

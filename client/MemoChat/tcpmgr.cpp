@@ -4,10 +4,24 @@
 #include <QtEndian>
 #include "usermgr.h"
 
-TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_message_id(0),_message_len(0)
+TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_connecting(false),_message_id(0),_message_len(0)
 {
+    _connect_timeout_timer.setSingleShot(true);
+    _connect_timeout_timer.setInterval(8000);
+    QObject::connect(&_connect_timeout_timer, &QTimer::timeout, [this]() {
+        if (!_connecting) {
+            return;
+        }
+        qWarning() << "TCP connect timeout. host:" << _host << "port:" << _port;
+        _connecting = false;
+        _socket.abort();
+        emit sig_con_success(false);
+    });
+
     QObject::connect(&_socket, &QTcpSocket::connected, [&]() {
            qDebug() << "Connected to server!";
+           _connect_timeout_timer.stop();
+           _connecting = false;
            _buffer.clear();
            _b_recv_pending = false;
            _message_id = 0;
@@ -69,27 +83,47 @@ TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_message_id(0),_messa
         QObject::connect(&_socket, &QTcpSocket::errorOccurred,
                             [this](QAbstractSocket::SocketError socketError) {
                qDebug() << "Error:" << _socket.errorString() ;
+               const bool wasConnecting = _connecting;
+               if (wasConnecting) {
+                   _connecting = false;
+                   _connect_timeout_timer.stop();
+               }
                switch (socketError) {
                    case QTcpSocket::ConnectionRefusedError:
                        qDebug() << "Connection Refused!";
-                       emit sig_con_success(false);
+                       if (wasConnecting) {
+                           emit sig_con_success(false);
+                       }
                        break;
                    case QTcpSocket::RemoteHostClosedError:
                        qDebug() << "Remote Host Closed Connection!";
+                       if (wasConnecting) {
+                           emit sig_con_success(false);
+                       }
                        break;
                    case QTcpSocket::HostNotFoundError:
                        qDebug() << "Host Not Found!";
-                       emit sig_con_success(false);
+                       if (wasConnecting) {
+                           emit sig_con_success(false);
+                       }
                        break;
                    case QTcpSocket::SocketTimeoutError:
                        qDebug() << "Connection Timeout!";
-                       emit sig_con_success(false);
+                       if (wasConnecting) {
+                           emit sig_con_success(false);
+                       }
                        break;
                    case QTcpSocket::NetworkError:
                        qDebug() << "Network Error!";
+                       if (wasConnecting) {
+                           emit sig_con_success(false);
+                       }
                        break;
                    default:
                        qDebug() << "Other Error!";
+                       if (wasConnecting) {
+                           emit sig_con_success(false);
+                       }
                        break;
                }
          });
@@ -97,6 +131,11 @@ TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_message_id(0),_messa
         // 处理连接断开
         QObject::connect(&_socket, &QTcpSocket::disconnected, [&]() {
             qDebug() << "Disconnected from server.";
+            if (_connecting) {
+                _connecting = false;
+                _connect_timeout_timer.stop();
+                emit sig_con_success(false);
+            }
             _buffer.clear();
             _b_recv_pending = false;
             _message_id = 0;
@@ -111,6 +150,8 @@ TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_message_id(0),_messa
 }
 
 void TcpMgr::CloseConnection(){
+    _connect_timeout_timer.stop();
+    _connecting = false;
     _socket.close();
 }
 
@@ -155,7 +196,8 @@ void TcpMgr::initHandlers()
         auto icon = jsonObj["icon"].toString();
         auto sex = jsonObj["sex"].toInt();
         auto desc = jsonObj["desc"].toString();
-        auto user_info = std::make_shared<UserInfo>(uid, name, nick, icon, sex,"",desc);
+        auto userId = jsonObj["user_id"].toString();
+        auto user_info = std::make_shared<UserInfo>(uid, name, nick, icon, sex,"",desc, userId);
  
         UserMgr::GetInstance()->SetUserInfo(user_info);
         UserMgr::GetInstance()->SetToken(jsonObj["token"].toString());
@@ -202,7 +244,7 @@ void TcpMgr::initHandlers()
 		}
        auto search_info =  std::make_shared<SearchInfo>(jsonObj["uid"].toInt(), jsonObj["name"].toString(),
             jsonObj["nick"].toString(), jsonObj["desc"].toString(),
-               jsonObj["sex"].toInt(), jsonObj["icon"].toString());
+               jsonObj["sex"].toInt(), jsonObj["icon"].toString(), jsonObj["user_id"].toString());
 
         emit sig_user_search(search_info);
 		});
@@ -242,10 +284,11 @@ void TcpMgr::initHandlers()
          QString icon = jsonObj["icon"].toString();
          QString nick = jsonObj["nick"].toString();
          int sex = jsonObj["sex"].toInt();
+         QString userId = jsonObj["user_id"].toString();
 
         auto apply_info = std::make_shared<AddFriendApply>(
                     from_uid, name, desc,
-                      icon, nick, sex);
+                      icon, nick, sex, userId);
 
 		emit sig_friend_apply(apply_info);
 		});
@@ -280,9 +323,10 @@ void TcpMgr::initHandlers()
         QString nick = jsonObj["nick"].toString();
         QString icon = jsonObj["icon"].toString();
         int sex = jsonObj["sex"].toInt();
+        QString userId = jsonObj["user_id"].toString();
 
         auto auth_info = std::make_shared<AuthInfo>(from_uid,name,
-                                                    nick, icon, sex);
+                                                    nick, icon, sex, userId);
 
         emit sig_add_auth_friend(auth_info);
         });
@@ -348,7 +392,8 @@ void TcpMgr::initHandlers()
         auto icon = jsonObj["icon"].toString();
         auto sex = jsonObj["sex"].toInt();
         auto uid = jsonObj["uid"].toInt();
-        auto rsp = std::make_shared<AuthRsp>(uid, name, nick, icon, sex);
+        auto userId = jsonObj["user_id"].toString();
+        auto rsp = std::make_shared<AuthRsp>(uid, name, nick, icon, sex, userId);
         emit sig_auth_rsp(rsp);
 
         qDebug() << "Auth Friend Success " ;
@@ -556,6 +601,7 @@ void TcpMgr::initHandlers()
             return;
         }
         emit sig_group_invite(jsonObj.value("groupid").toVariant().toLongLong(),
+                              jsonObj.value("group_code").toString(),
                               jsonObj.value("name").toString(),
                               jsonObj.value("operator_uid").toInt());
       });
@@ -572,6 +618,7 @@ void TcpMgr::initHandlers()
         }
         emit sig_group_apply(jsonObj.value("groupid").toVariant().toLongLong(),
                              jsonObj.value("applicant_uid").toInt(),
+                             jsonObj.value("applicant_user_id").toString(),
                              jsonObj.value("reason").toString());
       });
 
@@ -686,11 +733,32 @@ void TcpMgr::handleMsg(ReqId id, int len, QByteArray data)
 void TcpMgr::slot_tcp_connect(ServerInfo si)
 {
     qDebug()<< "receive tcp connect signal";
-    // 尝试连接到服务器
-    qDebug() << "Connecting to server...";
-    _host = si.Host;
-    _port = static_cast<uint16_t>(si.Port.toUInt());
-    _socket.connectToHost(si.Host, _port);
+    _host = si.Host.trimmed();
+    if (_host == "0.0.0.0") {
+        _host = "127.0.0.1";
+    }
+
+    bool portOk = false;
+    const uint parsedPort = si.Port.trimmed().toUInt(&portOk);
+    if (!portOk || parsedPort == 0 || parsedPort > std::numeric_limits<uint16_t>::max() || _host.isEmpty()) {
+        qWarning() << "invalid chat server endpoint, host:" << _host << "port:" << si.Port;
+        emit sig_con_success(false);
+        return;
+    }
+
+    _port = static_cast<uint16_t>(parsedPort);
+    if (_socket.state() != QAbstractSocket::UnconnectedState) {
+        _socket.abort();
+    }
+
+    _buffer.clear();
+    _b_recv_pending = false;
+    _message_id = 0;
+    _message_len = 0;
+    _connecting = true;
+    _connect_timeout_timer.start();
+    qDebug() << "Connecting to chat server, host:" << _host << "port:" << _port;
+    _socket.connectToHost(_host, _port);
 }
 
 void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)

@@ -12,6 +12,7 @@ Rectangle {
     radius: 10
 
     property int uid: 0
+    property string userId: ""
     property string name: ""
     property string desc: ""
     property string icon: ""
@@ -51,7 +52,7 @@ Rectangle {
             }
 
             Label {
-                text: root.desc.length > 0 ? root.desc : ("UID: " + root.uid)
+                text: root.desc.length > 0 ? root.desc : ("ID: " + (root.userId.length > 0 ? root.userId : root.uid))
                 color: "#63748c"
                 elide: Text.ElideRight
                 Layout.fillWidth: true

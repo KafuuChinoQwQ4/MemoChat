@@ -6,6 +6,7 @@ import "../../components"
 GlassSurface {
     id: root
     property string groupName: ""
+    property string groupCode: ""
     property string statusText: ""
     property bool statusError: false
 
@@ -30,6 +31,14 @@ GlassSurface {
             color: "#2a3649"
             font.bold: true
             font.pixelSize: 15
+            elide: Text.ElideRight
+        }
+
+        Label {
+            Layout.fillWidth: true
+            text: root.groupCode.length > 0 ? ("群ID: " + root.groupCode) : "群ID: -"
+            color: "#5f6f85"
+            font.pixelSize: 12
             elide: Text.ElideRight
         }
 

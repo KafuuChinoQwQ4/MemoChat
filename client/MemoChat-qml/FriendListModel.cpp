@@ -25,6 +25,8 @@ QVariant FriendListModel::data(const QModelIndex &index, int role) const
     switch (role) {
     case UidRole:
         return entry.uid;
+    case UserIdRole:
+        return entry.userId;
     case NameRole:
         return entry.name;
     case NickRole:
@@ -48,6 +50,7 @@ QHash<int, QByteArray> FriendListModel::roleNames() const
 {
     return {
         {UidRole, "uid"},
+        {UserIdRole, "userId"},
         {NameRole, "name"},
         {NickRole, "nick"},
         {IconRole, "icon"},
@@ -87,6 +90,7 @@ void FriendListModel::setFriends(const std::vector<std::shared_ptr<FriendInfo> >
 
         FriendEntry entry;
         entry.uid = friendInfo->_uid;
+        entry.userId = friendInfo->_user_id;
         entry.name = friendInfo->_name;
         entry.nick = friendInfo->_nick;
         entry.icon = normalizeIcon(friendInfo->_icon);
@@ -119,6 +123,7 @@ void FriendListModel::upsertFriend(const std::shared_ptr<FriendInfo> &friendInfo
 
     FriendEntry entry;
     entry.uid = friendInfo->_uid;
+    entry.userId = friendInfo->_user_id;
     entry.name = friendInfo->_name;
     entry.nick = friendInfo->_nick;
     entry.icon = normalizeIcon(friendInfo->_icon);
@@ -137,6 +142,7 @@ void FriendListModel::upsertFriend(const std::shared_ptr<AuthInfo> &authInfo)
 
     FriendEntry entry;
     entry.uid = authInfo->_uid;
+    entry.userId = authInfo->_user_id;
     entry.name = authInfo->_name;
     entry.nick = authInfo->_nick;
     entry.icon = normalizeIcon(authInfo->_icon);
@@ -153,6 +159,7 @@ void FriendListModel::upsertFriend(const std::shared_ptr<AuthRsp> &authRsp)
 
     FriendEntry entry;
     entry.uid = authRsp->_uid;
+    entry.userId = authRsp->_user_id;
     entry.name = authRsp->_name;
     entry.nick = authRsp->_nick;
     entry.icon = normalizeIcon(authRsp->_icon);
@@ -187,6 +194,7 @@ QVariantMap FriendListModel::get(int indexValue) const
     const FriendEntry &entry = _items[static_cast<size_t>(indexValue)];
     return {
         {"uid", entry.uid},
+        {"userId", entry.userId},
         {"name", entry.name},
         {"nick", entry.nick},
         {"icon", entry.icon},

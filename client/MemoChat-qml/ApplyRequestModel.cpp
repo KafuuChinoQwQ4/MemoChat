@@ -26,6 +26,8 @@ QVariant ApplyRequestModel::data(const QModelIndex &index, int role) const
     switch (role) {
     case UidRole:
         return entry.uid;
+    case UserIdRole:
+        return entry.userId;
     case NameRole:
         return entry.name;
     case NickRole:
@@ -49,6 +51,7 @@ QHash<int, QByteArray> ApplyRequestModel::roleNames() const
 {
     return {
         {UidRole, "uid"},
+        {UserIdRole, "userId"},
         {NameRole, "name"},
         {NickRole, "nick"},
         {DescRole, "desc"},
@@ -101,6 +104,7 @@ void ApplyRequestModel::setApplies(const std::vector<std::shared_ptr<ApplyInfo>>
 
         ApplyEntry entry;
         entry.uid = apply->_uid;
+        entry.userId = apply->_user_id;
         entry.name = apply->_name;
         entry.nick = apply->_nick;
         entry.desc = apply->_desc;
@@ -123,6 +127,7 @@ void ApplyRequestModel::upsertApply(const std::shared_ptr<ApplyInfo> &applyInfo)
 
     ApplyEntry entry;
     entry.uid = applyInfo->_uid;
+    entry.userId = applyInfo->_user_id;
     entry.name = applyInfo->_name;
     entry.nick = applyInfo->_nick;
     entry.desc = applyInfo->_desc;
@@ -140,6 +145,7 @@ void ApplyRequestModel::upsertApply(const std::shared_ptr<AddFriendApply> &apply
 
     ApplyEntry entry;
     entry.uid = applyInfo->_from_uid;
+    entry.userId = applyInfo->_user_id;
     entry.name = applyInfo->_name;
     entry.nick = applyInfo->_nick;
     entry.desc = applyInfo->_desc;
@@ -195,6 +201,7 @@ QVariantMap ApplyRequestModel::get(int indexValue) const
     const ApplyEntry &entry = _items[static_cast<size_t>(indexValue)];
     return {
         {"uid", entry.uid},
+        {"userId", entry.userId},
         {"name", entry.name},
         {"nick", entry.nick},
         {"desc", entry.desc},

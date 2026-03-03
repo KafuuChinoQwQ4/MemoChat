@@ -5,6 +5,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 
 namespace {
 QJsonArray buildLabelsArray(const QVariantList &labels)
@@ -27,17 +28,17 @@ ContactController::ContactController(ClientGateway *gateway)
 
 bool ContactController::sendSearchUser(const QString &uidText, QString *errorText) const
 {
-    bool ok = false;
-    const int uid = uidText.trimmed().toInt(&ok);
-    if (!ok || uid <= 0) {
+    static const QRegularExpression kUserIdPattern("^u[1-9][0-9]{8}$");
+    const QString userId = uidText.trimmed();
+    if (!kUserIdPattern.match(userId).hasMatch()) {
         if (errorText) {
-            *errorText = "请输入有效 UID";
+            *errorText = "请输入有效用户ID（格式 u#########）";
         }
         return false;
     }
 
     QJsonObject jsonObj;
-    jsonObj["uid"] = uidText.trimmed();
+    jsonObj["user_id"] = userId;
     const QByteArray jsonData = QJsonDocument(jsonObj).toJson(QJsonDocument::Compact);
     _gateway->tcpMgr()->slot_send_data(ReqId::ID_SEARCH_USER_REQ, jsonData);
     return true;

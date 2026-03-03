@@ -35,6 +35,10 @@ Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendR
     rtvalue["icon"] = request->icon();
     rtvalue["sex"] = request->sex();
     rtvalue["nick"] = request->nick();
+    auto apply_info = MysqlMgr::GetInstance()->GetUser(request->applyuid());
+    if (apply_info) {
+        rtvalue["user_id"] = apply_info->user_id;
+    }
 
     std::string return_str = rtvalue.toStyledString();
     session->Send(return_str, ID_NOTIFY_ADD_FRIEND_REQ);
@@ -70,6 +74,7 @@ Status ChatServiceImpl::NotifyAuthFriend(ServerContext* context, const AuthFrien
         rtvalue["nick"] = user_info->nick;
         rtvalue["icon"] = user_info->icon;
         rtvalue["sex"] = user_info->sex;
+        rtvalue["user_id"] = user_info->user_id;
     }
     else {
         rtvalue["error"] = ErrorCodes::UidInvalid;
@@ -128,6 +133,7 @@ bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr
         Json::Value root;
         reader.parse(info_str, root);
         userinfo->uid = root["uid"].asInt();
+        userinfo->user_id = root["user_id"].asString();
         userinfo->name = root["name"].asString();
         userinfo->pwd = root["pwd"].asString();
         userinfo->email = root["email"].asString();
@@ -147,6 +153,7 @@ bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr
 
         Json::Value redis_root;
         redis_root["uid"] = uid;
+        redis_root["user_id"] = userinfo->user_id;
         redis_root["pwd"] = userinfo->pwd;
         redis_root["name"] = userinfo->name;
         redis_root["email"] = userinfo->email;

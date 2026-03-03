@@ -63,6 +63,10 @@ std::shared_ptr<UserInfo> MysqlMgr::GetUser(std::string name)
 	return _dao.GetUser(name);
 }
 
+bool MysqlMgr::GetUidByUserId(const std::string& user_id, int& uid) {
+	return _dao.GetUidByUserId(user_id, uid);
+}
+
 bool MysqlMgr::GetApplyList(int touid, 
 	std::vector<std::shared_ptr<ApplyInfo>>& applyList, int begin, int limit) {
 
@@ -91,8 +95,12 @@ bool MysqlMgr::IsFriend(const int& self_id, const int& friend_id) {
 }
 
 bool MysqlMgr::CreateGroup(const int& owner_uid, const std::string& name, const std::string& announcement,
-	const int& member_limit, const std::vector<int>& initial_members, int64_t& out_group_id) {
-	return _dao.CreateGroup(owner_uid, name, announcement, member_limit, initial_members, out_group_id);
+	const int& member_limit, const std::vector<int>& initial_members, int64_t& out_group_id, std::string& out_group_code) {
+	return _dao.CreateGroup(owner_uid, name, announcement, member_limit, initial_members, out_group_id, out_group_code);
+}
+
+bool MysqlMgr::GetGroupIdByCode(const std::string& group_code, int64_t& out_group_id) {
+	return _dao.GetGroupIdByCode(group_code, out_group_id);
 }
 
 bool MysqlMgr::GetUserGroupList(const int& uid, std::vector<std::shared_ptr<GroupInfo>>& group_list) {

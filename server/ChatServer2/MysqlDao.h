@@ -248,6 +248,7 @@ public:
 	std::vector<std::string> GetFriendTags(const int& self_id, const int& friend_id);
 	std::shared_ptr<UserInfo> GetUser(int uid);
 	std::shared_ptr<UserInfo> GetUser(std::string name);
+	bool GetUidByUserId(const std::string& user_id, int& uid);
 	bool GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& applyList, int offset, int limit );
 	bool GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo> >& user_info);
 	bool SavePrivateMessage(const PrivateMessageInfo& msg);
@@ -257,7 +258,8 @@ public:
 	bool IsFriend(const int& self_id, const int& friend_id);
 
 	bool CreateGroup(const int& owner_uid, const std::string& name, const std::string& announcement,
-		const int& member_limit, const std::vector<int>& initial_members, int64_t& out_group_id);
+		const int& member_limit, const std::vector<int>& initial_members, int64_t& out_group_id, std::string& out_group_code);
+	bool GetGroupIdByCode(const std::string& group_code, int64_t& out_group_id);
 	bool GetUserGroupList(const int& uid, std::vector<std::shared_ptr<GroupInfo>>& group_list);
 	bool GetGroupMemberList(const int64_t& group_id, std::vector<std::shared_ptr<GroupMemberInfo>>& member_list);
 	bool InviteGroupMember(const int64_t& group_id, const int& inviter_uid, const int& target_uid, const std::string& reason);
@@ -276,5 +278,7 @@ public:
 	bool IsUserInGroup(const int64_t& group_id, const int& uid);
 	bool GetPendingGroupApplyForReviewer(const int& reviewer_uid, std::vector<std::shared_ptr<GroupApplyInfo>>& applies, int limit);
 private:
+	bool EnsureGroupCodeSchemaAndBackfill();
+	std::string GenerateRandomGroupCode();
 	std::unique_ptr<MySqlPool> pool_;
 };

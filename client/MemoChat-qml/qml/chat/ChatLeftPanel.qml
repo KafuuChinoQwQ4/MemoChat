@@ -71,7 +71,7 @@ Rectangle {
                     rightInset: 12
                     textPixelSize: 14
                     textHorizontalAlignment: TextInput.AlignLeft
-                    placeholderText: "搜索 UID"
+                    placeholderText: "搜索用户ID（u#########）"
                     onTextChanged: root.searchCleared()
                     onAccepted: root.searchRequested(searchField.text)
                 }
@@ -116,7 +116,7 @@ Rectangle {
                             Layout.fillWidth: true
                             spacing: 6
                             Label {
-                                text: searchPending ? "搜索中..." : "搜索用户"
+                                text: searchPending ? "搜索中..." : "搜索用户ID"
                                 color: "#415066"
                                 Layout.fillWidth: true
                             }
@@ -182,7 +182,7 @@ Rectangle {
                                             Layout.fillWidth: true
                                             spacing: 2
                                             Label { text: name; font.bold: true; color: "#273449" }
-                                            Label { text: "UID: " + uid; color: "#5f6f85" }
+                                            Label { text: "ID: " + (userId && userId.length > 0 ? userId : uid); color: "#5f6f85" }
                                             Label {
                                                 text: desc
                                                 color: "#5f6f85"

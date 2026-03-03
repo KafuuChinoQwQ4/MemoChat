@@ -22,6 +22,7 @@ Item {
         delegate: ApplyRequestDelegate {
             width: ListView.view.width
             uid: model.uid
+            userId: model.userId
             name: model.name
             desc: model.desc
             icon: model.icon

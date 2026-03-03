@@ -142,11 +142,21 @@ Item {
                             }
                         }
 
-                        Label {
-                            text: name
-                            color: "#2c3a4f"
+                        ColumnLayout {
                             Layout.fillWidth: true
-                            verticalAlignment: Text.AlignVCenter
+                            spacing: 2
+                            Label {
+                                text: name
+                                color: "#2c3a4f"
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Label {
+                                text: "ID: " + (userId && userId.length > 0 ? userId : uid)
+                                color: "#6c7c92"
+                                font.pixelSize: 11
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
                         }
                     }
 

@@ -103,9 +103,10 @@ void UserMgr::AppendApplyList(QJsonArray array)
         auto nick = value["nick"].toString();
         auto sex = value["sex"].toInt();
         auto uid = value["uid"].toInt();
+        auto userId = value["user_id"].toString();
         auto status = value["status"].toInt();
         auto info = std::make_shared<ApplyInfo>(uid, name,
-                           desc, icon, nick, sex, status);
+                           desc, icon, nick, sex, status, userId);
         _apply_list.push_back(info);
     }
 }
@@ -123,10 +124,11 @@ void UserMgr::AppendFriendList(QJsonArray array) {
         auto nick = value["nick"].toString();
         auto sex = value["sex"].toInt();
         auto uid = value["uid"].toInt();
+        auto userId = value["user_id"].toString();
         auto back = value["back"].toString();
 
         auto info = std::make_shared<FriendInfo>(uid, name,
-            nick, icon, sex, desc, back);
+            nick, icon, sex, desc, back, "", userId);
         _friend_list.push_back(info);
         _friend_map.insert(uid, info);
     }
@@ -140,6 +142,7 @@ void UserMgr::SetGroupList(const QJsonArray &array)
     for (const QJsonValue &value : array) {
         auto info = std::make_shared<GroupInfoData>();
         info->_group_id = value["groupid"].toVariant().toLongLong();
+        info->_group_code = value["group_code"].toString();
         info->_name = value["name"].toString();
         info->_announcement = value["announcement"].toString();
         info->_owner_uid = value["owner_uid"].toInt();

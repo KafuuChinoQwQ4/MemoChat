@@ -13,7 +13,7 @@ Popup {
     padding: 0
 
     property Item backdrop: null
-    signal submitted(string name, var memberUids)
+    signal submitted(string name, var memberUserIds)
 
     background: GlassSurface {
         backdrop: root.backdrop
@@ -44,7 +44,7 @@ Popup {
         }
 
         Label {
-            text: "成员 UID（英文逗号分隔，可选）"
+            text: "成员用户ID（u#########，英文逗号分隔，可选）"
             color: "#56677d"
             font.pixelSize: 12
         }
@@ -53,7 +53,7 @@ Popup {
             id: membersInput
             Layout.fillWidth: true
             Layout.fillHeight: true
-            placeholderText: "例如：10002,10003,10004"
+            placeholderText: "例如：u123456789,u223456789"
             wrapMode: TextArea.Wrap
             color: "#2a3649"
             selectByMouse: true
@@ -93,9 +93,9 @@ Popup {
                     var ids = []
                     var parts = membersInput.text.split(",")
                     for (var i = 0; i < parts.length; ++i) {
-                        var num = parseInt(parts[i].trim())
-                        if (!isNaN(num) && num > 0) {
-                            ids.push(num)
+                        var one = parts[i].trim()
+                        if (one.length > 0) {
+                            ids.push(one)
                         }
                     }
                     root.submitted(groupNameInput.text, ids)

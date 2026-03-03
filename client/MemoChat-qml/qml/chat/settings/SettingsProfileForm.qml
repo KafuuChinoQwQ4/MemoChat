@@ -10,6 +10,7 @@ Item {
     property string userName: ""
     property string userNick: ""
     property string userDesc: ""
+    property string userId: ""
     property string statusText: ""
     property bool statusError: false
     signal saveRequested(string nick, string desc)
@@ -80,6 +81,26 @@ Item {
                         border.color: Qt.rgba(1, 1, 1, 0.50)
                     }
                     onTextChanged: root.statusCleared()
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Label {
+                    text: "我的ID"
+                    Layout.preferredWidth: 56
+                }
+                TextField {
+                    Layout.fillWidth: true
+                    text: root.userId
+                    enabled: false
+                    color: "#536276"
+                    background: Rectangle {
+                        radius: 8
+                        color: Qt.rgba(1, 1, 1, 0.22)
+                        border.color: Qt.rgba(1, 1, 1, 0.44)
+                    }
                 }
             }
 
