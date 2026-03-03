@@ -83,6 +83,7 @@ Rectangle {
         LoginAvatar {
             id: avatarSection
             anchors.horizontalCenter: parent.horizontalCenter
+            backdrop: backdropLayer
             opacity: loginRoot.stageValue(0.09, 0.16)
             scale: 0.96 + 0.04 * opacity
         }
