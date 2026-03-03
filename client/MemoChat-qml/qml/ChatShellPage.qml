@@ -11,6 +11,8 @@ Rectangle {
     color: "transparent"
     property int topInset: 0
     property real revealProgress: 1.0
+    property int viewMode: 0 // 0 = main tabs, 1 = profile center
+    property int lastMainTab: controller.chatTab
 
     function stageValue(start, span) {
         return Math.max(0, Math.min(1, (revealProgress - start) / span))
@@ -46,7 +48,15 @@ Rectangle {
                 currentTab: controller.chatTab
                 userIcon: controller.currentUserIcon
                 hasPendingApply: controller.hasPendingApply
-                onTabSelected: controller.switchChatTab(tab)
+                onTabSelected: {
+                    root.viewMode = 0
+                    root.lastMainTab = tab
+                    controller.switchChatTab(tab)
+                }
+                onAvatarClicked: {
+                    root.lastMainTab = controller.chatTab
+                    root.viewMode = 1
+                }
             }
         }
 
@@ -109,6 +119,7 @@ Rectangle {
             StackLayout {
                 anchors.fill: parent
                 anchors.margins: 8
+                visible: root.viewMode === 0
                 currentIndex: controller.chatTab
 
                 Item {
@@ -169,19 +180,30 @@ Rectangle {
                     onVideoChatRequested: controller.startVideoChat()
                 }
 
-                ChatSettingsPane {
+                ChatMorePane {
                     backdrop: backdropLayer
-                    userIcon: controller.currentUserIcon
-                    userNick: controller.currentUserNick
-                    userName: controller.currentUserName
-                    userDesc: controller.currentUserDesc
-                    userId: controller.currentUserId
-                    statusText: controller.settingsStatusText
-                    statusError: controller.settingsStatusError
-                    onChooseAvatarRequested: controller.chooseAvatar()
-                    onSaveProfileRequested: controller.saveProfile(nick, desc)
-                    onStatusCleared: controller.clearSettingsStatus()
                 }
+            }
+
+            ChatProfileCenterPane {
+                anchors.fill: parent
+                anchors.margins: 8
+                visible: root.viewMode === 1
+                backdrop: backdropLayer
+                userIcon: controller.currentUserIcon
+                userNick: controller.currentUserNick
+                userName: controller.currentUserName
+                userDesc: controller.currentUserDesc
+                userId: controller.currentUserId
+                statusText: controller.settingsStatusText
+                statusError: controller.settingsStatusError
+                onBackRequested: {
+                    root.viewMode = 0
+                    controller.switchChatTab(root.lastMainTab)
+                }
+                onChooseAvatarRequested: controller.chooseAvatar()
+                onSaveProfileRequested: controller.saveProfile(nick, desc)
+                onStatusCleared: controller.clearSettingsStatus()
             }
         }
     }

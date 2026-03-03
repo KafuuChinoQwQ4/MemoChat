@@ -21,6 +21,8 @@
         <file>qml/chat/ChatLeftPanel.qml</file>
         <file>qml/chat/ChatConversationPane.qml</file>
         <file>qml/chat/ChatContactPane.qml</file>
+        <file>qml/chat/ChatProfileCenterPane.qml</file>
+        <file>qml/chat/ChatMorePane.qml</file>
         <file>qml/chat/ChatSettingsPane.qml</file>
         <file>qml/chat/conversation/ChatMessageDelegate.qml</file>
         <file>qml/chat/conversation/ChatComposerBar.qml</file>
