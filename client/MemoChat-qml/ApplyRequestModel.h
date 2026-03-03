@@ -17,6 +17,7 @@ class ApplyRequestModel : public QAbstractListModel
 public:
     enum Roles {
         UidRole = Qt::UserRole + 1,
+        UserIdRole,
         NameRole,
         NickRole,
         DescRole,
@@ -54,6 +55,7 @@ signals:
 private:
     struct ApplyEntry {
         int uid;
+        QString userId;
         QString name;
         QString nick;
         QString desc;

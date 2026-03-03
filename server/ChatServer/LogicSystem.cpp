@@ -190,6 +190,7 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 	rtvalue["desc"] = user_info->desc;
 	rtvalue["sex"] = user_info->sex;
 	rtvalue["icon"] = user_info->icon;
+	rtvalue["user_id"] = user_info->user_id;
 
 	//�����ݿ��ȡ�����б�
 	std::vector<std::shared_ptr<ApplyInfo>> apply_list;
@@ -199,6 +200,7 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 			Json::Value obj;
 			obj["name"] = apply->_name;
 			obj["uid"] = apply->_uid;
+			obj["user_id"] = apply->_user_id;
 			obj["icon"] = apply->_icon;
 			obj["nick"] = apply->_nick;
 			obj["sex"] = apply->_sex;
@@ -218,6 +220,7 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 		Json::Value obj;
 		obj["name"] = friend_ele->name;
 		obj["uid"] = friend_ele->uid;
+		obj["user_id"] = friend_ele->user_id;
 		obj["icon"] = friend_ele->icon;
 		obj["nick"] = friend_ele->nick;
 		obj["sex"] = friend_ele->sex;
@@ -291,8 +294,8 @@ void LogicSystem::SearchInfo(std::shared_ptr<CSession> session, const short& msg
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
-	auto uid_str = root["uid"].asString();
-	std::cout << "user SearchInfo uid is  " << uid_str << endl;
+	const std::string user_id = root["user_id"].asString();
+	std::cout << "user SearchInfo user_id is " << user_id << endl;
 
 	Json::Value  rtvalue;
 
@@ -301,13 +304,17 @@ void LogicSystem::SearchInfo(std::shared_ptr<CSession> session, const short& msg
 		session->Send(return_str, ID_SEARCH_USER_RSP);
 		});
 
-	bool b_digit = isPureDigit(uid_str);
-	if (b_digit) {
-		GetUserByUid(uid_str, rtvalue);
+	if (!root.isMember("user_id") || user_id.empty()) {
+		rtvalue["error"] = ErrorCodes::Error_Json;
+		return;
 	}
-	else {
-		GetUserByName(uid_str, rtvalue);
+
+	int uid = 0;
+	if (!MysqlMgr::GetInstance()->GetUidByUserId(user_id, uid) || uid <= 0) {
+		rtvalue["error"] = ErrorCodes::UidInvalid;
+		return;
 	}
+	GetUserByUid(std::to_string(uid), rtvalue);
 	return;
 }
 
@@ -372,6 +379,7 @@ void LogicSystem::AddFriendApply(std::shared_ptr<CSession> session, const short&
 				notify["icon"] = apply_info->icon;
 				notify["sex"] = apply_info->sex;
 				notify["nick"] = apply_info->nick;
+				notify["user_id"] = apply_info->user_id;
 			}
 			std::string return_str = notify.toStyledString();
 			session->Send(return_str, ID_NOTIFY_ADD_FRIEND_REQ);
@@ -426,6 +434,7 @@ void LogicSystem::AuthFriendApply(std::shared_ptr<CSession> session, const short
 		rtvalue["icon"] = user_info->icon;
 		rtvalue["sex"] = user_info->sex;
 		rtvalue["uid"] = touid;
+		rtvalue["user_id"] = user_info->user_id;
 	}
 	else {
 		rtvalue["error"] = ErrorCodes::UidInvalid;
@@ -474,6 +483,7 @@ void LogicSystem::AuthFriendApply(std::shared_ptr<CSession> session, const short
 				notify["nick"] = user_info->nick;
 				notify["icon"] = user_info->icon;
 				notify["sex"] = user_info->sex;
+				notify["user_id"] = user_info->user_id;
 			}
 			else {
 				notify["error"] = ErrorCodes::UidInvalid;
@@ -628,6 +638,7 @@ void LogicSystem::GetUserByUid(std::string uid_str, Json::Value& rtvalue)
 		Json::Value root;
 		reader.parse(info_str, root);
 		auto uid = root["uid"].asInt();
+		auto user_id = root["user_id"].asString();
 		auto name = root["name"].asString();
 		auto pwd = root["pwd"].asString();
 		auto email = root["email"].asString();
@@ -639,6 +650,7 @@ void LogicSystem::GetUserByUid(std::string uid_str, Json::Value& rtvalue)
 			<< name << " pwd is " << pwd << " email is " << email <<" icon is " << icon << endl;
 
 		rtvalue["uid"] = uid;
+		rtvalue["user_id"] = user_id;
 		rtvalue["pwd"] = pwd;
 		rtvalue["name"] = name;
 		rtvalue["email"] = email;
@@ -662,6 +674,7 @@ void LogicSystem::GetUserByUid(std::string uid_str, Json::Value& rtvalue)
 	//�����ݿ�����д��redis����
 	Json::Value redis_root;
 	redis_root["uid"] = user_info->uid;
+	redis_root["user_id"] = user_info->user_id;
 	redis_root["pwd"] = user_info->pwd;
 	redis_root["name"] = user_info->name;
 	redis_root["email"] = user_info->email;
@@ -674,6 +687,7 @@ void LogicSystem::GetUserByUid(std::string uid_str, Json::Value& rtvalue)
 
 	//��������
 	rtvalue["uid"] = user_info->uid;
+	rtvalue["user_id"] = user_info->user_id;
 	rtvalue["pwd"] = user_info->pwd;
 	rtvalue["name"] = user_info->name;
 	rtvalue["email"] = user_info->email;
@@ -697,6 +711,7 @@ void LogicSystem::GetUserByName(std::string name, Json::Value& rtvalue)
 		Json::Value root;
 		reader.parse(info_str, root);
 		auto uid = root["uid"].asInt();
+		auto user_id = root["user_id"].asString();
 		auto name = root["name"].asString();
 		auto pwd = root["pwd"].asString();
 		auto email = root["email"].asString();
@@ -707,6 +722,7 @@ void LogicSystem::GetUserByName(std::string name, Json::Value& rtvalue)
 			<< name << " pwd is " << pwd << " email is " << email << endl;
 
 		rtvalue["uid"] = uid;
+		rtvalue["user_id"] = user_id;
 		rtvalue["pwd"] = pwd;
 		rtvalue["name"] = name;
 		rtvalue["email"] = email;
@@ -728,6 +744,7 @@ void LogicSystem::GetUserByName(std::string name, Json::Value& rtvalue)
 	//�����ݿ�����д��redis����
 	Json::Value redis_root;
 	redis_root["uid"] = user_info->uid;
+	redis_root["user_id"] = user_info->user_id;
 	redis_root["pwd"] = user_info->pwd;
 	redis_root["name"] = user_info->name;
 	redis_root["email"] = user_info->email;
@@ -739,6 +756,7 @@ void LogicSystem::GetUserByName(std::string name, Json::Value& rtvalue)
 	
 	//��������
 	rtvalue["uid"] = user_info->uid;
+	rtvalue["user_id"] = user_info->user_id;
 	rtvalue["pwd"] = user_info->pwd;
 	rtvalue["name"] = user_info->name;
 	rtvalue["email"] = user_info->email;
@@ -757,6 +775,7 @@ bool LogicSystem::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<Use
 		Json::Value root;
 		reader.parse(info_str, root);
 		userinfo->uid = root["uid"].asInt();
+		userinfo->user_id = root["user_id"].asString();
 		userinfo->name = root["name"].asString();
 		userinfo->pwd = root["pwd"].asString();
 		userinfo->email = root["email"].asString();
@@ -781,6 +800,7 @@ bool LogicSystem::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<Use
 		//�����ݿ�����д��redis����
 		Json::Value redis_root;
 		redis_root["uid"] = uid;
+		redis_root["user_id"] = userinfo->user_id;
 		redis_root["pwd"] = userinfo->pwd;
 		redis_root["name"] = userinfo->name;
 		redis_root["email"] = userinfo->email;
@@ -814,6 +834,7 @@ void LogicSystem::BuildGroupListJson(int uid, Json::Value& out)
 		}
 		Json::Value one;
 		one["groupid"] = static_cast<Json::Int64>(group->group_id);
+		one["group_code"] = group->group_code;
 		one["name"] = group->name;
 		one["owner_uid"] = group->owner_uid;
 		one["announcement"] = group->announcement;
@@ -833,8 +854,22 @@ void LogicSystem::BuildGroupListJson(int uid, Json::Value& out)
 		Json::Value one;
 		one["apply_id"] = static_cast<Json::Int64>(apply->apply_id);
 		one["groupid"] = static_cast<Json::Int64>(apply->group_id);
+		std::shared_ptr<GroupInfo> group_info;
+		if (MysqlMgr::GetInstance()->GetGroupById(apply->group_id, group_info) && group_info) {
+			one["group_code"] = group_info->group_code;
+		}
 		one["applicant_uid"] = apply->applicant_uid;
 		one["inviter_uid"] = apply->inviter_uid;
+		auto applicant = MysqlMgr::GetInstance()->GetUser(apply->applicant_uid);
+		if (applicant) {
+			one["applicant_user_id"] = applicant->user_id;
+		}
+		if (apply->inviter_uid > 0) {
+			auto inviter = MysqlMgr::GetInstance()->GetUser(apply->inviter_uid);
+			if (inviter) {
+				one["inviter_user_id"] = inviter->user_id;
+			}
+		}
 		one["type"] = apply->type;
 		one["status"] = apply->status;
 		one["reason"] = apply->reason;
@@ -933,13 +968,24 @@ void LogicSystem::CreateGroupHandler(std::shared_ptr<CSession> session, const sh
 	const std::string announcement = root.get("announcement", "").asString();
 	const int member_limit = root.get("member_limit", 200).asInt();
 	std::vector<int> members;
-	if (root.isMember("members") && root["members"].isArray()) {
-		for (const auto& one : root["members"]) {
-			int uid = one.asInt();
-			if (uid > 0 && uid != owner_uid) {
-				members.push_back(uid);
+	std::unordered_set<int> member_set;
+	bool invalid_member_user_id = false;
+	if (root.isMember("member_user_ids") && root["member_user_ids"].isArray()) {
+		for (const auto& one : root["member_user_ids"]) {
+			const std::string member_user_id = one.asString();
+			int uid = 0;
+			if (!MysqlMgr::GetInstance()->GetUidByUserId(member_user_id, uid) || uid <= 0) {
+				invalid_member_user_id = true;
+				break;
 			}
+			if (uid == owner_uid) {
+				continue;
+			}
+			member_set.insert(uid);
 		}
+	}
+	for (int uid : member_set) {
+		members.push_back(uid);
 	}
 
 	Json::Value rtvalue;
@@ -948,7 +994,7 @@ void LogicSystem::CreateGroupHandler(std::shared_ptr<CSession> session, const sh
 		session->Send(rtvalue.toStyledString(), ID_CREATE_GROUP_RSP);
 		});
 
-	if (owner_uid <= 0 || group_name.empty()) {
+	if (owner_uid <= 0 || group_name.empty() || group_name.size() > 64 || invalid_member_user_id) {
 		rtvalue["error"] = ErrorCodes::Error_Json;
 		return;
 	}
@@ -961,12 +1007,15 @@ void LogicSystem::CreateGroupHandler(std::shared_ptr<CSession> session, const sh
 	}
 
 	int64_t group_id = 0;
-	if (!MysqlMgr::GetInstance()->CreateGroup(owner_uid, group_name, announcement, member_limit, members, group_id) || group_id <= 0) {
+	std::string group_code;
+	if (!MysqlMgr::GetInstance()->CreateGroup(owner_uid, group_name, announcement, member_limit, members, group_id, group_code)
+		|| group_id <= 0) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}
 
 	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["group_code"] = group_code;
 	rtvalue["name"] = group_name;
 	rtvalue["announcement"] = announcement;
 	BuildGroupListJson(owner_uid, rtvalue);
@@ -976,6 +1025,7 @@ void LogicSystem::CreateGroupHandler(std::shared_ptr<CSession> session, const sh
 		notify["error"] = ErrorCodes::Success;
 		notify["event"] = "group_invite";
 		notify["groupid"] = static_cast<Json::Int64>(group_id);
+		notify["group_code"] = group_code;
 		notify["name"] = group_name;
 		notify["operator_uid"] = owner_uid;
 		PushGroupPayload(members, ID_NOTIFY_GROUP_INVITE_REQ, notify);
@@ -1007,19 +1057,24 @@ void LogicSystem::InviteGroupMemberHandler(std::shared_ptr<CSession> session, co
 	Json::Value root;
 	reader.parse(msg_data, root);
 	const int from_uid = root["fromuid"].asInt();
-	const int to_uid = root["touid"].asInt();
+	const std::string target_user_id = root.get("target_user_id", "").asString();
 	const int64_t group_id = root["groupid"].asInt64();
 	const std::string reason = root.get("reason", "").asString();
+	int to_uid = 0;
+	if (!MysqlMgr::GetInstance()->GetUidByUserId(target_user_id, to_uid)) {
+		to_uid = 0;
+	}
 
 	Json::Value rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
 	rtvalue["touid"] = to_uid;
+	rtvalue["target_user_id"] = target_user_id;
 	Defer defer([&rtvalue, session]() {
 		session->Send(rtvalue.toStyledString(), ID_INVITE_GROUP_MEMBER_RSP);
 		});
 
-	if (from_uid <= 0 || to_uid <= 0 || group_id <= 0) {
+	if (from_uid <= 0 || to_uid <= 0 || group_id <= 0 || target_user_id.empty()) {
 		rtvalue["error"] = ErrorCodes::Error_Json;
 		return;
 	}
@@ -1036,8 +1091,10 @@ void LogicSystem::InviteGroupMemberHandler(std::shared_ptr<CSession> session, co
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_invite";
 	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["group_code"] = group_info ? group_info->group_code : "";
 	notify["name"] = group_info ? group_info->name : "";
 	notify["operator_uid"] = from_uid;
+	notify["target_user_id"] = target_user_id;
 	notify["reason"] = reason;
 	PushGroupPayload({ to_uid }, ID_NOTIFY_GROUP_INVITE_REQ, notify);
 }
@@ -1048,17 +1105,22 @@ void LogicSystem::ApplyJoinGroupHandler(std::shared_ptr<CSession> session, const
 	Json::Value root;
 	reader.parse(msg_data, root);
 	const int from_uid = root["fromuid"].asInt();
-	const int64_t group_id = root["groupid"].asInt64();
+	const std::string group_code = root.get("group_code", "").asString();
+	int64_t group_id = 0;
+	if (!MysqlMgr::GetInstance()->GetGroupIdByCode(group_code, group_id)) {
+		group_id = 0;
+	}
 	const std::string reason = root.get("reason", "").asString();
 
 	Json::Value rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["group_code"] = group_code;
 	Defer defer([&rtvalue, session]() {
 		session->Send(rtvalue.toStyledString(), ID_APPLY_JOIN_GROUP_RSP);
 		});
 
-	if (from_uid <= 0 || group_id <= 0) {
+	if (from_uid <= 0 || group_id <= 0 || group_code.empty()) {
 		rtvalue["error"] = ErrorCodes::Error_Json;
 		return;
 	}
@@ -1080,7 +1142,12 @@ void LogicSystem::ApplyJoinGroupHandler(std::shared_ptr<CSession> session, const
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_apply";
 	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["group_code"] = group_code;
 	notify["applicant_uid"] = from_uid;
+	auto applicant = MysqlMgr::GetInstance()->GetUser(from_uid);
+	if (applicant) {
+		notify["applicant_user_id"] = applicant->user_id;
+	}
 	notify["reason"] = reason;
 	PushGroupPayload(admins, ID_NOTIFY_GROUP_APPLY_REQ, notify);
 }
@@ -1115,6 +1182,14 @@ void LogicSystem::ReviewGroupApplyHandler(std::shared_ptr<CSession> session, con
 
 	rtvalue["groupid"] = static_cast<Json::Int64>(apply_info->group_id);
 	rtvalue["applicant_uid"] = apply_info->applicant_uid;
+	std::shared_ptr<GroupInfo> apply_group;
+	if (MysqlMgr::GetInstance()->GetGroupById(apply_info->group_id, apply_group) && apply_group) {
+		rtvalue["group_code"] = apply_group->group_code;
+	}
+	auto applicant = MysqlMgr::GetInstance()->GetUser(apply_info->applicant_uid);
+	if (applicant) {
+		rtvalue["applicant_user_id"] = applicant->user_id;
+	}
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
 	MysqlMgr::GetInstance()->GetGroupMemberList(apply_info->group_id, members);
@@ -1130,7 +1205,11 @@ void LogicSystem::ReviewGroupApplyHandler(std::shared_ptr<CSession> session, con
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_member_changed";
 	notify["groupid"] = static_cast<Json::Int64>(apply_info->group_id);
+	notify["group_code"] = apply_group ? apply_group->group_code : "";
 	notify["applicant_uid"] = apply_info->applicant_uid;
+	if (applicant) {
+		notify["applicant_user_id"] = applicant->user_id;
+	}
 	notify["agree"] = agree;
 	notify["operator_uid"] = reviewer_uid;
 	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
@@ -1206,10 +1285,16 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 	rtvalue["created_at"] = static_cast<Json::Int64>(now);
 
 	auto sender_info = MysqlMgr::GetInstance()->GetUser(from_uid);
+	std::shared_ptr<GroupInfo> group_info;
+	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
 	if (sender_info) {
 		rtvalue["from_name"] = sender_info->name;
 		rtvalue["from_nick"] = sender_info->nick;
 		rtvalue["from_icon"] = sender_info->icon;
+		rtvalue["from_user_id"] = sender_info->user_id;
+	}
+	if (group_info) {
+		rtvalue["group_code"] = group_info->group_code;
 	}
 
 	std::vector<int> recipients;
@@ -1247,6 +1332,10 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 	if (!MysqlMgr::GetInstance()->GetGroupHistory(group_id, before_ts, limit, msgs)) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
+	}
+	std::shared_ptr<GroupInfo> group_info;
+	if (MysqlMgr::GetInstance()->GetGroupById(group_id, group_info) && group_info) {
+		rtvalue["group_code"] = group_info->group_code;
 	}
 
 	for (const auto& one : msgs) {
@@ -1338,6 +1427,11 @@ void LogicSystem::UpdateGroupAnnouncementHandler(std::shared_ptr<CSession> sessi
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
 	rtvalue["announcement"] = announcement;
+	std::shared_ptr<GroupInfo> group_info;
+	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
+	if (group_info) {
+		rtvalue["group_code"] = group_info->group_code;
+	}
 	Defer defer([&rtvalue, session]() {
 		session->Send(rtvalue.toStyledString(), ID_UPDATE_GROUP_ANNOUNCEMENT_RSP);
 		});
@@ -1360,6 +1454,7 @@ void LogicSystem::UpdateGroupAnnouncementHandler(std::shared_ptr<CSession> sessi
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_announcement_updated";
 	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["group_code"] = group_info ? group_info->group_code : "";
 	notify["announcement"] = announcement;
 	notify["operator_uid"] = uid;
 	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
@@ -1371,20 +1466,31 @@ void LogicSystem::SetGroupAdminHandler(std::shared_ptr<CSession> session, const 
 	Json::Value root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
-	const int target_uid = root["touid"].asInt();
+	const std::string target_user_id = root.get("target_user_id", "").asString();
 	const int64_t group_id = root["groupid"].asInt64();
 	const bool is_admin = root.get("is_admin", true).asBool();
+	int target_uid = 0;
+	if (!MysqlMgr::GetInstance()->GetUidByUserId(target_user_id, target_uid)) {
+		target_uid = 0;
+	}
 
 	Json::Value rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
 	rtvalue["touid"] = target_uid;
+	rtvalue["target_user_id"] = target_user_id;
 	rtvalue["is_admin"] = is_admin;
+	std::shared_ptr<GroupInfo> group_info;
+	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
+	if (group_info) {
+		rtvalue["group_code"] = group_info->group_code;
+	}
 	Defer defer([&rtvalue, session]() {
 		session->Send(rtvalue.toStyledString(), ID_SET_GROUP_ADMIN_RSP);
 		});
 
-	if (!MysqlMgr::GetInstance()->SetGroupAdmin(group_id, uid, target_uid, is_admin)) {
+	if (target_uid <= 0 || target_user_id.empty() ||
+		!MysqlMgr::GetInstance()->SetGroupAdmin(group_id, uid, target_uid, is_admin)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
@@ -1401,8 +1507,10 @@ void LogicSystem::SetGroupAdminHandler(std::shared_ptr<CSession> session, const 
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_admin_changed";
 	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["group_code"] = group_info ? group_info->group_code : "";
 	notify["operator_uid"] = uid;
 	notify["target_uid"] = target_uid;
+	notify["target_user_id"] = target_user_id;
 	notify["is_admin"] = is_admin;
 	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
 }
@@ -1413,9 +1521,13 @@ void LogicSystem::MuteGroupMemberHandler(std::shared_ptr<CSession> session, cons
 	Json::Value root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
-	const int target_uid = root["touid"].asInt();
+	const std::string target_user_id = root.get("target_user_id", "").asString();
 	const int64_t group_id = root["groupid"].asInt64();
 	const int mute_seconds = root.get("mute_seconds", 0).asInt();
+	int target_uid = 0;
+	if (!MysqlMgr::GetInstance()->GetUidByUserId(target_user_id, target_uid)) {
+		target_uid = 0;
+	}
 	const auto now = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
 		std::chrono::system_clock::now().time_since_epoch()).count());
 	const int64_t mute_until = (mute_seconds > 0) ? now + mute_seconds : 0;
@@ -1424,12 +1536,19 @@ void LogicSystem::MuteGroupMemberHandler(std::shared_ptr<CSession> session, cons
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
 	rtvalue["touid"] = target_uid;
+	rtvalue["target_user_id"] = target_user_id;
 	rtvalue["mute_until"] = static_cast<Json::Int64>(mute_until);
+	std::shared_ptr<GroupInfo> group_info;
+	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
+	if (group_info) {
+		rtvalue["group_code"] = group_info->group_code;
+	}
 	Defer defer([&rtvalue, session]() {
 		session->Send(rtvalue.toStyledString(), ID_MUTE_GROUP_MEMBER_RSP);
 		});
 
-	if (!MysqlMgr::GetInstance()->MuteGroupMember(group_id, uid, target_uid, mute_until)) {
+	if (target_uid <= 0 || target_user_id.empty() ||
+		!MysqlMgr::GetInstance()->MuteGroupMember(group_id, uid, target_uid, mute_until)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
@@ -1446,8 +1565,10 @@ void LogicSystem::MuteGroupMemberHandler(std::shared_ptr<CSession> session, cons
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_mute_changed";
 	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["group_code"] = group_info ? group_info->group_code : "";
 	notify["operator_uid"] = uid;
 	notify["target_uid"] = target_uid;
+	notify["target_user_id"] = target_user_id;
 	notify["mute_until"] = static_cast<Json::Int64>(mute_until);
 	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
 }
@@ -1458,18 +1579,29 @@ void LogicSystem::KickGroupMemberHandler(std::shared_ptr<CSession> session, cons
 	Json::Value root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
-	const int target_uid = root["touid"].asInt();
+	const std::string target_user_id = root.get("target_user_id", "").asString();
 	const int64_t group_id = root["groupid"].asInt64();
+	int target_uid = 0;
+	if (!MysqlMgr::GetInstance()->GetUidByUserId(target_user_id, target_uid)) {
+		target_uid = 0;
+	}
 
 	Json::Value rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
 	rtvalue["touid"] = target_uid;
+	rtvalue["target_user_id"] = target_user_id;
+	std::shared_ptr<GroupInfo> group_info;
+	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
+	if (group_info) {
+		rtvalue["group_code"] = group_info->group_code;
+	}
 	Defer defer([&rtvalue, session]() {
 		session->Send(rtvalue.toStyledString(), ID_KICK_GROUP_MEMBER_RSP);
 		});
 
-	if (!MysqlMgr::GetInstance()->KickGroupMember(group_id, uid, target_uid)) {
+	if (target_uid <= 0 || target_user_id.empty() ||
+		!MysqlMgr::GetInstance()->KickGroupMember(group_id, uid, target_uid)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
@@ -1488,8 +1620,10 @@ void LogicSystem::KickGroupMemberHandler(std::shared_ptr<CSession> session, cons
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_member_kicked";
 	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["group_code"] = group_info ? group_info->group_code : "";
 	notify["operator_uid"] = uid;
 	notify["target_uid"] = target_uid;
+	notify["target_user_id"] = target_user_id;
 	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
 }
 
@@ -1504,6 +1638,11 @@ void LogicSystem::QuitGroupHandler(std::shared_ptr<CSession> session, const shor
 	Json::Value rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	std::shared_ptr<GroupInfo> group_info;
+	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
+	if (group_info) {
+		rtvalue["group_code"] = group_info->group_code;
+	}
 	Defer defer([&rtvalue, session]() {
 		session->Send(rtvalue.toStyledString(), ID_QUIT_GROUP_RSP);
 		});
@@ -1526,6 +1665,7 @@ void LogicSystem::QuitGroupHandler(std::shared_ptr<CSession> session, const shor
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_member_quit";
 	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["group_code"] = group_info ? group_info->group_code : "";
 	notify["target_uid"] = uid;
 	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
 }

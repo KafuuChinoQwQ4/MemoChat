@@ -6,7 +6,7 @@ import "../../components"
 GlassSurface {
     id: root
 
-    signal applyJoinRequested(var groupId, string reason)
+    signal applyJoinRequested(string groupCode, string reason)
     signal reviewRequested(var applyId, bool agree)
 
     cornerRadius: 10
@@ -31,7 +31,7 @@ GlassSurface {
             Layout.fillWidth: true
             Layout.preferredHeight: 32
             backdrop: root.backdrop
-            placeholderText: "申请入群 GroupId"
+            placeholderText: "申请入群 群ID（g#########）"
         }
 
         GlassTextField {
@@ -51,7 +51,7 @@ GlassSurface {
             hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
             pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
             disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-            onClicked: root.applyJoinRequested(parseInt(groupIdInput.text), reasonInput.text)
+            onClicked: root.applyJoinRequested(groupIdInput.text.trim(), reasonInput.text)
         }
 
         Rectangle {

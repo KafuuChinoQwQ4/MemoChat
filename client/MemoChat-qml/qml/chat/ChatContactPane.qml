@@ -14,6 +14,7 @@ Rectangle {
     property string contactIcon: "qrc:/res/head_1.jpg"
     property string contactBack: ""
     property int contactSex: 0
+    property string contactUserId: ""
     property bool hasCurrentContact: false
     property var applyModel
     property string authStatusText: ""
@@ -86,6 +87,7 @@ Rectangle {
                 contactIcon: root.contactIcon
                 contactBack: root.contactBack
                 contactSex: root.contactSex
+                contactUserId: root.contactUserId
                 onMessageChatClicked: root.messageChatRequested()
                 onVoiceChatClicked: root.voiceChatRequested()
                 onVideoChatClicked: root.videoChatRequested()

@@ -157,6 +157,7 @@ Rectangle {
                     contactIcon: controller.currentContactIcon
                     contactBack: controller.currentContactBack
                     contactSex: controller.currentContactSex
+                    contactUserId: controller.currentContactUserId
                     hasCurrentContact: controller.hasCurrentContact
                     applyModel: controller.applyRequestModel
                     authStatusText: controller.authStatusText
@@ -174,6 +175,7 @@ Rectangle {
                     userNick: controller.currentUserNick
                     userName: controller.currentUserName
                     userDesc: controller.currentUserDesc
+                    userId: controller.currentUserId
                     statusText: controller.settingsStatusText
                     statusError: controller.settingsStatusError
                     onChooseAvatarRequested: controller.chooseAvatar()
@@ -188,7 +190,7 @@ Rectangle {
         id: createGroupDialog
         anchors.centerIn: Overlay.overlay
         backdrop: backdropLayer
-        onSubmitted: controller.createGroup(name, memberUids)
+        onSubmitted: controller.createGroup(name, memberUserIds)
     }
 
     Popup {
@@ -227,6 +229,7 @@ Rectangle {
                     height: 210
                     backdrop: backdropLayer
                     groupName: controller.currentGroupName
+                    groupCode: controller.currentGroupCode
                     statusText: controller.groupStatusText
                     statusError: controller.groupStatusError
                     onRefreshRequested: controller.refreshGroupList()
@@ -242,17 +245,17 @@ Rectangle {
                     width: parent.width
                     height: 270
                     backdrop: backdropLayer
-                    onInviteRequested: controller.inviteGroupMember(uid, reason)
-                    onSetAdminRequested: controller.setGroupAdmin(uid, isAdmin)
-                    onMuteRequested: controller.muteGroupMember(uid, muteSeconds)
-                    onKickRequested: controller.kickGroupMember(uid)
+                    onInviteRequested: controller.inviteGroupMember(userId, reason)
+                    onSetAdminRequested: controller.setGroupAdmin(userId, isAdmin)
+                    onMuteRequested: controller.muteGroupMember(userId, muteSeconds)
+                    onKickRequested: controller.kickGroupMember(userId)
                 }
 
                 GroupApplyReviewPane {
                     width: parent.width
                     height: 250
                     backdrop: backdropLayer
-                    onApplyJoinRequested: controller.applyJoinGroup(groupId, reason)
+                    onApplyJoinRequested: controller.applyJoinGroup(groupCode, reason)
                     onReviewRequested: controller.reviewGroupApply(applyId, agree)
                 }
             }

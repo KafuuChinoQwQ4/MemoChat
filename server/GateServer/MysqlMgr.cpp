@@ -28,8 +28,11 @@ bool MysqlMgr::CheckPwd(const std::string& email, const std::string& pwd, UserIn
 	return _dao.CheckPwd(email, pwd, userInfo);
 }
 
+std::string MysqlMgr::GetUserPublicId(int uid) {
+	return _dao.GetUserPublicId(uid);
+}
+
 bool MysqlMgr::TestProcedure(const std::string& email, int& uid, string& name) {
 	return _dao.TestProcedure(email,uid, name);
 }
-
 

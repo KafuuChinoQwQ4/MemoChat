@@ -12,6 +12,7 @@ Rectangle {
     property string userNick: ""
     property string userName: ""
     property string userDesc: ""
+    property string userId: ""
     property string statusText: ""
     property bool statusError: false
     signal chooseAvatarRequested()
@@ -38,6 +39,7 @@ Rectangle {
             userName: root.userName
             userNick: root.userNick
             userDesc: root.userDesc
+            userId: root.userId
             statusText: root.statusText
             statusError: root.statusError
             onSaveRequested: root.saveProfileRequested(nick, desc)

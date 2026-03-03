@@ -1,5 +1,9 @@
 #include "MysqlDao.h"
 #include "ConfigMgr.h"
+#include <cctype>
+#include <random>
+#include <stdexcept>
+#include <unordered_set>
 
 namespace {
 std::string DecodeLegacyXorPwd(const std::string& input) {
@@ -9,6 +13,21 @@ std::string DecodeLegacyXorPwd(const std::string& input) {
 		decoded[i] = static_cast<char>(static_cast<unsigned char>(decoded[i]) ^ xor_code);
 	}
 	return decoded;
+}
+
+bool IsValidUserPublicId(const std::string& user_id) {
+	if (user_id.size() != 10 || user_id[0] != 'u') {
+		return false;
+	}
+	if (user_id[1] < '1' || user_id[1] > '9') {
+		return false;
+	}
+	for (size_t i = 2; i < user_id.size(); ++i) {
+		if (!std::isdigit(static_cast<unsigned char>(user_id[i]))) {
+			return false;
+		}
+	}
+	return true;
 }
 }
 
@@ -25,6 +44,9 @@ MysqlDao::MysqlDao()
 		mysql_url = "tcp://" + mysql_url;
 	}
 	pool_.reset(new MySqlPool(mysql_url + ":" + port, user, pwd, schema, 5));
+	if (!EnsureUserPublicIdSchemaAndBackfill()) {
+		throw std::runtime_error("failed to ensure/backfill user.user_id");
+	}
 }
 
 MysqlDao::~MysqlDao(){
@@ -140,15 +162,35 @@ int MysqlDao::RegUserTransaction(const std::string& name, const std::string& ema
 			return -1;
 		}
 
+		std::string user_public_id;
+		for (int i = 0; i < 20; ++i) {
+			user_public_id = GenerateRandomUserPublicId();
+			std::unique_ptr<sql::PreparedStatement> check_user_id(
+				con->_con->prepareStatement("SELECT 1 FROM user WHERE user_id = ? LIMIT 1"));
+			check_user_id->setString(1, user_public_id);
+			std::unique_ptr<sql::ResultSet> check_user_id_res(check_user_id->executeQuery());
+			if (!check_user_id_res->next()) {
+				break;
+			}
+			user_public_id.clear();
+		}
+
+		if (user_public_id.empty()) {
+			con->_con->rollback();
+			std::cout << "generate user_public_id failed" << std::endl;
+			return -1;
+		}
+
 		// ����user��Ϣ
-		std::unique_ptr<sql::PreparedStatement> pstmt_insert(con->_con->prepareStatement("INSERT INTO user (uid, name, email, pwd, nick, icon) "
-			"VALUES (?, ?, ?, ?,?,?)"));
+		std::unique_ptr<sql::PreparedStatement> pstmt_insert(con->_con->prepareStatement("INSERT INTO user (uid, name, email, pwd, nick, icon, user_id) "
+			"VALUES (?, ?, ?, ?, ?, ?, ?)"));
 		pstmt_insert->setInt(1,newId);
 		pstmt_insert->setString(2, name);
 		pstmt_insert->setString(3, email);
 		pstmt_insert->setString(4, pwd);
 		pstmt_insert->setString(5, name);
 		pstmt_insert->setString(6, icon);
+		pstmt_insert->setString(7, user_public_id);
 		//ִ�в���
 		pstmt_insert->executeUpdate();
 		// �ύ����
@@ -292,12 +334,22 @@ bool MysqlDao::CheckPwd(const std::string& email, const std::string& pwd, UserIn
 		// ִ�в�ѯ
 		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 		std::string origin_pwd = "";
+		bool matched = false;
 		// ���������
 		while (res->next()) {
 			origin_pwd = res->getString("pwd");
+			userInfo.name = res->getString("name");
+			userInfo.email = res->getString("email");
+			userInfo.uid = res->getInt("uid");
+			userInfo.user_id = res->getString("user_id");
 			// �����ѯ��������
 			std::cout << "Password: " << origin_pwd << std::endl;
+			matched = true;
 			break;
+		}
+
+		if (!matched) {
+			return false;
 		}
 
 		if (pwd != origin_pwd) {
@@ -306,14 +358,154 @@ bool MysqlDao::CheckPwd(const std::string& email, const std::string& pwd, UserIn
 				return false;
 			}
 		}
-		userInfo.name = res->getString("name");
-		userInfo.email = res->getString("email");
-		userInfo.uid = res->getInt("uid");
 		userInfo.pwd = origin_pwd;
 		return true;
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+std::string MysqlDao::GetUserPublicId(int uid) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return "";
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement("SELECT user_id FROM user WHERE uid = ? LIMIT 1"));
+		pstmt->setInt(1, uid);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		if (!res->next()) {
+			return "";
+		}
+		return res->getString("user_id");
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return "";
+	}
+}
+
+std::string MysqlDao::GenerateRandomUserPublicId() {
+	static thread_local std::mt19937_64 rng(std::random_device{}());
+	std::uniform_int_distribution<int> dist(100000000, 999999999);
+	return "u" + std::to_string(dist(rng));
+}
+
+bool MysqlDao::EnsureUserPublicIdSchemaAndBackfill() {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
+		try {
+			stmt->execute("ALTER TABLE user ADD COLUMN user_id VARCHAR(10) NULL");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("CREATE UNIQUE INDEX uk_user_user_id ON user(user_id)");
+		}
+		catch (sql::SQLException&) {
+		}
+
+		std::unique_ptr<sql::PreparedStatement> query(
+			con->_con->prepareStatement("SELECT uid, user_id FROM user ORDER BY uid ASC"));
+		std::unique_ptr<sql::ResultSet> rows(query->executeQuery());
+
+		struct UserRow {
+			int uid = 0;
+			std::string user_id;
+		};
+		std::vector<UserRow> all_rows;
+		std::unordered_set<std::string> used_user_ids;
+		int duplicated_marked = 0;
+
+		while (rows->next()) {
+			UserRow row;
+			row.uid = rows->getInt("uid");
+			row.user_id = rows->isNull("user_id") ? "" : rows->getString("user_id");
+			if (IsValidUserPublicId(row.user_id)) {
+				if (used_user_ids.find(row.user_id) == used_user_ids.end()) {
+					used_user_ids.insert(row.user_id);
+				}
+				else {
+					row.user_id.clear();
+					++duplicated_marked;
+				}
+			}
+			else {
+				row.user_id.clear();
+			}
+			all_rows.push_back(row);
+		}
+
+		int backfilled = 0;
+		int retries = 0;
+		con->_con->setAutoCommit(false);
+		std::unique_ptr<sql::PreparedStatement> update_stmt(
+			con->_con->prepareStatement("UPDATE user SET user_id = ? WHERE uid = ?"));
+
+		for (auto& row : all_rows) {
+			if (!row.user_id.empty()) {
+				continue;
+			}
+
+			std::string new_user_id;
+			for (int i = 0; i < 20; ++i) {
+				const std::string candidate = GenerateRandomUserPublicId();
+				if (used_user_ids.find(candidate) == used_user_ids.end()) {
+					new_user_id = candidate;
+					break;
+				}
+				++retries;
+			}
+
+			if (new_user_id.empty()) {
+				con->_con->rollback();
+				return false;
+			}
+
+			update_stmt->setString(1, new_user_id);
+			update_stmt->setInt(2, row.uid);
+			update_stmt->executeUpdate();
+			used_user_ids.insert(new_user_id);
+			++backfilled;
+		}
+
+		con->_con->commit();
+		std::cout << "[GateServer] user_id backfill done. total=" << all_rows.size()
+			<< " backfilled=" << backfilled
+			<< " duplicate_fixed=" << duplicated_marked
+			<< " retries=" << retries << std::endl;
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		if (con && con->_con) {
+			try {
+				con->_con->rollback();
+			}
+			catch (...) {
+			}
+		}
+		std::cerr << "EnsureUserPublicIdSchemaAndBackfill SQLException: " << e.what();
 		std::cerr << " (MySQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;

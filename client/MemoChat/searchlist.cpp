@@ -107,7 +107,7 @@ void SearchList::slot_item_clicked(QListWidgetItem *item)
        auto uid_str = search_edit->text();
        //此处发送请求给server
 	   QJsonObject jsonObj;
-	   jsonObj["uid"] = uid_str;
+	   jsonObj["user_id"] = uid_str;
 
 	   QJsonDocument doc(jsonObj);
 	   QByteArray jsonData = doc.toJson(QJsonDocument::Compact);

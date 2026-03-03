@@ -216,6 +216,7 @@ struct UserInfo {
 	std::string name;
 	std::string pwd;
 	int uid;
+	std::string user_id;
 	std::string email;
 };
 
@@ -230,9 +231,11 @@ public:
 	bool UpdatePwd(const std::string& name, const std::string& newpwd);
 	bool UpdateUserProfile(int uid, const std::string& nick, const std::string& desc, const std::string& icon);
 	bool CheckPwd(const std::string& name, const std::string& pwd, UserInfo& userInfo);
+	std::string GetUserPublicId(int uid);
 	bool TestProcedure(const std::string& email, int& uid, string& name);
 private:
+	bool EnsureUserPublicIdSchemaAndBackfill();
+	std::string GenerateRandomUserPublicId();
 	std::unique_ptr<MySqlPool> pool_;
 };
-
 

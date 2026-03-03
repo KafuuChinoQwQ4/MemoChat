@@ -12,6 +12,7 @@ Rectangle {
     property string contactIcon: "qrc:/res/head_1.jpg"
     property string contactBack: ""
     property int contactSex: 0
+    property string contactUserId: ""
 
     signal messageChatClicked()
     signal voiceChatClicked()
@@ -73,6 +74,20 @@ Rectangle {
                     }
                     Label {
                         text: root.contactBack.length > 0 ? root.contactBack : root.contactNick
+                        color: "#243246"
+                        font.pixelSize: 14
+                    }
+                }
+
+                RowLayout {
+                    spacing: 8
+                    Label {
+                        text: "ID:"
+                        color: "#243246"
+                        font.pixelSize: 14
+                    }
+                    Label {
+                        text: root.contactUserId
                         color: "#243246"
                         font.pixelSize: 14
                     }

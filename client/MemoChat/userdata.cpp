@@ -2,13 +2,13 @@
 #include <algorithm>
 #include <unordered_set>
 SearchInfo::SearchInfo(int uid, QString name,
-    QString nick, QString desc, int sex, QString icon):_uid(uid)
-  ,_name(name), _nick(nick),_desc(desc),_sex(sex),_icon(icon){
+    QString nick, QString desc, int sex, QString icon, QString userId):_uid(uid)
+  ,_user_id(userId),_name(name), _nick(nick),_desc(desc),_sex(sex),_icon(icon){
 }
 
 AddFriendApply::AddFriendApply(int from_uid, QString name, QString desc,
-                               QString icon, QString nick, int sex)
-    :_from_uid(from_uid),_name(name),
+                               QString icon, QString nick, int sex, QString userId)
+    :_from_uid(from_uid),_user_id(userId),_name(name),
       _desc(desc),_icon(icon),_nick(nick),_sex(sex)
 {
 

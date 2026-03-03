@@ -15,6 +15,7 @@ class FriendListModel : public QAbstractListModel
 public:
     enum Roles {
         UidRole = Qt::UserRole + 1,
+        UserIdRole,
         NameRole,
         NickRole,
         IconRole,
@@ -49,6 +50,7 @@ signals:
 private:
     struct FriendEntry {
         int uid;
+        QString userId;
         QString name;
         QString nick;
         QString icon;

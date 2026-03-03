@@ -6,10 +6,10 @@ import "../../components"
 GlassSurface {
     id: root
 
-    signal inviteRequested(int uid, string reason)
-    signal setAdminRequested(int uid, bool isAdmin)
-    signal muteRequested(int uid, int muteSeconds)
-    signal kickRequested(int uid)
+    signal inviteRequested(string userId, string reason)
+    signal setAdminRequested(string userId, bool isAdmin)
+    signal muteRequested(string userId, int muteSeconds)
+    signal kickRequested(string userId)
 
     cornerRadius: 10
     blurRadius: 26
@@ -33,7 +33,7 @@ GlassSurface {
             Layout.fillWidth: true
             Layout.preferredHeight: 32
             backdrop: root.backdrop
-            placeholderText: "目标 UID"
+            placeholderText: "目标用户ID（u#########）"
         }
 
         GlassTextField {
@@ -65,7 +65,7 @@ GlassSurface {
                 hoverColor: Qt.rgba(0.28, 0.70, 0.58, 0.34)
                 pressedColor: Qt.rgba(0.28, 0.70, 0.58, 0.42)
                 disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                onClicked: root.inviteRequested(parseInt(uidInput.text), reasonInput.text)
+                onClicked: root.inviteRequested(uidInput.text.trim(), reasonInput.text)
             }
             GlassButton {
                 Layout.fillWidth: true
@@ -76,7 +76,7 @@ GlassSurface {
                 hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
                 pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
                 disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                onClicked: root.setAdminRequested(parseInt(uidInput.text), true)
+                onClicked: root.setAdminRequested(uidInput.text.trim(), true)
             }
         }
 
@@ -93,7 +93,7 @@ GlassSurface {
                 hoverColor: Qt.rgba(0.48, 0.56, 0.66, 0.30)
                 pressedColor: Qt.rgba(0.48, 0.56, 0.66, 0.38)
                 disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                onClicked: root.setAdminRequested(parseInt(uidInput.text), false)
+                onClicked: root.setAdminRequested(uidInput.text.trim(), false)
             }
             GlassButton {
                 Layout.fillWidth: true
@@ -104,7 +104,7 @@ GlassSurface {
                 hoverColor: Qt.rgba(0.83, 0.61, 0.24, 0.34)
                 pressedColor: Qt.rgba(0.83, 0.61, 0.24, 0.42)
                 disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                onClicked: root.muteRequested(parseInt(uidInput.text), parseInt(muteInput.text))
+                onClicked: root.muteRequested(uidInput.text.trim(), parseInt(muteInput.text))
             }
         }
 
@@ -117,7 +117,7 @@ GlassSurface {
             hoverColor: Qt.rgba(0.82, 0.38, 0.38, 0.32)
             pressedColor: Qt.rgba(0.82, 0.38, 0.38, 0.40)
             disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-            onClicked: root.kickRequested(parseInt(uidInput.text))
+            onClicked: root.kickRequested(uidInput.text.trim())
         }
     }
 }

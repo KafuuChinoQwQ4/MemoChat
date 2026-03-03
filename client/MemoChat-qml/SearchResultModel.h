@@ -13,6 +13,7 @@ class SearchResultModel : public QAbstractListModel
 public:
     enum Roles {
         UidRole = Qt::UserRole + 1,
+        UserIdRole,
         NameRole,
         NickRole,
         DescRole,
@@ -34,6 +35,7 @@ signals:
 private:
     bool _has_result;
     int _uid;
+    QString _user_id;
     QString _name;
     QString _nick;
     QString _desc;
@@ -41,4 +43,3 @@ private:
 };
 
 #endif // SEARCHRESULTMODEL_H
-

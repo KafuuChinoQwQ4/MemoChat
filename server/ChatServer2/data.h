@@ -2,10 +2,11 @@
 #include <string>
 #include <vector>
 struct UserInfo {
-	UserInfo():name(""), pwd(""),uid(0),email(""),nick(""),desc(""),sex(0), icon(""), back("") {}
+	UserInfo():name(""), pwd(""),uid(0),user_id(""),email(""),nick(""),desc(""),sex(0), icon(""), back("") {}
 	std::string name;
 	std::string pwd;
 	int uid;
+	std::string user_id;
 	std::string email;
 	std::string nick;
 	std::string desc;
@@ -17,11 +18,12 @@ struct UserInfo {
 
 struct ApplyInfo {
 	ApplyInfo(int uid, std::string name, std::string desc,
-		std::string icon, std::string nick, int sex, int status)
+		std::string icon, std::string nick, int sex, int status, std::string user_id = "")
 		:_uid(uid),_name(name),_desc(desc),
-		_icon(icon),_nick(nick),_sex(sex),_status(status){}
+		_icon(icon),_nick(nick),_sex(sex),_status(status),_user_id(user_id){}
 
 	int _uid;
+	std::string _user_id;
 	std::string _name;
 	std::string _desc;
 	std::string _icon;
@@ -37,6 +39,7 @@ struct GroupInfo {
 		  role(0), member_count(0), status(1) {}
 
 	int64_t group_id;
+	std::string group_code;
 	std::string name;
 	int owner_uid;
 	std::string announcement;
@@ -53,6 +56,7 @@ struct GroupMemberInfo {
 
 	int64_t group_id;
 	int uid;
+	std::string user_id;
 	int role; // 3-owner, 2-admin, 1-member
 	int64_t mute_until;
 	int status; // 1-active, 2-exited, 3-kicked

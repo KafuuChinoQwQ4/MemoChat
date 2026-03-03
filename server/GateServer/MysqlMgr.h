@@ -12,9 +12,9 @@ public:
 	bool UpdatePwd(const std::string& name, const std::string& email);
 	bool UpdateUserProfile(int uid, const std::string& nick, const std::string& desc, const std::string& icon);
 	bool CheckPwd(const std::string& email, const std::string& pwd, UserInfo& userInfo);
+	std::string GetUserPublicId(int uid);
 	bool TestProcedure(const std::string &email, int& uid, string & name);
 private:
 	MysqlMgr();
 	MysqlDao  _dao;
 };
-

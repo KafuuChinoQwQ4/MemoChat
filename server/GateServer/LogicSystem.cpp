@@ -293,6 +293,7 @@ LogicSystem::LogicSystem() {
 		}
 		root["error"] = 0;
 		root["uid"] = uid;
+		root["user_id"] = MysqlMgr::GetInstance()->GetUserPublicId(uid);
 		root["email"] = email;
 		root ["user"]= name;
 		root["passwd"] = pwd;
@@ -427,6 +428,7 @@ LogicSystem::LogicSystem() {
 		root["error"] = 0;
 		root["email"] = email;
 		root["uid"] = userInfo.uid;
+		root["user_id"] = userInfo.user_id;
 		root["token"] = reply.token();
 		root["host"] = reply.host();
 		root["port"] = reply.port();
