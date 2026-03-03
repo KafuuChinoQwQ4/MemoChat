@@ -4,6 +4,7 @@
 #include <json/json.h>
 #include <json/value.h>
 #include <json/reader.h>
+#include <chrono>
 #include "RedisMgr.h"
 #include "MysqlMgr.h"
 
@@ -99,6 +100,16 @@ Status ChatServiceImpl::NotifyTextChatMsg(::grpc::ServerContext* context,
         Json::Value element;
         element["content"] = msg.msgcontent();
         element["msgid"] = msg.msgid();
+        std::shared_ptr<PrivateMessageInfo> private_msg;
+        int64_t created_at = 0;
+        if (MysqlMgr::GetInstance()->GetPrivateMessageByMsgId(msg.msgid(), private_msg) && private_msg) {
+            created_at = private_msg->created_at;
+        }
+        if (created_at <= 0) {
+            created_at = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count());
+        }
+        element["created_at"] = static_cast<Json::Int64>(created_at);
         text_array.append(element);
     }
     rtvalue["text_array"] = text_array;

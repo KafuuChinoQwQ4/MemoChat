@@ -13,8 +13,8 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets Network Qml Quick QuickControls2)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets Network Qml Quick QuickControls2)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets Network Sql Qml Quick QuickControls2)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets Network Sql Qml Quick QuickControls2)
 
 set(LEGACY_CLIENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../MemoChat)
 
@@ -31,6 +31,7 @@ set(SOURCES
     SearchResultModel.cpp
     ApplyRequestModel.cpp
     MessageContentCodec.cpp
+    PrivateChatCacheStore.cpp
     ProfileController.cpp
     LocalFilePickerService.cpp
     MediaUploadService.cpp
@@ -50,6 +51,7 @@ set(HEADERS
     SearchResultModel.h
     ApplyRequestModel.h
     MessageContentCodec.h
+    PrivateChatCacheStore.h
     ProfileController.h
     LocalFilePickerService.h
     MediaUploadService.h
@@ -77,6 +79,7 @@ target_link_libraries(MemoChatQml PRIVATE
     Qt${QT_VERSION_MAJOR}::Gui
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Network
+    Qt${QT_VERSION_MAJOR}::Sql
     Qt${QT_VERSION_MAJOR}::Qml
     Qt${QT_VERSION_MAJOR}::Quick
     Qt${QT_VERSION_MAJOR}::QuickControls2

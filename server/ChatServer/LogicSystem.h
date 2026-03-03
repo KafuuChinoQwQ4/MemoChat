@@ -39,6 +39,7 @@ private:
 	void ReviewGroupApplyHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void DealGroupChatMsg(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void GroupHistoryHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void PrivateHistoryHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void UpdateGroupAnnouncementHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void SetGroupAdminHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void MuteGroupMemberHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);

@@ -2,6 +2,7 @@
 #define CHATMESSAGEMODEL_H
 
 #include <QAbstractListModel>
+#include <QtGlobal>
 #include <memory>
 #include <vector>
 #include "userdata.h"
@@ -21,7 +22,8 @@ public:
         MsgTypeRole,
         FileNameRole,
         SenderNameRole,
-        ShowAvatarRole
+        ShowAvatarRole,
+        CreatedAtRole
     };
 
     explicit ChatMessageModel(QObject *parent = nullptr);
@@ -33,6 +35,9 @@ public:
     void clear();
     void setMessages(const std::vector<std::shared_ptr<TextChatData>> &messages, int selfUid);
     void appendMessage(const std::shared_ptr<TextChatData> &message, int selfUid);
+    void prependMessages(const std::vector<std::shared_ptr<TextChatData>> &messages, int selfUid);
+    qint64 earliestCreatedAt() const;
+    bool containsMessage(const QString &msgId) const;
 
 signals:
     void countChanged();
@@ -48,9 +53,11 @@ private:
         QString fileName;
         QString senderName;
         bool showAvatar;
+        qint64 createdAt;
     };
 
     MessageEntry toEntry(const std::shared_ptr<TextChatData> &message, int selfUid) const;
+    void refreshAvatarFlags();
     std::vector<MessageEntry> _items;
 };
 

@@ -85,6 +85,17 @@ MysqlDao::MysqlDao()
 				"mime VARCHAR(127) DEFAULT '',"
 				"size INT NOT NULL DEFAULT 0"
 				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+			stmt->execute("CREATE TABLE IF NOT EXISTS chat_private_msg ("
+				"msg_id VARCHAR(64) PRIMARY KEY,"
+				"conv_uid_min INT NOT NULL,"
+				"conv_uid_max INT NOT NULL,"
+				"from_uid INT NOT NULL,"
+				"to_uid INT NOT NULL,"
+				"content TEXT NOT NULL,"
+				"created_at BIGINT NOT NULL,"
+				"KEY idx_conv_created(conv_uid_min, conv_uid_max, created_at),"
+				"KEY idx_to_created(to_uid, created_at)"
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 			pool_->returnConnection(std::move(con));
 		}
 	}
@@ -729,6 +740,155 @@ bool MysqlDao::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo> 
 	}
 
 	return true;
+}
+
+bool MysqlDao::SavePrivateMessage(const PrivateMessageInfo& msg) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"INSERT INTO chat_private_msg(msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, created_at) "
+				"VALUES(?,?,?,?,?,?,?) "
+				"ON DUPLICATE KEY UPDATE from_uid = VALUES(from_uid), to_uid = VALUES(to_uid), "
+				"content = VALUES(content), created_at = VALUES(created_at)"));
+		pstmt->setString(1, msg.msg_id);
+		pstmt->setInt(2, msg.conv_uid_min);
+		pstmt->setInt(3, msg.conv_uid_max);
+		pstmt->setInt(4, msg.from_uid);
+		pstmt->setInt(5, msg.to_uid);
+		pstmt->setString(6, msg.content);
+		pstmt->setInt64(7, msg.created_at);
+		const int row_affected = pstmt->executeUpdate();
+		return row_affected >= 0;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const int& limit,
+	std::vector<std::shared_ptr<PrivateMessageInfo>>& messages, bool& has_more) {
+	has_more = false;
+	messages.clear();
+	if (uid <= 0 || peer_uid <= 0 || limit <= 0) {
+		return false;
+	}
+
+	const int conv_min = std::min(uid, peer_uid);
+	const int conv_max = std::max(uid, peer_uid);
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt;
+		if (before_ts > 0) {
+			pstmt.reset(con->_con->prepareStatement(
+				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, created_at "
+				"FROM chat_private_msg WHERE conv_uid_min = ? AND conv_uid_max = ? AND created_at < ? "
+				"ORDER BY created_at DESC, msg_id DESC LIMIT ?"));
+			pstmt->setInt(1, conv_min);
+			pstmt->setInt(2, conv_max);
+			pstmt->setInt64(3, before_ts);
+			pstmt->setInt(4, limit + 1);
+		}
+		else {
+			pstmt.reset(con->_con->prepareStatement(
+				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, created_at "
+				"FROM chat_private_msg WHERE conv_uid_min = ? AND conv_uid_max = ? "
+				"ORDER BY created_at DESC, msg_id DESC LIMIT ?"));
+			pstmt->setInt(1, conv_min);
+			pstmt->setInt(2, conv_max);
+			pstmt->setInt(3, limit + 1);
+		}
+
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		while (res->next()) {
+			auto one = std::make_shared<PrivateMessageInfo>();
+			one->msg_id = res->getString("msg_id");
+			one->conv_uid_min = res->getInt("conv_uid_min");
+			one->conv_uid_max = res->getInt("conv_uid_max");
+			one->from_uid = res->getInt("from_uid");
+			one->to_uid = res->getInt("to_uid");
+			one->content = res->getString("content");
+			one->created_at = res->getInt64("created_at");
+			messages.push_back(one);
+		}
+
+		if (static_cast<int>(messages.size()) > limit) {
+			has_more = true;
+			messages.resize(limit);
+		}
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_ptr<PrivateMessageInfo>& message) {
+	message = nullptr;
+	if (msg_id.empty()) {
+		return false;
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, created_at "
+				"FROM chat_private_msg WHERE msg_id = ? LIMIT 1"));
+		pstmt->setString(1, msg_id);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		if (!res->next()) {
+			return false;
+		}
+
+		auto one = std::make_shared<PrivateMessageInfo>();
+		one->msg_id = res->getString("msg_id");
+		one->conv_uid_min = res->getInt("conv_uid_min");
+		one->conv_uid_max = res->getInt("conv_uid_max");
+		one->from_uid = res->getInt("from_uid");
+		one->to_uid = res->getInt("to_uid");
+		one->content = res->getString("content");
+		one->created_at = res->getInt64("created_at");
+		message = one;
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
 }
 
 bool MysqlDao::IsFriend(const int& self_id, const int& friend_id) {

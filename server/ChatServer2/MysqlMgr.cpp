@@ -73,6 +73,19 @@ bool MysqlMgr::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo> 
 	return _dao.GetFriendList(self_id, user_info);
 }
 
+bool MysqlMgr::SavePrivateMessage(const PrivateMessageInfo& msg) {
+	return _dao.SavePrivateMessage(msg);
+}
+
+bool MysqlMgr::GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const int& limit,
+	std::vector<std::shared_ptr<PrivateMessageInfo>>& messages, bool& has_more) {
+	return _dao.GetPrivateHistory(uid, peer_uid, before_ts, limit, messages, has_more);
+}
+
+bool MysqlMgr::GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_ptr<PrivateMessageInfo>& message) {
+	return _dao.GetPrivateMessageByMsgId(msg_id, message);
+}
+
 bool MysqlMgr::IsFriend(const int& self_id, const int& friend_id) {
 	return _dao.IsFriend(self_id, friend_id);
 }

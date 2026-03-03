@@ -14,10 +14,20 @@ Rectangle {
     property string peerAvatar: "qrc:/res/head_1.jpg"
     property bool hasCurrentChat: false
     property var messageModel
+    property bool privateHistoryLoading: false
+    property bool canLoadMorePrivateHistory: false
+    property bool _historyTopTriggered: false
     signal sendText(string text)
     signal sendImage()
     signal sendFile()
     signal openAttachment(string url)
+    signal requestLoadMoreHistory()
+
+    onPrivateHistoryLoadingChanged: {
+        if (!privateHistoryLoading) {
+            _historyTopTriggered = false
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -73,6 +83,19 @@ Rectangle {
                 onCountChanged: {
                     if (count > 0) {
                         positionViewAtEnd()
+                    }
+                }
+                onContentYChanged: {
+                    if (contentY > 6) {
+                        root._historyTopTriggered = false
+                    }
+                    if (contentY <= 0
+                            && count > 0
+                            && root.canLoadMorePrivateHistory
+                            && !root.privateHistoryLoading
+                            && !root._historyTopTriggered) {
+                        root._historyTopTriggered = true
+                        root.requestLoadMoreHistory()
                     }
                 }
 
