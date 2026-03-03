@@ -1,4 +1,4 @@
-﻿#include "TextBubble.h"
+#include "TextBubble.h"
 #include <QFontMetricsF>
 #include <QDebug>
 #include <QFont>
@@ -29,7 +29,7 @@ bool TextBubble::eventFilter(QObject *o, QEvent *e)
 {
     if(m_pTextEdit == o && e->type() == QEvent::Paint)
     {
-        adjustTextHeight(); //PaintEvent中设置
+        adjustTextHeight();
     }
     return BubbleFrame::eventFilter(o, e);
 }
@@ -38,37 +38,37 @@ void TextBubble::setPlainText(const QString &text)
 {
     m_pTextEdit->setPlainText(text);
     //m_pTextEdit->setHtml(text);
-    //找到段落中最大宽度
+
     qreal doc_margin = m_pTextEdit->document()->documentMargin();
     int margin_left = this->layout()->contentsMargins().left();
     int margin_right = this->layout()->contentsMargins().right();
     QFontMetricsF fm(m_pTextEdit->font());
     QTextDocument *doc = m_pTextEdit->document();
     int max_width = 0;
-    //遍历每一段找到 最宽的那一段
-    for (QTextBlock it = doc->begin(); it != doc->end(); it = it.next())    //字体总长
+
+    for (QTextBlock it = doc->begin(); it != doc->end(); it = it.next())
     {
         int txtW = int(fm.horizontalAdvance(it.text()));
-        max_width = max_width < txtW ? txtW : max_width;                 //找到最长的那段
+        max_width = max_width < txtW ? txtW : max_width;
     }
-    //设置这个气泡的最大宽度 只需要设置一次
-    setMaximumWidth(max_width + doc_margin * 2 + (margin_left + margin_right));        //设置最大宽度
+
+    setMaximumWidth(max_width + doc_margin * 2 + (margin_left + margin_right));
 }
 
 void TextBubble::adjustTextHeight()
 {
-    qreal doc_margin = m_pTextEdit->document()->documentMargin();    //字体到边框的距离默认为4
+    qreal doc_margin = m_pTextEdit->document()->documentMargin();
     QTextDocument *doc = m_pTextEdit->document();
     qreal text_height = 0;
-    //把每一段的高度相加=文本高
+
     for (QTextBlock it = doc->begin(); it != doc->end(); it = it.next())
     {
         QTextLayout *pLayout = it.layout();
-        QRectF text_rect = pLayout->boundingRect();                             //这段的rect
+        QRectF text_rect = pLayout->boundingRect();
         text_height += text_rect.height();
     }
     int vMargin = this->layout()->contentsMargins().top();
-    //设置这个气泡需要的高度 文本高+文本边距+TextEdit边框到气泡边框的距离
+
     setFixedHeight(text_height + doc_margin *2 + vMargin*2 );
 }
 

@@ -18,16 +18,16 @@ ConUserItem::~ConUserItem()
 
 QSize ConUserItem::sizeHint() const
 {
-    return QSize(250, 70); // 返回自定义的尺寸
+    return QSize(250, 70);
 }
 
 void ConUserItem::SetInfo(std::shared_ptr<AuthInfo> auth_info)
 {
     _info = std::make_shared<UserInfo>(auth_info);
-    // 加载图片
+
     QPixmap pixmap(_info->_icon);
 
-    // 设置图片自动缩放
+
     ui->icon_lb->setPixmap(pixmap.scaled(ui->icon_lb->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     ui->icon_lb->setScaledContents(true);
 
@@ -38,10 +38,10 @@ void ConUserItem::SetInfo(int uid, QString name, QString icon)
 {
      _info = std::make_shared<UserInfo>(uid,name, name, icon, 0);
 
-     // 加载图片
+
      QPixmap pixmap(_info->_icon);
 
-     // 设置图片自动缩放
+
      ui->icon_lb->setPixmap(pixmap.scaled(ui->icon_lb->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
      ui->icon_lb->setScaledContents(true);
 
@@ -51,10 +51,10 @@ void ConUserItem::SetInfo(int uid, QString name, QString icon)
 void ConUserItem::SetInfo(std::shared_ptr<AuthRsp> auth_rsp){
     _info = std::make_shared<UserInfo>(auth_rsp);
 
-    // 加载图片
+
     QPixmap pixmap(_info->_icon);
 
-    // 设置图片自动缩放
+
     ui->icon_lb->setPixmap(pixmap.scaled(ui->icon_lb->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     ui->icon_lb->setScaledContents(true);
 

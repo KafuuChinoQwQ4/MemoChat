@@ -1,4 +1,4 @@
-﻿#include "statewidget.h"
+#include "statewidget.h"
 
 #include <QPaintEvent>
 #include <QStyleOption>

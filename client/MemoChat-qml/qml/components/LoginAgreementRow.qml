@@ -4,7 +4,7 @@ import QtQuick.Controls 2.15
 Row {
     id: root
     property alias checked: termsCheck.checked
-    property string agreementText: "已阅读并同意<a href=\"https://example.com/agreement\">服务协议</a>和<a href=\"https://example.com/privacy\">Memo隐私保护指引</a>"
+    property string agreementText: '已阅读并同意<a href="https://example.com/agreement">服务协议</a>和<a href="https://example.com/privacy">Memo隐私保护指引</a>'
     signal linkActivated(string link)
 
     width: 0

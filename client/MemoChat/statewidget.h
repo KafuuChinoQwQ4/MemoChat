@@ -1,4 +1,4 @@
-﻿#ifndef STATEWIDGET_H
+#ifndef STATEWIDGET_H
 #define STATEWIDGET_H
 
 #include <QWidget>

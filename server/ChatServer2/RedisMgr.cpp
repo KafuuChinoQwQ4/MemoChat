@@ -46,14 +46,14 @@ bool RedisMgr::Get(const std::string& key, std::string& value)
 }
 
 bool RedisMgr::Set(const std::string &key, const std::string &value){
-	//执行redis命令行
+
 	auto connect = _con_pool->getConnection();
 	if (connect == nullptr) {
 		return false;
 	}
 	auto reply = (redisReply*)redisCommand(connect, "SET %s %s", key.c_str(), value.c_str());
 
-	//如果返回NULL则说明执行失败
+
 	if (NULL == reply)
 	{
 		std::cout << "Execut command [ SET " << key << "  "<< value << " ] failure ! " << std::endl;
@@ -62,7 +62,7 @@ bool RedisMgr::Set(const std::string &key, const std::string &value){
 		return false;
 	}
 
-	//如果执行失败则释放连接
+
 	if (!(reply->type == REDIS_REPLY_STATUS && (strcmp(reply->str, "OK") == 0 || strcmp(reply->str, "ok") == 0)))
 	{
 		std::cout << "Execut command [ SET " << key << "  " << value << " ] failure ! " << std::endl;
@@ -71,7 +71,7 @@ bool RedisMgr::Set(const std::string &key, const std::string &value){
 		return false;
 	}
 
-	//执行成功 释放redisCommand执行后返回的redisReply所占用的内存
+
 	freeReplyObject(reply);
 	std::cout << "Execut command [ SET " << key << "  " << value << " ] success ! " << std::endl;
 	_con_pool->returnConnection(connect);
@@ -396,12 +396,12 @@ void RedisMgr::IncreaseCount(std::string server_name)
 {
 	auto lock_key = LOCK_COUNT;
 	auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, ACQUIRE_TIME_OUT);
-	//利用defer解锁
+
 	Defer defer2([this, identifier, lock_key]() {
 		RedisMgr::GetInstance()->releaseLock(lock_key, identifier);
 		});
 
-	//将登录数量增加
+
 	auto rd_res = RedisMgr::GetInstance()->HGet(LOGIN_COUNT, server_name);
 	int count = 0;
 	if (!rd_res.empty()) {
@@ -417,12 +417,12 @@ void RedisMgr::DecreaseCount(std::string server_name)
 {
 	auto lock_key = LOCK_COUNT;
 	auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, ACQUIRE_TIME_OUT);
-	//利用defer解锁
+
 	Defer defer2([this, identifier, lock_key]() {
 		RedisMgr::GetInstance()->releaseLock(lock_key, identifier);
 		});
 
-	//将登录数量减少
+
 	auto rd_res = RedisMgr::GetInstance()->HGet(LOGIN_COUNT, server_name);
 	int count = 0;
 	if (!rd_res.empty()) {
@@ -441,7 +441,7 @@ void RedisMgr::DecreaseCount(std::string server_name)
 void RedisMgr::InitCount(std::string server_name) {
 	auto lock_key = LOCK_COUNT;
 	auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, ACQUIRE_TIME_OUT);
-	//利用defer解锁
+
 	Defer defer2([this, identifier, lock_key]() {
 		RedisMgr::GetInstance()->releaseLock(lock_key, identifier);
 		});
@@ -452,7 +452,7 @@ void RedisMgr::InitCount(std::string server_name) {
 void RedisMgr::DelCount(std::string server_name) {
 	auto lock_key = LOCK_COUNT;
 	auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, ACQUIRE_TIME_OUT);
-	//利用defer解锁
+
 	Defer defer2([this, identifier, lock_key]() {
 		RedisMgr::GetInstance()->releaseLock(lock_key, identifier);
 		});

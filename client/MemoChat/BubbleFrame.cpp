@@ -1,7 +1,7 @@
-﻿#include "BubbleFrame.h"
+#include "BubbleFrame.h"
 #include <QPainter>
 #include <QDebug>
-const int WIDTH_SANJIAO  = 8;  //三角宽
+const int WIDTH_SANJIAO  = 8;
 BubbleFrame::BubbleFrame(ChatRole role, QWidget *parent)
     :QFrame(parent)
     ,m_role(role)
@@ -38,12 +38,12 @@ void BubbleFrame::paintEvent(QPaintEvent *e)
 
     if(m_role == ChatRole::Other)
     {
-        //画气泡
+
         QColor bk_color(Qt::white);
         painter.setBrush(QBrush(bk_color));
         QRect bk_rect = QRect(WIDTH_SANJIAO, 0, this->width()-WIDTH_SANJIAO, this->height());
         painter.drawRoundedRect(bk_rect,5,5);
-        //画小三角
+
         QPointF points[3] = {
             QPointF(bk_rect.x(), 12),
             QPointF(bk_rect.x(), 10+WIDTH_SANJIAO +2),
@@ -55,10 +55,10 @@ void BubbleFrame::paintEvent(QPaintEvent *e)
     {
         QColor bk_color(158,234,106);
         painter.setBrush(QBrush(bk_color));
-        //画气泡
+
         QRect bk_rect = QRect(0, 0, this->width()-WIDTH_SANJIAO, this->height());
         painter.drawRoundedRect(bk_rect,5,5);
-        //画三角
+
         QPointF points[3] = {
             QPointF(bk_rect.x()+bk_rect.width(), 12),
             QPointF(bk_rect.x()+bk_rect.width(), 12+WIDTH_SANJIAO +2),

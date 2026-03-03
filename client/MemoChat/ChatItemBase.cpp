@@ -1,4 +1,4 @@
-﻿#include "ChatItemBase.h"
+#include "ChatItemBase.h"
 #include <QFont>
 #include <QVBoxLayout>
 #include "BubbleFrame.h"

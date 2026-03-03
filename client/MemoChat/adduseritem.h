@@ -15,7 +15,7 @@ public:
     explicit AddUserItem(QWidget *parent = nullptr);
     ~AddUserItem();
     QSize sizeHint() const override {
-        return QSize(250, 70); // 返回自定义的尺寸
+        return QSize(250, 70);
     }
 protected:
 

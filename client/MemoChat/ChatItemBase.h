@@ -1,4 +1,4 @@
-﻿#ifndef CHATITEMBASE_H
+#ifndef CHATITEMBASE_H
 #define CHATITEMBASE_H
 
 #include <QWidget>

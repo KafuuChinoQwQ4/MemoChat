@@ -1,4 +1,4 @@
-﻿#ifndef CLICKEDBTN_H
+#ifndef CLICKEDBTN_H
 #define CLICKEDBTN_H
 
 #include <QPushButton>

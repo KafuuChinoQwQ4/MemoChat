@@ -1,4 +1,4 @@
-﻿#include "ChatView.h"
+#include "ChatView.h"
 #include <QScrollBar>
 #include <QVBoxLayout>
 #include <QEvent>
@@ -26,12 +26,12 @@ ChatView::ChatView(QWidget *parent)
     QVBoxLayout *pHLayout_1 = new QVBoxLayout();
     pHLayout_1->addWidget(new QWidget(), 100000);
     w->setLayout(pHLayout_1);
-    m_pScrollArea->setWidget(w);    //应该时在QSCrollArea构造后执行 才对
+    m_pScrollArea->setWidget(w);
 
     m_pScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     QScrollBar *pVScrollBar = m_pScrollArea->verticalScrollBar();
     connect(pVScrollBar, &QScrollBar::rangeChanged,this, &ChatView::onVScrollBarMoved);
-    //把垂直ScrollBar放到上边 而不是原来的并排
+
     QHBoxLayout *pHLayout_2 = new QHBoxLayout();
     pHLayout_2->addWidget(pVScrollBar, 0, Qt::AlignRight);
     pHLayout_2->setContentsMargins(0, 0, 0, 0);
@@ -68,7 +68,7 @@ void ChatView::removeAllItem()
    int count = layout->count();
 
     for (int i = 0; i < count - 1; ++i) {
-        QLayoutItem *item = layout->takeAt(0); // 始终从第一个控件开始删除
+        QLayoutItem *item = layout->takeAt(0);
         if (item) {
             if (QWidget *widget = item->widget()) {
                 delete widget;
@@ -107,11 +107,11 @@ void ChatView::paintEvent(QPaintEvent *event)
 
 void ChatView::onVScrollBarMoved(int min, int max)
 {
-    if(isAppended) //添加item可能调用多次
+    if(isAppended)
     {
         QScrollBar *pVScrollBar = m_pScrollArea->verticalScrollBar();
         pVScrollBar->setSliderPosition(pVScrollBar->maximum());
-        //500毫秒内可能调用多次
+
         QTimer::singleShot(500, [this]()
         {
             isAppended = false;

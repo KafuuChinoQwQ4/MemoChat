@@ -16,5 +16,5 @@ LineItem::~LineItem()
 
 QSize LineItem::sizeHint() const
 {
-   return QSize(250,5); // 返回自定义的尺寸
+   return QSize(250,5);
 }

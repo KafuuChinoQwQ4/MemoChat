@@ -1,4 +1,4 @@
-﻿// StatusServer.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
+
 //
 
 #include <iostream>
@@ -17,6 +17,8 @@
 #include <thread>
 #include <boost/asio.hpp>
 #include "StatusServiceImpl.h"
+#include "logging/LogConfig.h"
+#include "logging/Logger.h"
 void RunServer() {
 	auto & cfg = ConfigMgr::Inst();
 	
@@ -24,48 +26,55 @@ void RunServer() {
 	StatusServiceImpl service;
 
 	grpc::ServerBuilder builder;
-	// 监听端口和添加服务
+
 	builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
 	builder.RegisterService(&service);
 
-	// 构建并启动gRPC服务器
-	std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-	std::cout << "Server listening on " << server_address << std::endl;
 
-	// 创建Boost.Asio的io_context
+	std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+	memolog::LogInfo("service.start", "StatusServer listening", { {"address", server_address} });
+
+
 	boost::asio::io_context io_context;
-	// 创建signal_set用于捕获SIGINT
+
 	boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
 
-	// 设置异步等待SIGINT信号
+
 	signals.async_wait([&server, &io_context](const boost::system::error_code& error, int signal_number) {
 		if (!error) {
-			std::cout << "Shutting down server..." << std::endl;
-			server->Shutdown(); // 优雅地关闭服务器
-			io_context.stop(); // 停止io_context
+			memolog::LogInfo("service.stop", "StatusServer shutting down");
+			server->Shutdown();
+			io_context.stop();
 		}
 		});
 
-	// 在单独的线程中运行io_context
+
 	std::thread([&io_context]() { io_context.run(); }).detach();
 
-	// 等待服务器关闭
+
 	server->Wait();
 
 }
 
 int main(int argc, char** argv) {
 	try {
+		auto& cfg = ConfigMgr::Inst();
+		auto log_cfg = memolog::LogConfig::FromGetter(
+			[&cfg](const std::string& section, const std::string& key) {
+				return cfg.GetValue(section, key);
+			});
+		memolog::Logger::Init("StatusServer", log_cfg);
 		RunServer();
 		RedisMgr::GetInstance()->Close();
+		memolog::Logger::Shutdown();
 	}
 	catch (std::exception const& e) {
-		std::cerr << "Error: " << e.what() << std::endl;
+		memolog::LogError("service.fatal", "StatusServer crashed", { {"error", e.what()} });
 		RedisMgr::GetInstance()->Close();
+		memolog::Logger::Shutdown();
 		return EXIT_FAILURE;
 	}
 
 	return 0;
 }
-
 

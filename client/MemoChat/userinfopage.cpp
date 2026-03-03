@@ -17,14 +17,14 @@ UserInfoPage::UserInfoPage(QWidget *parent) :
     auto icon = UserMgr::GetInstance()->GetIcon();
     qDebug() << "icon is " << icon ;
     QPixmap pixmap(icon);
-    QPixmap scaledPixmap = pixmap.scaled( ui->head_lb->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation); // 将图片缩放到label的大小
-    ui->head_lb->setPixmap(scaledPixmap); // 将缩放后的图片设置到QLabel上
-    ui->head_lb->setScaledContents(true); // 设置QLabel自动缩放图片内容以适应大小
-    //获取nick
+    QPixmap scaledPixmap = pixmap.scaled( ui->head_lb->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->head_lb->setPixmap(scaledPixmap);
+    ui->head_lb->setScaledContents(true);
+
     auto nick = UserMgr::GetInstance()->GetNick();
-    //获取name
+
     auto name = UserMgr::GetInstance()->GetName();
-    //描述
+
     auto desc = UserMgr::GetInstance()->GetDesc();
     ui->nick_ed->setText(nick);
     ui->name_ed->setText(name);
@@ -36,10 +36,10 @@ UserInfoPage::~UserInfoPage()
     delete ui;
 }
 
-//上传头像
+
 void UserInfoPage::on_up_btn_clicked()
 {
-    // 1. 让对话框也能选 *.webp
+
     QString filename = QFileDialog::getOpenFileName(
         this,
         tr("选择图片"),
@@ -49,7 +49,7 @@ void UserInfoPage::on_up_btn_clicked()
     if (filename.isEmpty())
         return;
 
-    // 2. 直接用 QPixmap::load() 加载，无需手动区分格式
+
     QPixmap inputImage;
     if (!inputImage.load(filename)) {
         QMessageBox::critical(
@@ -65,13 +65,13 @@ void UserInfoPage::on_up_btn_clicked()
     if (image.isNull())
         return;
 
-    QPixmap scaledPixmap = image.scaled( ui->head_lb->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation); // 将图片缩放到label的大小
-    ui->head_lb->setPixmap(scaledPixmap); // 将缩放后的图片设置到QLabel上
-    ui->head_lb->setScaledContents(true); // 设置QLabel自动缩放图片内容以适应大小
+    QPixmap scaledPixmap = image.scaled( ui->head_lb->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->head_lb->setPixmap(scaledPixmap);
+    ui->head_lb->setScaledContents(true);
 
     QString storageDir = QStandardPaths::writableLocation(
                              QStandardPaths::AppDataLocation);
-    // 2. 在其下再建一个 avatars 子目录
+
     QDir dir(storageDir);
     if (!dir.exists("avatars")) {
         if (!dir.mkpath("avatars")) {
@@ -84,10 +84,10 @@ void UserInfoPage::on_up_btn_clicked()
             return;
         }
     }
-    // 3. 拼接最终的文件名 head.png
+
     QString filePath = dir.filePath("avatars/head.png");
 
-    // 4. 保存 scaledPixmap 为 PNG（无损、最高质量）
+
     if (!scaledPixmap.save(filePath, "PNG")) {
         QMessageBox::warning(
             this,
@@ -96,6 +96,6 @@ void UserInfoPage::on_up_btn_clicked()
         );
     } else {
         qDebug() << "头像已保存到：" << filePath;
-        // 以后读取直接用同一路径：storageDir/avatars/head.png
+
     }
 }

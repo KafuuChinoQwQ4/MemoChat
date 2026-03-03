@@ -1,4 +1,4 @@
-﻿#include "authenfriend.h"
+#include "authenfriend.h"
 #include "ui_authenfriend.h"
 #include "clickedlabel.h"
 #include "friendlabel.h"
@@ -11,7 +11,7 @@ AuthenFriend::AuthenFriend(QWidget *parent) :
     ui(new Ui::AuthenFriend),_label_point(2,6)
 {
     ui->setupUi(this);
-    // 闅愯棌瀵硅瘽妗嗘爣棰樻爮
+
     setWindowFlags(windowFlags() | Qt::FramelessWindowHint);
     this->setObjectName("AuthenFriend");
     this->setModal(true);
@@ -34,7 +34,7 @@ AuthenFriend::AuthenFriend(QWidget *parent) :
 
     connect(ui->more_lb, &ClickedOnceLabel::clicked, this, &AuthenFriend::ShowMoreLabel);
     InitTipLbs();
-    //閾炬帴杈撳叆鏍囩鍥炶溅浜嬩欢
+
     connect(ui->lb_ed, &CustomizeEdit::returnPressed, this, &AuthenFriend::SlotLabelEnter);
     connect(ui->lb_ed, &CustomizeEdit::textChanged, this, &AuthenFriend::SlotLabelTextChange);
     connect(ui->lb_ed, &CustomizeEdit::editingFinished, this, &AuthenFriend::SlotLabelEditFinished);
@@ -130,7 +130,7 @@ void AuthenFriend::ShowMoreLabel()
     auto next_point = _tip_cur_point;
     int textWidth;
     int textHeight;
-    //閲嶆媿鐜版湁鐨刲abel
+
     for(auto & added_key : _add_label_keys){
         auto added_lb = _add_labels[added_key];
 
@@ -150,7 +150,7 @@ void AuthenFriend::ShowMoreLabel()
 
     }
 
-    //娣诲姞鏈坊鍔犵殑
+
     for(int i = 0; i < _tip_data.size(); i++){
         auto iter = _add_labels.find(_tip_data[i]);
         if(iter != _add_labels.end()){
@@ -194,7 +194,7 @@ void AuthenFriend::resetLabels()
     auto max_width = ui->gridWidget->width();
     auto label_height = 0;
     for(auto iter = _friend_labels.begin(); iter != _friend_labels.end(); iter++){
-        //todo... 娣诲姞瀹藉害缁熻
+
         if( _label_point.x() + iter.value()->width() > max_width) {
             _label_point.setY(_label_point.y()+iter.value()->height()+6);
             _label_point.setX(2);
@@ -231,7 +231,7 @@ void AuthenFriend::addLabel(QString name)
     tmplabel->setObjectName("FriendLabel");
 
     auto max_width = ui->gridWidget->width();
-    //todo... 娣诲姞瀹藉害缁熻
+
     if (_label_point.x() + tmplabel->width() > max_width) {
         _label_point.setY(_label_point.y() + tmplabel->height() + 6);
         _label_point.setX(2);
@@ -316,7 +316,7 @@ void AuthenFriend::SlotRemoveFriendLabel(QString name)
    find_add.value()->ResetNormalState();
 }
 
-//鐐瑰嚮鏍囧凡鏈夌娣诲姞鎴栧垹闄ゆ柊鑱旂郴浜虹殑鏍囩
+
 void AuthenFriend::SlotChangeFriendLabelByTip(QString lbtext, ClickLbState state)
 {
     auto find_iter = _add_labels.find(lbtext);
@@ -325,13 +325,13 @@ void AuthenFriend::SlotChangeFriendLabelByTip(QString lbtext, ClickLbState state
     }
 
     if(state == ClickLbState::Selected){
-        //缂栧啓娣诲姞閫昏緫
+
         addLabel(lbtext);
         return;
     }
 
     if(state == ClickLbState::Normal){
-        //缂栧啓鍒犻櫎閫昏緫
+
         SlotRemoveFriendLabel(lbtext);
         return;
     }
@@ -369,7 +369,7 @@ void AuthenFriend::SlotAddFirendLabelByClickTip(QString text)
         text = text.mid(index + add_prefix.length());
     }
     addLabel(text);
-    //鏍囩灞曠ず鏍忎篃澧炲姞涓€涓爣绛? 骞惰缃豢鑹查€変腑
+
     if (index != -1) {
         _tip_data.push_back(text);
     }
@@ -411,7 +411,7 @@ void AuthenFriend::SlotAddFirendLabelByClickTip(QString text)
 void AuthenFriend::SlotApplySure()
 {
     qDebug() << "Slot Apply Sure ";
-    //娣诲姞鍙戦€侀€昏緫
+
     QJsonObject jsonObj;
     auto uid = UserMgr::GetInstance()->GetUid();
     jsonObj["fromuid"] = uid;
@@ -427,7 +427,7 @@ void AuthenFriend::SlotApplySure()
     QJsonDocument doc(jsonObj);
     QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
 
-    //鍙戦€乼cp璇锋眰缁檆hat server
+
     emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_AUTH_FRIEND_REQ, jsonData);
 
     this->hide();

@@ -34,7 +34,7 @@ void UserMgr::RmvUserSession(int uid, std::string session_id)
 		}
 	
 		auto session_id_ = iter->second->GetSessionId();
-		//不相等说明是其他地方登录了
+
 		if (session_id_ != session_id) {
 			return;
 		}
