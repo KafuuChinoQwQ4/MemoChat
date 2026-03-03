@@ -60,19 +60,19 @@ int MysqlDao::RegUser(const std::string& name, const std::string& email, const s
 		if (con == nullptr) {
 			return false;
 		}
-		// ׼�����ô洢����
+
 		unique_ptr < sql::PreparedStatement > stmt(con->_con->prepareStatement("CALL reg_user(?,?,?,@result)"));
-		// �����������
+
 		stmt->setString(1, name);
 		stmt->setString(2, email);
 		stmt->setString(3, pwd);
 
-		// ����PreparedStatement��ֱ��֧��ע�����������������Ҫʹ�ûỰ������������������ȡ���������ֵ
 
-		  // ִ�д洢����
+
+
 		stmt->execute();
-		// ����洢���������˻Ự��������������ʽ��ȡ���������ֵ�������������ִ��SELECT��ѯ����ȡ����
-	   // ���磬����洢����������һ���Ự����@result���洢������������������ȡ��
+
+
 	   unique_ptr<sql::Statement> stmtResult(con->_con->createStatement());
 	  unique_ptr<sql::ResultSet> res(stmtResult->executeQuery("SELECT @result AS result"));
 	  if (res->next()) {
@@ -106,17 +106,17 @@ int MysqlDao::RegUserTransaction(const std::string& name, const std::string& ema
 	});
 
 	try {
-		//��ʼ����
+
 		con->_con->setAutoCommit(false);
-		//ִ�е�һ�����ݿ����������email�����û�
-			// ׼����ѯ���
+
+
 
 		std::unique_ptr<sql::PreparedStatement> pstmt_email(con->_con->prepareStatement("SELECT 1 FROM user WHERE email = ?"));
 
-		// �󶨲���
+
 		pstmt_email->setString(1, email);
 
-		// ִ�в�ѯ
+
 		std::unique_ptr<sql::ResultSet> res_email(pstmt_email->executeQuery());
 
 		auto email_exist = res_email->next();
@@ -126,13 +126,13 @@ int MysqlDao::RegUserTransaction(const std::string& name, const std::string& ema
 			return 0;
 		}
 
-		// ׼����ѯ�û����Ƿ��ظ�
+
 		std::unique_ptr<sql::PreparedStatement> pstmt_name(con->_con->prepareStatement("SELECT 1 FROM user WHERE name = ?"));
 
-		// �󶨲���
+
 		pstmt_name->setString(1, name);
 
-		// ִ�в�ѯ
+
 		std::unique_ptr<sql::ResultSet> res_name(pstmt_name->executeQuery());
 
 		auto name_exist = res_name->next();
@@ -142,17 +142,17 @@ int MysqlDao::RegUserTransaction(const std::string& name, const std::string& ema
 			return 0;
 		}
 
-		// ׼�������û�id
+
 		std::unique_ptr<sql::PreparedStatement> pstmt_upid(con->_con->prepareStatement("UPDATE user_id SET id = id + 1"));
 
-		// ִ�и���
+
 		pstmt_upid->executeUpdate();
 
-		// ��ȡ���º�� id ֵ
+
 		std::unique_ptr<sql::PreparedStatement> pstmt_uid(con->_con->prepareStatement("SELECT id FROM user_id"));
 		std::unique_ptr<sql::ResultSet> res_uid(pstmt_uid->executeQuery());
 		int newId = 0;
-		// ��������
+
 		if (res_uid->next()) {
 			newId = res_uid->getInt("id");
 		}
@@ -181,7 +181,7 @@ int MysqlDao::RegUserTransaction(const std::string& name, const std::string& ema
 			return -1;
 		}
 
-		// ����user��Ϣ
+
 		std::unique_ptr<sql::PreparedStatement> pstmt_insert(con->_con->prepareStatement("INSERT INTO user (uid, name, email, pwd, nick, icon, user_id) "
 			"VALUES (?, ?, ?, ?, ?, ?, ?)"));
 		pstmt_insert->setInt(1,newId);
@@ -191,15 +191,15 @@ int MysqlDao::RegUserTransaction(const std::string& name, const std::string& ema
 		pstmt_insert->setString(5, name);
 		pstmt_insert->setString(6, icon);
 		pstmt_insert->setString(7, user_public_id);
-		//ִ�в���
+
 		pstmt_insert->executeUpdate();
-		// �ύ����
+
 		con->_con->commit();
 		std::cout << "newuser insert into user success" << std::endl;
 		return newId;
 	}
 	catch (sql::SQLException& e) {
-		// ����������󣬻ع�����
+
 		if (con) {
 			con->_con->rollback();
 		}
@@ -217,16 +217,16 @@ bool MysqlDao::CheckEmail(const std::string& name, const std::string& email) {
 			return false;
 		}
 
-		// ׼����ѯ���
+
 		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("SELECT email FROM user WHERE name = ?"));
 
-		// �󶨲���
+
 		pstmt->setString(1, name);
 
-		// ִ�в�ѯ
+
 		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 
-		// ���������
+
 		while (res->next()) {
 			std::cout << "Check Email: " << res->getString("email") << std::endl;
 			if (email != res->getString("email")) {
@@ -254,14 +254,14 @@ bool MysqlDao::UpdatePwd(const std::string& name, const std::string& newpwd) {
 			return false;
 		}
 
-		// ׼����ѯ���
+
 		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("UPDATE user SET pwd = ? WHERE name = ?"));
 
-		// �󶨲���
+
 		pstmt->setString(2, name);
 		pstmt->setString(1, newpwd);
 
-		// ִ�и���
+
 		int updateCount = pstmt->executeUpdate();
 
 		std::cout << "Updated rows: " << updateCount << std::endl;
@@ -327,22 +327,22 @@ bool MysqlDao::CheckPwd(const std::string& email, const std::string& pwd, UserIn
 	try {
 	
 
-		// ׼��SQL���
-		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("SELECT * FROM user WHERE email = ?"));
-		pstmt->setString(1, email); // ��username�滻Ϊ��Ҫ��ѯ���û���
 
-		// ִ�в�ѯ
+		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("SELECT * FROM user WHERE email = ?"));
+		pstmt->setString(1, email);
+
+
 		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 		std::string origin_pwd = "";
 		bool matched = false;
-		// ���������
+
 		while (res->next()) {
 			origin_pwd = res->getString("pwd");
 			userInfo.name = res->getString("name");
 			userInfo.email = res->getString("email");
 			userInfo.uid = res->getInt("uid");
 			userInfo.user_id = res->getString("user_id");
-			// �����ѯ��������
+
 			std::cout << "Password: " << origin_pwd << std::endl;
 			matched = true;
 			break;
@@ -522,17 +522,17 @@ bool MysqlDao::TestProcedure(const std::string& email, int& uid, string& name) {
 		Defer defer([this, &con]() {
 			pool_->returnConnection(std::move(con));
 			});
-		// ׼�����ô洢����
+
 		unique_ptr < sql::PreparedStatement > stmt(con->_con->prepareStatement("CALL test_procedure(?,@userId,@userName)"));
-		// �����������
+
 		stmt->setString(1, email);
 		
-		// ����PreparedStatement��ֱ��֧��ע�����������������Ҫʹ�ûỰ������������������ȡ���������ֵ
 
-		  // ִ�д洢����
+
+
 		stmt->execute();
-		// ����洢���������˻Ự��������������ʽ��ȡ���������ֵ�������������ִ��SELECT��ѯ����ȡ����
-	   // ���磬����洢����������һ���Ự����@result���洢������������������ȡ��
+
+
 		unique_ptr<sql::Statement> stmtResult(con->_con->createStatement());
 		unique_ptr<sql::ResultSet> res(stmtResult->executeQuery("SELECT @userId AS uid"));
 		if (!(res->next())) {

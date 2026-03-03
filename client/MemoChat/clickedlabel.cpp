@@ -6,7 +6,7 @@ ClickedLabel::ClickedLabel(QWidget* parent):QLabel (parent),_curstate(ClickLbSta
 }
 
 
-// 处理鼠标点击事件
+
 void ClickedLabel::mousePressEvent(QMouseEvent* event)  {
     if (event->button() == Qt::LeftButton) {
         if(_curstate == ClickLbState::Normal){
@@ -25,7 +25,7 @@ void ClickedLabel::mousePressEvent(QMouseEvent* event)  {
         }
         return;
     }
-    // 调用基类的mousePressEvent以保证正常的事件处理
+
     QLabel::mousePressEvent(event);
 }
 
@@ -47,13 +47,13 @@ void ClickedLabel::mouseReleaseEvent(QMouseEvent *event)
         emit clicked(this->text(), _curstate);
         return;
     }
-    // 调用基类的mousePressEvent以保证正常的事件处理
+
     QLabel::mousePressEvent(event);
 }
 
-// 处理鼠标悬停进入事件
+
 void ClickedLabel::enterEvent(QEnterEvent* event) {
-    // 在这里处理鼠标悬停进入的逻辑
+
     if(_curstate == ClickLbState::Normal){
         // qDebug()<<"enter , change to normal hover: "<< _normal_hover;
         setProperty("state",_normal_hover);
@@ -70,9 +70,9 @@ void ClickedLabel::enterEvent(QEnterEvent* event) {
     QLabel::enterEvent(event);
 }
 
-// 处理鼠标悬停离开事件
+
 void ClickedLabel::leaveEvent(QEvent* event){
-    // 在这里处理鼠标悬停离开的逻辑
+
     if(_curstate == ClickLbState::Normal){
         // qDebug()<<"leave , change to normal : "<< _normal;
         setProperty("state",_normal);

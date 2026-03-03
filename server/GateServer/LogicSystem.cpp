@@ -4,6 +4,8 @@
 #include "RedisMgr.h"
 #include "MysqlMgr.h"
 #include "StatusGrpcClient.h"
+#include "logging/Logger.h"
+#include "logging/TraceContext.h"
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -201,14 +203,14 @@ LogicSystem::LogicSystem() {
 
 	RegPost("/get_varifycode", [](std::shared_ptr<HttpConnection> connection) {
 		auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
-		std::cout << "receive body is " << body_str << std::endl;
+		memolog::TraceContext::SetTraceId(connection->_trace_id);
 		connection->_response.set(http::field::content_type, "text/json");
 		Json::Value root;
 		Json::Reader reader;
 		Json::Value src_root;
 		bool parse_success = reader.parse(body_str, src_root);
 		if (!parse_success) {
-			std::cout << "Failed to parse JSON data!" << std::endl;
+			memolog::LogWarn("gate.get_varifycode.invalid_json", "request json parse failed");
 			root["error"] = ErrorCodes::Error_Json;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
@@ -216,7 +218,7 @@ LogicSystem::LogicSystem() {
 		}
 
 		if (!src_root.isMember("email")) {
-			std::cout << "Failed to parse JSON data!" << std::endl;
+			memolog::LogWarn("gate.get_varifycode.invalid_body", "email is missing");
 			root["error"] = ErrorCodes::Error_Json;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
@@ -225,24 +227,29 @@ LogicSystem::LogicSystem() {
 
 		auto email = src_root["email"].asString();
 		GetVarifyRsp rsp = VerifyGrpcClient::GetInstance()->GetVarifyCode(email);
-		cout << "email is " << email << endl;
 		root["error"] = rsp.error();
 		root["email"] = src_root["email"];
+		memolog::LogInfo("gate.get_varifycode", "verify code requested",
+			{
+				{"route", "/get_varifycode"},
+				{"email", email},
+				{"error_code", std::to_string(rsp.error())}
+			});
 		std::string jsonstr = root.toStyledString();
 		beast::ostream(connection->_response.body()) << jsonstr;
 		return true;
 	});
-	//day11 ע���û��߼�
+
 	RegPost("/user_register", [](std::shared_ptr<HttpConnection> connection) {
 		auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
-		std::cout << "receive body is " << body_str << std::endl;
+		memolog::TraceContext::SetTraceId(connection->_trace_id);
 		connection->_response.set(http::field::content_type, "text/json");
 		Json::Value root;
 		Json::Reader reader;
 		Json::Value src_root;
 		bool parse_success = reader.parse(body_str, src_root);
 		if (!parse_success) {
-			std::cout << "Failed to parse JSON data!" << std::endl;
+			memolog::LogWarn("gate.user_register.invalid_json", "request json parse failed");
 			root["error"] = ErrorCodes::Error_Json;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
@@ -256,18 +263,18 @@ LogicSystem::LogicSystem() {
 		auto icon = src_root["icon"].asString();
 
 		if (pwd != confirm) {
-			std::cout << "password err " << std::endl;
+			memolog::LogWarn("gate.user_register.failed", "password mismatch", { {"email", email} });
 			root["error"] = ErrorCodes::PasswdErr;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
 			return true;
 		}
 
-		//�Ȳ���redis��email��Ӧ����֤���Ƿ����
+
 		std::string  varify_code;
 		bool b_get_varify = RedisMgr::GetInstance()->Get(CODEPREFIX+src_root["email"].asString(), varify_code);
 		if (!b_get_varify) {
-			std::cout << " get varify code expired" << std::endl;
+			memolog::LogWarn("gate.user_register.failed", "verify code expired", { {"email", email} });
 			root["error"] = ErrorCodes::VarifyExpired;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
@@ -275,17 +282,17 @@ LogicSystem::LogicSystem() {
 		}
 
 		if (varify_code != src_root["varifycode"].asString()) {
-			std::cout << " varify code error" << std::endl;
+			memolog::LogWarn("gate.user_register.failed", "verify code mismatch", { {"email", email} });
 			root["error"] = ErrorCodes::VarifyCodeErr;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
 			return true;
 		}
 
-		//�������ݿ��ж��û��Ƿ����
+
 		int uid = MysqlMgr::GetInstance()->RegUser(name, email, pwd, icon);
 		if (uid == 0 || uid == -1) {
-			std::cout << " user or email exist" << std::endl;
+			memolog::LogWarn("gate.user_register.failed", "user or email exists", { {"email", email}, {"name", name} });
 			root["error"] = ErrorCodes::UserExist;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
@@ -300,22 +307,24 @@ LogicSystem::LogicSystem() {
 		root["confirm"] = confirm;
 		root["icon"] = icon;
 		root["varifycode"] = src_root["varifycode"].asString();
+		memolog::LogInfo("gate.user_register", "user registered",
+			{ {"email", email}, {"uid", std::to_string(uid)} });
 		std::string jsonstr = root.toStyledString();
 		beast::ostream(connection->_response.body()) << jsonstr;
 		return true;
 		});
 
-	//���ûص��߼�
+
 	RegPost("/reset_pwd", [](std::shared_ptr<HttpConnection> connection) {
 		auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
-		std::cout << "receive body is " << body_str << std::endl;
+		memolog::TraceContext::SetTraceId(connection->_trace_id);
 		connection->_response.set(http::field::content_type, "text/json");
 		Json::Value root;
 		Json::Reader reader;
 		Json::Value src_root;
 		bool parse_success = reader.parse(body_str, src_root);
 		if (!parse_success) {
-			std::cout << "Failed to parse JSON data!" << std::endl;
+			memolog::LogWarn("gate.reset_pwd.invalid_json", "request json parse failed");
 			root["error"] = ErrorCodes::Error_Json;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
@@ -326,11 +335,11 @@ LogicSystem::LogicSystem() {
 		auto name = src_root["user"].asString();
 		auto pwd = src_root["passwd"].asString();
 
-		//�Ȳ���redis��email��Ӧ����֤���Ƿ����
+
 		std::string  varify_code;
 		bool b_get_varify = RedisMgr::GetInstance()->Get(CODEPREFIX + src_root["email"].asString(), varify_code);
 		if (!b_get_varify) {
-			std::cout << " get varify code expired" << std::endl;
+			memolog::LogWarn("gate.reset_pwd.failed", "verify code expired", { {"email", email} });
 			root["error"] = ErrorCodes::VarifyExpired;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
@@ -338,33 +347,33 @@ LogicSystem::LogicSystem() {
 		}
 
 		if (varify_code != src_root["varifycode"].asString()) {
-			std::cout << " varify code error" << std::endl;
+			memolog::LogWarn("gate.reset_pwd.failed", "verify code mismatch", { {"email", email} });
 			root["error"] = ErrorCodes::VarifyCodeErr;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
 			return true;
 		}
-		//��ѯ���ݿ��ж��û����������Ƿ�ƥ��
+
 		bool email_valid = MysqlMgr::GetInstance()->CheckEmail(name, email);
 		if (!email_valid) {
-			std::cout << " user email not match" << std::endl;
+			memolog::LogWarn("gate.reset_pwd.failed", "user email mismatch", { {"email", email}, {"name", name} });
 			root["error"] = ErrorCodes::EmailNotMatch;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
 			return true;
 		}
 
-		//��������Ϊ��������
+
 		bool b_up = MysqlMgr::GetInstance()->UpdatePwd(name, pwd);
 		if (!b_up) {
-			std::cout << " update pwd failed" << std::endl;
+			memolog::LogWarn("gate.reset_pwd.failed", "password update failed", { {"email", email} });
 			root["error"] = ErrorCodes::PasswdUpFailed;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
 			return true;
 		}
 
-		std::cout << "succeed to update password" << pwd << std::endl;
+		memolog::LogInfo("gate.reset_pwd", "password updated", { {"email", email} });
 		root["error"] = 0;
 		root["email"] = email;
 		root["user"] = name;
@@ -375,17 +384,18 @@ LogicSystem::LogicSystem() {
 		return true;
 		});
 
-	//�û���¼�߼�
+
 	RegPost("/user_login", [](std::shared_ptr<HttpConnection> connection) {
 		auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
-		std::cout << "receive body is " << body_str << std::endl;
+		memolog::TraceContext::SetTraceId(connection->_trace_id);
 		connection->_response.set(http::field::content_type, "text/json");
 		Json::Value root;
 		Json::Reader reader;
 		Json::Value src_root;
+		root["trace_id"] = connection->_trace_id;
 		bool parse_success = reader.parse(body_str, src_root);
 		if (!parse_success) {
-			std::cout << "Failed to parse JSON data!" << std::endl;
+			memolog::LogWarn("gate.user_login.invalid_json", "request json parse failed");
 			root["error"] = ErrorCodes::Error_Json;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
@@ -399,32 +409,36 @@ LogicSystem::LogicSystem() {
 		root["feature_group_chat"] = true;
 		if (!IsClientVersionAllowed(client_ver, kMinClientVersion)) {
 			root["error"] = ErrorCodes::ClientVersionTooLow;
+			memolog::LogWarn("gate.user_login.failed", "client version too low",
+				{ {"email", email}, {"error_code", std::to_string(ErrorCodes::ClientVersionTooLow)} });
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
 			return true;
 		}
 		UserInfo userInfo;
-		//��ѯ���ݿ��ж��û����������Ƿ�ƥ��
+
 		bool pwd_valid = MysqlMgr::GetInstance()->CheckPwd(email, pwd, userInfo);
 		if (!pwd_valid) {
-			std::cout << " user pwd not match" << std::endl;
+			memolog::LogWarn("gate.user_login.failed", "password invalid",
+				{ {"email", email}, {"error_code", std::to_string(ErrorCodes::PasswdInvalid)} });
 			root["error"] = ErrorCodes::PasswdInvalid;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
 			return true;
 		}
 
-		//��ѯStatusServer�ҵ����ʵ�����
+
 		auto reply = StatusGrpcClient::GetInstance()->GetChatServer(userInfo.uid);
 		if (reply.error()) {
-			std::cout << " grpc get chat server failed, error is " << reply.error()<< std::endl;
+			memolog::LogWarn("gate.user_login.failed", "get chat server rpc failed",
+				{ {"uid", std::to_string(userInfo.uid)}, {"error_code", std::to_string(reply.error())} });
 			root["error"] = ErrorCodes::RPCFailed;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
 			return true;
 		}
 
-		std::cout << "succeed to load userinfo uid is " << userInfo.uid << std::endl;
+		memolog::TraceContext::SetUid(std::to_string(userInfo.uid));
 		root["error"] = 0;
 		root["email"] = email;
 		root["uid"] = userInfo.uid;
@@ -432,6 +446,13 @@ LogicSystem::LogicSystem() {
 		root["token"] = reply.token();
 		root["host"] = reply.host();
 		root["port"] = reply.port();
+		memolog::LogInfo("gate.user_login", "user login succeeded",
+			{
+				{"uid", std::to_string(userInfo.uid)},
+				{"route", "/user_login"},
+				{"chat_host", reply.host()},
+				{"chat_port", reply.port()}
+			});
 		std::string jsonstr = root.toStyledString();
 		beast::ostream(connection->_response.body()) << jsonstr;
 		return true;
@@ -646,9 +667,12 @@ bool LogicSystem::HandleGet(std::string path, std::shared_ptr<HttpConnection> co
 
 bool LogicSystem::HandlePost(std::string path, std::shared_ptr<HttpConnection> con) {
 	if (_post_handlers.find(path) == _post_handlers.end()) {
+		memolog::LogWarn("gate.http.post.not_found", "post route not found", { {"route", path} });
 		return false;
 	}
 
+	memolog::TraceContext::SetTraceId(con ? con->_trace_id : "");
+	memolog::LogInfo("gate.http.post.dispatch", "dispatch post route", { {"route", path} });
 	_post_handlers[path](con);
 	return true;
 }

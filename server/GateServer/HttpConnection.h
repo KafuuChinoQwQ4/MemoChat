@@ -31,5 +31,5 @@ private:
 
 	std::string _get_url;
 	std::unordered_map<std::string, std::string> _get_params;
+	std::string _trace_id;
 };
-

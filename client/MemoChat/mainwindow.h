@@ -6,15 +6,7 @@
 #include "registerdialog.h"
 #include "resetdialog.h"
 #include "chatdialog.h"
-/******************************************************************************
- *
- * @file       mainwindow.h
- * @brief      主界面功能 Function
- *
- * @author     恋恋风辰
- * @date       2024/02/27
- * @history
- *****************************************************************************/
+
 namespace Ui {
 class MainWindow;
 }

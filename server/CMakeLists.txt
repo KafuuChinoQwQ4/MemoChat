@@ -12,8 +12,17 @@ find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(hiredis CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
 find_package(unofficial-libmysql CONFIG REQUIRED)
 find_package(unofficial-mysql-connector-cpp CONFIG REQUIRED)
+
+if(TARGET spdlog::spdlog)
+    set(MEMOCHAT_SPDLOG_TARGET spdlog::spdlog)
+elseif(TARGET spdlog::spdlog_header_only)
+    set(MEMOCHAT_SPDLOG_TARGET spdlog::spdlog_header_only)
+else()
+    message(FATAL_ERROR "spdlog target not found")
+endif()
 
 if(NOT TARGET protobuf::protoc)
     message(FATAL_ERROR "protobuf::protoc target not found. Install protobuf host tools.")
@@ -23,15 +32,34 @@ if(NOT TARGET gRPC::grpc_cpp_plugin)
     message(FATAL_ERROR "gRPC::grpc_cpp_plugin target not found. Install grpc[codegen].")
 endif()
 
+add_library(memochat_logging STATIC
+    common/logging/LogConfig.cpp
+    common/logging/Logger.cpp
+    common/logging/Redaction.cpp
+)
+target_compile_features(memochat_logging PUBLIC cxx_std_17)
+target_include_directories(memochat_logging PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+)
+target_link_libraries(memochat_logging PUBLIC
+    JsonCpp::JsonCpp
+    ${MEMOCHAT_SPDLOG_TARGET}
+)
+
 add_library(memochat_server_deps INTERFACE)
 target_compile_features(memochat_server_deps INTERFACE cxx_std_17)
+target_include_directories(memochat_server_deps INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+)
 target_link_libraries(memochat_server_deps INTERFACE
+    memochat_logging
     Boost::filesystem
     gRPC::grpc++
     gRPC::grpc++_reflection
     protobuf::libprotobuf
     hiredis::hiredis
     JsonCpp::JsonCpp
+    ${MEMOCHAT_SPDLOG_TARGET}
     unofficial::libmysql::libmysql
     unofficial::mysql-connector-cpp::connector-jdbc
     ws2_32

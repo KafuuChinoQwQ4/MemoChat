@@ -1,4 +1,4 @@
-﻿#ifndef PICTUREBUBBLE_H
+#ifndef PICTUREBUBBLE_H
 #define PICTUREBUBBLE_H
 
 #include "BubbleFrame.h"

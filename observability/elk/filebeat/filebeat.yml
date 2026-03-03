@@ -1,0 +1,62 @@
+filebeat.inputs:
+  - type: filestream
+    id: memochat-server-logs
+    enabled: true
+    paths:
+      - /workspace/build/run/*/logs/*.json
+    parsers:
+      - ndjson:
+          overwrite_keys: true
+          add_error_key: true
+    fields:
+      source_type: server
+      env: local
+    fields_under_root: true
+
+  - type: filestream
+    id: memochat-client-logs
+    enabled: true
+    paths:
+      - /workspace/build/bin/Release/logs/*.json
+      - /workspace/build/bin/Debug/logs/*.json
+    parsers:
+      - ndjson:
+          overwrite_keys: true
+          add_error_key: true
+    fields:
+      source_type: client
+      env: local
+    fields_under_root: true
+
+  - type: filestream
+    id: memochat-loadtest-logs
+    enabled: true
+    paths:
+      - /workspace/local-loadtest/logs/*.json
+    parsers:
+      - ndjson:
+          overwrite_keys: true
+          add_error_key: true
+    fields:
+      source_type: loadtest
+      env: local
+    fields_under_root: true
+
+  - type: filestream
+    id: memochat-varify-logs
+    enabled: true
+    paths:
+      - /workspace/server/VarifyServer/logs/*.json
+    parsers:
+      - ndjson:
+          overwrite_keys: true
+          add_error_key: true
+    fields:
+      source_type: varify
+      env: local
+    fields_under_root: true
+
+output.logstash:
+  hosts: ["logstash:5044"]
+
+logging.level: info

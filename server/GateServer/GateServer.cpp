@@ -1,4 +1,4 @@
-// GateServer.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
+
 //
 
 #include <iostream>
@@ -12,10 +12,12 @@
 #include "RedisMgr.h"
 #include "MysqlMgr.h"
 #include "AsioIOServicePool.h"
+#include "logging/LogConfig.h"
+#include "logging/Logger.h"
 
 void TestRedis() {
-	//连接redis 需要启动才可以进行连接
-//redis默认监听端口为6387 可以再配置文件中修改
+
+
 	redisContext* c = redisConnect("127.0.0.1", 6380);
 	if (c->err)
 	{
@@ -32,20 +34,20 @@ void TestRedis() {
 		printf("Redis auth success!\n");
 		 }
 
-	//为redis设置key
+
 	const char* command1 = "set stest1 value1";
 
-	//执行redis命令行
+
     r = (redisReply*)redisCommand(c, command1);
 
-	//如果返回NULL则说明执行失败
+
 	if (NULL == r)
 	{
 		printf("Execut command1 failure\n");
 		redisFree(c);        return;
 	}
 
-	//如果执行失败则释放连接
+
 	if (!(r->type == REDIS_REPLY_STATUS && (strcmp(r->str, "OK") == 0 || strcmp(r->str, "ok") == 0)))
 	{
 		printf("Failed to execute command[%s]\n", command1);
@@ -53,14 +55,14 @@ void TestRedis() {
 		redisFree(c);        return;
 	}
 
-	//执行成功 释放redisCommand执行后返回的redisReply所占用的内存
+
 	freeReplyObject(r);
 	printf("Succeed to execute command[%s]\n", command1);
 
 	const char* command2 = "strlen stest1";
 	r = (redisReply*)redisCommand(c, command2);
 
-	//如果返回类型不是整形 则释放连接
+
 	if (r->type != REDIS_REPLY_INTEGER)
 	{
 		printf("Failed to execute command[%s]\n", command2);
@@ -68,13 +70,13 @@ void TestRedis() {
 		redisFree(c);        return;
 	}
 
-	//获取字符串长度
+
 	int length = r->integer;
 	freeReplyObject(r);
 	printf("The length of 'stest1' is %d.\n", length);
 	printf("Succeed to execute command[%s]\n", command2);
 
-	//获取redis键值对信息
+
 	const char* command3 = "get stest1";
 	r = (redisReply*)redisCommand(c, command3);
 	if (r->type != REDIS_REPLY_STRING)
@@ -98,7 +100,7 @@ void TestRedis() {
 	freeReplyObject(r);
 	printf("Succeed to execute command[%s]\n", command4);
 
-	//释放连接资源
+
 	redisFree(c);
 
 }
@@ -135,6 +137,11 @@ int main()
 		MysqlMgr::GetInstance();
 		RedisMgr::GetInstance();
 		auto & gCfgMgr = ConfigMgr::Inst();
+		auto log_cfg = memolog::LogConfig::FromGetter(
+			[&gCfgMgr](const std::string& section, const std::string& key) {
+				return gCfgMgr.GetValue(section, key);
+			});
+		memolog::Logger::Init("GateServer", log_cfg);
 		std::string gate_port_str = gCfgMgr["GateServer"]["Port"];
 		unsigned short gate_port = atoi(gate_port_str.c_str());
 		net::io_context ioc{ 1 };
@@ -147,14 +154,18 @@ int main()
 			ioc.stop();
 			});
 		std::make_shared<CServer>(ioc, gate_port)->Start();
-		std::cout << "Gate Server listen on port: " << gate_port << std::endl;
+		memolog::LogInfo("service.start", "GateServer listening", { {"port", std::to_string(gate_port)} });
 		ioc.run();
+		memolog::LogInfo("service.stop", "GateServer stopped");
 		RedisMgr::GetInstance()->Close();
+		memolog::Logger::Shutdown();
+		return EXIT_SUCCESS;
 	}
 	catch (std::exception const& e)
 	{
-		std::cerr << "Error: " << e.what() << std::endl;
+		memolog::LogError("service.fatal", "GateServer crashed", { {"error", e.what()} });
 		RedisMgr::GetInstance()->Close();
+		memolog::Logger::Shutdown();
 		return EXIT_FAILURE;
 	}
 

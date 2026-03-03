@@ -1,0 +1,36 @@
+﻿{
+  "test": "tcp_login",
+  "time_utc": "20260303_083748",
+  "target": {
+    "gate_url": "http://127.0.0.1:8080",
+    "login_path": "/user_login"
+  },
+  "config": {
+    "total": 1500,
+    "concurrency": 1,
+    "http_timeout_sec": 5.0,
+    "tcp_timeout_sec": 5.0,
+    "accounts": 1,
+    "use_xor_passwd": true
+  },
+  "summary": {
+    "total": 1500,
+    "success": 1473,
+    "failed": 27,
+    "success_rate": 0.982,
+    "elapsed_sec": 110.677621,
+    "throughput_rps": 13.553,
+    "latency_ms": {
+      "min": 41.413,
+      "avg": 73.73,
+      "p50": 44.265,
+      "p90": 52.472,
+      "p95": 57.104,
+      "p99": 969.615,
+      "max": 1135.12
+    }
+  },
+  "error_counter": {
+    "tcp_error_1010": 27
+  }
+}

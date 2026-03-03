@@ -1,4 +1,4 @@
-﻿#ifndef MESSAGETEXTEDIT_H
+#ifndef MESSAGETEXTEDIT_H
 #define MESSAGETEXTEDIT_H
 
 #include <QObject>
@@ -41,12 +41,12 @@ private:
     void insertFromMimeData(const QMimeData *source);
 
 private:
-    bool isImage(QString url);//判断文件是否为图片
+    bool isImage(QString url);
     void insertMsgList(QVector<MsgInfo> &list,QString flag, QString text, QPixmap pix);
 
     QStringList getUrl(QString text);
-    QPixmap getFileIconPixmap(const QString &url);//获取文件图标及大小信息，并转化成图片
-    QString getFileSize(qint64 size);//获取文件大小
+    QPixmap getFileIconPixmap(const QString &url);
+    QString getFileSize(qint64 size);
 
 private slots:
     void textEditChanged();

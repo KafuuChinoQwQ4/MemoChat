@@ -12,7 +12,7 @@ void ClickedOnceLabel::mouseReleaseEvent(QMouseEvent *event)
         emit clicked(this->text());
         return;
     }
-    // 调用基类的mousePressEvent以保证正常的事件处理
+
     QLabel::mousePressEvent(event);
 }
 
