@@ -535,12 +535,15 @@ void TcpMgr::initHandlers()
         const QJsonArray messages = jsonObj.value("messages").toArray();
         for (int i = messages.size() - 1; i >= 0; --i) {
             const QJsonObject one = messages.at(i).toObject();
+            const QString fromName = one.value("from_nick").toString(one.value("from_name").toString());
+            const QString fromIcon = one.value("from_icon").toString();
             auto msg = std::make_shared<TextChatData>(one.value("msgid").toString(),
                                                       one.value("content").toString(),
                                                       one.value("fromuid").toInt(),
                                                       0,
-                                                      QString(),
-                                                      one.value("created_at").toVariant().toLongLong());
+                                                      fromName,
+                                                      one.value("created_at").toVariant().toLongLong(),
+                                                      fromIcon);
             UserMgr::GetInstance()->AppendGroupChatMsg(groupId, msg);
         }
         emit sig_group_list_updated();
@@ -559,6 +562,12 @@ void TcpMgr::initHandlers()
       });
 
     _handlers.insert(ID_SET_GROUP_ADMIN_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_UPDATE_GROUP_ICON_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
         QJsonObject jsonObj;
         parse_group_rsp(id, data, jsonObj);
@@ -649,7 +658,8 @@ void TcpMgr::initHandlers()
         const int fromUid = jsonObj.value("fromuid").toInt();
         const QJsonObject msgObj = jsonObj.value("msg").toObject();
         const QString fromName = jsonObj.value("from_nick").toString(jsonObj.value("from_name").toString());
-        auto groupMsg = std::make_shared<GroupChatMsg>(groupId, fromUid, msgObj, fromName);
+        const QString fromIcon = jsonObj.value("from_icon").toString();
+        auto groupMsg = std::make_shared<GroupChatMsg>(groupId, fromUid, msgObj, fromName, fromIcon);
         emit sig_group_chat_msg(groupMsg);
       });
 

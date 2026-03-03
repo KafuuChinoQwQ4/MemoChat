@@ -136,6 +136,10 @@ bool MysqlMgr::UpdateGroupAnnouncement(const int64_t& group_id, const int& opera
 	return _dao.UpdateGroupAnnouncement(group_id, operator_uid, announcement);
 }
 
+bool MysqlMgr::UpdateGroupIcon(const int64_t& group_id, const int& operator_uid, const std::string& icon) {
+	return _dao.UpdateGroupIcon(group_id, operator_uid, icon);
+}
+
 bool MysqlMgr::SetGroupAdmin(const int64_t& group_id, const int& operator_uid, const int& target_uid, const bool& is_admin) {
 	return _dao.SetGroupAdmin(group_id, operator_uid, target_uid, is_admin);
 }

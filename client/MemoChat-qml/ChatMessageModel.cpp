@@ -42,6 +42,8 @@ QVariant ChatMessageModel::data(const QModelIndex &index, int role) const
         return entry.fileName;
     case SenderNameRole:
         return entry.senderName;
+    case SenderIconRole:
+        return entry.senderIcon;
     case ShowAvatarRole:
         return entry.showAvatar;
     case CreatedAtRole:
@@ -62,6 +64,7 @@ QHash<int, QByteArray> ChatMessageModel::roleNames() const
         {MsgTypeRole, "msgType"},
         {FileNameRole, "fileName"},
         {SenderNameRole, "senderName"},
+        {SenderIconRole, "senderIcon"},
         {ShowAvatarRole, "showAvatar"},
         {CreatedAtRole, "createdAt"}
     };
@@ -214,6 +217,7 @@ ChatMessageModel::MessageEntry ChatMessageModel::toEntry(const std::shared_ptr<T
     entry.msgType = decoded.type;
     entry.fileName = decoded.fileName;
     entry.senderName = message->_from_name;
+    entry.senderIcon = message->_from_icon;
     entry.fromUid = message->_from_uid;
     entry.toUid = message->_to_uid;
     entry.outgoing = (message->_from_uid == selfUid);
