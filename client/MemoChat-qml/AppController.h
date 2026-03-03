@@ -16,6 +16,7 @@
 #include "SearchResultModel.h"
 #include "ApplyRequestModel.h"
 #include "ProfileController.h"
+#include "PrivateChatCacheStore.h"
 
 class AppController : public QObject
 {
@@ -55,6 +56,8 @@ class AppController : public QObject
     Q_PROPERTY(bool hasPendingApply READ hasPendingApply NOTIFY pendingApplyChanged)
     Q_PROPERTY(bool chatLoadingMore READ chatLoadingMore NOTIFY chatLoadingMoreChanged)
     Q_PROPERTY(bool canLoadMoreChats READ canLoadMoreChats NOTIFY canLoadMoreChatsChanged)
+    Q_PROPERTY(bool privateHistoryLoading READ privateHistoryLoading NOTIFY privateHistoryLoadingChanged)
+    Q_PROPERTY(bool canLoadMorePrivateHistory READ canLoadMorePrivateHistory NOTIFY canLoadMorePrivateHistoryChanged)
     Q_PROPERTY(bool contactLoadingMore READ contactLoadingMore NOTIFY contactLoadingMoreChanged)
     Q_PROPERTY(bool canLoadMoreContacts READ canLoadMoreContacts NOTIFY canLoadMoreContactsChanged)
     Q_PROPERTY(QString authStatusText READ authStatusText NOTIFY authStatusChanged)
@@ -123,6 +126,8 @@ public:
     bool hasPendingApply() const;
     bool chatLoadingMore() const;
     bool canLoadMoreChats() const;
+    bool privateHistoryLoading() const;
+    bool canLoadMorePrivateHistory() const;
     bool contactLoadingMore() const;
     bool canLoadMoreContacts() const;
     QString authStatusText() const;
@@ -143,6 +148,7 @@ public:
     Q_INVOKABLE void showApplyRequests();
     Q_INVOKABLE void jumpChatWithCurrentContact();
     Q_INVOKABLE void loadMoreChats();
+    Q_INVOKABLE void loadMorePrivateHistory();
     Q_INVOKABLE void loadMoreContacts();
     Q_INVOKABLE void sendTextMessage(const QString &text);
     Q_INVOKABLE void sendImageMessage();
@@ -198,6 +204,8 @@ signals:
     void pendingApplyChanged();
     void chatLoadingMoreChanged();
     void canLoadMoreChatsChanged();
+    void privateHistoryLoadingChanged();
+    void canLoadMorePrivateHistoryChanged();
     void contactLoadingMoreChanged();
     void canLoadMoreContactsChanged();
     void authStatusChanged();
@@ -228,6 +236,7 @@ private slots:
     void onGroupMemberChanged(QJsonObject payload);
     void onGroupChatMsg(std::shared_ptr<GroupChatMsg> msg);
     void onGroupRsp(ReqId reqId, int error, QJsonObject payload);
+    void onPrivateHistoryRsp(QJsonObject payload);
 
 private:
     bool parseJson(const QString &res, QJsonObject &obj);
@@ -249,6 +258,7 @@ private:
     void refreshChatLoadMoreState();
     void refreshContactLoadMoreState();
     void loadCurrentChatMessages();
+    void requestPrivateHistory(int peerUid, qint64 beforeTs);
     void setContactPane(ContactPane pane);
     void setCurrentContact(int uid, const QString &name, const QString &nick, const QString &icon,
                            const QString &back, int sex);
@@ -259,6 +269,8 @@ private:
     void setSearchStatus(const QString &text, bool isError);
     void clearSearchResultOnly();
     void setChatLoadingMore(bool loading);
+    void setPrivateHistoryLoading(bool loading);
+    void setCanLoadMorePrivateHistory(bool canLoad);
     void setContactLoadingMore(bool loading);
     void setAuthStatus(const QString &text, bool isError);
     void setSettingsStatus(const QString &text, bool isError);
@@ -303,6 +315,8 @@ private:
     bool _search_status_error;
     bool _chat_loading_more;
     bool _can_load_more_chats;
+    bool _private_history_loading;
+    bool _can_load_more_private_history;
     bool _contact_loading_more;
     bool _can_load_more_contacts;
     QString _auth_status_text;
@@ -312,12 +326,16 @@ private:
     QString _group_status_text;
     bool _group_status_error;
     QMap<int, qint64> _group_uid_map;
+    qint64 _private_history_before_ts;
+    qint64 _private_history_pending_before_ts;
+    int _private_history_pending_peer_uid;
 
     ClientGateway _gateway;
     AuthController _auth_controller;
     ChatController _chat_controller;
     ContactController _contact_controller;
     ProfileController _profile_controller;
+    PrivateChatCacheStore _private_cache_store;
     QTimer _register_countdown_timer;
     QTimer _heartbeat_timer;
 };

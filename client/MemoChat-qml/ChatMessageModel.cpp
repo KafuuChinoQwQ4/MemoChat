@@ -1,6 +1,8 @@
 #include "ChatMessageModel.h"
 #include "MessageContentCodec.h"
 #include <limits>
+#include <algorithm>
+#include <unordered_set>
 
 ChatMessageModel::ChatMessageModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -42,6 +44,8 @@ QVariant ChatMessageModel::data(const QModelIndex &index, int role) const
         return entry.senderName;
     case ShowAvatarRole:
         return entry.showAvatar;
+    case CreatedAtRole:
+        return entry.createdAt;
     default:
         return {};
     }
@@ -58,7 +62,8 @@ QHash<int, QByteArray> ChatMessageModel::roleNames() const
         {MsgTypeRole, "msgType"},
         {FileNameRole, "fileName"},
         {SenderNameRole, "senderName"},
-        {ShowAvatarRole, "showAvatar"}
+        {ShowAvatarRole, "showAvatar"},
+        {CreatedAtRole, "createdAt"}
     };
 }
 
@@ -80,15 +85,35 @@ void ChatMessageModel::setMessages(const std::vector<std::shared_ptr<TextChatDat
     _items.clear();
     _items.reserve(messages.size());
 
-    int previousSenderUid = std::numeric_limits<int>::min();
+    std::vector<MessageEntry> incoming;
+    incoming.reserve(messages.size());
+    std::unordered_set<std::string> seen;
+    seen.reserve(messages.size());
     for (const auto &message : messages) {
         if (!message) {
             continue;
         }
         MessageEntry entry = toEntry(message, selfUid);
+        const std::string key = entry.msgId.toStdString();
+        if (key.empty() || seen.find(key) != seen.end()) {
+            continue;
+        }
+        seen.insert(key);
+        incoming.push_back(std::move(entry));
+    }
+
+    std::sort(incoming.begin(), incoming.end(),
+              [](const MessageEntry &lhs, const MessageEntry &rhs) {
+                  if (lhs.createdAt != rhs.createdAt) {
+                      return lhs.createdAt < rhs.createdAt;
+                  }
+                  return lhs.msgId < rhs.msgId;
+              });
+    _items = std::move(incoming);
+    int previousSenderUid = std::numeric_limits<int>::min();
+    for (auto &entry : _items) {
         entry.showAvatar = (entry.fromUid != previousSenderUid);
         previousSenderUid = entry.fromUid;
-        _items.push_back(std::move(entry));
     }
 
     endResetModel();
@@ -102,12 +127,82 @@ void ChatMessageModel::appendMessage(const std::shared_ptr<TextChatData> &messag
     }
 
     MessageEntry entry = toEntry(message, selfUid);
-    entry.showAvatar = _items.empty() || _items.back().fromUid != entry.fromUid;
+    if (containsMessage(entry.msgId)) {
+        return;
+    }
+    int insertPos = rowCount();
+    auto insertIt = _items.end();
+    if (!_items.empty()) {
+        insertIt = std::upper_bound(
+            _items.begin(), _items.end(), entry,
+            [](const MessageEntry &lhs, const MessageEntry &rhs) {
+                if (lhs.createdAt != rhs.createdAt) {
+                    return lhs.createdAt < rhs.createdAt;
+                }
+                return lhs.msgId < rhs.msgId;
+            });
+        insertPos = static_cast<int>(std::distance(_items.begin(), insertIt));
+    }
 
-    beginInsertRows(QModelIndex(), rowCount(), rowCount());
-    _items.push_back(entry);
+    beginInsertRows(QModelIndex(), insertPos, insertPos);
+    _items.insert(insertIt, entry);
     endInsertRows();
+    refreshAvatarFlags();
     emit countChanged();
+}
+
+void ChatMessageModel::prependMessages(const std::vector<std::shared_ptr<TextChatData> > &messages, int selfUid)
+{
+    if (messages.empty()) {
+        return;
+    }
+
+    std::vector<MessageEntry> incoming;
+    incoming.reserve(messages.size());
+    for (const auto &message : messages) {
+        if (!message) {
+            continue;
+        }
+        MessageEntry entry = toEntry(message, selfUid);
+        if (containsMessage(entry.msgId)) {
+            continue;
+        }
+        incoming.push_back(std::move(entry));
+    }
+    if (incoming.empty()) {
+        return;
+    }
+
+    std::sort(incoming.begin(), incoming.end(),
+              [](const MessageEntry &lhs, const MessageEntry &rhs) {
+                  if (lhs.createdAt != rhs.createdAt) {
+                      return lhs.createdAt < rhs.createdAt;
+                  }
+                  return lhs.msgId < rhs.msgId;
+              });
+
+    beginInsertRows(QModelIndex(), 0, static_cast<int>(incoming.size()) - 1);
+    _items.insert(_items.begin(), incoming.begin(), incoming.end());
+    endInsertRows();
+    refreshAvatarFlags();
+    emit countChanged();
+}
+
+qint64 ChatMessageModel::earliestCreatedAt() const
+{
+    if (_items.empty()) {
+        return 0;
+    }
+    return _items.front().createdAt;
+}
+
+bool ChatMessageModel::containsMessage(const QString &msgId) const
+{
+    if (msgId.isEmpty()) {
+        return false;
+    }
+    return std::any_of(_items.begin(), _items.end(),
+                       [&msgId](const MessageEntry &entry) { return entry.msgId == msgId; });
 }
 
 ChatMessageModel::MessageEntry ChatMessageModel::toEntry(const std::shared_ptr<TextChatData> &message, int selfUid) const
@@ -123,5 +218,20 @@ ChatMessageModel::MessageEntry ChatMessageModel::toEntry(const std::shared_ptr<T
     entry.toUid = message->_to_uid;
     entry.outgoing = (message->_from_uid == selfUid);
     entry.showAvatar = true;
+    entry.createdAt = message->_created_at;
     return entry;
+}
+
+void ChatMessageModel::refreshAvatarFlags()
+{
+    int previousSenderUid = std::numeric_limits<int>::min();
+    for (auto &entry : _items) {
+        entry.showAvatar = (entry.fromUid != previousSenderUid);
+        previousSenderUid = entry.fromUid;
+    }
+    if (!_items.empty()) {
+        const QModelIndex top = index(0, 0);
+        const QModelIndex bottom = index(rowCount() - 1, 0);
+        emit dataChanged(top, bottom, {ShowAvatarRole});
+    }
 }

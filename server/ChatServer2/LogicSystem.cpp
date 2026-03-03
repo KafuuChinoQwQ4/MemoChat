@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <unordered_set>
+#include <algorithm>
 #include <chrono>
 #include "CServer.h"
 using namespace std;
@@ -118,6 +119,9 @@ void LogicSystem::RegisterCallBacks() {
 		placeholders::_1, placeholders::_2, placeholders::_3);
 
 	_fun_callbacks[ID_GROUP_HISTORY_REQ] = std::bind(&LogicSystem::GroupHistoryHandler, this,
+		placeholders::_1, placeholders::_2, placeholders::_3);
+
+	_fun_callbacks[ID_PRIVATE_HISTORY_REQ] = std::bind(&LogicSystem::PrivateHistoryHandler, this,
 		placeholders::_1, placeholders::_2, placeholders::_3);
 
 	_fun_callbacks[ID_UPDATE_GROUP_ANNOUNCEMENT_REQ] = std::bind(&LogicSystem::UpdateGroupAnnouncementHandler, this,
@@ -500,11 +504,10 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 	auto uid = root["fromuid"].asInt();
 	auto touid = root["touid"].asInt();
 
-	const Json::Value  arrays = root["text_array"];
+	const Json::Value arrays = root["text_array"];
 	
-	Json::Value  rtvalue;
+	Json::Value rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
-	rtvalue["text_array"] = arrays;
 	rtvalue["fromuid"] = uid;
 	rtvalue["touid"] = touid;
 
@@ -512,6 +515,55 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 		std::string return_str = rtvalue.toStyledString();
 		session->Send(return_str, ID_TEXT_CHAT_MSG_RSP);
 		});
+
+	if (uid <= 0 || touid <= 0 || !arrays.isArray() || arrays.empty()) {
+		rtvalue["error"] = ErrorCodes::Error_Json;
+		return;
+	}
+
+	Json::Value normalized = Json::arrayValue;
+	TextChatMsgReq text_msg_req;
+	text_msg_req.set_fromuid(uid);
+	text_msg_req.set_touid(touid);
+	const int conv_uid_min = std::min(uid, touid);
+	const int conv_uid_max = std::max(uid, touid);
+	for (const auto& txt_obj : arrays) {
+		const std::string content = txt_obj["content"].asString();
+		const std::string msgid = txt_obj["msgid"].asString();
+		int64_t created_at = txt_obj.get("created_at", 0).asInt64();
+		if (created_at <= 0) {
+			created_at = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+				std::chrono::system_clock::now().time_since_epoch()).count());
+		}
+		if (content.empty() || msgid.empty()) {
+			rtvalue["error"] = ErrorCodes::Error_Json;
+			return;
+		}
+
+		PrivateMessageInfo msg;
+		msg.msg_id = msgid;
+		msg.conv_uid_min = conv_uid_min;
+		msg.conv_uid_max = conv_uid_max;
+		msg.from_uid = uid;
+		msg.to_uid = touid;
+		msg.content = content;
+		msg.created_at = created_at;
+		if (!MysqlMgr::GetInstance()->SavePrivateMessage(msg)) {
+			rtvalue["error"] = ErrorCodes::RPCFailed;
+			return;
+		}
+
+		Json::Value element;
+		element["content"] = content;
+		element["msgid"] = msgid;
+		element["created_at"] = static_cast<Json::Int64>(created_at);
+		normalized.append(element);
+
+		auto* text_msg = text_msg_req.add_textmsgs();
+		text_msg->set_msgid(msgid);
+		text_msg->set_msgcontent(content);
+	}
+	rtvalue["text_array"] = normalized;
 
 
 	//��ѯredis ����touid��Ӧ��server ip
@@ -536,21 +588,6 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 
 		return ;
 	}
-
-
-	TextChatMsgReq text_msg_req;
-	text_msg_req.set_fromuid(uid);
-	text_msg_req.set_touid(touid);
-	for (const auto& txt_obj : arrays) {
-		auto content = txt_obj["content"].asString();
-		auto msgid = txt_obj["msgid"].asString();
-		std::cout << "content is " << content << std::endl;
-		std::cout << "msgid is " << msgid << std::endl;
-		auto *text_msg = text_msg_req.add_textmsgs();
-		text_msg->set_msgid(msgid);
-		text_msg->set_msgcontent(content);
-	}
-
 
 	//����֪ͨ todo...
 	ChatGrpcClient::GetInstance()->NotifyTextChatMsg(to_ip_value, text_msg_req, rtvalue);
@@ -1234,6 +1271,55 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 		item["file_name"] = one->file_name;
 		item["mime"] = one->mime;
 		item["size"] = one->size;
+		item["created_at"] = static_cast<Json::Int64>(one->created_at);
+		rtvalue["messages"].append(item);
+	}
+}
+
+void LogicSystem::PrivateHistoryHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
+{
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	const int uid = root["fromuid"].asInt();
+	const int peer_uid = root["peer_uid"].asInt();
+	const int64_t before_ts = root.get("before_ts", 0).asInt64();
+	const int limit = root.get("limit", 20).asInt();
+
+	Json::Value rtvalue;
+	rtvalue["error"] = ErrorCodes::Success;
+	rtvalue["peer_uid"] = peer_uid;
+	rtvalue["has_more"] = false;
+	Defer defer([&rtvalue, session]() {
+		session->Send(rtvalue.toStyledString(), ID_PRIVATE_HISTORY_RSP);
+		});
+
+	if (uid <= 0 || peer_uid <= 0 || limit <= 0) {
+		rtvalue["error"] = ErrorCodes::Error_Json;
+		return;
+	}
+
+	if (!MysqlMgr::GetInstance()->IsFriend(uid, peer_uid)) {
+		rtvalue["error"] = ErrorCodes::UidInvalid;
+		return;
+	}
+
+	std::vector<std::shared_ptr<PrivateMessageInfo>> messages;
+	bool has_more = false;
+	if (!MysqlMgr::GetInstance()->GetPrivateHistory(uid, peer_uid, before_ts, limit, messages, has_more)) {
+		rtvalue["error"] = ErrorCodes::RPCFailed;
+		return;
+	}
+	rtvalue["has_more"] = has_more;
+	for (const auto& one : messages) {
+		if (!one) {
+			continue;
+		}
+		Json::Value item;
+		item["msgid"] = one->msg_id;
+		item["content"] = one->content;
+		item["fromuid"] = one->from_uid;
+		item["touid"] = one->to_uid;
 		item["created_at"] = static_cast<Json::Int64>(one->created_at);
 		rtvalue["messages"].append(item);
 	}

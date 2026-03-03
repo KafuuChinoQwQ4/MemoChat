@@ -91,3 +91,16 @@ struct GroupMessageInfo {
 	int size;
 	int64_t created_at;
 };
+
+struct PrivateMessageInfo {
+	PrivateMessageInfo()
+		: conv_uid_min(0), conv_uid_max(0), from_uid(0), to_uid(0), created_at(0) {}
+
+	std::string msg_id;
+	int conv_uid_min;
+	int conv_uid_max;
+	int from_uid;
+	int to_uid;
+	std::string content;
+	int64_t created_at;
+};

@@ -493,7 +493,9 @@ void TcpMgr::initHandlers()
             auto msg = std::make_shared<TextChatData>(one.value("msgid").toString(),
                                                       one.value("content").toString(),
                                                       one.value("fromuid").toInt(),
-                                                      0);
+                                                      0,
+                                                      QString(),
+                                                      one.value("created_at").toVariant().toLongLong());
             UserMgr::GetInstance()->AppendGroupChatMsg(groupId, msg);
         }
         emit sig_group_list_updated();
@@ -527,6 +529,20 @@ void TcpMgr::initHandlers()
         Q_UNUSED(len);
         QJsonObject jsonObj;
         parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_PRIVATE_HISTORY_RSP, [this](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        Q_UNUSED(id);
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+        if (jsonDoc.isNull() || !jsonDoc.isObject()) {
+            QJsonObject fallback;
+            fallback["error"] = ErrorCodes::ERR_JSON;
+            emit sig_private_history_rsp(fallback);
+            return;
+        }
+        QJsonObject jsonObj = jsonDoc.object();
+        emit sig_private_history_rsp(jsonObj);
       });
 
     _handlers.insert(ID_NOTIFY_GROUP_INVITE_REQ, [this](ReqId id, int len, QByteArray data) {

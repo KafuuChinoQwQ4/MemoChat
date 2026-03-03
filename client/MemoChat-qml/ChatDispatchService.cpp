@@ -8,6 +8,7 @@ QByteArray ChatDispatchService::buildTextPayload(const OutgoingChatPacket &packe
     QJsonObject msgObj;
     msgObj["content"] = packet.content;
     msgObj["msgid"] = packet.msgId;
+    msgObj["created_at"] = static_cast<qint64>(packet.createdAt);
 
     QJsonArray textArray;
     textArray.append(msgObj);

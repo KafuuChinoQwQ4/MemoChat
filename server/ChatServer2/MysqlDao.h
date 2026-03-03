@@ -250,6 +250,10 @@ public:
 	std::shared_ptr<UserInfo> GetUser(std::string name);
 	bool GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& applyList, int offset, int limit );
 	bool GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo> >& user_info);
+	bool SavePrivateMessage(const PrivateMessageInfo& msg);
+	bool GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const int& limit,
+		std::vector<std::shared_ptr<PrivateMessageInfo>>& messages, bool& has_more);
+	bool GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_ptr<PrivateMessageInfo>& message);
 	bool IsFriend(const int& self_id, const int& friend_id);
 
 	bool CreateGroup(const int& owner_uid, const std::string& name, const std::string& announcement,
@@ -274,4 +278,3 @@ public:
 private:
 	std::unique_ptr<MySqlPool> pool_;
 };
-

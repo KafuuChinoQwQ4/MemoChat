@@ -5,6 +5,7 @@
 #include <QJsonArray>
 #include <vector>
 #include <QJsonObject>
+#include <QDateTime>
 
 class SearchInfo {
 public:
@@ -172,9 +173,9 @@ struct UserInfo {
 
 struct TextChatData{
     TextChatData(QString msg_id, QString msg_content, int fromuid, int touid,
-                 const QString &from_name = QString())
+                 const QString &from_name = QString(), qint64 created_at = 0)
         :_msg_id(msg_id),_msg_content(msg_content),_from_uid(fromuid),_to_uid(touid),
-         _from_name(from_name){
+         _from_name(from_name),_created_at(created_at){
 
     }
     QString _msg_id;
@@ -182,6 +183,7 @@ struct TextChatData{
     int _from_uid;
     int _to_uid;
     QString _from_name;
+    qint64 _created_at;
 };
 
 struct GroupChatData {
@@ -228,7 +230,11 @@ struct TextChatMsg{
             auto msg_obj = msg_data.toObject();
             auto content = msg_obj["content"].toString();
             auto msgid = msg_obj["msgid"].toString();
-            auto msg_ptr = std::make_shared<TextChatData>(msgid, content,fromuid, touid);
+            auto createdAt = msg_obj["created_at"].toVariant().toLongLong();
+            if (createdAt <= 0) {
+                createdAt = QDateTime::currentMSecsSinceEpoch();
+            }
+            auto msg_ptr = std::make_shared<TextChatData>(msgid, content,fromuid, touid, QString(), createdAt);
             _chat_msgs.push_back(msg_ptr);
         }
     }

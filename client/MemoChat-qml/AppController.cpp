@@ -6,6 +6,8 @@
 #include "httpmgr.h"
 #include "tcpmgr.h"
 #include "usermgr.h"
+#include <QDateTime>
+#include <algorithm>
 #include <QFileInfo>
 #include <QUuid>
 
@@ -37,11 +39,16 @@ AppController::AppController(QObject *parent)
       _search_status_error(false),
       _chat_loading_more(false),
       _can_load_more_chats(false),
+      _private_history_loading(false),
+      _can_load_more_private_history(false),
       _contact_loading_more(false),
       _can_load_more_contacts(false),
       _auth_status_error(false),
       _settings_status_error(false),
       _group_status_error(false),
+      _private_history_before_ts(0),
+      _private_history_pending_before_ts(0),
+      _private_history_pending_peer_uid(0),
       _auth_controller(&_gateway),
       _chat_controller(&_gateway),
       _contact_controller(&_gateway),
@@ -88,6 +95,8 @@ AppController::AppController(QObject *parent)
             this, &AppController::onGroupChatMsg);
     connect(_gateway.tcpMgr().get(), &TcpMgr::sig_group_rsp,
             this, &AppController::onGroupRsp);
+    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_private_history_rsp,
+            this, &AppController::onPrivateHistoryRsp);
     connect(&_apply_request_model, &ApplyRequestModel::unapprovedCountChanged,
             this, &AppController::pendingApplyChanged);
 
@@ -272,6 +281,16 @@ bool AppController::canLoadMoreChats() const
     return _can_load_more_chats;
 }
 
+bool AppController::privateHistoryLoading() const
+{
+    return _private_history_loading;
+}
+
+bool AppController::canLoadMorePrivateHistory() const
+{
+    return _can_load_more_private_history;
+}
+
 bool AppController::contactLoadingMore() const
 {
     return _contact_loading_more;
@@ -316,6 +335,7 @@ void AppController::switchToLogin()
 {
     _register_countdown_timer.stop();
     _heartbeat_timer.stop();
+    _private_cache_store.close();
     _gateway.userMgr()->ResetSession();
     if (_register_success_page) {
         _register_success_page = false;
@@ -333,6 +353,12 @@ void AppController::switchToLogin()
     setSearchPending(false);
     setSearchStatus("", false);
     setChatLoadingMore(false);
+    setPrivateHistoryLoading(false);
+    _private_history_before_ts = 0;
+    _private_history_pending_before_ts = 0;
+    _private_history_pending_peer_uid = 0;
+    _can_load_more_private_history = false;
+    emit canLoadMorePrivateHistoryChanged();
     setContactLoadingMore(false);
     setAuthStatus("", false);
     setSettingsStatus("", false);
@@ -402,6 +428,11 @@ void AppController::selectChatIndex(int index)
         setCurrentChatPeerName("");
         setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
         _message_model.clear();
+        _private_history_before_ts = 0;
+        _private_history_pending_before_ts = 0;
+        _private_history_pending_peer_uid = 0;
+        setPrivateHistoryLoading(false);
+        setCanLoadMorePrivateHistory(false);
         return;
     }
 
@@ -441,6 +472,7 @@ void AppController::selectGroupIndex(int index)
     if (item.isEmpty()) {
         setCurrentGroup(0, "");
         _message_model.clear();
+        setCanLoadMorePrivateHistory(false);
         return;
     }
 
@@ -449,11 +481,14 @@ void AppController::selectGroupIndex(int index)
     if (groupId <= 0) {
         setCurrentGroup(0, "");
         _message_model.clear();
+        setCanLoadMorePrivateHistory(false);
         return;
     }
 
     setCurrentGroup(groupId, item.value("name").toString());
     _current_chat_uid = 0;
+    setPrivateHistoryLoading(false);
+    setCanLoadMorePrivateHistory(false);
     setCurrentChatPeerName(_current_group_name);
     setCurrentChatPeerIcon("qrc:/res/chat_icon.png");
 
@@ -499,6 +534,22 @@ void AppController::loadMoreChats()
     _gateway.userMgr()->UpdateChatLoadedCount();
     setChatLoadingMore(false);
     refreshChatLoadMoreState();
+}
+
+void AppController::loadMorePrivateHistory()
+{
+    if (_private_history_loading || !_can_load_more_private_history) {
+        return;
+    }
+    if (_current_chat_uid <= 0) {
+        return;
+    }
+
+    qint64 beforeTs = _message_model.earliestCreatedAt();
+    if (beforeTs <= 0) {
+        beforeTs = _private_history_before_ts;
+    }
+    requestPrivateHistory(_current_chat_uid, beforeTs);
 }
 
 void AppController::loadMoreContacts()
@@ -1281,6 +1332,11 @@ void AppController::onSwitchToChat()
     setTip("", false);
     setSearchPending(false);
     setChatLoadingMore(false);
+    setPrivateHistoryLoading(false);
+    setCanLoadMorePrivateHistory(false);
+    _private_history_before_ts = 0;
+    _private_history_pending_before_ts = 0;
+    _private_history_pending_peer_uid = 0;
     setContactLoadingMore(false);
     setAuthStatus("", false);
     setSettingsStatus("", false);
@@ -1290,6 +1346,7 @@ void AppController::onSwitchToChat()
 
     auto user_info = _gateway.userMgr()->GetUserInfo();
     if (user_info) {
+        _private_cache_store.openForUser(user_info->_uid);
         const QString name = user_info->_name;
         const QString nick = user_info->_nick;
         const QString icon = normalizeIconPath(user_info->_icon);
@@ -1411,7 +1468,14 @@ void AppController::onTextChatMsg(std::shared_ptr<TextChatMsg> msg)
     const int selfUid = selfInfo->_uid;
     const int peerUid = (msg->_from_uid == selfUid) ? msg->_to_uid : msg->_from_uid;
     _gateway.userMgr()->AppendFriendChatMsg(peerUid, msg->_chat_msgs);
-    const QString preview = MessageContentCodec::toPreviewText(msg->_chat_msgs.front()->_msg_content);
+    _private_cache_store.upsertMessages(selfUid, peerUid, msg->_chat_msgs);
+    const auto friendInfo = _gateway.userMgr()->GetFriendById(peerUid);
+    QString preview;
+    if (friendInfo && !friendInfo->_chat_msgs.empty()) {
+        preview = MessageContentCodec::toPreviewText(friendInfo->_chat_msgs.back()->_msg_content);
+    } else {
+        preview = MessageContentCodec::toPreviewText(msg->_chat_msgs.back()->_msg_content);
+    }
     _chat_list_model.updateLastMessage(peerUid, preview);
 
     if (peerUid != _current_chat_uid) {
@@ -1421,6 +1485,7 @@ void AppController::onTextChatMsg(std::shared_ptr<TextChatMsg> msg)
     for (const auto &chat : msg->_chat_msgs) {
         _message_model.appendMessage(chat, selfUid);
     }
+    _private_history_before_ts = _message_model.earliestCreatedAt();
 }
 
 void AppController::onUserSearch(std::shared_ptr<SearchInfo> searchInfo)
@@ -1558,7 +1623,7 @@ void AppController::onGroupChatMsg(std::shared_ptr<GroupChatMsg> msg)
 
     auto textMsg = std::make_shared<TextChatData>(msg->_msg->_msg_id, msg->_msg->_msg_content,
                                                   msg->_msg->_from_uid, static_cast<int>(msg->_group_id),
-                                                  msg->_from_name);
+                                                  msg->_from_name, msg->_msg->_created_at);
     _gateway.userMgr()->AppendGroupChatMsg(msg->_group_id, textMsg);
 
     int pseudoUid = 0;
@@ -1666,6 +1731,83 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
     }
 }
 
+void AppController::onPrivateHistoryRsp(QJsonObject payload)
+{
+    setPrivateHistoryLoading(false);
+    const int error = payload.value("error").toInt(ErrorCodes::ERR_JSON);
+    if (error != ErrorCodes::SUCCESS) {
+        _private_history_pending_before_ts = 0;
+        _private_history_pending_peer_uid = 0;
+        setCanLoadMorePrivateHistory(false);
+        return;
+    }
+
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo) {
+        _private_history_pending_before_ts = 0;
+        _private_history_pending_peer_uid = 0;
+        setCanLoadMorePrivateHistory(false);
+        return;
+    }
+
+    const int peerUid = payload.value("peer_uid").toInt();
+    const bool hasMore = payload.value("has_more").toBool(false);
+    const QJsonArray messages = payload.value("messages").toArray();
+    std::vector<std::shared_ptr<TextChatData>> parsed;
+    parsed.reserve(messages.size());
+    for (const auto &one : messages) {
+        const QJsonObject obj = one.toObject();
+        qint64 createdAt = obj.value("created_at").toVariant().toLongLong();
+        if (createdAt <= 0) {
+            createdAt = QDateTime::currentMSecsSinceEpoch();
+        }
+        auto msg = std::make_shared<TextChatData>(
+            obj.value("msgid").toString(),
+            obj.value("content").toString(),
+            obj.value("fromuid").toInt(),
+            obj.value("touid").toInt(),
+            QString(),
+            createdAt);
+        parsed.push_back(msg);
+    }
+    std::sort(parsed.begin(), parsed.end(),
+              [](const std::shared_ptr<TextChatData> &lhs, const std::shared_ptr<TextChatData> &rhs) {
+                  if (!lhs || !rhs) {
+                      return static_cast<bool>(lhs);
+                  }
+                  if (lhs->_created_at != rhs->_created_at) {
+                      return lhs->_created_at < rhs->_created_at;
+                  }
+                  return lhs->_msg_id < rhs->_msg_id;
+              });
+
+    if (!parsed.empty()) {
+        _private_cache_store.upsertMessages(selfInfo->_uid, peerUid, parsed);
+        _gateway.userMgr()->AppendFriendChatMsg(peerUid, parsed);
+    }
+
+    auto friendInfo = _gateway.userMgr()->GetFriendById(peerUid);
+    if (friendInfo && !friendInfo->_chat_msgs.empty()) {
+        const QString preview = MessageContentCodec::toPreviewText(friendInfo->_chat_msgs.back()->_msg_content);
+        _chat_list_model.updateLastMessage(peerUid, preview);
+    }
+
+    if (peerUid == _current_chat_uid) {
+        if (_private_history_pending_before_ts > 0) {
+            _message_model.prependMessages(parsed, selfInfo->_uid);
+        } else if (friendInfo) {
+            _message_model.setMessages(friendInfo->_chat_msgs, selfInfo->_uid);
+        } else {
+            _message_model.clear();
+        }
+        _private_history_before_ts = _message_model.earliestCreatedAt();
+        setCanLoadMorePrivateHistory(hasMore);
+    }
+
+    _private_history_pending_before_ts = 0;
+    _private_history_pending_peer_uid = 0;
+}
+
 void AppController::refreshFriendModels()
 {
     _chat_list_model.clear();
@@ -1722,6 +1864,11 @@ void AppController::loadCurrentChatMessages()
 {
     if (_current_chat_uid <= 0) {
         _message_model.clear();
+        _private_history_before_ts = 0;
+        _private_history_pending_before_ts = 0;
+        _private_history_pending_peer_uid = 0;
+        setPrivateHistoryLoading(false);
+        setCanLoadMorePrivateHistory(false);
         return;
     }
 
@@ -1729,12 +1876,52 @@ void AppController::loadCurrentChatMessages()
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
     if (!friendInfo || !selfInfo) {
         _message_model.clear();
+        _private_history_before_ts = 0;
+        _private_history_pending_before_ts = 0;
+        _private_history_pending_peer_uid = 0;
+        setPrivateHistoryLoading(false);
+        setCanLoadMorePrivateHistory(false);
         return;
     }
 
     setCurrentChatPeerName(friendInfo->_name);
     setCurrentChatPeerIcon(friendInfo->_icon);
+
+    const auto localMessages = _private_cache_store.loadRecentMessages(selfInfo->_uid, _current_chat_uid, 20);
+    if (!localMessages.empty()) {
+        _gateway.userMgr()->AppendFriendChatMsg(_current_chat_uid, localMessages);
+    }
     _message_model.setMessages(friendInfo->_chat_msgs, selfInfo->_uid);
+    _private_history_before_ts = _message_model.earliestCreatedAt();
+    _private_history_pending_before_ts = 0;
+    _private_history_pending_peer_uid = 0;
+    setPrivateHistoryLoading(false);
+    setCanLoadMorePrivateHistory(true);
+    requestPrivateHistory(_current_chat_uid, 0);
+}
+
+void AppController::requestPrivateHistory(int peerUid, qint64 beforeTs)
+{
+    if (_private_history_loading || peerUid <= 0) {
+        return;
+    }
+
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo) {
+        return;
+    }
+
+    QJsonObject payloadObj;
+    payloadObj["fromuid"] = selfInfo->_uid;
+    payloadObj["peer_uid"] = peerUid;
+    payloadObj["before_ts"] = static_cast<qint64>(beforeTs);
+    payloadObj["limit"] = 20;
+    const QByteArray payload = QJsonDocument(payloadObj).toJson(QJsonDocument::Compact);
+
+    _private_history_pending_peer_uid = peerUid;
+    _private_history_pending_before_ts = beforeTs;
+    setPrivateHistoryLoading(true);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_PRIVATE_HISTORY_REQ, payload);
 }
 
 void AppController::setContactPane(ContactPane pane)
@@ -1832,6 +2019,24 @@ void AppController::setChatLoadingMore(bool loading)
 
     _chat_loading_more = loading;
     emit chatLoadingMoreChanged();
+}
+
+void AppController::setPrivateHistoryLoading(bool loading)
+{
+    if (_private_history_loading == loading) {
+        return;
+    }
+    _private_history_loading = loading;
+    emit privateHistoryLoadingChanged();
+}
+
+void AppController::setCanLoadMorePrivateHistory(bool canLoad)
+{
+    if (_can_load_more_private_history == canLoad) {
+        return;
+    }
+    _can_load_more_private_history = canLoad;
+    emit canLoadMorePrivateHistoryChanged();
 }
 
 void AppController::setContactLoadingMore(bool loading)
@@ -1972,6 +2177,7 @@ bool AppController::dispatchChatContent(const QString &content, const QString &p
     packet.toUid = _current_chat_uid;
     packet.msgId = QUuid::createUuid().toString();
     packet.content = content;
+    packet.createdAt = QDateTime::currentMSecsSinceEpoch();
 
     QString errorText;
     if (!_chat_controller.dispatchChatText(packet, &errorText)) {
@@ -1981,9 +2187,11 @@ bool AppController::dispatchChatContent(const QString &content, const QString &p
         return false;
     }
 
-    auto msg = std::make_shared<TextChatData>(packet.msgId, content, packet.fromUid, packet.toUid);
+    auto msg = std::make_shared<TextChatData>(packet.msgId, content, packet.fromUid, packet.toUid, QString(), packet.createdAt);
     _gateway.userMgr()->AppendFriendChatMsg(_current_chat_uid, {msg});
+    _private_cache_store.upsertMessages(packet.fromUid, _current_chat_uid, {msg});
     _message_model.appendMessage(msg, packet.fromUid);
+    _private_history_before_ts = _message_model.earliestCreatedAt();
 
     const QString resolvedPreview = previewText.isEmpty() ? MessageContentCodec::toPreviewText(content) : previewText;
     _chat_list_model.updateLastMessage(_current_chat_uid, resolvedPreview);

@@ -3,6 +3,7 @@
 
 #include <QString>
 #include <QByteArray>
+#include <QtGlobal>
 #include <functional>
 
 struct OutgoingChatPacket {
@@ -10,6 +11,7 @@ struct OutgoingChatPacket {
     int toUid = 0;
     QString msgId;
     QString content;
+    qint64 createdAt = 0;
 };
 
 class ChatDispatchService

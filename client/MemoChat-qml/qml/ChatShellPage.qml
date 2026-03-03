@@ -122,10 +122,13 @@ Rectangle {
                         peerAvatar: controller.currentChatPeerIcon
                         hasCurrentChat: controller.hasCurrentChat
                         messageModel: controller.messageModel
+                        privateHistoryLoading: controller.privateHistoryLoading
+                        canLoadMorePrivateHistory: controller.canLoadMorePrivateHistory
                         onSendText: controller.sendTextMessage(text)
                         onSendImage: controller.sendImageMessage()
                         onSendFile: controller.sendFileMessage()
                         onOpenAttachment: controller.openExternalResource(url)
+                        onRequestLoadMoreHistory: controller.loadMorePrivateHistory()
                     }
 
                     GlassButton {
