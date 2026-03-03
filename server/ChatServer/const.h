@@ -20,6 +20,7 @@ enum ErrorCodes {
     GroupMemberLimit = 1015,
     GroupMuted = 1016,
     GroupApplyNotFound = 1017,
+    ProtocolVersionMismatch = 1098,
 };
 
 class Defer {
@@ -87,6 +88,19 @@ enum MSG_IDS {
     ID_PRIVATE_HISTORY_RSP = 1060,
     ID_UPDATE_GROUP_ICON_REQ = 1061,
     ID_UPDATE_GROUP_ICON_RSP = 1062,
+    ID_GET_DIALOG_LIST_REQ = 1063,
+    ID_GET_DIALOG_LIST_RSP = 1064,
+    ID_EDIT_GROUP_MSG_REQ = 1065,
+    ID_EDIT_GROUP_MSG_RSP = 1066,
+    ID_REVOKE_GROUP_MSG_REQ = 1067,
+    ID_REVOKE_GROUP_MSG_RSP = 1068,
+    ID_FORWARD_GROUP_MSG_REQ = 1069,
+    ID_FORWARD_GROUP_MSG_RSP = 1070,
+    ID_GROUP_READ_ACK_REQ = 1071,
+    ID_SYNC_DRAFT_REQ = 1072,
+    ID_SYNC_DRAFT_RSP = 1073,
+    ID_PIN_DIALOG_REQ = 1074,
+    ID_PIN_DIALOG_RSP = 1075,
 };
 
 #define USERIPPREFIX "uip_"

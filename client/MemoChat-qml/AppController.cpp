@@ -33,6 +33,7 @@ AppController::AppController(QObject *parent)
       _current_group_id(0),
       _chat_list_model(this),
       _group_list_model(this),
+      _dialog_list_model(this),
       _contact_list_model(this),
       _message_model(this),
       _search_result_model(this),
@@ -260,6 +261,11 @@ QString AppController::currentGroupCode() const
     return _current_group_code;
 }
 
+FriendListModel *AppController::dialogListModel()
+{
+    return &_dialog_list_model;
+}
+
 FriendListModel *AppController::chatListModel()
 {
     return &_chat_list_model;
@@ -376,6 +382,7 @@ void AppController::switchToLogin()
     _heartbeat_timer.stop();
     _chat_login_timeout_timer.stop();
     _private_cache_store.close();
+    _group_cache_store.close();
     _gateway.userMgr()->ResetSession();
     if (_register_success_page) {
         _register_success_page = false;
@@ -386,6 +393,7 @@ void AppController::switchToLogin()
     setTip("", false);
     _chat_list_model.clear();
     _group_list_model.clear();
+    _dialog_list_model.clear();
     _contact_list_model.clear();
     _message_model.clear();
     _search_result_model.clear();
@@ -549,7 +557,39 @@ void AppController::selectGroupIndex(int index)
         return;
     }
 
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (selfInfo && _group_cache_store.isReady()) {
+        const auto localMessages = _group_cache_store.loadRecentMessages(selfInfo->_uid, groupId, 50);
+        for (const auto &one : localMessages) {
+            _gateway.userMgr()->UpsertGroupChatMsg(groupId, one);
+        }
+    }
+
+    groupInfo = _gateway.userMgr()->GetGroupById(groupId);
+    if (!groupInfo) {
+        _message_model.clear();
+        return;
+    }
+
     _message_model.setMessages(groupInfo->_chat_msgs, _gateway.userMgr()->GetUid());
+    loadGroupHistory();
+}
+
+void AppController::selectDialogByUid(int uid)
+{
+    if (uid == 0) {
+        return;
+    }
+
+    if (uid > 0) {
+        selectChatByUid(uid);
+        return;
+    }
+
+    const int groupIndex = _group_list_model.indexOfUid(uid);
+    if (groupIndex >= 0) {
+        selectGroupIndex(groupIndex);
+    }
 }
 
 void AppController::showApplyRequests()
@@ -1475,6 +1515,7 @@ void AppController::onTcpConnectFinished(bool success)
     QJsonObject obj;
     obj["uid"] = _pending_uid;
     obj["token"] = _pending_token;
+    obj["protocol_version"] = 2;
     if (!_pending_trace_id.isEmpty()) {
         obj["trace_id"] = _pending_trace_id;
     }
@@ -1487,6 +1528,10 @@ void AppController::onChatLoginFailed(int err)
 {
     _chat_login_timeout_timer.stop();
     setBusy(false);
+    if (err == ErrorCodes::ERR_PROTOCOL_VERSION) {
+        setTip("客户端版本过旧，请升级到 v2 协议客户端", true);
+        return;
+    }
     setTip(QString("登录失败, err is %1").arg(err), true);
 }
 
@@ -1512,6 +1557,7 @@ void AppController::onSwitchToChat()
     auto user_info = _gateway.userMgr()->GetUserInfo();
     if (user_info) {
         _private_cache_store.openForUser(user_info->_uid);
+        _group_cache_store.openForUser(user_info->_uid);
         const QString name = user_info->_name;
         const QString nick = user_info->_nick;
         const QString icon = normalizeIconPath(user_info->_icon);
@@ -1536,20 +1582,26 @@ void AppController::onSwitchToChat()
         emit currentUserChanged();
     }
 
-    refreshFriendModels();
-    refreshApplyModel();
-    refreshGroupList();
-    if (_chat_list_model.count() > 0) {
-        selectChatIndex(0);
-    } else {
-        _current_chat_uid = 0;
-        setCurrentChatPeerName("");
-        setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
-    }
+    QTimer::singleShot(0, this, [this]() {
+        if (_page != ChatPage) {
+            return;
+        }
 
-    // Keep chat session alive; server considers session expired after heartbeat timeout.
-    _heartbeat_timer.start(10000);
-    onHeartbeatTimeout();
+        refreshFriendModels();
+        refreshApplyModel();
+        refreshGroupList();
+        if (_chat_list_model.count() > 0) {
+            selectChatIndex(0);
+        } else {
+            _current_chat_uid = 0;
+            setCurrentChatPeerName("");
+            setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
+        }
+
+        // Keep chat session alive; server considers session expired after heartbeat timeout.
+        _heartbeat_timer.start(10000);
+        onHeartbeatTimeout();
+    });
 }
 
 void AppController::onRegisterCountdownTimeout()
@@ -1591,6 +1643,7 @@ void AppController::onAddAuthFriend(std::shared_ptr<AuthInfo> authInfo)
     }
     _chat_list_model.upsertFriend(authInfo);
     _contact_list_model.upsertFriend(authInfo);
+    refreshDialogModel();
     refreshChatLoadMoreState();
     refreshContactLoadMoreState();
     if (authInfo) {
@@ -1610,6 +1663,7 @@ void AppController::onAuthRsp(std::shared_ptr<AuthRsp> authRsp)
     }
     _chat_list_model.upsertFriend(authRsp);
     _contact_list_model.upsertFriend(authRsp);
+    refreshDialogModel();
     refreshChatLoadMoreState();
     refreshContactLoadMoreState();
     if (authRsp) {
@@ -1646,6 +1700,7 @@ void AppController::onTextChatMsg(std::shared_ptr<TextChatMsg> msg)
         preview = MessageContentCodec::toPreviewText(msg->_chat_msgs.back()->_msg_content);
     }
     _chat_list_model.updateLastMessage(peerUid, preview);
+    _dialog_list_model.updateLastMessage(peerUid, preview);
 
     if (peerUid != _current_chat_uid) {
         return;
@@ -1740,6 +1795,7 @@ void AppController::onConnectionClosed()
 void AppController::onGroupListUpdated()
 {
     refreshGroupModel();
+    refreshDialogModel();
     if (_current_group_id > 0) {
         auto groupInfo = _gateway.userMgr()->GetGroupById(_current_group_id);
         if (groupInfo) {
@@ -1812,7 +1868,11 @@ void AppController::onGroupChatMsg(std::shared_ptr<GroupChatMsg> msg)
     auto textMsg = std::make_shared<TextChatData>(msg->_msg->_msg_id, msg->_msg->_msg_content,
                                                   msg->_msg->_from_uid, static_cast<int>(msg->_group_id),
                                                   msg->_from_name, msg->_msg->_created_at, msg->_from_icon);
-    _gateway.userMgr()->AppendGroupChatMsg(msg->_group_id, textMsg);
+    _gateway.userMgr()->UpsertGroupChatMsg(msg->_group_id, textMsg);
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (selfInfo && _group_cache_store.isReady()) {
+        _group_cache_store.upsertMessages(selfInfo->_uid, msg->_group_id, {textMsg});
+    }
 
     int pseudoUid = 0;
     for (auto it = _group_uid_map.cbegin(); it != _group_uid_map.cend(); ++it) {
@@ -1824,6 +1884,7 @@ void AppController::onGroupChatMsg(std::shared_ptr<GroupChatMsg> msg)
     if (pseudoUid != 0) {
         const QString preview = MessageContentCodec::toPreviewText(msg->_msg->_msg_content);
         _group_list_model.updateLastMessage(pseudoUid, preview);
+        _dialog_list_model.updateLastMessage(pseudoUid, preview);
     }
 
     if (msg->_group_id != _current_group_id) {
@@ -1881,6 +1942,10 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
             auto groupInfo = _gateway.userMgr()->GetGroupById(_current_group_id);
             if (groupInfo) {
                 _message_model.setMessages(groupInfo->_chat_msgs, _gateway.userMgr()->GetUid());
+                auto selfInfo = _gateway.userMgr()->GetUserInfo();
+                if (selfInfo && _group_cache_store.isReady()) {
+                    _group_cache_store.upsertMessages(selfInfo->_uid, _current_group_id, groupInfo->_chat_msgs);
+                }
             }
         }
         setGroupStatus("历史消息已加载", false);
@@ -1923,7 +1988,58 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
             setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
         }
         break;
-    case ID_GROUP_CHAT_MSG_RSP:
+    case ID_GROUP_CHAT_MSG_RSP: {
+        const qint64 groupId = payload.value("groupid").toVariant().toLongLong();
+        const QJsonObject msgObj = payload.value("msg").toObject();
+        const QString msgId = msgObj.value("msgid").toString();
+        if (groupId > 0 && !msgId.isEmpty()) {
+            qint64 createdAt = payload.value("created_at").toVariant().toLongLong();
+            if (createdAt <= 0) {
+                createdAt = msgObj.value("created_at").toVariant().toLongLong();
+            }
+            if (createdAt <= 0) {
+                createdAt = QDateTime::currentMSecsSinceEpoch();
+            } else if (createdAt < 100000000000LL) {
+                createdAt *= 1000;
+            }
+
+            auto selfInfo = _gateway.userMgr()->GetUserInfo();
+            const int selfUid = selfInfo ? selfInfo->_uid : _gateway.userMgr()->GetUid();
+            const QString senderName = payload.value("from_nick").toString(
+                payload.value("from_name").toString(selfInfo ? selfInfo->_nick : QString()));
+            const QString senderIcon = normalizeIconPath(payload.value("from_icon").toString(
+                selfInfo ? selfInfo->_icon : QString()));
+            auto correctedMsg = std::make_shared<TextChatData>(msgId,
+                                                               msgObj.value("content").toString(),
+                                                               selfUid,
+                                                               0,
+                                                               senderName,
+                                                               createdAt,
+                                                               senderIcon);
+            _gateway.userMgr()->UpsertGroupChatMsg(groupId, correctedMsg);
+            if (selfInfo && _group_cache_store.isReady()) {
+                _group_cache_store.upsertMessages(selfInfo->_uid, groupId, {correctedMsg});
+            }
+
+            int pseudoUid = 0;
+            for (auto it = _group_uid_map.cbegin(); it != _group_uid_map.cend(); ++it) {
+                if (it.value() == groupId) {
+                    pseudoUid = it.key();
+                    break;
+                }
+            }
+            if (pseudoUid != 0) {
+                const QString preview = MessageContentCodec::toPreviewText(correctedMsg->_msg_content);
+                _group_list_model.updateLastMessage(pseudoUid, preview);
+                _dialog_list_model.updateLastMessage(pseudoUid, preview);
+            }
+
+            if (groupId == _current_group_id) {
+                _message_model.upsertMessage(correctedMsg, _gateway.userMgr()->GetUid());
+            }
+        }
+        break;
+    }
     case ID_GET_GROUP_LIST_RSP:
     default:
         break;
@@ -1989,6 +2105,7 @@ void AppController::onPrivateHistoryRsp(QJsonObject payload)
     if (friendInfo && !friendInfo->_chat_msgs.empty()) {
         const QString preview = MessageContentCodec::toPreviewText(friendInfo->_chat_msgs.back()->_msg_content);
         _chat_list_model.updateLastMessage(peerUid, preview);
+        _dialog_list_model.updateLastMessage(peerUid, preview);
     }
 
     if (peerUid == _current_chat_uid) {
@@ -2022,6 +2139,7 @@ void AppController::refreshFriendModels()
     refreshContactLoadMoreState();
 
     refreshGroupModel();
+    refreshDialogModel();
 }
 
 void AppController::refreshApplyModel()
@@ -2035,7 +2153,7 @@ void AppController::refreshGroupModel()
     _group_list_model.clear();
     _group_uid_map.clear();
 
-    const auto groups = _gateway.userMgr()->GetGroupListPerPage();
+    const auto groups = _gateway.userMgr()->GetGroupListSnapshot();
     std::vector<std::shared_ptr<FriendInfo>> converted;
     converted.reserve(groups.size());
     for (const auto &group : groups) {
@@ -2059,7 +2177,52 @@ void AppController::refreshGroupModel()
     }
 
     _group_list_model.setFriends(converted);
-    _gateway.userMgr()->UpdateGroupLoadedCount();
+}
+
+void AppController::refreshDialogModel()
+{
+    _dialog_list_model.clear();
+    std::vector<std::shared_ptr<FriendInfo>> dialogs;
+
+    const auto chats = _gateway.userMgr()->GetFriendListSnapshot();
+    dialogs.reserve(chats.size() + _group_uid_map.size());
+    for (const auto &chat : chats) {
+        if (!chat) {
+            continue;
+        }
+        auto one = std::make_shared<FriendInfo>(chat->_uid,
+                                                chat->_name,
+                                                chat->_nick,
+                                                chat->_icon,
+                                                chat->_sex,
+                                                chat->_desc,
+                                                chat->_back,
+                                                chat->_last_msg,
+                                                chat->_user_id);
+        dialogs.push_back(one);
+    }
+
+    const auto groups = _gateway.userMgr()->GetGroupListSnapshot();
+    for (const auto &group : groups) {
+        if (!group || group->_group_id <= 0) {
+            continue;
+        }
+        const int pseudoUid = -static_cast<int>(group->_group_id);
+        const QString groupIcon = group->_icon.trimmed().isEmpty()
+            ? QStringLiteral("qrc:/res/chat_icon.png")
+            : group->_icon;
+        auto one = std::make_shared<FriendInfo>(pseudoUid,
+                                                group->_name,
+                                                group->_name,
+                                                groupIcon,
+                                                0,
+                                                group->_announcement,
+                                                group->_announcement,
+                                                group->_last_msg);
+        dialogs.push_back(one);
+    }
+
+    _dialog_list_model.setFriends(dialogs);
 }
 
 void AppController::loadCurrentChatMessages()
@@ -2186,7 +2349,19 @@ void AppController::selectChatByUid(int uid)
     const int idx = _chat_list_model.indexOfUid(uid);
     if (idx >= 0) {
         selectChatIndex(idx);
+        return;
     }
+
+    auto friendInfo = _gateway.userMgr()->GetFriendById(uid);
+    if (!friendInfo) {
+        return;
+    }
+
+    _current_chat_uid = uid;
+    setCurrentGroup(0, "");
+    setCurrentChatPeerName(friendInfo->_name);
+    setCurrentChatPeerIcon(friendInfo->_icon);
+    loadCurrentChatMessages();
 }
 
 void AppController::setSearchPending(bool pending)
@@ -2401,6 +2576,7 @@ bool AppController::dispatchChatContent(const QString &content, const QString &p
 
     const QString resolvedPreview = previewText.isEmpty() ? MessageContentCodec::toPreviewText(content) : previewText;
     _chat_list_model.updateLastMessage(_current_chat_uid, resolvedPreview);
+    _dialog_list_model.updateLastMessage(_current_chat_uid, resolvedPreview);
     return true;
 }
 
@@ -2416,6 +2592,7 @@ bool AppController::dispatchGroupChatContent(const QString &content, const QStri
     }
 
     const QString msgId = QUuid::createUuid().toString();
+    const qint64 createdAt = QDateTime::currentMSecsSinceEpoch();
     const DecodedMessageContent decoded = MessageContentCodec::decode(content);
 
     QJsonObject msgObj;
@@ -2435,8 +2612,11 @@ bool AppController::dispatchGroupChatContent(const QString &content, const QStri
     _gateway.tcpMgr()->slot_send_data(ReqId::ID_GROUP_CHAT_MSG_REQ, payload);
 
     const QString senderName = selfInfo->_nick.isEmpty() ? selfInfo->_name : selfInfo->_nick;
-    auto msg = std::make_shared<TextChatData>(msgId, content, selfInfo->_uid, 0, senderName, 0, _current_user_icon);
-    _gateway.userMgr()->AppendGroupChatMsg(_current_group_id, msg);
+    auto msg = std::make_shared<TextChatData>(msgId, content, selfInfo->_uid, 0, senderName, createdAt, _current_user_icon);
+    _gateway.userMgr()->UpsertGroupChatMsg(_current_group_id, msg);
+    if (_group_cache_store.isReady()) {
+        _group_cache_store.upsertMessages(selfInfo->_uid, _current_group_id, {msg});
+    }
     _message_model.appendMessage(msg, selfInfo->_uid);
 
     int pseudoUid = 0;
@@ -2450,6 +2630,7 @@ bool AppController::dispatchGroupChatContent(const QString &content, const QStri
     if (pseudoUid != 0) {
         const QString resolvedPreview = previewText.isEmpty() ? MessageContentCodec::toPreviewText(content) : previewText;
         _group_list_model.updateLastMessage(pseudoUid, resolvedPreview);
+        _dialog_list_model.updateLastMessage(pseudoUid, resolvedPreview);
     }
 
     return true;

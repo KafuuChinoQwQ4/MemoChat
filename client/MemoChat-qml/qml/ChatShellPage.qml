@@ -76,6 +76,7 @@ Rectangle {
                 anchors.fill: parent
                 backdrop: backdropLayer
                 currentTab: controller.chatTab
+                dialogModel: controller.dialogListModel
                 chatModel: controller.chatListModel
                 groupModel: controller.groupListModel
                 contactModel: controller.contactListModel
@@ -90,6 +91,7 @@ Rectangle {
                 contactLoadingMore: controller.contactLoadingMore
                 groupStatusText: controller.groupStatusText
                 groupStatusError: controller.groupStatusError
+                onDialogUidSelected: controller.selectDialogByUid(uid)
                 onChatIndexSelected: controller.selectChatIndex(index)
                 onGroupIndexSelected: controller.selectGroupIndex(index)
                 onRequestChatLoadMore: controller.loadMoreChats()

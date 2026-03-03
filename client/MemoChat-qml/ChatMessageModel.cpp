@@ -154,6 +154,45 @@ void ChatMessageModel::appendMessage(const std::shared_ptr<TextChatData> &messag
     emit countChanged();
 }
 
+void ChatMessageModel::upsertMessage(const std::shared_ptr<TextChatData> &message, int selfUid)
+{
+    if (!message) {
+        return;
+    }
+
+    beginResetModel();
+    MessageEntry entry = toEntry(message, selfUid);
+    bool found = false;
+    for (auto &item : _items) {
+        if (item.msgId == entry.msgId) {
+            item = entry;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        _items.push_back(std::move(entry));
+    }
+
+    std::sort(_items.begin(), _items.end(),
+              [](const MessageEntry &lhs, const MessageEntry &rhs) {
+                  if (lhs.createdAt != rhs.createdAt) {
+                      return lhs.createdAt < rhs.createdAt;
+                  }
+                  return lhs.msgId < rhs.msgId;
+              });
+
+    if (!_items.empty()) {
+        int previousSenderUid = std::numeric_limits<int>::min();
+        for (auto &item : _items) {
+            item.showAvatar = (item.fromUid != previousSenderUid);
+            previousSenderUid = item.fromUid;
+        }
+    }
+    endResetModel();
+    emit countChanged();
+}
+
 void ChatMessageModel::prependMessages(const std::vector<std::shared_ptr<TextChatData> > &messages, int selfUid)
 {
     if (messages.empty()) {

@@ -1457,7 +1457,7 @@ bool MysqlDao::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts
 				"FROM chat_group_msg m "
 				"LEFT JOIN chat_group_msg_ext e ON m.msg_id = e.msg_id "
 				"LEFT JOIN user u ON m.from_uid = u.uid "
-				"WHERE m.group_id = ? AND m.created_at < ? ORDER BY m.created_at DESC LIMIT ?"));
+				"WHERE m.group_id = ? AND m.created_at < ? ORDER BY m.created_at DESC, m.msg_id DESC LIMIT ?"));
 		pstmt->setInt64(1, group_id);
 		pstmt->setInt64(2, final_before);
 		pstmt->setInt(3, final_limit);

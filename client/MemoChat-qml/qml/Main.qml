@@ -1,5 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
 import MemoChat 1.0
 import "components"
@@ -27,6 +28,20 @@ ApplicationWindow {
         height = chatMode ? chatWindowSize.height : loginWindowSize.height
     }
 
+    Behavior on width {
+        NumberAnimation {
+            duration: 150
+            easing.type: Easing.OutCubic
+        }
+    }
+
+    Behavior on height {
+        NumberAnimation {
+            duration: 150
+            easing.type: Easing.OutCubic
+        }
+    }
+
     onChatModeChanged: {
         if (visibility === Window.Windowed) {
             width = chatMode ? chatWindowSize.width : loginWindowSize.width
@@ -42,14 +57,30 @@ ApplicationWindow {
         clip: !root.isMaximized
         color: "transparent"
 
-        Loader {
-            id: pageLoader
+        StackLayout {
+            id: pageStack
             anchors.fill: parent
-            sourceComponent: {
-                if (controller.page === AppController.LoginPage) return loginPage
-                if (controller.page === AppController.RegisterPage) return registerPage
-                if (controller.page === AppController.ResetPage) return resetPage
-                return chatPage
+            currentIndex: controller.page
+
+            LoginPage {
+                tipText: controller.tipText
+                tipError: controller.tipError
+                busy: controller.busy
+
+                onClearTipRequested: controller.clearTip()
+                onSwitchToRegisterRequested: controller.switchToRegister()
+                onSwitchToResetRequested: controller.switchToReset()
+                onLoginRequested: function(email, password) {
+                    controller.login(email, password)
+                }
+            }
+
+            RegisterPage { }
+
+            ResetPage { }
+
+            ChatShellPage {
+                topInset: 24
             }
         }
 
@@ -110,36 +141,4 @@ ApplicationWindow {
         }
     }
 
-    Component {
-        id: loginPage
-        LoginPage {
-            tipText: controller.tipText
-            tipError: controller.tipError
-            busy: controller.busy
-
-            onClearTipRequested: controller.clearTip()
-            onSwitchToRegisterRequested: controller.switchToRegister()
-            onSwitchToResetRequested: controller.switchToReset()
-            onLoginRequested: function(email, password) {
-                controller.login(email, password)
-            }
-        }
-    }
-
-    Component {
-        id: registerPage
-        RegisterPage { }
-    }
-
-    Component {
-        id: resetPage
-        ResetPage { }
-    }
-
-    Component {
-        id: chatPage
-        ChatShellPage {
-            topInset: 24
-        }
-    }
 }
