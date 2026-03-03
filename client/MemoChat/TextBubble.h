@@ -1,4 +1,4 @@
-﻿#ifndef TEXTBUBBLE_H
+#ifndef TEXTBUBBLE_H
 #define TEXTBUBBLE_H
 
 #include <QTextEdit>

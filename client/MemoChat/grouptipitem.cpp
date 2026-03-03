@@ -16,7 +16,7 @@ GroupTipItem::~GroupTipItem()
 
 QSize GroupTipItem::sizeHint() const
 {
-    return QSize(250, 25); // 返回自定义的尺寸
+    return QSize(250, 25);
 }
 
 void GroupTipItem::SetGroupTip(QString str)

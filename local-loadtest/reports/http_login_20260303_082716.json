@@ -1,0 +1,33 @@
+﻿{
+  "test": "http_login",
+  "time_utc": "20260303_082716",
+  "target": "http://127.0.0.1:8080/user_login",
+  "config": {
+    "total": 300,
+    "concurrency": 10,
+    "timeout_sec": 5.0,
+    "accounts": 1,
+    "use_xor_passwd": true
+  },
+  "summary": {
+    "total": 300,
+    "success": 300,
+    "failed": 0,
+    "success_rate": 1.0,
+    "elapsed_sec": 3.712508,
+    "throughput_rps": 80.808,
+    "latency_ms": {
+      "min": 7.327,
+      "avg": 122.293,
+      "p50": 128.013,
+      "p90": 212.491,
+      "p95": 219.463,
+      "p99": 235.082,
+      "max": 255.591
+    }
+  },
+  "http_status_counter": {
+    "200": 300
+  },
+  "error_counter": {}
+}

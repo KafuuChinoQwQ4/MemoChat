@@ -9,7 +9,7 @@ class InvalidItem : public ListItemBase
 public:
     explicit InvalidItem(QWidget *parent = nullptr);
     QSize sizeHint() const override {
-        return QSize(250,10); // 返回自定义的尺寸
+        return QSize(250,10);
     }
 signals:
 

@@ -18,16 +18,16 @@ ChatUserWid::~ChatUserWid()
 
 QSize ChatUserWid::sizeHint() const
 {
-    return QSize(250, 70); // 返回自定义的尺寸
+    return QSize(250, 70);
 }
 
 void ChatUserWid::SetInfo(std::shared_ptr<UserInfo> user_info)
 {
     _user_info = user_info;
-    // 加载图片
+
     QPixmap pixmap(_user_info->_icon);
 
-    // 设置图片自动缩放
+
     ui->icon_lb->setPixmap(pixmap.scaled(ui->icon_lb->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     ui->icon_lb->setScaledContents(true);
 
@@ -38,10 +38,10 @@ void ChatUserWid::SetInfo(std::shared_ptr<UserInfo> user_info)
 void ChatUserWid::SetInfo(std::shared_ptr<FriendInfo> friend_info)
 {
     _user_info = std::make_shared<UserInfo>(friend_info);
-    // 加载图片
+
     QPixmap pixmap(_user_info->_icon);
 
-    // 设置图片自动缩放
+
     ui->icon_lb->setPixmap(pixmap.scaled(ui->icon_lb->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     ui->icon_lb->setScaledContents(true);
 

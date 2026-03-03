@@ -1,4 +1,4 @@
-﻿#include "clickedbtn.h"
+#include "clickedbtn.h"
 
 #include <QVariant>
 #include <QKeyEvent>

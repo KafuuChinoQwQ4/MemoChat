@@ -1,4 +1,4 @@
-﻿#include "AppController.h"
+#include "AppController.h"
 #include "LocalFilePickerService.h"
 #include "MediaUploadService.h"
 #include "MessageContentCodec.h"
@@ -1256,6 +1256,7 @@ void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
 
     _pending_uid = server_info.Uid;
     _pending_token = server_info.Token;
+    _pending_trace_id = obj.value("trace_id").toString();
     setTip("正在连接聊天服务...", false);
     _gateway.tcpMgr()->slot_tcp_connect(server_info);
 }
@@ -1398,6 +1399,9 @@ void AppController::onTcpConnectFinished(bool success)
     QJsonObject obj;
     obj["uid"] = _pending_uid;
     obj["token"] = _pending_token;
+    if (!_pending_trace_id.isEmpty()) {
+        obj["trace_id"] = _pending_trace_id;
+    }
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
     _gateway.tcpMgr()->slot_send_data(ReqId::ID_CHAT_LOGIN, payload);
     _chat_login_timeout_timer.start();

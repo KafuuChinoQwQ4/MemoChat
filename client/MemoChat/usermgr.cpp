@@ -95,7 +95,7 @@ void UserMgr::ResetSession()
 void UserMgr::AppendApplyList(QJsonArray array)
 {
     _apply_list.clear();
-    // 遍历 QJsonArray 并输出每个元素
+
     for (const QJsonValue &value : array) {
         auto name = value["name"].toString();
         auto desc = value["desc"].toString();
@@ -116,7 +116,7 @@ void UserMgr::AppendFriendList(QJsonArray array) {
     _friend_map.clear();
     _chat_loaded = 0;
     _contact_loaded = 0;
-    // 遍历 QJsonArray 并输出每个元素
+
     for (const QJsonValue& value : array) {
         auto name = value["name"].toString();
         auto desc = value["desc"].toString();

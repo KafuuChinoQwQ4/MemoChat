@@ -1,4 +1,4 @@
-﻿#include "statelabel.h"
+#include "statelabel.h"
 
 StateLabel::StateLabel(QWidget* parent)
     : QLabel(parent), _curstate(ClickLbState::Normal)

@@ -293,6 +293,7 @@ private:
     ContactPane _contact_pane;
     int _pending_uid;
     QString _pending_token;
+    QString _pending_trace_id;
 
     QString _current_user_name;
     QString _current_user_nick;

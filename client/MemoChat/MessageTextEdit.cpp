@@ -1,4 +1,4 @@
-﻿#include "MessageTextEdit.h"
+#include "MessageTextEdit.h"
 #include <QDebug>
 #include <QMessageBox>
 
@@ -24,7 +24,7 @@ QVector<MsgInfo> MessageTextEdit::getMsgList()
     mGetMsgList.clear();
 
     QString doc = this->document()->toPlainText();
-    QString text="";//存储文本信息
+    QString text="";
     int indexUrl = 0;
     int count = mMsgList.size();
 
@@ -106,7 +106,7 @@ void MessageTextEdit::insertFileFromUrl(const QStringList &urls)
 void MessageTextEdit::insertImages(const QString &url)
 {
     QImage image(url);
-    //按比例缩放图片
+
     if(image.width()>120||image.height()>80)
     {
         if(image.width()>image.height())
@@ -225,14 +225,14 @@ QPixmap MessageTextEdit::getFileIconPixmap(const QString &url)
    // painter.setRenderHint(QPainter::Antialiasing, true);
     //painter.setFont(font);
     painter.begin(&pix);
-    // 文件图标
+
     QRect rect(0, 0, 50, 50);
     painter.drawPixmap(rect, icon.pixmap(40,40));
     painter.setPen(Qt::black);
-    // 文件名称
+
     QRect rectText(50+10, 3, textSize.width(), textSize.height());
     painter.drawText(rectText, fileinfo.fileName());
-    // 文件大小
+
     QRect rectFile(50+10, textSize.height()+5, FileSize.width(), FileSize.height());
     painter.drawText(rectFile, strFileSize);
     painter.end();

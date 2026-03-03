@@ -23,6 +23,7 @@
         "boost-filesystem",
         "boost-property-tree",
         "boost-uuid",
+        "spdlog",
         {
           "name": "mysql-connector-cpp",
           "features": [

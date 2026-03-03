@@ -1,14 +1,6 @@
 #ifndef SINGLETON_H
 #define SINGLETON_H
-/******************************************************************************
- *
- * @file       singleton.h
- * @brief       单例模板类
- *
- * @author     恋恋风辰
- * @date       2024/02/28
- * @history
- *****************************************************************************/
+
 #include <memory>
 #include <mutex>
 #include <iostream>

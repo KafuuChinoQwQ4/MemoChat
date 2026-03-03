@@ -18,9 +18,9 @@ public:
 				sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
 				auto*  con = driver->connect(url_, user_, pass_);
 				con->setSchema(schema_);
-				// ��ȡ��ǰʱ���
+
 				auto currentTime = std::chrono::system_clock::now().time_since_epoch();
-				// ��ʱ���ת��Ϊ��
+
 				long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
 				pool_.push(std::make_unique<SqlConnection>(con, timestamp));
 			}
@@ -35,23 +35,23 @@ public:
 			_check_thread.detach();
 		}
 		catch (sql::SQLException& e) {
-			// �����쳣
+
 			std::cout << "mysql pool init failed, error is " << e.what()<< std::endl;
 		}
 	}
 
 	void checkConnectionPro() {
-		// 1)�ȶ�ȡ��Ŀ�괦������
+
 		size_t targetCount;
 		{
 			std::lock_guard<std::mutex> guard(mutex_);
 			targetCount = pool_.size();
 		}
 
-		//2 ��ǰ�Ѿ����������
+
 		size_t processed = 0;
 
-		//3 ʱ���
+
 		auto now = std::chrono::system_clock::now().time_since_epoch();
 		long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(now).count();
 
@@ -67,7 +67,7 @@ public:
 			}
 
 			bool healthy = true;
-			//�����������/�����߼�
+
 			if (timestamp - con->_last_oper_time >= 5) {
 				try {
 					std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
@@ -129,9 +129,9 @@ public:
 	void checkConnection() {
 		std::lock_guard<std::mutex> guard(mutex_);
 		int poolsize = pool_.size();
-		// ��ȡ��ǰʱ���
+
 		auto currentTime = std::chrono::system_clock::now().time_since_epoch();
-		// ��ʱ���ת��Ϊ��
+
 		long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
 		for (int i = 0; i < poolsize; i++) {
 			auto con = std::move(pool_.front());
@@ -152,7 +152,7 @@ public:
 			}
 			catch (sql::SQLException& e) {
 				std::cout << "Error keeping connection alive: " << e.what() << std::endl;
-				// ���´������Ӳ��滻�ɵ�����
+
 				sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
 				auto* newcon = driver->connect(url_, user_, pass_);
 				newcon->setSchema(schema_);

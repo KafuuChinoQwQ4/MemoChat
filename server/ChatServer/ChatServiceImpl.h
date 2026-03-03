@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <grpcpp/grpcpp.h>
 #include "message.grpc.pb.h"
 #include "message.pb.h"

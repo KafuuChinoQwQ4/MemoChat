@@ -1,4 +1,4 @@
-﻿#include "ChatGrpcClient.h"
+#include "ChatGrpcClient.h"
 #include "RedisMgr.h"
 #include "ConfigMgr.h"
 #include "UserMgr.h"

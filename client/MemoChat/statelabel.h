@@ -1,4 +1,4 @@
-﻿#ifndef STATELABEL_H
+#ifndef STATELABEL_H
 #define STATELABEL_H
 
 #include <QLabel>

@@ -30,7 +30,7 @@ struct SectionInfo {
 		if (_section_datas.find(key) == _section_datas.end()) {
 			return "";
 		}
-		// 这里可以添加一些边界检查  
+
 		return _section_datas[key];
 	}
 
@@ -38,7 +38,7 @@ struct SectionInfo {
 		if (_section_datas.find(key) == _section_datas.end()) {
 			return "";
 		}
-		// 这里可以添加一些边界检查  
+
 		return _section_datas[key];
 	}
 };
@@ -77,7 +77,7 @@ public:
 	std::string GetValue(const std::string& section, const std::string & key);
 private:
 	ConfigMgr();
-	// 存储section和key-value对的map  
+
 	std::map<std::string, SectionInfo> _config_map;
 };
 

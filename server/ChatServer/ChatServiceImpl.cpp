@@ -1,4 +1,4 @@
-﻿#include "ChatServiceImpl.h"
+#include "ChatServiceImpl.h"
 #include "UserMgr.h"
 #include "CSession.h"
 #include <json/json.h>

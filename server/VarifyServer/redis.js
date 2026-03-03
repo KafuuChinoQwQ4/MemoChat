@@ -1,105 +1,77 @@
+const Redis = require('ioredis');
 
-const config_module = require('./config')
-const Redis = require("ioredis");
+const config_module = require('./config');
+const { logger } = require('./logger');
 
-// 创建Redis客户端实例
 const RedisCli = new Redis({
-  host: config_module.redis_host,       // Redis服务器主机名
-  port: config_module.redis_port,        // Redis服务器端口号
-  password: config_module.redis_passwd, // Redis密码
-
-  enableOfflineQueue: false, // 禁用离线队列
-  enableReadyCheck: true,    // 启用连接就绪检查
+  host: config_module.redis_host,
+  port: config_module.redis_port,
+  password: config_module.redis_passwd,
+  enableOfflineQueue: false,
+  enableReadyCheck: true,
   maxRetriesPerRequest: 2,
   retryStrategy(times) {
     return Math.min(times * 200, 3000);
   },
 });
 
-
-// 监听连接错误事件
-RedisCli.on("error", function (err) {
-  console.error("Redis connection error:", err);
+RedisCli.on('error', (err) => {
+  logger.error({ event: 'redis.error', error: err.message || String(err) }, 'redis connection error');
 });
 
-// 监听连接断开事件
-RedisCli.on("end", function () {
-  console.log("Redis connection closed");
+RedisCli.on('end', () => {
+  logger.warn({ event: 'redis.closed' }, 'redis connection closed');
 });
 
-// 心跳机制：定时发送心跳消息
 const heartbeatTimer = setInterval(() => {
-  // 发送心跳消息，比如向一个特定的 key 写入当前时间戳
-  RedisCli.set("heartbeat", Date.now()).catch((error) => {
-    console.log("heartbeat set failed:", error);
+  RedisCli.set('heartbeat', Date.now()).catch((error) => {
+    logger.warn({ event: 'redis.heartbeat.failed', error: error.message || String(error) }, 'redis heartbeat set failed');
   });
-}, 60000); // 每 60 秒发送一次心跳消息
-if (typeof heartbeatTimer.unref === "function") {
+}, 60000);
+if (typeof heartbeatTimer.unref === 'function') {
   heartbeatTimer.unref();
 }
 
-/**
- * 根据key获取value
- * @param {*} key 
- * @returns 
- */
 async function GetRedis(key) {
-    
-    try{
-        const result = await RedisCli.get(key)
-        if(result === null){
-          console.log('result:','<'+result+'>', 'This key cannot be find...')
-          return null
-        }
-        console.log('Result:','<'+result+'>','Get key success!...');
-        return result
-    }catch(error){
-        console.log('GetRedis error is', error);
-        return null
+  try {
+    const result = await RedisCli.get(key);
+    if (result === null) {
+      logger.info({ event: 'redis.get.miss', key }, 'redis key not found');
+      return null;
     }
-
+    return result;
+  } catch (error) {
+    logger.error({ event: 'redis.get.error', key, error: error.message || String(error) }, 'redis get error');
+    return null;
   }
+}
 
-/**
- * 根据key查询redis中是否存在key
- * @param {*} key 
- * @returns 
- */
 async function QueryRedis(key) {
-    try{
-        const result = await RedisCli.exists(key)
-        //  判断该值是否为空 如果为空返回null
-        if (result === 0) {
-          console.log('result:<','<'+result+'>','This key is null...');
-          return null
-        }
-        console.log('Result:','<'+result+'>','With this value!...');
-        return result
-    }catch(error){
-        console.log('QueryRedis error is', error);
-        return null
+  try {
+    const result = await RedisCli.exists(key);
+    if (result === 0) {
+      logger.info({ event: 'redis.exists.miss', key }, 'redis key not found by exists');
+      return null;
     }
-
+    return result;
+  } catch (error) {
+    logger.error({ event: 'redis.exists.error', key, error: error.message || String(error) }, 'redis exists error');
+    return null;
   }
+}
 
-/**
- * 设置key和value，并过期时间
- * @param {*} key 
- * @param {*} value 
- * @param {*} exptime 
- * @returns 
- */
-async function SetRedisExpire(key,value, exptime){
-    try{
-        // 设置键和值
-        await RedisCli.set(key,value)
-        // 设置过期时间（以秒为单位）
-        await RedisCli.expire(key, exptime);
-        return true;
-    }catch(error){
-        console.log('SetRedisExpire error is', error);
-        return false;
-    }
+async function SetRedisExpire(key, value, exptime) {
+  try {
+    await RedisCli.set(key, value);
+    await RedisCli.expire(key, exptime);
+    return true;
+  } catch (error) {
+    logger.error(
+      { event: 'redis.set_expire.error', key, exptime, error: error.message || String(error) },
+      'redis set+expire error'
+    );
+    return false;
+  }
 }
 
 async function closeRedis() {
@@ -107,9 +79,14 @@ async function closeRedis() {
   try {
     await RedisCli.quit();
   } catch (error) {
-    console.log("Redis quit failed, disconnect directly:", error);
+    logger.warn({ event: 'redis.quit.failed', error: error.message || String(error) }, 'redis quit failed, disconnecting');
     RedisCli.disconnect();
   }
 }
 
-module.exports = {GetRedis, QueryRedis,SetRedisExpire, closeRedis}
+module.exports = {
+  GetRedis,
+  QueryRedis,
+  SetRedisExpire,
+  closeRedis,
+};

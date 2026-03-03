@@ -6,6 +6,7 @@
 #include <QSettings>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QTextStream>
 #include <QDateTime>
 #include <QStandardPaths>
@@ -14,6 +15,11 @@
 #include <QQuickWindow>
 #include <QTimer>
 #include <QQuickStyle>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QMutex>
+#include <QMutexLocker>
+#include <cstdio>
 #include "AppController.h"
 #include "global.h"
 
@@ -120,24 +126,119 @@ void applyWindowsAcrylic(QQuickWindow *window)
 #endif
 
 namespace {
+struct RuntimeLogConfig {
+    QString level = "info";
+    QString dir = "./logs";
+    bool toConsole = true;
+    int maxFiles = 14;
+    QString env = "local";
+};
+
+RuntimeLogConfig g_log_cfg;
+QMutex g_log_mutex;
+
+int levelWeight(const QString &level)
+{
+    const QString v = level.trimmed().toLower();
+    if (v == "debug") {
+        return 0;
+    }
+    if (v == "info") {
+        return 1;
+    }
+    if (v == "warn" || v == "warning") {
+        return 2;
+    }
+    return 3;
+}
+
+int msgWeight(QtMsgType type)
+{
+    switch (type) {
+    case QtDebugMsg: return 0;
+    case QtInfoMsg: return 1;
+    case QtWarningMsg: return 2;
+    case QtCriticalMsg: return 3;
+    case QtFatalMsg: return 3;
+    }
+    return 1;
+}
+
+QString msgLevel(QtMsgType type)
+{
+    switch (type) {
+    case QtDebugMsg: return "debug";
+    case QtInfoMsg: return "info";
+    case QtWarningMsg: return "warn";
+    case QtCriticalMsg: return "error";
+    case QtFatalMsg: return "fatal";
+    }
+    return "info";
+}
+
+QString resolveLogDir(const QString &appPath, const QString &configuredDir)
+{
+    const QString dir = configuredDir.trimmed();
+    if (dir.isEmpty()) {
+        return QDir(appPath).filePath("logs");
+    }
+    QDir maybeRelative(dir);
+    if (maybeRelative.isRelative()) {
+        return QDir(appPath).filePath(dir);
+    }
+    return dir;
+}
+
+void cleanupOldLogs()
+{
+    QDir dir(g_log_cfg.dir);
+    const QStringList files = dir.entryList(QStringList() << "MemoChatQml_*.json",
+                                            QDir::Files,
+                                            QDir::Name | QDir::Reversed);
+    for (int i = g_log_cfg.maxFiles; i < files.size(); ++i) {
+        dir.remove(files.at(i));
+    }
+}
+
+void loadRuntimeLogConfig(const QString &configPath, const QString &appPath)
+{
+    QSettings settings(configPath, QSettings::IniFormat);
+    g_log_cfg.level = settings.value("Log/Level", "info").toString().trimmed().toLower();
+    g_log_cfg.dir = resolveLogDir(appPath, settings.value("Log/Dir", "./logs").toString());
+    g_log_cfg.toConsole = settings.value("Log/ToConsole", true).toBool();
+    g_log_cfg.maxFiles = settings.value("Log/MaxFiles", 14).toInt();
+    if (g_log_cfg.maxFiles <= 0) {
+        g_log_cfg.maxFiles = 14;
+    }
+    g_log_cfg.env = settings.value("Log/Env", "local").toString().trimmed();
+    QDir().mkpath(g_log_cfg.dir);
+}
+
 void fileMessageHandler(QtMsgType type, const QMessageLogContext &, const QString &msg)
 {
-    QString level;
-    switch (type) {
-    case QtDebugMsg: level = "DEBUG"; break;
-    case QtInfoMsg: level = "INFO"; break;
-    case QtWarningMsg: level = "WARN"; break;
-    case QtCriticalMsg: level = "ERROR"; break;
-    case QtFatalMsg: level = "FATAL"; break;
+    QMutexLocker locker(&g_log_mutex);
+    if (msgWeight(type) < levelWeight(g_log_cfg.level)) {
+        return;
     }
 
-    const QString logDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir().mkpath(logDir);
-    QFile file(logDir + "/qml_runtime.log");
+    cleanupOldLogs();
+    const QString dateTag = QDate::currentDate().toString("yyyyMMdd");
+    QFile file(QDir(g_log_cfg.dir).filePath(QString("MemoChatQml_%1.json").arg(dateTag)));
     if (file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
-        QTextStream out(&file);
-        out << QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss.zzz")
-            << " [" << level << "] " << msg << "\n";
+        QJsonObject obj;
+        obj["ts"] = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
+        obj["level"] = msgLevel(type);
+        obj["service"] = "MemoChatQml";
+        obj["env"] = g_log_cfg.env;
+        obj["event"] = "qt.message";
+        obj["message"] = msg;
+        const QByteArray line = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+        file.write(line);
+        file.write("\n");
+        file.flush();
+        if (g_log_cfg.toConsole) {
+            std::fprintf(stderr, "%s\n", line.constData());
+        }
     }
 
     if (type == QtFatalMsg) {
@@ -154,17 +255,23 @@ int main(int argc, char *argv[])
 
     // Avoid stale QML cache after frequent qrc/page changes.
     qputenv("QML_DISABLE_DISK_CACHE", "1");
+    QString app_path = QFileInfo(QString::fromLocal8Bit(argv[0])).absolutePath();
+    if (app_path.isEmpty()) {
+        app_path = QDir::currentPath();
+    }
+    const QString config_path = QDir::toNativeSeparators(
+        app_path + QDir::separator() + QStringLiteral("config.ini"));
+    loadRuntimeLogConfig(config_path, app_path);
     qInstallMessageHandler(fileMessageHandler);
     QQuickStyle::setStyle("Basic");
 
     QApplication app(argc, argv);
 
-    const QString app_path = QCoreApplication::applicationDirPath();
-    const QString file_name = "config.ini";
-    const QString config_path = QDir::toNativeSeparators(
-        app_path + QDir::separator() + file_name);
+    const QString runtime_app_path = QCoreApplication::applicationDirPath();
+    const QString runtime_config_path = QDir::toNativeSeparators(
+        runtime_app_path + QDir::separator() + QStringLiteral("config.ini"));
 
-    QSettings settings(config_path, QSettings::IniFormat);
+    QSettings settings(runtime_config_path, QSettings::IniFormat);
     QString gate_host = settings.value("GateServer/host").toString().trimmed();
     if (gate_host.isEmpty()) {
         gate_host = settings.value("GateServer/Host").toString().trimmed();

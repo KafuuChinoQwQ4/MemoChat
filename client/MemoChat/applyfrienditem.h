@@ -21,7 +21,7 @@ public:
     void SetInfo(std::shared_ptr<ApplyInfo> apply_info);
     void ShowAddBtn(bool bshow);
     QSize sizeHint() const override {
-        return QSize(250, 80); // 返回自定义的尺寸
+        return QSize(250, 80);
     }
     int GetUid();
 private:

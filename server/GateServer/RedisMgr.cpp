@@ -45,14 +45,14 @@ bool RedisMgr::Get(const std::string& key, std::string& value)
 }
 
 bool RedisMgr::Set(const std::string &key, const std::string &value){
-	//ִ��redis������
+
 	auto connect = _con_pool->getConnection();
 	if (connect == nullptr) {
 		return false;
 	}
 	auto reply = (redisReply*)redisCommand(connect, "SET %s %s", key.c_str(), value.c_str());
 
-	//�������NULL��˵��ִ��ʧ��
+
 	if (NULL == reply)
 	{
 		std::cout << "Execut command [ SET " << key << "  "<< value << " ] failure ! " << std::endl;
@@ -61,7 +61,7 @@ bool RedisMgr::Set(const std::string &key, const std::string &value){
 		return false;
 	}
 
-	//���ִ��ʧ�����ͷ�����
+
 	if (!(reply->type == REDIS_REPLY_STATUS && (strcmp(reply->str, "OK") == 0 || strcmp(reply->str, "ok") == 0)))
 	{
 		std::cout << "Execut command [ SET " << key << "  " << value << " ] failure ! " << std::endl;
@@ -70,7 +70,7 @@ bool RedisMgr::Set(const std::string &key, const std::string &value){
 		return false;
 	}
 
-	//ִ�гɹ� �ͷ�redisCommandִ�к󷵻ص�redisReply��ռ�õ��ڴ�
+
 	freeReplyObject(reply);
 	std::cout << "Execut command [ SET " << key << "  " << value << " ] success ! " << std::endl;
 	_con_pool->returnConnection(connect);

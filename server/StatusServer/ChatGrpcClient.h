@@ -47,7 +47,7 @@ public:
 			}
 			return !connections_.empty();
 			});
-		//如果停止则直接返回空指针
+
 		if (b_stop_) {
 			return  nullptr;
 		}
