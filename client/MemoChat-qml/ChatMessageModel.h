@@ -36,6 +36,7 @@ public:
     void clear();
     void setMessages(const std::vector<std::shared_ptr<TextChatData>> &messages, int selfUid);
     void appendMessage(const std::shared_ptr<TextChatData> &message, int selfUid);
+    void upsertMessage(const std::shared_ptr<TextChatData> &message, int selfUid);
     void prependMessages(const std::vector<std::shared_ptr<TextChatData>> &messages, int selfUid);
     qint64 earliestCreatedAt() const;
     bool containsMessage(const QString &msgId) const;

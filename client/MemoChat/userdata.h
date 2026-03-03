@@ -186,7 +186,11 @@ struct TextChatData{
                  const QString &from_name = QString(), qint64 created_at = 0, const QString &from_icon = QString())
         :_msg_id(msg_id),_msg_content(msg_content),_from_uid(fromuid),_to_uid(touid),
          _from_name(from_name),_created_at(created_at),_from_icon(from_icon){
-
+        if (_created_at <= 0) {
+            _created_at = QDateTime::currentMSecsSinceEpoch();
+        } else if (_created_at < 100000000000LL) {
+            _created_at *= 1000;
+        }
     }
     QString _msg_id;
     QString _msg_content;
@@ -222,6 +226,11 @@ struct GroupChatMsg {
         auto msgid = msg_obj.value("msgid").toString();
         auto msgtype = msg_obj.value("msgtype").toString("text");
         auto created_at = msg_obj.value("created_at").toVariant().toLongLong();
+        if (created_at <= 0) {
+            created_at = QDateTime::currentMSecsSinceEpoch();
+        } else if (created_at < 100000000000LL) {
+            created_at *= 1000;
+        }
         auto file_name = msg_obj.value("file_name").toString();
         auto mime = msg_obj.value("mime").toString();
         auto size = msg_obj.value("size").toInt();

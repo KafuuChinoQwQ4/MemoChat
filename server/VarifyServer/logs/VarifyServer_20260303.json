@@ -2,3 +2,5 @@
 {"level":30,"time":"2026-03-03T11:00:19.825Z","service":"VarifyServer","env":"local","event":"service.start","address":"0.0.0.0:50051","msg":"VarifyServer started"}
 {"level":30,"time":"2026-03-03T11:31:00.636Z","service":"VarifyServer","env":"local","event":"service.start","address":"0.0.0.0:50051","msg":"VarifyServer started"}
 {"level":30,"time":"2026-03-03T13:01:14.272Z","service":"VarifyServer","env":"local","event":"service.start","address":"0.0.0.0:50051","msg":"VarifyServer started"}
+{"level":30,"time":"2026-03-03T14:05:37.088Z","service":"VarifyServer","env":"local","event":"service.start","address":"0.0.0.0:50051","msg":"VarifyServer started"}
+{"level":30,"time":"2026-03-03T14:49:59.899Z","service":"VarifyServer","env":"local","event":"service.start","address":"0.0.0.0:50051","msg":"VarifyServer started"}

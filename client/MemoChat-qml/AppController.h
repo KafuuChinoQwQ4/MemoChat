@@ -17,6 +17,7 @@
 #include "ApplyRequestModel.h"
 #include "ProfileController.h"
 #include "PrivateChatCacheStore.h"
+#include "GroupChatCacheStore.h"
 
 class AppController : public QObject
 {
@@ -48,6 +49,7 @@ class AppController : public QObject
     Q_PROPERTY(int currentGroupRole READ currentGroupRole NOTIFY currentGroupChanged)
     Q_PROPERTY(QString currentGroupName READ currentGroupName NOTIFY currentGroupChanged)
     Q_PROPERTY(QString currentGroupCode READ currentGroupCode NOTIFY currentGroupChanged)
+    Q_PROPERTY(FriendListModel* dialogListModel READ dialogListModel CONSTANT)
     Q_PROPERTY(FriendListModel* chatListModel READ chatListModel CONSTANT)
     Q_PROPERTY(FriendListModel* groupListModel READ groupListModel CONSTANT)
     Q_PROPERTY(FriendListModel* contactListModel READ contactListModel CONSTANT)
@@ -122,6 +124,7 @@ public:
     int currentGroupRole() const;
     QString currentGroupName() const;
     QString currentGroupCode() const;
+    FriendListModel *dialogListModel();
     FriendListModel *chatListModel();
     FriendListModel *groupListModel();
     FriendListModel *contactListModel();
@@ -152,6 +155,7 @@ public:
     Q_INVOKABLE void clearTip();
     Q_INVOKABLE void selectChatIndex(int index);
     Q_INVOKABLE void selectGroupIndex(int index);
+    Q_INVOKABLE void selectDialogByUid(int uid);
     Q_INVOKABLE void selectContactIndex(int index);
     Q_INVOKABLE void showApplyRequests();
     Q_INVOKABLE void jumpChatWithCurrentContact();
@@ -264,6 +268,7 @@ private:
     void refreshFriendModels();
     void refreshApplyModel();
     void refreshGroupModel();
+    void refreshDialogModel();
     void refreshChatLoadMoreState();
     void refreshContactLoadMoreState();
     void loadCurrentChatMessages();
@@ -319,6 +324,7 @@ private:
 
     FriendListModel _chat_list_model;
     FriendListModel _group_list_model;
+    FriendListModel _dialog_list_model;
     FriendListModel _contact_list_model;
     ChatMessageModel _message_model;
     SearchResultModel _search_result_model;
@@ -349,6 +355,7 @@ private:
     ContactController _contact_controller;
     ProfileController _profile_controller;
     PrivateChatCacheStore _private_cache_store;
+    GroupChatCacheStore _group_cache_store;
     QTimer _register_countdown_timer;
     QTimer _heartbeat_timer;
     QTimer _chat_login_timeout_timer;

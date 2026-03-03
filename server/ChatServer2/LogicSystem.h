@@ -34,6 +34,7 @@ private:
 	void HeartBeatHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void CreateGroupHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void GetGroupListHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void GetDialogListHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void InviteGroupMemberHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void ApplyJoinGroupHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void ReviewGroupApplyHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
@@ -48,6 +49,7 @@ private:
 	void QuitGroupHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void PushGroupPayload(const std::vector<int>& recipients, short msgid, const Json::Value& payload, int exclude_uid = 0);
 	void BuildGroupListJson(int uid, Json::Value& out);
+	void BuildDialogListJson(int uid, Json::Value& out);
 	bool isPureDigit(const std::string& str);
 	void GetUserByUid(std::string uid_str, Json::Value& rtvalue);
 	void GetUserByName(std::string name, Json::Value& rtvalue);
