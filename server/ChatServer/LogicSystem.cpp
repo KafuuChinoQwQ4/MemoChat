@@ -129,6 +129,9 @@ void LogicSystem::RegisterCallBacks() {
 	_fun_callbacks[ID_UPDATE_GROUP_ANNOUNCEMENT_REQ] = std::bind(&LogicSystem::UpdateGroupAnnouncementHandler, this,
 		placeholders::_1, placeholders::_2, placeholders::_3);
 
+	_fun_callbacks[ID_UPDATE_GROUP_ICON_REQ] = std::bind(&LogicSystem::UpdateGroupIconHandler, this,
+		placeholders::_1, placeholders::_2, placeholders::_3);
+
 	_fun_callbacks[ID_SET_GROUP_ADMIN_REQ] = std::bind(&LogicSystem::SetGroupAdminHandler, this,
 		placeholders::_1, placeholders::_2, placeholders::_3);
 
@@ -862,6 +865,7 @@ void LogicSystem::BuildGroupListJson(int uid, Json::Value& out)
 		one["groupid"] = static_cast<Json::Int64>(group->group_id);
 		one["group_code"] = group->group_code;
 		one["name"] = group->name;
+		one["icon"] = group->icon;
 		one["owner_uid"] = group->owner_uid;
 		one["announcement"] = group->announcement;
 		one["member_limit"] = group->member_limit;
@@ -1387,6 +1391,9 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 		item["mime"] = one->mime;
 		item["size"] = one->size;
 		item["created_at"] = static_cast<Json::Int64>(one->created_at);
+		item["from_name"] = one->from_name;
+		item["from_nick"] = one->from_nick;
+		item["from_icon"] = one->from_icon;
 		rtvalue["messages"].append(item);
 	}
 }
@@ -1482,6 +1489,57 @@ void LogicSystem::UpdateGroupAnnouncementHandler(std::shared_ptr<CSession> sessi
 	notify["groupid"] = static_cast<Json::Int64>(group_id);
 	notify["group_code"] = group_info ? group_info->group_code : "";
 	notify["announcement"] = announcement;
+	notify["operator_uid"] = uid;
+	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
+}
+
+void LogicSystem::UpdateGroupIconHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
+{
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	const int uid = root["fromuid"].asInt();
+	const int64_t group_id = root["groupid"].asInt64();
+	const std::string icon = root.get("icon", "").asString();
+
+	Json::Value rtvalue;
+	rtvalue["error"] = ErrorCodes::Success;
+	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["icon"] = icon;
+	std::shared_ptr<GroupInfo> group_info;
+	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
+	if (group_info) {
+		rtvalue["group_code"] = group_info->group_code;
+	}
+	Defer defer([&rtvalue, session]() {
+		session->Send(rtvalue.toStyledString(), ID_UPDATE_GROUP_ICON_RSP);
+		});
+
+	if (uid <= 0 || group_id <= 0 || icon.empty() || icon.size() > 512) {
+		rtvalue["error"] = ErrorCodes::Error_Json;
+		return;
+	}
+
+	if (!MysqlMgr::GetInstance()->UpdateGroupIcon(group_id, uid, icon)) {
+		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
+		return;
+	}
+
+	std::vector<std::shared_ptr<GroupMemberInfo>> members;
+	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	std::vector<int> recipients;
+	for (const auto& one : members) {
+		if (one) {
+			recipients.push_back(one->uid);
+		}
+	}
+
+	Json::Value notify;
+	notify["error"] = ErrorCodes::Success;
+	notify["event"] = "group_icon_updated";
+	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["group_code"] = group_info ? group_info->group_code : "";
+	notify["icon"] = icon;
 	notify["operator_uid"] = uid;
 	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
 }

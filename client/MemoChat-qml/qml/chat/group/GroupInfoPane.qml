@@ -7,12 +7,15 @@ GlassSurface {
     id: root
     property string groupName: ""
     property string groupCode: ""
+    property string groupIcon: "qrc:/res/chat_icon.png"
+    property bool canUpdateIcon: false
     property string statusText: ""
     property bool statusError: false
 
     signal refreshRequested()
     signal loadHistoryRequested()
     signal updateAnnouncementRequested(string announcement)
+    signal updateGroupIconRequested()
     signal quitRequested()
 
     cornerRadius: 10
@@ -40,6 +43,41 @@ GlassSurface {
             color: "#5f6f85"
             font.pixelSize: 12
             elide: Text.ElideRight
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            Rectangle {
+                Layout.preferredWidth: 44
+                Layout.preferredHeight: 44
+                radius: 22
+                clip: true
+                color: Qt.rgba(0.73, 0.82, 0.92, 0.50)
+                border.color: Qt.rgba(1, 1, 1, 0.56)
+
+                Image {
+                    anchors.fill: parent
+                    source: (root.groupIcon && root.groupIcon.length > 0)
+                            ? root.groupIcon
+                            : "qrc:/res/chat_icon.png"
+                    fillMode: Image.PreserveAspectCrop
+                }
+            }
+
+            GlassButton {
+                Layout.preferredWidth: 96
+                text: "修改群头像"
+                implicitHeight: 30
+                enabled: root.canUpdateIcon
+                cornerRadius: 8
+                normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
+                hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
+                pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
+                disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                onClicked: root.updateGroupIconRequested()
+            }
         }
 
         Label {

@@ -144,6 +144,7 @@ void UserMgr::SetGroupList(const QJsonArray &array)
         info->_group_id = value["groupid"].toVariant().toLongLong();
         info->_group_code = value["group_code"].toString();
         info->_name = value["name"].toString();
+        info->_icon = value["icon"].toString();
         info->_announcement = value["announcement"].toString();
         info->_owner_uid = value["owner_uid"].toInt();
         info->_member_limit = value["member_limit"].toInt(200);
@@ -443,6 +444,7 @@ void UserMgr::UpsertGroup(const std::shared_ptr<GroupInfoData> &groupInfo)
         return;
     }
     stored->_name = groupInfo->_name;
+    stored->_icon = groupInfo->_icon;
     stored->_announcement = groupInfo->_announcement;
     stored->_owner_uid = groupInfo->_owner_uid;
     stored->_member_limit = groupInfo->_member_limit;

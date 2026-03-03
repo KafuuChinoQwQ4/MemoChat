@@ -11,6 +11,7 @@
 #include <QFileInfo>
 #include <QUuid>
 #include <QRegularExpression>
+#include <QUrl>
 
 AppController::AppController(QObject *parent)
     : QObject(parent),
@@ -235,6 +236,18 @@ bool AppController::hasCurrentChat() const
 bool AppController::hasCurrentGroup() const
 {
     return _current_group_id > 0;
+}
+
+int AppController::currentGroupRole() const
+{
+    if (_current_group_id <= 0) {
+        return 0;
+    }
+    auto groupInfo = _gateway.userMgr()->GetGroupById(_current_group_id);
+    if (!groupInfo) {
+        return 0;
+    }
+    return groupInfo->_role;
 }
 
 QString AppController::currentGroupName() const
@@ -525,7 +538,10 @@ void AppController::selectGroupIndex(int index)
     setPrivateHistoryLoading(false);
     setCanLoadMorePrivateHistory(false);
     setCurrentChatPeerName(_current_group_name);
-    setCurrentChatPeerIcon("qrc:/res/chat_icon.png");
+    const QString selectedGroupIcon = item.value("icon").toString().trimmed().isEmpty()
+        ? QStringLiteral("qrc:/res/chat_icon.png")
+        : item.value("icon").toString();
+    setCurrentChatPeerIcon(selectedGroupIcon);
 
     groupInfo = _gateway.userMgr()->GetGroupById(groupId);
     if (!groupInfo) {
@@ -860,8 +876,23 @@ void AppController::saveProfile(const QString &nick, const QString &desc)
         return;
     }
 
+    QString iconForSave = _current_user_icon;
+    const QUrl iconUrl(iconForSave);
+    if (iconUrl.isLocalFile() || QFileInfo(iconForSave).isAbsolute()) {
+        UploadedMediaInfo uploaded;
+        if (!MediaUploadService::uploadLocalFile(iconForSave, "avatar", selfInfo->_uid, &uploaded, &errorText)) {
+            setSettingsStatus(errorText.isEmpty() ? "头像上传失败" : errorText, true);
+            return;
+        }
+        if (uploaded.remoteUrl.isEmpty()) {
+            setSettingsStatus("头像上传失败", true);
+            return;
+        }
+        iconForSave = uploaded.remoteUrl;
+    }
+
     _profile_controller.sendSaveProfile(
-        selfInfo->_uid, selfInfo->_name, nick, desc, _current_user_icon);
+        selfInfo->_uid, selfInfo->_name, nick, desc, iconForSave);
     setSettingsStatus("资料同步中...", false);
 }
 
@@ -1050,6 +1081,51 @@ void AppController::updateGroupAnnouncement(const QString &announcement)
     obj["announcement"] = announcement.left(1000);
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
     _gateway.tcpMgr()->slot_send_data(ReqId::ID_UPDATE_GROUP_ANNOUNCEMENT_REQ, payload);
+}
+
+void AppController::updateGroupIcon()
+{
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || _current_group_id <= 0) {
+        setGroupStatus("请选择群聊", true);
+        return;
+    }
+    auto groupInfo = _gateway.userMgr()->GetGroupById(_current_group_id);
+    if (!groupInfo) {
+        setGroupStatus("群聊不存在或已失效", true);
+        return;
+    }
+    if (groupInfo->_role != 3) {
+        setGroupStatus("仅群主可修改群头像", true);
+        return;
+    }
+
+    QString avatarUrl;
+    QString errorText;
+    if (!LocalFilePickerService::pickAvatarUrl(&avatarUrl, &errorText)) {
+        if (!errorText.isEmpty()) {
+            setGroupStatus(errorText, true);
+        }
+        return;
+    }
+
+    UploadedMediaInfo uploaded;
+    if (!MediaUploadService::uploadLocalFile(avatarUrl, "group_avatar", selfInfo->_uid, &uploaded, &errorText)) {
+        setGroupStatus(errorText.isEmpty() ? "群头像上传失败" : errorText, true);
+        return;
+    }
+    if (uploaded.remoteUrl.isEmpty()) {
+        setGroupStatus("群头像上传失败", true);
+        return;
+    }
+
+    QJsonObject obj;
+    obj["fromuid"] = selfInfo->_uid;
+    obj["groupid"] = static_cast<qint64>(_current_group_id);
+    obj["icon"] = uploaded.remoteUrl;
+    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    _gateway.tcpMgr()->slot_send_data(ReqId::ID_UPDATE_GROUP_ICON_REQ, payload);
+    setGroupStatus("群头像更新中...", false);
 }
 
 void AppController::setGroupAdmin(const QString &userId, bool isAdmin)
@@ -1668,6 +1744,10 @@ void AppController::onGroupListUpdated()
         auto groupInfo = _gateway.userMgr()->GetGroupById(_current_group_id);
         if (groupInfo) {
             setCurrentGroup(groupInfo->_group_id, groupInfo->_name, groupInfo->_group_code);
+            const QString currentGroupIcon = groupInfo->_icon.trimmed().isEmpty()
+                ? QStringLiteral("qrc:/res/chat_icon.png")
+                : groupInfo->_icon;
+            setCurrentChatPeerIcon(currentGroupIcon);
             _message_model.setMessages(groupInfo->_chat_msgs, _gateway.userMgr()->GetUid());
             return;
         }
@@ -1713,6 +1793,13 @@ void AppController::onGroupMemberChanged(QJsonObject payload)
     if (!event.isEmpty()) {
         setGroupStatus(QString("群事件：%1").arg(event), false);
     }
+    if (event == "group_icon_updated"
+        && payload.value("groupid").toVariant().toLongLong() == _current_group_id) {
+        const QString newGroupIcon = payload.value("icon").toString().trimmed().isEmpty()
+            ? QStringLiteral("qrc:/res/chat_icon.png")
+            : payload.value("icon").toString();
+        setCurrentChatPeerIcon(newGroupIcon);
+    }
     refreshGroupList();
 }
 
@@ -1724,7 +1811,7 @@ void AppController::onGroupChatMsg(std::shared_ptr<GroupChatMsg> msg)
 
     auto textMsg = std::make_shared<TextChatData>(msg->_msg->_msg_id, msg->_msg->_msg_content,
                                                   msg->_msg->_from_uid, static_cast<int>(msg->_group_id),
-                                                  msg->_from_name, msg->_msg->_created_at);
+                                                  msg->_from_name, msg->_msg->_created_at, msg->_from_icon);
     _gateway.userMgr()->AppendGroupChatMsg(msg->_group_id, textMsg);
 
     int pseudoUid = 0;
@@ -1757,6 +1844,7 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
         case ID_GROUP_CHAT_MSG_RSP: return "发送群消息";
         case ID_GROUP_HISTORY_RSP: return "拉取群历史";
         case ID_UPDATE_GROUP_ANNOUNCEMENT_RSP: return "更新群公告";
+        case ID_UPDATE_GROUP_ICON_RSP: return "更新群头像";
         case ID_MUTE_GROUP_MEMBER_RSP: return "禁言成员";
         case ID_SET_GROUP_ADMIN_RSP: return "设置管理员";
         case ID_KICK_GROUP_MEMBER_RSP: return "踢出成员";
@@ -1800,6 +1888,16 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
     }
     case ID_UPDATE_GROUP_ANNOUNCEMENT_RSP:
         setGroupStatus("群公告已更新", false);
+        refreshGroupList();
+        break;
+    case ID_UPDATE_GROUP_ICON_RSP:
+        if (_current_group_id == payload.value("groupid").toVariant().toLongLong()) {
+            const QString updatedGroupIcon = payload.value("icon").toString().trimmed().isEmpty()
+                ? QStringLiteral("qrc:/res/chat_icon.png")
+                : payload.value("icon").toString();
+            setCurrentChatPeerIcon(updatedGroupIcon);
+        }
+        setGroupStatus("群头像已更新", false);
         refreshGroupList();
         break;
     case ID_MUTE_GROUP_MEMBER_RSP:
@@ -1945,10 +2043,13 @@ void AppController::refreshGroupModel()
             continue;
         }
         const int pseudoUid = -static_cast<int>(group->_group_id);
+        const QString groupIcon = group->_icon.trimmed().isEmpty()
+            ? QStringLiteral("qrc:/res/chat_icon.png")
+            : group->_icon;
         auto info = std::make_shared<FriendInfo>(pseudoUid,
                                                  group->_name,
                                                  group->_name,
-                                                 "qrc:/res/chat_icon.png",
+                                                 groupIcon,
                                                  0,
                                                  group->_announcement,
                                                  group->_announcement,
@@ -2334,7 +2435,7 @@ bool AppController::dispatchGroupChatContent(const QString &content, const QStri
     _gateway.tcpMgr()->slot_send_data(ReqId::ID_GROUP_CHAT_MSG_REQ, payload);
 
     const QString senderName = selfInfo->_nick.isEmpty() ? selfInfo->_name : selfInfo->_nick;
-    auto msg = std::make_shared<TextChatData>(msgId, content, selfInfo->_uid, 0, senderName);
+    auto msg = std::make_shared<TextChatData>(msgId, content, selfInfo->_uid, 0, senderName, 0, _current_user_icon);
     _gateway.userMgr()->AppendGroupChatMsg(_current_group_id, msg);
     _message_model.appendMessage(msg, selfInfo->_uid);
 

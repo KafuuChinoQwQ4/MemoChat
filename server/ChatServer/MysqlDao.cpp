@@ -70,6 +70,7 @@ MysqlDao::MysqlDao()
 				"group_id BIGINT AUTO_INCREMENT PRIMARY KEY,"
 				"group_code VARCHAR(10) NULL,"
 				"name VARCHAR(64) NOT NULL,"
+				"icon VARCHAR(512) NULL,"
 				"owner_uid INT NOT NULL,"
 				"announcement TEXT,"
 				"member_limit INT NOT NULL DEFAULT 200,"
@@ -1146,7 +1147,7 @@ bool MysqlDao::GetUserGroupList(const int& uid, std::vector<std::shared_ptr<Grou
 	try {
 		std::unique_ptr<sql::PreparedStatement> pstmt(
 			con->_con->prepareStatement(
-				"SELECT g.group_id, g.group_code, g.name, g.owner_uid, g.announcement, g.member_limit, g.is_all_muted, g.status, m.role, "
+				"SELECT g.group_id, g.group_code, g.name, g.icon, g.owner_uid, g.announcement, g.member_limit, g.is_all_muted, g.status, m.role, "
 				"(SELECT COUNT(1) FROM chat_group_member gm WHERE gm.group_id = g.group_id AND gm.status = 1) AS member_count "
 				"FROM chat_group_member m JOIN chat_group g ON m.group_id = g.group_id "
 				"WHERE m.uid = ? AND m.status = 1 AND g.status = 1 ORDER BY g.updated_at DESC"));
@@ -1157,6 +1158,7 @@ bool MysqlDao::GetUserGroupList(const int& uid, std::vector<std::shared_ptr<Grou
 			info->group_id = static_cast<int64_t>(std::stoll(res->getString("group_id")));
 			info->group_code = res->isNull("group_code") ? "" : res->getString("group_code");
 			info->name = res->getString("name");
+			info->icon = res->isNull("icon") ? "" : res->getString("icon");
 			info->owner_uid = res->getInt("owner_uid");
 			info->announcement = res->getString("announcement");
 			info->member_limit = res->getInt("member_limit");
@@ -1451,8 +1453,10 @@ bool MysqlDao::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts
 		std::unique_ptr<sql::PreparedStatement> pstmt(
 			con->_con->prepareStatement(
 				"SELECT m.msg_id, m.group_id, m.from_uid, m.msg_type, m.content, m.mentions_json, m.created_at, "
-				"e.file_name, e.mime, e.size "
-				"FROM chat_group_msg m LEFT JOIN chat_group_msg_ext e ON m.msg_id = e.msg_id "
+				"e.file_name, e.mime, e.size, u.name AS from_name, u.nick AS from_nick, u.icon AS from_icon "
+				"FROM chat_group_msg m "
+				"LEFT JOIN chat_group_msg_ext e ON m.msg_id = e.msg_id "
+				"LEFT JOIN user u ON m.from_uid = u.uid "
 				"WHERE m.group_id = ? AND m.created_at < ? ORDER BY m.created_at DESC LIMIT ?"));
 		pstmt->setInt64(1, group_id);
 		pstmt->setInt64(2, final_before);
@@ -1470,6 +1474,9 @@ bool MysqlDao::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts
 			info->file_name = res->isNull("file_name") ? "" : res->getString("file_name");
 			info->mime = res->isNull("mime") ? "" : res->getString("mime");
 			info->size = res->isNull("size") ? 0 : res->getInt("size");
+			info->from_name = res->isNull("from_name") ? "" : res->getString("from_name");
+			info->from_nick = res->isNull("from_nick") ? "" : res->getString("from_nick");
+			info->from_icon = res->isNull("from_icon") ? "" : res->getString("from_icon");
 			messages.push_back(info);
 		}
 		return true;
@@ -1498,6 +1505,33 @@ bool MysqlDao::UpdateGroupAnnouncement(const int64_t& group_id, const int& opera
 		std::unique_ptr<sql::PreparedStatement> pstmt(
 			con->_con->prepareStatement("UPDATE chat_group SET announcement = ?, updated_at = CURRENT_TIMESTAMP WHERE group_id = ? AND status = 1"));
 		pstmt->setString(1, announcement);
+		pstmt->setInt64(2, group_id);
+		return pstmt->executeUpdate() > 0;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::UpdateGroupIcon(const int64_t& group_id, const int& operator_uid, const std::string& icon) {
+	int role = 0;
+	if (!GetUserRoleInGroup(group_id, operator_uid, role) || role != 3) {
+		return false;
+	}
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement("UPDATE chat_group SET icon = ?, updated_at = CURRENT_TIMESTAMP WHERE group_id = ? AND status = 1"));
+		pstmt->setString(1, icon);
 		pstmt->setInt64(2, group_id);
 		return pstmt->executeUpdate() > 0;
 	}
@@ -1648,7 +1682,7 @@ bool MysqlDao::GetGroupById(const int64_t& group_id, std::shared_ptr<GroupInfo>&
 		});
 	try {
 		std::unique_ptr<sql::PreparedStatement> pstmt(
-			con->_con->prepareStatement("SELECT group_id, group_code, name, owner_uid, announcement, member_limit, is_all_muted, status "
+			con->_con->prepareStatement("SELECT group_id, group_code, name, icon, owner_uid, announcement, member_limit, is_all_muted, status "
 				"FROM chat_group WHERE group_id = ? LIMIT 1"));
 		pstmt->setInt64(1, group_id);
 		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
@@ -1659,6 +1693,7 @@ bool MysqlDao::GetGroupById(const int64_t& group_id, std::shared_ptr<GroupInfo>&
 		info->group_id = static_cast<int64_t>(std::stoll(res->getString("group_id")));
 		info->group_code = res->isNull("group_code") ? "" : res->getString("group_code");
 		info->name = res->getString("name");
+		info->icon = res->isNull("icon") ? "" : res->getString("icon");
 		info->owner_uid = res->getInt("owner_uid");
 		info->announcement = res->getString("announcement");
 		info->member_limit = res->getInt("member_limit");
@@ -1733,6 +1768,11 @@ bool MysqlDao::EnsureGroupCodeSchemaAndBackfill() {
 		catch (sql::SQLException&) {
 		}
 		try {
+			stmt->execute("ALTER TABLE chat_group ADD COLUMN icon VARCHAR(512) NULL");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
 			stmt->execute("CREATE UNIQUE INDEX uk_chat_group_code ON chat_group(group_code)");
 		}
 		catch (sql::SQLException&) {
@@ -1771,6 +1811,8 @@ bool MysqlDao::EnsureGroupCodeSchemaAndBackfill() {
 
 		int backfilled = 0;
 		int retries = 0;
+		int owner_role_fixed = 0;
+		int demoted_extra_owner = 0;
 		con->_con->setAutoCommit(false);
 		std::unique_ptr<sql::PreparedStatement> update_stmt(
 			con->_con->prepareStatement("UPDATE chat_group SET group_code = ? WHERE group_id = ?"));
@@ -1802,11 +1844,42 @@ bool MysqlDao::EnsureGroupCodeSchemaAndBackfill() {
 			++backfilled;
 		}
 
+		std::unique_ptr<sql::PreparedStatement> ensure_owner_stmt(
+			con->_con->prepareStatement("INSERT INTO chat_group_member(group_id, uid, role, mute_until, join_source, status) "
+				"VALUES(?, ?, 3, 0, 0, 1) "
+				"ON DUPLICATE KEY UPDATE role = 3, status = 1, mute_until = 0, updated_at = CURRENT_TIMESTAMP"));
+		std::unique_ptr<sql::PreparedStatement> demote_stmt(
+			con->_con->prepareStatement("UPDATE chat_group_member SET role = 2, updated_at = CURRENT_TIMESTAMP "
+				"WHERE group_id = ? AND uid <> ? AND role = 3 AND status = 1"));
+		for (const auto& row : all_rows) {
+			std::unique_ptr<sql::PreparedStatement> owner_query(
+				con->_con->prepareStatement("SELECT owner_uid FROM chat_group WHERE group_id = ? LIMIT 1"));
+			owner_query->setInt64(1, row.group_id);
+			std::unique_ptr<sql::ResultSet> owner_res(owner_query->executeQuery());
+			if (!owner_res->next()) {
+				continue;
+			}
+			const int owner_uid = owner_res->getInt("owner_uid");
+			if (owner_uid <= 0) {
+				continue;
+			}
+
+			ensure_owner_stmt->setInt64(1, row.group_id);
+			ensure_owner_stmt->setInt(2, owner_uid);
+			owner_role_fixed += ensure_owner_stmt->executeUpdate();
+
+			demote_stmt->setInt64(1, row.group_id);
+			demote_stmt->setInt(2, owner_uid);
+			demoted_extra_owner += demote_stmt->executeUpdate();
+		}
+
 		con->_con->commit();
 		std::cout << "[ChatServer] group_code backfill done. total=" << all_rows.size()
 			<< " backfilled=" << backfilled
 			<< " duplicate_fixed=" << duplicate_fixed
-			<< " retries=" << retries << std::endl;
+			<< " retries=" << retries
+			<< " owner_role_fixed=" << owner_role_fixed
+			<< " demoted_extra_owner=" << demoted_extra_owner << std::endl;
 		return true;
 	}
 	catch (sql::SQLException& e) {
