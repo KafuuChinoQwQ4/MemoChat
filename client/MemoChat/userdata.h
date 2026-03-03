@@ -128,6 +128,7 @@ struct GroupInfoData {
     qint64 _group_id = 0;
     QString _group_code;
     QString _name;
+    QString _icon;
     QString _announcement;
     int _owner_uid = 0;
     int _member_limit = 200;
@@ -182,9 +183,9 @@ struct UserInfo {
 
 struct TextChatData{
     TextChatData(QString msg_id, QString msg_content, int fromuid, int touid,
-                 const QString &from_name = QString(), qint64 created_at = 0)
+                 const QString &from_name = QString(), qint64 created_at = 0, const QString &from_icon = QString())
         :_msg_id(msg_id),_msg_content(msg_content),_from_uid(fromuid),_to_uid(touid),
-         _from_name(from_name),_created_at(created_at){
+         _from_name(from_name),_created_at(created_at),_from_icon(from_icon){
 
     }
     QString _msg_id;
@@ -193,6 +194,7 @@ struct TextChatData{
     int _to_uid;
     QString _from_name;
     qint64 _created_at;
+    QString _from_icon;
 };
 
 struct GroupChatData {
@@ -214,8 +216,8 @@ struct GroupChatData {
 };
 
 struct GroupChatMsg {
-    GroupChatMsg(qint64 groupid, int fromuid, QJsonObject msg_obj, const QString &from_name = QString())
-        : _group_id(groupid), _from_uid(fromuid), _from_name(from_name) {
+    GroupChatMsg(qint64 groupid, int fromuid, QJsonObject msg_obj, const QString &from_name = QString(), const QString &from_icon = QString())
+        : _group_id(groupid), _from_uid(fromuid), _from_name(from_name), _from_icon(from_icon) {
         auto content = msg_obj.value("content").toString();
         auto msgid = msg_obj.value("msgid").toString();
         auto msgtype = msg_obj.value("msgtype").toString("text");
@@ -229,6 +231,7 @@ struct GroupChatMsg {
     qint64 _group_id;
     int _from_uid;
     QString _from_name;
+    QString _from_icon;
     std::shared_ptr<GroupChatData> _msg;
 };
 

@@ -45,6 +45,7 @@ class AppController : public QObject
     Q_PROPERTY(QString currentChatPeerIcon READ currentChatPeerIcon NOTIFY currentChatPeerChanged)
     Q_PROPERTY(bool hasCurrentChat READ hasCurrentChat NOTIFY currentChatPeerChanged)
     Q_PROPERTY(bool hasCurrentGroup READ hasCurrentGroup NOTIFY currentGroupChanged)
+    Q_PROPERTY(int currentGroupRole READ currentGroupRole NOTIFY currentGroupChanged)
     Q_PROPERTY(QString currentGroupName READ currentGroupName NOTIFY currentGroupChanged)
     Q_PROPERTY(QString currentGroupCode READ currentGroupCode NOTIFY currentGroupChanged)
     Q_PROPERTY(FriendListModel* chatListModel READ chatListModel CONSTANT)
@@ -118,6 +119,7 @@ public:
     QString currentChatPeerIcon() const;
     bool hasCurrentChat() const;
     bool hasCurrentGroup() const;
+    int currentGroupRole() const;
     QString currentGroupName() const;
     QString currentGroupCode() const;
     FriendListModel *chatListModel();
@@ -180,6 +182,7 @@ public:
     Q_INVOKABLE void sendGroupFileMessage();
     Q_INVOKABLE void loadGroupHistory();
     Q_INVOKABLE void updateGroupAnnouncement(const QString &announcement);
+    Q_INVOKABLE void updateGroupIcon();
     Q_INVOKABLE void setGroupAdmin(const QString &userId, bool isAdmin);
     Q_INVOKABLE void muteGroupMember(const QString &userId, int muteSeconds);
     Q_INVOKABLE void kickGroupMember(const QString &userId);

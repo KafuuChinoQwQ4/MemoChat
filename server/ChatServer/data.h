@@ -41,6 +41,7 @@ struct GroupInfo {
 	int64_t group_id;
 	std::string group_code;
 	std::string name;
+	std::string icon;
 	int owner_uid;
 	std::string announcement;
 	int member_limit;
@@ -94,6 +95,9 @@ struct GroupMessageInfo {
 	std::string mime;
 	int size;
 	int64_t created_at;
+	std::string from_name;
+	std::string from_nick;
+	std::string from_icon;
 };
 
 struct PrivateMessageInfo {

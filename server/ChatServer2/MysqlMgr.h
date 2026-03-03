@@ -42,6 +42,7 @@ public:
 	bool GetGroupHistory(const int64_t& group_id, const int64_t& before_ts, const int& limit,
 		std::vector<std::shared_ptr<GroupMessageInfo>>& messages);
 	bool UpdateGroupAnnouncement(const int64_t& group_id, const int& operator_uid, const std::string& announcement);
+	bool UpdateGroupIcon(const int64_t& group_id, const int& operator_uid, const std::string& icon);
 	bool SetGroupAdmin(const int64_t& group_id, const int& operator_uid, const int& target_uid, const bool& is_admin);
 	bool MuteGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid, const int64_t& mute_until);
 	bool KickGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid);

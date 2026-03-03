@@ -22,6 +22,7 @@ public:
         MsgTypeRole,
         FileNameRole,
         SenderNameRole,
+        SenderIconRole,
         ShowAvatarRole,
         CreatedAtRole
     };
@@ -52,6 +53,7 @@ private:
         QString msgType;
         QString fileName;
         QString senderName;
+        QString senderIcon;
         bool showAvatar;
         qint64 createdAt;
     };

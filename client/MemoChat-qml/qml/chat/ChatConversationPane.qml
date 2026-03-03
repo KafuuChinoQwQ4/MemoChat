@@ -107,7 +107,9 @@ Rectangle {
                     fileName: model.fileName
                     senderName: model.senderName
                     showAvatar: model.showAvatar
-                    avatarSource: model.outgoing ? root.selfAvatar : root.peerAvatar
+                    avatarSource: model.outgoing
+                                  ? root.selfAvatar
+                                  : ((model.senderIcon && model.senderIcon.length > 0) ? model.senderIcon : root.peerAvatar)
                     onOpenUrlRequested: root.openAttachment(url)
                 }
             }

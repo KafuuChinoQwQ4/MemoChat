@@ -252,11 +252,14 @@ Rectangle {
                     backdrop: backdropLayer
                     groupName: controller.currentGroupName
                     groupCode: controller.currentGroupCode
+                    groupIcon: controller.currentChatPeerIcon
+                    canUpdateIcon: controller.currentGroupRole === 3
                     statusText: controller.groupStatusText
                     statusError: controller.groupStatusError
                     onRefreshRequested: controller.refreshGroupList()
                     onLoadHistoryRequested: controller.loadGroupHistory()
                     onUpdateAnnouncementRequested: controller.updateGroupAnnouncement(announcement)
+                    onUpdateGroupIconRequested: controller.updateGroupIcon()
                     onQuitRequested: {
                         controller.quitCurrentGroup()
                         groupManagePopup.close()
