@@ -20,16 +20,35 @@ Item {
         spacing: 0
 
         Rectangle {
+            id: newFriendEntry
             Layout.fillWidth: true
             Layout.preferredHeight: 56
-            color: Qt.rgba(1, 1, 1, 0.14)
+            color: newFriendArea.pressed ? Qt.rgba(1, 1, 1, 0.26)
+                                         : newFriendArea.containsMouse ? Qt.rgba(1, 1, 1, 0.20)
+                                                                      : Qt.rgba(1, 1, 1, 0.14)
             border.color: Qt.rgba(1, 1, 1, 0.34)
 
+            Behavior on color {
+                ColorAnimation {
+                    duration: 110
+                    easing.type: Easing.OutQuad
+                }
+            }
+
             RowLayout {
+                id: newFriendRow
                 anchors.fill: parent
                 anchors.leftMargin: 10
                 anchors.rightMargin: 10
                 spacing: 8
+                scale: newFriendArea.pressed ? 0.96 : (newFriendArea.containsMouse ? 1.02 : 1.0)
+
+                Behavior on scale {
+                    NumberAnimation {
+                        duration: 110
+                        easing.type: Easing.OutQuad
+                    }
+                }
 
                 Rectangle {
                     Layout.preferredWidth: 36
@@ -63,7 +82,10 @@ Item {
             }
 
             MouseArea {
+                id: newFriendArea
                 anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
                 onClicked: root.openApplyRequested()
             }
         }
@@ -119,9 +141,37 @@ Item {
                 }
 
                 delegate: Rectangle {
+                    id: contactDelegate
                     width: ListView.view.width
                     height: 58
-                    color: ListView.isCurrentItem ? Qt.rgba(0.77, 0.87, 0.98, 0.30) : "transparent"
+                    color: {
+                        if (ListView.isCurrentItem) {
+                            return contactArea.pressed ? Qt.rgba(0.77, 0.87, 0.98, 0.44)
+                                                       : contactArea.containsMouse ? Qt.rgba(0.77, 0.87, 0.98, 0.36)
+                                                                                 : Qt.rgba(0.77, 0.87, 0.98, 0.30)
+                        }
+                        if (contactArea.pressed) {
+                            return Qt.rgba(0.77, 0.87, 0.98, 0.24)
+                        }
+                        if (contactArea.containsMouse) {
+                            return Qt.rgba(0.77, 0.87, 0.98, 0.14)
+                        }
+                        return "transparent"
+                    }
+                    scale: contactArea.pressed ? 0.96 : (contactArea.containsMouse ? 1.02 : 1.0)
+
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: 110
+                            easing.type: Easing.OutQuad
+                        }
+                    }
+                    Behavior on scale {
+                        NumberAnimation {
+                            duration: 110
+                            easing.type: Easing.OutQuad
+                        }
+                    }
 
                     RowLayout {
                         anchors.fill: parent
@@ -161,7 +211,9 @@ Item {
                     }
 
                     MouseArea {
+                        id: contactArea
                         anchors.fill: parent
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             contactList.currentIndex = index

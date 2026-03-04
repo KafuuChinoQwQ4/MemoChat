@@ -42,6 +42,10 @@ public:
     std::shared_ptr<FriendInfo> GetFriendById(int uid);
     std::vector<std::shared_ptr<FriendInfo>> GetFriendListSnapshot() const;
     void AppendFriendChatMsg(int friend_id,std::vector<std::shared_ptr<TextChatData>>);
+    bool UpdatePrivateChatMsgState(int peer_uid, const QString &msgId, const QString &state);
+    bool UpdatePrivateChatMsgContent(int peer_uid, const QString &msgId, const QString &content,
+                                     const QString &state = QString(), qint64 editedAtMs = 0, qint64 deletedAtMs = 0);
+    int MarkPrivateOutgoingReadUntil(int peer_uid, int self_uid, qint64 read_ts);
     void SetGroupList(const QJsonArray &array);
     std::vector<std::shared_ptr<GroupInfoData>> GetGroupListPerPage();
     bool IsLoadGroupFin();
@@ -51,6 +55,10 @@ public:
     void UpsertGroup(const std::shared_ptr<GroupInfoData>& groupInfo);
     void AppendGroupChatMsg(qint64 group_id, const std::shared_ptr<TextChatData>& msg);
     void UpsertGroupChatMsg(qint64 group_id, const std::shared_ptr<TextChatData>& msg);
+    bool UpdateGroupChatMsgState(qint64 group_id, const QString &msgId, const QString &state);
+    bool UpdateGroupChatMsgContent(qint64 group_id, const QString &msgId, const QString &content,
+                                   const QString &state = QString(), qint64 editedAtMs = 0, qint64 deletedAtMs = 0);
+    int MarkGroupOutgoingReadUntil(qint64 group_id, int self_uid, qint64 read_ts);
     std::vector<std::shared_ptr<GroupInfoData>> GetGroupListSnapshot() const;
 private:
     UserMgr();

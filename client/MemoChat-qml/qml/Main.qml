@@ -23,6 +23,39 @@ ApplicationWindow {
     maximumWidth: chatMode ? 100000 : 300
     maximumHeight: chatMode ? 100000 : 500
 
+    Component {
+        id: loginPageComponent
+        LoginPage {
+            tipText: controller.tipText
+            tipError: controller.tipError
+            busy: controller.busy
+
+            onClearTipRequested: controller.clearTip()
+            onSwitchToRegisterRequested: controller.switchToRegister()
+            onSwitchToResetRequested: controller.switchToReset()
+            onLoginRequested: function(email, password) {
+                controller.login(email, password)
+            }
+        }
+    }
+
+    Component {
+        id: registerPageComponent
+        RegisterPage { }
+    }
+
+    Component {
+        id: resetPageComponent
+        ResetPage { }
+    }
+
+    Component {
+        id: chatShellPageComponent
+        ChatShellPage {
+            topInset: 24
+        }
+    }
+
     Component.onCompleted: {
         width = chatMode ? chatWindowSize.width : loginWindowSize.width
         height = chatMode ? chatWindowSize.height : loginWindowSize.height
@@ -30,14 +63,14 @@ ApplicationWindow {
 
     Behavior on width {
         NumberAnimation {
-            duration: 150
+            duration: 80
             easing.type: Easing.OutCubic
         }
     }
 
     Behavior on height {
         NumberAnimation {
-            duration: 150
+            duration: 80
             easing.type: Easing.OutCubic
         }
     }
@@ -62,25 +95,40 @@ ApplicationWindow {
             anchors.fill: parent
             currentIndex: controller.page
 
-            LoginPage {
-                tipText: controller.tipText
-                tipError: controller.tipError
-                busy: controller.busy
-
-                onClearTipRequested: controller.clearTip()
-                onSwitchToRegisterRequested: controller.switchToRegister()
-                onSwitchToResetRequested: controller.switchToReset()
-                onLoginRequested: function(email, password) {
-                    controller.login(email, password)
+            Item {
+                Loader {
+                    anchors.fill: parent
+                    active: controller.page === AppController.LoginPage
+                    asynchronous: true
+                    sourceComponent: loginPageComponent
                 }
             }
 
-            RegisterPage { }
+            Item {
+                Loader {
+                    anchors.fill: parent
+                    active: controller.page === AppController.RegisterPage
+                    asynchronous: true
+                    sourceComponent: registerPageComponent
+                }
+            }
 
-            ResetPage { }
+            Item {
+                Loader {
+                    anchors.fill: parent
+                    active: controller.page === AppController.ResetPage
+                    asynchronous: true
+                    sourceComponent: resetPageComponent
+                }
+            }
 
-            ChatShellPage {
-                topInset: 24
+            Item {
+                Loader {
+                    anchors.fill: parent
+                    active: controller.page === AppController.ChatPage
+                    asynchronous: true
+                    sourceComponent: chatShellPageComponent
+                }
             }
         }
 

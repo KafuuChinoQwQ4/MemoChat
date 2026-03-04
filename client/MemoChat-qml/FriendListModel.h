@@ -22,7 +22,14 @@ public:
         DescRole,
         LastMsgRole,
         SexRole,
-        BackRole
+        BackRole,
+        DialogTypeRole,
+        UnreadCountRole,
+        PinnedRankRole,
+        DraftTextRole,
+        LastMsgTsRole,
+        MuteStateRole,
+        MentionCountRole
     };
 
     explicit FriendListModel(QObject *parent = nullptr);
@@ -39,7 +46,14 @@ public:
     void upsertFriend(const std::shared_ptr<FriendInfo> &friendInfo);
     void upsertFriend(const std::shared_ptr<AuthInfo> &authInfo);
     void upsertFriend(const std::shared_ptr<AuthRsp> &authRsp);
-    void updateLastMessage(int uid, const QString &lastMsg);
+    void updateLastMessage(int uid, const QString &lastMsg, qint64 lastMsgTs = 0);
+    void incrementUnread(int uid, int delta = 1);
+    void clearUnread(int uid);
+    void incrementMention(int uid, int delta = 1);
+    void clearMention(int uid);
+    void setMentionCount(int uid, int count);
+    void setDialogMeta(int uid, const QString &dialogType, int unreadCount, int pinnedRank,
+                       const QString &draftText, qint64 lastMsgTs, int muteState);
 
     Q_INVOKABLE QVariantMap get(int index) const;
     Q_INVOKABLE int indexOfUid(int uid) const;
@@ -58,6 +72,13 @@ private:
         QString lastMsg;
         int sex;
         QString back;
+        QString dialogType;
+        int unreadCount = 0;
+        int pinnedRank = 0;
+        QString draftText;
+        qint64 lastMsgTs = 0;
+        int muteState = 0;
+        int mentionCount = 0;
     };
 
     static QString normalizeIcon(QString icon);

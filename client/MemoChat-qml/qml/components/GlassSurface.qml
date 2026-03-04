@@ -5,7 +5,9 @@ Item {
     id: root
 
     property Item backdrop: null
-    property int blurRadius: 26
+    property bool blurEnabled: true
+    property bool liveBlur: false
+    property int blurRadius: 18
     property real cornerRadius: 10
 
     property color fillColor: Qt.rgba(1, 1, 1, 0.15)
@@ -14,31 +16,22 @@ Item {
 
     property color glowTopColor: Qt.rgba(1, 1, 1, 0.24)
     property color glowBottomColor: Qt.rgba(1, 1, 1, 0.06)
+    readonly property bool effectActive: blurEnabled && visible && opacity > 0.01 && width > 1 && height > 1
 
     implicitWidth: 100
     implicitHeight: 38
     clip: true
-    layer.enabled: true
-    layer.smooth: true
-    layer.effect: OpacityMask {
-        maskSource: Rectangle {
-            width: root.width
-            height: root.height
-            radius: root.cornerRadius
-            color: "black"
-        }
-    }
 
     ShaderEffectSource {
         id: blurSource
         anchors.fill: parent
         readonly property Item sourceBackdrop: root.backdrop !== null ? root.backdrop : root
-        sourceItem: sourceBackdrop
+        sourceItem: root.effectActive ? sourceBackdrop : null
         sourceRect: {
             var p = root.mapToItem(sourceBackdrop, 0, 0)
             return Qt.rect(p.x, p.y, root.width, root.height)
         }
-        live: true
+        live: root.effectActive && root.liveBlur
         hideSource: true
         visible: false
     }
@@ -46,13 +39,14 @@ Item {
     Item {
         id: blurLayer
         anchors.fill: parent
+        visible: root.effectActive
 
         FastBlur {
             id: blurEffect
             anchors.fill: parent
-            source: blurSource
+            source: root.effectActive ? blurSource : null
             radius: root.blurRadius
-            transparentBorder: true
+            transparentBorder: false
             visible: false
         }
 
@@ -97,7 +91,7 @@ Item {
 
     Behavior on blurRadius {
         NumberAnimation {
-            duration: 220
+            duration: 120
             easing.type: Easing.InOutQuad
         }
     }

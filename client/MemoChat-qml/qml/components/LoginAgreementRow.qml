@@ -16,7 +16,7 @@ Row {
         checked: false
         anchors.verticalCenter: parent.verticalCenter
         focusPolicy: Qt.NoFocus
-        hoverEnabled: false
+        hoverEnabled: true
         leftPadding: 0
         rightPadding: 0
         topPadding: 0
@@ -29,9 +29,20 @@ Row {
             implicitHeight: 18
             radius: 9
             border.width: 1
-            border.color: "#8ea0b4"
-            color: termsCheck.checked ? "#4f9edd" : "transparent"
-            scale: termsCheck.checked ? 1.0 : 0.94
+            border.color: termsCheck.down ? "#6f88a6" : (termsCheck.hovered ? "#7d96b3" : "#8ea0b4")
+            color: {
+                if (termsCheck.checked) {
+                    return termsCheck.down ? "#3f89c7" : (termsCheck.hovered ? "#58a7e6" : "#4f9edd")
+                }
+                if (termsCheck.down) {
+                    return Qt.rgba(0.31, 0.62, 0.87, 0.26)
+                }
+                if (termsCheck.hovered) {
+                    return Qt.rgba(0.31, 0.62, 0.87, 0.14)
+                }
+                return "transparent"
+            }
+            scale: termsCheck.down ? 0.96 : (termsCheck.hovered ? 1.02 : (termsCheck.checked ? 1.0 : 0.94))
 
             Behavior on color {
                 ColorAnimation {
@@ -74,6 +85,10 @@ Row {
 
         background: Item { }
         contentItem: Item { }
+
+        HoverHandler {
+            cursorShape: termsCheck.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+        }
     }
 
     Text {

@@ -84,10 +84,12 @@ std::vector<std::shared_ptr<TextChatData>> GroupChatCacheStore::loadRecentMessag
 
     QSqlQuery query(_db);
     query.prepare(
-        "SELECT msg_id, content, from_uid, from_name, from_icon, created_at "
+        "SELECT msg_id, content, from_uid, from_name, from_icon, created_at, server_msg_id, group_seq, "
+        "reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms "
         "FROM group_chat_msg "
         "WHERE owner_uid = ? AND group_id = ? "
-        "ORDER BY created_at DESC, msg_id DESC LIMIT ?");
+        "ORDER BY CASE WHEN group_seq > 0 THEN group_seq ELSE created_at END DESC, "
+        "server_msg_id DESC, msg_id DESC LIMIT ?");
     query.addBindValue(ownerUid);
     query.addBindValue(groupId);
     query.addBindValue(limit);
@@ -103,7 +105,34 @@ std::vector<std::shared_ptr<TextChatData>> GroupChatCacheStore::loadRecentMessag
         const QString fromName = query.value(3).toString();
         const QString fromIcon = query.value(4).toString();
         const qint64 createdAt = normalizeCreatedAt(query.value(5).toLongLong());
-        messages.push_back(std::make_shared<TextChatData>(msgId, content, fromUid, 0, fromName, createdAt, fromIcon));
+        const qint64 serverMsgId = query.value(6).toLongLong();
+        const qint64 groupSeq = query.value(7).toLongLong();
+        const qint64 replyToServerMsgId = query.value(8).toLongLong();
+        const QString forwardMetaJson = query.value(9).toString();
+        qint64 editedAtMs = query.value(10).toLongLong();
+        qint64 deletedAtMs = query.value(11).toLongLong();
+        if (editedAtMs > 0 && editedAtMs < 100000000000LL) {
+            editedAtMs *= 1000;
+        }
+        if (deletedAtMs > 0 && deletedAtMs < 100000000000LL) {
+            deletedAtMs *= 1000;
+        }
+        const QString state = deletedAtMs > 0 ? QStringLiteral("deleted")
+                           : (editedAtMs > 0 ? QStringLiteral("edited") : QStringLiteral("sent"));
+        messages.push_back(std::make_shared<TextChatData>(msgId,
+                                                          content,
+                                                          fromUid,
+                                                          0,
+                                                          fromName,
+                                                          createdAt,
+                                                          fromIcon,
+                                                          state,
+                                                          serverMsgId,
+                                                          groupSeq,
+                                                          replyToServerMsgId,
+                                                          forwardMetaJson,
+                                                          editedAtMs,
+                                                          deletedAtMs));
     }
 
     std::reverse(messages.begin(), messages.end());
@@ -119,8 +148,9 @@ void GroupChatCacheStore::upsertMessages(int ownerUid, qint64 groupId, const std
     QSqlQuery query(_db);
     query.prepare(
         "INSERT OR REPLACE INTO group_chat_msg("
-        "owner_uid, group_id, msg_id, from_uid, content, from_name, from_icon, created_at) "
-        "VALUES(?, ?, ?, ?, ?, ?, ?, ?)");
+        "owner_uid, group_id, msg_id, from_uid, content, from_name, from_icon, created_at, server_msg_id, group_seq, "
+        "reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms) "
+        "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     _db.transaction();
     for (const auto &msg : messages) {
@@ -135,6 +165,12 @@ void GroupChatCacheStore::upsertMessages(int ownerUid, qint64 groupId, const std
         query.addBindValue(msg->_from_name);
         query.addBindValue(msg->_from_icon);
         query.addBindValue(normalizeCreatedAt(msg->_created_at));
+        query.addBindValue(msg->_server_msg_id);
+        query.addBindValue(msg->_group_seq);
+        query.addBindValue(msg->_reply_to_server_msg_id);
+        query.addBindValue(msg->_forward_meta_json);
+        query.addBindValue(msg->_edited_at_ms);
+        query.addBindValue(msg->_deleted_at_ms);
         if (!query.exec()) {
             _db.rollback();
             return;
@@ -156,7 +192,8 @@ void GroupChatCacheStore::pruneConversation(int ownerUid, qint64 groupId, int ke
         "WHERE owner_uid = ? AND group_id = ? AND msg_id IN ("
         "SELECT msg_id FROM group_chat_msg "
         "WHERE owner_uid = ? AND group_id = ? "
-        "ORDER BY created_at DESC, msg_id DESC LIMIT -1 OFFSET ?)");
+        "ORDER BY CASE WHEN group_seq > 0 THEN group_seq ELSE created_at END DESC, "
+        "server_msg_id DESC, msg_id DESC LIMIT -1 OFFSET ?)");
     query.addBindValue(ownerUid);
     query.addBindValue(groupId);
     query.addBindValue(ownerUid);
@@ -182,13 +219,32 @@ bool GroupChatCacheStore::ensureSchema()
             "from_name TEXT,"
             "from_icon TEXT,"
             "created_at INTEGER NOT NULL,"
+            "server_msg_id INTEGER NOT NULL DEFAULT 0,"
+            "group_seq INTEGER NOT NULL DEFAULT 0,"
+            "reply_to_server_msg_id INTEGER NOT NULL DEFAULT 0,"
+            "forward_meta_json TEXT,"
+            "edited_at_ms INTEGER NOT NULL DEFAULT 0,"
+            "deleted_at_ms INTEGER NOT NULL DEFAULT 0,"
             "PRIMARY KEY(owner_uid, msg_id))")) {
         return false;
     }
 
+    query.exec("ALTER TABLE group_chat_msg ADD COLUMN server_msg_id INTEGER NOT NULL DEFAULT 0");
+    query.exec("ALTER TABLE group_chat_msg ADD COLUMN group_seq INTEGER NOT NULL DEFAULT 0");
+    query.exec("ALTER TABLE group_chat_msg ADD COLUMN reply_to_server_msg_id INTEGER NOT NULL DEFAULT 0");
+    query.exec("ALTER TABLE group_chat_msg ADD COLUMN forward_meta_json TEXT");
+    query.exec("ALTER TABLE group_chat_msg ADD COLUMN edited_at_ms INTEGER NOT NULL DEFAULT 0");
+    query.exec("ALTER TABLE group_chat_msg ADD COLUMN deleted_at_ms INTEGER NOT NULL DEFAULT 0");
+
     if (!query.exec(
             "CREATE INDEX IF NOT EXISTS idx_group_chat_owner_group_created "
             "ON group_chat_msg(owner_uid, group_id, created_at)")) {
+        return false;
+    }
+
+    if (!query.exec(
+            "CREATE INDEX IF NOT EXISTS idx_group_chat_owner_group_seq "
+            "ON group_chat_msg(owner_uid, group_id, group_seq)")) {
         return false;
     }
 

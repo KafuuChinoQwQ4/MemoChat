@@ -5,6 +5,7 @@
 #include <json/json.h>
 #include <json/value.h>
 #include <json/reader.h>
+#include <limits>
 #include "LogicSystem.h"
 #include "RedisMgr.h"
 #include "ConfigMgr.h"
@@ -50,7 +51,15 @@ void CSession::Send(std::string msg, short msgid) {
 		return;
 	}
 
-	_send_que.push(make_shared<SendNode>(msg.c_str(), msg.length(), msgid));
+	const size_t payload_len = msg.size();
+	if (payload_len > static_cast<size_t>(MAX_LENGTH)
+		|| payload_len > static_cast<size_t>(std::numeric_limits<short>::max())) {
+		std::cout << "session: " << _session_id << " send payload too large, size is " << payload_len << endl;
+		return;
+	}
+
+	const short payload_len_short = static_cast<short>(payload_len);
+	_send_que.push(make_shared<SendNode>(msg.c_str(), payload_len_short, msgid));
 	if (send_que_size > 0) {
 		return;
 	}

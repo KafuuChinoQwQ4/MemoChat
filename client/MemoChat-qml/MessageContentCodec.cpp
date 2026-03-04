@@ -8,6 +8,7 @@ namespace {
 const QString kImagePrefix = "__memochat_img__:";
 const QString kFilePrefix = "__memochat_file__:";
 const QString kCallPrefix = "__memochat_call__:";
+const QString kReplyPrefix = "__memochat_reply__:";
 }
 
 QString MessageContentCodec::encodeImage(const QString &fileUrl)
@@ -34,6 +35,18 @@ QString MessageContentCodec::encodeCallInvite(const QString &callType, const QSt
     callObj["url"] = joinUrl;
     const QByteArray compact = QJsonDocument(callObj).toJson(QJsonDocument::Compact);
     return kCallPrefix + QString::fromLatin1(compact.toBase64());
+}
+
+QString MessageContentCodec::encodeReplyText(const QString &text, const QString &replyToMsgId,
+                                             const QString &replySender, const QString &replyPreview)
+{
+    QJsonObject replyObj;
+    replyObj["text"] = text;
+    replyObj["reply_to_msgid"] = replyToMsgId;
+    replyObj["reply_sender"] = replySender;
+    replyObj["reply_preview"] = replyPreview;
+    const QByteArray compact = QJsonDocument(replyObj).toJson(QJsonDocument::Compact);
+    return kReplyPrefix + QString::fromLatin1(compact.toBase64());
 }
 
 DecodedMessageContent MessageContentCodec::decode(const QString &rawContent)
@@ -101,6 +114,25 @@ DecodedMessageContent MessageContentCodec::decode(const QString &rawContent)
         return decoded;
     }
 
+    if (rawContent.startsWith(kReplyPrefix)) {
+        const QString encodedPayload = rawContent.mid(kReplyPrefix.size());
+        const QByteArray payload = QByteArray::fromBase64(encodedPayload.toLatin1());
+        const QJsonDocument doc = QJsonDocument::fromJson(payload);
+        if (doc.isObject()) {
+            const QJsonObject obj = doc.object();
+            const QString text = obj.value("text").toString();
+            decoded.isReply = true;
+            decoded.replyToMsgId = obj.value("reply_to_msgid").toString();
+            decoded.replySender = obj.value("reply_sender").toString();
+            decoded.replyPreview = obj.value("reply_preview").toString();
+            decoded.content = text;
+            if (!decoded.replyPreview.isEmpty() && decoded.replyPreview.length() > 80) {
+                decoded.replyPreview = decoded.replyPreview.left(80);
+            }
+            return decoded;
+        }
+    }
+
     return decoded;
 }
 
@@ -118,6 +150,12 @@ QString MessageContentCodec::toPreviewText(const QString &rawContent)
     }
     if (decoded.type == "call") {
         return decoded.fileName.isEmpty() ? "[通话邀请]" : QString("[%1]").arg(decoded.fileName);
+    }
+    if (decoded.isReply) {
+        if (decoded.content.isEmpty()) {
+            return "[回复]";
+        }
+        return QString("[回复] %1").arg(decoded.content);
     }
     return decoded.content;
 }

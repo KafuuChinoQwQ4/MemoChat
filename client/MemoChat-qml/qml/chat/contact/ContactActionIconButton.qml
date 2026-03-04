@@ -9,8 +9,30 @@ Item {
     property string normalSource: ""
     property string hoverSource: ""
     property string pressedSource: ""
+    property bool enableScaleFeedback: true
+    property real hoverScale: 1.02
+    property real pressedScale: 0.96
 
     signal clicked()
+    scale: {
+        if (!root.enabled || !root.enableScaleFeedback) {
+            return 1.0
+        }
+        if (mouse.pressed) {
+            return root.pressedScale
+        }
+        if (mouse.containsMouse) {
+            return root.hoverScale
+        }
+        return 1.0
+    }
+
+    Behavior on scale {
+        NumberAnimation {
+            duration: 110
+            easing.type: Easing.OutQuad
+        }
+    }
 
     Rectangle {
         anchors.fill: parent
