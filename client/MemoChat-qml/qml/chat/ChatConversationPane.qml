@@ -13,15 +13,37 @@ Rectangle {
     property string selfAvatar: "qrc:/res/head_1.jpg"
     property string peerAvatar: "qrc:/res/head_1.jpg"
     property bool hasCurrentChat: false
+    property bool isGroupChat: false
+    property int currentGroupRole: 1
     property var messageModel
+    property string currentDraftText: ""
+    property bool currentDialogPinned: false
+    property bool currentDialogMuted: false
+    property bool hasPendingReply: false
+    property string replyTargetName: ""
+    property string replyPreviewText: ""
     property bool privateHistoryLoading: false
     property bool canLoadMorePrivateHistory: false
     property bool _historyTopTriggered: false
     signal sendText(string text)
     signal sendImage()
     signal sendFile()
+    signal sendVoiceCall()
+    signal sendVideoCall()
+    signal draftEdited(string text)
+    signal toggleDialogPinned()
+    signal toggleDialogMuted()
+    signal openGroupManageRequested()
     signal openAttachment(string url)
     signal requestLoadMoreHistory()
+    signal forwardMessage(string msgId)
+    signal revokeMessage(string msgId)
+    signal editMessage(string msgId, string text)
+    signal replyMessage(string msgId, string senderName, string previewText)
+    signal cancelReplyMessage()
+
+    property string _editMsgId: ""
+    property string _editText: ""
 
     onPrivateHistoryLoadingChanged: {
         if (!privateHistoryLoading) {
@@ -62,6 +84,50 @@ Rectangle {
                         elide: Text.ElideRight
                     }
                 }
+
+                GlassButton {
+                    Layout.preferredWidth: 88
+                    Layout.preferredHeight: 32
+                    visible: root.hasCurrentChat
+                    text: root.currentDialogPinned ? "取消置顶" : "置顶"
+                    textPixelSize: 13
+                    cornerRadius: 9
+                    normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.22)
+                    hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.32)
+                    pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.40)
+                    disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                    onClicked: root.toggleDialogPinned()
+                }
+
+                GlassButton {
+                    Layout.preferredWidth: 88
+                    Layout.preferredHeight: 32
+                    Layout.leftMargin: 8
+                    visible: root.hasCurrentChat
+                    text: root.currentDialogMuted ? "取消静音" : "静音"
+                    textPixelSize: 13
+                    cornerRadius: 9
+                    normalColor: Qt.rgba(0.42, 0.56, 0.74, 0.22)
+                    hoverColor: Qt.rgba(0.42, 0.56, 0.74, 0.32)
+                    pressedColor: Qt.rgba(0.42, 0.56, 0.74, 0.40)
+                    disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                    onClicked: root.toggleDialogMuted()
+                }
+
+                GlassButton {
+                    Layout.preferredWidth: 84
+                    Layout.preferredHeight: 32
+                    Layout.leftMargin: 8
+                    visible: root.hasCurrentChat && root.isGroupChat
+                    text: "群管理"
+                    textPixelSize: 13
+                    cornerRadius: 9
+                    normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
+                    hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
+                    pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
+                    disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                    onClicked: root.openGroupManageRequested()
+                }
             }
         }
 
@@ -101,16 +167,38 @@ Rectangle {
 
                 delegate: ChatMessageDelegate {
                     width: messageList.width
+                    msgId: model.msgId
                     outgoing: model.outgoing
                     msgType: model.msgType
                     content: model.content
+                    rawContent: model.rawContent
                     fileName: model.fileName
                     senderName: model.senderName
                     showAvatar: model.showAvatar
+                    messageState: model.messageState
+                    isReply: model.isReply
+                    replyToMsgId: model.replyToMsgId
+                    replySender: model.replySender
+                    replyPreview: model.replyPreview
+                    enableContextMenu: root.hasCurrentChat
+                    canReply: root.isGroupChat
+                    canMention: root.isGroupChat && !model.outgoing && model.senderName && model.senderName.length > 0
+                    canForward: root.hasCurrentChat
+                    canEdit: model.outgoing && model.msgType === "text"
+                    canRevoke: root.isGroupChat ? (model.outgoing || root.currentGroupRole >= 2) : model.outgoing
                     avatarSource: model.outgoing
                                   ? root.selfAvatar
                                   : ((model.senderIcon && model.senderIcon.length > 0) ? model.senderIcon : root.peerAvatar)
                     onOpenUrlRequested: root.openAttachment(url)
+                    onForwardRequested: root.forwardMessage(msgId)
+                    onRevokeRequested: root.revokeMessage(msgId)
+                    onReplyRequested: root.replyMessage(msgId, senderName, previewText)
+                    onMentionRequested: composer.insertMention(mentionText)
+                    onEditRequested: {
+                        root._editMsgId = msgId
+                        root._editText = text
+                        editDialog.open()
+                    }
                 }
             }
 
@@ -121,7 +209,7 @@ Rectangle {
                 visible: messageList.count === 0
                 backdrop: root.backdrop !== null ? root.backdrop : root
                 cornerRadius: 10
-                blurRadius: 28
+                blurRadius: 16
                 fillColor: Qt.rgba(1, 1, 1, 0.20)
                 strokeColor: Qt.rgba(1, 1, 1, 0.42)
 
@@ -142,12 +230,103 @@ Rectangle {
             border.color: Qt.rgba(1, 1, 1, 0.46)
 
             ChatComposerBar {
+                id: composer
                 anchors.fill: parent
                 backdrop: root.backdrop
                 enabledComposer: root.hasCurrentChat
+                isGroupChat: root.isGroupChat
+                draftText: root.currentDraftText
+                hasReplyContext: root.hasPendingReply
+                replyTargetName: root.replyTargetName
+                replyPreviewText: root.replyPreviewText
                 onSendText: root.sendText(text)
                 onSendImage: root.sendImage()
                 onSendFile: root.sendFile()
+                onSendVoiceCall: root.sendVoiceCall()
+                onSendVideoCall: root.sendVideoCall()
+                onDraftEdited: root.draftEdited(text)
+                onClearReplyRequested: root.cancelReplyMessage()
+            }
+        }
+    }
+
+    Popup {
+        id: editDialog
+        modal: true
+        focus: true
+        width: Math.min(root.width - 40, 420)
+        height: 220
+        anchors.centerIn: Overlay.overlay
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        onOpened: editInput.text = root._editText
+
+        background: GlassSurface {
+            anchors.fill: parent
+            backdrop: root.backdrop !== null ? root.backdrop : root
+            cornerRadius: 12
+            blurRadius: 18
+            fillColor: Qt.rgba(1, 1, 1, 0.24)
+            strokeColor: Qt.rgba(1, 1, 1, 0.46)
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 8
+
+            Label {
+                text: "编辑消息"
+                color: "#2a3649"
+                font.pixelSize: 15
+                font.bold: true
+            }
+
+            TextArea {
+                id: editInput
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                text: root._editText
+                wrapMode: Text.Wrap
+                color: "#253247"
+                selectionColor: "#7baee899"
+                selectedTextColor: "#ffffff"
+                background: Rectangle {
+                    radius: 8
+                    color: Qt.rgba(1, 1, 1, 0.30)
+                    border.color: Qt.rgba(1, 1, 1, 0.44)
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Item { Layout.fillWidth: true }
+                GlassButton {
+                    text: "取消"
+                    implicitWidth: 72
+                    implicitHeight: 32
+                    cornerRadius: 8
+                    normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.24)
+                    hoverColor: Qt.rgba(0.54, 0.60, 0.68, 0.34)
+                    pressedColor: Qt.rgba(0.54, 0.60, 0.68, 0.42)
+                    disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                    onClicked: editDialog.close()
+                }
+                GlassButton {
+                    text: "保存"
+                    implicitWidth: 72
+                    implicitHeight: 32
+                    cornerRadius: 8
+                    normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
+                    hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
+                    pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
+                    disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                    enabled: editInput.text.trim().length > 0
+                    onClicked: {
+                        root.editMessage(root._editMsgId, editInput.text)
+                        editDialog.close()
+                    }
+                }
             }
         }
     }

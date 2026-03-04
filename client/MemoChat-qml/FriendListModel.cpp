@@ -1,5 +1,6 @@
 #include "FriendListModel.h"
 #include "IconPathUtils.h"
+#include <QtGlobal>
 
 FriendListModel::FriendListModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -41,6 +42,20 @@ QVariant FriendListModel::data(const QModelIndex &index, int role) const
         return entry.sex;
     case BackRole:
         return entry.back;
+    case DialogTypeRole:
+        return entry.dialogType;
+    case UnreadCountRole:
+        return entry.unreadCount;
+    case PinnedRankRole:
+        return entry.pinnedRank;
+    case DraftTextRole:
+        return entry.draftText;
+    case LastMsgTsRole:
+        return entry.lastMsgTs;
+    case MuteStateRole:
+        return entry.muteState;
+    case MentionCountRole:
+        return entry.mentionCount;
     default:
         return {};
     }
@@ -57,7 +72,14 @@ QHash<int, QByteArray> FriendListModel::roleNames() const
         {DescRole, "desc"},
         {LastMsgRole, "lastMsg"},
         {SexRole, "sex"},
-        {BackRole, "back"}
+        {BackRole, "back"},
+        {DialogTypeRole, "dialogType"},
+        {UnreadCountRole, "unreadCount"},
+        {PinnedRankRole, "pinnedRank"},
+        {DraftTextRole, "draftText"},
+        {LastMsgTsRole, "lastMsgTs"},
+        {MuteStateRole, "muteState"},
+        {MentionCountRole, "mentionCount"}
     };
 }
 
@@ -98,6 +120,13 @@ void FriendListModel::setFriends(const std::vector<std::shared_ptr<FriendInfo> >
         entry.lastMsg = friendInfo->_last_msg;
         entry.sex = friendInfo->_sex;
         entry.back = friendInfo->_back;
+        entry.dialogType = friendInfo->_dialog_type;
+        entry.unreadCount = friendInfo->_unread_count;
+        entry.pinnedRank = friendInfo->_pinned_rank;
+        entry.draftText = friendInfo->_draft_text;
+        entry.lastMsgTs = friendInfo->_last_msg_ts;
+        entry.muteState = friendInfo->_mute_state;
+        entry.mentionCount = friendInfo->_mention_count;
         _items.push_back(entry);
     }
     endResetModel();
@@ -131,6 +160,13 @@ void FriendListModel::upsertFriend(const std::shared_ptr<FriendInfo> &friendInfo
     entry.lastMsg = friendInfo->_last_msg;
     entry.sex = friendInfo->_sex;
     entry.back = friendInfo->_back;
+    entry.dialogType = friendInfo->_dialog_type;
+    entry.unreadCount = friendInfo->_unread_count;
+    entry.pinnedRank = friendInfo->_pinned_rank;
+    entry.draftText = friendInfo->_draft_text;
+    entry.lastMsgTs = friendInfo->_last_msg_ts;
+    entry.muteState = friendInfo->_mute_state;
+    entry.mentionCount = friendInfo->_mention_count;
     upsert(entry);
 }
 
@@ -148,6 +184,7 @@ void FriendListModel::upsertFriend(const std::shared_ptr<AuthInfo> &authInfo)
     entry.icon = normalizeIcon(authInfo->_icon);
     entry.sex = authInfo->_sex;
     entry.back = authInfo->_nick;
+    entry.dialogType = QStringLiteral("private");
     upsert(entry);
 }
 
@@ -165,10 +202,11 @@ void FriendListModel::upsertFriend(const std::shared_ptr<AuthRsp> &authRsp)
     entry.icon = normalizeIcon(authRsp->_icon);
     entry.sex = authRsp->_sex;
     entry.back = authRsp->_nick;
+    entry.dialogType = QStringLiteral("private");
     upsert(entry);
 }
 
-void FriendListModel::updateLastMessage(int uid, const QString &lastMsg)
+void FriendListModel::updateLastMessage(int uid, const QString &lastMsg, qint64 lastMsgTs)
 {
     const int idx = indexOfUid(uid);
     if (idx < 0) {
@@ -176,13 +214,148 @@ void FriendListModel::updateLastMessage(int uid, const QString &lastMsg)
     }
 
     FriendEntry &entry = _items[static_cast<size_t>(idx)];
-    if (entry.lastMsg == lastMsg) {
+    bool changed = false;
+    if (entry.lastMsg != lastMsg) {
+        entry.lastMsg = lastMsg;
+        changed = true;
+    }
+    if (lastMsgTs > 0 && entry.lastMsgTs != lastMsgTs) {
+        entry.lastMsgTs = lastMsgTs;
+        changed = true;
+    }
+    if (!changed) {
         return;
     }
 
-    entry.lastMsg = lastMsg;
     const QModelIndex modelIndex = index(idx, 0);
-    emit dataChanged(modelIndex, modelIndex, {LastMsgRole});
+    emit dataChanged(modelIndex, modelIndex, {LastMsgRole, LastMsgTsRole});
+}
+
+void FriendListModel::incrementUnread(int uid, int delta)
+{
+    if (delta <= 0) {
+        return;
+    }
+    const int idx = indexOfUid(uid);
+    if (idx < 0) {
+        return;
+    }
+
+    FriendEntry &entry = _items[static_cast<size_t>(idx)];
+    const int next = entry.unreadCount + delta;
+    if (entry.unreadCount == next) {
+        return;
+    }
+    entry.unreadCount = next;
+    const QModelIndex modelIndex = index(idx, 0);
+    emit dataChanged(modelIndex, modelIndex, {UnreadCountRole});
+}
+
+void FriendListModel::clearUnread(int uid)
+{
+    const int idx = indexOfUid(uid);
+    if (idx < 0) {
+        return;
+    }
+    FriendEntry &entry = _items[static_cast<size_t>(idx)];
+    if (entry.unreadCount == 0) {
+        return;
+    }
+    entry.unreadCount = 0;
+    const QModelIndex modelIndex = index(idx, 0);
+    emit dataChanged(modelIndex, modelIndex, {UnreadCountRole});
+}
+
+void FriendListModel::incrementMention(int uid, int delta)
+{
+    if (delta <= 0) {
+        return;
+    }
+    const int idx = indexOfUid(uid);
+    if (idx < 0) {
+        return;
+    }
+
+    FriendEntry &entry = _items[static_cast<size_t>(idx)];
+    const int next = entry.mentionCount + delta;
+    if (entry.mentionCount == next) {
+        return;
+    }
+    entry.mentionCount = next;
+    const QModelIndex modelIndex = index(idx, 0);
+    emit dataChanged(modelIndex, modelIndex, {MentionCountRole});
+}
+
+void FriendListModel::clearMention(int uid)
+{
+    const int idx = indexOfUid(uid);
+    if (idx < 0) {
+        return;
+    }
+    FriendEntry &entry = _items[static_cast<size_t>(idx)];
+    if (entry.mentionCount == 0) {
+        return;
+    }
+    entry.mentionCount = 0;
+    const QModelIndex modelIndex = index(idx, 0);
+    emit dataChanged(modelIndex, modelIndex, {MentionCountRole});
+}
+
+void FriendListModel::setMentionCount(int uid, int count)
+{
+    const int idx = indexOfUid(uid);
+    if (idx < 0) {
+        return;
+    }
+    const int normalized = qMax(0, count);
+    FriendEntry &entry = _items[static_cast<size_t>(idx)];
+    if (entry.mentionCount == normalized) {
+        return;
+    }
+    entry.mentionCount = normalized;
+    const QModelIndex modelIndex = index(idx, 0);
+    emit dataChanged(modelIndex, modelIndex, {MentionCountRole});
+}
+
+void FriendListModel::setDialogMeta(int uid, const QString &dialogType, int unreadCount,
+                                    int pinnedRank, const QString &draftText, qint64 lastMsgTs, int muteState)
+{
+    const int idx = indexOfUid(uid);
+    if (idx < 0) {
+        return;
+    }
+    FriendEntry &entry = _items[static_cast<size_t>(idx)];
+    bool changed = false;
+    if (!dialogType.isEmpty() && entry.dialogType != dialogType) {
+        entry.dialogType = dialogType;
+        changed = true;
+    }
+    if (entry.unreadCount != unreadCount) {
+        entry.unreadCount = unreadCount < 0 ? 0 : unreadCount;
+        changed = true;
+    }
+    if (entry.pinnedRank != pinnedRank) {
+        entry.pinnedRank = pinnedRank;
+        changed = true;
+    }
+    if (entry.draftText != draftText) {
+        entry.draftText = draftText;
+        changed = true;
+    }
+    if (lastMsgTs > 0 && entry.lastMsgTs != lastMsgTs) {
+        entry.lastMsgTs = lastMsgTs;
+        changed = true;
+    }
+    if (entry.muteState != muteState) {
+        entry.muteState = muteState;
+        changed = true;
+    }
+    if (!changed) {
+        return;
+    }
+    const QModelIndex modelIndex = index(idx, 0);
+    emit dataChanged(modelIndex, modelIndex,
+                     {DialogTypeRole, UnreadCountRole, PinnedRankRole, DraftTextRole, LastMsgTsRole, MuteStateRole});
 }
 
 QVariantMap FriendListModel::get(int indexValue) const
@@ -201,7 +374,14 @@ QVariantMap FriendListModel::get(int indexValue) const
         {"desc", entry.desc},
         {"lastMsg", entry.lastMsg},
         {"sex", entry.sex},
-        {"back", entry.back}
+        {"back", entry.back},
+        {"dialogType", entry.dialogType},
+        {"unreadCount", entry.unreadCount},
+        {"pinnedRank", entry.pinnedRank},
+        {"draftText", entry.draftText},
+        {"lastMsgTs", entry.lastMsgTs},
+        {"muteState", entry.muteState},
+        {"mentionCount", entry.mentionCount}
     };
 }
 

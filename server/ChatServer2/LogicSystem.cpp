@@ -16,6 +16,18 @@
 #include "CServer.h"
 using namespace std;
 
+namespace {
+constexpr int64_t kPermChangeGroupInfo = 1LL << 0;
+constexpr int64_t kPermDeleteMessages = 1LL << 1;
+constexpr int64_t kPermInviteUsers = 1LL << 2;
+constexpr int64_t kPermManageAdmins = 1LL << 3;
+constexpr int64_t kPermPinMessages = 1LL << 4;
+constexpr int64_t kPermBanUsers = 1LL << 5;
+constexpr int64_t kPermManageTopics = 1LL << 6;
+constexpr int64_t kDefaultAdminPermBits =
+	kPermChangeGroupInfo | kPermDeleteMessages | kPermInviteUsers | kPermPinMessages | kPermBanUsers;
+}
+
 LogicSystem::LogicSystem():_b_stop(false), _p_server(nullptr){
 	RegisterCallBacks();
 	_worker_thread = std::thread (&LogicSystem::DealMsg, this);
@@ -126,7 +138,37 @@ void LogicSystem::RegisterCallBacks() {
 	_fun_callbacks[ID_GROUP_HISTORY_REQ] = std::bind(&LogicSystem::GroupHistoryHandler, this,
 		placeholders::_1, placeholders::_2, placeholders::_3);
 
+	_fun_callbacks[ID_EDIT_GROUP_MSG_REQ] = std::bind(&LogicSystem::EditGroupMsgHandler, this,
+		placeholders::_1, placeholders::_2, placeholders::_3);
+
+	_fun_callbacks[ID_REVOKE_GROUP_MSG_REQ] = std::bind(&LogicSystem::RevokeGroupMsgHandler, this,
+		placeholders::_1, placeholders::_2, placeholders::_3);
+
+	_fun_callbacks[ID_EDIT_PRIVATE_MSG_REQ] = std::bind(&LogicSystem::EditPrivateMsgHandler, this,
+		placeholders::_1, placeholders::_2, placeholders::_3);
+
+	_fun_callbacks[ID_REVOKE_PRIVATE_MSG_REQ] = std::bind(&LogicSystem::RevokePrivateMsgHandler, this,
+		placeholders::_1, placeholders::_2, placeholders::_3);
+
 	_fun_callbacks[ID_PRIVATE_HISTORY_REQ] = std::bind(&LogicSystem::PrivateHistoryHandler, this,
+		placeholders::_1, placeholders::_2, placeholders::_3);
+
+	_fun_callbacks[ID_SYNC_DRAFT_REQ] = std::bind(&LogicSystem::SyncDraftHandler, this,
+		placeholders::_1, placeholders::_2, placeholders::_3);
+
+	_fun_callbacks[ID_PIN_DIALOG_REQ] = std::bind(&LogicSystem::PinDialogHandler, this,
+		placeholders::_1, placeholders::_2, placeholders::_3);
+
+	_fun_callbacks[ID_FORWARD_GROUP_MSG_REQ] = std::bind(&LogicSystem::ForwardGroupMsgHandler, this,
+		placeholders::_1, placeholders::_2, placeholders::_3);
+
+	_fun_callbacks[ID_FORWARD_PRIVATE_MSG_REQ] = std::bind(&LogicSystem::ForwardPrivateMsgHandler, this,
+		placeholders::_1, placeholders::_2, placeholders::_3);
+
+	_fun_callbacks[ID_GROUP_READ_ACK_REQ] = std::bind(&LogicSystem::GroupReadAckHandler, this,
+		placeholders::_1, placeholders::_2, placeholders::_3);
+
+	_fun_callbacks[ID_PRIVATE_READ_ACK_REQ] = std::bind(&LogicSystem::PrivateReadAckHandler, this,
 		placeholders::_1, placeholders::_2, placeholders::_3);
 
 	_fun_callbacks[ID_UPDATE_GROUP_ANNOUNCEMENT_REQ] = std::bind(&LogicSystem::UpdateGroupAnnouncementHandler, this,
@@ -580,6 +622,13 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 		const std::string content = txt_obj["content"].asString();
 		const std::string msgid = txt_obj["msgid"].asString();
 		int64_t created_at = txt_obj.get("created_at", 0).asInt64();
+		const int64_t reply_to_server_msg_id = txt_obj.get("reply_to_server_msg_id", 0).asInt64();
+		const int64_t edited_at_ms = txt_obj.get("edited_at_ms", 0).asInt64();
+		const int64_t deleted_at_ms = txt_obj.get("deleted_at_ms", 0).asInt64();
+		std::string forward_meta_json;
+		if (txt_obj.isMember("forward_meta")) {
+			forward_meta_json = txt_obj["forward_meta"].toStyledString();
+		}
 		if (created_at <= 0) {
 			created_at = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 				std::chrono::system_clock::now().time_since_epoch()).count());
@@ -596,6 +645,10 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 		msg.from_uid = uid;
 		msg.to_uid = touid;
 		msg.content = content;
+		msg.reply_to_server_msg_id = reply_to_server_msg_id;
+		msg.forward_meta_json = forward_meta_json;
+		msg.edited_at_ms = edited_at_ms;
+		msg.deleted_at_ms = deleted_at_ms;
 		msg.created_at = created_at;
 		if (!MysqlMgr::GetInstance()->SavePrivateMessage(msg)) {
 			rtvalue["error"] = ErrorCodes::RPCFailed;
@@ -606,6 +659,22 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 		element["content"] = content;
 		element["msgid"] = msgid;
 		element["created_at"] = static_cast<Json::Int64>(created_at);
+		if (reply_to_server_msg_id > 0) {
+			element["reply_to_server_msg_id"] = static_cast<Json::Int64>(reply_to_server_msg_id);
+		}
+		if (!forward_meta_json.empty()) {
+			Json::Reader forward_reader;
+			Json::Value forward_meta;
+			if (forward_reader.parse(forward_meta_json, forward_meta)) {
+				element["forward_meta"] = forward_meta;
+			}
+		}
+		if (edited_at_ms > 0) {
+			element["edited_at_ms"] = static_cast<Json::Int64>(edited_at_ms);
+		}
+		if (deleted_at_ms > 0) {
+			element["deleted_at_ms"] = static_cast<Json::Int64>(deleted_at_ms);
+		}
 		normalized.append(element);
 
 		auto* text_msg = text_msg_req.add_textmsgs();
@@ -882,6 +951,14 @@ void LogicSystem::BuildGroupListJson(int uid, Json::Value& out)
 		one["member_count"] = group->member_count;
 		one["is_all_muted"] = group->is_all_muted;
 		one["role"] = group->role;
+		one["permission_bits"] = static_cast<Json::Int64>(group->permission_bits);
+		one["can_change_group_info"] = (group->permission_bits & kPermChangeGroupInfo) != 0;
+		one["can_delete_messages"] = (group->permission_bits & kPermDeleteMessages) != 0;
+		one["can_invite_users"] = (group->permission_bits & kPermInviteUsers) != 0;
+		one["can_manage_admins"] = (group->permission_bits & kPermManageAdmins) != 0;
+		one["can_pin_messages"] = (group->permission_bits & kPermPinMessages) != 0;
+		one["can_ban_users"] = (group->permission_bits & kPermBanUsers) != 0;
+		one["can_manage_topics"] = (group->permission_bits & kPermManageTopics) != 0;
 		out["group_list"].append(one);
 	}
 
@@ -919,24 +996,49 @@ void LogicSystem::BuildGroupListJson(int uid, Json::Value& out)
 
 void LogicSystem::BuildDialogListJson(int uid, Json::Value& out)
 {
+	MysqlMgr::GetInstance()->RefreshDialogsForOwner(uid);
+
+	std::unordered_map<int, std::shared_ptr<DialogMetaInfo>> private_meta;
+	std::unordered_map<int64_t, std::shared_ptr<DialogMetaInfo>> group_meta;
+	std::vector<std::shared_ptr<DialogMetaInfo>> meta_list;
+	if (MysqlMgr::GetInstance()->GetDialogMetaByOwner(uid, meta_list)) {
+		for (const auto& meta : meta_list) {
+			if (!meta) {
+				continue;
+			}
+			if (meta->dialog_type == "private" && meta->peer_uid > 0) {
+				private_meta[meta->peer_uid] = meta;
+				continue;
+			}
+			if (meta->dialog_type == "group" && meta->group_id > 0) {
+				group_meta[meta->group_id] = meta;
+			}
+		}
+	}
+
 	std::vector<std::shared_ptr<UserInfo>> friend_list;
 	GetFriendList(uid, friend_list);
 	for (const auto& peer : friend_list) {
 		if (!peer) {
 			continue;
 		}
+		const auto meta_it = private_meta.find(peer->uid);
 		Json::Value one;
 		one["dialog_id"] = std::string("u_") + std::to_string(peer->uid);
 		one["dialog_type"] = "private";
 		one["peer_uid"] = peer->uid;
 		one["title"] = peer->nick.empty() ? peer->name : peer->nick;
 		one["avatar"] = peer->icon;
-		one["last_msg_preview"] = "";
-		one["last_msg_ts"] = static_cast<Json::Int64>(0);
-		one["unread_count"] = 0;
-		one["pinned_rank"] = 0;
-		one["draft_text"] = "";
-		one["mute_state"] = 0;
+		DialogRuntimeInfo runtime;
+		if (!MysqlMgr::GetInstance()->GetPrivateDialogRuntime(uid, peer->uid, runtime)) {
+			runtime = DialogRuntimeInfo();
+		}
+		one["last_msg_preview"] = runtime.last_msg_preview;
+		one["last_msg_ts"] = static_cast<Json::Int64>(runtime.last_msg_ts);
+		one["unread_count"] = runtime.unread_count;
+		one["pinned_rank"] = (meta_it == private_meta.end()) ? 0 : meta_it->second->pinned_rank;
+		one["draft_text"] = (meta_it == private_meta.end()) ? "" : meta_it->second->draft_text;
+		one["mute_state"] = (meta_it == private_meta.end()) ? 0 : meta_it->second->mute_state;
 		out["dialogs"].append(one);
 	}
 
@@ -946,18 +1048,23 @@ void LogicSystem::BuildDialogListJson(int uid, Json::Value& out)
 		if (!group) {
 			continue;
 		}
+		const auto meta_it = group_meta.find(group->group_id);
 		Json::Value one;
 		one["dialog_id"] = std::string("g_") + std::to_string(group->group_id);
 		one["dialog_type"] = "group";
 		one["group_id"] = static_cast<Json::Int64>(group->group_id);
 		one["title"] = group->name;
 		one["avatar"] = group->icon;
-		one["last_msg_preview"] = "";
-		one["last_msg_ts"] = static_cast<Json::Int64>(0);
-		one["unread_count"] = 0;
-		one["pinned_rank"] = 0;
-		one["draft_text"] = "";
-		one["mute_state"] = 0;
+		DialogRuntimeInfo runtime;
+		if (!MysqlMgr::GetInstance()->GetGroupDialogRuntime(uid, group->group_id, runtime)) {
+			runtime = DialogRuntimeInfo();
+		}
+		one["last_msg_preview"] = runtime.last_msg_preview;
+		one["last_msg_ts"] = static_cast<Json::Int64>(runtime.last_msg_ts);
+		one["unread_count"] = runtime.unread_count;
+		one["pinned_rank"] = (meta_it == group_meta.end()) ? 0 : meta_it->second->pinned_rank;
+		one["draft_text"] = (meta_it == group_meta.end()) ? "" : meta_it->second->draft_text;
+		one["mute_state"] = (meta_it == group_meta.end()) ? 0 : meta_it->second->mute_state;
 		out["dialogs"].append(one);
 	}
 }
@@ -983,6 +1090,462 @@ void LogicSystem::GetDialogListHandler(std::shared_ptr<CSession> session, const 
 	}
 
 	BuildDialogListJson(uid, rtvalue);
+}
+
+void LogicSystem::SyncDraftHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
+{
+	(void)msg_id;
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	const int uid = root.get("fromuid", root.get("uid", 0)).asInt();
+	const std::string dialog_type = root.get("dialog_type", "").asString();
+	const int peer_uid = root.get("peer_uid", 0).asInt();
+	const int64_t group_id = root.get("groupid", root.get("group_id", 0)).asInt64();
+	const bool has_mute_state = root.isMember("mute_state");
+	const int mute_state = root.get("mute_state", 0).asInt();
+	std::string draft_text = root.get("draft_text", "").asString();
+	if (draft_text.size() > 2000) {
+		draft_text.resize(2000);
+	}
+
+	Json::Value rtvalue;
+	rtvalue["error"] = ErrorCodes::Success;
+	rtvalue["uid"] = uid;
+	rtvalue["dialog_type"] = dialog_type;
+	rtvalue["peer_uid"] = peer_uid;
+	rtvalue["group_id"] = static_cast<Json::Int64>(group_id);
+	rtvalue["draft_text"] = draft_text;
+	if (has_mute_state) {
+		rtvalue["mute_state"] = mute_state > 0 ? 1 : 0;
+	}
+	Defer defer([&rtvalue, session]() {
+		session->Send(rtvalue.toStyledString(), ID_SYNC_DRAFT_RSP);
+		});
+
+	if (uid <= 0 || (dialog_type != "private" && dialog_type != "group")) {
+		rtvalue["error"] = ErrorCodes::Error_Json;
+		return;
+	}
+
+	int normalized_peer_uid = 0;
+	int64_t normalized_group_id = 0;
+	if (dialog_type == "private") {
+		normalized_peer_uid = peer_uid;
+		if (normalized_peer_uid <= 0 || !MysqlMgr::GetInstance()->IsFriend(uid, normalized_peer_uid)) {
+			rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
+			return;
+		}
+	}
+	else {
+		normalized_group_id = group_id;
+		if (normalized_group_id <= 0 || !MysqlMgr::GetInstance()->IsUserInGroup(normalized_group_id, uid)) {
+			rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
+			return;
+		}
+	}
+
+	if (!MysqlMgr::GetInstance()->UpsertDialogDraft(uid, dialog_type, normalized_peer_uid, normalized_group_id, draft_text)) {
+		rtvalue["error"] = ErrorCodes::RPCFailed;
+		return;
+	}
+	if (has_mute_state
+		&& !MysqlMgr::GetInstance()->UpsertDialogMuteState(uid, dialog_type, normalized_peer_uid, normalized_group_id, mute_state)) {
+		rtvalue["error"] = ErrorCodes::RPCFailed;
+		return;
+	}
+}
+
+void LogicSystem::PinDialogHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
+{
+	(void)msg_id;
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	const int uid = root.get("fromuid", root.get("uid", 0)).asInt();
+	const std::string dialog_type = root.get("dialog_type", "").asString();
+	const int peer_uid = root.get("peer_uid", 0).asInt();
+	const int64_t group_id = root.get("groupid", root.get("group_id", 0)).asInt64();
+	int pinned_rank = root.get("pinned_rank", 0).asInt();
+	if (pinned_rank < 0) {
+		pinned_rank = 0;
+	}
+	if (pinned_rank > 1000000000) {
+		pinned_rank = 1000000000;
+	}
+
+	Json::Value rtvalue;
+	rtvalue["error"] = ErrorCodes::Success;
+	rtvalue["uid"] = uid;
+	rtvalue["dialog_type"] = dialog_type;
+	rtvalue["peer_uid"] = peer_uid;
+	rtvalue["group_id"] = static_cast<Json::Int64>(group_id);
+	rtvalue["pinned_rank"] = pinned_rank;
+	Defer defer([&rtvalue, session]() {
+		session->Send(rtvalue.toStyledString(), ID_PIN_DIALOG_RSP);
+		});
+
+	if (uid <= 0 || (dialog_type != "private" && dialog_type != "group")) {
+		rtvalue["error"] = ErrorCodes::Error_Json;
+		return;
+	}
+
+	int normalized_peer_uid = 0;
+	int64_t normalized_group_id = 0;
+	if (dialog_type == "private") {
+		normalized_peer_uid = peer_uid;
+		if (normalized_peer_uid <= 0 || !MysqlMgr::GetInstance()->IsFriend(uid, normalized_peer_uid)) {
+			rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
+			return;
+		}
+	}
+	else {
+		normalized_group_id = group_id;
+		if (normalized_group_id <= 0 || !MysqlMgr::GetInstance()->IsUserInGroup(normalized_group_id, uid)) {
+			rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
+			return;
+		}
+	}
+
+	if (!MysqlMgr::GetInstance()->UpsertDialogPinned(uid, dialog_type, normalized_peer_uid, normalized_group_id, pinned_rank)) {
+		rtvalue["error"] = ErrorCodes::RPCFailed;
+		return;
+	}
+}
+
+void LogicSystem::ForwardGroupMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
+{
+	(void)msg_id;
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	const int from_uid = root.get("fromuid", root.get("uid", 0)).asInt();
+	const int64_t group_id = root.get("groupid", 0).asInt64();
+	const std::string source_msg_id = root.get("msgid", "").asString();
+	std::string client_msg_id = root.get("client_msg_id", "").asString();
+
+	Json::Value rtvalue;
+	rtvalue["error"] = ErrorCodes::Success;
+	rtvalue["fromuid"] = from_uid;
+	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	if (!client_msg_id.empty()) {
+		rtvalue["client_msg_id"] = client_msg_id;
+	}
+	Defer defer([&rtvalue, session]() {
+		session->Send(rtvalue.toStyledString(), ID_FORWARD_GROUP_MSG_RSP);
+		});
+
+	if (from_uid <= 0 || group_id <= 0 || source_msg_id.empty()) {
+		rtvalue["error"] = ErrorCodes::Error_Json;
+		return;
+	}
+	if (!MysqlMgr::GetInstance()->IsUserInGroup(group_id, from_uid)) {
+		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
+		return;
+	}
+
+	std::shared_ptr<GroupMessageInfo> source_msg;
+	if (!MysqlMgr::GetInstance()->GetGroupMessageByMsgId(group_id, source_msg_id, source_msg) || !source_msg) {
+		rtvalue["error"] = ErrorCodes::GroupNotFound;
+		return;
+	}
+
+	const int64_t now_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()).count());
+	if (client_msg_id.empty()) {
+		client_msg_id = std::to_string(from_uid) + "_" + std::to_string(now_ms);
+		rtvalue["client_msg_id"] = client_msg_id;
+	}
+
+	GroupMessageInfo info;
+	info.msg_id = client_msg_id;
+	info.group_id = group_id;
+	info.from_uid = from_uid;
+	info.msg_type = source_msg->msg_type;
+	info.content = source_msg->content;
+	info.mentions_json = source_msg->mentions_json;
+	info.file_name = source_msg->file_name;
+	info.mime = source_msg->mime;
+	info.size = source_msg->size;
+	info.reply_to_server_msg_id = source_msg->reply_to_server_msg_id;
+	Json::Value forward_meta;
+	forward_meta["forwarded_from_msgid"] = source_msg_id;
+	forward_meta["source_server_msg_id"] = static_cast<Json::Int64>(source_msg->server_msg_id);
+	forward_meta["source_group_seq"] = static_cast<Json::Int64>(source_msg->group_seq);
+	forward_meta["source_from_uid"] = source_msg->from_uid;
+	if (!source_msg->forward_meta_json.empty()) {
+		Json::Reader prev_forward_reader;
+		Json::Value prev_forward_meta;
+		if (prev_forward_reader.parse(source_msg->forward_meta_json, prev_forward_meta)) {
+			forward_meta["prev_forward_meta"] = prev_forward_meta;
+		}
+	}
+	info.forward_meta_json = forward_meta.toStyledString();
+	info.created_at = now_ms;
+	int64_t server_msg_id = 0;
+	int64_t group_seq = 0;
+	if (!MysqlMgr::GetInstance()->SaveGroupMessage(info, &server_msg_id, &group_seq)) {
+		rtvalue["error"] = ErrorCodes::RPCFailed;
+		return;
+	}
+
+	Json::Value forwarded_msg;
+	forwarded_msg["msgid"] = info.msg_id;
+	forwarded_msg["msgtype"] = info.msg_type;
+	forwarded_msg["content"] = info.content;
+	Json::Value mentions(Json::arrayValue);
+	if (!info.mentions_json.empty()) {
+		Json::Reader mentions_reader;
+		Json::Value parsed_mentions;
+		if (mentions_reader.parse(info.mentions_json, parsed_mentions) && parsed_mentions.isArray()) {
+			mentions = parsed_mentions;
+		}
+	}
+	forwarded_msg["mentions"] = mentions;
+	if (!info.file_name.empty()) {
+		forwarded_msg["file_name"] = info.file_name;
+	}
+	if (!info.mime.empty()) {
+		forwarded_msg["mime"] = info.mime;
+	}
+	if (info.size > 0) {
+		forwarded_msg["size"] = info.size;
+	}
+	forwarded_msg["forwarded_from_msgid"] = source_msg_id;
+	forwarded_msg["created_at"] = static_cast<Json::Int64>(now_ms);
+	forwarded_msg["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
+	forwarded_msg["group_seq"] = static_cast<Json::Int64>(group_seq);
+	if (info.reply_to_server_msg_id > 0) {
+		forwarded_msg["reply_to_server_msg_id"] = static_cast<Json::Int64>(info.reply_to_server_msg_id);
+	}
+	{
+		Json::Reader forward_reader;
+		Json::Value parsed_forward_meta;
+		if (forward_reader.parse(info.forward_meta_json, parsed_forward_meta)) {
+			forwarded_msg["forward_meta"] = parsed_forward_meta;
+		}
+	}
+
+	rtvalue["msg"] = forwarded_msg;
+	rtvalue["created_at"] = static_cast<Json::Int64>(now_ms);
+	rtvalue["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
+	rtvalue["group_seq"] = static_cast<Json::Int64>(group_seq);
+	if (info.reply_to_server_msg_id > 0) {
+		rtvalue["reply_to_server_msg_id"] = static_cast<Json::Int64>(info.reply_to_server_msg_id);
+	}
+	rtvalue["forward_meta"] = forward_meta;
+
+	auto sender_info = MysqlMgr::GetInstance()->GetUser(from_uid);
+	if (sender_info) {
+		rtvalue["from_name"] = sender_info->name;
+		rtvalue["from_nick"] = sender_info->nick;
+		rtvalue["from_icon"] = sender_info->icon;
+		rtvalue["from_user_id"] = sender_info->user_id;
+	}
+	std::shared_ptr<GroupInfo> group_info;
+	if (MysqlMgr::GetInstance()->GetGroupById(group_id, group_info) && group_info) {
+		rtvalue["group_code"] = group_info->group_code;
+	}
+
+	std::vector<std::shared_ptr<GroupMemberInfo>> members;
+	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	std::vector<int> recipients;
+	for (const auto& member : members) {
+		if (member && member->status == 1) {
+			recipients.push_back(member->uid);
+		}
+	}
+	PushGroupPayload(recipients, ID_NOTIFY_GROUP_CHAT_MSG_REQ, rtvalue, from_uid);
+}
+
+void LogicSystem::ForwardPrivateMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
+{
+	(void)msg_id;
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	const int from_uid = root.get("fromuid", root.get("uid", 0)).asInt();
+	const int peer_uid = root.get("peer_uid", root.get("touid", 0)).asInt();
+	const std::string source_msg_id = root.get("msgid", "").asString();
+	std::string client_msg_id = root.get("client_msg_id", "").asString();
+
+	Json::Value rtvalue;
+	rtvalue["error"] = ErrorCodes::Success;
+	rtvalue["fromuid"] = from_uid;
+	rtvalue["peer_uid"] = peer_uid;
+	rtvalue["touid"] = peer_uid;
+	if (!client_msg_id.empty()) {
+		rtvalue["client_msg_id"] = client_msg_id;
+	}
+	Defer defer([&rtvalue, session]() {
+		session->Send(rtvalue.toStyledString(), ID_FORWARD_PRIVATE_MSG_RSP);
+		});
+
+	if (from_uid <= 0 || peer_uid <= 0 || source_msg_id.empty()) {
+		rtvalue["error"] = ErrorCodes::Error_Json;
+		return;
+	}
+	if (!MysqlMgr::GetInstance()->IsFriend(from_uid, peer_uid)) {
+		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
+		return;
+	}
+
+	std::shared_ptr<PrivateMessageInfo> source_msg;
+	if (!MysqlMgr::GetInstance()->GetPrivateMessageByMsgId(source_msg_id, source_msg) || !source_msg) {
+		rtvalue["error"] = ErrorCodes::GroupNotFound;
+		return;
+	}
+
+	const int conv_uid_min = std::min(from_uid, peer_uid);
+	const int conv_uid_max = std::max(from_uid, peer_uid);
+	if (source_msg->conv_uid_min != conv_uid_min || source_msg->conv_uid_max != conv_uid_max) {
+		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
+		return;
+	}
+
+	const int64_t now_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()).count());
+	if (client_msg_id.empty()) {
+		client_msg_id = std::to_string(from_uid) + "_" + std::to_string(now_ms);
+		rtvalue["client_msg_id"] = client_msg_id;
+	}
+
+	PrivateMessageInfo info;
+	info.msg_id = client_msg_id;
+	info.conv_uid_min = conv_uid_min;
+	info.conv_uid_max = conv_uid_max;
+	info.from_uid = from_uid;
+	info.to_uid = peer_uid;
+	info.content = source_msg->content;
+	info.reply_to_server_msg_id = source_msg->reply_to_server_msg_id;
+	info.created_at = now_ms;
+
+	Json::Value forward_meta;
+	forward_meta["forwarded_from_msgid"] = source_msg_id;
+	forward_meta["source_from_uid"] = source_msg->from_uid;
+	forward_meta["source_conv_uid_min"] = source_msg->conv_uid_min;
+	forward_meta["source_conv_uid_max"] = source_msg->conv_uid_max;
+	forward_meta["source_created_at"] = static_cast<Json::Int64>(source_msg->created_at);
+	if (!source_msg->forward_meta_json.empty()) {
+		Json::Reader prev_forward_reader;
+		Json::Value prev_forward_meta;
+		if (prev_forward_reader.parse(source_msg->forward_meta_json, prev_forward_meta)) {
+			forward_meta["prev_forward_meta"] = prev_forward_meta;
+		}
+	}
+	info.forward_meta_json = forward_meta.toStyledString();
+
+	if (!MysqlMgr::GetInstance()->SavePrivateMessage(info)) {
+		rtvalue["error"] = ErrorCodes::RPCFailed;
+		return;
+	}
+
+	Json::Value msg_obj;
+	msg_obj["msgid"] = info.msg_id;
+	msg_obj["content"] = info.content;
+	msg_obj["created_at"] = static_cast<Json::Int64>(now_ms);
+	if (info.reply_to_server_msg_id > 0) {
+		msg_obj["reply_to_server_msg_id"] = static_cast<Json::Int64>(info.reply_to_server_msg_id);
+	}
+	msg_obj["forward_meta"] = forward_meta;
+	rtvalue["msg"] = msg_obj;
+	rtvalue["text_array"].append(msg_obj);
+	rtvalue["created_at"] = static_cast<Json::Int64>(now_ms);
+
+	std::string to_ip_value = "";
+	const auto to_ip_key = USERIPPREFIX + std::to_string(peer_uid);
+	const bool online = RedisMgr::GetInstance()->Get(to_ip_key, to_ip_value);
+	if (!online) {
+		return;
+	}
+
+	auto& cfg = ConfigMgr::Inst();
+	const auto self_name = cfg["SelfServer"]["Name"];
+	if (to_ip_value == self_name) {
+		auto to_session = UserMgr::GetInstance()->GetSession(peer_uid);
+		if (to_session) {
+			to_session->Send(rtvalue.toStyledString(), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+		}
+		return;
+	}
+
+	TextChatMsgReq text_msg_req;
+	text_msg_req.set_fromuid(from_uid);
+	text_msg_req.set_touid(peer_uid);
+	auto* text_msg = text_msg_req.add_textmsgs();
+	text_msg->set_msgid(info.msg_id);
+	text_msg->set_msgcontent(info.content);
+	ChatGrpcClient::GetInstance()->NotifyTextChatMsg(to_ip_value, text_msg_req, rtvalue);
+}
+
+void LogicSystem::GroupReadAckHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
+{
+	(void)session;
+	(void)msg_id;
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	const int uid = root.get("fromuid", root.get("uid", 0)).asInt();
+	const int64_t group_id = root.get("groupid", 0).asInt64();
+	int64_t read_ts = root.get("read_ts", 0).asInt64();
+	if (uid <= 0 || group_id <= 0) {
+		return;
+	}
+	if (!MysqlMgr::GetInstance()->IsUserInGroup(group_id, uid)) {
+		return;
+	}
+	if (read_ts <= 0) {
+		read_ts = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count());
+	}
+	MysqlMgr::GetInstance()->UpsertGroupReadState(uid, group_id, read_ts);
+
+	std::vector<std::shared_ptr<GroupMemberInfo>> members;
+	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	std::vector<int> recipients;
+	for (const auto& member : members) {
+		if (member && member->status == 1) {
+			recipients.push_back(member->uid);
+		}
+	}
+	Json::Value notify;
+	notify["error"] = ErrorCodes::Success;
+	notify["event"] = "group_read_ack";
+	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["fromuid"] = uid;
+	notify["read_ts"] = static_cast<Json::Int64>(read_ts);
+	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify, uid);
+}
+
+void LogicSystem::PrivateReadAckHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
+{
+	(void)session;
+	(void)msg_id;
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	const int uid = root.get("fromuid", root.get("uid", 0)).asInt();
+	const int peer_uid = root.get("peer_uid", 0).asInt();
+	int64_t read_ts = root.get("read_ts", 0).asInt64();
+	if (uid <= 0 || peer_uid <= 0) {
+		return;
+	}
+	if (!MysqlMgr::GetInstance()->IsFriend(uid, peer_uid)) {
+		return;
+	}
+	if (read_ts <= 0) {
+		read_ts = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count());
+	}
+	MysqlMgr::GetInstance()->UpsertPrivateReadState(uid, peer_uid, read_ts);
+
+	Json::Value notify;
+	notify["error"] = ErrorCodes::Success;
+	notify["event"] = "private_read_ack";
+	notify["fromuid"] = uid;
+	notify["peer_uid"] = peer_uid;
+	notify["read_ts"] = static_cast<Json::Int64>(read_ts);
+	PushGroupPayload({ peer_uid }, ID_NOTIFY_PRIVATE_READ_ACK_REQ, notify);
 }
 
 void LogicSystem::PushGroupPayload(const std::vector<int>& recipients, short msgid, const Json::Value& payload, int exclude_uid)
@@ -1331,11 +1894,15 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 	const int from_uid = root["fromuid"].asInt();
 	const int64_t group_id = root["groupid"].asInt64();
 	const Json::Value msg = root["msg"];
+	const std::string client_msg_id = msg.get("msgid", "").asString();
 
 	Json::Value rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["fromuid"] = from_uid;
 	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	if (!client_msg_id.empty()) {
+		rtvalue["client_msg_id"] = client_msg_id;
+	}
 	Defer defer([&rtvalue, session]() {
 		session->Send(rtvalue.toStyledString(), ID_GROUP_CHAT_MSG_RSP);
 		});
@@ -1371,7 +1938,7 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 	}
 
 	GroupMessageInfo info;
-	info.msg_id = msg.get("msgid", "").asString();
+	info.msg_id = client_msg_id;
 	info.group_id = group_id;
 	info.from_uid = from_uid;
 	info.msg_type = msg.get("msgtype", "text").asString();
@@ -1380,19 +1947,65 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 	info.file_name = msg.get("file_name", "").asString();
 	info.mime = msg.get("mime", "").asString();
 	info.size = msg.get("size", 0).asInt();
+	info.reply_to_server_msg_id = msg.get("reply_to_server_msg_id", 0).asInt64();
+	if (msg.isMember("forward_meta")) {
+		info.forward_meta_json = msg["forward_meta"].toStyledString();
+	}
+	info.edited_at_ms = msg.get("edited_at_ms", 0).asInt64();
+	info.deleted_at_ms = msg.get("deleted_at_ms", 0).asInt64();
 	info.created_at = now_ms;
 	if (info.msg_id.empty() || info.content.empty()) {
 		rtvalue["error"] = ErrorCodes::Error_Json;
 		return;
 	}
 
-	if (!MysqlMgr::GetInstance()->SaveGroupMessage(info)) {
+	int64_t server_msg_id = 0;
+	int64_t group_seq = 0;
+	if (!MysqlMgr::GetInstance()->SaveGroupMessage(info, &server_msg_id, &group_seq)) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}
 
-	rtvalue["msg"] = msg;
+	Json::Value msg_out = msg;
+	msg_out["created_at"] = static_cast<Json::Int64>(now_ms);
+	msg_out["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
+	msg_out["group_seq"] = static_cast<Json::Int64>(group_seq);
+	if (info.reply_to_server_msg_id > 0) {
+		msg_out["reply_to_server_msg_id"] = static_cast<Json::Int64>(info.reply_to_server_msg_id);
+	}
+	if (!info.forward_meta_json.empty()) {
+		Json::Reader forward_reader;
+		Json::Value forward_meta;
+		if (forward_reader.parse(info.forward_meta_json, forward_meta)) {
+			msg_out["forward_meta"] = forward_meta;
+		}
+	}
+	if (info.edited_at_ms > 0) {
+		msg_out["edited_at_ms"] = static_cast<Json::Int64>(info.edited_at_ms);
+	}
+	if (info.deleted_at_ms > 0) {
+		msg_out["deleted_at_ms"] = static_cast<Json::Int64>(info.deleted_at_ms);
+	}
+	rtvalue["msg"] = msg_out;
 	rtvalue["created_at"] = static_cast<Json::Int64>(now_ms);
+	rtvalue["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
+	rtvalue["group_seq"] = static_cast<Json::Int64>(group_seq);
+	if (info.reply_to_server_msg_id > 0) {
+		rtvalue["reply_to_server_msg_id"] = static_cast<Json::Int64>(info.reply_to_server_msg_id);
+	}
+	if (!info.forward_meta_json.empty()) {
+		Json::Reader forward_reader;
+		Json::Value forward_meta;
+		if (forward_reader.parse(info.forward_meta_json, forward_meta)) {
+			rtvalue["forward_meta"] = forward_meta;
+		}
+	}
+	if (info.edited_at_ms > 0) {
+		rtvalue["edited_at_ms"] = static_cast<Json::Int64>(info.edited_at_ms);
+	}
+	if (info.deleted_at_ms > 0) {
+		rtvalue["deleted_at_ms"] = static_cast<Json::Int64>(info.deleted_at_ms);
+	}
 
 	auto sender_info = MysqlMgr::GetInstance()->GetUser(from_uid);
 	std::shared_ptr<GroupInfo> group_info;
@@ -1424,11 +2037,14 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 	const int uid = root["fromuid"].asInt();
 	const int64_t group_id = root["groupid"].asInt64();
 	const int64_t before_ts = root.get("before_ts", 0).asInt64();
+	const int64_t before_seq = root.get("before_seq", 0).asInt64();
 	const int limit = root.get("limit", 20).asInt();
 
 	Json::Value rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["has_more"] = false;
+	rtvalue["next_before_seq"] = static_cast<Json::Int64>(0);
 	Defer defer([&rtvalue, session]() {
 		session->Send(rtvalue.toStyledString(), ID_GROUP_HISTORY_RSP);
 		});
@@ -1439,10 +2055,12 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 	}
 
 	std::vector<std::shared_ptr<GroupMessageInfo>> msgs;
-	if (!MysqlMgr::GetInstance()->GetGroupHistory(group_id, before_ts, limit, msgs)) {
+	bool has_more = false;
+	if (!MysqlMgr::GetInstance()->GetGroupHistory(group_id, before_ts, before_seq, limit, msgs, has_more)) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}
+	rtvalue["has_more"] = has_more;
 	std::shared_ptr<GroupInfo> group_info;
 	if (MysqlMgr::GetInstance()->GetGroupById(group_id, group_info) && group_info) {
 		rtvalue["group_code"] = group_info->group_code;
@@ -1452,6 +2070,7 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 		if (!one) {
 			continue;
 		}
+		const int64_t created_at = one->created_at;
 		Json::Value item;
 		item["msgid"] = one->msg_id;
 		item["groupid"] = static_cast<Json::Int64>(one->group_id);
@@ -1470,12 +2089,252 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 		item["file_name"] = one->file_name;
 		item["mime"] = one->mime;
 		item["size"] = one->size;
-		item["created_at"] = static_cast<Json::Int64>(one->created_at);
+		item["created_at"] = static_cast<Json::Int64>(created_at);
+		item["server_msg_id"] = static_cast<Json::Int64>(one->server_msg_id);
+		item["group_seq"] = static_cast<Json::Int64>(one->group_seq);
+		if (one->reply_to_server_msg_id > 0) {
+			item["reply_to_server_msg_id"] = static_cast<Json::Int64>(one->reply_to_server_msg_id);
+		}
+		if (!one->forward_meta_json.empty()) {
+			Json::Reader forward_reader;
+			Json::Value forward_meta;
+			if (forward_reader.parse(one->forward_meta_json, forward_meta)) {
+				item["forward_meta"] = forward_meta;
+			}
+		}
+		if (one->edited_at_ms > 0) {
+			item["edited_at_ms"] = static_cast<Json::Int64>(one->edited_at_ms);
+		}
+		if (one->deleted_at_ms > 0) {
+			item["deleted_at_ms"] = static_cast<Json::Int64>(one->deleted_at_ms);
+		}
 		item["from_name"] = one->from_name;
 		item["from_nick"] = one->from_nick;
 		item["from_icon"] = one->from_icon;
 		rtvalue["messages"].append(item);
 	}
+	if (!msgs.empty() && msgs.back()) {
+		rtvalue["next_before_seq"] = static_cast<Json::Int64>(msgs.back()->group_seq);
+	}
+	int64_t read_ts = 0;
+	if (!msgs.empty() && msgs.front()) {
+		read_ts = msgs.front()->created_at;
+	}
+	if (read_ts <= 0) {
+		read_ts = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count());
+	}
+	MysqlMgr::GetInstance()->UpsertGroupReadState(uid, group_id, read_ts);
+}
+
+void LogicSystem::EditPrivateMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
+{
+	(void)msg_id;
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	const int uid = root["fromuid"].asInt();
+	const int peer_uid = root["peer_uid"].asInt();
+	const std::string target_msg_id = root.get("msgid", "").asString();
+	const std::string content = root.get("content", "").asString();
+	const int64_t now_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()).count());
+
+	Json::Value rtvalue;
+	rtvalue["error"] = ErrorCodes::Success;
+	rtvalue["fromuid"] = uid;
+	rtvalue["peer_uid"] = peer_uid;
+	rtvalue["msgid"] = target_msg_id;
+	rtvalue["content"] = content;
+	rtvalue["edited_at_ms"] = static_cast<Json::Int64>(now_ms);
+	Defer defer([&rtvalue, session]() {
+		session->Send(rtvalue.toStyledString(), ID_EDIT_PRIVATE_MSG_RSP);
+		});
+
+	if (uid <= 0 || peer_uid <= 0 || target_msg_id.empty() || content.empty() || content.size() > 4096) {
+		rtvalue["error"] = ErrorCodes::Error_Json;
+		return;
+	}
+	if (!MysqlMgr::GetInstance()->IsFriend(uid, peer_uid)) {
+		rtvalue["error"] = ErrorCodes::UidInvalid;
+		return;
+	}
+	if (!MysqlMgr::GetInstance()->UpdatePrivateMessageContent(uid, peer_uid, target_msg_id, content, now_ms)) {
+		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
+		return;
+	}
+
+	Json::Value notify;
+	notify["error"] = ErrorCodes::Success;
+	notify["event"] = "private_msg_edited";
+	notify["fromuid"] = uid;
+	notify["peer_uid"] = peer_uid;
+	notify["msgid"] = target_msg_id;
+	notify["content"] = content;
+	notify["edited_at_ms"] = static_cast<Json::Int64>(now_ms);
+	PushGroupPayload({ uid, peer_uid }, ID_NOTIFY_PRIVATE_MSG_CHANGED_REQ, notify);
+}
+
+void LogicSystem::RevokePrivateMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
+{
+	(void)msg_id;
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	const int uid = root["fromuid"].asInt();
+	const int peer_uid = root["peer_uid"].asInt();
+	const std::string target_msg_id = root.get("msgid", "").asString();
+	const int64_t now_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()).count());
+
+	Json::Value rtvalue;
+	rtvalue["error"] = ErrorCodes::Success;
+	rtvalue["fromuid"] = uid;
+	rtvalue["peer_uid"] = peer_uid;
+	rtvalue["msgid"] = target_msg_id;
+	rtvalue["content"] = "[消息已撤回]";
+	rtvalue["deleted_at_ms"] = static_cast<Json::Int64>(now_ms);
+	Defer defer([&rtvalue, session]() {
+		session->Send(rtvalue.toStyledString(), ID_REVOKE_PRIVATE_MSG_RSP);
+		});
+
+	if (uid <= 0 || peer_uid <= 0 || target_msg_id.empty()) {
+		rtvalue["error"] = ErrorCodes::Error_Json;
+		return;
+	}
+	if (!MysqlMgr::GetInstance()->IsFriend(uid, peer_uid)) {
+		rtvalue["error"] = ErrorCodes::UidInvalid;
+		return;
+	}
+	if (!MysqlMgr::GetInstance()->RevokePrivateMessage(uid, peer_uid, target_msg_id, now_ms)) {
+		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
+		return;
+	}
+
+	Json::Value notify;
+	notify["error"] = ErrorCodes::Success;
+	notify["event"] = "private_msg_revoked";
+	notify["fromuid"] = uid;
+	notify["peer_uid"] = peer_uid;
+	notify["msgid"] = target_msg_id;
+	notify["content"] = "[消息已撤回]";
+	notify["deleted_at_ms"] = static_cast<Json::Int64>(now_ms);
+	PushGroupPayload({ uid, peer_uid }, ID_NOTIFY_PRIVATE_MSG_CHANGED_REQ, notify);
+}
+
+void LogicSystem::EditGroupMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
+{
+	(void)msg_id;
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	const int uid = root["fromuid"].asInt();
+	const int64_t group_id = root["groupid"].asInt64();
+	const std::string target_msg_id = root.get("msgid", "").asString();
+	const std::string content = root.get("content", "").asString();
+	const int64_t now_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()).count());
+
+	Json::Value rtvalue;
+	rtvalue["error"] = ErrorCodes::Success;
+	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["msgid"] = target_msg_id;
+	rtvalue["content"] = content;
+	rtvalue["edited_at_ms"] = static_cast<Json::Int64>(now_ms);
+	Defer defer([&rtvalue, session]() {
+		session->Send(rtvalue.toStyledString(), ID_EDIT_GROUP_MSG_RSP);
+		});
+
+	if (uid <= 0 || group_id <= 0 || target_msg_id.empty() || content.empty() || content.size() > 4096) {
+		rtvalue["error"] = ErrorCodes::Error_Json;
+		return;
+	}
+
+	if (!MysqlMgr::GetInstance()->IsUserInGroup(group_id, uid)) {
+		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
+		return;
+	}
+
+	if (!MysqlMgr::GetInstance()->UpdateGroupMessageContent(group_id, uid, target_msg_id, content, now_ms)) {
+		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
+		return;
+	}
+
+	std::vector<std::shared_ptr<GroupMemberInfo>> members;
+	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	std::vector<int> recipients;
+	for (const auto& member : members) {
+		if (member && member->status == 1) {
+			recipients.push_back(member->uid);
+		}
+	}
+
+	Json::Value notify;
+	notify["error"] = ErrorCodes::Success;
+	notify["event"] = "group_msg_edited";
+	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["msgid"] = target_msg_id;
+	notify["content"] = content;
+	notify["edited_at_ms"] = static_cast<Json::Int64>(now_ms);
+	notify["operator_uid"] = uid;
+	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify, 0);
+}
+
+void LogicSystem::RevokeGroupMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
+{
+	(void)msg_id;
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	const int uid = root["fromuid"].asInt();
+	const int64_t group_id = root["groupid"].asInt64();
+	const std::string target_msg_id = root.get("msgid", "").asString();
+	const int64_t now_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()).count());
+
+	Json::Value rtvalue;
+	rtvalue["error"] = ErrorCodes::Success;
+	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["msgid"] = target_msg_id;
+	rtvalue["content"] = "[消息已撤回]";
+	rtvalue["deleted_at_ms"] = static_cast<Json::Int64>(now_ms);
+	Defer defer([&rtvalue, session]() {
+		session->Send(rtvalue.toStyledString(), ID_REVOKE_GROUP_MSG_RSP);
+		});
+
+	if (uid <= 0 || group_id <= 0 || target_msg_id.empty()) {
+		rtvalue["error"] = ErrorCodes::Error_Json;
+		return;
+	}
+
+	if (!MysqlMgr::GetInstance()->IsUserInGroup(group_id, uid)) {
+		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
+		return;
+	}
+
+	if (!MysqlMgr::GetInstance()->RevokeGroupMessage(group_id, uid, target_msg_id, now_ms)) {
+		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
+		return;
+	}
+
+	std::vector<std::shared_ptr<GroupMemberInfo>> members;
+	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	std::vector<int> recipients;
+	for (const auto& member : members) {
+		if (member && member->status == 1) {
+			recipients.push_back(member->uid);
+		}
+	}
+
+	Json::Value notify;
+	notify["error"] = ErrorCodes::Success;
+	notify["event"] = "group_msg_revoked";
+	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["msgid"] = target_msg_id;
+	notify["content"] = "[消息已撤回]";
+	notify["deleted_at_ms"] = static_cast<Json::Int64>(now_ms);
+	notify["operator_uid"] = uid;
+	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify, 0);
 }
 
 void LogicSystem::PrivateHistoryHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
@@ -1513,6 +2372,7 @@ void LogicSystem::PrivateHistoryHandler(std::shared_ptr<CSession> session, const
 		return;
 	}
 	rtvalue["has_more"] = has_more;
+	int64_t max_peer_read_ts = 0;
 	for (const auto& one : messages) {
 		if (!one) {
 			continue;
@@ -1523,7 +2383,29 @@ void LogicSystem::PrivateHistoryHandler(std::shared_ptr<CSession> session, const
 		item["fromuid"] = one->from_uid;
 		item["touid"] = one->to_uid;
 		item["created_at"] = static_cast<Json::Int64>(one->created_at);
+		if (one->reply_to_server_msg_id > 0) {
+			item["reply_to_server_msg_id"] = static_cast<Json::Int64>(one->reply_to_server_msg_id);
+		}
+		if (!one->forward_meta_json.empty()) {
+			Json::Reader forward_reader;
+			Json::Value forward_meta;
+			if (forward_reader.parse(one->forward_meta_json, forward_meta)) {
+				item["forward_meta"] = forward_meta;
+			}
+		}
+		if (one->edited_at_ms > 0) {
+			item["edited_at_ms"] = static_cast<Json::Int64>(one->edited_at_ms);
+		}
+		if (one->deleted_at_ms > 0) {
+			item["deleted_at_ms"] = static_cast<Json::Int64>(one->deleted_at_ms);
+		}
 		rtvalue["messages"].append(item);
+		if (one->from_uid == peer_uid && one->created_at > max_peer_read_ts) {
+			max_peer_read_ts = one->created_at;
+		}
+	}
+	if (max_peer_read_ts > 0) {
+		MysqlMgr::GetInstance()->UpsertPrivateReadState(uid, peer_uid, max_peer_read_ts);
 	}
 }
 
@@ -1633,6 +2515,35 @@ void LogicSystem::SetGroupAdminHandler(std::shared_ptr<CSession> session, const 
 	const std::string target_user_id = root.get("target_user_id", "").asString();
 	const int64_t group_id = root["groupid"].asInt64();
 	const bool is_admin = root.get("is_admin", true).asBool();
+	bool has_permission_bits = root.isMember("permission_bits");
+	int64_t permission_bits = root.get("permission_bits", 0).asInt64();
+	auto merge_perm_flag = [&](const char* key, int64_t bit) {
+		if (!root.isMember(key)) {
+			return;
+		}
+		has_permission_bits = true;
+		if (root.get(key, false).asBool()) {
+			permission_bits |= bit;
+		}
+		else {
+			permission_bits &= ~bit;
+		}
+		};
+	merge_perm_flag("can_change_group_info", kPermChangeGroupInfo);
+	merge_perm_flag("can_delete_messages", kPermDeleteMessages);
+	merge_perm_flag("can_invite_users", kPermInviteUsers);
+	merge_perm_flag("can_manage_admins", kPermManageAdmins);
+	merge_perm_flag("can_pin_messages", kPermPinMessages);
+	merge_perm_flag("can_ban_users", kPermBanUsers);
+	merge_perm_flag("can_manage_topics", kPermManageTopics);
+	if (!is_admin) {
+		permission_bits = 0;
+		has_permission_bits = true;
+	}
+	int64_t requested_permission_bits = has_permission_bits ? permission_bits : 0;
+	if (is_admin && !has_permission_bits && requested_permission_bits <= 0) {
+		requested_permission_bits = kDefaultAdminPermBits;
+	}
 	int target_uid = 0;
 	if (!MysqlMgr::GetInstance()->GetUidByUserId(target_user_id, target_uid)) {
 		target_uid = 0;
@@ -1644,6 +2555,14 @@ void LogicSystem::SetGroupAdminHandler(std::shared_ptr<CSession> session, const 
 	rtvalue["touid"] = target_uid;
 	rtvalue["target_user_id"] = target_user_id;
 	rtvalue["is_admin"] = is_admin;
+	rtvalue["permission_bits"] = static_cast<Json::Int64>(requested_permission_bits);
+	rtvalue["can_change_group_info"] = (requested_permission_bits & kPermChangeGroupInfo) != 0;
+	rtvalue["can_delete_messages"] = (requested_permission_bits & kPermDeleteMessages) != 0;
+	rtvalue["can_invite_users"] = (requested_permission_bits & kPermInviteUsers) != 0;
+	rtvalue["can_manage_admins"] = (requested_permission_bits & kPermManageAdmins) != 0;
+	rtvalue["can_pin_messages"] = (requested_permission_bits & kPermPinMessages) != 0;
+	rtvalue["can_ban_users"] = (requested_permission_bits & kPermBanUsers) != 0;
+	rtvalue["can_manage_topics"] = (requested_permission_bits & kPermManageTopics) != 0;
 	std::shared_ptr<GroupInfo> group_info;
 	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
 	if (group_info) {
@@ -1654,7 +2573,7 @@ void LogicSystem::SetGroupAdminHandler(std::shared_ptr<CSession> session, const 
 		});
 
 	if (target_uid <= 0 || target_user_id.empty() ||
-		!MysqlMgr::GetInstance()->SetGroupAdmin(group_id, uid, target_uid, is_admin)) {
+		!MysqlMgr::GetInstance()->SetGroupAdmin(group_id, uid, target_uid, is_admin, requested_permission_bits)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
@@ -1676,6 +2595,14 @@ void LogicSystem::SetGroupAdminHandler(std::shared_ptr<CSession> session, const 
 	notify["target_uid"] = target_uid;
 	notify["target_user_id"] = target_user_id;
 	notify["is_admin"] = is_admin;
+	notify["permission_bits"] = static_cast<Json::Int64>(requested_permission_bits);
+	notify["can_change_group_info"] = (requested_permission_bits & kPermChangeGroupInfo) != 0;
+	notify["can_delete_messages"] = (requested_permission_bits & kPermDeleteMessages) != 0;
+	notify["can_invite_users"] = (requested_permission_bits & kPermInviteUsers) != 0;
+	notify["can_manage_admins"] = (requested_permission_bits & kPermManageAdmins) != 0;
+	notify["can_pin_messages"] = (requested_permission_bits & kPermPinMessages) != 0;
+	notify["can_ban_users"] = (requested_permission_bits & kPermBanUsers) != 0;
+	notify["can_manage_topics"] = (requested_permission_bits & kPermManageTopics) != 0;
 	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
 }
 

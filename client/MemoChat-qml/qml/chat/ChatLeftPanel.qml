@@ -27,6 +27,9 @@ Rectangle {
     property string groupStatusText: ""
     property bool groupStatusError: false
     property int sessionFilter: 0 // 0 all, 1 private, 2 group
+    property int selectedDialogUid: 0
+    property int selectedChatUid: 0
+    property int selectedGroupUid: 0
 
     signal dialogUidSelected(int uid)
     signal chatIndexSelected(int index)
@@ -40,9 +43,27 @@ Rectangle {
     signal requestContactLoadMore()
     signal createGroupRequested()
     signal refreshGroupRequested()
+    signal dialogPinToggled(int uid)
+    signal dialogMuteToggled(int uid)
+    signal dialogMarkRead(int uid)
+    signal dialogDraftCleared(int uid)
 
     onCurrentTabChanged: if (currentTab !== 0) { sessionFilter = 0 }
     onSessionFilterChanged: sessionList.currentIndex = -1
+
+    function activateSession(uidValue, indexValue) {
+        sessionList.currentIndex = indexValue
+        if (root.sessionFilter === 2) {
+            root.selectedGroupUid = uidValue
+            root.groupIndexSelected(indexValue)
+        } else if (root.sessionFilter === 1) {
+            root.selectedChatUid = uidValue
+            root.chatIndexSelected(indexValue)
+        } else {
+            root.selectedDialogUid = uidValue
+            root.dialogUidSelected(uidValue)
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -64,7 +85,7 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 34
                     backdrop: root.backdrop !== null ? root.backdrop : root
-                    blurRadius: 30
+                    blurRadius: 18
                     cornerRadius: 9
                     leftInset: 12
                     rightInset: 12
@@ -223,7 +244,7 @@ Rectangle {
                                          && searchResultList.count === 0
                                 backdrop: root.backdrop !== null ? root.backdrop : root
                                 cornerRadius: 10
-                                blurRadius: 28
+                                blurRadius: 16
                                 fillColor: Qt.rgba(1, 1, 1, 0.20)
                                 strokeColor: Qt.rgba(1, 1, 1, 0.42)
 
@@ -277,25 +298,51 @@ Rectangle {
                                     GlassButton {
                                         Layout.fillWidth: true
                                         implicitHeight: 30
-                                        text: "私聊"
+                                        id: privateFilterBtn
+                                        text: ""
                                         cornerRadius: 8
                                         normalColor: root.sessionFilter === 1 ? Qt.rgba(0.36, 0.62, 0.92, 0.28) : Qt.rgba(0.48, 0.56, 0.66, 0.20)
                                         hoverColor: root.sessionFilter === 1 ? Qt.rgba(0.36, 0.62, 0.92, 0.38) : Qt.rgba(0.48, 0.56, 0.66, 0.28)
                                         pressedColor: root.sessionFilter === 1 ? Qt.rgba(0.36, 0.62, 0.92, 0.45) : Qt.rgba(0.48, 0.56, 0.66, 0.34)
                                         disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
                                         onClicked: root.sessionFilter = 1
+
+                                        Image {
+                                            anchors.centerIn: parent
+                                            width: 16
+                                            height: 16
+                                            source: "qrc:/icons/user.png"
+                                            fillMode: Image.PreserveAspectFit
+                                        }
+
+                                        ToolTip.visible: privateFilterBtn.hovering
+                                        ToolTip.delay: 120
+                                        ToolTip.text: "私聊"
                                     }
 
                                     GlassButton {
                                         Layout.fillWidth: true
                                         implicitHeight: 30
-                                        text: "群组"
+                                        id: groupFilterBtn
+                                        text: ""
                                         cornerRadius: 8
                                         normalColor: root.sessionFilter === 2 ? Qt.rgba(0.36, 0.62, 0.92, 0.28) : Qt.rgba(0.48, 0.56, 0.66, 0.20)
                                         hoverColor: root.sessionFilter === 2 ? Qt.rgba(0.36, 0.62, 0.92, 0.38) : Qt.rgba(0.48, 0.56, 0.66, 0.28)
                                         pressedColor: root.sessionFilter === 2 ? Qt.rgba(0.36, 0.62, 0.92, 0.45) : Qt.rgba(0.48, 0.56, 0.66, 0.34)
                                         disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
                                         onClicked: root.sessionFilter = 2
+
+                                        Image {
+                                            anchors.centerIn: parent
+                                            width: 16
+                                            height: 16
+                                            source: "qrc:/icons/team.png"
+                                            fillMode: Image.PreserveAspectFit
+                                        }
+
+                                        ToolTip.visible: groupFilterBtn.hovering
+                                        ToolTip.delay: 120
+                                        ToolTip.text: "群组"
                                     }
 
                                     GlassButton {
@@ -361,15 +408,44 @@ Rectangle {
                                 if (count <= 0 || currentIndex >= 0) {
                                     return
                                 }
+                                if (root.sessionFilter === 2 && root.selectedGroupUid !== 0) {
+                                    const groupIdx = root.groupModel ? root.groupModel.indexOfUid(root.selectedGroupUid) : -1
+                                    if (groupIdx >= 0) {
+                                        currentIndex = groupIdx
+                                        root.groupIndexSelected(groupIdx)
+                                        return
+                                    }
+                                }
+                                if (root.sessionFilter === 1 && root.selectedChatUid !== 0) {
+                                    const chatIdx = root.chatModel ? root.chatModel.indexOfUid(root.selectedChatUid) : -1
+                                    if (chatIdx >= 0) {
+                                        currentIndex = chatIdx
+                                        root.chatIndexSelected(chatIdx)
+                                        return
+                                    }
+                                }
+                                if (root.sessionFilter === 0 && root.selectedDialogUid !== 0) {
+                                    const dialogIdx = root.dialogModel ? root.dialogModel.indexOfUid(root.selectedDialogUid) : -1
+                                    if (dialogIdx >= 0) {
+                                        currentIndex = dialogIdx
+                                        root.dialogUidSelected(root.selectedDialogUid)
+                                        return
+                                    }
+                                }
                                 currentIndex = 0
                                 if (root.sessionFilter === 2) {
+                                    const firstGroup = root.groupModel ? root.groupModel.get(0) : {}
+                                    root.selectedGroupUid = firstGroup.uid !== undefined ? firstGroup.uid : 0
                                     root.groupIndexSelected(0)
                                 } else if (root.sessionFilter === 1) {
+                                    const firstChat = root.chatModel ? root.chatModel.get(0) : {}
+                                    root.selectedChatUid = firstChat.uid !== undefined ? firstChat.uid : 0
                                     root.chatIndexSelected(0)
                                 } else {
                                     const firstItem = root.dialogModel ? root.dialogModel.get(0) : {}
                                     const firstUid = firstItem.uid !== undefined ? firstItem.uid : 0
                                     if (firstUid !== 0) {
+                                        root.selectedDialogUid = firstUid
                                         root.dialogUidSelected(firstUid)
                                     }
                                 }
@@ -426,10 +502,85 @@ Rectangle {
                                         spacing: 3
                                         Label { text: name; font.bold: true; color: "#273449" }
                                         Label {
-                                            text: (lastMsg && lastMsg.length > 0) ? lastMsg : desc
-                                            color: "#647489"
+                                            text: (draftText && draftText.length > 0)
+                                                  ? ("草稿: " + draftText)
+                                                  : ((lastMsg && lastMsg.length > 0) ? lastMsg : desc)
+                                            color: (draftText && draftText.length > 0) ? "#c05f45" : "#647489"
                                             elide: Text.ElideRight
                                             Layout.fillWidth: true
+                                        }
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+                                        spacing: 4
+                                        visible: (unreadCount && unreadCount > 0)
+                                                 || (mentionCount && mentionCount > 0)
+                                                 || (pinnedRank && pinnedRank > 0)
+                                                 || (muteState && muteState > 0)
+
+                                        Rectangle {
+                                            Layout.alignment: Qt.AlignRight
+                                            width: mentionCount > 99 ? 30 : 22
+                                            height: 18
+                                            radius: 9
+                                            visible: mentionCount && mentionCount > 0
+                                            color: "#f09a3e"
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: mentionCount > 99 ? "@99+" : ("@" + String(mentionCount))
+                                                color: "white"
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            Layout.alignment: Qt.AlignRight
+                                            width: 18
+                                            height: 18
+                                            radius: 9
+                                            visible: pinnedRank && pinnedRank > 0
+                                            color: Qt.rgba(0.32, 0.60, 0.92, 0.24)
+                                            border.color: Qt.rgba(0.32, 0.60, 0.92, 0.50)
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "置"
+                                                color: "#2f5f92"
+                                                font.pixelSize: 10
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            Layout.alignment: Qt.AlignRight
+                                            width: unreadCount > 99 ? 26 : 20
+                                            height: 20
+                                            radius: 10
+                                            visible: unreadCount && unreadCount > 0
+                                            color: "#d95f5f"
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: unreadCount > 99 ? "99+" : String(unreadCount)
+                                                color: "white"
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            Layout.alignment: Qt.AlignRight
+                                            width: 18
+                                            height: 18
+                                            radius: 9
+                                            visible: muteState && muteState > 0
+                                            color: Qt.rgba(0.42, 0.56, 0.74, 0.24)
+                                            border.color: Qt.rgba(0.42, 0.56, 0.74, 0.50)
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "静"
+                                                color: "#436789"
+                                                font.pixelSize: 10
+                                            }
                                         }
                                     }
                                 }
@@ -437,15 +588,38 @@ Rectangle {
                                 MouseArea {
                                     anchors.fill: parent
                                     cursorShape: Qt.PointingHandCursor
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
                                     onClicked: {
-                                        sessionList.currentIndex = index
-                                        if (root.sessionFilter === 2) {
-                                            root.groupIndexSelected(index)
-                                        } else if (root.sessionFilter === 1) {
-                                            root.chatIndexSelected(index)
-                                        } else {
-                                            root.dialogUidSelected(uid)
+                                        if (mouse.button === Qt.RightButton) {
+                                            root.activateSession(uid, index)
+                                            sessionMenu.popup()
+                                            return
                                         }
+                                        root.activateSession(uid, index)
+                                    }
+                                }
+
+                                Menu {
+                                    id: sessionMenu
+                                    y: parent.height - 4
+
+                                    MenuItem {
+                                        text: (pinnedRank && pinnedRank > 0) ? "取消置顶" : "置顶会话"
+                                        onTriggered: root.dialogPinToggled(uid)
+                                    }
+                                    MenuItem {
+                                        text: (muteState && muteState > 0) ? "取消静音" : "静音会话"
+                                        onTriggered: root.dialogMuteToggled(uid)
+                                    }
+                                    MenuItem {
+                                        text: "标记已读"
+                                        enabled: unreadCount && unreadCount > 0
+                                        onTriggered: root.dialogMarkRead(uid)
+                                    }
+                                    MenuItem {
+                                        text: "清空草稿"
+                                        enabled: draftText && draftText.length > 0
+                                        onTriggered: root.dialogDraftCleared(uid)
                                     }
                                 }
 
@@ -470,7 +644,7 @@ Rectangle {
                         visible: sessionList.count === 0 && !root.chatLoadingMore
                         backdrop: root.backdrop !== null ? root.backdrop : root
                         cornerRadius: 10
-                        blurRadius: 28
+                        blurRadius: 16
                         fillColor: Qt.rgba(1, 1, 1, 0.20)
                         strokeColor: Qt.rgba(1, 1, 1, 0.42)
 

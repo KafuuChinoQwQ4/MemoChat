@@ -40,7 +40,17 @@ private:
 	void ReviewGroupApplyHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void DealGroupChatMsg(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void GroupHistoryHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void EditGroupMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void RevokeGroupMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void EditPrivateMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void RevokePrivateMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void PrivateHistoryHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void SyncDraftHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void PinDialogHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void ForwardGroupMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void ForwardPrivateMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void GroupReadAckHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void PrivateReadAckHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void UpdateGroupAnnouncementHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void UpdateGroupIconHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void SetGroupAdminHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);

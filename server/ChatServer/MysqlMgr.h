@@ -29,6 +29,11 @@ public:
 	bool GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const int& limit,
 		std::vector<std::shared_ptr<PrivateMessageInfo>>& messages, bool& has_more);
 	bool GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_ptr<PrivateMessageInfo>& message);
+	bool UpdatePrivateMessageContent(const int& uid, const int& peer_uid, const std::string& msg_id,
+		const std::string& content, int64_t edited_at_ms = 0);
+	bool RevokePrivateMessage(const int& uid, const int& peer_uid, const std::string& msg_id,
+		int64_t deleted_at_ms = 0);
+	bool UpsertPrivateReadState(const int& uid, const int& peer_uid, const int64_t& read_ts);
 	bool IsFriend(const int& self_id, const int& friend_id);
 	bool CreateGroup(const int& owner_uid, const std::string& name, const std::string& announcement,
 		const int& member_limit, const std::vector<int>& initial_members, int64_t& out_group_id, std::string& out_group_code);
@@ -38,12 +43,16 @@ public:
 	bool InviteGroupMember(const int64_t& group_id, const int& inviter_uid, const int& target_uid, const std::string& reason);
 	bool ApplyJoinGroup(const int64_t& group_id, const int& applicant_uid, const std::string& reason);
 	bool ReviewGroupApply(const int64_t& apply_id, const int& reviewer_uid, const bool& agree, std::shared_ptr<GroupApplyInfo>& apply_info);
-	bool SaveGroupMessage(const GroupMessageInfo& msg);
-	bool GetGroupHistory(const int64_t& group_id, const int64_t& before_ts, const int& limit,
-		std::vector<std::shared_ptr<GroupMessageInfo>>& messages);
+	bool SaveGroupMessage(const GroupMessageInfo& msg, int64_t* out_server_msg_id = nullptr, int64_t* out_group_seq = nullptr);
+	bool UpdateGroupMessageContent(const int64_t& group_id, const int& operator_uid, const std::string& msg_id,
+		const std::string& content, int64_t edited_at_ms = 0);
+	bool RevokeGroupMessage(const int64_t& group_id, const int& operator_uid, const std::string& msg_id,
+		int64_t deleted_at_ms = 0);
+	bool GetGroupHistory(const int64_t& group_id, const int64_t& before_ts, const int64_t& before_seq, const int& limit,
+		std::vector<std::shared_ptr<GroupMessageInfo>>& messages, bool& has_more);
 	bool UpdateGroupAnnouncement(const int64_t& group_id, const int& operator_uid, const std::string& announcement);
 	bool UpdateGroupIcon(const int64_t& group_id, const int& operator_uid, const std::string& icon);
-	bool SetGroupAdmin(const int64_t& group_id, const int& operator_uid, const int& target_uid, const bool& is_admin);
+	bool SetGroupAdmin(const int64_t& group_id, const int& operator_uid, const int& target_uid, const bool& is_admin, const int64_t& permission_bits = 0);
 	bool MuteGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid, const int64_t& mute_until);
 	bool KickGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid);
 	bool QuitGroup(const int64_t& group_id, const int& uid);
@@ -51,6 +60,18 @@ public:
 	bool GetUserRoleInGroup(const int64_t& group_id, const int& uid, int& role);
 	bool IsUserInGroup(const int64_t& group_id, const int& uid);
 	bool GetPendingGroupApplyForReviewer(const int& reviewer_uid, std::vector<std::shared_ptr<GroupApplyInfo>>& applies, int limit = 20);
+	bool GetDialogMetaByOwner(const int& owner_uid, std::vector<std::shared_ptr<DialogMetaInfo>>& metas);
+	bool GetPrivateDialogRuntime(const int& owner_uid, const int& peer_uid, DialogRuntimeInfo& runtime);
+	bool GetGroupDialogRuntime(const int& owner_uid, const int64_t& group_id, DialogRuntimeInfo& runtime);
+	bool RefreshDialogsForOwner(const int& owner_uid);
+	bool UpsertGroupReadState(const int& uid, const int64_t& group_id, const int64_t& read_ts);
+	bool GetGroupMessageByMsgId(const int64_t& group_id, const std::string& msg_id, std::shared_ptr<GroupMessageInfo>& message);
+	bool UpsertDialogDraft(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
+		const int64_t& group_id, const std::string& draft_text);
+	bool UpsertDialogPinned(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
+		const int64_t& group_id, const int& pinned_rank);
+	bool UpsertDialogMuteState(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
+		const int64_t& group_id, const int& mute_state);
 private:
 	MysqlMgr();
 	MysqlDao  _dao;

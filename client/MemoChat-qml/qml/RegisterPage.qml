@@ -127,20 +127,49 @@ Rectangle {
                         }
 
                         Image {
+                            id: pwdEyeIcon
+                            z: 1
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.right: parent.right
                             anchors.rightMargin: 12
                             width: 20
                             height: 20
                             source: registerRoot.pwdVisible ? "qrc:/res/visible.png" : "qrc:/res/unvisible.png"
+                            scale: pwdEyeArea.pressed ? 0.96 : (pwdEyeArea.containsMouse ? 1.02 : 1.0)
+
+                            Behavior on scale {
+                                NumberAnimation {
+                                    duration: 110
+                                    easing.type: Easing.OutQuad
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.centerIn: pwdEyeIcon
+                            width: 28
+                            height: 28
+                            radius: 14
+                            color: pwdEyeArea.pressed ? Qt.rgba(0.35, 0.61, 0.90, 0.24)
+                                                      : pwdEyeArea.containsMouse ? Qt.rgba(0.35, 0.61, 0.90, 0.14)
+                                                                                : "transparent"
+
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: 110
+                                    easing.type: Easing.OutQuad
+                                }
+                            }
                         }
 
                         MouseArea {
+                            id: pwdEyeArea
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.right: parent.right
                             anchors.rightMargin: 10
                             width: 24
                             height: 24
+                            hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: registerRoot.pwdVisible = !registerRoot.pwdVisible
                         }
@@ -176,20 +205,49 @@ Rectangle {
                         }
 
                         Image {
+                            id: confirmEyeIcon
+                            z: 1
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.right: parent.right
                             anchors.rightMargin: 12
                             width: 20
                             height: 20
                             source: registerRoot.confirmVisible ? "qrc:/res/visible.png" : "qrc:/res/unvisible.png"
+                            scale: confirmEyeArea.pressed ? 0.96 : (confirmEyeArea.containsMouse ? 1.02 : 1.0)
+
+                            Behavior on scale {
+                                NumberAnimation {
+                                    duration: 110
+                                    easing.type: Easing.OutQuad
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.centerIn: confirmEyeIcon
+                            width: 28
+                            height: 28
+                            radius: 14
+                            color: confirmEyeArea.pressed ? Qt.rgba(0.35, 0.61, 0.90, 0.24)
+                                                          : confirmEyeArea.containsMouse ? Qt.rgba(0.35, 0.61, 0.90, 0.14)
+                                                                                    : "transparent"
+
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: 110
+                                    easing.type: Easing.OutQuad
+                                }
+                            }
                         }
 
                         MouseArea {
+                            id: confirmEyeArea
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.right: parent.right
                             anchors.rightMargin: 10
                             width: 24
                             height: 24
+                            hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: registerRoot.confirmVisible = !registerRoot.confirmVisible
                         }

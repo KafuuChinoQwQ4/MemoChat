@@ -9,6 +9,7 @@ GlassSurface {
     property string groupCode: ""
     property string groupIcon: "qrc:/res/chat_icon.png"
     property bool canUpdateIcon: false
+    property bool canUpdateAnnouncement: false
     property string statusText: ""
     property bool statusError: false
 
@@ -140,6 +141,7 @@ GlassSurface {
                 Layout.fillWidth: true
                 text: "更新公告"
                 implicitHeight: 30
+                enabled: root.canUpdateAnnouncement
                 cornerRadius: 8
                 normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
                 hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)

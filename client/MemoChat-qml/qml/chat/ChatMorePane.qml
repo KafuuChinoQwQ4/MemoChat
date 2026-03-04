@@ -38,7 +38,7 @@ Item {
                 height: 78
                 backdrop: root.backdrop !== null ? root.backdrop : root
                 cornerRadius: 12
-                blurRadius: 30
+                blurRadius: 18
                 fillColor: Qt.rgba(1, 1, 1, 0.20)
                 strokeColor: Qt.rgba(1, 1, 1, 0.46)
                 glowTopColor: Qt.rgba(1, 1, 1, 0.24)
@@ -80,7 +80,7 @@ Item {
                         Layout.preferredHeight: 150
                         backdrop: root.backdrop !== null ? root.backdrop : root
                         cornerRadius: 11
-                        blurRadius: 30
+                        blurRadius: 18
                         fillColor: Qt.rgba(1, 1, 1, 0.16)
                         strokeColor: Qt.rgba(1, 1, 1, 0.40)
                         glowTopColor: Qt.rgba(1, 1, 1, 0.19)
