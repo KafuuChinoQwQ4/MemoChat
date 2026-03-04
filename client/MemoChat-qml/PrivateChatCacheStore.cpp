@@ -85,7 +85,8 @@ std::vector<std::shared_ptr<TextChatData>> PrivateChatCacheStore::loadRecentMess
 
     QSqlQuery query(_db);
     query.prepare(
-        "SELECT msg_id, content, from_uid, to_uid, created_at "
+        "SELECT msg_id, content, from_uid, to_uid, created_at, "
+        "reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms "
         "FROM private_chat_msg "
         "WHERE owner_uid = ? AND peer_uid = ? "
         "ORDER BY created_at DESC, msg_id DESC LIMIT ?");
@@ -103,7 +104,32 @@ std::vector<std::shared_ptr<TextChatData>> PrivateChatCacheStore::loadRecentMess
         const int fromUid = query.value(2).toInt();
         const int toUid = query.value(3).toInt();
         const qint64 createdAt = query.value(4).toLongLong();
-        messages.push_back(std::make_shared<TextChatData>(msgId, content, fromUid, toUid, QString(), createdAt));
+        const qint64 replyToServerMsgId = query.value(5).toLongLong();
+        const QString forwardMetaJson = query.value(6).toString();
+        qint64 editedAtMs = query.value(7).toLongLong();
+        qint64 deletedAtMs = query.value(8).toLongLong();
+        if (editedAtMs > 0 && editedAtMs < 100000000000LL) {
+            editedAtMs *= 1000;
+        }
+        if (deletedAtMs > 0 && deletedAtMs < 100000000000LL) {
+            deletedAtMs *= 1000;
+        }
+        const QString state = deletedAtMs > 0 ? QStringLiteral("deleted")
+                           : (editedAtMs > 0 ? QStringLiteral("edited") : QStringLiteral("sent"));
+        messages.push_back(std::make_shared<TextChatData>(msgId,
+                                                          content,
+                                                          fromUid,
+                                                          toUid,
+                                                          QString(),
+                                                          createdAt,
+                                                          QString(),
+                                                          state,
+                                                          0,
+                                                          0,
+                                                          replyToServerMsgId,
+                                                          forwardMetaJson,
+                                                          editedAtMs,
+                                                          deletedAtMs));
     }
 
     std::reverse(messages.begin(), messages.end());
@@ -119,8 +145,9 @@ void PrivateChatCacheStore::upsertMessages(int ownerUid, int peerUid, const std:
     QSqlQuery query(_db);
     query.prepare(
         "INSERT OR REPLACE INTO private_chat_msg("
-        "owner_uid, peer_uid, msg_id, from_uid, to_uid, content, created_at) "
-        "VALUES(?, ?, ?, ?, ?, ?, ?)");
+        "owner_uid, peer_uid, msg_id, from_uid, to_uid, content, created_at, "
+        "reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms) "
+        "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     _db.transaction();
     for (const auto &msg : messages) {
@@ -134,6 +161,10 @@ void PrivateChatCacheStore::upsertMessages(int ownerUid, int peerUid, const std:
         query.addBindValue(msg->_to_uid);
         query.addBindValue(msg->_msg_content);
         query.addBindValue(normalizeCreatedAt(msg->_created_at));
+        query.addBindValue(msg->_reply_to_server_msg_id);
+        query.addBindValue(msg->_forward_meta_json);
+        query.addBindValue(msg->_edited_at_ms);
+        query.addBindValue(msg->_deleted_at_ms);
         if (!query.exec()) {
             _db.rollback();
             return;
@@ -180,9 +211,17 @@ bool PrivateChatCacheStore::ensureSchema()
             "to_uid INTEGER NOT NULL,"
             "content TEXT NOT NULL,"
             "created_at INTEGER NOT NULL,"
+            "reply_to_server_msg_id INTEGER NOT NULL DEFAULT 0,"
+            "forward_meta_json TEXT,"
+            "edited_at_ms INTEGER NOT NULL DEFAULT 0,"
+            "deleted_at_ms INTEGER NOT NULL DEFAULT 0,"
             "PRIMARY KEY(owner_uid, msg_id))")) {
         return false;
     }
+    query.exec("ALTER TABLE private_chat_msg ADD COLUMN reply_to_server_msg_id INTEGER NOT NULL DEFAULT 0");
+    query.exec("ALTER TABLE private_chat_msg ADD COLUMN forward_meta_json TEXT");
+    query.exec("ALTER TABLE private_chat_msg ADD COLUMN edited_at_ms INTEGER NOT NULL DEFAULT 0");
+    query.exec("ALTER TABLE private_chat_msg ADD COLUMN deleted_at_ms INTEGER NOT NULL DEFAULT 0");
 
     if (!query.exec(
             "CREATE INDEX IF NOT EXISTS idx_private_chat_owner_peer_created "
@@ -195,8 +234,11 @@ bool PrivateChatCacheStore::ensureSchema()
 
 qint64 PrivateChatCacheStore::normalizeCreatedAt(qint64 createdAt)
 {
-    if (createdAt > 0) {
-        return createdAt;
+    if (createdAt <= 0) {
+        return QDateTime::currentMSecsSinceEpoch();
     }
-    return QDateTime::currentMSecsSinceEpoch();
+    if (createdAt < 100000000000LL) {
+        return createdAt * 1000;
+    }
+    return createdAt;
 }

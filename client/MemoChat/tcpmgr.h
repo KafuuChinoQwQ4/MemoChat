@@ -52,7 +52,10 @@ signals:
     void sig_group_member_changed(QJsonObject payload);
     void sig_group_chat_msg(std::shared_ptr<GroupChatMsg> msg);
     void sig_group_rsp(ReqId reqId, int error, QJsonObject payload);
+    void sig_dialog_list_rsp(QJsonObject payload);
     void sig_private_history_rsp(QJsonObject payload);
+    void sig_private_msg_changed(QJsonObject payload);
+    void sig_private_read_ack(QJsonObject payload);
     void sig_notify_offline();
     void sig_connection_closed();
 };

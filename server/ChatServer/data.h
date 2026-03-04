@@ -36,7 +36,7 @@ struct ApplyInfo {
 struct GroupInfo {
 	GroupInfo()
 		: group_id(0), owner_uid(0), member_limit(200), is_all_muted(0),
-		  role(0), member_count(0), status(1) {}
+		  role(0), member_count(0), status(1), permission_bits(0) {}
 
 	int64_t group_id;
 	std::string group_code;
@@ -49,6 +49,7 @@ struct GroupInfo {
 	int role; // 3-owner, 2-admin, 1-member
 	int member_count;
 	int status;
+	int64_t permission_bits;
 };
 
 struct GroupMemberInfo {
@@ -81,9 +82,32 @@ struct GroupApplyInfo {
 	int reviewer_uid;
 };
 
+struct DialogMetaInfo {
+	DialogMetaInfo()
+		: owner_uid(0), peer_uid(0), group_id(0), pinned_rank(0), mute_state(0) {}
+
+	int owner_uid;
+	std::string dialog_type; // private/group
+	int peer_uid;
+	int64_t group_id;
+	int pinned_rank;
+	std::string draft_text;
+	int mute_state;
+};
+
+struct DialogRuntimeInfo {
+	DialogRuntimeInfo()
+		: last_msg_ts(0), unread_count(0) {}
+
+	std::string last_msg_preview;
+	int64_t last_msg_ts;
+	int unread_count;
+};
+
 struct GroupMessageInfo {
 	GroupMessageInfo()
-		: group_id(0), from_uid(0), size(0), created_at(0) {}
+		: group_id(0), from_uid(0), size(0), created_at(0), server_msg_id(0), group_seq(0),
+		  reply_to_server_msg_id(0), edited_at_ms(0), deleted_at_ms(0) {}
 
 	std::string msg_id;
 	int64_t group_id;
@@ -95,6 +119,12 @@ struct GroupMessageInfo {
 	std::string mime;
 	int size;
 	int64_t created_at;
+	int64_t server_msg_id;
+	int64_t group_seq;
+	int64_t reply_to_server_msg_id;
+	std::string forward_meta_json;
+	int64_t edited_at_ms;
+	int64_t deleted_at_ms;
 	std::string from_name;
 	std::string from_nick;
 	std::string from_icon;
@@ -102,7 +132,8 @@ struct GroupMessageInfo {
 
 struct PrivateMessageInfo {
 	PrivateMessageInfo()
-		: conv_uid_min(0), conv_uid_max(0), from_uid(0), to_uid(0), created_at(0) {}
+		: conv_uid_min(0), conv_uid_max(0), from_uid(0), to_uid(0), created_at(0),
+		  reply_to_server_msg_id(0), edited_at_ms(0), deleted_at_ms(0) {}
 
 	std::string msg_id;
 	int conv_uid_min;
@@ -111,4 +142,8 @@ struct PrivateMessageInfo {
 	int to_uid;
 	std::string content;
 	int64_t created_at;
+	int64_t reply_to_server_msg_id;
+	std::string forward_meta_json;
+	int64_t edited_at_ms;
+	int64_t deleted_at_ms;
 };

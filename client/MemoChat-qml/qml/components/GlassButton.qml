@@ -16,11 +16,33 @@ Item {
     property real cornerRadius: 10
     property bool hovering: false
     property bool pressed: false
+    property bool enableScaleFeedback: true
+    property real hoverScale: 1.02
+    property real pressedScale: 0.96
 
     signal clicked()
 
     implicitWidth: 120
     implicitHeight: 38
+    scale: {
+        if (!root.enabled || !root.enableScaleFeedback) {
+            return 1.0
+        }
+        if (root.pressed) {
+            return root.pressedScale
+        }
+        if (root.hovering) {
+            return root.hoverScale
+        }
+        return 1.0
+    }
+
+    Behavior on scale {
+        NumberAnimation {
+            duration: 110
+            easing.type: Easing.OutQuad
+        }
+    }
 
     Rectangle {
         anchors.fill: parent

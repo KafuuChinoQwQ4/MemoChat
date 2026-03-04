@@ -39,6 +39,37 @@ bool IsValidGroupCode(const std::string& group_code) {
 	}
 	return true;
 }
+
+constexpr int64_t kPermChangeGroupInfo = 1LL << 0;
+constexpr int64_t kPermDeleteMessages = 1LL << 1;
+constexpr int64_t kPermInviteUsers = 1LL << 2;
+constexpr int64_t kPermManageAdmins = 1LL << 3;
+constexpr int64_t kPermPinMessages = 1LL << 4;
+constexpr int64_t kPermBanUsers = 1LL << 5;
+constexpr int64_t kPermManageTopics = 1LL << 6;
+constexpr int64_t kDefaultAdminPermBits =
+	kPermChangeGroupInfo | kPermDeleteMessages | kPermInviteUsers | kPermPinMessages | kPermBanUsers;
+constexpr int64_t kOwnerPermBits =
+	kDefaultAdminPermBits | kPermManageAdmins | kPermManageTopics;
+
+std::string BuildPreviewText(const std::string& msg_type, const std::string& content) {
+	if (msg_type == "image" || content.rfind("__memochat_img__:", 0) == 0) {
+		return "[图片]";
+	}
+	if (msg_type == "file" || content.rfind("__memochat_file__:", 0) == 0) {
+		return "[文件]";
+	}
+	if (msg_type == "call" || content.rfind("__memochat_call__:", 0) == 0) {
+		return "[通话邀请]";
+	}
+	if (content.rfind("__memochat_reply__:", 0) == 0) {
+		return "[回复]";
+	}
+	if (content.size() <= 80) {
+		return content;
+	}
+	return content.substr(0, 80);
+}
 }
 
 MysqlDao::MysqlDao()
@@ -110,13 +141,20 @@ MysqlDao::MysqlDao()
 				"KEY idx_inviter(group_id, inviter_uid, status)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 			stmt->execute("CREATE TABLE IF NOT EXISTS chat_group_msg ("
 				"msg_id VARCHAR(64) PRIMARY KEY,"
+				"server_msg_id BIGINT NOT NULL AUTO_INCREMENT UNIQUE,"
 				"group_id BIGINT NOT NULL,"
+				"group_seq BIGINT NOT NULL DEFAULT 0,"
 				"from_uid INT NOT NULL,"
 				"msg_type VARCHAR(16) NOT NULL,"
 				"content TEXT NOT NULL,"
 				"mentions_json TEXT,"
+				"reply_to_server_msg_id BIGINT NOT NULL DEFAULT 0,"
+				"forward_meta_json TEXT,"
+				"edited_at_ms BIGINT NOT NULL DEFAULT 0,"
+				"deleted_at_ms BIGINT NOT NULL DEFAULT 0,"
 				"created_at BIGINT NOT NULL,"
-				"KEY idx_group_created(group_id, created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+				"KEY idx_group_created(group_id, created_at),"
+				"KEY idx_group_seq(group_id, group_seq)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 			stmt->execute("CREATE TABLE IF NOT EXISTS chat_group_msg_ext ("
 				"msg_id VARCHAR(64) PRIMARY KEY,"
 				"file_name VARCHAR(255) DEFAULT '',"
@@ -130,6 +168,10 @@ MysqlDao::MysqlDao()
 				"from_uid INT NOT NULL,"
 				"to_uid INT NOT NULL,"
 				"content TEXT NOT NULL,"
+				"reply_to_server_msg_id BIGINT NOT NULL DEFAULT 0,"
+				"forward_meta_json TEXT,"
+				"edited_at_ms BIGINT NOT NULL DEFAULT 0,"
+				"deleted_at_ms BIGINT NOT NULL DEFAULT 0,"
 				"created_at BIGINT NOT NULL,"
 				"KEY idx_conv_created(conv_uid_min, conv_uid_max, created_at),"
 				"KEY idx_to_created(to_uid, created_at)"
@@ -143,6 +185,21 @@ MysqlDao::MysqlDao()
 
 	if (!EnsureGroupCodeSchemaAndBackfill()) {
 		throw std::runtime_error("failed to ensure/backfill chat_group.group_code");
+	}
+	if (!EnsureDialogMetaSchema()) {
+		throw std::runtime_error("failed to ensure chat_dialog schema");
+	}
+	if (!EnsurePrivateReadStateSchema()) {
+		throw std::runtime_error("failed to ensure chat_private_read_state schema");
+	}
+	if (!EnsureGroupReadStateSchema()) {
+		throw std::runtime_error("failed to ensure chat_group_read_state schema");
+	}
+	if (!EnsureGroupMessageOrderSchema()) {
+		throw std::runtime_error("failed to ensure/backfill chat_group_msg sequence schema");
+	}
+	if (!EnsureGroupPermissionSchemaAndBackfill()) {
+		throw std::runtime_error("failed to ensure/backfill chat_group_admin_permission schema");
 	}
 }
 
@@ -833,17 +890,24 @@ bool MysqlDao::SavePrivateMessage(const PrivateMessageInfo& msg) {
 	try {
 		std::unique_ptr<sql::PreparedStatement> pstmt(
 			con->_con->prepareStatement(
-				"INSERT INTO chat_private_msg(msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, created_at) "
-				"VALUES(?,?,?,?,?,?,?) "
+				"INSERT INTO chat_private_msg(msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
+				"reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at) "
+				"VALUES(?,?,?,?,?,?,?,?,?,?,?) "
 				"ON DUPLICATE KEY UPDATE from_uid = VALUES(from_uid), to_uid = VALUES(to_uid), "
-				"content = VALUES(content), created_at = VALUES(created_at)"));
+				"content = VALUES(content), reply_to_server_msg_id = VALUES(reply_to_server_msg_id), "
+				"forward_meta_json = VALUES(forward_meta_json), edited_at_ms = VALUES(edited_at_ms), "
+				"deleted_at_ms = VALUES(deleted_at_ms), created_at = VALUES(created_at)"));
 		pstmt->setString(1, msg.msg_id);
 		pstmt->setInt(2, msg.conv_uid_min);
 		pstmt->setInt(3, msg.conv_uid_max);
 		pstmt->setInt(4, msg.from_uid);
 		pstmt->setInt(5, msg.to_uid);
 		pstmt->setString(6, msg.content);
-		pstmt->setInt64(7, msg.created_at);
+		pstmt->setInt64(7, msg.reply_to_server_msg_id);
+		pstmt->setString(8, msg.forward_meta_json);
+		pstmt->setInt64(9, msg.edited_at_ms);
+		pstmt->setInt64(10, msg.deleted_at_ms);
+		pstmt->setInt64(11, msg.created_at);
 		const int row_affected = pstmt->executeUpdate();
 		return row_affected >= 0;
 	}
@@ -879,7 +943,8 @@ bool MysqlDao::GetPrivateHistory(const int& uid, const int& peer_uid, const int6
 		std::unique_ptr<sql::PreparedStatement> pstmt;
 		if (before_ts > 0) {
 			pstmt.reset(con->_con->prepareStatement(
-				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, created_at "
+				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
+				"reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at "
 				"FROM chat_private_msg WHERE conv_uid_min = ? AND conv_uid_max = ? AND created_at < ? "
 				"ORDER BY created_at DESC, msg_id DESC LIMIT ?"));
 			pstmt->setInt(1, conv_min);
@@ -889,7 +954,8 @@ bool MysqlDao::GetPrivateHistory(const int& uid, const int& peer_uid, const int6
 		}
 		else {
 			pstmt.reset(con->_con->prepareStatement(
-				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, created_at "
+				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
+				"reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at "
 				"FROM chat_private_msg WHERE conv_uid_min = ? AND conv_uid_max = ? "
 				"ORDER BY created_at DESC, msg_id DESC LIMIT ?"));
 			pstmt->setInt(1, conv_min);
@@ -906,6 +972,10 @@ bool MysqlDao::GetPrivateHistory(const int& uid, const int& peer_uid, const int6
 			one->from_uid = res->getInt("from_uid");
 			one->to_uid = res->getInt("to_uid");
 			one->content = res->getString("content");
+			one->reply_to_server_msg_id = res->isNull("reply_to_server_msg_id") ? 0 : res->getInt64("reply_to_server_msg_id");
+			one->forward_meta_json = res->isNull("forward_meta_json") ? "" : res->getString("forward_meta_json");
+			one->edited_at_ms = res->isNull("edited_at_ms") ? 0 : res->getInt64("edited_at_ms");
+			one->deleted_at_ms = res->isNull("deleted_at_ms") ? 0 : res->getInt64("deleted_at_ms");
 			one->created_at = res->getInt64("created_at");
 			messages.push_back(one);
 		}
@@ -942,7 +1012,8 @@ bool MysqlDao::GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_p
 	try {
 		std::unique_ptr<sql::PreparedStatement> pstmt(
 			con->_con->prepareStatement(
-				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, created_at "
+				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
+				"reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at "
 				"FROM chat_private_msg WHERE msg_id = ? LIMIT 1"));
 		pstmt->setString(1, msg_id);
 		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
@@ -957,9 +1028,144 @@ bool MysqlDao::GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_p
 		one->from_uid = res->getInt("from_uid");
 		one->to_uid = res->getInt("to_uid");
 		one->content = res->getString("content");
+		one->reply_to_server_msg_id = res->isNull("reply_to_server_msg_id") ? 0 : res->getInt64("reply_to_server_msg_id");
+		one->forward_meta_json = res->isNull("forward_meta_json") ? "" : res->getString("forward_meta_json");
+		one->edited_at_ms = res->isNull("edited_at_ms") ? 0 : res->getInt64("edited_at_ms");
+		one->deleted_at_ms = res->isNull("deleted_at_ms") ? 0 : res->getInt64("deleted_at_ms");
 		one->created_at = res->getInt64("created_at");
 		message = one;
 		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::UpdatePrivateMessageContent(const int& uid, const int& peer_uid, const std::string& msg_id,
+	const std::string& content, int64_t edited_at_ms) {
+	if (uid <= 0 || peer_uid <= 0 || msg_id.empty() || content.empty()) {
+		return false;
+	}
+	if (edited_at_ms <= 0) {
+		edited_at_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count());
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::shared_ptr<PrivateMessageInfo> message;
+		if (!GetPrivateMessageByMsgId(msg_id, message) || !message) {
+			return false;
+		}
+		const int conv_min = std::min(uid, peer_uid);
+		const int conv_max = std::max(uid, peer_uid);
+		if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid) {
+			return false;
+		}
+
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"UPDATE chat_private_msg SET content = ?, edited_at_ms = ?, deleted_at_ms = 0, "
+				"created_at = created_at WHERE msg_id = ? AND conv_uid_min = ? AND conv_uid_max = ?"));
+		pstmt->setString(1, content);
+		pstmt->setInt64(2, edited_at_ms);
+		pstmt->setString(3, msg_id);
+		pstmt->setInt(4, conv_min);
+		pstmt->setInt(5, conv_max);
+		return pstmt->executeUpdate() > 0;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::RevokePrivateMessage(const int& uid, const int& peer_uid, const std::string& msg_id, int64_t deleted_at_ms) {
+	if (uid <= 0 || peer_uid <= 0 || msg_id.empty()) {
+		return false;
+	}
+	if (deleted_at_ms <= 0) {
+		deleted_at_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count());
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::shared_ptr<PrivateMessageInfo> message;
+		if (!GetPrivateMessageByMsgId(msg_id, message) || !message) {
+			return false;
+		}
+		const int conv_min = std::min(uid, peer_uid);
+		const int conv_max = std::max(uid, peer_uid);
+		if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid) {
+			return false;
+		}
+
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"UPDATE chat_private_msg SET content = '[消息已撤回]', deleted_at_ms = ?, edited_at_ms = 0, "
+				"created_at = created_at WHERE msg_id = ? AND conv_uid_min = ? AND conv_uid_max = ?"));
+		pstmt->setInt64(1, deleted_at_ms);
+		pstmt->setString(2, msg_id);
+		pstmt->setInt(3, conv_min);
+		pstmt->setInt(4, conv_max);
+		return pstmt->executeUpdate() > 0;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::UpsertPrivateReadState(const int& uid, const int& peer_uid, const int64_t& read_ts) {
+	if (uid <= 0 || peer_uid <= 0) {
+		return false;
+	}
+	int64_t normalized_read_ts = read_ts;
+	if (normalized_read_ts <= 0) {
+		normalized_read_ts = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count());
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"INSERT INTO chat_private_read_state(uid, peer_uid, read_ts) VALUES(?, ?, ?) "
+				"ON DUPLICATE KEY UPDATE read_ts = GREATEST(read_ts, VALUES(read_ts)), updated_at = CURRENT_TIMESTAMP"));
+		pstmt->setInt(1, uid);
+		pstmt->setInt(2, peer_uid);
+		pstmt->setInt64(3, normalized_read_ts);
+		return pstmt->executeUpdate() >= 0;
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
@@ -1148,10 +1354,17 @@ bool MysqlDao::GetUserGroupList(const int& uid, std::vector<std::shared_ptr<Grou
 		std::unique_ptr<sql::PreparedStatement> pstmt(
 			con->_con->prepareStatement(
 				"SELECT g.group_id, g.group_code, g.name, g.icon, g.owner_uid, g.announcement, g.member_limit, g.is_all_muted, g.status, m.role, "
+				"CASE "
+				"WHEN m.role >= 3 THEN ? "
+				"WHEN m.role = 2 THEN COALESCE(NULLIF(p.permission_bits, 0), ?) "
+				"ELSE 0 END AS permission_bits, "
 				"(SELECT COUNT(1) FROM chat_group_member gm WHERE gm.group_id = g.group_id AND gm.status = 1) AS member_count "
 				"FROM chat_group_member m JOIN chat_group g ON m.group_id = g.group_id "
+				"LEFT JOIN chat_group_admin_permission p ON p.group_id = m.group_id AND p.uid = m.uid "
 				"WHERE m.uid = ? AND m.status = 1 AND g.status = 1 ORDER BY g.updated_at DESC"));
-		pstmt->setInt(1, uid);
+		pstmt->setInt64(1, kOwnerPermBits);
+		pstmt->setInt64(2, kDefaultAdminPermBits);
+		pstmt->setInt(3, uid);
 		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 		while (res->next()) {
 			auto info = std::make_shared<GroupInfo>();
@@ -1165,6 +1378,7 @@ bool MysqlDao::GetUserGroupList(const int& uid, std::vector<std::shared_ptr<Grou
 			info->is_all_muted = res->getInt("is_all_muted");
 			info->status = res->getInt("status");
 			info->role = res->getInt("role");
+			info->permission_bits = static_cast<int64_t>(std::stoll(res->getString("permission_bits")));
 			info->member_count = res->getInt("member_count");
 			group_list.push_back(info);
 		}
@@ -1219,8 +1433,7 @@ bool MysqlDao::GetGroupMemberList(const int64_t& group_id, std::vector<std::shar
 }
 
 bool MysqlDao::InviteGroupMember(const int64_t& group_id, const int& inviter_uid, const int& target_uid, const std::string& reason) {
-	int role = 0;
-	if (!GetUserRoleInGroup(group_id, inviter_uid, role) || role < 2) {
+	if (!HasGroupPermission(group_id, inviter_uid, kPermInviteUsers)) {
 		return false;
 	}
 	if (!IsFriend(inviter_uid, target_uid)) {
@@ -1335,8 +1548,7 @@ bool MysqlDao::ReviewGroupApply(const int64_t& apply_id, const int& reviewer_uid
 		found->reason = res->getString("reason");
 		found->reviewer_uid = reviewer_uid;
 
-		int reviewer_role = 0;
-		if (!GetUserRoleInGroup(found->group_id, reviewer_uid, reviewer_role) || reviewer_role < 2) {
+		if (!HasGroupPermission(found->group_id, reviewer_uid, kPermInviteUsers)) {
 			con->_con->rollback();
 			return false;
 		}
@@ -1366,6 +1578,11 @@ bool MysqlDao::ReviewGroupApply(const int64_t& apply_id, const int& reviewer_uid
 			ins_member->setInt(2, found->applicant_uid);
 			ins_member->setInt(3, found->type == "invite" ? 1 : 2);
 			ins_member->executeUpdate();
+			std::unique_ptr<sql::PreparedStatement> del_perm(
+				con->_con->prepareStatement("DELETE FROM chat_group_admin_permission WHERE group_id = ? AND uid = ?"));
+			del_perm->setInt64(1, found->group_id);
+			del_perm->setInt(2, found->applicant_uid);
+			del_perm->executeUpdate();
 		}
 
 		con->_con->commit();
@@ -1384,9 +1601,15 @@ bool MysqlDao::ReviewGroupApply(const int64_t& apply_id, const int& reviewer_uid
 	}
 }
 
-bool MysqlDao::SaveGroupMessage(const GroupMessageInfo& msg) {
+bool MysqlDao::SaveGroupMessage(const GroupMessageInfo& msg, int64_t* out_server_msg_id, int64_t* out_group_seq) {
 	if (msg.msg_id.empty() || msg.group_id <= 0 || msg.from_uid <= 0) {
 		return false;
+	}
+	if (out_server_msg_id) {
+		*out_server_msg_id = 0;
+	}
+	if (out_group_seq) {
+		*out_group_seq = 0;
 	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -1398,19 +1621,70 @@ bool MysqlDao::SaveGroupMessage(const GroupMessageInfo& msg) {
 
 	try {
 		con->_con->setAutoCommit(false);
+		{
+			std::unique_ptr<sql::PreparedStatement> lock_group_stmt(
+				con->_con->prepareStatement("SELECT group_id FROM chat_group WHERE group_id = ? AND status = 1 LIMIT 1 FOR UPDATE"));
+			lock_group_stmt->setInt64(1, msg.group_id);
+			std::unique_ptr<sql::ResultSet> lock_group_res(lock_group_stmt->executeQuery());
+			if (!lock_group_res->next()) {
+				con->_con->rollback();
+				return false;
+			}
+		}
+		int64_t next_group_seq = 0;
+		{
+			std::unique_ptr<sql::PreparedStatement> seq_stmt(
+				con->_con->prepareStatement("SELECT COALESCE(MAX(group_seq), 0) + 1 AS next_seq "
+					"FROM chat_group_msg WHERE group_id = ?"));
+			seq_stmt->setInt64(1, msg.group_id);
+			std::unique_ptr<sql::ResultSet> seq_res(seq_stmt->executeQuery());
+			if (!seq_res->next()) {
+				con->_con->rollback();
+				return false;
+			}
+			next_group_seq = seq_res->getInt64("next_seq");
+			if (next_group_seq <= 0) {
+				next_group_seq = 1;
+			}
+		}
+
 		std::unique_ptr<sql::PreparedStatement> ins_msg(
-			con->_con->prepareStatement("INSERT INTO chat_group_msg(msg_id, group_id, from_uid, msg_type, content, mentions_json, created_at) "
-				"VALUES(?,?,?,?,?,?,?)"));
+			con->_con->prepareStatement("INSERT INTO chat_group_msg(msg_id, group_id, group_seq, from_uid, msg_type, content, "
+				"mentions_json, reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at) "
+				"VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"));
 		ins_msg->setString(1, msg.msg_id);
 		ins_msg->setInt64(2, msg.group_id);
-		ins_msg->setInt(3, msg.from_uid);
-		ins_msg->setString(4, msg.msg_type);
-		ins_msg->setString(5, msg.content);
-		ins_msg->setString(6, msg.mentions_json);
-		ins_msg->setInt64(7, msg.created_at);
+		ins_msg->setInt64(3, next_group_seq);
+		ins_msg->setInt(4, msg.from_uid);
+		ins_msg->setString(5, msg.msg_type);
+		ins_msg->setString(6, msg.content);
+		ins_msg->setString(7, msg.mentions_json);
+		ins_msg->setInt64(8, msg.reply_to_server_msg_id);
+		ins_msg->setString(9, msg.forward_meta_json);
+		ins_msg->setInt64(10, msg.edited_at_ms);
+		ins_msg->setInt64(11, msg.deleted_at_ms);
+		ins_msg->setInt64(12, msg.created_at);
 		if (ins_msg->executeUpdate() <= 0) {
 			con->_con->rollback();
 			return false;
+		}
+
+		int64_t server_msg_id = 0;
+		{
+			std::unique_ptr<sql::Statement> id_stmt(con->_con->createStatement());
+			std::unique_ptr<sql::ResultSet> id_res(id_stmt->executeQuery("SELECT LAST_INSERT_ID() AS server_msg_id"));
+			if (id_res->next()) {
+				server_msg_id = id_res->getInt64("server_msg_id");
+			}
+		}
+		if (server_msg_id <= 0) {
+			std::unique_ptr<sql::PreparedStatement> fallback_stmt(
+				con->_con->prepareStatement("SELECT server_msg_id FROM chat_group_msg WHERE msg_id = ? LIMIT 1"));
+			fallback_stmt->setString(1, msg.msg_id);
+			std::unique_ptr<sql::ResultSet> fallback_res(fallback_stmt->executeQuery());
+			if (fallback_res->next()) {
+				server_msg_id = fallback_res->getInt64("server_msg_id");
+			}
 		}
 
 		if (!msg.file_name.empty() || !msg.mime.empty() || msg.size > 0) {
@@ -1422,6 +1696,79 @@ bool MysqlDao::SaveGroupMessage(const GroupMessageInfo& msg) {
 			up_ext->setInt(4, msg.size);
 			up_ext->executeUpdate();
 		}
+
+		con->_con->commit();
+		if (out_server_msg_id) {
+			*out_server_msg_id = server_msg_id;
+		}
+		if (out_group_seq) {
+			*out_group_seq = next_group_seq;
+		}
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		if (con) {
+			con->_con->rollback();
+		}
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::UpdateGroupMessageContent(const int64_t& group_id, const int& operator_uid, const std::string& msg_id,
+	const std::string& content, int64_t edited_at_ms) {
+	if (group_id <= 0 || operator_uid <= 0 || msg_id.empty() || content.empty()) {
+		return false;
+	}
+	if (edited_at_ms <= 0) {
+		edited_at_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count());
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> qmsg(
+			con->_con->prepareStatement("SELECT from_uid FROM chat_group_msg WHERE group_id = ? AND msg_id = ? LIMIT 1"));
+		qmsg->setInt64(1, group_id);
+		qmsg->setString(2, msg_id);
+		std::unique_ptr<sql::ResultSet> res(qmsg->executeQuery());
+		if (!res->next()) {
+			return false;
+		}
+		const int from_uid = res->getInt("from_uid");
+
+		if (from_uid != operator_uid) {
+			if (!HasGroupPermission(group_id, operator_uid, kPermDeleteMessages)) {
+				return false;
+			}
+		}
+
+		con->_con->setAutoCommit(false);
+		std::unique_ptr<sql::PreparedStatement> up(
+			con->_con->prepareStatement("UPDATE chat_group_msg SET content = ?, msg_type = 'text', mentions_json = '[]', "
+				"edited_at_ms = ?, deleted_at_ms = 0 WHERE group_id = ? AND msg_id = ?"));
+		up->setString(1, content);
+		up->setInt64(2, edited_at_ms);
+		up->setInt64(3, group_id);
+		up->setString(4, msg_id);
+		if (up->executeUpdate() <= 0) {
+			con->_con->rollback();
+			return false;
+		}
+
+		std::unique_ptr<sql::PreparedStatement> del_ext(
+			con->_con->prepareStatement("DELETE FROM chat_group_msg_ext WHERE msg_id = ?"));
+		del_ext->setString(1, msg_id);
+		del_ext->executeUpdate();
 
 		con->_con->commit();
 		return true;
@@ -1437,8 +1784,75 @@ bool MysqlDao::SaveGroupMessage(const GroupMessageInfo& msg) {
 	}
 }
 
-bool MysqlDao::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts, const int& limit,
-	std::vector<std::shared_ptr<GroupMessageInfo>>& messages) {
+bool MysqlDao::RevokeGroupMessage(const int64_t& group_id, const int& operator_uid, const std::string& msg_id, int64_t deleted_at_ms) {
+	if (group_id <= 0 || operator_uid <= 0 || msg_id.empty()) {
+		return false;
+	}
+	if (deleted_at_ms <= 0) {
+		deleted_at_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count());
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> qmsg(
+			con->_con->prepareStatement("SELECT from_uid FROM chat_group_msg WHERE group_id = ? AND msg_id = ? LIMIT 1"));
+		qmsg->setInt64(1, group_id);
+		qmsg->setString(2, msg_id);
+		std::unique_ptr<sql::ResultSet> res(qmsg->executeQuery());
+		if (!res->next()) {
+			return false;
+		}
+		const int from_uid = res->getInt("from_uid");
+
+		if (from_uid != operator_uid) {
+			if (!HasGroupPermission(group_id, operator_uid, kPermDeleteMessages)) {
+				return false;
+			}
+		}
+
+		con->_con->setAutoCommit(false);
+		std::unique_ptr<sql::PreparedStatement> up(
+			con->_con->prepareStatement("UPDATE chat_group_msg SET content = '[消息已撤回]', msg_type = 'revoke', mentions_json = '[]', "
+				"deleted_at_ms = ?, edited_at_ms = 0 WHERE group_id = ? AND msg_id = ?"));
+		up->setInt64(1, deleted_at_ms);
+		up->setInt64(2, group_id);
+		up->setString(3, msg_id);
+		if (up->executeUpdate() <= 0) {
+			con->_con->rollback();
+			return false;
+		}
+
+		std::unique_ptr<sql::PreparedStatement> del_ext(
+			con->_con->prepareStatement("DELETE FROM chat_group_msg_ext WHERE msg_id = ?"));
+		del_ext->setString(1, msg_id);
+		del_ext->executeUpdate();
+
+		con->_con->commit();
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		if (con) {
+			con->_con->rollback();
+		}
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts, const int64_t& before_seq, const int& limit,
+	std::vector<std::shared_ptr<GroupMessageInfo>>& messages, bool& has_more) {
+	has_more = false;
+	messages.clear();
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -1449,18 +1863,45 @@ bool MysqlDao::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts
 
 	try {
 		const int final_limit = std::max(1, std::min(limit, 50));
-		const int64_t final_before = (before_ts <= 0) ? std::numeric_limits<int64_t>::max() : before_ts;
-		std::unique_ptr<sql::PreparedStatement> pstmt(
-			con->_con->prepareStatement(
-				"SELECT m.msg_id, m.group_id, m.from_uid, m.msg_type, m.content, m.mentions_json, m.created_at, "
+		std::unique_ptr<sql::PreparedStatement> pstmt;
+		if (before_seq > 0) {
+			pstmt.reset(con->_con->prepareStatement(
+				"SELECT m.msg_id, m.server_msg_id, m.group_seq, m.group_id, m.from_uid, m.msg_type, m.content, m.mentions_json, "
+				"m.reply_to_server_msg_id, m.forward_meta_json, m.edited_at_ms, m.deleted_at_ms, m.created_at, "
 				"e.file_name, e.mime, e.size, u.name AS from_name, u.nick AS from_nick, u.icon AS from_icon "
 				"FROM chat_group_msg m "
 				"LEFT JOIN chat_group_msg_ext e ON m.msg_id = e.msg_id "
 				"LEFT JOIN user u ON m.from_uid = u.uid "
-				"WHERE m.group_id = ? AND m.created_at < ? ORDER BY m.created_at DESC, m.msg_id DESC LIMIT ?"));
-		pstmt->setInt64(1, group_id);
-		pstmt->setInt64(2, final_before);
-		pstmt->setInt(3, final_limit);
+				"WHERE m.group_id = ? AND m.group_seq < ? ORDER BY m.group_seq DESC, m.server_msg_id DESC LIMIT ?"));
+			pstmt->setInt64(1, group_id);
+			pstmt->setInt64(2, before_seq);
+			pstmt->setInt(3, final_limit + 1);
+		}
+		else if (before_ts > 0) {
+			pstmt.reset(con->_con->prepareStatement(
+				"SELECT m.msg_id, m.server_msg_id, m.group_seq, m.group_id, m.from_uid, m.msg_type, m.content, m.mentions_json, "
+				"m.reply_to_server_msg_id, m.forward_meta_json, m.edited_at_ms, m.deleted_at_ms, m.created_at, "
+				"e.file_name, e.mime, e.size, u.name AS from_name, u.nick AS from_nick, u.icon AS from_icon "
+				"FROM chat_group_msg m "
+				"LEFT JOIN chat_group_msg_ext e ON m.msg_id = e.msg_id "
+				"LEFT JOIN user u ON m.from_uid = u.uid "
+				"WHERE m.group_id = ? AND m.created_at < ? ORDER BY m.group_seq DESC, m.server_msg_id DESC LIMIT ?"));
+			pstmt->setInt64(1, group_id);
+			pstmt->setInt64(2, before_ts);
+			pstmt->setInt(3, final_limit + 1);
+		}
+		else {
+			pstmt.reset(con->_con->prepareStatement(
+				"SELECT m.msg_id, m.server_msg_id, m.group_seq, m.group_id, m.from_uid, m.msg_type, m.content, m.mentions_json, "
+				"m.reply_to_server_msg_id, m.forward_meta_json, m.edited_at_ms, m.deleted_at_ms, m.created_at, "
+				"e.file_name, e.mime, e.size, u.name AS from_name, u.nick AS from_nick, u.icon AS from_icon "
+				"FROM chat_group_msg m "
+				"LEFT JOIN chat_group_msg_ext e ON m.msg_id = e.msg_id "
+				"LEFT JOIN user u ON m.from_uid = u.uid "
+				"WHERE m.group_id = ? ORDER BY m.group_seq DESC, m.server_msg_id DESC LIMIT ?"));
+			pstmt->setInt64(1, group_id);
+			pstmt->setInt(2, final_limit + 1);
+		}
 		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 		while (res->next()) {
 			auto info = std::make_shared<GroupMessageInfo>();
@@ -1470,7 +1911,13 @@ bool MysqlDao::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts
 			info->msg_type = res->getString("msg_type");
 			info->content = res->getString("content");
 			info->mentions_json = res->getString("mentions_json");
+			info->reply_to_server_msg_id = res->isNull("reply_to_server_msg_id") ? 0 : res->getInt64("reply_to_server_msg_id");
+			info->forward_meta_json = res->isNull("forward_meta_json") ? "" : res->getString("forward_meta_json");
+			info->edited_at_ms = res->isNull("edited_at_ms") ? 0 : res->getInt64("edited_at_ms");
+			info->deleted_at_ms = res->isNull("deleted_at_ms") ? 0 : res->getInt64("deleted_at_ms");
 			info->created_at = static_cast<int64_t>(std::stoll(res->getString("created_at")));
+			info->server_msg_id = static_cast<int64_t>(std::stoll(res->getString("server_msg_id")));
+			info->group_seq = static_cast<int64_t>(std::stoll(res->getString("group_seq")));
 			info->file_name = res->isNull("file_name") ? "" : res->getString("file_name");
 			info->mime = res->isNull("mime") ? "" : res->getString("mime");
 			info->size = res->isNull("size") ? 0 : res->getInt("size");
@@ -1478,6 +1925,10 @@ bool MysqlDao::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts
 			info->from_nick = res->isNull("from_nick") ? "" : res->getString("from_nick");
 			info->from_icon = res->isNull("from_icon") ? "" : res->getString("from_icon");
 			messages.push_back(info);
+		}
+		if (static_cast<int>(messages.size()) > final_limit) {
+			has_more = true;
+			messages.resize(final_limit);
 		}
 		return true;
 	}
@@ -1490,8 +1941,7 @@ bool MysqlDao::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts
 }
 
 bool MysqlDao::UpdateGroupAnnouncement(const int64_t& group_id, const int& operator_uid, const std::string& announcement) {
-	int role = 0;
-	if (!GetUserRoleInGroup(group_id, operator_uid, role) || role < 2) {
+	if (!HasGroupPermission(group_id, operator_uid, kPermChangeGroupInfo)) {
 		return false;
 	}
 	auto con = pool_->getConnection();
@@ -1517,8 +1967,7 @@ bool MysqlDao::UpdateGroupAnnouncement(const int64_t& group_id, const int& opera
 }
 
 bool MysqlDao::UpdateGroupIcon(const int64_t& group_id, const int& operator_uid, const std::string& icon) {
-	int role = 0;
-	if (!GetUserRoleInGroup(group_id, operator_uid, role) || role != 3) {
+	if (!HasGroupPermission(group_id, operator_uid, kPermChangeGroupInfo)) {
 		return false;
 	}
 	auto con = pool_->getConnection();
@@ -1543,14 +1992,30 @@ bool MysqlDao::UpdateGroupIcon(const int64_t& group_id, const int& operator_uid,
 	}
 }
 
-bool MysqlDao::SetGroupAdmin(const int64_t& group_id, const int& operator_uid, const int& target_uid, const bool& is_admin) {
-	int role = 0;
-	if (!GetUserRoleInGroup(group_id, operator_uid, role) || role != 3) {
+bool MysqlDao::SetGroupAdmin(const int64_t& group_id, const int& operator_uid, const int& target_uid, const bool& is_admin, const int64_t& permission_bits) {
+	if (!HasGroupPermission(group_id, operator_uid, kPermManageAdmins)) {
+		return false;
+	}
+	int operator_role = 0;
+	if (!GetUserRoleInGroup(group_id, operator_uid, operator_role) || operator_role < 2) {
 		return false;
 	}
 	int target_role = 0;
 	if (!GetUserRoleInGroup(group_id, target_uid, target_role) || target_role == 3) {
 		return false;
+	}
+	if (operator_role < 3 && target_role >= operator_role) {
+		return false;
+	}
+	int64_t normalized_perm_bits = kDefaultAdminPermBits;
+	if (permission_bits > 0) {
+		normalized_perm_bits = permission_bits & kOwnerPermBits;
+		if (normalized_perm_bits <= 0) {
+			normalized_perm_bits = kDefaultAdminPermBits;
+		}
+	}
+	if (!is_admin) {
+		normalized_perm_bits = 0;
 	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -1560,15 +2025,43 @@ bool MysqlDao::SetGroupAdmin(const int64_t& group_id, const int& operator_uid, c
 		pool_->returnConnection(std::move(con));
 		});
 	try {
+		con->_con->setAutoCommit(false);
 		std::unique_ptr<sql::PreparedStatement> pstmt(
 			con->_con->prepareStatement("UPDATE chat_group_member SET role = ?, updated_at = CURRENT_TIMESTAMP "
 				"WHERE group_id = ? AND uid = ? AND status = 1"));
 		pstmt->setInt(1, is_admin ? 2 : 1);
 		pstmt->setInt64(2, group_id);
 		pstmt->setInt(3, target_uid);
-		return pstmt->executeUpdate() > 0;
+		if (pstmt->executeUpdate() <= 0) {
+			con->_con->rollback();
+			return false;
+		}
+
+		if (is_admin) {
+			std::unique_ptr<sql::PreparedStatement> up_perm(
+				con->_con->prepareStatement("INSERT INTO chat_group_admin_permission(group_id, uid, permission_bits) "
+					"VALUES(?,?,?) ON DUPLICATE KEY UPDATE permission_bits = VALUES(permission_bits), updated_at = CURRENT_TIMESTAMP"));
+			up_perm->setInt64(1, group_id);
+			up_perm->setInt(2, target_uid);
+			up_perm->setInt64(3, normalized_perm_bits);
+			up_perm->executeUpdate();
+		}
+		else {
+			std::unique_ptr<sql::PreparedStatement> del_perm(
+				con->_con->prepareStatement("DELETE FROM chat_group_admin_permission WHERE group_id = ? AND uid = ?"));
+			del_perm->setInt64(1, group_id);
+			del_perm->setInt(2, target_uid);
+			del_perm->executeUpdate();
+		}
+		con->_con->commit();
+		return true;
 	}
 	catch (sql::SQLException& e) {
+		try {
+			con->_con->rollback();
+		}
+		catch (...) {
+		}
 		std::cerr << "SQLException: " << e.what();
 		std::cerr << " (MySQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
@@ -1578,7 +2071,8 @@ bool MysqlDao::SetGroupAdmin(const int64_t& group_id, const int& operator_uid, c
 
 bool MysqlDao::MuteGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid, const int64_t& mute_until) {
 	int op_role = 0;
-	if (!GetUserRoleInGroup(group_id, operator_uid, op_role) || op_role < 2) {
+	if (!GetUserRoleInGroup(group_id, operator_uid, op_role) || op_role < 2
+		|| !HasGroupPermission(group_id, operator_uid, kPermBanUsers)) {
 		return false;
 	}
 	int target_role = 0;
@@ -1611,7 +2105,8 @@ bool MysqlDao::MuteGroupMember(const int64_t& group_id, const int& operator_uid,
 
 bool MysqlDao::KickGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid) {
 	int op_role = 0;
-	if (!GetUserRoleInGroup(group_id, operator_uid, op_role) || op_role < 2) {
+	if (!GetUserRoleInGroup(group_id, operator_uid, op_role) || op_role < 2
+		|| !HasGroupPermission(group_id, operator_uid, kPermBanUsers)) {
 		return false;
 	}
 	int target_role = 0;
@@ -1631,7 +2126,15 @@ bool MysqlDao::KickGroupMember(const int64_t& group_id, const int& operator_uid,
 				"WHERE group_id = ? AND uid = ? AND status = 1"));
 		pstmt->setInt64(1, group_id);
 		pstmt->setInt(2, target_uid);
-		return pstmt->executeUpdate() > 0;
+		if (pstmt->executeUpdate() <= 0) {
+			return false;
+		}
+		std::unique_ptr<sql::PreparedStatement> del_perm(
+			con->_con->prepareStatement("DELETE FROM chat_group_admin_permission WHERE group_id = ? AND uid = ?"));
+		del_perm->setInt64(1, group_id);
+		del_perm->setInt(2, target_uid);
+		del_perm->executeUpdate();
+		return true;
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
@@ -1662,7 +2165,15 @@ bool MysqlDao::QuitGroup(const int64_t& group_id, const int& uid) {
 				"WHERE group_id = ? AND uid = ? AND status = 1"));
 		pstmt->setInt64(1, group_id);
 		pstmt->setInt(2, uid);
-		return pstmt->executeUpdate() > 0;
+		if (pstmt->executeUpdate() <= 0) {
+			return false;
+		}
+		std::unique_ptr<sql::PreparedStatement> del_perm(
+			con->_con->prepareStatement("DELETE FROM chat_group_admin_permission WHERE group_id = ? AND uid = ?"));
+		del_perm->setInt64(1, group_id);
+		del_perm->setInt(2, uid);
+		del_perm->executeUpdate();
+		return true;
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
@@ -1744,10 +2255,945 @@ bool MysqlDao::IsUserInGroup(const int64_t& group_id, const int& uid) {
 	return GetUserRoleInGroup(group_id, uid, role);
 }
 
+bool MysqlDao::GetGroupPermissionBits(const int64_t& group_id, const int& uid, int64_t& out_bits) {
+	out_bits = 0;
+	int role = 0;
+	if (!GetUserRoleInGroup(group_id, uid, role)) {
+		return false;
+	}
+	if (role >= 3) {
+		out_bits = kOwnerPermBits;
+		return true;
+	}
+	if (role < 2) {
+		out_bits = 0;
+		return true;
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement("SELECT permission_bits FROM chat_group_admin_permission "
+				"WHERE group_id = ? AND uid = ? LIMIT 1"));
+		pstmt->setInt64(1, group_id);
+		pstmt->setInt(2, uid);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		if (!res->next()) {
+			out_bits = kDefaultAdminPermBits;
+			return true;
+		}
+		out_bits = static_cast<int64_t>(std::stoll(res->getString("permission_bits")));
+		if (out_bits <= 0) {
+			out_bits = kDefaultAdminPermBits;
+		}
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::HasGroupPermission(const int64_t& group_id, const int& uid, int64_t required_bits) {
+	int64_t bits = 0;
+	if (!GetGroupPermissionBits(group_id, uid, bits)) {
+		return false;
+	}
+	return (bits & required_bits) == required_bits;
+}
+
+bool MysqlDao::GetDialogMetaByOwner(const int& owner_uid, std::vector<std::shared_ptr<DialogMetaInfo>>& metas) {
+	metas.clear();
+	if (owner_uid <= 0) {
+		return false;
+	}
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+	});
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"SELECT dialog_type, peer_uid, group_id, pinned_rank, draft_text, mute_state "
+				"FROM chat_dialog WHERE owner_uid = ?"));
+		pstmt->setInt(1, owner_uid);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		while (res->next()) {
+			auto info = std::make_shared<DialogMetaInfo>();
+			info->owner_uid = owner_uid;
+			info->dialog_type = res->getString("dialog_type");
+			info->peer_uid = res->getInt("peer_uid");
+			info->group_id = static_cast<int64_t>(std::stoll(res->getString("group_id")));
+			info->pinned_rank = res->getInt("pinned_rank");
+			info->draft_text = res->isNull("draft_text") ? "" : res->getString("draft_text");
+			info->mute_state = res->getInt("mute_state");
+			metas.push_back(info);
+		}
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::GetPrivateDialogRuntime(const int& owner_uid, const int& peer_uid, DialogRuntimeInfo& runtime) {
+	runtime = DialogRuntimeInfo();
+	if (owner_uid <= 0 || peer_uid <= 0) {
+		return false;
+	}
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"SELECT last_msg_preview, last_msg_ts, unread_count FROM chat_dialog "
+				"WHERE owner_uid = ? AND dialog_type = 'private' AND peer_uid = ? AND group_id = 0 LIMIT 1"));
+		pstmt->setInt(1, owner_uid);
+		pstmt->setInt(2, peer_uid);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		if (res->next()) {
+			runtime.last_msg_preview = res->isNull("last_msg_preview") ? "" : res->getString("last_msg_preview");
+			runtime.last_msg_ts = res->isNull("last_msg_ts") ? 0 : res->getInt64("last_msg_ts");
+			runtime.unread_count = std::max(0, res->getInt("unread_count"));
+		}
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::GetGroupDialogRuntime(const int& owner_uid, const int64_t& group_id, DialogRuntimeInfo& runtime) {
+	runtime = DialogRuntimeInfo();
+	if (owner_uid <= 0 || group_id <= 0) {
+		return false;
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"SELECT last_msg_preview, last_msg_ts, unread_count FROM chat_dialog "
+				"WHERE owner_uid = ? AND dialog_type = 'group' AND group_id = ? LIMIT 1"));
+		pstmt->setInt(1, owner_uid);
+		pstmt->setInt64(2, group_id);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		if (res->next()) {
+			runtime.last_msg_preview = res->isNull("last_msg_preview") ? "" : res->getString("last_msg_preview");
+			runtime.last_msg_ts = res->isNull("last_msg_ts") ? 0 : res->getInt64("last_msg_ts");
+			runtime.unread_count = std::max(0, res->getInt("unread_count"));
+		}
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::RefreshDialogsForOwner(const int& owner_uid) {
+	if (owner_uid <= 0) {
+		return false;
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::vector<int> peers;
+		{
+			std::unique_ptr<sql::PreparedStatement> list_private(
+				con->_con->prepareStatement("SELECT friend_id FROM friend WHERE self_id = ?"));
+			list_private->setInt(1, owner_uid);
+			std::unique_ptr<sql::ResultSet> private_res(list_private->executeQuery());
+			while (private_res->next()) {
+				const int peer_uid = private_res->getInt("friend_id");
+				if (peer_uid > 0) {
+					peers.push_back(peer_uid);
+				}
+			}
+		}
+
+		for (int peer_uid : peers) {
+			std::unique_ptr<sql::PreparedStatement> ensure_row(
+				con->_con->prepareStatement(
+					"INSERT INTO chat_dialog(owner_uid, dialog_type, peer_uid, group_id, pinned_rank, draft_text, mute_state, last_msg_preview, last_msg_ts, unread_count) "
+					"VALUES(?, 'private', ?, 0, 0, '', 0, '', 0, 0) "
+					"ON DUPLICATE KEY UPDATE owner_uid = owner_uid"));
+			ensure_row->setInt(1, owner_uid);
+			ensure_row->setInt(2, peer_uid);
+			ensure_row->executeUpdate();
+
+			const int conv_min = std::min(owner_uid, peer_uid);
+			const int conv_max = std::max(owner_uid, peer_uid);
+			std::string preview;
+			int64_t last_msg_ts = 0;
+			int unread_count = 0;
+
+			{
+				std::unique_ptr<sql::PreparedStatement> last_stmt(
+					con->_con->prepareStatement(
+						"SELECT content, created_at FROM chat_private_msg "
+						"WHERE conv_uid_min = ? AND conv_uid_max = ? "
+						"ORDER BY created_at DESC, msg_id DESC LIMIT 1"));
+				last_stmt->setInt(1, conv_min);
+				last_stmt->setInt(2, conv_max);
+				std::unique_ptr<sql::ResultSet> last_res(last_stmt->executeQuery());
+				if (last_res->next()) {
+					const std::string content = last_res->isNull("content") ? "" : last_res->getString("content");
+					preview = BuildPreviewText("", content);
+					last_msg_ts = last_res->isNull("created_at") ? 0 : last_res->getInt64("created_at");
+				}
+			}
+
+			{
+				std::unique_ptr<sql::PreparedStatement> unread_stmt(
+					con->_con->prepareStatement(
+						"SELECT COUNT(1) AS unread_count FROM chat_private_msg "
+						"WHERE conv_uid_min = ? AND conv_uid_max = ? AND from_uid = ? "
+						"AND created_at > COALESCE((SELECT read_ts FROM chat_private_read_state WHERE uid = ? AND peer_uid = ?), 0)"));
+				unread_stmt->setInt(1, conv_min);
+				unread_stmt->setInt(2, conv_max);
+				unread_stmt->setInt(3, peer_uid);
+				unread_stmt->setInt(4, owner_uid);
+				unread_stmt->setInt(5, peer_uid);
+				std::unique_ptr<sql::ResultSet> unread_res(unread_stmt->executeQuery());
+				if (unread_res->next()) {
+					unread_count = std::max(0, unread_res->getInt("unread_count"));
+				}
+			}
+
+			std::unique_ptr<sql::PreparedStatement> update_stmt(
+				con->_con->prepareStatement(
+					"UPDATE chat_dialog SET last_msg_preview = ?, last_msg_ts = ?, unread_count = ?, updated_at = CURRENT_TIMESTAMP "
+					"WHERE owner_uid = ? AND dialog_type = 'private' AND peer_uid = ? AND group_id = 0"));
+			update_stmt->setString(1, preview);
+			update_stmt->setInt64(2, last_msg_ts);
+			update_stmt->setInt(3, unread_count);
+			update_stmt->setInt(4, owner_uid);
+			update_stmt->setInt(5, peer_uid);
+			update_stmt->executeUpdate();
+		}
+
+		std::vector<int64_t> groups;
+		{
+			std::unique_ptr<sql::PreparedStatement> list_groups(
+				con->_con->prepareStatement(
+					"SELECT m.group_id FROM chat_group_member m "
+					"JOIN chat_group g ON g.group_id = m.group_id "
+					"WHERE m.uid = ? AND m.status = 1 AND g.status = 1"));
+			list_groups->setInt(1, owner_uid);
+			std::unique_ptr<sql::ResultSet> group_res(list_groups->executeQuery());
+			while (group_res->next()) {
+				const int64_t group_id = group_res->getInt64("group_id");
+				if (group_id > 0) {
+					groups.push_back(group_id);
+				}
+			}
+		}
+
+		for (int64_t group_id : groups) {
+			std::unique_ptr<sql::PreparedStatement> ensure_row(
+				con->_con->prepareStatement(
+					"INSERT INTO chat_dialog(owner_uid, dialog_type, peer_uid, group_id, pinned_rank, draft_text, mute_state, last_msg_preview, last_msg_ts, unread_count) "
+					"VALUES(?, 'group', 0, ?, 0, '', 0, '', 0, 0) "
+					"ON DUPLICATE KEY UPDATE owner_uid = owner_uid"));
+			ensure_row->setInt(1, owner_uid);
+			ensure_row->setInt64(2, group_id);
+			ensure_row->executeUpdate();
+
+			std::string preview;
+			int64_t last_msg_ts = 0;
+			int unread_count = 0;
+
+			{
+				std::unique_ptr<sql::PreparedStatement> last_stmt(
+					con->_con->prepareStatement(
+						"SELECT msg_type, content, created_at FROM chat_group_msg "
+						"WHERE group_id = ? ORDER BY group_seq DESC, server_msg_id DESC LIMIT 1"));
+				last_stmt->setInt64(1, group_id);
+				std::unique_ptr<sql::ResultSet> last_res(last_stmt->executeQuery());
+				if (last_res->next()) {
+					const std::string msg_type = last_res->isNull("msg_type") ? "" : last_res->getString("msg_type");
+					const std::string content = last_res->isNull("content") ? "" : last_res->getString("content");
+					preview = BuildPreviewText(msg_type, content);
+					last_msg_ts = last_res->isNull("created_at") ? 0 : last_res->getInt64("created_at");
+				}
+			}
+
+			{
+				std::unique_ptr<sql::PreparedStatement> unread_stmt(
+					con->_con->prepareStatement(
+						"SELECT COUNT(1) AS unread_count FROM chat_group_msg "
+						"WHERE group_id = ? AND created_at > COALESCE((SELECT read_ts FROM chat_group_read_state WHERE uid = ? AND group_id = ?), 0) "
+						"AND from_uid <> ?"));
+				unread_stmt->setInt64(1, group_id);
+				unread_stmt->setInt(2, owner_uid);
+				unread_stmt->setInt64(3, group_id);
+				unread_stmt->setInt(4, owner_uid);
+				std::unique_ptr<sql::ResultSet> unread_res(unread_stmt->executeQuery());
+				if (unread_res->next()) {
+					unread_count = std::max(0, unread_res->getInt("unread_count"));
+				}
+			}
+
+			std::unique_ptr<sql::PreparedStatement> update_stmt(
+				con->_con->prepareStatement(
+					"UPDATE chat_dialog SET last_msg_preview = ?, last_msg_ts = ?, unread_count = ?, updated_at = CURRENT_TIMESTAMP "
+					"WHERE owner_uid = ? AND dialog_type = 'group' AND group_id = ?"));
+			update_stmt->setString(1, preview);
+			update_stmt->setInt64(2, last_msg_ts);
+			update_stmt->setInt(3, unread_count);
+			update_stmt->setInt(4, owner_uid);
+			update_stmt->setInt64(5, group_id);
+			update_stmt->executeUpdate();
+		}
+
+		{
+			std::unique_ptr<sql::PreparedStatement> clean_private(
+				con->_con->prepareStatement(
+					"DELETE FROM chat_dialog "
+					"WHERE owner_uid = ? AND dialog_type = 'private' AND peer_uid > 0 "
+					"AND NOT EXISTS (SELECT 1 FROM friend f WHERE f.self_id = ? AND f.friend_id = chat_dialog.peer_uid)"));
+			clean_private->setInt(1, owner_uid);
+			clean_private->setInt(2, owner_uid);
+			clean_private->executeUpdate();
+		}
+		{
+			std::unique_ptr<sql::PreparedStatement> clean_group(
+				con->_con->prepareStatement(
+					"DELETE FROM chat_dialog "
+					"WHERE owner_uid = ? AND dialog_type = 'group' AND group_id > 0 "
+					"AND NOT EXISTS ("
+					"SELECT 1 FROM chat_group_member m JOIN chat_group g ON g.group_id = m.group_id "
+					"WHERE m.uid = ? AND m.group_id = chat_dialog.group_id AND m.status = 1 AND g.status = 1)"));
+			clean_group->setInt(1, owner_uid);
+			clean_group->setInt(2, owner_uid);
+			clean_group->executeUpdate();
+		}
+
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::UpsertGroupReadState(const int& uid, const int64_t& group_id, const int64_t& read_ts) {
+	if (uid <= 0 || group_id <= 0) {
+		return false;
+	}
+	int64_t normalized_read_ts = read_ts;
+	if (normalized_read_ts <= 0) {
+		normalized_read_ts = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count());
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"INSERT INTO chat_group_read_state(uid, group_id, read_ts) VALUES(?, ?, ?) "
+				"ON DUPLICATE KEY UPDATE read_ts = GREATEST(read_ts, VALUES(read_ts)), updated_at = CURRENT_TIMESTAMP"));
+		pstmt->setInt(1, uid);
+		pstmt->setInt64(2, group_id);
+		pstmt->setInt64(3, normalized_read_ts);
+		return pstmt->executeUpdate() >= 0;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::GetGroupMessageByMsgId(const int64_t& group_id, const std::string& msg_id, std::shared_ptr<GroupMessageInfo>& message) {
+	message = nullptr;
+	if (group_id <= 0 || msg_id.empty()) {
+		return false;
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"SELECT m.msg_id, m.server_msg_id, m.group_seq, m.group_id, m.from_uid, m.msg_type, m.content, m.mentions_json, "
+				"m.reply_to_server_msg_id, m.forward_meta_json, m.edited_at_ms, m.deleted_at_ms, m.created_at, "
+				"e.file_name, e.mime, e.size "
+				"FROM chat_group_msg m "
+				"LEFT JOIN chat_group_msg_ext e ON m.msg_id = e.msg_id "
+				"WHERE m.group_id = ? AND m.msg_id = ? LIMIT 1"));
+		pstmt->setInt64(1, group_id);
+		pstmt->setString(2, msg_id);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		if (!res->next()) {
+			return false;
+		}
+
+		auto one = std::make_shared<GroupMessageInfo>();
+		one->msg_id = res->getString("msg_id");
+		one->group_id = static_cast<int64_t>(std::stoll(res->getString("group_id")));
+		one->from_uid = res->getInt("from_uid");
+		one->msg_type = res->getString("msg_type");
+		one->content = res->getString("content");
+		one->mentions_json = res->isNull("mentions_json") ? "[]" : res->getString("mentions_json");
+		one->reply_to_server_msg_id = res->isNull("reply_to_server_msg_id") ? 0 : res->getInt64("reply_to_server_msg_id");
+		one->forward_meta_json = res->isNull("forward_meta_json") ? "" : res->getString("forward_meta_json");
+		one->edited_at_ms = res->isNull("edited_at_ms") ? 0 : res->getInt64("edited_at_ms");
+		one->deleted_at_ms = res->isNull("deleted_at_ms") ? 0 : res->getInt64("deleted_at_ms");
+		one->created_at = static_cast<int64_t>(std::stoll(res->getString("created_at")));
+		one->server_msg_id = static_cast<int64_t>(std::stoll(res->getString("server_msg_id")));
+		one->group_seq = static_cast<int64_t>(std::stoll(res->getString("group_seq")));
+		one->file_name = res->isNull("file_name") ? "" : res->getString("file_name");
+		one->mime = res->isNull("mime") ? "" : res->getString("mime");
+		one->size = res->isNull("size") ? 0 : res->getInt("size");
+		message = one;
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::UpsertDialogDraft(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
+	const int64_t& group_id, const std::string& draft_text) {
+	if (owner_uid <= 0 || (dialog_type != "private" && dialog_type != "group")) {
+		return false;
+	}
+
+	const int normalized_peer_uid = (dialog_type == "private") ? peer_uid : 0;
+	const int64_t normalized_group_id = (dialog_type == "group") ? group_id : 0;
+	if ((dialog_type == "private" && normalized_peer_uid <= 0)
+		|| (dialog_type == "group" && normalized_group_id <= 0)) {
+		return false;
+	}
+
+	std::string normalized_draft = draft_text;
+	if (normalized_draft.size() > 2000) {
+		normalized_draft.resize(2000);
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"INSERT INTO chat_dialog(owner_uid, dialog_type, peer_uid, group_id, pinned_rank, draft_text, mute_state, last_msg_preview, last_msg_ts, unread_count) "
+				"VALUES(?, ?, ?, ?, 0, ?, 0, '', 0, 0) "
+				"ON DUPLICATE KEY UPDATE draft_text = VALUES(draft_text), updated_at = CURRENT_TIMESTAMP"));
+		pstmt->setInt(1, owner_uid);
+		pstmt->setString(2, dialog_type);
+		pstmt->setInt(3, normalized_peer_uid);
+		pstmt->setInt64(4, normalized_group_id);
+		pstmt->setString(5, normalized_draft);
+		return pstmt->executeUpdate() >= 0;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::UpsertDialogPinned(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
+	const int64_t& group_id, const int& pinned_rank) {
+	if (owner_uid <= 0 || (dialog_type != "private" && dialog_type != "group")) {
+		return false;
+	}
+	const int normalized_peer_uid = (dialog_type == "private") ? peer_uid : 0;
+	const int64_t normalized_group_id = (dialog_type == "group") ? group_id : 0;
+	if ((dialog_type == "private" && normalized_peer_uid <= 0)
+		|| (dialog_type == "group" && normalized_group_id <= 0)) {
+		return false;
+	}
+	const int normalized_pinned_rank = std::max(0, pinned_rank);
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"INSERT INTO chat_dialog(owner_uid, dialog_type, peer_uid, group_id, pinned_rank, draft_text, mute_state, last_msg_preview, last_msg_ts, unread_count) "
+				"VALUES(?, ?, ?, ?, ?, '', 0, '', 0, 0) "
+				"ON DUPLICATE KEY UPDATE pinned_rank = VALUES(pinned_rank), updated_at = CURRENT_TIMESTAMP"));
+		pstmt->setInt(1, owner_uid);
+		pstmt->setString(2, dialog_type);
+		pstmt->setInt(3, normalized_peer_uid);
+		pstmt->setInt64(4, normalized_group_id);
+		pstmt->setInt(5, normalized_pinned_rank);
+		return pstmt->executeUpdate() >= 0;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::UpsertDialogMuteState(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
+	const int64_t& group_id, const int& mute_state) {
+	if (owner_uid <= 0 || (dialog_type != "private" && dialog_type != "group")) {
+		return false;
+	}
+	const int normalized_peer_uid = (dialog_type == "private") ? peer_uid : 0;
+	const int64_t normalized_group_id = (dialog_type == "group") ? group_id : 0;
+	if ((dialog_type == "private" && normalized_peer_uid <= 0)
+		|| (dialog_type == "group" && normalized_group_id <= 0)) {
+		return false;
+	}
+	const int normalized_mute_state = mute_state > 0 ? 1 : 0;
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"INSERT INTO chat_dialog(owner_uid, dialog_type, peer_uid, group_id, pinned_rank, draft_text, mute_state, last_msg_preview, last_msg_ts, unread_count) "
+				"VALUES(?, ?, ?, ?, 0, '', ?, '', 0, 0) "
+				"ON DUPLICATE KEY UPDATE mute_state = VALUES(mute_state), updated_at = CURRENT_TIMESTAMP"));
+		pstmt->setInt(1, owner_uid);
+		pstmt->setString(2, dialog_type);
+		pstmt->setInt(3, normalized_peer_uid);
+		pstmt->setInt64(4, normalized_group_id);
+		pstmt->setInt(5, normalized_mute_state);
+		return pstmt->executeUpdate() >= 0;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
 std::string MysqlDao::GenerateRandomGroupCode() {
 	static thread_local std::mt19937_64 rng(std::random_device{}());
 	std::uniform_int_distribution<int> dist(100000000, 999999999);
 	return "g" + std::to_string(dist(rng));
+}
+
+bool MysqlDao::EnsureDialogMetaSchema() {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
+		stmt->execute("CREATE TABLE IF NOT EXISTS chat_dialog ("
+			"id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+			"owner_uid INT NOT NULL,"
+			"dialog_type VARCHAR(16) NOT NULL,"
+			"peer_uid INT NOT NULL DEFAULT 0,"
+			"group_id BIGINT NOT NULL DEFAULT 0,"
+			"pinned_rank INT NOT NULL DEFAULT 0,"
+			"draft_text VARCHAR(2000) NOT NULL DEFAULT '',"
+			"mute_state TINYINT NOT NULL DEFAULT 0,"
+			"last_msg_preview VARCHAR(255) NOT NULL DEFAULT '',"
+			"last_msg_ts BIGINT NOT NULL DEFAULT 0,"
+			"unread_count INT NOT NULL DEFAULT 0,"
+			"updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,"
+			"UNIQUE KEY uq_owner_dialog(owner_uid, dialog_type, peer_uid, group_id),"
+			"KEY idx_owner(owner_uid),"
+			"KEY idx_owner_type(owner_uid, dialog_type)"
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+		try {
+			stmt->execute("ALTER TABLE chat_dialog ADD COLUMN mute_state TINYINT NOT NULL DEFAULT 0");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("ALTER TABLE chat_dialog ADD COLUMN last_msg_preview VARCHAR(255) NOT NULL DEFAULT ''");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("ALTER TABLE chat_dialog ADD COLUMN last_msg_ts BIGINT NOT NULL DEFAULT 0");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("ALTER TABLE chat_dialog ADD COLUMN unread_count INT NOT NULL DEFAULT 0");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("ALTER TABLE chat_dialog MODIFY COLUMN draft_text VARCHAR(2000) NOT NULL DEFAULT ''");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("CREATE UNIQUE INDEX uq_chat_dialog_owner_dialog ON chat_dialog(owner_uid, dialog_type, peer_uid, group_id)");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("CREATE INDEX idx_chat_dialog_owner_type ON chat_dialog(owner_uid, dialog_type)");
+		}
+		catch (sql::SQLException&) {
+		}
+
+		// Keep old table for migration compatibility with historical deployments.
+		stmt->execute("CREATE TABLE IF NOT EXISTS chat_dialog_meta ("
+			"id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+			"owner_uid INT NOT NULL,"
+			"dialog_type VARCHAR(16) NOT NULL,"
+			"peer_uid INT NOT NULL DEFAULT 0,"
+			"group_id BIGINT NOT NULL DEFAULT 0,"
+			"pinned_rank INT NOT NULL DEFAULT 0,"
+			"draft_text VARCHAR(2000) NOT NULL DEFAULT '',"
+			"mute_state TINYINT NOT NULL DEFAULT 0,"
+			"updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,"
+			"UNIQUE KEY uq_owner_dialog(owner_uid, dialog_type, peer_uid, group_id),"
+			"KEY idx_owner(owner_uid)"
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+		try {
+			stmt->execute("ALTER TABLE chat_dialog_meta ADD COLUMN mute_state TINYINT NOT NULL DEFAULT 0");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("ALTER TABLE chat_dialog_meta MODIFY COLUMN draft_text VARCHAR(2000) NOT NULL DEFAULT ''");
+		}
+		catch (sql::SQLException&) {
+		}
+		stmt->execute("INSERT INTO chat_dialog(owner_uid, dialog_type, peer_uid, group_id, pinned_rank, draft_text, mute_state, last_msg_preview, last_msg_ts, unread_count) "
+			"SELECT owner_uid, dialog_type, peer_uid, group_id, pinned_rank, draft_text, mute_state, '', 0, 0 "
+			"FROM chat_dialog_meta "
+			"ON DUPLICATE KEY UPDATE "
+			"pinned_rank = CASE WHEN chat_dialog.pinned_rank = 0 THEN VALUES(pinned_rank) ELSE chat_dialog.pinned_rank END, "
+			"draft_text = CASE WHEN chat_dialog.draft_text = '' THEN VALUES(draft_text) ELSE chat_dialog.draft_text END, "
+			"mute_state = CASE WHEN chat_dialog.mute_state = 0 THEN VALUES(mute_state) ELSE chat_dialog.mute_state END");
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "EnsureDialogMetaSchema SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::EnsurePrivateReadStateSchema() {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
+		stmt->execute("CREATE TABLE IF NOT EXISTS chat_private_read_state ("
+			"id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+			"uid INT NOT NULL,"
+			"peer_uid INT NOT NULL,"
+			"read_ts BIGINT NOT NULL DEFAULT 0,"
+			"updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,"
+			"UNIQUE KEY uq_uid_peer(uid, peer_uid),"
+			"KEY idx_peer_uid(peer_uid, uid)"
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+		try {
+			stmt->execute("ALTER TABLE chat_private_read_state ADD COLUMN read_ts BIGINT NOT NULL DEFAULT 0");
+		}
+		catch (sql::SQLException&) {
+		}
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "EnsurePrivateReadStateSchema SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::EnsureGroupReadStateSchema() {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
+		stmt->execute("CREATE TABLE IF NOT EXISTS chat_group_read_state ("
+			"id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+			"uid INT NOT NULL,"
+			"group_id BIGINT NOT NULL,"
+			"read_ts BIGINT NOT NULL DEFAULT 0,"
+			"updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,"
+			"UNIQUE KEY uq_uid_group(uid, group_id),"
+			"KEY idx_group_uid(group_id, uid)"
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+		try {
+			stmt->execute("ALTER TABLE chat_group_read_state ADD COLUMN read_ts BIGINT NOT NULL DEFAULT 0");
+		}
+		catch (sql::SQLException&) {
+		}
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "EnsureGroupReadStateSchema SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::EnsureGroupMessageOrderSchema() {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
+		try {
+			stmt->execute("ALTER TABLE chat_group_msg ADD COLUMN server_msg_id BIGINT NOT NULL AUTO_INCREMENT UNIQUE");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("ALTER TABLE chat_group_msg ADD COLUMN group_seq BIGINT NOT NULL DEFAULT 0");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("ALTER TABLE chat_group_msg ADD COLUMN reply_to_server_msg_id BIGINT NOT NULL DEFAULT 0");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("ALTER TABLE chat_group_msg ADD COLUMN forward_meta_json TEXT");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("ALTER TABLE chat_group_msg ADD COLUMN edited_at_ms BIGINT NOT NULL DEFAULT 0");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("ALTER TABLE chat_group_msg ADD COLUMN deleted_at_ms BIGINT NOT NULL DEFAULT 0");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("ALTER TABLE chat_private_msg ADD COLUMN reply_to_server_msg_id BIGINT NOT NULL DEFAULT 0");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("ALTER TABLE chat_private_msg ADD COLUMN forward_meta_json TEXT");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("ALTER TABLE chat_private_msg ADD COLUMN edited_at_ms BIGINT NOT NULL DEFAULT 0");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("ALTER TABLE chat_private_msg ADD COLUMN deleted_at_ms BIGINT NOT NULL DEFAULT 0");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("CREATE UNIQUE INDEX uk_chat_group_msg_server_msg_id ON chat_group_msg(server_msg_id)");
+		}
+		catch (sql::SQLException&) {
+		}
+		try {
+			stmt->execute("CREATE INDEX idx_chat_group_msg_group_seq ON chat_group_msg(group_id, group_seq)");
+		}
+		catch (sql::SQLException&) {
+		}
+
+		stmt->execute("CREATE TEMPORARY TABLE IF NOT EXISTS tmp_group_seq_backfill ("
+			"msg_id VARCHAR(64) PRIMARY KEY,"
+			"group_seq BIGINT NOT NULL"
+			") ENGINE=InnoDB");
+		stmt->execute("TRUNCATE TABLE tmp_group_seq_backfill");
+		stmt->execute("SET @memochat_prev_gid := -1, @memochat_seq := 0");
+		stmt->execute(
+			"INSERT INTO tmp_group_seq_backfill(msg_id, group_seq) "
+			"SELECT ordered.msg_id, "
+			"(@memochat_seq := IF(@memochat_prev_gid = ordered.group_id, @memochat_seq + 1, 1)) AS group_seq "
+			"FROM (SELECT msg_id, group_id FROM chat_group_msg ORDER BY group_id ASC, created_at ASC, msg_id ASC) ordered");
+		stmt->execute(
+			"UPDATE chat_group_msg m "
+			"JOIN tmp_group_seq_backfill t ON t.msg_id = m.msg_id "
+			"SET m.group_seq = t.group_seq");
+		stmt->execute("DROP TEMPORARY TABLE IF EXISTS tmp_group_seq_backfill");
+
+		try {
+			stmt->execute("CREATE UNIQUE INDEX uk_chat_group_msg_group_seq ON chat_group_msg(group_id, group_seq)");
+		}
+		catch (sql::SQLException&) {
+		}
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "EnsureGroupMessageOrderSchema SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::EnsureGroupPermissionSchemaAndBackfill() {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
+		stmt->execute("CREATE TABLE IF NOT EXISTS chat_group_admin_permission ("
+			"id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+			"group_id BIGINT NOT NULL,"
+			"uid INT NOT NULL,"
+			"permission_bits BIGINT NOT NULL DEFAULT 0,"
+			"updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,"
+			"UNIQUE KEY uq_group_uid(group_id, uid),"
+			"KEY idx_uid(uid)"
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+		try {
+			stmt->execute("ALTER TABLE chat_group_admin_permission ADD COLUMN permission_bits BIGINT NOT NULL DEFAULT 0");
+		}
+		catch (sql::SQLException&) {
+		}
+
+		con->_con->setAutoCommit(false);
+		stmt->execute("DELETE p FROM chat_group_admin_permission p "
+			"LEFT JOIN chat_group_member m ON p.group_id = m.group_id AND p.uid = m.uid "
+			"WHERE m.id IS NULL OR m.status <> 1 OR m.role < 2");
+
+		std::unique_ptr<sql::PreparedStatement> upsert_owner(
+			con->_con->prepareStatement(
+				"INSERT INTO chat_group_admin_permission(group_id, uid, permission_bits) "
+				"SELECT group_id, uid, ? FROM chat_group_member WHERE status = 1 AND role = 3 "
+				"ON DUPLICATE KEY UPDATE permission_bits = VALUES(permission_bits), updated_at = CURRENT_TIMESTAMP"));
+		upsert_owner->setInt64(1, kOwnerPermBits);
+		upsert_owner->executeUpdate();
+
+		std::unique_ptr<sql::PreparedStatement> upsert_admin(
+			con->_con->prepareStatement(
+				"INSERT INTO chat_group_admin_permission(group_id, uid, permission_bits) "
+				"SELECT group_id, uid, ? FROM chat_group_member WHERE status = 1 AND role = 2 "
+				"ON DUPLICATE KEY UPDATE permission_bits = IF(permission_bits <= 0, VALUES(permission_bits), permission_bits), updated_at = CURRENT_TIMESTAMP"));
+		upsert_admin->setInt64(1, kDefaultAdminPermBits);
+		upsert_admin->executeUpdate();
+
+		con->_con->commit();
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		if (con && con->_con) {
+			try {
+				con->_con->rollback();
+			}
+			catch (...) {
+			}
+		}
+		std::cerr << "EnsureGroupPermissionSchemaAndBackfill SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
 }
 
 bool MysqlDao::EnsureGroupCodeSchemaAndBackfill() {
@@ -1912,10 +3358,14 @@ bool MysqlDao::GetPendingGroupApplyForReviewer(const int& reviewer_uid, std::vec
 				"SELECT a.apply_id, a.group_id, a.applicant_uid, a.inviter_uid, a.type, a.status, a.reason, a.reviewer_uid "
 				"FROM chat_group_apply a "
 				"JOIN chat_group_member m ON a.group_id = m.group_id "
-				"WHERE a.status = 0 AND m.uid = ? AND m.status = 1 AND m.role >= 2 "
+				"LEFT JOIN chat_group_admin_permission p ON p.group_id = m.group_id AND p.uid = m.uid "
+				"WHERE a.status = 0 AND m.uid = ? AND m.status = 1 AND "
+				"(m.role = 3 OR ((COALESCE(p.permission_bits, ?) & ?) <> 0)) "
 				"ORDER BY a.created_at DESC LIMIT ?"));
 		pstmt->setInt(1, reviewer_uid);
-		pstmt->setInt(2, final_limit);
+		pstmt->setInt64(2, kDefaultAdminPermBits);
+		pstmt->setInt64(3, kPermInviteUsers);
+		pstmt->setInt(4, final_limit);
 		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 		while (res->next()) {
 			auto info = std::make_shared<GroupApplyInfo>();

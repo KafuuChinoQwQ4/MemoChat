@@ -20,7 +20,7 @@ Item {
     property int leftInset: 12
     property int rightInset: 12
 
-    property int blurRadius: 26
+    property int blurRadius: 16
     property real cornerRadius: 10
     property color fillColor: Qt.rgba(1, 1, 1, 0.15)
     property color strokeColor: Qt.rgba(1, 1, 1, 0.50)
@@ -31,7 +31,7 @@ Item {
     property color focusFillColor: Qt.rgba(1, 1, 1, 0.20)
     property color focusStrokeColor: Qt.rgba(0.47, 0.71, 0.93, 0.84)
     property real focusStrokeWidth: 1.2
-    property int focusBlurRadius: 34
+    property int focusBlurRadius: 20
 
     signal accepted()
 

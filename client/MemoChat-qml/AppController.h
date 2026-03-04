@@ -6,6 +6,8 @@
 #include <QJsonObject>
 #include <QVariantList>
 #include <QMap>
+#include <QHash>
+#include <QSet>
 #include "global.h"
 #include "AuthController.h"
 #include "ChatController.h"
@@ -49,6 +51,10 @@ class AppController : public QObject
     Q_PROPERTY(int currentGroupRole READ currentGroupRole NOTIFY currentGroupChanged)
     Q_PROPERTY(QString currentGroupName READ currentGroupName NOTIFY currentGroupChanged)
     Q_PROPERTY(QString currentGroupCode READ currentGroupCode NOTIFY currentGroupChanged)
+    Q_PROPERTY(bool currentGroupCanChangeInfo READ currentGroupCanChangeInfo NOTIFY currentGroupChanged)
+    Q_PROPERTY(bool currentGroupCanInviteUsers READ currentGroupCanInviteUsers NOTIFY currentGroupChanged)
+    Q_PROPERTY(bool currentGroupCanManageAdmins READ currentGroupCanManageAdmins NOTIFY currentGroupChanged)
+    Q_PROPERTY(bool currentGroupCanBanUsers READ currentGroupCanBanUsers NOTIFY currentGroupChanged)
     Q_PROPERTY(FriendListModel* dialogListModel READ dialogListModel CONSTANT)
     Q_PROPERTY(FriendListModel* chatListModel READ chatListModel CONSTANT)
     Q_PROPERTY(FriendListModel* groupListModel READ groupListModel CONSTANT)
@@ -72,6 +78,12 @@ class AppController : public QObject
     Q_PROPERTY(bool settingsStatusError READ settingsStatusError NOTIFY settingsStatusChanged)
     Q_PROPERTY(QString groupStatusText READ groupStatusText NOTIFY groupStatusChanged)
     Q_PROPERTY(bool groupStatusError READ groupStatusError NOTIFY groupStatusChanged)
+    Q_PROPERTY(QString currentDraftText READ currentDraftText NOTIFY currentDraftTextChanged)
+    Q_PROPERTY(bool currentDialogPinned READ currentDialogPinned NOTIFY currentDialogPinnedChanged)
+    Q_PROPERTY(bool currentDialogMuted READ currentDialogMuted NOTIFY currentDialogMutedChanged)
+    Q_PROPERTY(bool hasPendingReply READ hasPendingReply NOTIFY pendingReplyChanged)
+    Q_PROPERTY(QString replyTargetName READ replyTargetName NOTIFY pendingReplyChanged)
+    Q_PROPERTY(QString replyPreviewText READ replyPreviewText NOTIFY pendingReplyChanged)
 
 public:
     enum Page {
@@ -124,6 +136,10 @@ public:
     int currentGroupRole() const;
     QString currentGroupName() const;
     QString currentGroupCode() const;
+    bool currentGroupCanChangeInfo() const;
+    bool currentGroupCanInviteUsers() const;
+    bool currentGroupCanManageAdmins() const;
+    bool currentGroupCanBanUsers() const;
     FriendListModel *dialogListModel();
     FriendListModel *chatListModel();
     FriendListModel *groupListModel();
@@ -147,6 +163,12 @@ public:
     bool settingsStatusError() const;
     QString groupStatusText() const;
     bool groupStatusError() const;
+    QString currentDraftText() const;
+    bool currentDialogPinned() const;
+    bool currentDialogMuted() const;
+    bool hasPendingReply() const;
+    QString replyTargetName() const;
+    QString replyPreviewText() const;
 
     Q_INVOKABLE void switchToLogin();
     Q_INVOKABLE void switchToRegister();
@@ -184,14 +206,26 @@ public:
     Q_INVOKABLE void sendGroupTextMessage(const QString &text);
     Q_INVOKABLE void sendGroupImageMessage();
     Q_INVOKABLE void sendGroupFileMessage();
+    Q_INVOKABLE void editGroupMessage(const QString &msgId, const QString &text);
+    Q_INVOKABLE void revokeGroupMessage(const QString &msgId);
+    Q_INVOKABLE void forwardGroupMessage(const QString &msgId);
     Q_INVOKABLE void loadGroupHistory();
     Q_INVOKABLE void updateGroupAnnouncement(const QString &announcement);
     Q_INVOKABLE void updateGroupIcon();
-    Q_INVOKABLE void setGroupAdmin(const QString &userId, bool isAdmin);
+    Q_INVOKABLE void setGroupAdmin(const QString &userId, bool isAdmin, qint64 permissionBits = 0);
     Q_INVOKABLE void muteGroupMember(const QString &userId, int muteSeconds);
     Q_INVOKABLE void kickGroupMember(const QString &userId);
     Q_INVOKABLE void quitCurrentGroup();
     Q_INVOKABLE void clearGroupStatus();
+    Q_INVOKABLE void updateCurrentDraft(const QString &text);
+    Q_INVOKABLE void toggleCurrentDialogPinned();
+    Q_INVOKABLE void toggleCurrentDialogMuted();
+    Q_INVOKABLE void toggleDialogPinnedByUid(int dialogUid);
+    Q_INVOKABLE void toggleDialogMutedByUid(int dialogUid);
+    Q_INVOKABLE void markDialogReadByUid(int dialogUid);
+    Q_INVOKABLE void clearDialogDraftByUid(int dialogUid);
+    Q_INVOKABLE void beginReplyMessage(const QString &msgId, const QString &senderName, const QString &previewText);
+    Q_INVOKABLE void cancelReplyMessage();
 
     Q_INVOKABLE void login(const QString &email, const QString &password);
     Q_INVOKABLE void requestRegisterCode(const QString &email);
@@ -225,6 +259,10 @@ signals:
     void settingsStatusChanged();
     void currentGroupChanged();
     void groupStatusChanged();
+    void currentDraftTextChanged();
+    void currentDialogPinnedChanged();
+    void currentDialogMutedChanged();
+    void pendingReplyChanged();
 
 private slots:
     void onLoginHttpFinished(ReqId id, QString res, ErrorCodes err);
@@ -249,7 +287,10 @@ private slots:
     void onGroupMemberChanged(QJsonObject payload);
     void onGroupChatMsg(std::shared_ptr<GroupChatMsg> msg);
     void onGroupRsp(ReqId reqId, int error, QJsonObject payload);
+    void onDialogListRsp(QJsonObject payload);
     void onPrivateHistoryRsp(QJsonObject payload);
+    void onPrivateMsgChanged(QJsonObject payload);
+    void onPrivateReadAck(QJsonObject payload);
 
 private:
     bool parseJson(const QString &res, QJsonObject &obj);
@@ -261,6 +302,7 @@ private:
     bool dispatchGroupChatContent(const QString &content, const QString &previewText);
     void sendCallInvite(const QString &callType);
     QString buildCallJoinUrl(const QString &callType) const;
+    bool ensureCallTargetFromCurrentChat();
     void setTip(const QString &tip, bool isError);
     void setBusy(bool value);
     void setPage(Page newPage);
@@ -269,6 +311,7 @@ private:
     void refreshApplyModel();
     void refreshGroupModel();
     void refreshDialogModel();
+    void requestDialogList();
     void refreshChatLoadMoreState();
     void refreshContactLoadMoreState();
     void loadCurrentChatMessages();
@@ -290,6 +333,22 @@ private:
     void setSettingsStatus(const QString &text, bool isError);
     void setCurrentGroup(qint64 groupId, const QString &name, const QString &groupCode = QString());
     void setGroupStatus(const QString &text, bool isError);
+    void setCurrentDraftText(const QString &text);
+    void setCurrentDialogPinned(bool pinned);
+    void setCurrentDialogMuted(bool muted);
+    void setPendingReplyContext(const QString &msgId, const QString &senderName, const QString &previewText);
+    int currentDialogUid() const;
+    bool resolveDialogTarget(int dialogUid, QString &dialogType, int &peerUid, qint64 &groupId) const;
+    qint64 currentGroupPermissionBitsRaw() const;
+    bool hasCurrentGroupPermission(qint64 permissionBit) const;
+    qint64 latestGroupCreatedAt(qint64 groupId) const;
+    qint64 latestPrivatePeerCreatedAt(int peerUid) const;
+    void syncCurrentDialogDraft();
+    void loadDraftStore(int ownerUid);
+    void saveDraftStore(int ownerUid) const;
+    void applyDraftToDialogModel(int dialogUid, const QString &draftText);
+    void sendGroupReadAck(qint64 groupId, qint64 readTs = 0);
+    void sendPrivateReadAck(int peerUid, qint64 readTs = 0);
 
     Page _page;
     QString _tip_text;
@@ -344,10 +403,24 @@ private:
     bool _settings_status_error;
     QString _group_status_text;
     bool _group_status_error;
+    QString _current_draft_text;
+    bool _current_dialog_pinned = false;
+    bool _current_dialog_muted = false;
+    QString _reply_to_msg_id;
+    QString _reply_target_name;
+    QString _reply_preview_text;
     QMap<int, qint64> _group_uid_map;
+    QHash<QString, qint64> _pending_group_msg_group_map;
+    QHash<int, QString> _dialog_draft_map;
+    QSet<int> _dialog_local_pinned_set;
+    QHash<int, int> _dialog_server_pinned_map;
+    QHash<int, int> _dialog_server_mute_map;
+    QHash<int, int> _dialog_mention_map;
     qint64 _private_history_before_ts;
     qint64 _private_history_pending_before_ts;
     int _private_history_pending_peer_uid;
+    qint64 _group_history_before_seq;
+    bool _group_history_has_more;
 
     ClientGateway _gateway;
     AuthController _auth_controller;

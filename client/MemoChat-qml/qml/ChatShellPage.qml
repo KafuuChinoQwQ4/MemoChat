@@ -14,6 +14,15 @@ Rectangle {
     property int viewMode: 0 // 0 = main tabs, 1 = profile center
     property int lastMainTab: controller.chatTab
 
+    Connections {
+        target: controller
+        function onHasCurrentGroupChanged() {
+            if (!controller.hasCurrentGroup && groupManagePopup.opened) {
+                groupManagePopup.close()
+            }
+        }
+    }
+
     function stageValue(start, span) {
         return Math.max(0, Math.min(1, (revealProgress - start) / span))
     }
@@ -36,7 +45,7 @@ Rectangle {
             Layout.fillHeight: true
             backdrop: backdropLayer
             cornerRadius: 14
-            blurRadius: 30
+            blurRadius: 18
             fillColor: Qt.rgba(0.20, 0.28, 0.38, 0.34)
             strokeColor: Qt.rgba(1, 1, 1, 0.36)
             glowTopColor: Qt.rgba(1, 1, 1, 0.16)
@@ -65,7 +74,7 @@ Rectangle {
             Layout.fillHeight: true
             backdrop: backdropLayer
             cornerRadius: 14
-            blurRadius: 30
+            blurRadius: 18
             fillColor: Qt.rgba(1, 1, 1, 0.16)
             strokeColor: Qt.rgba(1, 1, 1, 0.48)
             glowTopColor: Qt.rgba(1, 1, 1, 0.24)
@@ -103,6 +112,10 @@ Rectangle {
                 onAddFriendRequested: controller.requestAddFriend(uid, bakName, tags)
                 onCreateGroupRequested: createGroupDialog.open()
                 onRefreshGroupRequested: controller.refreshGroupList()
+                onDialogPinToggled: controller.toggleDialogPinnedByUid(uid)
+                onDialogMuteToggled: controller.toggleDialogMutedByUid(uid)
+                onDialogMarkRead: controller.markDialogReadByUid(uid)
+                onDialogDraftCleared: controller.clearDialogDraftByUid(uid)
             }
         }
 
@@ -111,7 +124,7 @@ Rectangle {
             Layout.fillHeight: true
             backdrop: backdropLayer
             cornerRadius: 16
-            blurRadius: 34
+            blurRadius: 20
             fillColor: Qt.rgba(1, 1, 1, 0.14)
             strokeColor: Qt.rgba(1, 1, 1, 0.54)
             glowTopColor: Qt.rgba(1, 1, 1, 0.25)
@@ -134,31 +147,37 @@ Rectangle {
                         selfAvatar: controller.currentUserIcon
                         peerAvatar: controller.currentChatPeerIcon
                         hasCurrentChat: controller.hasCurrentChat
+                        isGroupChat: controller.hasCurrentGroup
+                        currentGroupRole: controller.currentGroupRole
                         messageModel: controller.messageModel
+                        currentDraftText: controller.currentDraftText
+                        currentDialogPinned: controller.currentDialogPinned
+                        currentDialogMuted: controller.currentDialogMuted
+                        hasPendingReply: controller.hasPendingReply
+                        replyTargetName: controller.replyTargetName
+                        replyPreviewText: controller.replyPreviewText
                         privateHistoryLoading: controller.privateHistoryLoading
                         canLoadMorePrivateHistory: controller.canLoadMorePrivateHistory
                         onSendText: controller.sendTextMessage(text)
                         onSendImage: controller.sendImageMessage()
                         onSendFile: controller.sendFileMessage()
+                        onSendVoiceCall: controller.startVoiceChat()
+                        onSendVideoCall: controller.startVideoChat()
+                        onDraftEdited: controller.updateCurrentDraft(text)
+                        onToggleDialogPinned: controller.toggleCurrentDialogPinned()
+                        onToggleDialogMuted: controller.toggleCurrentDialogMuted()
                         onOpenAttachment: controller.openExternalResource(url)
                         onRequestLoadMoreHistory: controller.loadMorePrivateHistory()
-                    }
-
-                    GlassButton {
-                        anchors.top: parent.top
-                        anchors.right: parent.right
-                        anchors.topMargin: 12
-                        anchors.rightMargin: 14
-                        visible: controller.hasCurrentGroup
-                        text: "群管理"
-                        implicitWidth: 84
-                        implicitHeight: 32
-                        cornerRadius: 9
-                        normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
-                        hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
-                        pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
-                        disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                        onClicked: groupManagePopup.open()
+                        onForwardMessage: controller.forwardGroupMessage(msgId)
+                        onRevokeMessage: controller.revokeGroupMessage(msgId)
+                        onEditMessage: controller.editGroupMessage(msgId, text)
+                        onReplyMessage: controller.beginReplyMessage(msgId, senderName, previewText)
+                        onCancelReplyMessage: controller.cancelReplyMessage()
+                        onOpenGroupManageRequested: {
+                            if (controller.hasCurrentGroup) {
+                                groupManagePopup.open()
+                            }
+                        }
                     }
                 }
 
@@ -225,13 +244,18 @@ Rectangle {
         height: Math.min(root.height - 48, 740)
         anchors.centerIn: Overlay.overlay
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        visible: controller.hasCurrentGroup
+        enabled: controller.hasCurrentGroup
+        onOpened: {
+            if (!controller.hasCurrentGroup) {
+                close()
+            }
+        }
 
         background: GlassSurface {
             anchors.fill: parent
             backdrop: backdropLayer
             cornerRadius: 12
-            blurRadius: 30
+            blurRadius: 18
             fillColor: Qt.rgba(1, 1, 1, 0.24)
             strokeColor: Qt.rgba(1, 1, 1, 0.46)
         }
@@ -255,7 +279,8 @@ Rectangle {
                     groupName: controller.currentGroupName
                     groupCode: controller.currentGroupCode
                     groupIcon: controller.currentChatPeerIcon
-                    canUpdateIcon: controller.currentGroupRole === 3
+                    canUpdateIcon: controller.currentGroupCanChangeInfo
+                    canUpdateAnnouncement: controller.currentGroupCanChangeInfo
                     statusText: controller.groupStatusText
                     statusError: controller.groupStatusError
                     onRefreshRequested: controller.refreshGroupList()
@@ -270,10 +295,13 @@ Rectangle {
 
                 GroupManagePane {
                     width: parent.width
-                    height: 270
+                    height: 340
                     backdrop: backdropLayer
+                    canInviteUsers: controller.currentGroupCanInviteUsers
+                    canManageAdmins: controller.currentGroupCanManageAdmins
+                    canBanUsers: controller.currentGroupCanBanUsers
                     onInviteRequested: controller.inviteGroupMember(userId, reason)
-                    onSetAdminRequested: controller.setGroupAdmin(userId, isAdmin)
+                    onSetAdminRequested: controller.setGroupAdmin(userId, isAdmin, permissionBits)
                     onMuteRequested: controller.muteGroupMember(userId, muteSeconds)
                     onKickRequested: controller.kickGroupMember(userId)
                 }

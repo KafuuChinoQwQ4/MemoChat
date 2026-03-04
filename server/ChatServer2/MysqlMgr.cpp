@@ -90,6 +90,20 @@ bool MysqlMgr::GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_p
 	return _dao.GetPrivateMessageByMsgId(msg_id, message);
 }
 
+bool MysqlMgr::UpdatePrivateMessageContent(const int& uid, const int& peer_uid, const std::string& msg_id,
+	const std::string& content, int64_t edited_at_ms) {
+	return _dao.UpdatePrivateMessageContent(uid, peer_uid, msg_id, content, edited_at_ms);
+}
+
+bool MysqlMgr::RevokePrivateMessage(const int& uid, const int& peer_uid, const std::string& msg_id,
+	int64_t deleted_at_ms) {
+	return _dao.RevokePrivateMessage(uid, peer_uid, msg_id, deleted_at_ms);
+}
+
+bool MysqlMgr::UpsertPrivateReadState(const int& uid, const int& peer_uid, const int64_t& read_ts) {
+	return _dao.UpsertPrivateReadState(uid, peer_uid, read_ts);
+}
+
 bool MysqlMgr::IsFriend(const int& self_id, const int& friend_id) {
 	return _dao.IsFriend(self_id, friend_id);
 }
@@ -123,13 +137,23 @@ bool MysqlMgr::ReviewGroupApply(const int64_t& apply_id, const int& reviewer_uid
 	return _dao.ReviewGroupApply(apply_id, reviewer_uid, agree, apply_info);
 }
 
-bool MysqlMgr::SaveGroupMessage(const GroupMessageInfo& msg) {
-	return _dao.SaveGroupMessage(msg);
+bool MysqlMgr::SaveGroupMessage(const GroupMessageInfo& msg, int64_t* out_server_msg_id, int64_t* out_group_seq) {
+	return _dao.SaveGroupMessage(msg, out_server_msg_id, out_group_seq);
 }
 
-bool MysqlMgr::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts, const int& limit,
-	std::vector<std::shared_ptr<GroupMessageInfo>>& messages) {
-	return _dao.GetGroupHistory(group_id, before_ts, limit, messages);
+bool MysqlMgr::UpdateGroupMessageContent(const int64_t& group_id, const int& operator_uid, const std::string& msg_id,
+	const std::string& content, int64_t edited_at_ms) {
+	return _dao.UpdateGroupMessageContent(group_id, operator_uid, msg_id, content, edited_at_ms);
+}
+
+bool MysqlMgr::RevokeGroupMessage(const int64_t& group_id, const int& operator_uid, const std::string& msg_id,
+	int64_t deleted_at_ms) {
+	return _dao.RevokeGroupMessage(group_id, operator_uid, msg_id, deleted_at_ms);
+}
+
+bool MysqlMgr::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts, const int64_t& before_seq, const int& limit,
+	std::vector<std::shared_ptr<GroupMessageInfo>>& messages, bool& has_more) {
+	return _dao.GetGroupHistory(group_id, before_ts, before_seq, limit, messages, has_more);
 }
 
 bool MysqlMgr::UpdateGroupAnnouncement(const int64_t& group_id, const int& operator_uid, const std::string& announcement) {
@@ -140,8 +164,8 @@ bool MysqlMgr::UpdateGroupIcon(const int64_t& group_id, const int& operator_uid,
 	return _dao.UpdateGroupIcon(group_id, operator_uid, icon);
 }
 
-bool MysqlMgr::SetGroupAdmin(const int64_t& group_id, const int& operator_uid, const int& target_uid, const bool& is_admin) {
-	return _dao.SetGroupAdmin(group_id, operator_uid, target_uid, is_admin);
+bool MysqlMgr::SetGroupAdmin(const int64_t& group_id, const int& operator_uid, const int& target_uid, const bool& is_admin, const int64_t& permission_bits) {
+	return _dao.SetGroupAdmin(group_id, operator_uid, target_uid, is_admin, permission_bits);
 }
 
 bool MysqlMgr::MuteGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid, const int64_t& mute_until) {
@@ -170,4 +194,43 @@ bool MysqlMgr::IsUserInGroup(const int64_t& group_id, const int& uid) {
 
 bool MysqlMgr::GetPendingGroupApplyForReviewer(const int& reviewer_uid, std::vector<std::shared_ptr<GroupApplyInfo>>& applies, int limit) {
 	return _dao.GetPendingGroupApplyForReviewer(reviewer_uid, applies, limit);
+}
+
+bool MysqlMgr::GetDialogMetaByOwner(const int& owner_uid, std::vector<std::shared_ptr<DialogMetaInfo>>& metas) {
+	return _dao.GetDialogMetaByOwner(owner_uid, metas);
+}
+
+bool MysqlMgr::GetPrivateDialogRuntime(const int& owner_uid, const int& peer_uid, DialogRuntimeInfo& runtime) {
+	return _dao.GetPrivateDialogRuntime(owner_uid, peer_uid, runtime);
+}
+
+bool MysqlMgr::GetGroupDialogRuntime(const int& owner_uid, const int64_t& group_id, DialogRuntimeInfo& runtime) {
+	return _dao.GetGroupDialogRuntime(owner_uid, group_id, runtime);
+}
+
+bool MysqlMgr::RefreshDialogsForOwner(const int& owner_uid) {
+	return _dao.RefreshDialogsForOwner(owner_uid);
+}
+
+bool MysqlMgr::UpsertGroupReadState(const int& uid, const int64_t& group_id, const int64_t& read_ts) {
+	return _dao.UpsertGroupReadState(uid, group_id, read_ts);
+}
+
+bool MysqlMgr::GetGroupMessageByMsgId(const int64_t& group_id, const std::string& msg_id, std::shared_ptr<GroupMessageInfo>& message) {
+	return _dao.GetGroupMessageByMsgId(group_id, msg_id, message);
+}
+
+bool MysqlMgr::UpsertDialogDraft(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
+	const int64_t& group_id, const std::string& draft_text) {
+	return _dao.UpsertDialogDraft(owner_uid, dialog_type, peer_uid, group_id, draft_text);
+}
+
+bool MysqlMgr::UpsertDialogPinned(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
+	const int64_t& group_id, const int& pinned_rank) {
+	return _dao.UpsertDialogPinned(owner_uid, dialog_type, peer_uid, group_id, pinned_rank);
+}
+
+bool MysqlMgr::UpsertDialogMuteState(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
+	const int64_t& group_id, const int& mute_state) {
+	return _dao.UpsertDialogMuteState(owner_uid, dialog_type, peer_uid, group_id, mute_state);
 }

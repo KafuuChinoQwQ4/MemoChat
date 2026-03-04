@@ -501,6 +501,19 @@ void TcpMgr::initHandlers()
         emit sig_group_list_updated();
       });
 
+    _handlers.insert(ID_GET_DIALOG_LIST_RSP, [this](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        Q_UNUSED(id);
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+        if (jsonDoc.isNull() || !jsonDoc.isObject()) {
+            QJsonObject fallback;
+            fallback["error"] = ErrorCodes::ERR_JSON;
+            emit sig_dialog_list_rsp(fallback);
+            return;
+        }
+        emit sig_dialog_list_rsp(jsonDoc.object());
+      });
+
     _handlers.insert(ID_INVITE_GROUP_MEMBER_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
         QJsonObject jsonObj;
@@ -535,10 +548,17 @@ void TcpMgr::initHandlers()
         return createdAt;
     };
 
-    _handlers.insert(ID_GROUP_HISTORY_RSP, [this, parse_group_rsp, normalize_group_created_at](ReqId id, int len, QByteArray data) {
+    _handlers.insert(ID_GROUP_HISTORY_RSP, [this, normalize_group_created_at](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
-        QJsonObject jsonObj;
-        if (!parse_group_rsp(id, data, jsonObj)) {
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+        if (jsonDoc.isNull() || !jsonDoc.isObject()) {
+            emit sig_group_rsp(id, ErrorCodes::ERR_JSON, QJsonObject());
+            return;
+        }
+        const QJsonObject jsonObj = jsonDoc.object();
+        const int err = jsonObj.value("error").toInt(ErrorCodes::ERR_JSON);
+        if (err != ErrorCodes::SUCCESS) {
+            emit sig_group_rsp(id, err, jsonObj);
             return;
         }
 
@@ -549,15 +569,44 @@ void TcpMgr::initHandlers()
             const QString fromName = one.value("from_nick").toString(one.value("from_name").toString());
             const QString fromIcon = one.value("from_icon").toString();
             const qint64 createdAt = normalize_group_created_at(one.value("created_at").toVariant().toLongLong());
+            const qint64 serverMsgId = one.value("server_msg_id").toVariant().toLongLong();
+            const qint64 groupSeq = one.value("group_seq").toVariant().toLongLong();
+            const qint64 replyToServerMsgId = one.value("reply_to_server_msg_id").toVariant().toLongLong();
+            QString forwardMetaJson;
+            const QJsonValue forwardMetaValue = one.value("forward_meta");
+            if (forwardMetaValue.isObject()) {
+                forwardMetaJson = QString::fromUtf8(QJsonDocument(forwardMetaValue.toObject()).toJson(QJsonDocument::Compact));
+            } else if (forwardMetaValue.isArray()) {
+                forwardMetaJson = QString::fromUtf8(QJsonDocument(forwardMetaValue.toArray()).toJson(QJsonDocument::Compact));
+            } else if (forwardMetaValue.isString()) {
+                forwardMetaJson = forwardMetaValue.toString();
+            }
+            const qint64 editedAtMs = one.value("edited_at_ms").toVariant().toLongLong();
+            const qint64 deletedAtMs = one.value("deleted_at_ms").toVariant().toLongLong();
+            QString state = QStringLiteral("sent");
+            if (deletedAtMs > 0 || one.value("msgtype").toString() == QStringLiteral("revoke")
+                || one.value("content").toString() == QStringLiteral("[消息已撤回]")) {
+                state = QStringLiteral("deleted");
+            } else if (editedAtMs > 0) {
+                state = QStringLiteral("edited");
+            }
             auto msg = std::make_shared<TextChatData>(one.value("msgid").toString(),
                                                       one.value("content").toString(),
                                                       one.value("fromuid").toInt(),
                                                       0,
                                                       fromName,
                                                       createdAt,
-                                                      fromIcon);
+                                                      fromIcon,
+                                                      state,
+                                                      serverMsgId,
+                                                      groupSeq,
+                                                      replyToServerMsgId,
+                                                      forwardMetaJson,
+                                                      editedAtMs,
+                                                      deletedAtMs);
             UserMgr::GetInstance()->UpsertGroupChatMsg(groupId, msg);
         }
+        emit sig_group_rsp(id, err, jsonObj);
       });
 
     _handlers.insert(ID_UPDATE_GROUP_ANNOUNCEMENT_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
@@ -579,6 +628,54 @@ void TcpMgr::initHandlers()
       });
 
     _handlers.insert(ID_UPDATE_GROUP_ICON_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_SYNC_DRAFT_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_PIN_DIALOG_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_EDIT_GROUP_MSG_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_REVOKE_GROUP_MSG_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_EDIT_PRIVATE_MSG_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_REVOKE_PRIVATE_MSG_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_FORWARD_GROUP_MSG_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+      });
+
+    _handlers.insert(ID_FORWARD_PRIVATE_MSG_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
         QJsonObject jsonObj;
         parse_group_rsp(id, data, jsonObj);
@@ -671,10 +768,61 @@ void TcpMgr::initHandlers()
         const qint64 topCreatedAt = normalize_group_created_at(jsonObj.value("created_at").toVariant().toLongLong());
         const qint64 msgCreatedAt = msgObj.value("created_at").toVariant().toLongLong();
         msgObj["created_at"] = normalize_group_created_at(msgCreatedAt <= 0 ? topCreatedAt : msgCreatedAt);
+        const qint64 topServerMsgId = jsonObj.value("server_msg_id").toVariant().toLongLong();
+        if (!msgObj.contains("server_msg_id") || msgObj.value("server_msg_id").toVariant().toLongLong() <= 0) {
+            msgObj["server_msg_id"] = topServerMsgId;
+        }
+        const qint64 topGroupSeq = jsonObj.value("group_seq").toVariant().toLongLong();
+        if (!msgObj.contains("group_seq") || msgObj.value("group_seq").toVariant().toLongLong() <= 0) {
+            msgObj["group_seq"] = topGroupSeq;
+        }
+        if (!msgObj.contains("reply_to_server_msg_id")) {
+            const qint64 topReplyToServerMsgId = jsonObj.value("reply_to_server_msg_id").toVariant().toLongLong();
+            if (topReplyToServerMsgId > 0) {
+                msgObj["reply_to_server_msg_id"] = topReplyToServerMsgId;
+            }
+        }
+        if (!msgObj.contains("forward_meta") && jsonObj.contains("forward_meta")) {
+            msgObj["forward_meta"] = jsonObj.value("forward_meta");
+        }
+        if (!msgObj.contains("edited_at_ms") && jsonObj.contains("edited_at_ms")) {
+            msgObj["edited_at_ms"] = jsonObj.value("edited_at_ms");
+        }
+        if (!msgObj.contains("deleted_at_ms") && jsonObj.contains("deleted_at_ms")) {
+            msgObj["deleted_at_ms"] = jsonObj.value("deleted_at_ms");
+        }
         const QString fromName = jsonObj.value("from_nick").toString(jsonObj.value("from_name").toString());
         const QString fromIcon = jsonObj.value("from_icon").toString();
         auto groupMsg = std::make_shared<GroupChatMsg>(groupId, fromUid, msgObj, fromName, fromIcon);
         emit sig_group_chat_msg(groupMsg);
+      });
+
+    _handlers.insert(ID_NOTIFY_PRIVATE_MSG_CHANGED_REQ, [this](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(id);
+        Q_UNUSED(len);
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+        if (jsonDoc.isNull() || !jsonDoc.isObject()) {
+            return;
+        }
+        const QJsonObject jsonObj = jsonDoc.object();
+        if (jsonObj.value("error").toInt(ErrorCodes::ERR_JSON) != ErrorCodes::SUCCESS) {
+            return;
+        }
+        emit sig_private_msg_changed(jsonObj);
+      });
+
+    _handlers.insert(ID_NOTIFY_PRIVATE_READ_ACK_REQ, [this](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(id);
+        Q_UNUSED(len);
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+        if (jsonDoc.isNull() || !jsonDoc.isObject()) {
+            return;
+        }
+        const QJsonObject jsonObj = jsonDoc.object();
+        if (jsonObj.value("error").toInt(ErrorCodes::ERR_JSON) != ErrorCodes::SUCCESS) {
+            return;
+        }
+        emit sig_private_read_ack(jsonObj);
       });
 
     _handlers.insert(ID_NOTIFY_OFF_LINE_REQ,[this](ReqId id, int len, QByteArray data){
