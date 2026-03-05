@@ -33,14 +33,25 @@ Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatSer
     memolog::TraceScope trace_scope(ExtractTraceId(context));
 
     const auto& server = getChatServer();
+    const int uid = request->uid();
+    const std::string token_key = USERTOKENPREFIX + std::to_string(uid);
+    std::string token_value;
+    bool has_token = RedisMgr::GetInstance()->Get(token_key, token_value);
+
     reply->set_host(server.host);
     reply->set_port(server.port);
     reply->set_error(ErrorCodes::Success);
-    reply->set_token(generate_unique_string());
-    insertToken(request->uid(), reply->token());
+    if (has_token && !token_value.empty()) {
+        // Reuse existing token to avoid invalidating in-flight chat login handshakes.
+        reply->set_token(token_value);
+    } else {
+        reply->set_token(generate_unique_string());
+        insertToken(uid, reply->token());
+    }
 
     memolog::LogInfo("status.get_chat_server", "select chat server",
-                     {{"uid", std::to_string(request->uid())},
+                     {{"uid", std::to_string(uid)},
+                      {"reuse_token", (has_token && !token_value.empty()) ? "true" : "false"},
                       {"host", server.host},
                       {"port", server.port}});
     return Status::OK;
@@ -88,9 +99,9 @@ Status StatusServiceImpl::Login(ServerContext* context, const LoginReq* request,
     std::string token_key = USERTOKENPREFIX + uid_str;
     std::string token_value;
     bool success = RedisMgr::GetInstance()->Get(token_key, token_value);
-    if (success) {
+    if (!success || token_value.empty()) {
         reply->set_error(ErrorCodes::UidInvalid);
-        memolog::LogWarn("status.login.failed", "uid already active",
+        memolog::LogWarn("status.login.failed", "uid token not found",
                          {{"uid", std::to_string(uid)},
                           {"error_code", std::to_string(ErrorCodes::UidInvalid)}});
         return Status::OK;
