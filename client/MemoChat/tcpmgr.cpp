@@ -886,6 +886,7 @@ void TcpMgr::initHandlers()
         }
 
         qDebug() << "Receive Heart Beat Msg Success" ;
+        emit sig_heartbeat_ack(QDateTime::currentMSecsSinceEpoch());
 
     });
 

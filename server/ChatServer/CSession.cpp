@@ -278,8 +278,9 @@ LogicNode::LogicNode(shared_ptr<CSession>  session,
 
 
 bool CSession::IsHeartbeatExpired(std::time_t& now) {
+	constexpr double kHeartbeatExpireSeconds = 45.0;
 	double diff_sec = std::difftime(now, _last_heartbeat);
-	if (diff_sec > 20) {
+	if (diff_sec > kHeartbeatExpireSeconds) {
 		std::cout << "heartbeat expired, session id is  " << _session_id << endl;
 		return true;
 	}

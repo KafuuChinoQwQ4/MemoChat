@@ -1,5 +1,7 @@
 #include "MysqlDao.h"
 #include "ConfigMgr.h"
+#include "MySqlPool.h"
+#include <jdbc/cppconn/prepared_statement.h>
 #include <set>
 #include <algorithm>
 #include <chrono>

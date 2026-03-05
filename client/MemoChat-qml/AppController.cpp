@@ -26,6 +26,9 @@ constexpr qint64 kPermManageTopics = 1LL << 6;
 constexpr qint64 kDefaultAdminPermBits =
     kPermChangeGroupInfo | kPermDeleteMessages | kPermInviteUsers | kPermPinMessages | kPermBanUsers;
 constexpr qint64 kOwnerPermBits = kDefaultAdminPermBits | kPermManageAdmins | kPermManageTopics;
+constexpr int kHeartbeatIntervalMs = 10000;
+constexpr int kHeartbeatAckMissThreshold = 2;
+constexpr qint64 kHeartbeatAckGraceMs = 22000;
 }
 
 AppController::AppController(QObject *parent)
@@ -123,6 +126,8 @@ AppController::AppController(QObject *parent)
             this, &AppController::onPrivateMsgChanged);
     connect(_gateway.tcpMgr().get(), &TcpMgr::sig_private_read_ack,
             this, &AppController::onPrivateReadAck);
+    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_heartbeat_ack,
+            this, &AppController::onHeartbeatAck);
     connect(&_apply_request_model, &ApplyRequestModel::unapprovedCountChanged,
             this, &AppController::pendingApplyChanged);
 
@@ -453,6 +458,7 @@ void AppController::switchToLogin()
 {
     _register_countdown_timer.stop();
     _heartbeat_timer.stop();
+    resetHeartbeatTracking();
     _chat_login_timeout_timer.stop();
     _private_cache_store.close();
     _group_cache_store.close();
@@ -518,6 +524,7 @@ void AppController::switchToRegister()
 {
     _register_countdown_timer.stop();
     _heartbeat_timer.stop();
+    resetHeartbeatTracking();
     if (_register_success_page) {
         _register_success_page = false;
         emit registerSuccessPageChanged();
@@ -530,6 +537,7 @@ void AppController::switchToReset()
 {
     _register_countdown_timer.stop();
     _heartbeat_timer.stop();
+    resetHeartbeatTracking();
     if (_register_success_page) {
         _register_success_page = false;
         emit registerSuccessPageChanged();
@@ -2066,6 +2074,8 @@ void AppController::onChatLoginFailed(int err)
 void AppController::onSwitchToChat()
 {
     _chat_login_timeout_timer.stop();
+    resetHeartbeatTracking();
+    _last_heartbeat_ack_ms = QDateTime::currentMSecsSinceEpoch();
     setBusy(false);
     setTip("", false);
     setSearchPending(false);
@@ -2144,7 +2154,7 @@ void AppController::onSwitchToChat()
         }
 
         // Keep chat session alive; server considers session expired after heartbeat timeout.
-        _heartbeat_timer.start(10000);
+        _heartbeat_timer.start(kHeartbeatIntervalMs);
         onHeartbeatTimeout();
     });
 }
@@ -2175,10 +2185,35 @@ void AppController::onHeartbeatTimeout()
         return;
     }
 
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    if (_last_heartbeat_sent_ms > 0 && _last_heartbeat_ack_ms < _last_heartbeat_sent_ms) {
+        ++_heartbeat_ack_miss_count;
+    } else {
+        _heartbeat_ack_miss_count = 0;
+    }
+
+    if (_heartbeat_ack_miss_count >= kHeartbeatAckMissThreshold
+        && (nowMs - _last_heartbeat_sent_ms) >= kHeartbeatAckGraceMs) {
+        _closed_by_heartbeat_watchdog = true;
+        _heartbeat_timer.stop();
+        _gateway.tcpMgr()->CloseConnection();
+        return;
+    }
+
     QJsonObject hb;
     hb["fromuid"] = selfInfo->_uid;
     const QByteArray payload = QJsonDocument(hb).toJson(QJsonDocument::Compact);
     _gateway.tcpMgr()->slot_send_data(ReqId::ID_HEART_BEAT_REQ, payload);
+    _last_heartbeat_sent_ms = nowMs;
+}
+
+void AppController::onHeartbeatAck(qint64 ackAtMs)
+{
+    if (ackAtMs <= 0) {
+        ackAtMs = QDateTime::currentMSecsSinceEpoch();
+    }
+    _last_heartbeat_ack_ms = ackAtMs;
+    _heartbeat_ack_miss_count = 0;
 }
 
 void AppController::onAddAuthFriend(std::shared_ptr<AuthInfo> authInfo)
@@ -2341,6 +2376,7 @@ void AppController::onNotifyOffline()
     }
 
     _heartbeat_timer.stop();
+    resetHeartbeatTracking();
     _gateway.tcpMgr()->CloseConnection();
     switchToLogin();
     setTip("同账号异地登录，该终端下线", true);
@@ -2354,12 +2390,37 @@ void AppController::onConnectionClosed()
             setBusy(false);
             setTip("聊天服务连接断开，请重试", true);
         }
+        resetHeartbeatTracking();
         return;
     }
 
     _heartbeat_timer.stop();
+    const bool heartbeatTimeout = isHeartbeatLikelyTimeout();
     switchToLogin();
-    setTip("心跳超时或连接断开，请重新登录", true);
+    setTip(heartbeatTimeout ? "心跳超时，请重新登录" : "聊天连接已断开，请重新登录", true);
+}
+
+void AppController::resetHeartbeatTracking()
+{
+    _last_heartbeat_sent_ms = 0;
+    _last_heartbeat_ack_ms = 0;
+    _heartbeat_ack_miss_count = 0;
+    _closed_by_heartbeat_watchdog = false;
+}
+
+bool AppController::isHeartbeatLikelyTimeout() const
+{
+    if (_closed_by_heartbeat_watchdog) {
+        return true;
+    }
+    if (_last_heartbeat_sent_ms <= 0) {
+        return false;
+    }
+    if (_last_heartbeat_ack_ms >= _last_heartbeat_sent_ms) {
+        return false;
+    }
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    return (nowMs - _last_heartbeat_sent_ms) >= kHeartbeatAckGraceMs;
 }
 
 void AppController::onGroupListUpdated()

@@ -274,6 +274,7 @@ private slots:
     void onSwitchToChat();
     void onRegisterCountdownTimeout();
     void onHeartbeatTimeout();
+    void onHeartbeatAck(qint64 ackAtMs);
     void onAddAuthFriend(std::shared_ptr<AuthInfo> authInfo);
     void onAuthRsp(std::shared_ptr<AuthRsp> authRsp);
     void onTextChatMsg(std::shared_ptr<TextChatMsg> msg);
@@ -349,6 +350,8 @@ private:
     void applyDraftToDialogModel(int dialogUid, const QString &draftText);
     void sendGroupReadAck(qint64 groupId, qint64 readTs = 0);
     void sendPrivateReadAck(int peerUid, qint64 readTs = 0);
+    void resetHeartbeatTracking();
+    bool isHeartbeatLikelyTimeout() const;
 
     Page _page;
     QString _tip_text;
@@ -432,6 +435,10 @@ private:
     QTimer _register_countdown_timer;
     QTimer _heartbeat_timer;
     QTimer _chat_login_timeout_timer;
+    qint64 _last_heartbeat_sent_ms = 0;
+    qint64 _last_heartbeat_ack_ms = 0;
+    int _heartbeat_ack_miss_count = 0;
+    bool _closed_by_heartbeat_watchdog = false;
 };
 
 #endif // APPCONTROLLER_H
