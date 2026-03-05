@@ -10,6 +10,7 @@ add_executable(ChatServer
     LogicSystem.cpp
     MsgNode.cpp
     MysqlDao.cpp
+    MySqlPool.cpp
     MysqlMgr.cpp
     RedisMgr.cpp
     StatusGrpcClient.cpp
@@ -26,6 +27,7 @@ add_executable(ChatServer
     LogicSystem.h
     MsgNode.h
     MysqlDao.h
+    MySqlPool.h
     MysqlMgr.h
     RedisMgr.h
     Singleton.h
