@@ -11,6 +11,7 @@
 #include <QDateTime>
 #include <QStandardPaths>
 #include <QSurfaceFormat>
+#include <QGuiApplication>
 #include <QWindow>
 #include <QQuickWindow>
 #include <QTimer>
@@ -122,6 +123,40 @@ void applyWindowsAcrylic(QQuickWindow *window)
     data.data = &policy;
     data.size_of_data = sizeof(policy);
     set_wca(hwnd, &data);
+}
+
+void ensureAcrylicVisibleHook(QQuickWindow *window)
+{
+    if (!window || window->property("_memochat_acrylic_hooked").toBool()) {
+        return;
+    }
+    window->setProperty("_memochat_acrylic_hooked", true);
+    QObject::connect(window,
+                     &QWindow::visibleChanged,
+                     window,
+                     [window](bool visible) {
+                         if (!visible) {
+                             return;
+                         }
+                         QTimer::singleShot(0, window, [window]() {
+                             applyWindowsAcrylic(window);
+                         });
+                     });
+}
+
+void applyAcrylicToTopLevelQuickWindows()
+{
+    const auto windows = QGuiApplication::topLevelWindows();
+    for (QWindow *win : windows) {
+        auto *quickWindow = qobject_cast<QQuickWindow *>(win);
+        if (!quickWindow) {
+            continue;
+        }
+        ensureAcrylicVisibleHook(quickWindow);
+        if (quickWindow->isVisible()) {
+            applyWindowsAcrylic(quickWindow);
+        }
+    }
 }
 #endif
 
@@ -319,23 +354,19 @@ int main(int argc, char *argv[])
         QObject *root_object = engine.rootObjects().constFirst();
         if (auto *window = qobject_cast<QQuickWindow *>(root_object)) {
             window->setColor(Qt::transparent);
-#ifdef Q_OS_WIN
-            auto apply_backdrop = [window]() {
-                applyWindowsAcrylic(window);
-            };
-            QTimer::singleShot(0, window, apply_backdrop);
-            QObject::connect(
-                window,
-                &QWindow::visibleChanged,
-                window,
-                [apply_backdrop](bool visible) {
-                    if (visible) {
-                        apply_backdrop();
-                    }
-                });
-#endif
         }
     }
+#ifdef Q_OS_WIN
+    QTimer::singleShot(0, &app, []() {
+        applyAcrylicToTopLevelQuickWindows();
+    });
+    QObject::connect(&app,
+                     &QGuiApplication::focusWindowChanged,
+                     &app,
+                     [](QWindow *) {
+                         applyAcrylicToTopLevelQuickWindows();
+                     });
+#endif
 
     return app.exec();
 }

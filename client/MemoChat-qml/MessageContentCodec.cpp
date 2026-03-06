@@ -16,12 +16,21 @@ QString MessageContentCodec::encodeImage(const QString &fileUrl)
     return kImagePrefix + fileUrl;
 }
 
-QString MessageContentCodec::encodeFile(const QString &fileUrl, const QString &fileName)
+QString MessageContentCodec::encodeFile(const QString &fileUrl, const QString &fileName,
+                                        const QString &mimeType, qint64 sizeBytes)
 {
-    if (!fileName.isEmpty()) {
+    if (!fileName.isEmpty() || !mimeType.isEmpty() || sizeBytes > 0) {
         QJsonObject fileObj;
         fileObj["url"] = fileUrl;
-        fileObj["name"] = fileName;
+        if (!fileName.isEmpty()) {
+            fileObj["name"] = fileName;
+        }
+        if (!mimeType.isEmpty()) {
+            fileObj["mime"] = mimeType;
+        }
+        if (sizeBytes > 0) {
+            fileObj["size"] = static_cast<qint64>(sizeBytes);
+        }
         const QByteArray compact = QJsonDocument(fileObj).toJson(QJsonDocument::Compact);
         return kFilePrefix + QString("json:") + QString::fromLatin1(compact.toBase64());
     }
@@ -71,6 +80,8 @@ DecodedMessageContent MessageContentCodec::decode(const QString &rawContent)
                 const QJsonObject obj = doc.object();
                 decoded.content = obj.value("url").toString();
                 decoded.fileName = obj.value("name").toString();
+                decoded.mimeType = obj.value("mime").toString();
+                decoded.sizeBytes = obj.value("size").toVariant().toLongLong();
             }
         }
 

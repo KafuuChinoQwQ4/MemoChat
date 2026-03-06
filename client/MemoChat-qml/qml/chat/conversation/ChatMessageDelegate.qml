@@ -59,8 +59,11 @@ Item {
     readonly property real bubbleMinWidth: compactTextBubble ? 24 : 56
     readonly property real bubbleContentMaxWidth: Math.max(72, bubbleMaxWidth - (bubbleHorizontalPadding * 2 + 2))
     readonly property real messageHeight: Math.max(bubble.implicitHeight, showAvatar ? avatarSize : 0)
+    readonly property bool showStateLabel: (root.outgoing && root.messageState !== "sent")
+                                           || (!root.outgoing && (root.messageState === "edited" || root.messageState === "deleted"))
+    readonly property int stateLabelHeight: showStateLabel ? 16 : 0
 
-    height: topSpacing + messageHeight + bottomSpacing
+    height: topSpacing + messageHeight + stateLabelHeight + bottomSpacing
 
     Item {
         anchors.left: parent.left
@@ -235,8 +238,7 @@ Item {
     }
 
     Text {
-        visible: (root.outgoing && root.messageState !== "sent")
-                 || (!root.outgoing && (root.messageState === "edited" || root.messageState === "deleted"))
+        visible: root.showStateLabel
         anchors.right: bubble.right
         anchors.top: bubble.bottom
         anchors.topMargin: 3

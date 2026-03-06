@@ -9,6 +9,8 @@ Item {
     property Item backdrop: null
     property bool enabledComposer: false
     property bool isGroupChat: false
+    property bool mediaUploadInProgress: false
+    property string mediaUploadProgressText: ""
     property string draftText: ""
     property bool syncingDraftText: false
     property string transientTipText: ""
@@ -77,7 +79,7 @@ Item {
                 id: emojiButton
                 Layout.preferredWidth: 30
                 Layout.preferredHeight: 30
-                enabled: root.enabledComposer
+                enabled: root.enabledComposer && !root.mediaUploadInProgress
                 hoverEnabled: true
                 scale: down ? 0.96 : (hovered ? 1.02 : 1.0)
                 onClicked: root.insertEmoji("😀")
@@ -121,7 +123,7 @@ Item {
                 id: imageButton
                 Layout.preferredWidth: 30
                 Layout.preferredHeight: 30
-                enabled: root.enabledComposer
+                enabled: root.enabledComposer && !root.mediaUploadInProgress
                 hoverEnabled: true
                 scale: down ? 0.96 : (hovered ? 1.02 : 1.0)
                 onClicked: root.sendImage()
@@ -165,7 +167,7 @@ Item {
                 id: fileButton
                 Layout.preferredWidth: 30
                 Layout.preferredHeight: 30
-                enabled: root.enabledComposer
+                enabled: root.enabledComposer && !root.mediaUploadInProgress
                 hoverEnabled: true
                 scale: down ? 0.96 : (hovered ? 1.02 : 1.0)
                 onClicked: root.sendFile()
@@ -209,7 +211,7 @@ Item {
                 id: voiceButton
                 Layout.preferredWidth: 30
                 Layout.preferredHeight: 30
-                enabled: root.enabledComposer
+                enabled: root.enabledComposer && !root.mediaUploadInProgress
                 hoverEnabled: true
                 scale: down ? 0.96 : (hovered ? 1.02 : 1.0)
                 onClicked: {
@@ -259,7 +261,7 @@ Item {
                 id: videoButton
                 Layout.preferredWidth: 30
                 Layout.preferredHeight: 30
-                enabled: root.enabledComposer
+                enabled: root.enabledComposer && !root.mediaUploadInProgress
                 hoverEnabled: true
                 scale: down ? 0.96 : (hovered ? 1.02 : 1.0)
                 onClicked: {
@@ -313,6 +315,15 @@ Item {
             visible: root.transientTipText.length > 0
             text: root.transientTipText
             color: "#b24f4f"
+            font.pixelSize: 12
+            elide: Text.ElideRight
+        }
+
+        Label {
+            Layout.fillWidth: true
+            visible: root.mediaUploadInProgress
+            text: root.mediaUploadProgressText.length > 0 ? root.mediaUploadProgressText : "上传中..."
+            color: "#3e6f9f"
             font.pixelSize: 12
             elide: Text.ElideRight
         }
@@ -421,7 +432,7 @@ Item {
                 anchors.rightMargin: 106
                 anchors.bottomMargin: 12
                 placeholderText: "输入消息..."
-                enabled: root.enabledComposer
+                enabled: root.enabledComposer && !root.mediaUploadInProgress
                 color: "#253247"
                 selectionColor: "#7baee899"
                 selectedTextColor: "#ffffff"
@@ -450,7 +461,7 @@ Item {
                 hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.36)
                 pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.44)
                 disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                enabled: root.enabledComposer && messageInput.text.trim().length > 0
+                enabled: root.enabledComposer && !root.mediaUploadInProgress && messageInput.text.trim().length > 0
                 onClicked: {
                     root.sendText(messageInput.text)
                     messageInput.clear()

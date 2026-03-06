@@ -5,6 +5,52 @@
 #include <QFileInfo>
 #include <QString>
 #include <QUrl>
+#include <QUrlQuery>
+
+inline int &iconDownloadAuthUid()
+{
+    static int uid = 0;
+    return uid;
+}
+
+inline QString &iconDownloadAuthToken()
+{
+    static QString token;
+    return token;
+}
+
+inline void setIconDownloadAuthContext(int uid, const QString &token)
+{
+    iconDownloadAuthUid() = uid;
+    iconDownloadAuthToken() = token.trimmed();
+}
+
+inline QString attachMediaDownloadAuth(QString icon)
+{
+    const int uid = iconDownloadAuthUid();
+    const QString token = iconDownloadAuthToken();
+    if (uid <= 0 || token.isEmpty()) {
+        return icon;
+    }
+
+    QUrl url(icon);
+    if (!url.isValid() || url.scheme().isEmpty() || url.isLocalFile()) {
+        return icon;
+    }
+
+    const QString path = url.path();
+    if (!path.endsWith(QStringLiteral("/media/download")) && !path.contains(QStringLiteral("/media/download"))) {
+        return icon;
+    }
+
+    QUrlQuery query(url);
+    query.removeAllQueryItems(QStringLiteral("uid"));
+    query.removeAllQueryItems(QStringLiteral("token"));
+    query.addQueryItem(QStringLiteral("uid"), QString::number(uid));
+    query.addQueryItem(QStringLiteral("token"), token);
+    url.setQuery(query);
+    return url.toString();
+}
 
 inline QString normalizeIconForQml(QString icon)
 {
@@ -45,7 +91,7 @@ inline QString normalizeIconForQml(QString icon)
             }
             return kDefaultIcon;
         }
-        return icon;
+        return attachMediaDownloadAuth(icon);
     }
 
     if (QDir::isAbsolutePath(icon)) {

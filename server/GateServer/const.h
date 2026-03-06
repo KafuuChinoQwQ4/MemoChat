@@ -56,3 +56,4 @@ private:
 };
 
 #define CODEPREFIX "code_"
+#define USERTOKENPREFIX "utoken_"

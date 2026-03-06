@@ -3,6 +3,7 @@
 #include <limits>
 #include <algorithm>
 #include <unordered_set>
+#include <QUrlQuery>
 
 ChatMessageModel::ChatMessageModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -317,6 +318,48 @@ QString ChatMessageModel::previewTextByMsgId(const QString &msgId) const
     return {};
 }
 
+void ChatMessageModel::setDownloadAuthContext(int uid, const QString &token)
+{
+    if (_download_uid == uid && _download_token == token) {
+        return;
+    }
+    _download_uid = uid;
+    _download_token = token;
+    if (_items.empty()) {
+        return;
+    }
+    beginResetModel();
+    for (auto &entry : _items) {
+        if ((entry.msgType == QStringLiteral("image") || entry.msgType == QStringLiteral("file"))
+            && !entry.content.isEmpty()) {
+            entry.content = withDownloadAuth(entry.content);
+        }
+    }
+    endResetModel();
+}
+
+QString ChatMessageModel::withDownloadAuth(const QString &urlText) const
+{
+    if (_download_uid <= 0 || _download_token.trimmed().isEmpty()) {
+        return urlText;
+    }
+    QUrl url(urlText);
+    if (!url.isValid()) {
+        return urlText;
+    }
+    const QString path = url.path();
+    if (!path.endsWith("/media/download") && !path.contains("/media/download")) {
+        return urlText;
+    }
+    QUrlQuery query(url);
+    query.removeQueryItem("uid");
+    query.removeQueryItem("token");
+    query.addQueryItem("uid", QString::number(_download_uid));
+    query.addQueryItem("token", _download_token);
+    url.setQuery(query);
+    return url.toString();
+}
+
 ChatMessageModel::MessageEntry ChatMessageModel::toEntry(const std::shared_ptr<TextChatData> &message, int selfUid) const
 {
     MessageEntry entry;
@@ -326,6 +369,10 @@ ChatMessageModel::MessageEntry ChatMessageModel::toEntry(const std::shared_ptr<T
     entry.content = decoded.content;
     entry.msgType = decoded.type;
     entry.fileName = decoded.fileName;
+    if ((entry.msgType == QStringLiteral("image") || entry.msgType == QStringLiteral("file"))
+        && !entry.content.isEmpty()) {
+        entry.content = withDownloadAuth(entry.content);
+    }
     entry.isReply = decoded.isReply;
     entry.replyToMsgId = decoded.replyToMsgId;
     entry.replySender = decoded.replySender;

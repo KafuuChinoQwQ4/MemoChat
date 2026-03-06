@@ -5,6 +5,7 @@ add_executable(GateServer
     GateServer.cpp
     HttpConnection.cpp
     LogicSystem.cpp
+    MediaStorage.cpp
     MysqlDao.cpp
     MysqlMgr.cpp
     RedisMgr.cpp
@@ -16,6 +17,7 @@ add_executable(GateServer
     CServer.h
     HttpConnection.h
     LogicSystem.h
+    MediaStorage.h
     MysqlDao.h
     MysqlMgr.h
     RedisMgr.h

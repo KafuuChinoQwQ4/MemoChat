@@ -57,41 +57,31 @@ void LogicSystem::SetServer(std::shared_ptr<CServer> pserver) {
 
 void LogicSystem::DealMsg() {
 	for (;;) {
-		std::unique_lock<std::mutex> unique_lk(_mutex);
-
-		while (_msg_que.empty() && !_b_stop) {
-			_consume.wait(unique_lk);
-		}
-
-
-		if (_b_stop ) {
-			while (!_msg_que.empty()) {
-				auto msg_node = _msg_que.front();
-				cout << "recv_msg id  is " << msg_node->_recvnode->_msg_id << endl;
-				auto call_back_iter = _fun_callbacks.find(msg_node->_recvnode->_msg_id);
-				if (call_back_iter == _fun_callbacks.end()) {
-					_msg_que.pop();
-					continue;
-				}
-				call_back_iter->second(msg_node->_session, msg_node->_recvnode->_msg_id,
-					std::string(msg_node->_recvnode->_data, msg_node->_recvnode->_cur_len));
-				_msg_que.pop();
+		shared_ptr<LogicNode> msg_node;
+		{
+			std::unique_lock<std::mutex> unique_lk(_mutex);
+			_consume.wait(unique_lk, [this]() {
+				return _b_stop || !_msg_que.empty();
+			});
+			if (_b_stop && _msg_que.empty()) {
+				break;
 			}
-			break;
+			msg_node = _msg_que.front();
+			_msg_que.pop();
 		}
 
+		if (!msg_node || !msg_node->_recvnode) {
+			continue;
+		}
 
-		auto msg_node = _msg_que.front();
 		cout << "recv_msg id  is " << msg_node->_recvnode->_msg_id << endl;
 		auto call_back_iter = _fun_callbacks.find(msg_node->_recvnode->_msg_id);
 		if (call_back_iter == _fun_callbacks.end()) {
-			_msg_que.pop();
 			std::cout << "msg id [" << msg_node->_recvnode->_msg_id << "] handler not found" << std::endl;
 			continue;
 		}
-		call_back_iter->second(msg_node->_session, msg_node->_recvnode->_msg_id, 
+		call_back_iter->second(msg_node->_session, msg_node->_recvnode->_msg_id,
 			std::string(msg_node->_recvnode->_data, msg_node->_recvnode->_cur_len));
-		_msg_que.pop();
 	}
 }
 

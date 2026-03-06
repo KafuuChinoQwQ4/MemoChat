@@ -32,6 +32,14 @@ std::string MysqlMgr::GetUserPublicId(int uid) {
 	return _dao.GetUserPublicId(uid);
 }
 
+bool MysqlMgr::InsertMediaAsset(const MediaAssetInfo& asset) {
+	return _dao.InsertMediaAsset(asset);
+}
+
+bool MysqlMgr::GetMediaAssetByKey(const std::string& media_key, MediaAssetInfo& asset) {
+	return _dao.GetMediaAssetByKey(media_key, asset);
+}
+
 bool MysqlMgr::TestProcedure(const std::string& email, int& uid, string& name) {
 	return _dao.TestProcedure(email,uid, name);
 }
