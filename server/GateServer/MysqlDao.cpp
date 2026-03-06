@@ -47,6 +47,9 @@ MysqlDao::MysqlDao()
 	if (!EnsureUserPublicIdSchemaAndBackfill()) {
 		throw std::runtime_error("failed to ensure/backfill user.user_id");
 	}
+	if (!EnsureMediaAssetSchema()) {
+		throw std::runtime_error("failed to ensure chat_media_asset schema");
+	}
 }
 
 MysqlDao::~MysqlDao(){
@@ -397,6 +400,93 @@ std::string MysqlDao::GetUserPublicId(int uid) {
 	}
 }
 
+bool MysqlDao::InsertMediaAsset(const MediaAssetInfo& asset) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"INSERT INTO chat_media_asset("
+				"media_key, owner_uid, media_type, origin_file_name, mime, size_bytes, "
+				"storage_provider, storage_path, created_at_ms, deleted_at_ms, status"
+				") VALUES(?,?,?,?,?,?,?,?,?,?,?)"));
+		pstmt->setString(1, asset.media_key);
+		pstmt->setInt(2, asset.owner_uid);
+		pstmt->setString(3, asset.media_type);
+		pstmt->setString(4, asset.origin_file_name);
+		pstmt->setString(5, asset.mime);
+		pstmt->setInt64(6, asset.size_bytes);
+		pstmt->setString(7, asset.storage_provider);
+		pstmt->setString(8, asset.storage_path);
+		pstmt->setInt64(9, asset.created_at_ms);
+		pstmt->setInt64(10, asset.deleted_at_ms);
+		pstmt->setInt(11, asset.status);
+		const int update = pstmt->executeUpdate();
+		return update > 0;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "InsertMediaAsset SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::GetMediaAssetByKey(const std::string& media_key, MediaAssetInfo& asset) {
+	if (media_key.empty()) {
+		return false;
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"SELECT media_id, media_key, owner_uid, media_type, origin_file_name, mime, size_bytes, "
+				"storage_provider, storage_path, created_at_ms, deleted_at_ms, status "
+				"FROM chat_media_asset WHERE media_key = ? LIMIT 1"));
+		pstmt->setString(1, media_key);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		if (!res->next()) {
+			return false;
+		}
+
+		asset.media_id = res->getInt64("media_id");
+		asset.media_key = res->getString("media_key");
+		asset.owner_uid = res->getInt("owner_uid");
+		asset.media_type = res->isNull("media_type") ? "" : res->getString("media_type");
+		asset.origin_file_name = res->isNull("origin_file_name") ? "" : res->getString("origin_file_name");
+		asset.mime = res->isNull("mime") ? "" : res->getString("mime");
+		asset.size_bytes = res->isNull("size_bytes") ? 0 : res->getInt64("size_bytes");
+		asset.storage_provider = res->isNull("storage_provider") ? "" : res->getString("storage_provider");
+		asset.storage_path = res->isNull("storage_path") ? "" : res->getString("storage_path");
+		asset.created_at_ms = res->isNull("created_at_ms") ? 0 : res->getInt64("created_at_ms");
+		asset.deleted_at_ms = res->isNull("deleted_at_ms") ? 0 : res->getInt64("deleted_at_ms");
+		asset.status = res->isNull("status") ? 0 : res->getInt("status");
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "GetMediaAssetByKey SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
 std::string MysqlDao::GenerateRandomUserPublicId() {
 	static thread_local std::mt19937_64 rng(std::random_device{}());
 	std::uniform_int_distribution<int> dist(100000000, 999999999);
@@ -506,6 +596,45 @@ bool MysqlDao::EnsureUserPublicIdSchemaAndBackfill() {
 			}
 		}
 		std::cerr << "EnsureUserPublicIdSchemaAndBackfill SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::EnsureMediaAssetSchema() {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
+		stmt->execute(
+			"CREATE TABLE IF NOT EXISTS chat_media_asset ("
+			"media_id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+			"media_key VARCHAR(64) NOT NULL,"
+			"owner_uid INT NOT NULL,"
+			"media_type VARCHAR(16) NOT NULL,"
+			"origin_file_name VARCHAR(255) NOT NULL,"
+			"mime VARCHAR(127) DEFAULT '',"
+			"size_bytes BIGINT NOT NULL DEFAULT 0,"
+			"storage_provider VARCHAR(32) NOT NULL DEFAULT 'local',"
+			"storage_path VARCHAR(1024) NOT NULL,"
+			"created_at_ms BIGINT NOT NULL,"
+			"deleted_at_ms BIGINT NOT NULL DEFAULT 0,"
+			"status TINYINT NOT NULL DEFAULT 1,"
+			"UNIQUE KEY uk_media_key(media_key),"
+			"KEY idx_owner_created(owner_uid, created_at_ms)"
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "EnsureMediaAssetSchema SQLException: " << e.what();
 		std::cerr << " (MySQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;

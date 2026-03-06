@@ -30,6 +30,10 @@ Rectangle {
     property int selectedDialogUid: 0
     property int selectedChatUid: 0
     property int selectedGroupUid: 0
+    property real _sessionLastContentY: 0
+    property bool _chatLoadBottomArmed: true
+    property real _chatLoadThresholdPx: 48
+    property real _chatLoadRearmOffsetPx: 96
 
     signal dialogUidSelected(int uid)
     signal chatIndexSelected(int index)
@@ -49,7 +53,11 @@ Rectangle {
     signal dialogDraftCleared(int uid)
 
     onCurrentTabChanged: if (currentTab !== 0) { sessionFilter = 0 }
-    onSessionFilterChanged: sessionList.currentIndex = -1
+    onSessionFilterChanged: {
+        sessionList.currentIndex = -1
+        _sessionLastContentY = sessionList.contentY
+        _chatLoadBottomArmed = true
+    }
 
     function activateSession(uidValue, indexValue) {
         sessionList.currentIndex = indexValue
@@ -387,10 +395,39 @@ Rectangle {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             clip: true
+                            interactive: false
                             model: root.sessionFilter === 0 ? root.dialogModel
                                   : (root.sessionFilter === 1 ? root.chatModel : root.groupModel)
                             ScrollBar.vertical: GlassScrollBar { }
+                            WheelHandler {
+                                target: null
+                                onWheel: function(event) {
+                                    const maxY = Math.max(0, sessionList.contentHeight - sessionList.height)
+                                    let deltaY = 0
+                                    if (event.pixelDelta.y !== 0) {
+                                        deltaY = event.pixelDelta.y
+                                    } else if (event.angleDelta.y !== 0) {
+                                        deltaY = (event.angleDelta.y / 120) * 48
+                                    }
+                                    if (deltaY === 0) {
+                                        return
+                                    }
+                                    const nextY = Math.max(0, Math.min(maxY, sessionList.contentY - deltaY))
+                                    if (Math.abs(nextY - sessionList.contentY) > 0.1) {
+                                        sessionList.contentY = nextY
+                                        event.accepted = true
+                                    }
+                                }
+                            }
                             onContentYChanged: {
+                                const movingDown = contentY > root._sessionLastContentY + 0.5
+                                const nearBottom = (contentY + height) >= (contentHeight - root._chatLoadThresholdPx)
+                                root._sessionLastContentY = contentY
+
+                                if ((contentY + height) < (contentHeight - root._chatLoadRearmOffsetPx)) {
+                                    root._chatLoadBottomArmed = true
+                                }
+
                                 if (root.sessionFilter !== 1) {
                                     return
                                 }
@@ -400,7 +437,8 @@ Rectangle {
                                 if (contentHeight <= height + 1) {
                                     return
                                 }
-                                if (contentY + height >= contentHeight - 48) {
+                                if (movingDown && nearBottom && root._chatLoadBottomArmed) {
+                                    root._chatLoadBottomArmed = false
                                     root.requestChatLoadMore()
                                 }
                             }

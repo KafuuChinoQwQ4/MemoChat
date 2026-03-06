@@ -1,6 +1,7 @@
 #pragma once
 #include "const.h"
 #include <thread>
+#include <cstdint>
 
 class SqlConnection {
 public:
@@ -220,6 +221,21 @@ struct UserInfo {
 	std::string email;
 };
 
+struct MediaAssetInfo {
+	int64_t media_id = 0;
+	std::string media_key;
+	int owner_uid = 0;
+	std::string media_type;
+	std::string origin_file_name;
+	std::string mime;
+	int64_t size_bytes = 0;
+	std::string storage_provider;
+	std::string storage_path;
+	int64_t created_at_ms = 0;
+	int64_t deleted_at_ms = 0;
+	int status = 1;
+};
+
 class MysqlDao
 {
 public:
@@ -232,9 +248,12 @@ public:
 	bool UpdateUserProfile(int uid, const std::string& nick, const std::string& desc, const std::string& icon);
 	bool CheckPwd(const std::string& name, const std::string& pwd, UserInfo& userInfo);
 	std::string GetUserPublicId(int uid);
+	bool InsertMediaAsset(const MediaAssetInfo& asset);
+	bool GetMediaAssetByKey(const std::string& media_key, MediaAssetInfo& asset);
 	bool TestProcedure(const std::string& email, int& uid, string& name);
 private:
 	bool EnsureUserPublicIdSchemaAndBackfill();
+	bool EnsureMediaAssetSchema();
 	std::string GenerateRandomUserPublicId();
 	std::unique_ptr<MySqlPool> pool_;
 };

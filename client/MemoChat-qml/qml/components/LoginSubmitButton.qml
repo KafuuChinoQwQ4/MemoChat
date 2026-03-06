@@ -30,9 +30,9 @@ Item {
         blurRadius: root.hovering && root.ready ? 38 : 32
         cornerRadius: 10
         fillColor: !root.ready ? Qt.rgba(0.60, 0.67, 0.74, 0.24)
-                               : root.pressed ? Qt.rgba(0.25, 0.50, 0.72, 0.45)
-                                              : root.hovering ? Qt.rgba(0.35, 0.62, 0.82, 0.40)
-                                                              : Qt.rgba(0.45, 0.70, 0.88, 0.36)
+                               : root.pressed ? Qt.rgba(0.18, 0.48, 0.78, 0.50)
+                                              : root.hovering ? Qt.rgba(0.24, 0.58, 0.90, 0.44)
+                                                              : Qt.rgba(0.30, 0.64, 0.94, 0.40)
         strokeColor: !root.ready ? Qt.rgba(1, 1, 1, 0.30)
                                  : Qt.rgba(1, 1, 1, 0.56)
         strokeWidth: 1
@@ -53,53 +53,6 @@ Item {
                 duration: 160
                 easing.type: Easing.InOutQuad
             }
-        }
-    }
-
-    Rectangle {
-        id: sheen
-        width: Math.max(42, root.width * 0.42)
-        height: root.height * 1.9
-        radius: width / 2
-        y: -root.height * 0.45
-        rotation: 17
-        x: -width
-        visible: root.ready
-        opacity: root.hovering ? 0.42 : 0.0
-        gradient: Gradient {
-            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.0) }
-            GradientStop { position: 0.52; color: Qt.rgba(1, 1, 1, 0.64) }
-            GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0.0) }
-        }
-
-        Behavior on opacity {
-            NumberAnimation {
-                duration: 140
-                easing.type: Easing.OutQuad
-            }
-        }
-    }
-
-    NumberAnimation {
-        id: sheenAnim
-        target: sheen
-        property: "x"
-        from: -sheen.width
-        to: root.width + sheen.width
-        duration: 1280
-        easing.type: Easing.InOutQuad
-        loops: Animation.Infinite
-        running: root.hovering && root.ready && !root.busy
-    }
-
-    onHoveringChanged: {
-        if (!hovering) {
-            sheen.x = -sheen.width
-        }
-    }
-    onBusyChanged: {
-        if (busy) {
-            sheen.x = -sheen.width
         }
     }
 

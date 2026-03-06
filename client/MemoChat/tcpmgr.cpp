@@ -8,7 +8,7 @@
 TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_connecting(false),_message_id(0),_message_len(0)
 {
     _connect_timeout_timer.setSingleShot(true);
-    _connect_timeout_timer.setInterval(8000);
+    _connect_timeout_timer.setInterval(15000);
     QObject::connect(&_connect_timeout_timer, &QTimer::timeout, [this]() {
         if (!_connecting) {
             return;
@@ -156,6 +156,11 @@ void TcpMgr::CloseConnection(){
     _socket.close();
 }
 
+bool TcpMgr::isConnected() const
+{
+    return !_connecting && _socket.state() == QAbstractSocket::ConnectedState;
+}
+
 TcpMgr::~TcpMgr(){
 
 }
@@ -171,6 +176,7 @@ void TcpMgr::initHandlers()
 
         if(jsonDoc.isNull()){
            qDebug() << "Failed to create QJsonDocument.";
+           emit sig_login_failed(ErrorCodes::ERR_JSON);
            return;
         }
 
@@ -936,6 +942,11 @@ void TcpMgr::slot_tcp_connect(ServerInfo si)
 
 void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
 {
+    if (_socket.state() != QAbstractSocket::ConnectedState) {
+        qWarning() << "skip send: tcp socket is not connected, req id:" << reqId;
+        return;
+    }
+
     uint16_t id = reqId;
 
 

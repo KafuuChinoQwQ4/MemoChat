@@ -78,6 +78,8 @@ class AppController : public QObject
     Q_PROPERTY(bool settingsStatusError READ settingsStatusError NOTIFY settingsStatusChanged)
     Q_PROPERTY(QString groupStatusText READ groupStatusText NOTIFY groupStatusChanged)
     Q_PROPERTY(bool groupStatusError READ groupStatusError NOTIFY groupStatusChanged)
+    Q_PROPERTY(bool mediaUploadInProgress READ mediaUploadInProgress NOTIFY mediaUploadStateChanged)
+    Q_PROPERTY(QString mediaUploadProgressText READ mediaUploadProgressText NOTIFY mediaUploadStateChanged)
     Q_PROPERTY(QString currentDraftText READ currentDraftText NOTIFY currentDraftTextChanged)
     Q_PROPERTY(bool currentDialogPinned READ currentDialogPinned NOTIFY currentDialogPinnedChanged)
     Q_PROPERTY(bool currentDialogMuted READ currentDialogMuted NOTIFY currentDialogMutedChanged)
@@ -163,6 +165,8 @@ public:
     bool settingsStatusError() const;
     QString groupStatusText() const;
     bool groupStatusError() const;
+    bool mediaUploadInProgress() const;
+    QString mediaUploadProgressText() const;
     QString currentDraftText() const;
     bool currentDialogPinned() const;
     bool currentDialogMuted() const;
@@ -259,6 +263,7 @@ signals:
     void settingsStatusChanged();
     void currentGroupChanged();
     void groupStatusChanged();
+    void mediaUploadStateChanged();
     void currentDraftTextChanged();
     void currentDialogPinnedChanged();
     void currentDialogMutedChanged();
@@ -299,8 +304,10 @@ private:
     bool checkPwdValid(const QString &password);
     bool checkUserValid(const QString &user);
     bool checkVerifyCodeValid(const QString &code);
+    bool isChatTransportReady() const;
     bool dispatchChatContent(const QString &content, const QString &previewText);
     bool dispatchGroupChatContent(const QString &content, const QString &previewText);
+    void startMediaUploadAndSend(const QString &fileUrl, const QString &mediaType, const QString &fallbackName);
     void sendCallInvite(const QString &callType);
     QString buildCallJoinUrl(const QString &callType) const;
     bool ensureCallTargetFromCurrentChat();
@@ -334,6 +341,8 @@ private:
     void setSettingsStatus(const QString &text, bool isError);
     void setCurrentGroup(qint64 groupId, const QString &name, const QString &groupCode = QString());
     void setGroupStatus(const QString &text, bool isError);
+    void setMediaUploadInProgress(bool inProgress);
+    void setMediaUploadProgressText(const QString &text);
     void setCurrentDraftText(const QString &text);
     void setCurrentDialogPinned(bool pinned);
     void setCurrentDialogMuted(bool muted);
@@ -350,6 +359,8 @@ private:
     void applyDraftToDialogModel(int dialogUid, const QString &draftText);
     void sendGroupReadAck(qint64 groupId, qint64 readTs = 0);
     void sendPrivateReadAck(int peerUid, qint64 readTs = 0);
+    bool tryReconnectChat();
+    void resetReconnectState();
     void resetHeartbeatTracking();
     bool isHeartbeatLikelyTimeout() const;
 
@@ -364,6 +375,8 @@ private:
     int _pending_uid;
     QString _pending_token;
     QString _pending_trace_id;
+    QString _chat_server_host;
+    QString _chat_server_port;
 
     QString _current_user_name;
     QString _current_user_nick;
@@ -406,6 +419,10 @@ private:
     bool _settings_status_error;
     QString _group_status_text;
     bool _group_status_error;
+    bool _media_upload_in_progress = false;
+    bool _settings_avatar_upload_in_progress = false;
+    bool _group_icon_upload_in_progress = false;
+    QString _media_upload_progress_text;
     QString _current_draft_text;
     bool _current_dialog_pinned = false;
     bool _current_dialog_muted = false;
@@ -424,6 +441,7 @@ private:
     int _private_history_pending_peer_uid;
     qint64 _group_history_before_seq;
     bool _group_history_has_more;
+    bool _dialog_bootstrap_loading = false;
 
     ClientGateway _gateway;
     AuthController _auth_controller;
@@ -439,6 +457,9 @@ private:
     qint64 _last_heartbeat_ack_ms = 0;
     int _heartbeat_ack_miss_count = 0;
     bool _closed_by_heartbeat_watchdog = false;
+    bool _reconnecting_chat = false;
+    int _chat_reconnect_attempts = 0;
+    bool _ignore_next_login_disconnect = false;
 };
 
 #endif // APPCONTROLLER_H

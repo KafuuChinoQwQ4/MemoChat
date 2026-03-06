@@ -10,8 +10,8 @@ Item {
     Row {
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
-        anchors.leftMargin: -2
-        anchors.verticalCenterOffset: -4
+        anchors.leftMargin: -16
+        anchors.verticalCenterOffset: -12
         spacing: 0
 
         LoginIconButton {

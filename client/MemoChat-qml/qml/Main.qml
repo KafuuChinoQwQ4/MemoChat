@@ -7,21 +7,70 @@ import "components"
 
 ApplicationWindow {
     id: root
-    visible: true
+    visible: controller.page !== AppController.ChatPage
     title: "MemoChat QML"
     flags: Qt.Window | Qt.FramelessWindowHint
     color: "transparent"
     property bool isMaximized: visibility === Window.Maximized
     property int windowRadius: isMaximized ? 0 : 20
-
-    property bool chatMode: controller.page === AppController.ChatPage
     property size loginWindowSize: Qt.size(300, 500)
     property size chatWindowSize: Qt.size(1100, 820)
 
-    minimumWidth: chatMode ? 980 : 300
-    minimumHeight: chatMode ? 760 : 500
-    maximumWidth: chatMode ? 100000 : 300
-    maximumHeight: chatMode ? 100000 : 500
+    function centerWindow(win) {
+        if (!win || win.visibility !== Window.Windowed || !win.screen) {
+            return
+        }
+        const area = win.screen.availableGeometry
+        const centeredX = area.x + Math.round((area.width - win.width) / 2)
+        const centeredY = area.y + Math.round((area.height - win.height) / 2)
+        win.x = Math.max(area.x, centeredX)
+        win.y = Math.max(area.y, centeredY)
+    }
+
+    function showLoginWindow() {
+        if (root.visibility === Window.Maximized) {
+            root.showNormal()
+        }
+        root.width = loginWindowSize.width
+        root.height = loginWindowSize.height
+        root.visible = true
+        centerWindow(root)
+        root.raise()
+        root.requestActivate()
+        Qt.callLater(function() {
+            centerWindow(root)
+        })
+    }
+
+    function showChatWindow() {
+        if (chatWindow.visibility === Window.Maximized) {
+            chatWindow.showNormal()
+        }
+        chatWindow.width = chatWindowSize.width
+        chatWindow.height = chatWindowSize.height
+        chatWindow.visible = true
+        centerWindow(chatWindow)
+        chatWindow.raise()
+        chatWindow.requestActivate()
+        Qt.callLater(function() {
+            centerWindow(chatWindow)
+        })
+    }
+
+    function syncWindowsByPage() {
+        if (controller.page === AppController.ChatPage) {
+            showChatWindow()
+            root.visible = false
+        } else {
+            showLoginWindow()
+            chatWindow.visible = false
+        }
+    }
+
+    minimumWidth: loginWindowSize.width
+    minimumHeight: loginWindowSize.height
+    maximumWidth: loginWindowSize.width
+    maximumHeight: loginWindowSize.height
 
     Component {
         id: loginPageComponent
@@ -56,29 +105,12 @@ ApplicationWindow {
         }
     }
 
-    Component.onCompleted: {
-        width = chatMode ? chatWindowSize.width : loginWindowSize.width
-        height = chatMode ? chatWindowSize.height : loginWindowSize.height
-    }
+    Component.onCompleted: syncWindowsByPage()
 
-    Behavior on width {
-        NumberAnimation {
-            duration: 80
-            easing.type: Easing.OutCubic
-        }
-    }
-
-    Behavior on height {
-        NumberAnimation {
-            duration: 80
-            easing.type: Easing.OutCubic
-        }
-    }
-
-    onChatModeChanged: {
-        if (visibility === Window.Windowed) {
-            width = chatMode ? chatWindowSize.width : loginWindowSize.width
-            height = chatMode ? chatWindowSize.height : loginWindowSize.height
+    Connections {
+        target: controller
+        function onPageChanged() {
+            syncWindowsByPage()
         }
     }
 
@@ -93,7 +125,9 @@ ApplicationWindow {
         StackLayout {
             id: pageStack
             anchors.fill: parent
-            currentIndex: controller.page
+            currentIndex: controller.page === AppController.RegisterPage
+                          ? 1
+                          : (controller.page === AppController.ResetPage ? 2 : 0)
 
             Item {
                 Loader {
@@ -121,15 +155,6 @@ ApplicationWindow {
                     sourceComponent: resetPageComponent
                 }
             }
-
-            Item {
-                Loader {
-                    anchors.fill: parent
-                    active: controller.page === AppController.ChatPage
-                    asynchronous: true
-                    sourceComponent: chatShellPageComponent
-                }
-            }
         }
 
         DragHandler {
@@ -143,24 +168,14 @@ ApplicationWindow {
     }
 
     Item {
-        id: windowControls
+        id: loginWindowControls
         z: 200
         anchors.top: parent.top
         anchors.right: parent.right
-        anchors.topMargin: chatMode ? 10 : 20
-        anchors.rightMargin: chatMode ? 10 : 14
+        anchors.topMargin: 20
+        anchors.rightMargin: 14
         width: controlsRow.implicitWidth
         height: controlsRow.implicitHeight
-
-        Rectangle {
-            anchors.centerIn: parent
-            width: controlsRow.implicitWidth + (chatMode ? 20 : 0)
-            height: controlsRow.implicitHeight + (chatMode ? 12 : 0)
-            radius: 12
-            color: chatMode ? Qt.rgba(1, 1, 1, 0.18) : "transparent"
-            border.color: chatMode ? Qt.rgba(1, 1, 1, 0.40) : "transparent"
-            visible: chatMode
-        }
 
         Row {
             id: controlsRow
@@ -184,9 +199,89 @@ ApplicationWindow {
 
             LoginIconButton {
                 iconSource: "qrc:/icons/close.png"
-                onClicked: root.close()
+                onClicked: Qt.quit()
             }
         }
     }
 
+    Window {
+        id: chatWindow
+        visible: false
+        title: "MemoChat QML"
+        flags: Qt.Window | Qt.FramelessWindowHint
+        color: "transparent"
+        minimumWidth: 980
+        minimumHeight: 760
+        maximumWidth: 100000
+        maximumHeight: 100000
+        property bool isMaximized: visibility === Window.Maximized
+        property int windowRadius: isMaximized ? 0 : 20
+
+        onClosing: function(close) {
+            close.accepted = false
+            Qt.quit()
+        }
+
+        Rectangle {
+            id: chatShell
+            anchors.fill: parent
+            radius: chatWindow.windowRadius
+            antialiasing: !chatWindow.isMaximized
+            clip: !chatWindow.isMaximized
+            color: "transparent"
+
+            Loader {
+                anchors.fill: parent
+                active: controller.page === AppController.ChatPage
+                asynchronous: true
+                sourceComponent: chatShellPageComponent
+            }
+        }
+
+        Item {
+            id: chatWindowControls
+            z: 200
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.topMargin: 10
+            anchors.rightMargin: 10
+            width: chatControlsRow.implicitWidth
+            height: chatControlsRow.implicitHeight
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: chatControlsRow.implicitWidth + 20
+                height: chatControlsRow.implicitHeight + 12
+                radius: 12
+                color: Qt.rgba(1, 1, 1, 0.18)
+                border.color: Qt.rgba(1, 1, 1, 0.40)
+            }
+
+            Row {
+                id: chatControlsRow
+                spacing: 20
+
+                LoginIconButton {
+                    iconSource: "qrc:/icons/minimize.png"
+                    onClicked: chatWindow.showMinimized()
+                }
+
+                LoginIconButton {
+                    iconSource: "qrc:/icons/maximize.png"
+                    onClicked: {
+                        if (chatWindow.visibility === Window.Maximized) {
+                            chatWindow.showNormal()
+                        } else {
+                            chatWindow.showMaximized()
+                        }
+                    }
+                }
+
+                LoginIconButton {
+                    iconSource: "qrc:/icons/close.png"
+                    onClicked: Qt.quit()
+                }
+            }
+        }
+    }
 }

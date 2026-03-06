@@ -6,6 +6,8 @@ import "../components"
 Item {
     id: root
     property Item backdrop: null
+    signal switchAccountRequested()
+    signal logoutRequested()
 
     readonly property var moreModules: [
         { "title": "账号与安全", "desc": "登录设备、密码策略、异常告警。", "state": "即将上线" },
@@ -124,6 +126,60 @@ Item {
                                     font.pixelSize: 11
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            GlassSurface {
+                width: parent.width
+                height: 116
+                backdrop: root.backdrop !== null ? root.backdrop : root
+                cornerRadius: 11
+                blurRadius: 18
+                fillColor: Qt.rgba(1, 1, 1, 0.18)
+                strokeColor: Qt.rgba(1, 1, 1, 0.42)
+                glowTopColor: Qt.rgba(1, 1, 1, 0.20)
+                glowBottomColor: Qt.rgba(1, 1, 1, 0.03)
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    spacing: 8
+
+                    Label {
+                        text: "账号操作"
+                        color: "#25364b"
+                        font.pixelSize: 14
+                        font.bold: true
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        GlassButton {
+                            Layout.fillWidth: true
+                            implicitHeight: 34
+                            text: "切换账号"
+                            cornerRadius: 8
+                            normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
+                            hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
+                            pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
+                            disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                            onClicked: root.switchAccountRequested()
+                        }
+
+                        GlassButton {
+                            Layout.fillWidth: true
+                            implicitHeight: 34
+                            text: "退出登录"
+                            cornerRadius: 8
+                            normalColor: Qt.rgba(0.80, 0.35, 0.35, 0.20)
+                            hoverColor: Qt.rgba(0.80, 0.35, 0.35, 0.30)
+                            pressedColor: Qt.rgba(0.80, 0.35, 0.35, 0.38)
+                            disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                            onClicked: root.logoutRequested()
                         }
                     }
                 }
