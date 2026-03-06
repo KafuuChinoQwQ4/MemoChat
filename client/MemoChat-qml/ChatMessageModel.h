@@ -53,6 +53,7 @@ public:
     bool containsMessage(const QString &msgId) const;
     QString rawContentByMsgId(const QString &msgId) const;
     QString previewTextByMsgId(const QString &msgId) const;
+    void setDownloadAuthContext(int uid, const QString &token);
 
 signals:
     void countChanged();
@@ -85,9 +86,12 @@ private:
     };
 
     static bool lessThan(const MessageEntry &lhs, const MessageEntry &rhs);
+    QString withDownloadAuth(const QString &urlText) const;
     MessageEntry toEntry(const std::shared_ptr<TextChatData> &message, int selfUid) const;
     void refreshAvatarFlags();
     std::vector<MessageEntry> _items;
+    int _download_uid = 0;
+    QString _download_token;
 };
 
 #endif // CHATMESSAGEMODEL_H

@@ -14,6 +14,9 @@
 #include <QUrl>
 #include <QSettings>
 #include <QVariantMap>
+#include <QFutureWatcher>
+#include <QtConcurrent>
+#include <QtGlobal>
 
 namespace {
 constexpr qint64 kPermChangeGroupInfo = 1LL << 0;
@@ -29,6 +32,14 @@ constexpr qint64 kOwnerPermBits = kDefaultAdminPermBits | kPermManageAdmins | kP
 constexpr int kHeartbeatIntervalMs = 10000;
 constexpr int kHeartbeatAckMissThreshold = 2;
 constexpr qint64 kHeartbeatAckGraceMs = 22000;
+constexpr int kChatReconnectMaxAttempts = 2;
+constexpr int kChatReconnectDelayMs = 300;
+
+struct MediaUploadTaskResult {
+    bool ok = false;
+    UploadedMediaInfo uploaded;
+    QString errorText;
+};
 }
 
 AppController::AppController(QObject *parent)
@@ -136,8 +147,12 @@ AppController::AppController(QObject *parent)
     connect(&_heartbeat_timer, &QTimer::timeout,
             this, &AppController::onHeartbeatTimeout);
     _chat_login_timeout_timer.setSingleShot(true);
-    _chat_login_timeout_timer.setInterval(8000);
+    _chat_login_timeout_timer.setInterval(15000);
     connect(&_chat_login_timeout_timer, &QTimer::timeout, this, [this]() {
+        if (_reconnecting_chat && _page == ChatPage) {
+            _gateway.tcpMgr()->CloseConnection();
+            return;
+        }
         if (!_busy || _page != LoginPage) {
             return;
         }
@@ -424,6 +439,16 @@ bool AppController::groupStatusError() const
     return _group_status_error;
 }
 
+bool AppController::mediaUploadInProgress() const
+{
+    return _media_upload_in_progress;
+}
+
+QString AppController::mediaUploadProgressText() const
+{
+    return _media_upload_progress_text;
+}
+
 QString AppController::currentDraftText() const
 {
     return _current_draft_text;
@@ -458,8 +483,14 @@ void AppController::switchToLogin()
 {
     _register_countdown_timer.stop();
     _heartbeat_timer.stop();
+    _chat_server_host.clear();
+    _chat_server_port.clear();
+    resetReconnectState();
     resetHeartbeatTracking();
     _chat_login_timeout_timer.stop();
+    _ignore_next_login_disconnect = true;
+    setPage(LoginPage);
+    _gateway.tcpMgr()->CloseConnection();
     _private_cache_store.close();
     _group_cache_store.close();
     _gateway.userMgr()->ResetSession();
@@ -468,7 +499,6 @@ void AppController::switchToLogin()
         emit registerSuccessPageChanged();
     }
     setBusy(false);
-    setPage(LoginPage);
     setTip("", false);
     _chat_list_model.clear();
     _group_list_model.clear();
@@ -486,6 +516,7 @@ void AppController::switchToLogin()
     _private_history_pending_peer_uid = 0;
     _group_history_before_seq = 0;
     _group_history_has_more = true;
+    _dialog_bootstrap_loading = false;
     _can_load_more_private_history = false;
     emit canLoadMorePrivateHistoryChanged();
     setContactLoadingMore(false);
@@ -518,6 +549,15 @@ void AppController::switchToLogin()
     setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
     _current_user_id.clear();
     _current_user_desc.clear();
+    _pending_uid = 0;
+    _pending_token.clear();
+    _pending_trace_id.clear();
+    setMediaUploadInProgress(false);
+    setMediaUploadProgressText(QString());
+    _message_model.setDownloadAuthContext(0, QString());
+    setIconDownloadAuthContext(0, QString());
+    _settings_avatar_upload_in_progress = false;
+    _group_icon_upload_in_progress = false;
 }
 
 void AppController::switchToRegister()
@@ -843,6 +883,10 @@ void AppController::sendImageMessage()
     if (_current_chat_uid <= 0 && _current_group_id <= 0) {
         return;
     }
+    if (_media_upload_in_progress) {
+        setTip("已有文件上传中，请稍后", true);
+        return;
+    }
 
     QString fileUrl;
     QString errorText;
@@ -852,34 +896,16 @@ void AppController::sendImageMessage()
         }
         return;
     }
-
-    auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo) {
-        setTip("用户状态异常，请重新登录", true);
-        return;
-    }
-
-    UploadedMediaInfo uploaded;
-    if (!MediaUploadService::uploadLocalFile(fileUrl, "image", selfInfo->_uid, &uploaded, &errorText)) {
-        setTip(errorText.isEmpty() ? "图片上传失败" : errorText, true);
-        return;
-    }
-
-    const QString encoded = MessageContentCodec::encodeImage(uploaded.remoteUrl);
-    if (_current_group_id > 0) {
-        if (!dispatchGroupChatContent(encoded, "[图片]")) {
-            setTip("群图片发送失败", true);
-        }
-        return;
-    }
-    if (!dispatchChatContent(encoded, "[图片]")) {
-        setTip("图片发送失败", true);
-    }
+    startMediaUploadAndSend(fileUrl, QStringLiteral("image"), QString());
 }
 
 void AppController::sendFileMessage()
 {
     if (_current_chat_uid <= 0 && _current_group_id <= 0) {
+        return;
+    }
+    if (_media_upload_in_progress) {
+        setTip("已有文件上传中，请稍后", true);
         return;
     }
 
@@ -892,31 +918,173 @@ void AppController::sendFileMessage()
         }
         return;
     }
+    startMediaUploadAndSend(fileUrl, QStringLiteral("file"), fileName);
+}
 
+void AppController::startMediaUploadAndSend(const QString &fileUrl, const QString &mediaType, const QString &fallbackName)
+{
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
     if (!selfInfo) {
         setTip("用户状态异常，请重新登录", true);
         return;
     }
-
-    UploadedMediaInfo uploaded;
-    if (!MediaUploadService::uploadLocalFile(fileUrl, "file", selfInfo->_uid, &uploaded, &errorText)) {
-        setTip(errorText.isEmpty() ? "文件上传失败" : errorText, true);
+    if (_pending_token.trimmed().isEmpty()) {
+        setTip("登录态失效，请重新登录", true);
         return;
     }
 
-    const QString remoteName = uploaded.fileName.isEmpty() ? fileName : uploaded.fileName;
-    const QString encoded = MessageContentCodec::encodeFile(uploaded.remoteUrl, remoteName);
-    const QString preview = remoteName.isEmpty() ? "[文件]" : QString("[文件] %1").arg(remoteName);
-    if (_current_group_id > 0) {
-        if (!dispatchGroupChatContent(encoded, preview)) {
-            setTip("群文件发送失败", true);
+    setMediaUploadInProgress(true);
+    setMediaUploadProgressText("上传准备中...");
+
+    auto *watcher = new QFutureWatcher<MediaUploadTaskResult>(this);
+    const int uploadUid = selfInfo->_uid;
+    const QString token = _pending_token;
+    const QString uploadFileUrl = fileUrl;
+    const QString uploadType = mediaType;
+    const QString fallbackDisplayName = fallbackName;
+    const qint64 targetGroupId = _current_group_id;
+    const int targetChatUid = _current_chat_uid;
+
+    const auto future = QtConcurrent::run([this, uploadFileUrl, uploadType, uploadUid, token]() {
+        MediaUploadTaskResult result;
+        result.ok = MediaUploadService::uploadLocalFile(
+            uploadFileUrl,
+            uploadType,
+            uploadUid,
+            token,
+            &result.uploaded,
+            &result.errorText,
+            [this](int percent, const QString &stage) {
+                QMetaObject::invokeMethod(this, [this, percent, stage]() {
+                    const int bounded = qBound(0, percent, 100);
+                    setMediaUploadProgressText(QString("%1 %2%").arg(stage).arg(bounded));
+                }, Qt::QueuedConnection);
+            });
+        return result;
+    });
+
+    connect(watcher, &QFutureWatcher<MediaUploadTaskResult>::finished, this, [this, watcher, uploadType, fallbackDisplayName, targetGroupId, targetChatUid]() {
+        const MediaUploadTaskResult result = watcher->result();
+        watcher->deleteLater();
+        setMediaUploadInProgress(false);
+        setMediaUploadProgressText(QString());
+
+        if (!result.ok) {
+            const QString fallbackErr = (uploadType == QStringLiteral("image")) ? "图片上传失败" : "文件上传失败";
+            setTip(result.errorText.isEmpty() ? fallbackErr : result.errorText, true);
+            return;
         }
-        return;
-    }
-    if (!dispatchChatContent(encoded, preview)) {
-        setTip("文件发送失败", true);
-    }
+
+        const bool sameDialog = (_current_group_id == targetGroupId && _current_chat_uid == targetChatUid);
+        auto selfInfo = _gateway.userMgr()->GetUserInfo();
+        if (!selfInfo) {
+            setTip("用户状态异常，请重新登录", true);
+            return;
+        }
+
+        if (uploadType == QStringLiteral("image")) {
+            const QString encoded = MessageContentCodec::encodeImage(result.uploaded.remoteUrl);
+            if (targetGroupId > 0) {
+                if (sameDialog) {
+                    if (!dispatchGroupChatContent(encoded, "[图片]")) {
+                        setTip("群图片发送失败", true);
+                    }
+                } else {
+                    const QString msgId = QUuid::createUuid().toString();
+                    const DecodedMessageContent decoded = MessageContentCodec::decode(encoded);
+                    QJsonObject msgObj;
+                    msgObj["msgid"] = msgId;
+                    msgObj["content"] = encoded;
+                    msgObj["msgtype"] = decoded.type.isEmpty() ? "text" : decoded.type;
+                    QJsonObject payloadObj;
+                    payloadObj["fromuid"] = selfInfo->_uid;
+                    payloadObj["groupid"] = static_cast<qint64>(targetGroupId);
+                    payloadObj["msg"] = msgObj;
+                    _gateway.tcpMgr()->slot_send_data(ReqId::ID_GROUP_CHAT_MSG_REQ,
+                                                      QJsonDocument(payloadObj).toJson(QJsonDocument::Compact));
+                    setTip("上传完成，图片已发送到原会话", false);
+                }
+                return;
+            }
+
+            if (sameDialog) {
+                if (!dispatchChatContent(encoded, "[图片]")) {
+                    setTip("图片发送失败", true);
+                }
+            } else {
+                OutgoingChatPacket packet;
+                packet.fromUid = selfInfo->_uid;
+                packet.toUid = targetChatUid;
+                packet.msgId = QUuid::createUuid().toString();
+                packet.content = encoded;
+                packet.createdAt = QDateTime::currentMSecsSinceEpoch();
+                QString errText;
+                if (!_chat_controller.dispatchChatText(packet, &errText)) {
+                    setTip(errText.isEmpty() ? "图片发送失败" : errText, true);
+                } else {
+                    setTip("上传完成，图片已发送到原会话", false);
+                }
+            }
+            return;
+        }
+
+        const QString remoteName = result.uploaded.fileName.isEmpty() ? fallbackDisplayName : result.uploaded.fileName;
+        const QString encoded = MessageContentCodec::encodeFile(result.uploaded.remoteUrl,
+                                                                remoteName,
+                                                                result.uploaded.mimeType,
+                                                                result.uploaded.sizeBytes);
+        const QString preview = remoteName.isEmpty() ? "[文件]" : QString("[文件] %1").arg(remoteName);
+        if (targetGroupId > 0) {
+            if (sameDialog) {
+                if (!dispatchGroupChatContent(encoded, preview)) {
+                    setTip("群文件发送失败", true);
+                }
+            } else {
+                const QString msgId = QUuid::createUuid().toString();
+                const DecodedMessageContent decoded = MessageContentCodec::decode(encoded);
+                QJsonObject msgObj;
+                msgObj["msgid"] = msgId;
+                msgObj["content"] = encoded;
+                msgObj["msgtype"] = decoded.type.isEmpty() ? "text" : decoded.type;
+                if (!decoded.fileName.isEmpty()) {
+                    msgObj["file_name"] = decoded.fileName;
+                }
+                if (!decoded.mimeType.isEmpty()) {
+                    msgObj["mime"] = decoded.mimeType;
+                }
+                if (decoded.sizeBytes > 0) {
+                    msgObj["size"] = static_cast<qint64>(decoded.sizeBytes);
+                }
+                QJsonObject payloadObj;
+                payloadObj["fromuid"] = selfInfo->_uid;
+                payloadObj["groupid"] = static_cast<qint64>(targetGroupId);
+                payloadObj["msg"] = msgObj;
+                _gateway.tcpMgr()->slot_send_data(ReqId::ID_GROUP_CHAT_MSG_REQ,
+                                                  QJsonDocument(payloadObj).toJson(QJsonDocument::Compact));
+                setTip("上传完成，文件已发送到原会话", false);
+            }
+            return;
+        }
+        if (sameDialog) {
+            if (!dispatchChatContent(encoded, preview)) {
+                setTip("文件发送失败", true);
+            }
+        } else {
+            OutgoingChatPacket packet;
+            packet.fromUid = selfInfo->_uid;
+            packet.toUid = targetChatUid;
+            packet.msgId = QUuid::createUuid().toString();
+            packet.content = encoded;
+            packet.createdAt = QDateTime::currentMSecsSinceEpoch();
+            QString errText;
+            if (!_chat_controller.dispatchChatText(packet, &errText)) {
+                setTip(errText.isEmpty() ? "文件发送失败" : errText, true);
+            } else {
+                setTip("上传完成，文件已发送到原会话", false);
+            }
+        }
+    });
+    watcher->setFuture(future);
 }
 
 void AppController::openExternalResource(const QString &url)
@@ -1064,23 +1232,60 @@ void AppController::saveProfile(const QString &nick, const QString &desc)
         return;
     }
 
+    const int selfUid = selfInfo->_uid;
+    const QString selfName = selfInfo->_name;
     QString iconForSave = _current_user_icon;
     const QUrl iconUrl(iconForSave);
     if (iconUrl.isLocalFile() || QFileInfo(iconForSave).isAbsolute()) {
-        UploadedMediaInfo uploaded;
-        if (!MediaUploadService::uploadLocalFile(iconForSave, "avatar", selfInfo->_uid, &uploaded, &errorText)) {
-            setSettingsStatus(errorText.isEmpty() ? "头像上传失败" : errorText, true);
+        if (_settings_avatar_upload_in_progress) {
+            setSettingsStatus("头像上传中，请稍候", false);
             return;
         }
-        if (uploaded.remoteUrl.isEmpty()) {
-            setSettingsStatus("头像上传失败", true);
+        if (_pending_token.trimmed().isEmpty()) {
+            setSettingsStatus("登录态失效，请重新登录", true);
             return;
         }
-        iconForSave = uploaded.remoteUrl;
+
+        _settings_avatar_upload_in_progress = true;
+        setSettingsStatus("头像上传中...", false);
+        const QString uploadPath = iconForSave;
+        const QString uploadToken = _pending_token;
+
+        auto *watcher = new QFutureWatcher<MediaUploadTaskResult>(this);
+        connect(watcher, &QFutureWatcher<MediaUploadTaskResult>::finished, this,
+                [this, watcher, selfUid, selfName, nick, desc]() {
+            const MediaUploadTaskResult result = watcher->future().result();
+            watcher->deleteLater();
+            _settings_avatar_upload_in_progress = false;
+            if (!result.ok || result.uploaded.remoteUrl.isEmpty()) {
+                setSettingsStatus(result.errorText.isEmpty() ? "头像上传失败" : result.errorText, true);
+                return;
+            }
+            _profile_controller.sendSaveProfile(selfUid, selfName, nick, desc, result.uploaded.remoteUrl);
+            setSettingsStatus("资料同步中...", false);
+        });
+
+        const auto future = QtConcurrent::run([uploadPath, selfUid, uploadToken]() {
+            MediaUploadTaskResult result;
+            QString uploadErr;
+            result.ok = MediaUploadService::uploadLocalFile(
+                uploadPath,
+                QStringLiteral("avatar"),
+                selfUid,
+                uploadToken,
+                &result.uploaded,
+                &uploadErr);
+            if (!result.ok) {
+                result.errorText = uploadErr;
+            }
+            return result;
+        });
+        watcher->setFuture(future);
+        return;
     }
 
     _profile_controller.sendSaveProfile(
-        selfInfo->_uid, selfInfo->_name, nick, desc, iconForSave);
+        selfUid, selfName, nick, desc, iconForSave);
     setSettingsStatus("资料同步中...", false);
 }
 
@@ -1416,6 +1621,10 @@ void AppController::updateGroupIcon()
         setGroupStatus("没有修改群资料权限", true);
         return;
     }
+    if (_group_icon_upload_in_progress) {
+        setGroupStatus("群头像上传中，请稍候", false);
+        return;
+    }
 
     QString avatarUrl;
     QString errorText;
@@ -1426,23 +1635,53 @@ void AppController::updateGroupIcon()
         return;
     }
 
-    UploadedMediaInfo uploaded;
-    if (!MediaUploadService::uploadLocalFile(avatarUrl, "group_avatar", selfInfo->_uid, &uploaded, &errorText)) {
-        setGroupStatus(errorText.isEmpty() ? "群头像上传失败" : errorText, true);
-        return;
-    }
-    if (uploaded.remoteUrl.isEmpty()) {
-        setGroupStatus("群头像上传失败", true);
+    if (_pending_token.trimmed().isEmpty()) {
+        setGroupStatus("登录态失效，请重新登录", true);
         return;
     }
 
-    QJsonObject obj;
-    obj["fromuid"] = selfInfo->_uid;
-    obj["groupid"] = static_cast<qint64>(_current_group_id);
-    obj["icon"] = uploaded.remoteUrl;
-    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_UPDATE_GROUP_ICON_REQ, payload);
-    setGroupStatus("群头像更新中...", false);
+    const int selfUid = selfInfo->_uid;
+    const qint64 targetGroupId = _current_group_id;
+    const QString uploadToken = _pending_token;
+    _group_icon_upload_in_progress = true;
+    setGroupStatus("群头像上传中...", false);
+
+    auto *watcher = new QFutureWatcher<MediaUploadTaskResult>(this);
+    connect(watcher, &QFutureWatcher<MediaUploadTaskResult>::finished, this,
+            [this, watcher, selfUid, targetGroupId]() {
+        const MediaUploadTaskResult result = watcher->future().result();
+        watcher->deleteLater();
+        _group_icon_upload_in_progress = false;
+        if (!result.ok || result.uploaded.remoteUrl.isEmpty()) {
+            setGroupStatus(result.errorText.isEmpty() ? "群头像上传失败" : result.errorText, true);
+            return;
+        }
+
+        QJsonObject obj;
+        obj["fromuid"] = selfUid;
+        obj["groupid"] = static_cast<qint64>(targetGroupId);
+        obj["icon"] = result.uploaded.remoteUrl;
+        const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+        _gateway.tcpMgr()->slot_send_data(ReqId::ID_UPDATE_GROUP_ICON_REQ, payload);
+        setGroupStatus("群头像更新中...", false);
+    });
+
+    const auto future = QtConcurrent::run([avatarUrl, selfUid, uploadToken]() {
+        MediaUploadTaskResult result;
+        QString uploadErr;
+        result.ok = MediaUploadService::uploadLocalFile(
+            avatarUrl,
+            QStringLiteral("group_avatar"),
+            selfUid,
+            uploadToken,
+            &result.uploaded,
+            &uploadErr);
+        if (!result.ok) {
+            result.errorText = uploadErr;
+        }
+        return result;
+    });
+    watcher->setFuture(future);
 }
 
 void AppController::setGroupAdmin(const QString &userId, bool isAdmin, qint64 permissionBits)
@@ -1786,6 +2025,13 @@ void AppController::login(const QString &email, const QString &password)
         return;
     }
 
+    // Ensure account switch starts from a clean transport/session baseline.
+    _pending_uid = 0;
+    _pending_token.clear();
+    _pending_trace_id.clear();
+    _chat_login_timeout_timer.stop();
+    _ignore_next_login_disconnect = true;
+    _gateway.tcpMgr()->CloseConnection();
     setBusy(true);
     setTip("", false);
     _auth_controller.sendLogin(email, password);
@@ -1862,6 +2108,7 @@ void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
     }
 
     if (err != ErrorCodes::SUCCESS) {
+        _ignore_next_login_disconnect = false;
         setBusy(false);
         setTip("网络请求错误", true);
         return;
@@ -1869,6 +2116,7 @@ void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
 
     QJsonObject obj;
     if (!parseJson(res, obj)) {
+        _ignore_next_login_disconnect = false;
         setBusy(false);
         setTip("json解析错误", true);
         return;
@@ -1876,6 +2124,7 @@ void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
 
     const int error = obj.value("error").toInt(ErrorCodes::ERR_JSON);
     if (error != ErrorCodes::SUCCESS) {
+        _ignore_next_login_disconnect = false;
         setBusy(false);
         if (error == ErrorCodes::ERR_VERSION_TOO_LOW) {
             const QString minVersion = obj.value("min_version").toString(QStringLiteral("2.0.0"));
@@ -1909,6 +2158,11 @@ void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
     _pending_uid = server_info.Uid;
     _pending_token = server_info.Token;
     _pending_trace_id = obj.value("trace_id").toString();
+    _message_model.setDownloadAuthContext(_pending_uid, _pending_token);
+    setIconDownloadAuthContext(_pending_uid, _pending_token);
+    _chat_server_host = server_info.Host;
+    _chat_server_port = server_info.Port;
+    resetReconnectState();
     setTip("正在连接聊天服务...", false);
     _gateway.tcpMgr()->slot_tcp_connect(server_info);
 }
@@ -2040,8 +2294,18 @@ void AppController::onSettingsHttpFinished(ReqId id, QString res, ErrorCodes err
 
 void AppController::onTcpConnectFinished(bool success)
 {
+    _ignore_next_login_disconnect = false;
     if (!success) {
         _chat_login_timeout_timer.stop();
+        if (_reconnecting_chat && _page == ChatPage) {
+            if (tryReconnectChat()) {
+                return;
+            }
+            _heartbeat_timer.stop();
+            switchToLogin();
+            setTip("聊天重连失败，请重新登录", true);
+            return;
+        }
         setBusy(false);
         setTip("网络异常", true);
         return;
@@ -2062,7 +2326,14 @@ void AppController::onTcpConnectFinished(bool success)
 
 void AppController::onChatLoginFailed(int err)
 {
+    _ignore_next_login_disconnect = false;
     _chat_login_timeout_timer.stop();
+    if (_reconnecting_chat && _page == ChatPage) {
+        _heartbeat_timer.stop();
+        switchToLogin();
+        setTip("重连失败，会话已失效，请重新登录", true);
+        return;
+    }
     setBusy(false);
     if (err == ErrorCodes::ERR_PROTOCOL_VERSION) {
         setTip("客户端版本过旧，请升级到 v2 协议客户端", true);
@@ -2073,7 +2344,9 @@ void AppController::onChatLoginFailed(int err)
 
 void AppController::onSwitchToChat()
 {
+    _ignore_next_login_disconnect = false;
     _chat_login_timeout_timer.stop();
+    resetReconnectState();
     resetHeartbeatTracking();
     _last_heartbeat_ack_ms = QDateTime::currentMSecsSinceEpoch();
     setBusy(false);
@@ -2087,6 +2360,7 @@ void AppController::onSwitchToChat()
     _private_history_pending_peer_uid = 0;
     _group_history_before_seq = 0;
     _group_history_has_more = true;
+    _dialog_bootstrap_loading = true;
     _pending_group_msg_group_map.clear();
     _dialog_mention_map.clear();
     setPendingReplyContext(QString(), QString(), QString());
@@ -2099,6 +2373,8 @@ void AppController::onSwitchToChat()
 
     auto user_info = _gateway.userMgr()->GetUserInfo();
     if (user_info) {
+        setIconDownloadAuthContext(user_info->_uid, _pending_token);
+        _message_model.setDownloadAuthContext(user_info->_uid, _pending_token);
         _private_cache_store.openForUser(user_info->_uid);
         _group_cache_store.openForUser(user_info->_uid);
         loadDraftStore(user_info->_uid);
@@ -2142,9 +2418,7 @@ void AppController::onSwitchToChat()
         refreshApplyModel();
         refreshGroupList();
         requestDialogList();
-        if (_chat_list_model.count() > 0) {
-            selectChatIndex(0);
-        } else {
+        if (_chat_list_model.count() <= 0) {
             _current_chat_uid = 0;
             setCurrentChatPeerName("");
             setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
@@ -2271,6 +2545,36 @@ void AppController::onTextChatMsg(std::shared_ptr<TextChatMsg> msg)
     const int selfUid = selfInfo->_uid;
     const bool fromSelf = (msg->_from_uid == selfUid);
     const int peerUid = (msg->_from_uid == selfUid) ? msg->_to_uid : msg->_from_uid;
+    auto friendInfo = _gateway.userMgr()->GetFriendById(peerUid);
+    if (!friendInfo && peerUid > 0) {
+        QString fallbackName = QString::number(peerUid);
+        QString fallbackNick = fallbackName;
+        QString fallbackIcon = QStringLiteral("qrc:/res/head_1.jpg");
+        const int dialogIndex = _dialog_list_model.indexOfUid(peerUid);
+        if (dialogIndex >= 0) {
+            const QVariantMap dialogItem = _dialog_list_model.get(dialogIndex);
+            const QString dialogName = dialogItem.value("name").toString().trimmed();
+            const QString dialogNick = dialogItem.value("nick").toString().trimmed();
+            const QString dialogIcon = dialogItem.value("icon").toString().trimmed();
+            if (!dialogName.isEmpty()) {
+                fallbackName = dialogName;
+            }
+            if (!dialogNick.isEmpty()) {
+                fallbackNick = dialogNick;
+            } else {
+                fallbackNick = fallbackName;
+            }
+            if (!dialogIcon.isEmpty()) {
+                fallbackIcon = dialogIcon;
+            }
+        }
+        auto placeholder = std::make_shared<AuthInfo>(peerUid, fallbackName, fallbackNick, fallbackIcon, 0, QString());
+        _gateway.userMgr()->AddFriend(placeholder);
+        _chat_list_model.upsertFriend(placeholder);
+        _contact_list_model.upsertFriend(placeholder);
+        _dialog_list_model.upsertFriend(placeholder);
+        friendInfo = _gateway.userMgr()->GetFriendById(peerUid);
+    }
     qint64 latestPeerTs = 0;
     for (const auto &one : msg->_chat_msgs) {
         if (one && (one->_deleted_at_ms > 0 || one->_msg_content == QStringLiteral("[消息已撤回]"))) {
@@ -2284,7 +2588,7 @@ void AppController::onTextChatMsg(std::shared_ptr<TextChatMsg> msg)
     }
     _gateway.userMgr()->AppendFriendChatMsg(peerUid, msg->_chat_msgs);
     _private_cache_store.upsertMessages(selfUid, peerUid, msg->_chat_msgs);
-    const auto friendInfo = _gateway.userMgr()->GetFriendById(peerUid);
+    friendInfo = _gateway.userMgr()->GetFriendById(peerUid);
     QString preview;
     if (friendInfo && !friendInfo->_chat_msgs.empty()) {
         preview = MessageContentCodec::toPreviewText(friendInfo->_chat_msgs.back()->_msg_content);
@@ -2376,6 +2680,7 @@ void AppController::onNotifyOffline()
     }
 
     _heartbeat_timer.stop();
+    resetReconnectState();
     resetHeartbeatTracking();
     _gateway.tcpMgr()->CloseConnection();
     switchToLogin();
@@ -2384,20 +2689,85 @@ void AppController::onNotifyOffline()
 
 void AppController::onConnectionClosed()
 {
-    _chat_login_timeout_timer.stop();
     if (_page != ChatPage) {
-        if (_busy) {
-            setBusy(false);
-            setTip("聊天服务连接断开，请重试", true);
+        // Consume one expected disconnect triggered by proactive stale-socket close.
+        if (_ignore_next_login_disconnect) {
+            _chat_login_timeout_timer.stop();
+            _ignore_next_login_disconnect = false;
+            resetReconnectState();
+            resetHeartbeatTracking();
+            return;
         }
+
+        // During login handshakes, stale disconnect events can arrive from the previous socket.
+        // Wait for explicit connect/login result instead of interrupting the new login attempt.
+        if (_busy) {
+            if (_chat_login_timeout_timer.isActive()) {
+                _chat_login_timeout_timer.stop();
+                _ignore_next_login_disconnect = false;
+                setBusy(false);
+                setTip("聊天连接已断开，请重试", true);
+            }
+            resetReconnectState();
+            resetHeartbeatTracking();
+            return;
+        }
+
+        _chat_login_timeout_timer.stop();
+        resetReconnectState();
         resetHeartbeatTracking();
         return;
     }
 
+    _chat_login_timeout_timer.stop();
     _heartbeat_timer.stop();
+    if (tryReconnectChat()) {
+        return;
+    }
     const bool heartbeatTimeout = isHeartbeatLikelyTimeout();
     switchToLogin();
     setTip(heartbeatTimeout ? "心跳超时，请重新登录" : "聊天连接已断开，请重新登录", true);
+}
+
+bool AppController::tryReconnectChat()
+{
+    if (_page != ChatPage) {
+        return false;
+    }
+    if (_chat_server_host.trimmed().isEmpty() || _chat_server_port.trimmed().isEmpty()) {
+        return false;
+    }
+    if (_pending_uid <= 0 || _pending_token.isEmpty()) {
+        return false;
+    }
+    if (_chat_reconnect_attempts >= kChatReconnectMaxAttempts) {
+        return false;
+    }
+
+    _reconnecting_chat = true;
+    ++_chat_reconnect_attempts;
+    setTip(QString("聊天连接断开，正在重连（%1/%2）...")
+               .arg(_chat_reconnect_attempts)
+               .arg(kChatReconnectMaxAttempts), true);
+
+    ServerInfo serverInfo;
+    serverInfo.Uid = _pending_uid;
+    serverInfo.Host = _chat_server_host;
+    serverInfo.Port = _chat_server_port;
+    serverInfo.Token = _pending_token;
+    QTimer::singleShot(kChatReconnectDelayMs, this, [this, serverInfo]() {
+        if (!_reconnecting_chat || _page != ChatPage) {
+            return;
+        }
+        _gateway.tcpMgr()->slot_tcp_connect(serverInfo);
+    });
+    return true;
+}
+
+void AppController::resetReconnectState()
+{
+    _reconnecting_chat = false;
+    _chat_reconnect_attempts = 0;
 }
 
 void AppController::resetHeartbeatTracking()
@@ -3167,11 +3537,22 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
 
 void AppController::onDialogListRsp(QJsonObject payload)
 {
+    const bool bootstrappingDialog = _dialog_bootstrap_loading;
+    _dialog_bootstrap_loading = false;
+
     if (!payload.contains("dialogs")) {
+        if (bootstrappingDialog && _chat_list_model.count() > 0
+            && _current_chat_uid <= 0 && _current_group_id <= 0) {
+            selectChatIndex(0);
+        }
         return;
     }
     const int error = payload.value("error").toInt(ErrorCodes::ERR_JSON);
     if (error != ErrorCodes::SUCCESS) {
+        if (bootstrappingDialog && _chat_list_model.count() > 0
+            && _current_chat_uid <= 0 && _current_group_id <= 0) {
+            selectChatIndex(0);
+        }
         return;
     }
 
@@ -3221,6 +3602,7 @@ void AppController::onDialogListRsp(QJsonObject payload)
                 item->_pinned_rank = qMax(item->_pinned_rank, 1000000);
             }
             merged.push_back(item);
+            _chat_list_model.upsertFriend(item);
             continue;
         }
 
@@ -3291,6 +3673,26 @@ void AppController::onDialogListRsp(QJsonObject payload)
         _dialog_mention_map.remove(_current_chat_uid);
     }
     syncCurrentDialogDraft();
+
+    const bool shouldSelectDialog = bootstrappingDialog || (_current_chat_uid <= 0 && _current_group_id <= 0);
+    if (shouldSelectDialog) {
+        if (!merged.empty() && merged.front()) {
+            const int topDialogUid = merged.front()->_uid;
+            if (topDialogUid > 0) {
+                selectChatByUid(topDialogUid);
+                _dialog_list_model.clearUnread(topDialogUid);
+                _dialog_list_model.clearMention(topDialogUid);
+                _dialog_mention_map.remove(topDialogUid);
+            } else if (topDialogUid < 0) {
+                const int topGroupIndex = _group_list_model.indexOfUid(topDialogUid);
+                if (topGroupIndex >= 0) {
+                    selectGroupIndex(topGroupIndex);
+                }
+            }
+        } else if (_chat_list_model.count() > 0) {
+            selectChatIndex(0);
+        }
+    }
 }
 
 void AppController::onPrivateHistoryRsp(QJsonObject payload)
@@ -3837,7 +4239,36 @@ void AppController::selectChatByUid(int uid)
 
     auto friendInfo = _gateway.userMgr()->GetFriendById(uid);
     if (!friendInfo) {
-        return;
+        QString fallbackName = QString::number(uid);
+        QString fallbackNick = fallbackName;
+        QString fallbackIcon = QStringLiteral("qrc:/res/head_1.jpg");
+        const int dialogIndex = _dialog_list_model.indexOfUid(uid);
+        if (dialogIndex >= 0) {
+            const QVariantMap dialogItem = _dialog_list_model.get(dialogIndex);
+            const QString dialogName = dialogItem.value("name").toString().trimmed();
+            const QString dialogNick = dialogItem.value("nick").toString().trimmed();
+            const QString dialogIcon = dialogItem.value("icon").toString().trimmed();
+            if (!dialogName.isEmpty()) {
+                fallbackName = dialogName;
+            }
+            if (!dialogNick.isEmpty()) {
+                fallbackNick = dialogNick;
+            } else {
+                fallbackNick = fallbackName;
+            }
+            if (!dialogIcon.isEmpty()) {
+                fallbackIcon = dialogIcon;
+            }
+        }
+        auto placeholder = std::make_shared<AuthInfo>(uid, fallbackName, fallbackNick, fallbackIcon, 0, QString());
+        _gateway.userMgr()->AddFriend(placeholder);
+        _chat_list_model.upsertFriend(placeholder);
+        _contact_list_model.upsertFriend(placeholder);
+        _dialog_list_model.upsertFriend(placeholder);
+        friendInfo = _gateway.userMgr()->GetFriendById(uid);
+        if (!friendInfo) {
+            return;
+        }
     }
 
     _current_chat_uid = uid;
@@ -3957,6 +4388,24 @@ void AppController::setGroupStatus(const QString &text, bool isError)
     _group_status_text = text;
     _group_status_error = isError;
     emit groupStatusChanged();
+}
+
+void AppController::setMediaUploadInProgress(bool inProgress)
+{
+    if (_media_upload_in_progress == inProgress) {
+        return;
+    }
+    _media_upload_in_progress = inProgress;
+    emit mediaUploadStateChanged();
+}
+
+void AppController::setMediaUploadProgressText(const QString &text)
+{
+    if (_media_upload_progress_text == text) {
+        return;
+    }
+    _media_upload_progress_text = text;
+    emit mediaUploadStateChanged();
 }
 
 void AppController::setCurrentDraftText(const QString &text)
@@ -4264,6 +4713,12 @@ bool AppController::checkVerifyCodeValid(const QString &code)
     return true;
 }
 
+bool AppController::isChatTransportReady() const
+{
+    const auto tcp = _gateway.tcpMgr();
+    return tcp && tcp->isConnected();
+}
+
 bool AppController::dispatchChatContent(const QString &content, const QString &previewText)
 {
     if (_current_chat_uid <= 0) {
@@ -4272,6 +4727,10 @@ bool AppController::dispatchChatContent(const QString &content, const QString &p
 
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
     if (!selfInfo) {
+        return false;
+    }
+    if (!isChatTransportReady()) {
+        setTip("聊天连接未就绪，请重新登录", true);
         return false;
     }
 
@@ -4311,6 +4770,10 @@ bool AppController::dispatchGroupChatContent(const QString &content, const QStri
 
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
     if (!selfInfo) {
+        return false;
+    }
+    if (!isChatTransportReady()) {
+        setTip("聊天连接未就绪，请重新登录", true);
         return false;
     }
 
@@ -4358,6 +4821,12 @@ bool AppController::dispatchGroupChatContent(const QString &content, const QStri
     }
     if (!decoded.fileName.isEmpty()) {
         msgObj["file_name"] = decoded.fileName;
+    }
+    if (!decoded.mimeType.isEmpty()) {
+        msgObj["mime"] = decoded.mimeType;
+    }
+    if (decoded.sizeBytes > 0) {
+        msgObj["size"] = static_cast<qint64>(decoded.sizeBytes);
     }
 
     QJsonObject payloadObj;

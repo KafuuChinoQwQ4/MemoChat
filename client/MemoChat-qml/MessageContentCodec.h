@@ -7,6 +7,8 @@ struct DecodedMessageContent {
     QString type;
     QString content;
     QString fileName;
+    QString mimeType;
+    qint64 sizeBytes = 0;
     bool isReply = false;
     QString replyToMsgId;
     QString replySender;
@@ -17,7 +19,8 @@ class MessageContentCodec
 {
 public:
     static QString encodeImage(const QString &fileUrl);
-    static QString encodeFile(const QString &fileUrl, const QString &fileName = QString());
+    static QString encodeFile(const QString &fileUrl, const QString &fileName = QString(),
+                              const QString &mimeType = QString(), qint64 sizeBytes = 0);
     static QString encodeCallInvite(const QString &callType, const QString &joinUrl);
     static QString encodeReplyText(const QString &text, const QString &replyToMsgId,
                                    const QString &replySender, const QString &replyPreview);

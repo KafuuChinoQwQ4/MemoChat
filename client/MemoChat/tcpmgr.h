@@ -17,6 +17,7 @@ class TcpMgr:public QObject, public Singleton<TcpMgr>,
 public:
    ~ TcpMgr();
     void CloseConnection();
+    bool isConnected() const;
 private:
     friend class Singleton<TcpMgr>;
     TcpMgr();

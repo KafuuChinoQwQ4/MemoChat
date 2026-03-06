@@ -24,7 +24,12 @@ Rectangle {
     property string replyPreviewText: ""
     property bool privateHistoryLoading: false
     property bool canLoadMorePrivateHistory: false
-    property bool _historyTopTriggered: false
+    property bool mediaUploadInProgress: false
+    property string mediaUploadProgressText: ""
+    property bool _followTail: true
+    property bool _topLoadArmed: true
+    property real _wheelStepPx: 44
+    property bool _stickToBottom: true
     signal sendText(string text)
     signal sendImage()
     signal sendFile()
@@ -45,10 +50,62 @@ Rectangle {
     property string _editMsgId: ""
     property string _editText: ""
 
-    onPrivateHistoryLoadingChanged: {
-        if (!privateHistoryLoading) {
-            _historyTopTriggered = false
+    function minContentY() {
+        return messageList.originY
+    }
+
+    function maxContentY() {
+        return messageList.originY + Math.max(0, messageList.contentHeight - messageList.height)
+    }
+
+    function clampY(y) {
+        return Math.max(minContentY(), Math.min(maxContentY(), y))
+    }
+
+    function isAtBottom(epsilon) {
+        return maxContentY() - messageList.contentY <= (epsilon || 1.0)
+    }
+
+    function _requestScrollToEnd() {
+        if (!root.hasCurrentChat) {
+            return
         }
+        scrollToEndTimer.restart()
+    }
+
+    function _resetScrollState() {
+        _followTail = true
+        _topLoadArmed = true
+        _stickToBottom = true
+    }
+
+    onPrivateHistoryLoadingChanged: {
+        if (!privateHistoryLoading && messageList.contentY > 24) {
+            _topLoadArmed = true
+        }
+    }
+
+    onHasCurrentChatChanged: {
+        _resetScrollState()
+        if (hasCurrentChat) {
+            _requestScrollToEnd()
+        }
+    }
+
+    onPeerNameChanged: {
+        if (!hasCurrentChat) {
+            return
+        }
+        _resetScrollState()
+        _requestScrollToEnd()
+    }
+
+    onIsGroupChatChanged: {
+        if (!hasCurrentChat) {
+            return
+        }
+        _resetScrollState()
+        _requestScrollToEnd()
     }
 
     ColumnLayout {
@@ -144,23 +201,73 @@ Rectangle {
                 anchors.margins: 14
                 spacing: 0
                 clip: true
+                interactive: false
                 model: root.messageModel
                 ScrollBar.vertical: GlassScrollBar { }
+                WheelHandler {
+                    target: null
+                    onWheel: function(event) {
+                        let deltaY = 0
+                        if (event.pixelDelta.y !== 0) {
+                            deltaY = event.pixelDelta.y
+                        } else if (event.angleDelta.y !== 0) {
+                            deltaY = (event.angleDelta.y / 120) * root._wheelStepPx
+                        }
+                        if (deltaY === 0) {
+                            return
+                        }
+                        const nextY = root.clampY(messageList.contentY - deltaY)
+                        if (Math.abs(nextY - messageList.contentY) > 0.1) {
+                            messageList.contentY = nextY
+                            if (deltaY > 0) {
+                                root._followTail = false
+                            } else if (root.isAtBottom(1.0)) {
+                                root._followTail = true
+                            }
+                            root._stickToBottom = root.isAtBottom(1.0)
+                            event.accepted = true
+                        }
+                    }
+                }
                 onCountChanged: {
-                    if (count > 0) {
-                        positionViewAtEnd()
+                    if (count > 0
+                            && root.hasCurrentChat
+                            && root._followTail
+                            && !root.privateHistoryLoading) {
+                        root._requestScrollToEnd()
+                    }
+                }
+                onContentHeightChanged: {
+                    if (count > 0
+                            && root.hasCurrentChat
+                            && root._followTail
+                            && !root.privateHistoryLoading) {
+                        root._requestScrollToEnd()
+                    }
+                }
+                onHeightChanged: {
+                    if (count > 0
+                            && root.hasCurrentChat
+                            && root._followTail
+                            && !root.privateHistoryLoading) {
+                        root._requestScrollToEnd()
                     }
                 }
                 onContentYChanged: {
-                    if (contentY > 6) {
-                        root._historyTopTriggered = false
+                    root._stickToBottom = root.isAtBottom(1.0)
+                    if (root._stickToBottom) {
+                        root._followTail = true
                     }
-                    if (contentY <= 0
+                    if (contentY > 24) {
+                        root._topLoadArmed = true
+                    }
+                    if (contentY <= root.minContentY() + 1
                             && count > 0
                             && root.canLoadMorePrivateHistory
                             && !root.privateHistoryLoading
-                            && !root._historyTopTriggered) {
-                        root._historyTopTriggered = true
+                            && root._topLoadArmed) {
+                        root._topLoadArmed = false
+                        root._followTail = false
                         root.requestLoadMoreHistory()
                     }
                 }
@@ -235,17 +342,47 @@ Rectangle {
                 backdrop: root.backdrop
                 enabledComposer: root.hasCurrentChat
                 isGroupChat: root.isGroupChat
+                mediaUploadInProgress: root.mediaUploadInProgress
+                mediaUploadProgressText: root.mediaUploadProgressText
                 draftText: root.currentDraftText
                 hasReplyContext: root.hasPendingReply
                 replyTargetName: root.replyTargetName
                 replyPreviewText: root.replyPreviewText
-                onSendText: root.sendText(text)
-                onSendImage: root.sendImage()
-                onSendFile: root.sendFile()
+                onSendText: {
+                    root._followTail = true
+                    root._stickToBottom = true
+                    root.sendText(text)
+                    root._requestScrollToEnd()
+                }
+                onSendImage: {
+                    root._followTail = true
+                    root._stickToBottom = true
+                    root.sendImage()
+                    root._requestScrollToEnd()
+                }
+                onSendFile: {
+                    root._followTail = true
+                    root._stickToBottom = true
+                    root.sendFile()
+                    root._requestScrollToEnd()
+                }
                 onSendVoiceCall: root.sendVoiceCall()
                 onSendVideoCall: root.sendVideoCall()
                 onDraftEdited: root.draftEdited(text)
                 onClearReplyRequested: root.cancelReplyMessage()
+            }
+        }
+    }
+
+    Timer {
+        id: scrollToEndTimer
+        interval: 0
+        repeat: false
+        onTriggered: {
+            if (messageList.count > 0) {
+                messageList.positionViewAtEnd()
+                root._stickToBottom = true
+                root._followTail = true
             }
         }
     }
