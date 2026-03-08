@@ -89,12 +89,13 @@ Status ChatServiceImpl::NotifyTextChatMsg(::grpc::ServerContext* context,
     const TextChatMsgReq* request, TextChatMsgRsp* reply) {
     auto touid = request->touid();
     auto session = UserMgr::GetInstance()->GetSession(touid);
-    reply->set_error(ErrorCodes::Success);
 
     if (session == nullptr) {
+        reply->set_error(ErrorCodes::TargetOffline);
         return Status::OK;
     }
 
+    reply->set_error(ErrorCodes::Success);
     Json::Value rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     rtvalue["fromuid"] = request->fromuid();

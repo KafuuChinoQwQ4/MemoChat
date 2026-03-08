@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/">
+        <file alias="app/icon.ico">icon.ico</file>
         <file>style/stylesheet.qss</file>
         <file>res/unvisible.png</file>
         <file>res/visible.png</file>

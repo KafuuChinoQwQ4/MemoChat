@@ -3,7 +3,22 @@
 #include <QAbstractSocket>
 #include <QDateTime>
 #include <QtEndian>
+#include <QDebug>
 #include "usermgr.h"
+
+namespace {
+const char *socketErrorName(QAbstractSocket::SocketError socketError)
+{
+    switch (socketError) {
+    case QAbstractSocket::ConnectionRefusedError: return "ConnectionRefusedError";
+    case QAbstractSocket::RemoteHostClosedError: return "RemoteHostClosedError";
+    case QAbstractSocket::HostNotFoundError: return "HostNotFoundError";
+    case QAbstractSocket::SocketTimeoutError: return "SocketTimeoutError";
+    case QAbstractSocket::NetworkError: return "NetworkError";
+    default: return "OtherSocketError";
+    }
+}
+}
 
 TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_connecting(false),_message_id(0),_message_len(0)
 {
@@ -20,7 +35,7 @@ TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_connecting(false),_m
     });
 
     QObject::connect(&_socket, &QTcpSocket::connected, [&]() {
-           qDebug() << "Connected to server!";
+           qInfo() << "tcp connect success. host:" << _host << "port:" << _port;
            _connect_timeout_timer.stop();
            _connecting = false;
            _buffer.clear();
@@ -57,7 +72,7 @@ TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_connecting(false),_m
                        break;
                    }
 
-                   qDebug() << "Message ID:" << _message_id << ", Length:" << _message_len;
+               qDebug() << "Message ID:" << _message_id << ", Length:" << _message_len;
                    _b_recv_pending = true;
                }
 
@@ -83,7 +98,10 @@ TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_connecting(false),_m
 
         QObject::connect(&_socket, &QTcpSocket::errorOccurred,
                             [this](QAbstractSocket::SocketError socketError) {
-               qDebug() << "Error:" << _socket.errorString() ;
+               qWarning() << "tcp socket error:" << socketErrorName(socketError)
+                          << "message:" << _socket.errorString()
+                          << "host:" << _host
+                          << "port:" << _port;
                const bool wasConnecting = _connecting;
                if (wasConnecting) {
                    _connecting = false;
@@ -91,37 +109,31 @@ TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_connecting(false),_m
                }
                switch (socketError) {
                    case QTcpSocket::ConnectionRefusedError:
-                       qDebug() << "Connection Refused!";
                        if (wasConnecting) {
                            emit sig_con_success(false);
                        }
                        break;
                    case QTcpSocket::RemoteHostClosedError:
-                       qDebug() << "Remote Host Closed Connection!";
                        if (wasConnecting) {
                            emit sig_con_success(false);
                        }
                        break;
                    case QTcpSocket::HostNotFoundError:
-                       qDebug() << "Host Not Found!";
                        if (wasConnecting) {
                            emit sig_con_success(false);
                        }
                        break;
                    case QTcpSocket::SocketTimeoutError:
-                       qDebug() << "Connection Timeout!";
                        if (wasConnecting) {
                            emit sig_con_success(false);
                        }
                        break;
                    case QTcpSocket::NetworkError:
-                       qDebug() << "Network Error!";
                        if (wasConnecting) {
                            emit sig_con_success(false);
                        }
                        break;
                    default:
-                       qDebug() << "Other Error!";
                        if (wasConnecting) {
                            emit sig_con_success(false);
                        }
@@ -131,7 +143,8 @@ TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_connecting(false),_m
 
 
         QObject::connect(&_socket, &QTcpSocket::disconnected, [&]() {
-            qDebug() << "Disconnected from server.";
+            qWarning() << "tcp disconnected. host:" << _host << "port:" << _port
+                       << "connecting:" << _connecting;
             if (_connecting) {
                 _connecting = false;
                 _connect_timeout_timer.stop();
@@ -151,6 +164,8 @@ TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_connecting(false),_m
 }
 
 void TcpMgr::CloseConnection(){
+    qInfo() << "closing tcp connection. host:" << _host << "port:" << _port
+            << "state:" << _socket.state();
     _connect_timeout_timer.stop();
     _connecting = false;
     _socket.close();
@@ -175,7 +190,7 @@ void TcpMgr::initHandlers()
 
 
         if(jsonDoc.isNull()){
-           qDebug() << "Failed to create QJsonDocument.";
+           qWarning() << "chat login rsp json parse failed";
            emit sig_login_failed(ErrorCodes::ERR_JSON);
            return;
         }
@@ -185,14 +200,14 @@ void TcpMgr::initHandlers()
 
         if(!jsonObj.contains("error")){
             int err = ErrorCodes::ERR_JSON;
-            qDebug() << "Login Failed, err is Json Parse Err" << err ;
+            qWarning() << "chat login rsp missing error field";
             emit sig_login_failed(err);
             return;
         }
 
         int err = jsonObj["error"].toInt();
         if(err != ErrorCodes::SUCCESS){
-            qDebug() << "Login Failed, err is " << err ;
+            qWarning() << "chat login rsp failed, err:" << err;
             emit sig_login_failed(err);
             return;
         }
@@ -217,6 +232,7 @@ void TcpMgr::initHandlers()
             UserMgr::GetInstance()->AppendFriendList(jsonObj["friend_list"].toArray());
         }
 
+        qInfo() << "chat login rsp success for uid:" << uid;
         emit sig_swich_chatdlg();
     });
 
@@ -911,7 +927,7 @@ void TcpMgr::handleMsg(ReqId id, int len, QByteArray data)
 
 void TcpMgr::slot_tcp_connect(ServerInfo si)
 {
-    qDebug()<< "receive tcp connect signal";
+    qInfo() << "tcp connect start. host:" << si.Host << "port:" << si.Port << "uid:" << si.Uid;
     _host = si.Host.trimmed();
     if (_host == "0.0.0.0") {
         _host = "127.0.0.1";
@@ -936,7 +952,7 @@ void TcpMgr::slot_tcp_connect(ServerInfo si)
     _message_len = 0;
     _connecting = true;
     _connect_timeout_timer.start();
-    qDebug() << "Connecting to chat server, host:" << _host << "port:" << _port;
+    qInfo() << "connecting to chat server, host:" << _host << "port:" << _port;
     _socket.connectToHost(_host, _port);
 }
 
@@ -967,5 +983,9 @@ void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
 
 
     _socket.write(block);
-    qDebug() << "tcp mgr send byte data is " << block ;
+    if (reqId == ReqId::ID_CHAT_LOGIN) {
+        qInfo() << "chat login payload sent. bytes:" << block.size();
+    } else {
+        qDebug() << "tcp mgr send byte data is " << block ;
+    }
 }
