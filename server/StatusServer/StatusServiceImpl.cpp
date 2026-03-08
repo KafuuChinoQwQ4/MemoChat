@@ -27,13 +27,26 @@ std::string ExtractTraceId(ServerContext* context) {
     }
     return std::string(trace_it->second.data(), trace_it->second.length());
 }
+
+std::string JoinStrings(const std::vector<std::string>& values, const char* delimiter) {
+    std::ostringstream oss;
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (i > 0) {
+            oss << delimiter;
+        }
+        oss << values[i];
+    }
+    return oss.str();
+}
 } // namespace
 
 Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatServerReq* request,
                                         GetChatServerRsp* reply) {
     memolog::TraceScope trace_scope(ExtractTraceId(context));
 
-    const auto& server = getChatServer();
+    std::vector<std::string> server_load_snapshot;
+    std::vector<std::string> least_loaded_servers;
+    const auto& server = getChatServer(&server_load_snapshot, &least_loaded_servers);
     const int uid = request->uid();
     const std::string token_key = USERTOKENPREFIX + std::to_string(uid);
     std::string token_value;
@@ -53,6 +66,10 @@ Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatSer
     memolog::LogInfo("status.get_chat_server", "select chat server",
                      {{"uid", std::to_string(uid)},
                       {"reuse_token", (has_token && !token_value.empty()) ? "true" : "false"},
+                      {"server_loads", JoinStrings(server_load_snapshot, ",")},
+                      {"least_loaded_servers", JoinStrings(least_loaded_servers, ",")},
+                      {"server_count", std::to_string(server_load_snapshot.size())},
+                      {"selected_server", server.name},
                       {"host", server.host},
                       {"port", server.port}});
     return Status::OK;
@@ -84,8 +101,15 @@ StatusServiceImpl::StatusServiceImpl() {
     }
 }
 
-ChatServer StatusServiceImpl::getChatServer() {
+ChatServer StatusServiceImpl::getChatServer(std::vector<std::string>* server_load_snapshot,
+                                           std::vector<std::string>* least_loaded_servers_snapshot) {
     std::lock_guard<std::mutex> guard(_server_mtx);
+    if (server_load_snapshot) {
+        server_load_snapshot->clear();
+    }
+    if (least_loaded_servers_snapshot) {
+        least_loaded_servers_snapshot->clear();
+    }
     if (_servers.empty()) {
         return ChatServer();
     }
@@ -105,10 +129,19 @@ ChatServer StatusServiceImpl::getChatServer() {
     for (auto server : ordered_servers) {
         const std::string online_users_key = std::string(SERVER_ONLINE_USERS_PREFIX) + server.name;
         int online_count = 0;
-        if (!RedisMgr::GetInstance()->SCard(online_users_key, online_count) || online_count < 0) {
+        const bool load_ok = RedisMgr::GetInstance()->SCard(online_users_key, online_count);
+        if (!load_ok || online_count < 0) {
             online_count = 0;
         }
         server.con_count = online_count;
+        if (server_load_snapshot) {
+            std::ostringstream one;
+            one << server.name << "=" << online_count;
+            if (!load_ok) {
+                one << "(redis-fallback)";
+            }
+            server_load_snapshot->push_back(one.str());
+        }
         if (online_count < min_online) {
             min_online = online_count;
             least_loaded.clear();
@@ -122,6 +155,12 @@ ChatServer StatusServiceImpl::getChatServer() {
 
     if (least_loaded.empty()) {
         return ordered_servers.front();
+    }
+
+    if (least_loaded_servers_snapshot) {
+        for (const auto& one : least_loaded) {
+            least_loaded_servers_snapshot->push_back(one.name);
+        }
     }
 
     const auto next_index = static_cast<size_t>(_rr_counter.fetch_add(1, std::memory_order_relaxed));
