@@ -16,6 +16,7 @@
 #include <QQuickWindow>
 #include <QTimer>
 #include <QQuickStyle>
+#include <QIcon>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMutex>
@@ -301,6 +302,7 @@ int main(int argc, char *argv[])
     QQuickStyle::setStyle("Basic");
 
     QApplication app(argc, argv);
+    app.setWindowIcon(QIcon(QStringLiteral(":/app/icon.ico")));
 
     const QString runtime_app_path = QCoreApplication::applicationDirPath();
     const QString runtime_config_path = QDir::toNativeSeparators(

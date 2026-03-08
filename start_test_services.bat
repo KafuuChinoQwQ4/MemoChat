@@ -99,23 +99,32 @@ if errorlevel 1 exit /b 1
 
 echo [INFO] Starting VarifyServer (Node)...
 start "VarifyServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%ROOT%\server\VarifyServer"" && node server.js"
-timeout /t 2 >nul
+call :wait_for_port VarifyServer 50051 20 "%ROOT%\server\VarifyServer\logs"
+if errorlevel 1 exit /b 1
 
 echo [INFO] Starting StatusServer...
 start "StatusServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\StatusServer"" && StatusServer.exe"
-timeout /t 2 >nul
+call :wait_for_port StatusServer 50052 20 "%RUN_ROOT%\StatusServer\logs"
+if errorlevel 1 exit /b 1
 
 echo [INFO] Starting ChatServer...
 start "ChatServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\ChatServer"" && ChatServer.exe"
-timeout /t 2 >nul
+call :wait_for_port ChatServer 8090 20 "%RUN_ROOT%\ChatServer\logs"
+if errorlevel 1 exit /b 1
+call :wait_for_port ChatServer-RPC 50055 20 "%RUN_ROOT%\ChatServer\logs"
+if errorlevel 1 exit /b 1
 
 echo [INFO] Starting ChatServer2...
 start "ChatServer2" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\ChatServer2"" && ChatServer2.exe"
-timeout /t 2 >nul
+call :wait_for_port ChatServer2 8091 20 "%RUN_ROOT%\ChatServer2\logs"
+if errorlevel 1 exit /b 1
+call :wait_for_port ChatServer2-RPC 50056 20 "%RUN_ROOT%\ChatServer2\logs"
+if errorlevel 1 exit /b 1
 
 echo [INFO] Starting GateServer...
 start "GateServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\GateServer"" && GateServer.exe"
-timeout /t 2 >nul
+call :wait_for_port GateServer 8080 20 "%RUN_ROOT%\GateServer\logs"
+if errorlevel 1 exit /b 1
 
 if "%WITH_CLIENT%"=="1" (
   if not exist "%CLIENT_BIN%\MemoChatQml.exe" (
@@ -134,6 +143,32 @@ echo.
 echo [DONE] Services started.
 echo [INFO] GateServer HTTP: http://127.0.0.1:8080
 echo [INFO] Close each opened window to stop each service.
+exit /b 0
+
+:wait_for_port
+set "WAIT_NAME=%~1"
+set "WAIT_PORT=%~2"
+set "WAIT_SECS=%~3"
+set "WAIT_LOGDIR=%~4"
+set "WAIT_FOUND="
+if "%WAIT_SECS%"=="" set "WAIT_SECS=15"
+echo [INFO] Waiting for %WAIT_NAME% on port %WAIT_PORT%...
+for /L %%I in (1,1,%WAIT_SECS%) do (
+  set "WAIT_FOUND="
+  for /f "usebackq delims=" %%L in (`netstat -ano -p TCP ^| findstr /R /C:":%WAIT_PORT% .*LISTENING"`) do (
+    set "WAIT_FOUND=1"
+  )
+  if defined WAIT_FOUND goto :wait_for_port_ok
+  timeout /t 1 >nul
+)
+echo [ERROR] %WAIT_NAME% failed to listen on port %WAIT_PORT% within %WAIT_SECS% seconds.
+if not "%WAIT_LOGDIR%"=="" (
+  echo [HINT] Check logs under %WAIT_LOGDIR%
+)
+exit /b 1
+
+:wait_for_port_ok
+echo [INFO] %WAIT_NAME% is listening on port %WAIT_PORT%.
 exit /b 0
 
 :stop_existing_services

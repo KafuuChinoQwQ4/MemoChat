@@ -20,6 +20,7 @@ enum ErrorCodes {
     GroupMemberLimit = 1015,
     GroupMuted = 1016,
     GroupApplyNotFound = 1017,
+    TargetOffline = 1018,
     ProtocolVersionMismatch = 1098,
 };
 
