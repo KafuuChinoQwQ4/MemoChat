@@ -687,18 +687,25 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 
 	if (to_ip_value == self_name) {
 		auto session = UserMgr::GetInstance()->GetSession(touid);
-		if (session) {
-
-			std::string return_str = rtvalue.toStyledString();
-			session->Send(return_str, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+		if (!session) {
+			RedisMgr::GetInstance()->Del(to_ip_key);
+			RedisMgr::GetInstance()->Del(USER_SESSION_PREFIX + to_str);
+			return;
 		}
+
+		std::string return_str = rtvalue.toStyledString();
+		session->Send(return_str, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
 
 		return ;
 	}
 
 
 
-	ChatGrpcClient::GetInstance()->NotifyTextChatMsg(to_ip_value, text_msg_req, rtvalue);
+	const auto notify_rsp = ChatGrpcClient::GetInstance()->NotifyTextChatMsg(to_ip_value, text_msg_req, rtvalue);
+	if (notify_rsp.error() == ErrorCodes::TargetOffline) {
+		RedisMgr::GetInstance()->Del(to_ip_key);
+		RedisMgr::GetInstance()->Del(USER_SESSION_PREFIX + to_str);
+	}
 }
 
 void LogicSystem::HeartBeatHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data) {

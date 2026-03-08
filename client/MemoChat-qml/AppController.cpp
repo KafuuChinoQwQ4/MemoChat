@@ -17,6 +17,7 @@
 #include <QFutureWatcher>
 #include <QtConcurrent>
 #include <QtGlobal>
+#include <QDebug>
 
 namespace {
 constexpr qint64 kPermChangeGroupInfo = 1LL << 0;
@@ -481,6 +482,9 @@ QString AppController::replyPreviewText() const
 
 void AppController::switchToLogin()
 {
+    qInfo() << "Switching to login page, current page:" << _page
+            << "pending uid:" << _pending_uid
+            << "chat connected:" << _gateway.tcpMgr()->isConnected();
     _register_countdown_timer.stop();
     _heartbeat_timer.stop();
     _chat_server_host.clear();
@@ -2032,6 +2036,7 @@ void AppController::login(const QString &email, const QString &password)
     _chat_login_timeout_timer.stop();
     _ignore_next_login_disconnect = true;
     _gateway.tcpMgr()->CloseConnection();
+    qInfo() << "Starting login flow for email:" << email;
     setBusy(true);
     setTip("", false);
     _auth_controller.sendLogin(email, password);
@@ -2154,6 +2159,13 @@ void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
     server_info.Host = obj.value("host").toString();
     server_info.Port = obj.value("port").toString();
     server_info.Token = obj.value("token").toString();
+    if (server_info.Uid <= 0 || server_info.Host.trimmed().isEmpty() || server_info.Port.trimmed().isEmpty()) {
+        _ignore_next_login_disconnect = false;
+        setBusy(false);
+        setTip("聊天服务配置无效，请确认服务已启动", true);
+        qWarning() << "Invalid chat server response:" << obj;
+        return;
+    }
 
     _pending_uid = server_info.Uid;
     _pending_token = server_info.Token;
@@ -2163,6 +2175,9 @@ void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
     _chat_server_host = server_info.Host;
     _chat_server_port = server_info.Port;
     resetReconnectState();
+    qInfo() << "HTTP login succeeded, connecting chat server host:" << _chat_server_host
+            << "port:" << _chat_server_port
+            << "uid:" << _pending_uid;
     setTip("正在连接聊天服务...", false);
     _gateway.tcpMgr()->slot_tcp_connect(server_info);
 }
@@ -2297,6 +2312,10 @@ void AppController::onTcpConnectFinished(bool success)
     _ignore_next_login_disconnect = false;
     if (!success) {
         _chat_login_timeout_timer.stop();
+        qWarning() << "Chat TCP connect failed. reconnecting:" << _reconnecting_chat
+                   << "page:" << _page
+                   << "host:" << _chat_server_host
+                   << "port:" << _chat_server_port;
         if (_reconnecting_chat && _page == ChatPage) {
             if (tryReconnectChat()) {
                 return;
@@ -2307,10 +2326,11 @@ void AppController::onTcpConnectFinished(bool success)
             return;
         }
         setBusy(false);
-        setTip("网络异常", true);
+        setTip("聊天服务不可用或连接失败，请确认服务已启动", true);
         return;
     }
 
+    qInfo() << "Chat TCP connected, sending chat login for uid:" << _pending_uid;
     setTip("聊天服务连接成功，正在登录...", false);
     QJsonObject obj;
     obj["uid"] = _pending_uid;
@@ -2328,6 +2348,9 @@ void AppController::onChatLoginFailed(int err)
 {
     _ignore_next_login_disconnect = false;
     _chat_login_timeout_timer.stop();
+    qWarning() << "Chat login failed, err:" << err
+               << "reconnecting:" << _reconnecting_chat
+               << "page:" << _page;
     if (_reconnecting_chat && _page == ChatPage) {
         _heartbeat_timer.stop();
         switchToLogin();
@@ -2339,11 +2362,12 @@ void AppController::onChatLoginFailed(int err)
         setTip("客户端版本过旧，请升级到 v2 协议客户端", true);
         return;
     }
-    setTip(QString("登录失败, err is %1").arg(err), true);
+    setTip(QString("聊天服务登录失败（错误码:%1）").arg(err), true);
 }
 
 void AppController::onSwitchToChat()
 {
+    qInfo() << "Chat login succeeded, switching to chat page for uid:" << _pending_uid;
     _ignore_next_login_disconnect = false;
     _chat_login_timeout_timer.stop();
     resetReconnectState();
@@ -2679,6 +2703,7 @@ void AppController::onNotifyOffline()
         return;
     }
 
+    qWarning() << "Received offline notification for current session.";
     _heartbeat_timer.stop();
     resetReconnectState();
     resetHeartbeatTracking();
@@ -2689,6 +2714,10 @@ void AppController::onNotifyOffline()
 
 void AppController::onConnectionClosed()
 {
+    qWarning() << "Chat connection closed. page:" << _page
+               << "busy:" << _busy
+               << "reconnecting:" << _reconnecting_chat
+               << "ignore_disconnect:" << _ignore_next_login_disconnect;
     if (_page != ChatPage) {
         // Consume one expected disconnect triggered by proactive stale-socket close.
         if (_ignore_next_login_disconnect) {
@@ -2706,7 +2735,7 @@ void AppController::onConnectionClosed()
                 _chat_login_timeout_timer.stop();
                 _ignore_next_login_disconnect = false;
                 setBusy(false);
-                setTip("聊天连接已断开，请重试", true);
+                setTip("聊天连接已断开，登录已取消，请重试", true);
             }
             resetReconnectState();
             resetHeartbeatTracking();
@@ -2725,6 +2754,7 @@ void AppController::onConnectionClosed()
         return;
     }
     const bool heartbeatTimeout = isHeartbeatLikelyTimeout();
+    qWarning() << "Chat reconnect exhausted. heartbeat timeout:" << heartbeatTimeout;
     switchToLogin();
     setTip(heartbeatTimeout ? "心跳超时，请重新登录" : "聊天连接已断开，请重新登录", true);
 }
@@ -2741,11 +2771,19 @@ bool AppController::tryReconnectChat()
         return false;
     }
     if (_chat_reconnect_attempts >= kChatReconnectMaxAttempts) {
+        qWarning() << "Reconnect attempts exhausted for uid:" << _pending_uid
+                   << "host:" << _chat_server_host
+                   << "port:" << _chat_server_port;
         return false;
     }
 
     _reconnecting_chat = true;
     ++_chat_reconnect_attempts;
+    qInfo() << "Attempting chat reconnect" << _chat_reconnect_attempts
+            << "/" << kChatReconnectMaxAttempts
+            << "uid:" << _pending_uid
+            << "host:" << _chat_server_host
+            << "port:" << _chat_server_port;
     setTip(QString("聊天连接断开，正在重连（%1/%2）...")
                .arg(_chat_reconnect_attempts)
                .arg(kChatReconnectMaxAttempts), true);

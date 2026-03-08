@@ -147,6 +147,7 @@ TextChatMsgRsp ChatGrpcClient::NotifyTextChatMsg(std::string server_ip,
 
     auto find_iter = _pools.find(server_ip);
     if (find_iter == _pools.end()) {
+        rsp.set_error(ErrorCodes::TargetOffline);
         return rsp;
     }
 
@@ -159,7 +160,7 @@ TextChatMsgRsp ChatGrpcClient::NotifyTextChatMsg(std::string server_ip,
         });
 
     if (!status.ok()) {
-        rsp.set_error(ErrorCodes::RPCFailed);
+        rsp.set_error(ErrorCodes::TargetOffline);
         return rsp;
     }
 
