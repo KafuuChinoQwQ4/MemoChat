@@ -82,7 +82,7 @@ void AuthController::sendLogin(const QString &email, const QString &password) co
     payload["passwd"] = xorString(password);
     payload["client_ver"] = QStringLiteral(MEMOCHAT_CLIENT_VERSION);
     _gateway->httpMgr()->PostHttpReq(
-        QUrl(gate_url_prefix + "/user_login"), payload, ReqId::ID_LOGIN_USER, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/user_login"), payload, ReqId::ID_LOGIN_USER, Modules::LOGINMOD, QStringLiteral("auth"));
 }
 
 void AuthController::sendVerifyCode(const QString &email, Modules module) const
@@ -90,7 +90,7 @@ void AuthController::sendVerifyCode(const QString &email, Modules module) const
     QJsonObject payload;
     payload["email"] = email.trimmed();
     _gateway->httpMgr()->PostHttpReq(
-        QUrl(gate_url_prefix + "/get_varifycode"), payload, ReqId::ID_GET_VARIFY_CODE, module);
+        QUrl(gate_url_prefix + "/get_varifycode"), payload, ReqId::ID_GET_VARIFY_CODE, module, QStringLiteral("auth"));
 }
 
 void AuthController::sendRegister(const QString &user, const QString &email, const QString &password,
@@ -107,7 +107,7 @@ void AuthController::sendRegister(const QString &user, const QString &email, con
     payload["nick"] = user.trimmed();
 
     _gateway->httpMgr()->PostHttpReq(
-        QUrl(gate_url_prefix + "/user_register"), payload, ReqId::ID_REG_USER, Modules::REGISTERMOD);
+        QUrl(gate_url_prefix + "/user_register"), payload, ReqId::ID_REG_USER, Modules::REGISTERMOD, QStringLiteral("auth"));
 }
 
 void AuthController::sendResetPassword(const QString &user, const QString &email, const QString &password,
@@ -120,5 +120,5 @@ void AuthController::sendResetPassword(const QString &user, const QString &email
     payload["varifycode"] = verifyCode.trimmed();
 
     _gateway->httpMgr()->PostHttpReq(
-        QUrl(gate_url_prefix + "/reset_pwd"), payload, ReqId::ID_RESET_PWD, Modules::RESETMOD);
+        QUrl(gate_url_prefix + "/reset_pwd"), payload, ReqId::ID_RESET_PWD, Modules::RESETMOD, QStringLiteral("auth"));
 }

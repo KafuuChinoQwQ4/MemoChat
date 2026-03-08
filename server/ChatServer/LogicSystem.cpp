@@ -113,6 +113,40 @@ const char* RouteResultName(OnlineRouteKind kind) {
 	}
 }
 
+void BindTcpTraceContext(const std::shared_ptr<CSession>& session, const std::string& msg_data) {
+	Json::Reader reader;
+	Json::Value root;
+	if (!reader.parse(msg_data, root) || !root.isObject()) {
+		memolog::TraceContext::SetTraceId(memolog::TraceContext::NewId());
+		memolog::TraceContext::SetRequestId(memolog::TraceContext::NewId());
+		memolog::TraceContext::SetSpanId("");
+		if (session) {
+			memolog::TraceContext::SetSessionId(session->GetSessionId());
+		}
+		return;
+	}
+
+	std::string trace_id = root.get("trace_id", "").asString();
+	if (trace_id.empty()) {
+		trace_id = memolog::TraceContext::NewId();
+	}
+	std::string request_id = root.get("request_id", "").asString();
+	if (request_id.empty()) {
+		request_id = memolog::TraceContext::NewId();
+	}
+	memolog::TraceContext::SetTraceId(trace_id);
+	memolog::TraceContext::SetRequestId(request_id);
+	memolog::TraceContext::SetSpanId(root.get("span_id", "").asString());
+	if (root.isMember("uid")) {
+		memolog::TraceContext::SetUid(std::to_string(root["uid"].asInt()));
+	} else if (root.isMember("fromuid")) {
+		memolog::TraceContext::SetUid(std::to_string(root["fromuid"].asInt()));
+	}
+	if (session) {
+		memolog::TraceContext::SetSessionId(session->GetSessionId());
+	}
+}
+
 void LogPrivateRoute(const std::string& event,
 	int from_uid,
 	int to_uid,
@@ -190,8 +224,13 @@ void LogicSystem::DealMsg() {
 			std::cout << "msg id [" << msg_node->_recvnode->_msg_id << "] handler not found" << std::endl;
 			continue;
 		}
+		const std::string msg_data(msg_node->_recvnode->_data, msg_node->_recvnode->_cur_len);
+		BindTcpTraceContext(msg_node->_session, msg_data);
+		Defer clear_trace([]() {
+			memolog::TraceContext::Clear();
+		});
 		call_back_iter->second(msg_node->_session, msg_node->_recvnode->_msg_id,
-			std::string(msg_node->_recvnode->_data, msg_node->_recvnode->_cur_len));
+			msg_data);
 	}
 }
 

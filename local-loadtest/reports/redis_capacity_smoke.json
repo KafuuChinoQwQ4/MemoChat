@@ -1,0 +1,96 @@
+﻿{
+  "scenario": "redis_capacity",
+  "test": "redis_capacity",
+  "time_utc": "20260308_085745",
+  "target": {
+    "redis": "127.0.0.1"
+  },
+  "config": {
+    "total": 4,
+    "concurrency": 2,
+    "workload_mix": [
+      "verify_code",
+      "token_session",
+      "online_route"
+    ],
+    "pipeline_mode": true
+  },
+  "summary": {
+    "total": 4,
+    "success": 4,
+    "failed": 0,
+    "success_rate": 1.0,
+    "elapsed_sec": 0.069459,
+    "throughput_rps": 57.588,
+    "latency_ms": {
+      "min": 6.235,
+      "avg": 29.626,
+      "p50": 18.849,
+      "p90": 47.49,
+      "p95": 47.49,
+      "p99": 47.49,
+      "max": 47.49
+    }
+  },
+  "phase_breakdown": {
+    "verify_code": {
+      "min": 18.849,
+      "avg": 32.389,
+      "p50": 18.849,
+      "p90": 45.929,
+      "p95": 45.929,
+      "p99": 45.929,
+      "max": 45.929
+    },
+    "token_session": {
+      "min": 47.49,
+      "avg": 47.49,
+      "p50": 47.49,
+      "p90": 47.49,
+      "p95": 47.49,
+      "p99": 47.49,
+      "max": 47.49
+    },
+    "online_route": {
+      "min": 6.235,
+      "avg": 6.235,
+      "p50": 6.235,
+      "p90": 6.235,
+      "p95": 6.235,
+      "p99": 6.235,
+      "max": 6.235
+    }
+  },
+  "error_counter": {},
+  "top_errors": {},
+  "preconditions": {
+    "workloads": [
+      "verify_code",
+      "token_session",
+      "online_route"
+    ]
+  },
+  "data_mutation_summary": {
+    "redis_verify_code_ops": 2,
+    "redis_token_session_ops": 1,
+    "redis_online_route_ops": 1
+  },
+  "samples": [
+    {
+      "workload": "verify_code",
+      "elapsed_ms": 45.929
+    },
+    {
+      "workload": "token_session",
+      "elapsed_ms": 47.49
+    },
+    {
+      "workload": "online_route",
+      "elapsed_ms": 6.235
+    },
+    {
+      "workload": "verify_code",
+      "elapsed_ms": 18.849
+    }
+  ]
+}

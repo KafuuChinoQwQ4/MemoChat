@@ -1,4 +1,6 @@
-# MemoChat ELK (Local Docker)
+# MemoChat ELK (Compatibility Mode)
+
+This stack remains available during migration. The default local observability stack is now under `observability/otel`.
 
 ## Start
 

@@ -1,6 +1,7 @@
 #include "HttpConnection.h"
 
 #include "LogicSystem.h"
+#include "logging/Telemetry.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
 #include <map>
@@ -32,21 +33,33 @@ void HttpConnection::Start() {
                              if (self->_trace_id.empty()) {
                                  self->_trace_id = memolog::TraceContext::NewId();
                              }
+                             auto request_it = self->_request.find("X-Request-Id");
+                             if (request_it != self->_request.end()) {
+                                 self->_request_id = std::string(request_it->value().data(), request_it->value().size());
+                             }
+                             if (self->_request_id.empty()) {
+                                 self->_request_id = memolog::TraceContext::NewId();
+                             }
                              memolog::TraceContext::SetTraceId(self->_trace_id);
-                             memolog::TraceContext::SetRequestId(memolog::TraceContext::NewId());
+                             memolog::TraceContext::SetRequestId(self->_request_id);
+                             self->_request_span.reset(new memolog::SpanScope(
+                                 "GateServer.HttpRequest",
+                                 "SERVER",
+                                 {{"http.method", std::string(self->_request.method_string())}}));
 
                              const auto target_sv = self->_request.target();
                              const auto method_sv = self->_request.method_string();
                              std::map<std::string, std::string> fields;
                              fields["route"] = std::string(target_sv.data(), target_sv.size());
                              fields["method"] = std::string(method_sv.data(), method_sv.size());
-                             fields["trace_id"] = self->_trace_id;
+                             fields["module"] = "http";
                              memolog::LogInfo("http.request.received", "incoming http request", fields);
 
                              self->HandleReq();
                              self->CheckDeadline();
                          } catch (std::exception& exp) {
                              memolog::LogError("http.request.exception", "http request exception", {{"error", exp.what()}});
+                             self->_request_span.reset();
                              memolog::TraceContext::Clear();
                          }
                      });
@@ -143,6 +156,7 @@ void HttpConnection::HandleReq() {
     _response.version(_request.version());
     _response.keep_alive(false);
     _response.set("X-Trace-Id", _trace_id);
+    _response.set("X-Request-Id", _request_id);
     _response.set(boost::beast::http::field::access_control_allow_origin, "*");
 
     if (_request.method() == http::verb::get) {
@@ -185,6 +199,7 @@ void HttpConnection::CheckDeadline() {
     deadline_.async_wait([self](beast::error_code ec) {
         if (!ec) {
             self->_socket.close(ec);
+            self->_request_span.reset();
             memolog::TraceContext::Clear();
         }
     });
@@ -214,6 +229,7 @@ void HttpConnection::WriteResponse() {
             http::async_write(_socket, _response, [self](beast::error_code write_ec, std::size_t) {
                 self->_socket.shutdown(tcp::socket::shutdown_send, write_ec);
                 self->deadline_.cancel();
+                self->_request_span.reset();
                 memolog::TraceContext::Clear();
             });
             return;
@@ -227,6 +243,7 @@ void HttpConnection::WriteResponse() {
         http::async_write(_socket, *file_res, [self, file_res](beast::error_code write_ec, std::size_t) {
             self->_socket.shutdown(tcp::socket::shutdown_send, write_ec);
             self->deadline_.cancel();
+            self->_request_span.reset();
             memolog::TraceContext::Clear();
         });
         return;
@@ -237,6 +254,7 @@ void HttpConnection::WriteResponse() {
     http::async_write(_socket, _response, [self](beast::error_code ec, std::size_t) {
         self->_socket.shutdown(tcp::socket::shutdown_send, ec);
         self->deadline_.cancel();
+        self->_request_span.reset();
         memolog::TraceContext::Clear();
     });
 }

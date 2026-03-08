@@ -9,11 +9,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 from memochat_load_common import (
     build_summary,
+    finalize_report,
     init_json_logger,
     load_accounts,
     load_json,
     new_trace_id,
-    save_json,
+    top_errors,
     utc_now_str,
     xor_encode,
 )
@@ -52,6 +53,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description='MemoChat TCP chat-login load test (HTTP login + TCP 1005 handshake)')
     parser.add_argument('--config', default='config.json', help='Path to config.json')
     parser.add_argument('--accounts-csv', default='', help='CSV path with header: email,password')
+    parser.add_argument('--report-path', default='', help='Explicit report output path')
     parser.add_argument('--total', type=int, default=0)
     parser.add_argument('--concurrency', type=int, default=0)
     parser.add_argument('--http-timeout', type=float, default=0)
@@ -166,6 +168,7 @@ def main() -> int:
 
     summary = build_summary(latencies, success, failed, elapsed_sec)
     report = {
+        'scenario': 'login.tcp',
         'test': 'tcp_login',
         'time_utc': utc_now_str(),
         'target': {'gate_url': gate_url, 'login_path': login_path},
@@ -179,14 +182,18 @@ def main() -> int:
         },
         'summary': summary,
         'error_counter': dict(error_counter),
+        'top_errors': top_errors(error_counter),
+        'phase_breakdown': {'tcp_login_chain': summary['latency_ms']},
+        'preconditions': {'service': ['GateServer', 'StatusServer', 'ChatServer', 'ChatServer2', 'Redis']},
+        'data_mutation_summary': {'tcp_login_requests': success},
     }
 
-    report_path = f"reports/tcp_login_{report['time_utc']}.json"
-    save_json(report_path, report)
+    report_path = finalize_report('tcp_login', report, args.report_path)
 
     logger.info('tcp login load test completed',
                 extra={
                     'event': 'loadtest.tcp_login.summary',
+                    'scenario': 'login.tcp',
                     'payload': {
                         'target': {'gate_url': gate_url, 'login_path': login_path},
                         'total': total,
@@ -198,7 +205,7 @@ def main() -> int:
                         'rps': summary['throughput_rps'],
                         'p95': summary['latency_ms']['p95'],
                         'p99': summary['latency_ms']['p99'],
-                        'top_errors': dict(error_counter.most_common(8)),
+                        'top_errors': top_errors(error_counter),
                         'report': report_path,
                     },
                 })

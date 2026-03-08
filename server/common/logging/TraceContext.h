@@ -3,6 +3,7 @@
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 
+#include <algorithm>
 #include <string>
 
 namespace memolog {
@@ -10,6 +11,7 @@ namespace memolog {
 struct TraceSnapshot {
     std::string trace_id;
     std::string request_id;
+    std::string span_id;
     std::string uid;
     std::string session_id;
 };
@@ -22,6 +24,10 @@ public:
 
     static void SetRequestId(const std::string& request_id) {
         data().request_id = request_id;
+    }
+
+    static void SetSpanId(const std::string& span_id) {
+        data().span_id = span_id;
     }
 
     static void SetUid(const std::string& uid) {
@@ -40,6 +46,10 @@ public:
         return data().request_id;
     }
 
+    static const std::string& GetSpanId() {
+        return data().span_id;
+    }
+
     static const std::string& GetUid() {
         return data().uid;
     }
@@ -49,7 +59,14 @@ public:
     }
 
     static std::string NewId() {
-        return boost::uuids::to_string(boost::uuids::random_generator()());
+        std::string raw = boost::uuids::to_string(boost::uuids::random_generator()());
+        raw.erase(std::remove(raw.begin(), raw.end(), '-'), raw.end());
+        return raw;
+    }
+
+    static std::string NewSpanId() {
+        const std::string id = NewId();
+        return id.size() >= 16 ? id.substr(0, 16) : id;
     }
 
     static std::string EnsureTraceId() {
@@ -83,6 +100,7 @@ public:
     explicit TraceScope(const std::string& trace_id) : old_(TraceContext::Capture()) {
         TraceContext::SetTraceId(trace_id.empty() ? TraceContext::NewId() : trace_id);
         TraceContext::SetRequestId(TraceContext::NewId());
+        TraceContext::SetSpanId("");
     }
 
     ~TraceScope() {

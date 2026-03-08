@@ -8,11 +8,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 from memochat_load_common import (
     build_summary,
+    finalize_report,
     init_json_logger,
     load_accounts,
     load_json,
     new_trace_id,
-    save_json,
+    top_errors,
     utc_now_str,
     xor_encode,
 )
@@ -22,6 +23,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description='MemoChat GateServer /user_login load test')
     parser.add_argument('--config', default='config.json', help='Path to config.json')
     parser.add_argument('--accounts-csv', default='', help='CSV path with header: email,password')
+    parser.add_argument('--report-path', default='', help='Explicit report output path')
     parser.add_argument('--total', type=int, default=0, help='Override total requests')
     parser.add_argument('--concurrency', type=int, default=0, help='Override concurrency')
     parser.add_argument('--timeout', type=float, default=0, help='Override HTTP timeout seconds')
@@ -105,6 +107,7 @@ def main() -> int:
 
     summary = build_summary(latencies, success, failed, elapsed_sec)
     report = {
+        'scenario': 'login.http',
         'test': 'http_login',
         'time_utc': utc_now_str(),
         'target': url,
@@ -116,16 +119,20 @@ def main() -> int:
             'use_xor_passwd': use_xor,
         },
         'summary': summary,
+        'phase_breakdown': {'http_login': summary['latency_ms']},
         'http_status_counter': dict(status_counter),
         'error_counter': dict(error_counter),
+        'top_errors': top_errors(error_counter),
+        'preconditions': {'service': ['GateServer', 'StatusServer', 'Redis']},
+        'data_mutation_summary': {'login_requests': success},
     }
 
-    report_path = f"reports/http_login_{report['time_utc']}.json"
-    save_json(report_path, report)
+    report_path = finalize_report('http_login', report, args.report_path)
 
     logger.info('http login load test completed',
                 extra={
                     'event': 'loadtest.http_login.summary',
+                    'scenario': 'login.http',
                     'payload': {
                         'target': url,
                         'total': total,
@@ -137,7 +144,7 @@ def main() -> int:
                         'rps': summary['throughput_rps'],
                         'p95': summary['latency_ms']['p95'],
                         'p99': summary['latency_ms']['p99'],
-                        'top_errors': dict(error_counter.most_common(8)),
+                        'top_errors': top_errors(error_counter),
                         'report': report_path,
                     },
                 })

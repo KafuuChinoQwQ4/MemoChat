@@ -3,7 +3,9 @@
 #include "ConfigMgr.h"
 #include "RedisMgr.h"
 #include "const.h"
+#include "logging/GrpcTrace.h"
 #include "logging/Logger.h"
+#include "logging/Telemetry.h"
 #include "logging/TraceContext.h"
 
 #include <climits>
@@ -17,17 +19,6 @@ std::string generate_unique_string() {
 }
 
 namespace {
-std::string ExtractTraceId(ServerContext* context) {
-    if (context == nullptr) {
-        return "";
-    }
-    const auto trace_it = context->client_metadata().find("x-trace-id");
-    if (trace_it == context->client_metadata().end()) {
-        return "";
-    }
-    return std::string(trace_it->second.data(), trace_it->second.length());
-}
-
 std::string JoinStrings(const std::vector<std::string>& values, const char* delimiter) {
     std::ostringstream oss;
     for (size_t i = 0; i < values.size(); ++i) {
@@ -42,7 +33,10 @@ std::string JoinStrings(const std::vector<std::string>& values, const char* deli
 
 Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatServerReq* request,
                                         GetChatServerRsp* reply) {
-    memolog::TraceScope trace_scope(ExtractTraceId(context));
+    memolog::BindGrpcTraceContext(context);
+    memolog::SpanScope span("StatusService.GetChatServer", "SERVER",
+                            {{"rpc.system", "grpc"}, {"rpc.service", "StatusService"}, {"rpc.method", "GetChatServer"}});
+    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
 
     std::vector<std::string> server_load_snapshot;
     std::vector<std::string> least_loaded_servers;
@@ -65,6 +59,7 @@ Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatSer
 
     memolog::LogInfo("status.get_chat_server", "select chat server",
                      {{"uid", std::to_string(uid)},
+                      {"module", "grpc"},
                       {"reuse_token", (has_token && !token_value.empty()) ? "true" : "false"},
                       {"server_loads", JoinStrings(server_load_snapshot, ",")},
                       {"least_loaded_servers", JoinStrings(least_loaded_servers, ",")},
@@ -168,7 +163,10 @@ ChatServer StatusServiceImpl::getChatServer(std::vector<std::string>* server_loa
 }
 
 Status StatusServiceImpl::Login(ServerContext* context, const LoginReq* request, LoginRsp* reply) {
-    memolog::TraceScope trace_scope(ExtractTraceId(context));
+    memolog::BindGrpcTraceContext(context);
+    memolog::SpanScope span("StatusService.Login", "SERVER",
+                            {{"rpc.system", "grpc"}, {"rpc.service", "StatusService"}, {"rpc.method", "Login"}});
+    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
 
     auto uid = request->uid();
     auto token = request->token();
@@ -181,6 +179,7 @@ Status StatusServiceImpl::Login(ServerContext* context, const LoginReq* request,
         reply->set_error(ErrorCodes::UidInvalid);
         memolog::LogWarn("status.login.failed", "uid token not found",
                          {{"uid", std::to_string(uid)},
+                          {"module", "grpc"},
                           {"error_code", std::to_string(ErrorCodes::UidInvalid)}});
         return Status::OK;
     }
@@ -189,6 +188,7 @@ Status StatusServiceImpl::Login(ServerContext* context, const LoginReq* request,
         reply->set_error(ErrorCodes::TokenInvalid);
         memolog::LogWarn("status.login.failed", "token mismatch",
                          {{"uid", std::to_string(uid)},
+                          {"module", "grpc"},
                           {"error_code", std::to_string(ErrorCodes::TokenInvalid)}});
         return Status::OK;
     }
@@ -196,7 +196,7 @@ Status StatusServiceImpl::Login(ServerContext* context, const LoginReq* request,
     reply->set_error(ErrorCodes::Success);
     reply->set_uid(uid);
     reply->set_token(token);
-    memolog::LogInfo("status.login", "token validated", {{"uid", std::to_string(uid)}});
+    memolog::LogInfo("status.login", "token validated", {{"uid", std::to_string(uid)}, {"module", "grpc"}});
     return Status::OK;
 }
 

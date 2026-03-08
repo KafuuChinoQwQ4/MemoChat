@@ -1,68 +1,134 @@
-﻿# MemoChat Load Test Toolkit
+# MemoChat Load Test Toolkit
 
-Location: `D:\MemoChat-LoadTest`
+Location: `d:\MemoChat-Qml-Drogon\local-loadtest`
 
 ## Included
-- `http_login_load.py`: GateServer `/user_login` pressure test
-- `tcp_login_load.py`: full chain pressure test (HTTP login -> TCP chat login 1005/1006)
-- `run_suite.ps1`: one-click runner
-- `config.json`: default configuration
-- `accounts.example.csv`: account file template
-- `reports/`: JSON reports output
+- Existing login load tests:
+  - `http_login_load.py`
+  - `tcp_login_load.py`
+- New auth load tests:
+  - `http_verify_code_load.py`
+  - `http_register_load.py`
+  - `http_reset_password_load.py`
+- New business load tests:
+  - `tcp_friendship_load.py`
+  - `tcp_group_ops_load.py`
+  - `tcp_history_ack_load.py`
+  - `media_load.py`
+  - `tcp_call_invite_load.py`
+- New capacity load tests:
+  - `mysql_capacity_load.py`
+  - `redis_capacity_load.py`
+- Shared helpers:
+  - `memochat_load_common.py`
+  - `config.json`
+  - `accounts.example.csv`
+  - `run_suite.ps1`
 
 ## Prerequisites
 - Python 3.8+
-- MemoChat services started (`GateServer`, `StatusServer`, `ChatServer`, `ChatServer2`, `VarifyServer`)
+- Python packages: `pymysql`, `redis`
+- MemoChat services started:
+  - `GateServer`
+  - `StatusServer`
+  - `ChatServer`
+  - `ChatServer2`
+  - `VarifyServer`
+- Local MySQL and Redis should match `config.json`
 
-## 1) Prepare accounts
-Option A: edit `config.json` -> `accounts`
+## Accounts
+Recommended flow:
 
-Option B (recommended): create `accounts.csv` with header:
+1. Copy `accounts.example.csv` to `accounts.local.csv`, or set `runtime_accounts_csv` in `config.json`.
+2. Keep at least `2 * concurrency` accounts for friend and history tests.
+3. Optional fields `user`, `uid`, `user_id`, `last_password`, `tags` will be auto-filled or refreshed by scripts.
+
+Example CSV:
 
 ```csv
-email,password
-u1@example.com,pass1
-u2@example.com,pass2
+email,password,user,uid,user_id,last_password,tags
+u1@example.com,pass1,load_user_1,,,,seed
+u2@example.com,pass2,load_user_2,,,,seed
 ```
 
-> For stable TCP results, account count should be >= concurrency, otherwise token race may increase failures.
+## Config
+`config.json` now includes:
+- shared gate and account settings
+- mutable runtime account CSV path
+- MySQL and Redis direct connection settings
+- per-scenario settings for auth, friendship, group, history, media, call, MySQL, and Redis
 
-## 2) Run tests
-### HTTP login
+The suite is allowed to mutate local dev MySQL and Redis. It does not auto-clean data in v1.
+
+## Run Individual Tests
+Examples:
+
 ```powershell
-cd D:\MemoChat-LoadTest
-python .\http_login_load.py --config .\config.json --accounts-csv .\accounts.csv
+python .\http_verify_code_load.py --config .\config.json
+python .\http_register_load.py --config .\config.json --accounts-csv .\accounts.local.csv
+python .\http_reset_password_load.py --config .\config.json --accounts-csv .\accounts.local.csv
+python .\tcp_friendship_load.py --config .\config.json --accounts-csv .\accounts.local.csv
+python .\tcp_group_ops_load.py --config .\config.json --accounts-csv .\accounts.local.csv
+python .\tcp_history_ack_load.py --config .\config.json --accounts-csv .\accounts.local.csv
+python .\media_load.py --config .\config.json --accounts-csv .\accounts.local.csv
+python .\tcp_call_invite_load.py --config .\config.json --accounts-csv .\accounts.local.csv
+python .\mysql_capacity_load.py --config .\config.json --accounts-csv .\accounts.local.csv
+python .\redis_capacity_load.py --config .\config.json
 ```
 
-### TCP login chain
+## Run Suite
+Supported scenarios:
+- `auth`
+- `login`
+- `friend`
+- `group`
+- `history`
+- `media`
+- `call`
+- `mysql`
+- `redis`
+- `all`
+
+Examples:
+
 ```powershell
-cd D:\MemoChat-LoadTest
-python .\tcp_login_load.py --config .\config.json --accounts-csv .\accounts.csv
+.\run_suite.ps1 -Config .\config.json -AccountsCsv .\accounts.local.csv -Scenario auth
+.\run_suite.ps1 -Config .\config.json -AccountsCsv .\accounts.local.csv -Scenario friend
+.\run_suite.ps1 -Config .\config.json -AccountsCsv .\accounts.local.csv -Scenario all
 ```
 
-### One-click suite
-```powershell
-cd D:\MemoChat-LoadTest
-.\run_suite.ps1 -Config .\config.json -AccountsCsv .\accounts.csv
-```
+`all` runs in this order:
+1. auth
+2. login
+3. friendship
+4. group ops
+5. history and read ack
+6. media upload and download
+7. call invite
+8. MySQL capacity
+9. Redis capacity
 
-## 3) Optional overrides
-```powershell
-python .\http_login_load.py --config .\config.json --accounts-csv .\accounts.csv --total 20000 --concurrency 500 --timeout 8
-python .\tcp_login_load.py --config .\config.json --accounts-csv .\accounts.csv --total 5000 --concurrency 200 --http-timeout 8 --tcp-timeout 8
-```
-
-## Report format
-JSON report saved in `reports/`, includes:
-- success/fail and success rate
-- throughput (RPS)
-- latency stats (`p50/p90/p95/p99`)
-- error counters
-
-## Runtime logs
-- JSON line logs are written to `logs/http_login_loadtest.json` and `logs/tcp_login_loadtest.json`.
-- Every request carries `X-Trace-Id`; TCP login payload also includes optional `trace_id`.
+## Reports And Logs
+- Every script writes JSON reports under `reports/`
+- `run_suite.ps1` writes a timestamped suite folder and `suite_summary.json`
+- Report schema includes:
+  - `scenario`
+  - `summary`
+  - `phase_breakdown`
+  - `top_errors`
+  - `preconditions`
+  - `data_mutation_summary`
+- JSON line logs go to `logs/*.json`
+- Log correlation fields include:
+  - `trace_id`
+  - `scenario`
+  - `stage`
+  - `account_email`
+  - `group_id`
+  - `peer_uid`
+  - `upload_id`
 
 ## Notes
-- Password can be XOR-encoded automatically (`use_xor_passwd=true` in config).
-- GateServer in this project also accepts plain password fallback, but keeping XOR mode matches client behavior.
+- Passwords can still use XOR encoding via `use_xor_passwd=true`
+- Auth and business tests may create accounts, friendships, groups, messages, read state rows, and media assets
+- MySQL and Redis capacity tests are business-shaped synthetic workloads, not empty benchmark loops

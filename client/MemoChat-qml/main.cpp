@@ -21,8 +21,10 @@
 #include <QJsonObject>
 #include <QMutex>
 #include <QMutexLocker>
+#include <QSysInfo>
 #include <cstdio>
 #include "AppController.h"
+#include "TelemetryUtils.h"
 #include "global.h"
 
 #ifdef Q_OS_WIN
@@ -168,6 +170,8 @@ struct RuntimeLogConfig {
     bool toConsole = true;
     int maxFiles = 14;
     QString env = "local";
+    QString serviceName = "MemoChatQml";
+    QString serviceInstance = "MemoChatQml@localhost";
 };
 
 RuntimeLogConfig g_log_cfg;
@@ -247,6 +251,14 @@ void loadRuntimeLogConfig(const QString &configPath, const QString &appPath)
         g_log_cfg.maxFiles = 14;
     }
     g_log_cfg.env = settings.value("Log/Env", "local").toString().trimmed();
+    g_log_cfg.serviceName = settings.value("Telemetry/ServiceName", "MemoChatQml").toString().trimmed();
+    if (g_log_cfg.serviceName.isEmpty()) {
+        g_log_cfg.serviceName = "MemoChatQml";
+    }
+    g_log_cfg.serviceInstance = QStringLiteral("%1@%2:%3")
+                                   .arg(g_log_cfg.serviceName,
+                                        QSysInfo::machineHostName().isEmpty() ? QStringLiteral("localhost") : QSysInfo::machineHostName(),
+                                        QString::number(QCoreApplication::applicationPid()));
     QDir().mkpath(g_log_cfg.dir);
 }
 
@@ -264,10 +276,19 @@ void fileMessageHandler(QtMsgType type, const QMessageLogContext &, const QStrin
         QJsonObject obj;
         obj["ts"] = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
         obj["level"] = msgLevel(type);
-        obj["service"] = "MemoChatQml";
+        obj["service"] = g_log_cfg.serviceName;
+        obj["service_instance"] = g_log_cfg.serviceInstance;
         obj["env"] = g_log_cfg.env;
         obj["event"] = "qt.message";
         obj["message"] = msg;
+        obj["request_id"] = QString();
+        obj["span_id"] = QString();
+        obj["module"] = "qt";
+        obj["peer_service"] = QString();
+        obj["error_code"] = QString();
+        obj["error_type"] = (type == QtCriticalMsg || type == QtFatalMsg) ? "qt" : QString();
+        obj["duration_ms"] = 0;
+        obj["attrs"] = QJsonObject();
         const QByteArray line = QJsonDocument(obj).toJson(QJsonDocument::Compact);
         file.write(line);
         file.write("\n");
@@ -285,6 +306,7 @@ void fileMessageHandler(QtMsgType type, const QMessageLogContext &, const QStrin
 
 int main(int argc, char *argv[])
 {
+    QCoreApplication::setApplicationName(QStringLiteral("MemoChatQml"));
     QSurfaceFormat format;
     format.setSamples(8);
     QSurfaceFormat::setDefaultFormat(format);

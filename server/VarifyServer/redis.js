@@ -1,6 +1,7 @@
 const Redis = require('ioredis');
 
 const config_module = require('./config');
+const { childSpan, exportZipkinSpan } = require('./telemetry');
 const { logger } = require('./logger');
 
 const RedisCli = new Redis({
@@ -32,44 +33,70 @@ if (typeof heartbeatTimer.unref === 'function') {
   heartbeatTimer.unref();
 }
 
-async function GetRedis(key) {
+async function GetRedis(key, spanContext = null) {
+  const span = childSpan(spanContext, 'Redis GET', 'CLIENT', {
+    'db.system': 'redis',
+    'db.operation': 'GET',
+    'db.statement.name': 'GET',
+    key,
+  });
   try {
     const result = await RedisCli.get(key);
     if (result === null) {
-      logger.info({ event: 'redis.get.miss', key }, 'redis key not found');
+      logger.info({ event: 'redis.get.miss', key, trace_id: span.trace_id, request_id: span.request_id, span_id: span.span_id, module: 'redis' }, 'redis key not found');
+      exportZipkinSpan(span, { 'db.redis.result': 'miss' });
       return null;
     }
+    exportZipkinSpan(span, { 'db.redis.result': 'hit' });
     return result;
   } catch (error) {
-    logger.error({ event: 'redis.get.error', key, error: error.message || String(error) }, 'redis get error');
+    logger.error({ event: 'redis.get.error', key, error: error.message || String(error), trace_id: span.trace_id, request_id: span.request_id, span_id: span.span_id, module: 'redis', error_type: 'redis' }, 'redis get error');
+    exportZipkinSpan(span, { error: error.message || String(error), 'otel.status_code': 'ERROR' });
     return null;
   }
 }
 
-async function QueryRedis(key) {
+async function QueryRedis(key, spanContext = null) {
+  const span = childSpan(spanContext, 'Redis EXISTS', 'CLIENT', {
+    'db.system': 'redis',
+    'db.operation': 'EXISTS',
+    'db.statement.name': 'EXISTS',
+    key,
+  });
   try {
     const result = await RedisCli.exists(key);
     if (result === 0) {
-      logger.info({ event: 'redis.exists.miss', key }, 'redis key not found by exists');
+      logger.info({ event: 'redis.exists.miss', key, trace_id: span.trace_id, request_id: span.request_id, span_id: span.span_id, module: 'redis' }, 'redis key not found by exists');
+      exportZipkinSpan(span, { 'db.redis.result': 'miss' });
       return null;
     }
+    exportZipkinSpan(span, { 'db.redis.result': 'hit' });
     return result;
   } catch (error) {
-    logger.error({ event: 'redis.exists.error', key, error: error.message || String(error) }, 'redis exists error');
+    logger.error({ event: 'redis.exists.error', key, error: error.message || String(error), trace_id: span.trace_id, request_id: span.request_id, span_id: span.span_id, module: 'redis', error_type: 'redis' }, 'redis exists error');
+    exportZipkinSpan(span, { error: error.message || String(error), 'otel.status_code': 'ERROR' });
     return null;
   }
 }
 
-async function SetRedisExpire(key, value, exptime) {
+async function SetRedisExpire(key, value, exptime, spanContext = null) {
+  const span = childSpan(spanContext, 'Redis SETEX', 'CLIENT', {
+    'db.system': 'redis',
+    'db.operation': 'SETEX',
+    'db.statement.name': 'SETEX',
+    key,
+  });
   try {
     await RedisCli.set(key, value);
     await RedisCli.expire(key, exptime);
+    exportZipkinSpan(span, { exptime });
     return true;
   } catch (error) {
     logger.error(
-      { event: 'redis.set_expire.error', key, exptime, error: error.message || String(error) },
+      { event: 'redis.set_expire.error', key, exptime, error: error.message || String(error), trace_id: span.trace_id, request_id: span.request_id, span_id: span.span_id, module: 'redis', error_type: 'redis' },
       'redis set+expire error'
     );
+    exportZipkinSpan(span, { error: error.message || String(error), exptime, 'otel.status_code': 'ERROR' });
     return false;
   }
 }
