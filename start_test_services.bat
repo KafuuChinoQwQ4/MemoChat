@@ -18,13 +18,8 @@ set "CONSOLE_CP=936"
 
 if /I "%~1"=="--no-client" set "WITH_CLIENT=0"
 
-call :has_all_servers "%BUILD_BIN%"
-if errorlevel 1 (
-  call :has_all_servers "%SERVER_BIN_FALLBACK%"
-  if not errorlevel 1 (
-    set "BUILD_BIN=%SERVER_BIN_FALLBACK%"
-  )
-)
+call :select_server_bin
+if errorlevel 1 exit /b 1
 
 echo [INFO] Root: %ROOT%
 echo [INFO] Server bin: %BUILD_BIN%
@@ -106,12 +101,16 @@ echo [INFO] Starting StatusServer...
 start "StatusServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\StatusServer"" && StatusServer.exe"
 call :wait_for_port StatusServer 50052 20 "%RUN_ROOT%\StatusServer\logs"
 if errorlevel 1 exit /b 1
+call :print_running_process_stamp StatusServer.exe
+if errorlevel 1 exit /b 1
 
 echo [INFO] Starting ChatServer...
 start "ChatServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\ChatServer"" && ChatServer.exe"
 call :wait_for_port ChatServer 8090 20 "%RUN_ROOT%\ChatServer\logs"
 if errorlevel 1 exit /b 1
 call :wait_for_port ChatServer-RPC 50055 20 "%RUN_ROOT%\ChatServer\logs"
+if errorlevel 1 exit /b 1
+call :print_running_process_stamp ChatServer.exe
 if errorlevel 1 exit /b 1
 
 echo [INFO] Starting ChatServer2...
@@ -120,10 +119,14 @@ call :wait_for_port ChatServer2 8091 20 "%RUN_ROOT%\ChatServer2\logs"
 if errorlevel 1 exit /b 1
 call :wait_for_port ChatServer2-RPC 50056 20 "%RUN_ROOT%\ChatServer2\logs"
 if errorlevel 1 exit /b 1
+call :print_running_process_stamp ChatServer2.exe
+if errorlevel 1 exit /b 1
 
 echo [INFO] Starting GateServer...
 start "GateServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\GateServer"" && GateServer.exe"
 call :wait_for_port GateServer 8080 20 "%RUN_ROOT%\GateServer\logs"
+if errorlevel 1 exit /b 1
+call :print_running_process_stamp GateServer.exe
 if errorlevel 1 exit /b 1
 
 if "%WITH_CLIENT%"=="1" (
@@ -241,10 +244,68 @@ if not exist "%SVC_EXE%" (
 
 if not exist "%SVC_DIR%" mkdir "%SVC_DIR%"
 
+call :print_file_stamp "Source %SVC_NAME%" "%SVC_EXE%"
 copy /Y "%SVC_EXE%" "%SVC_DIR%\%~nx3" >nul
 copy /Y "%SVC_CFG%" "%SVC_DIR%\config.ini" >nul
+call :print_file_stamp "Prepared %SVC_NAME%" "%SVC_DIR%\%~nx3"
 
 echo [INFO] Prepared %SVC_NAME% in %SVC_DIR%
+exit /b 0
+
+:select_server_bin
+set "BUILD_BIN="
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$dirs = @('%SERVER_BIN_PRIMARY%', '%SERVER_BIN_FALLBACK%');" ^
+  "$required = 'GateServer.exe','StatusServer.exe','ChatServer.exe','ChatServer2.exe';" ^
+  "$complete = foreach ($dir in $dirs) {" ^
+  "  if (-not (Test-Path $dir)) { continue }" ^
+  "  $missing = $required | Where-Object { -not (Test-Path (Join-Path $dir $_)) };" ^
+  "  if (-not $missing) { [pscustomobject]@{ Path = $dir; StatusServerTime = (Get-Item (Join-Path $dir 'StatusServer.exe')).LastWriteTimeUtc } }" ^
+  "};" ^
+  "if (-not $complete) { exit 1 }" ^
+  "$best = $complete | Sort-Object StatusServerTime -Descending | Select-Object -First 1;" ^
+  "Write-Host ('[INFO] Candidate server bins: ' + (($complete | ForEach-Object { '{0} [{1}]' -f $_.Path, $_.StatusServerTime.ToString('yyyy-MM-dd HH:mm:ss') }) -join '; '));" ^
+  "$best = $best.Path;" ^
+  "Write-Output $best"`) do (
+  set "BUILD_BIN=%%I"
+)
+if not defined BUILD_BIN (
+  echo [ERROR] No complete server binary directory found.
+  echo [HINT] Checked:
+  echo [HINT]   %SERVER_BIN_PRIMARY%
+  echo [HINT]   %SERVER_BIN_FALLBACK%
+  exit /b 1
+)
+call :print_file_stamp "Selected StatusServer" "%BUILD_BIN%\StatusServer.exe"
+call :print_file_stamp "Selected ChatServer" "%BUILD_BIN%\ChatServer.exe"
+call :print_file_stamp "Selected ChatServer2" "%BUILD_BIN%\ChatServer2.exe"
+call :print_file_stamp "Selected GateServer" "%BUILD_BIN%\GateServer.exe"
+exit /b 0
+
+:print_running_process_stamp
+set "RUN_EXE=%~1"
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$proc = Get-CimInstance Win32_Process -Filter \"Name='%RUN_EXE%'\" -ErrorAction SilentlyContinue | Select-Object -First 1;" ^
+  "if (-not $proc) { exit 1 }" ^
+  "$path = $proc.ExecutablePath;" ^
+  "if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path $path)) { exit 1 }" ^
+  "$item = Get-Item $path;" ^
+  "Write-Output ('[INFO] Running {0}: {1} ({2} bytes, {3})' -f '%RUN_EXE%', $item.FullName, $item.Length, $item.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"`) do echo %%I
+if errorlevel 1 (
+  echo [WARN] Unable to inspect running process image for %RUN_EXE%
+)
+exit /b 0
+
+:print_file_stamp
+set "STAMP_LABEL=%~1"
+set "STAMP_PATH=%~2"
+if not exist "%STAMP_PATH%" (
+  echo [WARN] %STAMP_LABEL% missing: %STAMP_PATH%
+  exit /b 0
+)
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$item = Get-Item '%STAMP_PATH%';" ^
+  "Write-Output ('[INFO] {0}: {1} ({2} bytes, {3})' -f '%STAMP_LABEL%', $item.FullName, $item.Length, $item.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"`) do echo %%I
 exit /b 0
 
 :has_all_servers

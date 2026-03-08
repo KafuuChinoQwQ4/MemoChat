@@ -632,9 +632,13 @@ void AppController::selectChatIndex(int index)
     setPendingReplyContext(QString(), QString(), QString());
     _current_chat_uid = item.value("uid").toInt();
     _dialog_list_model.clearUnread(_current_chat_uid);
+    _chat_list_model.clearUnread(_current_chat_uid);
     setCurrentGroup(0, "");
     _group_history_before_seq = 0;
     _group_history_has_more = true;
+    qInfo() << "Selecting private chat by index:" << index
+            << "uid:" << _current_chat_uid
+            << "name:" << item.value("name").toString();
     setCurrentChatPeerName(item.value("name").toString());
     setCurrentChatPeerIcon(item.value("icon").toString());
     loadCurrentChatMessages();
@@ -762,6 +766,10 @@ void AppController::selectDialogByUid(int uid)
     if (uid == 0) {
         return;
     }
+
+    qInfo() << "Selecting dialog by uid:" << uid
+            << "current chat uid:" << _current_chat_uid
+            << "current group id:" << _current_group_id;
 
     if (uid > 0) {
         selectChatByUid(uid);
@@ -2569,6 +2577,11 @@ void AppController::onTextChatMsg(std::shared_ptr<TextChatMsg> msg)
     const int selfUid = selfInfo->_uid;
     const bool fromSelf = (msg->_from_uid == selfUid);
     const int peerUid = (msg->_from_uid == selfUid) ? msg->_to_uid : msg->_from_uid;
+    qInfo() << "Private chat message received, peer uid:" << peerUid
+            << "from self:" << fromSelf
+            << "current chat uid:" << _current_chat_uid
+            << "current group id:" << _current_group_id
+            << "batch size:" << static_cast<int>(msg->_chat_msgs.size());
     auto friendInfo = _gateway.userMgr()->GetFriendById(peerUid);
     if (!friendInfo && peerUid > 0) {
         QString fallbackName = QString::number(peerUid);
@@ -2628,6 +2641,7 @@ void AppController::onTextChatMsg(std::shared_ptr<TextChatMsg> msg)
     const bool isViewingCurrentPrivate = (_current_group_id <= 0 && peerUid == _current_chat_uid);
     if (isViewingCurrentPrivate) {
         _dialog_list_model.clearUnread(peerUid);
+        _chat_list_model.clearUnread(peerUid);
         if (latestPeerTs > 0) {
             sendPrivateReadAck(peerUid, latestPeerTs);
         }
@@ -2636,13 +2650,21 @@ void AppController::onTextChatMsg(std::shared_ptr<TextChatMsg> msg)
     }
 
     if (peerUid != _current_chat_uid) {
+        qInfo() << "Private chat message stored for background dialog, peer uid:" << peerUid;
         return;
     }
 
-    for (const auto &chat : msg->_chat_msgs) {
-        _message_model.appendMessage(chat, selfUid);
+    if (friendInfo) {
+        _message_model.setMessages(friendInfo->_chat_msgs, selfUid);
+    } else {
+        for (const auto &chat : msg->_chat_msgs) {
+            _message_model.appendMessage(chat, selfUid);
+        }
     }
     _private_history_before_ts = _message_model.earliestCreatedAt();
+    qInfo() << "Private chat view refreshed from live message, peer uid:" << peerUid
+            << "friend msg count:" << (friendInfo ? static_cast<qlonglong>(friendInfo->_chat_msgs.size()) : 0LL)
+            << "message model count:" << _message_model.rowCount();
 }
 
 void AppController::onUserSearch(std::shared_ptr<SearchInfo> searchInfo)
@@ -3755,6 +3777,12 @@ void AppController::onPrivateHistoryRsp(QJsonObject payload)
     const int peerUid = payload.value("peer_uid").toInt();
     const bool hasMore = payload.value("has_more").toBool(false);
     const QJsonArray messages = payload.value("messages").toArray();
+    qInfo() << "Private history response, peer uid:" << peerUid
+            << "current chat uid:" << _current_chat_uid
+            << "pending peer uid:" << _private_history_pending_peer_uid
+            << "before ts:" << _private_history_pending_before_ts
+            << "message count:" << messages.size()
+            << "has more:" << hasMore;
     std::vector<std::shared_ptr<TextChatData>> parsed;
     parsed.reserve(messages.size());
     for (const auto &one : messages) {
@@ -3849,6 +3877,12 @@ void AppController::onPrivateHistoryRsp(QJsonObject payload)
         if (latestPeerTs > 0) {
             sendPrivateReadAck(peerUid, latestPeerTs);
         }
+        qInfo() << "Private chat view refreshed from history, peer uid:" << peerUid
+                << "history append mode:" << (_private_history_pending_before_ts > 0 ? "prepend" : "reset")
+                << "friend msg count:" << (friendInfo ? static_cast<qlonglong>(friendInfo->_chat_msgs.size()) : 0LL)
+                << "message model count:" << _message_model.rowCount();
+    } else {
+        qInfo() << "Private history response cached for non-current dialog, peer uid:" << peerUid;
     }
 
     _private_history_pending_before_ts = 0;
@@ -4129,12 +4163,16 @@ void AppController::loadCurrentChatMessages()
         return;
     }
 
+    qInfo() << "Loading current private chat, peer uid:" << _current_chat_uid
+            << "existing friend msg count:" << static_cast<qlonglong>(friendInfo->_chat_msgs.size());
     setCurrentChatPeerName(friendInfo->_name);
     setCurrentChatPeerIcon(friendInfo->_icon);
 
     const auto localMessages = _private_cache_store.loadRecentMessages(selfInfo->_uid, _current_chat_uid, 20);
     if (!localMessages.empty()) {
         _gateway.userMgr()->AppendFriendChatMsg(_current_chat_uid, localMessages);
+        qInfo() << "Merged local private cache, peer uid:" << _current_chat_uid
+                << "cache count:" << static_cast<qlonglong>(localMessages.size());
     }
     _message_model.setMessages(friendInfo->_chat_msgs, selfInfo->_uid);
     qint64 latestPeerTs = 0;
@@ -4151,6 +4189,10 @@ void AppController::loadCurrentChatMessages()
     _private_history_pending_peer_uid = 0;
     setPrivateHistoryLoading(false);
     setCanLoadMorePrivateHistory(true);
+    qInfo() << "Private chat loaded, peer uid:" << _current_chat_uid
+            << "friend msg count:" << static_cast<qlonglong>(friendInfo->_chat_msgs.size())
+            << "message model count:" << _message_model.rowCount()
+            << "earliest created at:" << _private_history_before_ts;
     requestPrivateHistory(_current_chat_uid, 0);
 }
 
@@ -4269,6 +4311,9 @@ void AppController::setCurrentChatPeerIcon(const QString &icon)
 
 void AppController::selectChatByUid(int uid)
 {
+    qInfo() << "Selecting private chat by uid:" << uid
+            << "current chat uid:" << _current_chat_uid
+            << "current group id:" << _current_group_id;
     const int idx = _chat_list_model.indexOfUid(uid);
     if (idx >= 0) {
         selectChatIndex(idx);
@@ -4310,9 +4355,14 @@ void AppController::selectChatByUid(int uid)
     }
 
     _current_chat_uid = uid;
+    _dialog_list_model.clearUnread(uid);
+    _chat_list_model.clearUnread(uid);
     setCurrentGroup(0, "");
     setCurrentChatPeerName(friendInfo->_name);
     setCurrentChatPeerIcon(friendInfo->_icon);
+    qInfo() << "Private chat resolved, uid:" << uid
+            << "name:" << friendInfo->_name
+            << "friend msg count:" << static_cast<qlonglong>(friendInfo->_chat_msgs.size());
     loadCurrentChatMessages();
     syncCurrentDialogDraft();
 }
@@ -4790,13 +4840,23 @@ bool AppController::dispatchChatContent(const QString &content, const QString &p
     auto msg = std::make_shared<TextChatData>(packet.msgId, content, packet.fromUid, packet.toUid, QString(), packet.createdAt);
     _gateway.userMgr()->AppendFriendChatMsg(_current_chat_uid, {msg});
     _private_cache_store.upsertMessages(packet.fromUid, _current_chat_uid, {msg});
-    _message_model.appendMessage(msg, packet.fromUid);
+    auto friendInfo = _gateway.userMgr()->GetFriendById(_current_chat_uid);
+    if (friendInfo) {
+        _message_model.setMessages(friendInfo->_chat_msgs, packet.fromUid);
+    } else {
+        _message_model.appendMessage(msg, packet.fromUid);
+    }
     _private_history_before_ts = _message_model.earliestCreatedAt();
 
     const QString resolvedPreview = previewText.isEmpty() ? MessageContentCodec::toPreviewText(content) : previewText;
     _chat_list_model.updateLastMessage(_current_chat_uid, resolvedPreview, packet.createdAt);
     _dialog_list_model.updateLastMessage(_current_chat_uid, resolvedPreview, packet.createdAt);
     _dialog_list_model.clearUnread(_current_chat_uid);
+    _chat_list_model.clearUnread(_current_chat_uid);
+    qInfo() << "Private chat message dispatched, peer uid:" << _current_chat_uid
+            << "msg id:" << packet.msgId
+            << "friend msg count:" << (friendInfo ? static_cast<qlonglong>(friendInfo->_chat_msgs.size()) : 0LL)
+            << "message model count:" << _message_model.rowCount();
     return true;
 }
 

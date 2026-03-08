@@ -15,6 +15,8 @@ Item {
     property string fileName: ""
     property string senderName: ""
     property bool showAvatar: true
+    property bool showTimeDivider: false
+    property string timeDividerText: ""
     property string avatarSource: "qrc:/res/head_1.jpg"
     property string defaultAvatarSource: "qrc:/res/head_1.jpg"
     property string messageState: "sent"
@@ -61,15 +63,35 @@ Item {
     readonly property real messageHeight: Math.max(bubble.implicitHeight, showAvatar ? avatarSize : 0)
     readonly property bool showStateLabel: (root.outgoing && root.messageState !== "sent")
                                            || (!root.outgoing && (root.messageState === "edited" || root.messageState === "deleted"))
+    readonly property int timeDividerHeight: root.showTimeDivider ? 32 : 0
     readonly property int stateLabelHeight: showStateLabel ? 16 : 0
 
-    height: topSpacing + messageHeight + stateLabelHeight + bottomSpacing
+    height: timeDividerHeight + topSpacing + messageHeight + stateLabelHeight + bottomSpacing
+
+    Rectangle {
+        visible: root.showTimeDivider
+        anchors.top: parent.top
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: timeDividerLabel.implicitWidth + 20
+        height: 22
+        radius: height / 2
+        color: Qt.rgba(0.32, 0.41, 0.53, 0.18)
+        border.color: Qt.rgba(1, 1, 1, 0.40)
+
+        Text {
+            id: timeDividerLabel
+            anchors.centerIn: parent
+            text: root.timeDividerText
+            color: "#5f7087"
+            font.pixelSize: 11
+        }
+    }
 
     Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.topMargin: root.topSpacing
+        anchors.topMargin: root.timeDividerHeight + root.topSpacing
         height: root.messageHeight
 
         Item {
@@ -147,7 +169,7 @@ Item {
         color: root.outgoing ? Qt.rgba(0.62, 0.80, 1.0, 0.52) : Qt.rgba(1, 1, 1, 0.50)
         border.color: root.outgoing ? Qt.rgba(0.44, 0.67, 0.95, 0.82) : Qt.rgba(1, 1, 1, 0.66)
         anchors.top: parent.top
-        anchors.topMargin: root.topSpacing
+        anchors.topMargin: root.timeDividerHeight + root.topSpacing
         anchors.right: root.outgoing ? parent.right : undefined
         anchors.rightMargin: root.outgoing ? root.avatarSlotWidth : 0
         anchors.left: root.outgoing ? undefined : parent.left
