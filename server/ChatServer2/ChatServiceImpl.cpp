@@ -1,6 +1,9 @@
 #include "ChatServiceImpl.h"
 #include "UserMgr.h"
 #include "CSession.h"
+#include "logging/GrpcTrace.h"
+#include "logging/Telemetry.h"
+#include "logging/TraceContext.h"
 #include <json/json.h>
 #include <json/value.h>
 #include <json/reader.h>
@@ -14,6 +17,10 @@ ChatServiceImpl::ChatServiceImpl()
 
 Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendReq* request, AddFriendRsp* reply)
 {
+    memolog::BindGrpcTraceContext(context);
+    memolog::SpanScope span("ChatService.NotifyAddFriend", "SERVER",
+                            {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyAddFriend"}});
+    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
     auto touid = request->touid();
     auto session = UserMgr::GetInstance()->GetSession(touid);
 
@@ -47,6 +54,10 @@ Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendR
 
 Status ChatServiceImpl::NotifyAuthFriend(ServerContext* context, const AuthFriendReq* request,
     AuthFriendRsp* reply) {
+    memolog::BindGrpcTraceContext(context);
+    memolog::SpanScope span("ChatService.NotifyAuthFriend", "SERVER",
+                            {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyAuthFriend"}});
+    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
     auto touid = request->touid();
     auto fromuid = request->fromuid();
     auto session = UserMgr::GetInstance()->GetSession(touid);
@@ -87,6 +98,10 @@ Status ChatServiceImpl::NotifyAuthFriend(ServerContext* context, const AuthFrien
 
 Status ChatServiceImpl::NotifyTextChatMsg(::grpc::ServerContext* context,
     const TextChatMsgReq* request, TextChatMsgRsp* reply) {
+    memolog::BindGrpcTraceContext(context);
+    memolog::SpanScope span("ChatService.NotifyTextChatMsg", "SERVER",
+                            {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyTextChatMsg"}});
+    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
     auto touid = request->touid();
     auto session = UserMgr::GetInstance()->GetSession(touid);
 
@@ -171,6 +186,10 @@ bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr
 Status ChatServiceImpl::NotifyKickUser(::grpc::ServerContext* context,
     const KickUserReq* request, KickUserRsp* reply)
 {
+    memolog::BindGrpcTraceContext(context);
+    memolog::SpanScope span("ChatService.NotifyKickUser", "SERVER",
+                            {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyKickUser"}});
+    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
     auto uid = request->uid();
     auto session = UserMgr::GetInstance()->GetSession(uid);
 
@@ -192,6 +211,10 @@ Status ChatServiceImpl::NotifyKickUser(::grpc::ServerContext* context,
 Status ChatServiceImpl::NotifyGroupMessage(::grpc::ServerContext* context,
     const GroupMessageNotifyReq* request, GroupMessageNotifyRsp* response)
 {
+    memolog::BindGrpcTraceContext(context);
+    memolog::SpanScope span("ChatService.NotifyGroupMessage", "SERVER",
+                            {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyGroupMessage"}});
+    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
     int delivered = 0;
     for (int i = 0; i < request->touids_size(); ++i) {
         auto uid = request->touids(i);
@@ -210,6 +233,10 @@ Status ChatServiceImpl::NotifyGroupMessage(::grpc::ServerContext* context,
 Status ChatServiceImpl::NotifyGroupEvent(::grpc::ServerContext* context,
     const GroupEventNotifyReq* request, GroupEventNotifyRsp* response)
 {
+    memolog::BindGrpcTraceContext(context);
+    memolog::SpanScope span("ChatService.NotifyGroupEvent", "SERVER",
+                            {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyGroupEvent"}});
+    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
     int delivered = 0;
     for (int i = 0; i < request->touids_size(); ++i) {
         auto uid = request->touids(i);
@@ -228,6 +255,10 @@ Status ChatServiceImpl::NotifyGroupEvent(::grpc::ServerContext* context,
 Status ChatServiceImpl::NotifyGroupMemberBatch(::grpc::ServerContext* context,
     const GroupMemberBatchReq* request, GroupMemberBatchRsp* response)
 {
+    memolog::BindGrpcTraceContext(context);
+    memolog::SpanScope span("ChatService.NotifyGroupMemberBatch", "SERVER",
+                            {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyGroupMemberBatch"}});
+    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
     int delivered = 0;
     for (int i = 0; i < request->touids_size(); ++i) {
         auto uid = request->touids(i);

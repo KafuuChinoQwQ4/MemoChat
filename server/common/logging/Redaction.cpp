@@ -37,7 +37,10 @@ std::string RedactEmail(const std::string& value) {
 
 bool IsSensitiveKey(const std::string& key) {
     const std::string lower = ToLower(key);
-    return lower == "passwd" || lower == "password" || lower == "token" || lower == "email";
+    return lower == "passwd" || lower == "password" || lower == "token" ||
+           lower == "access_token" || lower == "refresh_token" ||
+           lower == "authorization" || lower == "cookie" ||
+           lower == "email" || lower == "phone" || lower == "verify_code";
 }
 
 std::string RedactValue(const std::string& key, const std::string& value, bool enabled) {
@@ -48,7 +51,8 @@ std::string RedactValue(const std::string& key, const std::string& value, bool e
     if (lower == "email") {
         return RedactEmail(value);
     }
-    if (lower == "token") {
+    if (lower == "token" || lower == "access_token" || lower == "refresh_token" ||
+        lower == "authorization" || lower == "cookie") {
         return RedactToken(value);
     }
     return "****";

@@ -15,6 +15,8 @@
 #include "const.h"
 #include "logging/LogConfig.h"
 #include "logging/Logger.h"
+#include "logging/Telemetry.h"
+#include "logging/TelemetryConfig.h"
 
 using namespace std;
 bool bstop = false;
@@ -77,7 +79,12 @@ int main()
 			[&cfg](const std::string& section, const std::string& key) {
 				return cfg.GetValue(section, key);
 			});
+		auto telemetry_cfg = memolog::TelemetryConfig::FromGetter(
+			[&cfg](const std::string& section, const std::string& key) {
+				return cfg.GetValue(section, key);
+			});
 		memolog::Logger::Init("ChatServer", log_cfg);
+		memolog::Telemetry::Init("ChatServer", telemetry_cfg);
 		auto pool = AsioIOServicePool::GetInstance();
 
 		CleanupTrackedOnlineState(server_name);
@@ -85,6 +92,7 @@ int main()
 				CleanupTrackedOnlineState(server_name);
 				RedisMgr::GetInstance()->DelCount(server_name);
 				RedisMgr::GetInstance()->Close();
+				memolog::Telemetry::Shutdown();
 				memolog::Logger::Shutdown();
 			});
 
@@ -133,6 +141,7 @@ int main()
 	}
 	catch (std::exception& e) {
 		memolog::LogError("service.fatal", "ChatServer crashed", { {"error", e.what()} });
+		memolog::Telemetry::Shutdown();
 		memolog::Logger::Shutdown();
 		return EXIT_FAILURE;
 	}

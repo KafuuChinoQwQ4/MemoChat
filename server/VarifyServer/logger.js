@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 const pino = require('pino');
 
 const config = require('./config');
@@ -31,20 +30,51 @@ streams.push({ stream: pino.destination({ dest: filePath, sync: false }) });
 const logger = pino(
   {
     level: config.log_level || 'info',
+    messageKey: 'message',
     base: {
-      service: 'VarifyServer',
+      service: config.telemetry_service_name || 'VarifyServer',
+      service_instance: config.service_instance,
       env: config.log_env || 'local',
     },
-    timestamp: pino.stdTimeFunctions.isoTime,
+    timestamp: () => `,"ts":"${new Date().toISOString()}"`,
+    formatters: {
+      level(label) {
+        return { level: label };
+      },
+      log(object) {
+        const attrs = {};
+        const normalized = {
+          event: object.event || 'varify.log',
+          trace_id: object.trace_id || '',
+          request_id: object.request_id || '',
+          span_id: object.span_id || '',
+          uid: object.uid || '',
+          session_id: object.session_id || '',
+          module: object.module || '',
+          peer_service: object.peer_service || '',
+          error_code: object.error_code || '',
+          error_type: object.error_type || '',
+          duration_ms: object.duration_ms || 0,
+        };
+        for (const [key, value] of Object.entries(object)) {
+          if (Object.prototype.hasOwnProperty.call(normalized, key) || key === 'event') {
+            if (key === 'event') {
+              normalized.event = value;
+            }
+            continue;
+          }
+          attrs[key] = value;
+        }
+        normalized.attrs = attrs;
+        return normalized;
+      },
+    },
   },
   pino.multistream(streams)
 );
 
 function newTraceId() {
-  if (typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return require('./telemetry').newTraceId();
 }
 
 function redactEmail(email) {

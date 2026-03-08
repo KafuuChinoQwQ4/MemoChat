@@ -1,6 +1,7 @@
 #include "logging/Logger.h"
 
 #include "logging/Redaction.h"
+#include "logging/Telemetry.h"
 #include "logging/TraceContext.h"
 
 #include <json/json.h>
@@ -14,6 +15,7 @@
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <set>
 #include <vector>
 
 namespace memolog {
@@ -71,6 +73,20 @@ std::string NormalizeDir(std::string dir) {
         return "./logs";
     }
     return dir;
+}
+
+bool IsTopLevelField(const std::string& key) {
+    static const std::set<std::string> known = {
+        "service_instance",
+        "module",
+        "peer_service",
+        "error_code",
+        "error_type",
+        "duration_ms",
+        "uid",
+        "session_id"
+    };
+    return known.find(key) != known.end();
 }
 
 } // namespace
@@ -147,12 +163,19 @@ void Logger::Log(spdlog::level::level_enum level,
     root["ts"] = NowIso8601();
     root["level"] = ToLevelString(level);
     root["service"] = service_name_;
+    root["service_instance"] = Telemetry::ServiceInstance();
     root["env"] = config_.env;
     root["event"] = event;
     root["message"] = message;
+    root["module"] = "";
+    root["peer_service"] = "";
+    root["error_code"] = "";
+    root["error_type"] = "";
+    root["duration_ms"] = 0;
 
     const auto& trace_id = TraceContext::GetTraceId();
     const auto& request_id = TraceContext::GetRequestId();
+    const auto& span_id = TraceContext::GetSpanId();
     const auto& uid = TraceContext::GetUid();
     const auto& session_id = TraceContext::GetSessionId();
     if (!trace_id.empty()) {
@@ -161,6 +184,9 @@ void Logger::Log(spdlog::level::level_enum level,
     if (!request_id.empty()) {
         root["request_id"] = request_id;
     }
+    if (!span_id.empty()) {
+        root["span_id"] = span_id;
+    }
     if (!uid.empty()) {
         root["uid"] = uid;
     }
@@ -168,9 +194,32 @@ void Logger::Log(spdlog::level::level_enum level,
         root["session_id"] = session_id;
     }
 
+    Json::Value attrs(Json::objectValue);
     for (const auto& it : fields) {
-        root[it.first] = RedactValue(it.first, it.second, config_.redact);
+        const std::string redacted = RedactValue(it.first, it.second, config_.redact);
+        if (it.first == "uid") {
+            root["uid"] = redacted;
+            continue;
+        }
+        if (it.first == "session_id") {
+            root["session_id"] = redacted;
+            continue;
+        }
+        if (IsTopLevelField(it.first)) {
+            if (it.first == "duration_ms") {
+                try {
+                    root[it.first] = std::stod(redacted);
+                } catch (...) {
+                    root[it.first] = redacted;
+                }
+            } else {
+                root[it.first] = redacted;
+            }
+            continue;
+        }
+        attrs[it.first] = redacted;
     }
+    root["attrs"] = attrs;
 
     Json::StreamWriterBuilder builder;
     builder["indentation"] = "";

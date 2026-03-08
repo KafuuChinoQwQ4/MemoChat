@@ -23,5 +23,16 @@
     "dir": "./logs",
     "toConsole": true,
     "env": "local"
+  },
+  "telemetry": {
+    "enabled": true,
+    "otlpEndpoint": "http://127.0.0.1:9411/api/v2/spans",
+    "protocol": "zipkin-json",
+    "sampleRatio": 1.0,
+    "exportLogs": true,
+    "exportTraces": true,
+    "exportMetrics": false,
+    "serviceName": "VarifyServer",
+    "serviceNamespace": "memochat"
   }
 }
