@@ -320,6 +320,8 @@ void CSession::DealExceptionSession()
 		return;
 	}
 
+	auto& cfg = ConfigMgr::Inst();
+	RedisMgr::GetInstance()->SRem(std::string(SERVER_ONLINE_USERS_PREFIX) + cfg["SelfServer"]["Name"], uid_str);
 	RedisMgr::GetInstance()->Del(USER_SESSION_PREFIX + uid_str);
 
 	RedisMgr::GetInstance()->Del(USERIPPREFIX + uid_str);

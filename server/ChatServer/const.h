@@ -121,6 +121,7 @@ enum MSG_IDS {
 #define NAME_INFO "nameinfo_"
 #define LOCK_PREFIX "lock_"
 #define USER_SESSION_PREFIX "usession_"
+#define SERVER_ONLINE_USERS_PREFIX "server_online_users_"
 #define LOCK_COUNT "lockcount"
 
 #define LOCK_TIME_OUT 10

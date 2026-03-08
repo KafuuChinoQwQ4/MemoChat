@@ -5,6 +5,8 @@
 #include <csignal>
 #include <thread>
 #include <mutex>
+#include <unordered_set>
+#include <vector>
 #include "AsioIOServicePool.h"
 #include "CServer.h"
 #include "ConfigMgr.h"
@@ -19,6 +21,53 @@ bool bstop = false;
 std::condition_variable cond_quit;
 std::mutex mutex_quit;
 
+namespace {
+std::string ServerOnlineUsersKey(const std::string& server_name) {
+	return std::string(SERVER_ONLINE_USERS_PREFIX) + server_name;
+}
+
+void CleanupTrackedOnlineState(const std::string& server_name) {
+	std::unordered_set<std::string> online_uids;
+	const auto online_key = ServerOnlineUsersKey(server_name);
+	std::vector<std::string> tracked_uids;
+	RedisMgr::GetInstance()->SMembers(online_key, tracked_uids);
+	for (const auto& uid : tracked_uids) {
+		if (!uid.empty()) {
+			online_uids.insert(uid);
+		}
+	}
+
+	std::vector<std::string> ip_keys;
+	RedisMgr::GetInstance()->Keys(std::string(USERIPPREFIX) + "*", ip_keys);
+	for (const auto& ip_key : ip_keys) {
+		if (ip_key.rfind(USERIPPREFIX, 0) != 0) {
+			continue;
+		}
+		std::string mapped_server;
+		if (!RedisMgr::GetInstance()->Get(ip_key, mapped_server) || mapped_server != server_name) {
+			continue;
+		}
+		online_uids.insert(ip_key.substr(std::strlen(USERIPPREFIX)));
+	}
+
+	for (const auto& uid : online_uids) {
+		if (uid.empty()) {
+			continue;
+		}
+		RedisMgr::GetInstance()->Del(USERIPPREFIX + uid);
+		RedisMgr::GetInstance()->Del(USER_SESSION_PREFIX + uid);
+	}
+	RedisMgr::GetInstance()->Del(online_key);
+	RedisMgr::GetInstance()->InitCount(server_name);
+	memolog::LogInfo("service.online_state_reset",
+		"ChatServer2 online state reset",
+		{
+			{"name", server_name},
+			{"tracked_uid_count", std::to_string(online_uids.size())}
+		});
+}
+}
+
 int main()
 {
 	auto& cfg = ConfigMgr::Inst();
@@ -31,9 +80,10 @@ int main()
 		memolog::Logger::Init("ChatServer2", log_cfg);
 		auto pool = AsioIOServicePool::GetInstance();
 
-		RedisMgr::GetInstance()->HSet(LOGIN_COUNT, server_name, "0");
+		CleanupTrackedOnlineState(server_name);
 		Defer derfer ([server_name]() {
-				RedisMgr::GetInstance()->HDel(LOGIN_COUNT, server_name);
+				CleanupTrackedOnlineState(server_name);
+				RedisMgr::GetInstance()->DelCount(server_name);
 				RedisMgr::GetInstance()->Close();
 				memolog::Logger::Shutdown();
 			});
