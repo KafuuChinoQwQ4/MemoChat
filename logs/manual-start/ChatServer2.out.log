@@ -1,0 +1,89 @@
+Config path: "D:\MemoChat-Qml-Drogon\server\ChatServer2\config.ini"
+[GateServer]
+Port=8080
+[Log]
+Dir=./logs
+Env=local
+Format=json
+Level=info
+MaxFiles=14
+MaxSizeMB=100
+Redact=true
+RotateMode=daily
+ToConsole=true
+[Mysql]
+Host=tcp://127.0.0.1
+Passwd=123456
+Port=3306
+Schema=memo
+User=root
+[PeerServer]
+Servers=chatserver1
+[Redis]
+Host=127.0.0.1
+Passwd=123456
+Port=6379
+[SelfServer]
+Host=0.0.0.0
+Name=chatserver2
+Port=8091
+RPCPort=50056
+[StatusServer]
+Host=127.0.0.1
+Port=50052
+[VarifyServer]
+Host=127.0.0.1
+Port=50051
+[chatserver1]
+Host=127.0.0.1
+Name=chatserver1
+Port=50055
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+Execut command [ Del server_online_users_chatserver2 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+{"env":"local","event":"service.online_state_reset","level":"info","message":"ChatServer2 online state reset","name":"chatserver2","service":"ChatServer2","tracked_uid_count":"0","ts":"2026-03-08T07:03:41.298Z"}
+Server start success, listen on port : 8091
+{"env":"local","event":"service.start","level":"info","message":"ChatServer2 listening","name":"chatserver2","rpc_address":"0.0.0.0:50056","service":"ChatServer2","ts":"2026-03-08T07:03:41.303Z"}
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+msg_id is 1005
+msg_len is 114
+receive data is {"uid": 1003, "token": "b11b0ef2-c741-4541-9905-5490b2ccc426", "protocol_version": 2, "trace_id": "route-check-2"}
+recv_msg id  is 1005
+{"env":"local","event":"chat.login.received","level":"info","message":"chat login request received","request_id":"bf28d270-b5db-41d1-9dd6-afbd62b2cdc6","service":"ChatServer2","session_id":"49bfd31a-bf00-481f-9df2-2da4297fcbd2","tcp_msg_id":"1005","trace_id":"route-check-2","ts":"2026-03-08T07:10:40.800Z","uid":"1003"}
+Succeed to execute command [ GET utoken_1003  ]
+Succeed to execute command [ GET ubaseinfo_1003  ]
+user login uid is  1003 name  is tc pwd is 123456 email is 18165031775@qq.com
+mysql connection init success
+mysql connection init success
+mysql connection init success
+mysql connection init success
+mysql connection init success
+[ChatServer] group_code backfill done. total=1 backfilled=0 duplicate_fixed=0 retries=0 owner_role_fixed=2 demoted_extra_owner=0
+[ GET  uip_1003 ] failed
+Execut command [ SET uip_1003  chatserver2 ] success ! 
+Execut command [ SET usession_1003  49bfd31a-bf00-481f-9df2-2da4297fcbd2 ] success ! 
+{"env":"local","event":"chat.login.succeeded","level":"info","message":"chat login success","request_id":"bf28d270-b5db-41d1-9dd6-afbd62b2cdc6","service":"ChatServer2","session_id":"49bfd31a-bf00-481f-9df2-2da4297fcbd2","trace_id":"route-check-2","ts":"2026-03-08T07:10:41.188Z","uid":"1003"}
+destruct MsgNode
+Execut command [ HSet logincount  chatserver2  1 ] success ! 
+handle read failed, error is End of file [asio.misc:2 at D:\MemoChat-Qml-Drogon\vcpkg_installed\x64-windows-static\include\boost/asio/detail/win_iocp_socket_recv_op.hpp:89:5 in function 'void __cdecl boost::asio::detail::win_iocp_socket_recv_op<class boost::asio::mutable_buffer,class <lambda_9fdebcb5ee0f451c28b83298bef13f3e>,class boost::asio::any_io_executor>::do_complete(void *,class boost::asio::detail::win_iocp_operation *,const class boost::system::error_code &,unsigned __int64)']
+Succeed to execute command [ GET usession_1003  ]
+Execut command [ Del usession_1003 ] success ! 
+Execut command [ Del uip_1003 ] success ! 
+~CSession destruct
+destruct MsgNode
+destruct MsgNode
+Execut command [ HSet logincount  chatserver2  0 ] success ! 

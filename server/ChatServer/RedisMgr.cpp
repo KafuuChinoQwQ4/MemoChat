@@ -306,6 +306,122 @@ bool RedisMgr::HDel(const std::string& key, const std::string& field)
 	return success;
 }
 
+bool RedisMgr::SAdd(const std::string& key, const std::string& member)
+{
+	auto connect = _con_pool->getConnection();
+	if (connect == nullptr) {
+		return false;
+	}
+
+	Defer defer([&connect, this]() {
+		_con_pool->returnConnection(connect);
+		});
+
+	redisReply* reply = (redisReply*)redisCommand(connect, "SADD %s %s", key.c_str(), member.c_str());
+	if (reply == nullptr) {
+		std::cerr << "SADD command failed" << std::endl;
+		return false;
+	}
+
+	const bool success = reply->type == REDIS_REPLY_INTEGER;
+	freeReplyObject(reply);
+	return success;
+}
+
+bool RedisMgr::SRem(const std::string& key, const std::string& member)
+{
+	auto connect = _con_pool->getConnection();
+	if (connect == nullptr) {
+		return false;
+	}
+
+	Defer defer([&connect, this]() {
+		_con_pool->returnConnection(connect);
+		});
+
+	redisReply* reply = (redisReply*)redisCommand(connect, "SREM %s %s", key.c_str(), member.c_str());
+	if (reply == nullptr) {
+		std::cerr << "SREM command failed" << std::endl;
+		return false;
+	}
+
+	const bool success = reply->type == REDIS_REPLY_INTEGER;
+	freeReplyObject(reply);
+	return success;
+}
+
+bool RedisMgr::SMembers(const std::string& key, std::vector<std::string>& members)
+{
+	members.clear();
+	auto connect = _con_pool->getConnection();
+	if (connect == nullptr) {
+		return false;
+	}
+
+	Defer defer([&connect, this]() {
+		_con_pool->returnConnection(connect);
+		});
+
+	redisReply* reply = (redisReply*)redisCommand(connect, "SMEMBERS %s", key.c_str());
+	if (reply == nullptr) {
+		std::cerr << "SMEMBERS command failed" << std::endl;
+		return false;
+	}
+
+	if (reply->type != REDIS_REPLY_ARRAY) {
+		freeReplyObject(reply);
+		return false;
+	}
+
+	members.reserve(reply->elements);
+	for (size_t i = 0; i < reply->elements; ++i) {
+		auto* element = reply->element[i];
+		if (element == nullptr || element->type != REDIS_REPLY_STRING || element->str == nullptr) {
+			continue;
+		}
+		members.emplace_back(element->str, element->len);
+	}
+
+	freeReplyObject(reply);
+	return true;
+}
+
+bool RedisMgr::Keys(const std::string& pattern, std::vector<std::string>& keys)
+{
+	keys.clear();
+	auto connect = _con_pool->getConnection();
+	if (connect == nullptr) {
+		return false;
+	}
+
+	Defer defer([&connect, this]() {
+		_con_pool->returnConnection(connect);
+		});
+
+	redisReply* reply = (redisReply*)redisCommand(connect, "KEYS %s", pattern.c_str());
+	if (reply == nullptr) {
+		std::cerr << "KEYS command failed" << std::endl;
+		return false;
+	}
+
+	if (reply->type != REDIS_REPLY_ARRAY) {
+		freeReplyObject(reply);
+		return false;
+	}
+
+	keys.reserve(reply->elements);
+	for (size_t i = 0; i < reply->elements; ++i) {
+		auto* element = reply->element[i];
+		if (element == nullptr || element->type != REDIS_REPLY_STRING || element->str == nullptr) {
+			continue;
+		}
+		keys.emplace_back(element->str, element->len);
+	}
+
+	freeReplyObject(reply);
+	return true;
+}
+
 bool RedisMgr::Del(const std::string &key)
 {
 	auto connect = _con_pool->getConnection();

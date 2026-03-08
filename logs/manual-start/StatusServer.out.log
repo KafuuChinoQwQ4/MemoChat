@@ -1,0 +1,44 @@
+Config path: "D:\MemoChat-Qml-Drogon\server\StatusServer\config.ini"
+[Log]
+Dir=./logs
+Env=local
+Format=json
+Level=info
+MaxFiles=14
+MaxSizeMB=100
+Redact=true
+RotateMode=daily
+ToConsole=true
+[Mysql]
+Host=tcp://127.0.0.1
+Passwd=123456
+Port=3306
+Schema=memo
+User=root
+[Redis]
+Host=127.0.0.1
+Passwd=123456
+Port=6379
+[StatusServer]
+Host=0.0.0.0
+Port=50052
+[chatserver1]
+Host=127.0.0.1
+Name=chatserver1
+Port=8090
+[chatserver2]
+Host=127.0.0.1
+Name=chatserver2
+Port=8091
+[chatservers]
+Name=chatserver1,chatserver2
+{"address":"0.0.0.0:50052","env":"local","event":"service.start","level":"info","message":"StatusServer listening","service":"StatusServer","ts":"2026-03-08T07:10:12.155Z"}
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+Succeed to execute command [ GET utoken_1059  ]
+{"env":"local","event":"status.get_chat_server","host":"127.0.0.1","level":"info","message":"select chat server","port":"8090","request_id":"d649d885-11e4-42ff-bae3-fc604a6d27b0","reuse_token":"true","service":"StatusServer","trace_id":"51641b09-bbdd-404e-aab9-f0749c69522e","ts":"2026-03-08T07:10:39.738Z","uid":"1059"}
+Succeed to execute command [ GET utoken_1003  ]
+{"env":"local","event":"status.get_chat_server","host":"127.0.0.1","level":"info","message":"select chat server","port":"8091","request_id":"61c1cb2e-4488-460f-9f51-9a5c5d1c6221","reuse_token":"true","service":"StatusServer","trace_id":"8587c4c5-0377-4e12-a2d3-304d7f04e6cd","ts":"2026-03-08T07:10:40.769Z","uid":"1003"}

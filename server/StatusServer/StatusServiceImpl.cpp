@@ -7,6 +7,7 @@
 #include "logging/TraceContext.h"
 
 #include <climits>
+#include <algorithm>
 #include <sstream>
 #include <vector>
 
@@ -85,8 +86,46 @@ StatusServiceImpl::StatusServiceImpl() {
 
 ChatServer StatusServiceImpl::getChatServer() {
     std::lock_guard<std::mutex> guard(_server_mtx);
-    auto minServer = _servers.begin()->second;
-    return minServer;
+    if (_servers.empty()) {
+        return ChatServer();
+    }
+
+    std::vector<ChatServer> ordered_servers;
+    ordered_servers.reserve(_servers.size());
+    for (const auto& entry : _servers) {
+        ordered_servers.push_back(entry.second);
+    }
+    std::sort(ordered_servers.begin(), ordered_servers.end(), [](const ChatServer& lhs, const ChatServer& rhs) {
+        return lhs.name < rhs.name;
+    });
+
+    int min_online = INT_MAX;
+    std::vector<ChatServer> least_loaded;
+    least_loaded.reserve(ordered_servers.size());
+    for (auto server : ordered_servers) {
+        const std::string online_users_key = std::string(SERVER_ONLINE_USERS_PREFIX) + server.name;
+        int online_count = 0;
+        if (!RedisMgr::GetInstance()->SCard(online_users_key, online_count) || online_count < 0) {
+            online_count = 0;
+        }
+        server.con_count = online_count;
+        if (online_count < min_online) {
+            min_online = online_count;
+            least_loaded.clear();
+            least_loaded.push_back(server);
+            continue;
+        }
+        if (online_count == min_online) {
+            least_loaded.push_back(server);
+        }
+    }
+
+    if (least_loaded.empty()) {
+        return ordered_servers.front();
+    }
+
+    const auto next_index = static_cast<size_t>(_rr_counter.fetch_add(1, std::memory_order_relaxed));
+    return least_loaded[next_index % least_loaded.size()];
 }
 
 Status StatusServiceImpl::Login(ServerContext* context, const LoginReq* request, LoginRsp* reply) {

@@ -26,6 +26,116 @@ constexpr int64_t kPermBanUsers = 1LL << 5;
 constexpr int64_t kPermManageTopics = 1LL << 6;
 constexpr int64_t kDefaultAdminPermBits =
 	kPermChangeGroupInfo | kPermDeleteMessages | kPermInviteUsers | kPermPinMessages | kPermBanUsers;
+
+enum class OnlineRouteKind {
+	Offline,
+	Local,
+	Remote,
+	Stale
+};
+
+struct OnlineRouteDecision {
+	OnlineRouteKind kind = OnlineRouteKind::Offline;
+	std::shared_ptr<CSession> session;
+	std::string redis_server;
+	bool local_session_found = false;
+};
+
+std::string ServerOnlineUsersKey(const std::string& server_name) {
+	return std::string(SERVER_ONLINE_USERS_PREFIX) + server_name;
+}
+
+void ClearTrackedOnlineRoute(int uid, const std::string& server_name) {
+	if (uid <= 0 || server_name.empty()) {
+		return;
+	}
+	const auto uid_str = std::to_string(uid);
+	RedisMgr::GetInstance()->Del(USERIPPREFIX + uid_str);
+	RedisMgr::GetInstance()->Del(USER_SESSION_PREFIX + uid_str);
+	RedisMgr::GetInstance()->SRem(ServerOnlineUsersKey(server_name), uid_str);
+}
+
+OnlineRouteDecision ResolveOnlineRoute(int uid) {
+	OnlineRouteDecision route;
+	if (uid <= 0) {
+		return route;
+	}
+
+	const auto uid_str = std::to_string(uid);
+	std::string redis_server;
+	if (!RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, redis_server)) {
+		return route;
+	}
+	if (redis_server.empty()) {
+		return route;
+	}
+
+	route.redis_server = redis_server;
+	const auto self_name = ConfigMgr::Inst()["SelfServer"]["Name"];
+	if (redis_server != self_name) {
+		route.kind = OnlineRouteKind::Remote;
+		return route;
+	}
+
+	auto session = UserMgr::GetInstance()->GetSession(uid);
+	if (session) {
+		route.kind = OnlineRouteKind::Local;
+		route.local_session_found = true;
+		route.session = session;
+		return route;
+	}
+
+	std::string reloaded_server;
+	if (RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, reloaded_server) && !reloaded_server.empty()) {
+		route.redis_server = reloaded_server;
+		if (reloaded_server != self_name) {
+			route.kind = OnlineRouteKind::Remote;
+			return route;
+		}
+	}
+
+	route.kind = OnlineRouteKind::Stale;
+	ClearTrackedOnlineRoute(uid, self_name);
+	return route;
+}
+
+const char* RouteResultName(OnlineRouteKind kind) {
+	switch (kind) {
+	case OnlineRouteKind::Local:
+		return "local";
+	case OnlineRouteKind::Remote:
+		return "remote";
+	case OnlineRouteKind::Stale:
+		return "stale";
+	case OnlineRouteKind::Offline:
+	default:
+		return "offline";
+	}
+}
+
+void LogPrivateRoute(const std::string& event,
+	int from_uid,
+	int to_uid,
+	const std::string& msg_id,
+	const OnlineRouteDecision& route,
+	const std::string& grpc_status,
+	bool notify_delivered) {
+	const auto fields = std::map<std::string, std::string>{
+		{"from_uid", std::to_string(from_uid)},
+		{"to_uid", std::to_string(to_uid)},
+		{"msg_id", msg_id},
+		{"redis_server", route.redis_server},
+		{"route_result", RouteResultName(route.kind)},
+		{"local_session_found", route.local_session_found ? "true" : "false"},
+		{"grpc_status", grpc_status},
+		{"notify_delivered", notify_delivered ? "true" : "false"}
+	};
+	if (route.kind == OnlineRouteKind::Stale || !notify_delivered) {
+		memolog::LogWarn(event, "private message notify not delivered", fields);
+		return;
+	}
+	memolog::LogInfo(event, "private message notify delivered", fields);
+}
 }
 
 LogicSystem::LogicSystem():_b_stop(false), _p_server(nullptr){
@@ -349,6 +459,7 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 		UserMgr::GetInstance()->SetUserSession(uid, session);
 		std::string  uid_session_key = USER_SESSION_PREFIX + uid_str;
 		RedisMgr::GetInstance()->Set(uid_session_key, session->GetSessionId());
+		RedisMgr::GetInstance()->SAdd(ServerOnlineUsersKey(server_name), uid_str);
 
 	}
 	memolog::LogInfo("chat.login.succeeded", "chat login success",
@@ -672,40 +783,28 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 		text_msg->set_msgcontent(content);
 	}
 	rtvalue["text_array"] = normalized;
-
-
-	auto to_str = std::to_string(touid);
-	auto to_ip_key = USERIPPREFIX + to_str;
-	std::string to_ip_value = "";
-	bool b_ip = RedisMgr::GetInstance()->Get(to_ip_key, to_ip_value);
-	if (!b_ip) {
+	const std::string first_msg_id = arrays[0].get("msgid", "").asString();
+	const auto route = ResolveOnlineRoute(touid);
+	if (route.kind == OnlineRouteKind::Offline || route.kind == OnlineRouteKind::Stale) {
+		LogPrivateRoute("chat.private.route", uid, touid, first_msg_id, route, "skipped", false);
 		return;
 	}
 
-	auto& cfg = ConfigMgr::Inst();
-	auto self_name = cfg["SelfServer"]["Name"];
+	if (route.kind == OnlineRouteKind::Local && route.session) {
+		route.session->Send(rtvalue.toStyledString(), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+		LogPrivateRoute("chat.private.route", uid, touid, first_msg_id, route, "n/a", true);
+		return;
+	}
 
-	if (to_ip_value == self_name) {
-		auto session = UserMgr::GetInstance()->GetSession(touid);
-		if (!session) {
-			RedisMgr::GetInstance()->Del(to_ip_key);
-			RedisMgr::GetInstance()->Del(USER_SESSION_PREFIX + to_str);
-			return;
+	const auto notify_rsp = ChatGrpcClient::GetInstance()->NotifyTextChatMsg(route.redis_server, text_msg_req, rtvalue);
+	if (notify_rsp.error() != ErrorCodes::Success) {
+		if (notify_rsp.error() == ErrorCodes::TargetOffline) {
+			ClearTrackedOnlineRoute(touid, route.redis_server);
 		}
-
-		std::string return_str = rtvalue.toStyledString();
-		session->Send(return_str, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
-
-		return ;
+		LogPrivateRoute("chat.private.route", uid, touid, first_msg_id, route, std::to_string(notify_rsp.error()), false);
+		return;
 	}
-
-
-
-	const auto notify_rsp = ChatGrpcClient::GetInstance()->NotifyTextChatMsg(to_ip_value, text_msg_req, rtvalue);
-	if (notify_rsp.error() == ErrorCodes::TargetOffline) {
-		RedisMgr::GetInstance()->Del(to_ip_key);
-		RedisMgr::GetInstance()->Del(USER_SESSION_PREFIX + to_str);
-	}
+	LogPrivateRoute("chat.private.route", uid, touid, first_msg_id, route, std::to_string(notify_rsp.error()), true);
 }
 
 void LogicSystem::HeartBeatHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data) {
@@ -1449,30 +1548,34 @@ void LogicSystem::ForwardPrivateMsgHandler(std::shared_ptr<CSession> session, co
 	rtvalue["text_array"].append(msg_obj);
 	rtvalue["created_at"] = static_cast<Json::Int64>(now_ms);
 
-	std::string to_ip_value = "";
-	const auto to_ip_key = USERIPPREFIX + std::to_string(peer_uid);
-	const bool online = RedisMgr::GetInstance()->Get(to_ip_key, to_ip_value);
-	if (!online) {
-		return;
-	}
-
-	auto& cfg = ConfigMgr::Inst();
-	const auto self_name = cfg["SelfServer"]["Name"];
-	if (to_ip_value == self_name) {
-		auto to_session = UserMgr::GetInstance()->GetSession(peer_uid);
-		if (to_session) {
-			to_session->Send(rtvalue.toStyledString(), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
-		}
-		return;
-	}
-
 	TextChatMsgReq text_msg_req;
 	text_msg_req.set_fromuid(from_uid);
 	text_msg_req.set_touid(peer_uid);
 	auto* text_msg = text_msg_req.add_textmsgs();
 	text_msg->set_msgid(info.msg_id);
 	text_msg->set_msgcontent(info.content);
-	ChatGrpcClient::GetInstance()->NotifyTextChatMsg(to_ip_value, text_msg_req, rtvalue);
+
+	const auto route = ResolveOnlineRoute(peer_uid);
+	if (route.kind == OnlineRouteKind::Offline || route.kind == OnlineRouteKind::Stale) {
+		LogPrivateRoute("chat.private.forward.route", from_uid, peer_uid, info.msg_id, route, "skipped", false);
+		return;
+	}
+
+	if (route.kind == OnlineRouteKind::Local && route.session) {
+		route.session->Send(rtvalue.toStyledString(), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+		LogPrivateRoute("chat.private.forward.route", from_uid, peer_uid, info.msg_id, route, "n/a", true);
+		return;
+	}
+
+	const auto notify_rsp = ChatGrpcClient::GetInstance()->NotifyTextChatMsg(route.redis_server, text_msg_req, rtvalue);
+	if (notify_rsp.error() != ErrorCodes::Success) {
+		if (notify_rsp.error() == ErrorCodes::TargetOffline) {
+			ClearTrackedOnlineRoute(peer_uid, route.redis_server);
+		}
+		LogPrivateRoute("chat.private.forward.route", from_uid, peer_uid, info.msg_id, route, std::to_string(notify_rsp.error()), false);
+		return;
+	}
+	LogPrivateRoute("chat.private.forward.route", from_uid, peer_uid, info.msg_id, route, std::to_string(notify_rsp.error()), true);
 }
 
 void LogicSystem::GroupReadAckHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
@@ -1563,26 +1666,16 @@ void LogicSystem::PushGroupPayload(const std::vector<int>& recipients, short msg
 	}
 
 	const std::string payload_str = payload.toStyledString();
-	auto& cfg = ConfigMgr::Inst();
-	const auto self_name = cfg["SelfServer"]["Name"];
 	std::unordered_map<std::string, std::vector<int>> remote_server_uids;
 
 	for (int uid : uniq) {
-		std::string to_ip_value = "";
-		const auto to_ip_key = USERIPPREFIX + std::to_string(uid);
-		const bool online = RedisMgr::GetInstance()->Get(to_ip_key, to_ip_value);
-		if (!online) {
+		const auto route = ResolveOnlineRoute(uid);
+		if (route.kind == OnlineRouteKind::Local && route.session) {
+			route.session->Send(payload_str, msgid);
 			continue;
 		}
-
-		if (to_ip_value == self_name) {
-			auto session = UserMgr::GetInstance()->GetSession(uid);
-			if (session) {
-				session->Send(payload_str, msgid);
-			}
-		}
-		else {
-			remote_server_uids[to_ip_value].push_back(uid);
+		if (route.kind == OnlineRouteKind::Remote) {
+			remote_server_uids[route.redis_server].push_back(uid);
 		}
 	}
 

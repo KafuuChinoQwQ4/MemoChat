@@ -6,3 +6,7 @@
 {"level":30,"time":"2026-03-08T06:16:23.038Z","service":"VarifyServer","env":"local","event":"service.start","address":"0.0.0.0:50051","msg":"VarifyServer started"}
 {"level":50,"time":"2026-03-08T06:16:40.905Z","service":"VarifyServer","env":"local","event":"service.bind.failed","address":"0.0.0.0:50051","error":"No address added out of total 1 resolved errors: [listen EADDRINUSE: address already in use 0.0.0.0:50051]","msg":"failed to bind gRPC server"}
 {"level":30,"time":"2026-03-08T06:25:31.684Z","service":"VarifyServer","env":"local","event":"service.start","address":"0.0.0.0:50051","msg":"VarifyServer started"}
+{"level":30,"time":"2026-03-08T06:57:01.901Z","service":"VarifyServer","env":"local","event":"service.start","address":"0.0.0.0:50051","msg":"VarifyServer started"}
+{"level":30,"time":"2026-03-08T07:01:58.398Z","service":"VarifyServer","env":"local","event":"service.start","address":"0.0.0.0:50051","msg":"VarifyServer started"}
+{"level":30,"time":"2026-03-08T07:03:35.038Z","service":"VarifyServer","env":"local","event":"service.start","address":"0.0.0.0:50051","msg":"VarifyServer started"}
+{"level":30,"time":"2026-03-08T07:14:37.798Z","service":"VarifyServer","env":"local","event":"service.start","address":"0.0.0.0:50051","msg":"VarifyServer started"}

@@ -1,0 +1,92 @@
+Config path: "D:\MemoChat-Qml-Drogon\server\GateServer\config.ini"
+[GateServer]
+Port=8080
+[Log]
+Dir=./logs
+Env=local
+Format=json
+Level=info
+MaxFiles=14
+MaxSizeMB=100
+Redact=true
+RotateMode=daily
+ToConsole=true
+[Media]
+ChunkSizeKB=1024
+MaxFileMB=200
+MaxImageMB=20
+SessionExpireSec=86400
+StorageProvider=local
+[Mysql]
+Host=tcp://127.0.0.1
+Passwd=123456
+Port=3306
+Schema=memo
+User=root
+[Redis]
+Host=127.0.0.1
+Passwd=123456
+Port=6379
+[StatusServer]
+Host=127.0.0.1
+Port=50052
+[VarifyServer]
+Host=127.0.0.1
+Port=50051
+[GateServer] user_id backfill done. total=35 backfilled=0 duplicate_fixed=0 retries=0
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+{"env":"local","event":"service.start","level":"info","message":"GateServer listening","port":"8080","service":"GateServer","ts":"2026-03-08T07:03:43.566Z"}
+{"env":"local","event":"http.request.received","level":"info","message":"incoming http request","method":"POST","request_id":"d5764d05-61d9-4678-9da7-4fd7bd4a8e76","route":"/user_login","service":"GateServer","trace_id":"c1d0e36f-b8b3-4a19-b868-efac25fb3ce8","ts":"2026-03-08T07:04:41.726Z"}
+{"env":"local","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","request_id":"d5764d05-61d9-4678-9da7-4fd7bd4a8e76","route":"/user_login","service":"GateServer","trace_id":"c1d0e36f-b8b3-4a19-b868-efac25fb3ce8","ts":"2026-03-08T07:04:41.726Z"}
+Password: 745230
+{"env":"local","event":"grpc.call","level":"info","message":"calling StatusService.GetChatServer","request_id":"d5764d05-61d9-4678-9da7-4fd7bd4a8e76","rpc":"StatusService.GetChatServer","service":"GateServer","trace_id":"c1d0e36f-b8b3-4a19-b868-efac25fb3ce8","ts":"2026-03-08T07:04:41.732Z","uid":"1059"}
+{"chat_host":"127.0.0.1","chat_port":"8090","env":"local","event":"gate.user_login","level":"info","message":"user login succeeded","request_id":"d5764d05-61d9-4678-9da7-4fd7bd4a8e76","route":"/user_login","service":"GateServer","trace_id":"c1d0e36f-b8b3-4a19-b868-efac25fb3ce8","ts":"2026-03-08T07:04:41.778Z","uid":"1059"}
+{"env":"local","event":"http.request.received","level":"info","message":"incoming http request","method":"POST","request_id":"41f3f924-0fdb-4c77-b69d-fb7d7e712c71","route":"/user_login","service":"GateServer","trace_id":"63658aa9-d7bb-4ead-9330-7949496a865f","ts":"2026-03-08T07:04:43.116Z"}
+{"env":"local","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","request_id":"41f3f924-0fdb-4c77-b69d-fb7d7e712c71","route":"/user_login","service":"GateServer","trace_id":"63658aa9-d7bb-4ead-9330-7949496a865f","ts":"2026-03-08T07:04:43.117Z"}
+Password: 123456
+{"env":"local","event":"grpc.call","level":"info","message":"calling StatusService.GetChatServer","request_id":"41f3f924-0fdb-4c77-b69d-fb7d7e712c71","rpc":"StatusService.GetChatServer","service":"GateServer","trace_id":"63658aa9-d7bb-4ead-9330-7949496a865f","ts":"2026-03-08T07:04:43.119Z","uid":"1053"}
+{"chat_host":"127.0.0.1","chat_port":"8090","env":"local","event":"gate.user_login","level":"info","message":"user login succeeded","request_id":"41f3f924-0fdb-4c77-b69d-fb7d7e712c71","route":"/user_login","service":"GateServer","trace_id":"63658aa9-d7bb-4ead-9330-7949496a865f","ts":"2026-03-08T07:04:43.132Z","uid":"1053"}
+{"env":"local","event":"http.request.received","level":"info","message":"incoming http request","method":"POST","request_id":"3b60cc31-1240-428e-84c8-20580e699c74","route":"/user_login","service":"GateServer","trace_id":"98c62d16-f4ab-4d42-9eac-7a304a48f7b7","ts":"2026-03-08T07:06:05.969Z"}
+{"env":"local","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","request_id":"3b60cc31-1240-428e-84c8-20580e699c74","route":"/user_login","service":"GateServer","trace_id":"98c62d16-f4ab-4d42-9eac-7a304a48f7b7","ts":"2026-03-08T07:06:05.969Z"}
+Password: 745230
+{"env":"local","event":"grpc.call","level":"info","message":"calling StatusService.GetChatServer","request_id":"3b60cc31-1240-428e-84c8-20580e699c74","rpc":"StatusService.GetChatServer","service":"GateServer","trace_id":"98c62d16-f4ab-4d42-9eac-7a304a48f7b7","ts":"2026-03-08T07:06:05.971Z","uid":"1059"}
+{"chat_host":"127.0.0.1","chat_port":"8090","env":"local","event":"gate.user_login","level":"info","message":"user login succeeded","request_id":"3b60cc31-1240-428e-84c8-20580e699c74","route":"/user_login","service":"GateServer","trace_id":"98c62d16-f4ab-4d42-9eac-7a304a48f7b7","ts":"2026-03-08T07:06:05.983Z","uid":"1059"}
+{"env":"local","event":"http.request.received","level":"info","message":"incoming http request","method":"POST","request_id":"864544dc-003c-474f-881b-de99a926eaed","route":"/user_login","service":"GateServer","trace_id":"3c67c789-8c13-433a-afbf-e412c2c4b986","ts":"2026-03-08T07:06:05.996Z"}
+{"env":"local","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","request_id":"864544dc-003c-474f-881b-de99a926eaed","route":"/user_login","service":"GateServer","trace_id":"3c67c789-8c13-433a-afbf-e412c2c4b986","ts":"2026-03-08T07:06:05.997Z"}
+Password: 123456
+{"env":"local","event":"grpc.call","level":"info","message":"calling StatusService.GetChatServer","request_id":"864544dc-003c-474f-881b-de99a926eaed","rpc":"StatusService.GetChatServer","service":"GateServer","trace_id":"3c67c789-8c13-433a-afbf-e412c2c4b986","ts":"2026-03-08T07:06:05.998Z","uid":"1003"}
+{"chat_host":"127.0.0.1","chat_port":"8090","env":"local","event":"gate.user_login","level":"info","message":"user login succeeded","request_id":"864544dc-003c-474f-881b-de99a926eaed","route":"/user_login","service":"GateServer","trace_id":"3c67c789-8c13-433a-afbf-e412c2c4b986","ts":"2026-03-08T07:06:06.011Z","uid":"1003"}
+{"env":"local","event":"http.request.received","level":"info","message":"incoming http request","method":"POST","request_id":"98164011-74ca-4444-85e5-f93a4c5759cb","route":"/user_login","service":"GateServer","trace_id":"9a14403e-64d2-4694-af0f-7dbf02a8f10f","ts":"2026-03-08T07:06:06.042Z"}
+{"env":"local","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","request_id":"98164011-74ca-4444-85e5-f93a4c5759cb","route":"/user_login","service":"GateServer","trace_id":"9a14403e-64d2-4694-af0f-7dbf02a8f10f","ts":"2026-03-08T07:06:06.043Z"}
+Password: 123456
+{"env":"local","event":"grpc.call","level":"info","message":"calling StatusService.GetChatServer","request_id":"98164011-74ca-4444-85e5-f93a4c5759cb","rpc":"StatusService.GetChatServer","service":"GateServer","trace_id":"9a14403e-64d2-4694-af0f-7dbf02a8f10f","ts":"2026-03-08T07:06:06.045Z","uid":"1053"}
+{"chat_host":"127.0.0.1","chat_port":"8090","env":"local","event":"gate.user_login","level":"info","message":"user login succeeded","request_id":"98164011-74ca-4444-85e5-f93a4c5759cb","route":"/user_login","service":"GateServer","trace_id":"9a14403e-64d2-4694-af0f-7dbf02a8f10f","ts":"2026-03-08T07:06:06.056Z","uid":"1053"}
+{"env":"local","event":"http.request.received","level":"info","message":"incoming http request","method":"POST","request_id":"0d8f0fee-ea8b-46b9-a64f-6a6b003f4204","route":"/user_login","service":"GateServer","trace_id":"931ce82e-b101-4eb3-ac34-fd0bbef1fbab","ts":"2026-03-08T07:06:25.332Z"}
+{"env":"local","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","request_id":"0d8f0fee-ea8b-46b9-a64f-6a6b003f4204","route":"/user_login","service":"GateServer","trace_id":"931ce82e-b101-4eb3-ac34-fd0bbef1fbab","ts":"2026-03-08T07:06:25.333Z"}
+Password: 745230
+{"env":"local","event":"grpc.call","level":"info","message":"calling StatusService.GetChatServer","request_id":"0d8f0fee-ea8b-46b9-a64f-6a6b003f4204","rpc":"StatusService.GetChatServer","service":"GateServer","trace_id":"931ce82e-b101-4eb3-ac34-fd0bbef1fbab","ts":"2026-03-08T07:06:25.335Z","uid":"1059"}
+{"chat_host":"127.0.0.1","chat_port":"8090","env":"local","event":"gate.user_login","level":"info","message":"user login succeeded","request_id":"0d8f0fee-ea8b-46b9-a64f-6a6b003f4204","route":"/user_login","service":"GateServer","trace_id":"931ce82e-b101-4eb3-ac34-fd0bbef1fbab","ts":"2026-03-08T07:06:25.338Z","uid":"1059"}
+{"env":"local","event":"http.request.received","level":"info","message":"incoming http request","method":"POST","request_id":"bcf951c5-bfa3-4d0e-a15c-1287aeab9ef1","route":"/user_login","service":"GateServer","trace_id":"57d1786c-46b3-499a-afc7-6a6365fe557f","ts":"2026-03-08T07:06:25.353Z"}
+{"env":"local","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","request_id":"bcf951c5-bfa3-4d0e-a15c-1287aeab9ef1","route":"/user_login","service":"GateServer","trace_id":"57d1786c-46b3-499a-afc7-6a6365fe557f","ts":"2026-03-08T07:06:25.353Z"}
+Password: 123456
+{"env":"local","event":"grpc.call","level":"info","message":"calling StatusService.GetChatServer","request_id":"bcf951c5-bfa3-4d0e-a15c-1287aeab9ef1","rpc":"StatusService.GetChatServer","service":"GateServer","trace_id":"57d1786c-46b3-499a-afc7-6a6365fe557f","ts":"2026-03-08T07:06:25.355Z","uid":"1003"}
+{"chat_host":"127.0.0.1","chat_port":"8090","env":"local","event":"gate.user_login","level":"info","message":"user login succeeded","request_id":"bcf951c5-bfa3-4d0e-a15c-1287aeab9ef1","route":"/user_login","service":"GateServer","trace_id":"57d1786c-46b3-499a-afc7-6a6365fe557f","ts":"2026-03-08T07:06:25.358Z","uid":"1003"}
+{"env":"local","event":"http.request.received","level":"info","message":"incoming http request","method":"POST","request_id":"c00eb03b-43a8-42b0-9a1f-9cdffa3431ec","route":"/user_login","service":"GateServer","trace_id":"75b82815-b6cc-4f17-99a1-36acf4b0669c","ts":"2026-03-08T07:06:25.397Z"}
+{"env":"local","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","request_id":"c00eb03b-43a8-42b0-9a1f-9cdffa3431ec","route":"/user_login","service":"GateServer","trace_id":"75b82815-b6cc-4f17-99a1-36acf4b0669c","ts":"2026-03-08T07:06:25.397Z"}
+Password: 123456
+{"env":"local","event":"grpc.call","level":"info","message":"calling StatusService.GetChatServer","request_id":"c00eb03b-43a8-42b0-9a1f-9cdffa3431ec","rpc":"StatusService.GetChatServer","service":"GateServer","trace_id":"75b82815-b6cc-4f17-99a1-36acf4b0669c","ts":"2026-03-08T07:06:25.399Z","uid":"1053"}
+{"chat_host":"127.0.0.1","chat_port":"8090","env":"local","event":"gate.user_login","level":"info","message":"user login succeeded","request_id":"c00eb03b-43a8-42b0-9a1f-9cdffa3431ec","route":"/user_login","service":"GateServer","trace_id":"75b82815-b6cc-4f17-99a1-36acf4b0669c","ts":"2026-03-08T07:06:25.402Z","uid":"1053"}
+{"env":"local","event":"http.request.received","level":"info","message":"incoming http request","method":"POST","request_id":"d5386430-1ded-4c01-b6bb-151bf8f249f4","route":"/user_login","service":"GateServer","trace_id":"51641b09-bbdd-404e-aab9-f0749c69522e","ts":"2026-03-08T07:10:39.690Z"}
+{"env":"local","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","request_id":"d5386430-1ded-4c01-b6bb-151bf8f249f4","route":"/user_login","service":"GateServer","trace_id":"51641b09-bbdd-404e-aab9-f0749c69522e","ts":"2026-03-08T07:10:39.691Z"}
+Password: 745230
+{"env":"local","event":"grpc.call","level":"info","message":"calling StatusService.GetChatServer","request_id":"d5386430-1ded-4c01-b6bb-151bf8f249f4","rpc":"StatusService.GetChatServer","service":"GateServer","trace_id":"51641b09-bbdd-404e-aab9-f0749c69522e","ts":"2026-03-08T07:10:39.694Z","uid":"1059"}
+{"chat_host":"127.0.0.1","chat_port":"8090","env":"local","event":"gate.user_login","level":"info","message":"user login succeeded","request_id":"d5386430-1ded-4c01-b6bb-151bf8f249f4","route":"/user_login","service":"GateServer","trace_id":"51641b09-bbdd-404e-aab9-f0749c69522e","ts":"2026-03-08T07:10:39.739Z","uid":"1059"}
+{"env":"local","event":"http.request.received","level":"info","message":"incoming http request","method":"POST","request_id":"5d52ea13-ed44-4a1e-b6de-2d144e6ab88b","route":"/user_login","service":"GateServer","trace_id":"8587c4c5-0377-4e12-a2d3-304d7f04e6cd","ts":"2026-03-08T07:10:40.760Z"}
+{"env":"local","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","request_id":"5d52ea13-ed44-4a1e-b6de-2d144e6ab88b","route":"/user_login","service":"GateServer","trace_id":"8587c4c5-0377-4e12-a2d3-304d7f04e6cd","ts":"2026-03-08T07:10:40.765Z"}
+Password: 123456
+{"env":"local","event":"grpc.call","level":"info","message":"calling StatusService.GetChatServer","request_id":"5d52ea13-ed44-4a1e-b6de-2d144e6ab88b","rpc":"StatusService.GetChatServer","service":"GateServer","trace_id":"8587c4c5-0377-4e12-a2d3-304d7f04e6cd","ts":"2026-03-08T07:10:40.767Z","uid":"1003"}
+{"chat_host":"127.0.0.1","chat_port":"8091","env":"local","event":"gate.user_login","level":"info","message":"user login succeeded","request_id":"5d52ea13-ed44-4a1e-b6de-2d144e6ab88b","route":"/user_login","service":"GateServer","trace_id":"8587c4c5-0377-4e12-a2d3-304d7f04e6cd","ts":"2026-03-08T07:10:40.770Z","uid":"1003"}
