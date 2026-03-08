@@ -46,7 +46,8 @@ public:
 		LoginRsp* reply) override;
 private:
 	void insertToken(int uid, std::string token);
-	ChatServer getChatServer();
+	ChatServer getChatServer(std::vector<std::string>* server_load_snapshot = nullptr,
+	                        std::vector<std::string>* least_loaded_servers_snapshot = nullptr);
 	std::unordered_map<std::string, ChatServer> _servers;
 	std::mutex _server_mtx;
 	std::atomic<uint64_t> _rr_counter{0};

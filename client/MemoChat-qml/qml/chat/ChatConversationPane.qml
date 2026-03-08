@@ -282,6 +282,8 @@ Rectangle {
                     fileName: model.fileName
                     senderName: model.senderName
                     showAvatar: model.showAvatar
+                    showTimeDivider: model.showTimeDivider
+                    timeDividerText: model.timeDividerText
                     messageState: model.messageState
                     isReply: model.isReply
                     replyToMsgId: model.replyToMsgId
@@ -296,12 +298,12 @@ Rectangle {
                     avatarSource: model.outgoing
                                   ? root.selfAvatar
                                   : ((model.senderIcon && model.senderIcon.length > 0) ? model.senderIcon : root.peerAvatar)
-                    onOpenUrlRequested: root.openAttachment(url)
-                    onForwardRequested: root.forwardMessage(msgId)
-                    onRevokeRequested: root.revokeMessage(msgId)
-                    onReplyRequested: root.replyMessage(msgId, senderName, previewText)
-                    onMentionRequested: composer.insertMention(mentionText)
-                    onEditRequested: {
+                    onOpenUrlRequested: function(url) { root.openAttachment(url) }
+                    onForwardRequested: function(msgId) { root.forwardMessage(msgId) }
+                    onRevokeRequested: function(msgId) { root.revokeMessage(msgId) }
+                    onReplyRequested: function(msgId, senderName, previewText) { root.replyMessage(msgId, senderName, previewText) }
+                    onMentionRequested: function(mentionText) { composer.insertMention(mentionText) }
+                    onEditRequested: function(msgId, text) {
                         root._editMsgId = msgId
                         root._editText = text
                         editDialog.open()
@@ -348,7 +350,7 @@ Rectangle {
                 hasReplyContext: root.hasPendingReply
                 replyTargetName: root.replyTargetName
                 replyPreviewText: root.replyPreviewText
-                onSendText: {
+                onSendText: function(text) {
                     root._followTail = true
                     root._stickToBottom = true
                     root.sendText(text)
@@ -368,7 +370,7 @@ Rectangle {
                 }
                 onSendVoiceCall: root.sendVoiceCall()
                 onSendVideoCall: root.sendVideoCall()
-                onDraftEdited: root.draftEdited(text)
+                onDraftEdited: function(text) { root.draftEdited(text) }
                 onClearReplyRequested: root.cancelReplyMessage()
             }
         }

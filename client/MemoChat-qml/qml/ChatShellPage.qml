@@ -58,7 +58,7 @@ Rectangle {
                 currentTab: controller.chatTab
                 userIcon: controller.currentUserIcon
                 hasPendingApply: controller.hasPendingApply
-                onTabSelected: {
+                onTabSelected: function(tab) {
                     root.viewMode = 0
                     root.lastMainTab = tab
                     controller.switchChatTab(tab)
@@ -149,22 +149,22 @@ Rectangle {
                 contactLoadingMore: controller.contactLoadingMore
                 groupStatusText: controller.groupStatusText
                 groupStatusError: controller.groupStatusError
-                onDialogUidSelected: controller.selectDialogByUid(uid)
-                onChatIndexSelected: controller.selectChatIndex(index)
-                onGroupIndexSelected: controller.selectGroupIndex(index)
+                onDialogUidSelected: function(uid) { controller.selectDialogByUid(uid) }
+                onChatIndexSelected: function(index) { controller.selectChatIndex(index) }
+                onGroupIndexSelected: function(index) { controller.selectGroupIndex(index) }
                 onRequestChatLoadMore: controller.loadMoreChats()
-                onContactIndexSelected: controller.selectContactIndex(index)
+                onContactIndexSelected: function(index) { controller.selectContactIndex(index) }
                 onOpenApplyRequested: controller.showApplyRequests()
                 onRequestContactLoadMore: controller.loadMoreContacts()
-                onSearchRequested: controller.searchUser(uidText)
+                onSearchRequested: function(uidText) { controller.searchUser(uidText) }
                 onSearchCleared: controller.clearSearchState()
-                onAddFriendRequested: controller.requestAddFriend(uid, bakName, tags)
+                onAddFriendRequested: function(uid, bakName, tags) { controller.requestAddFriend(uid, bakName, tags) }
                 onCreateGroupRequested: createGroupDialog.open()
                 onRefreshGroupRequested: controller.refreshGroupList()
-                onDialogPinToggled: controller.toggleDialogPinnedByUid(uid)
-                onDialogMuteToggled: controller.toggleDialogMutedByUid(uid)
-                onDialogMarkRead: controller.markDialogReadByUid(uid)
-                onDialogDraftCleared: controller.clearDialogDraftByUid(uid)
+                onDialogPinToggled: function(uid) { controller.toggleDialogPinnedByUid(uid) }
+                onDialogMuteToggled: function(uid) { controller.toggleDialogMutedByUid(uid) }
+                onDialogMarkRead: function(uid) { controller.markDialogReadByUid(uid) }
+                onDialogDraftCleared: function(uid) { controller.clearDialogDraftByUid(uid) }
             }
         }
 
@@ -209,20 +209,20 @@ Rectangle {
                         canLoadMorePrivateHistory: controller.canLoadMorePrivateHistory
                         mediaUploadInProgress: controller.mediaUploadInProgress
                         mediaUploadProgressText: controller.mediaUploadProgressText
-                        onSendText: controller.sendTextMessage(text)
+                        onSendText: function(text) { controller.sendTextMessage(text) }
                         onSendImage: controller.sendImageMessage()
                         onSendFile: controller.sendFileMessage()
                         onSendVoiceCall: controller.startVoiceChat()
                         onSendVideoCall: controller.startVideoChat()
-                        onDraftEdited: controller.updateCurrentDraft(text)
+                        onDraftEdited: function(text) { controller.updateCurrentDraft(text) }
                         onToggleDialogPinned: controller.toggleCurrentDialogPinned()
                         onToggleDialogMuted: controller.toggleCurrentDialogMuted()
-                        onOpenAttachment: controller.openExternalResource(url)
+                        onOpenAttachment: function(url) { controller.openExternalResource(url) }
                         onRequestLoadMoreHistory: controller.loadMorePrivateHistory()
-                        onForwardMessage: controller.forwardGroupMessage(msgId)
-                        onRevokeMessage: controller.revokeGroupMessage(msgId)
-                        onEditMessage: controller.editGroupMessage(msgId, text)
-                        onReplyMessage: controller.beginReplyMessage(msgId, senderName, previewText)
+                        onForwardMessage: function(msgId) { controller.forwardGroupMessage(msgId) }
+                        onRevokeMessage: function(msgId) { controller.revokeGroupMessage(msgId) }
+                        onEditMessage: function(msgId, text) { controller.editGroupMessage(msgId, text) }
+                        onReplyMessage: function(msgId, senderName, previewText) { controller.beginReplyMessage(msgId, senderName, previewText) }
                         onCancelReplyMessage: controller.cancelReplyMessage()
                         onOpenGroupManageRequested: {
                             if (controller.hasCurrentGroup) {
@@ -245,7 +245,7 @@ Rectangle {
                     applyModel: controller.applyRequestModel
                     authStatusText: controller.authStatusText
                     authStatusError: controller.authStatusError
-                    onApproveFriendRequested: controller.approveFriend(uid, backName, tags)
+                    onApproveFriendRequested: function(uid, backName, tags) { controller.approveFriend(uid, backName, tags) }
                     onAuthStatusCleared: controller.clearAuthStatus()
                     onMessageChatRequested: controller.jumpChatWithCurrentContact()
                     onVoiceChatRequested: controller.startVoiceChat()
@@ -276,7 +276,7 @@ Rectangle {
                     controller.switchChatTab(root.lastMainTab)
                 }
                 onChooseAvatarRequested: controller.chooseAvatar()
-                onSaveProfileRequested: controller.saveProfile(nick, desc)
+                onSaveProfileRequested: function(nick, desc) { controller.saveProfile(nick, desc) }
                 onStatusCleared: controller.clearSettingsStatus()
             }
         }
@@ -286,7 +286,7 @@ Rectangle {
         id: createGroupDialog
         anchors.centerIn: Overlay.overlay
         backdrop: backdropLayer
-        onSubmitted: controller.createGroup(name, memberUserIds)
+        onSubmitted: function(name, memberUserIds) { controller.createGroup(name, memberUserIds) }
     }
 
     Popup {
@@ -338,7 +338,7 @@ Rectangle {
                     statusError: controller.groupStatusError
                     onRefreshRequested: controller.refreshGroupList()
                     onLoadHistoryRequested: controller.loadGroupHistory()
-                    onUpdateAnnouncementRequested: controller.updateGroupAnnouncement(announcement)
+                    onUpdateAnnouncementRequested: function(announcement) { controller.updateGroupAnnouncement(announcement) }
                     onUpdateGroupIconRequested: controller.updateGroupIcon()
                     onQuitRequested: {
                         controller.quitCurrentGroup()
@@ -353,18 +353,18 @@ Rectangle {
                     canInviteUsers: controller.currentGroupCanInviteUsers
                     canManageAdmins: controller.currentGroupCanManageAdmins
                     canBanUsers: controller.currentGroupCanBanUsers
-                    onInviteRequested: controller.inviteGroupMember(userId, reason)
-                    onSetAdminRequested: controller.setGroupAdmin(userId, isAdmin, permissionBits)
-                    onMuteRequested: controller.muteGroupMember(userId, muteSeconds)
-                    onKickRequested: controller.kickGroupMember(userId)
+                    onInviteRequested: function(userId, reason) { controller.inviteGroupMember(userId, reason) }
+                    onSetAdminRequested: function(userId, isAdmin, permissionBits) { controller.setGroupAdmin(userId, isAdmin, permissionBits) }
+                    onMuteRequested: function(userId, muteSeconds) { controller.muteGroupMember(userId, muteSeconds) }
+                    onKickRequested: function(userId) { controller.kickGroupMember(userId) }
                 }
 
                 GroupApplyReviewPane {
                     width: parent.width
                     height: 250
                     backdrop: backdropLayer
-                    onApplyJoinRequested: controller.applyJoinGroup(groupCode, reason)
-                    onReviewRequested: controller.reviewGroupApply(applyId, agree)
+                    onApplyJoinRequested: function(groupCode, reason) { controller.applyJoinGroup(groupCode, reason) }
+                    onReviewRequested: function(applyId, agree) { controller.reviewGroupApply(applyId, agree) }
                 }
             }
         }

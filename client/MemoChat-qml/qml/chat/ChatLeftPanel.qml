@@ -627,7 +627,7 @@ Rectangle {
                                     anchors.fill: parent
                                     cursorShape: Qt.PointingHandCursor
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                    onClicked: {
+                                    onClicked: function(mouse) {
                                         if (mouse.button === Qt.RightButton) {
                                             root.activateSession(uid, index)
                                             sessionMenu.popup()
@@ -643,21 +643,21 @@ Rectangle {
 
                                     MenuItem {
                                         text: (pinnedRank && pinnedRank > 0) ? "取消置顶" : "置顶会话"
-                                        onTriggered: root.dialogPinToggled(uid)
+                                        onTriggered: function() { root.dialogPinToggled(uid) }
                                     }
                                     MenuItem {
                                         text: (muteState && muteState > 0) ? "取消静音" : "静音会话"
-                                        onTriggered: root.dialogMuteToggled(uid)
+                                        onTriggered: function() { root.dialogMuteToggled(uid) }
                                     }
                                     MenuItem {
                                         text: "标记已读"
                                         enabled: unreadCount && unreadCount > 0
-                                        onTriggered: root.dialogMarkRead(uid)
+                                        onTriggered: function() { root.dialogMarkRead(uid) }
                                     }
                                     MenuItem {
                                         text: "清空草稿"
                                         enabled: draftText && draftText.length > 0
-                                        onTriggered: root.dialogDraftCleared(uid)
+                                        onTriggered: function() { root.dialogDraftCleared(uid) }
                                     }
                                 }
 
@@ -706,7 +706,7 @@ Rectangle {
                     canLoadMore: root.canLoadMoreContacts
                     loadingMore: root.contactLoadingMore
                     onOpenApplyRequested: root.openApplyRequested()
-                    onContactIndexSelected: root.contactIndexSelected(index)
+                    onContactIndexSelected: function(index) { root.contactIndexSelected(index) }
                     onLoadMoreRequested: root.requestContactLoadMore()
                 }
             }
@@ -717,6 +717,6 @@ Rectangle {
         id: addFriendDialog
         anchors.centerIn: Overlay.overlay
         backdrop: root.backdrop !== null ? root.backdrop : root
-        onSubmitted: root.addFriendRequested(uid, backName, tags)
+        onSubmitted: function(uid, backName, tags) { root.addFriendRequested(uid, backName, tags) }
     }
 }

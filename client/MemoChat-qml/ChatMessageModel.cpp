@@ -1,13 +1,60 @@
 #include "ChatMessageModel.h"
 #include "MessageContentCodec.h"
-#include <limits>
 #include <algorithm>
+#include <limits>
 #include <unordered_set>
+#include <QDateTime>
 #include <QUrlQuery>
+
+namespace {
+
+QString weekdayText(int dayOfWeek)
+{
+    switch (dayOfWeek) {
+    case 1:
+        return QStringLiteral("周一");
+    case 2:
+        return QStringLiteral("周二");
+    case 3:
+        return QStringLiteral("周三");
+    case 4:
+        return QStringLiteral("周四");
+    case 5:
+        return QStringLiteral("周五");
+    case 6:
+        return QStringLiteral("周六");
+    case 7:
+        return QStringLiteral("周日");
+    default:
+        return QString();
+    }
+}
+
+QDateTime localDateTimeForMs(qint64 createdAt)
+{
+    return QDateTime::fromMSecsSinceEpoch(createdAt, Qt::LocalTime);
+}
+
+bool sameMinuteBucket(const QDateTime &lhs, const QDateTime &rhs)
+{
+    return lhs.date() == rhs.date()
+           && lhs.time().hour() == rhs.time().hour()
+           && lhs.time().minute() == rhs.time().minute();
+}
+
+}
 
 ChatMessageModel::ChatMessageModel(QObject *parent)
     : QAbstractListModel(parent)
 {
+    _time_divider_refresh_timer.setSingleShot(true);
+    connect(&_time_divider_refresh_timer, &QTimer::timeout, this, [this]() {
+        if (_items.empty()) {
+            return;
+        }
+        refreshTimeDividerRange(0, rowCount() - 1);
+        restartTimeDividerRefreshTimer();
+    });
 }
 
 bool ChatMessageModel::lessThan(const MessageEntry &lhs, const MessageEntry &rhs)
@@ -65,6 +112,10 @@ QVariant ChatMessageModel::data(const QModelIndex &index, int role) const
         return entry.showAvatar;
     case CreatedAtRole:
         return entry.createdAt;
+    case ShowTimeDividerRole:
+        return shouldShowTimeDivider(index.row());
+    case TimeDividerTextRole:
+        return timeDividerText(index.row());
     case MessageStateRole:
         return entry.messageState;
     case IsReplyRole:
@@ -103,6 +154,8 @@ QHash<int, QByteArray> ChatMessageModel::roleNames() const
         {SenderIconRole, "senderIcon"},
         {ShowAvatarRole, "showAvatar"},
         {CreatedAtRole, "createdAt"},
+        {ShowTimeDividerRole, "showTimeDivider"},
+        {TimeDividerTextRole, "timeDividerText"},
         {MessageStateRole, "messageState"},
         {IsReplyRole, "isReply"},
         {ReplyToMsgIdRole, "replyToMsgId"},
@@ -124,6 +177,7 @@ void ChatMessageModel::clear()
     beginResetModel();
     _items.clear();
     endResetModel();
+    stopTimeDividerRefreshTimer();
     emit countChanged();
 }
 
@@ -159,6 +213,7 @@ void ChatMessageModel::setMessages(const std::vector<std::shared_ptr<TextChatDat
     }
 
     endResetModel();
+    restartTimeDividerRefreshTimer();
     emit countChanged();
 }
 
@@ -187,6 +242,8 @@ void ChatMessageModel::appendMessage(const std::shared_ptr<TextChatData> &messag
     _items.insert(insertIt, entry);
     endInsertRows();
     refreshAvatarFlags();
+    refreshTimeDividerRange(insertPos - 1, insertPos + 1);
+    restartTimeDividerRefreshTimer();
     emit countChanged();
 }
 
@@ -220,6 +277,7 @@ void ChatMessageModel::upsertMessage(const std::shared_ptr<TextChatData> &messag
         }
     }
     endResetModel();
+    restartTimeDividerRefreshTimer();
     emit countChanged();
 }
 
@@ -251,6 +309,8 @@ void ChatMessageModel::prependMessages(const std::vector<std::shared_ptr<TextCha
     _items.insert(_items.begin(), incoming.begin(), incoming.end());
     endInsertRows();
     refreshAvatarFlags();
+    refreshTimeDividerRange(0, static_cast<int>(incoming.size()));
+    restartTimeDividerRefreshTimer();
     emit countChanged();
 }
 
@@ -336,6 +396,81 @@ void ChatMessageModel::setDownloadAuthContext(int uid, const QString &token)
         }
     }
     endResetModel();
+}
+
+bool ChatMessageModel::shouldShowTimeDivider(int row) const
+{
+    if (row < 0 || row >= rowCount()) {
+        return false;
+    }
+    if (row == 0) {
+        return true;
+    }
+
+    const QDateTime current = localDateTimeForMs(_items[static_cast<size_t>(row)].createdAt);
+    const QDateTime previous = localDateTimeForMs(_items[static_cast<size_t>(row - 1)].createdAt);
+    if (current.date() != previous.date()) {
+        return true;
+    }
+    return current.date() == QDate::currentDate() && !sameMinuteBucket(previous, current);
+}
+
+QString ChatMessageModel::timeDividerText(int row) const
+{
+    if (!shouldShowTimeDivider(row)) {
+        return QString();
+    }
+
+    const QDateTime messageDateTime = localDateTimeForMs(_items[static_cast<size_t>(row)].createdAt);
+    const QDate currentDate = QDate::currentDate();
+    const QDate messageDate = messageDateTime.date();
+    if (messageDate == currentDate) {
+        return messageDateTime.toString(QStringLiteral("HH:mm"));
+    }
+
+    const int daysAgo = messageDate.daysTo(currentDate);
+    if (daysAgo >= 1 && daysAgo <= 7) {
+        return QStringLiteral("%1 %2")
+            .arg(weekdayText(messageDate.dayOfWeek()), messageDateTime.toString(QStringLiteral("HH:mm")));
+    }
+    if (messageDate.year() == currentDate.year()) {
+        return messageDateTime.toString(QStringLiteral("M月d日 HH:mm"));
+    }
+    return messageDateTime.toString(QStringLiteral("yyyy年M月d日 HH:mm"));
+}
+
+void ChatMessageModel::refreshTimeDividerRange(int firstRow, int lastRow)
+{
+    if (_items.empty()) {
+        return;
+    }
+
+    const int topRow = qMax(0, firstRow);
+    const int bottomRow = qMin(rowCount() - 1, lastRow);
+    if (topRow > bottomRow) {
+        return;
+    }
+
+    const QModelIndex top = index(topRow, 0);
+    const QModelIndex bottom = index(bottomRow, 0);
+    emit dataChanged(top, bottom, {ShowTimeDividerRole, TimeDividerTextRole});
+}
+
+void ChatMessageModel::restartTimeDividerRefreshTimer()
+{
+    if (_items.empty()) {
+        _time_divider_refresh_timer.stop();
+        return;
+    }
+
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    const int delayMs = static_cast<int>(60000 - (nowMs % 60000));
+    _time_divider_refresh_timer.start(qMax(1, delayMs));
+}
+
+void ChatMessageModel::stopTimeDividerRefreshTimer()
+{
+    _time_divider_refresh_timer.stop();
 }
 
 QString ChatMessageModel::withDownloadAuth(const QString &urlText) const

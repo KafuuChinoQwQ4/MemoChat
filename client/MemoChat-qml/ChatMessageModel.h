@@ -2,6 +2,7 @@
 #define CHATMESSAGEMODEL_H
 
 #include <QAbstractListModel>
+#include <QTimer>
 #include <QtGlobal>
 #include <memory>
 #include <vector>
@@ -26,6 +27,8 @@ public:
         SenderIconRole,
         ShowAvatarRole,
         CreatedAtRole,
+        ShowTimeDividerRole,
+        TimeDividerTextRole,
         MessageStateRole,
         IsReplyRole,
         ReplyToMsgIdRole,
@@ -86,12 +89,18 @@ private:
     };
 
     static bool lessThan(const MessageEntry &lhs, const MessageEntry &rhs);
+    bool shouldShowTimeDivider(int row) const;
+    QString timeDividerText(int row) const;
+    void refreshTimeDividerRange(int firstRow, int lastRow);
+    void restartTimeDividerRefreshTimer();
+    void stopTimeDividerRefreshTimer();
     QString withDownloadAuth(const QString &urlText) const;
     MessageEntry toEntry(const std::shared_ptr<TextChatData> &message, int selfUid) const;
     void refreshAvatarFlags();
     std::vector<MessageEntry> _items;
     int _download_uid = 0;
     QString _download_token;
+    QTimer _time_divider_refresh_timer;
 };
 
 #endif // CHATMESSAGEMODEL_H
