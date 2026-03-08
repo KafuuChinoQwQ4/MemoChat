@@ -358,6 +358,34 @@ bool RedisMgr::ExistsKey(const std::string &key)
 	return true;
 }
 
+bool RedisMgr::SCard(const std::string& key, int& count)
+{
+	count = 0;
+	auto connect = _con_pool->getConnection();
+	if (connect == nullptr) {
+		return false;
+	}
+
+	auto reply = (redisReply*)redisCommand(connect, "SCARD %s", key.c_str());
+	if (reply == nullptr) {
+		std::cout << "Execut command [ SCARD " << key << " ] failure ! " << std::endl;
+		_con_pool->returnConnection(connect);
+		return false;
+	}
+
+	if (reply->type != REDIS_REPLY_INTEGER) {
+		std::cout << "Execut command [ SCARD " << key << " ] failure ! " << std::endl;
+		freeReplyObject(reply);
+		_con_pool->returnConnection(connect);
+		return false;
+	}
+
+	count = static_cast<int>(reply->integer);
+	freeReplyObject(reply);
+	_con_pool->returnConnection(connect);
+	return true;
+}
+
 std::string RedisMgr::acquireLock(const std::string& lockName,
 	int lockTimeout, int acquireTimeout) {
 

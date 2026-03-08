@@ -58,6 +58,7 @@ private:
 #define IPCOUNTPREFIX "ipcount_"
 #define USER_BASE_INFO "ubaseinfo_"
 #define LOGIN_COUNT "logincount"
+#define SERVER_ONLINE_USERS_PREFIX "server_online_users_"
 #define LOCK_COUNT "lockcount"
 
 #define LOCK_TIME_OUT 10

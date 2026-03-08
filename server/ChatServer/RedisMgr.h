@@ -4,6 +4,7 @@
 #include <queue>
 #include <atomic>
 #include <mutex>
+#include <vector>
 #include "Singleton.h"
 #include <cstring>
 class RedisConPool {
@@ -280,6 +281,10 @@ public:
 	bool HSet(const char* key, const char* hkey, const char* hvalue, size_t hvaluelen);
 	std::string HGet(const std::string &key, const std::string &hkey);
 	bool HDel(const std::string& key, const std::string& field);
+	bool SAdd(const std::string& key, const std::string& member);
+	bool SRem(const std::string& key, const std::string& member);
+	bool SMembers(const std::string& key, std::vector<std::string>& members);
+	bool Keys(const std::string& pattern, std::vector<std::string>& keys);
 	bool Del(const std::string &key);
 	bool ExistsKey(const std::string &key);
 	void Close() {

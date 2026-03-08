@@ -1,6 +1,7 @@
 #pragma once
 #include <grpcpp/grpcpp.h>
 #include "message.grpc.pb.h"
+#include <atomic>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -48,5 +49,6 @@ private:
 	ChatServer getChatServer();
 	std::unordered_map<std::string, ChatServer> _servers;
 	std::mutex _server_mtx;
+	std::atomic<uint64_t> _rr_counter{0};
 
 };

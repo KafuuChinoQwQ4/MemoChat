@@ -279,6 +279,7 @@ public:
 	bool HDel(const std::string& key, const std::string& field);
 	bool Del(const std::string &key);
 	bool ExistsKey(const std::string &key);
+	bool SCard(const std::string& key, int& count);
 	void Close() {
 		_con_pool->Close();
 		_con_pool->ClearConnections();
