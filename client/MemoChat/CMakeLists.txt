@@ -21,6 +21,7 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets Network)
 set(CORE_SOURCES
     global.cpp
     httpmgr.cpp
+    TelemetryUtils.cpp
     tcpmgr.cpp
     userdata.cpp
     usermgr.cpp
@@ -29,6 +30,7 @@ set(CORE_SOURCES
 set(CORE_HEADERS
     global.h
     httpmgr.h
+    TelemetryUtils.h
     tcpmgr.h
     userdata.h
     usermgr.h

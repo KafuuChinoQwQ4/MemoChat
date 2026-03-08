@@ -4,6 +4,9 @@
 #include "UserMgr.h"
 #include "CSession.h"
 #include "MysqlMgr.h"
+#include "logging/GrpcTrace.h"
+#include "logging/Logger.h"
+#include "logging/Telemetry.h"
 #include <sstream>
 
 ChatGrpcClient::ChatGrpcClient()
@@ -29,6 +32,8 @@ ChatGrpcClient::ChatGrpcClient()
 
 AddFriendRsp ChatGrpcClient::NotifyAddFriend(std::string server_ip, const AddFriendReq& req)
 {
+    memolog::SpanScope span("ChatService.NotifyAddFriend", "CLIENT",
+        {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyAddFriend"}, {"peer_service", server_ip}});
     AddFriendRsp rsp;
     Defer defer([&rsp, &req]() {
         rsp.set_error(ErrorCodes::Success);
@@ -43,6 +48,7 @@ AddFriendRsp ChatGrpcClient::NotifyAddFriend(std::string server_ip, const AddFri
 
     auto& pool = find_iter->second;
     ClientContext context;
+    memolog::InjectGrpcTraceMetadata(context);
     auto stub = pool->getConnection();
     Status status = stub->NotifyAddFriend(&context, req, &rsp);
     Defer defercon([&stub, this, &pool]() {
@@ -50,6 +56,7 @@ AddFriendRsp ChatGrpcClient::NotifyAddFriend(std::string server_ip, const AddFri
         });
 
     if (!status.ok()) {
+        span.SetStatusError("grpc", status.error_message());
         rsp.set_error(ErrorCodes::RPCFailed);
         return rsp;
     }
@@ -99,6 +106,8 @@ bool ChatGrpcClient::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<
 }
 
 AuthFriendRsp ChatGrpcClient::NotifyAuthFriend(std::string server_ip, const AuthFriendReq& req) {
+    memolog::SpanScope span("ChatService.NotifyAuthFriend", "CLIENT",
+        {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyAuthFriend"}, {"peer_service", server_ip}});
     AuthFriendRsp rsp;
     rsp.set_error(ErrorCodes::Success);
 
@@ -114,6 +123,7 @@ AuthFriendRsp ChatGrpcClient::NotifyAuthFriend(std::string server_ip, const Auth
 
     auto& pool = find_iter->second;
     ClientContext context;
+    memolog::InjectGrpcTraceMetadata(context);
     auto stub = pool->getConnection();
     Status status = stub->NotifyAuthFriend(&context, req, &rsp);
     Defer defercon([&stub, this, &pool]() {
@@ -121,6 +131,7 @@ AuthFriendRsp ChatGrpcClient::NotifyAuthFriend(std::string server_ip, const Auth
         });
 
     if (!status.ok()) {
+        span.SetStatusError("grpc", status.error_message());
         rsp.set_error(ErrorCodes::RPCFailed);
         return rsp;
     }
@@ -130,6 +141,8 @@ AuthFriendRsp ChatGrpcClient::NotifyAuthFriend(std::string server_ip, const Auth
 
 TextChatMsgRsp ChatGrpcClient::NotifyTextChatMsg(std::string server_ip,
     const TextChatMsgReq& req, const Json::Value& rtvalue) {
+    memolog::SpanScope span("ChatService.NotifyTextChatMsg", "CLIENT",
+        {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyTextChatMsg"}, {"peer_service", server_ip}});
 
     TextChatMsgRsp rsp;
     rsp.set_error(ErrorCodes::Success);
@@ -153,6 +166,7 @@ TextChatMsgRsp ChatGrpcClient::NotifyTextChatMsg(std::string server_ip,
 
     auto& pool = find_iter->second;
     ClientContext context;
+    memolog::InjectGrpcTraceMetadata(context);
     auto stub = pool->getConnection();
     Status status = stub->NotifyTextChatMsg(&context, req, &rsp);
     Defer defercon([&stub, this, &pool]() {
@@ -160,6 +174,7 @@ TextChatMsgRsp ChatGrpcClient::NotifyTextChatMsg(std::string server_ip,
         });
 
     if (!status.ok()) {
+        span.SetStatusError("grpc", status.error_message());
         rsp.set_error(ErrorCodes::TargetOffline);
         return rsp;
     }
@@ -169,6 +184,8 @@ TextChatMsgRsp ChatGrpcClient::NotifyTextChatMsg(std::string server_ip,
 
 KickUserRsp ChatGrpcClient::NotifyKickUser(std::string server_ip, const KickUserReq& req)
 {
+    memolog::SpanScope span("ChatService.NotifyKickUser", "CLIENT",
+        {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyKickUser"}, {"peer_service", server_ip}});
     KickUserRsp rsp;
     Defer defer([&rsp, &req]() {
         rsp.set_error(ErrorCodes::Success);
@@ -182,6 +199,7 @@ KickUserRsp ChatGrpcClient::NotifyKickUser(std::string server_ip, const KickUser
 
     auto& pool = find_iter->second;
     ClientContext context;
+    memolog::InjectGrpcTraceMetadata(context);
     auto stub = pool->getConnection();
     Defer defercon([&stub, this, &pool]() {
         pool->returnConnection(std::move(stub));
@@ -189,6 +207,7 @@ KickUserRsp ChatGrpcClient::NotifyKickUser(std::string server_ip, const KickUser
     Status status = stub->NotifyKickUser(&context, req, &rsp);
 
     if (!status.ok()) {
+        span.SetStatusError("grpc", status.error_message());
         rsp.set_error(ErrorCodes::RPCFailed);
         return rsp;
     }
@@ -198,6 +217,8 @@ KickUserRsp ChatGrpcClient::NotifyKickUser(std::string server_ip, const KickUser
 
 GroupMessageNotifyRsp ChatGrpcClient::NotifyGroupMessage(std::string server_ip, const GroupMessageNotifyReq& req)
 {
+    memolog::SpanScope span("ChatService.NotifyGroupMessage", "CLIENT",
+        {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyGroupMessage"}, {"peer_service", server_ip}});
     GroupMessageNotifyRsp rsp;
     rsp.set_error(ErrorCodes::Success);
 
@@ -208,6 +229,7 @@ GroupMessageNotifyRsp ChatGrpcClient::NotifyGroupMessage(std::string server_ip, 
 
     auto& pool = find_iter->second;
     ClientContext context;
+    memolog::InjectGrpcTraceMetadata(context);
     auto stub = pool->getConnection();
     Status status = stub->NotifyGroupMessage(&context, req, &rsp);
     Defer defercon([&stub, this, &pool]() {
@@ -215,6 +237,7 @@ GroupMessageNotifyRsp ChatGrpcClient::NotifyGroupMessage(std::string server_ip, 
         });
 
     if (!status.ok()) {
+        span.SetStatusError("grpc", status.error_message());
         rsp.set_error(ErrorCodes::RPCFailed);
     }
     return rsp;
@@ -222,6 +245,8 @@ GroupMessageNotifyRsp ChatGrpcClient::NotifyGroupMessage(std::string server_ip, 
 
 GroupEventNotifyRsp ChatGrpcClient::NotifyGroupEvent(std::string server_ip, const GroupEventNotifyReq& req)
 {
+    memolog::SpanScope span("ChatService.NotifyGroupEvent", "CLIENT",
+        {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyGroupEvent"}, {"peer_service", server_ip}});
     GroupEventNotifyRsp rsp;
     rsp.set_error(ErrorCodes::Success);
 
@@ -232,6 +257,7 @@ GroupEventNotifyRsp ChatGrpcClient::NotifyGroupEvent(std::string server_ip, cons
 
     auto& pool = find_iter->second;
     ClientContext context;
+    memolog::InjectGrpcTraceMetadata(context);
     auto stub = pool->getConnection();
     Status status = stub->NotifyGroupEvent(&context, req, &rsp);
     Defer defercon([&stub, this, &pool]() {
@@ -239,6 +265,7 @@ GroupEventNotifyRsp ChatGrpcClient::NotifyGroupEvent(std::string server_ip, cons
         });
 
     if (!status.ok()) {
+        span.SetStatusError("grpc", status.error_message());
         rsp.set_error(ErrorCodes::RPCFailed);
     }
     return rsp;
@@ -246,6 +273,8 @@ GroupEventNotifyRsp ChatGrpcClient::NotifyGroupEvent(std::string server_ip, cons
 
 GroupMemberBatchRsp ChatGrpcClient::NotifyGroupMemberBatch(std::string server_ip, const GroupMemberBatchReq& req)
 {
+    memolog::SpanScope span("ChatService.NotifyGroupMemberBatch", "CLIENT",
+        {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyGroupMemberBatch"}, {"peer_service", server_ip}});
     GroupMemberBatchRsp rsp;
     rsp.set_error(ErrorCodes::Success);
 
@@ -256,6 +285,7 @@ GroupMemberBatchRsp ChatGrpcClient::NotifyGroupMemberBatch(std::string server_ip
 
     auto& pool = find_iter->second;
     ClientContext context;
+    memolog::InjectGrpcTraceMetadata(context);
     auto stub = pool->getConnection();
     Status status = stub->NotifyGroupMemberBatch(&context, req, &rsp);
     Defer defercon([&stub, this, &pool]() {
@@ -263,6 +293,7 @@ GroupMemberBatchRsp ChatGrpcClient::NotifyGroupMemberBatch(std::string server_ip
         });
 
     if (!status.ok()) {
+        span.SetStatusError("grpc", status.error_message());
         rsp.set_error(ErrorCodes::RPCFailed);
     }
     return rsp;

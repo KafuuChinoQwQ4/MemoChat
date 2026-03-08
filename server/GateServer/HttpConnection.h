@@ -1,5 +1,8 @@
 #pragma once
 #include "const.h"
+#include "logging/Telemetry.h"
+
+#include <memory>
 
 class HttpConnection: public std::enable_shared_from_this<HttpConnection>
 {
@@ -33,6 +36,8 @@ private:
 	std::string _get_url;
 	std::unordered_map<std::string, std::string> _get_params;
 	std::string _trace_id;
+	std::string _request_id;
+	std::unique_ptr<memolog::SpanScope> _request_span;
 	bool _send_file_response = false;
 	std::string _send_file_path;
 	std::string _send_file_content_type;

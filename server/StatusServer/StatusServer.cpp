@@ -19,6 +19,8 @@
 #include "StatusServiceImpl.h"
 #include "logging/LogConfig.h"
 #include "logging/Logger.h"
+#include "logging/Telemetry.h"
+#include "logging/TelemetryConfig.h"
 void RunServer() {
 	auto & cfg = ConfigMgr::Inst();
 	
@@ -63,14 +65,21 @@ int main(int argc, char** argv) {
 			[&cfg](const std::string& section, const std::string& key) {
 				return cfg.GetValue(section, key);
 			});
+		auto telemetry_cfg = memolog::TelemetryConfig::FromGetter(
+			[&cfg](const std::string& section, const std::string& key) {
+				return cfg.GetValue(section, key);
+			});
 		memolog::Logger::Init("StatusServer", log_cfg);
+		memolog::Telemetry::Init("StatusServer", telemetry_cfg);
 		RunServer();
 		RedisMgr::GetInstance()->Close();
+		memolog::Telemetry::Shutdown();
 		memolog::Logger::Shutdown();
 	}
 	catch (std::exception const& e) {
 		memolog::LogError("service.fatal", "StatusServer crashed", { {"error", e.what()} });
 		RedisMgr::GetInstance()->Close();
+		memolog::Telemetry::Shutdown();
 		memolog::Logger::Shutdown();
 		return EXIT_FAILURE;
 	}

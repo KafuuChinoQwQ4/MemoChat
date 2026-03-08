@@ -7,6 +7,8 @@
 #include "const.h"
 #include "Singleton.h"
 #include "ConfigMgr.h"
+#include "logging/GrpcTrace.h"
+#include "logging/Telemetry.h"
 using grpc::Channel;
 using grpc::Status;
 using grpc::ClientContext;
@@ -86,17 +88,23 @@ public:
 	}
 	GetVarifyRsp GetVarifyCode(std::string email) {
 		ClientContext context;
+		memolog::SpanScope span("VarifyService.GetVarifyCode", "CLIENT",
+			{{"rpc.system", "grpc"}, {"rpc.service", "VarifyService"}, {"rpc.method", "GetVarifyCode"}});
 		GetVarifyRsp reply;
 		GetVarifyReq request;
 		request.set_email(email);
+		memolog::InjectGrpcTraceMetadata(context);
 		auto stub = pool_->getConnection();
 		Status status = stub->GetVarifyCode(&context, request, &reply);
 
 		if (status.ok()) {
+			span.SetAttribute("rpc.grpc.status_code", std::to_string(status.error_code()));
 			pool_->returnConnection(std::move(stub));
 			return reply;
 		}
 		else {
+			span.SetStatusError("grpc", status.error_message());
+			span.SetAttribute("rpc.grpc.status_code", std::to_string(status.error_code()));
 			pool_->returnConnection(std::move(stub));
 			reply.set_error(ErrorCodes::RPCFailed);
 			return reply;

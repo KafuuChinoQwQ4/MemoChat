@@ -1,0 +1,49 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+  zipkin:
+    endpoint: 0.0.0.0:9411
+  filelog/memochat:
+    include:
+      - /workspace/build/run/*/logs/*.json
+      - /workspace/build/bin/Release/logs/*.json
+      - /workspace/build/bin/Debug/logs/*.json
+      - /workspace/local-loadtest/logs/*.json
+      - /workspace/server/VarifyServer/logs/*.json
+    start_at: beginning
+    operators:
+      - type: json_parser
+        parse_from: body
+        timestamp:
+          parse_from: attributes.ts
+          layout_type: gotime
+          layout: '2006-01-02T15:04:05.000Z'
+
+processors:
+  batch:
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    default_labels_enabled:
+      exporter: true
+      job: true
+  logging:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp, zipkin]
+      processors: [batch]
+      exporters: [otlp/tempo, logging]
+    logs:
+      receivers: [filelog/memochat, otlp]
+      processors: [batch]
+      exporters: [loki, logging]

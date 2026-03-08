@@ -1,5 +1,6 @@
 #include "MediaUploadService.h"
 #include "global.h"
+#include "TelemetryUtils.h"
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QFile>
@@ -55,6 +56,11 @@ bool postJson(const QUrl &url, const QJsonObject &payload, QJsonObject *response
 {
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    QString traceId;
+    QString requestId;
+    QString spanId;
+    applyTraceHeaders(request, &traceId, &requestId, &spanId);
+    const qint64 startAtMs = QDateTime::currentMSecsSinceEpoch();
 
     QNetworkAccessManager manager;
     QNetworkReply *reply = manager.post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
@@ -80,13 +86,36 @@ bool postJson(const QUrl &url, const QJsonObject &payload, QJsonObject *response
 
     const auto netErr = reply->error();
     const QByteArray body = reply->readAll();
+    QVariantMap spanAttrs;
+    spanAttrs.insert("http.method", QStringLiteral("POST"));
+    spanAttrs.insert("http.url", url.toString());
+    spanAttrs.insert("module", QStringLiteral("media"));
+    spanAttrs.insert("request.id", requestId);
+    spanAttrs.insert("http.status_code", reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt());
     reply->deleteLater();
     if (netErr != QNetworkReply::NoError) {
+        spanAttrs.insert("error", QStringLiteral("network"));
+        exportZipkinSpan(QStringLiteral("HTTP POST %1").arg(url.path()),
+                         QStringLiteral("CLIENT"),
+                         traceId,
+                         spanId,
+                         QString(),
+                         startAtMs,
+                         qMax<qint64>(0, QDateTime::currentMSecsSinceEpoch() - startAtMs),
+                         spanAttrs);
         if (errorText) {
             *errorText = "网络请求失败";
         }
         return false;
     }
+    exportZipkinSpan(QStringLiteral("HTTP POST %1").arg(url.path()),
+                     QStringLiteral("CLIENT"),
+                     traceId,
+                     spanId,
+                     QString(),
+                     startAtMs,
+                     qMax<qint64>(0, QDateTime::currentMSecsSinceEpoch() - startAtMs),
+                     spanAttrs);
 
     const QJsonDocument doc = QJsonDocument::fromJson(body);
     if (!doc.isObject()) {
@@ -109,9 +138,14 @@ bool postBinary(const QUrl &url,
 {
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/octet-stream");
+    QString traceId;
+    QString requestId;
+    QString spanId;
+    applyTraceHeaders(request, &traceId, &requestId, &spanId);
     for (const auto &header : headers) {
         request.setRawHeader(header.first, header.second);
     }
+    const qint64 startAtMs = QDateTime::currentMSecsSinceEpoch();
 
     QNetworkAccessManager manager;
     QNetworkReply *reply = manager.post(request, payload);
@@ -137,13 +171,36 @@ bool postBinary(const QUrl &url,
 
     const auto netErr = reply->error();
     const QByteArray body = reply->readAll();
+    QVariantMap spanAttrs;
+    spanAttrs.insert("http.method", QStringLiteral("POST"));
+    spanAttrs.insert("http.url", url.toString());
+    spanAttrs.insert("module", QStringLiteral("media"));
+    spanAttrs.insert("request.id", requestId);
+    spanAttrs.insert("http.status_code", reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt());
     reply->deleteLater();
     if (netErr != QNetworkReply::NoError) {
+        spanAttrs.insert("error", QStringLiteral("network"));
+        exportZipkinSpan(QStringLiteral("HTTP POST %1").arg(url.path()),
+                         QStringLiteral("CLIENT"),
+                         traceId,
+                         spanId,
+                         QString(),
+                         startAtMs,
+                         qMax<qint64>(0, QDateTime::currentMSecsSinceEpoch() - startAtMs),
+                         spanAttrs);
         if (errorText) {
             *errorText = "网络请求失败";
         }
         return false;
     }
+    exportZipkinSpan(QStringLiteral("HTTP POST %1").arg(url.path()),
+                     QStringLiteral("CLIENT"),
+                     traceId,
+                     spanId,
+                     QString(),
+                     startAtMs,
+                     qMax<qint64>(0, QDateTime::currentMSecsSinceEpoch() - startAtMs),
+                     spanAttrs);
 
     const QJsonDocument doc = QJsonDocument::fromJson(body);
     if (!doc.isObject()) {
@@ -161,6 +218,11 @@ bool postBinary(const QUrl &url,
 bool getJson(const QUrl &url, QJsonObject *responseObj, QString *errorText)
 {
     QNetworkRequest request(url);
+    QString traceId;
+    QString requestId;
+    QString spanId;
+    applyTraceHeaders(request, &traceId, &requestId, &spanId);
+    const qint64 startAtMs = QDateTime::currentMSecsSinceEpoch();
 
     QNetworkAccessManager manager;
     QNetworkReply *reply = manager.get(request);
@@ -186,13 +248,36 @@ bool getJson(const QUrl &url, QJsonObject *responseObj, QString *errorText)
 
     const auto netErr = reply->error();
     const QByteArray body = reply->readAll();
+    QVariantMap spanAttrs;
+    spanAttrs.insert("http.method", QStringLiteral("GET"));
+    spanAttrs.insert("http.url", url.toString());
+    spanAttrs.insert("module", QStringLiteral("media"));
+    spanAttrs.insert("request.id", requestId);
+    spanAttrs.insert("http.status_code", reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt());
     reply->deleteLater();
     if (netErr != QNetworkReply::NoError) {
+        spanAttrs.insert("error", QStringLiteral("network"));
+        exportZipkinSpan(QStringLiteral("HTTP GET %1").arg(url.path()),
+                         QStringLiteral("CLIENT"),
+                         traceId,
+                         spanId,
+                         QString(),
+                         startAtMs,
+                         qMax<qint64>(0, QDateTime::currentMSecsSinceEpoch() - startAtMs),
+                         spanAttrs);
         if (errorText) {
             *errorText = "网络请求失败";
         }
         return false;
     }
+    exportZipkinSpan(QStringLiteral("HTTP GET %1").arg(url.path()),
+                     QStringLiteral("CLIENT"),
+                     traceId,
+                     spanId,
+                     QString(),
+                     startAtMs,
+                     qMax<qint64>(0, QDateTime::currentMSecsSinceEpoch() - startAtMs),
+                     spanAttrs);
 
     const QJsonDocument doc = QJsonDocument::fromJson(body);
     if (!doc.isObject()) {

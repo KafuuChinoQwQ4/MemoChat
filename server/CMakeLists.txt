@@ -36,6 +36,9 @@ add_library(memochat_logging STATIC
     common/logging/LogConfig.cpp
     common/logging/Logger.cpp
     common/logging/Redaction.cpp
+    common/logging/Telemetry.cpp
+    common/logging/TelemetryConfig.cpp
+    common/logging/GrpcTrace.cpp
 )
 target_compile_features(memochat_logging PUBLIC cxx_std_17)
 target_include_directories(memochat_logging PUBLIC

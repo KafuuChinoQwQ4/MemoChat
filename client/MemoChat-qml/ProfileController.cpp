@@ -45,5 +45,5 @@ void ProfileController::sendSaveProfile(int uid, const QString &name, const QStr
     payload["icon"] = icon;
 
     _gateway->httpMgr()->PostHttpReq(
-        QUrl(gate_url_prefix + "/user_update_profile"), payload, ReqId::ID_UPDATE_PROFILE, Modules::SETTINGSMOD);
+        QUrl(gate_url_prefix + "/user_update_profile"), payload, ReqId::ID_UPDATE_PROFILE, Modules::SETTINGSMOD, QStringLiteral("profile"));
 }

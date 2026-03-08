@@ -15,7 +15,7 @@ class HttpMgr:public QObject, public Singleton<HttpMgr>,
 
 public:
     ~HttpMgr();
-    void PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod);
+    void PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod, const QString &module = QStringLiteral("http"));
 private:
     friend class Singleton<HttpMgr>;
     HttpMgr();

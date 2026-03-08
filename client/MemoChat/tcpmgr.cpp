@@ -4,7 +4,10 @@
 #include <QDateTime>
 #include <QtEndian>
 #include <QDebug>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include "usermgr.h"
+#include "TelemetryUtils.h"
 
 namespace {
 const char *socketErrorName(QAbstractSocket::SocketError socketError)
@@ -963,6 +966,32 @@ void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
         return;
     }
 
+    QJsonParseError parseError;
+    const QJsonDocument requestDoc = QJsonDocument::fromJson(dataBytes, &parseError);
+    QString traceId;
+    QString requestId;
+    QString spanId;
+    if (parseError.error == QJsonParseError::NoError && requestDoc.isObject()) {
+        QJsonObject obj = requestDoc.object();
+        traceId = obj.value("trace_id").toString().trimmed();
+        requestId = obj.value("request_id").toString().trimmed();
+        spanId = obj.value("span_id").toString().trimmed();
+        if (traceId.isEmpty()) {
+            traceId = newTraceId();
+            obj.insert("trace_id", traceId);
+        }
+        if (requestId.isEmpty()) {
+            requestId = newRequestId();
+            obj.insert("request_id", requestId);
+        }
+        if (spanId.isEmpty()) {
+            spanId = newSpanId();
+            obj.insert("span_id", spanId);
+        }
+        dataBytes = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    }
+
+    const qint64 startAtMs = QDateTime::currentMSecsSinceEpoch();
     uint16_t id = reqId;
 
 
@@ -983,6 +1012,21 @@ void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
 
 
     _socket.write(block);
+    QVariantMap spanAttrs;
+    spanAttrs.insert("net.transport", QStringLiteral("ip_tcp"));
+    spanAttrs.insert("messaging.system", QStringLiteral("memochat-tcp"));
+    spanAttrs.insert("messaging.operation", QStringLiteral("send"));
+    spanAttrs.insert("messaging.message_id", static_cast<int>(reqId));
+    spanAttrs.insert("net.peer.name", _host);
+    spanAttrs.insert("net.peer.port", static_cast<int>(_port));
+    exportZipkinSpan(QStringLiteral("TCP %1").arg(static_cast<int>(reqId)),
+                     QStringLiteral("CLIENT"),
+                     traceId,
+                     spanId,
+                     QString(),
+                     startAtMs,
+                     qMax<qint64>(0, QDateTime::currentMSecsSinceEpoch() - startAtMs),
+                     spanAttrs);
     if (reqId == ReqId::ID_CHAT_LOGIN) {
         qInfo() << "chat login payload sent. bytes:" << block.size();
     } else {

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const configPath = path.join(__dirname, 'config.json');
 const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -21,6 +22,18 @@ const log_level = (config.log && config.log.level) || 'info';
 const log_dir = (config.log && config.log.dir) || './logs';
 const log_to_console = config.log ? config.log.toConsole !== false : true;
 const log_env = (config.log && config.log.env) || 'local';
+const telemetry_enabled = config.telemetry ? config.telemetry.enabled !== false : true;
+const telemetry_endpoint = (config.telemetry && config.telemetry.otlpEndpoint) || 'http://127.0.0.1:9411/api/v2/spans';
+const telemetry_protocol = (config.telemetry && config.telemetry.protocol) || 'zipkin-json';
+const telemetry_sample_ratio = config.telemetry && config.telemetry.sampleRatio !== undefined
+  ? Number(config.telemetry.sampleRatio)
+  : 1.0;
+const telemetry_export_logs = config.telemetry ? config.telemetry.exportLogs !== false : true;
+const telemetry_export_traces = config.telemetry ? config.telemetry.exportTraces !== false : true;
+const telemetry_export_metrics = config.telemetry ? config.telemetry.exportMetrics === true : false;
+const telemetry_service_name = (config.telemetry && config.telemetry.serviceName) || 'VarifyServer';
+const telemetry_service_namespace = (config.telemetry && config.telemetry.serviceNamespace) || 'memochat';
+const service_instance = `${telemetry_service_name}@${os.hostname()}:${process.pid}`;
 
 module.exports = {
   email_host,
@@ -39,4 +52,14 @@ module.exports = {
   log_dir,
   log_to_console,
   log_env,
+  telemetry_enabled,
+  telemetry_endpoint,
+  telemetry_protocol,
+  telemetry_sample_ratio,
+  telemetry_export_logs,
+  telemetry_export_traces,
+  telemetry_export_metrics,
+  telemetry_service_name,
+  telemetry_service_namespace,
+  service_instance,
 };

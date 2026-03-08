@@ -14,6 +14,8 @@
 #include "AsioIOServicePool.h"
 #include "logging/LogConfig.h"
 #include "logging/Logger.h"
+#include "logging/Telemetry.h"
+#include "logging/TelemetryConfig.h"
 
 void TestRedis() {
 
@@ -141,7 +143,12 @@ int main()
 			[&gCfgMgr](const std::string& section, const std::string& key) {
 				return gCfgMgr.GetValue(section, key);
 			});
+		auto telemetry_cfg = memolog::TelemetryConfig::FromGetter(
+			[&gCfgMgr](const std::string& section, const std::string& key) {
+				return gCfgMgr.GetValue(section, key);
+			});
 		memolog::Logger::Init("GateServer", log_cfg);
+		memolog::Telemetry::Init("GateServer", telemetry_cfg);
 		std::string gate_port_str = gCfgMgr["GateServer"]["Port"];
 		unsigned short gate_port = atoi(gate_port_str.c_str());
 		net::io_context ioc{ 1 };
@@ -158,6 +165,7 @@ int main()
 		ioc.run();
 		memolog::LogInfo("service.stop", "GateServer stopped");
 		RedisMgr::GetInstance()->Close();
+		memolog::Telemetry::Shutdown();
 		memolog::Logger::Shutdown();
 		return EXIT_SUCCESS;
 	}
@@ -165,6 +173,7 @@ int main()
 	{
 		memolog::LogError("service.fatal", "GateServer crashed", { {"error", e.what()} });
 		RedisMgr::GetInstance()->Close();
+		memolog::Telemetry::Shutdown();
 		memolog::Logger::Shutdown();
 		return EXIT_FAILURE;
 	}
