@@ -80,7 +80,9 @@ AppController::AppController(QObject *parent)
       _settings_status_error(false),
       _group_status_error(false),
       _private_history_before_ts(0),
+      _private_history_before_msg_id(),
       _private_history_pending_before_ts(0),
+      _private_history_pending_before_msg_id(),
       _private_history_pending_peer_uid(0),
       _group_history_before_seq(0),
       _group_history_has_more(true),
@@ -516,7 +518,9 @@ void AppController::switchToLogin()
     setChatLoadingMore(false);
     setPrivateHistoryLoading(false);
     _private_history_before_ts = 0;
+    _private_history_before_msg_id.clear();
     _private_history_pending_before_ts = 0;
+    _private_history_pending_before_msg_id.clear();
     _private_history_pending_peer_uid = 0;
     _group_history_before_seq = 0;
     _group_history_has_more = true;
@@ -538,6 +542,7 @@ void AppController::switchToLogin()
     _current_group_name.clear();
     _current_group_code.clear();
     emit currentGroupChanged();
+    emitCurrentDialogUidChangedIfNeeded();
     _group_uid_map.clear();
     _pending_group_msg_group_map.clear();
     _dialog_draft_map.clear();
@@ -617,7 +622,9 @@ void AppController::selectChatIndex(int index)
         setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
         _message_model.clear();
         _private_history_before_ts = 0;
+        _private_history_before_msg_id.clear();
         _private_history_pending_before_ts = 0;
+        _private_history_pending_before_msg_id.clear();
         _private_history_pending_peer_uid = 0;
         _group_history_before_seq = 0;
         _group_history_has_more = true;
@@ -626,6 +633,7 @@ void AppController::selectChatIndex(int index)
         setCurrentDraftText("");
         setCurrentDialogPinned(false);
         setCurrentDialogMuted(false);
+        emitCurrentDialogUidChangedIfNeeded();
         return;
     }
 
@@ -641,6 +649,7 @@ void AppController::selectChatIndex(int index)
             << "name:" << item.value("name").toString();
     setCurrentChatPeerName(item.value("name").toString());
     setCurrentChatPeerIcon(item.value("icon").toString());
+    emitCurrentDialogUidChangedIfNeeded();
     loadCurrentChatMessages();
     syncCurrentDialogDraft();
 }
@@ -682,6 +691,7 @@ void AppController::selectGroupIndex(int index)
         setCurrentDraftText("");
         setCurrentDialogPinned(false);
         setCurrentDialogMuted(false);
+        emitCurrentDialogUidChangedIfNeeded();
         return;
     }
 
@@ -697,6 +707,7 @@ void AppController::selectGroupIndex(int index)
         setCurrentDraftText("");
         setCurrentDialogPinned(false);
         setCurrentDialogMuted(false);
+        emitCurrentDialogUidChangedIfNeeded();
         return;
     }
 
@@ -720,6 +731,7 @@ void AppController::selectGroupIndex(int index)
         ? QStringLiteral("qrc:/res/chat_icon.png")
         : item.value("icon").toString();
     setCurrentChatPeerIcon(selectedGroupIcon);
+    emitCurrentDialogUidChangedIfNeeded();
 
     groupInfo = _gateway.userMgr()->GetGroupById(groupId);
     if (!groupInfo) {
@@ -828,10 +840,12 @@ void AppController::loadMorePrivateHistory()
     }
     if (_current_chat_uid > 0) {
         qint64 beforeTs = _message_model.earliestCreatedAt();
+        QString beforeMsgId = _message_model.earliestMsgId();
         if (beforeTs <= 0) {
             beforeTs = _private_history_before_ts;
+            beforeMsgId = _private_history_before_msg_id;
         }
-        requestPrivateHistory(_current_chat_uid, beforeTs);
+        requestPrivateHistory(_current_chat_uid, beforeTs, beforeMsgId);
     }
 }
 
@@ -2388,7 +2402,9 @@ void AppController::onSwitchToChat()
     setPrivateHistoryLoading(false);
     setCanLoadMorePrivateHistory(false);
     _private_history_before_ts = 0;
+    _private_history_before_msg_id.clear();
     _private_history_pending_before_ts = 0;
+    _private_history_pending_before_msg_id.clear();
     _private_history_pending_peer_uid = 0;
     _group_history_before_seq = 0;
     _group_history_has_more = true;
@@ -2458,6 +2474,7 @@ void AppController::onSwitchToChat()
             setCurrentDialogPinned(false);
             setCurrentDialogMuted(false);
         }
+        emitCurrentDialogUidChangedIfNeeded();
 
         // Keep chat session alive; server considers session expired after heartbeat timeout.
         _heartbeat_timer.start(kHeartbeatIntervalMs);
@@ -2654,14 +2671,11 @@ void AppController::onTextChatMsg(std::shared_ptr<TextChatMsg> msg)
         return;
     }
 
-    if (friendInfo) {
-        _message_model.setMessages(friendInfo->_chat_msgs, selfUid);
-    } else {
-        for (const auto &chat : msg->_chat_msgs) {
-            _message_model.appendMessage(chat, selfUid);
-        }
+    for (const auto &chat : msg->_chat_msgs) {
+        _message_model.appendMessage(chat, selfUid);
     }
     _private_history_before_ts = _message_model.earliestCreatedAt();
+    _private_history_before_msg_id = _message_model.earliestMsgId();
     qInfo() << "Private chat view refreshed from live message, peer uid:" << peerUid
             << "friend msg count:" << (friendInfo ? static_cast<qlonglong>(friendInfo->_chat_msgs.size()) : 0LL)
             << "message model count:" << _message_model.rowCount();
@@ -3244,8 +3258,8 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
                     _dialog_list_model.updateLastMessage(peerUid, preview, lastTs);
                 }
             }
-            if (peerUid == _current_chat_uid && friendInfo) {
-                _message_model.setMessages(friendInfo->_chat_msgs, selfInfo->_uid);
+            if (peerUid == _current_chat_uid) {
+                _message_model.patchMessageContent(msgId, content, state, editedAtMs, deletedAtMs);
             }
         }
         setTip(reqId == ID_EDIT_PRIVATE_MSG_RSP ? "私聊消息已编辑" : "私聊消息已撤回", false);
@@ -3761,6 +3775,7 @@ void AppController::onPrivateHistoryRsp(QJsonObject payload)
     const int error = payload.value("error").toInt(ErrorCodes::ERR_JSON);
     if (error != ErrorCodes::SUCCESS) {
         _private_history_pending_before_ts = 0;
+        _private_history_pending_before_msg_id.clear();
         _private_history_pending_peer_uid = 0;
         setCanLoadMorePrivateHistory(false);
         return;
@@ -3769,6 +3784,7 @@ void AppController::onPrivateHistoryRsp(QJsonObject payload)
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
     if (!selfInfo) {
         _private_history_pending_before_ts = 0;
+        _private_history_pending_before_msg_id.clear();
         _private_history_pending_peer_uid = 0;
         setCanLoadMorePrivateHistory(false);
         return;
@@ -3781,6 +3797,7 @@ void AppController::onPrivateHistoryRsp(QJsonObject payload)
             << "current chat uid:" << _current_chat_uid
             << "pending peer uid:" << _private_history_pending_peer_uid
             << "before ts:" << _private_history_pending_before_ts
+            << "before msg id:" << _private_history_pending_before_msg_id
             << "message count:" << messages.size()
             << "has more:" << hasMore;
     std::vector<std::shared_ptr<TextChatData>> parsed;
@@ -3857,7 +3874,7 @@ void AppController::onPrivateHistoryRsp(QJsonObject payload)
     }
 
     if (peerUid == _current_chat_uid) {
-        if (_private_history_pending_before_ts > 0) {
+        if (_private_history_pending_before_ts > 0 || !_private_history_pending_before_msg_id.isEmpty()) {
             _message_model.prependMessages(parsed, selfInfo->_uid);
         } else if (friendInfo) {
             _message_model.setMessages(friendInfo->_chat_msgs, selfInfo->_uid);
@@ -3865,6 +3882,7 @@ void AppController::onPrivateHistoryRsp(QJsonObject payload)
             _message_model.clear();
         }
         _private_history_before_ts = _message_model.earliestCreatedAt();
+        _private_history_before_msg_id = _message_model.earliestMsgId();
         setCanLoadMorePrivateHistory(hasMore);
         qint64 latestPeerTs = 0;
         if (friendInfo) {
@@ -3878,7 +3896,7 @@ void AppController::onPrivateHistoryRsp(QJsonObject payload)
             sendPrivateReadAck(peerUid, latestPeerTs);
         }
         qInfo() << "Private chat view refreshed from history, peer uid:" << peerUid
-                << "history append mode:" << (_private_history_pending_before_ts > 0 ? "prepend" : "reset")
+                << "history append mode:" << (_private_history_pending_before_ts > 0 || !_private_history_pending_before_msg_id.isEmpty() ? "prepend" : "reset")
                 << "friend msg count:" << (friendInfo ? static_cast<qlonglong>(friendInfo->_chat_msgs.size()) : 0LL)
                 << "message model count:" << _message_model.rowCount();
     } else {
@@ -3886,6 +3904,7 @@ void AppController::onPrivateHistoryRsp(QJsonObject payload)
     }
 
     _private_history_pending_before_ts = 0;
+    _private_history_pending_before_msg_id.clear();
     _private_history_pending_peer_uid = 0;
 }
 
@@ -3951,7 +3970,7 @@ void AppController::onPrivateMsgChanged(QJsonObject payload)
         _dialog_list_model.updateLastMessage(peerUid, preview, lastTs);
     }
     if (peerUid == _current_chat_uid) {
-        _message_model.setMessages(friendInfo->_chat_msgs, selfUid);
+        _message_model.patchMessageContent(msgId, content, state, editedAtMs, deletedAtMs);
     }
 }
 
@@ -3989,7 +4008,15 @@ void AppController::onPrivateReadAck(QJsonObject payload)
         _private_cache_store.upsertMessages(selfUid, readerUid, friendInfo->_chat_msgs);
     }
     if (readerUid == _current_chat_uid) {
-        _message_model.setMessages(friendInfo->_chat_msgs, selfUid);
+        for (const auto &one : friendInfo->_chat_msgs) {
+            if (!one || one->_from_uid != selfUid || one->_created_at > readTs) {
+                continue;
+            }
+            if (one->_msg_state != QStringLiteral("read")) {
+                continue;
+            }
+            _message_model.updateMessageState(one->_msg_id, QStringLiteral("read"));
+        }
     }
 }
 
@@ -4140,7 +4167,9 @@ void AppController::loadCurrentChatMessages()
     if (_current_chat_uid <= 0) {
         _message_model.clear();
         _private_history_before_ts = 0;
+        _private_history_before_msg_id.clear();
         _private_history_pending_before_ts = 0;
+        _private_history_pending_before_msg_id.clear();
         _private_history_pending_peer_uid = 0;
         _group_history_before_seq = 0;
         _group_history_has_more = true;
@@ -4154,7 +4183,9 @@ void AppController::loadCurrentChatMessages()
     if (!friendInfo || !selfInfo) {
         _message_model.clear();
         _private_history_before_ts = 0;
+        _private_history_before_msg_id.clear();
         _private_history_pending_before_ts = 0;
+        _private_history_pending_before_msg_id.clear();
         _private_history_pending_peer_uid = 0;
         _group_history_before_seq = 0;
         _group_history_has_more = true;
@@ -4185,18 +4216,21 @@ void AppController::loadCurrentChatMessages()
         sendPrivateReadAck(_current_chat_uid, latestPeerTs);
     }
     _private_history_before_ts = _message_model.earliestCreatedAt();
+    _private_history_before_msg_id = _message_model.earliestMsgId();
     _private_history_pending_before_ts = 0;
+    _private_history_pending_before_msg_id.clear();
     _private_history_pending_peer_uid = 0;
     setPrivateHistoryLoading(false);
     setCanLoadMorePrivateHistory(true);
     qInfo() << "Private chat loaded, peer uid:" << _current_chat_uid
             << "friend msg count:" << static_cast<qlonglong>(friendInfo->_chat_msgs.size())
             << "message model count:" << _message_model.rowCount()
-            << "earliest created at:" << _private_history_before_ts;
-    requestPrivateHistory(_current_chat_uid, 0);
+            << "earliest created at:" << _private_history_before_ts
+            << "earliest msg id:" << _private_history_before_msg_id;
+    requestPrivateHistory(_current_chat_uid, 0, QString());
 }
 
-void AppController::requestPrivateHistory(int peerUid, qint64 beforeTs)
+void AppController::requestPrivateHistory(int peerUid, qint64 beforeTs, const QString &beforeMsgId)
 {
     if (_private_history_loading || peerUid <= 0) {
         return;
@@ -4211,11 +4245,15 @@ void AppController::requestPrivateHistory(int peerUid, qint64 beforeTs)
     payloadObj["fromuid"] = selfInfo->_uid;
     payloadObj["peer_uid"] = peerUid;
     payloadObj["before_ts"] = static_cast<qint64>(beforeTs);
+    if (!beforeMsgId.trimmed().isEmpty()) {
+        payloadObj["before_msg_id"] = beforeMsgId.trimmed();
+    }
     payloadObj["limit"] = 20;
     const QByteArray payload = QJsonDocument(payloadObj).toJson(QJsonDocument::Compact);
 
     _private_history_pending_peer_uid = peerUid;
     _private_history_pending_before_ts = beforeTs;
+    _private_history_pending_before_msg_id = beforeMsgId.trimmed();
     setPrivateHistoryLoading(true);
     _gateway.tcpMgr()->slot_send_data(ReqId::ID_PRIVATE_HISTORY_REQ, payload);
 }
@@ -4360,6 +4398,7 @@ void AppController::selectChatByUid(int uid)
     setCurrentGroup(0, "");
     setCurrentChatPeerName(friendInfo->_name);
     setCurrentChatPeerIcon(friendInfo->_icon);
+    emitCurrentDialogUidChangedIfNeeded();
     qInfo() << "Private chat resolved, uid:" << uid
             << "name:" << friendInfo->_name
             << "friend msg count:" << static_cast<qlonglong>(friendInfo->_chat_msgs.size());
@@ -4551,6 +4590,16 @@ int AppController::currentDialogUid() const
         return _current_chat_uid;
     }
     return 0;
+}
+
+void AppController::emitCurrentDialogUidChangedIfNeeded()
+{
+    const int dialogUid = currentDialogUid();
+    if (_last_emitted_dialog_uid == dialogUid) {
+        return;
+    }
+    _last_emitted_dialog_uid = dialogUid;
+    emit currentDialogUidChanged();
 }
 
 bool AppController::resolveDialogTarget(int dialogUid, QString &dialogType, int &peerUid, qint64 &groupId) const
@@ -4841,12 +4890,9 @@ bool AppController::dispatchChatContent(const QString &content, const QString &p
     _gateway.userMgr()->AppendFriendChatMsg(_current_chat_uid, {msg});
     _private_cache_store.upsertMessages(packet.fromUid, _current_chat_uid, {msg});
     auto friendInfo = _gateway.userMgr()->GetFriendById(_current_chat_uid);
-    if (friendInfo) {
-        _message_model.setMessages(friendInfo->_chat_msgs, packet.fromUid);
-    } else {
-        _message_model.appendMessage(msg, packet.fromUid);
-    }
+    _message_model.appendMessage(msg, packet.fromUid);
     _private_history_before_ts = _message_model.earliestCreatedAt();
+    _private_history_before_msg_id = _message_model.earliestMsgId();
 
     const QString resolvedPreview = previewText.isEmpty() ? MessageContentCodec::toPreviewText(content) : previewText;
     _chat_list_model.updateLastMessage(_current_chat_uid, resolvedPreview, packet.createdAt);

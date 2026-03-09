@@ -1,0 +1,86 @@
+﻿{
+  "scenario": "auth.register",
+  "test": "http_register",
+  "time_utc": "20260309_100954",
+  "target": {
+    "verify_code": "/get_varifycode",
+    "register": "/user_register"
+  },
+  "config": {
+    "total": 8,
+    "concurrency": 2,
+    "timeout_sec": 10.0,
+    "runtime_accounts_csv": ".\\accounts.e2e.csv",
+    "seed_prefix": "register",
+    "domain": "loadtest.local"
+  },
+  "summary": {
+    "total": 8,
+    "success": 0,
+    "failed": 8,
+    "success_rate": 0.0,
+    "elapsed_sec": 21.217827,
+    "throughput_rps": 0.377,
+    "latency_ms": {
+      "min": 3823.14,
+      "avg": 5225.497,
+      "p50": 4898.86,
+      "p90": 7833.993,
+      "p95": 7833.993,
+      "p99": 7833.993,
+      "max": 7833.993
+    }
+  },
+  "phase_breakdown": {
+    "verify_code": {
+      "min": 3823.132,
+      "avg": 5225.49,
+      "p50": 4898.855,
+      "p90": 7833.986,
+      "p95": 7833.986,
+      "p99": 7833.986,
+      "max": 7833.986
+    }
+  },
+  "error_counter": {
+    "verify_err_2": 8
+  },
+  "top_errors": {
+    "verify_err_2": 8
+  },
+  "preconditions": {
+    "service": [
+      "GateServer",
+      "VarifyServer",
+      "Redis",
+      "MySQL"
+    ]
+  },
+  "data_mutation_summary": {},
+  "samples": [
+    {
+      "email": "register_1773050973742y9njw@loadtest.local"
+    },
+    {
+      "email": "register_17730509737431jr65@loadtest.local"
+    },
+    {
+      "email": "register_17730509811388erap@loadtest.local"
+    },
+    {
+      "email": "register_1773050981576j4ngp@loadtest.local"
+    },
+    {
+      "email": "register_1773050985514yfzxm@loadtest.local"
+    },
+    {
+      "email": "register_1773050986037zv84g@loadtest.local"
+    },
+    {
+      "email": "register_1773050989931e7x4c@loadtest.local"
+    },
+    {
+      "email": "register_1773050990509n42pi@loadtest.local"
+    }
+  ]
+}

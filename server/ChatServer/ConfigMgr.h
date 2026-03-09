@@ -74,9 +74,13 @@ public:
 		return cfg_mgr;
 	}
 
+	static void InitConfigPath(const std::string& config_path);
+	static std::string GetConfigPath();
+
 	std::string GetValue(const std::string& section, const std::string & key);
 private:
 	ConfigMgr();
+	static std::string& ConfigPathStorage();
 
 	std::map<std::string, SectionInfo> _config_map;
 };

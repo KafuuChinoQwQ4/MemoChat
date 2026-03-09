@@ -47,6 +47,7 @@ class AppController : public QObject
     Q_PROPERTY(QString currentChatPeerName READ currentChatPeerName NOTIFY currentChatPeerChanged)
     Q_PROPERTY(QString currentChatPeerIcon READ currentChatPeerIcon NOTIFY currentChatPeerChanged)
     Q_PROPERTY(bool hasCurrentChat READ hasCurrentChat NOTIFY currentChatPeerChanged)
+    Q_PROPERTY(int currentDialogUid READ currentDialogUid NOTIFY currentDialogUidChanged)
     Q_PROPERTY(bool hasCurrentGroup READ hasCurrentGroup NOTIFY currentGroupChanged)
     Q_PROPERTY(int currentGroupRole READ currentGroupRole NOTIFY currentGroupChanged)
     Q_PROPERTY(QString currentGroupName READ currentGroupName NOTIFY currentGroupChanged)
@@ -250,6 +251,7 @@ signals:
     void currentContactChanged();
     void currentUserChanged();
     void currentChatPeerChanged();
+    void currentDialogUidChanged();
     void searchPendingChanged();
     void searchStatusChanged();
     void pendingApplyChanged();
@@ -323,7 +325,7 @@ private:
     void refreshChatLoadMoreState();
     void refreshContactLoadMoreState();
     void loadCurrentChatMessages();
-    void requestPrivateHistory(int peerUid, qint64 beforeTs);
+    void requestPrivateHistory(int peerUid, qint64 beforeTs, const QString &beforeMsgId = QString());
     void setContactPane(ContactPane pane);
     void setCurrentContact(int uid, const QString &name, const QString &nick, const QString &icon,
                            const QString &back, int sex, const QString &userId = QString());
@@ -348,6 +350,7 @@ private:
     void setCurrentDialogMuted(bool muted);
     void setPendingReplyContext(const QString &msgId, const QString &senderName, const QString &previewText);
     int currentDialogUid() const;
+    void emitCurrentDialogUidChangedIfNeeded();
     bool resolveDialogTarget(int dialogUid, QString &dialogType, int &peerUid, qint64 &groupId) const;
     qint64 currentGroupPermissionBitsRaw() const;
     bool hasCurrentGroupPermission(qint64 permissionBit) const;
@@ -437,7 +440,9 @@ private:
     QHash<int, int> _dialog_server_mute_map;
     QHash<int, int> _dialog_mention_map;
     qint64 _private_history_before_ts;
+    QString _private_history_before_msg_id;
     qint64 _private_history_pending_before_ts;
+    QString _private_history_pending_before_msg_id;
     int _private_history_pending_peer_uid;
     qint64 _group_history_before_seq;
     bool _group_history_has_more;
@@ -460,6 +465,7 @@ private:
     bool _reconnecting_chat = false;
     int _chat_reconnect_attempts = 0;
     bool _ignore_next_login_disconnect = false;
+    int _last_emitted_dialog_uid = 0;
 };
 
 #endif // APPCONTROLLER_H

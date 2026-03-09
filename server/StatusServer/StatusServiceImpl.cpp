@@ -3,6 +3,7 @@
 #include "ConfigMgr.h"
 #include "RedisMgr.h"
 #include "const.h"
+#include "cluster/ChatClusterDiscovery.h"
 #include "logging/GrpcTrace.h"
 #include "logging/Logger.h"
 #include "logging/Telemetry.h"
@@ -72,26 +73,16 @@ Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatSer
 
 StatusServiceImpl::StatusServiceImpl() {
     auto& cfg = ConfigMgr::Inst();
-    auto server_list = cfg["chatservers"]["Name"];
+    const auto cluster = memochat::cluster::LoadStaticChatClusterConfig(
+        [&cfg](const std::string& section, const std::string& key) {
+            return cfg.GetValue(section, key);
+        });
 
-    std::vector<std::string> words;
-
-    std::stringstream ss(server_list);
-    std::string word;
-
-    while (std::getline(ss, word, ',')) {
-        words.push_back(word);
-    }
-
-    for (auto& one : words) {
-        if (cfg[one]["Name"].empty()) {
-            continue;
-        }
-
+    for (const auto& node : cluster.enabledNodes()) {
         ChatServer server;
-        server.port = cfg[one]["Port"];
-        server.host = cfg[one]["Host"];
-        server.name = cfg[one]["Name"];
+        server.port = node.tcp_port;
+        server.host = node.tcp_host;
+        server.name = node.name;
         _servers[server.name] = server;
     }
 }

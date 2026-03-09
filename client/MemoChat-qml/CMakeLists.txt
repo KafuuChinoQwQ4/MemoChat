@@ -16,7 +16,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets Network Sql Qml Quick QuickControls2 Concurrent)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets Network Sql Qml Quick QuickControls2 Concurrent)
 
-set(LEGACY_CLIENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../MemoChat)
+set(SHARED_CLIENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../MemoChatShared)
 
 set(SOURCES
     main.cpp
@@ -37,7 +37,7 @@ set(SOURCES
     LocalFilePickerService.cpp
     MediaUploadService.cpp
     WindowShapeService.cpp
-    ${LEGACY_CLIENT_DIR}/imagecropperlabel.cpp
+    ${SHARED_CLIENT_DIR}/imagecropperlabel.cpp
 )
 
 set(HEADERS
@@ -59,20 +59,20 @@ set(HEADERS
     MediaUploadService.h
     WindowShapeService.h
     IconPathUtils.h
-    ${LEGACY_CLIENT_DIR}/imagecropperdialog.h
-    ${LEGACY_CLIENT_DIR}/imagecropperlabel.h
+    ${SHARED_CLIENT_DIR}/imagecropperdialog.h
+    ${SHARED_CLIENT_DIR}/imagecropperlabel.h
 )
 
 set(RESOURCES
     qml.qrc
-    ${LEGACY_CLIENT_DIR}/rc.qrc
+    ${SHARED_CLIENT_DIR}/rc.qrc
 )
 
 add_executable(MemoChatQml WIN32 MACOSX_BUNDLE ${SOURCES} ${HEADERS} ${RESOURCES})
 
 target_include_directories(MemoChatQml PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${LEGACY_CLIENT_DIR}
+    ${SHARED_CLIENT_DIR}
 )
 
 target_link_libraries(MemoChatQml PRIVATE
@@ -94,7 +94,7 @@ endif()
 
 add_custom_command(TARGET MemoChatQml POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
-    ${LEGACY_CLIENT_DIR}/config.ini
+    ${SHARED_CLIENT_DIR}/config.ini
     $<TARGET_FILE_DIR:MemoChatQml>/config.ini
     COMMENT "Copying config.ini for MemoChatQml"
 )

@@ -1,1 +1,1 @@
-{"level":30,"time":"2026-03-08T07:03:35.038Z","service":"VarifyServer","env":"local","event":"service.start","address":"0.0.0.0:50051","msg":"VarifyServer started"}
+{"level":"info","ts":"2026-03-09T06:18:13.316Z","service":"VarifyServer","service_instance":"VarifyServer@yksl:24548","env":"local","event":"service.start","trace_id":"","request_id":"","span_id":"","uid":"","session_id":"","module":"grpc","peer_service":"","error_code":"","error_type":"","duration_ms":0,"attrs":{"address":"0.0.0.0:50051"},"message":"VarifyServer started"}

@@ -1,4 +1,4 @@
-Config path: "D:\MemoChat-Qml-Drogon\server\ChatServer2\config.ini"
+Config path: "D:\MemoChat-Qml-Drogon\build\run\ChatServer2\config.ini"
 [GateServer]
 Port=8080
 [Log]
@@ -31,6 +31,16 @@ RPCPort=50056
 [StatusServer]
 Host=127.0.0.1
 Port=50052
+[Telemetry]
+Enabled=true
+ExportLogs=true
+ExportMetrics=false
+ExportTraces=true
+OtlpEndpoint=http://127.0.0.1:9411/api/v2/spans
+Protocol=zipkin-json
+SampleRatio=1.0
+ServiceName=ChatServer2
+ServiceNamespace=memochat
 [VarifyServer]
 Host=127.0.0.1
 Port=50051
@@ -50,40 +60,409 @@ redis auth status
 redis auth status
 Execut command [ Del server_online_users_chatserver2 ] success ! 
 Execut command [ HSet logincount  chatserver2  0 ] success ! 
-{"env":"local","event":"service.online_state_reset","level":"info","message":"ChatServer2 online state reset","name":"chatserver2","service":"ChatServer2","tracked_uid_count":"0","ts":"2026-03-08T07:03:41.298Z"}
+{"attrs":{"name":"chatserver2","tracked_uid_count":"0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.online_state_reset","level":"info","message":"ChatServer2 online state reset","module":"","peer_service":"","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","ts":"2026-03-09T06:31:40.583Z"}
 Server start success, listen on port : 8091
-{"env":"local","event":"service.start","level":"info","message":"ChatServer2 listening","name":"chatserver2","rpc_address":"0.0.0.0:50056","service":"ChatServer2","ts":"2026-03-08T07:03:41.303Z"}
-Execut command [ HSet logincount  chatserver2  0 ] success ! 
-Execut command [ HSet logincount  chatserver2  0 ] success ! 
-Execut command [ HSet logincount  chatserver2  0 ] success ! 
-Execut command [ HSet logincount  chatserver2  0 ] success ! 
-Execut command [ HSet logincount  chatserver2  0 ] success ! 
+{"attrs":{"name":"chatserver2","rpc_address":"0.0.0.0:50056"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.start","level":"info","message":"ChatServer2 listening","module":"","peer_service":"","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","ts":"2026-03-09T06:31:40.588Z"}
 Execut command [ HSet logincount  chatserver2  0 ] success ! 
 msg_id is 1005
-msg_len is 114
-receive data is {"uid": 1003, "token": "b11b0ef2-c741-4541-9905-5490b2ccc426", "protocol_version": 2, "trace_id": "route-check-2"}
+msg_len is 119
+receive data is {"uid":1059,"token":"20db1f8f-1983-4750-839c-c16ad5239f70","protocol_version":2,"trace_id":"historyfix-A-09f6aec620cd"}
 recv_msg id  is 1005
-{"env":"local","event":"chat.login.received","level":"info","message":"chat login request received","request_id":"bf28d270-b5db-41d1-9dd6-afbd62b2cdc6","service":"ChatServer2","session_id":"49bfd31a-bf00-481f-9df2-2da4297fcbd2","tcp_msg_id":"1005","trace_id":"route-check-2","ts":"2026-03-08T07:10:40.800Z","uid":"1003"}
-Succeed to execute command [ GET utoken_1003  ]
-Succeed to execute command [ GET ubaseinfo_1003  ]
-user login uid is  1003 name  is tc pwd is 123456 email is 18165031775@qq.com
+{"attrs":{"tcp_msg_id":"1005"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.login.received","level":"info","message":"chat login request received","module":"","peer_service":"","request_id":"37a94ee64305499f9b580d486a3899ce","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"historyfix-A-09f6aec620cd","ts":"2026-03-09T06:32:53.574Z","uid":"1059"}
+Succeed to execute command [ GET utoken_1059  ]
+Succeed to execute command [ GET ubaseinfo_1059  ]
+user login uid is  1059 name  is yksl pwd is 745230 email is 1220743777@qq.com
 mysql connection init success
 mysql connection init success
 mysql connection init success
 mysql connection init success
 mysql connection init success
 [ChatServer] group_code backfill done. total=1 backfilled=0 duplicate_fixed=0 retries=0 owner_role_fixed=2 demoted_extra_owner=0
-[ GET  uip_1003 ] failed
-Execut command [ SET uip_1003  chatserver2 ] success ! 
-Execut command [ SET usession_1003  49bfd31a-bf00-481f-9df2-2da4297fcbd2 ] success ! 
-{"env":"local","event":"chat.login.succeeded","level":"info","message":"chat login success","request_id":"bf28d270-b5db-41d1-9dd6-afbd62b2cdc6","service":"ChatServer2","session_id":"49bfd31a-bf00-481f-9df2-2da4297fcbd2","trace_id":"route-check-2","ts":"2026-03-08T07:10:41.188Z","uid":"1003"}
+[ GET  uip_1059 ] failed
+Execut command [ SET uip_1059  chatserver2 ] success ! 
+Execut command [ SET uip_1059  chatserver2 ] success ! 
+Execut command [ SET usession_1059  844f00b3-5419-4df8-8928-1e69f7464b84 ] success ! 
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.login.succeeded","level":"info","message":"chat login success","module":"","peer_service":"","request_id":"37a94ee64305499f9b580d486a3899ce","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"historyfix-A-09f6aec620cd","ts":"2026-03-09T06:32:54.225Z","uid":"1059"}
 destruct MsgNode
-Execut command [ HSet logincount  chatserver2  1 ] success ! 
+msg_id is 1017
+msg_len is 146
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-1","msgid":"offline33ok-92fe43-1-246554c3","created_at":1773037974225}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-1-246554c3","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"0e65418397ab4bb1aff6d6e2b034ff69","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"877ad4ca400148dd9ce9da9650ab4a22","ts":"2026-03-09T06:32:54.280Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 146
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-2","msgid":"offline33ok-92fe43-2-39d65af6","created_at":1773037974295}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-2-39d65af6","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"3dcc8ce11d284a60a5cd8856c7cc51aa","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"bda44fdfe17c4df8a084b4a83fa70e45","ts":"2026-03-09T06:32:54.346Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 146
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-3","msgid":"offline33ok-92fe43-3-c8e46b14","created_at":1773037974349}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-3-c8e46b14","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"d2b17b9665724dca9203ca86f40ccc12","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"b356517e141b4de396239ff3424be289","ts":"2026-03-09T06:32:54.402Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 146
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-4","msgid":"offline33ok-92fe43-4-b6b58b05","created_at":1773037974416}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-4-b6b58b05","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"ed3e3a336a3d4608ba97f65e3d109308","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"ccadf361f5db462aabb88e7b916cb18e","ts":"2026-03-09T06:32:54.468Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 146
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-5","msgid":"offline33ok-92fe43-5-15ed2619","created_at":1773037974470}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-5-15ed2619","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"f77db31fde5b447c9c67a6505c3af5c7","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"c6bddc2eb99f4a7c94d35396abc0739c","ts":"2026-03-09T06:32:54.527Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 146
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-6","msgid":"offline33ok-92fe43-6-c17fc234","created_at":1773037974535}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-6-c17fc234","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"6a7a289c7a0944e986f729745a20c6fd","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"d0e18e1c1997406a836aede28093a647","ts":"2026-03-09T06:32:54.591Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 146
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-7","msgid":"offline33ok-92fe43-7-d1705f00","created_at":1773037974608}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-7-d1705f00","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"375f9a8c22c34dfa8ab2259feffbcfb5","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"4600b0b689e8479ebec10c206b7f3899","ts":"2026-03-09T06:32:54.661Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 146
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-8","msgid":"offline33ok-92fe43-8-26533e2e","created_at":1773037974672}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-8-26533e2e","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"92367ee0d21d4828900e5026eb9d10b2","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"ca68ba4ac7c9418fa8d8df6d35e61901","ts":"2026-03-09T06:32:54.726Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 146
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-9","msgid":"offline33ok-92fe43-9-61807095","created_at":1773037974735}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-9-61807095","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"0a6e8370c36d49999f5b94cd0ee6303b","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"5d465f6cc01e4e3db8103748155a897d","ts":"2026-03-09T06:32:54.790Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-10","msgid":"offline33ok-92fe43-10-5c4f7dfc","created_at":1773037974810}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-10-5c4f7dfc","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"3437f70451044820aa77b41f8eb9a84d","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"7ac0cdb83d9946f993b11875e1077b57","ts":"2026-03-09T06:32:54.863Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-11","msgid":"offline33ok-92fe43-11-a8728c7e","created_at":1773037974883}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-11-a8728c7e","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"a27fea2159204d71990373c8b6956b19","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"7a1e41968a6b4e3ebbf882792a300b61","ts":"2026-03-09T06:32:54.937Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-12","msgid":"offline33ok-92fe43-12-b5065b37","created_at":1773037974942}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-12-b5065b37","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"859e7b8eaf8b4a9b9e13ed7fd76f1267","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"ae649276cd504142a8354db0bc4356c5","ts":"2026-03-09T06:32:54.996Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-13","msgid":"offline33ok-92fe43-13-7898f28b","created_at":1773037975004}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-13-7898f28b","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"40b9136ef859476e97abfdc9a00ce5b2","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"4cb77546fbfb4db4993894d55d86866e","ts":"2026-03-09T06:32:55.056Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-14","msgid":"offline33ok-92fe43-14-ae9662bb","created_at":1773037975063}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-14-ae9662bb","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"7c12edf0127e4e2f8453388ea31a382b","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"0a01f1c82ee3447a81853ce0060d73c9","ts":"2026-03-09T06:32:55.115Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-15","msgid":"offline33ok-92fe43-15-207ea644","created_at":1773037975127}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-15-207ea644","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"2b87ab5e6b0b4025b8d6d39ee23b3fe9","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"75572d4f87d549ecb9143dd59ea8f729","ts":"2026-03-09T06:32:55.185Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-16","msgid":"offline33ok-92fe43-16-e357e7e1","created_at":1773037975190}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-16-e357e7e1","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"b5e06552d3d741d7b307bba3ea940648","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"bff091dbf3c142f09a3fd18bdc5412c3","ts":"2026-03-09T06:32:55.246Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-17","msgid":"offline33ok-92fe43-17-81ff6451","created_at":1773037975259}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-17-81ff6451","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"44dcf42463aa4d1591e08f4a82e356b0","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"a239eeaad79e41848c176307e1a0b5e3","ts":"2026-03-09T06:32:55.317Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-18","msgid":"offline33ok-92fe43-18-b2b3dadf","created_at":1773037975323}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-18-b2b3dadf","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"07270c7eb1514ff9973ee4a2158456d9","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"6d7ee76ea8824656babd9e7e1d88b2f7","ts":"2026-03-09T06:32:55.376Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-19","msgid":"offline33ok-92fe43-19-944f5784","created_at":1773037975393}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-19-944f5784","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"b39d71e382ec46f09f7d55ca63956733","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"09ca9965c98d44ab8b5987637e35c7b8","ts":"2026-03-09T06:32:55.449Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-20","msgid":"offline33ok-92fe43-20-877961f2","created_at":1773037975466}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-20-877961f2","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"e4d10f36bbae40f686ea1afba4bb8c8e","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"77224ebe5829403699377d7bb6da0ff4","ts":"2026-03-09T06:32:55.520Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-21","msgid":"offline33ok-92fe43-21-23ee9bec","created_at":1773037975531}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-21-23ee9bec","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"d748376800c1406db3a0bf0d23e16f98","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"03a924c6493746c1b1a6d76643091162","ts":"2026-03-09T06:32:55.584Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-22","msgid":"offline33ok-92fe43-22-80a02d29","created_at":1773037975593}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-22-80a02d29","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"7d2ffdf68c4346d68f5813670c64d555","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"9fbc876007a142e38e7f362dc040b1b7","ts":"2026-03-09T06:32:55.646Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-23","msgid":"offline33ok-92fe43-23-a4b41936","created_at":1773037975657}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-23-a4b41936","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"457f88ea6c4a46cf80fcc0ce310f47d3","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"37a7e993ce984347ad2bdf307073ff98","ts":"2026-03-09T06:32:55.713Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-24","msgid":"offline33ok-92fe43-24-9045ce9b","created_at":1773037975725}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-24-9045ce9b","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"d157c07b27f2428b99940ddfe437d9c5","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"db376b430adc4d46a353ed0aab3f1454","ts":"2026-03-09T06:32:55.781Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-25","msgid":"offline33ok-92fe43-25-9ac6e448","created_at":1773037975788}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-25-9ac6e448","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"953a919168f949258d76ef59df711b56","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"aaf8b06ddd384c87b541dc63909eb58d","ts":"2026-03-09T06:32:55.842Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-26","msgid":"offline33ok-92fe43-26-1d9bcccf","created_at":1773037975848}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-26-1d9bcccf","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"0222758d886d4ae1a5c460c8d57a5fbb","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"dd14d23b35644339ace339d9f952759b","ts":"2026-03-09T06:32:55.903Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-27","msgid":"offline33ok-92fe43-27-0fc9a29e","created_at":1773037975907}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-27-0fc9a29e","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"027d18e012c541c08ee7622ee3b26d75","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"5655cf0e9c37489dae96fdd88f2975f4","ts":"2026-03-09T06:32:55.959Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-28","msgid":"offline33ok-92fe43-28-89d05a9c","created_at":1773037975967}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-28-89d05a9c","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"bdcf2ab23a4446aba6b7b86b401d2bab","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"f342922c830c484099f2c2f6aa9b9e5c","ts":"2026-03-09T06:32:56.019Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-29","msgid":"offline33ok-92fe43-29-2094968b","created_at":1773037976022}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-29-2094968b","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"262e51dbf99e4264ab2a9dde3a627fd2","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"63ba7d7d94754c4588a09708814baf2a","ts":"2026-03-09T06:32:56.075Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-30","msgid":"offline33ok-92fe43-30-6db08fd3","created_at":1773037976080}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-30-6db08fd3","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"6fec69f393ea4956a3c0f5cf7eec9caf","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"4575eff6e38544bba746715079299b65","ts":"2026-03-09T06:32:56.134Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-31","msgid":"offline33ok-92fe43-31-b6c54ee0","created_at":1773037976140}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-31-b6c54ee0","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"97e48fc994964593a293e80cf005c57e","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"f4b37261cfc746f982e9d4afdfcb7c6b","ts":"2026-03-09T06:32:56.193Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-32","msgid":"offline33ok-92fe43-32-c8293063","created_at":1773037976200}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-32-c8293063","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"1de0222ee59d43b9be310b8d6e061009","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"bc4c7fd4c4ca4fb09abb1e8e5fc80be7","ts":"2026-03-09T06:32:56.255Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 148
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"offline33ok-92fe43-33","msgid":"offline33ok-92fe43-33-2dd8bc62","created_at":1773037976273}]}
+recv_msg id  is 1017
+[ GET  uip_1003 ] failed
+{"attrs":{"from_uid":"1059","grpc_status":"skipped","local_session_found":"false","msg_id":"offline33ok-92fe43-33-2dd8bc62","notify_delivered":"false","redis_server":"","route_result":"offline","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"warn","message":"private message notify not delivered","module":"","peer_service":"","request_id":"8b24874b2d6446ef94ff0573a5ac4c44","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"844f00b3-5419-4df8-8928-1e69f7464b84","trace_id":"df425dc90152492a8c417a284f9f2f66","ts":"2026-03-09T06:32:56.325Z","uid":"1059"}
+destruct MsgNode
 handle read failed, error is End of file [asio.misc:2 at D:\MemoChat-Qml-Drogon\vcpkg_installed\x64-windows-static\include\boost/asio/detail/win_iocp_socket_recv_op.hpp:89:5 in function 'void __cdecl boost::asio::detail::win_iocp_socket_recv_op<class boost::asio::mutable_buffer,class <lambda_9fdebcb5ee0f451c28b83298bef13f3e>,class boost::asio::any_io_executor>::do_complete(void *,class boost::asio::detail::win_iocp_operation *,const class boost::system::error_code &,unsigned __int64)']
-Succeed to execute command [ GET usession_1003  ]
-Execut command [ Del usession_1003 ] success ! 
-Execut command [ Del uip_1003 ] success ! 
+Succeed to execute command [ GET usession_1059  ]
+Execut command [ Del usession_1059 ] success ! 
+Execut command [ Del uip_1059 ] success ! 
 ~CSession destruct
 destruct MsgNode
 destruct MsgNode
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+msg_id is 1005
+msg_len is 114
+receive data is {"uid":1059,"token":"20db1f8f-1983-4750-839c-c16ad5239f70","protocol_version":2,"trace_id":"smoke-A-49f5f7da4e1e"}
+recv_msg id  is 1005
+{"attrs":{"tcp_msg_id":"1005"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.login.received","level":"info","message":"chat login request received","module":"","peer_service":"","request_id":"ba540fe98e184e0abdbee3c3addaebf0","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"af6aa494-b2ed-4a79-8e6e-9ce1ca2846aa","trace_id":"smoke-A-49f5f7da4e1e","ts":"2026-03-09T06:33:46.106Z","uid":"1059"}
+Succeed to execute command [ GET utoken_1059  ]
+Succeed to execute command [ GET ubaseinfo_1059  ]
+user login uid is  1059 name  is yksl pwd is 745230 email is 1220743777@qq.com
+[ GET  uip_1059 ] failed
+Execut command [ SET uip_1059  chatserver2 ] success ! 
+Execut command [ SET uip_1059  chatserver2 ] success ! 
+Execut command [ SET usession_1059  af6aa494-b2ed-4a79-8e6e-9ce1ca2846aa ] success ! 
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.login.succeeded","level":"info","message":"chat login success","module":"","peer_service":"","request_id":"ba540fe98e184e0abdbee3c3addaebf0","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"af6aa494-b2ed-4a79-8e6e-9ce1ca2846aa","trace_id":"smoke-A-49f5f7da4e1e","ts":"2026-03-09T06:33:46.385Z","uid":"1059"}
+destruct MsgNode
+msg_id is 1017
+msg_len is 156
+destruct MsgNode
+receive data is {"fromuid":1059,"touid":1003,"text_array":[{"content":"smoke-a-to-b-55fdbc3f","msgid":"smoke-a739906e7cc4460198bcc692be530b5c","created_at":1773038026621}]}
+recv_msg id  is 1017
+Succeed to execute command [ GET uip_1003  ]
+{"attrs":{"from_uid":"1059","grpc_status":"0","local_session_found":"false","msg_id":"smoke-a739906e7cc4460198bcc692be530b5c","notify_delivered":"true","redis_server":"chatserver1","route_result":"remote","to_uid":"1003"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"info","message":"private message notify delivered","module":"","peer_service":"","request_id":"3a27331b140f4311b2dd2ec97d2b41f8","service":"ChatServer2","service_instance":"ChatServer2@YKSL:23368","session_id":"af6aa494-b2ed-4a79-8e6e-9ce1ca2846aa","trace_id":"62d18dff52964f63ae709c395f074a54","ts":"2026-03-09T06:33:50.783Z","uid":"1059"}
+destruct MsgNode
+destruct MsgNode
+handle read failed, error is End of file [asio.misc:2 at D:\MemoChat-Qml-Drogon\vcpkg_installed\x64-windows-static\include\boost/asio/detail/win_iocp_socket_recv_op.hpp:89:5 in function 'void __cdecl boost::asio::detail::win_iocp_socket_recv_op<class boost::asio::mutable_buffer,class <lambda_9fdebcb5ee0f451c28b83298bef13f3e>,class boost::asio::any_io_executor>::do_complete(void *,class boost::asio::detail::win_iocp_operation *,const class boost::system::error_code &,unsigned __int64)']
+Succeed to execute command [ GET usession_1059  ]
+Execut command [ Del usession_1059 ] success ! 
+Execut command [ Del uip_1059 ] success ! 
+~CSession destruct
+destruct MsgNode
+destruct MsgNode
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
+Execut command [ HSet logincount  chatserver2  0 ] success ! 
 Execut command [ HSet logincount  chatserver2  0 ] success ! 

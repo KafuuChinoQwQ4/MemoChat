@@ -1,0 +1,115 @@
+﻿{
+  "scenario": "friendship",
+  "test": "tcp_friendship",
+  "time_utc": "20260309_102126",
+  "target": {
+    "gate_login": "/user_login",
+    "tcp": [
+      1007,
+      1009,
+      1013
+    ]
+  },
+  "config": {
+    "total": 3,
+    "concurrency": 1,
+    "http_timeout_sec": 10.0,
+    "tcp_timeout_sec": 10.0,
+    "runtime_accounts_csv": ".\\accounts.e2e.csv"
+  },
+  "summary": {
+    "total": 3,
+    "success": 1,
+    "failed": 2,
+    "success_rate": 0.333333,
+    "elapsed_sec": 27.215062,
+    "throughput_rps": 0.11,
+    "latency_ms": {
+      "min": 1008.717,
+      "avg": 9071.103,
+      "p50": 6254.389,
+      "p90": 19950.203,
+      "p95": 19950.203,
+      "p99": 19950.203,
+      "max": 19950.203
+    }
+  },
+  "phase_breakdown": {
+    "search_user": {
+      "min": 43.903,
+      "avg": 43.903,
+      "p50": 43.903,
+      "p90": 43.903,
+      "p95": 43.903,
+      "p99": 43.903,
+      "max": 43.903
+    },
+    "friend_apply_rsp": {
+      "min": 4238.316,
+      "avg": 4238.316,
+      "p50": 4238.316,
+      "p90": 4238.316,
+      "p95": 4238.316,
+      "p99": 4238.316,
+      "max": 4238.316
+    },
+    "friend_apply_notify": {
+      "min": 0.04,
+      "avg": 0.04,
+      "p50": 0.04,
+      "p90": 0.04,
+      "p95": 0.04,
+      "p99": 0.04,
+      "max": 0.04
+    },
+    "friend_auth_rsp": {
+      "min": 4392.22,
+      "avg": 4392.22,
+      "p50": 4392.22,
+      "p90": 4392.22,
+      "p95": 4392.22,
+      "p99": 4392.22,
+      "max": 4392.22
+    },
+    "friend_auth_notify": {
+      "min": 0.042,
+      "avg": 0.042,
+      "p50": 0.042,
+      "p90": 0.042,
+      "p95": 0.042,
+      "p99": 0.042,
+      "max": 0.042
+    }
+  },
+  "error_counter": {
+    "exception_RuntimeError": 2
+  },
+  "top_errors": {
+    "exception_RuntimeError": 2
+  },
+  "preconditions": {
+    "accounts": 6,
+    "service": [
+      "GateServer",
+      "StatusServer",
+      "ConfiguredChatNodes"
+    ]
+  },
+  "data_mutation_summary": {
+    "friend_pairs_established": 1
+  },
+  "samples": [
+    {
+      "requester_email": "friend_17730516336770zn8b@loadtest.local",
+      "approver_email": "friend_1773051654289fm5xi@loadtest.local"
+    },
+    {
+      "requester_email": "friend_17730516336770zn8b@loadtest.local",
+      "approver_email": "reset_1773051569825vohf0@loadtest.local"
+    },
+    {
+      "requester_email": "friend_17730516336770zn8b@loadtest.local",
+      "approver_email": "reset_1773051574923s0jd3@loadtest.local"
+    }
+  ]
+}

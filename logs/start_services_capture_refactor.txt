@@ -1,0 +1,89 @@
+[INFO] Selected StatusServer: D:\MemoChat-Qml-Drogon\build-vcpkg-server\bin\Release\StatusServer.exe (20602880 bytes, 2026-03-09 02:41:36)
+[INFO] Selected ChatServer: D:\MemoChat-Qml-Drogon\build-vcpkg-server\bin\Release\ChatServer.exe (21775872 bytes, 2026-03-09 02:41:38)
+[INFO] Selected GateServer: D:\MemoChat-Qml-Drogon\build-vcpkg-server\bin\Release\GateServer.exe (21313536 bytes, 2026-03-09 02:40:37)
+[INFO] Using skill: memochat-multiservice-ops
+[INFO] Root: D:\MemoChat-Qml-Drogon
+[INFO] Server bin: D:\MemoChat-Qml-Drogon\build-vcpkg-server\bin\Release
+[INFO] Client bin: D:\MemoChat-Qml-Drogon\build\bin\Release
+[INFO] Console code page: 936
+
+[INFO] Enabled chat nodes: chatserver1,chatserver2
+[INFO] Stopping existing MemoChat service processes...
+[INFO] VarifyServer dependencies found.
+[INFO] Source StatusServer: D:\MemoChat-Qml-Drogon\build-vcpkg-server\bin\Release\StatusServer.exe (20602880 bytes, 2026-03-09 02:41:36)
+[INFO] Prepared StatusServer: D:\MemoChat-Qml-Drogon\build\run\StatusServer\StatusServer.exe (20602880 bytes, 2026-03-09 02:41:36)
+[INFO] Prepared StatusServer in D:\MemoChat-Qml-Drogon\build\run\StatusServer
+[INFO] Source chatserver1: D:\MemoChat-Qml-Drogon\build-vcpkg-server\bin\Release\ChatServer.exe (21775872 bytes, 2026-03-09 02:41:38)
+[INFO] Prepared chatserver1: D:\MemoChat-Qml-Drogon\build\run\chatserver1\ChatServer.exe (21775872 bytes, 2026-03-09 02:41:38)
+[INFO] Prepared chatserver1 in D:\MemoChat-Qml-Drogon\build\run\chatserver1
+[INFO] Source chatserver2: D:\MemoChat-Qml-Drogon\build-vcpkg-server\bin\Release\ChatServer.exe (21775872 bytes, 2026-03-09 02:41:38)
+[INFO] Prepared chatserver2: D:\MemoChat-Qml-Drogon\build\run\chatserver2\ChatServer.exe (21775872 bytes, 2026-03-09 02:41:38)
+[INFO] Prepared chatserver2 in D:\MemoChat-Qml-Drogon\build\run\chatserver2
+[INFO] Source GateServer: D:\MemoChat-Qml-Drogon\build-vcpkg-server\bin\Release\GateServer.exe (21313536 bytes, 2026-03-09 02:40:37)
+[INFO] Prepared GateServer: D:\MemoChat-Qml-Drogon\build\run\GateServer\GateServer.exe (21313536 bytes, 2026-03-09 02:40:37)
+[INFO] Prepared GateServer in D:\MemoChat-Qml-Drogon\build\run\GateServer
+[INFO] Starting VarifyServer (Node)...
+[INFO] Waiting for VarifyServer on port 50051...
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+[INFO] VarifyServer is listening on port 50051.
+[INFO] Starting StatusServer...
+[INFO] Waiting for StatusServer on port 50052...
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+[INFO] StatusServer is listening on port 50052.
+[INFO] Starting chatserver1...
+[INFO] Waiting for chatserver1 on port 8090...
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+[INFO] chatserver1 is listening on port 8090.
+[INFO] Waiting for chatserver1-RPC on port 50055...
+[INFO] chatserver1-RPC is listening on port 50055.
+[INFO] Starting chatserver2...
+[INFO] Waiting for chatserver2 on port 8091...
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+[INFO] chatserver2 is listening on port 8091.
+[INFO] Waiting for chatserver2-RPC on port 50056...
+[INFO] chatserver2-RPC is listening on port 50056.
+[INFO] Running ChatServer.exe instances: 2
+[INFO] Starting GateServer...
+[INFO] Waiting for GateServer on port 8080...
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+ERROR: Input redirection is not supported, exiting the process immediately.
+[INFO] GateServer is listening on port 8080.
+
+[DONE] Services started.
+[INFO] GateServer HTTP: http://127.0.0.1:8080
+[INFO] Chat cluster nodes: chatserver1,chatserver2
+[INFO] Close each opened window to stop each service.

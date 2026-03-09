@@ -123,7 +123,7 @@ def main() -> int:
         "phase_breakdown": result["phase_breakdown"],
         "error_counter": result["error_counter"],
         "top_errors": result["top_errors"],
-        "preconditions": {"accounts": total * 2, "service": ["GateServer", "StatusServer", "ChatServer", "ChatServer2"]},
+        "preconditions": {"accounts": total * 2, "service": ["GateServer", "StatusServer", "ConfiguredChatNodes"]},
         "data_mutation_summary": result["data_mutation_summary"],
         "samples": result["samples"],
     }

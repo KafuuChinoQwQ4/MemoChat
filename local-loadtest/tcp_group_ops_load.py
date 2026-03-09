@@ -106,6 +106,33 @@ def main() -> int:
             if int(invite_rsp.get("error", -1)) != 0:
                 raise RuntimeError(f"invite member failed: {invite_rsp}")
             member_client.recv_until([ID_NOTIFY_GROUP_INVITE_REQ], tcp_timeout)
+            conn = open_mysql(cfg)
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT apply_id FROM chat_group_apply "
+                        "WHERE group_id = %s AND applicant_uid = %s AND type = 1 "
+                        "ORDER BY apply_id DESC LIMIT 1",
+                        [group_id, int(member["uid"])],
+                    )
+                    row = cursor.fetchone()
+                if not row:
+                    raise RuntimeError("invite apply row not found")
+                invite_apply_id = int(row["apply_id"])
+            finally:
+                conn.close()
+            owner_client.send_json(
+                ID_REVIEW_GROUP_APPLY_REQ,
+                {
+                    "fromuid": int(owner["uid"]),
+                    "apply_id": invite_apply_id,
+                    "agree": True,
+                },
+            )
+            _, invite_review_rsp = owner_client.recv_until([ID_REVIEW_GROUP_APPLY_RSP], tcp_timeout)
+            if int(invite_review_rsp.get("error", -1)) != 0:
+                raise RuntimeError(f"review invite failed: {invite_review_rsp}")
+            member_client.recv_until([ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ], tcp_timeout)
             phase_ms["invite_member"] = (time.perf_counter() - t1) * 1000.0
 
             t2 = time.perf_counter()
@@ -224,7 +251,7 @@ def main() -> int:
         "phase_breakdown": result["phase_breakdown"],
         "error_counter": result["error_counter"],
         "top_errors": result["top_errors"],
-        "preconditions": {"accounts": total * 3, "service": ["GateServer", "StatusServer", "ChatServer", "ChatServer2"]},
+        "preconditions": {"accounts": total * 3, "service": ["GateServer", "StatusServer", "ConfiguredChatNodes"]},
         "data_mutation_summary": result["data_mutation_summary"],
         "samples": result["samples"],
     }

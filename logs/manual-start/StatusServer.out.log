@@ -1,4 +1,4 @@
-Config path: "D:\MemoChat-Qml-Drogon\server\StatusServer\config.ini"
+Config path: "D:\MemoChat-Qml-Drogon\build\run\StatusServer\config.ini"
 [Log]
 Dir=./logs
 Env=local
@@ -22,6 +22,16 @@ Port=6379
 [StatusServer]
 Host=0.0.0.0
 Port=50052
+[Telemetry]
+Enabled=true
+ExportLogs=true
+ExportMetrics=false
+ExportTraces=true
+OtlpEndpoint=http://127.0.0.1:9411/api/v2/spans
+Protocol=zipkin-json
+SampleRatio=1.0
+ServiceName=StatusServer
+ServiceNamespace=memochat
 [chatserver1]
 Host=127.0.0.1
 Name=chatserver1
@@ -32,13 +42,31 @@ Name=chatserver2
 Port=8091
 [chatservers]
 Name=chatserver1,chatserver2
-{"address":"0.0.0.0:50052","env":"local","event":"service.start","level":"info","message":"StatusServer listening","service":"StatusServer","ts":"2026-03-08T07:10:12.155Z"}
+{"attrs":{"address":"0.0.0.0:50052"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.start","level":"info","message":"StatusServer listening","module":"","peer_service":"","service":"StatusServer","service_instance":"StatusServer@YKSL:26140","ts":"2026-03-09T06:18:12.060Z"}
 redis auth success
 redis auth success
 redis auth success
 redis auth success
 redis auth success
 Succeed to execute command [ GET utoken_1059  ]
-{"env":"local","event":"status.get_chat_server","host":"127.0.0.1","level":"info","message":"select chat server","port":"8090","request_id":"d649d885-11e4-42ff-bae3-fc604a6d27b0","reuse_token":"true","service":"StatusServer","trace_id":"51641b09-bbdd-404e-aab9-f0749c69522e","ts":"2026-03-08T07:10:39.738Z","uid":"1059"}
+{"attrs":{"host":"127.0.0.1","least_loaded_servers":"chatserver1,chatserver2","port":"8090","reuse_token":"true","selected_server":"chatserver1","server_count":"2","server_loads":"chatserver1=0,chatserver2=0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"status.get_chat_server","level":"info","message":"select chat server","module":"grpc","peer_service":"","request_id":"f0b31e15e4b0445a9ef834ea97a01403","service":"StatusServer","service_instance":"StatusServer@YKSL:26140","span_id":"1f062fe19c234a65","trace_id":"d5f7b127ccf8474592994aaa1184ac89","ts":"2026-03-09T06:19:05.477Z","uid":"1059"}
 Succeed to execute command [ GET utoken_1003  ]
-{"env":"local","event":"status.get_chat_server","host":"127.0.0.1","level":"info","message":"select chat server","port":"8091","request_id":"61c1cb2e-4488-460f-9f51-9a5c5d1c6221","reuse_token":"true","service":"StatusServer","trace_id":"8587c4c5-0377-4e12-a2d3-304d7f04e6cd","ts":"2026-03-08T07:10:40.769Z","uid":"1003"}
+{"attrs":{"host":"127.0.0.1","least_loaded_servers":"chatserver1,chatserver2","port":"8091","reuse_token":"true","selected_server":"chatserver2","server_count":"2","server_loads":"chatserver1=0,chatserver2=0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"status.get_chat_server","level":"info","message":"select chat server","module":"grpc","peer_service":"","request_id":"e01912920f274b0ca3eaa4c2c3ed519b","service":"StatusServer","service_instance":"StatusServer@YKSL:26140","span_id":"3cfdf33c612f4d76","trace_id":"137f14afa8ad42339deb061a2903b106","ts":"2026-03-09T06:19:09.541Z","uid":"1003"}
+Succeed to execute command [ GET utoken_1059  ]
+{"attrs":{"host":"127.0.0.1","least_loaded_servers":"chatserver1,chatserver2","port":"8090","reuse_token":"true","selected_server":"chatserver1","server_count":"2","server_loads":"chatserver1=0,chatserver2=0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"status.get_chat_server","level":"info","message":"select chat server","module":"grpc","peer_service":"","request_id":"817b350c232140309e3488b7b7bd4831","service":"StatusServer","service_instance":"StatusServer@YKSL:26140","span_id":"39d6c3751d8b4af5","trace_id":"246c504f41384b00bd8e30cd73028226","ts":"2026-03-09T06:22:43.423Z","uid":"1059"}
+Succeed to execute command [ GET utoken_1003  ]
+{"attrs":{"host":"127.0.0.1","least_loaded_servers":"chatserver1,chatserver2","port":"8091","reuse_token":"true","selected_server":"chatserver2","server_count":"2","server_loads":"chatserver1=0,chatserver2=0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"status.get_chat_server","level":"info","message":"select chat server","module":"grpc","peer_service":"","request_id":"07d17177b3a142cd8ebab213ace19b01","service":"StatusServer","service_instance":"StatusServer@YKSL:26140","span_id":"9292895dd3e2448a","trace_id":"354e195f2de24f6a8001276dc451f7bd","ts":"2026-03-09T06:22:47.487Z","uid":"1003"}
+Succeed to execute command [ GET utoken_1003  ]
+{"attrs":{"host":"127.0.0.1","least_loaded_servers":"chatserver1,chatserver2","port":"8090","reuse_token":"true","selected_server":"chatserver1","server_count":"2","server_loads":"chatserver1=0,chatserver2=0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"status.get_chat_server","level":"info","message":"select chat server","module":"grpc","peer_service":"","request_id":"c769e2d5ce444c6699bde6b0255a4386","service":"StatusServer","service_instance":"StatusServer@YKSL:26140","span_id":"7ef72b1ffe8243b3","trace_id":"86aba9017be4434c918a427a59ba2bb9","ts":"2026-03-09T06:24:58.519Z","uid":"1003"}
+Succeed to execute command [ GET utoken_1003  ]
+{"attrs":{"host":"127.0.0.1","least_loaded_servers":"chatserver1,chatserver2","port":"8091","reuse_token":"true","selected_server":"chatserver2","server_count":"2","server_loads":"chatserver1=0,chatserver2=0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"status.get_chat_server","level":"info","message":"select chat server","module":"grpc","peer_service":"","request_id":"a120628d651e4ef68f03685bca3c9375","service":"StatusServer","service_instance":"StatusServer@YKSL:26140","span_id":"167fe81b078f47bc","trace_id":"6efdf71429b946fa9af64c4700d86e1a","ts":"2026-03-09T06:27:56.139Z","uid":"1003"}
+Succeed to execute command [ GET utoken_1003  ]
+{"attrs":{"host":"127.0.0.1","least_loaded_servers":"chatserver1,chatserver2","port":"8090","reuse_token":"true","selected_server":"chatserver1","server_count":"2","server_loads":"chatserver1=0,chatserver2=0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"status.get_chat_server","level":"info","message":"select chat server","module":"grpc","peer_service":"","request_id":"cbb26c1547b84885b74ddb279b4a193c","service":"StatusServer","service_instance":"StatusServer@YKSL:26140","span_id":"506169b8c385484c","trace_id":"5268d8d4827e42bb88e439e7f519cb11","ts":"2026-03-09T06:32:10.520Z","uid":"1003"}
+Succeed to execute command [ GET utoken_1059  ]
+{"attrs":{"host":"127.0.0.1","least_loaded_servers":"chatserver1,chatserver2","port":"8091","reuse_token":"true","selected_server":"chatserver2","server_count":"2","server_loads":"chatserver1=0,chatserver2=0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"status.get_chat_server","level":"info","message":"select chat server","module":"grpc","peer_service":"","request_id":"423cda44bc5d489bba5ba7d2bf7b09d9","service":"StatusServer","service_instance":"StatusServer@YKSL:26140","span_id":"9739e9fac0cc4b93","trace_id":"e324e0f0e3a64c64bcea172f89f5d086","ts":"2026-03-09T06:32:45.452Z","uid":"1059"}
+Succeed to execute command [ GET utoken_1003  ]
+{"attrs":{"host":"127.0.0.1","least_loaded_servers":"chatserver1,chatserver2","port":"8090","reuse_token":"true","selected_server":"chatserver1","server_count":"2","server_loads":"chatserver1=0,chatserver2=0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"status.get_chat_server","level":"info","message":"select chat server","module":"grpc","peer_service":"","request_id":"815b0d168bf5468a932d4971aea50f80","service":"StatusServer","service_instance":"StatusServer@YKSL:26140","span_id":"323b91079ae74331","trace_id":"c588b8ba2b5e467ba1dfa311077d08d7","ts":"2026-03-09T06:32:49.509Z","uid":"1003"}
+Succeed to execute command [ GET utoken_1059  ]
+{"attrs":{"host":"127.0.0.1","least_loaded_servers":"chatserver1,chatserver2","port":"8091","reuse_token":"true","selected_server":"chatserver2","server_count":"2","server_loads":"chatserver1=0,chatserver2=0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"status.get_chat_server","level":"info","message":"select chat server","module":"grpc","peer_service":"","request_id":"c51501553254442d8406e3f979d7f05e","service":"StatusServer","service_instance":"StatusServer@YKSL:26140","span_id":"ea6e8ef4b13045c5","trace_id":"4b26729bda004563abf9243ef1baeed1","ts":"2026-03-09T06:33:37.995Z","uid":"1059"}
+Succeed to execute command [ GET utoken_1003  ]
+{"attrs":{"host":"127.0.0.1","least_loaded_servers":"chatserver1,chatserver2","port":"8090","reuse_token":"true","selected_server":"chatserver1","server_count":"2","server_loads":"chatserver1=0,chatserver2=0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"status.get_chat_server","level":"info","message":"select chat server","module":"grpc","peer_service":"","request_id":"4352f9a4936b48729c57a904587d388b","service":"StatusServer","service_instance":"StatusServer@YKSL:26140","span_id":"848f692811cf4343","trace_id":"f2ea9837b55a4255a26e9e7ddfbf3bd4","ts":"2026-03-09T06:33:42.034Z","uid":"1003"}

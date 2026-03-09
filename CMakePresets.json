@@ -78,7 +78,6 @@
       "configurePreset": "msvc2022-all",
       "configuration": "Debug",
       "targets": [
-        "MemoChat",
         "MemoChatQml"
       ],
       "jobs": 8

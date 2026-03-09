@@ -78,13 +78,20 @@ std::string DetectServiceInstance(const std::string& service_name) {
     if (host == nullptr || *host == '\0') {
         host = std::getenv("HOSTNAME");
     }
+    const char* instance = std::getenv("MEMOCHAT_INSTANCE_NAME");
     const std::string host_name = (host == nullptr || *host == '\0') ? "localhost" : std::string(host);
+    const std::string instance_name = (instance == nullptr || *instance == '\0') ? "" : std::string(instance);
 #ifdef _WIN32
     const int pid = _getpid();
 #else
     const int pid = getpid();
 #endif
-    return service_name + "@" + host_name + ":" + std::to_string(pid);
+    std::string value = service_name + "@";
+    if (!instance_name.empty()) {
+        value += instance_name + ".";
+    }
+    value += host_name + ":" + std::to_string(pid);
+    return value;
 }
 
 void PostJsonBestEffort(const std::string& endpoint, const std::string& body) {

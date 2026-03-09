@@ -35,6 +35,8 @@ add_executable(ChatServer
     UserMgr.h
     message.proto
     config.ini
+    chatserver1.ini
+    chatserver2.ini
 )
 
 memochat_add_proto_sources(ChatServer message.proto)

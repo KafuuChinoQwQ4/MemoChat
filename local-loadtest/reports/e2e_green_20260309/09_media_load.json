@@ -1,0 +1,113 @@
+﻿{
+  "scenario": "media",
+  "test": "media_load",
+  "time_utc": "20260309_105604",
+  "target": {
+    "http": [
+      "/upload_media_init",
+      "/upload_media_chunk",
+      "/upload_media_status",
+      "/upload_media_complete",
+      "/media/download"
+    ]
+  },
+  "config": {
+    "total": 1,
+    "concurrency": 1,
+    "http_timeout_sec": 30.0,
+    "runtime_accounts_csv": ".\\accounts.e2e.csv",
+    "file_sizes_kb": [
+      128,
+      512
+    ],
+    "media_types": [
+      "image",
+      "file"
+    ]
+  },
+  "summary": {
+    "total": 1,
+    "success": 1,
+    "failed": 0,
+    "success_rate": 1.0,
+    "elapsed_sec": 9.685366,
+    "throughput_rps": 0.103,
+    "latency_ms": {
+      "min": 9668.279,
+      "avg": 9668.279,
+      "p50": 9668.279,
+      "p90": 9668.279,
+      "p95": 9668.279,
+      "p99": 9668.279,
+      "max": 9668.279
+    }
+  },
+  "phase_breakdown": {
+    "upload_init": {
+      "min": 18.342,
+      "avg": 18.342,
+      "p50": 18.342,
+      "p90": 18.342,
+      "p95": 18.342,
+      "p99": 18.342,
+      "max": 18.342
+    },
+    "upload_chunk": {
+      "min": 468.873,
+      "avg": 468.873,
+      "p50": 468.873,
+      "p90": 468.873,
+      "p95": 468.873,
+      "p99": 468.873,
+      "max": 468.873
+    },
+    "upload_status": {
+      "min": 1561.845,
+      "avg": 1561.845,
+      "p50": 1561.845,
+      "p90": 1561.845,
+      "p95": 1561.845,
+      "p99": 1561.845,
+      "max": 1561.845
+    },
+    "upload_complete": {
+      "min": 483.495,
+      "avg": 483.495,
+      "p50": 483.495,
+      "p90": 483.495,
+      "p95": 483.495,
+      "p99": 483.495,
+      "max": 483.495
+    },
+    "download": {
+      "min": 1544.177,
+      "avg": 1544.177,
+      "p50": 1544.177,
+      "p90": 1544.177,
+      "p95": 1544.177,
+      "p99": 1544.177,
+      "max": 1544.177
+    }
+  },
+  "error_counter": {},
+  "top_errors": {},
+  "preconditions": {
+    "accounts": 1,
+    "service": [
+      "GateServer",
+      "MySQL",
+      "Redis"
+    ]
+  },
+  "data_mutation_summary": {
+    "media_uploaded": 1,
+    "media_downloaded": 1
+  },
+  "samples": [
+    {
+      "account_email": "friend_17730516336770zn8b@loadtest.local",
+      "upload_id": "012bbd09-54f0-4b64-8997-1a93f4991797",
+      "media_type": "image"
+    }
+  ]
+}

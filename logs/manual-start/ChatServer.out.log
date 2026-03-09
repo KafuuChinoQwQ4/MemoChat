@@ -1,4 +1,4 @@
-Config path: "D:\MemoChat-Qml-Drogon\server\ChatServer\config.ini"
+Config path: "D:\MemoChat-Qml-Drogon\build\run\ChatServer\config.ini"
 [GateServer]
 Port=8080
 [Log]
@@ -31,6 +31,16 @@ RPCPort=50055
 [StatusServer]
 Host=127.0.0.1
 Port=50052
+[Telemetry]
+Enabled=true
+ExportLogs=true
+ExportMetrics=false
+ExportTraces=true
+OtlpEndpoint=http://127.0.0.1:9411/api/v2/spans
+Protocol=zipkin-json
+SampleRatio=1.0
+ServiceName=ChatServer
+ServiceNamespace=memochat
 [VarifyServer]
 Host=127.0.0.1
 Port=50051
@@ -50,100 +60,34 @@ redis auth status
 redis auth status
 Execut command [ Del server_online_users_chatserver1 ] success ! 
 Execut command [ HSet logincount  chatserver1  0 ] success ! 
-{"env":"local","event":"service.online_state_reset","level":"info","message":"ChatServer online state reset","name":"chatserver1","service":"ChatServer","tracked_uid_count":"0","ts":"2026-03-08T07:03:39.039Z"}
+{"attrs":{"name":"chatserver1","tracked_uid_count":"0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.online_state_reset","level":"info","message":"ChatServer online state reset","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@YKSL:24132","ts":"2026-03-09T06:31:40.745Z"}
 Server start success, listen on port : 8090
-{"env":"local","event":"service.start","level":"info","message":"ChatServer listening","name":"chatserver1","rpc_address":"0.0.0.0:50055","service":"ChatServer","ts":"2026-03-08T07:03:39.044Z"}
-Execut command [ HSet logincount  chatserver1  0 ] success ! 
+{"attrs":{"name":"chatserver1","rpc_address":"0.0.0.0:50055"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.start","level":"info","message":"ChatServer listening","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@YKSL:24132","ts":"2026-03-09T06:31:40.750Z"}
 msg_id is 1005
-msg_len is 113
-receive data is {"uid": 1059, "token": "20db1f8f-1983-4750-839c-c16ad5239f70", "protocol_version": 2, "trace_id": "manual-repro"}
+msg_len is 112
+receive data is {"uid":1003,"token":"b11b0ef2-c741-4541-9905-5490b2ccc426","protocol_version":2,"trace_id":"quickhist-06f142df"}
 recv_msg id  is 1005
-{"env":"local","event":"chat.login.received","level":"info","message":"chat login request received","request_id":"d1ec2648-24bc-4515-af71-98c805dc67bb","service":"ChatServer","session_id":"11000948-fcf9-418d-a4e3-06045ecf4608","tcp_msg_id":"1005","trace_id":"manual-repro","ts":"2026-03-08T07:04:41.794Z","uid":"1059"}
-Succeed to execute command [ GET utoken_1059  ]
-Succeed to execute command [ GET ubaseinfo_1059  ]
-user login uid is  1059 name  is yksl pwd is 745230 email is 1220743777@qq.com
+{"attrs":{"tcp_msg_id":"1005"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.login.received","level":"info","message":"chat login request received","module":"","peer_service":"","request_id":"e5b50d86b80944528facb40a5cd0981d","service":"ChatServer","service_instance":"ChatServer@YKSL:24132","session_id":"31fde8a1-e380-4c8d-8f7c-f4dcac319766","trace_id":"quickhist-06f142df","ts":"2026-03-09T06:32:14.593Z","uid":"1003"}
+Succeed to execute command [ GET utoken_1003  ]
+Succeed to execute command [ GET ubaseinfo_1003  ]
+user login uid is  1003 name  is tc pwd is 123456 email is 18165031775@qq.com
 mysql connection init success
 mysql connection init success
 mysql connection init success
 mysql connection init success
 mysql connection init success
 [ChatServer] group_code backfill done. total=1 backfilled=0 duplicate_fixed=0 retries=0 owner_role_fixed=2 demoted_extra_owner=0
-[ GET  uip_1059 ] failed
-Execut command [ SET uip_1059  chatserver1 ] success ! 
-Execut command [ SET usession_1059  11000948-fcf9-418d-a4e3-06045ecf4608 ] success ! 
-{"env":"local","event":"chat.login.succeeded","level":"info","message":"chat login success","request_id":"d1ec2648-24bc-4515-af71-98c805dc67bb","service":"ChatServer","session_id":"11000948-fcf9-418d-a4e3-06045ecf4608","trace_id":"manual-repro","ts":"2026-03-08T07:04:42.110Z","uid":"1059"}
-destruct MsgNode
-msg_id is 1005
-msg_len is 113
-receive data is {"uid": 1053, "token": "7f441011-9aa7-44a8-a890-07e3f86d4298", "protocol_version": 2, "trace_id": "manual-repro"}
-recv_msg id  is 1005
-{"env":"local","event":"chat.login.received","level":"info","message":"chat login request received","request_id":"83c77a93-9934-4261-88e8-25fc92a824c1","service":"ChatServer","session_id":"b7d5536c-dcac-487a-b477-43854ac5314c","tcp_msg_id":"1005","trace_id":"manual-repro","ts":"2026-03-08T07:04:43.134Z","uid":"1053"}
-Succeed to execute command [ GET utoken_1053  ]
-[ GET  ubaseinfo_1053 ] failed
-Execut command [ SET ubaseinfo_1053  {
-	"desc" : "",
-	"email" : "zzsr_0719@qq.com",
-	"icon" : "",
-	"name" : "test_1",
-	"nick" : "",
-	"pwd" : "123456",
-	"sex" : 0,
-	"uid" : 1053,
-	"user_id" : "u836772048"
-}
- ] success ! 
-[ GET  uip_1053 ] failed
-Execut command [ SET uip_1053  chatserver1 ] success ! 
-Execut command [ SET usession_1053  b7d5536c-dcac-487a-b477-43854ac5314c ] success ! 
-{"env":"local","event":"chat.login.succeeded","level":"info","message":"chat login success","request_id":"83c77a93-9934-4261-88e8-25fc92a824c1","service":"ChatServer","session_id":"b7d5536c-dcac-487a-b477-43854ac5314c","trace_id":"manual-repro","ts":"2026-03-08T07:04:43.143Z","uid":"1053"}
-destruct MsgNode
-handle read failed, error is End of file [asio.misc:2 at D:\MemoChat-Qml-Drogon\vcpkg_installed\x64-windows-static\include\boost/asio/detail/win_iocp_socket_recv_op.hpp:89:5 in function 'void __cdecl boost::asio::detail::win_iocp_socket_recv_op<class boost::asio::mutable_buffer,class <lambda_33fcf3388d1d3d9ac1171cdf626357f3>,class boost::asio::any_io_executor>::do_complete(void *,class boost::asio::detail::win_iocp_operation *,const class boost::system::error_code &,unsigned __int64)']
-handle read failed, error is End of file [asio.misc:2 at D:\MemoChat-Qml-Drogon\vcpkg_installed\x64-windows-static\include\boost/asio/detail/win_iocp_socket_recv_op.hpp:89:5 in function 'void __cdecl boost::asio::detail::win_iocp_socket_recv_op<class boost::asio::mutable_buffer,class <lambda_33fcf3388d1d3d9ac1171cdf626357f3>,class boost::asio::any_io_executor>::do_complete(void *,class boost::asio::detail::win_iocp_operation *,const class boost::system::error_code &,unsigned __int64)']
-Succeed to execute command [ GET usession_1059  ]
-Succeed to execute command [ GET usession_1053  ]
-Execut command [ Del usession_1059 ] success ! 
-Execut command [ Del usession_1053 ] success ! 
-Execut command [ Del uip_1059 ] success ! 
-Execut command [ Del uip_1053 ] success ! 
-~CSession destruct
-~CSession destructdestruct MsgNode
-
-destruct MsgNode
-destruct MsgNode
-destruct MsgNode
-Execut command [ HSet logincount  chatserver1  0 ] success ! 
-msg_id is 1005
-msg_len is 114
-receive data is {"uid": 1059, "token": "20db1f8f-1983-4750-839c-c16ad5239f70", "protocol_version": 2, "trace_id": "latency-check"}
-recv_msg id  is 1005
-{"env":"local","event":"chat.login.received","level":"info","message":"chat login request received","request_id":"486c1e27-4ab1-4c94-8cb1-368161d7922b","service":"ChatServer","session_id":"8b490121-5ce4-4319-aa18-8ed3b59b1506","tcp_msg_id":"1005","trace_id":"latency-check","ts":"2026-03-08T07:06:05.985Z","uid":"1059"}
-Succeed to execute command [ GET utoken_1059  ]
-Succeed to execute command [ GET ubaseinfo_1059  ]
-user login uid is  1059 name  is yksl pwd is 745230 email is 1220743777@qq.com
-[ GET  uip_1059 ] failed
-Execut command [ SET uip_1059  chatserver1 ] success ! 
-Execut command [ SET usession_1059  8b490121-5ce4-4319-aa18-8ed3b59b1506 ] success ! 
-{"env":"local","event":"chat.login.succeeded","level":"info","message":"chat login success","request_id":"486c1e27-4ab1-4c94-8cb1-368161d7922b","service":"ChatServer","session_id":"8b490121-5ce4-4319-aa18-8ed3b59b1506","trace_id":"latency-check","ts":"2026-03-08T07:06:05.995Z","uid":"1059"}
-destruct MsgNode
-handle read failed, error is End of file [asio.misc:2 at D:\MemoChat-Qml-Drogon\vcpkg_installed\x64-windows-static\include\boost/asio/detail/win_iocp_socket_recv_op.hpp:89:5 in function 'void __cdecl boost::asio::detail::win_iocp_socket_recv_op<class boost::asio::mutable_buffer,class <lambda_33fcf3388d1d3d9ac1171cdf626357f3>,class boost::asio::any_io_executor>::do_complete(void *,class boost::asio::detail::win_iocp_operation *,const class boost::system::error_code &,unsigned __int64)']
-Succeed to execute command [ GET usession_1059  ]
-Execut command [ Del usession_1059 ] success ! 
-Execut command [ Del uip_1059 ] success ! 
-~CSession destruct
-destruct MsgNode
-destruct MsgNode
-msg_id is 1005
-msg_len is 114
-receive data is {"uid": 1003, "token": "b11b0ef2-c741-4541-9905-5490b2ccc426", "protocol_version": 2, "trace_id": "latency-check"}
-recv_msg id  is 1005
-{"env":"local","event":"chat.login.received","level":"info","message":"chat login request received","request_id":"d738ce35-291c-4905-a79f-26f6d67dbcd4","service":"ChatServer","session_id":"e9f0d34d-19df-47d1-8a18-7d9e9a1ee08b","tcp_msg_id":"1005","trace_id":"latency-check","ts":"2026-03-08T07:06:06.013Z","uid":"1003"}
-Succeed to execute command [ GET utoken_1003  ]
-Succeed to execute command [ GET ubaseinfo_1003  ]
-user login uid is  1003 name  is tc pwd is 123456 email is 18165031775@qq.com
 [ GET  uip_1003 ] failed
 Execut command [ SET uip_1003  chatserver1 ] success ! 
-Execut command [ SET usession_1003  e9f0d34d-19df-47d1-8a18-7d9e9a1ee08b ] success ! 
-{"env":"local","event":"chat.login.succeeded","level":"info","message":"chat login success","request_id":"d738ce35-291c-4905-a79f-26f6d67dbcd4","service":"ChatServer","session_id":"e9f0d34d-19df-47d1-8a18-7d9e9a1ee08b","trace_id":"latency-check","ts":"2026-03-08T07:06:06.041Z","uid":"1003"}
+Execut command [ SET uip_1003  chatserver1 ] success ! 
+Execut command [ SET usession_1003  31fde8a1-e380-4c8d-8f7c-f4dcac319766 ] success ! 
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.login.succeeded","level":"info","message":"chat login success","module":"","peer_service":"","request_id":"e5b50d86b80944528facb40a5cd0981d","service":"ChatServer","service_instance":"ChatServer@YKSL:24132","session_id":"31fde8a1-e380-4c8d-8f7c-f4dcac319766","trace_id":"quickhist-06f142df","ts":"2026-03-09T06:32:15.197Z","uid":"1003"}
+destruct MsgNode
+msg_id is 1059
+msg_len is 57
+destruct MsgNode
+receive data is {"fromuid":1003,"peer_uid":1059,"before_ts":0,"limit":20}
+recv_msg id  is 1059
 destruct MsgNode
 handle read failed, error is End of file [asio.misc:2 at D:\MemoChat-Qml-Drogon\vcpkg_installed\x64-windows-static\include\boost/asio/detail/win_iocp_socket_recv_op.hpp:89:5 in function 'void __cdecl boost::asio::detail::win_iocp_socket_recv_op<class boost::asio::mutable_buffer,class <lambda_33fcf3388d1d3d9ac1171cdf626357f3>,class boost::asio::any_io_executor>::do_complete(void *,class boost::asio::detail::win_iocp_operation *,const class boost::system::error_code &,unsigned __int64)']
 Succeed to execute command [ GET usession_1003  ]
@@ -152,58 +96,50 @@ Execut command [ Del uip_1003 ] success !
 ~CSession destruct
 destruct MsgNode
 destruct MsgNode
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
 msg_id is 1005
-msg_len is 114
-receive data is {"uid": 1053, "token": "7f441011-9aa7-44a8-a890-07e3f86d4298", "protocol_version": 2, "trace_id": "latency-check"}
+msg_len is 119
+receive data is {"uid":1003,"token":"b11b0ef2-c741-4541-9905-5490b2ccc426","protocol_version":2,"trace_id":"historyfix-B-272aa80666de"}
 recv_msg id  is 1005
-{"env":"local","event":"chat.login.received","level":"info","message":"chat login request received","request_id":"87d6fd70-ede1-4b19-844a-051e8b878c3d","service":"ChatServer","session_id":"40e3e766-a27d-4622-a8db-f87a42b6259b","tcp_msg_id":"1005","trace_id":"latency-check","ts":"2026-03-08T07:06:06.059Z","uid":"1053"}
-Succeed to execute command [ GET utoken_1053  ]
-Succeed to execute command [ GET ubaseinfo_1053  ]
-user login uid is  1053 name  is test_1 pwd is 123456 email is zzsr_0719@qq.com
-[ GET  uip_1053 ] failed
-Execut command [ SET uip_1053  chatserver1 ] success ! 
-Execut command [ SET usession_1053  40e3e766-a27d-4622-a8db-f87a42b6259b ] success ! 
-{"env":"local","event":"chat.login.succeeded","level":"info","message":"chat login success","request_id":"87d6fd70-ede1-4b19-844a-051e8b878c3d","service":"ChatServer","session_id":"40e3e766-a27d-4622-a8db-f87a42b6259b","trace_id":"latency-check","ts":"2026-03-08T07:06:06.077Z","uid":"1053"}
-destruct MsgNode
-handle read failed, error is End of file [asio.misc:2 at D:\MemoChat-Qml-Drogon\vcpkg_installed\x64-windows-static\include\boost/asio/detail/win_iocp_socket_recv_op.hpp:89:5 in function 'void __cdecl boost::asio::detail::win_iocp_socket_recv_op<class boost::asio::mutable_buffer,class <lambda_33fcf3388d1d3d9ac1171cdf626357f3>,class boost::asio::any_io_executor>::do_complete(void *,class boost::asio::detail::win_iocp_operation *,const class boost::system::error_code &,unsigned __int64)']
-Succeed to execute command [ GET usession_1053  ]
-Execut command [ Del usession_1053 ] success ! 
-Execut command [ Del uip_1053 ] success ! 
-~CSession destruct
-destruct MsgNode
-destruct MsgNode
-msg_id is 1005
-msg_len is 111
-receive data is {"uid": 1059, "token": "20db1f8f-1983-4750-839c-c16ad5239f70", "protocol_version": 2, "trace_id": "size-check"}
-recv_msg id  is 1005
-{"env":"local","event":"chat.login.received","level":"info","message":"chat login request received","request_id":"053cf232-582d-4ade-9f8c-76ad041979b9","service":"ChatServer","session_id":"1ab3f115-f8eb-45cf-af4a-aca5225935eb","tcp_msg_id":"1005","trace_id":"size-check","ts":"2026-03-08T07:06:25.340Z","uid":"1059"}
-Succeed to execute command [ GET utoken_1059  ]
-Succeed to execute command [ GET ubaseinfo_1059  ]
-user login uid is  1059 name  is yksl pwd is 745230 email is 1220743777@qq.com
-[ GET  uip_1059 ] failed
-Execut command [ SET uip_1059  chatserver1 ] success ! 
-Execut command [ SET usession_1059  1ab3f115-f8eb-45cf-af4a-aca5225935eb ] success ! 
-{"env":"local","event":"chat.login.succeeded","level":"info","message":"chat login success","request_id":"053cf232-582d-4ade-9f8c-76ad041979b9","service":"ChatServer","session_id":"1ab3f115-f8eb-45cf-af4a-aca5225935eb","trace_id":"size-check","ts":"2026-03-08T07:06:25.351Z","uid":"1059"}
-destruct MsgNode
-handle read failed, error is End of file [asio.misc:2 at D:\MemoChat-Qml-Drogon\vcpkg_installed\x64-windows-static\include\boost/asio/detail/win_iocp_socket_recv_op.hpp:89:5 in function 'void __cdecl boost::asio::detail::win_iocp_socket_recv_op<class boost::asio::mutable_buffer,class <lambda_33fcf3388d1d3d9ac1171cdf626357f3>,class boost::asio::any_io_executor>::do_complete(void *,class boost::asio::detail::win_iocp_operation *,const class boost::system::error_code &,unsigned __int64)']
-Succeed to execute command [ GET usession_1059  ]
-Execut command [ Del usession_1059 ] success ! 
-Execut command [ Del uip_1059 ] success ! 
-~CSession destruct
-destruct MsgNode
-destruct MsgNode
-msg_id is 1005
-msg_len is 111
-receive data is {"uid": 1003, "token": "b11b0ef2-c741-4541-9905-5490b2ccc426", "protocol_version": 2, "trace_id": "size-check"}
-recv_msg id  is 1005
-{"env":"local","event":"chat.login.received","level":"info","message":"chat login request received","request_id":"733571e9-33c0-4519-bbad-0784e6c2256b","service":"ChatServer","session_id":"f711285f-96be-4327-80af-55c39b21f3b0","tcp_msg_id":"1005","trace_id":"size-check","ts":"2026-03-08T07:06:25.361Z","uid":"1003"}
+{"attrs":{"tcp_msg_id":"1005"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.login.received","level":"info","message":"chat login request received","module":"","peer_service":"","request_id":"882e9fef34554c689466ae7d2e92d27a","service":"ChatServer","service_instance":"ChatServer@YKSL:24132","session_id":"cb843f23-ef76-4d85-843f-4644f507a53c","trace_id":"historyfix-B-272aa80666de","ts":"2026-03-09T06:32:56.849Z","uid":"1003"}
 Succeed to execute command [ GET utoken_1003  ]
 Succeed to execute command [ GET ubaseinfo_1003  ]
 user login uid is  1003 name  is tc pwd is 123456 email is 18165031775@qq.com
 [ GET  uip_1003 ] failed
 Execut command [ SET uip_1003  chatserver1 ] success ! 
-Execut command [ SET usession_1003  f711285f-96be-4327-80af-55c39b21f3b0 ] success ! 
-{"env":"local","event":"chat.login.succeeded","level":"info","message":"chat login success","request_id":"733571e9-33c0-4519-bbad-0784e6c2256b","service":"ChatServer","session_id":"f711285f-96be-4327-80af-55c39b21f3b0","trace_id":"size-check","ts":"2026-03-08T07:06:25.395Z","uid":"1003"}
+Execut command [ SET uip_1003  chatserver1 ] success ! 
+Execut command [ SET usession_1003  cb843f23-ef76-4d85-843f-4644f507a53c ] success ! 
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.login.succeeded","level":"info","message":"chat login success","module":"","peer_service":"","request_id":"882e9fef34554c689466ae7d2e92d27a","service":"ChatServer","service_instance":"ChatServer@YKSL:24132","session_id":"cb843f23-ef76-4d85-843f-4644f507a53c","trace_id":"historyfix-B-272aa80666de","ts":"2026-03-09T06:32:57.080Z","uid":"1003"}
+destruct MsgNode
+msg_id is 1059
+msg_len is 57
+destruct MsgNode
+receive data is {"fromuid":1003,"peer_uid":1059,"before_ts":0,"limit":20}
+recv_msg id  is 1059
+destruct MsgNode
+msg_id is 1059
+msg_len is 118
+destruct MsgNode
+receive data is {"fromuid":1003,"peer_uid":1059,"before_ts":1773037975063,"limit":20,"before_msg_id":"offline33ok-92fe43-14-ae9662bb"}
+recv_msg id  is 1059
+destruct MsgNode
+msg_id is 1059
+msg_len is 119
+destruct MsgNode
+receive data is {"fromuid":1003,"peer_uid":1059,"before_ts":1773037372262,"limit":20,"before_msg_id":"offline33fix-f17164-25-3455cb4e"}
+recv_msg id  is 1059
+destruct MsgNode
+msg_id is 1059
+msg_len is 117
+destruct MsgNode
+receive data is {"fromuid":1003,"peer_uid":1059,"before_ts":1773037155393,"limit":20,"before_msg_id":"offline33fix-daa02d-32-1307f1"}
+recv_msg id  is 1059
+destruct MsgNode
+msg_id is 1059
+msg_len is 116
+destruct MsgNode
+receive data is {"fromuid":1003,"peer_uid":1059,"before_ts":1773037154215,"limit":20,"before_msg_id":"offline33fix-daa02d-7-13f280"}
+recv_msg id  is 1059
 destruct MsgNode
 handle read failed, error is End of file [asio.misc:2 at D:\MemoChat-Qml-Drogon\vcpkg_installed\x64-windows-static\include\boost/asio/detail/win_iocp_socket_recv_op.hpp:89:5 in function 'void __cdecl boost::asio::detail::win_iocp_socket_recv_op<class boost::asio::mutable_buffer,class <lambda_33fcf3388d1d3d9ac1171cdf626357f3>,class boost::asio::any_io_executor>::do_complete(void *,class boost::asio::detail::win_iocp_operation *,const class boost::system::error_code &,unsigned __int64)']
 Succeed to execute command [ GET usession_1003  ]
@@ -212,49 +148,114 @@ Execut command [ Del uip_1003 ] success !
 ~CSession destruct
 destruct MsgNode
 destruct MsgNode
-msg_id is 1005
-msg_len is 111
-receive data is {"uid": 1053, "token": "7f441011-9aa7-44a8-a890-07e3f86d4298", "protocol_version": 2, "trace_id": "size-check"}
-recv_msg id  is 1005
-{"env":"local","event":"chat.login.received","level":"info","message":"chat login request received","request_id":"2749dabf-b736-46f8-9202-84ca47a849d7","service":"ChatServer","session_id":"fe464aad-0acd-4245-89b1-ef6918c82d0f","tcp_msg_id":"1005","trace_id":"size-check","ts":"2026-03-08T07:06:25.415Z","uid":"1053"}
-Succeed to execute command [ GET utoken_1053  ]
-Succeed to execute command [ GET ubaseinfo_1053  ]
-user login uid is  1053 name  is test_1 pwd is 123456 email is zzsr_0719@qq.com
-[ GET  uip_1053 ] failed
-Execut command [ SET uip_1053  chatserver1 ] success ! 
-Execut command [ SET usession_1053  fe464aad-0acd-4245-89b1-ef6918c82d0f ] success ! 
-{"env":"local","event":"chat.login.succeeded","level":"info","message":"chat login success","request_id":"2749dabf-b736-46f8-9202-84ca47a849d7","service":"ChatServer","session_id":"fe464aad-0acd-4245-89b1-ef6918c82d0f","trace_id":"size-check","ts":"2026-03-08T07:06:25.432Z","uid":"1053"}
-destruct MsgNode
-handle read failed, error is End of file [asio.misc:2 at D:\MemoChat-Qml-Drogon\vcpkg_installed\x64-windows-static\include\boost/asio/detail/win_iocp_socket_recv_op.hpp:89:5 in function 'void __cdecl boost::asio::detail::win_iocp_socket_recv_op<class boost::asio::mutable_buffer,class <lambda_33fcf3388d1d3d9ac1171cdf626357f3>,class boost::asio::any_io_executor>::do_complete(void *,class boost::asio::detail::win_iocp_operation *,const class boost::system::error_code &,unsigned __int64)']
-Succeed to execute command [ GET usession_1053  ]
-Execut command [ Del usession_1053 ] success ! 
-Execut command [ Del uip_1053 ] success ! 
-~CSession destruct
-destruct MsgNode
-destruct MsgNode
-Execut command [ HSet logincount  chatserver1  0 ] success ! 
-Execut command [ HSet logincount  chatserver1  0 ] success ! 
-Execut command [ HSet logincount  chatserver1  0 ] success ! 
-Execut command [ HSet logincount  chatserver1  0 ] success ! 
 Execut command [ HSet logincount  chatserver1  0 ] success ! 
 msg_id is 1005
 msg_len is 114
-receive data is {"uid": 1059, "token": "20db1f8f-1983-4750-839c-c16ad5239f70", "protocol_version": 2, "trace_id": "route-check-1"}
+receive data is {"uid":1003,"token":"b11b0ef2-c741-4541-9905-5490b2ccc426","protocol_version":2,"trace_id":"smoke-B-3f4564729d6d"}
 recv_msg id  is 1005
-{"env":"local","event":"chat.login.received","level":"info","message":"chat login request received","request_id":"600fc0ba-a133-482a-9bb1-80a896358709","service":"ChatServer","session_id":"a9870588-11a0-454d-a661-66475307da99","tcp_msg_id":"1005","trace_id":"route-check-1","ts":"2026-03-08T07:10:39.742Z","uid":"1059"}
-Succeed to execute command [ GET utoken_1059  ]
-Succeed to execute command [ GET ubaseinfo_1059  ]
-user login uid is  1059 name  is yksl pwd is 745230 email is 1220743777@qq.com
-[ GET  uip_1059 ] failed
-Execut command [ SET uip_1059  chatserver1 ] success ! 
-Execut command [ SET usession_1059  a9870588-11a0-454d-a661-66475307da99 ] success ! 
-{"env":"local","event":"chat.login.succeeded","level":"info","message":"chat login success","request_id":"600fc0ba-a133-482a-9bb1-80a896358709","service":"ChatServer","session_id":"a9870588-11a0-454d-a661-66475307da99","trace_id":"route-check-1","ts":"2026-03-08T07:10:39.754Z","uid":"1059"}
+{"attrs":{"tcp_msg_id":"1005"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.login.received","level":"info","message":"chat login request received","module":"","peer_service":"","request_id":"dcebba31f6ba47b18c2c5ea973b50f00","service":"ChatServer","service_instance":"ChatServer@YKSL:24132","session_id":"7541408a-c181-42c9-8ee6-da3e7cbe99f5","trace_id":"smoke-B-3f4564729d6d","ts":"2026-03-09T06:33:46.397Z","uid":"1003"}
+Succeed to execute command [ GET utoken_1003  ]
+Succeed to execute command [ GET ubaseinfo_1003  ]
+user login uid is  1003 name  is tc pwd is 123456 email is 18165031775@qq.com
+[ GET  uip_1003 ] failed
+Execut command [ SET uip_1003  chatserver1 ] success ! 
+Execut command [ SET uip_1003  chatserver1 ] success ! 
+Execut command [ SET usession_1003  7541408a-c181-42c9-8ee6-da3e7cbe99f5 ] success ! 
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.login.succeeded","level":"info","message":"chat login success","module":"","peer_service":"","request_id":"dcebba31f6ba47b18c2c5ea973b50f00","service":"ChatServer","service_instance":"ChatServer@YKSL:24132","session_id":"7541408a-c181-42c9-8ee6-da3e7cbe99f5","trace_id":"smoke-B-3f4564729d6d","ts":"2026-03-09T06:33:46.621Z","uid":"1003"}
+destruct MsgNode
+destruct MsgNode
+msg_id is 1017
+msg_len is 156
+destruct MsgNode
+receive data is {"fromuid":1003,"touid":1059,"text_array":[{"content":"smoke-b-to-a-1f9db4d4","msgid":"smoke-ac10259b7cc34070a449d0f58b95a039","created_at":1773038030787}]}
+recv_msg id  is 1017
+Succeed to execute command [ GET uip_1059  ]
+{"attrs":{"from_uid":"1003","grpc_status":"0","local_session_found":"false","msg_id":"smoke-ac10259b7cc34070a449d0f58b95a039","notify_delivered":"true","redis_server":"chatserver2","route_result":"remote","to_uid":"1059"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.private.route","level":"info","message":"private message notify delivered","module":"","peer_service":"","request_id":"768c9ebbcaff48c49a0b1bc43671c641","service":"ChatServer","service_instance":"ChatServer@YKSL:24132","session_id":"7541408a-c181-42c9-8ee6-da3e7cbe99f5","trace_id":"169fd989abfe49668fe52cb3a4a02c3e","ts":"2026-03-09T06:33:54.933Z","uid":"1003"}
 destruct MsgNode
 handle read failed, error is End of file [asio.misc:2 at D:\MemoChat-Qml-Drogon\vcpkg_installed\x64-windows-static\include\boost/asio/detail/win_iocp_socket_recv_op.hpp:89:5 in function 'void __cdecl boost::asio::detail::win_iocp_socket_recv_op<class boost::asio::mutable_buffer,class <lambda_33fcf3388d1d3d9ac1171cdf626357f3>,class boost::asio::any_io_executor>::do_complete(void *,class boost::asio::detail::win_iocp_operation *,const class boost::system::error_code &,unsigned __int64)']
-Succeed to execute command [ GET usession_1059  ]
-Execut command [ Del usession_1059 ] success ! 
-Execut command [ Del uip_1059 ] success ! 
+Succeed to execute command [ GET usession_1003  ]
+Execut command [ Del usession_1003 ] success ! 
+Execut command [ Del uip_1003 ] success ! 
 ~CSession destruct
 destruct MsgNode
 destruct MsgNode
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
 Execut command [ HSet logincount  chatserver1  0 ] success ! 
