@@ -12,7 +12,9 @@ set "SERVER_BIN_PRIMARY=%ROOT%\build-vcpkg-server\bin\Release"
 set "SERVER_BIN_FALLBACK=%ROOT%\build\bin\Release"
 set "BUILD_BIN=%SERVER_BIN_PRIMARY%"
 set "CLIENT_BIN=%ROOT%\build\bin\Release"
-set "RUN_ROOT=%ROOT%\build\run"
+set "OPS_ROOT=%ROOT%\Memo_ops"
+set "OPS_RUNTIME=%OPS_ROOT%\runtime"
+set "RUN_ROOT=%OPS_RUNTIME%\services"
 set "WITH_CLIENT=1"
 set "CONSOLE_CP=936"
 set "STATUS_CONFIG=%ROOT%\server\StatusServer\config.ini"
@@ -86,6 +88,9 @@ call :ensure_varify_deps
 if errorlevel 1 exit /b 1
 
 if not exist "%RUN_ROOT%" mkdir "%RUN_ROOT%"
+if not exist "%OPS_RUNTIME%\varify\logs" mkdir "%OPS_RUNTIME%\varify\logs"
+if not exist "%OPS_RUNTIME%\loadtest\logs" mkdir "%OPS_RUNTIME%\loadtest\logs"
+if not exist "%OPS_RUNTIME%\loadtest\reports" mkdir "%OPS_RUNTIME%\loadtest\reports"
 
 call :prepare_service StatusServer "%ROOT%\server\StatusServer\config.ini" "%BUILD_BIN%\StatusServer.exe"
 if errorlevel 1 exit /b 1
@@ -148,11 +153,19 @@ if "%WITH_CLIENT%"=="1" (
   )
 )
 
+echo [INFO] Starting Memo_ops platform...
+if "%WITH_CLIENT%"=="1" (
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPS_ROOT%\scripts\start_ops_platform.ps1"
+) else (
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPS_ROOT%\scripts\start_ops_platform.ps1" -NoClient
+)
+if errorlevel 1 exit /b 1
+
 echo.
 echo [DONE] Services started.
 echo [INFO] GateServer HTTP: http://127.0.0.1:8080
 echo [INFO] Chat cluster nodes: !CHAT_NODE_NAMES!
-echo [INFO] Close each opened window to stop each service.
+echo [INFO] Ops runtime: %OPS_RUNTIME%
 exit /b 0
 
 :wait_for_port
