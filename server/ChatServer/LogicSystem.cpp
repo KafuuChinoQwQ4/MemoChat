@@ -6,6 +6,7 @@
 #include "UserMgr.h"
 #include "ChatGrpcClient.h"
 #include "DistLock.h"
+#include "cluster/ChatClusterDiscovery.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
 #include <string>
@@ -13,6 +14,7 @@
 #include <unordered_set>
 #include <algorithm>
 #include <chrono>
+#include <sstream>
 #include "CServer.h"
 using namespace std;
 
@@ -45,6 +47,54 @@ std::string ServerOnlineUsersKey(const std::string& server_name) {
 	return std::string(SERVER_ONLINE_USERS_PREFIX) + server_name;
 }
 
+std::string TrimCopy(const std::string& text) {
+	const auto begin = text.find_first_not_of(" \t\r\n");
+	if (begin == std::string::npos) {
+		return std::string();
+	}
+	const auto end = text.find_last_not_of(" \t\r\n");
+	return text.substr(begin, end - begin + 1);
+}
+
+std::vector<std::string> KnownChatServerNames() {
+	std::vector<std::string> servers;
+	auto& cfg = ConfigMgr::Inst();
+	static const auto cluster = memochat::cluster::LoadStaticChatClusterConfig(
+		[&cfg](const std::string& section, const std::string& key) {
+			return cfg.GetValue(section, key);
+		},
+		TrimCopy(cfg["SelfServer"]["Name"]));
+	for (const auto& node : cluster.enabledNodes()) {
+		servers.push_back(node.name);
+	}
+	return servers;
+}
+
+void RepairOnlineRouteState(int uid, const std::shared_ptr<CSession>& session, const std::string& server_name) {
+	if (uid <= 0 || !session || server_name.empty()) {
+		return;
+	}
+	const auto uid_str = std::to_string(uid);
+	RedisMgr::GetInstance()->Set(USERIPPREFIX + uid_str, server_name);
+	RedisMgr::GetInstance()->Set(USER_SESSION_PREFIX + uid_str, session->GetSessionId());
+	RedisMgr::GetInstance()->SAdd(ServerOnlineUsersKey(server_name), uid_str);
+}
+
+std::string ResolveServerFromOnlineSets(const std::string& uid_str) {
+	if (uid_str.empty()) {
+		return std::string();
+	}
+
+	for (const auto& server_name : KnownChatServerNames()) {
+		std::vector<std::string> online_uids;
+		RedisMgr::GetInstance()->SMembers(ServerOnlineUsersKey(server_name), online_uids);
+		if (std::find(online_uids.begin(), online_uids.end(), uid_str) != online_uids.end()) {
+			return server_name;
+		}
+	}
+	return std::string();
+}
+
 void ClearTrackedOnlineRoute(int uid, const std::string& server_name) {
 	if (uid <= 0 || server_name.empty()) {
 		return;
@@ -61,27 +111,28 @@ OnlineRouteDecision ResolveOnlineRoute(int uid) {
 		return route;
 	}
 
-	const auto uid_str = std::to_string(uid);
-	std::string redis_server;
-	if (!RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, redis_server)) {
-		return route;
-	}
-	if (redis_server.empty()) {
-		return route;
-	}
-
-	route.redis_server = redis_server;
 	const auto self_name = ConfigMgr::Inst()["SelfServer"]["Name"];
-	if (redis_server != self_name) {
-		route.kind = OnlineRouteKind::Remote;
-		return route;
-	}
-
 	auto session = UserMgr::GetInstance()->GetSession(uid);
 	if (session) {
 		route.kind = OnlineRouteKind::Local;
-		route.local_session_found = true;
 		route.session = session;
+		route.redis_server = self_name;
+		route.local_session_found = true;
+		RepairOnlineRouteState(uid, session, self_name);
+		return route;
+	}
+
+	const auto uid_str = std::to_string(uid);
+	std::string redis_server;
+	if (!RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, redis_server) || redis_server.empty()) {
+		redis_server = ResolveServerFromOnlineSets(uid_str);
+		if (redis_server.empty()) {
+			return route;
+		}
+	}
+	route.redis_server = redis_server;
+	if (redis_server != self_name) {
+		route.kind = OnlineRouteKind::Remote;
 		return route;
 	}
 
@@ -496,9 +547,7 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 		RedisMgr::GetInstance()->Set(ipkey, server_name);
 
 		UserMgr::GetInstance()->SetUserSession(uid, session);
-		std::string  uid_session_key = USER_SESSION_PREFIX + uid_str;
-		RedisMgr::GetInstance()->Set(uid_session_key, session->GetSessionId());
-		RedisMgr::GetInstance()->SAdd(ServerOnlineUsersKey(server_name), uid_str);
+		RepairOnlineRouteState(uid, session, server_name);
 
 	}
 	memolog::LogInfo("chat.login.succeeded", "chat login success",
@@ -2474,6 +2523,7 @@ void LogicSystem::PrivateHistoryHandler(std::shared_ptr<CSession> session, const
 	const int uid = root["fromuid"].asInt();
 	const int peer_uid = root["peer_uid"].asInt();
 	const int64_t before_ts = root.get("before_ts", 0).asInt64();
+	const std::string before_msg_id = root.get("before_msg_id", "").asString();
 	const int limit = root.get("limit", 20).asInt();
 
 	Json::Value rtvalue;
@@ -2496,7 +2546,7 @@ void LogicSystem::PrivateHistoryHandler(std::shared_ptr<CSession> session, const
 
 	std::vector<std::shared_ptr<PrivateMessageInfo>> messages;
 	bool has_more = false;
-	if (!MysqlMgr::GetInstance()->GetPrivateHistory(uid, peer_uid, before_ts, limit, messages, has_more)) {
+	if (!MysqlMgr::GetInstance()->GetPrivateHistory(uid, peer_uid, before_ts, before_msg_id, limit, messages, has_more)) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}

@@ -1,0 +1,107 @@
+﻿{
+  "scenario": "friendship",
+  "test": "tcp_friendship",
+  "time_utc": "20260309_105416",
+  "target": {
+    "gate_login": "/user_login",
+    "tcp": [
+      1007,
+      1009,
+      1013
+    ]
+  },
+  "config": {
+    "total": 2,
+    "concurrency": 1,
+    "http_timeout_sec": 8.0,
+    "tcp_timeout_sec": 8.0,
+    "runtime_accounts_csv": ".\\accounts.e2e.csv"
+  },
+  "summary": {
+    "total": 2,
+    "success": 2,
+    "failed": 0,
+    "success_rate": 1.0,
+    "elapsed_sec": 38.571028,
+    "throughput_rps": 0.052,
+    "latency_ms": {
+      "min": 19217.487,
+      "avg": 19284.743,
+      "p50": 19217.487,
+      "p90": 19352.0,
+      "p95": 19352.0,
+      "p99": 19352.0,
+      "max": 19352.0
+    }
+  },
+  "phase_breakdown": {
+    "search_user": {
+      "min": 44.161,
+      "avg": 44.958,
+      "p50": 44.161,
+      "p90": 45.756,
+      "p95": 45.756,
+      "p99": 45.756,
+      "max": 45.756
+    },
+    "friend_apply_rsp": {
+      "min": 4239.652,
+      "avg": 4240.19,
+      "p50": 4239.652,
+      "p90": 4240.728,
+      "p95": 4240.728,
+      "p99": 4240.728,
+      "max": 4240.728
+    },
+    "friend_apply_notify": {
+      "min": 0.056,
+      "avg": 0.064,
+      "p50": 0.056,
+      "p90": 0.071,
+      "p95": 0.071,
+      "p99": 0.071,
+      "max": 0.071
+    },
+    "friend_auth_rsp": {
+      "min": 4387.509,
+      "avg": 4387.756,
+      "p50": 4387.509,
+      "p90": 4388.004,
+      "p95": 4388.004,
+      "p99": 4388.004,
+      "max": 4388.004
+    },
+    "friend_auth_notify": {
+      "min": 0.052,
+      "avg": 0.066,
+      "p50": 0.052,
+      "p90": 0.08,
+      "p95": 0.08,
+      "p99": 0.08,
+      "max": 0.08
+    }
+  },
+  "error_counter": {},
+  "top_errors": {},
+  "preconditions": {
+    "accounts": 4,
+    "service": [
+      "GateServer",
+      "StatusServer",
+      "ConfiguredChatNodes"
+    ]
+  },
+  "data_mutation_summary": {
+    "friend_pairs_established": 2
+  },
+  "samples": [
+    {
+      "requester_email": "friend_17730516336770zn8b@loadtest.local",
+      "approver_email": "reset_1773051579996r6j0f@loadtest.local"
+    },
+    {
+      "requester_email": "friend_17730516336770zn8b@loadtest.local",
+      "approver_email": "reset_1773051585258chyjq@loadtest.local"
+    }
+  ]
+}

@@ -3,6 +3,7 @@
 
 #include <QAbstractListModel>
 #include <QTimer>
+#include <QVector>
 #include <QtGlobal>
 #include <memory>
 #include <vector>
@@ -51,8 +52,14 @@ public:
     void appendMessage(const std::shared_ptr<TextChatData> &message, int selfUid);
     void upsertMessage(const std::shared_ptr<TextChatData> &message, int selfUid);
     void updateMessageState(const QString &msgId, const QString &state);
+    bool patchMessageContent(const QString &msgId,
+                             const QString &rawContent,
+                             const QString &state,
+                             qint64 editedAtMs,
+                             qint64 deletedAtMs);
     void prependMessages(const std::vector<std::shared_ptr<TextChatData>> &messages, int selfUid);
     qint64 earliestCreatedAt() const;
+    QString earliestMsgId() const;
     bool containsMessage(const QString &msgId) const;
     QString rawContentByMsgId(const QString &msgId) const;
     QString previewTextByMsgId(const QString &msgId) const;
@@ -89,6 +96,7 @@ private:
     };
 
     static bool lessThan(const MessageEntry &lhs, const MessageEntry &rhs);
+    static bool shouldShowAvatarForEntry(const MessageEntry *previous, const MessageEntry &current);
     bool shouldShowTimeDivider(int row) const;
     QString timeDividerText(int row) const;
     void refreshTimeDividerRange(int firstRow, int lastRow);
@@ -96,7 +104,12 @@ private:
     void stopTimeDividerRefreshTimer();
     QString withDownloadAuth(const QString &urlText) const;
     MessageEntry toEntry(const std::shared_ptr<TextChatData> &message, int selfUid) const;
+    void recomputeAvatarFlags();
     void refreshAvatarFlags();
+    int indexOfMessage(const QString &msgId) const;
+    void refreshAvatarRange(int firstRow, int lastRow);
+    void refreshSurroundingRows(int centerRow, const QVector<int> &roles);
+    int findInsertPosition(const MessageEntry &entry) const;
     std::vector<MessageEntry> _items;
     int _download_uid = 0;
     QString _download_token;

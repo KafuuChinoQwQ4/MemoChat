@@ -3,6 +3,29 @@
 SqlConnection::SqlConnection(sql::Connection* con, int64_t lasttime)
 	: _con(con), _last_oper_time(lasttime) {}
 
+namespace {
+void sanitizeConnection(SqlConnection* con) {
+	if (con == nullptr || !con->_con) {
+		return;
+	}
+
+	try {
+		con->_con->rollback();
+	}
+	catch (...) {
+	}
+
+	try {
+		con->_con->setAutoCommit(true);
+	}
+	catch (...) {
+	}
+
+	auto now = std::chrono::system_clock::now().time_since_epoch();
+	con->_last_oper_time = std::chrono::duration_cast<std::chrono::seconds>(now).count();
+}
+}
+
 MySqlPool::MySqlPool(const std::string& url, const std::string& user, const std::string& pass,
 	const std::string& schema, int poolSize)
 	: url_(url), user_(user), pass_(pass), schema_(schema), poolSize_(poolSize), b_stop_(false), _fail_count(0) {
@@ -11,6 +34,7 @@ MySqlPool::MySqlPool(const std::string& url, const std::string& user, const std:
 			sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
 			auto* con = driver->connect(url_, user_, pass_);
 			con->setSchema(schema_);
+			con->setAutoCommit(true);
 
 			auto currentTime = std::chrono::system_clock::now().time_since_epoch();
 			long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
@@ -100,6 +124,7 @@ bool MySqlPool::reconnect(long long timestamp) {
 		sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
 		auto* con = driver->connect(url_, user_, pass_);
 		con->setSchema(schema_);
+		con->setAutoCommit(true);
 
 		auto newCon = std::make_unique<SqlConnection>(con, timestamp);
 		{
@@ -170,6 +195,7 @@ void MySqlPool::returnConnection(std::unique_ptr<SqlConnection> con) {
 	if (b_stop_) {
 		return;
 	}
+	sanitizeConnection(con.get());
 	pool_.push(std::move(con));
 	cond_.notify_one();
 }

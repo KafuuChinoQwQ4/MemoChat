@@ -117,7 +117,10 @@ def main() -> int:
                 stage = 'http_payload_invalid'
                 return ok, stage, (time.perf_counter() - t0) * 1000.0, trace_id
 
-            payload = json.dumps({'uid': uid, 'token': token, 'trace_id': trace_id}, separators=(',', ':')).encode('utf-8')
+            payload = json.dumps(
+                {'uid': uid, 'token': token, 'trace_id': trace_id, 'protocol_version': 2},
+                separators=(',', ':'),
+            ).encode('utf-8')
             packet = struct.pack('!HH', CHAT_LOGIN_REQ, len(payload)) + payload
 
             with socket.create_connection((host, port), timeout=tcp_timeout) as s:
@@ -184,7 +187,7 @@ def main() -> int:
         'error_counter': dict(error_counter),
         'top_errors': top_errors(error_counter),
         'phase_breakdown': {'tcp_login_chain': summary['latency_ms']},
-        'preconditions': {'service': ['GateServer', 'StatusServer', 'ChatServer', 'ChatServer2', 'Redis']},
+        'preconditions': {'service': ['GateServer', 'StatusServer', 'ConfiguredChatNodes', 'Redis']},
         'data_mutation_summary': {'tcp_login_requests': success},
     }
 

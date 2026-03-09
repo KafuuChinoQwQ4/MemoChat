@@ -921,7 +921,7 @@ bool MysqlDao::SavePrivateMessage(const PrivateMessageInfo& msg) {
 	}
 }
 
-bool MysqlDao::GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const int& limit,
+bool MysqlDao::GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const std::string& before_msg_id, const int& limit,
 	std::vector<std::shared_ptr<PrivateMessageInfo>>& messages, bool& has_more) {
 	has_more = false;
 	messages.clear();
@@ -943,7 +943,21 @@ bool MysqlDao::GetPrivateHistory(const int& uid, const int& peer_uid, const int6
 
 	try {
 		std::unique_ptr<sql::PreparedStatement> pstmt;
-		if (before_ts > 0) {
+		if (before_ts > 0 && !before_msg_id.empty()) {
+			pstmt.reset(con->_con->prepareStatement(
+				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
+				"reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at "
+				"FROM chat_private_msg WHERE conv_uid_min = ? AND conv_uid_max = ? "
+				"AND (created_at < ? OR (created_at = ? AND msg_id < ?)) "
+				"ORDER BY created_at DESC, msg_id DESC LIMIT ?"));
+			pstmt->setInt(1, conv_min);
+			pstmt->setInt(2, conv_max);
+			pstmt->setInt64(3, before_ts);
+			pstmt->setInt64(4, before_ts);
+			pstmt->setString(5, before_msg_id);
+			pstmt->setInt(6, limit + 1);
+		}
+		else if (before_ts > 0) {
 			pstmt.reset(con->_con->prepareStatement(
 				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
 				"reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at "

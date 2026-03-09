@@ -1,28 +1,18 @@
 #include "ChatGrpcClient.h"
 #include "RedisMgr.h"
+#include "cluster/ChatClusterDiscovery.h"
 
 ChatGrpcClient::ChatGrpcClient()
 {
 	auto& cfg = ConfigMgr::Inst();
-	auto server_list = cfg["chatservers"]["Name"];
+	auto cluster = memochat::cluster::LoadStaticChatClusterConfig(
+		[&cfg](const std::string& section, const std::string& key) {
+			return cfg.GetValue(section, key);
+		});
 
-	std::vector<std::string> words;
-
-	std::stringstream ss(server_list);
-	std::string word;
-
-	while (std::getline(ss, word, ',')) {
-		words.push_back(word);
+	for (const auto& node : cluster.enabledNodes()) {
+		_pools[node.name] = std::make_unique<ChatConPool>(5, node.rpc_host, node.rpc_port);
 	}
-
-	for (auto& word : words) {
-		if (cfg[word]["Name"].empty()) {
-			continue;
-		}
-		
-		_pools[cfg[word]["Name"]] = std::make_unique<ChatConPool>(5, cfg[word]["Host"], cfg[word]["Port"]);
-	}
-
 }
 
 AddFriendRsp ChatGrpcClient::NotifyAddFriend(const AddFriendReq& req)

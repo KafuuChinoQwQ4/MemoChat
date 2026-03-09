@@ -4,6 +4,7 @@
 #include "UserMgr.h"
 #include "CSession.h"
 #include "MysqlMgr.h"
+#include "cluster/ChatClusterDiscovery.h"
 #include "logging/GrpcTrace.h"
 #include "logging/Logger.h"
 #include "logging/Telemetry.h"
@@ -12,21 +13,18 @@
 ChatGrpcClient::ChatGrpcClient()
 {
     auto& cfg = ConfigMgr::Inst();
-    auto server_list = cfg["PeerServer"]["Servers"];
+    const std::string self_name = cfg.GetValue("SelfServer", "Name");
+    const auto cluster = memochat::cluster::LoadStaticChatClusterConfig(
+        [&cfg](const std::string& section, const std::string& key) {
+            return cfg.GetValue(section, key);
+        },
+        self_name);
 
-    std::vector<std::string> words;
-    std::stringstream ss(server_list);
-    std::string word;
-
-    while (std::getline(ss, word, ',')) {
-        words.push_back(word);
-    }
-
-    for (auto& one : words) {
-        if (cfg[one]["Name"].empty()) {
+    for (const auto& node : cluster.enabledNodes()) {
+        if (node.name == self_name) {
             continue;
         }
-        _pools[cfg[one]["Name"]] = std::make_unique<ChatConPool>(5, cfg[one]["Host"], cfg[one]["Port"]);
+        _pools[node.name] = std::make_unique<ChatConPool>(5, node.rpc_host, node.rpc_port);
     }
 }
 

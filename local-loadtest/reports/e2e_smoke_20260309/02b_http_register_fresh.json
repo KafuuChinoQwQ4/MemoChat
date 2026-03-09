@@ -1,0 +1,87 @@
+﻿{
+  "scenario": "auth.register",
+  "test": "http_register",
+  "time_utc": "20260309_103932",
+  "target": {
+    "verify_code": "/get_varifycode",
+    "register": "/user_register"
+  },
+  "config": {
+    "total": 1,
+    "concurrency": 1,
+    "timeout_sec": 15.0,
+    "runtime_accounts_csv": ".\\accounts.register.smoke.csv",
+    "seed_prefix": "register",
+    "domain": "loadtest.local"
+  },
+  "summary": {
+    "total": 1,
+    "success": 0,
+    "failed": 1,
+    "success_rate": 0.0,
+    "elapsed_sec": 5.216753,
+    "throughput_rps": 0.192,
+    "latency_ms": {
+      "min": 5215.676,
+      "avg": 5215.676,
+      "p50": 5215.676,
+      "p90": 5215.676,
+      "p95": 5215.676,
+      "p99": 5215.676,
+      "max": 5215.676
+    }
+  },
+  "phase_breakdown": {
+    "verify_code": {
+      "min": 4092.947,
+      "avg": 4092.947,
+      "p50": 4092.947,
+      "p90": 4092.947,
+      "p95": 4092.947,
+      "p99": 4092.947,
+      "max": 4092.947
+    },
+    "redis_verify_code": {
+      "min": 26.898,
+      "avg": 26.898,
+      "p50": 26.898,
+      "p90": 26.898,
+      "p95": 26.898,
+      "p99": 26.898,
+      "max": 26.898
+    },
+    "register": {
+      "min": 1095.822,
+      "avg": 1095.822,
+      "p50": 1095.822,
+      "p90": 1095.822,
+      "p95": 1095.822,
+      "p99": 1095.822,
+      "max": 1095.822
+    }
+  },
+  "error_counter": {
+    "register_err_1005": 1
+  },
+  "top_errors": {
+    "register_err_1005": 1
+  },
+  "preconditions": {
+    "service": [
+      "GateServer",
+      "VarifyServer",
+      "Redis",
+      "MySQL"
+    ]
+  },
+  "data_mutation_summary": {
+    "accounts_registered": 0
+  },
+  "samples": [
+    {
+      "email": "register_1773052767185wed2d@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    }
+  ]
+}

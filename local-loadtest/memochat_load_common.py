@@ -373,11 +373,12 @@ def random_password() -> str:
 
 
 def generate_account(seed_prefix: str, domain: str) -> Dict[str, str]:
-    suffix = f"{int(time.time() * 1000)}{random_string(5)}"
-    user = f"{seed_prefix}_{suffix}"
+    compact_prefix = "".join(ch for ch in seed_prefix.lower() if ch.isalnum())[:8] or "account"
+    millis = f"{int(time.time() * 1000) % 100_000_000:08d}"
+    user = f"{compact_prefix}_{millis}{random_string(7)}"
     return {
         "user": user[:24],
-        "email": f"{user}@{domain}",
+        "email": f"{user[:24]}@{domain}",
         "password": random_password(),
         "last_password": random_password(),
         "tags": "loadtest",
@@ -618,6 +619,7 @@ def reset_password_via_gate(
     span_id = new_span_id()
     encoded = xor_encode(password) if use_xor_passwd(cfg) else password
     body = {
+        "name": user,
         "user": user,
         "email": email,
         "passwd": encoded,

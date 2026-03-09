@@ -11,6 +11,7 @@ Rectangle {
     property Item backdrop: null
 
     property int currentTab: 0
+    property int currentDialogUid: 0
     property var dialogModel
     property var chatModel
     property var groupModel
@@ -46,7 +47,6 @@ Rectangle {
     signal contactIndexSelected(int index)
     signal requestContactLoadMore()
     signal createGroupRequested()
-    signal refreshGroupRequested()
     signal dialogPinToggled(int uid)
     signal dialogMuteToggled(int uid)
     signal dialogMarkRead(int uid)
@@ -54,10 +54,12 @@ Rectangle {
 
     onCurrentTabChanged: if (currentTab !== 0) { sessionFilter = 0 }
     onSessionFilterChanged: {
-        sessionList.currentIndex = -1
         _sessionLastContentY = sessionList.contentY
         _chatLoadBottomArmed = true
+        syncCurrentSelection()
     }
+
+    onCurrentDialogUidChanged: syncCurrentSelection()
 
     function activateSession(uidValue, indexValue) {
         sessionList.currentIndex = indexValue
@@ -70,6 +72,53 @@ Rectangle {
         } else {
             root.selectedDialogUid = uidValue
             root.dialogUidSelected(uidValue)
+        }
+    }
+
+    function syncCurrentSelection() {
+        const modelRef = root.sessionFilter === 0 ? root.dialogModel
+                        : (root.sessionFilter === 1 ? root.chatModel : root.groupModel)
+        if (!modelRef || sessionList.count <= 0) {
+            sessionList.currentIndex = -1
+            return
+        }
+
+        let targetUid = 0
+        if (root.sessionFilter === 0) {
+            targetUid = root.currentDialogUid
+        } else if (root.sessionFilter === 1) {
+            targetUid = root.currentDialogUid > 0 ? root.currentDialogUid : 0
+        } else {
+            targetUid = root.currentDialogUid < 0 ? root.currentDialogUid : 0
+        }
+
+        if (targetUid === 0) {
+            if (root.sessionFilter === 0 && sessionList.currentIndex < 0 && modelRef.get) {
+                const firstItem = modelRef.get(0)
+                const firstUid = firstItem && firstItem.uid !== undefined ? firstItem.uid : 0
+                if (firstUid !== 0) {
+                    root.selectedDialogUid = firstUid
+                    sessionList.currentIndex = 0
+                    root.dialogUidSelected(firstUid)
+                    return
+                }
+            }
+            sessionList.currentIndex = -1
+            return
+        }
+
+        const targetIndex = modelRef.indexOfUid ? modelRef.indexOfUid(targetUid) : -1
+        sessionList.currentIndex = targetIndex
+        if (targetIndex < 0) {
+            return
+        }
+
+        if (root.sessionFilter === 2) {
+            root.selectedGroupUid = targetUid
+        } else if (root.sessionFilter === 1) {
+            root.selectedChatUid = targetUid
+        } else {
+            root.selectedDialogUid = targetUid
         }
     }
 
@@ -366,18 +415,6 @@ Rectangle {
                                         onClicked: root.createGroupRequested()
                                     }
 
-                                    GlassButton {
-                                        implicitWidth: 42
-                                        implicitHeight: 30
-                                        text: "刷"
-                                        visible: root.sessionFilter === 2
-                                        cornerRadius: 8
-                                        normalColor: Qt.rgba(0.54, 0.70, 0.93, 0.24)
-                                        hoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.34)
-                                        pressedColor: Qt.rgba(0.54, 0.70, 0.93, 0.42)
-                                        disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                                        onClicked: root.refreshGroupRequested()
-                                    }
                                 }
 
                                 Label {
@@ -443,50 +480,7 @@ Rectangle {
                                 }
                             }
                             onCountChanged: {
-                                if (count <= 0 || currentIndex >= 0) {
-                                    return
-                                }
-                                if (root.sessionFilter === 2 && root.selectedGroupUid !== 0) {
-                                    const groupIdx = root.groupModel ? root.groupModel.indexOfUid(root.selectedGroupUid) : -1
-                                    if (groupIdx >= 0) {
-                                        currentIndex = groupIdx
-                                        root.groupIndexSelected(groupIdx)
-                                        return
-                                    }
-                                }
-                                if (root.sessionFilter === 1 && root.selectedChatUid !== 0) {
-                                    const chatIdx = root.chatModel ? root.chatModel.indexOfUid(root.selectedChatUid) : -1
-                                    if (chatIdx >= 0) {
-                                        currentIndex = chatIdx
-                                        root.chatIndexSelected(chatIdx)
-                                        return
-                                    }
-                                }
-                                if (root.sessionFilter === 0 && root.selectedDialogUid !== 0) {
-                                    const dialogIdx = root.dialogModel ? root.dialogModel.indexOfUid(root.selectedDialogUid) : -1
-                                    if (dialogIdx >= 0) {
-                                        currentIndex = dialogIdx
-                                        root.dialogUidSelected(root.selectedDialogUid)
-                                        return
-                                    }
-                                }
-                                currentIndex = 0
-                                if (root.sessionFilter === 2) {
-                                    const firstGroup = root.groupModel ? root.groupModel.get(0) : {}
-                                    root.selectedGroupUid = firstGroup.uid !== undefined ? firstGroup.uid : 0
-                                    root.groupIndexSelected(0)
-                                } else if (root.sessionFilter === 1) {
-                                    const firstChat = root.chatModel ? root.chatModel.get(0) : {}
-                                    root.selectedChatUid = firstChat.uid !== undefined ? firstChat.uid : 0
-                                    root.chatIndexSelected(0)
-                                } else {
-                                    const firstItem = root.dialogModel ? root.dialogModel.get(0) : {}
-                                    const firstUid = firstItem.uid !== undefined ? firstItem.uid : 0
-                                    if (firstUid !== 0) {
-                                        root.selectedDialogUid = firstUid
-                                        root.dialogUidSelected(firstUid)
-                                    }
-                                }
+                                root.syncCurrentSelection()
                             }
 
                             footer: Item {

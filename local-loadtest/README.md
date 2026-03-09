@@ -31,8 +31,7 @@ Location: `d:\MemoChat-Qml-Drogon\local-loadtest`
 - MemoChat services started:
   - `GateServer`
   - `StatusServer`
-  - `ChatServer`
-  - `ChatServer2`
+  - Configured `ChatServer` node set
   - `VarifyServer`
 - Local MySQL and Redis should match `config.json`
 
@@ -132,3 +131,4 @@ Examples:
 - Passwords can still use XOR encoding via `use_xor_passwd=true`
 - Auth and business tests may create accounts, friendships, groups, messages, read state rows, and media assets
 - MySQL and Redis capacity tests are business-shaped synthetic workloads, not empty benchmark loops
+- Chat prerequisites are now config-driven by `server/StatusServer/config.ini` `[Cluster]`, not fixed to exactly two chat nodes

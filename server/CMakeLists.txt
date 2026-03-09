@@ -124,7 +124,6 @@ function(memochat_configure_server_target target_name)
 endfunction()
 
 add_subdirectory(ChatServer)
-add_subdirectory(ChatServer2)
 add_subdirectory(GateServer)
 add_subdirectory(StatusServer)
 add_subdirectory(VarifyServer)

@@ -1,0 +1,124 @@
+﻿{
+  "scenario": "media",
+  "test": "media_load",
+  "time_utc": "20260309_102153",
+  "target": {
+    "http": [
+      "/upload_media_init",
+      "/upload_media_chunk",
+      "/upload_media_status",
+      "/upload_media_complete",
+      "/media/download"
+    ]
+  },
+  "config": {
+    "total": 2,
+    "concurrency": 1,
+    "http_timeout_sec": 30.0,
+    "runtime_accounts_csv": ".\\accounts.e2e.csv",
+    "file_sizes_kb": [
+      128,
+      512
+    ],
+    "media_types": [
+      "image",
+      "file"
+    ]
+  },
+  "summary": {
+    "total": 2,
+    "success": 0,
+    "failed": 2,
+    "success_rate": 0.0,
+    "elapsed_sec": 11.155786,
+    "throughput_rps": 0.179,
+    "latency_ms": {
+      "min": 1821.681,
+      "avg": 5558.575,
+      "p50": 1821.681,
+      "p90": 9295.468,
+      "p95": 9295.468,
+      "p99": 9295.468,
+      "max": 9295.468
+    }
+  },
+  "phase_breakdown": {
+    "upload_init": {
+      "min": 14.788,
+      "avg": 14.788,
+      "p50": 14.788,
+      "p90": 14.788,
+      "p95": 14.788,
+      "p99": 14.788,
+      "max": 14.788
+    },
+    "upload_chunk": {
+      "min": 819.658,
+      "avg": 819.658,
+      "p50": 819.658,
+      "p90": 819.658,
+      "p95": 819.658,
+      "p99": 819.658,
+      "max": 819.658
+    },
+    "upload_status": {
+      "min": 1204.682,
+      "avg": 1204.682,
+      "p50": 1204.682,
+      "p90": 1204.682,
+      "p95": 1204.682,
+      "p99": 1204.682,
+      "max": 1204.682
+    },
+    "upload_complete": {
+      "min": 825.22,
+      "avg": 825.22,
+      "p50": 825.22,
+      "p90": 825.22,
+      "p95": 825.22,
+      "p99": 825.22,
+      "max": 825.22
+    },
+    "download": {
+      "min": 1192.761,
+      "avg": 1192.761,
+      "p50": 1192.761,
+      "p90": 1192.761,
+      "p95": 1192.761,
+      "p99": 1192.761,
+      "max": 1192.761
+    }
+  },
+  "error_counter": {
+    "hash_mismatch": 1,
+    "exception_RuntimeError": 1
+  },
+  "top_errors": {
+    "hash_mismatch": 1,
+    "exception_RuntimeError": 1
+  },
+  "preconditions": {
+    "accounts": 2,
+    "service": [
+      "GateServer",
+      "MySQL",
+      "Redis"
+    ]
+  },
+  "data_mutation_summary": {
+    "media_uploaded": 0,
+    "media_downloaded": 0
+  },
+  "samples": [
+    {
+      "account_email": "friend_17730516336770zn8b@loadtest.local",
+      "upload_id": "640afe02-27c8-4d8c-9457-448fca82d0be",
+      "media_type": "image"
+    },
+    {
+      "account_email": "friend_1773051654289fm5xi@loadtest.local",
+      "upload_id": "",
+      "media_type": "file"
+    }
+  ]
+}

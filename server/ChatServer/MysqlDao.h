@@ -27,7 +27,7 @@ public:
 	bool GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& applyList, int offset, int limit );
 	bool GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo> >& user_info);
 	bool SavePrivateMessage(const PrivateMessageInfo& msg);
-	bool GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const int& limit,
+	bool GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const std::string& before_msg_id, const int& limit,
 		std::vector<std::shared_ptr<PrivateMessageInfo>>& messages, bool& has_more);
 	bool GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_ptr<PrivateMessageInfo>& message);
 	bool UpdatePrivateMessageContent(const int& uid, const int& peer_uid, const std::string& msg_id,

@@ -183,6 +183,16 @@ public:
 		if (b_stop_) {
 			return;
 		}
+		try {
+			if (con && con->_con) {
+				con->_con->rollback();
+				con->_con->setAutoCommit(true);
+				auto now = std::chrono::system_clock::now().time_since_epoch();
+				con->_last_oper_time = std::chrono::duration_cast<std::chrono::seconds>(now).count();
+			}
+		}
+		catch (sql::SQLException&) {
+		}
 		pool_.push(std::move(con));
 		cond_.notify_one();
 	}
