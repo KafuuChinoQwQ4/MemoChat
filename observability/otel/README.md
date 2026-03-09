@@ -16,7 +16,7 @@ docker compose up -d
 ## What It Collects
 
 - Service and client JSON log files from the repository workspace via the collector `filelog` receiver
-- Zipkin-compatible spans exported by GateServer, StatusServer, ChatServer, ChatServer2, VarifyServer, QML client, and local load tests
+- Zipkin-compatible spans exported by GateServer, StatusServer, ChatServer instances, VarifyServer, QML client, and local load tests
 - Future OTLP telemetry on `4317` and `4318`
 
 ## Notes

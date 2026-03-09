@@ -1,9 +1,24 @@
 #include "ConfigMgr.h"
+
+std::string& ConfigMgr::ConfigPathStorage() {
+	static std::string config_path;
+	return config_path;
+}
+
+void ConfigMgr::InitConfigPath(const std::string& config_path) {
+	ConfigPathStorage() = config_path;
+}
+
+std::string ConfigMgr::GetConfigPath() {
+	return ConfigPathStorage();
+}
+
 ConfigMgr::ConfigMgr(){
 
 	boost::filesystem::path current_path = boost::filesystem::current_path();
-
-	boost::filesystem::path config_path = current_path / "config.ini";
+	boost::filesystem::path config_path = ConfigPathStorage().empty()
+		? (current_path / "config.ini")
+		: boost::filesystem::path(ConfigPathStorage());
 	std::cout << "Config path: " << config_path << std::endl;
 
 

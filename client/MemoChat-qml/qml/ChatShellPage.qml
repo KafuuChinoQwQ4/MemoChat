@@ -134,6 +134,7 @@ Rectangle {
                 anchors.fill: parent
                 backdrop: backdropLayer
                 currentTab: controller.chatTab
+                currentDialogUid: controller.currentDialogUid
                 dialogModel: controller.dialogListModel
                 chatModel: controller.chatListModel
                 groupModel: controller.groupListModel
@@ -160,7 +161,6 @@ Rectangle {
                 onSearchCleared: controller.clearSearchState()
                 onAddFriendRequested: function(uid, bakName, tags) { controller.requestAddFriend(uid, bakName, tags) }
                 onCreateGroupRequested: createGroupDialog.open()
-                onRefreshGroupRequested: controller.refreshGroupList()
                 onDialogPinToggled: function(uid) { controller.toggleDialogPinnedByUid(uid) }
                 onDialogMuteToggled: function(uid) { controller.toggleDialogMutedByUid(uid) }
                 onDialogMarkRead: function(uid) { controller.markDialogReadByUid(uid) }
@@ -215,6 +215,7 @@ Rectangle {
                         onSendVoiceCall: controller.startVoiceChat()
                         onSendVideoCall: controller.startVideoChat()
                         onDraftEdited: function(text) { controller.updateCurrentDraft(text) }
+                        onRefreshGroupRequested: controller.refreshGroupList()
                         onToggleDialogPinned: controller.toggleCurrentDialogPinned()
                         onToggleDialogMuted: controller.toggleCurrentDialogMuted()
                         onOpenAttachment: function(url) { controller.openExternalResource(url) }

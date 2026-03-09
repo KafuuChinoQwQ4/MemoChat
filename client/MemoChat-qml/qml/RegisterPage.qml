@@ -31,7 +31,7 @@ Rectangle {
         anchors.fill: parent
         anchors.leftMargin: 16
         anchors.rightMargin: 16
-        anchors.topMargin: 18
+        anchors.topMargin: 30
         anchors.bottomMargin: 18
         currentIndex: controller.registerSuccessPage ? 1 : 0
 
@@ -51,7 +51,7 @@ Rectangle {
                     visible: text.length > 0
                 }
 
-                Item { Layout.fillWidth: true; Layout.preferredHeight: 4 }
+                Item { Layout.fillWidth: true; Layout.preferredHeight: 16 }
 
                 RowLayout {
                     Layout.fillWidth: true

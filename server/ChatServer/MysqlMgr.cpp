@@ -81,9 +81,9 @@ bool MysqlMgr::SavePrivateMessage(const PrivateMessageInfo& msg) {
 	return _dao.SavePrivateMessage(msg);
 }
 
-bool MysqlMgr::GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const int& limit,
+bool MysqlMgr::GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const std::string& before_msg_id, const int& limit,
 	std::vector<std::shared_ptr<PrivateMessageInfo>>& messages, bool& has_more) {
-	return _dao.GetPrivateHistory(uid, peer_uid, before_ts, limit, messages, has_more);
+	return _dao.GetPrivateHistory(uid, peer_uid, before_ts, before_msg_id, limit, messages, has_more);
 }
 
 bool MysqlMgr::GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_ptr<PrivateMessageInfo>& message) {

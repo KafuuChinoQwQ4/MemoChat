@@ -13,10 +13,12 @@
 #include "RedisMgr.h"
 #include "ChatServiceImpl.h"
 #include "const.h"
+#include "cluster/ChatClusterDiscovery.h"
 #include "logging/LogConfig.h"
 #include "logging/Logger.h"
 #include "logging/Telemetry.h"
 #include "logging/TelemetryConfig.h"
+#include <cstdlib>
 
 using namespace std;
 bool bstop = false;
@@ -68,13 +70,50 @@ void CleanupTrackedOnlineState(const std::string& server_name) {
 			{"tracked_uid_count", std::to_string(online_uids.size())}
 		});
 }
+
+std::string ParseConfigPath(int argc, char** argv) {
+	for (int i = 1; i < argc; ++i) {
+		const std::string arg = argv[i];
+		if (arg == "--config") {
+			if (i + 1 >= argc) {
+				throw std::runtime_error("missing value for --config");
+			}
+			return argv[++i];
+		}
+		throw std::runtime_error("unknown argument: " + arg);
+	}
+	return "";
 }
 
-int main()
+void SetInstanceNameEnv(const std::string& instance_name) {
+	if (instance_name.empty()) {
+		return;
+	}
+#ifdef _WIN32
+	_putenv_s("MEMOCHAT_INSTANCE_NAME", instance_name.c_str());
+#else
+	setenv("MEMOCHAT_INSTANCE_NAME", instance_name.c_str(), 1);
+#endif
+}
+}
+
+int main(int argc, char** argv)
 {
-	auto& cfg = ConfigMgr::Inst();
-	auto server_name = cfg["SelfServer"]["Name"];
 	try {
+		ConfigMgr::InitConfigPath(ParseConfigPath(argc, argv));
+		auto& cfg = ConfigMgr::Inst();
+		const std::string server_name = cfg["SelfServer"]["Name"];
+		const auto cluster = memochat::cluster::LoadStaticChatClusterConfig(
+			[&cfg](const std::string& section, const std::string& key) {
+				return cfg.GetValue(section, key);
+			},
+			server_name);
+		const auto* self_node = cluster.findNode(server_name);
+		if (self_node == nullptr) {
+			throw std::runtime_error("self node missing from cluster config: " + server_name);
+		}
+		SetInstanceNameEnv(server_name);
+
 		auto log_cfg = memolog::LogConfig::FromGetter(
 			[&cfg](const std::string& section, const std::string& key) {
 				return cfg.GetValue(section, key);
@@ -97,15 +136,13 @@ int main()
 			});
 
 		boost::asio::io_context  io_context;
-		auto port_str = cfg["SelfServer"]["Port"];
+		auto port_str = self_node->tcp_port;
 
 		auto pointer_server = std::make_shared<CServer>(io_context, atoi(port_str.c_str()));
 
 		pointer_server->StartTimer();
 
-
-
-		std::string server_address(cfg["SelfServer"]["Host"] + ":" + cfg["SelfServer"]["RPCPort"]);
+		std::string server_address(self_node->rpc_host + ":" + self_node->rpc_port);
 		ChatServiceImpl service;
 		grpc::ServerBuilder builder;
 

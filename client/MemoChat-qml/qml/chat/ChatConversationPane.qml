@@ -36,6 +36,7 @@ Rectangle {
     signal sendVoiceCall()
     signal sendVideoCall()
     signal draftEdited(string text)
+    signal refreshGroupRequested()
     signal toggleDialogPinned()
     signal toggleDialogMuted()
     signal openGroupManageRequested()
@@ -145,6 +146,21 @@ Rectangle {
                 GlassButton {
                     Layout.preferredWidth: 88
                     Layout.preferredHeight: 32
+                    Layout.leftMargin: 8
+                    visible: root.hasCurrentChat && root.isGroupChat
+                    text: "刷新"
+                    textPixelSize: 13
+                    cornerRadius: 9
+                    normalColor: Qt.rgba(0.54, 0.70, 0.93, 0.22)
+                    hoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.32)
+                    pressedColor: Qt.rgba(0.54, 0.70, 0.93, 0.40)
+                    disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                    onClicked: root.refreshGroupRequested()
+                }
+
+                GlassButton {
+                    Layout.preferredWidth: 88
+                    Layout.preferredHeight: 32
                     visible: root.hasCurrentChat
                     text: root.currentDialogPinned ? "取消置顶" : "置顶"
                     textPixelSize: 13
@@ -230,22 +246,6 @@ Rectangle {
                     }
                 }
                 onCountChanged: {
-                    if (count > 0
-                            && root.hasCurrentChat
-                            && root._followTail
-                            && !root.privateHistoryLoading) {
-                        root._requestScrollToEnd()
-                    }
-                }
-                onContentHeightChanged: {
-                    if (count > 0
-                            && root.hasCurrentChat
-                            && root._followTail
-                            && !root.privateHistoryLoading) {
-                        root._requestScrollToEnd()
-                    }
-                }
-                onHeightChanged: {
                     if (count > 0
                             && root.hasCurrentChat
                             && root._followTail

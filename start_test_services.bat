@@ -15,12 +15,14 @@ set "CLIENT_BIN=%ROOT%\build\bin\Release"
 set "RUN_ROOT=%ROOT%\build\run"
 set "WITH_CLIENT=1"
 set "CONSOLE_CP=936"
+set "STATUS_CONFIG=%ROOT%\server\StatusServer\config.ini"
 
 if /I "%~1"=="--no-client" set "WITH_CLIENT=0"
 
 call :select_server_bin
 if errorlevel 1 exit /b 1
 
+echo [INFO] Using skill: memochat-multiservice-ops
 echo [INFO] Root: %ROOT%
 echo [INFO] Server bin: %BUILD_BIN%
 echo [INFO] Client bin: %CLIENT_BIN%
@@ -45,11 +47,6 @@ if not exist "%BUILD_BIN%\ChatServer.exe" (
   exit /b 1
 )
 
-if not exist "%BUILD_BIN%\ChatServer2.exe" (
-  echo [ERROR] Missing %BUILD_BIN%\ChatServer2.exe
-  exit /b 1
-)
-
 where node >nul 2>nul
 if errorlevel 1 (
   echo [ERROR] node not found in PATH.
@@ -68,11 +65,21 @@ if not exist "%ROOT%\server\VarifyServer\package.json" (
 )
 
 if not exist "%ROOT%\server\GateServer\config.ini" (
-  echo [ERROR] Missing server config files.
+  echo [ERROR] Missing %ROOT%\server\GateServer\config.ini
   exit /b 1
 )
 
-call :stop_existing_services
+if not exist "%STATUS_CONFIG%" (
+  echo [ERROR] Missing %STATUS_CONFIG%
+  exit /b 1
+)
+
+call :load_cluster_nodes "%STATUS_CONFIG%"
+if errorlevel 1 exit /b 1
+
+echo [INFO] Enabled chat nodes: !CHAT_NODE_NAMES!
+
+call "%ROOT%\stop_test_services.bat"
 if errorlevel 1 exit /b 1
 
 call :ensure_varify_deps
@@ -83,11 +90,16 @@ if not exist "%RUN_ROOT%" mkdir "%RUN_ROOT%"
 call :prepare_service StatusServer "%ROOT%\server\StatusServer\config.ini" "%BUILD_BIN%\StatusServer.exe"
 if errorlevel 1 exit /b 1
 
-call :prepare_service ChatServer "%ROOT%\server\ChatServer\config.ini" "%BUILD_BIN%\ChatServer.exe"
-if errorlevel 1 exit /b 1
-
-call :prepare_service ChatServer2 "%ROOT%\server\ChatServer2\config.ini" "%BUILD_BIN%\ChatServer2.exe"
-if errorlevel 1 exit /b 1
+for /L %%I in (1,1,!CHAT_NODE_COUNT!) do (
+  set "NODE_NAME=!CHAT_NODE_%%I_NAME!"
+  set "NODE_CFG=%ROOT%\server\ChatServer\!NODE_NAME!.ini"
+  if not exist "!NODE_CFG!" (
+    echo [ERROR] Missing chat node config: !NODE_CFG!
+    exit /b 1
+  )
+  call :prepare_service !NODE_NAME! "!NODE_CFG!" "%BUILD_BIN%\ChatServer.exe"
+  if errorlevel 1 exit /b 1
+)
 
 call :prepare_service GateServer "%ROOT%\server\GateServer\config.ini" "%BUILD_BIN%\GateServer.exe"
 if errorlevel 1 exit /b 1
@@ -102,32 +114,26 @@ start "StatusServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\StatusS
 call :wait_for_port StatusServer 50052 20 "%RUN_ROOT%\StatusServer\logs"
 if errorlevel 1 exit /b 1
 call :print_running_process_stamp StatusServer.exe
-if errorlevel 1 exit /b 1
 
-echo [INFO] Starting ChatServer...
-start "ChatServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\ChatServer"" && ChatServer.exe"
-call :wait_for_port ChatServer 8090 20 "%RUN_ROOT%\ChatServer\logs"
-if errorlevel 1 exit /b 1
-call :wait_for_port ChatServer-RPC 50055 20 "%RUN_ROOT%\ChatServer\logs"
-if errorlevel 1 exit /b 1
-call :print_running_process_stamp ChatServer.exe
-if errorlevel 1 exit /b 1
+for /L %%I in (1,1,!CHAT_NODE_COUNT!) do (
+  set "NODE_NAME=!CHAT_NODE_%%I_NAME!"
+  set "NODE_TCP_PORT=!CHAT_NODE_%%I_TCP_PORT!"
+  set "NODE_RPC_PORT=!CHAT_NODE_%%I_RPC_PORT!"
+  echo [INFO] Starting !NODE_NAME!...
+  start "ChatServer-!NODE_NAME!" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\!NODE_NAME!"" && ChatServer.exe --config .\config.ini"
+  call :wait_for_port !NODE_NAME! !NODE_TCP_PORT! 20 "%RUN_ROOT%\!NODE_NAME!\logs"
+  if errorlevel 1 exit /b 1
+  call :wait_for_port !NODE_NAME!-RPC !NODE_RPC_PORT! 20 "%RUN_ROOT%\!NODE_NAME!\logs"
+  if errorlevel 1 exit /b 1
+)
 
-echo [INFO] Starting ChatServer2...
-start "ChatServer2" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\ChatServer2"" && ChatServer2.exe"
-call :wait_for_port ChatServer2 8091 20 "%RUN_ROOT%\ChatServer2\logs"
-if errorlevel 1 exit /b 1
-call :wait_for_port ChatServer2-RPC 50056 20 "%RUN_ROOT%\ChatServer2\logs"
-if errorlevel 1 exit /b 1
-call :print_running_process_stamp ChatServer2.exe
-if errorlevel 1 exit /b 1
+call :print_chat_process_count
 
 echo [INFO] Starting GateServer...
 start "GateServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\GateServer"" && GateServer.exe"
 call :wait_for_port GateServer 8080 20 "%RUN_ROOT%\GateServer\logs"
 if errorlevel 1 exit /b 1
 call :print_running_process_stamp GateServer.exe
-if errorlevel 1 exit /b 1
 
 if "%WITH_CLIENT%"=="1" (
   if not exist "%CLIENT_BIN%\MemoChatQml.exe" (
@@ -145,6 +151,7 @@ if "%WITH_CLIENT%"=="1" (
 echo.
 echo [DONE] Services started.
 echo [INFO] GateServer HTTP: http://127.0.0.1:8080
+echo [INFO] Chat cluster nodes: !CHAT_NODE_NAMES!
 echo [INFO] Close each opened window to stop each service.
 exit /b 0
 
@@ -162,7 +169,7 @@ for /L %%I in (1,1,%WAIT_SECS%) do (
     set "WAIT_FOUND=1"
   )
   if defined WAIT_FOUND goto :wait_for_port_ok
-  timeout /t 1 >nul
+  >nul ping -n 2 127.0.0.1
 )
 echo [ERROR] %WAIT_NAME% failed to listen on port %WAIT_PORT% within %WAIT_SECS% seconds.
 if not "%WAIT_LOGDIR%"=="" (
@@ -172,15 +179,6 @@ exit /b 1
 
 :wait_for_port_ok
 echo [INFO] %WAIT_NAME% is listening on port %WAIT_PORT%.
-exit /b 0
-
-:stop_existing_services
-echo [INFO] Stopping existing MemoChat service processes...
-for %%P in (GateServer.exe StatusServer.exe ChatServer.exe ChatServer2.exe) do (
-  taskkill /F /IM %%P >nul 2>nul
-)
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ports=@(8080,50051,50052,8090,8091,50055,50056); Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue ^| Where-Object { $ports -contains $_.LocalPort } ^| Select-Object -ExpandProperty OwningProcess -Unique ^| ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }" >nul 2>nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" ^| Where-Object { $_.CommandLine -like '*VarifyServer*server.js*' } ^| ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>nul
 exit /b 0
 
 :ensure_varify_deps
@@ -252,11 +250,61 @@ call :print_file_stamp "Prepared %SVC_NAME%" "%SVC_DIR%\%~nx3"
 echo [INFO] Prepared %SVC_NAME% in %SVC_DIR%
 exit /b 0
 
+:load_cluster_nodes
+set "CLUSTER_CONFIG=%~1"
+for /L %%I in (1,1,32) do (
+  set "CHAT_NODE_%%I_NAME="
+  set "CHAT_NODE_%%I_TCP_PORT="
+  set "CHAT_NODE_%%I_RPC_PORT="
+)
+set "CHAT_NODE_COUNT="
+set "CHAT_NODE_NAMES="
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$ini='%CLUSTER_CONFIG%';" ^
+  "if (-not (Test-Path $ini)) { throw 'missing config file' }" ^
+  "$sections=@{}; $section='';" ^
+  "foreach ($raw in Get-Content $ini) {" ^
+  "  $line=$raw.Trim();" ^
+  "  if (-not $line -or $line.StartsWith(';') -or $line.StartsWith('#')) { continue }" ^
+  "  if ($line -match '^\[(.+)\]$') { $section=$Matches[1].Trim(); if (-not $sections.ContainsKey($section)) { $sections[$section]=@{} }; continue }" ^
+  "  $parts=$line.Split('=',2);" ^
+  "  if ($section -and $parts.Count -eq 2) { $sections[$section][$parts[0].Trim()]=$parts[1].Trim() }" ^
+  "}" ^
+  "$cluster=$sections['Cluster'];" ^
+  "if (-not $cluster) { throw 'missing [Cluster] section' }" ^
+  "$nodes=((($cluster['Nodes']) -split ',') | ForEach-Object { $_.Trim() } | Where-Object { $_ });" ^
+  "if (-not $nodes) { throw 'empty Cluster/Nodes' }" ^
+  "$enabled=@();" ^
+  "foreach ($nodeId in $nodes) {" ^
+  "  $node=$sections[$nodeId];" ^
+  "  if (-not $node) { throw ('missing node section [' + $nodeId + ']') }" ^
+  "  $enabledValue=if ($node.ContainsKey('Enabled')) { [string]$node['Enabled'] } else { 'true' };" ^
+  "  if ($enabledValue -match '^(?i:false|0|no|off)$') { continue }" ^
+  "  $name=[string]$node['Name']; $tcpPort=[string]$node['TcpPort']; $rpcPort=[string]$node['RpcPort'];" ^
+  "  if ([string]::IsNullOrWhiteSpace($name) -or [string]::IsNullOrWhiteSpace($tcpPort) -or [string]::IsNullOrWhiteSpace($rpcPort)) { throw ('incomplete node section [' + $nodeId + ']') }" ^
+  "  $enabled += [pscustomobject]@{ Name=$name; TcpPort=$tcpPort; RpcPort=$rpcPort };" ^
+  "}" ^
+  "if (-not $enabled) { throw 'no enabled chat nodes found' }" ^
+  "Write-Output ('set CHAT_NODE_COUNT=' + $enabled.Count);" ^
+  "Write-Output ('set CHAT_NODE_NAMES=' + (($enabled | ForEach-Object { $_.Name }) -join ','));" ^
+  "$index=1;" ^
+  "foreach ($node in $enabled) {" ^
+  "  Write-Output ('set CHAT_NODE_' + $index + '_NAME=' + $node.Name);" ^
+  "  Write-Output ('set CHAT_NODE_' + $index + '_TCP_PORT=' + $node.TcpPort);" ^
+  "  Write-Output ('set CHAT_NODE_' + $index + '_RPC_PORT=' + $node.RpcPort);" ^
+  "  $index++;" ^
+  "}"`) do %%I
+if not defined CHAT_NODE_COUNT (
+  echo [ERROR] Failed to load chat node list from %CLUSTER_CONFIG%
+  exit /b 1
+)
+exit /b 0
+
 :select_server_bin
 set "BUILD_BIN="
 for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$dirs = @('%SERVER_BIN_PRIMARY%', '%SERVER_BIN_FALLBACK%');" ^
-  "$required = 'GateServer.exe','StatusServer.exe','ChatServer.exe','ChatServer2.exe';" ^
+  "$required = 'GateServer.exe','StatusServer.exe','ChatServer.exe';" ^
   "$complete = foreach ($dir in $dirs) {" ^
   "  if (-not (Test-Path $dir)) { continue }" ^
   "  $missing = $required | Where-Object { -not (Test-Path (Join-Path $dir $_)) };" ^
@@ -265,8 +313,7 @@ for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass
   "if (-not $complete) { exit 1 }" ^
   "$best = $complete | Sort-Object StatusServerTime -Descending | Select-Object -First 1;" ^
   "Write-Host ('[INFO] Candidate server bins: ' + (($complete | ForEach-Object { '{0} [{1}]' -f $_.Path, $_.StatusServerTime.ToString('yyyy-MM-dd HH:mm:ss') }) -join '; '));" ^
-  "$best = $best.Path;" ^
-  "Write-Output $best"`) do (
+  "Write-Output $best.Path"`) do (
   set "BUILD_BIN=%%I"
 )
 if not defined BUILD_BIN (
@@ -278,7 +325,6 @@ if not defined BUILD_BIN (
 )
 call :print_file_stamp "Selected StatusServer" "%BUILD_BIN%\StatusServer.exe"
 call :print_file_stamp "Selected ChatServer" "%BUILD_BIN%\ChatServer.exe"
-call :print_file_stamp "Selected ChatServer2" "%BUILD_BIN%\ChatServer2.exe"
 call :print_file_stamp "Selected GateServer" "%BUILD_BIN%\GateServer.exe"
 exit /b 0
 
@@ -296,6 +342,12 @@ if errorlevel 1 (
 )
 exit /b 0
 
+:print_chat_process_count
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$count = (Get-Process -Name 'ChatServer' -ErrorAction SilentlyContinue | Measure-Object).Count;" ^
+  "Write-Output ('[INFO] Running ChatServer.exe instances: ' + $count)"`) do echo %%I
+exit /b 0
+
 :print_file_stamp
 set "STAMP_LABEL=%~1"
 set "STAMP_PATH=%~2"
@@ -306,12 +358,4 @@ if not exist "%STAMP_PATH%" (
 for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$item = Get-Item '%STAMP_PATH%';" ^
   "Write-Output ('[INFO] {0}: {1} ({2} bytes, {3})' -f '%STAMP_LABEL%', $item.FullName, $item.Length, $item.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"`) do echo %%I
-exit /b 0
-
-:has_all_servers
-set "CHK_DIR=%~1"
-if not exist "%CHK_DIR%\GateServer.exe" exit /b 1
-if not exist "%CHK_DIR%\StatusServer.exe" exit /b 1
-if not exist "%CHK_DIR%\ChatServer.exe" exit /b 1
-if not exist "%CHK_DIR%\ChatServer2.exe" exit /b 1
 exit /b 0

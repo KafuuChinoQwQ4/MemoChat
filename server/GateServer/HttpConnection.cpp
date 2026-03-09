@@ -4,6 +4,7 @@
 #include "logging/Telemetry.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
+#include <fstream>
 #include <map>
 
 HttpConnection::HttpConnection(boost::asio::io_context& ioc)
@@ -209,18 +210,8 @@ void HttpConnection::WriteResponse() {
     auto self = shared_from_this();
 
     if (_send_file_response) {
-        beast::error_code ec;
-        auto file_res = std::make_shared<http::response<http::file_body>>();
-        file_res->version(_response.version());
-        file_res->result(_response.result());
-        file_res->keep_alive(false);
-        for (const auto& field : _response.base()) {
-            file_res->set(field.name(), field.value());
-        }
-
-        http::file_body::value_type file;
-        file.open(_send_file_path.c_str(), beast::file_mode::scan, ec);
-        if (ec) {
+        std::ifstream file(_send_file_path, std::ios::binary);
+        if (!file.is_open()) {
             _send_file_response = false;
             _response.result(http::status::internal_server_error);
             _response.set(http::field::content_type, "text/plain");
@@ -235,12 +226,13 @@ void HttpConnection::WriteResponse() {
             return;
         }
 
-        file_res->body() = std::move(file);
         if (!_send_file_content_type.empty()) {
-            file_res->set(http::field::content_type, _send_file_content_type);
+            _response.set(http::field::content_type, _send_file_content_type);
         }
-        file_res->prepare_payload();
-        http::async_write(_socket, *file_res, [self, file_res](beast::error_code write_ec, std::size_t) {
+        beast::ostream(_response.body()) << file.rdbuf();
+        _response.content_length(_response.body().size());
+        _send_file_response = false;
+        http::async_write(_socket, _response, [self](beast::error_code write_ec, std::size_t) {
             self->_socket.shutdown(tcp::socket::shutdown_send, write_ec);
             self->deadline_.cancel();
             self->_request_span.reset();
