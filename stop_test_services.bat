@@ -7,7 +7,9 @@ set "STATUS_CONFIG=%ROOT%\server\StatusServer\config.ini"
 
 echo [INFO] Stopping MemoChat test services...
 
-for %%P in (GateServer.exe StatusServer.exe ChatServer.exe MemoChatQml.exe) do (
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\Memo_ops\scripts\stop_ops_platform.ps1" >nul 2>nul
+
+for %%P in (GateServer.exe StatusServer.exe ChatServer.exe MemoChatQml.exe MemoOpsQml.exe) do (
   taskkill /F /IM %%P >nul 2>nul
 )
 

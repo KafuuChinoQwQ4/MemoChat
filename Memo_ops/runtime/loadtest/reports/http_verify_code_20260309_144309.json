@@ -1,0 +1,52 @@
+﻿{
+  "scenario": "auth.verify_code",
+  "test": "http_verify_code",
+  "time_utc": "20260309_144309",
+  "target": "http://127.0.0.1:8080/get_varifycode",
+  "config": {
+    "total": 2,
+    "concurrency": 1,
+    "timeout_sec": 5.0,
+    "domain": "loadtest.local"
+  },
+  "summary": {
+    "total": 2,
+    "success": 2,
+    "failed": 0,
+    "success_rate": 1.0,
+    "elapsed_sec": 8.370469,
+    "throughput_rps": 0.239,
+    "latency_ms": {
+      "min": 4078.381,
+      "avg": 4184.527,
+      "p50": 4078.381,
+      "p90": 4290.673,
+      "p95": 4290.673,
+      "p99": 4290.673,
+      "max": 4290.673
+    }
+  },
+  "phase_breakdown": {
+    "verify_code": {
+      "min": 4078.381,
+      "avg": 4184.527,
+      "p50": 4078.381,
+      "p90": 4290.673,
+      "p95": 4290.673,
+      "p99": 4290.673,
+      "max": 4290.673
+    }
+  },
+  "error_counter": {},
+  "top_errors": {},
+  "preconditions": {
+    "service": [
+      "GateServer",
+      "VarifyServer",
+      "Redis"
+    ]
+  },
+  "data_mutation_summary": {
+    "verify_code_requests": 2
+  }
+}

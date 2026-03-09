@@ -4,6 +4,7 @@ from typing import Dict, List
 from memochat_load_common import (
     ensure_accounts,
     finalize_report,
+    get_log_dir,
     get_runtime_accounts_csv,
     init_json_logger,
     load_accounts,
@@ -33,7 +34,7 @@ def main() -> int:
     args = parser.parse_args()
 
     cfg = load_json(args.config)
-    logger = init_json_logger("http_register_loadtest", log_dir="logs")
+    logger = init_json_logger("http_register_loadtest", log_dir=get_log_dir(cfg))
     register_cfg = cfg.get("register_verify_reset", {}).get("register", {})
     total = args.total if args.total > 0 else int(register_cfg.get("total", 100))
     concurrency = args.concurrency if args.concurrency > 0 else int(register_cfg.get("concurrency", 20))
@@ -127,7 +128,7 @@ def main() -> int:
         "data_mutation_summary": result["data_mutation_summary"],
         "samples": result["samples"],
     }
-    report_path = finalize_report("http_register", report, args.report_path)
+    report_path = finalize_report("http_register", report, args.report_path, cfg)
 
     logger.info(
         "register load test completed",

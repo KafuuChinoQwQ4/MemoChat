@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from memochat_load_common import (
     build_summary,
     finalize_report,
+    get_log_dir,
     init_json_logger,
     load_accounts,
     load_json,
@@ -61,7 +62,7 @@ def main() -> int:
     args = parser.parse_args()
 
     cfg = load_json(args.config)
-    logger = init_json_logger('tcp_login_loadtest', log_dir='logs')
+    logger = init_json_logger('tcp_login_loadtest', log_dir=get_log_dir(cfg))
     tcp_cfg = cfg.get('tcp_login', {})
     total = args.total if args.total > 0 else int(tcp_cfg.get('total', 1000))
     concurrency = args.concurrency if args.concurrency > 0 else int(tcp_cfg.get('concurrency', 100))
@@ -191,7 +192,7 @@ def main() -> int:
         'data_mutation_summary': {'tcp_login_requests': success},
     }
 
-    report_path = finalize_report('tcp_login', report, args.report_path)
+    report_path = finalize_report('tcp_login', report, args.report_path, cfg)
 
     logger.info('tcp login load test completed',
                 extra={

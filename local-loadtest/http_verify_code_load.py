@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from memochat_load_common import (
     finalize_report,
     gate_api_url,
+    get_log_dir,
     init_json_logger,
     load_json,
     new_trace_id,
@@ -25,7 +26,7 @@ def main() -> int:
     args = parser.parse_args()
 
     cfg = load_json(args.config)
-    logger = init_json_logger("http_verify_code_loadtest", log_dir="logs")
+    logger = init_json_logger("http_verify_code_loadtest", log_dir=get_log_dir(cfg))
     auth_cfg = cfg.get("register_verify_reset", {}).get("verify_code", {})
     total = args.total if args.total > 0 else int(auth_cfg.get("total", 300))
     concurrency = args.concurrency if args.concurrency > 0 else int(auth_cfg.get("concurrency", 50))
@@ -95,7 +96,7 @@ def main() -> int:
         "preconditions": {"service": ["GateServer", "VarifyServer", "Redis"]},
         "data_mutation_summary": {"verify_code_requests": success},
     }
-    report_path = finalize_report("http_verify_code", report, args.report_path)
+    report_path = finalize_report("http_verify_code", report, args.report_path, cfg)
 
     logger.info(
         "verify code load test completed",

@@ -48,3 +48,9 @@ ui_*.h
 /vcpkg/buildtrees/
 /vcpkg/packages/
 /vcpkg/downloads/
+
+# Memo_ops local artifacts
+/Memo_ops/.venv/
+/Memo_ops/**/__pycache__/
+/Memo_ops/*.log
+/build-memo-ops/
