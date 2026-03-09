@@ -12,6 +12,7 @@ from memochat_load_common import (
     ensure_accounts,
     establish_friendship,
     finalize_report,
+    get_log_dir,
     get_runtime_accounts_csv,
     init_json_logger,
     load_json,
@@ -33,7 +34,7 @@ def main() -> int:
     args = parser.parse_args()
 
     cfg = load_json(args.config)
-    logger = init_json_logger("tcp_call_invite_loadtest", log_dir="logs")
+    logger = init_json_logger("tcp_call_invite_loadtest", log_dir=get_log_dir(cfg))
     test_cfg = cfg.get("call_invite", {})
     total = args.total if args.total > 0 else int(test_cfg.get("total", 10))
     concurrency = args.concurrency if args.concurrency > 0 else int(test_cfg.get("concurrency", 2))
@@ -133,7 +134,7 @@ def main() -> int:
         "data_mutation_summary": result["data_mutation_summary"],
         "samples": result["samples"],
     }
-    report_path = finalize_report("tcp_call_invite", report, args.report_path)
+    report_path = finalize_report("tcp_call_invite", report, args.report_path, cfg)
 
     logger.info(
         "call invite load test completed",

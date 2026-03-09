@@ -36,6 +36,16 @@ services:
     ports:
       - "3200:3200"
 
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: memochat-prometheus
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+
   grafana:
     image: grafana/grafana:10.4.2
     container_name: memochat-grafana
@@ -50,8 +60,10 @@ services:
     depends_on:
       - loki
       - tempo
+      - prometheus
 
 volumes:
   loki-data:
   tempo-data:
   grafana-data:
+  prometheus-data:

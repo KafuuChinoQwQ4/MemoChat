@@ -84,7 +84,10 @@ def ensure_dir(path: str) -> None:
 
 def load_json(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8-sig") as f:
-        return json.load(f)
+        payload = json.load(f)
+    if isinstance(payload, dict):
+        payload["__config_dir"] = os.path.dirname(os.path.abspath(path))
+    return payload
 
 
 def save_json(path: str, payload: Dict[str, Any]) -> None:
@@ -169,6 +172,7 @@ def init_json_logger(
     to_console: bool = True,
     level: str = "INFO",
 ) -> logging.Logger:
+    log_dir = os.environ.get("MEMOCHAT_LOADTEST_LOG_DIR", log_dir)
     ensure_dir(log_dir)
     logger = logging.getLogger(name)
     logger.setLevel(getattr(logging, level.upper(), logging.INFO))
@@ -288,7 +292,35 @@ def get_runtime_accounts_csv(cfg: Dict[str, Any], cli_csv_path: str = "") -> str
     if cli_csv_path:
         return cli_csv_path
     runtime_csv = str(cfg.get("runtime_accounts_csv", "accounts.local.csv")).strip()
-    return runtime_csv
+    return resolve_cfg_path(cfg, runtime_csv)
+
+
+def resolve_cfg_path(cfg: Dict[str, Any], value: str) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return raw
+    if os.path.isabs(raw):
+        return raw
+    config_dir = str(cfg.get("__config_dir", "")).strip()
+    if config_dir:
+        return os.path.normpath(os.path.join(config_dir, raw))
+    return raw
+
+
+def get_log_dir(cfg: Dict[str, Any]) -> str:
+    env_dir = os.environ.get("MEMOCHAT_LOADTEST_LOG_DIR", "").strip()
+    if env_dir:
+        return env_dir
+    configured = str(cfg.get("log_dir", "logs")).strip()
+    return resolve_cfg_path(cfg, configured)
+
+
+def get_report_dir(cfg: Dict[str, Any]) -> str:
+    env_dir = os.environ.get("MEMOCHAT_LOADTEST_REPORT_DIR", "").strip()
+    if env_dir:
+        return env_dir
+    configured = str(cfg.get("report_dir", "reports")).strip()
+    return resolve_cfg_path(cfg, configured)
 
 
 def normalize_account(row: Dict[str, Any]) -> Dict[str, str]:
@@ -811,18 +843,19 @@ def default_join_url(call_type: str, uid_a: int, uid_b: int) -> str:
     return f"https://meet.jit.si/{room_name}"
 
 
-def report_path(report_prefix: str, explicit_path: str = "") -> str:
+def report_path(report_prefix: str, explicit_path: str = "", cfg: Optional[Dict[str, Any]] = None) -> str:
     if explicit_path:
         return explicit_path
-    return os.path.join("reports", f"{report_prefix}_{utc_now_str()}.json")
+    return os.path.join(get_report_dir(cfg or {}), f"{report_prefix}_{utc_now_str()}.json")
 
 
 def finalize_report(
     report_prefix: str,
     report: Dict[str, Any],
     explicit_path: str = "",
+    cfg: Optional[Dict[str, Any]] = None,
 ) -> str:
-    path = report_path(report_prefix, explicit_path)
+    path = report_path(report_prefix, explicit_path, cfg)
     save_json(path, report)
     return path
 

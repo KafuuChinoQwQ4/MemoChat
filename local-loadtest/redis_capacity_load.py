@@ -1,7 +1,7 @@
 import argparse
 import time
 
-from memochat_load_common import finalize_report, init_json_logger, load_json, open_redis, run_parallel, utc_now_str
+from memochat_load_common import finalize_report, get_log_dir, init_json_logger, load_json, open_redis, run_parallel, utc_now_str
 
 
 def main() -> int:
@@ -13,7 +13,7 @@ def main() -> int:
     args = parser.parse_args()
 
     cfg = load_json(args.config)
-    logger = init_json_logger("redis_capacity_loadtest", log_dir="logs")
+    logger = init_json_logger("redis_capacity_loadtest", log_dir=get_log_dir(cfg))
     test_cfg = cfg.get("redis_capacity", {})
     total = args.total if args.total > 0 else int(test_cfg.get("total", 1000))
     concurrency = args.concurrency if args.concurrency > 0 else int(test_cfg.get("concurrency", 50))
@@ -95,7 +95,7 @@ def main() -> int:
         "data_mutation_summary": result["data_mutation_summary"],
         "samples": result["samples"],
     }
-    report_path = finalize_report("redis_capacity", report, args.report_path)
+    report_path = finalize_report("redis_capacity", report, args.report_path, cfg)
     logger.info(
         "redis capacity load test completed",
         extra={

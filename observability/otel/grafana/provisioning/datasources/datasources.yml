@@ -21,3 +21,8 @@ datasources:
     access: proxy
     url: http://loki:3100
     uid: MemoChatLokiUid
+  - name: MemoChat Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    uid: MemoChatPrometheusUid

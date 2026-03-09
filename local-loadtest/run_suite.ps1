@@ -12,12 +12,22 @@ if ($AccountsCsv) {
 }
 Set-Location -Path $PSScriptRoot
 
+$configDir = Split-Path -Parent $Config
+$configJson = Get-Content $Config -Raw | ConvertFrom-Json
+$reportRoot = if ($env:MEMOCHAT_LOADTEST_REPORT_DIR) {
+    $env:MEMOCHAT_LOADTEST_REPORT_DIR
+} elseif ($configJson.report_dir) {
+    Join-Path $configDir ([string]$configJson.report_dir)
+} else {
+    Join-Path $PSScriptRoot "reports"
+}
+
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     throw "python not found in PATH"
 }
 
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-$suiteDir = Join-Path $PSScriptRoot ("reports\suite_" + $timestamp)
+$suiteDir = Join-Path $reportRoot ("suite_" + $timestamp)
 New-Item -ItemType Directory -Force -Path $suiteDir | Out-Null
 
 $reports = New-Object System.Collections.Generic.List[object]

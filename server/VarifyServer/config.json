@@ -20,7 +20,7 @@
   },
   "log": {
     "level": "info",
-    "dir": "./logs",
+    "dir": "../../Memo_ops/runtime/varify/logs",
     "toConsole": true,
     "env": "local"
   },
