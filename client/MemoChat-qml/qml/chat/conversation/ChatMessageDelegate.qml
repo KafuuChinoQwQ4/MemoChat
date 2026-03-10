@@ -54,12 +54,15 @@ Item {
     }
     property int topSpacing: (showAvatar ? 8 : 2) + (showSenderName ? 16 : 0)
     property int bottomSpacing: 2
+    readonly property bool imageBubble: msgType === "image"
     readonly property bool compactTextBubble: msgType === "text" && !isReply
-    readonly property int bubbleHorizontalPadding: compactTextBubble ? 6 : 8
-    readonly property int bubbleVerticalPadding: compactTextBubble ? 6 : 8
+    readonly property int bubbleHorizontalPadding: imageBubble ? 4 : (compactTextBubble ? 6 : 8)
+    readonly property int bubbleVerticalPadding: imageBubble ? 4 : (compactTextBubble ? 6 : 8)
     readonly property real bubbleMaxWidth: Math.max(120, width - avatarSlotWidth - 20)
-    readonly property real bubbleMinWidth: compactTextBubble ? 24 : 56
+    readonly property real bubbleMinWidth: imageBubble ? 92 : (compactTextBubble ? 24 : 56)
     readonly property real bubbleContentMaxWidth: Math.max(72, bubbleMaxWidth - (bubbleHorizontalPadding * 2 + 2))
+    readonly property real imageContentMaxWidth: Math.min(bubbleContentMaxWidth, 280)
+    readonly property real imageContentMaxHeight: 240
     readonly property real messageHeight: Math.max(bubble.implicitHeight, showAvatar ? avatarSize : 0)
     readonly property bool showStateLabel: (root.outgoing && root.messageState !== "sent")
                                            || (!root.outgoing && (root.messageState === "edited" || root.messageState === "deleted"))
@@ -308,14 +311,57 @@ Item {
     Component {
         id: imageComp
         Item {
-            implicitWidth: img.status === Image.Ready ? Math.min(root.bubbleContentMaxWidth, img.implicitWidth) : 200
-            implicitHeight: img.status === Image.Ready ? Math.min(160, img.implicitHeight) : 120
+            function targetSize() {
+                const srcWidth = img.status === Image.Ready ? Math.max(1, img.implicitWidth) : 180
+                const srcHeight = img.status === Image.Ready ? Math.max(1, img.implicitHeight) : 132
+                const downScale = Math.min(root.imageContentMaxWidth / srcWidth,
+                                           root.imageContentMaxHeight / srcHeight,
+                                           1.0)
+                let width = srcWidth * downScale
+                let height = srcHeight * downScale
+                if (img.status === Image.Ready && width < 96 && height < 96) {
+                    const upScale = Math.min(root.imageContentMaxWidth / srcWidth,
+                                             root.imageContentMaxHeight / srcHeight,
+                                             96 / Math.max(width, height))
+                    width = srcWidth * upScale
+                    height = srcHeight * upScale
+                }
+                return Qt.size(Math.round(width), Math.round(height))
+            }
+
+            readonly property size fittedSize: targetSize()
+            implicitWidth: fittedSize.width
+            implicitHeight: fittedSize.height
+
+            Rectangle {
+                anchors.fill: parent
+                radius: 8
+                color: Qt.rgba(0.88, 0.93, 0.98, 0.42)
+                border.color: Qt.rgba(0.44, 0.61, 0.82, 0.20)
+            }
 
             Image {
                 id: img
                 anchors.fill: parent
+                anchors.margins: img.status === Image.Error ? 12 : 0
                 fillMode: Image.PreserveAspectFit
                 source: root.content
+            }
+
+            Text {
+                anchors.centerIn: parent
+                visible: img.status === Image.Loading
+                text: "图片加载中..."
+                color: "#5f728b"
+                font.pixelSize: 12
+            }
+
+            Text {
+                anchors.centerIn: parent
+                visible: img.status === Image.Error
+                text: "图片加载失败"
+                color: "#6c7d92"
+                font.pixelSize: 12
             }
         }
     }

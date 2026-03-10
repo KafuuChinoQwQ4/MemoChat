@@ -1,6 +1,7 @@
 #include "LocalFilePickerService.h"
 #include "imagecropperdialog.h"
 #include <QDesktopServices>
+#include <QDateTime>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -12,6 +13,31 @@
 #include <QUuid>
 
 namespace {
+QVariantMap buildAttachmentMap(const QString &filename, const QString &type)
+{
+    QVariantMap attachment;
+    const QFileInfo fileInfo(filename);
+    attachment.insert(QStringLiteral("attachmentId"), QUuid::createUuid().toString(QUuid::WithoutBraces));
+    attachment.insert(QStringLiteral("type"), type);
+    attachment.insert(QStringLiteral("fileUrl"), QUrl::fromLocalFile(filename).toString());
+    attachment.insert(QStringLiteral("fileName"), fileInfo.fileName());
+    attachment.insert(QStringLiteral("sizeBytes"), fileInfo.size());
+    attachment.insert(QStringLiteral("selectedAt"), QDateTime::currentMSecsSinceEpoch());
+
+    if (type == QStringLiteral("image")) {
+        QImageReader reader(filename);
+        const QSize imageSize = reader.size();
+        attachment.insert(QStringLiteral("previewUrl"), QUrl::fromLocalFile(filename).toString());
+        attachment.insert(QStringLiteral("width"), imageSize.width());
+        attachment.insert(QStringLiteral("height"), imageSize.height());
+        attachment.insert(QStringLiteral("mimeType"), reader.format().isEmpty()
+                                                ? QString()
+                                                : QStringLiteral("image/%1").arg(QString::fromLatin1(reader.format()).toLower()));
+    }
+
+    return attachment;
+}
+
 QString storeAvatarImage(const QImage &image)
 {
     QString storageDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
@@ -61,6 +87,36 @@ bool LocalFilePickerService::pickImageUrl(QString *fileUrl, QString *errorText)
     return true;
 }
 
+bool LocalFilePickerService::pickImageUrls(QVariantList *attachments, QString *errorText)
+{
+    const QStringList filenames = QFileDialog::getOpenFileNames(
+        nullptr,
+        "选择图片",
+        QString(),
+        "图片文件 (*.png *.jpg *.jpeg *.bmp *.webp)");
+    if (filenames.isEmpty()) {
+        return false;
+    }
+
+    QVariantList picked;
+    picked.reserve(filenames.size());
+    for (const QString &filename : filenames) {
+        QImageReader reader(filename);
+        if (!reader.canRead()) {
+            if (errorText) {
+                *errorText = QStringLiteral("图片读取失败: %1").arg(QFileInfo(filename).fileName());
+            }
+            return false;
+        }
+        picked.push_back(buildAttachmentMap(filename, QStringLiteral("image")));
+    }
+
+    if (attachments) {
+        *attachments = picked;
+    }
+    return true;
+}
+
 bool LocalFilePickerService::pickFileUrl(QString *fileUrl, QString *displayName, QString *errorText)
 {
     Q_UNUSED(errorText);
@@ -78,6 +134,30 @@ bool LocalFilePickerService::pickFileUrl(QString *fileUrl, QString *displayName,
     }
     if (displayName) {
         *displayName = QFileInfo(filename).fileName();
+    }
+    return true;
+}
+
+bool LocalFilePickerService::pickFileUrls(QVariantList *attachments, QString *errorText)
+{
+    Q_UNUSED(errorText);
+    const QStringList filenames = QFileDialog::getOpenFileNames(
+        nullptr,
+        "选择文件",
+        QString(),
+        "所有文件 (*.*)");
+    if (filenames.isEmpty()) {
+        return false;
+    }
+
+    QVariantList picked;
+    picked.reserve(filenames.size());
+    for (const QString &filename : filenames) {
+        picked.push_back(buildAttachmentMap(filename, QStringLiteral("file")));
+    }
+
+    if (attachments) {
+        *attachments = picked;
     }
     return true;
 }

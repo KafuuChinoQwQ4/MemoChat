@@ -1,0 +1,1 @@
+{"level":"info","ts":"2026-03-10T07:20:27.017Z","service":"VarifyServer","service_instance":"VarifyServer@yksl:932","env":"local","event":"service.start","trace_id":"","request_id":"","span_id":"","uid":"","session_id":"","module":"grpc","peer_service":"","error_code":"","error_type":"","duration_ms":0,"attrs":{"address":"0.0.0.0:50051"},"message":"VarifyServer started"}
