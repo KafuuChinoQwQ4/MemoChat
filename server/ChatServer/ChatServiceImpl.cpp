@@ -10,6 +10,7 @@
 #include <chrono>
 #include "RedisMgr.h"
 #include "MysqlMgr.h"
+#include "MongoMgr.h"
 
 ChatServiceImpl::ChatServiceImpl()
 {
@@ -123,7 +124,8 @@ Status ChatServiceImpl::NotifyTextChatMsg(::grpc::ServerContext* context,
         element["msgid"] = msg.msgid();
         std::shared_ptr<PrivateMessageInfo> private_msg;
         int64_t created_at = 0;
-        if (MysqlMgr::GetInstance()->GetPrivateMessageByMsgId(msg.msgid(), private_msg) && private_msg) {
+        if ((MongoMgr::GetInstance()->Enabled() && MongoMgr::GetInstance()->GetPrivateMessageByMsgId(msg.msgid(), private_msg) && private_msg) ||
+            (MysqlMgr::GetInstance()->GetPrivateMessageByMsgId(msg.msgid(), private_msg) && private_msg)) {
             created_at = private_msg->created_at;
         }
         if (created_at <= 0) {

@@ -72,6 +72,17 @@ std::string BuildPreviewText(const std::string& msg_type, const std::string& con
 	}
 	return content.substr(0, 80);
 }
+
+void ExecuteIgnoreSql(sql::Statement* stmt, const std::string& sql_text) {
+	if (stmt == nullptr) {
+		return;
+	}
+	try {
+		stmt->execute(sql_text);
+	}
+	catch (const sql::SQLException&) {
+	}
+}
 }
 
 MysqlDao::MysqlDao()
@@ -2917,16 +2928,10 @@ bool MysqlDao::EnsureDialogMetaSchema() {
 		}
 		catch (sql::SQLException&) {
 		}
-		try {
-			stmt->execute("CREATE UNIQUE INDEX uq_chat_dialog_owner_dialog ON chat_dialog(owner_uid, dialog_type, peer_uid, group_id)");
-		}
-		catch (sql::SQLException&) {
-		}
-		try {
-			stmt->execute("CREATE INDEX idx_chat_dialog_owner_type ON chat_dialog(owner_uid, dialog_type)");
-		}
-		catch (sql::SQLException&) {
-		}
+		ExecuteIgnoreSql(stmt.get(), "CREATE UNIQUE INDEX uq_owner_dialog ON chat_dialog(owner_uid, dialog_type, peer_uid, group_id)");
+		ExecuteIgnoreSql(stmt.get(), "CREATE INDEX idx_owner_type ON chat_dialog(owner_uid, dialog_type)");
+		ExecuteIgnoreSql(stmt.get(), "DROP INDEX uq_chat_dialog_owner_dialog ON chat_dialog");
+		ExecuteIgnoreSql(stmt.get(), "DROP INDEX idx_chat_dialog_owner_type ON chat_dialog");
 
 		// Keep old table for migration compatibility with historical deployments.
 		stmt->execute("CREATE TABLE IF NOT EXISTS chat_dialog_meta ("
@@ -3103,16 +3108,7 @@ bool MysqlDao::EnsureGroupMessageOrderSchema() {
 		}
 		catch (sql::SQLException&) {
 		}
-		try {
-			stmt->execute("CREATE UNIQUE INDEX uk_chat_group_msg_server_msg_id ON chat_group_msg(server_msg_id)");
-		}
-		catch (sql::SQLException&) {
-		}
-		try {
-			stmt->execute("CREATE INDEX idx_chat_group_msg_group_seq ON chat_group_msg(group_id, group_seq)");
-		}
-		catch (sql::SQLException&) {
-		}
+		ExecuteIgnoreSql(stmt.get(), "CREATE INDEX idx_group_seq ON chat_group_msg(group_id, group_seq)");
 
 		stmt->execute("CREATE TEMPORARY TABLE IF NOT EXISTS tmp_group_seq_backfill ("
 			"msg_id VARCHAR(64) PRIMARY KEY,"
@@ -3122,20 +3118,21 @@ bool MysqlDao::EnsureGroupMessageOrderSchema() {
 		stmt->execute("SET @memochat_prev_gid := -1, @memochat_seq := 0");
 		stmt->execute(
 			"INSERT INTO tmp_group_seq_backfill(msg_id, group_seq) "
+			"SELECT ranked.msg_id, ranked.group_seq "
+			"FROM ("
 			"SELECT ordered.msg_id, "
-			"(@memochat_seq := IF(@memochat_prev_gid = ordered.group_id, @memochat_seq + 1, 1)) AS group_seq "
-			"FROM (SELECT msg_id, group_id FROM chat_group_msg ORDER BY group_id ASC, created_at ASC, msg_id ASC) ordered");
+			"(@memochat_seq := IF(@memochat_prev_gid = ordered.group_id, @memochat_seq + 1, 1)) AS group_seq, "
+			"(@memochat_prev_gid := ordered.group_id) AS prev_gid "
+			"FROM (SELECT msg_id, group_id FROM chat_group_msg ORDER BY group_id ASC, created_at ASC, msg_id ASC) ordered"
+			") ranked");
 		stmt->execute(
 			"UPDATE chat_group_msg m "
 			"JOIN tmp_group_seq_backfill t ON t.msg_id = m.msg_id "
 			"SET m.group_seq = t.group_seq");
 		stmt->execute("DROP TEMPORARY TABLE IF EXISTS tmp_group_seq_backfill");
 
-		try {
-			stmt->execute("CREATE UNIQUE INDEX uk_chat_group_msg_group_seq ON chat_group_msg(group_id, group_seq)");
-		}
-		catch (sql::SQLException&) {
-		}
+		ExecuteIgnoreSql(stmt.get(), "DROP INDEX idx_chat_group_msg_group_seq ON chat_group_msg");
+		ExecuteIgnoreSql(stmt.get(), "CREATE UNIQUE INDEX uk_chat_group_msg_group_seq ON chat_group_msg(group_id, group_seq)");
 		return true;
 	}
 	catch (sql::SQLException& e) {
