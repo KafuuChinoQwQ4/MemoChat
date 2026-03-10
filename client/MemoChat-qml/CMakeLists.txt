@@ -21,11 +21,18 @@ set(SHARED_CLIENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../MemoChatShared)
 set(SOURCES
     main.cpp
     AppController.cpp
+    AppControllerGroupEvents.cpp
+    AppControllerMedia.cpp
+    AppControllerPrivateEvents.cpp
+    AppControllerSession.cpp
+    AppControllerState.cpp
     AuthController.cpp
     ChatController.cpp
     ChatDispatchService.cpp
     ClientGateway.cpp
+    ConversationSyncService.cpp
     ContactController.cpp
+    DialogListService.cpp
     FriendListModel.cpp
     ChatMessageModel.cpp
     SearchResultModel.cpp
@@ -36,6 +43,7 @@ set(SOURCES
     ProfileController.cpp
     LocalFilePickerService.cpp
     MediaUploadService.cpp
+    MessagePayloadService.cpp
     WindowShapeService.cpp
     ${SHARED_CLIENT_DIR}/imagecropperlabel.cpp
 )
@@ -46,12 +54,15 @@ set(HEADERS
     ChatController.h
     ChatDispatchService.h
     ClientGateway.h
+    ConversationSyncService.h
     ContactController.h
+    DialogListService.h
     FriendListModel.h
     ChatMessageModel.h
     SearchResultModel.h
     ApplyRequestModel.h
     MessageContentCodec.h
+    MessagePayloadService.h
     PrivateChatCacheStore.h
     GroupChatCacheStore.h
     ProfileController.h

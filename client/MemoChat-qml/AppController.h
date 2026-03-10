@@ -20,6 +20,7 @@
 #include "ProfileController.h"
 #include "PrivateChatCacheStore.h"
 #include "GroupChatCacheStore.h"
+#include "MediaUploadService.h"
 
 class AppController : public QObject
 {
@@ -82,6 +83,8 @@ class AppController : public QObject
     Q_PROPERTY(bool mediaUploadInProgress READ mediaUploadInProgress NOTIFY mediaUploadStateChanged)
     Q_PROPERTY(QString mediaUploadProgressText READ mediaUploadProgressText NOTIFY mediaUploadStateChanged)
     Q_PROPERTY(QString currentDraftText READ currentDraftText NOTIFY currentDraftTextChanged)
+    Q_PROPERTY(QVariantList currentPendingAttachments READ currentPendingAttachments NOTIFY currentPendingAttachmentsChanged)
+    Q_PROPERTY(bool hasPendingAttachments READ hasPendingAttachments NOTIFY currentPendingAttachmentsChanged)
     Q_PROPERTY(bool currentDialogPinned READ currentDialogPinned NOTIFY currentDialogPinnedChanged)
     Q_PROPERTY(bool currentDialogMuted READ currentDialogMuted NOTIFY currentDialogMutedChanged)
     Q_PROPERTY(bool hasPendingReply READ hasPendingReply NOTIFY pendingReplyChanged)
@@ -169,6 +172,8 @@ public:
     bool mediaUploadInProgress() const;
     QString mediaUploadProgressText() const;
     QString currentDraftText() const;
+    QVariantList currentPendingAttachments() const;
+    bool hasPendingAttachments() const;
     bool currentDialogPinned() const;
     bool currentDialogMuted() const;
     bool hasPendingReply() const;
@@ -190,8 +195,11 @@ public:
     Q_INVOKABLE void loadMorePrivateHistory();
     Q_INVOKABLE void loadMoreContacts();
     Q_INVOKABLE void sendTextMessage(const QString &text);
+    Q_INVOKABLE void sendCurrentComposerPayload(const QString &text);
     Q_INVOKABLE void sendImageMessage();
     Q_INVOKABLE void sendFileMessage();
+    Q_INVOKABLE void removePendingAttachment(const QString &attachmentId);
+    Q_INVOKABLE void clearPendingAttachments();
     Q_INVOKABLE void openExternalResource(const QString &url);
     Q_INVOKABLE void searchUser(const QString &uidText);
     Q_INVOKABLE void clearSearchState();
@@ -267,6 +275,7 @@ signals:
     void groupStatusChanged();
     void mediaUploadStateChanged();
     void currentDraftTextChanged();
+    void currentPendingAttachmentsChanged();
     void currentDialogPinnedChanged();
     void currentDialogMutedChanged();
     void pendingReplyChanged();
@@ -310,6 +319,12 @@ private:
     bool dispatchChatContent(const QString &content, const QString &previewText);
     bool dispatchGroupChatContent(const QString &content, const QString &previewText);
     void startMediaUploadAndSend(const QString &fileUrl, const QString &mediaType, const QString &fallbackName);
+    void addPendingAttachments(const QVariantList &attachments);
+    void removePendingAttachmentById(const QString &attachmentId, int dialogUid = 0);
+    void setCurrentPendingAttachments(const QVariantList &attachments);
+    void processPendingAttachmentQueue();
+    bool sendUploadedAttachmentToDialog(const QVariantMap &attachment, const UploadedMediaInfo &uploaded,
+                                        int dialogUid, int chatUid, qint64 groupId);
     void sendCallInvite(const QString &callType);
     QString buildCallJoinUrl(const QString &callType) const;
     bool ensureCallTargetFromCurrentChat();
@@ -360,6 +375,7 @@ private:
     void loadDraftStore(int ownerUid);
     void saveDraftStore(int ownerUid) const;
     void applyDraftToDialogModel(int dialogUid, const QString &draftText);
+    void syncCurrentPendingAttachments();
     void sendGroupReadAck(qint64 groupId, qint64 readTs = 0);
     void sendPrivateReadAck(int peerUid, qint64 readTs = 0);
     bool tryReconnectChat();
@@ -427,6 +443,8 @@ private:
     bool _group_icon_upload_in_progress = false;
     QString _media_upload_progress_text;
     QString _current_draft_text;
+    QVariantList _current_pending_attachments;
+    QHash<int, QVariantList> _dialog_pending_attachment_map;
     bool _current_dialog_pinned = false;
     bool _current_dialog_muted = false;
     QString _reply_to_msg_id;
@@ -466,6 +484,11 @@ private:
     int _chat_reconnect_attempts = 0;
     bool _ignore_next_login_disconnect = false;
     int _last_emitted_dialog_uid = 0;
+    QVariantList _pending_send_queue;
+    int _pending_send_dialog_uid = 0;
+    int _pending_send_chat_uid = 0;
+    qint64 _pending_send_group_id = 0;
+    int _pending_send_total_count = 0;
 };
 
 #endif // APPCONTROLLER_H

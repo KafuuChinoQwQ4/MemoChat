@@ -12,14 +12,17 @@ Item {
     property bool mediaUploadInProgress: false
     property string mediaUploadProgressText: ""
     property string draftText: ""
+    property var pendingAttachments: []
     property bool syncingDraftText: false
     property string transientTipText: ""
     property bool hasReplyContext: false
     property string replyTargetName: ""
     property string replyPreviewText: ""
-    signal sendText(string text)
+    readonly property bool hasPendingAttachmentItems: pendingAttachments && pendingAttachments.length > 0
+    signal sendComposer(string text)
     signal sendImage()
     signal sendFile()
+    signal removePendingAttachment(string attachmentId)
     signal sendVoiceCall()
     signal sendVideoCall()
     signal draftEdited(string text)
@@ -424,48 +427,160 @@ Item {
             glowTopColor: Qt.rgba(1, 1, 1, 0.20)
             glowBottomColor: Qt.rgba(1, 1, 1, 0.02)
 
-            TextArea {
-                id: messageInput
+            ColumnLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.topMargin: 12
-                anchors.rightMargin: 106
-                anchors.bottomMargin: 12
-                placeholderText: "输入消息..."
-                enabled: root.enabledComposer && !root.mediaUploadInProgress
-                color: "#253247"
-                selectionColor: "#7baee899"
-                selectedTextColor: "#ffffff"
-                wrapMode: Text.Wrap
-                font.pixelSize: 17
-                background: Item { }
-                onTextChanged: {
-                    if (!root.syncingDraftText) {
-                        root.draftEdited(text)
+                anchors.margins: 10
+                spacing: 8
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: root.hasPendingAttachmentItems ? 76 : 0
+                    visible: root.hasPendingAttachmentItems
+                    radius: 10
+                    color: Qt.rgba(0.88, 0.93, 0.98, 0.42)
+                    border.color: Qt.rgba(0.49, 0.67, 0.89, 0.30)
+
+                    Flickable {
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        clip: true
+                        contentWidth: attachmentRow.implicitWidth
+                        contentHeight: attachmentRow.height
+
+                        Row {
+                            id: attachmentRow
+                            spacing: 8
+
+                            Repeater {
+                                model: root.pendingAttachments
+
+                                delegate: Rectangle {
+                                    width: modelData.type === "image" ? 96 : 164
+                                    height: 52
+                                    radius: 8
+                                    color: Qt.rgba(1, 1, 1, 0.50)
+                                    border.color: Qt.rgba(0.44, 0.61, 0.82, 0.28)
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 6
+                                        anchors.rightMargin: 4
+                                        spacing: 6
+
+                                        Rectangle {
+                                            Layout.preferredWidth: 40
+                                            Layout.preferredHeight: 40
+                                            radius: 6
+                                            color: Qt.rgba(0.80, 0.88, 0.96, 0.65)
+                                            border.color: Qt.rgba(1, 1, 1, 0.44)
+                                            clip: true
+
+                                            Image {
+                                                anchors.fill: parent
+                                                anchors.margins: modelData.type === "image" ? 0 : 10
+                                                source: modelData.type === "image" ? modelData.previewUrl : "qrc:/icons/file.png"
+                                                fillMode: modelData.type === "image" ? Image.PreserveAspectCrop : Image.PreserveAspectFit
+                                                sourceSize.width: 80
+                                                sourceSize.height: 80
+                                            }
+                                        }
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 1
+
+                                            Label {
+                                                Layout.fillWidth: true
+                                                text: modelData.fileName
+                                                color: "#2a3950"
+                                                font.pixelSize: 12
+                                                elide: Text.ElideMiddle
+                                            }
+
+                                            Label {
+                                                Layout.fillWidth: true
+                                                text: modelData.type === "image" ? "图片待发送" : "文件待发送"
+                                                color: "#667b95"
+                                                font.pixelSize: 11
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+
+                                        ToolButton {
+                                            id: removeButton
+                                            Layout.preferredWidth: 24
+                                            Layout.preferredHeight: 24
+                                            enabled: !root.mediaUploadInProgress
+                                            onClicked: root.removePendingAttachment(modelData.attachmentId)
+                                            contentItem: Label {
+                                                text: "x"
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                                color: "#516378"
+                                                font.pixelSize: 12
+                                            }
+                                            background: Rectangle {
+                                                radius: 6
+                                                color: removeButton.down ? Qt.rgba(0.35, 0.61, 0.90, 0.18)
+                                                                         : removeButton.hovered ? Qt.rgba(0.35, 0.61, 0.90, 0.12)
+                                                                                                : "transparent"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-            }
 
-            GlassButton {
-                id: sendButton
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                anchors.rightMargin: 10
-                anchors.bottomMargin: 10
-                implicitWidth: 88
-                implicitHeight: 34
-                textPixelSize: 14
-                cornerRadius: 9
-                text: "发送"
-                normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.26)
-                hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.36)
-                pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.44)
-                disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                enabled: root.enabledComposer && !root.mediaUploadInProgress && messageInput.text.trim().length > 0
-                onClicked: {
-                    root.sendText(messageInput.text)
-                    messageInput.clear()
-                    root.draftEdited("")
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 10
+
+                    TextArea {
+                        id: messageInput
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        placeholderText: "输入消息..."
+                        enabled: root.enabledComposer && !root.mediaUploadInProgress
+                        color: "#253247"
+                        selectionColor: "#7baee899"
+                        selectedTextColor: "#ffffff"
+                        wrapMode: Text.Wrap
+                        font.pixelSize: 17
+                        background: Item { }
+                        onTextChanged: {
+                            if (!root.syncingDraftText) {
+                                root.draftEdited(text)
+                            }
+                        }
+                    }
+
+                    GlassButton {
+                        id: sendButton
+                        Layout.alignment: Qt.AlignBottom
+                        implicitWidth: 88
+                        implicitHeight: 34
+                        textPixelSize: 14
+                        cornerRadius: 9
+                        text: "发送"
+                        normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.26)
+                        hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.36)
+                        pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.44)
+                        disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                        enabled: root.enabledComposer
+                                 && !root.mediaUploadInProgress
+                                 && (messageInput.text.trim().length > 0 || root.hasPendingAttachmentItems)
+                        onClicked: {
+                            const shouldClearText = !root.hasPendingAttachmentItems
+                            root.sendComposer(messageInput.text)
+                            if (shouldClearText) {
+                                messageInput.clear()
+                                root.draftEdited("")
+                            }
+                        }
+                    }
                 }
             }
         }
