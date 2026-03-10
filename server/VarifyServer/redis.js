@@ -56,6 +56,15 @@ async function GetRedis(key, spanContext = null) {
   }
 }
 
+async function GetRedisTTL(key) {
+  try {
+    return await RedisCli.ttl(key);
+  } catch (error) {
+    logger.error({ event: 'redis.ttl.error', key, error: error.message || String(error), module: 'redis', error_type: 'redis' }, 'redis ttl error');
+    return -2;
+  }
+}
+
 async function QueryRedis(key, spanContext = null) {
   const span = childSpan(spanContext, 'Redis EXISTS', 'CLIENT', {
     'db.system': 'redis',
@@ -87,8 +96,7 @@ async function SetRedisExpire(key, value, exptime, spanContext = null) {
     key,
   });
   try {
-    await RedisCli.set(key, value);
-    await RedisCli.expire(key, exptime);
+    await RedisCli.set(key, value, 'EX', exptime);
     exportZipkinSpan(span, { exptime });
     return true;
   } catch (error) {
@@ -113,6 +121,7 @@ async function closeRedis() {
 
 module.exports = {
   GetRedis,
+  GetRedisTTL,
   QueryRedis,
   SetRedisExpire,
   closeRedis,

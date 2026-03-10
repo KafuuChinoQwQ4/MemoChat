@@ -130,7 +130,11 @@ def main() -> int:
                     "agree": True,
                 },
             )
-            _, invite_review_rsp = owner_client.recv_until([ID_REVIEW_GROUP_APPLY_RSP], tcp_timeout)
+            _, invite_review_rsp = owner_client.recv_until(
+                [ID_REVIEW_GROUP_APPLY_RSP],
+                tcp_timeout,
+                ignored_messages=[],
+            )
             if int(invite_review_rsp.get("error", -1)) != 0:
                 raise RuntimeError(f"review invite failed: {invite_review_rsp}")
             member_client.recv_until([ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ], tcp_timeout)
@@ -173,7 +177,11 @@ def main() -> int:
                     "agree": True,
                 },
             )
-            _, review_rsp = owner_client.recv_until([ID_REVIEW_GROUP_APPLY_RSP], tcp_timeout)
+            _, review_rsp = owner_client.recv_until(
+                [ID_REVIEW_GROUP_APPLY_RSP],
+                tcp_timeout,
+                ignored_messages=[],
+            )
             if int(review_rsp.get("error", -1)) != 0:
                 raise RuntimeError(f"review group apply failed: {review_rsp}")
             applicant_client.recv_until([ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ], tcp_timeout)
@@ -184,7 +192,11 @@ def main() -> int:
                 ID_GROUP_CHAT_MSG_REQ,
                 build_group_message_payload(int(owner["uid"]), group_id, f"group-message-{trace_id}", "text"),
             )
-            _, group_rsp = owner_client.recv_until([ID_GROUP_CHAT_MSG_RSP], tcp_timeout)
+            _, group_rsp = owner_client.recv_until(
+                [ID_GROUP_CHAT_MSG_RSP],
+                tcp_timeout,
+                ignored_messages=[],
+            )
             if int(group_rsp.get("error", -1)) != 0:
                 raise RuntimeError(f"group message send failed: {group_rsp}")
             member_client.recv_until([ID_NOTIFY_GROUP_CHAT_MSG_REQ], tcp_timeout)

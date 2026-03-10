@@ -1,0 +1,60 @@
+﻿{
+  "scenario": "login.http",
+  "test": "http_login",
+  "time_utc": "20260310_090635",
+  "target": "http://127.0.0.1:8080/user_login",
+  "config": {
+    "total": 6,
+    "concurrency": 1,
+    "timeout_sec": 8.0,
+    "accounts": 6,
+    "use_xor_passwd": true
+  },
+  "summary": {
+    "total": 6,
+    "success": 4,
+    "failed": 2,
+    "success_rate": 0.666667,
+    "elapsed_sec": 20.686347,
+    "throughput_rps": 0.29,
+    "latency_ms": {
+      "min": 47.288,
+      "avg": 3446.728,
+      "p50": 4102.779,
+      "p90": 6223.148,
+      "p95": 6223.148,
+      "p99": 6223.148,
+      "max": 6223.148
+    }
+  },
+  "phase_breakdown": {
+    "http_login": {
+      "min": 47.288,
+      "avg": 3446.728,
+      "p50": 4102.779,
+      "p90": 6223.148,
+      "p95": 6223.148,
+      "p99": 6223.148,
+      "max": 6223.148
+    }
+  },
+  "http_status_counter": {
+    "200": 6
+  },
+  "error_counter": {
+    "http_200_err_1009": 2
+  },
+  "top_errors": {
+    "http_200_err_1009": 2
+  },
+  "preconditions": {
+    "service": [
+      "GateServer",
+      "StatusServer",
+      "Redis"
+    ]
+  },
+  "data_mutation_summary": {
+    "login_requests": 4
+  }
+}

@@ -1,0 +1,119 @@
+﻿{
+  "scenario": "call_invite",
+  "test": "tcp_call_invite",
+  "time_utc": "20260310_091826",
+  "target": {
+    "tcp": [
+      1017,
+      1019
+    ]
+  },
+  "config": {
+    "total": 2,
+    "concurrency": 1,
+    "http_timeout_sec": 8.0,
+    "tcp_timeout_sec": 8.0,
+    "runtime_accounts_csv": "D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\loadtest\\accounts.local.csv",
+    "call_types": [
+      "voice"
+    ]
+  },
+  "summary": {
+    "total": 2,
+    "success": 2,
+    "failed": 0,
+    "success_rate": 1.0,
+    "elapsed_sec": 47.332254,
+    "throughput_rps": 0.042,
+    "latency_ms": {
+      "min": 23454.822,
+      "avg": 23665.141,
+      "p50": 23454.822,
+      "p90": 23875.46,
+      "p95": 23875.46,
+      "p99": 23875.46,
+      "max": 23875.46
+    }
+  },
+  "phase_breakdown": {
+    "search_user": {
+      "min": 47.561,
+      "avg": 47.572,
+      "p50": 47.561,
+      "p90": 47.584,
+      "p95": 47.584,
+      "p99": 47.584,
+      "max": 47.584
+    },
+    "friend_apply_rsp": {
+      "min": 4214.996,
+      "avg": 4222.591,
+      "p50": 4214.996,
+      "p90": 4230.186,
+      "p95": 4230.186,
+      "p99": 4230.186,
+      "max": 4230.186
+    },
+    "friend_apply_notify": {
+      "min": 0.049,
+      "avg": 0.058,
+      "p50": 0.049,
+      "p90": 0.068,
+      "p95": 0.068,
+      "p99": 0.068,
+      "max": 0.068
+    },
+    "friend_auth_rsp": {
+      "min": 4376.161,
+      "avg": 4390.653,
+      "p50": 4376.161,
+      "p90": 4405.144,
+      "p95": 4405.144,
+      "p99": 4405.144,
+      "max": 4405.144
+    },
+    "friend_auth_notify": {
+      "min": 0.054,
+      "avg": 0.059,
+      "p50": 0.054,
+      "p90": 0.064,
+      "p95": 0.064,
+      "p99": 0.064,
+      "max": 0.064
+    },
+    "call_invite": {
+      "min": 4103.069,
+      "avg": 4120.81,
+      "p50": 4103.069,
+      "p90": 4138.552,
+      "p95": 4138.552,
+      "p99": 4138.552,
+      "max": 4138.552
+    }
+  },
+  "error_counter": {},
+  "top_errors": {},
+  "preconditions": {
+    "accounts": 4,
+    "service": [
+      "GateServer",
+      "StatusServer",
+      "ConfiguredChatNodes"
+    ]
+  },
+  "data_mutation_summary": {
+    "call_invites_sent": 2
+  },
+  "samples": [
+    {
+      "caller_email": "friend_17730516336770zn8b@loadtest.local",
+      "callee_email": "friend_1773051654289fm5xi@loadtest.local",
+      "call_type": "voice"
+    },
+    {
+      "caller_email": "group_34028411jv9lcyb@loadtest.local",
+      "callee_email": "group_34032762aw9gz7p@loadtest.local",
+      "call_type": "voice"
+    }
+  ]
+}

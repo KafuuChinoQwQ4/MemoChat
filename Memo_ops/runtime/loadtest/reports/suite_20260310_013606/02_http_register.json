@@ -1,0 +1,74 @@
+﻿{
+  "scenario": "auth.register",
+  "test": "http_register",
+  "time_utc": "20260310_083720",
+  "target": {
+    "verify_code": "/get_varifycode",
+    "register": "/user_register"
+  },
+  "config": {
+    "total": 4,
+    "concurrency": 1,
+    "timeout_sec": 8.0,
+    "runtime_accounts_csv": "D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\loadtest\\accounts.local.csv",
+    "seed_prefix": "register",
+    "domain": "loadtest.local"
+  },
+  "summary": {
+    "total": 4,
+    "success": 0,
+    "failed": 4,
+    "success_rate": 0.0,
+    "elapsed_sec": 36.044609,
+    "throughput_rps": 0.111,
+    "latency_ms": {
+      "min": 9004.665,
+      "avg": 9010.115,
+      "p50": 9007.156,
+      "p90": 9017.147,
+      "p95": 9017.147,
+      "p99": 9017.147,
+      "max": 9017.147
+    }
+  },
+  "phase_breakdown": {},
+  "error_counter": {
+    "exception_timeout": 4
+  },
+  "top_errors": {
+    "exception_timeout": 4
+  },
+  "preconditions": {
+    "service": [
+      "GateServer",
+      "VarifyServer",
+      "Redis",
+      "MySQL"
+    ]
+  },
+  "data_mutation_summary": {
+    "accounts_registered": 0
+  },
+  "samples": [
+    {
+      "email": "register_31803981r1ndtjj@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    },
+    {
+      "email": "register_31812999nnk6au0@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    },
+    {
+      "email": "register_31822006pb43z6u@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    },
+    {
+      "email": "register_31831011h4hse7k@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    }
+  ]
+}

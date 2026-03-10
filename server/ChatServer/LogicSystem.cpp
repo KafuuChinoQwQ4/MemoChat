@@ -1,6 +1,7 @@
 #include "LogicSystem.h"
 #include "StatusGrpcClient.h"
 #include "MysqlMgr.h"
+#include "MongoMgr.h"
 #include "const.h"
 #include "RedisMgr.h"
 #include "UserMgr.h"
@@ -14,6 +15,7 @@
 #include <unordered_set>
 #include <algorithm>
 #include <chrono>
+#include <iostream>
 #include <sstream>
 #include "CServer.h"
 using namespace std;
@@ -843,6 +845,9 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 			rtvalue["error"] = ErrorCodes::RPCFailed;
 			return;
 		}
+		if (MongoMgr::GetInstance()->Enabled() && !MongoMgr::GetInstance()->SavePrivateMessage(msg)) {
+			std::cerr << "[MongoMgr] SavePrivateMessage dual-write failed for msg_id=" << msg.msg_id << std::endl;
+		}
 
 		Json::Value element;
 		element["content"] = content;
@@ -1429,7 +1434,10 @@ void LogicSystem::ForwardGroupMsgHandler(std::shared_ptr<CSession> session, cons
 	}
 
 	std::shared_ptr<GroupMessageInfo> source_msg;
-	if (!MysqlMgr::GetInstance()->GetGroupMessageByMsgId(group_id, source_msg_id, source_msg) || !source_msg) {
+	if (!(
+		(MongoMgr::GetInstance()->Enabled() &&
+			MongoMgr::GetInstance()->GetGroupMessageByMsgId(group_id, source_msg_id, source_msg) && source_msg) ||
+		(MysqlMgr::GetInstance()->GetGroupMessageByMsgId(group_id, source_msg_id, source_msg) && source_msg))) {
 		rtvalue["error"] = ErrorCodes::GroupNotFound;
 		return;
 	}
@@ -1471,6 +1479,17 @@ void LogicSystem::ForwardGroupMsgHandler(std::shared_ptr<CSession> session, cons
 	if (!MysqlMgr::GetInstance()->SaveGroupMessage(info, &server_msg_id, &group_seq)) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
+	}
+	info.server_msg_id = server_msg_id;
+	info.group_seq = group_seq;
+	auto sender_info_for_group_mongo = MysqlMgr::GetInstance()->GetUser(from_uid);
+	if (sender_info_for_group_mongo) {
+		info.from_name = sender_info_for_group_mongo->name;
+		info.from_nick = sender_info_for_group_mongo->nick;
+		info.from_icon = sender_info_for_group_mongo->icon;
+	}
+	if (MongoMgr::GetInstance()->Enabled() && !MongoMgr::GetInstance()->SaveGroupMessage(info)) {
+		std::cerr << "[MongoMgr] SaveGroupMessage dual-write failed for msg_id=" << info.msg_id << std::endl;
 	}
 
 	Json::Value forwarded_msg;
@@ -1575,7 +1594,10 @@ void LogicSystem::ForwardPrivateMsgHandler(std::shared_ptr<CSession> session, co
 	}
 
 	std::shared_ptr<PrivateMessageInfo> source_msg;
-	if (!MysqlMgr::GetInstance()->GetPrivateMessageByMsgId(source_msg_id, source_msg) || !source_msg) {
+	if (!(
+		(MongoMgr::GetInstance()->Enabled() &&
+			MongoMgr::GetInstance()->GetPrivateMessageByMsgId(source_msg_id, source_msg) && source_msg) ||
+		(MysqlMgr::GetInstance()->GetPrivateMessageByMsgId(source_msg_id, source_msg) && source_msg))) {
 		rtvalue["error"] = ErrorCodes::GroupNotFound;
 		return;
 	}
@@ -1622,6 +1644,9 @@ void LogicSystem::ForwardPrivateMsgHandler(std::shared_ptr<CSession> session, co
 	if (!MysqlMgr::GetInstance()->SavePrivateMessage(info)) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
+	}
+	if (MongoMgr::GetInstance()->Enabled() && !MongoMgr::GetInstance()->SavePrivateMessage(info)) {
+		std::cerr << "[MongoMgr] SavePrivateMessage dual-write failed for msg_id=" << info.msg_id << std::endl;
 	}
 
 	Json::Value msg_obj;
@@ -1756,6 +1781,48 @@ void LogicSystem::PushGroupPayload(const std::vector<int>& recipients, short msg
 	const std::string payload_str = payload.toStyledString();
 	std::unordered_map<std::string, std::vector<int>> remote_server_uids;
 
+	if (msgid == ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ) {
+		for (int uid : uniq) {
+			auto route = ResolveOnlineRoute(uid);
+			if (route.kind == OnlineRouteKind::Local && route.session) {
+				route.session->Send(payload_str, msgid);
+				continue;
+			}
+
+			std::string target_server;
+			if (route.kind == OnlineRouteKind::Remote) {
+				target_server = route.redis_server;
+			}
+			if (target_server.empty()) {
+				target_server = ResolveServerFromOnlineSets(std::to_string(uid));
+			}
+			if (target_server.empty()) {
+				continue;
+			}
+
+			GroupMemberBatchReq req;
+			req.set_tcp_msgid(msgid);
+			req.set_payload_json(payload_str);
+			req.add_touids(uid);
+			auto rsp = ChatGrpcClient::GetInstance()->NotifyGroupMemberBatch(target_server, req);
+			if (rsp.error() == ErrorCodes::Success && rsp.delivered() > 0) {
+				RedisMgr::GetInstance()->Set(USERIPPREFIX + std::to_string(uid), target_server);
+				continue;
+			}
+
+			const auto fallback_server = ResolveServerFromOnlineSets(std::to_string(uid));
+			if (fallback_server.empty() || fallback_server == target_server) {
+				continue;
+			}
+
+			auto fallback_rsp = ChatGrpcClient::GetInstance()->NotifyGroupMemberBatch(fallback_server, req);
+			if (fallback_rsp.error() == ErrorCodes::Success && fallback_rsp.delivered() > 0) {
+				RedisMgr::GetInstance()->Set(USERIPPREFIX + std::to_string(uid), fallback_server);
+			}
+		}
+		return;
+	}
+
 	for (int uid : uniq) {
 		const auto route = ResolveOnlineRoute(uid);
 		if (route.kind == OnlineRouteKind::Local && route.session) {
@@ -1782,17 +1849,6 @@ void LogicSystem::PushGroupPayload(const std::vector<int>& recipients, short msg
 				req.add_touids(uid);
 			}
 			ChatGrpcClient::GetInstance()->NotifyGroupMessage(server_name, req);
-			continue;
-		}
-
-		if (msgid == ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ) {
-			GroupMemberBatchReq req;
-			req.set_tcp_msgid(msgid);
-			req.set_payload_json(payload_str);
-			for (int uid : uids) {
-				req.add_touids(uid);
-			}
-			ChatGrpcClient::GetInstance()->NotifyGroupMemberBatch(server_name, req);
 			continue;
 		}
 
@@ -2143,6 +2199,17 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}
+	info.server_msg_id = server_msg_id;
+	info.group_seq = group_seq;
+	auto sender_info_for_group_mongo = MysqlMgr::GetInstance()->GetUser(from_uid);
+	if (sender_info_for_group_mongo) {
+		info.from_name = sender_info_for_group_mongo->name;
+		info.from_nick = sender_info_for_group_mongo->nick;
+		info.from_icon = sender_info_for_group_mongo->icon;
+	}
+	if (MongoMgr::GetInstance()->Enabled() && !MongoMgr::GetInstance()->SaveGroupMessage(info)) {
+		std::cerr << "[MongoMgr] SaveGroupMessage dual-write failed for msg_id=" << info.msg_id << std::endl;
+	}
 
 	Json::Value msg_out = msg;
 	msg_out["created_at"] = static_cast<Json::Int64>(now_ms);
@@ -2234,7 +2301,10 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 
 	std::vector<std::shared_ptr<GroupMessageInfo>> msgs;
 	bool has_more = false;
-	if (!MysqlMgr::GetInstance()->GetGroupHistory(group_id, before_ts, before_seq, limit, msgs, has_more)) {
+	if (!(
+		(MongoMgr::GetInstance()->Enabled() &&
+			MongoMgr::GetInstance()->GetGroupHistory(group_id, before_ts, before_seq, limit, msgs, has_more)) ||
+		MysqlMgr::GetInstance()->GetGroupHistory(group_id, before_ts, before_seq, limit, msgs, has_more))) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}
@@ -2289,6 +2359,14 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 		item["from_name"] = one->from_name;
 		item["from_nick"] = one->from_nick;
 		item["from_icon"] = one->from_icon;
+		if ((one->from_name.empty() || one->from_nick.empty()) && one->from_uid > 0) {
+			auto from_user = MysqlMgr::GetInstance()->GetUser(one->from_uid);
+			if (from_user) {
+				item["from_name"] = from_user->name;
+				item["from_nick"] = from_user->nick;
+				item["from_icon"] = from_user->icon;
+			}
+		}
 		rtvalue["messages"].append(item);
 	}
 	if (!msgs.empty() && msgs.back()) {
@@ -2341,6 +2419,9 @@ void LogicSystem::EditPrivateMsgHandler(std::shared_ptr<CSession> session, const
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
+	if (MongoMgr::GetInstance()->Enabled() && !MongoMgr::GetInstance()->UpdatePrivateMessageContent(uid, peer_uid, target_msg_id, content, now_ms)) {
+		std::cerr << "[MongoMgr] UpdatePrivateMessageContent sync failed for msg_id=" << target_msg_id << std::endl;
+	}
 
 	Json::Value notify;
 	notify["error"] = ErrorCodes::Success;
@@ -2387,6 +2468,9 @@ void LogicSystem::RevokePrivateMsgHandler(std::shared_ptr<CSession> session, con
 	if (!MysqlMgr::GetInstance()->RevokePrivateMessage(uid, peer_uid, target_msg_id, now_ms)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
+	}
+	if (MongoMgr::GetInstance()->Enabled() && !MongoMgr::GetInstance()->RevokePrivateMessage(uid, peer_uid, target_msg_id, now_ms)) {
+		std::cerr << "[MongoMgr] RevokePrivateMessage sync failed for msg_id=" << target_msg_id << std::endl;
 	}
 
 	Json::Value notify;
@@ -2436,6 +2520,9 @@ void LogicSystem::EditGroupMsgHandler(std::shared_ptr<CSession> session, const s
 	if (!MysqlMgr::GetInstance()->UpdateGroupMessageContent(group_id, uid, target_msg_id, content, now_ms)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
+	}
+	if (MongoMgr::GetInstance()->Enabled() && !MongoMgr::GetInstance()->UpdateGroupMessageContent(group_id, uid, target_msg_id, content, now_ms)) {
+		std::cerr << "[MongoMgr] UpdateGroupMessageContent sync failed for msg_id=" << target_msg_id << std::endl;
 	}
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
@@ -2494,6 +2581,9 @@ void LogicSystem::RevokeGroupMsgHandler(std::shared_ptr<CSession> session, const
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
+	if (MongoMgr::GetInstance()->Enabled() && !MongoMgr::GetInstance()->RevokeGroupMessage(group_id, uid, target_msg_id, now_ms)) {
+		std::cerr << "[MongoMgr] RevokeGroupMessage sync failed for msg_id=" << target_msg_id << std::endl;
+	}
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
 	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
@@ -2546,7 +2636,10 @@ void LogicSystem::PrivateHistoryHandler(std::shared_ptr<CSession> session, const
 
 	std::vector<std::shared_ptr<PrivateMessageInfo>> messages;
 	bool has_more = false;
-	if (!MysqlMgr::GetInstance()->GetPrivateHistory(uid, peer_uid, before_ts, before_msg_id, limit, messages, has_more)) {
+	if (!(
+		(MongoMgr::GetInstance()->Enabled() &&
+			MongoMgr::GetInstance()->GetPrivateHistory(uid, peer_uid, before_ts, before_msg_id, limit, messages, has_more)) ||
+		MysqlMgr::GetInstance()->GetPrivateHistory(uid, peer_uid, before_ts, before_msg_id, limit, messages, has_more))) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}

@@ -1,0 +1,42 @@
+﻿{
+    "scenario":  "login",
+    "started_at":  "20260310_021021",
+    "config":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\config.smoke.json",
+    "reports":  [
+                    "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021021\\04_http_login.json",
+                    "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021021\\05_tcp_login.json"
+                ],
+    "totals":  {
+                   "tests":  2,
+                   "success":  12,
+                   "failed":  0
+               },
+    "breakdown":  [
+                      {
+                          "scenario":  "login.http",
+                          "test":  "http_login",
+                          "success":  6,
+                          "failed":  0,
+                          "success_rate":  1.0,
+                          "throughput_rps":  0.244,
+                          "p95_ms":  4112.456,
+                          "report_path":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021021\\04_http_login.json",
+                          "top_errors":  {
+
+                                         }
+                      },
+                      {
+                          "scenario":  "login.tcp",
+                          "test":  "tcp_login",
+                          "success":  6,
+                          "failed":  0,
+                          "success_rate":  1.0,
+                          "throughput_rps":  0.214,
+                          "p95_ms":  6130.005,
+                          "report_path":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021021\\05_tcp_login.json",
+                          "top_errors":  {
+
+                                         }
+                      }
+                  ]
+}

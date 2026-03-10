@@ -1,0 +1,28 @@
+﻿{
+    "scenario":  "group",
+    "started_at":  "20260310_022108",
+    "config":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\config.smoke.json",
+    "reports":  [
+                    "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_022108\\07_tcp_group_ops.json"
+                ],
+    "totals":  {
+                   "tests":  1,
+                   "success":  0,
+                   "failed":  2
+               },
+    "breakdown":  [
+                      {
+                          "scenario":  "group_ops",
+                          "test":  "tcp_group_ops",
+                          "success":  0,
+                          "failed":  2,
+                          "success_rate":  0.0,
+                          "throughput_rps":  0.022,
+                          "p95_ms":  46525.522,
+                          "report_path":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_022108\\07_tcp_group_ops.json",
+                          "top_errors":  {
+                                             "exception_timeout":  2
+                                         }
+                      }
+                  ]
+}

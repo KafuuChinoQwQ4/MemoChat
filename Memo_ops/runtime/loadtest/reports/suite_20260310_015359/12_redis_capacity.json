@@ -1,0 +1,128 @@
+﻿{
+  "scenario": "redis_capacity",
+  "test": "redis_capacity",
+  "time_utc": "20260310_085732",
+  "target": {
+    "redis": "127.0.0.1"
+  },
+  "config": {
+    "total": 80,
+    "concurrency": 8,
+    "workload_mix": [
+      "verify_code",
+      "token_session",
+      "online_route"
+    ],
+    "pipeline_mode": true
+  },
+  "summary": {
+    "total": 80,
+    "success": 80,
+    "failed": 0,
+    "success_rate": 1.0,
+    "elapsed_sec": 0.306636,
+    "throughput_rps": 260.896,
+    "latency_ms": {
+      "min": 9.004,
+      "avg": 29.293,
+      "p50": 14.355,
+      "p90": 21.959,
+      "p95": 163.014,
+      "p99": 174.666,
+      "max": 174.666
+    }
+  },
+  "phase_breakdown": {
+    "verify_code": {
+      "min": 9.893,
+      "avg": 30.817,
+      "p50": 15.253,
+      "p90": 158.691,
+      "p95": 160.603,
+      "p99": 166.877,
+      "max": 166.877
+    },
+    "token_session": {
+      "min": 10.153,
+      "avg": 31.067,
+      "p50": 15.468,
+      "p90": 157.853,
+      "p95": 164.208,
+      "p99": 166.802,
+      "max": 166.802
+    },
+    "online_route": {
+      "min": 9.004,
+      "avg": 25.868,
+      "p50": 13.781,
+      "p90": 21.959,
+      "p95": 163.014,
+      "p99": 174.666,
+      "max": 174.666
+    }
+  },
+  "error_counter": {},
+  "top_errors": {},
+  "preconditions": {
+    "workloads": [
+      "verify_code",
+      "token_session",
+      "online_route"
+    ]
+  },
+  "data_mutation_summary": {
+    "redis_verify_code_ops": 27,
+    "redis_token_session_ops": 27,
+    "redis_online_route_ops": 26
+  },
+  "samples": [
+    {
+      "workload": "verify_code",
+      "elapsed_ms": 160.603
+    },
+    {
+      "workload": "token_session",
+      "elapsed_ms": 166.802
+    },
+    {
+      "workload": "online_route",
+      "elapsed_ms": 174.666
+    },
+    {
+      "workload": "verify_code",
+      "elapsed_ms": 158.691
+    },
+    {
+      "workload": "token_session",
+      "elapsed_ms": 157.853
+    },
+    {
+      "workload": "online_route",
+      "elapsed_ms": 163.014
+    },
+    {
+      "workload": "verify_code",
+      "elapsed_ms": 166.877
+    },
+    {
+      "workload": "token_session",
+      "elapsed_ms": 164.208
+    },
+    {
+      "workload": "online_route",
+      "elapsed_ms": 11.967
+    },
+    {
+      "workload": "verify_code",
+      "elapsed_ms": 13.88
+    },
+    {
+      "workload": "token_session",
+      "elapsed_ms": 13.509
+    },
+    {
+      "workload": "online_route",
+      "elapsed_ms": 11.499
+    }
+  ]
+}

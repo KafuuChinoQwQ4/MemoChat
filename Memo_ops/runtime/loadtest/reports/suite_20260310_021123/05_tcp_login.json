@@ -1,0 +1,58 @@
+﻿{
+  "scenario": "login.tcp",
+  "test": "tcp_login",
+  "time_utc": "20260310_091308",
+  "target": {
+    "gate_url": "http://127.0.0.1:8080",
+    "login_path": "/user_login"
+  },
+  "config": {
+    "total": 6,
+    "concurrency": 1,
+    "http_timeout_sec": 8.0,
+    "tcp_timeout_sec": 8.0,
+    "accounts": 4,
+    "use_xor_passwd": true
+  },
+  "summary": {
+    "total": 6,
+    "success": 6,
+    "failed": 0,
+    "success_rate": 1.0,
+    "elapsed_sec": 28.159333,
+    "throughput_rps": 0.213,
+    "latency_ms": {
+      "min": 4232.176,
+      "avg": 4692.932,
+      "p50": 4323.988,
+      "p90": 6081.581,
+      "p95": 6081.581,
+      "p99": 6081.581,
+      "max": 6081.581
+    }
+  },
+  "error_counter": {},
+  "top_errors": {},
+  "phase_breakdown": {
+    "tcp_login_chain": {
+      "min": 4232.176,
+      "avg": 4692.932,
+      "p50": 4323.988,
+      "p90": 6081.581,
+      "p95": 6081.581,
+      "p99": 6081.581,
+      "max": 6081.581
+    }
+  },
+  "preconditions": {
+    "service": [
+      "GateServer",
+      "StatusServer",
+      "ConfiguredChatNodes",
+      "Redis"
+    ]
+  },
+  "data_mutation_summary": {
+    "tcp_login_requests": 6
+  }
+}

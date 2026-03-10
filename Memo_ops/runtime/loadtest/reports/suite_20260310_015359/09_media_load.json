@@ -1,0 +1,75 @@
+﻿{
+  "scenario": "media",
+  "test": "media_load",
+  "time_utc": "20260310_085716",
+  "target": {
+    "http": [
+      "/upload_media_init",
+      "/upload_media_chunk",
+      "/upload_media_status",
+      "/upload_media_complete",
+      "/media/download"
+    ]
+  },
+  "config": {
+    "total": 2,
+    "concurrency": 1,
+    "http_timeout_sec": 20.0,
+    "runtime_accounts_csv": "D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\loadtest\\accounts.local.csv",
+    "file_sizes_kb": [
+      128
+    ],
+    "media_types": [
+      "image",
+      "file"
+    ]
+  },
+  "summary": {
+    "total": 2,
+    "success": 0,
+    "failed": 2,
+    "success_rate": 0.0,
+    "elapsed_sec": 14.280709,
+    "throughput_rps": 0.14,
+    "latency_ms": {
+      "min": 7120.235,
+      "avg": 7126.525,
+      "p50": 7120.235,
+      "p90": 7132.815,
+      "p95": 7132.815,
+      "p99": 7132.815,
+      "max": 7132.815
+    }
+  },
+  "phase_breakdown": {},
+  "error_counter": {
+    "exception_ConnectionRefusedError": 2
+  },
+  "top_errors": {
+    "exception_ConnectionRefusedError": 2
+  },
+  "preconditions": {
+    "accounts": 2,
+    "service": [
+      "GateServer",
+      "MySQL",
+      "Redis"
+    ]
+  },
+  "data_mutation_summary": {
+    "media_uploaded": 0,
+    "media_downloaded": 0
+  },
+  "samples": [
+    {
+      "account_email": "friend_17730516336770zn8b@loadtest.local",
+      "upload_id": "",
+      "media_type": "image"
+    },
+    {
+      "account_email": "friend_1773051654289fm5xi@loadtest.local",
+      "upload_id": "",
+      "media_type": "file"
+    }
+  ]
+}

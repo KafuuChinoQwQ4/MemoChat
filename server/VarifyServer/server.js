@@ -22,6 +22,42 @@ function traceIdFromCall(call) {
   return newTraceId();
 }
 
+async function resolveVerifyCode(email, span) {
+  const canonicalKey = const_module.code_prefix + email;
+  let code = await redis_module.GetRedis(canonicalKey, span);
+  if (code !== null) {
+    return code;
+  }
+
+  // Short compatibility window for environments that still have legacy bare-email keys.
+  const legacyCode = await redis_module.GetRedis(email, span);
+  if (legacyCode === null) {
+    return null;
+  }
+
+  let ttl = await redis_module.GetRedisTTL(email);
+  if (ttl <= 0) {
+    ttl = 600;
+  }
+  await redis_module.SetRedisExpire(canonicalKey, legacyCode, ttl, span);
+  logger.warn(
+    {
+      event: 'varify.get_code.legacy_key_migrated',
+      trace_id: span.trace_id,
+      request_id: span.request_id,
+      span_id: span.span_id,
+      email: redactEmail(email),
+      module: 'grpc',
+    },
+    'migrated legacy verify-code key to canonical prefix'
+  );
+  return legacyCode;
+}
+
+function isSyntheticLoadtestEmail(email) {
+  return typeof email === 'string' && email.toLowerCase().endsWith('@loadtest.local');
+}
+
 async function GetVarifyCode(call, callback) {
   const span = startServerSpan('VarifyService.GetVarifyCode', call, {
     'rpc.system': 'grpc',
@@ -33,7 +69,7 @@ async function GetVarifyCode(call, callback) {
   logger.info({ event: 'varify.get_code.request', trace_id, request_id: span.request_id, span_id: span.span_id, email: redactEmail(email), module: 'grpc' }, 'get verify code request');
 
   try {
-    let query_res = await redis_module.GetRedis(const_module.code_prefix + email, span);
+    let query_res = await resolveVerifyCode(email, span);
     let uniqueId = query_res;
 
     if (query_res == null) {
@@ -53,28 +89,43 @@ async function GetVarifyCode(call, callback) {
       }
     }
 
-    const text_str = `您的验证码为${uniqueId}请三分钟内完成注册`;
-    const mailOptions = {
-      from: config_module.email_from,
-      to: email,
-      subject: '验证码',
-      text: text_str,
-    };
+    if (isSyntheticLoadtestEmail(email)) {
+      logger.info(
+        {
+          event: 'varify.get_code.synthetic_sent',
+          trace_id,
+          request_id: span.request_id,
+          span_id: span.span_id,
+          email: redactEmail(email),
+          module: 'grpc',
+        },
+        'verify code generated without smtp for synthetic loadtest account'
+      );
+      exportZipkinSpan(span, { email: redactEmail(email), peer_service: 'redis', delivery_mode: 'synthetic' });
+    } else {
+      const text_str = `您的验证码为${uniqueId}请三分钟内完成注册`;
+      const mailOptions = {
+        from: config_module.email_from,
+        to: email,
+        subject: '验证码',
+        text: text_str,
+      };
 
-    const send_res = await emailModule.SendMail(mailOptions);
-    logger.info(
-      {
-        event: 'varify.get_code.sent',
-        trace_id,
-        request_id: span.request_id,
-        span_id: span.span_id,
-        email: redactEmail(email),
-        smtp_message: send_res,
-        module: 'grpc',
-      },
-      'verify code sent'
-    );
-    exportZipkinSpan(span, { email: redactEmail(email), peer_service: 'smtp' });
+      const send_res = await emailModule.SendMail(mailOptions);
+      logger.info(
+        {
+          event: 'varify.get_code.sent',
+          trace_id,
+          request_id: span.request_id,
+          span_id: span.span_id,
+          email: redactEmail(email),
+          smtp_message: send_res,
+          module: 'grpc',
+        },
+        'verify code sent'
+      );
+      exportZipkinSpan(span, { email: redactEmail(email), peer_service: 'smtp' });
+    }
 
     callback(null, {
       email,

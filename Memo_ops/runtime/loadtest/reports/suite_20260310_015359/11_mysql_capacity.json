@@ -1,0 +1,126 @@
+﻿{
+  "scenario": "mysql_capacity",
+  "test": "mysql_capacity",
+  "time_utc": "20260310_085732",
+  "target": {
+    "database": "memo"
+  },
+  "config": {
+    "total": 40,
+    "concurrency": 4,
+    "workload_mix": [
+      "read",
+      "write",
+      "mixed"
+    ],
+    "slow_query_ms": 50.0
+  },
+  "summary": {
+    "total": 40,
+    "success": 40,
+    "failed": 0,
+    "success_rate": 1.0,
+    "elapsed_sec": 0.225782,
+    "throughput_rps": 177.162,
+    "latency_ms": {
+      "min": 4.685,
+      "avg": 21.884,
+      "p50": 23.231,
+      "p90": 34.287,
+      "p95": 46.858,
+      "p99": 64.711,
+      "max": 64.711
+    }
+  },
+  "phase_breakdown": {
+    "read": {
+      "min": 4.685,
+      "avg": 6.292,
+      "p50": 5.872,
+      "p90": 9.311,
+      "p95": 10.909,
+      "p99": 10.909,
+      "max": 10.909
+    },
+    "write": {
+      "min": 16.914,
+      "avg": 26.352,
+      "p50": 26.651,
+      "p90": 33.072,
+      "p95": 37.672,
+      "p99": 37.672,
+      "max": 37.672
+    },
+    "mixed": {
+      "min": 17.332,
+      "avg": 34.207,
+      "p50": 31.457,
+      "p90": 54.19,
+      "p95": 64.711,
+      "p99": 64.711,
+      "max": 64.711
+    }
+  },
+  "error_counter": {},
+  "top_errors": {},
+  "preconditions": {
+    "seed_group_id": 8,
+    "seed_owner_uid": 1067,
+    "seed_peer_uid": 1068
+  },
+  "data_mutation_summary": {
+    "mysql_reads": 14,
+    "mysql_writes": 26,
+    "mysql_slow_queries": 2
+  },
+  "samples": [
+    {
+      "workload": "read",
+      "elapsed_ms": 10.909
+    },
+    {
+      "workload": "write",
+      "elapsed_ms": 26.943
+    },
+    {
+      "workload": "mixed",
+      "elapsed_ms": 64.711
+    },
+    {
+      "workload": "read",
+      "elapsed_ms": 9.311
+    },
+    {
+      "workload": "write",
+      "elapsed_ms": 30.885
+    },
+    {
+      "workload": "mixed",
+      "elapsed_ms": 54.19
+    },
+    {
+      "workload": "read",
+      "elapsed_ms": 6.091
+    },
+    {
+      "workload": "write",
+      "elapsed_ms": 23.274
+    },
+    {
+      "workload": "mixed",
+      "elapsed_ms": 33.745
+    },
+    {
+      "workload": "read",
+      "elapsed_ms": 5.219
+    },
+    {
+      "workload": "write",
+      "elapsed_ms": 26.651
+    },
+    {
+      "workload": "mixed",
+      "elapsed_ms": 34.287
+    }
+  ]
+}

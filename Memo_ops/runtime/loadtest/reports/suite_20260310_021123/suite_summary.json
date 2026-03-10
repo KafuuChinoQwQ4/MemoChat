@@ -1,0 +1,182 @@
+﻿{
+    "scenario":  "all",
+    "started_at":  "20260310_021123",
+    "config":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\config.smoke.json",
+    "reports":  [
+                    "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\01_http_verify_code.json",
+                    "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\02_http_register.json",
+                    "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\03_http_reset_password.json",
+                    "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\04_http_login.json",
+                    "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\05_tcp_login.json",
+                    "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\06_tcp_friendship.json",
+                    "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\07_tcp_group_ops.json",
+                    "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\08_tcp_history_ack.json",
+                    "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\09_media_load.json",
+                    "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\10_tcp_call_invite.json",
+                    "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\11_mysql_capacity.json",
+                    "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\12_redis_capacity.json"
+                ],
+    "totals":  {
+                   "tests":  12,
+                   "success":  156,
+                   "failed":  2
+               },
+    "breakdown":  [
+                      {
+                          "scenario":  "auth.verify_code",
+                          "test":  "http_verify_code",
+                          "success":  8,
+                          "failed":  0,
+                          "success_rate":  1.0,
+                          "throughput_rps":  0.526,
+                          "p95_ms":  4058.171,
+                          "report_path":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\01_http_verify_code.json",
+                          "top_errors":  {
+
+                                         }
+                      },
+                      {
+                          "scenario":  "auth.register",
+                          "test":  "http_register",
+                          "success":  4,
+                          "failed":  0,
+                          "success_rate":  1.0,
+                          "throughput_rps":  0.215,
+                          "p95_ms":  5213.367,
+                          "report_path":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\02_http_register.json",
+                          "top_errors":  {
+
+                                         }
+                      },
+                      {
+                          "scenario":  "auth.reset_password",
+                          "test":  "http_reset_password",
+                          "success":  4,
+                          "failed":  0,
+                          "success_rate":  1.0,
+                          "throughput_rps":  0.244,
+                          "p95_ms":  4188.36,
+                          "report_path":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\03_http_reset_password.json",
+                          "top_errors":  {
+
+                                         }
+                      },
+                      {
+                          "scenario":  "login.http",
+                          "test":  "http_login",
+                          "success":  6,
+                          "failed":  0,
+                          "success_rate":  1.0,
+                          "throughput_rps":  0.245,
+                          "p95_ms":  4100.622,
+                          "report_path":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\04_http_login.json",
+                          "top_errors":  {
+
+                                         }
+                      },
+                      {
+                          "scenario":  "login.tcp",
+                          "test":  "tcp_login",
+                          "success":  6,
+                          "failed":  0,
+                          "success_rate":  1.0,
+                          "throughput_rps":  0.213,
+                          "p95_ms":  6081.581,
+                          "report_path":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\05_tcp_login.json",
+                          "top_errors":  {
+
+                                         }
+                      },
+                      {
+                          "scenario":  "friendship",
+                          "test":  "tcp_friendship",
+                          "success":  2,
+                          "failed":  0,
+                          "success_rate":  1.0,
+                          "throughput_rps":  0.051,
+                          "p95_ms":  19669.49,
+                          "report_path":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\06_tcp_friendship.json",
+                          "top_errors":  {
+
+                                         }
+                      },
+                      {
+                          "scenario":  "group_ops",
+                          "test":  "tcp_group_ops",
+                          "success":  0,
+                          "failed":  2,
+                          "success_rate":  0.0,
+                          "throughput_rps":  0.022,
+                          "p95_ms":  46522.392,
+                          "report_path":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\07_tcp_group_ops.json",
+                          "top_errors":  {
+                                             "exception_timeout":  2
+                                         }
+                      },
+                      {
+                          "scenario":  "history_ack",
+                          "test":  "tcp_history_ack",
+                          "success":  2,
+                          "failed":  0,
+                          "success_rate":  1.0,
+                          "throughput_rps":  0.018,
+                          "p95_ms":  54968.376,
+                          "report_path":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\08_tcp_history_ack.json",
+                          "top_errors":  {
+
+                                         }
+                      },
+                      {
+                          "scenario":  "media",
+                          "test":  "media_load",
+                          "success":  2,
+                          "failed":  0,
+                          "success_rate":  1.0,
+                          "throughput_rps":  0.098,
+                          "p95_ms":  10567.924,
+                          "report_path":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\09_media_load.json",
+                          "top_errors":  {
+
+                                         }
+                      },
+                      {
+                          "scenario":  "call_invite",
+                          "test":  "tcp_call_invite",
+                          "success":  2,
+                          "failed":  0,
+                          "success_rate":  1.0,
+                          "throughput_rps":  0.042,
+                          "p95_ms":  23875.46,
+                          "report_path":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\10_tcp_call_invite.json",
+                          "top_errors":  {
+
+                                         }
+                      },
+                      {
+                          "scenario":  "mysql_capacity",
+                          "test":  "mysql_capacity",
+                          "success":  40,
+                          "failed":  0,
+                          "success_rate":  1.0,
+                          "throughput_rps":  153.003,
+                          "p95_ms":  52.233,
+                          "report_path":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\11_mysql_capacity.json",
+                          "top_errors":  {
+
+                                         }
+                      },
+                      {
+                          "scenario":  "redis_capacity",
+                          "test":  "redis_capacity",
+                          "success":  80,
+                          "failed":  0,
+                          "success_rate":  1.0,
+                          "throughput_rps":  249.936,
+                          "p95_ms":  173.003,
+                          "report_path":  "D:\\MemoChat-Qml-Drogon\\local-loadtest\\..\\Memo_ops\\runtime\\loadtest\\reports\\suite_20260310_021123\\12_redis_capacity.json",
+                          "top_errors":  {
+
+                                         }
+                      }
+                  ]
+}

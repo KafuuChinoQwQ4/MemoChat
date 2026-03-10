@@ -1,0 +1,114 @@
+﻿{
+  "scenario": "auth.register",
+  "test": "http_register",
+  "time_utc": "20260310_083448",
+  "target": {
+    "verify_code": "/get_varifycode",
+    "register": "/user_register"
+  },
+  "config": {
+    "total": 60,
+    "concurrency": 10,
+    "timeout_sec": 8.0,
+    "runtime_accounts_csv": "D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\loadtest\\accounts.local.csv",
+    "seed_prefix": "register",
+    "domain": "loadtest.local"
+  },
+  "summary": {
+    "total": 60,
+    "success": 0,
+    "failed": 60,
+    "success_rate": 0.0,
+    "elapsed_sec": 54.148735,
+    "throughput_rps": 1.108,
+    "latency_ms": {
+      "min": 9006.679,
+      "avg": 9021.048,
+      "p50": 9021.71,
+      "p90": 9029.533,
+      "p95": 9030.275,
+      "p99": 9039.671,
+      "max": 9039.671
+    }
+  },
+  "phase_breakdown": {},
+  "error_counter": {
+    "exception_timeout": 60
+  },
+  "top_errors": {
+    "exception_timeout": 60
+  },
+  "preconditions": {
+    "service": [
+      "GateServer",
+      "VarifyServer",
+      "Redis",
+      "MySQL"
+    ]
+  },
+  "data_mutation_summary": {
+    "accounts_registered": 0
+  },
+  "samples": [
+    {
+      "email": "register_31633967zueqbot@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    },
+    {
+      "email": "register_31633972qve10vd@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    },
+    {
+      "email": "register_3163397445x67we@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    },
+    {
+      "email": "register_316339753bq5npo@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    },
+    {
+      "email": "register_31633978dwzd0u0@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    },
+    {
+      "email": "register_31633979bqv76mx@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    },
+    {
+      "email": "register_31633980um20d0b@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    },
+    {
+      "email": "register_31633981r3prkme@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    },
+    {
+      "email": "register_31633984wmnf293@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    },
+    {
+      "email": "register_31633985bz9l4pu@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    },
+    {
+      "email": "register_316430024nws5zb@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    },
+    {
+      "email": "register_31643003wwljxq8@loadtest.local",
+      "uid": "",
+      "user_id": ""
+    }
+  ]
+}

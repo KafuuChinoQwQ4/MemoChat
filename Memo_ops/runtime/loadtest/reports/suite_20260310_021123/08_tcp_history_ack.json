@@ -1,0 +1,174 @@
+﻿{
+  "scenario": "history_ack",
+  "test": "tcp_history_ack",
+  "time_utc": "20260310_091718",
+  "target": {
+    "tcp": [
+      1017,
+      1044,
+      1059,
+      1047,
+      1076,
+      1071
+    ]
+  },
+  "config": {
+    "total": 2,
+    "concurrency": 1,
+    "http_timeout_sec": 8.0,
+    "tcp_timeout_sec": 8.0,
+    "runtime_accounts_csv": "D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\loadtest\\accounts.local.csv"
+  },
+  "summary": {
+    "total": 2,
+    "success": 2,
+    "failed": 0,
+    "success_rate": 1.0,
+    "elapsed_sec": 108.2092,
+    "throughput_rps": 0.018,
+    "latency_ms": {
+      "min": 53238.982,
+      "avg": 54103.679,
+      "p50": 53238.982,
+      "p90": 54968.376,
+      "p95": 54968.376,
+      "p99": 54968.376,
+      "max": 54968.376
+    }
+  },
+  "phase_breakdown": {
+    "search_user": {
+      "min": 46.057,
+      "avg": 46.182,
+      "p50": 46.057,
+      "p90": 46.307,
+      "p95": 46.307,
+      "p99": 46.307,
+      "max": 46.307
+    },
+    "friend_apply_rsp": {
+      "min": 4230.451,
+      "avg": 4231.107,
+      "p50": 4230.451,
+      "p90": 4231.763,
+      "p95": 4231.763,
+      "p99": 4231.763,
+      "max": 4231.763
+    },
+    "friend_apply_notify": {
+      "min": 0.042,
+      "avg": 0.051,
+      "p50": 0.042,
+      "p90": 0.059,
+      "p95": 0.059,
+      "p99": 0.059,
+      "max": 0.059
+    },
+    "friend_auth_rsp": {
+      "min": 4375.052,
+      "avg": 4379.66,
+      "p50": 4375.052,
+      "p90": 4384.267,
+      "p95": 4384.267,
+      "p99": 4384.267,
+      "max": 4384.267
+    },
+    "friend_auth_notify": {
+      "min": 0.055,
+      "avg": 0.061,
+      "p50": 0.055,
+      "p90": 0.067,
+      "p95": 0.067,
+      "p99": 0.067,
+      "max": 0.067
+    },
+    "private_message_warmup": {
+      "min": 16410.278,
+      "avg": 16574.094,
+      "p50": 16410.278,
+      "p90": 16737.91,
+      "p95": 16737.91,
+      "p99": 16737.91,
+      "max": 16737.91
+    },
+    "group_create": {
+      "min": 4315.221,
+      "avg": 4390.603,
+      "p50": 4315.221,
+      "p90": 4465.986,
+      "p95": 4465.986,
+      "p99": 4465.986,
+      "max": 4465.986
+    },
+    "group_message_warmup": {
+      "min": 8803.759,
+      "avg": 8873.951,
+      "p50": 8803.759,
+      "p90": 8944.143,
+      "p95": 8944.143,
+      "p99": 8944.143,
+      "max": 8944.143
+    },
+    "private_history": {
+      "min": 104.704,
+      "avg": 147.456,
+      "p50": 104.704,
+      "p90": 190.207,
+      "p95": 190.207,
+      "p99": 190.207,
+      "max": 190.207
+    },
+    "private_read_ack": {
+      "min": 97.046,
+      "avg": 101.086,
+      "p50": 97.046,
+      "p90": 105.125,
+      "p95": 105.125,
+      "p99": 105.125,
+      "max": 105.125
+    },
+    "group_history": {
+      "min": 4207.504,
+      "avg": 4261.213,
+      "p50": 4207.504,
+      "p90": 4314.922,
+      "p95": 4314.922,
+      "p99": 4314.922,
+      "max": 4314.922
+    },
+    "group_read_ack": {
+      "min": 138.253,
+      "avg": 142.136,
+      "p50": 138.253,
+      "p90": 146.019,
+      "p95": 146.019,
+      "p99": 146.019,
+      "max": 146.019
+    }
+  },
+  "error_counter": {},
+  "top_errors": {},
+  "preconditions": {
+    "accounts": 4,
+    "service": [
+      "GateServer",
+      "StatusServer",
+      "ConfiguredChatNodes"
+    ]
+  },
+  "data_mutation_summary": {
+    "history_flows_completed": 2
+  },
+  "samples": [
+    {
+      "owner_email": "friend_17730516336770zn8b@loadtest.local",
+      "peer_email": "friend_1773051654289fm5xi@loadtest.local",
+      "group_id": 11
+    },
+    {
+      "owner_email": "group_34028411jv9lcyb@loadtest.local",
+      "peer_email": "group_34032762aw9gz7p@loadtest.local",
+      "group_id": 12
+    }
+  ]
+}

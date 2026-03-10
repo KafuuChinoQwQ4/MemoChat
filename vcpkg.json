@@ -24,6 +24,7 @@
         "boost-property-tree",
         "boost-uuid",
         "spdlog",
+        "mongo-cxx-driver",
         {
           "name": "mysql-connector-cpp",
           "features": [
