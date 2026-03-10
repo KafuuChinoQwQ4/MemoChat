@@ -339,6 +339,31 @@ QString AppController::replyPreviewText() const
     return _reply_preview_text;
 }
 
+bool AppController::dialogsReady() const
+{
+    return _dialogs_ready;
+}
+
+bool AppController::contactsReady() const
+{
+    return _contacts_ready;
+}
+
+bool AppController::groupsReady() const
+{
+    return _groups_ready;
+}
+
+bool AppController::applyReady() const
+{
+    return _apply_ready;
+}
+
+bool AppController::chatShellBusy() const
+{
+    return _page == ChatPage && !_dialogs_ready;
+}
+
 void AppController::setContactPane(ContactPane pane)
 {
     if (_contact_pane == pane) {
@@ -836,4 +861,40 @@ void AppController::setPage(Page newPage)
 QString AppController::normalizeIconPath(QString icon) const
 {
     return normalizeIconForQml(icon);
+}
+
+void AppController::setDialogsReady(bool ready)
+{
+    if (_dialogs_ready == ready) {
+        return;
+    }
+    _dialogs_ready = ready;
+    emit lazyBootstrapStateChanged();
+}
+
+void AppController::setContactsReady(bool ready)
+{
+    if (_contacts_ready == ready) {
+        return;
+    }
+    _contacts_ready = ready;
+    emit lazyBootstrapStateChanged();
+}
+
+void AppController::setGroupsReady(bool ready)
+{
+    if (_groups_ready == ready) {
+        return;
+    }
+    _groups_ready = ready;
+    emit lazyBootstrapStateChanged();
+}
+
+void AppController::setApplyReady(bool ready)
+{
+    if (_apply_ready == ready) {
+        return;
+    }
+    _apply_ready = ready;
+    emit lazyBootstrapStateChanged();
 }

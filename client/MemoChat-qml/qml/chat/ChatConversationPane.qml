@@ -27,6 +27,7 @@ Rectangle {
     property bool canLoadMorePrivateHistory: false
     property bool mediaUploadInProgress: false
     property string mediaUploadProgressText: ""
+    property bool dialogsReady: false
     property bool _followTail: true
     property bool _topLoadArmed: true
     property real _wheelStepPx: 44
@@ -326,7 +327,9 @@ Rectangle {
 
                 Label {
                     anchors.centerIn: parent
-                    text: root.hasCurrentChat ? "还没有消息，开始聊吧" : "请选择一个会话"
+                    text: root.hasCurrentChat
+                          ? "还没有消息，开始聊吧"
+                          : (root.dialogsReady ? "请选择一个会话" : "正在准备最近会话")
                     color: "#6a7b92"
                     font.pixelSize: 13
                 }

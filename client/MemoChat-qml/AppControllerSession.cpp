@@ -296,7 +296,12 @@ void AppController::onSwitchToChat()
     _private_history_pending_peer_uid = 0;
     _group_history_before_seq = 0;
     _group_history_has_more = true;
-    _dialog_bootstrap_loading = true;
+    _dialog_bootstrap_loading = false;
+    _chat_list_initialized = false;
+    setDialogsReady(false);
+    setContactsReady(false);
+    setGroupsReady(false);
+    setApplyReady(false);
     _pending_group_msg_group_map.clear();
     _dialog_mention_map.clear();
     _dialog_pending_attachment_map.clear();
@@ -358,23 +363,24 @@ void AppController::onSwitchToChat()
         if (_page != ChatPage) {
             return;
         }
-
-        refreshFriendModels();
-        refreshApplyModel();
-        refreshGroupList();
-        requestDialogList();
-        if (_chat_list_model.count() <= 0) {
-            _current_chat_uid = 0;
-            setCurrentChatPeerName("");
-            setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
-            setCurrentDraftText("");
-            setCurrentDialogPinned(false);
-            setCurrentDialogMuted(false);
-        }
-        emitCurrentDialogUidChangedIfNeeded();
+        bootstrapDialogs();
 
         _heartbeat_timer.start(kHeartbeatIntervalMs);
         onHeartbeatTimeout();
+    });
+
+    QTimer::singleShot(120, this, [this]() {
+        if (_page != ChatPage || _dialogs_ready) {
+            return;
+        }
+        ensureChatListInitialized();
+    });
+
+    QTimer::singleShot(220, this, [this]() {
+        if (_page != ChatPage) {
+            return;
+        }
+        bootstrapApplies();
     });
 }
 

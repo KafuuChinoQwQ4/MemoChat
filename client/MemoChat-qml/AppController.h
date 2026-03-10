@@ -90,6 +90,11 @@ class AppController : public QObject
     Q_PROPERTY(bool hasPendingReply READ hasPendingReply NOTIFY pendingReplyChanged)
     Q_PROPERTY(QString replyTargetName READ replyTargetName NOTIFY pendingReplyChanged)
     Q_PROPERTY(QString replyPreviewText READ replyPreviewText NOTIFY pendingReplyChanged)
+    Q_PROPERTY(bool dialogsReady READ dialogsReady NOTIFY lazyBootstrapStateChanged)
+    Q_PROPERTY(bool contactsReady READ contactsReady NOTIFY lazyBootstrapStateChanged)
+    Q_PROPERTY(bool groupsReady READ groupsReady NOTIFY lazyBootstrapStateChanged)
+    Q_PROPERTY(bool applyReady READ applyReady NOTIFY lazyBootstrapStateChanged)
+    Q_PROPERTY(bool chatShellBusy READ chatShellBusy NOTIFY lazyBootstrapStateChanged)
 
 public:
     enum Page {
@@ -179,11 +184,20 @@ public:
     bool hasPendingReply() const;
     QString replyTargetName() const;
     QString replyPreviewText() const;
+    bool dialogsReady() const;
+    bool contactsReady() const;
+    bool groupsReady() const;
+    bool applyReady() const;
+    bool chatShellBusy() const;
 
     Q_INVOKABLE void switchToLogin();
     Q_INVOKABLE void switchToRegister();
     Q_INVOKABLE void switchToReset();
     Q_INVOKABLE void switchChatTab(int tab);
+    Q_INVOKABLE void ensureContactsInitialized();
+    Q_INVOKABLE void ensureGroupsInitialized();
+    Q_INVOKABLE void ensureApplyInitialized();
+    Q_INVOKABLE void ensureChatListInitialized();
     Q_INVOKABLE void clearTip();
     Q_INVOKABLE void selectChatIndex(int index);
     Q_INVOKABLE void selectGroupIndex(int index);
@@ -279,6 +293,7 @@ signals:
     void currentDialogPinnedChanged();
     void currentDialogMutedChanged();
     void pendingReplyChanged();
+    void lazyBootstrapStateChanged();
 
 private slots:
     void onLoginHttpFinished(ReqId id, QString res, ErrorCodes err);
@@ -337,6 +352,14 @@ private:
     void refreshGroupModel();
     void refreshDialogModel();
     void requestDialogList();
+    void bootstrapDialogs();
+    void bootstrapContacts();
+    void bootstrapGroups();
+    void bootstrapApplies();
+    void setDialogsReady(bool ready);
+    void setContactsReady(bool ready);
+    void setGroupsReady(bool ready);
+    void setApplyReady(bool ready);
     void refreshChatLoadMoreState();
     void refreshContactLoadMoreState();
     void loadCurrentChatMessages();
@@ -465,6 +488,11 @@ private:
     qint64 _group_history_before_seq;
     bool _group_history_has_more;
     bool _dialog_bootstrap_loading = false;
+    bool _dialogs_ready = false;
+    bool _contacts_ready = false;
+    bool _groups_ready = false;
+    bool _apply_ready = false;
+    bool _chat_list_initialized = false;
 
     ClientGateway _gateway;
     AuthController _auth_controller;

@@ -16,7 +16,12 @@ public:
 		return _socket;
 	}
 private:
+	using FileResponse = http::response<http::file_body>;
+
 	void CheckDeadline();
+	void FinishRequest(beast::error_code ec);
+	void WriteErrorResponse(http::status status, const std::string& message);
+	void WriteFileResponse();
 	void WriteResponse();
 	void HandleReq();
 	tcp::socket  _socket;
@@ -41,4 +46,5 @@ private:
 	bool _send_file_response = false;
 	std::string _send_file_path;
 	std::string _send_file_content_type;
+	std::shared_ptr<FileResponse> _file_response;
 };

@@ -153,12 +153,28 @@ std::string GuessContentType(const std::string& fileName, const std::string& mim
 }
 
 struct MediaConfig {
-	int max_image_bytes = 20 * 1024 * 1024;
-	int max_file_bytes = 200 * 1024 * 1024;
-	int chunk_size_bytes = 1024 * 1024;
+	int64_t max_image_bytes = 200LL * 1024 * 1024;
+	int64_t max_file_bytes = 20480LL * 1024 * 1024;
+	int chunk_size_bytes = 4 * 1024 * 1024;
 	int session_expire_sec = 86400;
 	std::string storage_provider = "local";
 };
+
+int64_t ParseConfigInt64(const std::string& raw, int64_t fallback) {
+	if (raw.empty()) {
+		return fallback;
+	}
+	try {
+		const int64_t value = std::stoll(raw);
+		if (value <= 0) {
+			return fallback;
+		}
+		return value;
+	}
+	catch (...) {
+		return fallback;
+	}
+}
 
 int ParseConfigInt(const std::string& raw, int fallback) {
 	if (raw.empty()) {
@@ -179,9 +195,9 @@ int ParseConfigInt(const std::string& raw, int fallback) {
 MediaConfig LoadMediaConfig() {
 	MediaConfig cfg;
 	auto media = ConfigMgr::Inst()["Media"];
-	cfg.max_image_bytes = ParseConfigInt(media["MaxImageMB"], 20) * 1024 * 1024;
-	cfg.max_file_bytes = ParseConfigInt(media["MaxFileMB"], 200) * 1024 * 1024;
-	cfg.chunk_size_bytes = ParseConfigInt(media["ChunkSizeKB"], 1024) * 1024;
+	cfg.max_image_bytes = ParseConfigInt64(media["MaxImageMB"], 200) * 1024 * 1024;
+	cfg.max_file_bytes = ParseConfigInt64(media["MaxFileMB"], 20480) * 1024 * 1024;
+	cfg.chunk_size_bytes = ParseConfigInt(media["ChunkSizeKB"], 4096) * 1024;
 	cfg.session_expire_sec = ParseConfigInt(media["SessionExpireSec"], 86400);
 	const std::string provider = media["StorageProvider"];
 	if (!provider.empty()) {
