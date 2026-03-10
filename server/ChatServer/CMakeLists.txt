@@ -8,6 +8,8 @@ add_executable(ChatServer
     CSession.cpp
     DistLock.cpp
     LogicSystem.cpp
+    MongoDao.cpp
+    MongoMgr.cpp
     MsgNode.cpp
     MysqlDao.cpp
     MySqlPool.cpp
@@ -25,6 +27,8 @@ add_executable(ChatServer
     data.h
     DistLock.h
     LogicSystem.h
+    MongoDao.h
+    MongoMgr.h
     MsgNode.h
     MysqlDao.h
     MySqlPool.h
@@ -42,3 +46,4 @@ add_executable(ChatServer
 memochat_add_proto_sources(ChatServer message.proto)
 set_target_properties(ChatServer PROPERTIES FOLDER "Server")
 memochat_configure_server_target(ChatServer)
+target_link_libraries(ChatServer PRIVATE ${MEMOCHAT_MONGOCXX_TARGET} ${MEMOCHAT_BSONCXX_TARGET})
