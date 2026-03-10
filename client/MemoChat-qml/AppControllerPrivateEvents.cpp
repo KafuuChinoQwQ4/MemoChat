@@ -195,6 +195,7 @@ void AppController::onDialogListRsp(QJsonObject payload)
 {
     const bool bootstrappingDialog = _dialog_bootstrap_loading;
     _dialog_bootstrap_loading = false;
+    setDialogsReady(true);
 
     if (!payload.contains("dialogs")) {
         if (bootstrappingDialog && _chat_list_model.count() > 0
@@ -258,6 +259,7 @@ void AppController::onDialogListRsp(QJsonObject payload)
             auto item = DialogListService::buildDialogEntry(seed, decorationState);
             merged.push_back(item);
             _chat_list_model.upsertFriend(item);
+            _chat_list_initialized = true;
             continue;
         }
 

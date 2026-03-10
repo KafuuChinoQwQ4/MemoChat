@@ -30,9 +30,9 @@ QString resolveLocalPath(const QString &localFileUrl)
 }
 
 struct ClientMediaConfig {
-    qint64 maxImageBytes = 20LL * 1024 * 1024;
-    qint64 maxFileBytes = 200LL * 1024 * 1024;
-    int chunkSizeBytes = 1024 * 1024;
+    qint64 maxImageBytes = 200LL * 1024 * 1024;
+    qint64 maxFileBytes = 20480LL * 1024 * 1024;
+    int chunkSizeBytes = 4 * 1024 * 1024;
     int chunkRetry = 3;
 };
 
@@ -41,8 +41,16 @@ ClientMediaConfig loadMediaConfig()
     ClientMediaConfig cfg;
     const QString configPath = QCoreApplication::applicationDirPath() + "/config.ini";
     QSettings settings(configPath, QSettings::IniFormat);
-    const int chunkKb = settings.value("Media/ChunkSizeKB", 1024).toInt();
+    const qint64 maxImageMb = settings.value("Media/MaxImageMB", 200).toLongLong();
+    const qint64 maxFileMb = settings.value("Media/MaxFileMB", 20480).toLongLong();
+    const int chunkKb = settings.value("Media/ChunkSizeKB", 4096).toInt();
     const int retry = settings.value("Media/ChunkRetry", 3).toInt();
+    if (maxImageMb > 0) {
+        cfg.maxImageBytes = maxImageMb * 1024 * 1024;
+    }
+    if (maxFileMb > 0) {
+        cfg.maxFileBytes = maxFileMb * 1024 * 1024;
+    }
     if (chunkKb > 0) {
         cfg.chunkSizeBytes = qBound(256 * 1024, chunkKb * 1024, 4 * 1024 * 1024);
     }

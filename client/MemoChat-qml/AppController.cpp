@@ -215,6 +215,11 @@ void AppController::switchToLogin()
     _group_history_before_seq = 0;
     _group_history_has_more = true;
     _dialog_bootstrap_loading = false;
+    _chat_list_initialized = false;
+    setDialogsReady(false);
+    setContactsReady(false);
+    setGroupsReady(false);
+    setApplyReady(false);
     _can_load_more_private_history = false;
     emit canLoadMorePrivateHistoryChanged();
     setContactLoadingMore(false);
@@ -300,7 +305,49 @@ void AppController::switchChatTab(int tab)
         return;
     }
     _chat_tab = target;
+    if (target == ContactTabPage) {
+        ensureContactsInitialized();
+        ensureApplyInitialized();
+    }
     emit chatTabChanged();
+}
+
+void AppController::ensureContactsInitialized()
+{
+    if (_contacts_ready) {
+        return;
+    }
+    bootstrapContacts();
+}
+
+void AppController::ensureGroupsInitialized()
+{
+    if (_groups_ready) {
+        return;
+    }
+    bootstrapGroups();
+}
+
+void AppController::ensureApplyInitialized()
+{
+    if (_apply_ready) {
+        return;
+    }
+    bootstrapApplies();
+}
+
+void AppController::ensureChatListInitialized()
+{
+    if (_chat_list_initialized) {
+        return;
+    }
+
+    _chat_list_model.clear();
+    const auto chatList = _gateway.userMgr()->GetChatListPerPage();
+    _chat_list_model.setFriends(chatList);
+    _gateway.userMgr()->UpdateChatLoadedCount();
+    _chat_list_initialized = true;
+    refreshChatLoadMoreState();
 }
 
 void AppController::clearTip()
@@ -353,6 +400,7 @@ void AppController::selectChatIndex(int index)
 
 void AppController::selectContactIndex(int index)
 {
+    ensureContactsInitialized();
     const QVariantMap item = _contact_list_model.get(index);
     if (item.isEmpty()) {
         return;
@@ -377,6 +425,7 @@ void AppController::selectContactIndex(int index)
 
 void AppController::selectGroupIndex(int index)
 {
+    ensureGroupsInitialized();
     const QVariantMap item = _group_list_model.get(index);
     if (item.isEmpty()) {
         setPendingReplyContext(QString(), QString(), QString());
@@ -493,6 +542,7 @@ void AppController::selectDialogByUid(int uid)
 
 void AppController::showApplyRequests()
 {
+    ensureApplyInitialized();
     setContactPane(ApplyRequestPane);
     setAuthStatus("", false);
 }
@@ -509,6 +559,7 @@ void AppController::jumpChatWithCurrentContact()
 
 void AppController::loadMoreChats()
 {
+    ensureChatListInitialized();
     if (_chat_loading_more) {
         return;
     }
@@ -548,6 +599,7 @@ void AppController::loadMorePrivateHistory()
 
 void AppController::loadMoreContacts()
 {
+    ensureContactsInitialized();
     if (_contact_loading_more) {
         return;
     }
@@ -774,6 +826,10 @@ void AppController::clearSettingsStatus()
 
 void AppController::refreshGroupList()
 {
+    if (!_groups_ready) {
+        bootstrapGroups();
+        return;
+    }
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
     if (!selfInfo) {
         setGroupStatus("用户状态异常，请重新登录", true);
@@ -1586,19 +1642,9 @@ void AppController::resetPassword(const QString &user, const QString &email, con
 
 void AppController::refreshFriendModels()
 {
-    _chat_list_model.clear();
-    const auto chatList = _gateway.userMgr()->GetChatListPerPage();
-    _chat_list_model.setFriends(chatList);
-    _gateway.userMgr()->UpdateChatLoadedCount();
-    refreshChatLoadMoreState();
-
-    _contact_list_model.clear();
-    const auto contactList = _gateway.userMgr()->GetConListPerPage();
-    _contact_list_model.setFriends(contactList);
-    _gateway.userMgr()->UpdateContactLoadedCount();
-    refreshContactLoadMoreState();
-
-    refreshGroupModel();
+    ensureChatListInitialized();
+    bootstrapContacts();
+    bootstrapGroups();
     refreshDialogModel();
 }
 
@@ -1606,6 +1652,60 @@ void AppController::refreshApplyModel()
 {
     const auto applyList = _gateway.userMgr()->GetApplyListSnapshot();
     _apply_request_model.setApplies(applyList);
+}
+
+void AppController::bootstrapDialogs()
+{
+    if (_dialogs_ready) {
+        return;
+    }
+    _dialog_bootstrap_loading = true;
+    setDialogsReady(false);
+    requestDialogList();
+}
+
+void AppController::bootstrapContacts()
+{
+    if (_contacts_ready) {
+        return;
+    }
+
+    ensureChatListInitialized();
+    _contact_list_model.clear();
+    const auto contactList = _gateway.userMgr()->GetConListPerPage();
+    _contact_list_model.setFriends(contactList);
+    _gateway.userMgr()->UpdateContactLoadedCount();
+    refreshContactLoadMoreState();
+    setContactsReady(true);
+}
+
+void AppController::bootstrapGroups()
+{
+    if (_groups_ready) {
+        return;
+    }
+
+    refreshGroupModel();
+    setGroupsReady(true);
+    if (auto selfInfo = _gateway.userMgr()->GetUserInfo()) {
+        QTimer::singleShot(0, this, [this, uid = selfInfo->_uid]() {
+            auto current = _gateway.userMgr()->GetUserInfo();
+            if (!current || current->_uid != uid || _page != ChatPage) {
+                return;
+            }
+            refreshGroupList();
+        });
+    }
+}
+
+void AppController::bootstrapApplies()
+{
+    if (_apply_ready) {
+        return;
+    }
+
+    refreshApplyModel();
+    setApplyReady(true);
 }
 
 void AppController::refreshGroupModel()
@@ -1746,6 +1846,12 @@ void AppController::loadCurrentChatMessages()
         qInfo() << "Merged local private cache, peer uid:" << _current_chat_uid
                 << "cache count:" << static_cast<qlonglong>(localMessages.size());
     }
+    friendInfo = _gateway.userMgr()->GetFriendById(_current_chat_uid);
+    if (!friendInfo) {
+        _message_model.clear();
+        setCanLoadMorePrivateHistory(false);
+        return;
+    }
     _message_model.setMessages(friendInfo->_chat_msgs, selfInfo->_uid);
     qint64 latestPeerTs = 0;
     for (const auto &one : friendInfo->_chat_msgs) {
@@ -1768,7 +1874,7 @@ void AppController::loadCurrentChatMessages()
             << "message model count:" << _message_model.rowCount()
             << "earliest created at:" << _private_history_before_ts
             << "earliest msg id:" << _private_history_before_msg_id;
-    requestPrivateHistory(_current_chat_uid, 0, QString());
+    requestPrivateHistory(_current_chat_uid, _private_history_before_ts, _private_history_before_msg_id);
 }
 
 void AppController::requestPrivateHistory(int peerUid, qint64 beforeTs, const QString &beforeMsgId)
