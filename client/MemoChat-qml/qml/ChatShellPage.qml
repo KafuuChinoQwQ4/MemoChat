@@ -200,6 +200,7 @@ Rectangle {
                         currentGroupRole: controller.currentGroupRole
                         messageModel: controller.messageModel
                         currentDraftText: controller.currentDraftText
+                        currentPendingAttachments: controller.currentPendingAttachments
                         currentDialogPinned: controller.currentDialogPinned
                         currentDialogMuted: controller.currentDialogMuted
                         hasPendingReply: controller.hasPendingReply
@@ -209,9 +210,10 @@ Rectangle {
                         canLoadMorePrivateHistory: controller.canLoadMorePrivateHistory
                         mediaUploadInProgress: controller.mediaUploadInProgress
                         mediaUploadProgressText: controller.mediaUploadProgressText
-                        onSendText: function(text) { controller.sendTextMessage(text) }
+                        onSendComposer: function(text) { controller.sendCurrentComposerPayload(text) }
                         onSendImage: controller.sendImageMessage()
                         onSendFile: controller.sendFileMessage()
+                        onRemovePendingAttachment: function(attachmentId) { controller.removePendingAttachment(attachmentId) }
                         onSendVoiceCall: controller.startVoiceChat()
                         onSendVideoCall: controller.startVideoChat()
                         onDraftEdited: function(text) { controller.updateCurrentDraft(text) }

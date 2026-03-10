@@ -17,6 +17,7 @@ Rectangle {
     property int currentGroupRole: 1
     property var messageModel
     property string currentDraftText: ""
+    property var currentPendingAttachments: []
     property bool currentDialogPinned: false
     property bool currentDialogMuted: false
     property bool hasPendingReply: false
@@ -30,9 +31,10 @@ Rectangle {
     property bool _topLoadArmed: true
     property real _wheelStepPx: 44
     property bool _stickToBottom: true
-    signal sendText(string text)
+    signal sendComposer(string text)
     signal sendImage()
     signal sendFile()
+    signal removePendingAttachment(string attachmentId)
     signal sendVoiceCall()
     signal sendVideoCall()
     signal draftEdited(string text)
@@ -347,13 +349,14 @@ Rectangle {
                 mediaUploadInProgress: root.mediaUploadInProgress
                 mediaUploadProgressText: root.mediaUploadProgressText
                 draftText: root.currentDraftText
+                pendingAttachments: root.currentPendingAttachments
                 hasReplyContext: root.hasPendingReply
                 replyTargetName: root.replyTargetName
                 replyPreviewText: root.replyPreviewText
-                onSendText: function(text) {
+                onSendComposer: function(text) {
                     root._followTail = true
                     root._stickToBottom = true
-                    root.sendText(text)
+                    root.sendComposer(text)
                     root._requestScrollToEnd()
                 }
                 onSendImage: {
@@ -368,6 +371,7 @@ Rectangle {
                     root.sendFile()
                     root._requestScrollToEnd()
                 }
+                onRemovePendingAttachment: function(attachmentId) { root.removePendingAttachment(attachmentId) }
                 onSendVoiceCall: root.sendVoiceCall()
                 onSendVideoCall: root.sendVideoCall()
                 onDraftEdited: function(text) { root.draftEdited(text) }
