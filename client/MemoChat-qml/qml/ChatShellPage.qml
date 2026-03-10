@@ -14,6 +14,8 @@ Rectangle {
     property real revealProgress: 1.0
     property int viewMode: 0 // 0 = main tabs, 1 = profile center
     property int lastMainTab: controller.chatTab
+    property bool createGroupDialogActivated: false
+    property bool groupManagePopupActivated: false
 
     Connections {
         target: controller
@@ -135,6 +137,9 @@ Rectangle {
                 backdrop: backdropLayer
                 currentTab: controller.chatTab
                 currentDialogUid: controller.currentDialogUid
+                dialogsReady: controller.dialogsReady
+                contactsReady: controller.contactsReady
+                groupsReady: controller.groupsReady
                 dialogModel: controller.dialogListModel
                 chatModel: controller.chatListModel
                 groupModel: controller.groupListModel
@@ -160,7 +165,12 @@ Rectangle {
                 onSearchRequested: function(uidText) { controller.searchUser(uidText) }
                 onSearchCleared: controller.clearSearchState()
                 onAddFriendRequested: function(uid, bakName, tags) { controller.requestAddFriend(uid, bakName, tags) }
-                onCreateGroupRequested: createGroupDialog.open()
+                onCreateGroupRequested: {
+                    createGroupDialogActivated = true
+                    if (createGroupDialogLoader.item) {
+                        createGroupDialogLoader.item.open()
+                    }
+                }
                 onDialogPinToggled: function(uid) { controller.toggleDialogPinnedByUid(uid) }
                 onDialogMuteToggled: function(uid) { controller.toggleDialogMutedByUid(uid) }
                 onDialogMarkRead: function(uid) { controller.markDialogReadByUid(uid) }
@@ -180,196 +190,237 @@ Rectangle {
             glowBottomColor: Qt.rgba(1, 1, 1, 0.04)
             opacity: root.stageValue(0.20, 0.24)
 
-            StackLayout {
+            Item {
                 anchors.fill: parent
                 anchors.margins: 8
                 visible: root.viewMode === 0
-                currentIndex: controller.chatTab
 
-                Item {
+                Loader {
                     anchors.fill: parent
-
-                    ChatConversationPane {
-                        anchors.fill: parent
-                        backdrop: backdropLayer
-                        peerName: controller.currentChatPeerName
-                        selfAvatar: controller.currentUserIcon
-                        peerAvatar: controller.currentChatPeerIcon
-                        hasCurrentChat: controller.hasCurrentChat
-                        isGroupChat: controller.hasCurrentGroup
-                        currentGroupRole: controller.currentGroupRole
-                        messageModel: controller.messageModel
-                        currentDraftText: controller.currentDraftText
-                        currentPendingAttachments: controller.currentPendingAttachments
-                        currentDialogPinned: controller.currentDialogPinned
-                        currentDialogMuted: controller.currentDialogMuted
-                        hasPendingReply: controller.hasPendingReply
-                        replyTargetName: controller.replyTargetName
-                        replyPreviewText: controller.replyPreviewText
-                        privateHistoryLoading: controller.privateHistoryLoading
-                        canLoadMorePrivateHistory: controller.canLoadMorePrivateHistory
-                        mediaUploadInProgress: controller.mediaUploadInProgress
-                        mediaUploadProgressText: controller.mediaUploadProgressText
-                        onSendComposer: function(text) { controller.sendCurrentComposerPayload(text) }
-                        onSendImage: controller.sendImageMessage()
-                        onSendFile: controller.sendFileMessage()
-                        onRemovePendingAttachment: function(attachmentId) { controller.removePendingAttachment(attachmentId) }
-                        onSendVoiceCall: controller.startVoiceChat()
-                        onSendVideoCall: controller.startVideoChat()
-                        onDraftEdited: function(text) { controller.updateCurrentDraft(text) }
-                        onRefreshGroupRequested: controller.refreshGroupList()
-                        onToggleDialogPinned: controller.toggleCurrentDialogPinned()
-                        onToggleDialogMuted: controller.toggleCurrentDialogMuted()
-                        onOpenAttachment: function(url) { controller.openExternalResource(url) }
-                        onRequestLoadMoreHistory: controller.loadMorePrivateHistory()
-                        onForwardMessage: function(msgId) { controller.forwardGroupMessage(msgId) }
-                        onRevokeMessage: function(msgId) { controller.revokeGroupMessage(msgId) }
-                        onEditMessage: function(msgId, text) { controller.editGroupMessage(msgId, text) }
-                        onReplyMessage: function(msgId, senderName, previewText) { controller.beginReplyMessage(msgId, senderName, previewText) }
-                        onCancelReplyMessage: controller.cancelReplyMessage()
-                        onOpenGroupManageRequested: {
-                            if (controller.hasCurrentGroup) {
-                                groupManagePopup.open()
+                    active: root.viewMode === 0 && controller.chatTab === AppController.ChatTabPage
+                    asynchronous: true
+                    sourceComponent: Component {
+                        ChatConversationPane {
+                            backdrop: backdropLayer
+                            peerName: controller.currentChatPeerName
+                            selfAvatar: controller.currentUserIcon
+                            peerAvatar: controller.currentChatPeerIcon
+                            hasCurrentChat: controller.hasCurrentChat
+                            isGroupChat: controller.hasCurrentGroup
+                            currentGroupRole: controller.currentGroupRole
+                            messageModel: controller.messageModel
+                            currentDraftText: controller.currentDraftText
+                            currentPendingAttachments: controller.currentPendingAttachments
+                            currentDialogPinned: controller.currentDialogPinned
+                            currentDialogMuted: controller.currentDialogMuted
+                            hasPendingReply: controller.hasPendingReply
+                            replyTargetName: controller.replyTargetName
+                            replyPreviewText: controller.replyPreviewText
+                            privateHistoryLoading: controller.privateHistoryLoading
+                            canLoadMorePrivateHistory: controller.canLoadMorePrivateHistory
+                            mediaUploadInProgress: controller.mediaUploadInProgress
+                            mediaUploadProgressText: controller.mediaUploadProgressText
+                            dialogsReady: controller.dialogsReady
+                            onSendComposer: function(text) { controller.sendCurrentComposerPayload(text) }
+                            onSendImage: controller.sendImageMessage()
+                            onSendFile: controller.sendFileMessage()
+                            onRemovePendingAttachment: function(attachmentId) { controller.removePendingAttachment(attachmentId) }
+                            onSendVoiceCall: controller.startVoiceChat()
+                            onSendVideoCall: controller.startVideoChat()
+                            onDraftEdited: function(text) { controller.updateCurrentDraft(text) }
+                            onRefreshGroupRequested: controller.refreshGroupList()
+                            onToggleDialogPinned: controller.toggleCurrentDialogPinned()
+                            onToggleDialogMuted: controller.toggleCurrentDialogMuted()
+                            onOpenAttachment: function(url) { controller.openExternalResource(url) }
+                            onRequestLoadMoreHistory: controller.loadMorePrivateHistory()
+                            onForwardMessage: function(msgId) { controller.forwardGroupMessage(msgId) }
+                            onRevokeMessage: function(msgId) { controller.revokeGroupMessage(msgId) }
+                            onEditMessage: function(msgId, text) { controller.editGroupMessage(msgId, text) }
+                            onReplyMessage: function(msgId, senderName, previewText) { controller.beginReplyMessage(msgId, senderName, previewText) }
+                            onCancelReplyMessage: controller.cancelReplyMessage()
+                            onOpenGroupManageRequested: {
+                                if (controller.hasCurrentGroup) {
+                                    groupManagePopupActivated = true
+                                    if (groupManagePopupLoader.item) {
+                                        groupManagePopupLoader.item.open()
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
-                ChatContactPane {
-                    backdrop: backdropLayer
-                    paneIndex: controller.contactPane
-                    contactName: controller.currentContactName
-                    contactNick: controller.currentContactNick
-                    contactIcon: controller.currentContactIcon
-                    contactBack: controller.currentContactBack
-                    contactSex: controller.currentContactSex
-                    contactUserId: controller.currentContactUserId
-                    hasCurrentContact: controller.hasCurrentContact
-                    applyModel: controller.applyRequestModel
-                    authStatusText: controller.authStatusText
-                    authStatusError: controller.authStatusError
-                    onApproveFriendRequested: function(uid, backName, tags) { controller.approveFriend(uid, backName, tags) }
-                    onAuthStatusCleared: controller.clearAuthStatus()
-                    onMessageChatRequested: controller.jumpChatWithCurrentContact()
-                    onVoiceChatRequested: controller.startVoiceChat()
-                    onVideoChatRequested: controller.startVideoChat()
-                }
-
-                ChatMorePane {
-                    backdrop: backdropLayer
-                    onSwitchAccountRequested: controller.switchToLogin()
-                    onLogoutRequested: controller.switchToLogin()
-                }
-            }
-
-            ChatProfileCenterPane {
-                anchors.fill: parent
-                anchors.margins: 8
-                visible: root.viewMode === 1
-                backdrop: backdropLayer
-                userIcon: controller.currentUserIcon
-                userNick: controller.currentUserNick
-                userName: controller.currentUserName
-                userDesc: controller.currentUserDesc
-                userId: controller.currentUserId
-                statusText: controller.settingsStatusText
-                statusError: controller.settingsStatusError
-                onBackRequested: {
-                    root.viewMode = 0
-                    controller.switchChatTab(root.lastMainTab)
-                }
-                onChooseAvatarRequested: controller.chooseAvatar()
-                onSaveProfileRequested: function(nick, desc) { controller.saveProfile(nick, desc) }
-                onStatusCleared: controller.clearSettingsStatus()
-            }
-        }
-    }
-
-    CreateGroupDialog {
-        id: createGroupDialog
-        anchors.centerIn: Overlay.overlay
-        backdrop: backdropLayer
-        onSubmitted: function(name, memberUserIds) { controller.createGroup(name, memberUserIds) }
-    }
-
-    Popup {
-        id: groupManagePopup
-        modal: true
-        focus: true
-        width: 360
-        height: Math.min(root.height - 48, 740)
-        anchors.centerIn: Overlay.overlay
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        enabled: controller.hasCurrentGroup
-        onOpened: {
-            if (!controller.hasCurrentGroup) {
-                close()
-            }
-        }
-
-        background: GlassSurface {
-            anchors.fill: parent
-            backdrop: backdropLayer
-            cornerRadius: 12
-            blurRadius: 18
-            fillColor: Qt.rgba(1, 1, 1, 0.24)
-            strokeColor: Qt.rgba(1, 1, 1, 0.46)
-        }
-
-        Flickable {
-            anchors.fill: parent
-            anchors.margins: 12
-            clip: true
-            contentWidth: width
-            contentHeight: toolsColumn.implicitHeight
-
-            Column {
-                id: toolsColumn
-                width: parent.width
-                spacing: 8
-
-                GroupInfoPane {
-                    width: parent.width
-                    height: 210
-                    backdrop: backdropLayer
-                    groupName: controller.currentGroupName
-                    groupCode: controller.currentGroupCode
-                    groupIcon: controller.currentChatPeerIcon
-                    canUpdateIcon: controller.currentGroupCanChangeInfo
-                    canUpdateAnnouncement: controller.currentGroupCanChangeInfo
-                    statusText: controller.groupStatusText
-                    statusError: controller.groupStatusError
-                    onRefreshRequested: controller.refreshGroupList()
-                    onLoadHistoryRequested: controller.loadGroupHistory()
-                    onUpdateAnnouncementRequested: function(announcement) { controller.updateGroupAnnouncement(announcement) }
-                    onUpdateGroupIconRequested: controller.updateGroupIcon()
-                    onQuitRequested: {
-                        controller.quitCurrentGroup()
-                        groupManagePopup.close()
+                Loader {
+                    anchors.fill: parent
+                    active: root.viewMode === 0 && controller.chatTab === AppController.ContactTabPage
+                    asynchronous: true
+                    sourceComponent: Component {
+                        ChatContactPane {
+                            backdrop: backdropLayer
+                            paneIndex: controller.contactPane
+                            contactName: controller.currentContactName
+                            contactNick: controller.currentContactNick
+                            contactIcon: controller.currentContactIcon
+                            contactBack: controller.currentContactBack
+                            contactSex: controller.currentContactSex
+                            contactUserId: controller.currentContactUserId
+                            hasCurrentContact: controller.hasCurrentContact
+                            applyModel: controller.applyRequestModel
+                            authStatusText: controller.authStatusText
+                            authStatusError: controller.authStatusError
+                            onApproveFriendRequested: function(uid, backName, tags) { controller.approveFriend(uid, backName, tags) }
+                            onAuthStatusCleared: controller.clearAuthStatus()
+                            onMessageChatRequested: controller.jumpChatWithCurrentContact()
+                            onVoiceChatRequested: controller.startVoiceChat()
+                            onVideoChatRequested: controller.startVideoChat()
+                        }
                     }
                 }
 
-                GroupManagePane {
-                    width: parent.width
-                    height: 340
-                    backdrop: backdropLayer
-                    canInviteUsers: controller.currentGroupCanInviteUsers
-                    canManageAdmins: controller.currentGroupCanManageAdmins
-                    canBanUsers: controller.currentGroupCanBanUsers
-                    onInviteRequested: function(userId, reason) { controller.inviteGroupMember(userId, reason) }
-                    onSetAdminRequested: function(userId, isAdmin, permissionBits) { controller.setGroupAdmin(userId, isAdmin, permissionBits) }
-                    onMuteRequested: function(userId, muteSeconds) { controller.muteGroupMember(userId, muteSeconds) }
-                    onKickRequested: function(userId) { controller.kickGroupMember(userId) }
+                Loader {
+                    anchors.fill: parent
+                    active: root.viewMode === 0 && controller.chatTab === AppController.SettingsTabPage
+                    asynchronous: true
+                    sourceComponent: Component {
+                        ChatMorePane {
+                            backdrop: backdropLayer
+                            onSwitchAccountRequested: controller.switchToLogin()
+                            onLogoutRequested: controller.switchToLogin()
+                        }
+                    }
                 }
+            }
 
-                GroupApplyReviewPane {
-                    width: parent.width
-                    height: 250
-                    backdrop: backdropLayer
-                    onApplyJoinRequested: function(groupCode, reason) { controller.applyJoinGroup(groupCode, reason) }
-                    onReviewRequested: function(applyId, agree) { controller.reviewGroupApply(applyId, agree) }
+            Loader {
+                anchors.fill: parent
+                anchors.margins: 8
+                active: root.viewMode === 1
+                asynchronous: true
+                sourceComponent: Component {
+                    ChatProfileCenterPane {
+                        backdrop: backdropLayer
+                        userIcon: controller.currentUserIcon
+                        userNick: controller.currentUserNick
+                        userName: controller.currentUserName
+                        userDesc: controller.currentUserDesc
+                        userId: controller.currentUserId
+                        statusText: controller.settingsStatusText
+                        statusError: controller.settingsStatusError
+                        onBackRequested: {
+                            root.viewMode = 0
+                            controller.switchChatTab(root.lastMainTab)
+                        }
+                        onChooseAvatarRequested: controller.chooseAvatar()
+                        onSaveProfileRequested: function(nick, desc) { controller.saveProfile(nick, desc) }
+                        onStatusCleared: controller.clearSettingsStatus()
+                    }
                 }
             }
         }
+    }
+
+    Loader {
+        id: createGroupDialogLoader
+        active: root.createGroupDialogActivated
+        asynchronous: true
+        sourceComponent: Component {
+            CreateGroupDialog {
+                anchors.centerIn: Overlay.overlay
+                backdrop: backdropLayer
+                onSubmitted: function(name, memberUserIds) { controller.createGroup(name, memberUserIds) }
+            }
+        }
+        onLoaded: if (item) { item.open() }
+    }
+
+    Loader {
+        id: groupManagePopupLoader
+        active: root.groupManagePopupActivated
+        asynchronous: true
+        sourceComponent: Component {
+            Popup {
+                id: groupManagePopup
+                modal: true
+                focus: true
+                width: 360
+                height: Math.min(root.height - 48, 740)
+                anchors.centerIn: Overlay.overlay
+                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                enabled: controller.hasCurrentGroup
+                onOpened: {
+                    if (!controller.hasCurrentGroup) {
+                        close()
+                    } else {
+                        controller.ensureGroupsInitialized()
+                    }
+                }
+
+                background: GlassSurface {
+                    anchors.fill: parent
+                    backdrop: backdropLayer
+                    cornerRadius: 12
+                    blurRadius: 18
+                    fillColor: Qt.rgba(1, 1, 1, 0.24)
+                    strokeColor: Qt.rgba(1, 1, 1, 0.46)
+                }
+
+                Flickable {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    clip: true
+                    contentWidth: width
+                    contentHeight: toolsColumn.implicitHeight
+
+                    Column {
+                        id: toolsColumn
+                        width: parent.width
+                        spacing: 8
+
+                        GroupInfoPane {
+                            width: parent.width
+                            height: 210
+                            backdrop: backdropLayer
+                            groupName: controller.currentGroupName
+                            groupCode: controller.currentGroupCode
+                            groupIcon: controller.currentChatPeerIcon
+                            canUpdateIcon: controller.currentGroupCanChangeInfo
+                            canUpdateAnnouncement: controller.currentGroupCanChangeInfo
+                            statusText: controller.groupStatusText
+                            statusError: controller.groupStatusError
+                            onRefreshRequested: controller.refreshGroupList()
+                            onLoadHistoryRequested: controller.loadGroupHistory()
+                            onUpdateAnnouncementRequested: function(announcement) { controller.updateGroupAnnouncement(announcement) }
+                            onUpdateGroupIconRequested: controller.updateGroupIcon()
+                            onQuitRequested: {
+                                controller.quitCurrentGroup()
+                                groupManagePopup.close()
+                            }
+                        }
+
+                        GroupManagePane {
+                            width: parent.width
+                            height: 340
+                            backdrop: backdropLayer
+                            canInviteUsers: controller.currentGroupCanInviteUsers
+                            canManageAdmins: controller.currentGroupCanManageAdmins
+                            canBanUsers: controller.currentGroupCanBanUsers
+                            onInviteRequested: function(userId, reason) { controller.inviteGroupMember(userId, reason) }
+                            onSetAdminRequested: function(userId, isAdmin, permissionBits) { controller.setGroupAdmin(userId, isAdmin, permissionBits) }
+                            onMuteRequested: function(userId, muteSeconds) { controller.muteGroupMember(userId, muteSeconds) }
+                            onKickRequested: function(userId) { controller.kickGroupMember(userId) }
+                        }
+
+                        GroupApplyReviewPane {
+                            width: parent.width
+                            height: 250
+                            backdrop: backdropLayer
+                            onApplyJoinRequested: function(groupCode, reason) { controller.applyJoinGroup(groupCode, reason) }
+                            onReviewRequested: function(applyId, agree) { controller.reviewGroupApply(applyId, agree) }
+                        }
+                    }
+                }
+            }
+        }
+        onLoaded: if (item) { item.open() }
     }
 }

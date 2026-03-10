@@ -206,47 +206,67 @@ void HttpConnection::CheckDeadline() {
     });
 }
 
+void HttpConnection::FinishRequest(beast::error_code ec) {
+    _socket.shutdown(tcp::socket::shutdown_send, ec);
+    deadline_.cancel();
+    _file_response.reset();
+    _request_span.reset();
+    memolog::TraceContext::Clear();
+}
+
+void HttpConnection::WriteErrorResponse(http::status status, const std::string& message) {
+    _send_file_response = false;
+    _send_file_path.clear();
+    _send_file_content_type.clear();
+    _response.result(status);
+    _response.set(http::field::content_type, "text/plain");
+    _response.body().clear();
+    beast::ostream(_response.body()) << message;
+    WriteResponse();
+}
+
+void HttpConnection::WriteFileResponse() {
+    _send_file_response = false;
+    auto response = std::make_shared<FileResponse>();
+    response->version(_request.version());
+    response->result(http::status::ok);
+    response->keep_alive(false);
+    response->set(http::field::server, "GateServer");
+    response->set("X-Trace-Id", _trace_id);
+    response->set("X-Request-Id", _request_id);
+    response->set(http::field::access_control_allow_origin, "*");
+    if (!_send_file_content_type.empty()) {
+        response->set(http::field::content_type, _send_file_content_type);
+    }
+
+    beast::error_code ec;
+    response->body().open(_send_file_path.c_str(), beast::file_mode::scan, ec);
+    _send_file_path.clear();
+    _send_file_content_type.clear();
+    if (ec) {
+        WriteErrorResponse(http::status::internal_server_error, "open file failed\r\n");
+        return;
+    }
+
+    response->prepare_payload();
+    _file_response = response;
+    auto self = shared_from_this();
+    http::async_write(_socket, *response, [self, response](beast::error_code write_ec, std::size_t) {
+        self->FinishRequest(write_ec);
+    });
+}
+
 void HttpConnection::WriteResponse() {
     auto self = shared_from_this();
 
     if (_send_file_response) {
-        std::ifstream file(_send_file_path, std::ios::binary);
-        if (!file.is_open()) {
-            _send_file_response = false;
-            _response.result(http::status::internal_server_error);
-            _response.set(http::field::content_type, "text/plain");
-            beast::ostream(_response.body()) << "open file failed\r\n";
-            _response.content_length(_response.body().size());
-            http::async_write(_socket, _response, [self](beast::error_code write_ec, std::size_t) {
-                self->_socket.shutdown(tcp::socket::shutdown_send, write_ec);
-                self->deadline_.cancel();
-                self->_request_span.reset();
-                memolog::TraceContext::Clear();
-            });
-            return;
-        }
-
-        if (!_send_file_content_type.empty()) {
-            _response.set(http::field::content_type, _send_file_content_type);
-        }
-        beast::ostream(_response.body()) << file.rdbuf();
-        _response.content_length(_response.body().size());
-        _send_file_response = false;
-        http::async_write(_socket, _response, [self](beast::error_code write_ec, std::size_t) {
-            self->_socket.shutdown(tcp::socket::shutdown_send, write_ec);
-            self->deadline_.cancel();
-            self->_request_span.reset();
-            memolog::TraceContext::Clear();
-        });
+        WriteFileResponse();
         return;
     }
 
     _response.content_length(_response.body().size());
 
     http::async_write(_socket, _response, [self](beast::error_code ec, std::size_t) {
-        self->_socket.shutdown(tcp::socket::shutdown_send, ec);
-        self->deadline_.cancel();
-        self->_request_span.reset();
-        memolog::TraceContext::Clear();
+        self->FinishRequest(ec);
     });
 }
