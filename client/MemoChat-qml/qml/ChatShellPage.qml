@@ -6,6 +6,7 @@ import MemoChat 1.0
 import "components"
 import "chat"
 import "chat/group"
+import "call"
 
 Rectangle {
     id: root
@@ -422,5 +423,15 @@ Rectangle {
             }
         }
         onLoaded: if (item) { item.open() }
+    }
+
+    CallOverlay {
+        anchors.fill: parent
+        sessionModel: controller.callSession
+        onAcceptRequested: controller.acceptIncomingCall()
+        onRejectRequested: controller.rejectIncomingCall()
+        onEndRequested: controller.endCurrentCall()
+        onMuteToggled: controller.toggleCallMuted()
+        onCameraToggled: controller.toggleCallCamera()
     }
 }

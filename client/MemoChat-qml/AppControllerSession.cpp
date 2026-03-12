@@ -490,6 +490,10 @@ void AppController::onConnectionClosed()
         return;
     }
 
+    if (_call_session_model.visible()) {
+        finalizeEndedCall(QStringLiteral("通话链路已断开"));
+    }
+
     _chat_login_timeout_timer.stop();
     _heartbeat_timer.stop();
     if (tryReconnectChat()) {

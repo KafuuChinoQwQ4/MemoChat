@@ -24,6 +24,7 @@
         <file>qml/chat/ChatProfileCenterPane.qml</file>
         <file>qml/chat/ChatMorePane.qml</file>
         <file>qml/chat/ChatSettingsPane.qml</file>
+        <file>qml/call/CallOverlay.qml</file>
         <file>qml/chat/conversation/ChatMessageDelegate.qml</file>
         <file>qml/chat/conversation/ChatComposerBar.qml</file>
         <file>qml/chat/contact/ApplyRequestDelegate.qml</file>
@@ -40,6 +41,8 @@
         <file>qml/chat/group/GroupApplyReviewPane.qml</file>
         <file>qml/chat/settings/SettingsAvatarCard.qml</file>
         <file>qml/chat/settings/SettingsProfileForm.qml</file>
+        <file alias="web/livekit/index.html">web/livekit/index.html</file>
+        <file alias="web/livekit/app.js">web/livekit/app.js</file>
         <file alias="icons/emoji.png">src/表情.png</file>
         <file alias="icons/file.png">src/文件.png</file>
         <file alias="icons/settings.png">src/设置.png</file>

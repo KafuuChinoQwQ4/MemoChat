@@ -1,5 +1,7 @@
 add_executable(GateServer
     AsioIOServicePool.cpp
+    CallService.cpp
+    ChatGrpcClient.cpp
     ConfigMgr.cpp
     CServer.cpp
     GateServer.cpp
@@ -12,6 +14,8 @@ add_executable(GateServer
     StatusGrpcClient.cpp
     VerifyGrpcClient.cpp
     AsioIOServicePool.h
+    CallService.h
+    ChatGrpcClient.h
     ConfigMgr.h
     const.h
     CServer.h
@@ -31,3 +35,6 @@ add_executable(GateServer
 memochat_add_proto_sources(GateServer message.proto)
 set_target_properties(GateServer PROPERTIES FOLDER "Server")
 memochat_configure_server_target(GateServer)
+if(WIN32)
+    target_link_libraries(GateServer PRIVATE bcrypt)
+endif()

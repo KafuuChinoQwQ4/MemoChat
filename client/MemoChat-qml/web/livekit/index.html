@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MemoChat LiveKit</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #09111c;
+      --panel: rgba(14, 24, 38, 0.9);
+      --line: rgba(255, 255, 255, 0.08);
+      --text: #e6eef8;
+      --muted: rgba(230, 238, 248, 0.58);
+      --accent: #64d4ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(100, 212, 255, 0.12), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(78, 142, 255, 0.18), transparent 35%),
+        linear-gradient(160deg, #07101a, #0d1826 55%, #09111c);
+      color: var(--text);
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      overflow: hidden;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 220px;
+      gap: 16px;
+      width: 100vw;
+      height: 100vh;
+      padding: 16px;
+    }
+
+    .panel {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      overflow: hidden;
+      background: var(--panel);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    .remote-panel {
+      min-width: 0;
+    }
+
+    .local-panel {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #remoteTracks,
+    #localPreview {
+      width: 100%;
+      height: 100%;
+    }
+
+    video,
+    audio {
+      display: block;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #02060a;
+    }
+
+    #localPreview video {
+      transform: scaleX(-1);
+    }
+
+    .empty-state {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      color: var(--muted);
+      letter-spacing: 0.03em;
+    }
+
+    .badge {
+      position: absolute;
+      left: 16px;
+      bottom: 16px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(9, 17, 28, 0.72);
+      border: 1px solid rgba(100, 212, 255, 0.16);
+      font-size: 12px;
+      color: var(--accent);
+      pointer-events: none;
+    }
+
+    @media (max-width: 900px) {
+      .shell {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 180px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel remote-panel">
+      <div id="remoteTracks"></div>
+      <div id="remoteEmpty" class="empty-state">等待对方加入音视频房间</div>
+      <div class="badge">Remote</div>
+    </section>
+    <section class="panel local-panel">
+      <div id="localPreview"></div>
+      <div id="localEmpty" class="empty-state">本地预览将在接入后显示</div>
+      <div class="badge">Local</div>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.15.7/dist/livekit-client.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

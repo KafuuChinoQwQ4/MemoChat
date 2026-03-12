@@ -89,6 +89,9 @@ AppController::AppController(QObject *parent)
       _group_history_before_seq(0),
       _group_history_has_more(true),
       _auth_controller(&_gateway),
+      _call_controller(&_gateway),
+      _call_session_model(this),
+      _livekit_bridge(this),
       _chat_controller(&_gateway),
       _contact_controller(&_gateway),
       _profile_controller(&_gateway)
@@ -101,6 +104,8 @@ AppController::AppController(QObject *parent)
             this, &AppController::onResetHttpFinished);
     connect(_gateway.httpMgr().get(), &HttpMgr::sig_settings_mod_finish,
             this, &AppController::onSettingsHttpFinished);
+    connect(_gateway.httpMgr().get(), &HttpMgr::sig_call_mod_finish,
+            this, &AppController::onCallHttpFinished);
 
     connect(_gateway.tcpMgr().get(), &TcpMgr::sig_con_success,
             this, &AppController::onTcpConnectFinished);
@@ -142,6 +147,23 @@ AppController::AppController(QObject *parent)
             this, &AppController::onPrivateMsgChanged);
     connect(_gateway.tcpMgr().get(), &TcpMgr::sig_private_read_ack,
             this, &AppController::onPrivateReadAck);
+    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_call_event,
+            this, &AppController::onCallEvent);
+    connect(&_livekit_bridge, &LivekitBridge::roomJoined,
+            this, &AppController::onLivekitRoomJoined);
+    connect(&_livekit_bridge, &LivekitBridge::remoteTrackReady,
+            this, &AppController::onLivekitRemoteTrackReady);
+    connect(&_livekit_bridge, &LivekitBridge::roomDisconnected,
+            this, &AppController::onLivekitRoomDisconnected);
+    connect(&_livekit_bridge, &LivekitBridge::permissionError,
+            this, &AppController::onLivekitPermissionError);
+    connect(&_livekit_bridge, &LivekitBridge::mediaError,
+            this, &AppController::onLivekitMediaError);
+    connect(&_livekit_bridge, &LivekitBridge::reconnecting,
+            this, &AppController::onLivekitReconnecting);
+    connect(&_livekit_bridge, &LivekitBridge::bridgeLog, this, [](const QString &message) {
+        qInfo().noquote() << "[livekit]" << message;
+    });
     connect(_gateway.tcpMgr().get(), &TcpMgr::sig_heartbeat_ack,
             this, &AppController::onHeartbeatAck);
     connect(&_apply_request_model, &ApplyRequestModel::unapprovedCountChanged,
@@ -172,6 +194,16 @@ AppController::Page AppController::page() const
     return _page;
 }
 
+CallSessionModel *AppController::callSession()
+{
+    return &_call_session_model;
+}
+
+LivekitBridge *AppController::livekitBridge()
+{
+    return &_livekit_bridge;
+}
+
 void AppController::switchToLogin()
 {
     qInfo() << "Switching to login page, current page:" << _page
@@ -179,6 +211,8 @@ void AppController::switchToLogin()
             << "chat connected:" << _gateway.tcpMgr()->isConnected();
     _register_countdown_timer.stop();
     _heartbeat_timer.stop();
+    _livekit_bridge.leaveRoom();
+    _call_session_model.clear();
     _chat_server_host.clear();
     _chat_server_port.clear();
     resetReconnectState();
@@ -711,7 +745,7 @@ void AppController::startVoiceChat()
     if (!ensureCallTargetFromCurrentChat()) {
         return;
     }
-    sendCallInvite("voice");
+    startCallFlow("voice");
 }
 
 void AppController::startVideoChat()
@@ -719,7 +753,55 @@ void AppController::startVideoChat()
     if (!ensureCallTargetFromCurrentChat()) {
         return;
     }
-    sendCallInvite("video");
+    startCallFlow("video");
+}
+
+void AppController::acceptIncomingCall()
+{
+    const auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || _call_session_model.callId().isEmpty()) {
+        return;
+    }
+    _call_controller.acceptCall(selfInfo->_uid, _gateway.userMgr()->GetToken(), _call_session_model.callId());
+    setAuthStatus("正在接听通话", false);
+}
+
+void AppController::rejectIncomingCall()
+{
+    const auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || _call_session_model.callId().isEmpty()) {
+        return;
+    }
+    _call_controller.rejectCall(selfInfo->_uid, _gateway.userMgr()->GetToken(), _call_session_model.callId());
+}
+
+void AppController::endCurrentCall()
+{
+    const auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || _call_session_model.callId().isEmpty()) {
+        return;
+    }
+    _livekit_bridge.leaveRoom();
+    if (!_call_session_model.active() && !_call_session_model.incoming()) {
+        _call_controller.cancelCall(selfInfo->_uid, _gateway.userMgr()->GetToken(), _call_session_model.callId());
+        return;
+    }
+    _call_controller.hangupCall(selfInfo->_uid, _gateway.userMgr()->GetToken(), _call_session_model.callId());
+}
+
+void AppController::toggleCallMuted()
+{
+    _livekit_bridge.toggleMic();
+    _call_session_model.setMuted(!_call_session_model.muted());
+}
+
+void AppController::toggleCallCamera()
+{
+    if (_call_session_model.callType() != QStringLiteral("video")) {
+        return;
+    }
+    _livekit_bridge.toggleCamera();
+    _call_session_model.setCameraEnabled(!_call_session_model.cameraEnabled());
 }
 
 void AppController::chooseAvatar()

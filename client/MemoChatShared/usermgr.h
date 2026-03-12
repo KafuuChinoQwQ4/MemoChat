@@ -19,6 +19,7 @@ public:
     QString GetNick();
     QString GetIcon();
     QString GetDesc();
+    QString GetToken();
     void UpdateNickAndDesc(const QString &nick, const QString &desc);
     void UpdateIcon(const QString &icon);
     std::shared_ptr<UserInfo> GetUserInfo();
