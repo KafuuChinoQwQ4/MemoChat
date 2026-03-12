@@ -24,8 +24,10 @@
 #include <QSysInfo>
 #include <cstdio>
 #include "AppController.h"
+#include "CallSessionModel.h"
 #include "TelemetryUtils.h"
 #include "global.h"
+#include <QtWebEngineQuick/qtwebenginequickglobal.h>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -325,6 +327,7 @@ int main(int argc, char *argv[])
 
     QApplication app(argc, argv);
     app.setWindowIcon(QIcon(QStringLiteral(":/app/icon.ico")));
+    QtWebEngineQuick::initialize();
 
     const QString runtime_app_path = QCoreApplication::applicationDirPath();
     const QString runtime_config_path = QDir::toNativeSeparators(
@@ -351,6 +354,8 @@ int main(int argc, char *argv[])
 
     qmlRegisterUncreatableType<AppController>(
         "MemoChat", 1, 0, "AppController", "Enum only");
+    qmlRegisterUncreatableType<CallSessionModel>(
+        "MemoChat", 1, 0, "CallSessionModel", "Exposed via AppController");
 
     AppController controller;
     QQmlApplicationEngine engine;
@@ -360,6 +365,7 @@ int main(int argc, char *argv[])
         }
     });
     engine.rootContext()->setContextProperty("controller", &controller);
+    engine.rootContext()->setContextProperty("livekitBridge", controller.livekitBridge());
 
     const QUrl main_url(QStringLiteral("qrc:/qml/Main.qml"));
     QObject::connect(

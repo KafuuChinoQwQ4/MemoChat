@@ -50,6 +50,9 @@ MysqlDao::MysqlDao()
 	if (!EnsureMediaAssetSchema()) {
 		throw std::runtime_error("failed to ensure chat_media_asset schema");
 	}
+	if (!EnsureCallSessionSchema()) {
+		throw std::runtime_error("failed to ensure chat_call_session schema");
+	}
 }
 
 MysqlDao::~MysqlDao(){
@@ -341,10 +344,14 @@ bool MysqlDao::CheckPwd(const std::string& email, const std::string& pwd, UserIn
 
 		while (res->next()) {
 			origin_pwd = res->getString("pwd");
-			userInfo.name = res->getString("name");
-			userInfo.email = res->getString("email");
-			userInfo.uid = res->getInt("uid");
-			userInfo.user_id = res->getString("user_id");
+		userInfo.name = res->getString("name");
+		userInfo.email = res->getString("email");
+		userInfo.uid = res->getInt("uid");
+		userInfo.user_id = res->getString("user_id");
+		userInfo.nick = res->isNull("nick") ? "" : res->getString("nick");
+		userInfo.icon = res->isNull("icon") ? "" : res->getString("icon");
+		userInfo.desc = res->isNull("desc") ? "" : res->getString("desc");
+		userInfo.sex = res->isNull("sex") ? 0 : res->getInt("sex");
 
 			std::cout << "Password: " << origin_pwd << std::endl;
 			matched = true;
@@ -397,6 +404,155 @@ std::string MysqlDao::GetUserPublicId(int uid) {
 		std::cerr << " (MySQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return "";
+	}
+}
+
+bool MysqlDao::GetCallUserProfile(int uid, CallUserProfile& profile) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"SELECT uid, user_id, name, nick, icon FROM user WHERE uid = ? LIMIT 1"));
+		pstmt->setInt(1, uid);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		if (!res->next()) {
+			return false;
+		}
+		profile.uid = res->getInt("uid");
+		profile.user_id = res->isNull("user_id") ? "" : res->getString("user_id");
+		profile.name = res->isNull("name") ? "" : res->getString("name");
+		profile.nick = res->isNull("nick") ? "" : res->getString("nick");
+		profile.icon = res->isNull("icon") ? "" : res->getString("icon");
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "GetCallUserProfile SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::IsFriend(int uid, int peer_uid) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement("SELECT 1 FROM friend WHERE self_id = ? AND friend_id = ? LIMIT 1"));
+		pstmt->setInt(1, uid);
+		pstmt->setInt(2, peer_uid);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		return res->next();
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "IsFriend SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::UpsertCallSession(const CallSessionInfo& session) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"INSERT INTO chat_call_session("
+				"call_id, room_name, call_type, caller_uid, callee_uid, state, "
+				"started_at_ms, accepted_at_ms, ended_at_ms, expires_at_ms, duration_sec, reason, trace_id, updated_at_ms"
+				") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+				"ON DUPLICATE KEY UPDATE "
+				"room_name=VALUES(room_name), call_type=VALUES(call_type), caller_uid=VALUES(caller_uid), "
+				"callee_uid=VALUES(callee_uid), state=VALUES(state), started_at_ms=VALUES(started_at_ms), "
+				"accepted_at_ms=VALUES(accepted_at_ms), ended_at_ms=VALUES(ended_at_ms), "
+				"expires_at_ms=VALUES(expires_at_ms), duration_sec=VALUES(duration_sec), "
+				"reason=VALUES(reason), trace_id=VALUES(trace_id), updated_at_ms=VALUES(updated_at_ms)"));
+		pstmt->setString(1, session.call_id);
+		pstmt->setString(2, session.room_name);
+		pstmt->setString(3, session.call_type);
+		pstmt->setInt(4, session.caller_uid);
+		pstmt->setInt(5, session.callee_uid);
+		pstmt->setString(6, session.state);
+		pstmt->setInt64(7, session.started_at_ms);
+		pstmt->setInt64(8, session.accepted_at_ms);
+		pstmt->setInt64(9, session.ended_at_ms);
+		pstmt->setInt64(10, session.expires_at_ms);
+		pstmt->setInt(11, session.duration_sec);
+		pstmt->setString(12, session.reason);
+		pstmt->setString(13, session.trace_id);
+		pstmt->setInt64(14, session.updated_at_ms);
+		return pstmt->executeUpdate() >= 0;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "UpsertCallSession SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::GetCallSession(const std::string& call_id, CallSessionInfo& session) {
+	if (call_id.empty()) {
+		return false;
+	}
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"SELECT call_id, room_name, call_type, caller_uid, callee_uid, state, "
+				"started_at_ms, accepted_at_ms, ended_at_ms, expires_at_ms, duration_sec, reason, trace_id, updated_at_ms "
+				"FROM chat_call_session WHERE call_id = ? LIMIT 1"));
+		pstmt->setString(1, call_id);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		if (!res->next()) {
+			return false;
+		}
+		session.call_id = res->isNull("call_id") ? "" : res->getString("call_id");
+		session.room_name = res->isNull("room_name") ? "" : res->getString("room_name");
+		session.call_type = res->isNull("call_type") ? "" : res->getString("call_type");
+		session.caller_uid = res->isNull("caller_uid") ? 0 : res->getInt("caller_uid");
+		session.callee_uid = res->isNull("callee_uid") ? 0 : res->getInt("callee_uid");
+		session.state = res->isNull("state") ? "" : res->getString("state");
+		session.started_at_ms = res->isNull("started_at_ms") ? 0 : res->getInt64("started_at_ms");
+		session.accepted_at_ms = res->isNull("accepted_at_ms") ? 0 : res->getInt64("accepted_at_ms");
+		session.ended_at_ms = res->isNull("ended_at_ms") ? 0 : res->getInt64("ended_at_ms");
+		session.expires_at_ms = res->isNull("expires_at_ms") ? 0 : res->getInt64("expires_at_ms");
+		session.duration_sec = res->isNull("duration_sec") ? 0 : res->getInt("duration_sec");
+		session.reason = res->isNull("reason") ? "" : res->getString("reason");
+		session.trace_id = res->isNull("trace_id") ? "" : res->getString("trace_id");
+		session.updated_at_ms = res->isNull("updated_at_ms") ? 0 : res->getInt64("updated_at_ms");
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "GetCallSession SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
 	}
 }
 
@@ -635,6 +791,48 @@ bool MysqlDao::EnsureMediaAssetSchema() {
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "EnsureMediaAssetSchema SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
+bool MysqlDao::EnsureCallSessionSchema() {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
+		stmt->execute(
+			"CREATE TABLE IF NOT EXISTS chat_call_session ("
+			"call_id VARCHAR(64) PRIMARY KEY,"
+			"room_name VARCHAR(128) NOT NULL,"
+			"call_type VARCHAR(16) NOT NULL,"
+			"caller_uid INT NOT NULL,"
+			"callee_uid INT NOT NULL,"
+			"state VARCHAR(32) NOT NULL,"
+			"started_at_ms BIGINT NOT NULL,"
+			"accepted_at_ms BIGINT NOT NULL DEFAULT 0,"
+			"ended_at_ms BIGINT NOT NULL DEFAULT 0,"
+			"expires_at_ms BIGINT NOT NULL DEFAULT 0,"
+			"duration_sec INT NOT NULL DEFAULT 0,"
+			"reason VARCHAR(64) NOT NULL DEFAULT '',"
+			"trace_id VARCHAR(64) NOT NULL DEFAULT '',"
+			"updated_at_ms BIGINT NOT NULL DEFAULT 0,"
+			"KEY idx_call_caller(caller_uid, started_at_ms),"
+			"KEY idx_call_callee(callee_uid, started_at_ms),"
+			"KEY idx_call_state(state, updated_at_ms)"
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "EnsureCallSessionSchema SQLException: " << e.what();
 		std::cerr << " (MySQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;

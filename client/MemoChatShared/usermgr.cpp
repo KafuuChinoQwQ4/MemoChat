@@ -57,6 +57,11 @@ QString UserMgr::GetDesc()
     return _user_info->_desc;
 }
 
+QString UserMgr::GetToken()
+{
+    return _token;
+}
+
 void UserMgr::UpdateNickAndDesc(const QString &nick, const QString &desc)
 {
     if (!_user_info) {

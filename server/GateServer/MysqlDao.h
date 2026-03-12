@@ -229,6 +229,35 @@ struct UserInfo {
 	int uid;
 	std::string user_id;
 	std::string email;
+	std::string nick;
+	std::string icon;
+	std::string desc;
+	int sex = 0;
+};
+
+struct CallUserProfile {
+	int uid = 0;
+	std::string user_id;
+	std::string name;
+	std::string nick;
+	std::string icon;
+};
+
+struct CallSessionInfo {
+	std::string call_id;
+	std::string room_name;
+	std::string call_type;
+	int caller_uid = 0;
+	int callee_uid = 0;
+	std::string state;
+	int64_t started_at_ms = 0;
+	int64_t accepted_at_ms = 0;
+	int64_t ended_at_ms = 0;
+	int64_t expires_at_ms = 0;
+	int duration_sec = 0;
+	std::string reason;
+	std::string trace_id;
+	int64_t updated_at_ms = 0;
 };
 
 struct MediaAssetInfo {
@@ -258,12 +287,17 @@ public:
 	bool UpdateUserProfile(int uid, const std::string& nick, const std::string& desc, const std::string& icon);
 	bool CheckPwd(const std::string& name, const std::string& pwd, UserInfo& userInfo);
 	std::string GetUserPublicId(int uid);
+	bool GetCallUserProfile(int uid, CallUserProfile& profile);
+	bool IsFriend(int uid, int peer_uid);
+	bool UpsertCallSession(const CallSessionInfo& session);
+	bool GetCallSession(const std::string& call_id, CallSessionInfo& session);
 	bool InsertMediaAsset(const MediaAssetInfo& asset);
 	bool GetMediaAssetByKey(const std::string& media_key, MediaAssetInfo& asset);
 	bool TestProcedure(const std::string& email, int& uid, string& name);
 private:
 	bool EnsureUserPublicIdSchemaAndBackfill();
 	bool EnsureMediaAssetSchema();
+	bool EnsureCallSessionSchema();
 	std::string GenerateRandomUserPublicId();
 	std::unique_ptr<MySqlPool> pool_;
 };
