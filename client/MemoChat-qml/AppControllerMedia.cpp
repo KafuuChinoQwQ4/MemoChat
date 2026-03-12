@@ -656,43 +656,5 @@ bool AppController::ensureCallTargetFromCurrentChat()
 
 void AppController::sendCallInvite(const QString &callType)
 {
-    if (_current_contact_uid <= 0) {
-        setAuthStatus("请选择联系人", true);
-        return;
-    }
-
-    if (_current_chat_uid != _current_contact_uid) {
-        selectChatByUid(_current_contact_uid);
-    }
-    if (_current_chat_uid != _current_contact_uid) {
-        _current_chat_uid = _current_contact_uid;
-        setCurrentChatPeerName(_current_contact_name);
-        setCurrentChatPeerIcon(_current_contact_icon);
-        loadCurrentChatMessages();
-    }
-
-    const QString joinUrl = buildCallJoinUrl(callType);
-    const QString encoded = MessageContentCodec::encodeCallInvite(callType, joinUrl);
-    const QString preview = (callType == "video") ? "[视频通话邀请]" : "[语音通话邀请]";
-    if (!dispatchChatContent(encoded, preview)) {
-        setAuthStatus("通话邀请发送失败", true);
-        return;
-    }
-
-    QString errorText;
-    if (!LocalFilePickerService::openUrl(joinUrl, &errorText)) {
-        setAuthStatus(errorText.isEmpty() ? "打开通话链接失败" : errorText, true);
-        return;
-    }
-
-    setAuthStatus("通话邀请已发送", false);
-}
-
-QString AppController::buildCallJoinUrl(const QString &callType) const
-{
-    auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo) {
-        return {};
-    }
-    return _chat_controller.buildCallJoinUrl(selfInfo->_uid, _current_contact_uid, callType);
+    startCallFlow(callType);
 }

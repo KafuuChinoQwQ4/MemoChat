@@ -77,6 +77,26 @@ bool RedisMgr::Set(const std::string &key, const std::string &value){
 	return true;
 }
 
+bool RedisMgr::SetEx(const std::string& key, const std::string& value, int expire_seconds)
+{
+	auto connect = _con_pool->getConnection();
+	if (connect == nullptr) {
+		return false;
+	}
+	auto reply = static_cast<redisReply*>(redisCommand(connect, "SETEX %s %d %s",
+		key.c_str(), expire_seconds, value.c_str()));
+	if (reply == nullptr) {
+		_con_pool->returnConnection(connect);
+		return false;
+	}
+	const bool ok = reply->type == REDIS_REPLY_STATUS &&
+		reply->str != nullptr &&
+		(std::strcmp(reply->str, "OK") == 0 || std::strcmp(reply->str, "ok") == 0);
+	freeReplyObject(reply);
+	_con_pool->returnConnection(connect);
+	return ok;
+}
+
 bool RedisMgr::LPush(const std::string &key, const std::string &value)
 {
 	auto connect = _con_pool->getConnection();

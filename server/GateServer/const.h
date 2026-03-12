@@ -44,6 +44,11 @@ enum ErrorCodes {
     ProfileUpFailed = 1012,
     MediaUploadFailed = 1013,
     ClientVersionTooLow = 1014,
+    CallBusy = 1015,
+    CallNotFound = 1016,
+    CallStateInvalid = 1017,
+    CallPermissionDenied = 1018,
+    CallTargetOffline = 1019,
 };
 
 class Defer {
@@ -56,4 +61,8 @@ private:
 };
 
 #define CODEPREFIX "code_"
+#define USERIPPREFIX "uip_"
 #define USERTOKENPREFIX "utoken_"
+#define CALL_SESSION_PREFIX "call:session:"
+#define CALL_ACTIVE_PREFIX "call:user_active:"
+#define CALL_RINGING_PREFIX "call:ringing:"

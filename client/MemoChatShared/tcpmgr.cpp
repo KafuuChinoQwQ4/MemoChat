@@ -850,6 +850,21 @@ void TcpMgr::initHandlers()
         emit sig_private_read_ack(jsonObj);
       });
 
+    _handlers.insert(ID_NOTIFY_CALL_EVENT_REQ, [this](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(id);
+        Q_UNUSED(len);
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+        if (jsonDoc.isNull() || !jsonDoc.isObject()) {
+            qWarning() << "call event parse failed";
+            return;
+        }
+        const QJsonObject jsonObj = jsonDoc.object();
+        if (jsonObj.value("error").toInt(ErrorCodes::SUCCESS) != ErrorCodes::SUCCESS) {
+            return;
+        }
+        emit sig_call_event(jsonObj);
+      });
+
     _handlers.insert(ID_NOTIFY_OFF_LINE_REQ,[this](ReqId id, int len, QByteArray data){
         Q_UNUSED(len);
         qDebug() << "handle id is " << id << " data is " << data;

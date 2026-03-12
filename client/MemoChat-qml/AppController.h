@@ -10,6 +10,8 @@
 #include <QSet>
 #include "global.h"
 #include "AuthController.h"
+#include "CallController.h"
+#include "CallSessionModel.h"
 #include "ChatController.h"
 #include "ClientGateway.h"
 #include "ContactController.h"
@@ -20,6 +22,7 @@
 #include "ProfileController.h"
 #include "PrivateChatCacheStore.h"
 #include "GroupChatCacheStore.h"
+#include "LivekitBridge.h"
 #include "MediaUploadService.h"
 
 class AppController : public QObject
@@ -82,6 +85,8 @@ class AppController : public QObject
     Q_PROPERTY(bool groupStatusError READ groupStatusError NOTIFY groupStatusChanged)
     Q_PROPERTY(bool mediaUploadInProgress READ mediaUploadInProgress NOTIFY mediaUploadStateChanged)
     Q_PROPERTY(QString mediaUploadProgressText READ mediaUploadProgressText NOTIFY mediaUploadStateChanged)
+    Q_PROPERTY(CallSessionModel* callSession READ callSession CONSTANT)
+    Q_PROPERTY(LivekitBridge* livekitBridge READ livekitBridge CONSTANT)
     Q_PROPERTY(QString currentDraftText READ currentDraftText NOTIFY currentDraftTextChanged)
     Q_PROPERTY(QVariantList currentPendingAttachments READ currentPendingAttachments NOTIFY currentPendingAttachmentsChanged)
     Q_PROPERTY(bool hasPendingAttachments READ hasPendingAttachments NOTIFY currentPendingAttachmentsChanged)
@@ -176,6 +181,8 @@ public:
     bool groupStatusError() const;
     bool mediaUploadInProgress() const;
     QString mediaUploadProgressText() const;
+    CallSessionModel *callSession();
+    LivekitBridge *livekitBridge();
     QString currentDraftText() const;
     QVariantList currentPendingAttachments() const;
     bool hasPendingAttachments() const;
@@ -222,6 +229,11 @@ public:
     Q_INVOKABLE void clearAuthStatus();
     Q_INVOKABLE void startVoiceChat();
     Q_INVOKABLE void startVideoChat();
+    Q_INVOKABLE void acceptIncomingCall();
+    Q_INVOKABLE void rejectIncomingCall();
+    Q_INVOKABLE void endCurrentCall();
+    Q_INVOKABLE void toggleCallMuted();
+    Q_INVOKABLE void toggleCallCamera();
     Q_INVOKABLE void chooseAvatar();
     Q_INVOKABLE void saveProfile(const QString &nick, const QString &desc);
     Q_INVOKABLE void clearSettingsStatus();
@@ -300,6 +312,7 @@ private slots:
     void onRegisterHttpFinished(ReqId id, QString res, ErrorCodes err);
     void onResetHttpFinished(ReqId id, QString res, ErrorCodes err);
     void onSettingsHttpFinished(ReqId id, QString res, ErrorCodes err);
+    void onCallHttpFinished(ReqId id, QString res, ErrorCodes err);
     void onTcpConnectFinished(bool success);
     void onChatLoginFailed(int err);
     void onSwitchToChat();
@@ -323,6 +336,13 @@ private slots:
     void onPrivateHistoryRsp(QJsonObject payload);
     void onPrivateMsgChanged(QJsonObject payload);
     void onPrivateReadAck(QJsonObject payload);
+    void onCallEvent(QJsonObject payload);
+    void onLivekitRoomJoined();
+    void onLivekitRemoteTrackReady();
+    void onLivekitRoomDisconnected(const QString &reason, bool recoverable);
+    void onLivekitPermissionError(const QString &deviceType, const QString &message);
+    void onLivekitMediaError(const QString &message);
+    void onLivekitReconnecting(const QString &message);
 
 private:
     bool parseJson(const QString &res, QJsonObject &obj);
@@ -341,8 +361,9 @@ private:
     bool sendUploadedAttachmentToDialog(const QVariantMap &attachment, const UploadedMediaInfo &uploaded,
                                         int dialogUid, int chatUid, qint64 groupId);
     void sendCallInvite(const QString &callType);
-    QString buildCallJoinUrl(const QString &callType) const;
     bool ensureCallTargetFromCurrentChat();
+    void startCallFlow(const QString &callType);
+    void finalizeEndedCall(const QString &statusText);
     void setTip(const QString &tip, bool isError);
     void setBusy(bool value);
     void setPage(Page newPage);
@@ -496,6 +517,9 @@ private:
 
     ClientGateway _gateway;
     AuthController _auth_controller;
+    CallController _call_controller;
+    CallSessionModel _call_session_model;
+    LivekitBridge _livekit_bridge;
     ChatController _chat_controller;
     ContactController _contact_controller;
     ProfileController _profile_controller;

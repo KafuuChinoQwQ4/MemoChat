@@ -13,20 +13,24 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets Network Sql Qml Quick QuickControls2 Concurrent)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets Network Sql Qml Quick QuickControls2 Concurrent)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets Network Sql Qml Quick QuickControls2 Concurrent WebEngineQuick)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets Network Sql Qml Quick QuickControls2 Concurrent WebEngineQuick)
 
 set(SHARED_CLIENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../MemoChatShared)
 
 set(SOURCES
     main.cpp
     AppController.cpp
+    AppControllerCall.cpp
     AppControllerGroupEvents.cpp
     AppControllerMedia.cpp
     AppControllerPrivateEvents.cpp
     AppControllerSession.cpp
     AppControllerState.cpp
     AuthController.cpp
+    CallController.cpp
+    CallSessionModel.cpp
+    LivekitBridge.cpp
     ChatController.cpp
     ChatDispatchService.cpp
     ClientGateway.cpp
@@ -51,6 +55,9 @@ set(SOURCES
 set(HEADERS
     AppController.h
     AuthController.h
+    CallController.h
+    CallSessionModel.h
+    LivekitBridge.h
     ChatController.h
     ChatDispatchService.h
     ClientGateway.h
@@ -97,6 +104,7 @@ target_link_libraries(MemoChatQml PRIVATE
     Qt${QT_VERSION_MAJOR}::Quick
     Qt${QT_VERSION_MAJOR}::QuickControls2
     Qt${QT_VERSION_MAJOR}::Concurrent
+    Qt${QT_VERSION_MAJOR}::WebEngineQuick
 )
 
 if(WIN32)

@@ -32,6 +32,22 @@ std::string MysqlMgr::GetUserPublicId(int uid) {
 	return _dao.GetUserPublicId(uid);
 }
 
+bool MysqlMgr::GetCallUserProfile(int uid, CallUserProfile& profile) {
+	return _dao.GetCallUserProfile(uid, profile);
+}
+
+bool MysqlMgr::IsFriend(int uid, int peer_uid) {
+	return _dao.IsFriend(uid, peer_uid);
+}
+
+bool MysqlMgr::UpsertCallSession(const CallSessionInfo& session) {
+	return _dao.UpsertCallSession(session);
+}
+
+bool MysqlMgr::GetCallSession(const std::string& call_id, CallSessionInfo& session) {
+	return _dao.GetCallSession(call_id, session);
+}
+
 bool MysqlMgr::InsertMediaAsset(const MediaAssetInfo& asset) {
 	return _dao.InsertMediaAsset(asset);
 }

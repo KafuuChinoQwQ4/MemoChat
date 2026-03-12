@@ -5,6 +5,7 @@
 #include "MysqlMgr.h"
 #include "StatusGrpcClient.h"
 #include "MediaStorage.h"
+#include "CallService.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
 #include <algorithm>
@@ -1318,6 +1319,82 @@ LogicSystem::LogicSystem() {
 		beast::ostream(connection->_response.body()) << jsonstr;
 		return true;
 	});
+
+    const auto handle_call_post = [](std::shared_ptr<HttpConnection> connection,
+                                     const std::function<bool(const Json::Value&, Json::Value&, const std::string&)>& fn) {
+        auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
+        connection->_response.set(http::field::content_type, "text/json");
+        Json::Value root;
+        Json::Reader reader;
+        Json::Value src_root;
+        if (!reader.parse(body_str, src_root)) {
+            root["error"] = ErrorCodes::Error_Json;
+            beast::ostream(connection->_response.body()) << root.toStyledString();
+            return true;
+        }
+        fn(src_root, root, connection->_trace_id);
+        if (!root.isMember("trace_id")) {
+            root["trace_id"] = connection->_trace_id;
+        }
+        beast::ostream(connection->_response.body()) << root.toStyledString();
+        return true;
+    };
+
+    RegPost("/api/call/start", [handle_call_post](std::shared_ptr<HttpConnection> connection) {
+        return handle_call_post(connection, [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            memolog::LogInfo("call.start.requested", "call start requested", {{"trace_id", trace_id}, {"module", "call"}});
+            return CallService::GetInstance()->StartCall(src_root, root, trace_id);
+        });
+    });
+
+    RegPost("/api/call/accept", [handle_call_post](std::shared_ptr<HttpConnection> connection) {
+        return handle_call_post(connection, [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            return CallService::GetInstance()->AcceptCall(src_root, root, trace_id);
+        });
+    });
+
+    RegPost("/api/call/reject", [handle_call_post](std::shared_ptr<HttpConnection> connection) {
+        return handle_call_post(connection, [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            return CallService::GetInstance()->RejectCall(src_root, root, trace_id);
+        });
+    });
+
+    RegPost("/api/call/cancel", [handle_call_post](std::shared_ptr<HttpConnection> connection) {
+        return handle_call_post(connection, [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            return CallService::GetInstance()->CancelCall(src_root, root, trace_id);
+        });
+    });
+
+    RegPost("/api/call/hangup", [handle_call_post](std::shared_ptr<HttpConnection> connection) {
+        return handle_call_post(connection, [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            return CallService::GetInstance()->HangupCall(src_root, root, trace_id);
+        });
+    });
+
+    RegGet("/api/call/token", [](std::shared_ptr<HttpConnection> connection) {
+        connection->_response.set(http::field::content_type, "text/json");
+        Json::Value root;
+        const int uid = std::atoi(connection->_get_params["uid"].c_str());
+        const std::string token = connection->_get_params["token"];
+        const std::string call_id = connection->_get_params["call_id"];
+        const std::string role = connection->_get_params["role"];
+        CallService::GetInstance()->GetToken(uid, token, call_id, role, root, connection->_trace_id);
+        if (!root.isMember("trace_id")) {
+            root["trace_id"] = connection->_trace_id;
+        }
+        beast::ostream(connection->_response.body()) << root.toStyledString();
+        return true;
+    });
+
+    RegPost("/api/call/token", [handle_call_post](std::shared_ptr<HttpConnection> connection) {
+        return handle_call_post(connection, [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            const int uid = src_root.get("uid", 0).asInt();
+            const std::string token = src_root.get("token", "").asString();
+            const std::string call_id = src_root.get("call_id", "").asString();
+            const std::string role = src_root.get("role", "").asString();
+            return CallService::GetInstance()->GetToken(uid, token, call_id, role, root, trace_id);
+        });
+    });
 }
 void LogicSystem::RegGet(std::string url, HttpHandler handler) {
 	_get_handlers.insert(make_pair(url, handler));
