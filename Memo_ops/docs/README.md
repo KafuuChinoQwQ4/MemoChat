@@ -15,6 +15,7 @@
 - Redis prefix: `ops:*`
 - Raw business data remains in `memo`
 - Raw log bodies and traces stay in Loki and Tempo
+- Runtime and historical local artifacts are unified under `Memo_ops/artifacts`
 
 ## Quick Start
 

@@ -4,9 +4,9 @@
   "client_ver": "2.0.0",
   "use_xor_passwd": true,
   "account_domain": "loadtest.local",
-  "runtime_accounts_csv": "../Memo_ops/runtime/loadtest/accounts.local.csv",
-  "log_dir": "../Memo_ops/runtime/loadtest/logs",
-  "report_dir": "../Memo_ops/runtime/loadtest/reports",
+  "runtime_accounts_csv": "../Memo_ops/artifacts/loadtest/runtime/accounts/accounts.local.csv",
+  "log_dir": "../Memo_ops/artifacts/loadtest/runtime/logs",
+  "report_dir": "../Memo_ops/artifacts/loadtest/runtime/reports",
   "seed": 20260310,
   "cleanup_mode": "none",
   "warmup": {

@@ -20,7 +20,7 @@
   },
   "log": {
     "level": "info",
-    "dir": "../../Memo_ops/runtime/varify/logs",
+    "dir": "../../Memo_ops/artifacts/logs/services/VarifyServer",
     "toConsole": true,
     "env": "local"
   },
