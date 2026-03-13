@@ -9,6 +9,7 @@
 #include <QNetworkReply>
 #include <QDir>
 #include <QSettings>
+#include <QVector>
 
 extern std::function<void(QWidget*)> repolish;
 
@@ -98,6 +99,8 @@ enum ReqId{
     ID_CALL_CANCEL = 1089,
     ID_CALL_HANGUP = 1090,
     ID_CALL_GET_TOKEN = 1091,
+    ID_GET_RELATION_BOOTSTRAP_REQ = 1092,
+    ID_GET_RELATION_BOOTSTRAP_RSP = 1093,
 };
 
 enum ErrorCodes{
@@ -105,6 +108,9 @@ enum ErrorCodes{
     ERR_JSON = 1,
     ERR_NETWORK = 2,
     ERR_VERSION_TOO_LOW = 1014,
+    ERR_CHAT_TICKET_INVALID = 1095,
+    ERR_CHAT_TICKET_EXPIRED = 1096,
+    ERR_CHAT_SERVER_MISMATCH = 1097,
     ERR_PROTOCOL_VERSION = 1098,
 };
 
@@ -134,13 +140,27 @@ enum ClickLbState{
 
 extern QString gate_url_prefix;
 
-#define MEMOCHAT_CLIENT_VERSION "2.0.0"
+#define MEMOCHAT_CLIENT_VERSION "3.0.0"
+
+struct ChatEndpoint {
+    QString host;
+    QString port;
+    QString serverName;
+    int priority = 0;
+};
 
 
 struct ServerInfo{
     QString Host;
     QString Port;
     QString Token;
+    QString LoginTicket;
+    QString ServerName;
+    QVector<ChatEndpoint> Endpoints;
+    int ConnectTimeoutMs = 1200;
+    int BackupDialDelayMs = 250;
+    int TotalLoginTimeoutMs = 5000;
+    int ProtocolVersion = 2;
     int Uid;
 };
 

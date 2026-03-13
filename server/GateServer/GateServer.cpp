@@ -16,6 +16,7 @@
 #include "logging/Logger.h"
 #include "logging/Telemetry.h"
 #include "logging/TelemetryConfig.h"
+#include <chrono>
 
 void TestRedis() {
 
@@ -136,8 +137,6 @@ int main()
 {
 	try
 	{
-		MysqlMgr::GetInstance();
-		RedisMgr::GetInstance();
 		auto & gCfgMgr = ConfigMgr::Inst();
 		auto log_cfg = memolog::LogConfig::FromGetter(
 			[&gCfgMgr](const std::string& section, const std::string& key) {
@@ -149,6 +148,14 @@ int main()
 			});
 		memolog::Logger::Init("GateServer", log_cfg);
 		memolog::Telemetry::Init("GateServer", telemetry_cfg);
+		const auto mysql_init_start = std::chrono::steady_clock::now();
+		MysqlMgr::GetInstance();
+		memolog::LogInfo("service.mysql_ready", "GateServer mysql ready",
+			{
+				{"mysql_init_ms", std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - mysql_init_start).count())}
+			});
+		RedisMgr::GetInstance();
 		std::string gate_port_str = gCfgMgr["GateServer"]["Port"];
 		unsigned short gate_port = atoi(gate_port_str.c_str());
 		net::io_context ioc{ 1 };
