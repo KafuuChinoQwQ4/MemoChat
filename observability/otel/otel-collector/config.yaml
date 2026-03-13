@@ -7,9 +7,9 @@ receivers:
     endpoint: 0.0.0.0:9411
   filelog/memochat:
     include:
-      - /workspace/Memo_ops/runtime/services/*/logs/*.json
-      - /workspace/Memo_ops/runtime/varify/logs/*.json
-      - /workspace/Memo_ops/runtime/loadtest/logs/*.json
+      - /workspace/Memo_ops/artifacts/logs/services/*/*.json
+      - /workspace/Memo_ops/artifacts/loadtest/runtime/logs/*.json
+      - /workspace/Memo_ops/artifacts/loadtest/history/ad-hoc/logs/*.json
       - /workspace/build/bin/Release/logs/*.json
       - /workspace/build/bin/Debug/logs/*.json
     start_at: beginning

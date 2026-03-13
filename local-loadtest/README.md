@@ -108,7 +108,9 @@ Examples:
 9. Redis capacity
 
 ## Reports And Logs
-- Every script writes JSON reports under `reports/`
+- Runtime loadtest logs now default to `Memo_ops/artifacts/loadtest/runtime/logs/`
+- Runtime loadtest reports now default to `Memo_ops/artifacts/loadtest/runtime/reports/`
+- Historical ad-hoc and e2e samples are archived under `Memo_ops/artifacts/loadtest/history/`
 - `run_suite.ps1` writes a timestamped suite folder and `suite_summary.json`
 - Report schema includes:
   - `scenario`

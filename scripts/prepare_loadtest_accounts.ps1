@@ -22,7 +22,7 @@ function Resolve-RepoRoot {
 }
 
 $root = Resolve-RepoRoot -InputRoot $RepoRoot
-$runtimeDir = Join-Path $root "Memo_ops/runtime/loadtest"
+$runtimeDir = Join-Path $root "Memo_ops/artifacts/loadtest/runtime/accounts"
 $target = Join-Path $runtimeDir "accounts.local.csv"
 New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
 

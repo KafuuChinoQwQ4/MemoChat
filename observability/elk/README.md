@@ -18,8 +18,9 @@ docker compose up -d
 - `build/run/*/logs/*.json`
 - `build/bin/Release/logs/*.json`
 - `build/bin/Debug/logs/*.json`
-- `local-loadtest/logs/*.json`
-- `server/VarifyServer/logs/*.json`
+- `Memo_ops/artifacts/loadtest/runtime/logs/*.json`
+- `Memo_ops/artifacts/loadtest/history/ad-hoc/logs/*.json`
+- `Memo_ops/artifacts/logs/services/VarifyServer/*.json`
 
 ## Index
 

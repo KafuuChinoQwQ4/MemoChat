@@ -17,6 +17,7 @@ set "CHAT_EXE="
 set "CLIENT_BIN=%ROOT%\build\bin\Release"
 set "OPS_ROOT=%ROOT%\Memo_ops"
 set "OPS_RUNTIME=%OPS_ROOT%\runtime"
+set "ARTIFACT_ROOT=%OPS_ROOT%\artifacts"
 set "RUN_ROOT=%OPS_RUNTIME%\services"
 set "WITH_CLIENT=1"
 set "CONSOLE_CP=936"
@@ -93,9 +94,17 @@ call :ensure_varify_deps
 if errorlevel 1 exit /b 1
 
 if not exist "%RUN_ROOT%" mkdir "%RUN_ROOT%"
-if not exist "%OPS_RUNTIME%\varify\logs" mkdir "%OPS_RUNTIME%\varify\logs"
-if not exist "%OPS_RUNTIME%\loadtest\logs" mkdir "%OPS_RUNTIME%\loadtest\logs"
-if not exist "%OPS_RUNTIME%\loadtest\reports" mkdir "%OPS_RUNTIME%\loadtest\reports"
+if not exist "%ARTIFACT_ROOT%\logs\services\GateServer" mkdir "%ARTIFACT_ROOT%\logs\services\GateServer"
+if not exist "%ARTIFACT_ROOT%\logs\services\StatusServer" mkdir "%ARTIFACT_ROOT%\logs\services\StatusServer"
+if not exist "%ARTIFACT_ROOT%\logs\services\chatserver1" mkdir "%ARTIFACT_ROOT%\logs\services\chatserver1"
+if not exist "%ARTIFACT_ROOT%\logs\services\chatserver2" mkdir "%ARTIFACT_ROOT%\logs\services\chatserver2"
+if not exist "%ARTIFACT_ROOT%\logs\services\chatserver3" mkdir "%ARTIFACT_ROOT%\logs\services\chatserver3"
+if not exist "%ARTIFACT_ROOT%\logs\services\chatserver4" mkdir "%ARTIFACT_ROOT%\logs\services\chatserver4"
+if not exist "%ARTIFACT_ROOT%\logs\services\VarifyServer" mkdir "%ARTIFACT_ROOT%\logs\services\VarifyServer"
+if not exist "%ARTIFACT_ROOT%\logs\manual-start" mkdir "%ARTIFACT_ROOT%\logs\manual-start"
+if not exist "%ARTIFACT_ROOT%\loadtest\runtime\accounts" mkdir "%ARTIFACT_ROOT%\loadtest\runtime\accounts"
+if not exist "%ARTIFACT_ROOT%\loadtest\runtime\logs" mkdir "%ARTIFACT_ROOT%\loadtest\runtime\logs"
+if not exist "%ARTIFACT_ROOT%\loadtest\runtime\reports" mkdir "%ARTIFACT_ROOT%\loadtest\runtime\reports"
 
 call :prepare_service StatusServer "%ROOT%\server\StatusServer\config.ini" "%STATUS_EXE%"
 if errorlevel 1 exit /b 1
@@ -116,12 +125,12 @@ if errorlevel 1 exit /b 1
 
 echo [INFO] Starting VarifyServer (Node)...
 start "VarifyServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%ROOT%\server\VarifyServer"" && node server.js"
-call :wait_for_port VarifyServer 50051 20 "%ROOT%\server\VarifyServer\logs"
+call :wait_for_port VarifyServer 50051 20 "%ARTIFACT_ROOT%\logs\services\VarifyServer"
 if errorlevel 1 exit /b 1
 
 echo [INFO] Starting StatusServer...
 start "StatusServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\StatusServer"" && StatusServer.exe"
-call :wait_for_port StatusServer 50052 20 "%RUN_ROOT%\StatusServer\logs"
+call :wait_for_port StatusServer 50052 20 "%ARTIFACT_ROOT%\logs\services\StatusServer"
 if errorlevel 1 exit /b 1
 call :print_running_process_stamp StatusServer.exe
 
@@ -131,9 +140,9 @@ for /L %%I in (1,1,!CHAT_NODE_COUNT!) do (
   set "NODE_RPC_PORT=!CHAT_NODE_%%I_RPC_PORT!"
   echo [INFO] Starting !NODE_NAME!...
   start "ChatServer-!NODE_NAME!" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\!NODE_NAME!"" && ChatServer.exe --config .\config.ini"
-  call :wait_for_port !NODE_NAME! !NODE_TCP_PORT! 20 "%RUN_ROOT%\!NODE_NAME!\logs"
+  call :wait_for_port !NODE_NAME! !NODE_TCP_PORT! 20 "%ARTIFACT_ROOT%\logs\services\!NODE_NAME!"
   if errorlevel 1 exit /b 1
-  call :wait_for_port !NODE_NAME!-RPC !NODE_RPC_PORT! 20 "%RUN_ROOT%\!NODE_NAME!\logs"
+  call :wait_for_port !NODE_NAME!-RPC !NODE_RPC_PORT! 20 "%ARTIFACT_ROOT%\logs\services\!NODE_NAME!"
   if errorlevel 1 exit /b 1
 )
 
@@ -141,7 +150,7 @@ call :print_chat_process_count
 
 echo [INFO] Starting GateServer...
 start "GateServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\GateServer"" && GateServer.exe"
-call :wait_for_port GateServer 8080 20 "%RUN_ROOT%\GateServer\logs"
+call :wait_for_port GateServer 8080 20 "%ARTIFACT_ROOT%\logs\services\GateServer"
 if errorlevel 1 exit /b 1
 call :print_running_process_stamp GateServer.exe
 
@@ -171,6 +180,7 @@ echo [DONE] Services started.
 echo [INFO] GateServer HTTP: http://127.0.0.1:8080
 echo [INFO] Chat cluster nodes: !CHAT_NODE_NAMES!
 echo [INFO] Ops runtime: %OPS_RUNTIME%
+echo [INFO] Artifacts root: %ARTIFACT_ROOT%
 exit /b 0
 
 :wait_for_port
