@@ -21,6 +21,9 @@ enum ErrorCodes {
     GroupMuted = 1016,
     GroupApplyNotFound = 1017,
     TargetOffline = 1018,
+    ChatTicketInvalid = 1095,
+    ChatTicketExpired = 1096,
+    ChatServerMismatch = 1097,
     ProtocolVersionMismatch = 1098,
 };
 
@@ -112,6 +115,8 @@ enum MSG_IDS {
     ID_FORWARD_PRIVATE_MSG_REQ = 1083,
     ID_FORWARD_PRIVATE_MSG_RSP = 1084,
     ID_NOTIFY_CALL_EVENT_REQ = 1085,
+    ID_GET_RELATION_BOOTSTRAP_REQ = 1092,
+    ID_GET_RELATION_BOOTSTRAP_RSP = 1093,
 };
 
 #define USERIPPREFIX "uip_"

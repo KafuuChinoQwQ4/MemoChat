@@ -27,6 +27,7 @@ private:
 	void DealMsg();
 	void RegisterCallBacks();
 	void LoginHandler(shared_ptr<CSession> session, const short &msg_id, const string &msg_data);
+	void GetRelationBootstrapHandler(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
 	void SearchInfo(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void AddFriendApply(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void AuthFriendApply(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
@@ -60,6 +61,7 @@ private:
 	void PushGroupPayload(const std::vector<int>& recipients, short msgid, const Json::Value& payload, int exclude_uid = 0);
 	void BuildGroupListJson(int uid, Json::Value& out);
 	void BuildDialogListJson(int uid, Json::Value& out);
+	void AppendRelationBootstrapJson(int uid, Json::Value& out);
 	bool isPureDigit(const std::string& str);
 	void GetUserByUid(std::string uid_str, Json::Value& rtvalue);
 	void GetUserByName(std::string name, Json::Value& rtvalue);

@@ -21,7 +21,7 @@ public:
     void Stop();
 
 private:
-    AsioIOServicePool(std::size_t size = 2);
+    AsioIOServicePool(std::size_t size = 1);
     std::vector<IOService> _ioServices;
     std::vector<WorkPtr> _works;
     std::vector<std::thread> _threads;

@@ -20,6 +20,8 @@ void CServer::Start()
 				return;
 			}
 
+			beast::error_code option_ec;
+			new_con->GetSocket().set_option(tcp::no_delay(true), option_ec);
 
 			new_con->Start();
 

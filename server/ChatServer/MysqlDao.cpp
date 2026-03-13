@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cctype>
 #include <unordered_set>
+#include <unordered_map>
 #include <random>
 #include <stdexcept>
 #include <limits>
@@ -189,6 +190,10 @@ MysqlDao::MysqlDao()
 				"KEY idx_conv_created(conv_uid_min, conv_uid_max, created_at),"
 				"KEY idx_to_created(to_uid, created_at)"
 				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+			ExecuteIgnoreSql(stmt.get(), "CREATE INDEX idx_friend_self_id_friend_id ON friend(self_id, friend_id)");
+			ExecuteIgnoreSql(stmt.get(), "CREATE INDEX idx_friend_apply_to_uid_id_from_uid ON friend_apply(to_uid, id, from_uid)");
+			ExecuteIgnoreSql(stmt.get(), "CREATE INDEX idx_friend_apply_tag_to_uid_from_uid_id ON friend_apply_tag(to_uid, from_uid, id)");
+			ExecuteIgnoreSql(stmt.get(), "CREATE INDEX idx_friend_tag_self_id_friend_id_id ON friend_tag(self_id, friend_id, id)");
 			pool_->returnConnection(std::move(con));
 		}
 	}
@@ -214,10 +219,68 @@ MysqlDao::MysqlDao()
 	if (!EnsureGroupPermissionSchemaAndBackfill()) {
 		throw std::runtime_error("failed to ensure/backfill chat_group_admin_permission schema");
 	}
+	WarmupRelationBootstrapQueries();
 }
 
 MysqlDao::~MysqlDao(){
 	pool_->Close();
+}
+
+void MysqlDao::WarmupRelationBootstrapQueries() {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		{
+			std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement(
+				"select apply.from_uid, apply.status, user.name, user.nick, user.sex, user.user_id "
+				"from friend_apply as apply join user on apply.from_uid = user.uid where apply.to_uid = ? "
+				"and apply.id > ? order by apply.id ASC LIMIT ? "));
+			pstmt->setInt(1, -1);
+			pstmt->setInt(2, 0);
+			pstmt->setInt(3, 1);
+			std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+			(void)res;
+		}
+
+		{
+			std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement(
+				"SELECT from_uid, tag FROM friend_apply_tag WHERE to_uid = ? AND from_uid IN (?) ORDER BY id ASC"));
+			pstmt->setInt(1, -1);
+			pstmt->setInt(2, -1);
+			std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+			(void)res;
+		}
+
+		{
+			std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement(
+				"SELECT f.friend_id, f.back, u.name, u.nick, u.sex, u.user_id, u.`desc`, u.icon "
+				"FROM friend AS f "
+				"JOIN user AS u ON f.friend_id = u.uid "
+				"WHERE f.self_id = ? LIMIT 1"));
+			pstmt->setInt(1, -1);
+			std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+			(void)res;
+		}
+
+		{
+			std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement(
+				"SELECT friend_id, tag FROM friend_tag WHERE self_id = ? AND friend_id IN (?) ORDER BY id ASC"));
+			pstmt->setInt(1, -1);
+			pstmt->setInt(2, -1);
+			std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+			(void)res;
+		}
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "warmup relation bootstrap queries failed: " << e.what() << std::endl;
+	}
 }
 
 int MysqlDao::RegUser(const std::string& name, const std::string& email, const std::string& pwd)
@@ -811,7 +874,9 @@ bool MysqlDao::GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& 
 		});
 
 
-		try {
+	try {
+		std::vector<int> from_uids;
+		std::unordered_map<int, std::shared_ptr<ApplyInfo>> apply_by_uid;
 
 		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("select apply.from_uid, apply.status, user.name, "
 				"user.nick, user.sex, user.user_id from friend_apply as apply join user on apply.from_uid = user.uid where apply.to_uid = ? "
@@ -831,8 +896,35 @@ bool MysqlDao::GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& 
 			auto sex = res->getInt("sex");
 			auto user_id = res->isNull("user_id") ? "" : res->getString("user_id");
 			auto apply_ptr = std::make_shared<ApplyInfo>(uid, name, "", "", nick, sex, status, user_id);
-			apply_ptr->_labels = GetApplyTags(uid, touid);
 			applyList.push_back(apply_ptr);
+			from_uids.push_back(uid);
+			apply_by_uid.emplace(uid, apply_ptr);
+		}
+
+		if (!from_uids.empty()) {
+			std::string placeholders;
+			placeholders.reserve(from_uids.size() * 2);
+			for (size_t i = 0; i < from_uids.size(); ++i) {
+				if (i > 0) {
+					placeholders += ",";
+				}
+				placeholders += "?";
+			}
+
+			std::unique_ptr<sql::PreparedStatement> tag_stmt(con->_con->prepareStatement(
+				"SELECT from_uid, tag FROM friend_apply_tag WHERE to_uid = ? AND from_uid IN (" + placeholders + ") ORDER BY id ASC"));
+			tag_stmt->setInt(1, touid);
+			for (size_t i = 0; i < from_uids.size(); ++i) {
+				tag_stmt->setInt(static_cast<int>(i + 2), from_uids[i]);
+			}
+			std::unique_ptr<sql::ResultSet> tag_res(tag_stmt->executeQuery());
+			while (tag_res->next()) {
+				const auto uid = tag_res->getInt("from_uid");
+				const auto it = apply_by_uid.find(uid);
+				if (it != apply_by_uid.end() && it->second) {
+					it->second->_labels.push_back(tag_res->getString("tag"));
+				}
+			}
 		}
 		return true;
 	}
@@ -857,8 +949,14 @@ bool MysqlDao::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo> 
 
 
 	try {
+		std::vector<int> friend_ids;
+		std::unordered_map<int, std::shared_ptr<UserInfo>> friend_by_id;
 
-		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("select * from friend where self_id = ? "));
+		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement(
+			"SELECT f.friend_id, f.back, u.name, u.nick, u.sex, u.user_id, u.`desc`, u.icon "
+			"FROM friend AS f "
+			"JOIN user AS u ON f.friend_id = u.uid "
+			"WHERE f.self_id = ?"));
 
 		pstmt->setInt(1, self_id);
 	
@@ -867,16 +965,45 @@ bool MysqlDao::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo> 
 
 		while (res->next()) {		
 			auto friend_id = res->getInt("friend_id");
-			auto back = res->getString("back");
+			auto back = res->isNull("back") ? "" : res->getString("back");
+			auto user_info = std::make_shared<UserInfo>();
+			user_info->uid = friend_id;
+			user_info->name = res->getString("name");
+			user_info->nick = res->isNull("nick") ? "" : res->getString("nick");
+			user_info->sex = res->getInt("sex");
+			user_info->user_id = res->isNull("user_id") ? "" : res->getString("user_id");
+			user_info->desc = res->isNull("desc") ? "" : res->getString("desc");
+			user_info->icon = res->isNull("icon") ? "" : res->getString("icon");
+			user_info->back = back;
+			user_info_list.push_back(user_info);
+			friend_ids.push_back(friend_id);
+			friend_by_id.emplace(friend_id, user_info);
+		}
 
-			auto user_info = GetUser(friend_id);
-			if (user_info == nullptr) {
-				continue;
+		if (!friend_ids.empty()) {
+			std::string placeholders;
+			placeholders.reserve(friend_ids.size() * 2);
+			for (size_t i = 0; i < friend_ids.size(); ++i) {
+				if (i > 0) {
+					placeholders += ",";
+				}
+				placeholders += "?";
 			}
 
-			user_info->back = back;
-			user_info->labels = GetFriendTags(self_id, friend_id);
-			user_info_list.push_back(user_info);
+			std::unique_ptr<sql::PreparedStatement> tag_stmt(con->_con->prepareStatement(
+				"SELECT friend_id, tag FROM friend_tag WHERE self_id = ? AND friend_id IN (" + placeholders + ") ORDER BY id ASC"));
+			tag_stmt->setInt(1, self_id);
+			for (size_t i = 0; i < friend_ids.size(); ++i) {
+				tag_stmt->setInt(static_cast<int>(i + 2), friend_ids[i]);
+			}
+			std::unique_ptr<sql::ResultSet> tag_res(tag_stmt->executeQuery());
+			while (tag_res->next()) {
+				const auto friend_id = tag_res->getInt("friend_id");
+				const auto it = friend_by_id.find(friend_id);
+				if (it != friend_by_id.end() && it->second) {
+					it->second->labels.push_back(tag_res->getString("tag"));
+				}
+			}
 		}
 		return true;
 	}

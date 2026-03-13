@@ -6,6 +6,8 @@
 #include "StatusGrpcClient.h"
 #include "MediaStorage.h"
 #include "CallService.h"
+#include "auth/ChatLoginTicket.h"
+#include "cluster/ChatClusterDiscovery.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
 #include <algorithm>
@@ -18,9 +20,22 @@
 #include <vector>
 #include <unordered_map>
 #include <sstream>
+#include <atomic>
+#include <climits>
 
 namespace {
 const char* kMinClientVersion = "2.0.0";
+constexpr int kLoginProtocolVersion = 3;
+
+struct GateChatRouteNode {
+	std::string name;
+	std::string host;
+	std::string port;
+	int online_count = 0;
+	int priority = 0;
+};
+
+std::atomic<uint64_t> g_gate_route_rr_counter{0};
 
 bool ParseSemVer(const std::string& ver, int& major, int& minor, int& patch) {
 	major = 0;
@@ -371,6 +386,192 @@ bool IsMediaTypeImage(const std::string& media_type) {
 std::string NewIdString() {
 	return boost::uuids::to_string(boost::uuids::random_generator()());
 }
+
+std::string GetChatAuthSecret() {
+	auto& cfg = ConfigMgr::Inst();
+	auto secret = cfg.GetValue("ChatAuth", "HmacSecret");
+	if (secret.empty()) {
+		secret = "memochat-dev-chat-secret";
+	}
+	return secret;
+}
+
+int GetChatTicketTtlSec() {
+	auto& cfg = ConfigMgr::Inst();
+	const auto ttl = cfg.GetValue("ChatAuth", "TicketTtlSec");
+	if (ttl.empty()) {
+		return 20;
+	}
+	return std::max(5, std::atoi(ttl.c_str()));
+}
+
+int GetLoginCacheTtlSec() {
+	auto& cfg = ConfigMgr::Inst();
+	const auto ttl = cfg.GetValue("LoginCache", "TtlSec");
+	if (ttl.empty()) {
+		return 3600;
+	}
+	return std::max(60, std::atoi(ttl.c_str()));
+}
+
+std::string BuildLoginCacheKey(const std::string& email) {
+	return "ulogin_profile_" + email;
+}
+
+std::string BuildLoginCacheUidKey(int uid) {
+	return "ulogin_profile_uid_" + std::to_string(uid);
+}
+
+std::string DecodeLegacyXorPwd(const std::string& input) {
+	unsigned int xor_code = static_cast<unsigned int>(input.size() % 255);
+	std::string decoded = input;
+	for (size_t i = 0; i < decoded.size(); ++i) {
+		decoded[i] = static_cast<char>(static_cast<unsigned char>(decoded[i]) ^ xor_code);
+	}
+	return decoded;
+}
+
+bool TryLoadCachedLoginProfile(const std::string& email, const std::string& pwd, UserInfo& userInfo) {
+	std::string cached_json;
+	if (!RedisMgr::GetInstance()->Get(BuildLoginCacheKey(email), cached_json) || cached_json.empty()) {
+		return false;
+	}
+
+	Json::Value root;
+	Json::Reader reader;
+	if (!reader.parse(cached_json, root) || !root.isObject()) {
+		return false;
+	}
+
+	const auto cached_pwd = root.get("pwd", "").asString();
+	if (cached_pwd.empty()) {
+		return false;
+	}
+	if (pwd != cached_pwd && DecodeLegacyXorPwd(pwd) != cached_pwd) {
+		return false;
+	}
+
+	userInfo.pwd = cached_pwd;
+	userInfo.name = root.get("name", "").asString();
+	userInfo.email = root.get("email", "").asString();
+	userInfo.uid = root.get("uid", 0).asInt();
+	userInfo.user_id = root.get("user_id", "").asString();
+	userInfo.nick = root.get("nick", "").asString();
+	userInfo.icon = root.get("icon", "").asString();
+	userInfo.desc = root.get("desc", "").asString();
+	userInfo.sex = root.get("sex", 0).asInt();
+	return userInfo.uid > 0;
+}
+
+void CacheLoginProfile(const std::string& email, const UserInfo& userInfo) {
+	Json::Value root(Json::objectValue);
+	root["uid"] = userInfo.uid;
+	root["pwd"] = userInfo.pwd;
+	root["name"] = userInfo.name;
+	root["email"] = userInfo.email;
+	root["user_id"] = userInfo.user_id;
+	root["nick"] = userInfo.nick;
+	root["icon"] = userInfo.icon;
+	root["desc"] = userInfo.desc;
+	root["sex"] = userInfo.sex;
+	const auto ttl = GetLoginCacheTtlSec();
+	RedisMgr::GetInstance()->SetEx(BuildLoginCacheKey(email), root.toStyledString(), ttl);
+	if (userInfo.uid > 0) {
+		RedisMgr::GetInstance()->SetEx(BuildLoginCacheUidKey(userInfo.uid), email, ttl);
+	}
+}
+
+void InvalidateLoginCacheByEmail(const std::string& email) {
+	if (email.empty()) {
+		return;
+	}
+	RedisMgr::GetInstance()->Del(BuildLoginCacheKey(email));
+}
+
+void InvalidateLoginCacheByUid(int uid) {
+	if (uid <= 0) {
+		return;
+	}
+	std::string email;
+	if (RedisMgr::GetInstance()->Get(BuildLoginCacheUidKey(uid), email) && !email.empty()) {
+		RedisMgr::GetInstance()->Del(BuildLoginCacheKey(email));
+	}
+	RedisMgr::GetInstance()->Del(BuildLoginCacheUidKey(uid));
+}
+
+std::vector<GateChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load_snapshot = nullptr,
+                                                      std::vector<std::string>* least_loaded_snapshot = nullptr) {
+	if (load_snapshot) {
+		load_snapshot->clear();
+	}
+	if (least_loaded_snapshot) {
+		least_loaded_snapshot->clear();
+	}
+	try {
+		auto& cfg = ConfigMgr::Inst();
+		const auto cluster = memochat::cluster::LoadStaticChatClusterConfig(
+			[&cfg](const std::string& section, const std::string& key) {
+				return cfg.GetValue(section, key);
+			});
+		std::vector<GateChatRouteNode> nodes;
+		nodes.reserve(cluster.enabledNodes().size());
+		int min_online = INT_MAX;
+		for (const auto& node : cluster.enabledNodes()) {
+			GateChatRouteNode route_node;
+			route_node.name = node.name;
+			route_node.host = node.tcp_host;
+			route_node.port = node.tcp_port;
+			const int online_count = 0;
+			route_node.online_count = online_count;
+			nodes.push_back(route_node);
+			min_online = std::min(min_online, online_count);
+			if (load_snapshot) {
+				std::ostringstream one;
+				one << node.name << "=" << online_count;
+				load_snapshot->push_back(one.str());
+			}
+		}
+		std::sort(nodes.begin(), nodes.end(), [](const GateChatRouteNode& lhs, const GateChatRouteNode& rhs) {
+			if (lhs.online_count != rhs.online_count) {
+				return lhs.online_count < rhs.online_count;
+			}
+			return lhs.name < rhs.name;
+		});
+		int priority = 0;
+		for (auto& node : nodes) {
+			node.priority = priority++;
+			if (node.online_count == min_online && least_loaded_snapshot) {
+				least_loaded_snapshot->push_back(node.name);
+			}
+		}
+		if (!nodes.empty()) {
+			const auto next_index = static_cast<size_t>(g_gate_route_rr_counter.fetch_add(1, std::memory_order_relaxed));
+			std::stable_sort(nodes.begin(), nodes.end(), [next_index, min_online](const GateChatRouteNode& lhs, const GateChatRouteNode& rhs) {
+				const bool lhs_least = lhs.online_count == min_online;
+				const bool rhs_least = rhs.online_count == min_online;
+				if (lhs_least != rhs_least) {
+					return lhs_least > rhs_least;
+				}
+				if (lhs_least && rhs_least) {
+					return ((lhs.priority + static_cast<int>(next_index)) % 1024) < ((rhs.priority + static_cast<int>(next_index)) % 1024);
+				}
+				return lhs.priority < rhs.priority;
+			});
+		}
+		return nodes;
+	}
+	catch (const std::exception& ex) {
+		memolog::LogError("gate.route_select.config_error", "failed to load local chat route config",
+			{
+				{"error_type", "cluster_config"},
+				{"error", ex.what()}
+			});
+		if (load_snapshot) {
+			load_snapshot->push_back(std::string("config_error:") + ex.what());
+		}
+		return {};
+	}
+}
 }
 
 LogicSystem::LogicSystem() {
@@ -531,6 +732,17 @@ LogicSystem::LogicSystem() {
 		root["confirm"] = confirm;
 		root["icon"] = icon;
 		root["varifycode"] = src_root["varifycode"].asString();
+		UserInfo cached_user;
+		cached_user.uid = uid;
+		cached_user.user_id = root["user_id"].asString();
+		cached_user.name = name;
+		cached_user.email = email;
+		cached_user.pwd = pwd;
+		cached_user.nick = name;
+		cached_user.icon = icon;
+		cached_user.desc = "";
+		cached_user.sex = src_root.get("sex", 0).asInt();
+		CacheLoginProfile(email, cached_user);
 		memolog::LogInfo("gate.user_register", "user registered",
 			{ {"email", email}, {"uid", std::to_string(uid)} });
 		std::string jsonstr = root.toStyledString();
@@ -598,6 +810,7 @@ LogicSystem::LogicSystem() {
 		}
 
 		memolog::LogInfo("gate.reset_pwd", "password updated", { {"email", email} });
+		InvalidateLoginCacheByEmail(email);
 		root["error"] = 0;
 		root["email"] = email;
 		root["user"] = name;
@@ -613,6 +826,7 @@ LogicSystem::LogicSystem() {
 		auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
 		memolog::TraceContext::SetTraceId(connection->_trace_id);
 		connection->_response.set(http::field::content_type, "text/json");
+		const auto login_start_ms = NowMs();
 		Json::Value root;
 		Json::Reader reader;
 		Json::Value src_root;
@@ -640,8 +854,17 @@ LogicSystem::LogicSystem() {
 			return true;
 		}
 		UserInfo userInfo;
-
-		bool pwd_valid = MysqlMgr::GetInstance()->CheckPwd(email, pwd, userInfo);
+		const auto mysql_start_ms = NowMs();
+		bool login_cache_hit = TryLoadCachedLoginProfile(email, pwd, userInfo);
+		bool pwd_valid = login_cache_hit;
+		int64_t mysql_check_pwd_ms = 0;
+		if (!pwd_valid) {
+			pwd_valid = MysqlMgr::GetInstance()->CheckPwd(email, pwd, userInfo);
+			mysql_check_pwd_ms = NowMs() - mysql_start_ms;
+			if (pwd_valid) {
+				CacheLoginProfile(email, userInfo);
+			}
+		}
 		if (!pwd_valid) {
 			memolog::LogWarn("gate.user_login.failed", "password invalid",
 				{ {"email", email}, {"error_code", std::to_string(ErrorCodes::PasswdInvalid)} });
@@ -650,12 +873,42 @@ LogicSystem::LogicSystem() {
 			beast::ostream(connection->_response.body()) << jsonstr;
 			return true;
 		}
-
-
-		auto reply = StatusGrpcClient::GetInstance()->GetChatServer(userInfo.uid);
-		if (reply.error()) {
-			memolog::LogWarn("gate.user_login.failed", "get chat server rpc failed",
-				{ {"uid", std::to_string(userInfo.uid)}, {"error_code", std::to_string(reply.error())} });
+		std::vector<std::string> server_load_snapshot;
+		std::vector<std::string> least_loaded_servers;
+		const auto route_start_ms = NowMs();
+		const auto route_nodes = LoadGateChatRouteNodes(&server_load_snapshot, &least_loaded_servers);
+		const auto route_select_ms = NowMs() - route_start_ms;
+		if (route_nodes.empty()) {
+			memolog::LogWarn("gate.user_login.failed", "no chat server available",
+				{ {"uid", std::to_string(userInfo.uid)}, {"error_code", std::to_string(ErrorCodes::RPCFailed)} });
+			root["error"] = ErrorCodes::RPCFailed;
+			std::string jsonstr = root.toStyledString();
+			beast::ostream(connection->_response.body()) << jsonstr;
+			return true;
+		}
+		const auto ticket_start_ms = NowMs();
+		std::string http_token;
+		const std::string token_key = USERTOKENPREFIX + std::to_string(userInfo.uid);
+		if (!RedisMgr::GetInstance()->Get(token_key, http_token) || http_token.empty()) {
+			http_token = NewIdString();
+			RedisMgr::GetInstance()->Set(token_key, http_token);
+		}
+		memochat::auth::ChatLoginTicketClaims claims;
+		claims.uid = userInfo.uid;
+		claims.user_id = userInfo.user_id;
+		claims.name = userInfo.name;
+		claims.nick = userInfo.nick;
+		claims.icon = userInfo.icon;
+		claims.desc = userInfo.desc;
+		claims.email = userInfo.email;
+		claims.sex = userInfo.sex;
+		claims.target_server = route_nodes.front().name;
+		claims.protocol_version = kLoginProtocolVersion;
+		claims.issued_at_ms = NowMs();
+		claims.expire_at_ms = claims.issued_at_ms + static_cast<int64_t>(GetChatTicketTtlSec()) * 1000;
+		const std::string login_ticket = memochat::auth::EncodeTicket(claims, GetChatAuthSecret());
+		const auto ticket_issue_ms = NowMs() - ticket_start_ms;
+		if (login_ticket.empty()) {
 			root["error"] = ErrorCodes::RPCFailed;
 			std::string jsonstr = root.toStyledString();
 			beast::ostream(connection->_response.body()) << jsonstr;
@@ -664,18 +917,66 @@ LogicSystem::LogicSystem() {
 
 		memolog::TraceContext::SetUid(std::to_string(userInfo.uid));
 		root["error"] = 0;
+		root["protocol_version"] = kLoginProtocolVersion;
 		root["email"] = email;
 		root["uid"] = userInfo.uid;
 		root["user_id"] = userInfo.user_id;
-		root["token"] = reply.token();
-		root["host"] = reply.host();
-		root["port"] = reply.port();
+		root["token"] = http_token;
+		root["host"] = route_nodes.front().host;
+		root["port"] = route_nodes.front().port;
+		root["login_ticket"] = login_ticket;
+		root["ticket_expire_ms"] = static_cast<Json::Int64>(claims.expire_at_ms);
+		root["user_profile"]["uid"] = userInfo.uid;
+		root["user_profile"]["user_id"] = userInfo.user_id;
+		root["user_profile"]["name"] = userInfo.name;
+		root["user_profile"]["nick"] = userInfo.nick;
+		root["user_profile"]["icon"] = userInfo.icon;
+		root["user_profile"]["desc"] = userInfo.desc;
+		root["user_profile"]["email"] = userInfo.email;
+		root["user_profile"]["sex"] = userInfo.sex;
+		for (const auto& route_node : route_nodes) {
+			Json::Value endpoint;
+			endpoint["host"] = route_node.host;
+			endpoint["port"] = route_node.port;
+			endpoint["server_name"] = route_node.name;
+			endpoint["priority"] = route_node.priority;
+			root["chat_endpoints"].append(endpoint);
+		}
+		root["stage_metrics"]["mysql_check_pwd_ms"] = static_cast<Json::Int64>(mysql_check_pwd_ms);
+		root["stage_metrics"]["route_select_ms"] = static_cast<Json::Int64>(route_select_ms);
+		root["stage_metrics"]["ticket_issue_ms"] = static_cast<Json::Int64>(ticket_issue_ms);
+		root["stage_metrics"]["user_login_total_ms"] = static_cast<Json::Int64>(NowMs() - login_start_ms);
 		memolog::LogInfo("gate.user_login", "user login succeeded",
 			{
 				{"uid", std::to_string(userInfo.uid)},
 				{"route", "/user_login"},
-				{"chat_host", reply.host()},
-				{"chat_port", reply.port()}
+				{"chat_host", route_nodes.front().host},
+				{"chat_port", route_nodes.front().port},
+				{"chat_server", route_nodes.front().name},
+				{"login_cache_hit", login_cache_hit ? "true" : "false"},
+				{"mysql_check_pwd_ms", std::to_string(mysql_check_pwd_ms)},
+				{"route_select_ms", std::to_string(route_select_ms)},
+				{"ticket_issue_ms", std::to_string(ticket_issue_ms)},
+				{"user_login_total_ms", std::to_string(NowMs() - login_start_ms)},
+				{"server_loads", [&server_load_snapshot]() {
+					std::ostringstream oss;
+					for (size_t i = 0; i < server_load_snapshot.size(); ++i) {
+						if (i > 0) {
+							oss << ",";
+						}
+						oss << server_load_snapshot[i];
+					}
+					return oss.str();
+				}()}
+			});
+		memolog::LogInfo("login.stage.summary", "gate login stage summary",
+			{
+				{"uid", std::to_string(userInfo.uid)},
+				{"login_cache_hit", login_cache_hit ? "true" : "false"},
+				{"mysql_check_pwd_ms", std::to_string(mysql_check_pwd_ms)},
+				{"route_select_ms", std::to_string(route_select_ms)},
+				{"ticket_issue_ms", std::to_string(ticket_issue_ms)},
+				{"user_login_total_ms", std::to_string(NowMs() - login_start_ms)}
 			});
 		std::string jsonstr = root.toStyledString();
 		beast::ostream(connection->_response.body()) << jsonstr;
@@ -1308,6 +1609,7 @@ LogicSystem::LogicSystem() {
 		if (!name.empty()) {
 			RedisMgr::GetInstance()->Del("nameinfo_" + name);
 		}
+		InvalidateLoginCacheByUid(uid);
 
 		root["error"] = ErrorCodes::Success;
 		root["uid"] = uid;

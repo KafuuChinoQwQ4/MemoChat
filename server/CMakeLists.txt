@@ -89,6 +89,10 @@ target_link_libraries(memochat_server_deps INTERFACE
     iphlpapi
 )
 
+if(WIN32)
+    target_link_libraries(memochat_server_deps INTERFACE bcrypt)
+endif()
+
 function(memochat_add_proto_sources target_name proto_file)
     get_filename_component(proto_name "${proto_file}" NAME_WE)
     set(proto_source "${CMAKE_CURRENT_SOURCE_DIR}/${proto_file}")

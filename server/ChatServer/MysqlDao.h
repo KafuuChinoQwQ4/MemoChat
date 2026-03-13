@@ -75,6 +75,7 @@ public:
 	bool UpsertDialogMuteState(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
 		const int64_t& group_id, const int& mute_state);
 private:
+	void WarmupRelationBootstrapQueries();
 	bool EnsureGroupCodeSchemaAndBackfill();
 	bool EnsureDialogMetaSchema();
 	bool EnsurePrivateReadStateSchema();

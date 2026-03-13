@@ -11,6 +11,9 @@ if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
 set "SERVER_BIN_PRIMARY=%ROOT%\build-vcpkg-server\bin\Release"
 set "SERVER_BIN_FALLBACK=%ROOT%\build\bin\Release"
 set "BUILD_BIN=%SERVER_BIN_PRIMARY%"
+set "GATE_EXE="
+set "STATUS_EXE="
+set "CHAT_EXE="
 set "CLIENT_BIN=%ROOT%\build\bin\Release"
 set "OPS_ROOT=%ROOT%\Memo_ops"
 set "OPS_RUNTIME=%OPS_ROOT%\runtime"
@@ -26,26 +29,28 @@ if errorlevel 1 exit /b 1
 
 echo [INFO] Using skill: memochat-multiservice-ops
 echo [INFO] Root: %ROOT%
-echo [INFO] Server bin: %BUILD_BIN%
+echo [INFO] Gate exe: %GATE_EXE%
+echo [INFO] Status exe: %STATUS_EXE%
+echo [INFO] Chat exe: %CHAT_EXE%
 echo [INFO] Client bin: %CLIENT_BIN%
 echo [INFO] Console code page: %CONSOLE_CP%
 echo.
 
-if not exist "%BUILD_BIN%\GateServer.exe" (
-  echo [ERROR] Missing %BUILD_BIN%\GateServer.exe
+if not exist "%GATE_EXE%" (
+  echo [ERROR] Missing %GATE_EXE%
   echo [HINT] Build first with one of:
   echo [HINT]   cmake --preset msvc2022-vcpkg-server ^&^& cmake --build --preset msvc2022-vcpkg-server-release
   echo [HINT]   cmake --preset msvc2022-all ^&^& cmake --build --preset msvc2022-release
   exit /b 1
 )
 
-if not exist "%BUILD_BIN%\StatusServer.exe" (
-  echo [ERROR] Missing %BUILD_BIN%\StatusServer.exe
+if not exist "%STATUS_EXE%" (
+  echo [ERROR] Missing %STATUS_EXE%
   exit /b 1
 )
 
-if not exist "%BUILD_BIN%\ChatServer.exe" (
-  echo [ERROR] Missing %BUILD_BIN%\ChatServer.exe
+if not exist "%CHAT_EXE%" (
+  echo [ERROR] Missing %CHAT_EXE%
   exit /b 1
 )
 
@@ -92,7 +97,7 @@ if not exist "%OPS_RUNTIME%\varify\logs" mkdir "%OPS_RUNTIME%\varify\logs"
 if not exist "%OPS_RUNTIME%\loadtest\logs" mkdir "%OPS_RUNTIME%\loadtest\logs"
 if not exist "%OPS_RUNTIME%\loadtest\reports" mkdir "%OPS_RUNTIME%\loadtest\reports"
 
-call :prepare_service StatusServer "%ROOT%\server\StatusServer\config.ini" "%BUILD_BIN%\StatusServer.exe"
+call :prepare_service StatusServer "%ROOT%\server\StatusServer\config.ini" "%STATUS_EXE%"
 if errorlevel 1 exit /b 1
 
 for /L %%I in (1,1,!CHAT_NODE_COUNT!) do (
@@ -102,11 +107,11 @@ for /L %%I in (1,1,!CHAT_NODE_COUNT!) do (
     echo [ERROR] Missing chat node config: !NODE_CFG!
     exit /b 1
   )
-  call :prepare_service !NODE_NAME! "!NODE_CFG!" "%BUILD_BIN%\ChatServer.exe"
+  call :prepare_service !NODE_NAME! "!NODE_CFG!" "%CHAT_EXE%"
   if errorlevel 1 exit /b 1
 )
 
-call :prepare_service GateServer "%ROOT%\server\GateServer\config.ini" "%BUILD_BIN%\GateServer.exe"
+call :prepare_service GateServer "%ROOT%\server\GateServer\config.ini" "%GATE_EXE%"
 if errorlevel 1 exit /b 1
 
 echo [INFO] Starting VarifyServer (Node)...
@@ -315,30 +320,38 @@ exit /b 0
 
 :select_server_bin
 set "BUILD_BIN="
-for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$dirs = @('%SERVER_BIN_PRIMARY%', '%SERVER_BIN_FALLBACK%');" ^
-  "$required = 'GateServer.exe','StatusServer.exe','ChatServer.exe';" ^
-  "$complete = foreach ($dir in $dirs) {" ^
-  "  if (-not (Test-Path $dir)) { continue }" ^
-  "  $missing = $required | Where-Object { -not (Test-Path (Join-Path $dir $_)) };" ^
-  "  if (-not $missing) { [pscustomobject]@{ Path = $dir; StatusServerTime = (Get-Item (Join-Path $dir 'StatusServer.exe')).LastWriteTimeUtc } }" ^
-  "};" ^
-  "if (-not $complete) { exit 1 }" ^
-  "$best = $complete | Sort-Object StatusServerTime -Descending | Select-Object -First 1;" ^
-  "Write-Host ('[INFO] Candidate server bins: ' + (($complete | ForEach-Object { '{0} [{1}]' -f $_.Path, $_.StatusServerTime.ToString('yyyy-MM-dd HH:mm:ss') }) -join '; '));" ^
-  "Write-Output $best.Path"`) do (
-  set "BUILD_BIN=%%I"
+set "GATE_EXE="
+set "STATUS_EXE="
+set "CHAT_EXE="
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\select_server_bins.ps1" -PrimaryDir "%SERVER_BIN_PRIMARY%" -FallbackDir "%SERVER_BIN_FALLBACK%"`) do (
+  %%I
 )
-if not defined BUILD_BIN (
-  echo [ERROR] No complete server binary directory found.
+if not defined GATE_EXE (
+  echo [ERROR] No GateServer.exe found.
   echo [HINT] Checked:
   echo [HINT]   %SERVER_BIN_PRIMARY%
   echo [HINT]   %SERVER_BIN_FALLBACK%
   exit /b 1
 )
-call :print_file_stamp "Selected StatusServer" "%BUILD_BIN%\StatusServer.exe"
-call :print_file_stamp "Selected ChatServer" "%BUILD_BIN%\ChatServer.exe"
-call :print_file_stamp "Selected GateServer" "%BUILD_BIN%\GateServer.exe"
+if not defined STATUS_EXE (
+  echo [ERROR] No StatusServer.exe found.
+  echo [HINT] Checked:
+  echo [HINT]   %SERVER_BIN_PRIMARY%
+  echo [HINT]   %SERVER_BIN_FALLBACK%
+  exit /b 1
+)
+if not defined CHAT_EXE (
+  echo [ERROR] No ChatServer.exe found.
+  echo [HINT] Checked:
+  echo [HINT]   %SERVER_BIN_PRIMARY%
+  echo [HINT]   %SERVER_BIN_FALLBACK%
+  exit /b 1
+)
+for %%I in ("%CHAT_EXE%") do set "BUILD_BIN=%%~dpI"
+if "%BUILD_BIN:~-1%"=="\" set "BUILD_BIN=%BUILD_BIN:~0,-1%"
+call :print_file_stamp "Selected GateServer" "%GATE_EXE%"
+call :print_file_stamp "Selected StatusServer" "%STATUS_EXE%"
+call :print_file_stamp "Selected ChatServer" "%CHAT_EXE%"
 exit /b 0
 
 :print_running_process_stamp

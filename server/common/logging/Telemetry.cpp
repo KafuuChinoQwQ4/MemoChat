@@ -11,10 +11,13 @@
 #include <json/json.h>
 
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
+#include <deque>
 #include <mutex>
 #include <string>
+#include <thread>
 
 #ifdef _WIN32
 #include <process.h>
@@ -40,6 +43,14 @@ struct ParsedHttpEndpoint {
     std::string port = "80";
     std::string target = "/";
 };
+
+std::mutex g_export_mutex;
+std::condition_variable g_export_cv;
+std::deque<std::pair<std::string, std::string>> g_export_queue;
+std::thread g_export_thread;
+bool g_export_stop = false;
+bool g_export_started = false;
+constexpr std::size_t kMaxQueuedExports = 1024;
 
 long long NowUnixMicros() {
     using namespace std::chrono;
@@ -137,6 +148,67 @@ std::string ToJsonPayload(const Json::Value& value) {
     return out;
 }
 
+void ExportWorkerLoop() {
+    for (;;) {
+        std::pair<std::string, std::string> job;
+        {
+            std::unique_lock<std::mutex> lock(g_export_mutex);
+            g_export_cv.wait(lock, []() {
+                return g_export_stop || !g_export_queue.empty();
+            });
+            if (g_export_stop && g_export_queue.empty()) {
+                return;
+            }
+            job = std::move(g_export_queue.front());
+            g_export_queue.pop_front();
+        }
+        PostJsonBestEffort(job.first, job.second);
+    }
+}
+
+void StartExportWorkerIfNeeded() {
+    std::lock_guard<std::mutex> lock(g_export_mutex);
+    if (g_export_started) {
+        return;
+    }
+    g_export_stop = false;
+    g_export_started = true;
+    g_export_thread = std::thread(&ExportWorkerLoop);
+}
+
+void StopExportWorker() {
+    {
+        std::lock_guard<std::mutex> lock(g_export_mutex);
+        if (!g_export_started) {
+            return;
+        }
+        g_export_stop = true;
+    }
+    g_export_cv.notify_all();
+    if (g_export_thread.joinable()) {
+        g_export_thread.join();
+    }
+    std::lock_guard<std::mutex> lock(g_export_mutex);
+    g_export_queue.clear();
+    g_export_started = false;
+    g_export_stop = false;
+}
+
+void EnqueueJsonBestEffort(const std::string& endpoint, const std::string& body) {
+    if (endpoint.empty() || body.empty()) {
+        return;
+    }
+    StartExportWorkerIfNeeded();
+    {
+        std::lock_guard<std::mutex> lock(g_export_mutex);
+        if (g_export_queue.size() >= kMaxQueuedExports) {
+            g_export_queue.pop_front();
+        }
+        g_export_queue.emplace_back(endpoint, body);
+    }
+    g_export_cv.notify_one();
+}
+
 } // namespace
 
 void Telemetry::Init(const std::string& service_name, const TelemetryConfig& cfg) {
@@ -146,9 +218,13 @@ void Telemetry::Init(const std::string& service_name, const TelemetryConfig& cfg
         config_.service_name = service_name_;
     }
     service_instance_ = DetectServiceInstance(service_name_);
+    if (Enabled()) {
+        StartExportWorkerIfNeeded();
+    }
 }
 
 void Telemetry::Shutdown() {
+    StopExportWorker();
 }
 
 const TelemetryConfig& Telemetry::Config() {
@@ -206,7 +282,7 @@ void Telemetry::ExportSpan(const std::string& trace_id,
 
     Json::Value payload(Json::arrayValue);
     payload.append(span);
-    PostJsonBestEffort(config_.otlp_endpoint, ToJsonPayload(payload));
+    EnqueueJsonBestEffort(config_.otlp_endpoint, ToJsonPayload(payload));
 }
 
 SpanScope::SpanScope(const std::string& name,
