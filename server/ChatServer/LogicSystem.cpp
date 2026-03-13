@@ -8,6 +8,7 @@
 #include "ChatGrpcClient.h"
 #include "DistLock.h"
 #include "cluster/ChatClusterDiscovery.h"
+#include "auth/ChatLoginTicket.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
 #include <string>
@@ -16,6 +17,7 @@
 #include <algorithm>
 #include <chrono>
 #include <iostream>
+#include <json/writer.h>
 #include <sstream>
 #include "CServer.h"
 using namespace std;
@@ -47,6 +49,73 @@ struct OnlineRouteDecision {
 
 std::string ServerOnlineUsersKey(const std::string& server_name) {
 	return std::string(SERVER_ONLINE_USERS_PREFIX) + server_name;
+}
+
+std::string RelationBootstrapCacheKey(int uid) {
+	return std::string("relation_bootstrap_") + std::to_string(uid);
+}
+
+int RelationBootstrapCacheTtlSec() {
+	auto& cfg = ConfigMgr::Inst();
+	const auto raw = cfg.GetValue("RelationBootstrapCache", "TtlSec");
+	if (raw.empty()) {
+		return 15;
+	}
+	try {
+		return std::max(1, std::stoi(raw));
+	}
+	catch (...) {
+		return 15;
+	}
+}
+
+void InvalidateRelationBootstrapCache(int uid) {
+	if (uid <= 0) {
+		return;
+	}
+	RedisMgr::GetInstance()->Del(RelationBootstrapCacheKey(uid));
+}
+
+bool TryAppendCachedRelationBootstrapJson(int uid, Json::Value& out) {
+	if (uid <= 0) {
+		return false;
+	}
+
+	std::string payload;
+	if (!RedisMgr::GetInstance()->Get(RelationBootstrapCacheKey(uid), payload) || payload.empty()) {
+		return false;
+	}
+
+	Json::CharReaderBuilder builder;
+	std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+	Json::Value cached;
+	std::string errors;
+	if (!reader->parse(payload.data(), payload.data() + payload.size(), &cached, &errors) || !cached.isObject()) {
+		return false;
+	}
+
+	if (cached.isMember("apply_list")) {
+		out["apply_list"] = cached["apply_list"];
+	}
+	if (cached.isMember("friend_list")) {
+		out["friend_list"] = cached["friend_list"];
+	}
+	return true;
+}
+
+void CacheRelationBootstrapJson(int uid, const Json::Value& payload) {
+	if (uid <= 0 || !payload.isObject()) {
+		return;
+	}
+
+	Json::StreamWriterBuilder builder;
+	builder["indentation"] = "";
+	const auto json = Json::writeString(builder, payload);
+	if (json.empty()) {
+		return;
+	}
+
+	RedisMgr::GetInstance()->SetEx(RelationBootstrapCacheKey(uid), json, RelationBootstrapCacheTtlSec());
 }
 
 std::string TrimCopy(const std::string& text) {
@@ -164,6 +233,20 @@ const char* RouteResultName(OnlineRouteKind kind) {
 	default:
 		return "offline";
 	}
+}
+
+int64_t NowMs() {
+	return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()).count());
+}
+
+std::string GetChatAuthSecret() {
+	auto& cfg = ConfigMgr::Inst();
+	auto secret = cfg.GetValue("ChatAuth", "HmacSecret");
+	if (secret.empty()) {
+		secret = "memochat-dev-chat-secret";
+	}
+	return secret;
 }
 
 void BindTcpTraceContext(const std::shared_ptr<CSession>& session, const std::string& msg_data) {
@@ -290,6 +373,8 @@ void LogicSystem::DealMsg() {
 void LogicSystem::RegisterCallBacks() {
 	_fun_callbacks[MSG_CHAT_LOGIN] = std::bind(&LogicSystem::LoginHandler, this,
 		placeholders::_1, placeholders::_2, placeholders::_3);
+	_fun_callbacks[ID_GET_RELATION_BOOTSTRAP_REQ] = std::bind(&LogicSystem::GetRelationBootstrapHandler, this,
+		placeholders::_1, placeholders::_2, placeholders::_3);
 
 	_fun_callbacks[ID_SEARCH_USER_REQ] = std::bind(&LogicSystem::SearchInfo, this,
 		placeholders::_1, placeholders::_2, placeholders::_3);
@@ -384,12 +469,14 @@ void LogicSystem::RegisterCallBacks() {
 }
 
 void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id, const string &msg_data) {
+	const auto login_start_ms = NowMs();
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
 	auto uid = root["uid"].asInt();
 	auto token = root["token"].asString();
 	const int protocol_version = root.get("protocol_version", 1).asInt();
+	const auto verify_start_ms = NowMs();
 	auto trace_id = root.get("trace_id", "").asString();
 	if (trace_id.empty()) {
 		trace_id = memolog::TraceContext::NewId();
@@ -416,39 +503,78 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 	rtvalue["trace_id"] = trace_id;
 	rtvalue["protocol_version"] = 2;
 
-	if (protocol_version != 2) {
+	memochat::auth::ChatLoginTicketClaims ticket_claims;
+	const auto self_server_name = ConfigMgr::Inst().GetValue("SelfServer", "Name");
+	std::string uid_str = std::to_string(uid);
+	if (protocol_version >= 3) {
+		rtvalue["protocol_version"] = 3;
+		std::string ticket_error;
+		const auto login_ticket = root.get("login_ticket", "").asString();
+		if (!memochat::auth::DecodeAndVerifyTicket(login_ticket, GetChatAuthSecret(), ticket_claims, &ticket_error)) {
+			rtvalue["error"] = ErrorCodes::ChatTicketInvalid;
+			memolog::LogWarn("chat.login.failed", "chat ticket invalid",
+				{{"error_code", std::to_string(ErrorCodes::ChatTicketInvalid)}, {"detail", ticket_error}});
+			return;
+		}
+		if (ticket_claims.expire_at_ms > 0 && ticket_claims.expire_at_ms < NowMs()) {
+			rtvalue["error"] = ErrorCodes::ChatTicketExpired;
+			memolog::LogWarn("chat.login.failed", "chat ticket expired",
+				{{"error_code", std::to_string(ErrorCodes::ChatTicketExpired)}});
+			return;
+		}
+		if (!ticket_claims.target_server.empty() && ticket_claims.target_server != self_server_name) {
+			rtvalue["error"] = ErrorCodes::ChatServerMismatch;
+			memolog::LogWarn("chat.login.failed", "chat ticket target server mismatch",
+				{{"error_code", std::to_string(ErrorCodes::ChatServerMismatch)},
+				 {"ticket_target_server", ticket_claims.target_server},
+				 {"self_server", self_server_name}});
+			return;
+		}
+		uid = ticket_claims.uid;
+		uid_str = std::to_string(uid);
+		memolog::TraceContext::SetUid(uid_str);
+	} else if (protocol_version != 2) {
 		rtvalue["error"] = ErrorCodes::ProtocolVersionMismatch;
 		return;
 	}
 
+	if (protocol_version < 3) {
+		std::string token_key = USERTOKENPREFIX + uid_str;
+		std::string token_value = "";
+		bool success = RedisMgr::GetInstance()->Get(token_key, token_value);
+		if (!success) {
+			rtvalue["error"] = ErrorCodes::UidInvalid;
+			memolog::LogWarn("chat.login.failed", "uid invalid", { {"error_code", std::to_string(ErrorCodes::UidInvalid)} });
+			return ;
+		}
 
-
-	std::string uid_str = std::to_string(uid);
-	std::string token_key = USERTOKENPREFIX + uid_str;
-	std::string token_value = "";
-	bool success = RedisMgr::GetInstance()->Get(token_key, token_value);
-	if (!success) {
-		rtvalue["error"] = ErrorCodes::UidInvalid;
-		memolog::LogWarn("chat.login.failed", "uid invalid", { {"error_code", std::to_string(ErrorCodes::UidInvalid)} });
-		return ;
-	}
-
-	if (token_value != token) {
-		rtvalue["error"] = ErrorCodes::TokenInvalid;
-		memolog::LogWarn("chat.login.failed", "token invalid", { {"error_code", std::to_string(ErrorCodes::TokenInvalid)} });
-		return ;
+		if (token_value != token) {
+			rtvalue["error"] = ErrorCodes::TokenInvalid;
+			memolog::LogWarn("chat.login.failed", "token invalid", { {"error_code", std::to_string(ErrorCodes::TokenInvalid)} });
+			return ;
+		}
 	}
 
 	rtvalue["error"] = ErrorCodes::Success;
 
-
-	std::string base_key = USER_BASE_INFO + uid_str;
 	auto user_info = std::make_shared<UserInfo>();
-	bool b_base = GetBaseInfo(base_key, uid, user_info);
-	if (!b_base) {
-		rtvalue["error"] = ErrorCodes::UidInvalid;
-		memolog::LogWarn("chat.login.failed", "user base info not found", { {"error_code", std::to_string(ErrorCodes::UidInvalid)} });
-		return;
+	if (protocol_version >= 3) {
+		user_info->uid = ticket_claims.uid;
+		user_info->user_id = ticket_claims.user_id;
+		user_info->name = ticket_claims.name;
+		user_info->nick = ticket_claims.nick;
+		user_info->icon = ticket_claims.icon;
+		user_info->desc = ticket_claims.desc;
+		user_info->email = ticket_claims.email;
+		user_info->sex = ticket_claims.sex;
+	} else {
+		std::string base_key = USER_BASE_INFO + uid_str;
+		bool b_base = GetBaseInfo(base_key, uid, user_info);
+		if (!b_base) {
+			rtvalue["error"] = ErrorCodes::UidInvalid;
+			memolog::LogWarn("chat.login.failed", "user base info not found", { {"error_code", std::to_string(ErrorCodes::UidInvalid)} });
+			return;
+		}
 	}
 	rtvalue["uid"] = uid;
 	rtvalue["pwd"] = user_info->pwd;
@@ -460,47 +586,13 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 	rtvalue["icon"] = user_info->icon;
 	rtvalue["user_id"] = user_info->user_id;
 
-
-	std::vector<std::shared_ptr<ApplyInfo>> apply_list;
-	auto b_apply = GetFriendApplyInfo(uid, apply_list);
-	if (b_apply) {
-		for (auto& apply : apply_list) {
-			Json::Value obj;
-			obj["name"] = apply->_name;
-			obj["uid"] = apply->_uid;
-			obj["user_id"] = apply->_user_id;
-			obj["icon"] = apply->_icon;
-			obj["nick"] = apply->_nick;
-			obj["sex"] = apply->_sex;
-			obj["desc"] = apply->_desc;
-			obj["status"] = apply->_status;
-			for (const auto& tag : apply->_labels) {
-				obj["labels"].append(tag);
-			}
-			rtvalue["apply_list"].append(obj);
-		}
+	if (protocol_version < 3) {
+		AppendRelationBootstrapJson(uid, rtvalue);
 	}
 
-
-	std::vector<std::shared_ptr<UserInfo>> friend_list;
-	bool b_friend_list = GetFriendList(uid, friend_list);
-	for (auto& friend_ele : friend_list) {
-		Json::Value obj;
-		obj["name"] = friend_ele->name;
-		obj["uid"] = friend_ele->uid;
-		obj["user_id"] = friend_ele->user_id;
-		obj["icon"] = friend_ele->icon;
-		obj["nick"] = friend_ele->nick;
-		obj["sex"] = friend_ele->sex;
-		obj["desc"] = friend_ele->desc;
-		obj["back"] = friend_ele->back;
-		for (const auto& tag : friend_ele->labels) {
-			obj["labels"].append(tag);
-		}
-		rtvalue["friend_list"].append(obj);
-	}
-
-	auto server_name = ConfigMgr::Inst().GetValue("SelfServer", "Name");
+	const auto ticket_verify_ms = NowMs() - verify_start_ms;
+	const auto attach_start_ms = NowMs();
+	auto server_name = self_server_name;
 	{
 
 
@@ -552,13 +644,68 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 		RepairOnlineRouteState(uid, session, server_name);
 
 	}
+	const auto session_attach_ms = NowMs() - attach_start_ms;
 	memolog::LogInfo("chat.login.succeeded", "chat login success",
 		{
 			{"uid", std::to_string(uid)},
-			{"session_id", session->GetSessionId()}
+			{"session_id", session->GetSessionId()},
+			{"ticket_verify_ms", std::to_string(ticket_verify_ms)},
+			{"session_attach_ms", std::to_string(session_attach_ms)},
+			{"chat_login_total_ms", std::to_string(NowMs() - login_start_ms)}
+		});
+	memolog::LogInfo("login.stage.summary", "chat login stage summary",
+		{
+			{"uid", std::to_string(uid)},
+			{"ticket_verify_ms", std::to_string(ticket_verify_ms)},
+			{"session_attach_ms", std::to_string(session_attach_ms)},
+			{"chat_login_total_ms", std::to_string(NowMs() - login_start_ms)}
 		});
 
 	return;
+}
+
+void LogicSystem::GetRelationBootstrapHandler(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data)
+{
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	auto trace_id = root.get("trace_id", "").asString();
+	if (trace_id.empty()) {
+		trace_id = memolog::TraceContext::NewId();
+	}
+	memolog::TraceContext::SetTraceId(trace_id);
+	memolog::TraceContext::SetRequestId(memolog::TraceContext::NewId());
+	if (session) {
+		memolog::TraceContext::SetSessionId(session->GetSessionId());
+	}
+	Defer clear_trace([]() {
+		memolog::TraceContext::Clear();
+		});
+
+	Json::Value rtvalue;
+	rtvalue["trace_id"] = trace_id;
+	rtvalue["protocol_version"] = root.get("protocol_version", 3).asInt();
+	const int uid = session ? session->GetUserId() : 0;
+	if (uid <= 0) {
+		rtvalue["error"] = ErrorCodes::UidInvalid;
+		if (session) {
+			session->Send(rtvalue.toStyledString(), ID_GET_RELATION_BOOTSTRAP_RSP);
+		}
+		return;
+	}
+
+	memolog::TraceContext::SetUid(std::to_string(uid));
+	rtvalue["error"] = ErrorCodes::Success;
+	rtvalue["uid"] = uid;
+	AppendRelationBootstrapJson(uid, rtvalue);
+	if (session) {
+		session->Send(rtvalue.toStyledString(), ID_GET_RELATION_BOOTSTRAP_RSP);
+	}
+	memolog::LogInfo("chat.relation_bootstrap.succeeded", "relation bootstrap fetched",
+		{
+			{"uid", std::to_string(uid)},
+			{"tcp_msg_id", std::to_string(msg_id)}
+		});
 }
 
 void LogicSystem::SearchInfo(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
@@ -618,6 +765,7 @@ void LogicSystem::AddFriendApply(std::shared_ptr<CSession> session, const short&
 
 	MysqlMgr::GetInstance()->AddFriendApply(uid, touid);
 	MysqlMgr::GetInstance()->ReplaceApplyTags(uid, touid, labels);
+	InvalidateRelationBootstrapCache(touid);
 
 
 	auto to_str = std::to_string(touid);
@@ -726,6 +874,8 @@ void LogicSystem::AuthFriendApply(std::shared_ptr<CSession> session, const short
 	MysqlMgr::GetInstance()->ReplaceFriendTags(uid, touid, labels);
 	auto requesterApplyTags = MysqlMgr::GetInstance()->GetApplyTags(touid, uid);
 	MysqlMgr::GetInstance()->ReplaceFriendTags(touid, uid, requesterApplyTags);
+	InvalidateRelationBootstrapCache(uid);
+	InvalidateRelationBootstrapCache(touid);
 
 
 	auto to_str = std::to_string(touid);
@@ -1119,6 +1269,67 @@ bool LogicSystem::GetFriendApplyInfo(int to_uid, std::vector<std::shared_ptr<App
 bool LogicSystem::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo>>& user_list) {
 
 	return MysqlMgr::GetInstance()->GetFriendList(self_id, user_list);
+}
+
+void LogicSystem::AppendRelationBootstrapJson(int uid, Json::Value& out)
+{
+	const auto bootstrap_start_ms = NowMs();
+	if (TryAppendCachedRelationBootstrapJson(uid, out)) {
+		memolog::LogInfo("chat.relation_bootstrap.cache_hit", "relation bootstrap served from cache",
+			{
+				{"uid", std::to_string(uid)},
+				{"relation_bootstrap_ms", std::to_string(NowMs() - bootstrap_start_ms)}
+			});
+		return;
+	}
+
+	Json::Value cache_payload(Json::objectValue);
+	std::vector<std::shared_ptr<ApplyInfo>> apply_list;
+	if (GetFriendApplyInfo(uid, apply_list)) {
+		for (auto& apply : apply_list) {
+			Json::Value obj;
+			obj["name"] = apply->_name;
+			obj["uid"] = apply->_uid;
+			obj["user_id"] = apply->_user_id;
+			obj["icon"] = apply->_icon;
+			obj["nick"] = apply->_nick;
+			obj["sex"] = apply->_sex;
+			obj["desc"] = apply->_desc;
+			obj["status"] = apply->_status;
+			for (const auto& tag : apply->_labels) {
+				obj["labels"].append(tag);
+			}
+			out["apply_list"].append(obj);
+			cache_payload["apply_list"].append(obj);
+		}
+	}
+
+	std::vector<std::shared_ptr<UserInfo>> friend_list;
+	if (GetFriendList(uid, friend_list)) {
+		for (auto& friend_ele : friend_list) {
+			Json::Value obj;
+			obj["name"] = friend_ele->name;
+			obj["uid"] = friend_ele->uid;
+			obj["user_id"] = friend_ele->user_id;
+			obj["icon"] = friend_ele->icon;
+			obj["nick"] = friend_ele->nick;
+			obj["sex"] = friend_ele->sex;
+			obj["desc"] = friend_ele->desc;
+			obj["back"] = friend_ele->back;
+			for (const auto& tag : friend_ele->labels) {
+				obj["labels"].append(tag);
+			}
+			out["friend_list"].append(obj);
+			cache_payload["friend_list"].append(obj);
+		}
+	}
+
+	CacheRelationBootstrapJson(uid, cache_payload);
+	memolog::LogInfo("chat.relation_bootstrap.cache_fill", "relation bootstrap cache populated",
+		{
+			{"uid", std::to_string(uid)},
+			{"relation_bootstrap_ms", std::to_string(NowMs() - bootstrap_start_ms)}
+		});
 }
 
 void LogicSystem::BuildGroupListJson(int uid, Json::Value& out)

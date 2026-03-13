@@ -298,6 +298,7 @@ private:
 	bool EnsureUserPublicIdSchemaAndBackfill();
 	bool EnsureMediaAssetSchema();
 	bool EnsureCallSessionSchema();
+	void WarmupAuthQueries();
 	std::string GenerateRandomUserPublicId();
 	std::unique_ptr<MySqlPool> pool_;
 };

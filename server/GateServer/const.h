@@ -49,6 +49,9 @@ enum ErrorCodes {
     CallStateInvalid = 1017,
     CallPermissionDenied = 1018,
     CallTargetOffline = 1019,
+    ChatTicketInvalid = 1095,
+    ChatTicketExpired = 1096,
+    ChatServerMismatch = 1097,
 };
 
 class Defer {
@@ -63,6 +66,7 @@ private:
 #define CODEPREFIX "code_"
 #define USERIPPREFIX "uip_"
 #define USERTOKENPREFIX "utoken_"
+#define SERVER_ONLINE_USERS_PREFIX "server_online_users_"
 #define CALL_SESSION_PREFIX "call:session:"
 #define CALL_ACTIVE_PREFIX "call:user_active:"
 #define CALL_RINGING_PREFIX "call:ringing:"

@@ -54,3 +54,20 @@ ui_*.h
 /Memo_ops/**/__pycache__/
 /Memo_ops/*.log
 /build-memo-ops/
+
+# Local runtime logs and private artifacts
+/logs/
+/reports/
+/server/*/logs/
+/Memo_ops/runtime/services/**/logs/
+/Memo_ops/runtime/varify/logs/
+
+# Loadtest raw outputs and private account material
+/Memo_ops/runtime/loadtest/
+/local-loadtest/logs/
+/local-loadtest/reports/
+/local-loadtest/accounts.local.csv
+/local-loadtest/accounts.smoke.csv
+/local-loadtest/accounts.e2e.csv
+/local-loadtest/accounts.register.smoke.csv
+!/local-loadtest/accounts.example.csv

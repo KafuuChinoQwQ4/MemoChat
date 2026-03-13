@@ -78,6 +78,45 @@ bool RedisMgr::Set(const std::string &key, const std::string &value){
 	return true;
 }
 
+bool RedisMgr::SetEx(const std::string& key, const std::string& value, int expire_seconds)
+{
+	auto connect = _con_pool->getConnection();
+	if (connect == nullptr) {
+		return false;
+	}
+
+	const std::string ttl = std::to_string(expire_seconds > 0 ? expire_seconds : 1);
+	const char* argv[4];
+	size_t argvlen[4];
+	argv[0] = "SETEX";
+	argvlen[0] = 5;
+	argv[1] = key.c_str();
+	argvlen[1] = key.size();
+	argv[2] = ttl.c_str();
+	argvlen[2] = ttl.size();
+	argv[3] = value.data();
+	argvlen[3] = value.size();
+
+	auto reply = static_cast<redisReply*>(redisCommandArgv(connect, 4, argv, argvlen));
+	if (reply == nullptr) {
+		std::cout << "Execut command [ SETEX " << key << " ] failure ! " << std::endl;
+		_con_pool->returnConnection(connect);
+		return false;
+	}
+
+	if (!(reply->type == REDIS_REPLY_STATUS && reply->str != nullptr &&
+		(strcmp(reply->str, "OK") == 0 || strcmp(reply->str, "ok") == 0))) {
+		std::cout << "Execut command [ SETEX " << key << " ] failure ! " << std::endl;
+		freeReplyObject(reply);
+		_con_pool->returnConnection(connect);
+		return false;
+	}
+
+	freeReplyObject(reply);
+	_con_pool->returnConnection(connect);
+	return true;
+}
+
 bool RedisMgr::LPush(const std::string &key, const std::string &value)
 {
 	auto connect = _con_pool->getConnection();

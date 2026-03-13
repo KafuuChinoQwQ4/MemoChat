@@ -316,6 +316,7 @@ private slots:
     void onTcpConnectFinished(bool success);
     void onChatLoginFailed(int err);
     void onSwitchToChat();
+    void onRelationBootstrapUpdated();
     void onRegisterCountdownTimeout();
     void onHeartbeatTimeout();
     void onHeartbeatAck(qint64 ackAtMs);
@@ -373,6 +374,7 @@ private:
     void refreshGroupModel();
     void refreshDialogModel();
     void requestDialogList();
+    void requestRelationBootstrap();
     void bootstrapDialogs();
     void bootstrapContacts();
     void bootstrapGroups();
@@ -437,9 +439,21 @@ private:
     ContactPane _contact_pane;
     int _pending_uid;
     QString _pending_token;
+    QString _pending_login_ticket;
     QString _pending_trace_id;
     QString _chat_server_host;
     QString _chat_server_port;
+    QString _chat_server_name;
+    QVector<ChatEndpoint> _chat_endpoints;
+    int _chat_endpoint_index = -1;
+    int _chat_connect_timeout_ms = 1200;
+    int _chat_backup_dial_delay_ms = 250;
+    int _chat_total_login_timeout_ms = 5000;
+    int _chat_protocol_version = 2;
+    qint64 _login_started_ms = 0;
+    qint64 _http_login_finished_ms = 0;
+    qint64 _chat_connect_started_ms = 0;
+    qint64 _chat_connect_finished_ms = 0;
 
     QString _current_user_name;
     QString _current_user_nick;

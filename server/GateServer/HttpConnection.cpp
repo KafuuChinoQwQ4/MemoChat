@@ -207,7 +207,11 @@ void HttpConnection::CheckDeadline() {
 }
 
 void HttpConnection::FinishRequest(beast::error_code ec) {
-    _socket.shutdown(tcp::socket::shutdown_send, ec);
+    boost::ignore_unused(ec);
+    beast::error_code shutdown_ec;
+    _socket.shutdown(tcp::socket::shutdown_both, shutdown_ec);
+    beast::error_code close_ec;
+    _socket.close(close_ec);
     deadline_.cancel();
     _file_response.reset();
     _request_span.reset();
@@ -264,7 +268,7 @@ void HttpConnection::WriteResponse() {
         return;
     }
 
-    _response.content_length(_response.body().size());
+    _response.prepare_payload();
 
     http::async_write(_socket, _response, [self](beast::error_code ec, std::size_t) {
         self->FinishRequest(ec);

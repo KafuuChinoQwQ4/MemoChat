@@ -139,6 +139,8 @@ AppController::AppController(QObject *parent)
             this, &AppController::onGroupChatMsg);
     connect(_gateway.tcpMgr().get(), &TcpMgr::sig_group_rsp,
             this, &AppController::onGroupRsp);
+    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_relation_bootstrap_updated,
+            this, &AppController::onRelationBootstrapUpdated);
     connect(_gateway.tcpMgr().get(), &TcpMgr::sig_dialog_list_rsp,
             this, &AppController::onDialogListRsp);
     connect(_gateway.tcpMgr().get(), &TcpMgr::sig_private_history_rsp,
@@ -215,6 +217,10 @@ void AppController::switchToLogin()
     _call_session_model.clear();
     _chat_server_host.clear();
     _chat_server_port.clear();
+    _chat_server_name.clear();
+    _chat_endpoints.clear();
+    _chat_endpoint_index = -1;
+    _pending_login_ticket.clear();
     resetReconnectState();
     resetHeartbeatTracking();
     _chat_login_timeout_timer.stop();
@@ -1644,7 +1650,15 @@ void AppController::login(const QString &email, const QString &password)
     // Ensure account switch starts from a clean transport/session baseline.
     _pending_uid = 0;
     _pending_token.clear();
+    _pending_login_ticket.clear();
     _pending_trace_id.clear();
+    _chat_endpoints.clear();
+    _chat_endpoint_index = -1;
+    _chat_server_name.clear();
+    _login_started_ms = QDateTime::currentMSecsSinceEpoch();
+    _http_login_finished_ms = 0;
+    _chat_connect_started_ms = 0;
+    _chat_connect_finished_ms = 0;
     _chat_login_timeout_timer.stop();
     _ignore_next_login_disconnect = true;
     _gateway.tcpMgr()->CloseConnection();

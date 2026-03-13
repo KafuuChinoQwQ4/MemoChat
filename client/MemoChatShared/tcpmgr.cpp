@@ -225,7 +225,10 @@ void TcpMgr::initHandlers()
         auto user_info = std::make_shared<UserInfo>(uid, name, nick, icon, sex,"",desc, userId);
  
         UserMgr::GetInstance()->SetUserInfo(user_info);
-        UserMgr::GetInstance()->SetToken(jsonObj["token"].toString());
+        const QString responseToken = jsonObj["token"].toString();
+        if (!responseToken.isEmpty()) {
+            UserMgr::GetInstance()->SetToken(responseToken);
+        }
         if(jsonObj.contains("apply_list")){
             UserMgr::GetInstance()->AppendApplyList(jsonObj["apply_list"].toArray());
         }
@@ -237,6 +240,33 @@ void TcpMgr::initHandlers()
 
         qInfo() << "chat login rsp success for uid:" << uid;
         emit sig_swich_chatdlg();
+    });
+
+    _handlers.insert(ID_GET_RELATION_BOOTSTRAP_RSP, [this](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(id);
+        Q_UNUSED(len);
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+        if (jsonDoc.isNull() || !jsonDoc.isObject()) {
+            qWarning() << "relation bootstrap rsp json parse failed";
+            return;
+        }
+
+        const QJsonObject jsonObj = jsonDoc.object();
+        const int err = jsonObj.value("error").toInt(ErrorCodes::ERR_JSON);
+        if (err != ErrorCodes::SUCCESS) {
+            qWarning() << "relation bootstrap rsp failed, err:" << err;
+            return;
+        }
+
+        if (jsonObj.contains("apply_list")) {
+            UserMgr::GetInstance()->AppendApplyList(jsonObj.value("apply_list").toArray());
+        }
+        if (jsonObj.contains("friend_list")) {
+            UserMgr::GetInstance()->AppendFriendList(jsonObj.value("friend_list").toArray());
+        }
+
+        qInfo() << "relation bootstrap rsp success";
+        emit sig_relation_bootstrap_updated();
     });
 
 
@@ -969,8 +999,11 @@ void TcpMgr::slot_tcp_connect(ServerInfo si)
     _message_id = 0;
     _message_len = 0;
     _connecting = true;
+    _connect_timeout_timer.setInterval(si.ConnectTimeoutMs > 0 ? si.ConnectTimeoutMs : 1200);
     _connect_timeout_timer.start();
-    qInfo() << "connecting to chat server, host:" << _host << "port:" << _port;
+    qInfo() << "connecting to chat server, host:" << _host << "port:" << _port
+            << "timeout_ms:" << _connect_timeout_timer.interval()
+            << "protocol_version:" << si.ProtocolVersion;
     _socket.connectToHost(_host, _port);
 }
 

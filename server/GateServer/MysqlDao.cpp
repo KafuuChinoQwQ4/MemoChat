@@ -53,6 +53,7 @@ MysqlDao::MysqlDao()
 	if (!EnsureCallSessionSchema()) {
 		throw std::runtime_error("failed to ensure chat_call_session schema");
 	}
+	WarmupAuthQueries();
 }
 
 MysqlDao::~MysqlDao(){
@@ -331,10 +332,9 @@ bool MysqlDao::CheckPwd(const std::string& email, const std::string& pwd, UserIn
 		});
 
 	try {
-	
-
-
-		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("SELECT * FROM user WHERE email = ?"));
+		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement(
+			"SELECT uid, name, email, pwd, user_id, nick, icon, `desc`, sex "
+			"FROM user WHERE email = ? LIMIT 1"));
 		pstmt->setString(1, email);
 
 
@@ -404,6 +404,31 @@ std::string MysqlDao::GetUserPublicId(int uid) {
 		std::cerr << " (MySQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return "";
+	}
+}
+
+void MysqlDao::WarmupAuthQueries() {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement(
+			"SELECT uid, name, email, pwd, user_id, nick, icon, `desc`, sex "
+			"FROM user WHERE email = ? LIMIT 1"));
+		pstmt->setString(1, "__memochat_warmup__@invalid.local");
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		(void)res;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "WarmupAuthQueries SQLException: " << e.what();
+		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 	}
 }
 

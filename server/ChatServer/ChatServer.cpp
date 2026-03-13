@@ -10,6 +10,7 @@
 #include "AsioIOServicePool.h"
 #include "CServer.h"
 #include "ConfigMgr.h"
+#include "MysqlMgr.h"
 #include "RedisMgr.h"
 #include "ChatServiceImpl.h"
 #include "const.h"
@@ -125,6 +126,14 @@ int main(int argc, char** argv)
 		memolog::Logger::Init("ChatServer", log_cfg);
 		memolog::Telemetry::Init("ChatServer", telemetry_cfg);
 		auto pool = AsioIOServicePool::GetInstance();
+		const auto mysql_init_start = std::chrono::steady_clock::now();
+		MysqlMgr::GetInstance();
+		memolog::LogInfo("service.mysql_ready", "ChatServer mysql ready",
+			{
+				{"name", server_name},
+				{"mysql_init_ms", std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - mysql_init_start).count())}
+			});
 
 		CleanupTrackedOnlineState(server_name);
 		Defer derfer ([server_name]() {
