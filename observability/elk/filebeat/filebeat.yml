@@ -3,7 +3,7 @@ filebeat.inputs:
     id: memochat-server-logs
     enabled: true
     paths:
-      - /workspace/Memo_ops/runtime/services/*/logs/*.json
+      - /workspace/Memo_ops/artifacts/logs/services/*/*.json
     parsers:
       - ndjson:
           overwrite_keys: true
@@ -32,7 +32,8 @@ filebeat.inputs:
     id: memochat-loadtest-logs
     enabled: true
     paths:
-      - /workspace/Memo_ops/runtime/loadtest/logs/*.json
+      - /workspace/Memo_ops/artifacts/loadtest/runtime/logs/*.json
+      - /workspace/Memo_ops/artifacts/loadtest/history/ad-hoc/logs/*.json
     parsers:
       - ndjson:
           overwrite_keys: true
@@ -46,7 +47,7 @@ filebeat.inputs:
     id: memochat-varify-logs
     enabled: true
     paths:
-      - /workspace/Memo_ops/runtime/varify/logs/*.json
+      - /workspace/Memo_ops/artifacts/logs/services/VarifyServer/*.json
     parsers:
       - ndjson:
           overwrite_keys: true
