@@ -1,11 +1,19 @@
 #include "LogicSystem.h"
 #include "StatusGrpcClient.h"
-#include "MysqlMgr.h"
+#include "PostgresMgr.h"
 #include "MongoMgr.h"
 #include "const.h"
 #include "RedisMgr.h"
 #include "UserMgr.h"
 #include "ChatGrpcClient.h"
+#include "ChatRuntime.h"
+#include "ChatHandlerRegistrars.h"
+#include "AsyncEventDispatcher.h"
+#include "ChatRelationService.h"
+#include "ChatSessionService.h"
+#include "GroupMessageService.h"
+#include "MessageDeliveryService.h"
+#include "PrivateMessageService.h"
 #include "DistLock.h"
 #include "cluster/ChatClusterDiscovery.h"
 #include "auth/ChatLoginTicket.h"
@@ -241,12 +249,40 @@ int64_t NowMs() {
 }
 
 std::string GetChatAuthSecret() {
-	auto& cfg = ConfigMgr::Inst();
-	auto secret = cfg.GetValue("ChatAuth", "HmacSecret");
-	if (secret.empty()) {
-		secret = "memochat-dev-chat-secret";
-	}
+	static const std::string secret = []() {
+		auto& cfg = ConfigMgr::Inst();
+		auto value = cfg.GetValue("ChatAuth", "HmacSecret");
+		if (value.empty()) {
+			value = "memochat-dev-chat-secret";
+		}
+		return value;
+	}();
 	return secret;
+}
+
+std::string JsonToCompactString(const Json::Value& value) {
+	Json::StreamWriterBuilder builder;
+	builder["indentation"] = "";
+	return Json::writeString(builder, value);
+}
+
+bool ParseJsonObject(const std::string& payload, Json::Value& root) {
+	Json::CharReaderBuilder builder;
+	std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+	std::string errors;
+	return reader->parse(payload.data(), payload.data() + payload.size(), &root, &errors) && root.isObject();
+}
+
+int64_t AllocateGroupSeq(int64_t group_id) {
+	if (group_id <= 0) {
+		return 0;
+	}
+	int64_t seq = 0;
+	const auto key = std::string("group:") + std::to_string(group_id) + ":seq";
+	if (!RedisMgr::GetInstance()->Incr(key, seq)) {
+		return 0;
+	}
+	return seq;
 }
 
 void BindTcpTraceContext(const std::shared_ptr<CSession>& session, const std::string& msg_data) {
@@ -308,15 +344,32 @@ void LogPrivateRoute(const std::string& event,
 }
 }
 
-LogicSystem::LogicSystem():_b_stop(false), _p_server(nullptr){
+LogicSystem::LogicSystem():_b_stop(false), _event_stop(false), _p_server(nullptr){
+	_chat_session_service = std::make_unique<ChatSessionService>(*this);
+	_chat_relation_service = std::make_unique<ChatRelationService>(*this);
+	_private_message_service = std::make_unique<PrivateMessageService>(*this);
+	_group_message_service = std::make_unique<GroupMessageService>(*this);
+	_message_delivery_service = std::make_unique<MessageDeliveryService>();
+	_async_event_dispatcher = std::make_unique<AsyncEventDispatcher>(
+		[this]() { return _event_stop; },
+		[this](const std::vector<int>& recipients, short msgid, const Json::Value& payload, int exclude_uid) {
+			MessageDelivery().PushPayload(recipients, msgid, payload, exclude_uid);
+		});
 	RegisterCallBacks();
 	_worker_thread = std::thread (&LogicSystem::DealMsg, this);
+	_event_worker_thread = std::thread(&LogicSystem::DealAsyncEvents, this);
 }
 
 LogicSystem::~LogicSystem(){
 	_b_stop = true;
+	_event_stop = true;
 	_consume.notify_one();
-	_worker_thread.join();
+	if (_worker_thread.joinable()) {
+		_worker_thread.join();
+	}
+	if (_event_worker_thread.joinable()) {
+		_event_worker_thread.join();
+	}
 }
 
 void LogicSystem::PostMsgToQue(shared_ptr < LogicNode> msg) {
@@ -332,6 +385,11 @@ void LogicSystem::PostMsgToQue(shared_ptr < LogicNode> msg) {
 
 void LogicSystem::SetServer(std::shared_ptr<CServer> pserver) {
 	_p_server = pserver;
+}
+
+MessageDeliveryService& LogicSystem::MessageDelivery()
+{
+	return *_message_delivery_service;
 }
 
 
@@ -370,105 +428,44 @@ void LogicSystem::DealMsg() {
 	}
 }
 
+bool LogicSystem::PublishAsyncEvent(const std::string& topic, const Json::Value& payload, std::string* error)
+{
+	return _async_event_dispatcher->PublishAsyncEvent(topic, payload, error);
+}
+
+void LogicSystem::DealAsyncEvents()
+{
+	_async_event_dispatcher->DealAsyncEvents();
+}
+
+void LogicSystem::NotifyMessageStatus(const Json::Value& payload)
+{
+	_async_event_dispatcher->NotifyMessageStatus(payload);
+}
+
+void LogicSystem::HandlePrivateAsyncEvent(const Json::Value& root)
+{
+	_async_event_dispatcher->HandlePrivateAsyncEvent(root);
+}
+
+void LogicSystem::HandleGroupAsyncEvent(const Json::Value& root)
+{
+	_async_event_dispatcher->HandleGroupAsyncEvent(root);
+}
+
 void LogicSystem::RegisterCallBacks() {
-	_fun_callbacks[MSG_CHAT_LOGIN] = std::bind(&LogicSystem::LoginHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-	_fun_callbacks[ID_GET_RELATION_BOOTSTRAP_REQ] = std::bind(&LogicSystem::GetRelationBootstrapHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_SEARCH_USER_REQ] = std::bind(&LogicSystem::SearchInfo, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_ADD_FRIEND_REQ] = std::bind(&LogicSystem::AddFriendApply, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_AUTH_FRIEND_REQ] = std::bind(&LogicSystem::AuthFriendApply, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_TEXT_CHAT_MSG_REQ] = std::bind(&LogicSystem::DealChatTextMsg, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_HEART_BEAT_REQ] = std::bind(&LogicSystem::HeartBeatHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_CREATE_GROUP_REQ] = std::bind(&LogicSystem::CreateGroupHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_GET_GROUP_LIST_REQ] = std::bind(&LogicSystem::GetGroupListHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_GET_DIALOG_LIST_REQ] = std::bind(&LogicSystem::GetDialogListHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_INVITE_GROUP_MEMBER_REQ] = std::bind(&LogicSystem::InviteGroupMemberHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_APPLY_JOIN_GROUP_REQ] = std::bind(&LogicSystem::ApplyJoinGroupHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_REVIEW_GROUP_APPLY_REQ] = std::bind(&LogicSystem::ReviewGroupApplyHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_GROUP_CHAT_MSG_REQ] = std::bind(&LogicSystem::DealGroupChatMsg, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_GROUP_HISTORY_REQ] = std::bind(&LogicSystem::GroupHistoryHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_EDIT_GROUP_MSG_REQ] = std::bind(&LogicSystem::EditGroupMsgHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_REVOKE_GROUP_MSG_REQ] = std::bind(&LogicSystem::RevokeGroupMsgHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_EDIT_PRIVATE_MSG_REQ] = std::bind(&LogicSystem::EditPrivateMsgHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_REVOKE_PRIVATE_MSG_REQ] = std::bind(&LogicSystem::RevokePrivateMsgHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_PRIVATE_HISTORY_REQ] = std::bind(&LogicSystem::PrivateHistoryHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_SYNC_DRAFT_REQ] = std::bind(&LogicSystem::SyncDraftHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_PIN_DIALOG_REQ] = std::bind(&LogicSystem::PinDialogHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_FORWARD_GROUP_MSG_REQ] = std::bind(&LogicSystem::ForwardGroupMsgHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_FORWARD_PRIVATE_MSG_REQ] = std::bind(&LogicSystem::ForwardPrivateMsgHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_GROUP_READ_ACK_REQ] = std::bind(&LogicSystem::GroupReadAckHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_PRIVATE_READ_ACK_REQ] = std::bind(&LogicSystem::PrivateReadAckHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_UPDATE_GROUP_ANNOUNCEMENT_REQ] = std::bind(&LogicSystem::UpdateGroupAnnouncementHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_UPDATE_GROUP_ICON_REQ] = std::bind(&LogicSystem::UpdateGroupIconHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_SET_GROUP_ADMIN_REQ] = std::bind(&LogicSystem::SetGroupAdminHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_MUTE_GROUP_MEMBER_REQ] = std::bind(&LogicSystem::MuteGroupMemberHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_KICK_GROUP_MEMBER_REQ] = std::bind(&LogicSystem::KickGroupMemberHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-
-	_fun_callbacks[ID_QUIT_GROUP_REQ] = std::bind(&LogicSystem::QuitGroupHandler, this,
-		placeholders::_1, placeholders::_2, placeholders::_3);
-	
+	ChatSessionServiceRegistrar().Register(*this, _fun_callbacks);
+	ChatRelationServiceRegistrar().Register(*this, _fun_callbacks);
+	PrivateMessageServiceRegistrar().Register(*this, _fun_callbacks);
+	GroupMessageServiceRegistrar().Register(*this, _fun_callbacks);
+	AsyncEventDispatcherRegistrar().Register(*this, _fun_callbacks);
 }
 
 void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id, const string &msg_data) {
+	if (_chat_session_service) {
+		_chat_session_service->HandleLogin(session, msg_id, msg_data);
+		return;
+	}
 	const auto login_start_ms = NowMs();
 	Json::Reader reader;
 	Json::Value root;
@@ -506,7 +503,9 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 	memochat::auth::ChatLoginTicketClaims ticket_claims;
 	const auto self_server_name = ConfigMgr::Inst().GetValue("SelfServer", "Name");
 	std::string uid_str = std::to_string(uid);
+	std::string relation_bootstrap_mode = "inline";
 	if (protocol_version >= 3) {
+		relation_bootstrap_mode = "explicit_pull";
 		rtvalue["protocol_version"] = 3;
 		std::string ticket_error;
 		const auto login_ticket = root.get("login_ticket", "").asString();
@@ -649,15 +648,21 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 		{
 			{"uid", std::to_string(uid)},
 			{"session_id", session->GetSessionId()},
+			{"login_protocol_version", std::to_string(protocol_version >= 3 ? 3 : 2)},
 			{"ticket_verify_ms", std::to_string(ticket_verify_ms)},
 			{"session_attach_ms", std::to_string(session_attach_ms)},
+			{"relation_bootstrap_ms", "0"},
+			{"relation_bootstrap_mode", relation_bootstrap_mode},
 			{"chat_login_total_ms", std::to_string(NowMs() - login_start_ms)}
 		});
 	memolog::LogInfo("login.stage.summary", "chat login stage summary",
 		{
 			{"uid", std::to_string(uid)},
+			{"login_protocol_version", std::to_string(protocol_version >= 3 ? 3 : 2)},
 			{"ticket_verify_ms", std::to_string(ticket_verify_ms)},
 			{"session_attach_ms", std::to_string(session_attach_ms)},
+			{"relation_bootstrap_ms", "0"},
+			{"relation_bootstrap_mode", relation_bootstrap_mode},
 			{"chat_login_total_ms", std::to_string(NowMs() - login_start_ms)}
 		});
 
@@ -666,6 +671,11 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 
 void LogicSystem::GetRelationBootstrapHandler(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data)
 {
+	if (_chat_session_service) {
+		_chat_session_service->HandleRelationBootstrap(session, msg_id, msg_data);
+		return;
+	}
+	const auto bootstrap_start_ms = NowMs();
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -704,12 +714,18 @@ void LogicSystem::GetRelationBootstrapHandler(std::shared_ptr<CSession> session,
 	memolog::LogInfo("chat.relation_bootstrap.succeeded", "relation bootstrap fetched",
 		{
 			{"uid", std::to_string(uid)},
-			{"tcp_msg_id", std::to_string(msg_id)}
+			{"tcp_msg_id", std::to_string(msg_id)},
+			{"relation_bootstrap_ms", std::to_string(NowMs() - bootstrap_start_ms)},
+			{"relation_bootstrap_mode", "explicit_pull"}
 		});
 }
 
 void LogicSystem::SearchInfo(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_chat_relation_service) {
+		_chat_relation_service->HandleSearchUser(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -729,7 +745,7 @@ void LogicSystem::SearchInfo(std::shared_ptr<CSession> session, const short& msg
 	}
 
 	int uid = 0;
-	if (!MysqlMgr::GetInstance()->GetUidByUserId(user_id, uid) || uid <= 0) {
+	if (!PostgresMgr::GetInstance()->GetUidByUserId(user_id, uid) || uid <= 0) {
 		rtvalue["error"] = ErrorCodes::UidInvalid;
 		return;
 	}
@@ -739,6 +755,10 @@ void LogicSystem::SearchInfo(std::shared_ptr<CSession> session, const short& msg
 
 void LogicSystem::AddFriendApply(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_chat_relation_service) {
+		_chat_relation_service->HandleAddFriendApply(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -763,8 +783,8 @@ void LogicSystem::AddFriendApply(std::shared_ptr<CSession> session, const short&
 		});
 
 
-	MysqlMgr::GetInstance()->AddFriendApply(uid, touid);
-	MysqlMgr::GetInstance()->ReplaceApplyTags(uid, touid, labels);
+	PostgresMgr::GetInstance()->AddFriendApply(uid, touid);
+	PostgresMgr::GetInstance()->ReplaceApplyTags(uid, touid, labels);
 	InvalidateRelationBootstrapCache(touid);
 
 
@@ -826,7 +846,11 @@ void LogicSystem::AddFriendApply(std::shared_ptr<CSession> session, const short&
 }
 
 void LogicSystem::AuthFriendApply(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data) {
-	
+	if (_chat_relation_service) {
+		_chat_relation_service->HandleAuthFriendApply(session, msg_id, msg_data);
+		return;
+	}
+
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -867,13 +891,13 @@ void LogicSystem::AuthFriendApply(std::shared_ptr<CSession> session, const short
 		});
 
 
-	MysqlMgr::GetInstance()->AuthFriendApply(uid, touid);
+	PostgresMgr::GetInstance()->AuthFriendApply(uid, touid);
 
 
-	MysqlMgr::GetInstance()->AddFriend(uid, touid,back_name);
-	MysqlMgr::GetInstance()->ReplaceFriendTags(uid, touid, labels);
-	auto requesterApplyTags = MysqlMgr::GetInstance()->GetApplyTags(touid, uid);
-	MysqlMgr::GetInstance()->ReplaceFriendTags(touid, uid, requesterApplyTags);
+	PostgresMgr::GetInstance()->AddFriend(uid, touid,back_name);
+	PostgresMgr::GetInstance()->ReplaceFriendTags(uid, touid, labels);
+	auto requesterApplyTags = PostgresMgr::GetInstance()->GetApplyTags(touid, uid);
+	PostgresMgr::GetInstance()->ReplaceFriendTags(touid, uid, requesterApplyTags);
 	InvalidateRelationBootstrapCache(uid);
 	InvalidateRelationBootstrapCache(touid);
 
@@ -929,112 +953,149 @@ void LogicSystem::AuthFriendApply(std::shared_ptr<CSession> session, const short
 }
 
 void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data) {
-	Json::Reader reader;
+	if (_private_message_service) {
+		_private_message_service->HandleTextChatMessage(session, msg_id, msg_data);
+		return;
+	}
 	Json::Value root;
-	reader.parse(msg_data, root);
+	ParseJsonObject(msg_data, root);
 
-	auto uid = root["fromuid"].asInt();
-	auto touid = root["touid"].asInt();
-
+	const auto uid = root["fromuid"].asInt();
+	const auto touid = root["touid"].asInt();
 	const Json::Value arrays = root["text_array"];
-	
+	const bool kafka_shadow = memochat::chatruntime::FeatureEnabled("chat_private_kafka_shadow");
+	const bool kafka_primary = memochat::chatruntime::FeatureEnabled("chat_private_kafka_primary");
+
 	Json::Value rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["fromuid"] = uid;
 	rtvalue["touid"] = touid;
 
-	Defer defer([this, &rtvalue, session]() {
-		std::string return_str = rtvalue.toStyledString();
-		session->Send(return_str, ID_TEXT_CHAT_MSG_RSP);
-		});
+	Defer defer([&rtvalue, session]() {
+		session->Send(JsonToCompactString(rtvalue), ID_TEXT_CHAT_MSG_RSP);
+	});
 
 	if (uid <= 0 || touid <= 0 || !arrays.isArray() || arrays.empty()) {
 		rtvalue["error"] = ErrorCodes::Error_Json;
 		return;
 	}
 
-	Json::Value normalized = Json::arrayValue;
+	Json::Value normalized(Json::arrayValue);
+	std::vector<PrivateMessageInfo> pending_messages;
 	TextChatMsgReq text_msg_req;
 	text_msg_req.set_fromuid(uid);
 	text_msg_req.set_touid(touid);
 	const int conv_uid_min = std::min(uid, touid);
 	const int conv_uid_max = std::max(uid, touid);
-	for (const auto& txt_obj : arrays) {
-		const std::string content = txt_obj["content"].asString();
-		const std::string msgid = txt_obj["msgid"].asString();
-		int64_t created_at = txt_obj.get("created_at", 0).asInt64();
-		const int64_t reply_to_server_msg_id = txt_obj.get("reply_to_server_msg_id", 0).asInt64();
-		const int64_t edited_at_ms = txt_obj.get("edited_at_ms", 0).asInt64();
-		const int64_t deleted_at_ms = txt_obj.get("deleted_at_ms", 0).asInt64();
-		std::string forward_meta_json;
-		if (txt_obj.isMember("forward_meta")) {
-			forward_meta_json = txt_obj["forward_meta"].toStyledString();
-		}
-		if (created_at <= 0) {
-			created_at = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-				std::chrono::system_clock::now().time_since_epoch()).count());
-		}
-		if (content.empty() || msgid.empty()) {
-			rtvalue["error"] = ErrorCodes::Error_Json;
-			return;
-		}
+	std::string first_msg_id;
 
+	for (const auto& txt_obj : arrays) {
 		PrivateMessageInfo msg;
-		msg.msg_id = msgid;
+		msg.msg_id = txt_obj["msgid"].asString();
+		msg.content = txt_obj["content"].asString();
 		msg.conv_uid_min = conv_uid_min;
 		msg.conv_uid_max = conv_uid_max;
 		msg.from_uid = uid;
 		msg.to_uid = touid;
-		msg.content = content;
-		msg.reply_to_server_msg_id = reply_to_server_msg_id;
-		msg.forward_meta_json = forward_meta_json;
-		msg.edited_at_ms = edited_at_ms;
-		msg.deleted_at_ms = deleted_at_ms;
-		msg.created_at = created_at;
-		if (!MysqlMgr::GetInstance()->SavePrivateMessage(msg)) {
+		msg.reply_to_server_msg_id = txt_obj.get("reply_to_server_msg_id", 0).asInt64();
+		msg.edited_at_ms = txt_obj.get("edited_at_ms", 0).asInt64();
+		msg.deleted_at_ms = txt_obj.get("deleted_at_ms", 0).asInt64();
+		msg.created_at = txt_obj.get("created_at", 0).asInt64();
+		if (txt_obj.isMember("forward_meta")) {
+			msg.forward_meta_json = JsonToCompactString(txt_obj["forward_meta"]);
+		}
+		if (msg.created_at <= 0) {
+			msg.created_at = NowMs();
+		}
+		if (msg.msg_id.empty() || msg.content.empty()) {
+			rtvalue["error"] = ErrorCodes::Error_Json;
+			return;
+		}
+		if (first_msg_id.empty()) {
+			first_msg_id = msg.msg_id;
+		}
+		pending_messages.push_back(msg);
+
+		Json::Value element;
+		element["msgid"] = msg.msg_id;
+		element["content"] = msg.content;
+		element["created_at"] = static_cast<Json::Int64>(msg.created_at);
+		if (msg.reply_to_server_msg_id > 0) {
+			element["reply_to_server_msg_id"] = static_cast<Json::Int64>(msg.reply_to_server_msg_id);
+		}
+		if (!msg.forward_meta_json.empty()) {
+			Json::Value forward_meta;
+			if (ParseJsonObject(msg.forward_meta_json, forward_meta)) {
+				element["forward_meta"] = forward_meta;
+			}
+		}
+		if (msg.edited_at_ms > 0) {
+			element["edited_at_ms"] = static_cast<Json::Int64>(msg.edited_at_ms);
+		}
+		if (msg.deleted_at_ms > 0) {
+			element["deleted_at_ms"] = static_cast<Json::Int64>(msg.deleted_at_ms);
+		}
+		normalized.append(element);
+
+		auto* text_msg = text_msg_req.add_textmsgs();
+		text_msg->set_msgid(msg.msg_id);
+		text_msg->set_msgcontent(msg.content);
+	}
+
+	const auto accept_ts = NowMs();
+	rtvalue["client_msg_id"] = first_msg_id;
+	rtvalue["accept_node"] = memochat::chatruntime::SelfServerName();
+	rtvalue["accept_ts"] = static_cast<Json::Int64>(accept_ts);
+	rtvalue["status"] = kafka_primary ? "accepted" : "persisted";
+	if (!kafka_primary) {
+		rtvalue["text_array"] = normalized;
+	}
+
+	Json::Value event_payload;
+	event_payload["fromuid"] = uid;
+	event_payload["touid"] = touid;
+	event_payload["trace_id"] = root.get("trace_id", "").asString();
+	event_payload["request_id"] = root.get("request_id", "").asString();
+	event_payload["span_id"] = root.get("span_id", "").asString();
+	event_payload["accept_node"] = memochat::chatruntime::SelfServerName();
+	event_payload["accept_ts"] = static_cast<Json::Int64>(accept_ts);
+	event_payload["text_array"] = normalized;
+
+	if (kafka_primary || kafka_shadow) {
+		std::string publish_error;
+		if (!PublishAsyncEvent(memochat::chatruntime::TopicPrivate(), event_payload, &publish_error)) {
+			if (kafka_primary) {
+				rtvalue["error"] = ErrorCodes::RPCFailed;
+				rtvalue["status"] = "failed";
+				return;
+			}
+			memolog::LogWarn("chat.private.shadow_publish_failed", "private shadow publish failed",
+				{ {"error", publish_error}, {"client_msg_id", first_msg_id} });
+		}
+	}
+
+	if (kafka_primary) {
+		return;
+	}
+
+	for (const auto& msg : pending_messages) {
+		if (!PostgresMgr::GetInstance()->SavePrivateMessage(msg)) {
 			rtvalue["error"] = ErrorCodes::RPCFailed;
+			rtvalue["status"] = "failed";
 			return;
 		}
 		if (MongoMgr::GetInstance()->Enabled() && !MongoMgr::GetInstance()->SavePrivateMessage(msg)) {
 			std::cerr << "[MongoMgr] SavePrivateMessage dual-write failed for msg_id=" << msg.msg_id << std::endl;
 		}
-
-		Json::Value element;
-		element["content"] = content;
-		element["msgid"] = msgid;
-		element["created_at"] = static_cast<Json::Int64>(created_at);
-		if (reply_to_server_msg_id > 0) {
-			element["reply_to_server_msg_id"] = static_cast<Json::Int64>(reply_to_server_msg_id);
-		}
-		if (!forward_meta_json.empty()) {
-			Json::Reader forward_reader;
-			Json::Value forward_meta;
-			if (forward_reader.parse(forward_meta_json, forward_meta)) {
-				element["forward_meta"] = forward_meta;
-			}
-		}
-		if (edited_at_ms > 0) {
-			element["edited_at_ms"] = static_cast<Json::Int64>(edited_at_ms);
-		}
-		if (deleted_at_ms > 0) {
-			element["deleted_at_ms"] = static_cast<Json::Int64>(deleted_at_ms);
-		}
-		normalized.append(element);
-
-		auto* text_msg = text_msg_req.add_textmsgs();
-		text_msg->set_msgid(msgid);
-		text_msg->set_msgcontent(content);
 	}
-	rtvalue["text_array"] = normalized;
-	const std::string first_msg_id = arrays[0].get("msgid", "").asString();
+
 	const auto route = ResolveOnlineRoute(touid);
 	if (route.kind == OnlineRouteKind::Offline || route.kind == OnlineRouteKind::Stale) {
 		LogPrivateRoute("chat.private.route", uid, touid, first_msg_id, route, "skipped", false);
 		return;
 	}
-
 	if (route.kind == OnlineRouteKind::Local && route.session) {
-		route.session->Send(rtvalue.toStyledString(), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+		route.session->Send(JsonToCompactString(rtvalue), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
 		LogPrivateRoute("chat.private.route", uid, touid, first_msg_id, route, "n/a", true);
 		return;
 	}
@@ -1051,6 +1112,10 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 }
 
 void LogicSystem::HeartBeatHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data) {
+	if (_chat_session_service) {
+		_chat_session_service->HandleHeartbeat(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -1112,7 +1177,7 @@ void LogicSystem::GetUserByUid(std::string uid_str, Json::Value& rtvalue)
 
 
 	std::shared_ptr<UserInfo> user_info = nullptr;
-	user_info = MysqlMgr::GetInstance()->GetUser(uid);
+	user_info = PostgresMgr::GetInstance()->GetUser(uid);
 	if (user_info == nullptr) {
 		rtvalue["error"] = ErrorCodes::UidInvalid;
 		return;
@@ -1182,7 +1247,7 @@ void LogicSystem::GetUserByName(std::string name, Json::Value& rtvalue)
 
 
 	std::shared_ptr<UserInfo> user_info = nullptr;
-	user_info = MysqlMgr::GetInstance()->GetUser(name);
+	user_info = PostgresMgr::GetInstance()->GetUser(name);
 	if (user_info == nullptr) {
 		rtvalue["error"] = ErrorCodes::UidInvalid;
 		return;
@@ -1237,7 +1302,7 @@ bool LogicSystem::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<Use
 
 
 		std::shared_ptr<UserInfo> user_info = nullptr;
-		user_info = MysqlMgr::GetInstance()->GetUser(uid);
+		user_info = PostgresMgr::GetInstance()->GetUser(uid);
 		if (user_info == nullptr) {
 			return false;
 		}
@@ -1263,214 +1328,41 @@ bool LogicSystem::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<Use
 
 bool LogicSystem::GetFriendApplyInfo(int to_uid, std::vector<std::shared_ptr<ApplyInfo>> &list) {
 
-	return MysqlMgr::GetInstance()->GetApplyList(to_uid, list, 0, 10);
+	return PostgresMgr::GetInstance()->GetApplyList(to_uid, list, 0, 10);
 }
 
 bool LogicSystem::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo>>& user_list) {
 
-	return MysqlMgr::GetInstance()->GetFriendList(self_id, user_list);
+	return PostgresMgr::GetInstance()->GetFriendList(self_id, user_list);
 }
 
 void LogicSystem::AppendRelationBootstrapJson(int uid, Json::Value& out)
 {
-	const auto bootstrap_start_ms = NowMs();
-	if (TryAppendCachedRelationBootstrapJson(uid, out)) {
-		memolog::LogInfo("chat.relation_bootstrap.cache_hit", "relation bootstrap served from cache",
-			{
-				{"uid", std::to_string(uid)},
-				{"relation_bootstrap_ms", std::to_string(NowMs() - bootstrap_start_ms)}
-			});
-		return;
+	if (_chat_relation_service) {
+		_chat_relation_service->AppendRelationBootstrapJson(uid, out);
 	}
-
-	Json::Value cache_payload(Json::objectValue);
-	std::vector<std::shared_ptr<ApplyInfo>> apply_list;
-	if (GetFriendApplyInfo(uid, apply_list)) {
-		for (auto& apply : apply_list) {
-			Json::Value obj;
-			obj["name"] = apply->_name;
-			obj["uid"] = apply->_uid;
-			obj["user_id"] = apply->_user_id;
-			obj["icon"] = apply->_icon;
-			obj["nick"] = apply->_nick;
-			obj["sex"] = apply->_sex;
-			obj["desc"] = apply->_desc;
-			obj["status"] = apply->_status;
-			for (const auto& tag : apply->_labels) {
-				obj["labels"].append(tag);
-			}
-			out["apply_list"].append(obj);
-			cache_payload["apply_list"].append(obj);
-		}
-	}
-
-	std::vector<std::shared_ptr<UserInfo>> friend_list;
-	if (GetFriendList(uid, friend_list)) {
-		for (auto& friend_ele : friend_list) {
-			Json::Value obj;
-			obj["name"] = friend_ele->name;
-			obj["uid"] = friend_ele->uid;
-			obj["user_id"] = friend_ele->user_id;
-			obj["icon"] = friend_ele->icon;
-			obj["nick"] = friend_ele->nick;
-			obj["sex"] = friend_ele->sex;
-			obj["desc"] = friend_ele->desc;
-			obj["back"] = friend_ele->back;
-			for (const auto& tag : friend_ele->labels) {
-				obj["labels"].append(tag);
-			}
-			out["friend_list"].append(obj);
-			cache_payload["friend_list"].append(obj);
-		}
-	}
-
-	CacheRelationBootstrapJson(uid, cache_payload);
-	memolog::LogInfo("chat.relation_bootstrap.cache_fill", "relation bootstrap cache populated",
-		{
-			{"uid", std::to_string(uid)},
-			{"relation_bootstrap_ms", std::to_string(NowMs() - bootstrap_start_ms)}
-		});
 }
 
 void LogicSystem::BuildGroupListJson(int uid, Json::Value& out)
 {
-	std::vector<std::shared_ptr<GroupInfo>> groups;
-	MysqlMgr::GetInstance()->GetUserGroupList(uid, groups);
-	for (const auto& group : groups) {
-		if (!group) {
-			continue;
-		}
-		Json::Value one;
-		one["groupid"] = static_cast<Json::Int64>(group->group_id);
-		one["group_code"] = group->group_code;
-		one["name"] = group->name;
-		one["icon"] = group->icon;
-		one["owner_uid"] = group->owner_uid;
-		one["announcement"] = group->announcement;
-		one["member_limit"] = group->member_limit;
-		one["member_count"] = group->member_count;
-		one["is_all_muted"] = group->is_all_muted;
-		one["role"] = group->role;
-		one["permission_bits"] = static_cast<Json::Int64>(group->permission_bits);
-		one["can_change_group_info"] = (group->permission_bits & kPermChangeGroupInfo) != 0;
-		one["can_delete_messages"] = (group->permission_bits & kPermDeleteMessages) != 0;
-		one["can_invite_users"] = (group->permission_bits & kPermInviteUsers) != 0;
-		one["can_manage_admins"] = (group->permission_bits & kPermManageAdmins) != 0;
-		one["can_pin_messages"] = (group->permission_bits & kPermPinMessages) != 0;
-		one["can_ban_users"] = (group->permission_bits & kPermBanUsers) != 0;
-		one["can_manage_topics"] = (group->permission_bits & kPermManageTopics) != 0;
-		out["group_list"].append(one);
-	}
-
-	std::vector<std::shared_ptr<GroupApplyInfo>> applies;
-	MysqlMgr::GetInstance()->GetPendingGroupApplyForReviewer(uid, applies, 30);
-	for (const auto& apply : applies) {
-		if (!apply) {
-			continue;
-		}
-		Json::Value one;
-		one["apply_id"] = static_cast<Json::Int64>(apply->apply_id);
-		one["groupid"] = static_cast<Json::Int64>(apply->group_id);
-		std::shared_ptr<GroupInfo> group_info;
-		if (MysqlMgr::GetInstance()->GetGroupById(apply->group_id, group_info) && group_info) {
-			one["group_code"] = group_info->group_code;
-		}
-		one["applicant_uid"] = apply->applicant_uid;
-		one["inviter_uid"] = apply->inviter_uid;
-		auto applicant = MysqlMgr::GetInstance()->GetUser(apply->applicant_uid);
-		if (applicant) {
-			one["applicant_user_id"] = applicant->user_id;
-		}
-		if (apply->inviter_uid > 0) {
-			auto inviter = MysqlMgr::GetInstance()->GetUser(apply->inviter_uid);
-			if (inviter) {
-				one["inviter_user_id"] = inviter->user_id;
-			}
-		}
-		one["type"] = apply->type;
-		one["status"] = apply->status;
-		one["reason"] = apply->reason;
-		out["pending_group_apply_list"].append(one);
+	if (_group_message_service) {
+		_group_message_service->BuildGroupListJson(uid, out);
 	}
 }
 
 void LogicSystem::BuildDialogListJson(int uid, Json::Value& out)
 {
-	MysqlMgr::GetInstance()->RefreshDialogsForOwner(uid);
-
-	std::unordered_map<int, std::shared_ptr<DialogMetaInfo>> private_meta;
-	std::unordered_map<int64_t, std::shared_ptr<DialogMetaInfo>> group_meta;
-	std::vector<std::shared_ptr<DialogMetaInfo>> meta_list;
-	if (MysqlMgr::GetInstance()->GetDialogMetaByOwner(uid, meta_list)) {
-		for (const auto& meta : meta_list) {
-			if (!meta) {
-				continue;
-			}
-			if (meta->dialog_type == "private" && meta->peer_uid > 0) {
-				private_meta[meta->peer_uid] = meta;
-				continue;
-			}
-			if (meta->dialog_type == "group" && meta->group_id > 0) {
-				group_meta[meta->group_id] = meta;
-			}
-		}
-	}
-
-	std::vector<std::shared_ptr<UserInfo>> friend_list;
-	GetFriendList(uid, friend_list);
-	for (const auto& peer : friend_list) {
-		if (!peer) {
-			continue;
-		}
-		const auto meta_it = private_meta.find(peer->uid);
-		Json::Value one;
-		one["dialog_id"] = std::string("u_") + std::to_string(peer->uid);
-		one["dialog_type"] = "private";
-		one["peer_uid"] = peer->uid;
-		one["title"] = peer->nick.empty() ? peer->name : peer->nick;
-		one["avatar"] = peer->icon;
-		DialogRuntimeInfo runtime;
-		if (!MysqlMgr::GetInstance()->GetPrivateDialogRuntime(uid, peer->uid, runtime)) {
-			runtime = DialogRuntimeInfo();
-		}
-		one["last_msg_preview"] = runtime.last_msg_preview;
-		one["last_msg_ts"] = static_cast<Json::Int64>(runtime.last_msg_ts);
-		one["unread_count"] = runtime.unread_count;
-		one["pinned_rank"] = (meta_it == private_meta.end()) ? 0 : meta_it->second->pinned_rank;
-		one["draft_text"] = (meta_it == private_meta.end()) ? "" : meta_it->second->draft_text;
-		one["mute_state"] = (meta_it == private_meta.end()) ? 0 : meta_it->second->mute_state;
-		out["dialogs"].append(one);
-	}
-
-	std::vector<std::shared_ptr<GroupInfo>> groups;
-	MysqlMgr::GetInstance()->GetUserGroupList(uid, groups);
-	for (const auto& group : groups) {
-		if (!group) {
-			continue;
-		}
-		const auto meta_it = group_meta.find(group->group_id);
-		Json::Value one;
-		one["dialog_id"] = std::string("g_") + std::to_string(group->group_id);
-		one["dialog_type"] = "group";
-		one["group_id"] = static_cast<Json::Int64>(group->group_id);
-		one["title"] = group->name;
-		one["avatar"] = group->icon;
-		DialogRuntimeInfo runtime;
-		if (!MysqlMgr::GetInstance()->GetGroupDialogRuntime(uid, group->group_id, runtime)) {
-			runtime = DialogRuntimeInfo();
-		}
-		one["last_msg_preview"] = runtime.last_msg_preview;
-		one["last_msg_ts"] = static_cast<Json::Int64>(runtime.last_msg_ts);
-		one["unread_count"] = runtime.unread_count;
-		one["pinned_rank"] = (meta_it == group_meta.end()) ? 0 : meta_it->second->pinned_rank;
-		one["draft_text"] = (meta_it == group_meta.end()) ? "" : meta_it->second->draft_text;
-		one["mute_state"] = (meta_it == group_meta.end()) ? 0 : meta_it->second->mute_state;
-		out["dialogs"].append(one);
+	if (_chat_relation_service) {
+		_chat_relation_service->BuildDialogListJson(uid, out);
 	}
 }
 
 void LogicSystem::GetDialogListHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_chat_relation_service) {
+		_chat_relation_service->HandleGetDialogList(session, msg_id, msg_data);
+		return;
+	}
 	(void)msg_id;
 	Json::Reader reader;
 	Json::Value root;
@@ -1494,6 +1386,10 @@ void LogicSystem::GetDialogListHandler(std::shared_ptr<CSession> session, const 
 
 void LogicSystem::SyncDraftHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_chat_relation_service) {
+		_chat_relation_service->HandleSyncDraft(session, msg_id, msg_data);
+		return;
+	}
 	(void)msg_id;
 	Json::Reader reader;
 	Json::Value root;
@@ -1532,25 +1428,25 @@ void LogicSystem::SyncDraftHandler(std::shared_ptr<CSession> session, const shor
 	int64_t normalized_group_id = 0;
 	if (dialog_type == "private") {
 		normalized_peer_uid = peer_uid;
-		if (normalized_peer_uid <= 0 || !MysqlMgr::GetInstance()->IsFriend(uid, normalized_peer_uid)) {
+		if (normalized_peer_uid <= 0 || !PostgresMgr::GetInstance()->IsFriend(uid, normalized_peer_uid)) {
 			rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 			return;
 		}
 	}
 	else {
 		normalized_group_id = group_id;
-		if (normalized_group_id <= 0 || !MysqlMgr::GetInstance()->IsUserInGroup(normalized_group_id, uid)) {
+		if (normalized_group_id <= 0 || !PostgresMgr::GetInstance()->IsUserInGroup(normalized_group_id, uid)) {
 			rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 			return;
 		}
 	}
 
-	if (!MysqlMgr::GetInstance()->UpsertDialogDraft(uid, dialog_type, normalized_peer_uid, normalized_group_id, draft_text)) {
+	if (!PostgresMgr::GetInstance()->UpsertDialogDraft(uid, dialog_type, normalized_peer_uid, normalized_group_id, draft_text)) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}
 	if (has_mute_state
-		&& !MysqlMgr::GetInstance()->UpsertDialogMuteState(uid, dialog_type, normalized_peer_uid, normalized_group_id, mute_state)) {
+		&& !PostgresMgr::GetInstance()->UpsertDialogMuteState(uid, dialog_type, normalized_peer_uid, normalized_group_id, mute_state)) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}
@@ -1558,6 +1454,10 @@ void LogicSystem::SyncDraftHandler(std::shared_ptr<CSession> session, const shor
 
 void LogicSystem::PinDialogHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_chat_relation_service) {
+		_chat_relation_service->HandlePinDialog(session, msg_id, msg_data);
+		return;
+	}
 	(void)msg_id;
 	Json::Reader reader;
 	Json::Value root;
@@ -1594,20 +1494,20 @@ void LogicSystem::PinDialogHandler(std::shared_ptr<CSession> session, const shor
 	int64_t normalized_group_id = 0;
 	if (dialog_type == "private") {
 		normalized_peer_uid = peer_uid;
-		if (normalized_peer_uid <= 0 || !MysqlMgr::GetInstance()->IsFriend(uid, normalized_peer_uid)) {
+		if (normalized_peer_uid <= 0 || !PostgresMgr::GetInstance()->IsFriend(uid, normalized_peer_uid)) {
 			rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 			return;
 		}
 	}
 	else {
 		normalized_group_id = group_id;
-		if (normalized_group_id <= 0 || !MysqlMgr::GetInstance()->IsUserInGroup(normalized_group_id, uid)) {
+		if (normalized_group_id <= 0 || !PostgresMgr::GetInstance()->IsUserInGroup(normalized_group_id, uid)) {
 			rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 			return;
 		}
 	}
 
-	if (!MysqlMgr::GetInstance()->UpsertDialogPinned(uid, dialog_type, normalized_peer_uid, normalized_group_id, pinned_rank)) {
+	if (!PostgresMgr::GetInstance()->UpsertDialogPinned(uid, dialog_type, normalized_peer_uid, normalized_group_id, pinned_rank)) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}
@@ -1615,6 +1515,10 @@ void LogicSystem::PinDialogHandler(std::shared_ptr<CSession> session, const shor
 
 void LogicSystem::ForwardGroupMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleForwardGroupMessage(session, msg_id, msg_data);
+		return;
+	}
 	(void)msg_id;
 	Json::Reader reader;
 	Json::Value root;
@@ -1639,7 +1543,7 @@ void LogicSystem::ForwardGroupMsgHandler(std::shared_ptr<CSession> session, cons
 		rtvalue["error"] = ErrorCodes::Error_Json;
 		return;
 	}
-	if (!MysqlMgr::GetInstance()->IsUserInGroup(group_id, from_uid)) {
+	if (!PostgresMgr::GetInstance()->IsUserInGroup(group_id, from_uid)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
@@ -1648,7 +1552,7 @@ void LogicSystem::ForwardGroupMsgHandler(std::shared_ptr<CSession> session, cons
 	if (!(
 		(MongoMgr::GetInstance()->Enabled() &&
 			MongoMgr::GetInstance()->GetGroupMessageByMsgId(group_id, source_msg_id, source_msg) && source_msg) ||
-		(MysqlMgr::GetInstance()->GetGroupMessageByMsgId(group_id, source_msg_id, source_msg) && source_msg))) {
+		(PostgresMgr::GetInstance()->GetGroupMessageByMsgId(group_id, source_msg_id, source_msg) && source_msg))) {
 		rtvalue["error"] = ErrorCodes::GroupNotFound;
 		return;
 	}
@@ -1687,13 +1591,13 @@ void LogicSystem::ForwardGroupMsgHandler(std::shared_ptr<CSession> session, cons
 	info.created_at = now_ms;
 	int64_t server_msg_id = 0;
 	int64_t group_seq = 0;
-	if (!MysqlMgr::GetInstance()->SaveGroupMessage(info, &server_msg_id, &group_seq)) {
+	if (!PostgresMgr::GetInstance()->SaveGroupMessage(info, &server_msg_id, &group_seq)) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}
 	info.server_msg_id = server_msg_id;
 	info.group_seq = group_seq;
-	auto sender_info_for_group_mongo = MysqlMgr::GetInstance()->GetUser(from_uid);
+	auto sender_info_for_group_mongo = PostgresMgr::GetInstance()->GetUser(from_uid);
 	if (sender_info_for_group_mongo) {
 		info.from_name = sender_info_for_group_mongo->name;
 		info.from_nick = sender_info_for_group_mongo->nick;
@@ -1749,7 +1653,7 @@ void LogicSystem::ForwardGroupMsgHandler(std::shared_ptr<CSession> session, cons
 	}
 	rtvalue["forward_meta"] = forward_meta;
 
-	auto sender_info = MysqlMgr::GetInstance()->GetUser(from_uid);
+	auto sender_info = PostgresMgr::GetInstance()->GetUser(from_uid);
 	if (sender_info) {
 		rtvalue["from_name"] = sender_info->name;
 		rtvalue["from_nick"] = sender_info->nick;
@@ -1757,12 +1661,12 @@ void LogicSystem::ForwardGroupMsgHandler(std::shared_ptr<CSession> session, cons
 		rtvalue["from_user_id"] = sender_info->user_id;
 	}
 	std::shared_ptr<GroupInfo> group_info;
-	if (MysqlMgr::GetInstance()->GetGroupById(group_id, group_info) && group_info) {
+	if (PostgresMgr::GetInstance()->GetGroupById(group_id, group_info) && group_info) {
 		rtvalue["group_code"] = group_info->group_code;
 	}
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
-	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	PostgresMgr::GetInstance()->GetGroupMemberList(group_id, members);
 	std::vector<int> recipients;
 	for (const auto& member : members) {
 		if (member && member->status == 1) {
@@ -1774,6 +1678,10 @@ void LogicSystem::ForwardGroupMsgHandler(std::shared_ptr<CSession> session, cons
 
 void LogicSystem::ForwardPrivateMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_private_message_service) {
+		_private_message_service->HandleForwardPrivateMessage(session, msg_id, msg_data);
+		return;
+	}
 	(void)msg_id;
 	Json::Reader reader;
 	Json::Value root;
@@ -1799,7 +1707,7 @@ void LogicSystem::ForwardPrivateMsgHandler(std::shared_ptr<CSession> session, co
 		rtvalue["error"] = ErrorCodes::Error_Json;
 		return;
 	}
-	if (!MysqlMgr::GetInstance()->IsFriend(from_uid, peer_uid)) {
+	if (!PostgresMgr::GetInstance()->IsFriend(from_uid, peer_uid)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
@@ -1808,7 +1716,7 @@ void LogicSystem::ForwardPrivateMsgHandler(std::shared_ptr<CSession> session, co
 	if (!(
 		(MongoMgr::GetInstance()->Enabled() &&
 			MongoMgr::GetInstance()->GetPrivateMessageByMsgId(source_msg_id, source_msg) && source_msg) ||
-		(MysqlMgr::GetInstance()->GetPrivateMessageByMsgId(source_msg_id, source_msg) && source_msg))) {
+		(PostgresMgr::GetInstance()->GetPrivateMessageByMsgId(source_msg_id, source_msg) && source_msg))) {
 		rtvalue["error"] = ErrorCodes::GroupNotFound;
 		return;
 	}
@@ -1852,7 +1760,7 @@ void LogicSystem::ForwardPrivateMsgHandler(std::shared_ptr<CSession> session, co
 	}
 	info.forward_meta_json = forward_meta.toStyledString();
 
-	if (!MysqlMgr::GetInstance()->SavePrivateMessage(info)) {
+	if (!PostgresMgr::GetInstance()->SavePrivateMessage(info)) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}
@@ -1904,6 +1812,10 @@ void LogicSystem::ForwardPrivateMsgHandler(std::shared_ptr<CSession> session, co
 
 void LogicSystem::GroupReadAckHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleGroupReadAck(session, msg_id, msg_data);
+		return;
+	}
 	(void)session;
 	(void)msg_id;
 	Json::Reader reader;
@@ -1915,17 +1827,17 @@ void LogicSystem::GroupReadAckHandler(std::shared_ptr<CSession> session, const s
 	if (uid <= 0 || group_id <= 0) {
 		return;
 	}
-	if (!MysqlMgr::GetInstance()->IsUserInGroup(group_id, uid)) {
+	if (!PostgresMgr::GetInstance()->IsUserInGroup(group_id, uid)) {
 		return;
 	}
 	if (read_ts <= 0) {
 		read_ts = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::system_clock::now().time_since_epoch()).count());
 	}
-	MysqlMgr::GetInstance()->UpsertGroupReadState(uid, group_id, read_ts);
+	PostgresMgr::GetInstance()->UpsertGroupReadState(uid, group_id, read_ts);
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
-	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	PostgresMgr::GetInstance()->GetGroupMemberList(group_id, members);
 	std::vector<int> recipients;
 	for (const auto& member : members) {
 		if (member && member->status == 1) {
@@ -1943,6 +1855,10 @@ void LogicSystem::GroupReadAckHandler(std::shared_ptr<CSession> session, const s
 
 void LogicSystem::PrivateReadAckHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_private_message_service) {
+		_private_message_service->HandlePrivateReadAck(session, msg_id, msg_data);
+		return;
+	}
 	(void)session;
 	(void)msg_id;
 	Json::Reader reader;
@@ -1954,14 +1870,14 @@ void LogicSystem::PrivateReadAckHandler(std::shared_ptr<CSession> session, const
 	if (uid <= 0 || peer_uid <= 0) {
 		return;
 	}
-	if (!MysqlMgr::GetInstance()->IsFriend(uid, peer_uid)) {
+	if (!PostgresMgr::GetInstance()->IsFriend(uid, peer_uid)) {
 		return;
 	}
 	if (read_ts <= 0) {
 		read_ts = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::system_clock::now().time_since_epoch()).count());
 	}
-	MysqlMgr::GetInstance()->UpsertPrivateReadState(uid, peer_uid, read_ts);
+	PostgresMgr::GetInstance()->UpsertPrivateReadState(uid, peer_uid, read_ts);
 
 	Json::Value notify;
 	notify["error"] = ErrorCodes::Success;
@@ -1974,107 +1890,15 @@ void LogicSystem::PrivateReadAckHandler(std::shared_ptr<CSession> session, const
 
 void LogicSystem::PushGroupPayload(const std::vector<int>& recipients, short msgid, const Json::Value& payload, int exclude_uid)
 {
-	if (recipients.empty()) {
-		return;
-	}
-
-	std::unordered_set<int> uniq;
-	for (int uid : recipients) {
-		if (uid <= 0 || uid == exclude_uid) {
-			continue;
-		}
-		uniq.insert(uid);
-	}
-	if (uniq.empty()) {
-		return;
-	}
-
-	const std::string payload_str = payload.toStyledString();
-	std::unordered_map<std::string, std::vector<int>> remote_server_uids;
-
-	if (msgid == ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ) {
-		for (int uid : uniq) {
-			auto route = ResolveOnlineRoute(uid);
-			if (route.kind == OnlineRouteKind::Local && route.session) {
-				route.session->Send(payload_str, msgid);
-				continue;
-			}
-
-			std::string target_server;
-			if (route.kind == OnlineRouteKind::Remote) {
-				target_server = route.redis_server;
-			}
-			if (target_server.empty()) {
-				target_server = ResolveServerFromOnlineSets(std::to_string(uid));
-			}
-			if (target_server.empty()) {
-				continue;
-			}
-
-			GroupMemberBatchReq req;
-			req.set_tcp_msgid(msgid);
-			req.set_payload_json(payload_str);
-			req.add_touids(uid);
-			auto rsp = ChatGrpcClient::GetInstance()->NotifyGroupMemberBatch(target_server, req);
-			if (rsp.error() == ErrorCodes::Success && rsp.delivered() > 0) {
-				RedisMgr::GetInstance()->Set(USERIPPREFIX + std::to_string(uid), target_server);
-				continue;
-			}
-
-			const auto fallback_server = ResolveServerFromOnlineSets(std::to_string(uid));
-			if (fallback_server.empty() || fallback_server == target_server) {
-				continue;
-			}
-
-			auto fallback_rsp = ChatGrpcClient::GetInstance()->NotifyGroupMemberBatch(fallback_server, req);
-			if (fallback_rsp.error() == ErrorCodes::Success && fallback_rsp.delivered() > 0) {
-				RedisMgr::GetInstance()->Set(USERIPPREFIX + std::to_string(uid), fallback_server);
-			}
-		}
-		return;
-	}
-
-	for (int uid : uniq) {
-		const auto route = ResolveOnlineRoute(uid);
-		if (route.kind == OnlineRouteKind::Local && route.session) {
-			route.session->Send(payload_str, msgid);
-			continue;
-		}
-		if (route.kind == OnlineRouteKind::Remote) {
-			remote_server_uids[route.redis_server].push_back(uid);
-		}
-	}
-
-	for (auto& entry : remote_server_uids) {
-		auto& server_name = entry.first;
-		auto& uids = entry.second;
-		if (uids.empty()) {
-			continue;
-		}
-
-		if (msgid == ID_NOTIFY_GROUP_CHAT_MSG_REQ) {
-			GroupMessageNotifyReq req;
-			req.set_tcp_msgid(msgid);
-			req.set_payload_json(payload_str);
-			for (int uid : uids) {
-				req.add_touids(uid);
-			}
-			ChatGrpcClient::GetInstance()->NotifyGroupMessage(server_name, req);
-			continue;
-		}
-
-		GroupEventNotifyReq req;
-		req.set_tcp_msgid(msgid);
-		req.set_payload_json(payload_str);
-		for (int uid : uids) {
-			req.add_touids(uid);
-		}
-		ChatGrpcClient::GetInstance()->NotifyGroupEvent(server_name, req);
-	}
+	MessageDelivery().PushPayload(recipients, msgid, payload, exclude_uid);
 }
 
 void LogicSystem::CreateGroupHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleCreateGroup(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -2090,7 +1914,7 @@ void LogicSystem::CreateGroupHandler(std::shared_ptr<CSession> session, const sh
 		for (const auto& one : root["member_user_ids"]) {
 			const std::string member_user_id = one.asString();
 			int uid = 0;
-			if (!MysqlMgr::GetInstance()->GetUidByUserId(member_user_id, uid) || uid <= 0) {
+			if (!PostgresMgr::GetInstance()->GetUidByUserId(member_user_id, uid) || uid <= 0) {
 				invalid_member_user_id = true;
 				break;
 			}
@@ -2116,7 +1940,7 @@ void LogicSystem::CreateGroupHandler(std::shared_ptr<CSession> session, const sh
 	}
 
 	for (int uid : members) {
-		if (!MysqlMgr::GetInstance()->IsFriend(owner_uid, uid)) {
+		if (!PostgresMgr::GetInstance()->IsFriend(owner_uid, uid)) {
 			rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 			return;
 		}
@@ -2124,7 +1948,7 @@ void LogicSystem::CreateGroupHandler(std::shared_ptr<CSession> session, const sh
 
 	int64_t group_id = 0;
 	std::string group_code;
-	if (!MysqlMgr::GetInstance()->CreateGroup(owner_uid, group_name, announcement, member_limit, members, group_id, group_code)
+	if (!PostgresMgr::GetInstance()->CreateGroup(owner_uid, group_name, announcement, member_limit, members, group_id, group_code)
 		|| group_id <= 0) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
@@ -2150,6 +1974,10 @@ void LogicSystem::CreateGroupHandler(std::shared_ptr<CSession> session, const sh
 
 void LogicSystem::GetGroupListHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleGetGroupList(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -2169,6 +1997,10 @@ void LogicSystem::GetGroupListHandler(std::shared_ptr<CSession> session, const s
 
 void LogicSystem::InviteGroupMemberHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleInviteGroupMember(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -2177,7 +2009,7 @@ void LogicSystem::InviteGroupMemberHandler(std::shared_ptr<CSession> session, co
 	const int64_t group_id = root["groupid"].asInt64();
 	const std::string reason = root.get("reason", "").asString();
 	int to_uid = 0;
-	if (!MysqlMgr::GetInstance()->GetUidByUserId(target_user_id, to_uid)) {
+	if (!PostgresMgr::GetInstance()->GetUidByUserId(target_user_id, to_uid)) {
 		to_uid = 0;
 	}
 
@@ -2195,13 +2027,13 @@ void LogicSystem::InviteGroupMemberHandler(std::shared_ptr<CSession> session, co
 		return;
 	}
 
-	if (!MysqlMgr::GetInstance()->InviteGroupMember(group_id, from_uid, to_uid, reason)) {
+	if (!PostgresMgr::GetInstance()->InviteGroupMember(group_id, from_uid, to_uid, reason)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
 
 	std::shared_ptr<GroupInfo> group_info;
-	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
+	PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
 
 	Json::Value notify;
 	notify["error"] = ErrorCodes::Success;
@@ -2217,13 +2049,17 @@ void LogicSystem::InviteGroupMemberHandler(std::shared_ptr<CSession> session, co
 
 void LogicSystem::ApplyJoinGroupHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleApplyJoinGroup(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
 	const int from_uid = root["fromuid"].asInt();
 	const std::string group_code = root.get("group_code", "").asString();
 	int64_t group_id = 0;
-	if (!MysqlMgr::GetInstance()->GetGroupIdByCode(group_code, group_id)) {
+	if (!PostgresMgr::GetInstance()->GetGroupIdByCode(group_code, group_id)) {
 		group_id = 0;
 	}
 	const std::string reason = root.get("reason", "").asString();
@@ -2241,13 +2077,13 @@ void LogicSystem::ApplyJoinGroupHandler(std::shared_ptr<CSession> session, const
 		return;
 	}
 
-	if (!MysqlMgr::GetInstance()->ApplyJoinGroup(group_id, from_uid, reason)) {
+	if (!PostgresMgr::GetInstance()->ApplyJoinGroup(group_id, from_uid, reason)) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
-	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	PostgresMgr::GetInstance()->GetGroupMemberList(group_id, members);
 	std::vector<int> admins;
 	for (const auto& one : members) {
 		if (one && one->role >= 2) {
@@ -2260,7 +2096,7 @@ void LogicSystem::ApplyJoinGroupHandler(std::shared_ptr<CSession> session, const
 	notify["groupid"] = static_cast<Json::Int64>(group_id);
 	notify["group_code"] = group_code;
 	notify["applicant_uid"] = from_uid;
-	auto applicant = MysqlMgr::GetInstance()->GetUser(from_uid);
+	auto applicant = PostgresMgr::GetInstance()->GetUser(from_uid);
 	if (applicant) {
 		notify["applicant_user_id"] = applicant->user_id;
 	}
@@ -2270,6 +2106,10 @@ void LogicSystem::ApplyJoinGroupHandler(std::shared_ptr<CSession> session, const
 
 void LogicSystem::ReviewGroupApplyHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleReviewGroupApply(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -2291,7 +2131,7 @@ void LogicSystem::ReviewGroupApplyHandler(std::shared_ptr<CSession> session, con
 	}
 
 	std::shared_ptr<GroupApplyInfo> apply_info;
-	if (!MysqlMgr::GetInstance()->ReviewGroupApply(apply_id, reviewer_uid, agree, apply_info) || !apply_info) {
+	if (!PostgresMgr::GetInstance()->ReviewGroupApply(apply_id, reviewer_uid, agree, apply_info) || !apply_info) {
 		rtvalue["error"] = ErrorCodes::GroupApplyNotFound;
 		return;
 	}
@@ -2299,16 +2139,16 @@ void LogicSystem::ReviewGroupApplyHandler(std::shared_ptr<CSession> session, con
 	rtvalue["groupid"] = static_cast<Json::Int64>(apply_info->group_id);
 	rtvalue["applicant_uid"] = apply_info->applicant_uid;
 	std::shared_ptr<GroupInfo> apply_group;
-	if (MysqlMgr::GetInstance()->GetGroupById(apply_info->group_id, apply_group) && apply_group) {
+	if (PostgresMgr::GetInstance()->GetGroupById(apply_info->group_id, apply_group) && apply_group) {
 		rtvalue["group_code"] = apply_group->group_code;
 	}
-	auto applicant = MysqlMgr::GetInstance()->GetUser(apply_info->applicant_uid);
+	auto applicant = PostgresMgr::GetInstance()->GetUser(apply_info->applicant_uid);
 	if (applicant) {
 		rtvalue["applicant_user_id"] = applicant->user_id;
 	}
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
-	MysqlMgr::GetInstance()->GetGroupMemberList(apply_info->group_id, members);
+	PostgresMgr::GetInstance()->GetGroupMemberList(apply_info->group_id, members);
 	std::vector<int> recipients;
 	for (const auto& one : members) {
 		if (one) {
@@ -2333,13 +2173,18 @@ void LogicSystem::ReviewGroupApplyHandler(std::shared_ptr<CSession> session, con
 
 void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
-	Json::Reader reader;
+	if (_group_message_service) {
+		_group_message_service->HandleGroupChatMessage(session, msg_id, msg_data);
+		return;
+	}
 	Json::Value root;
-	reader.parse(msg_data, root);
+	ParseJsonObject(msg_data, root);
 	const int from_uid = root["fromuid"].asInt();
 	const int64_t group_id = root["groupid"].asInt64();
 	const Json::Value msg = root["msg"];
 	const std::string client_msg_id = msg.get("msgid", "").asString();
+	const bool kafka_shadow = memochat::chatruntime::FeatureEnabled("chat_group_kafka_shadow");
+	const bool kafka_primary = memochat::chatruntime::FeatureEnabled("chat_group_kafka_primary");
 
 	Json::Value rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
@@ -2358,13 +2203,13 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 	}
 
 	int role = 0;
-	if (!MysqlMgr::GetInstance()->GetUserRoleInGroup(group_id, from_uid, role)) {
+	if (!PostgresMgr::GetInstance()->GetUserRoleInGroup(group_id, from_uid, role)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
-	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	PostgresMgr::GetInstance()->GetGroupMemberList(group_id, members);
 	const auto now_sec = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
 		std::chrono::system_clock::now().time_since_epoch()).count());
 	const auto now_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -2404,68 +2249,14 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 		return;
 	}
 
-	int64_t server_msg_id = 0;
-	int64_t group_seq = 0;
-	if (!MysqlMgr::GetInstance()->SaveGroupMessage(info, &server_msg_id, &group_seq)) {
-		rtvalue["error"] = ErrorCodes::RPCFailed;
-		return;
-	}
-	info.server_msg_id = server_msg_id;
-	info.group_seq = group_seq;
-	auto sender_info_for_group_mongo = MysqlMgr::GetInstance()->GetUser(from_uid);
-	if (sender_info_for_group_mongo) {
-		info.from_name = sender_info_for_group_mongo->name;
-		info.from_nick = sender_info_for_group_mongo->nick;
-		info.from_icon = sender_info_for_group_mongo->icon;
-	}
-	if (MongoMgr::GetInstance()->Enabled() && !MongoMgr::GetInstance()->SaveGroupMessage(info)) {
-		std::cerr << "[MongoMgr] SaveGroupMessage dual-write failed for msg_id=" << info.msg_id << std::endl;
-	}
+	const auto accept_ts = NowMs();
+	rtvalue["accept_node"] = memochat::chatruntime::SelfServerName();
+	rtvalue["accept_ts"] = static_cast<Json::Int64>(accept_ts);
+	rtvalue["status"] = kafka_primary ? "accepted" : "persisted";
 
-	Json::Value msg_out = msg;
-	msg_out["created_at"] = static_cast<Json::Int64>(now_ms);
-	msg_out["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
-	msg_out["group_seq"] = static_cast<Json::Int64>(group_seq);
-	if (info.reply_to_server_msg_id > 0) {
-		msg_out["reply_to_server_msg_id"] = static_cast<Json::Int64>(info.reply_to_server_msg_id);
-	}
-	if (!info.forward_meta_json.empty()) {
-		Json::Reader forward_reader;
-		Json::Value forward_meta;
-		if (forward_reader.parse(info.forward_meta_json, forward_meta)) {
-			msg_out["forward_meta"] = forward_meta;
-		}
-	}
-	if (info.edited_at_ms > 0) {
-		msg_out["edited_at_ms"] = static_cast<Json::Int64>(info.edited_at_ms);
-	}
-	if (info.deleted_at_ms > 0) {
-		msg_out["deleted_at_ms"] = static_cast<Json::Int64>(info.deleted_at_ms);
-	}
-	rtvalue["msg"] = msg_out;
-	rtvalue["created_at"] = static_cast<Json::Int64>(now_ms);
-	rtvalue["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
-	rtvalue["group_seq"] = static_cast<Json::Int64>(group_seq);
-	if (info.reply_to_server_msg_id > 0) {
-		rtvalue["reply_to_server_msg_id"] = static_cast<Json::Int64>(info.reply_to_server_msg_id);
-	}
-	if (!info.forward_meta_json.empty()) {
-		Json::Reader forward_reader;
-		Json::Value forward_meta;
-		if (forward_reader.parse(info.forward_meta_json, forward_meta)) {
-			rtvalue["forward_meta"] = forward_meta;
-		}
-	}
-	if (info.edited_at_ms > 0) {
-		rtvalue["edited_at_ms"] = static_cast<Json::Int64>(info.edited_at_ms);
-	}
-	if (info.deleted_at_ms > 0) {
-		rtvalue["deleted_at_ms"] = static_cast<Json::Int64>(info.deleted_at_ms);
-	}
-
-	auto sender_info = MysqlMgr::GetInstance()->GetUser(from_uid);
+	auto sender_info = PostgresMgr::GetInstance()->GetUser(from_uid);
 	std::shared_ptr<GroupInfo> group_info;
-	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
+	PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
 	if (sender_info) {
 		rtvalue["from_name"] = sender_info->name;
 		rtvalue["from_nick"] = sender_info->nick;
@@ -2475,6 +2266,69 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 	if (group_info) {
 		rtvalue["group_code"] = group_info->group_code;
 	}
+
+	Json::Value event_payload;
+	event_payload["fromuid"] = from_uid;
+	event_payload["groupid"] = static_cast<Json::Int64>(group_id);
+	event_payload["trace_id"] = root.get("trace_id", "").asString();
+	event_payload["request_id"] = root.get("request_id", "").asString();
+	event_payload["span_id"] = root.get("span_id", "").asString();
+	event_payload["accept_node"] = memochat::chatruntime::SelfServerName();
+	event_payload["accept_ts"] = static_cast<Json::Int64>(accept_ts);
+	event_payload["msg"] = msg;
+	if (sender_info) {
+		event_payload["from_name"] = sender_info->name;
+		event_payload["from_nick"] = sender_info->nick;
+		event_payload["from_icon"] = sender_info->icon;
+		event_payload["from_user_id"] = sender_info->user_id;
+	}
+	if (group_info) {
+		event_payload["group_code"] = group_info->group_code;
+	}
+
+	if (kafka_primary || kafka_shadow) {
+		std::string publish_error;
+		if (!PublishAsyncEvent(memochat::chatruntime::TopicGroup(), event_payload, &publish_error)) {
+			if (kafka_primary) {
+				rtvalue["error"] = ErrorCodes::RPCFailed;
+				rtvalue["status"] = "failed";
+				return;
+			}
+			memolog::LogWarn("chat.group.shadow_publish_failed", "group shadow publish failed",
+				{ {"error", publish_error}, {"client_msg_id", client_msg_id} });
+		}
+	}
+
+	if (kafka_primary) {
+		return;
+	}
+
+	int64_t server_msg_id = 0;
+	int64_t group_seq = 0;
+	if (!PostgresMgr::GetInstance()->SaveGroupMessage(info, &server_msg_id, &group_seq)) {
+		rtvalue["error"] = ErrorCodes::RPCFailed;
+		rtvalue["status"] = "failed";
+		return;
+	}
+	info.server_msg_id = server_msg_id;
+	info.group_seq = group_seq;
+	if (sender_info) {
+		info.from_name = sender_info->name;
+		info.from_nick = sender_info->nick;
+		info.from_icon = sender_info->icon;
+	}
+	if (MongoMgr::GetInstance()->Enabled() && !MongoMgr::GetInstance()->SaveGroupMessage(info)) {
+		std::cerr << "[MongoMgr] SaveGroupMessage dual-write failed for msg_id=" << info.msg_id << std::endl;
+	}
+
+	Json::Value msg_out = msg;
+	msg_out["created_at"] = static_cast<Json::Int64>(now_ms);
+	msg_out["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
+	msg_out["group_seq"] = static_cast<Json::Int64>(group_seq);
+	rtvalue["msg"] = msg_out;
+	rtvalue["created_at"] = static_cast<Json::Int64>(now_ms);
+	rtvalue["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
+	rtvalue["group_seq"] = static_cast<Json::Int64>(group_seq);
 
 	std::vector<int> recipients;
 	for (const auto& member : members) {
@@ -2487,6 +2341,10 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 
 void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleGroupHistory(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -2505,7 +2363,7 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 		session->Send(rtvalue.toStyledString(), ID_GROUP_HISTORY_RSP);
 		});
 
-	if (uid <= 0 || group_id <= 0 || !MysqlMgr::GetInstance()->IsUserInGroup(group_id, uid)) {
+	if (uid <= 0 || group_id <= 0 || !PostgresMgr::GetInstance()->IsUserInGroup(group_id, uid)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
@@ -2515,13 +2373,13 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 	if (!(
 		(MongoMgr::GetInstance()->Enabled() &&
 			MongoMgr::GetInstance()->GetGroupHistory(group_id, before_ts, before_seq, limit, msgs, has_more)) ||
-		MysqlMgr::GetInstance()->GetGroupHistory(group_id, before_ts, before_seq, limit, msgs, has_more))) {
+		PostgresMgr::GetInstance()->GetGroupHistory(group_id, before_ts, before_seq, limit, msgs, has_more))) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}
 	rtvalue["has_more"] = has_more;
 	std::shared_ptr<GroupInfo> group_info;
-	if (MysqlMgr::GetInstance()->GetGroupById(group_id, group_info) && group_info) {
+	if (PostgresMgr::GetInstance()->GetGroupById(group_id, group_info) && group_info) {
 		rtvalue["group_code"] = group_info->group_code;
 	}
 
@@ -2571,7 +2429,7 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 		item["from_nick"] = one->from_nick;
 		item["from_icon"] = one->from_icon;
 		if ((one->from_name.empty() || one->from_nick.empty()) && one->from_uid > 0) {
-			auto from_user = MysqlMgr::GetInstance()->GetUser(one->from_uid);
+			auto from_user = PostgresMgr::GetInstance()->GetUser(one->from_uid);
 			if (from_user) {
 				item["from_name"] = from_user->name;
 				item["from_nick"] = from_user->nick;
@@ -2591,11 +2449,15 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 		read_ts = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::system_clock::now().time_since_epoch()).count());
 	}
-	MysqlMgr::GetInstance()->UpsertGroupReadState(uid, group_id, read_ts);
+	PostgresMgr::GetInstance()->UpsertGroupReadState(uid, group_id, read_ts);
 }
 
 void LogicSystem::EditPrivateMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_private_message_service) {
+		_private_message_service->HandleEditPrivateMessage(session, msg_id, msg_data);
+		return;
+	}
 	(void)msg_id;
 	Json::Reader reader;
 	Json::Value root;
@@ -2622,11 +2484,11 @@ void LogicSystem::EditPrivateMsgHandler(std::shared_ptr<CSession> session, const
 		rtvalue["error"] = ErrorCodes::Error_Json;
 		return;
 	}
-	if (!MysqlMgr::GetInstance()->IsFriend(uid, peer_uid)) {
+	if (!PostgresMgr::GetInstance()->IsFriend(uid, peer_uid)) {
 		rtvalue["error"] = ErrorCodes::UidInvalid;
 		return;
 	}
-	if (!MysqlMgr::GetInstance()->UpdatePrivateMessageContent(uid, peer_uid, target_msg_id, content, now_ms)) {
+	if (!PostgresMgr::GetInstance()->UpdatePrivateMessageContent(uid, peer_uid, target_msg_id, content, now_ms)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
@@ -2647,6 +2509,10 @@ void LogicSystem::EditPrivateMsgHandler(std::shared_ptr<CSession> session, const
 
 void LogicSystem::RevokePrivateMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_private_message_service) {
+		_private_message_service->HandleRevokePrivateMessage(session, msg_id, msg_data);
+		return;
+	}
 	(void)msg_id;
 	Json::Reader reader;
 	Json::Value root;
@@ -2672,11 +2538,11 @@ void LogicSystem::RevokePrivateMsgHandler(std::shared_ptr<CSession> session, con
 		rtvalue["error"] = ErrorCodes::Error_Json;
 		return;
 	}
-	if (!MysqlMgr::GetInstance()->IsFriend(uid, peer_uid)) {
+	if (!PostgresMgr::GetInstance()->IsFriend(uid, peer_uid)) {
 		rtvalue["error"] = ErrorCodes::UidInvalid;
 		return;
 	}
-	if (!MysqlMgr::GetInstance()->RevokePrivateMessage(uid, peer_uid, target_msg_id, now_ms)) {
+	if (!PostgresMgr::GetInstance()->RevokePrivateMessage(uid, peer_uid, target_msg_id, now_ms)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
@@ -2697,6 +2563,10 @@ void LogicSystem::RevokePrivateMsgHandler(std::shared_ptr<CSession> session, con
 
 void LogicSystem::EditGroupMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleEditGroupMessage(session, msg_id, msg_data);
+		return;
+	}
 	(void)msg_id;
 	Json::Reader reader;
 	Json::Value root;
@@ -2723,12 +2593,12 @@ void LogicSystem::EditGroupMsgHandler(std::shared_ptr<CSession> session, const s
 		return;
 	}
 
-	if (!MysqlMgr::GetInstance()->IsUserInGroup(group_id, uid)) {
+	if (!PostgresMgr::GetInstance()->IsUserInGroup(group_id, uid)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
 
-	if (!MysqlMgr::GetInstance()->UpdateGroupMessageContent(group_id, uid, target_msg_id, content, now_ms)) {
+	if (!PostgresMgr::GetInstance()->UpdateGroupMessageContent(group_id, uid, target_msg_id, content, now_ms)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
@@ -2737,7 +2607,7 @@ void LogicSystem::EditGroupMsgHandler(std::shared_ptr<CSession> session, const s
 	}
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
-	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	PostgresMgr::GetInstance()->GetGroupMemberList(group_id, members);
 	std::vector<int> recipients;
 	for (const auto& member : members) {
 		if (member && member->status == 1) {
@@ -2758,6 +2628,10 @@ void LogicSystem::EditGroupMsgHandler(std::shared_ptr<CSession> session, const s
 
 void LogicSystem::RevokeGroupMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleRevokeGroupMessage(session, msg_id, msg_data);
+		return;
+	}
 	(void)msg_id;
 	Json::Reader reader;
 	Json::Value root;
@@ -2783,12 +2657,12 @@ void LogicSystem::RevokeGroupMsgHandler(std::shared_ptr<CSession> session, const
 		return;
 	}
 
-	if (!MysqlMgr::GetInstance()->IsUserInGroup(group_id, uid)) {
+	if (!PostgresMgr::GetInstance()->IsUserInGroup(group_id, uid)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
 
-	if (!MysqlMgr::GetInstance()->RevokeGroupMessage(group_id, uid, target_msg_id, now_ms)) {
+	if (!PostgresMgr::GetInstance()->RevokeGroupMessage(group_id, uid, target_msg_id, now_ms)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
@@ -2797,7 +2671,7 @@ void LogicSystem::RevokeGroupMsgHandler(std::shared_ptr<CSession> session, const
 	}
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
-	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	PostgresMgr::GetInstance()->GetGroupMemberList(group_id, members);
 	std::vector<int> recipients;
 	for (const auto& member : members) {
 		if (member && member->status == 1) {
@@ -2818,6 +2692,10 @@ void LogicSystem::RevokeGroupMsgHandler(std::shared_ptr<CSession> session, const
 
 void LogicSystem::PrivateHistoryHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_private_message_service) {
+		_private_message_service->HandlePrivateHistory(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -2840,7 +2718,7 @@ void LogicSystem::PrivateHistoryHandler(std::shared_ptr<CSession> session, const
 		return;
 	}
 
-	if (!MysqlMgr::GetInstance()->IsFriend(uid, peer_uid)) {
+	if (!PostgresMgr::GetInstance()->IsFriend(uid, peer_uid)) {
 		rtvalue["error"] = ErrorCodes::UidInvalid;
 		return;
 	}
@@ -2850,7 +2728,7 @@ void LogicSystem::PrivateHistoryHandler(std::shared_ptr<CSession> session, const
 	if (!(
 		(MongoMgr::GetInstance()->Enabled() &&
 			MongoMgr::GetInstance()->GetPrivateHistory(uid, peer_uid, before_ts, before_msg_id, limit, messages, has_more)) ||
-		MysqlMgr::GetInstance()->GetPrivateHistory(uid, peer_uid, before_ts, before_msg_id, limit, messages, has_more))) {
+		PostgresMgr::GetInstance()->GetPrivateHistory(uid, peer_uid, before_ts, before_msg_id, limit, messages, has_more))) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}
@@ -2888,12 +2766,16 @@ void LogicSystem::PrivateHistoryHandler(std::shared_ptr<CSession> session, const
 		}
 	}
 	if (max_peer_read_ts > 0) {
-		MysqlMgr::GetInstance()->UpsertPrivateReadState(uid, peer_uid, max_peer_read_ts);
+		PostgresMgr::GetInstance()->UpsertPrivateReadState(uid, peer_uid, max_peer_read_ts);
 	}
 }
 
 void LogicSystem::UpdateGroupAnnouncementHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleUpdateGroupAnnouncement(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -2906,7 +2788,7 @@ void LogicSystem::UpdateGroupAnnouncementHandler(std::shared_ptr<CSession> sessi
 	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
 	rtvalue["announcement"] = announcement;
 	std::shared_ptr<GroupInfo> group_info;
-	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
+	PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
 	if (group_info) {
 		rtvalue["group_code"] = group_info->group_code;
 	}
@@ -2914,13 +2796,13 @@ void LogicSystem::UpdateGroupAnnouncementHandler(std::shared_ptr<CSession> sessi
 		session->Send(rtvalue.toStyledString(), ID_UPDATE_GROUP_ANNOUNCEMENT_RSP);
 		});
 
-	if (!MysqlMgr::GetInstance()->UpdateGroupAnnouncement(group_id, uid, announcement)) {
+	if (!PostgresMgr::GetInstance()->UpdateGroupAnnouncement(group_id, uid, announcement)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
-	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	PostgresMgr::GetInstance()->GetGroupMemberList(group_id, members);
 	std::vector<int> recipients;
 	for (const auto& one : members) {
 		if (one) {
@@ -2940,6 +2822,10 @@ void LogicSystem::UpdateGroupAnnouncementHandler(std::shared_ptr<CSession> sessi
 
 void LogicSystem::UpdateGroupIconHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleUpdateGroupIcon(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -2952,7 +2838,7 @@ void LogicSystem::UpdateGroupIconHandler(std::shared_ptr<CSession> session, cons
 	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
 	rtvalue["icon"] = icon;
 	std::shared_ptr<GroupInfo> group_info;
-	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
+	PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
 	if (group_info) {
 		rtvalue["group_code"] = group_info->group_code;
 	}
@@ -2965,13 +2851,13 @@ void LogicSystem::UpdateGroupIconHandler(std::shared_ptr<CSession> session, cons
 		return;
 	}
 
-	if (!MysqlMgr::GetInstance()->UpdateGroupIcon(group_id, uid, icon)) {
+	if (!PostgresMgr::GetInstance()->UpdateGroupIcon(group_id, uid, icon)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
-	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	PostgresMgr::GetInstance()->GetGroupMemberList(group_id, members);
 	std::vector<int> recipients;
 	for (const auto& one : members) {
 		if (one) {
@@ -2991,6 +2877,10 @@ void LogicSystem::UpdateGroupIconHandler(std::shared_ptr<CSession> session, cons
 
 void LogicSystem::SetGroupAdminHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleSetGroupAdmin(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -3028,7 +2918,7 @@ void LogicSystem::SetGroupAdminHandler(std::shared_ptr<CSession> session, const 
 		requested_permission_bits = kDefaultAdminPermBits;
 	}
 	int target_uid = 0;
-	if (!MysqlMgr::GetInstance()->GetUidByUserId(target_user_id, target_uid)) {
+	if (!PostgresMgr::GetInstance()->GetUidByUserId(target_user_id, target_uid)) {
 		target_uid = 0;
 	}
 
@@ -3047,7 +2937,7 @@ void LogicSystem::SetGroupAdminHandler(std::shared_ptr<CSession> session, const 
 	rtvalue["can_ban_users"] = (requested_permission_bits & kPermBanUsers) != 0;
 	rtvalue["can_manage_topics"] = (requested_permission_bits & kPermManageTopics) != 0;
 	std::shared_ptr<GroupInfo> group_info;
-	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
+	PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
 	if (group_info) {
 		rtvalue["group_code"] = group_info->group_code;
 	}
@@ -3056,13 +2946,13 @@ void LogicSystem::SetGroupAdminHandler(std::shared_ptr<CSession> session, const 
 		});
 
 	if (target_uid <= 0 || target_user_id.empty() ||
-		!MysqlMgr::GetInstance()->SetGroupAdmin(group_id, uid, target_uid, is_admin, requested_permission_bits)) {
+		!PostgresMgr::GetInstance()->SetGroupAdmin(group_id, uid, target_uid, is_admin, requested_permission_bits)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
-	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	PostgresMgr::GetInstance()->GetGroupMemberList(group_id, members);
 	std::vector<int> recipients;
 	for (const auto& one : members) {
 		if (one) {
@@ -3091,6 +2981,10 @@ void LogicSystem::SetGroupAdminHandler(std::shared_ptr<CSession> session, const 
 
 void LogicSystem::MuteGroupMemberHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleMuteGroupMember(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -3099,7 +2993,7 @@ void LogicSystem::MuteGroupMemberHandler(std::shared_ptr<CSession> session, cons
 	const int64_t group_id = root["groupid"].asInt64();
 	const int mute_seconds = root.get("mute_seconds", 0).asInt();
 	int target_uid = 0;
-	if (!MysqlMgr::GetInstance()->GetUidByUserId(target_user_id, target_uid)) {
+	if (!PostgresMgr::GetInstance()->GetUidByUserId(target_user_id, target_uid)) {
 		target_uid = 0;
 	}
 	const auto now = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
@@ -3113,7 +3007,7 @@ void LogicSystem::MuteGroupMemberHandler(std::shared_ptr<CSession> session, cons
 	rtvalue["target_user_id"] = target_user_id;
 	rtvalue["mute_until"] = static_cast<Json::Int64>(mute_until);
 	std::shared_ptr<GroupInfo> group_info;
-	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
+	PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
 	if (group_info) {
 		rtvalue["group_code"] = group_info->group_code;
 	}
@@ -3122,13 +3016,13 @@ void LogicSystem::MuteGroupMemberHandler(std::shared_ptr<CSession> session, cons
 		});
 
 	if (target_uid <= 0 || target_user_id.empty() ||
-		!MysqlMgr::GetInstance()->MuteGroupMember(group_id, uid, target_uid, mute_until)) {
+		!PostgresMgr::GetInstance()->MuteGroupMember(group_id, uid, target_uid, mute_until)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
-	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	PostgresMgr::GetInstance()->GetGroupMemberList(group_id, members);
 	std::vector<int> recipients;
 	for (const auto& one : members) {
 		if (one) {
@@ -3149,6 +3043,10 @@ void LogicSystem::MuteGroupMemberHandler(std::shared_ptr<CSession> session, cons
 
 void LogicSystem::KickGroupMemberHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleKickGroupMember(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -3156,7 +3054,7 @@ void LogicSystem::KickGroupMemberHandler(std::shared_ptr<CSession> session, cons
 	const std::string target_user_id = root.get("target_user_id", "").asString();
 	const int64_t group_id = root["groupid"].asInt64();
 	int target_uid = 0;
-	if (!MysqlMgr::GetInstance()->GetUidByUserId(target_user_id, target_uid)) {
+	if (!PostgresMgr::GetInstance()->GetUidByUserId(target_user_id, target_uid)) {
 		target_uid = 0;
 	}
 
@@ -3166,7 +3064,7 @@ void LogicSystem::KickGroupMemberHandler(std::shared_ptr<CSession> session, cons
 	rtvalue["touid"] = target_uid;
 	rtvalue["target_user_id"] = target_user_id;
 	std::shared_ptr<GroupInfo> group_info;
-	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
+	PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
 	if (group_info) {
 		rtvalue["group_code"] = group_info->group_code;
 	}
@@ -3175,13 +3073,13 @@ void LogicSystem::KickGroupMemberHandler(std::shared_ptr<CSession> session, cons
 		});
 
 	if (target_uid <= 0 || target_user_id.empty() ||
-		!MysqlMgr::GetInstance()->KickGroupMember(group_id, uid, target_uid)) {
+		!PostgresMgr::GetInstance()->KickGroupMember(group_id, uid, target_uid)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
-	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	PostgresMgr::GetInstance()->GetGroupMemberList(group_id, members);
 	std::vector<int> recipients;
 	for (const auto& one : members) {
 		if (one) {
@@ -3203,6 +3101,10 @@ void LogicSystem::KickGroupMemberHandler(std::shared_ptr<CSession> session, cons
 
 void LogicSystem::QuitGroupHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
 {
+	if (_group_message_service) {
+		_group_message_service->HandleQuitGroup(session, msg_id, msg_data);
+		return;
+	}
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
@@ -3213,7 +3115,7 @@ void LogicSystem::QuitGroupHandler(std::shared_ptr<CSession> session, const shor
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
 	std::shared_ptr<GroupInfo> group_info;
-	MysqlMgr::GetInstance()->GetGroupById(group_id, group_info);
+	PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
 	if (group_info) {
 		rtvalue["group_code"] = group_info->group_code;
 	}
@@ -3221,13 +3123,13 @@ void LogicSystem::QuitGroupHandler(std::shared_ptr<CSession> session, const shor
 		session->Send(rtvalue.toStyledString(), ID_QUIT_GROUP_RSP);
 		});
 
-	if (!MysqlMgr::GetInstance()->QuitGroup(group_id, uid)) {
+	if (!PostgresMgr::GetInstance()->QuitGroup(group_id, uid)) {
 		rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
 		return;
 	}
 
 	std::vector<std::shared_ptr<GroupMemberInfo>> members;
-	MysqlMgr::GetInstance()->GetGroupMemberList(group_id, members);
+	PostgresMgr::GetInstance()->GetGroupMemberList(group_id, members);
 	std::vector<int> recipients;
 	for (const auto& one : members) {
 		if (one) {

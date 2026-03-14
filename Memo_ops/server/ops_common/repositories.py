@@ -71,7 +71,7 @@ def list_recent_service_snapshots(conn) -> list[dict]:
         SELECT service_name, instance_name, observed_at, cpu_percent, memory_rss_bytes, online_users,
                qps, error_rate, latency_p95_ms, port_up, status
           FROM ops_service_snapshot
-         WHERE observed_at >= UTC_TIMESTAMP() - INTERVAL 15 MINUTE
+         WHERE observed_at >= CURRENT_TIMESTAMP - INTERVAL '15 minutes'
          ORDER BY observed_at DESC, service_name, instance_name
         """
     )
@@ -111,7 +111,7 @@ def list_recent_alert_source_snapshots(conn) -> list[dict]:
         """
         SELECT service_name, instance_name, cpu_percent, error_rate, status
           FROM ops_service_snapshot
-         WHERE observed_at >= UTC_TIMESTAMP() - INTERVAL 5 MINUTE
+         WHERE observed_at >= CURRENT_TIMESTAMP - INTERVAL '5 minutes'
          ORDER BY observed_at DESC
         """
     )
@@ -159,12 +159,12 @@ def summarize_alert_rows(conn) -> list[dict]:
           FROM (
             SELECT 'critical' AS severity, service_name, instance_name
               FROM ops_service_snapshot
-             WHERE observed_at >= UTC_TIMESTAMP() - INTERVAL 10 MINUTE
+             WHERE observed_at >= CURRENT_TIMESTAMP - INTERVAL '10 minutes'
                AND status <> 'up'
             UNION ALL
             SELECT 'warning' AS severity, service_name, instance_name
               FROM ops_service_snapshot
-             WHERE observed_at >= UTC_TIMESTAMP() - INTERVAL 10 MINUTE
+             WHERE observed_at >= CURRENT_TIMESTAMP - INTERVAL '10 minutes'
                AND (cpu_percent >= 85 OR error_rate >= 0.25)
           ) alerts
          GROUP BY severity
@@ -179,7 +179,7 @@ def list_top_error_services(conn, limit: int = 6) -> list[dict]:
         SELECT service_name,
                SUM(CASE WHEN level IN ('error','fatal','critical') THEN 1 ELSE 0 END) AS error_count
           FROM ops_log_event_index
-         WHERE ts_utc >= UTC_TIMESTAMP() - INTERVAL 1 HOUR
+         WHERE ts_utc >= CURRENT_TIMESTAMP - INTERVAL '1 hour'
          GROUP BY service_name
          ORDER BY error_count DESC, service_name
          LIMIT %s
@@ -195,7 +195,7 @@ def list_monitoring_overview_service_snapshots(conn) -> list[dict]:
         SELECT service_name, instance_name, observed_at, cpu_percent, memory_rss_bytes,
                online_users, qps, error_rate, latency_p95_ms, port_up, status
           FROM ops_service_snapshot
-         WHERE observed_at >= UTC_TIMESTAMP() - INTERVAL 10 MINUTE
+         WHERE observed_at >= CURRENT_TIMESTAMP - INTERVAL '10 minutes'
          ORDER BY observed_at DESC
         """
     )
@@ -207,7 +207,7 @@ def list_monitoring_overview_recent_log_counts(conn) -> list[dict]:
         """
         SELECT service_name, COUNT(*) AS count_rows
           FROM ops_log_event_index
-         WHERE ts_utc >= UTC_TIMESTAMP() - INTERVAL 60 MINUTE
+         WHERE ts_utc >= CURRENT_TIMESTAMP - INTERVAL '60 minutes'
          GROUP BY service_name
         """
     )

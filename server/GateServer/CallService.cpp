@@ -2,7 +2,7 @@
 
 #include "ChatGrpcClient.h"
 #include "ConfigMgr.h"
-#include "MysqlMgr.h"
+#include "PostgresMgr.h"
 #include "RedisMgr.h"
 #include "logging/Logger.h"
 #include <boost/uuid/uuid_generators.hpp>
@@ -174,7 +174,7 @@ bool CallService::LoadSession(const std::string& call_id, CallSessionInfo& sessi
             return !session.call_id.empty();
         }
     }
-    return MysqlMgr::GetInstance()->GetCallSession(call_id, session);
+    return PostgresMgr::GetInstance()->GetCallSession(call_id, session);
 }
 
 bool CallService::SaveSession(const CallSessionInfo& session, int ttl_seconds) const
@@ -200,7 +200,7 @@ bool CallService::SaveSession(const CallSessionInfo& session, int ttl_seconds) c
     } else {
         RedisMgr::GetInstance()->Set(std::string(CALL_SESSION_PREFIX) + session.call_id, payload);
     }
-    return MysqlMgr::GetInstance()->UpsertCallSession(session);
+    return PostgresMgr::GetInstance()->UpsertCallSession(session);
 }
 
 void CallService::ClearBusyState(const CallSessionInfo& session) const
@@ -329,7 +329,7 @@ bool CallService::StartCall(const Json::Value& request, Json::Value& response, c
         response["error"] = ErrorCodes::Error_Json;
         return true;
     }
-    if (!MysqlMgr::GetInstance()->IsFriend(uid, peer_uid) || !MysqlMgr::GetInstance()->IsFriend(peer_uid, uid)) {
+    if (!PostgresMgr::GetInstance()->IsFriend(uid, peer_uid) || !PostgresMgr::GetInstance()->IsFriend(peer_uid, uid)) {
         response["error"] = ErrorCodes::CallPermissionDenied;
         return true;
     }
@@ -347,8 +347,8 @@ bool CallService::StartCall(const Json::Value& request, Json::Value& response, c
 
     CallUserProfile caller;
     CallUserProfile callee;
-    if (!MysqlMgr::GetInstance()->GetCallUserProfile(uid, caller) ||
-        !MysqlMgr::GetInstance()->GetCallUserProfile(peer_uid, callee)) {
+    if (!PostgresMgr::GetInstance()->GetCallUserProfile(uid, caller) ||
+        !PostgresMgr::GetInstance()->GetCallUserProfile(peer_uid, callee)) {
         response["error"] = ErrorCodes::UidInvalid;
         return true;
     }
@@ -403,8 +403,8 @@ bool CallService::AcceptCall(const Json::Value& request, Json::Value& response, 
     }
     CallUserProfile caller;
     CallUserProfile callee;
-    MysqlMgr::GetInstance()->GetCallUserProfile(session.caller_uid, caller);
-    MysqlMgr::GetInstance()->GetCallUserProfile(session.callee_uid, callee);
+    PostgresMgr::GetInstance()->GetCallUserProfile(session.caller_uid, caller);
+    PostgresMgr::GetInstance()->GetCallUserProfile(session.callee_uid, callee);
     session.state = "accepted";
     session.accepted_at_ms = NowMs();
     session.updated_at_ms = session.accepted_at_ms;
@@ -442,8 +442,8 @@ bool CallService::RejectCall(const Json::Value& request, Json::Value& response, 
     }
     CallUserProfile caller;
     CallUserProfile callee;
-    MysqlMgr::GetInstance()->GetCallUserProfile(session.caller_uid, caller);
-    MysqlMgr::GetInstance()->GetCallUserProfile(session.callee_uid, callee);
+    PostgresMgr::GetInstance()->GetCallUserProfile(session.caller_uid, caller);
+    PostgresMgr::GetInstance()->GetCallUserProfile(session.callee_uid, callee);
     session.state = "rejected";
     session.reason = "rejected";
     session.ended_at_ms = NowMs();
@@ -481,8 +481,8 @@ bool CallService::CancelCall(const Json::Value& request, Json::Value& response, 
     const auto now_ms = NowMs();
     CallUserProfile caller;
     CallUserProfile callee;
-    MysqlMgr::GetInstance()->GetCallUserProfile(session.caller_uid, caller);
-    MysqlMgr::GetInstance()->GetCallUserProfile(session.callee_uid, callee);
+    PostgresMgr::GetInstance()->GetCallUserProfile(session.caller_uid, caller);
+    PostgresMgr::GetInstance()->GetCallUserProfile(session.callee_uid, callee);
     session.state = now_ms > session.expires_at_ms ? "timeout" : "cancelled";
     session.reason = session.state;
     session.ended_at_ms = now_ms;
@@ -519,8 +519,8 @@ bool CallService::HangupCall(const Json::Value& request, Json::Value& response, 
     }
     CallUserProfile caller;
     CallUserProfile callee;
-    MysqlMgr::GetInstance()->GetCallUserProfile(session.caller_uid, caller);
-    MysqlMgr::GetInstance()->GetCallUserProfile(session.callee_uid, callee);
+    PostgresMgr::GetInstance()->GetCallUserProfile(session.caller_uid, caller);
+    PostgresMgr::GetInstance()->GetCallUserProfile(session.callee_uid, callee);
     session.state = "ended";
     session.reason = "hangup";
     session.ended_at_ms = NowMs();

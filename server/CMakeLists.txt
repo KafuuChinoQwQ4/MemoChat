@@ -15,8 +15,7 @@ find_package(jsoncpp CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(bsoncxx CONFIG REQUIRED)
 find_package(mongocxx CONFIG REQUIRED)
-find_package(unofficial-libmysql CONFIG REQUIRED)
-find_package(unofficial-mysql-connector-cpp CONFIG REQUIRED)
+find_package(libpqxx CONFIG REQUIRED)
 
 if(TARGET spdlog::spdlog)
     set(MEMOCHAT_SPDLOG_TARGET spdlog::spdlog)
@@ -40,6 +39,12 @@ elseif(TARGET mongo::bsoncxx_static)
     set(MEMOCHAT_BSONCXX_TARGET mongo::bsoncxx_static)
 else()
     message(FATAL_ERROR "bsoncxx target not found")
+endif()
+
+if(TARGET libpqxx::pqxx)
+    set(MEMOCHAT_PQXX_TARGET libpqxx::pqxx)
+else()
+    message(FATAL_ERROR "libpqxx target not found")
 endif()
 
 if(NOT TARGET protobuf::protoc)
@@ -67,6 +72,57 @@ target_link_libraries(memochat_logging PUBLIC
     ${MEMOCHAT_SPDLOG_TARGET}
 )
 
+add_library(memochat_runtime STATIC
+    common/runtime/IniConfig.cpp
+    common/runtime/IoContextPool.cpp
+)
+target_compile_features(memochat_runtime PUBLIC cxx_std_17)
+target_include_directories(memochat_runtime PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+)
+target_link_libraries(memochat_runtime PUBLIC
+    Boost::filesystem
+)
+
+set(MEMOCHAT_PROTO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+set(MEMOCHAT_PROTO_SRC "${CMAKE_CURRENT_SOURCE_DIR}/common/proto/message.proto")
+set(MEMOCHAT_PROTO_GEN_DIR "${CMAKE_BINARY_DIR}/generated")
+set(MEMOCHAT_PROTO_CC "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/message.pb.cc")
+set(MEMOCHAT_PROTO_H "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/message.pb.h")
+set(MEMOCHAT_GRPC_CC "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/message.grpc.pb.cc")
+set(MEMOCHAT_GRPC_H "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/message.grpc.pb.h")
+
+add_custom_command(
+    OUTPUT
+        "${MEMOCHAT_PROTO_CC}"
+        "${MEMOCHAT_PROTO_H}"
+        "${MEMOCHAT_GRPC_CC}"
+        "${MEMOCHAT_GRPC_H}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${MEMOCHAT_PROTO_GEN_DIR}/common/proto"
+    COMMAND $<TARGET_FILE:protobuf::protoc> --proto_path=${MEMOCHAT_PROTO_ROOT} --cpp_out=${MEMOCHAT_PROTO_GEN_DIR} ${MEMOCHAT_PROTO_SRC}
+    COMMAND $<TARGET_FILE:protobuf::protoc> --proto_path=${MEMOCHAT_PROTO_ROOT} --grpc_out=${MEMOCHAT_PROTO_GEN_DIR} --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin> ${MEMOCHAT_PROTO_SRC}
+    DEPENDS
+        "${MEMOCHAT_PROTO_SRC}"
+        protobuf::protoc
+        gRPC::grpc_cpp_plugin
+    VERBATIM
+)
+
+add_library(memochat_proto STATIC
+    "${MEMOCHAT_PROTO_CC}"
+    "${MEMOCHAT_PROTO_H}"
+    "${MEMOCHAT_GRPC_CC}"
+    "${MEMOCHAT_GRPC_H}"
+)
+target_compile_features(memochat_proto PUBLIC cxx_std_17)
+target_include_directories(memochat_proto PUBLIC
+    ${MEMOCHAT_PROTO_GEN_DIR}
+)
+target_link_libraries(memochat_proto PUBLIC
+    gRPC::grpc++
+    protobuf::libprotobuf
+)
+
 add_library(memochat_server_deps INTERFACE)
 target_compile_features(memochat_server_deps INTERFACE cxx_std_17)
 target_include_directories(memochat_server_deps INTERFACE
@@ -74,6 +130,8 @@ target_include_directories(memochat_server_deps INTERFACE
 )
 target_link_libraries(memochat_server_deps INTERFACE
     memochat_logging
+    memochat_runtime
+    memochat_proto
     Boost::filesystem
     gRPC::grpc++
     gRPC::grpc++_reflection
@@ -81,8 +139,6 @@ target_link_libraries(memochat_server_deps INTERFACE
     hiredis::hiredis
     JsonCpp::JsonCpp
     ${MEMOCHAT_SPDLOG_TARGET}
-    unofficial::libmysql::libmysql
-    unofficial::mysql-connector-cpp::connector-jdbc
     ws2_32
     crypt32
     advapi32
@@ -92,37 +148,6 @@ target_link_libraries(memochat_server_deps INTERFACE
 if(WIN32)
     target_link_libraries(memochat_server_deps INTERFACE bcrypt)
 endif()
-
-function(memochat_add_proto_sources target_name proto_file)
-    get_filename_component(proto_name "${proto_file}" NAME_WE)
-    set(proto_source "${CMAKE_CURRENT_SOURCE_DIR}/${proto_file}")
-    set(proto_cc "${CMAKE_CURRENT_SOURCE_DIR}/${proto_name}.pb.cc")
-    set(proto_h "${CMAKE_CURRENT_SOURCE_DIR}/${proto_name}.pb.h")
-    set(grpc_cc "${CMAKE_CURRENT_SOURCE_DIR}/${proto_name}.grpc.pb.cc")
-    set(grpc_h "${CMAKE_CURRENT_SOURCE_DIR}/${proto_name}.grpc.pb.h")
-
-    add_custom_command(
-        OUTPUT
-            "${proto_cc}"
-            "${proto_h}"
-            "${grpc_cc}"
-            "${grpc_h}"
-        COMMAND $<TARGET_FILE:protobuf::protoc> --proto_path=${CMAKE_CURRENT_SOURCE_DIR} --cpp_out=${CMAKE_CURRENT_SOURCE_DIR} ${proto_source}
-        COMMAND $<TARGET_FILE:protobuf::protoc> --proto_path=${CMAKE_CURRENT_SOURCE_DIR} --grpc_out=${CMAKE_CURRENT_SOURCE_DIR} --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin> ${proto_source}
-        DEPENDS
-            "${proto_source}"
-            protobuf::protoc
-            gRPC::grpc_cpp_plugin
-        VERBATIM
-    )
-
-    target_sources(${target_name} PRIVATE
-        "${proto_cc}"
-        "${proto_h}"
-        "${grpc_cc}"
-        "${grpc_h}"
-    )
-endfunction()
 
 function(memochat_configure_server_target target_name)
     target_link_libraries(${target_name} PRIVATE memochat_server_deps)

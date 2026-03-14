@@ -128,7 +128,7 @@ def _insert_snapshot(conn, snapshot: dict) -> None:
             service_name, instance_name, observed_at, process_count, cpu_percent,
             memory_rss_bytes, online_users, qps, error_rate, latency_p95_ms,
             port_up, status, details_json
-        ) VALUES (%s, %s, UTC_TIMESTAMP(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ) VALUES (%s, %s, CURRENT_TIMESTAMP, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
         """,
         (
             snapshot["service_name"],
@@ -150,15 +150,15 @@ def _insert_snapshot(conn, snapshot: dict) -> None:
         INSERT INTO ops_service_metric_minute(
             service_name, instance_name, minute_utc, cpu_percent_avg, memory_rss_bytes_avg,
             online_users_avg, qps_avg, error_rate_avg, latency_p95_ms_avg, samples
-        ) VALUES (%s, %s, DATE_FORMAT(UTC_TIMESTAMP(), '%%Y-%%m-%%d %%H:%%i:00'), %s, %s, %s, %s, %s, %s, 1)
-        ON DUPLICATE KEY UPDATE
-            cpu_percent_avg=((cpu_percent_avg*samples)+VALUES(cpu_percent_avg))/(samples+1),
-            memory_rss_bytes_avg=((memory_rss_bytes_avg*samples)+VALUES(memory_rss_bytes_avg))/(samples+1),
-            online_users_avg=((online_users_avg*samples)+VALUES(online_users_avg))/(samples+1),
-            qps_avg=((qps_avg*samples)+VALUES(qps_avg))/(samples+1),
-            error_rate_avg=((error_rate_avg*samples)+VALUES(error_rate_avg))/(samples+1),
-            latency_p95_ms_avg=((latency_p95_ms_avg*samples)+VALUES(latency_p95_ms_avg))/(samples+1),
-            samples=samples+1
+        ) VALUES (%s, %s, date_trunc('minute', CURRENT_TIMESTAMP), %s, %s, %s, %s, %s, %s, 1)
+        ON CONFLICT (service_name, instance_name, minute_utc) DO UPDATE
+        SET cpu_percent_avg=((ops_service_metric_minute.cpu_percent_avg*ops_service_metric_minute.samples)+EXCLUDED.cpu_percent_avg)/(ops_service_metric_minute.samples+1),
+            memory_rss_bytes_avg=((ops_service_metric_minute.memory_rss_bytes_avg*ops_service_metric_minute.samples)+EXCLUDED.memory_rss_bytes_avg)/(ops_service_metric_minute.samples+1),
+            online_users_avg=((ops_service_metric_minute.online_users_avg*ops_service_metric_minute.samples)+EXCLUDED.online_users_avg)/(ops_service_metric_minute.samples+1),
+            qps_avg=((ops_service_metric_minute.qps_avg*ops_service_metric_minute.samples)+EXCLUDED.qps_avg)/(ops_service_metric_minute.samples+1),
+            error_rate_avg=((ops_service_metric_minute.error_rate_avg*ops_service_metric_minute.samples)+EXCLUDED.error_rate_avg)/(ops_service_metric_minute.samples+1),
+            latency_p95_ms_avg=((ops_service_metric_minute.latency_p95_ms_avg*ops_service_metric_minute.samples)+EXCLUDED.latency_p95_ms_avg)/(ops_service_metric_minute.samples+1),
+            samples=ops_service_metric_minute.samples+1
         """,
         (
             snapshot["service_name"],
@@ -190,7 +190,7 @@ def cached_overview(config: dict) -> dict[str, object]:
     cached = get_json_cache(client, prefixed_key(redis_cfg, "overview"))
     if cached:
         return cached
-    with mysql_conn(config["mysql"]) as conn:
+    with mysql_conn(config["postgresql"]) as conn:
         overview = build_overview(conn, config)
     set_json_cache(client, prefixed_key(redis_cfg, "overview"), overview, 30)
     return overview
@@ -204,7 +204,7 @@ def collect_snapshots(config: dict) -> list[dict]:
     for descriptor in descriptors:
         process_stats = _process_stats(descriptor.process_match)
         port_up = _check_port(descriptor.host, descriptor.port)
-        with mysql_conn(config["mysql"]) as conn:
+        with mysql_conn(config["postgresql"]) as conn:
             log_metrics = _recent_log_metrics(conn, descriptor.service_name, descriptor.instance_name)
         online_users = 0
         if descriptor.service_name == "ChatServer":
@@ -228,14 +228,14 @@ def collect_snapshots(config: dict) -> list[dict]:
                 "service_type": descriptor.service_type,
             },
         }
-        with mysql_conn(config["mysql"]) as conn:
+        with mysql_conn(config["postgresql"]) as conn:
             _insert_snapshot(conn, snapshot)
         set_json_cache(redis_handle, prefixed_key(redis_cfg, f"service:{descriptor.instance_name}:current"), snapshot, 60)
         snapshots.append(snapshot)
 
     alerts = build_active_alerts(config, snapshots)
     set_json_cache(redis_handle, prefixed_key(redis_cfg, "alerts:active"), alerts, 60)
-    with mysql_conn(config["mysql"]) as conn:
+    with mysql_conn(config["postgresql"]) as conn:
         overview = build_overview(conn, config)
     set_json_cache(redis_handle, prefixed_key(redis_cfg, "overview"), overview, 60)
     return snapshots

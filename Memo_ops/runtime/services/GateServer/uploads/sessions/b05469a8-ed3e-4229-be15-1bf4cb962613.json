@@ -1,0 +1,13 @@
+{
+	"chunk_size" : 4194304,
+	"created_at" : 1773494635929,
+	"expires_at" : 1773581035929,
+	"file_name" : "memochat-load-5yx_79dn.jpg",
+	"file_size" : 131072,
+	"media_type" : "image",
+	"mime" : "image/jpeg",
+	"storage_provider" : "local",
+	"total_chunks" : 1,
+	"uid" : 1067,
+	"upload_id" : "b05469a8-ed3e-4229-be15-1bf4cb962613"
+}

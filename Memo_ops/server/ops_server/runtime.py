@@ -5,7 +5,7 @@ from typing import Callable
 
 from Memo_ops.server.ops_common.config import load_yaml_config
 from Memo_ops.server.ops_common.schema import init_schema
-from Memo_ops.server.ops_common.storage import mysql_conn
+from Memo_ops.server.ops_common.storage import postgres_conn
 
 
 DEFAULT_CONFIG = Path(__file__).resolve().parents[2] / "config" / "opsserver.yaml"
@@ -27,7 +27,7 @@ class OpsServerRuntime:
         if self.startup_state["schema_ready"]:
             return
         try:
-            init_schema(self.config["mysql"])
+            init_schema(self.config["postgresql"])
             self.startup_state["schema_ready"] = True
             self.startup_state["startup_error"] = ""
         except Exception as exc:
@@ -43,7 +43,7 @@ class OpsServerRuntime:
 
     def with_conn(self, action: Callable) -> dict:
         def wrapped():
-            with mysql_conn(self.config["mysql"]) as conn:
+            with postgres_conn(self.config["postgresql"]) as conn:
                 return action(conn)
 
         return self.guarded(wrapped)

@@ -10,7 +10,7 @@
 #include "ConfigMgr.h"
 #include <hiredis/hiredis.h>
 #include "RedisMgr.h"
-#include "MysqlMgr.h"
+#include "PostgresMgr.h"
 #include "AsioIOServicePool.h"
 #include "logging/LogConfig.h"
 #include "logging/Logger.h"
@@ -128,8 +128,8 @@ void TestRedisMgr() {
 	assert(RedisMgr::GetInstance()->LPop("lpushkey2", value)==false);
 }
 
-void TestMysqlMgr() {
-	int id = MysqlMgr::GetInstance()->RegUser("wwc","secondtonone1@163.com","123456",": / res / head_1.jpg");
+void TestPostgresMgr() {
+	int id = PostgresMgr::GetInstance()->RegUser("wwc","secondtonone1@163.com","123456",": / res / head_1.jpg");
 	std::cout << "id  is " << id << std::endl;
 }
 
@@ -148,12 +148,12 @@ int main()
 			});
 		memolog::Logger::Init("GateServer", log_cfg);
 		memolog::Telemetry::Init("GateServer", telemetry_cfg);
-		const auto mysql_init_start = std::chrono::steady_clock::now();
-		MysqlMgr::GetInstance();
-		memolog::LogInfo("service.mysql_ready", "GateServer mysql ready",
+		const auto postgres_init_start = std::chrono::steady_clock::now();
+		PostgresMgr::GetInstance();
+		memolog::LogInfo("service.postgres_ready", "GateServer postgres ready",
 			{
-				{"mysql_init_ms", std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
-					std::chrono::steady_clock::now() - mysql_init_start).count())}
+				{"postgres_init_ms", std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - postgres_init_start).count())}
 			});
 		RedisMgr::GetInstance();
 		std::string gate_port_str = gCfgMgr["GateServer"]["Port"];

@@ -4,21 +4,22 @@ import json
 from contextlib import contextmanager
 from typing import Any, Dict, Iterable, Iterator, Optional
 
-import pymysql
+import psycopg
 import redis
-from pymysql.cursors import DictCursor
+from psycopg.rows import dict_row
 
 
 @contextmanager
-def mysql_conn(mysql_cfg: Dict[str, Any]) -> Iterator[pymysql.connections.Connection]:
-    conn = pymysql.connect(
-        host=str(mysql_cfg["host"]),
-        port=int(mysql_cfg["port"]),
-        user=str(mysql_cfg["user"]),
-        password=str(mysql_cfg["password"]),
-        database=str(mysql_cfg["schema"]),
-        charset=str(mysql_cfg.get("charset", "utf8mb4")),
-        cursorclass=DictCursor,
+def postgres_conn(pg_cfg: Dict[str, Any]) -> Iterator[psycopg.Connection]:
+    conn = psycopg.connect(
+        host=str(pg_cfg["host"]),
+        port=int(pg_cfg["port"]),
+        user=str(pg_cfg["user"]),
+        password=str(pg_cfg["password"]),
+        dbname=str(pg_cfg["database"]),
+        options=f"-c search_path={pg_cfg.get('schema', 'public')},public",
+        sslmode=str(pg_cfg.get("sslmode", "disable")),
+        row_factory=dict_row,
         autocommit=False,
     )
     try:
@@ -29,6 +30,13 @@ def mysql_conn(mysql_cfg: Dict[str, Any]) -> Iterator[pymysql.connections.Connec
         raise
     finally:
         conn.close()
+
+
+@contextmanager
+def mysql_conn(mysql_cfg: Dict[str, Any]) -> Iterator[psycopg.Connection]:
+    # Compatibility alias for existing callers while the codebase finishes renaming to postgresql/postgres_conn.
+    with postgres_conn(mysql_cfg) as conn:
+        yield conn
 
 
 def redis_client(redis_cfg: Dict[str, Any]) -> redis.Redis:
@@ -46,21 +54,22 @@ def prefixed_key(redis_cfg: Dict[str, Any], suffix: str) -> str:
     return f"{prefix}:{suffix}"
 
 
-def fetch_all(conn: pymysql.connections.Connection, sql: str, params: Optional[Iterable[Any]] = None):
+def fetch_all(conn: psycopg.Connection, sql: str, params: Optional[Iterable[Any]] = None):
     with conn.cursor() as cur:
         cur.execute(sql, tuple(params or ()))
         return list(cur.fetchall())
 
 
-def fetch_one(conn: pymysql.connections.Connection, sql: str, params: Optional[Iterable[Any]] = None):
+def fetch_one(conn: psycopg.Connection, sql: str, params: Optional[Iterable[Any]] = None):
     with conn.cursor() as cur:
         cur.execute(sql, tuple(params or ()))
         return cur.fetchone()
 
 
-def execute(conn: pymysql.connections.Connection, sql: str, params: Optional[Iterable[Any]] = None) -> int:
+def execute(conn: psycopg.Connection, sql: str, params: Optional[Iterable[Any]] = None) -> int:
     with conn.cursor() as cur:
-        return cur.execute(sql, tuple(params or ()))
+        cur.execute(sql, tuple(params or ()))
+        return cur.rowcount
 
 
 def set_json_cache(client: redis.Redis, key: str, value: Any, expire_seconds: int = 300) -> None:

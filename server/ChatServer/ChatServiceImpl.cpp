@@ -9,7 +9,7 @@
 #include <json/reader.h>
 #include <chrono>
 #include "RedisMgr.h"
-#include "MysqlMgr.h"
+#include "PostgresMgr.h"
 #include "MongoMgr.h"
 
 ChatServiceImpl::ChatServiceImpl()
@@ -43,7 +43,7 @@ Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendR
     rtvalue["icon"] = request->icon();
     rtvalue["sex"] = request->sex();
     rtvalue["nick"] = request->nick();
-    auto apply_info = MysqlMgr::GetInstance()->GetUser(request->applyuid());
+    auto apply_info = PostgresMgr::GetInstance()->GetUser(request->applyuid());
     if (apply_info) {
         rtvalue["user_id"] = apply_info->user_id;
     }
@@ -125,7 +125,7 @@ Status ChatServiceImpl::NotifyTextChatMsg(::grpc::ServerContext* context,
         std::shared_ptr<PrivateMessageInfo> private_msg;
         int64_t created_at = 0;
         if ((MongoMgr::GetInstance()->Enabled() && MongoMgr::GetInstance()->GetPrivateMessageByMsgId(msg.msgid(), private_msg) && private_msg) ||
-            (MysqlMgr::GetInstance()->GetPrivateMessageByMsgId(msg.msgid(), private_msg) && private_msg)) {
+            (PostgresMgr::GetInstance()->GetPrivateMessageByMsgId(msg.msgid(), private_msg) && private_msg)) {
             created_at = private_msg->created_at;
         }
         if (created_at <= 0) {
@@ -162,7 +162,7 @@ bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr
     }
     else {
         std::shared_ptr<UserInfo> user_info = nullptr;
-        user_info = MysqlMgr::GetInstance()->GetUser(uid);
+        user_info = PostgresMgr::GetInstance()->GetUser(uid);
         if (user_info == nullptr) {
             return false;
         }

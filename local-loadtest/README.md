@@ -17,7 +17,7 @@ Location: `d:\MemoChat-Qml-Drogon\local-loadtest`
   - `media_load.py`
   - `tcp_call_invite_load.py`
 - New capacity load tests:
-  - `mysql_capacity_load.py`
+  - `postgresql_capacity_load.py`
   - `redis_capacity_load.py`
 - Shared helpers:
   - `memochat_load_common.py`
@@ -27,13 +27,13 @@ Location: `d:\MemoChat-Qml-Drogon\local-loadtest`
 
 ## Prerequisites
 - Python 3.8+
-- Python packages: `pymysql`, `redis`
+- Python packages: `psycopg[binary]`, `pymysql`, `redis`
 - MemoChat services started:
   - `GateServer`
   - `StatusServer`
   - Configured `ChatServer` node set
   - `VarifyServer`
-- Local MySQL and Redis should match `config.json`
+- Local PostgreSQL and Redis should match `config.json`
 
 ## Accounts
 Recommended flow:
@@ -54,10 +54,10 @@ u2@example.com,pass2,load_user_2,,,,seed
 `config.json` now includes:
 - shared gate and account settings
 - mutable runtime account CSV path
-- MySQL and Redis direct connection settings
-- per-scenario settings for auth, friendship, group, history, media, call, MySQL, and Redis
+- PostgreSQL and Redis direct connection settings
+- per-scenario settings for auth, friendship, group, history, media, call, PostgreSQL, and Redis
 
-The suite is allowed to mutate local dev MySQL and Redis. It does not auto-clean data in v1.
+The suite is allowed to mutate local dev PostgreSQL and Redis. It does not auto-clean data in v1.
 
 ## Run Individual Tests
 Examples:
@@ -71,7 +71,7 @@ python .\tcp_group_ops_load.py --config .\config.json --accounts-csv .\accounts.
 python .\tcp_history_ack_load.py --config .\config.json --accounts-csv .\accounts.local.csv
 python .\media_load.py --config .\config.json --accounts-csv .\accounts.local.csv
 python .\tcp_call_invite_load.py --config .\config.json --accounts-csv .\accounts.local.csv
-python .\mysql_capacity_load.py --config .\config.json --accounts-csv .\accounts.local.csv
+python .\postgresql_capacity_load.py --config .\config.json --accounts-csv .\accounts.local.csv
 python .\redis_capacity_load.py --config .\config.json
 ```
 
@@ -84,7 +84,7 @@ Supported scenarios:
 - `history`
 - `media`
 - `call`
-- `mysql`
+- `postgresql`
 - `redis`
 - `all`
 
@@ -104,7 +104,7 @@ Examples:
 5. history and read ack
 6. media upload and download
 7. call invite
-8. MySQL capacity
+8. PostgreSQL capacity
 9. Redis capacity
 
 ## Reports And Logs
@@ -132,5 +132,5 @@ Examples:
 ## Notes
 - Passwords can still use XOR encoding via `use_xor_passwd=true`
 - Auth and business tests may create accounts, friendships, groups, messages, read state rows, and media assets
-- MySQL and Redis capacity tests are business-shaped synthetic workloads, not empty benchmark loops
+- PostgreSQL and Redis capacity tests are business-shaped synthetic workloads, not empty benchmark loops
 - Chat prerequisites are now config-driven by `server/StatusServer/config.ini` `[Cluster]`, not fixed to exactly two chat nodes

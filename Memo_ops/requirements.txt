@@ -2,6 +2,7 @@ fastapi==0.110.0
 uvicorn==0.29.0
 prometheus-client==0.20.0
 pymysql==1.1.0
+psycopg[binary]==3.2.6
 redis==5.0.1
 PyYAML==6.0.1
 psutil==5.9.8

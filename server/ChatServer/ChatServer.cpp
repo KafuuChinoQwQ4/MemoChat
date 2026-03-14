@@ -10,9 +10,10 @@
 #include "AsioIOServicePool.h"
 #include "CServer.h"
 #include "ConfigMgr.h"
-#include "MysqlMgr.h"
+#include "PostgresMgr.h"
 #include "RedisMgr.h"
 #include "ChatServiceImpl.h"
+#include "ChatRuntime.h"
 #include "const.h"
 #include "cluster/ChatClusterDiscovery.h"
 #include "logging/LogConfig.h"
@@ -126,13 +127,13 @@ int main(int argc, char** argv)
 		memolog::Logger::Init("ChatServer", log_cfg);
 		memolog::Telemetry::Init("ChatServer", telemetry_cfg);
 		auto pool = AsioIOServicePool::GetInstance();
-		const auto mysql_init_start = std::chrono::steady_clock::now();
-		MysqlMgr::GetInstance();
-		memolog::LogInfo("service.mysql_ready", "ChatServer mysql ready",
+		const auto storage_init_start = std::chrono::steady_clock::now();
+		PostgresMgr::GetInstance();
+		memolog::LogInfo("service.postgresql_ready", "ChatServer postgresql ready",
 			{
 				{"name", server_name},
-				{"mysql_init_ms", std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
-					std::chrono::steady_clock::now() - mysql_init_start).count())}
+				{"storage_init_ms", std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - storage_init_start).count())}
 			});
 
 		CleanupTrackedOnlineState(server_name);
@@ -146,10 +147,11 @@ int main(int argc, char** argv)
 
 		boost::asio::io_context  io_context;
 		auto port_str = self_node->tcp_port;
-
-		auto pointer_server = std::make_shared<CServer>(io_context, atoi(port_str.c_str()));
-
-		pointer_server->StartTimer();
+		std::shared_ptr<CServer> pointer_server;
+		if (memochat::chatruntime::IsIngressEnabled()) {
+			pointer_server = std::make_shared<CServer>(io_context, atoi(port_str.c_str()));
+			pointer_server->StartTimer();
+		}
 
 		std::string server_address(self_node->rpc_host + ":" + self_node->rpc_port);
 		ChatServiceImpl service;
@@ -181,7 +183,9 @@ int main(int argc, char** argv)
 		io_context.run();
 
 		grpc_server_thread.join();
-		pointer_server->StopTimer();
+		if (pointer_server) {
+			pointer_server->StopTimer();
+		}
 		memolog::LogInfo("service.stop", "ChatServer stopped");
 		return 0;
 	}

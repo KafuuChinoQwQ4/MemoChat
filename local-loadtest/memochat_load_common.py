@@ -455,6 +455,21 @@ def get_mysql_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def get_postgresql_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    pg_cfg = dict(cfg.get("postgresql", {}))
+    return {
+        "host": str(pg_cfg.get("host", "127.0.0.1")),
+        "port": int(pg_cfg.get("port", 5432)),
+        "user": str(pg_cfg.get("user", "memochat")),
+        "password": str(pg_cfg.get("password", "123456")),
+        "database": str(pg_cfg.get("database", "memo_pg")),
+        "schema": str(pg_cfg.get("schema", "public")),
+        "sslmode": str(pg_cfg.get("sslmode", "disable")),
+        "connect_timeout": int(pg_cfg.get("connect_timeout_sec", 5)),
+        "autocommit": bool(pg_cfg.get("autocommit", True)),
+    }
+
+
 def get_redis_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     redis_cfg = dict(cfg.get("redis", {}))
     return {
@@ -468,6 +483,9 @@ def get_redis_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def open_mysql(cfg: Dict[str, Any]):
+    if cfg.get("postgresql"):
+        return open_postgresql(cfg)
+
     import pymysql
 
     mysql_cfg = get_mysql_config(cfg)
@@ -481,6 +499,25 @@ def open_mysql(cfg: Dict[str, Any]):
         connect_timeout=mysql_cfg["connect_timeout"],
         autocommit=mysql_cfg["autocommit"],
         cursorclass=pymysql.cursors.DictCursor,
+    )
+
+
+def open_postgresql(cfg: Dict[str, Any]):
+    import psycopg
+    from psycopg.rows import dict_row
+
+    pg_cfg = get_postgresql_config(cfg)
+    return psycopg.connect(
+        host=pg_cfg["host"],
+        port=pg_cfg["port"],
+        user=pg_cfg["user"],
+        password=pg_cfg["password"],
+        dbname=pg_cfg["database"],
+        sslmode=pg_cfg["sslmode"],
+        connect_timeout=pg_cfg["connect_timeout"],
+        options=f"-c search_path={pg_cfg['schema']},public",
+        autocommit=pg_cfg["autocommit"],
+        row_factory=dict_row,
     )
 
 
@@ -753,13 +790,32 @@ class TcpChatClient:
         raise TimeoutError(f"{self.label} timed out waiting for {sorted(expected)}")
 
 
-def chat_login_payload(uid: int, token: str, trace_id: str) -> Dict[str, Any]:
-    return {
-        "uid": int(uid),
-        "token": token,
-        "protocol_version": 2,
+def chat_protocol_version(cfg: Dict[str, Any]) -> int:
+    tcp_cfg = cfg.get("tcp_login", {})
+    try:
+        return max(2, int(tcp_cfg.get("protocol_version", 3)))
+    except Exception:
+        return 3
+
+
+def relation_bootstrap_mode(cfg: Dict[str, Any]) -> str:
+    if chat_protocol_version(cfg) >= 3:
+        return "explicit_pull"
+    return "inline"
+
+
+def chat_login_payload(cfg: Dict[str, Any], login_rsp: Dict[str, Any], trace_id: str) -> Dict[str, Any]:
+    protocol_version = chat_protocol_version(cfg)
+    payload: Dict[str, Any] = {
+        "protocol_version": protocol_version,
         "trace_id": trace_id,
     }
+    if protocol_version >= 3:
+        payload["login_ticket"] = str(login_rsp.get("login_ticket", ""))
+    else:
+        payload["uid"] = int(login_rsp.get("uid", 0))
+        payload["token"] = str(login_rsp.get("token", ""))
+    return payload
 
 
 def connect_chat_client(
@@ -775,7 +831,11 @@ def connect_chat_client(
         raise RuntimeError(f"gate login failed for {account['email']}: status={status}, body={login_rsp}")
     client = TcpChatClient(label, str(login_rsp.get("host", "127.0.0.1")), int(login_rsp.get("port", 0)), tcp_timeout)
     client.connect()
-    client.send_json(ID_CHAT_LOGIN, chat_login_payload(int(login_rsp["uid"]), str(login_rsp["token"]), trace_id))
+    payload = chat_login_payload(cfg, login_rsp, trace_id)
+    if chat_protocol_version(cfg) >= 3 and not str(payload.get("login_ticket", "")).strip():
+        client.close()
+        raise RuntimeError(f"gate login missing login_ticket for {account['email']}: {login_rsp}")
+    client.send_json(ID_CHAT_LOGIN, payload)
     recv_msg_id, body = client.recv_until([ID_CHAT_LOGIN_RSP], tcp_timeout)
     if recv_msg_id != ID_CHAT_LOGIN_RSP or int(body.get("error", -1)) != 0:
         client.close()
@@ -784,8 +844,10 @@ def connect_chat_client(
     enriched["uid"] = str(login_rsp.get("uid", ""))
     enriched["user_id"] = str(login_rsp.get("user_id", account.get("user_id", "")))
     enriched["token"] = str(login_rsp.get("token", ""))
+    enriched["login_ticket"] = str(login_rsp.get("login_ticket", ""))
     enriched["chat_host"] = str(login_rsp.get("host", ""))
     enriched["chat_port"] = str(login_rsp.get("port", ""))
+    enriched["chat_protocol_version"] = str(chat_protocol_version(cfg))
     return client, enriched
 
 
@@ -924,11 +986,11 @@ def query_all(conn, sql_text: str, params: Sequence[Any]) -> List[Dict[str, Any]
 
 
 def get_user_by_email(conn, email: str) -> Optional[Dict[str, Any]]:
-    return query_one(conn, "SELECT uid, name, email, user_id, nick, icon FROM user WHERE email = %s LIMIT 1", [email])
+    return query_one(conn, 'SELECT uid, name, email, user_id, nick, icon FROM "user" WHERE email = %s LIMIT 1', [email])
 
 
 def get_user_by_uid(conn, uid: int) -> Optional[Dict[str, Any]]:
-    return query_one(conn, "SELECT uid, name, email, user_id, nick, icon FROM user WHERE uid = %s LIMIT 1", [uid])
+    return query_one(conn, 'SELECT uid, name, email, user_id, nick, icon FROM "user" WHERE uid = %s LIMIT 1', [uid])
 
 
 def is_friend(conn, uid_a: int, uid_b: int) -> bool:

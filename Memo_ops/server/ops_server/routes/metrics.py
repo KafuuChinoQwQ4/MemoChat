@@ -12,7 +12,7 @@ from Memo_ops.server.ops_common.repositories import (
     list_recent_alert_source_snapshots,
     list_recent_service_snapshots,
 )
-from Memo_ops.server.ops_common.storage import mysql_conn, prefixed_key, redis_client
+from Memo_ops.server.ops_common.storage import postgres_conn, prefixed_key, redis_client
 from Memo_ops.server.ops_server.runtime import OpsServerRuntime
 
 
@@ -56,7 +56,7 @@ def create_metrics_router(runtime: OpsServerRuntime) -> APIRouter:
             raw = client.get(prefixed_key(runtime.config["redis"], "alerts:active"))
             if raw:
                 return {"items": json.loads(raw)}
-            with mysql_conn(runtime.config["mysql"]) as conn:
+            with postgres_conn(runtime.config["postgresql"]) as conn:
                 snapshots = list_recent_alert_source_snapshots(conn)
             return {"items": build_active_alerts(runtime.config, snapshots)}
 

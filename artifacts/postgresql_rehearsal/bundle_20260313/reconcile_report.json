@@ -1,0 +1,675 @@
+{
+  "tables": [
+    {
+      "scope": "business",
+      "table": "user_id",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 1,
+      "postgres_rows": 1
+    },
+    {
+      "scope": "business",
+      "table": "user",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 71,
+      "postgres_rows": 71
+    },
+    {
+      "scope": "business",
+      "table": "friend",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 34,
+      "postgres_rows": 34
+    },
+    {
+      "scope": "business",
+      "table": "friend_apply",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 18,
+      "postgres_rows": 18
+    },
+    {
+      "scope": "business",
+      "table": "friend_apply_tag",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 11,
+      "postgres_rows": 11
+    },
+    {
+      "scope": "business",
+      "table": "friend_tag",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 22,
+      "postgres_rows": 22
+    },
+    {
+      "scope": "business",
+      "table": "chat_group",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 19,
+      "postgres_rows": 19
+    },
+    {
+      "scope": "business",
+      "table": "chat_group_member",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 45,
+      "postgres_rows": 45
+    },
+    {
+      "scope": "business",
+      "table": "chat_group_apply",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 16,
+      "postgres_rows": 16
+    },
+    {
+      "scope": "business",
+      "table": "chat_private_msg",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 510,
+      "postgres_rows": 510
+    },
+    {
+      "scope": "business",
+      "table": "chat_group_msg",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 357,
+      "postgres_rows": 357
+    },
+    {
+      "scope": "business",
+      "table": "chat_group_msg_ext",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 0,
+      "postgres_rows": 0
+    },
+    {
+      "scope": "business",
+      "table": "chat_dialog",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 6,
+      "postgres_rows": 6
+    },
+    {
+      "scope": "business",
+      "table": "chat_dialog_meta",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 0,
+      "postgres_rows": 0
+    },
+    {
+      "scope": "business",
+      "table": "chat_private_read_state",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 6,
+      "postgres_rows": 6
+    },
+    {
+      "scope": "business",
+      "table": "chat_group_read_state",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 8,
+      "postgres_rows": 8
+    },
+    {
+      "scope": "business",
+      "table": "chat_group_admin_permission",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 16,
+      "postgres_rows": 16
+    },
+    {
+      "scope": "business",
+      "table": "chat_media_asset",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 16,
+      "postgres_rows": 16
+    },
+    {
+      "scope": "business",
+      "table": "chat_call_session",
+      "source_schema": "memo",
+      "target_schema": "memo",
+      "mysql_rows": 0,
+      "postgres_rows": 0
+    },
+    {
+      "scope": "memo_ops",
+      "table": "ops_source",
+      "source_schema": "memo_ops",
+      "target_schema": "memo_ops",
+      "mysql_rows": 213,
+      "postgres_rows": 213
+    },
+    {
+      "scope": "memo_ops",
+      "table": "ops_ingest_cursor",
+      "source_schema": "memo_ops",
+      "target_schema": "memo_ops",
+      "mysql_rows": 0,
+      "postgres_rows": 0
+    },
+    {
+      "scope": "memo_ops",
+      "table": "ops_loadtest_run",
+      "source_schema": "memo_ops",
+      "target_schema": "memo_ops",
+      "mysql_rows": 106,
+      "postgres_rows": 106
+    },
+    {
+      "scope": "memo_ops",
+      "table": "ops_loadtest_case",
+      "source_schema": "memo_ops",
+      "target_schema": "memo_ops",
+      "mysql_rows": 170,
+      "postgres_rows": 170
+    },
+    {
+      "scope": "memo_ops",
+      "table": "ops_loadtest_error_bucket",
+      "source_schema": "memo_ops",
+      "target_schema": "memo_ops",
+      "mysql_rows": 56,
+      "postgres_rows": 56
+    },
+    {
+      "scope": "memo_ops",
+      "table": "ops_service_snapshot",
+      "source_schema": "memo_ops",
+      "target_schema": "memo_ops",
+      "mysql_rows": 2081,
+      "postgres_rows": 2081
+    },
+    {
+      "scope": "memo_ops",
+      "table": "ops_service_metric_minute",
+      "source_schema": "memo_ops",
+      "target_schema": "memo_ops",
+      "mysql_rows": 1938,
+      "postgres_rows": 1938
+    },
+    {
+      "scope": "memo_ops",
+      "table": "ops_log_stream",
+      "source_schema": "memo_ops",
+      "target_schema": "memo_ops",
+      "mysql_rows": 82,
+      "postgres_rows": 82
+    },
+    {
+      "scope": "memo_ops",
+      "table": "ops_log_event_index",
+      "source_schema": "memo_ops",
+      "target_schema": "memo_ops",
+      "mysql_rows": 16780,
+      "postgres_rows": 16780
+    },
+    {
+      "scope": "memo_ops",
+      "table": "ops_trace_index",
+      "source_schema": "memo_ops",
+      "target_schema": "memo_ops",
+      "mysql_rows": 2846,
+      "postgres_rows": 2846
+    },
+    {
+      "scope": "memo_ops",
+      "table": "ops_alert_rule",
+      "source_schema": "memo_ops",
+      "target_schema": "memo_ops",
+      "mysql_rows": 3,
+      "postgres_rows": 3
+    },
+    {
+      "scope": "memo_ops",
+      "table": "ops_platform_setting",
+      "source_schema": "memo_ops",
+      "target_schema": "memo_ops",
+      "mysql_rows": 0,
+      "postgres_rows": 0
+    }
+  ],
+  "orphans": [
+    {
+      "name": "friend.self_id_missing_user",
+      "mysql": 0,
+      "postgres": 0
+    },
+    {
+      "name": "friend.friend_id_missing_user",
+      "mysql": 0,
+      "postgres": 0
+    },
+    {
+      "name": "chat_group_member.missing_group",
+      "mysql": 0,
+      "postgres": 0
+    }
+  ],
+  "sample_user_hashes": {
+    "mysql": [
+      {
+        "uid": 1002,
+        "sha256": "46dc1a05eff531466e1dfc9320f022975043b6666a185bdf35645941ec79c20c"
+      },
+      {
+        "uid": 1003,
+        "sha256": "4fbe3d83b883be5e9c7c037d02b198b745e972ccc417ccef31e231d854ba6634"
+      },
+      {
+        "uid": 1004,
+        "sha256": "602c8a26c1ebe7e7df164feb6f18c1e4d9c55b897b7be429401b16c1cb7a41c7"
+      },
+      {
+        "uid": 1005,
+        "sha256": "330700e22e7e62fbe3520c789ebf808a7c5d6f0bbe7ffdafbdaecdbbaffb2ce3"
+      },
+      {
+        "uid": 1007,
+        "sha256": "5e7206e300b9351aaf03041b2954bc74276a6580fe450400ac73b687afdc7ca7"
+      },
+      {
+        "uid": 1008,
+        "sha256": "7530ecea2ff47a397af1f93c35ad7757ec5abcc4dac66f44d86a7876ac1f3933"
+      },
+      {
+        "uid": 1012,
+        "sha256": "1fae9cee1dc71f58598112861a9b4d6685fa108fba7d1d254d2d7b521d57f2cf"
+      },
+      {
+        "uid": 1013,
+        "sha256": "23d81268a6d775a0c17f2195618583da375920319249d15206aebd3aff818f15"
+      },
+      {
+        "uid": 1014,
+        "sha256": "e5cd907756c046b9bbfd9d17b6549b426a8a021c71145f0fe1e2476d7627ed61"
+      },
+      {
+        "uid": 1015,
+        "sha256": "ecb22268ca122a0e65fec40c49ac319eef04a4edf27535feb7353021ec442a67"
+      },
+      {
+        "uid": 1016,
+        "sha256": "518264fe12d140013a2cf84d734a3d3382d3b67bca6f1611d5b12e50332c38aa"
+      },
+      {
+        "uid": 1019,
+        "sha256": "03eaf3b72d355d89dece49168aeca8709cdc399f85a787542e4820c3e5883554"
+      },
+      {
+        "uid": 1020,
+        "sha256": "63804147312e67e8cad0a887233c9ddb370a022b22a3674538c619add9a3af28"
+      },
+      {
+        "uid": 1021,
+        "sha256": "ba16c6fcb2ecf833385b58248e3016e4df58b1caa43963d3a81412b1a51cc308"
+      },
+      {
+        "uid": 1022,
+        "sha256": "9b8c02f8d566c6a656ce97b1804249691f7d594184078b11778d327c8caf8463"
+      },
+      {
+        "uid": 1023,
+        "sha256": "d3893cba9ed1bb01646f72af714ae0db7aa9058d3221238a77e8f3cbb48492fb"
+      },
+      {
+        "uid": 1024,
+        "sha256": "aa1e26d0b2356020583f27a3cdb52c0a32e7bb77abb4fcc04f34d1010aa48a11"
+      },
+      {
+        "uid": 1025,
+        "sha256": "89d2e8ce3e917ac72ce2869acf950249f4fcbf9f5cc752a3f618904a510606df"
+      },
+      {
+        "uid": 1031,
+        "sha256": "e1420d932839207478f99d98a17369150a50171aa5ef090886baf20cfc92e713"
+      },
+      {
+        "uid": 1032,
+        "sha256": "b489594819f9dfb4d9241bac556d2eae23a7ce4ea449d344928941e8ebf56bc8"
+      },
+      {
+        "uid": 1035,
+        "sha256": "27a2cabaa787ef26cdebe914b77295000e69447db26bd48251e50c8aee18ea27"
+      },
+      {
+        "uid": 1037,
+        "sha256": "1d543d1aed33a48521ff4754c452b3716e9fdda5ed0412f6371abb44dd005838"
+      },
+      {
+        "uid": 1038,
+        "sha256": "c116354c55f5b062ecb3c3a9e1cf23db1078b60eb6d949c73c5c924ca2d2e6a3"
+      },
+      {
+        "uid": 1042,
+        "sha256": "8b7a56543c88c3816030403737ba83586c66153746bc620b7f39108074a55928"
+      },
+      {
+        "uid": 1043,
+        "sha256": "06a07a918bf68ca341190ef8233f26fe5a52894df0a0e59742fd46ba1d879feb"
+      },
+      {
+        "uid": 1044,
+        "sha256": "e4237e3330e8fd8d0f8685c6e9138ef5d0a0984374995eefb1f50638717785a1"
+      },
+      {
+        "uid": 1050,
+        "sha256": "6919dcd5d4c373d9c6c257dcb1ab0d8499da5290b4594ab4436e32cf24716965"
+      },
+      {
+        "uid": 1051,
+        "sha256": "eb9c442f2f42def2e9c26ae9ad20269ae4d6740ac97f6b29eb253ebbfd6a9738"
+      },
+      {
+        "uid": 1052,
+        "sha256": "1c47713ace0c9c726b6a0875055580247a3234ed8d3ccc44b85f89649f83cbaa"
+      },
+      {
+        "uid": 1053,
+        "sha256": "ae442ac5b00298ed933e9160df5d628a9c124cd593ba3d9c05cc3bd97df3a629"
+      },
+      {
+        "uid": 1054,
+        "sha256": "a879c1a028678b6aecefa5ace7f63ec19f33e0efb29908b350b8e18d54db3f3e"
+      },
+      {
+        "uid": 1055,
+        "sha256": "99dfb1de8e0ae746bf1fbe76b0b5b147f3c9934f32f78f16cfb825f596411430"
+      },
+      {
+        "uid": 1056,
+        "sha256": "496cfe46afa774a1a6f114d1f974ec8b30d65bec1a08544d5532c217894c1396"
+      },
+      {
+        "uid": 1058,
+        "sha256": "5b23ce78c4a5da139fa6eb54e35dbb08f554e147107d027316edd9a6445d57ba"
+      },
+      {
+        "uid": 1059,
+        "sha256": "253eefab4b83c5d5b8e214156f4c1e8ddb25fe6b38accc0ddd37a8899c7a67f5"
+      },
+      {
+        "uid": 1060,
+        "sha256": "cf58b814be14c1f55d814b9b33d02b8025a85f7de83f7d4c804f494c8e56e1bf"
+      },
+      {
+        "uid": 1061,
+        "sha256": "5f266491a394a4e13c95bd820288ff2c2ea33d6f742fed6249853cd3215612ae"
+      },
+      {
+        "uid": 1062,
+        "sha256": "6dfc5b9bdce4662082774ba83453bd8fa07c85d8cfcb49c0ba678872124e3610"
+      },
+      {
+        "uid": 1063,
+        "sha256": "969790e7cc10b52173dd6f27d645a38e7136b2c5577a02bb3ffef5d5d1b1abe8"
+      },
+      {
+        "uid": 1064,
+        "sha256": "7c24700dbeaf3bda3a02a99e5113064a65ca3996b33370ad3c36630d49978a14"
+      },
+      {
+        "uid": 1065,
+        "sha256": "5836ca124fd984d1e49612dced9781cdaa24c69ce07d5a1dcb2b84c25299f6f7"
+      },
+      {
+        "uid": 1066,
+        "sha256": "751ba3c1d82c1a641b6e75858378a456efc597e1d36725c598e70b69d4840e60"
+      },
+      {
+        "uid": 1067,
+        "sha256": "a84a61ae082a8d86a87719f2d6ff92da7c769958bf484843ea7a53aa58d3288f"
+      },
+      {
+        "uid": 1068,
+        "sha256": "63c23c27335e39265461f994c07fb16af538b9828a88ffffd88453fed0a92742"
+      },
+      {
+        "uid": 1069,
+        "sha256": "9d5302a65f5e5b71bae58d227e8aafa3fa25ec78214b922900915095300e2aff"
+      },
+      {
+        "uid": 1070,
+        "sha256": "b6cb7f99f05c990042a05a140cbd769904325209257c57d74460919ad9337113"
+      },
+      {
+        "uid": 1071,
+        "sha256": "adb763a9da753dc4ce8c69248d119aa0f3514636d4065cc57711d574668bead4"
+      },
+      {
+        "uid": 1072,
+        "sha256": "2bf90d057c3130f740f9cf9f9718aeee43e1d7f40b871cdbe68860155033c810"
+      },
+      {
+        "uid": 1073,
+        "sha256": "9f9944cbc25be9812f8d66ec4e6a3ae9dbd273592e4943ab1d43ef1b3eb470b0"
+      },
+      {
+        "uid": 1074,
+        "sha256": "9b32e646cafbdd82e1586325cc89a737fa961d9cb407e4f4af0446bf4587cf05"
+      }
+    ],
+    "postgres": [
+      {
+        "uid": 1002,
+        "sha256": "46dc1a05eff531466e1dfc9320f022975043b6666a185bdf35645941ec79c20c"
+      },
+      {
+        "uid": 1003,
+        "sha256": "4fbe3d83b883be5e9c7c037d02b198b745e972ccc417ccef31e231d854ba6634"
+      },
+      {
+        "uid": 1004,
+        "sha256": "602c8a26c1ebe7e7df164feb6f18c1e4d9c55b897b7be429401b16c1cb7a41c7"
+      },
+      {
+        "uid": 1005,
+        "sha256": "330700e22e7e62fbe3520c789ebf808a7c5d6f0bbe7ffdafbdaecdbbaffb2ce3"
+      },
+      {
+        "uid": 1007,
+        "sha256": "5e7206e300b9351aaf03041b2954bc74276a6580fe450400ac73b687afdc7ca7"
+      },
+      {
+        "uid": 1008,
+        "sha256": "7530ecea2ff47a397af1f93c35ad7757ec5abcc4dac66f44d86a7876ac1f3933"
+      },
+      {
+        "uid": 1012,
+        "sha256": "1fae9cee1dc71f58598112861a9b4d6685fa108fba7d1d254d2d7b521d57f2cf"
+      },
+      {
+        "uid": 1013,
+        "sha256": "23d81268a6d775a0c17f2195618583da375920319249d15206aebd3aff818f15"
+      },
+      {
+        "uid": 1014,
+        "sha256": "e5cd907756c046b9bbfd9d17b6549b426a8a021c71145f0fe1e2476d7627ed61"
+      },
+      {
+        "uid": 1015,
+        "sha256": "ecb22268ca122a0e65fec40c49ac319eef04a4edf27535feb7353021ec442a67"
+      },
+      {
+        "uid": 1016,
+        "sha256": "518264fe12d140013a2cf84d734a3d3382d3b67bca6f1611d5b12e50332c38aa"
+      },
+      {
+        "uid": 1019,
+        "sha256": "03eaf3b72d355d89dece49168aeca8709cdc399f85a787542e4820c3e5883554"
+      },
+      {
+        "uid": 1020,
+        "sha256": "63804147312e67e8cad0a887233c9ddb370a022b22a3674538c619add9a3af28"
+      },
+      {
+        "uid": 1021,
+        "sha256": "ba16c6fcb2ecf833385b58248e3016e4df58b1caa43963d3a81412b1a51cc308"
+      },
+      {
+        "uid": 1022,
+        "sha256": "9b8c02f8d566c6a656ce97b1804249691f7d594184078b11778d327c8caf8463"
+      },
+      {
+        "uid": 1023,
+        "sha256": "d3893cba9ed1bb01646f72af714ae0db7aa9058d3221238a77e8f3cbb48492fb"
+      },
+      {
+        "uid": 1024,
+        "sha256": "aa1e26d0b2356020583f27a3cdb52c0a32e7bb77abb4fcc04f34d1010aa48a11"
+      },
+      {
+        "uid": 1025,
+        "sha256": "89d2e8ce3e917ac72ce2869acf950249f4fcbf9f5cc752a3f618904a510606df"
+      },
+      {
+        "uid": 1031,
+        "sha256": "e1420d932839207478f99d98a17369150a50171aa5ef090886baf20cfc92e713"
+      },
+      {
+        "uid": 1032,
+        "sha256": "b489594819f9dfb4d9241bac556d2eae23a7ce4ea449d344928941e8ebf56bc8"
+      },
+      {
+        "uid": 1035,
+        "sha256": "27a2cabaa787ef26cdebe914b77295000e69447db26bd48251e50c8aee18ea27"
+      },
+      {
+        "uid": 1037,
+        "sha256": "1d543d1aed33a48521ff4754c452b3716e9fdda5ed0412f6371abb44dd005838"
+      },
+      {
+        "uid": 1038,
+        "sha256": "c116354c55f5b062ecb3c3a9e1cf23db1078b60eb6d949c73c5c924ca2d2e6a3"
+      },
+      {
+        "uid": 1042,
+        "sha256": "8b7a56543c88c3816030403737ba83586c66153746bc620b7f39108074a55928"
+      },
+      {
+        "uid": 1043,
+        "sha256": "06a07a918bf68ca341190ef8233f26fe5a52894df0a0e59742fd46ba1d879feb"
+      },
+      {
+        "uid": 1044,
+        "sha256": "e4237e3330e8fd8d0f8685c6e9138ef5d0a0984374995eefb1f50638717785a1"
+      },
+      {
+        "uid": 1050,
+        "sha256": "6919dcd5d4c373d9c6c257dcb1ab0d8499da5290b4594ab4436e32cf24716965"
+      },
+      {
+        "uid": 1051,
+        "sha256": "eb9c442f2f42def2e9c26ae9ad20269ae4d6740ac97f6b29eb253ebbfd6a9738"
+      },
+      {
+        "uid": 1052,
+        "sha256": "1c47713ace0c9c726b6a0875055580247a3234ed8d3ccc44b85f89649f83cbaa"
+      },
+      {
+        "uid": 1053,
+        "sha256": "ae442ac5b00298ed933e9160df5d628a9c124cd593ba3d9c05cc3bd97df3a629"
+      },
+      {
+        "uid": 1054,
+        "sha256": "a879c1a028678b6aecefa5ace7f63ec19f33e0efb29908b350b8e18d54db3f3e"
+      },
+      {
+        "uid": 1055,
+        "sha256": "99dfb1de8e0ae746bf1fbe76b0b5b147f3c9934f32f78f16cfb825f596411430"
+      },
+      {
+        "uid": 1056,
+        "sha256": "496cfe46afa774a1a6f114d1f974ec8b30d65bec1a08544d5532c217894c1396"
+      },
+      {
+        "uid": 1058,
+        "sha256": "5b23ce78c4a5da139fa6eb54e35dbb08f554e147107d027316edd9a6445d57ba"
+      },
+      {
+        "uid": 1059,
+        "sha256": "253eefab4b83c5d5b8e214156f4c1e8ddb25fe6b38accc0ddd37a8899c7a67f5"
+      },
+      {
+        "uid": 1060,
+        "sha256": "cf58b814be14c1f55d814b9b33d02b8025a85f7de83f7d4c804f494c8e56e1bf"
+      },
+      {
+        "uid": 1061,
+        "sha256": "5f266491a394a4e13c95bd820288ff2c2ea33d6f742fed6249853cd3215612ae"
+      },
+      {
+        "uid": 1062,
+        "sha256": "6dfc5b9bdce4662082774ba83453bd8fa07c85d8cfcb49c0ba678872124e3610"
+      },
+      {
+        "uid": 1063,
+        "sha256": "969790e7cc10b52173dd6f27d645a38e7136b2c5577a02bb3ffef5d5d1b1abe8"
+      },
+      {
+        "uid": 1064,
+        "sha256": "7c24700dbeaf3bda3a02a99e5113064a65ca3996b33370ad3c36630d49978a14"
+      },
+      {
+        "uid": 1065,
+        "sha256": "5836ca124fd984d1e49612dced9781cdaa24c69ce07d5a1dcb2b84c25299f6f7"
+      },
+      {
+        "uid": 1066,
+        "sha256": "751ba3c1d82c1a641b6e75858378a456efc597e1d36725c598e70b69d4840e60"
+      },
+      {
+        "uid": 1067,
+        "sha256": "a84a61ae082a8d86a87719f2d6ff92da7c769958bf484843ea7a53aa58d3288f"
+      },
+      {
+        "uid": 1068,
+        "sha256": "63c23c27335e39265461f994c07fb16af538b9828a88ffffd88453fed0a92742"
+      },
+      {
+        "uid": 1069,
+        "sha256": "9d5302a65f5e5b71bae58d227e8aafa3fa25ec78214b922900915095300e2aff"
+      },
+      {
+        "uid": 1070,
+        "sha256": "b6cb7f99f05c990042a05a140cbd769904325209257c57d74460919ad9337113"
+      },
+      {
+        "uid": 1071,
+        "sha256": "adb763a9da753dc4ce8c69248d119aa0f3514636d4065cc57711d574668bead4"
+      },
+      {
+        "uid": 1072,
+        "sha256": "2bf90d057c3130f740f9cf9f9718aeee43e1d7f40b871cdbe68860155033c810"
+      },
+      {
+        "uid": 1073,
+        "sha256": "9f9944cbc25be9812f8d66ec4e6a3ae9dbd273592e4943ab1d43ef1b3eb470b0"
+      },
+      {
+        "uid": 1074,
+        "sha256": "9b32e646cafbdd82e1586325cc89a737fa961d9cb407e4f4af0446bf4587cf05"
+      }
+    ]
+  }
+}

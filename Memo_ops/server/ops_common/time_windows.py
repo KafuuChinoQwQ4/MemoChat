@@ -43,9 +43,9 @@ def bucket_for_window(start: datetime, end: datetime) -> tuple[str, str]:
 
 def bucket_sql(column: str, bucket: str) -> str:
     if bucket == "5m":
-        return f"DATE_FORMAT(DATE_SUB({column}, INTERVAL (MINUTE({column}) %% 5) MINUTE), '%%Y-%%m-%%dT%%H:%%i:00')"
+        return f"to_char(date_trunc('hour', {column}) + floor(extract(minute from {column}) / 5) * interval '5 minutes', 'YYYY-MM-DD\"T\"HH24:MI:00')"
     if bucket == "15m":
-        return f"DATE_FORMAT(DATE_SUB({column}, INTERVAL (MINUTE({column}) %% 15) MINUTE), '%%Y-%%m-%%dT%%H:%%i:00')"
+        return f"to_char(date_trunc('hour', {column}) + floor(extract(minute from {column}) / 15) * interval '15 minutes', 'YYYY-MM-DD\"T\"HH24:MI:00')"
     if bucket == "1h":
-        return f"DATE_FORMAT({column}, '%%Y-%%m-%%dT%%H:00:00')"
-    return f"DATE_FORMAT({column}, '%%Y-%%m-%%dT00:00:00')"
+        return f"to_char(date_trunc('hour', {column}), 'YYYY-MM-DD\"T\"HH24:00:00')"
+    return f"to_char(date_trunc('day', {column}), 'YYYY-MM-DD\"T\"00:00:00')"
