@@ -1,4 +1,5 @@
 #include "AppController.h"
+#include "AppCoordinators.h"
 #include "DialogListService.h"
 #include "LocalFilePickerService.h"
 #include "MediaUploadService.h"
@@ -94,7 +95,13 @@ AppController::AppController(QObject *parent)
       _livekit_bridge(this),
       _chat_controller(&_gateway),
       _contact_controller(&_gateway),
-      _profile_controller(&_gateway)
+      _profile_controller(&_gateway),
+      _session_coordinator(std::make_unique<AppSessionCoordinator>(*this)),
+      _contact_coordinator_shell(std::make_unique<ContactCoordinatorShell>(*this)),
+      _group_coordinator(std::make_unique<GroupCoordinator>(*this)),
+      _media_coordinator(std::make_unique<MediaCoordinator>(*this)),
+      _call_coordinator(std::make_unique<CallCoordinator>(*this)),
+      _profile_coordinator(std::make_unique<ProfileCoordinator>(*this))
 {
     connect(_gateway.httpMgr().get(), &HttpMgr::sig_login_mod_finish,
             this, &AppController::onLoginHttpFinished);
@@ -149,6 +156,8 @@ AppController::AppController(QObject *parent)
             this, &AppController::onPrivateMsgChanged);
     connect(_gateway.tcpMgr().get(), &TcpMgr::sig_private_read_ack,
             this, &AppController::onPrivateReadAck);
+    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_message_status,
+            this, &AppController::onMessageStatus);
     connect(_gateway.tcpMgr().get(), &TcpMgr::sig_call_event,
             this, &AppController::onCallEvent);
     connect(&_livekit_bridge, &LivekitBridge::roomJoined,
@@ -195,6 +204,8 @@ AppController::Page AppController::page() const
 {
     return _page;
 }
+
+AppController::~AppController() = default;
 
 CallSessionModel *AppController::callSession()
 {
@@ -670,16 +681,7 @@ void AppController::openExternalResource(const QString &url)
 
 void AppController::searchUser(const QString &uidText)
 {
-    QString errorText;
-    if (!_contact_controller.sendSearchUser(uidText, &errorText)) {
-        clearSearchResultOnly();
-        setSearchStatus(errorText, true);
-        return;
-    }
-
-    clearSearchResultOnly();
-    setSearchPending(true);
-    setSearchStatus("搜索中...", false);
+    _contact_coordinator_shell->searchUser(uidText);
 }
 
 void AppController::clearSearchState()
@@ -691,54 +693,12 @@ void AppController::clearSearchState()
 
 void AppController::requestAddFriend(int uid, const QString &bakName, const QVariantList &labels)
 {
-    auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo) {
-        return;
-    }
-    if (uid == selfInfo->_uid) {
-        setSearchStatus("不能添加自己", true);
-        return;
-    }
-    if (_gateway.userMgr()->CheckFriendById(uid)) {
-        setSearchStatus("已是好友，无需重复申请", false);
-        return;
-    }
-
-    _contact_controller.sendAddFriend(
-        selfInfo->_uid, selfInfo->_name, uid, bakName, labels);
-    setSearchStatus("好友申请已发送", false);
+    _contact_coordinator_shell->requestAddFriend(uid, bakName, labels);
 }
 
 void AppController::approveFriend(int uid, const QString &backName, const QVariantList &labels)
 {
-    if (uid <= 0) {
-        setAuthStatus("非法好友申请", true);
-        return;
-    }
-
-    auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo) {
-        setAuthStatus("用户状态异常，请重新登录", true);
-        return;
-    }
-
-    if (_gateway.userMgr()->CheckFriendById(uid)) {
-        _apply_request_model.markApproved(uid);
-        setAuthStatus("已是好友", false);
-        return;
-    }
-
-    QString remark = backName.trimmed();
-    if (remark.isEmpty()) {
-        remark = _apply_request_model.nameByUid(uid);
-    }
-    if (remark.isEmpty()) {
-        remark = "MemoChat好友";
-    }
-
-    _contact_controller.sendApproveFriend(selfInfo->_uid, uid, remark, labels);
-    _apply_request_model.setPending(uid, true);
-    setAuthStatus("好友认证请求已发送", false);
+    _contact_coordinator_shell->approveFriend(uid, backName, labels);
 }
 
 void AppController::clearAuthStatus()
@@ -748,92 +708,42 @@ void AppController::clearAuthStatus()
 
 void AppController::startVoiceChat()
 {
-    if (!ensureCallTargetFromCurrentChat()) {
-        return;
-    }
-    startCallFlow("voice");
+    _call_coordinator->startVoiceChat();
 }
 
 void AppController::startVideoChat()
 {
-    if (!ensureCallTargetFromCurrentChat()) {
-        return;
-    }
-    startCallFlow("video");
+    _call_coordinator->startVideoChat();
 }
 
 void AppController::acceptIncomingCall()
 {
-    const auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo || _call_session_model.callId().isEmpty()) {
-        return;
-    }
-    _call_controller.acceptCall(selfInfo->_uid, _gateway.userMgr()->GetToken(), _call_session_model.callId());
-    setAuthStatus("正在接听通话", false);
+    _call_coordinator->acceptIncomingCall();
 }
 
 void AppController::rejectIncomingCall()
 {
-    const auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo || _call_session_model.callId().isEmpty()) {
-        return;
-    }
-    _call_controller.rejectCall(selfInfo->_uid, _gateway.userMgr()->GetToken(), _call_session_model.callId());
+    _call_coordinator->rejectIncomingCall();
 }
 
 void AppController::endCurrentCall()
 {
-    const auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo || _call_session_model.callId().isEmpty()) {
-        return;
-    }
-    _livekit_bridge.leaveRoom();
-    if (!_call_session_model.active() && !_call_session_model.incoming()) {
-        _call_controller.cancelCall(selfInfo->_uid, _gateway.userMgr()->GetToken(), _call_session_model.callId());
-        return;
-    }
-    _call_controller.hangupCall(selfInfo->_uid, _gateway.userMgr()->GetToken(), _call_session_model.callId());
+    _call_coordinator->endCurrentCall();
 }
 
 void AppController::toggleCallMuted()
 {
-    _livekit_bridge.toggleMic();
-    _call_session_model.setMuted(!_call_session_model.muted());
+    _call_coordinator->toggleCallMuted();
 }
 
 void AppController::toggleCallCamera()
 {
-    if (_call_session_model.callType() != QStringLiteral("video")) {
-        return;
-    }
-    _livekit_bridge.toggleCamera();
-    _call_session_model.setCameraEnabled(!_call_session_model.cameraEnabled());
+    _call_coordinator->toggleCallCamera();
 }
 
 void AppController::chooseAvatar()
 {
-    auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo) {
-        setSettingsStatus("用户状态异常，请重新登录", true);
-        return;
-    }
-
-    QString avatarUrl;
-    QString errorText;
-    if (!LocalFilePickerService::pickAvatarUrl(&avatarUrl, &errorText)) {
-        if (!errorText.isEmpty()) {
-            setSettingsStatus(errorText, true);
-        }
-        return;
-    }
-
-    _gateway.userMgr()->UpdateIcon(avatarUrl);
-    const QString normalized = normalizeIconPath(avatarUrl);
-    if (_current_user_icon != normalized) {
-        _current_user_icon = normalized;
-        emit currentUserChanged();
-    }
-    setSettingsStatus("已选择新头像，点击保存后同步", false);
+    _profile_coordinator->chooseAvatar();
 }
 
 void AppController::saveProfile(const QString &nick, const QString &desc)
@@ -943,42 +853,7 @@ void AppController::requestDialogList()
 
 void AppController::createGroup(const QString &name, const QVariantList &memberUserIdList)
 {
-    auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo) {
-        setGroupStatus("用户状态异常，请重新登录", true);
-        return;
-    }
-    const QString trimmedName = name.trimmed();
-    if (trimmedName.isEmpty() || trimmedName.size() > 64) {
-        setGroupStatus("群名称长度需在1-64之间", true);
-        return;
-    }
-
-    static const QRegularExpression kUserIdPattern("^u[1-9][0-9]{8}$");
-    QJsonArray memberUserIds;
-    for (const auto &one : memberUserIdList) {
-        const QString userId = one.toString().trimmed();
-        if (userId.isEmpty()) {
-            continue;
-        }
-        if (!kUserIdPattern.match(userId).hasMatch()) {
-            setGroupStatus(QString("成员ID格式非法：%1").arg(userId), true);
-            return;
-        }
-        if (selfInfo->_user_id == userId) {
-            continue;
-        }
-        memberUserIds.append(userId);
-    }
-
-    QJsonObject obj;
-    obj["fromuid"] = selfInfo->_uid;
-    obj["name"] = trimmedName;
-    obj["member_limit"] = 200;
-    obj["member_user_ids"] = memberUserIds;
-    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_CREATE_GROUP_REQ, payload);
-    setGroupStatus("正在创建群聊...", false);
+    _group_coordinator->createGroup(name, memberUserIdList);
 }
 
 void AppController::inviteGroupMember(const QString &userId, const QString &reason)
@@ -1038,46 +913,22 @@ void AppController::applyJoinGroup(const QString &groupCode, const QString &reas
 
 void AppController::reviewGroupApply(qint64 applyId, bool agree)
 {
-    auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo || applyId <= 0) {
-        setGroupStatus("审核参数非法", true);
-        return;
-    }
-
-    QJsonObject obj;
-    obj["fromuid"] = selfInfo->_uid;
-    obj["apply_id"] = applyId;
-    obj["agree"] = agree;
-    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_REVIEW_GROUP_APPLY_REQ, payload);
-    setGroupStatus("审核请求已发送", false);
+    _group_coordinator->reviewGroupApply(applyId, agree);
 }
 
 void AppController::sendGroupTextMessage(const QString &text)
 {
-    if (_current_group_id <= 0) {
-        setGroupStatus("请选择群聊", true);
-        return;
-    }
-    sendTextMessage(text);
+    _group_coordinator->sendGroupTextMessage(text);
 }
 
 void AppController::sendGroupImageMessage()
 {
-    if (_current_group_id <= 0) {
-        setGroupStatus("请选择群聊", true);
-        return;
-    }
-    sendImageMessage();
+    _group_coordinator->sendGroupImageMessage();
 }
 
 void AppController::sendGroupFileMessage()
 {
-    if (_current_group_id <= 0) {
-        setGroupStatus("请选择群聊", true);
-        return;
-    }
-    sendFileMessage();
+    _group_coordinator->sendGroupFileMessage();
 }
 
 void AppController::editGroupMessage(const QString &msgId, const QString &text)
@@ -1385,16 +1236,7 @@ void AppController::kickGroupMember(const QString &userId)
 
 void AppController::quitCurrentGroup()
 {
-    auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo || _current_group_id <= 0) {
-        setGroupStatus("请选择群聊", true);
-        return;
-    }
-    QJsonObject obj;
-    obj["fromuid"] = selfInfo->_uid;
-    obj["groupid"] = static_cast<qint64>(_current_group_id);
-    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_QUIT_GROUP_REQ, payload);
+    _group_coordinator->quitCurrentGroup();
 }
 
 void AppController::clearGroupStatus()
@@ -1639,97 +1481,29 @@ void AppController::cancelReplyMessage()
 
 void AppController::login(const QString &email, const QString &password)
 {
-    if (!checkEmailValid(email)) {
-        return;
-    }
-
-    if (!checkPwdValid(password)) {
-        return;
-    }
-
-    // Ensure account switch starts from a clean transport/session baseline.
-    _pending_uid = 0;
-    _pending_token.clear();
-    _pending_login_ticket.clear();
-    _pending_trace_id.clear();
-    _chat_endpoints.clear();
-    _chat_endpoint_index = -1;
-    _chat_server_name.clear();
-    _login_started_ms = QDateTime::currentMSecsSinceEpoch();
-    _http_login_finished_ms = 0;
-    _chat_connect_started_ms = 0;
-    _chat_connect_finished_ms = 0;
-    _chat_login_timeout_timer.stop();
-    _ignore_next_login_disconnect = true;
-    _gateway.tcpMgr()->CloseConnection();
-    qInfo() << "Starting login flow for email:" << email;
-    setBusy(true);
-    setTip("", false);
-    _auth_controller.sendLogin(email, password);
+    _session_coordinator->login(email, password);
 }
 
 void AppController::requestRegisterCode(const QString &email)
 {
-    if (!checkEmailValid(email)) {
-        return;
-    }
-
-    setBusy(true);
-    _auth_controller.sendVerifyCode(email, Modules::REGISTERMOD);
+    _session_coordinator->requestRegisterCode(email);
 }
 
 void AppController::registerUser(const QString &user, const QString &email, const QString &password,
                                  const QString &confirm, const QString &verifyCode)
 {
-    if (!checkUserValid(user)) {
-        return;
-    }
-    if (!checkEmailValid(email)) {
-        return;
-    }
-    if (!checkPwdValid(password)) {
-        return;
-    }
-    if (password != confirm) {
-        setTip("密码和确认密码不匹配", true);
-        return;
-    }
-    if (!checkVerifyCodeValid(verifyCode)) {
-        return;
-    }
-
-    setBusy(true);
-    _auth_controller.sendRegister(user, email, password, confirm, verifyCode);
+    _session_coordinator->registerUser(user, email, password, confirm, verifyCode);
 }
 
 void AppController::requestResetCode(const QString &email)
 {
-    if (!checkEmailValid(email)) {
-        return;
-    }
-
-    setBusy(true);
-    _auth_controller.sendVerifyCode(email, Modules::RESETMOD);
+    _session_coordinator->requestResetCode(email);
 }
 
 void AppController::resetPassword(const QString &user, const QString &email, const QString &password,
                                   const QString &verifyCode)
 {
-    if (!checkUserValid(user)) {
-        return;
-    }
-    if (!checkEmailValid(email)) {
-        return;
-    }
-    if (!checkPwdValid(password)) {
-        return;
-    }
-    if (!checkVerifyCodeValid(verifyCode)) {
-        return;
-    }
-
-    setBusy(true);
-    _auth_controller.sendResetPassword(user, email, password, verifyCode);
+    _session_coordinator->resetPassword(user, email, password, verifyCode);
 }
 
 

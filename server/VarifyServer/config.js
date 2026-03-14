@@ -34,6 +34,7 @@ const telemetry_export_metrics = config.telemetry ? config.telemetry.exportMetri
 const telemetry_service_name = (config.telemetry && config.telemetry.serviceName) || 'VarifyServer';
 const telemetry_service_namespace = (config.telemetry && config.telemetry.serviceNamespace) || 'memochat';
 const service_instance = `${telemetry_service_name}@${os.hostname()}:${process.pid}`;
+const verify_async_outbox = config.featureFlags ? config.featureFlags.verify_async_outbox === true : false;
 
 module.exports = {
   email_host,
@@ -62,4 +63,5 @@ module.exports = {
   telemetry_service_name,
   telemetry_service_namespace,
   service_instance,
+  verify_async_outbox,
 };

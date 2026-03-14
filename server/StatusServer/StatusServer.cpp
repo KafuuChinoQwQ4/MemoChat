@@ -9,7 +9,7 @@
 #include "ConfigMgr.h"
 #include <hiredis/hiredis.h>
 #include "RedisMgr.h"
-#include "MysqlMgr.h"
+#include "PostgresMgr.h"
 #include "AsioIOServicePool.h"
 #include <iostream>
 #include <memory>

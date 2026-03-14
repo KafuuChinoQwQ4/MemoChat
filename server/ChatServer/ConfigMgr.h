@@ -1,87 +1,29 @@
 #pragma once
-#include <fstream>  
-#include <boost/property_tree/ptree.hpp>  
-#include <boost/property_tree/ini_parser.hpp>  
-#include <boost/filesystem.hpp>    
-#include <map>
-#include <iostream>
 
-struct SectionInfo {
-	SectionInfo(){}
-	~SectionInfo(){
-		_section_datas.clear();
-	}
-	
-	SectionInfo(const SectionInfo& src) {
-		_section_datas = src._section_datas;
-	}
-	
-	SectionInfo& operator = (const SectionInfo& src) {
-		if (&src == this) {
-			return *this;
-		}
+#include "runtime/IniConfig.h"
 
-		this->_section_datas = src._section_datas;
-		return *this;
-	}
+using SectionInfo = memochat::runtime::IniSection;
 
-	std::map<std::string, std::string> _section_datas;
-	std::string  operator[](const std::string  &key) {
-		if (_section_datas.find(key) == _section_datas.end()) {
-			return "";
-		}
-
-		return _section_datas[key];
-	}
-
-	std::string GetValue(const std::string & key) {
-		if (_section_datas.find(key) == _section_datas.end()) {
-			return "";
-		}
-
-		return _section_datas[key];
-	}
-};
-
-class ConfigMgr
-{
+class ConfigMgr {
 public:
-	~ConfigMgr() {
-		_config_map.clear();
-	}
-	SectionInfo operator[](const std::string& section) {
-		if (_config_map.find(section) == _config_map.end()) {
-			return SectionInfo();
-		}
-		return _config_map[section];
-	}
+    ConfigMgr();
+    ~ConfigMgr() = default;
 
+    ConfigMgr(const ConfigMgr&) = default;
+    ConfigMgr& operator=(const ConfigMgr&) = default;
 
-	ConfigMgr& operator=(const ConfigMgr& src) {
-		if (&src == this) {
-			return *this;
-		}
+    SectionInfo operator[](const std::string& section) const;
 
-		this->_config_map = src._config_map;
-	};
+    static ConfigMgr& Inst();
 
-	ConfigMgr(const ConfigMgr& src) {
-		this->_config_map = src._config_map;
-	}
+    static void InitConfigPath(const std::string& config_path);
+    static std::string GetConfigPath();
 
-	static ConfigMgr& Inst() {
-		static ConfigMgr cfg_mgr;
-		return cfg_mgr;
-	}
+    std::string GetValue(const std::string& section, const std::string& key) const;
 
-	static void InitConfigPath(const std::string& config_path);
-	static std::string GetConfigPath();
-
-	std::string GetValue(const std::string& section, const std::string & key);
 private:
-	ConfigMgr();
-	static std::string& ConfigPathStorage();
+    static std::string& ConfigPathStorage();
 
-	std::map<std::string, SectionInfo> _config_map;
+    memochat::runtime::IniConfig _config;
 };
 

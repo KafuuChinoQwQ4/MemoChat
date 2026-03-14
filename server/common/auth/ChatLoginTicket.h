@@ -11,6 +11,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <bcrypt.h>
+#include <mutex>
 #pragma comment(lib, "bcrypt.lib")
 #endif
 
@@ -84,25 +85,28 @@ inline bool Base64UrlDecode(const std::string& input, std::string& output) {
 inline bool HmacSha256(const std::string& key, const std::string& data, std::string& output) {
 #ifdef _WIN32
     output.clear();
-    BCRYPT_ALG_HANDLE alg = nullptr;
+    static BCRYPT_ALG_HANDLE alg = nullptr;
+    static std::once_flag init_once;
+    static bool init_ok = false;
+    std::call_once(init_once, []() {
+        init_ok = BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, BCRYPT_ALG_HANDLE_HMAC_FLAG) >= 0;
+    });
+    if (!init_ok || alg == nullptr) {
+        return false;
+    }
+
     BCRYPT_HASH_HANDLE hash = nullptr;
     PUCHAR hash_object = nullptr;
     DWORD object_size = 0;
     DWORD data_size = 0;
     DWORD hash_size = 0;
-    NTSTATUS status = BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, BCRYPT_ALG_HANDLE_HMAC_FLAG);
-    if (status < 0) {
-        return false;
-    }
+    NTSTATUS status = 0;
     auto cleanup = [&]() {
         if (hash != nullptr) {
             BCryptDestroyHash(hash);
         }
         if (hash_object != nullptr) {
             HeapFree(GetProcessHeap(), 0, hash_object);
-        }
-        if (alg != nullptr) {
-            BCryptCloseAlgorithmProvider(alg, 0);
         }
     };
     status = BCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, reinterpret_cast<PUCHAR>(&object_size),

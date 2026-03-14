@@ -34,5 +34,8 @@
     "exportMetrics": false,
     "serviceName": "VarifyServer",
     "serviceNamespace": "memochat"
+  },
+  "featureFlags": {
+    "verify_async_outbox": true
   }
 }

@@ -453,8 +453,22 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
         const qint64 groupId = payload.value("groupid").toVariant().toLongLong();
         const QJsonObject msgObj = payload.value("msg").toObject();
         const QString ackMsgId = payload.value("client_msg_id").toString(msgObj.value("msgid").toString());
+        auto selfInfo = _gateway.userMgr()->GetUserInfo();
+        const QString ackStatus = payload.value("status").toString();
+        if (ackStatus == QStringLiteral("accepted") && groupId > 0 && !ackMsgId.isEmpty()) {
+            if (_gateway.userMgr()->UpdateGroupChatMsgState(groupId, ackMsgId, QStringLiteral("accepted"))
+                && groupId == _current_group_id) {
+                _message_model.updateMessageState(ackMsgId, QStringLiteral("accepted"));
+            }
+            if (selfInfo && _group_cache_store.isReady()) {
+                auto groupInfo = _gateway.userMgr()->GetGroupById(groupId);
+                if (groupInfo) {
+                    _group_cache_store.upsertMessages(selfInfo->_uid, groupId, groupInfo->_chat_msgs);
+                }
+            }
+            break;
+        }
         if (groupId > 0 && !ackMsgId.isEmpty()) {
-            auto selfInfo = _gateway.userMgr()->GetUserInfo();
             const int selfUid = selfInfo ? selfInfo->_uid : _gateway.userMgr()->GetUid();
             const QString senderName = payload.value("from_nick").toString(
                 payload.value("from_name").toString(selfInfo ? selfInfo->_nick : QString()));

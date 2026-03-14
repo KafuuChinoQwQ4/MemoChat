@@ -30,10 +30,10 @@
     <ClCompile Include="message.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="MysqlDao.cpp">
+    <ClCompile Include="PostgresDao.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="MysqlMgr.cpp">
+    <ClCompile Include="PostgresMgr.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="RedisMgr.cpp">
@@ -65,10 +65,10 @@
     <ClInclude Include="message.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="MysqlDao.h">
+    <ClInclude Include="PostgresDao.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="MysqlMgr.h">
+    <ClInclude Include="PostgresMgr.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="RedisMgr.h">

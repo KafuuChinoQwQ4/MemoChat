@@ -25,12 +25,8 @@
         "boost-uuid",
         "spdlog",
         "mongo-cxx-driver",
-        {
-          "name": "mysql-connector-cpp",
-          "features": [
-            "jdbc"
-          ]
-        }
+        "libpq",
+        "libpqxx"
       ]
     }
   }

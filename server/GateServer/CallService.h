@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Singleton.h"
-#include "MysqlDao.h"
+#include "PostgresDao.h"
 #include <json/value.h>
 #include <string>
 #include <vector>

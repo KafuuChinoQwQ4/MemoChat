@@ -461,6 +461,29 @@ bool RedisMgr::Keys(const std::string& pattern, std::vector<std::string>& keys)
 	return true;
 }
 
+bool RedisMgr::Incr(const std::string& key, int64_t& value)
+{
+	value = 0;
+	auto connect = _con_pool->getConnection();
+	if (connect == nullptr) {
+		return false;
+	}
+	auto reply = static_cast<redisReply*>(redisCommand(connect, "INCR %s", key.c_str()));
+	if (reply == nullptr) {
+		_con_pool->returnConnection(connect);
+		return false;
+	}
+	if (reply->type != REDIS_REPLY_INTEGER) {
+		freeReplyObject(reply);
+		_con_pool->returnConnection(connect);
+		return false;
+	}
+	value = static_cast<int64_t>(reply->integer);
+	freeReplyObject(reply);
+	_con_pool->returnConnection(connect);
+	return true;
+}
+
 bool RedisMgr::Del(const std::string &key)
 {
 	auto connect = _con_pool->getConnection();

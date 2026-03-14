@@ -1,7 +1,7 @@
 #pragma once
 #include <grpcpp/grpcpp.h>
-#include "message.grpc.pb.h"
-#include "message.pb.h"
+#include "common/proto/message.grpc.pb.h"
+#include "common/proto/message.pb.h"
 #include <mutex>
 #include "data.h"
 #include "CServer.h"

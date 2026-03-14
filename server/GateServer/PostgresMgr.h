@@ -1,11 +1,11 @@
 #pragma once
 #include "const.h"
-#include "MysqlDao.h"
-class MysqlMgr: public Singleton<MysqlMgr>
+#include "PostgresDao.h"
+class PostgresMgr: public Singleton<PostgresMgr>
 {
-	friend class Singleton<MysqlMgr>;
+	friend class Singleton<PostgresMgr>;
 public:
-	~MysqlMgr();
+	~PostgresMgr();
 
 	int RegUser(const std::string& name, const std::string& email,  const std::string& pwd, const std::string& icon);
 	bool CheckEmail(const std::string& name, const std::string & email);
@@ -21,6 +21,6 @@ public:
 	bool GetMediaAssetByKey(const std::string& media_key, MediaAssetInfo& asset);
 	bool TestProcedure(const std::string &email, int& uid, string & name);
 private:
-	MysqlMgr();
-	MysqlDao  _dao;
+	PostgresMgr();
+	PostgresDao  _dao;
 };

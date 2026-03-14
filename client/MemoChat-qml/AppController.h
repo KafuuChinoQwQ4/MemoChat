@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QTimer>
 #include <QJsonObject>
+#include <memory>
 #include <QVariantList>
 #include <QMap>
 #include <QHash>
@@ -24,6 +25,13 @@
 #include "GroupChatCacheStore.h"
 #include "LivekitBridge.h"
 #include "MediaUploadService.h"
+
+class AppSessionCoordinator;
+class ContactCoordinatorShell;
+class GroupCoordinator;
+class MediaCoordinator;
+class CallCoordinator;
+class ProfileCoordinator;
 
 class AppController : public QObject
 {
@@ -124,6 +132,7 @@ public:
     Q_ENUM(ContactPane)
 
     explicit AppController(QObject *parent = nullptr);
+    ~AppController();
 
     Page page() const;
     QString tipText() const;
@@ -337,6 +346,7 @@ private slots:
     void onPrivateHistoryRsp(QJsonObject payload);
     void onPrivateMsgChanged(QJsonObject payload);
     void onPrivateReadAck(QJsonObject payload);
+    void onMessageStatus(QJsonObject payload);
     void onCallEvent(QJsonObject payload);
     void onLivekitRoomJoined();
     void onLivekitRemoteTrackReady();
@@ -346,6 +356,13 @@ private slots:
     void onLivekitReconnecting(const QString &message);
 
 private:
+    friend class AppSessionCoordinator;
+    friend class ContactCoordinatorShell;
+    friend class GroupCoordinator;
+    friend class MediaCoordinator;
+    friend class CallCoordinator;
+    friend class ProfileCoordinator;
+
     bool parseJson(const QString &res, QJsonObject &obj);
     bool checkEmailValid(const QString &email);
     bool checkPwdValid(const QString &password);
@@ -555,6 +572,13 @@ private:
     int _pending_send_chat_uid = 0;
     qint64 _pending_send_group_id = 0;
     int _pending_send_total_count = 0;
+
+    std::unique_ptr<AppSessionCoordinator> _session_coordinator;
+    std::unique_ptr<ContactCoordinatorShell> _contact_coordinator_shell;
+    std::unique_ptr<GroupCoordinator> _group_coordinator;
+    std::unique_ptr<MediaCoordinator> _media_coordinator;
+    std::unique_ptr<CallCoordinator> _call_coordinator;
+    std::unique_ptr<ProfileCoordinator> _profile_coordinator;
 };
 
 #endif // APPCONTROLLER_H
