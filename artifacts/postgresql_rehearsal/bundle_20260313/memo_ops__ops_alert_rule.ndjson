@@ -1,3 +1,0 @@
-{"alert_rule_id": 1, "rule_name": "missing-service", "rule_type": "service_presence", "enabled": 1, "threshold_json": "{\"missing_service_after_sec\": 30}", "updated_at": "2026-03-09T05:50:28"}
-{"alert_rule_id": 2, "rule_name": "high-error-rate", "rule_type": "error_rate", "enabled": 1, "threshold_json": "{\"error_rate_warn\": 0.25}", "updated_at": "2026-03-09T05:50:28"}
-{"alert_rule_id": 3, "rule_name": "high-cpu", "rule_type": "cpu", "enabled": 1, "threshold_json": "{\"cpu_warn\": 85.0}", "updated_at": "2026-03-09T05:50:28"}

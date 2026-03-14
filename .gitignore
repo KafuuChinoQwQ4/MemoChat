@@ -60,6 +60,7 @@ ui_*.h
 /reports/
 /server/*/logs/
 /Memo_ops/runtime/services/**/logs/
+/Memo_ops/runtime/artifacts/logs/
 /Memo_ops/runtime/varify/logs/
 /Memo_ops/runtime/loadtest/
 /local-loadtest/logs/
@@ -73,6 +74,8 @@ ui_*.h
 !/local-loadtest/accounts.example.csv
 
 # Unified artifacts root
+/artifacts/
+/Memo_ops/runtime/artifacts/postgresql_rehearsal/
 /Memo_ops/artifacts/logs/
 /Memo_ops/artifacts/loadtest/
 /Memo_ops/artifacts/reports/
