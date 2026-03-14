@@ -17,7 +17,7 @@ def query_loadtest_trends(
         bucket_expr = "suite_name"
         bucket_label = "suite"
     else:
-        bucket_expr = "DATE_FORMAT(COALESCE(finished_at, started_at), '%%Y-%%m-%%d')"
+        bucket_expr = "to_char(COALESCE(finished_at, started_at), 'YYYY-MM-DD')"
         bucket_label = "day"
     rows = fetch_all(
         conn,

@@ -10,6 +10,59 @@ const { exportZipkinSpan, startServerSpan, childSpan } = require('./telemetry');
 
 let grpcServer = null;
 let shuttingDown = false;
+const verifyJobs = [];
+let verifyJobScheduled = false;
+
+function enqueueVerifyDelivery(job) {
+  verifyJobs.push(job);
+  if (verifyJobScheduled) {
+    return;
+  }
+  verifyJobScheduled = true;
+  setImmediate(async () => {
+    verifyJobScheduled = false;
+    while (verifyJobs.length > 0) {
+      const current = verifyJobs.shift();
+      if (!current) {
+        continue;
+      }
+      const span = childSpan(current.span, 'VarifyService.VerifyCodeDelivery', {
+        'job.type': 'verify_delivery',
+      });
+      try {
+        const send_res = await emailModule.SendMail(current.mailOptions);
+        logger.info(
+          {
+            event: 'varify.get_code.sent_async',
+            trace_id: span.trace_id,
+            request_id: span.request_id,
+            span_id: span.span_id,
+            email: redactEmail(current.email),
+            smtp_message: send_res,
+            module: 'job',
+          },
+          'verify code sent asynchronously'
+        );
+        exportZipkinSpan(span, { email: redactEmail(current.email), peer_service: 'smtp', delivery_mode: 'async' });
+      } catch (error) {
+        logger.error(
+          {
+            event: 'varify.get_code.async_failed',
+            trace_id: span.trace_id,
+            request_id: span.request_id,
+            span_id: span.span_id,
+            email: redactEmail(current.email),
+            error: error && error.message ? error.message : String(error),
+            module: 'job',
+            error_type: 'smtp',
+          },
+          'verify code async delivery failed'
+        );
+        exportZipkinSpan(span, { email: redactEmail(current.email), error: error && error.message ? error.message : String(error), 'otel.status_code': 'ERROR' });
+      }
+    }
+  });
+}
 
 function traceIdFromCall(call) {
   const md = call && call.metadata;
@@ -110,21 +163,36 @@ async function GetVarifyCode(call, callback) {
         subject: '验证码',
         text: text_str,
       };
-
-      const send_res = await emailModule.SendMail(mailOptions);
-      logger.info(
-        {
-          event: 'varify.get_code.sent',
-          trace_id,
-          request_id: span.request_id,
-          span_id: span.span_id,
-          email: redactEmail(email),
-          smtp_message: send_res,
-          module: 'grpc',
-        },
-        'verify code sent'
-      );
-      exportZipkinSpan(span, { email: redactEmail(email), peer_service: 'smtp' });
+      if (config_module.verify_async_outbox) {
+        enqueueVerifyDelivery({ email, mailOptions, span });
+        logger.info(
+          {
+            event: 'varify.get_code.queued',
+            trace_id,
+            request_id: span.request_id,
+            span_id: span.span_id,
+            email: redactEmail(email),
+            module: 'grpc',
+          },
+          'verify code queued for async delivery'
+        );
+        exportZipkinSpan(span, { email: redactEmail(email), delivery_mode: 'async-queued', peer_service: 'redis' });
+      } else {
+        const send_res = await emailModule.SendMail(mailOptions);
+        logger.info(
+          {
+            event: 'varify.get_code.sent',
+            trace_id,
+            request_id: span.request_id,
+            span_id: span.span_id,
+            email: redactEmail(email),
+            smtp_message: send_res,
+            module: 'grpc',
+          },
+          'verify code sent'
+        );
+        exportZipkinSpan(span, { email: redactEmail(email), peer_service: 'smtp' });
+      }
     }
 
     callback(null, {

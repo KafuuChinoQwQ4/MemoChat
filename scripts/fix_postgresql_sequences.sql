@@ -1,0 +1,15 @@
+SELECT setval('memo.chat_dialog_id_seq', COALESCE((SELECT max(id) FROM memo.chat_dialog), 1), true);
+SELECT setval('memo.chat_dialog_meta_id_seq', COALESCE((SELECT max(id) FROM memo.chat_dialog_meta), 1), true);
+SELECT setval('memo.chat_group_group_id_seq', COALESCE((SELECT max(group_id) FROM memo.chat_group), 1), true);
+SELECT setval('memo.chat_group_admin_permission_id_seq', COALESCE((SELECT max(id) FROM memo.chat_group_admin_permission), 1), true);
+SELECT setval('memo.chat_group_apply_apply_id_seq', COALESCE((SELECT max(apply_id) FROM memo.chat_group_apply), 1), true);
+SELECT setval('memo.chat_group_member_id_seq', COALESCE((SELECT max(id) FROM memo.chat_group_member), 1), true);
+SELECT setval('memo.chat_group_msg_server_msg_id_seq', COALESCE((SELECT max(server_msg_id) FROM memo.chat_group_msg), 1), true);
+SELECT setval('memo.chat_group_read_state_id_seq', COALESCE((SELECT max(id) FROM memo.chat_group_read_state), 1), true);
+SELECT setval('memo.chat_media_asset_media_id_seq', COALESCE((SELECT max(media_id) FROM memo.chat_media_asset), 1), true);
+SELECT setval('memo.chat_private_read_state_id_seq', COALESCE((SELECT max(id) FROM memo.chat_private_read_state), 1), true);
+SELECT setval('memo.friend_id_seq', COALESCE((SELECT max(id) FROM memo.friend), 1), true);
+SELECT setval('memo.friend_apply_id_seq', COALESCE((SELECT max(id) FROM memo.friend_apply), 1), true);
+SELECT setval('memo.friend_apply_tag_id_seq', COALESCE((SELECT max(id) FROM memo.friend_apply_tag), 1), true);
+SELECT setval('memo.friend_tag_id_seq', COALESCE((SELECT max(id) FROM memo.friend_tag), 1), true);
+SELECT setval('memo.user_id_seq', COALESCE((SELECT max(id) FROM memo."user"), 1), true);

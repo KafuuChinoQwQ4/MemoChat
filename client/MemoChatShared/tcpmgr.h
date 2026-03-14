@@ -58,6 +58,7 @@ signals:
     void sig_private_history_rsp(QJsonObject payload);
     void sig_private_msg_changed(QJsonObject payload);
     void sig_private_read_ack(QJsonObject payload);
+    void sig_message_status(QJsonObject payload);
     void sig_call_event(QJsonObject payload);
     void sig_heartbeat_ack(qint64 ackAtMs);
     void sig_notify_offline();

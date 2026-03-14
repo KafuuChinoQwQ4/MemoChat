@@ -21,6 +21,7 @@ set(SHARED_CLIENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../MemoChatShared)
 set(SOURCES
     main.cpp
     AppController.cpp
+    AppCoordinators.cpp
     AppControllerCall.cpp
     AppControllerGroupEvents.cpp
     AppControllerMedia.cpp
@@ -54,6 +55,7 @@ set(SOURCES
 
 set(HEADERS
     AppController.h
+    AppCoordinators.h
     AuthController.h
     CallController.h
     CallSessionModel.h

@@ -3,8 +3,8 @@
 #include "Singleton.h"
 #include "ConfigMgr.h"
 #include <grpcpp/grpcpp.h>
-#include "message.grpc.pb.h"
-#include "message.pb.h"
+#include "common/proto/message.grpc.pb.h"
+#include "common/proto/message.pb.h"
 #include <queue>
 #include "data.h"
 #include <json/json.h>

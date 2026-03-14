@@ -1,7 +1,7 @@
-#include "MysqlDao.h"
+#include "PostgresDao.h"
 #include "ConfigMgr.h"
-#include "MySqlPool.h"
-#include <jdbc/cppconn/prepared_statement.h>
+#include "PostgresPool.h"
+#include <pqxx/pqxx>
 #include <set>
 #include <algorithm>
 #include <chrono>
@@ -12,7 +12,29 @@
 #include <stdexcept>
 #include <limits>
 
+
 namespace {
+std::string BuildPostgresConnectionString() {
+	auto& cfg = ConfigMgr::Inst();
+	const auto host = cfg["Postgres"]["Host"];
+	if (host.empty()) {
+		return "";
+	}
+	const auto port = cfg["Postgres"]["Port"];
+	const auto pwd = cfg["Postgres"]["Passwd"];
+	const auto database = cfg["Postgres"]["Database"];
+	const auto schema = cfg["Postgres"]["Schema"];
+	const auto user = cfg["Postgres"]["User"];
+	const auto sslmode = cfg["Postgres"]["SslMode"];
+	return "host=" + host +
+		" port=" + port +
+		" user=" + user +
+		" password=" + pwd +
+		" dbname=" + database +
+		" sslmode=" + (sslmode.empty() ? "disable" : sslmode) +
+		" options='-c search_path=" + (schema.empty() ? "public" : schema) + ",public'";
+}
+
 bool IsValidUserPublicId(const std::string& user_id) {
 	if (user_id.size() != 10 || user_id[0] != 'u') {
 		return false;
@@ -41,6 +63,21 @@ bool IsValidGroupCode(const std::string& group_code) {
 		}
 	}
 	return true;
+}
+
+std::string GenerateRandomUserPublicId() {
+	static thread_local std::mt19937_64 rng(std::random_device{}());
+	std::uniform_int_distribution<int> dist(100000000, 999999999);
+	return "u" + std::to_string(dist(rng));
+}
+
+std::string DecodeLegacyXorPwd(const std::string& input) {
+	unsigned int xor_code = static_cast<unsigned int>(input.size() % 255);
+	std::string decoded = input;
+	for (size_t i = 0; i < decoded.size(); ++i) {
+		decoded[i] = static_cast<char>(static_cast<unsigned char>(decoded[i]) ^ xor_code);
+	}
+	return decoded;
 }
 
 constexpr int64_t kPermChangeGroupInfo = 1LL << 0;
@@ -86,147 +123,57 @@ void ExecuteIgnoreSql(sql::Statement* stmt, const std::string& sql_text) {
 }
 }
 
-MysqlDao::MysqlDao()
+PostgresDao::PostgresDao()
 {
-	auto & cfg = ConfigMgr::Inst();
-	const auto& host = cfg["Mysql"]["Host"];
-	const auto& port = cfg["Mysql"]["Port"];
-	const auto& pwd = cfg["Mysql"]["Passwd"];
-	const auto& schema = cfg["Mysql"]["Schema"];
-	const auto& user = cfg["Mysql"]["User"];
-	pool_.reset(new MySqlPool(host+":"+port, user, pwd,schema, 5));
-	try {
-		auto con = pool_->getConnection();
-		if (con != nullptr) {
-			std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
-			stmt->execute("CREATE TABLE IF NOT EXISTS friend_apply_tag ("
-				"id BIGINT AUTO_INCREMENT PRIMARY KEY,"
-				"from_uid INT NOT NULL,"
-				"to_uid INT NOT NULL,"
-				"tag VARCHAR(64) NOT NULL,"
-				"UNIQUE KEY uq_apply_tag(from_uid, to_uid, tag)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-			stmt->execute("CREATE TABLE IF NOT EXISTS friend_tag ("
-				"id BIGINT AUTO_INCREMENT PRIMARY KEY,"
-				"self_id INT NOT NULL,"
-				"friend_id INT NOT NULL,"
-				"tag VARCHAR(64) NOT NULL,"
-				"UNIQUE KEY uq_friend_tag(self_id, friend_id, tag)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-			stmt->execute("CREATE TABLE IF NOT EXISTS chat_group ("
-				"group_id BIGINT AUTO_INCREMENT PRIMARY KEY,"
-				"group_code VARCHAR(10) NULL,"
-				"name VARCHAR(64) NOT NULL,"
-				"icon VARCHAR(512) NULL,"
-				"owner_uid INT NOT NULL,"
-				"announcement TEXT,"
-				"member_limit INT NOT NULL DEFAULT 200,"
-				"is_all_muted TINYINT NOT NULL DEFAULT 0,"
-				"status TINYINT NOT NULL DEFAULT 1,"
-				"created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-				"updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,"
-				"UNIQUE KEY uk_group_code(group_code),"
-				"KEY idx_owner_uid(owner_uid),"
-				"KEY idx_status(status)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-			stmt->execute("CREATE TABLE IF NOT EXISTS chat_group_member ("
-				"id BIGINT AUTO_INCREMENT PRIMARY KEY,"
-				"group_id BIGINT NOT NULL,"
-				"uid INT NOT NULL,"
-				"role TINYINT NOT NULL DEFAULT 1,"
-				"mute_until BIGINT NOT NULL DEFAULT 0,"
-				"join_source TINYINT NOT NULL DEFAULT 0,"
-				"status TINYINT NOT NULL DEFAULT 1,"
-				"joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-				"updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,"
-				"UNIQUE KEY uq_group_user(group_id, uid),"
-				"KEY idx_uid_status(uid, status),"
-				"KEY idx_group_status(group_id, status)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-			stmt->execute("CREATE TABLE IF NOT EXISTS chat_group_apply ("
-				"apply_id BIGINT AUTO_INCREMENT PRIMARY KEY,"
-				"group_id BIGINT NOT NULL,"
-				"applicant_uid INT NOT NULL,"
-				"inviter_uid INT DEFAULT 0,"
-				"type TINYINT NOT NULL DEFAULT 1,"
-				"status TINYINT NOT NULL DEFAULT 0,"
-				"reason VARCHAR(128) DEFAULT '',"
-				"reviewer_uid INT DEFAULT 0,"
-				"created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-				"updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,"
-				"KEY idx_group_status(group_id, status, created_at),"
-				"KEY idx_applicant(group_id, applicant_uid, status),"
-				"KEY idx_inviter(group_id, inviter_uid, status)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-			stmt->execute("CREATE TABLE IF NOT EXISTS chat_group_msg ("
-				"msg_id VARCHAR(64) PRIMARY KEY,"
-				"server_msg_id BIGINT NOT NULL AUTO_INCREMENT UNIQUE,"
-				"group_id BIGINT NOT NULL,"
-				"group_seq BIGINT NOT NULL DEFAULT 0,"
-				"from_uid INT NOT NULL,"
-				"msg_type VARCHAR(16) NOT NULL,"
-				"content TEXT NOT NULL,"
-				"mentions_json TEXT,"
-				"reply_to_server_msg_id BIGINT NOT NULL DEFAULT 0,"
-				"forward_meta_json TEXT,"
-				"edited_at_ms BIGINT NOT NULL DEFAULT 0,"
-				"deleted_at_ms BIGINT NOT NULL DEFAULT 0,"
-				"created_at BIGINT NOT NULL,"
-				"KEY idx_group_created(group_id, created_at),"
-				"KEY idx_group_seq(group_id, group_seq)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-			stmt->execute("CREATE TABLE IF NOT EXISTS chat_group_msg_ext ("
-				"msg_id VARCHAR(64) PRIMARY KEY,"
-				"file_name VARCHAR(255) DEFAULT '',"
-				"mime VARCHAR(127) DEFAULT '',"
-				"size INT NOT NULL DEFAULT 0"
-				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-			stmt->execute("CREATE TABLE IF NOT EXISTS chat_private_msg ("
-				"msg_id VARCHAR(64) PRIMARY KEY,"
-				"conv_uid_min INT NOT NULL,"
-				"conv_uid_max INT NOT NULL,"
-				"from_uid INT NOT NULL,"
-				"to_uid INT NOT NULL,"
-				"content TEXT NOT NULL,"
-				"reply_to_server_msg_id BIGINT NOT NULL DEFAULT 0,"
-				"forward_meta_json TEXT,"
-				"edited_at_ms BIGINT NOT NULL DEFAULT 0,"
-				"deleted_at_ms BIGINT NOT NULL DEFAULT 0,"
-				"created_at BIGINT NOT NULL,"
-				"KEY idx_conv_created(conv_uid_min, conv_uid_max, created_at),"
-				"KEY idx_to_created(to_uid, created_at)"
-				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-			ExecuteIgnoreSql(stmt.get(), "CREATE INDEX idx_friend_self_id_friend_id ON friend(self_id, friend_id)");
-			ExecuteIgnoreSql(stmt.get(), "CREATE INDEX idx_friend_apply_to_uid_id_from_uid ON friend_apply(to_uid, id, from_uid)");
-			ExecuteIgnoreSql(stmt.get(), "CREATE INDEX idx_friend_apply_tag_to_uid_from_uid_id ON friend_apply_tag(to_uid, from_uid, id)");
-			ExecuteIgnoreSql(stmt.get(), "CREATE INDEX idx_friend_tag_self_id_friend_id_id ON friend_tag(self_id, friend_id, id)");
-			pool_->returnConnection(std::move(con));
-		}
-	}
-	catch (sql::SQLException& e) {
-		std::cerr << "init tag tables failed: " << e.what() << std::endl;
-	}
-
-	if (!EnsureGroupCodeSchemaAndBackfill()) {
-		throw std::runtime_error("failed to ensure/backfill chat_group.group_code");
-	}
-	if (!EnsureDialogMetaSchema()) {
-		throw std::runtime_error("failed to ensure chat_dialog schema");
-	}
-	if (!EnsurePrivateReadStateSchema()) {
-		throw std::runtime_error("failed to ensure chat_private_read_state schema");
-	}
-	if (!EnsureGroupReadStateSchema()) {
-		throw std::runtime_error("failed to ensure chat_group_read_state schema");
-	}
-	if (!EnsureGroupMessageOrderSchema()) {
-		throw std::runtime_error("failed to ensure/backfill chat_group_msg sequence schema");
-	}
-	if (!EnsureGroupPermissionSchemaAndBackfill()) {
-		throw std::runtime_error("failed to ensure/backfill chat_group_admin_permission schema");
+	postgres_connection_string_ = BuildPostgresConnectionString();
+	use_postgres_ = !postgres_connection_string_.empty();
+	if (!use_postgres_) {
+		throw std::runtime_error("missing [Postgres] configuration for ChatServer");
 	}
 	WarmupRelationBootstrapQueries();
 }
 
-MysqlDao::~MysqlDao(){
-	pool_->Close();
+PostgresDao::~PostgresDao(){
+	if (pool_) {
+		pool_->Close();
+	}
 }
 
-void MysqlDao::WarmupRelationBootstrapQueries() {
+void PostgresDao::WarmupRelationBootstrapQueries() {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			txn.exec_params(
+				"SELECT a.from_uid, a.status, u.name, u.nick, u.sex, u.user_id "
+				"FROM friend_apply AS a "
+				"JOIN \"user\" AS u ON a.from_uid = u.uid "
+				"WHERE a.to_uid = $1 AND a.id > $2 ORDER BY a.id ASC LIMIT $3",
+				-1,
+				0,
+				1);
+			txn.exec_params(
+				"SELECT tag FROM friend_apply_tag WHERE to_uid = $1 AND from_uid = $2 ORDER BY id ASC",
+				-1,
+				-1);
+			txn.exec_params(
+				"SELECT f.friend_id, f.back, u.name, u.nick, u.sex, u.user_id, u.\"desc\", u.icon "
+				"FROM friend AS f "
+				"JOIN \"user\" AS u ON f.friend_id = u.uid "
+				"WHERE f.self_id = $1 LIMIT 1",
+				-1);
+			txn.exec_params(
+				"SELECT tag FROM friend_tag WHERE self_id = $1 AND friend_id = $2 ORDER BY id ASC",
+				-1,
+				-1);
+			return;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "warmup relation bootstrap queries failed: " << e.what() << std::endl;
+			return;
+		}
+	}
+
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return;
@@ -283,8 +230,59 @@ void MysqlDao::WarmupRelationBootstrapQueries() {
 	}
 }
 
-int MysqlDao::RegUser(const std::string& name, const std::string& email, const std::string& pwd)
+int PostgresDao::RegUser(const std::string& name, const std::string& email, const std::string& pwd)
 {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto exists = txn.exec_params(
+				"SELECT 1 FROM \"user\" WHERE email = $1 OR name = $2 LIMIT 1",
+				email,
+				name);
+			if (!exists.empty()) {
+				txn.commit();
+				return 0;
+			}
+
+			const int new_id = txn.exec1("SELECT COALESCE(MAX(id), 1000) + 1 FROM user_id")[0].as<int>();
+			txn.exec0("DELETE FROM user_id");
+			txn.exec_params0("INSERT INTO user_id(id) VALUES ($1)", new_id);
+
+			std::string user_public_id;
+			for (int i = 0; i < 20; ++i) {
+				user_public_id = GenerateRandomUserPublicId();
+				const auto rows = txn.exec_params(
+					"SELECT 1 FROM \"user\" WHERE user_id = $1 LIMIT 1",
+					user_public_id);
+				if (rows.empty()) {
+					break;
+				}
+				user_public_id.clear();
+			}
+			if (user_public_id.empty()) {
+				txn.abort();
+				return -1;
+			}
+
+			txn.exec_params0(
+				"INSERT INTO \"user\"(uid, name, email, pwd, nick, icon, user_id) "
+				"VALUES ($1, $2, $3, $4, $5, $6, $7)",
+				new_id,
+				name,
+				email,
+				pwd,
+				name,
+				"",
+				user_public_id);
+			txn.commit();
+			return new_id;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return -1;
+		}
+	}
 	auto con = pool_->getConnection();
 	try {
 		if (con == nullptr) {
@@ -317,13 +315,31 @@ int MysqlDao::RegUser(const std::string& name, const std::string& email, const s
 	catch (sql::SQLException& e) {
 		pool_->returnConnection(std::move(con));
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return -1;
 	}
 }
 
-bool MysqlDao::CheckEmail(const std::string& name, const std::string& email) {
+bool PostgresDao::CheckEmail(const std::string& name, const std::string& email) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT email FROM \"user\" WHERE name = $1 LIMIT 1",
+				name);
+			if (rows.empty()) {
+				return false;
+			}
+			const auto stored_email = rows[0]["email"].is_null() ? "" : rows[0]["email"].c_str();
+			return stored_email == email;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
 	auto con = pool_->getConnection();
 	try {
 		if (con == nullptr) {
@@ -354,13 +370,29 @@ bool MysqlDao::CheckEmail(const std::string& name, const std::string& email) {
 	catch (sql::SQLException& e) {
 		pool_->returnConnection(std::move(con));
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::UpdatePwd(const std::string& name, const std::string& newpwd) {
+bool PostgresDao::UpdatePwd(const std::string& name, const std::string& newpwd) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto updated = txn.exec_params(
+				"UPDATE \"user\" SET pwd = $1 WHERE name = $2",
+				newpwd,
+				name);
+			txn.commit();
+			return updated.affected_rows() > 0;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
 	auto con = pool_->getConnection();
 	try {
 		if (con == nullptr) {
@@ -384,13 +416,49 @@ bool MysqlDao::UpdatePwd(const std::string& name, const std::string& newpwd) {
 	catch (sql::SQLException& e) {
 		pool_->returnConnection(std::move(con));
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::CheckPwd(const std::string& name, const std::string& pwd, UserInfo& userInfo) {
+bool PostgresDao::CheckPwd(const std::string& name, const std::string& pwd, UserInfo& userInfo) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT uid, name, email, pwd, user_id, nick, icon, \"desc\", sex "
+				"FROM \"user\" WHERE name = $1 LIMIT 1",
+				name);
+			if (rows.empty()) {
+				return false;
+			}
+			const auto& row = rows[0];
+			const std::string origin_pwd = row["pwd"].is_null() ? "" : row["pwd"].c_str();
+			if (pwd != origin_pwd) {
+				const auto decoded_pwd = DecodeLegacyXorPwd(pwd);
+				if (decoded_pwd != origin_pwd) {
+					return false;
+				}
+			}
+
+			userInfo.name = row["name"].is_null() ? "" : row["name"].c_str();
+			userInfo.email = row["email"].is_null() ? "" : row["email"].c_str();
+			userInfo.uid = row["uid"].as<int>();
+			userInfo.user_id = row["user_id"].is_null() ? "" : row["user_id"].c_str();
+			userInfo.nick = row["nick"].is_null() ? "" : row["nick"].c_str();
+			userInfo.icon = row["icon"].is_null() ? "" : row["icon"].c_str();
+			userInfo.desc = row["desc"].is_null() ? "" : row["desc"].c_str();
+			userInfo.sex = row["sex"].is_null() ? 0 : row["sex"].as<int>();
+			userInfo.pwd = origin_pwd;
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -425,14 +493,31 @@ bool MysqlDao::CheckPwd(const std::string& name, const std::string& pwd, UserInf
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::AddFriendApply(const int& from, const int& to)
+bool PostgresDao::AddFriendApply(const int& from, const int& to)
 {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			txn.exec_params(
+				"INSERT INTO friend_apply (from_uid, to_uid) VALUES ($1, $2) "
+				"ON CONFLICT (from_uid, to_uid) DO UPDATE SET from_uid = EXCLUDED.from_uid",
+				from,
+				to);
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -457,7 +542,7 @@ bool MysqlDao::AddFriendApply(const int& from, const int& to)
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
@@ -466,7 +551,23 @@ bool MysqlDao::AddFriendApply(const int& from, const int& to)
 	return true;
 }
 
-bool MysqlDao::AuthFriendApply(const int& from, const int& to) {
+bool PostgresDao::AuthFriendApply(const int& from, const int& to) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto updated = txn.exec_params(
+				"UPDATE friend_apply SET status = 1 WHERE from_uid = $1 AND to_uid = $2",
+				to,
+				from);
+			txn.commit();
+			return updated.affected_rows() >= 0;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -492,7 +593,7 @@ bool MysqlDao::AuthFriendApply(const int& from, const int& to) {
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
@@ -501,7 +602,31 @@ bool MysqlDao::AuthFriendApply(const int& from, const int& to) {
 	return true;
 }
 
-bool MysqlDao::AddFriend(const int& from, const int& to, std::string back_name) {
+bool PostgresDao::AddFriend(const int& from, const int& to, std::string back_name) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			txn.exec_params(
+				"INSERT INTO friend(self_id, friend_id, back) VALUES ($1, $2, $3) "
+				"ON CONFLICT (self_id, friend_id) DO NOTHING",
+				from,
+				to,
+				back_name);
+			txn.exec_params(
+				"INSERT INTO friend(self_id, friend_id, back) VALUES ($1, $2, $3) "
+				"ON CONFLICT (self_id, friend_id) DO NOTHING",
+				to,
+				from,
+				"");
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -558,7 +683,7 @@ bool MysqlDao::AddFriend(const int& from, const int& to, std::string back_name) 
 			con->_con->rollback();
 		}
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
@@ -567,7 +692,48 @@ bool MysqlDao::AddFriend(const int& from, const int& to, std::string back_name) 
 	return true;
 }
 
-bool MysqlDao::ReplaceApplyTags(const int& from, const int& to, const std::vector<std::string>& tags) {
+bool PostgresDao::ReplaceApplyTags(const int& from, const int& to, const std::vector<std::string>& tags) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			txn.exec_params(
+				"DELETE FROM friend_apply_tag WHERE from_uid = $1 AND to_uid = $2",
+				from,
+				to);
+
+			std::set<std::string> uniqTags;
+			for (const auto& raw : tags) {
+				auto begin = raw.find_first_not_of(" \t\r\n");
+				if (begin == std::string::npos) {
+					continue;
+				}
+				auto end = raw.find_last_not_of(" \t\r\n");
+				std::string tag = raw.substr(begin, end - begin + 1);
+				if (tag.size() > 64) {
+					tag = tag.substr(0, 64);
+				}
+				if (!tag.empty()) {
+					uniqTags.insert(tag);
+				}
+			}
+
+			for (const auto& tag : uniqTags) {
+				txn.exec_params(
+					"INSERT INTO friend_apply_tag(from_uid, to_uid, tag) VALUES($1, $2, $3) "
+					"ON CONFLICT (from_uid, to_uid, tag) DO NOTHING",
+					from,
+					to,
+					tag);
+			}
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -620,13 +786,54 @@ bool MysqlDao::ReplaceApplyTags(const int& from, const int& to, const std::vecto
 			con->_con->rollback();
 		}
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::ReplaceFriendTags(const int& self_id, const int& friend_id, const std::vector<std::string>& tags) {
+bool PostgresDao::ReplaceFriendTags(const int& self_id, const int& friend_id, const std::vector<std::string>& tags) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			txn.exec_params(
+				"DELETE FROM friend_tag WHERE self_id = $1 AND friend_id = $2",
+				self_id,
+				friend_id);
+
+			std::set<std::string> uniqTags;
+			for (const auto& raw : tags) {
+				auto begin = raw.find_first_not_of(" \t\r\n");
+				if (begin == std::string::npos) {
+					continue;
+				}
+				auto end = raw.find_last_not_of(" \t\r\n");
+				std::string tag = raw.substr(begin, end - begin + 1);
+				if (tag.size() > 64) {
+					tag = tag.substr(0, 64);
+				}
+				if (!tag.empty()) {
+					uniqTags.insert(tag);
+				}
+			}
+
+			for (const auto& tag : uniqTags) {
+				txn.exec_params(
+					"INSERT INTO friend_tag(self_id, friend_id, tag) VALUES($1, $2, $3) "
+					"ON CONFLICT (self_id, friend_id, tag) DO NOTHING",
+					self_id,
+					friend_id,
+					tag);
+			}
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -679,14 +886,31 @@ bool MysqlDao::ReplaceFriendTags(const int& self_id, const int& friend_id, const
 			con->_con->rollback();
 		}
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-std::vector<std::string> MysqlDao::GetApplyTags(const int& from, const int& to) {
+std::vector<std::string> PostgresDao::GetApplyTags(const int& from, const int& to) {
 	std::vector<std::string> tags;
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT tag FROM friend_apply_tag WHERE from_uid = $1 AND to_uid = $2 ORDER BY id ASC",
+				from,
+				to);
+			for (const auto& row : rows) {
+				tags.push_back(row["tag"].is_null() ? "" : row["tag"].c_str());
+			}
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+		}
+		return tags;
+	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return tags;
@@ -708,14 +932,31 @@ std::vector<std::string> MysqlDao::GetApplyTags(const int& from, const int& to) 
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 	}
 	return tags;
 }
 
-std::vector<std::string> MysqlDao::GetFriendTags(const int& self_id, const int& friend_id) {
+std::vector<std::string> PostgresDao::GetFriendTags(const int& self_id, const int& friend_id) {
 	std::vector<std::string> tags;
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT tag FROM friend_tag WHERE self_id = $1 AND friend_id = $2 ORDER BY id ASC",
+				self_id,
+				friend_id);
+			for (const auto& row : rows) {
+				tags.push_back(row["tag"].is_null() ? "" : row["tag"].c_str());
+			}
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+		}
+		return tags;
+	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return tags;
@@ -737,13 +978,44 @@ std::vector<std::string> MysqlDao::GetFriendTags(const int& self_id, const int& 
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 	}
 	return tags;
 }
-std::shared_ptr<UserInfo> MysqlDao::GetUser(int uid)
+std::shared_ptr<UserInfo> PostgresDao::GetUser(int uid)
 {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT pwd, email, name, nick, \"desc\", sex, icon, user_id, uid "
+				"FROM \"user\" WHERE uid = $1 LIMIT 1",
+				uid);
+			if (rows.empty()) {
+				return nullptr;
+			}
+
+			const auto& row = rows[0];
+			auto user_ptr = std::make_shared<UserInfo>();
+			user_ptr->pwd = row["pwd"].is_null() ? "" : row["pwd"].c_str();
+			user_ptr->email = row["email"].is_null() ? "" : row["email"].c_str();
+			user_ptr->name = row["name"].is_null() ? "" : row["name"].c_str();
+			user_ptr->nick = row["nick"].is_null() ? "" : row["nick"].c_str();
+			user_ptr->desc = row["desc"].is_null() ? "" : row["desc"].c_str();
+			user_ptr->sex = row["sex"].is_null() ? 0 : row["sex"].as<int>();
+			user_ptr->icon = row["icon"].is_null() ? "" : row["icon"].c_str();
+			user_ptr->user_id = row["user_id"].is_null() ? "" : row["user_id"].c_str();
+			user_ptr->uid = row["uid"].as<int>();
+			return user_ptr;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return nullptr;
+		}
+	}
+
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return nullptr;
@@ -779,14 +1051,45 @@ std::shared_ptr<UserInfo> MysqlDao::GetUser(int uid)
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return nullptr;
 	}
 }
 
-std::shared_ptr<UserInfo> MysqlDao::GetUser(std::string name)
+std::shared_ptr<UserInfo> PostgresDao::GetUser(std::string name)
 {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT pwd, email, name, nick, \"desc\", sex, icon, user_id, uid "
+				"FROM \"user\" WHERE name = $1 LIMIT 1",
+				name);
+			if (rows.empty()) {
+				return nullptr;
+			}
+
+			const auto& row = rows[0];
+			auto user_ptr = std::make_shared<UserInfo>();
+			user_ptr->pwd = row["pwd"].is_null() ? "" : row["pwd"].c_str();
+			user_ptr->email = row["email"].is_null() ? "" : row["email"].c_str();
+			user_ptr->name = row["name"].is_null() ? "" : row["name"].c_str();
+			user_ptr->nick = row["nick"].is_null() ? "" : row["nick"].c_str();
+			user_ptr->desc = row["desc"].is_null() ? "" : row["desc"].c_str();
+			user_ptr->sex = row["sex"].is_null() ? 0 : row["sex"].as<int>();
+			user_ptr->icon = row["icon"].is_null() ? "" : row["icon"].c_str();
+			user_ptr->user_id = row["user_id"].is_null() ? "" : row["user_id"].c_str();
+			user_ptr->uid = row["uid"].as<int>();
+			return user_ptr;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return nullptr;
+		}
+	}
+
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return nullptr;
@@ -822,16 +1125,35 @@ std::shared_ptr<UserInfo> MysqlDao::GetUser(std::string name)
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return nullptr;
 	}
 }
 
-bool MysqlDao::GetUidByUserId(const std::string& user_id, int& uid) {
+bool PostgresDao::GetUidByUserId(const std::string& user_id, int& uid) {
 	uid = 0;
 	if (!IsValidUserPublicId(user_id)) {
 		return false;
+	}
+
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT uid FROM \"user\" WHERE user_id = $1 LIMIT 1",
+				user_id);
+			if (rows.empty()) {
+				return false;
+			}
+			uid = rows[0]["uid"].as<int>();
+			return uid > 0;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 	auto con = pool_->getConnection();
@@ -856,14 +1178,75 @@ bool MysqlDao::GetUidByUserId(const std::string& user_id, int& uid) {
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
 
-bool MysqlDao::GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& applyList, int begin, int limit) {
+bool PostgresDao::GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& applyList, int begin, int limit) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			std::vector<int> from_uids;
+			std::unordered_map<int, std::shared_ptr<ApplyInfo>> apply_by_uid;
+			const auto rows = txn.exec_params(
+				"SELECT apply.from_uid, apply.status, usr.name, usr.nick, usr.sex, usr.user_id "
+				"FROM friend_apply AS apply "
+				"JOIN \"user\" AS usr ON apply.from_uid = usr.uid "
+				"WHERE apply.to_uid = $1 AND apply.id > $2 "
+				"ORDER BY apply.id ASC LIMIT $3",
+				touid,
+				begin,
+				limit);
+			for (const auto& row : rows) {
+				const auto uid = row["from_uid"].as<int>();
+				auto apply_ptr = std::make_shared<ApplyInfo>(
+					uid,
+					row["name"].is_null() ? "" : row["name"].c_str(),
+					"",
+					"",
+					row["nick"].is_null() ? "" : row["nick"].c_str(),
+					row["sex"].is_null() ? 0 : row["sex"].as<int>(),
+					row["status"].is_null() ? 0 : row["status"].as<int>(),
+					row["user_id"].is_null() ? "" : row["user_id"].c_str());
+				applyList.push_back(apply_ptr);
+				from_uids.push_back(uid);
+				apply_by_uid.emplace(uid, apply_ptr);
+			}
+
+			if (!from_uids.empty()) {
+				pqxx::params tag_params;
+				tag_params.append(touid);
+				std::string in_clause;
+				for (size_t i = 0; i < from_uids.size(); ++i) {
+					if (i > 0) {
+						in_clause += ", ";
+					}
+					in_clause += "$" + std::to_string(i + 2);
+					tag_params.append(from_uids[i]);
+				}
+				const auto tag_rows = txn.exec(
+					"SELECT from_uid, tag FROM friend_apply_tag WHERE to_uid = $1 AND from_uid IN (" + in_clause + ") ORDER BY id ASC",
+					tag_params);
+				for (const auto& row : tag_rows) {
+					const auto uid = row["from_uid"].as<int>();
+					const auto it = apply_by_uid.find(uid);
+					if (it != apply_by_uid.end() && it->second) {
+						it->second->_labels.push_back(row["tag"].is_null() ? "" : row["tag"].c_str());
+					}
+				}
+			}
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
+
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -930,13 +1313,70 @@ bool MysqlDao::GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& 
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo> >& user_info_list) {
+bool PostgresDao::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo> >& user_info_list) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			std::vector<int> friend_ids;
+			std::unordered_map<int, std::shared_ptr<UserInfo>> friend_by_id;
+			const auto rows = txn.exec_params(
+				"SELECT f.friend_id, f.back, u.name, u.nick, u.sex, u.user_id, u.\"desc\", u.icon "
+				"FROM friend AS f "
+				"JOIN \"user\" AS u ON f.friend_id = u.uid "
+				"WHERE f.self_id = $1",
+				self_id);
+			for (const auto& row : rows) {
+				const auto friend_id = row["friend_id"].as<int>();
+				auto user_info = std::make_shared<UserInfo>();
+				user_info->uid = friend_id;
+				user_info->name = row["name"].is_null() ? "" : row["name"].c_str();
+				user_info->nick = row["nick"].is_null() ? "" : row["nick"].c_str();
+				user_info->sex = row["sex"].is_null() ? 0 : row["sex"].as<int>();
+				user_info->user_id = row["user_id"].is_null() ? "" : row["user_id"].c_str();
+				user_info->desc = row["desc"].is_null() ? "" : row["desc"].c_str();
+				user_info->icon = row["icon"].is_null() ? "" : row["icon"].c_str();
+				user_info->back = row["back"].is_null() ? "" : row["back"].c_str();
+				user_info_list.push_back(user_info);
+				friend_ids.push_back(friend_id);
+				friend_by_id.emplace(friend_id, user_info);
+			}
+
+			if (!friend_ids.empty()) {
+				pqxx::params tag_params;
+				tag_params.append(self_id);
+				std::string in_clause;
+				for (size_t i = 0; i < friend_ids.size(); ++i) {
+					if (i > 0) {
+						in_clause += ", ";
+					}
+					in_clause += "$" + std::to_string(i + 2);
+					tag_params.append(friend_ids[i]);
+				}
+				const auto tag_rows = txn.exec(
+					"SELECT friend_id, tag FROM friend_tag WHERE self_id = $1 AND friend_id IN (" + in_clause + ") ORDER BY id ASC",
+					tag_params);
+				for (const auto& row : tag_rows) {
+					const auto friend_id = row["friend_id"].as<int>();
+					const auto it = friend_by_id.find(friend_id);
+					if (it != friend_by_id.end() && it->second) {
+						it->second->labels.push_back(row["tag"].is_null() ? "" : row["tag"].c_str());
+					}
+				}
+			}
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
 
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -1009,7 +1449,7 @@ bool MysqlDao::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo> 
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
@@ -1017,7 +1457,39 @@ bool MysqlDao::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo> 
 	return true;
 }
 
-bool MysqlDao::SavePrivateMessage(const PrivateMessageInfo& msg) {
+bool PostgresDao::SavePrivateMessage(const PrivateMessageInfo& msg) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto result = txn.exec_params(
+				"INSERT INTO chat_private_msg(msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
+				"reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at) "
+				"VALUES($1,$2,$3,$4,$5,$6,$7,NULLIF($8, '')::jsonb,$9,$10,$11) "
+				"ON CONFLICT (msg_id) DO UPDATE SET "
+				"from_uid = EXCLUDED.from_uid, to_uid = EXCLUDED.to_uid, content = EXCLUDED.content, "
+				"reply_to_server_msg_id = EXCLUDED.reply_to_server_msg_id, forward_meta_json = EXCLUDED.forward_meta_json, "
+				"edited_at_ms = EXCLUDED.edited_at_ms, deleted_at_ms = EXCLUDED.deleted_at_ms, created_at = EXCLUDED.created_at",
+				msg.msg_id,
+				msg.conv_uid_min,
+				msg.conv_uid_max,
+				msg.from_uid,
+				msg.to_uid,
+				msg.content,
+				msg.reply_to_server_msg_id,
+				msg.forward_meta_json,
+				msg.edited_at_ms,
+				msg.deleted_at_ms,
+				msg.created_at);
+			txn.commit();
+			return result.affected_rows() >= 0;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
+
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -1053,13 +1525,13 @@ bool MysqlDao::SavePrivateMessage(const PrivateMessageInfo& msg) {
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const std::string& before_msg_id, const int& limit,
+bool PostgresDao::GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const std::string& before_msg_id, const int& limit,
 	std::vector<std::shared_ptr<PrivateMessageInfo>>& messages, bool& has_more) {
 	has_more = false;
 	messages.clear();
@@ -1069,6 +1541,76 @@ bool MysqlDao::GetPrivateHistory(const int& uid, const int& peer_uid, const int6
 
 	const int conv_min = std::min(uid, peer_uid);
 	const int conv_max = std::max(uid, peer_uid);
+
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const int final_limit = limit + 1;
+			pqxx::result rows;
+			if (before_ts > 0 && !before_msg_id.empty()) {
+				rows = txn.exec_params(
+					"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
+					"reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at "
+					"FROM chat_private_msg WHERE conv_uid_min = $1 AND conv_uid_max = $2 "
+					"AND (created_at < $3 OR (created_at = $4 AND msg_id < $5)) "
+					"ORDER BY created_at DESC, msg_id DESC LIMIT $6",
+					conv_min,
+					conv_max,
+					before_ts,
+					before_ts,
+					before_msg_id,
+					final_limit);
+			}
+			else if (before_ts > 0) {
+				rows = txn.exec_params(
+					"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
+					"reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at "
+					"FROM chat_private_msg WHERE conv_uid_min = $1 AND conv_uid_max = $2 AND created_at < $3 "
+					"ORDER BY created_at DESC, msg_id DESC LIMIT $4",
+					conv_min,
+					conv_max,
+					before_ts,
+					final_limit);
+			}
+			else {
+				rows = txn.exec_params(
+					"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
+					"reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at "
+					"FROM chat_private_msg WHERE conv_uid_min = $1 AND conv_uid_max = $2 "
+					"ORDER BY created_at DESC, msg_id DESC LIMIT $3",
+					conv_min,
+					conv_max,
+					final_limit);
+			}
+
+			for (const auto& row : rows) {
+				auto one = std::make_shared<PrivateMessageInfo>();
+				one->msg_id = row["msg_id"].c_str();
+				one->conv_uid_min = row["conv_uid_min"].as<int>();
+				one->conv_uid_max = row["conv_uid_max"].as<int>();
+				one->from_uid = row["from_uid"].as<int>();
+				one->to_uid = row["to_uid"].as<int>();
+				one->content = row["content"].is_null() ? "" : row["content"].c_str();
+				one->reply_to_server_msg_id = row["reply_to_server_msg_id"].is_null() ? 0 : row["reply_to_server_msg_id"].as<int64_t>();
+				one->forward_meta_json = row["forward_meta_json"].is_null() ? "" : row["forward_meta_json"].c_str();
+				one->edited_at_ms = row["edited_at_ms"].is_null() ? 0 : row["edited_at_ms"].as<int64_t>();
+				one->deleted_at_ms = row["deleted_at_ms"].is_null() ? 0 : row["deleted_at_ms"].as<int64_t>();
+				one->created_at = row["created_at"].as<int64_t>();
+				messages.push_back(one);
+			}
+
+			if (static_cast<int>(messages.size()) > limit) {
+				has_more = true;
+				messages.resize(limit);
+			}
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
 
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -1142,16 +1684,51 @@ bool MysqlDao::GetPrivateHistory(const int& uid, const int& peer_uid, const int6
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_ptr<PrivateMessageInfo>& message) {
+bool PostgresDao::GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_ptr<PrivateMessageInfo>& message) {
 	message = nullptr;
 	if (msg_id.empty()) {
 		return false;
+	}
+
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
+				"reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at "
+				"FROM chat_private_msg WHERE msg_id = $1 LIMIT 1",
+				msg_id);
+			if (rows.empty()) {
+				return false;
+			}
+
+			const auto& row = rows[0];
+			auto one = std::make_shared<PrivateMessageInfo>();
+			one->msg_id = row["msg_id"].c_str();
+			one->conv_uid_min = row["conv_uid_min"].as<int>();
+			one->conv_uid_max = row["conv_uid_max"].as<int>();
+			one->from_uid = row["from_uid"].as<int>();
+			one->to_uid = row["to_uid"].as<int>();
+			one->content = row["content"].is_null() ? "" : row["content"].c_str();
+			one->reply_to_server_msg_id = row["reply_to_server_msg_id"].is_null() ? 0 : row["reply_to_server_msg_id"].as<int64_t>();
+			one->forward_meta_json = row["forward_meta_json"].is_null() ? "" : row["forward_meta_json"].c_str();
+			one->edited_at_ms = row["edited_at_ms"].is_null() ? 0 : row["edited_at_ms"].as<int64_t>();
+			one->deleted_at_ms = row["deleted_at_ms"].is_null() ? 0 : row["deleted_at_ms"].as<int64_t>();
+			one->created_at = row["created_at"].as<int64_t>();
+			message = one;
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 	auto con = pool_->getConnection();
@@ -1192,13 +1769,13 @@ bool MysqlDao::GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_p
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::UpdatePrivateMessageContent(const int& uid, const int& peer_uid, const std::string& msg_id,
+bool PostgresDao::UpdatePrivateMessageContent(const int& uid, const int& peer_uid, const std::string& msg_id,
 	const std::string& content, int64_t edited_at_ms) {
 	if (uid <= 0 || peer_uid <= 0 || msg_id.empty() || content.empty()) {
 		return false;
@@ -1206,6 +1783,36 @@ bool MysqlDao::UpdatePrivateMessageContent(const int& uid, const int& peer_uid, 
 	if (edited_at_ms <= 0) {
 		edited_at_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::system_clock::now().time_since_epoch()).count());
+	}
+	if (use_postgres_) {
+		try {
+			std::shared_ptr<PrivateMessageInfo> message;
+			if (!GetPrivateMessageByMsgId(msg_id, message) || !message) {
+				return false;
+			}
+			const int conv_min = std::min(uid, peer_uid);
+			const int conv_max = std::max(uid, peer_uid);
+			if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid) {
+				return false;
+			}
+
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto updated = txn.exec_params(
+				"UPDATE chat_private_msg SET content = $1, edited_at_ms = $2, deleted_at_ms = 0 "
+				"WHERE msg_id = $3 AND conv_uid_min = $4 AND conv_uid_max = $5",
+				content,
+				edited_at_ms,
+				msg_id,
+				conv_min,
+				conv_max);
+			txn.commit();
+			return updated.affected_rows() > 0;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 	auto con = pool_->getConnection();
@@ -1240,19 +1847,48 @@ bool MysqlDao::UpdatePrivateMessageContent(const int& uid, const int& peer_uid, 
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::RevokePrivateMessage(const int& uid, const int& peer_uid, const std::string& msg_id, int64_t deleted_at_ms) {
+bool PostgresDao::RevokePrivateMessage(const int& uid, const int& peer_uid, const std::string& msg_id, int64_t deleted_at_ms) {
 	if (uid <= 0 || peer_uid <= 0 || msg_id.empty()) {
 		return false;
 	}
 	if (deleted_at_ms <= 0) {
 		deleted_at_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::system_clock::now().time_since_epoch()).count());
+	}
+	if (use_postgres_) {
+		try {
+			std::shared_ptr<PrivateMessageInfo> message;
+			if (!GetPrivateMessageByMsgId(msg_id, message) || !message) {
+				return false;
+			}
+			const int conv_min = std::min(uid, peer_uid);
+			const int conv_max = std::max(uid, peer_uid);
+			if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid) {
+				return false;
+			}
+
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto updated = txn.exec_params(
+				"UPDATE chat_private_msg SET content = '[消息已撤回]', deleted_at_ms = $1, edited_at_ms = 0 "
+				"WHERE msg_id = $2 AND conv_uid_min = $3 AND conv_uid_max = $4",
+				deleted_at_ms,
+				msg_id,
+				conv_min,
+				conv_max);
+			txn.commit();
+			return updated.affected_rows() > 0;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 	auto con = pool_->getConnection();
@@ -1286,13 +1922,13 @@ bool MysqlDao::RevokePrivateMessage(const int& uid, const int& peer_uid, const s
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::UpsertPrivateReadState(const int& uid, const int& peer_uid, const int64_t& read_ts) {
+bool PostgresDao::UpsertPrivateReadState(const int& uid, const int& peer_uid, const int64_t& read_ts) {
 	if (uid <= 0 || peer_uid <= 0) {
 		return false;
 	}
@@ -1300,6 +1936,27 @@ bool MysqlDao::UpsertPrivateReadState(const int& uid, const int& peer_uid, const
 	if (normalized_read_ts <= 0) {
 		normalized_read_ts = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::system_clock::now().time_since_epoch()).count());
+	}
+
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto result = txn.exec_params(
+				"INSERT INTO chat_private_read_state(uid, peer_uid, read_ts) VALUES($1, $2, $3) "
+				"ON CONFLICT (uid, peer_uid) DO UPDATE SET "
+				"read_ts = GREATEST(chat_private_read_state.read_ts, EXCLUDED.read_ts), "
+				"updated_at = CURRENT_TIMESTAMP",
+				uid,
+				peer_uid,
+				normalized_read_ts);
+			txn.commit();
+			return result.affected_rows() >= 0;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 	auto con = pool_->getConnection();
@@ -1323,13 +1980,29 @@ bool MysqlDao::UpsertPrivateReadState(const int& uid, const int& peer_uid, const
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::IsFriend(const int& self_id, const int& friend_id) {
+bool PostgresDao::IsFriend(const int& self_id, const int& friend_id) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT 1 FROM friend WHERE self_id = $1 AND friend_id = $2 LIMIT 1",
+				self_id,
+				friend_id);
+			return !rows.empty();
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
+
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -1349,18 +2022,84 @@ bool MysqlDao::IsFriend(const int& self_id, const int& friend_id) {
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::CreateGroup(const int& owner_uid, const std::string& name, const std::string& announcement,
+bool PostgresDao::CreateGroup(const int& owner_uid, const std::string& name, const std::string& announcement,
 	const int& member_limit, const std::vector<int>& initial_members, int64_t& out_group_id, std::string& out_group_code) {
 	out_group_id = 0;
 	out_group_code.clear();
 	if (owner_uid <= 0 || name.empty()) {
 		return false;
+	}
+
+	if (use_postgres_) {
+		try {
+			const int final_limit = std::max(2, std::min(member_limit, 200));
+			std::unordered_set<int> member_set;
+			for (int uid : initial_members) {
+				if (uid > 0 && uid != owner_uid) {
+					member_set.insert(uid);
+				}
+			}
+			if (static_cast<int>(member_set.size()) + 1 > final_limit) {
+				return false;
+			}
+
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			std::string group_code;
+			for (int i = 0; i < 20; ++i) {
+				const std::string candidate = GenerateRandomGroupCode();
+				const auto dup = txn.exec_params(
+					"SELECT 1 FROM chat_group WHERE group_code = $1 LIMIT 1",
+					candidate);
+				if (dup.empty()) {
+					group_code = candidate;
+					break;
+				}
+			}
+			if (group_code.empty()) {
+				return false;
+			}
+
+			const auto group_rows = txn.exec_params(
+				"INSERT INTO chat_group(group_code, name, owner_uid, announcement, member_limit, is_all_muted, status) "
+				"VALUES($1,$2,$3,$4,$5,false,1) RETURNING group_id",
+				group_code,
+				name,
+				owner_uid,
+				announcement,
+				final_limit);
+			if (group_rows.empty()) {
+				return false;
+			}
+			out_group_id = group_rows[0]["group_id"].as<int64_t>();
+
+			txn.exec_params0(
+				"INSERT INTO chat_group_member(group_id, uid, role, mute_until, join_source, status) "
+				"VALUES($1,$2,3,0,0,1)",
+				out_group_id,
+				owner_uid);
+			for (int uid : member_set) {
+				txn.exec_params0(
+					"INSERT INTO chat_group_member(group_id, uid, role, mute_until, join_source, status) "
+					"VALUES($1,$2,1,0,1,1) "
+					"ON CONFLICT (group_id, uid) DO UPDATE SET status = 1, role = 1, mute_until = 0",
+					out_group_id,
+					uid);
+			}
+			txn.commit();
+			out_group_code = group_code;
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 	auto con = pool_->getConnection();
@@ -1456,16 +2195,35 @@ bool MysqlDao::CreateGroup(const int& owner_uid, const std::string& name, const 
 			con->_con->rollback();
 		}
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::GetGroupIdByCode(const std::string& group_code, int64_t& out_group_id) {
+bool PostgresDao::GetGroupIdByCode(const std::string& group_code, int64_t& out_group_id) {
 	out_group_id = 0;
 	if (!IsValidGroupCode(group_code)) {
 		return false;
+	}
+
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT group_id FROM chat_group WHERE group_code = $1 AND status = 1 LIMIT 1",
+				group_code);
+			if (rows.empty()) {
+				return false;
+			}
+			out_group_id = rows[0]["group_id"].as<int64_t>();
+			return out_group_id > 0;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 	auto con = pool_->getConnection();
@@ -1489,13 +2247,55 @@ bool MysqlDao::GetGroupIdByCode(const std::string& group_code, int64_t& out_grou
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::GetUserGroupList(const int& uid, std::vector<std::shared_ptr<GroupInfo>>& group_list) {
+bool PostgresDao::GetUserGroupList(const int& uid, std::vector<std::shared_ptr<GroupInfo>>& group_list) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT g.group_id, g.group_code, g.name, g.icon, g.owner_uid, g.announcement, g.member_limit, "
+				"g.is_all_muted, g.status, m.role, "
+				"CASE "
+				"WHEN m.role >= 3 THEN $1 "
+				"WHEN m.role = 2 THEN COALESCE(NULLIF(p.permission_bits, 0), $2) "
+				"ELSE 0 END AS permission_bits, "
+				"(SELECT COUNT(1) FROM chat_group_member gm WHERE gm.group_id = g.group_id AND gm.status = 1) AS member_count "
+				"FROM chat_group_member m JOIN chat_group g ON m.group_id = g.group_id "
+				"LEFT JOIN chat_group_admin_permission p ON p.group_id = m.group_id AND p.uid = m.uid "
+				"WHERE m.uid = $3 AND m.status = 1 AND g.status = 1 ORDER BY g.updated_at DESC",
+				kOwnerPermBits,
+				kDefaultAdminPermBits,
+				uid);
+			for (const auto& row : rows) {
+				auto info = std::make_shared<GroupInfo>();
+				info->group_id = row["group_id"].as<int64_t>();
+				info->group_code = row["group_code"].is_null() ? "" : row["group_code"].c_str();
+				info->name = row["name"].is_null() ? "" : row["name"].c_str();
+				info->icon = row["icon"].is_null() ? "" : row["icon"].c_str();
+				info->owner_uid = row["owner_uid"].is_null() ? 0 : row["owner_uid"].as<int>();
+				info->announcement = row["announcement"].is_null() ? "" : row["announcement"].c_str();
+				info->member_limit = row["member_limit"].is_null() ? 0 : row["member_limit"].as<int>();
+				info->is_all_muted = row["is_all_muted"].is_null() ? 0 : row["is_all_muted"].as<bool>();
+				info->status = row["status"].is_null() ? 0 : row["status"].as<int>();
+				info->role = row["role"].is_null() ? 0 : row["role"].as<int>();
+				info->permission_bits = row["permission_bits"].is_null() ? 0 : row["permission_bits"].as<int64_t>();
+				info->member_count = row["member_count"].is_null() ? 0 : row["member_count"].as<int>();
+				group_list.push_back(info);
+			}
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
+
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -1540,13 +2340,43 @@ bool MysqlDao::GetUserGroupList(const int& uid, std::vector<std::shared_ptr<Grou
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::GetGroupMemberList(const int64_t& group_id, std::vector<std::shared_ptr<GroupMemberInfo>>& member_list) {
+bool PostgresDao::GetGroupMemberList(const int64_t& group_id, std::vector<std::shared_ptr<GroupMemberInfo>>& member_list) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT m.group_id, m.uid, m.role, m.mute_until, m.status, u.name, u.nick, u.icon, u.user_id "
+				"FROM chat_group_member m LEFT JOIN \"user\" u ON m.uid = u.uid "
+				"WHERE m.group_id = $1 AND m.status = 1 ORDER BY m.role DESC, m.id ASC",
+				group_id);
+			for (const auto& row : rows) {
+				auto info = std::make_shared<GroupMemberInfo>();
+				info->group_id = row["group_id"].as<int64_t>();
+				info->uid = row["uid"].is_null() ? 0 : row["uid"].as<int>();
+				info->role = row["role"].is_null() ? 0 : row["role"].as<int>();
+				info->mute_until = row["mute_until"].is_null() ? 0 : row["mute_until"].as<int64_t>();
+				info->status = row["status"].is_null() ? 0 : row["status"].as<int>();
+				info->name = row["name"].is_null() ? "" : row["name"].c_str();
+				info->nick = row["nick"].is_null() ? "" : row["nick"].c_str();
+				info->icon = row["icon"].is_null() ? "" : row["icon"].c_str();
+				info->user_id = row["user_id"].is_null() ? "" : row["user_id"].c_str();
+				member_list.push_back(info);
+			}
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
+
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -1580,13 +2410,13 @@ bool MysqlDao::GetGroupMemberList(const int64_t& group_id, std::vector<std::shar
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::InviteGroupMember(const int64_t& group_id, const int& inviter_uid, const int& target_uid, const std::string& reason) {
+bool PostgresDao::InviteGroupMember(const int64_t& group_id, const int& inviter_uid, const int& target_uid, const std::string& reason) {
 	if (!HasGroupPermission(group_id, inviter_uid, kPermInviteUsers)) {
 		return false;
 	}
@@ -1608,6 +2438,25 @@ bool MysqlDao::InviteGroupMember(const int64_t& group_id, const int& inviter_uid
 	if (static_cast<int>(members.size()) >= group_info->member_limit) {
 		return false;
 	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			txn.exec_params(
+				"INSERT INTO chat_group_apply(group_id, applicant_uid, inviter_uid, type, status, reason, reviewer_uid) "
+				"VALUES($1, $2, $3, 1, 0, $4, 0)",
+				group_id,
+				target_uid,
+				inviter_uid,
+				reason);
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
 
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -1628,15 +2477,41 @@ bool MysqlDao::InviteGroupMember(const int64_t& group_id, const int& inviter_uid
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::ApplyJoinGroup(const int64_t& group_id, const int& applicant_uid, const std::string& reason) {
+bool PostgresDao::ApplyJoinGroup(const int64_t& group_id, const int& applicant_uid, const std::string& reason) {
 	if (IsUserInGroup(group_id, applicant_uid)) {
 		return true;
+	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto updated = txn.exec_params(
+				"UPDATE chat_group_apply SET reason = $1, updated_at = CURRENT_TIMESTAMP "
+				"WHERE group_id = $2 AND applicant_uid = $3 AND type = 2 AND status = 0",
+				reason,
+				group_id,
+				applicant_uid);
+			if (updated.affected_rows() <= 0) {
+				txn.exec_params(
+					"INSERT INTO chat_group_apply(group_id, applicant_uid, inviter_uid, type, status, reason, reviewer_uid) "
+					"VALUES($1, $2, 0, 2, 0, $3, 0)",
+					group_id,
+					applicant_uid,
+					reason);
+			}
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -1665,13 +2540,84 @@ bool MysqlDao::ApplyJoinGroup(const int64_t& group_id, const int& applicant_uid,
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::ReviewGroupApply(const int64_t& apply_id, const int& reviewer_uid, const bool& agree, std::shared_ptr<GroupApplyInfo>& apply_info) {
+bool PostgresDao::ReviewGroupApply(const int64_t& apply_id, const int& reviewer_uid, const bool& agree, std::shared_ptr<GroupApplyInfo>& apply_info) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT apply_id, group_id, applicant_uid, inviter_uid, type, status, reason "
+				"FROM chat_group_apply WHERE apply_id = $1 LIMIT 1",
+				apply_id);
+			if (rows.empty()) {
+				txn.abort();
+				return false;
+			}
+
+			const auto& row = rows[0];
+			auto found = std::make_shared<GroupApplyInfo>();
+			found->apply_id = row["apply_id"].as<int64_t>();
+			found->group_id = row["group_id"].as<int64_t>();
+			found->applicant_uid = row["applicant_uid"].is_null() ? 0 : row["applicant_uid"].as<int>();
+			found->inviter_uid = row["inviter_uid"].is_null() ? 0 : row["inviter_uid"].as<int>();
+			found->type = row["type"].is_null() ? "apply" : ((row["type"].as<int>() == 1) ? "invite" : "apply");
+			found->status = row["status"].is_null() ? 0 : row["status"].as<int>();
+			found->reason = row["reason"].is_null() ? "" : row["reason"].c_str();
+			found->reviewer_uid = reviewer_uid;
+
+			if (!HasGroupPermission(found->group_id, reviewer_uid, kPermInviteUsers)) {
+				txn.abort();
+				return false;
+			}
+
+			if (found->status != 0) {
+				apply_info = found;
+				txn.commit();
+				return true;
+			}
+
+			const auto updated = txn.exec_params(
+				"UPDATE chat_group_apply SET status = $1, reviewer_uid = $2, updated_at = CURRENT_TIMESTAMP "
+				"WHERE apply_id = $3",
+				agree ? 1 : 2,
+				reviewer_uid,
+				apply_id);
+			if (updated.affected_rows() <= 0) {
+				txn.abort();
+				return false;
+			}
+
+			if (agree && !IsUserInGroup(found->group_id, found->applicant_uid)) {
+				txn.exec_params(
+					"INSERT INTO chat_group_member(group_id, uid, role, mute_until, join_source, status) "
+					"VALUES($1, $2, 1, 0, $3, 1) "
+					"ON CONFLICT (group_id, uid) DO UPDATE SET "
+					"status = 1, role = 1, mute_until = 0, updated_at = CURRENT_TIMESTAMP",
+					found->group_id,
+					found->applicant_uid,
+					found->type == "invite" ? 1 : 2);
+				txn.exec_params(
+					"DELETE FROM chat_group_admin_permission WHERE group_id = $1 AND uid = $2",
+					found->group_id,
+					found->applicant_uid);
+			}
+
+			txn.commit();
+			found->status = agree ? 1 : 2;
+			apply_info = found;
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -1749,13 +2695,13 @@ bool MysqlDao::ReviewGroupApply(const int64_t& apply_id, const int& reviewer_uid
 			con->_con->rollback();
 		}
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::SaveGroupMessage(const GroupMessageInfo& msg, int64_t* out_server_msg_id, int64_t* out_group_seq) {
+bool PostgresDao::SaveGroupMessage(const GroupMessageInfo& msg, int64_t* out_server_msg_id, int64_t* out_group_seq, int64_t assigned_group_seq) {
 	if (msg.msg_id.empty() || msg.group_id <= 0 || msg.from_uid <= 0) {
 		return false;
 	}
@@ -1765,6 +2711,76 @@ bool MysqlDao::SaveGroupMessage(const GroupMessageInfo& msg, int64_t* out_server
 	if (out_group_seq) {
 		*out_group_seq = 0;
 	}
+
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto group_rows = txn.exec_params(
+				"SELECT group_id FROM chat_group WHERE group_id = $1 AND status = 1 LIMIT 1 FOR UPDATE",
+				msg.group_id);
+			if (group_rows.empty()) {
+				return false;
+			}
+
+			int64_t next_group_seq = assigned_group_seq;
+			if (next_group_seq <= 0) {
+				const auto seq_rows = txn.exec_params(
+					"SELECT COALESCE(MAX(group_seq), 0) + 1 AS next_seq FROM chat_group_msg WHERE group_id = $1",
+					msg.group_id);
+				next_group_seq = seq_rows.empty() ? 1 : seq_rows[0]["next_seq"].as<int64_t>();
+				if (next_group_seq <= 0) {
+					next_group_seq = 1;
+				}
+			}
+
+			const auto insert_rows = txn.exec_params(
+				"INSERT INTO chat_group_msg(msg_id, group_id, group_seq, from_uid, msg_type, content, "
+				"mentions_json, reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at) "
+				"VALUES($1,$2,$3,$4,$5,$6,COALESCE(NULLIF($7, ''), '[]')::jsonb,$8,NULLIF($9, '')::jsonb,$10,$11,$12) "
+				"RETURNING server_msg_id",
+				msg.msg_id,
+				msg.group_id,
+				next_group_seq,
+				msg.from_uid,
+				msg.msg_type,
+				msg.content,
+				msg.mentions_json,
+				msg.reply_to_server_msg_id,
+				msg.forward_meta_json,
+				msg.edited_at_ms,
+				msg.deleted_at_ms,
+				msg.created_at);
+			if (insert_rows.empty()) {
+				return false;
+			}
+
+			const auto server_msg_id = insert_rows[0]["server_msg_id"].as<int64_t>();
+			if (!msg.file_name.empty() || !msg.mime.empty() || msg.size > 0) {
+				txn.exec_params0(
+					"INSERT INTO chat_group_msg_ext(msg_id, file_name, mime, size) VALUES($1,$2,$3,$4) "
+					"ON CONFLICT (msg_id) DO UPDATE SET file_name = EXCLUDED.file_name, mime = EXCLUDED.mime, size = EXCLUDED.size",
+					msg.msg_id,
+					msg.file_name,
+					msg.mime,
+					msg.size);
+			}
+
+			txn.commit();
+			if (out_server_msg_id) {
+				*out_server_msg_id = server_msg_id;
+			}
+			if (out_group_seq) {
+				*out_group_seq = next_group_seq;
+			}
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
+
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -1785,8 +2801,8 @@ bool MysqlDao::SaveGroupMessage(const GroupMessageInfo& msg, int64_t* out_server
 				return false;
 			}
 		}
-		int64_t next_group_seq = 0;
-		{
+		int64_t next_group_seq = assigned_group_seq;
+		if (next_group_seq <= 0) {
 			std::unique_ptr<sql::PreparedStatement> seq_stmt(
 				con->_con->prepareStatement("SELECT COALESCE(MAX(group_seq), 0) + 1 AS next_seq "
 					"FROM chat_group_msg WHERE group_id = ?"));
@@ -1865,13 +2881,13 @@ bool MysqlDao::SaveGroupMessage(const GroupMessageInfo& msg, int64_t* out_server
 			con->_con->rollback();
 		}
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::UpdateGroupMessageContent(const int64_t& group_id, const int& operator_uid, const std::string& msg_id,
+bool PostgresDao::UpdateGroupMessageContent(const int64_t& group_id, const int& operator_uid, const std::string& msg_id,
 	const std::string& content, int64_t edited_at_ms) {
 	if (group_id <= 0 || operator_uid <= 0 || msg_id.empty() || content.empty()) {
 		return false;
@@ -1879,6 +2895,46 @@ bool MysqlDao::UpdateGroupMessageContent(const int64_t& group_id, const int& ope
 	if (edited_at_ms <= 0) {
 		edited_at_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::system_clock::now().time_since_epoch()).count());
+	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT from_uid FROM chat_group_msg WHERE group_id = $1 AND msg_id = $2 LIMIT 1",
+				group_id,
+				msg_id);
+			if (rows.empty()) {
+				txn.abort();
+				return false;
+			}
+			const int from_uid = rows[0]["from_uid"].as<int>();
+			if (from_uid != operator_uid && !HasGroupPermission(group_id, operator_uid, kPermDeleteMessages)) {
+				txn.abort();
+				return false;
+			}
+
+			const auto updated = txn.exec_params(
+				"UPDATE chat_group_msg SET content = $1, msg_type = 'text', mentions_json = '[]', "
+				"edited_at_ms = $2, deleted_at_ms = 0 WHERE group_id = $3 AND msg_id = $4",
+				content,
+				edited_at_ms,
+				group_id,
+				msg_id);
+			if (updated.affected_rows() <= 0) {
+				txn.abort();
+				return false;
+			}
+			txn.exec_params(
+				"DELETE FROM chat_group_msg_ext WHERE msg_id = $1",
+				msg_id);
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 	auto con = pool_->getConnection();
@@ -1932,19 +2988,58 @@ bool MysqlDao::UpdateGroupMessageContent(const int64_t& group_id, const int& ope
 			con->_con->rollback();
 		}
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::RevokeGroupMessage(const int64_t& group_id, const int& operator_uid, const std::string& msg_id, int64_t deleted_at_ms) {
+bool PostgresDao::RevokeGroupMessage(const int64_t& group_id, const int& operator_uid, const std::string& msg_id, int64_t deleted_at_ms) {
 	if (group_id <= 0 || operator_uid <= 0 || msg_id.empty()) {
 		return false;
 	}
 	if (deleted_at_ms <= 0) {
 		deleted_at_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::system_clock::now().time_since_epoch()).count());
+	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT from_uid FROM chat_group_msg WHERE group_id = $1 AND msg_id = $2 LIMIT 1",
+				group_id,
+				msg_id);
+			if (rows.empty()) {
+				txn.abort();
+				return false;
+			}
+			const int from_uid = rows[0]["from_uid"].as<int>();
+			if (from_uid != operator_uid && !HasGroupPermission(group_id, operator_uid, kPermDeleteMessages)) {
+				txn.abort();
+				return false;
+			}
+
+			const auto updated = txn.exec_params(
+				"UPDATE chat_group_msg SET content = '[消息已撤回]', msg_type = 'revoke', mentions_json = '[]', "
+				"deleted_at_ms = $1, edited_at_ms = 0 WHERE group_id = $2 AND msg_id = $3",
+				deleted_at_ms,
+				group_id,
+				msg_id);
+			if (updated.affected_rows() <= 0) {
+				txn.abort();
+				return false;
+			}
+			txn.exec_params(
+				"DELETE FROM chat_group_msg_ext WHERE msg_id = $1",
+				msg_id);
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 	auto con = pool_->getConnection();
@@ -1997,16 +3092,99 @@ bool MysqlDao::RevokeGroupMessage(const int64_t& group_id, const int& operator_u
 			con->_con->rollback();
 		}
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts, const int64_t& before_seq, const int& limit,
+bool PostgresDao::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts, const int64_t& before_seq, const int& limit,
 	std::vector<std::shared_ptr<GroupMessageInfo>>& messages, bool& has_more) {
 	has_more = false;
 	messages.clear();
+
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const int final_limit = std::max(1, std::min(limit, 50));
+			pqxx::result rows;
+			if (before_seq > 0) {
+				rows = txn.exec_params(
+					"SELECT m.msg_id, m.server_msg_id, m.group_seq, m.group_id, m.from_uid, m.msg_type, m.content, m.mentions_json, "
+					"m.reply_to_server_msg_id, m.forward_meta_json, m.edited_at_ms, m.deleted_at_ms, m.created_at, "
+					"e.file_name, e.mime, e.size, u.name AS from_name, u.nick AS from_nick, u.icon AS from_icon "
+					"FROM chat_group_msg m "
+					"LEFT JOIN chat_group_msg_ext e ON m.msg_id = e.msg_id "
+					"LEFT JOIN \"user\" u ON m.from_uid = u.uid "
+					"WHERE m.group_id = $1 AND m.group_seq < $2 "
+					"ORDER BY m.group_seq DESC, m.server_msg_id DESC LIMIT $3",
+					group_id,
+					before_seq,
+					final_limit + 1);
+			}
+			else if (before_ts > 0) {
+				rows = txn.exec_params(
+					"SELECT m.msg_id, m.server_msg_id, m.group_seq, m.group_id, m.from_uid, m.msg_type, m.content, m.mentions_json, "
+					"m.reply_to_server_msg_id, m.forward_meta_json, m.edited_at_ms, m.deleted_at_ms, m.created_at, "
+					"e.file_name, e.mime, e.size, u.name AS from_name, u.nick AS from_nick, u.icon AS from_icon "
+					"FROM chat_group_msg m "
+					"LEFT JOIN chat_group_msg_ext e ON m.msg_id = e.msg_id "
+					"LEFT JOIN \"user\" u ON m.from_uid = u.uid "
+					"WHERE m.group_id = $1 AND m.created_at < $2 "
+					"ORDER BY m.group_seq DESC, m.server_msg_id DESC LIMIT $3",
+					group_id,
+					before_ts,
+					final_limit + 1);
+			}
+			else {
+				rows = txn.exec_params(
+					"SELECT m.msg_id, m.server_msg_id, m.group_seq, m.group_id, m.from_uid, m.msg_type, m.content, m.mentions_json, "
+					"m.reply_to_server_msg_id, m.forward_meta_json, m.edited_at_ms, m.deleted_at_ms, m.created_at, "
+					"e.file_name, e.mime, e.size, u.name AS from_name, u.nick AS from_nick, u.icon AS from_icon "
+					"FROM chat_group_msg m "
+					"LEFT JOIN chat_group_msg_ext e ON m.msg_id = e.msg_id "
+					"LEFT JOIN \"user\" u ON m.from_uid = u.uid "
+					"WHERE m.group_id = $1 ORDER BY m.group_seq DESC, m.server_msg_id DESC LIMIT $2",
+					group_id,
+					final_limit + 1);
+			}
+
+			for (const auto& row : rows) {
+				auto info = std::make_shared<GroupMessageInfo>();
+				info->msg_id = row["msg_id"].c_str();
+				info->group_id = row["group_id"].as<int64_t>();
+				info->from_uid = row["from_uid"].as<int>();
+				info->msg_type = row["msg_type"].is_null() ? "" : row["msg_type"].c_str();
+				info->content = row["content"].is_null() ? "" : row["content"].c_str();
+				info->mentions_json = row["mentions_json"].is_null() ? "" : row["mentions_json"].c_str();
+				info->reply_to_server_msg_id = row["reply_to_server_msg_id"].is_null() ? 0 : row["reply_to_server_msg_id"].as<int64_t>();
+				info->forward_meta_json = row["forward_meta_json"].is_null() ? "" : row["forward_meta_json"].c_str();
+				info->edited_at_ms = row["edited_at_ms"].is_null() ? 0 : row["edited_at_ms"].as<int64_t>();
+				info->deleted_at_ms = row["deleted_at_ms"].is_null() ? 0 : row["deleted_at_ms"].as<int64_t>();
+				info->created_at = row["created_at"].as<int64_t>();
+				info->server_msg_id = row["server_msg_id"].as<int64_t>();
+				info->group_seq = row["group_seq"].as<int64_t>();
+				info->file_name = row["file_name"].is_null() ? "" : row["file_name"].c_str();
+				info->mime = row["mime"].is_null() ? "" : row["mime"].c_str();
+				info->size = row["size"].is_null() ? 0 : row["size"].as<int>();
+				info->from_name = row["from_name"].is_null() ? "" : row["from_name"].c_str();
+				info->from_nick = row["from_nick"].is_null() ? "" : row["from_nick"].c_str();
+				info->from_icon = row["from_icon"].is_null() ? "" : row["from_icon"].c_str();
+				messages.push_back(info);
+			}
+			if (static_cast<int>(messages.size()) > final_limit) {
+				has_more = true;
+				messages.resize(final_limit);
+			}
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
+
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -2088,15 +3266,32 @@ bool MysqlDao::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::UpdateGroupAnnouncement(const int64_t& group_id, const int& operator_uid, const std::string& announcement) {
+bool PostgresDao::UpdateGroupAnnouncement(const int64_t& group_id, const int& operator_uid, const std::string& announcement) {
 	if (!HasGroupPermission(group_id, operator_uid, kPermChangeGroupInfo)) {
 		return false;
+	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto updated = txn.exec_params(
+				"UPDATE chat_group SET announcement = $1, updated_at = CURRENT_TIMESTAMP "
+				"WHERE group_id = $2 AND status = 1",
+				announcement,
+				group_id);
+			txn.commit();
+			return updated.affected_rows() > 0;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -2114,15 +3309,32 @@ bool MysqlDao::UpdateGroupAnnouncement(const int64_t& group_id, const int& opera
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::UpdateGroupIcon(const int64_t& group_id, const int& operator_uid, const std::string& icon) {
+bool PostgresDao::UpdateGroupIcon(const int64_t& group_id, const int& operator_uid, const std::string& icon) {
 	if (!HasGroupPermission(group_id, operator_uid, kPermChangeGroupInfo)) {
 		return false;
+	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto updated = txn.exec_params(
+				"UPDATE chat_group SET icon = $1, updated_at = CURRENT_TIMESTAMP "
+				"WHERE group_id = $2 AND status = 1",
+				icon,
+				group_id);
+			txn.commit();
+			return updated.affected_rows() > 0;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -2140,13 +3352,13 @@ bool MysqlDao::UpdateGroupIcon(const int64_t& group_id, const int& operator_uid,
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::SetGroupAdmin(const int64_t& group_id, const int& operator_uid, const int& target_uid, const bool& is_admin, const int64_t& permission_bits) {
+bool PostgresDao::SetGroupAdmin(const int64_t& group_id, const int& operator_uid, const int& target_uid, const bool& is_admin, const int64_t& permission_bits) {
 	if (!HasGroupPermission(group_id, operator_uid, kPermManageAdmins)) {
 		return false;
 	}
@@ -2170,6 +3382,45 @@ bool MysqlDao::SetGroupAdmin(const int64_t& group_id, const int& operator_uid, c
 	}
 	if (!is_admin) {
 		normalized_perm_bits = 0;
+	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto updated = txn.exec_params(
+				"UPDATE chat_group_member SET role = $1, updated_at = CURRENT_TIMESTAMP "
+				"WHERE group_id = $2 AND uid = $3 AND status = 1",
+				is_admin ? 2 : 1,
+				group_id,
+				target_uid);
+			if (updated.affected_rows() <= 0) {
+				txn.abort();
+				return false;
+			}
+
+			if (is_admin) {
+				txn.exec_params(
+					"INSERT INTO chat_group_admin_permission(group_id, uid, permission_bits) "
+					"VALUES($1, $2, $3) "
+					"ON CONFLICT (group_id, uid) DO UPDATE SET "
+					"permission_bits = EXCLUDED.permission_bits, updated_at = CURRENT_TIMESTAMP",
+					group_id,
+					target_uid,
+					normalized_perm_bits);
+			}
+			else {
+				txn.exec_params(
+					"DELETE FROM chat_group_admin_permission WHERE group_id = $1 AND uid = $2",
+					group_id,
+					target_uid);
+			}
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -2217,13 +3468,13 @@ bool MysqlDao::SetGroupAdmin(const int64_t& group_id, const int& operator_uid, c
 		catch (...) {
 		}
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::MuteGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid, const int64_t& mute_until) {
+bool PostgresDao::MuteGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid, const int64_t& mute_until) {
 	int op_role = 0;
 	if (!GetUserRoleInGroup(group_id, operator_uid, op_role) || op_role < 2
 		|| !HasGroupPermission(group_id, operator_uid, kPermBanUsers)) {
@@ -2232,6 +3483,24 @@ bool MysqlDao::MuteGroupMember(const int64_t& group_id, const int& operator_uid,
 	int target_role = 0;
 	if (!GetUserRoleInGroup(group_id, target_uid, target_role) || target_role >= op_role) {
 		return false;
+	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto updated = txn.exec_params(
+				"UPDATE chat_group_member SET mute_until = $1, updated_at = CURRENT_TIMESTAMP "
+				"WHERE group_id = $2 AND uid = $3 AND status = 1",
+				std::max<int64_t>(0, mute_until),
+				group_id,
+				target_uid);
+			txn.commit();
+			return updated.affected_rows() > 0;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -2251,13 +3520,13 @@ bool MysqlDao::MuteGroupMember(const int64_t& group_id, const int& operator_uid,
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::KickGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid) {
+bool PostgresDao::KickGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid) {
 	int op_role = 0;
 	if (!GetUserRoleInGroup(group_id, operator_uid, op_role) || op_role < 2
 		|| !HasGroupPermission(group_id, operator_uid, kPermBanUsers)) {
@@ -2266,6 +3535,31 @@ bool MysqlDao::KickGroupMember(const int64_t& group_id, const int& operator_uid,
 	int target_role = 0;
 	if (!GetUserRoleInGroup(group_id, target_uid, target_role) || target_role >= op_role) {
 		return false;
+	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto updated = txn.exec_params(
+				"UPDATE chat_group_member SET status = 3, updated_at = CURRENT_TIMESTAMP "
+				"WHERE group_id = $1 AND uid = $2 AND status = 1",
+				group_id,
+				target_uid);
+			if (updated.affected_rows() <= 0) {
+				txn.abort();
+				return false;
+			}
+			txn.exec_params(
+				"DELETE FROM chat_group_admin_permission WHERE group_id = $1 AND uid = $2",
+				group_id,
+				target_uid);
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -2292,19 +3586,44 @@ bool MysqlDao::KickGroupMember(const int64_t& group_id, const int& operator_uid,
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::QuitGroup(const int64_t& group_id, const int& uid) {
+bool PostgresDao::QuitGroup(const int64_t& group_id, const int& uid) {
 	int role = 0;
 	if (!GetUserRoleInGroup(group_id, uid, role)) {
 		return false;
 	}
 	if (role == 3) {
 		return false;
+	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto updated = txn.exec_params(
+				"UPDATE chat_group_member SET status = 2, updated_at = CURRENT_TIMESTAMP "
+				"WHERE group_id = $1 AND uid = $2 AND status = 1",
+				group_id,
+				uid);
+			if (updated.affected_rows() <= 0) {
+				txn.abort();
+				return false;
+			}
+			txn.exec_params(
+				"DELETE FROM chat_group_admin_permission WHERE group_id = $1 AND uid = $2",
+				group_id,
+				uid);
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -2331,13 +3650,44 @@ bool MysqlDao::QuitGroup(const int64_t& group_id, const int& uid) {
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::GetGroupById(const int64_t& group_id, std::shared_ptr<GroupInfo>& group_info) {
+bool PostgresDao::GetGroupById(const int64_t& group_id, std::shared_ptr<GroupInfo>& group_info) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT group_id, group_code, name, icon, owner_uid, announcement, member_limit, is_all_muted, status "
+				"FROM chat_group WHERE group_id = $1 LIMIT 1",
+				group_id);
+			if (rows.empty()) {
+				return false;
+			}
+			const auto& row = rows[0];
+			auto info = std::make_shared<GroupInfo>();
+			info->group_id = row["group_id"].as<int64_t>();
+			info->group_code = row["group_code"].is_null() ? "" : row["group_code"].c_str();
+			info->name = row["name"].is_null() ? "" : row["name"].c_str();
+			info->icon = row["icon"].is_null() ? "" : row["icon"].c_str();
+			info->owner_uid = row["owner_uid"].is_null() ? 0 : row["owner_uid"].as<int>();
+			info->announcement = row["announcement"].is_null() ? "" : row["announcement"].c_str();
+			info->member_limit = row["member_limit"].is_null() ? 0 : row["member_limit"].as<int>();
+			info->is_all_muted = row["is_all_muted"].is_null() ? 0 : row["is_all_muted"].as<bool>();
+			info->status = row["status"].is_null() ? 0 : row["status"].as<int>();
+			group_info = info;
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
+
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -2369,14 +3719,34 @@ bool MysqlDao::GetGroupById(const int64_t& group_id, std::shared_ptr<GroupInfo>&
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::GetUserRoleInGroup(const int64_t& group_id, const int& uid, int& role) {
+bool PostgresDao::GetUserRoleInGroup(const int64_t& group_id, const int& uid, int& role) {
 	role = 0;
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT role FROM chat_group_member WHERE group_id = $1 AND uid = $2 AND status = 1 LIMIT 1",
+				group_id,
+				uid);
+			if (rows.empty()) {
+				return false;
+			}
+			role = rows[0]["role"].as<int>();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
+
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -2398,18 +3768,18 @@ bool MysqlDao::GetUserRoleInGroup(const int64_t& group_id, const int& uid, int& 
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::IsUserInGroup(const int64_t& group_id, const int& uid) {
+bool PostgresDao::IsUserInGroup(const int64_t& group_id, const int& uid) {
 	int role = 0;
 	return GetUserRoleInGroup(group_id, uid, role);
 }
 
-bool MysqlDao::GetGroupPermissionBits(const int64_t& group_id, const int& uid, int64_t& out_bits) {
+bool PostgresDao::GetGroupPermissionBits(const int64_t& group_id, const int& uid, int64_t& out_bits) {
 	out_bits = 0;
 	int role = 0;
 	if (!GetUserRoleInGroup(group_id, uid, role)) {
@@ -2422,6 +3792,30 @@ bool MysqlDao::GetGroupPermissionBits(const int64_t& group_id, const int& uid, i
 	if (role < 2) {
 		out_bits = 0;
 		return true;
+	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT permission_bits FROM chat_group_admin_permission "
+				"WHERE group_id = $1 AND uid = $2 LIMIT 1",
+				group_id,
+				uid);
+			if (rows.empty() || rows[0]["permission_bits"].is_null()) {
+				out_bits = kDefaultAdminPermBits;
+				return true;
+			}
+			out_bits = rows[0]["permission_bits"].as<int64_t>();
+			if (out_bits <= 0) {
+				out_bits = kDefaultAdminPermBits;
+			}
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 	auto con = pool_->getConnection();
@@ -2451,13 +3845,13 @@ bool MysqlDao::GetGroupPermissionBits(const int64_t& group_id, const int& uid, i
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::HasGroupPermission(const int64_t& group_id, const int& uid, int64_t required_bits) {
+bool PostgresDao::HasGroupPermission(const int64_t& group_id, const int& uid, int64_t required_bits) {
 	int64_t bits = 0;
 	if (!GetGroupPermissionBits(group_id, uid, bits)) {
 		return false;
@@ -2465,10 +3859,36 @@ bool MysqlDao::HasGroupPermission(const int64_t& group_id, const int& uid, int64
 	return (bits & required_bits) == required_bits;
 }
 
-bool MysqlDao::GetDialogMetaByOwner(const int& owner_uid, std::vector<std::shared_ptr<DialogMetaInfo>>& metas) {
+bool PostgresDao::GetDialogMetaByOwner(const int& owner_uid, std::vector<std::shared_ptr<DialogMetaInfo>>& metas) {
 	metas.clear();
 	if (owner_uid <= 0) {
 		return false;
+	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT dialog_type, peer_uid, group_id, pinned_rank, draft_text, mute_state "
+				"FROM chat_dialog WHERE owner_uid = $1",
+				owner_uid);
+			for (const auto& row : rows) {
+				auto info = std::make_shared<DialogMetaInfo>();
+				info->owner_uid = owner_uid;
+				info->dialog_type = row["dialog_type"].is_null() ? "" : row["dialog_type"].c_str();
+				info->peer_uid = row["peer_uid"].is_null() ? 0 : row["peer_uid"].as<int>();
+				info->group_id = row["group_id"].is_null() ? 0 : row["group_id"].as<int64_t>();
+				info->pinned_rank = row["pinned_rank"].is_null() ? 0 : row["pinned_rank"].as<int>();
+				info->draft_text = row["draft_text"].is_null() ? "" : row["draft_text"].c_str();
+				info->mute_state = row["mute_state"].is_null() ? 0 : row["mute_state"].as<int>();
+				metas.push_back(info);
+			}
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -2499,16 +3919,38 @@ bool MysqlDao::GetDialogMetaByOwner(const int& owner_uid, std::vector<std::share
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::GetPrivateDialogRuntime(const int& owner_uid, const int& peer_uid, DialogRuntimeInfo& runtime) {
+bool PostgresDao::GetPrivateDialogRuntime(const int& owner_uid, const int& peer_uid, DialogRuntimeInfo& runtime) {
 	runtime = DialogRuntimeInfo();
 	if (owner_uid <= 0 || peer_uid <= 0) {
 		return false;
+	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT last_msg_preview, last_msg_ts, unread_count FROM chat_dialog "
+				"WHERE owner_uid = $1 AND dialog_type = 'private' AND peer_uid = $2 AND group_id = 0 LIMIT 1",
+				owner_uid,
+				peer_uid);
+			if (!rows.empty()) {
+				const auto& row = rows[0];
+				runtime.last_msg_preview = row["last_msg_preview"].is_null() ? "" : row["last_msg_preview"].c_str();
+				runtime.last_msg_ts = row["last_msg_ts"].is_null() ? 0 : row["last_msg_ts"].as<int64_t>();
+				runtime.unread_count = row["unread_count"].is_null() ? 0 : std::max(0, row["unread_count"].as<int>());
+			}
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -2535,16 +3977,38 @@ bool MysqlDao::GetPrivateDialogRuntime(const int& owner_uid, const int& peer_uid
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::GetGroupDialogRuntime(const int& owner_uid, const int64_t& group_id, DialogRuntimeInfo& runtime) {
+bool PostgresDao::GetGroupDialogRuntime(const int& owner_uid, const int64_t& group_id, DialogRuntimeInfo& runtime) {
 	runtime = DialogRuntimeInfo();
 	if (owner_uid <= 0 || group_id <= 0) {
 		return false;
+	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT last_msg_preview, last_msg_ts, unread_count FROM chat_dialog "
+				"WHERE owner_uid = $1 AND dialog_type = 'group' AND group_id = $2 LIMIT 1",
+				owner_uid,
+				group_id);
+			if (!rows.empty()) {
+				const auto& row = rows[0];
+				runtime.last_msg_preview = row["last_msg_preview"].is_null() ? "" : row["last_msg_preview"].c_str();
+				runtime.last_msg_ts = row["last_msg_ts"].is_null() ? 0 : row["last_msg_ts"].as<int64_t>();
+				runtime.unread_count = row["unread_count"].is_null() ? 0 : std::max(0, row["unread_count"].as<int>());
+			}
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 	auto con = pool_->getConnection();
@@ -2572,15 +4036,163 @@ bool MysqlDao::GetGroupDialogRuntime(const int& owner_uid, const int64_t& group_
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::RefreshDialogsForOwner(const int& owner_uid) {
+bool PostgresDao::RefreshDialogsForOwner(const int& owner_uid) {
 	if (owner_uid <= 0) {
 		return false;
+	}
+
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			std::vector<int> peers;
+			{
+				const auto peer_rows = txn.exec_params("SELECT friend_id FROM friend WHERE self_id = $1", owner_uid);
+				for (const auto& row : peer_rows) {
+					const auto peer_uid = row["friend_id"].as<int>();
+					if (peer_uid > 0) {
+						peers.push_back(peer_uid);
+					}
+				}
+			}
+
+			for (int peer_uid : peers) {
+				txn.exec_params0(
+					"INSERT INTO chat_dialog(owner_uid, dialog_type, peer_uid, group_id, pinned_rank, draft_text, mute_state, last_msg_preview, last_msg_ts, unread_count) "
+					"VALUES($1, 'private', $2, 0, 0, '', 0, '', 0, 0) "
+					"ON CONFLICT (owner_uid, dialog_type, peer_uid, group_id) DO NOTHING",
+					owner_uid,
+					peer_uid);
+
+				const int conv_min = std::min(owner_uid, peer_uid);
+				const int conv_max = std::max(owner_uid, peer_uid);
+				std::string preview;
+				int64_t last_msg_ts = 0;
+				int unread_count = 0;
+
+				const auto last_rows = txn.exec_params(
+					"SELECT content, created_at FROM chat_private_msg "
+					"WHERE conv_uid_min = $1 AND conv_uid_max = $2 "
+					"ORDER BY created_at DESC, msg_id DESC LIMIT 1",
+					conv_min,
+					conv_max);
+				if (!last_rows.empty()) {
+					const auto content = last_rows[0]["content"].is_null() ? "" : std::string(last_rows[0]["content"].c_str());
+					preview = BuildPreviewText("", content);
+					last_msg_ts = last_rows[0]["created_at"].is_null() ? 0 : last_rows[0]["created_at"].as<int64_t>();
+				}
+
+				const auto unread_rows = txn.exec_params(
+					"SELECT COUNT(1) AS unread_count FROM chat_private_msg "
+					"WHERE conv_uid_min = $1 AND conv_uid_max = $2 AND from_uid = $3 "
+					"AND created_at > COALESCE((SELECT read_ts FROM chat_private_read_state WHERE uid = $4 AND peer_uid = $5), 0)",
+					conv_min,
+					conv_max,
+					peer_uid,
+					owner_uid,
+					peer_uid);
+				if (!unread_rows.empty()) {
+					unread_count = std::max(0, unread_rows[0]["unread_count"].as<int>());
+				}
+
+				txn.exec_params0(
+					"UPDATE chat_dialog SET last_msg_preview = $1, last_msg_ts = $2, unread_count = $3, updated_at = CURRENT_TIMESTAMP "
+					"WHERE owner_uid = $4 AND dialog_type = 'private' AND peer_uid = $5 AND group_id = 0",
+					preview,
+					last_msg_ts,
+					unread_count,
+					owner_uid,
+					peer_uid);
+			}
+
+			std::vector<int64_t> groups;
+			{
+				const auto group_rows = txn.exec_params(
+					"SELECT m.group_id FROM chat_group_member m "
+					"JOIN chat_group g ON g.group_id = m.group_id "
+					"WHERE m.uid = $1 AND m.status = 1 AND g.status = 1",
+					owner_uid);
+				for (const auto& row : group_rows) {
+					const auto group_id = row["group_id"].as<int64_t>();
+					if (group_id > 0) {
+						groups.push_back(group_id);
+					}
+				}
+			}
+
+			for (int64_t group_id : groups) {
+				txn.exec_params0(
+					"INSERT INTO chat_dialog(owner_uid, dialog_type, peer_uid, group_id, pinned_rank, draft_text, mute_state, last_msg_preview, last_msg_ts, unread_count) "
+					"VALUES($1, 'group', 0, $2, 0, '', 0, '', 0, 0) "
+					"ON CONFLICT (owner_uid, dialog_type, peer_uid, group_id) DO NOTHING",
+					owner_uid,
+					group_id);
+
+				std::string preview;
+				int64_t last_msg_ts = 0;
+				int unread_count = 0;
+
+				const auto last_rows = txn.exec_params(
+					"SELECT msg_type, content, created_at FROM chat_group_msg "
+					"WHERE group_id = $1 ORDER BY group_seq DESC, server_msg_id DESC LIMIT 1",
+					group_id);
+				if (!last_rows.empty()) {
+					const auto msg_type = last_rows[0]["msg_type"].is_null() ? "" : std::string(last_rows[0]["msg_type"].c_str());
+					const auto content = last_rows[0]["content"].is_null() ? "" : std::string(last_rows[0]["content"].c_str());
+					preview = BuildPreviewText(msg_type, content);
+					last_msg_ts = last_rows[0]["created_at"].is_null() ? 0 : last_rows[0]["created_at"].as<int64_t>();
+				}
+
+				const auto unread_rows = txn.exec_params(
+					"SELECT COUNT(1) AS unread_count FROM chat_group_msg "
+					"WHERE group_id = $1 AND created_at > COALESCE((SELECT read_ts FROM chat_group_read_state WHERE uid = $2 AND group_id = $3), 0) "
+					"AND from_uid <> $4",
+					group_id,
+					owner_uid,
+					group_id,
+					owner_uid);
+				if (!unread_rows.empty()) {
+					unread_count = std::max(0, unread_rows[0]["unread_count"].as<int>());
+				}
+
+				txn.exec_params0(
+					"UPDATE chat_dialog SET last_msg_preview = $1, last_msg_ts = $2, unread_count = $3, updated_at = CURRENT_TIMESTAMP "
+					"WHERE owner_uid = $4 AND dialog_type = 'group' AND group_id = $5",
+					preview,
+					last_msg_ts,
+					unread_count,
+					owner_uid,
+					group_id);
+			}
+
+			txn.exec_params0(
+				"DELETE FROM chat_dialog "
+				"WHERE owner_uid = $1 AND dialog_type = 'private' AND peer_uid > 0 "
+				"AND NOT EXISTS (SELECT 1 FROM friend f WHERE f.self_id = $2 AND f.friend_id = chat_dialog.peer_uid)",
+				owner_uid,
+				owner_uid);
+			txn.exec_params0(
+				"DELETE FROM chat_dialog "
+				"WHERE owner_uid = $1 AND dialog_type = 'group' AND group_id > 0 "
+				"AND NOT EXISTS ("
+				"SELECT 1 FROM chat_group_member m JOIN chat_group g ON g.group_id = m.group_id "
+				"WHERE m.uid = $2 AND m.group_id = chat_dialog.group_id AND m.status = 1 AND g.status = 1)",
+				owner_uid,
+				owner_uid);
+
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 	auto con = pool_->getConnection();
@@ -2768,13 +4380,13 @@ bool MysqlDao::RefreshDialogsForOwner(const int& owner_uid) {
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::UpsertGroupReadState(const int& uid, const int64_t& group_id, const int64_t& read_ts) {
+bool PostgresDao::UpsertGroupReadState(const int& uid, const int64_t& group_id, const int64_t& read_ts) {
 	if (uid <= 0 || group_id <= 0) {
 		return false;
 	}
@@ -2782,6 +4394,27 @@ bool MysqlDao::UpsertGroupReadState(const int& uid, const int64_t& group_id, con
 	if (normalized_read_ts <= 0) {
 		normalized_read_ts = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::system_clock::now().time_since_epoch()).count());
+	}
+
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto result = txn.exec_params(
+				"INSERT INTO chat_group_read_state(uid, group_id, read_ts) VALUES($1, $2, $3) "
+				"ON CONFLICT (uid, group_id) DO UPDATE SET "
+				"read_ts = GREATEST(chat_group_read_state.read_ts, EXCLUDED.read_ts), "
+				"updated_at = CURRENT_TIMESTAMP",
+				uid,
+				group_id,
+				normalized_read_ts);
+			txn.commit();
+			return result.affected_rows() >= 0;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 	auto con = pool_->getConnection();
@@ -2803,16 +4436,60 @@ bool MysqlDao::UpsertGroupReadState(const int& uid, const int64_t& group_id, con
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::GetGroupMessageByMsgId(const int64_t& group_id, const std::string& msg_id, std::shared_ptr<GroupMessageInfo>& message) {
+bool PostgresDao::GetGroupMessageByMsgId(const int64_t& group_id, const std::string& msg_id, std::shared_ptr<GroupMessageInfo>& message) {
 	message = nullptr;
 	if (group_id <= 0 || msg_id.empty()) {
 		return false;
+	}
+
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT m.msg_id, m.server_msg_id, m.group_seq, m.group_id, m.from_uid, m.msg_type, m.content, m.mentions_json, "
+				"m.reply_to_server_msg_id, m.forward_meta_json, m.edited_at_ms, m.deleted_at_ms, m.created_at, "
+				"e.file_name, e.mime, e.size "
+				"FROM chat_group_msg m "
+				"LEFT JOIN chat_group_msg_ext e ON m.msg_id = e.msg_id "
+				"WHERE m.group_id = $1 AND m.msg_id = $2 LIMIT 1",
+				group_id,
+				msg_id);
+			if (rows.empty()) {
+				return false;
+			}
+
+			const auto& row = rows[0];
+			auto one = std::make_shared<GroupMessageInfo>();
+			one->msg_id = row["msg_id"].c_str();
+			one->group_id = row["group_id"].as<int64_t>();
+			one->from_uid = row["from_uid"].as<int>();
+			one->msg_type = row["msg_type"].is_null() ? "" : row["msg_type"].c_str();
+			one->content = row["content"].is_null() ? "" : row["content"].c_str();
+			one->mentions_json = row["mentions_json"].is_null() ? "[]" : row["mentions_json"].c_str();
+			one->reply_to_server_msg_id = row["reply_to_server_msg_id"].is_null() ? 0 : row["reply_to_server_msg_id"].as<int64_t>();
+			one->forward_meta_json = row["forward_meta_json"].is_null() ? "" : row["forward_meta_json"].c_str();
+			one->edited_at_ms = row["edited_at_ms"].is_null() ? 0 : row["edited_at_ms"].as<int64_t>();
+			one->deleted_at_ms = row["deleted_at_ms"].is_null() ? 0 : row["deleted_at_ms"].as<int64_t>();
+			one->created_at = row["created_at"].as<int64_t>();
+			one->server_msg_id = row["server_msg_id"].as<int64_t>();
+			one->group_seq = row["group_seq"].as<int64_t>();
+			one->file_name = row["file_name"].is_null() ? "" : row["file_name"].c_str();
+			one->mime = row["mime"].is_null() ? "" : row["mime"].c_str();
+			one->size = row["size"].is_null() ? 0 : row["size"].as<int>();
+			message = one;
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 	auto con = pool_->getConnection();
@@ -2861,13 +4538,13 @@ bool MysqlDao::GetGroupMessageByMsgId(const int64_t& group_id, const std::string
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::UpsertDialogDraft(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
+bool PostgresDao::UpsertDialogDraft(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
 	const int64_t& group_id, const std::string& draft_text) {
 	if (owner_uid <= 0 || (dialog_type != "private" && dialog_type != "group")) {
 		return false;
@@ -2883,6 +4560,28 @@ bool MysqlDao::UpsertDialogDraft(const int& owner_uid, const std::string& dialog
 	std::string normalized_draft = draft_text;
 	if (normalized_draft.size() > 2000) {
 		normalized_draft.resize(2000);
+	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			txn.exec_params(
+				"INSERT INTO chat_dialog(owner_uid, dialog_type, peer_uid, group_id, pinned_rank, draft_text, mute_state, last_msg_preview, last_msg_ts, unread_count) "
+				"VALUES($1, $2, $3, $4, 0, $5, 0, '', 0, 0) "
+				"ON CONFLICT (owner_uid, dialog_type, peer_uid, group_id) DO UPDATE SET "
+				"draft_text = EXCLUDED.draft_text, updated_at = CURRENT_TIMESTAMP",
+				owner_uid,
+				dialog_type,
+				normalized_peer_uid,
+				normalized_group_id,
+				normalized_draft);
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 	auto con = pool_->getConnection();
@@ -2907,13 +4606,13 @@ bool MysqlDao::UpsertDialogDraft(const int& owner_uid, const std::string& dialog
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::UpsertDialogPinned(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
+bool PostgresDao::UpsertDialogPinned(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
 	const int64_t& group_id, const int& pinned_rank) {
 	if (owner_uid <= 0 || (dialog_type != "private" && dialog_type != "group")) {
 		return false;
@@ -2925,6 +4624,28 @@ bool MysqlDao::UpsertDialogPinned(const int& owner_uid, const std::string& dialo
 		return false;
 	}
 	const int normalized_pinned_rank = std::max(0, pinned_rank);
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			txn.exec_params(
+				"INSERT INTO chat_dialog(owner_uid, dialog_type, peer_uid, group_id, pinned_rank, draft_text, mute_state, last_msg_preview, last_msg_ts, unread_count) "
+				"VALUES($1, $2, $3, $4, $5, '', 0, '', 0, 0) "
+				"ON CONFLICT (owner_uid, dialog_type, peer_uid, group_id) DO UPDATE SET "
+				"pinned_rank = EXCLUDED.pinned_rank, updated_at = CURRENT_TIMESTAMP",
+				owner_uid,
+				dialog_type,
+				normalized_peer_uid,
+				normalized_group_id,
+				normalized_pinned_rank);
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
 
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -2948,13 +4669,13 @@ bool MysqlDao::UpsertDialogPinned(const int& owner_uid, const std::string& dialo
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::UpsertDialogMuteState(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
+bool PostgresDao::UpsertDialogMuteState(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
 	const int64_t& group_id, const int& mute_state) {
 	if (owner_uid <= 0 || (dialog_type != "private" && dialog_type != "group")) {
 		return false;
@@ -2966,6 +4687,28 @@ bool MysqlDao::UpsertDialogMuteState(const int& owner_uid, const std::string& di
 		return false;
 	}
 	const int normalized_mute_state = mute_state > 0 ? 1 : 0;
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			txn.exec_params(
+				"INSERT INTO chat_dialog(owner_uid, dialog_type, peer_uid, group_id, pinned_rank, draft_text, mute_state, last_msg_preview, last_msg_ts, unread_count) "
+				"VALUES($1, $2, $3, $4, 0, '', $5, '', 0, 0) "
+				"ON CONFLICT (owner_uid, dialog_type, peer_uid, group_id) DO UPDATE SET "
+				"mute_state = EXCLUDED.mute_state, updated_at = CURRENT_TIMESTAMP",
+				owner_uid,
+				dialog_type,
+				normalized_peer_uid,
+				normalized_group_id,
+				normalized_mute_state);
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
 
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
@@ -2989,19 +4732,19 @@ bool MysqlDao::UpsertDialogMuteState(const int& owner_uid, const std::string& di
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-std::string MysqlDao::GenerateRandomGroupCode() {
+std::string PostgresDao::GenerateRandomGroupCode() {
 	static thread_local std::mt19937_64 rng(std::random_device{}());
 	std::uniform_int_distribution<int> dist(100000000, 999999999);
 	return "g" + std::to_string(dist(rng));
 }
 
-bool MysqlDao::EnsureDialogMetaSchema() {
+bool PostgresDao::EnsureDialogMetaSchema() {
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -3095,13 +4838,13 @@ bool MysqlDao::EnsureDialogMetaSchema() {
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "EnsureDialogMetaSchema SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::EnsurePrivateReadStateSchema() {
+bool PostgresDao::EnsurePrivateReadStateSchema() {
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -3131,13 +4874,13 @@ bool MysqlDao::EnsurePrivateReadStateSchema() {
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "EnsurePrivateReadStateSchema SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::EnsureGroupReadStateSchema() {
+bool PostgresDao::EnsureGroupReadStateSchema() {
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -3167,13 +4910,13 @@ bool MysqlDao::EnsureGroupReadStateSchema() {
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "EnsureGroupReadStateSchema SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::EnsureGroupMessageOrderSchema() {
+bool PostgresDao::EnsureGroupMessageOrderSchema() {
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -3264,13 +5007,13 @@ bool MysqlDao::EnsureGroupMessageOrderSchema() {
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "EnsureGroupMessageOrderSchema SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::EnsureGroupPermissionSchemaAndBackfill() {
+bool PostgresDao::EnsureGroupPermissionSchemaAndBackfill() {
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -3330,13 +5073,13 @@ bool MysqlDao::EnsureGroupPermissionSchemaAndBackfill() {
 			}
 		}
 		std::cerr << "EnsureGroupPermissionSchemaAndBackfill SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::EnsureGroupCodeSchemaAndBackfill() {
+bool PostgresDao::EnsureGroupCodeSchemaAndBackfill() {
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -3477,13 +5220,50 @@ bool MysqlDao::EnsureGroupCodeSchemaAndBackfill() {
 			}
 		}
 		std::cerr << "EnsureGroupCodeSchemaAndBackfill SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}
 }
 
-bool MysqlDao::GetPendingGroupApplyForReviewer(const int& reviewer_uid, std::vector<std::shared_ptr<GroupApplyInfo>>& applies, int limit) {
+bool PostgresDao::GetPendingGroupApplyForReviewer(const int& reviewer_uid, std::vector<std::shared_ptr<GroupApplyInfo>>& applies, int limit) {
+	if (use_postgres_) {
+		try {
+			const int final_limit = std::max(1, std::min(limit, 100));
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT a.apply_id, a.group_id, a.applicant_uid, a.inviter_uid, a.type, a.status, a.reason, a.reviewer_uid "
+				"FROM chat_group_apply a "
+				"JOIN chat_group_member m ON a.group_id = m.group_id "
+				"LEFT JOIN chat_group_admin_permission p ON p.group_id = m.group_id AND p.uid = m.uid "
+				"WHERE a.status = 0 AND m.uid = $1 AND m.status = 1 AND "
+				"(m.role = 3 OR ((COALESCE(p.permission_bits, $2) & $3) <> 0)) "
+				"ORDER BY a.created_at DESC LIMIT $4",
+				reviewer_uid,
+				kDefaultAdminPermBits,
+				kPermInviteUsers,
+				final_limit);
+			applies.clear();
+			for (const auto& row : rows) {
+				auto info = std::make_shared<GroupApplyInfo>();
+				info->apply_id = row["apply_id"].as<int64_t>();
+				info->group_id = row["group_id"].as<int64_t>();
+				info->applicant_uid = row["applicant_uid"].is_null() ? 0 : row["applicant_uid"].as<int>();
+				info->inviter_uid = row["inviter_uid"].is_null() ? 0 : row["inviter_uid"].as<int>();
+				info->type = row["type"].is_null() ? "apply" : ((row["type"].as<int>() == 1) ? "invite" : "apply");
+				info->status = row["status"].is_null() ? 0 : row["status"].as<int>();
+				info->reason = row["reason"].is_null() ? "" : row["reason"].c_str();
+				info->reviewer_uid = row["reviewer_uid"].is_null() ? 0 : row["reviewer_uid"].as<int>();
+				applies.push_back(info);
+			}
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
 	auto con = pool_->getConnection();
 	if (con == nullptr) {
 		return false;
@@ -3523,7 +5303,7 @@ bool MysqlDao::GetPendingGroupApplyForReviewer(const int& reviewer_uid, std::vec
 	}
 	catch (sql::SQLException& e) {
 		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
 		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
 		return false;
 	}

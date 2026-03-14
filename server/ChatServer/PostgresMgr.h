@@ -1,14 +1,14 @@
 #pragma once
 #include "const.h"
-#include "MysqlDao.h"
+#include "PostgresDao.h"
 #include "Singleton.h"
 #include <vector>
 
-class MysqlMgr: public Singleton<MysqlMgr>
+class PostgresMgr: public Singleton<PostgresMgr>
 {
-	friend class Singleton<MysqlMgr>;
+	friend class Singleton<PostgresMgr>;
 public:
-	~MysqlMgr();
+	~PostgresMgr();
 	int RegUser(const std::string& name, const std::string& email,  const std::string& pwd);
 	bool CheckEmail(const std::string& name, const std::string & email);
 	bool UpdatePwd(const std::string& name, const std::string& email);
@@ -43,7 +43,7 @@ public:
 	bool InviteGroupMember(const int64_t& group_id, const int& inviter_uid, const int& target_uid, const std::string& reason);
 	bool ApplyJoinGroup(const int64_t& group_id, const int& applicant_uid, const std::string& reason);
 	bool ReviewGroupApply(const int64_t& apply_id, const int& reviewer_uid, const bool& agree, std::shared_ptr<GroupApplyInfo>& apply_info);
-	bool SaveGroupMessage(const GroupMessageInfo& msg, int64_t* out_server_msg_id = nullptr, int64_t* out_group_seq = nullptr);
+	bool SaveGroupMessage(const GroupMessageInfo& msg, int64_t* out_server_msg_id = nullptr, int64_t* out_group_seq = nullptr, int64_t assigned_group_seq = 0);
 	bool UpdateGroupMessageContent(const int64_t& group_id, const int& operator_uid, const std::string& msg_id,
 		const std::string& content, int64_t edited_at_ms = 0);
 	bool RevokeGroupMessage(const int64_t& group_id, const int& operator_uid, const std::string& msg_id,
@@ -73,6 +73,6 @@ public:
 	bool UpsertDialogMuteState(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
 		const int64_t& group_id, const int& mute_state);
 private:
-	MysqlMgr();
-	MysqlDao  _dao;
+	PostgresMgr();
+	PostgresDao  _dao;
 };

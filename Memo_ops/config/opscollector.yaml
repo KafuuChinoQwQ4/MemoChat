@@ -25,6 +25,15 @@ mysql:
   schema: memo_ops
   charset: utf8mb4
 
+postgresql:
+  host: 127.0.0.1
+  port: 5432
+  user: memochat
+  password: "123456"
+  database: memo_pg
+  schema: memo_ops
+  sslmode: disable
+
 redis:
   host: 127.0.0.1
   port: 6379

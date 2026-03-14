@@ -119,7 +119,7 @@ def main() -> int:
         "phase_breakdown": result["phase_breakdown"],
         "error_counter": result["error_counter"],
         "top_errors": result["top_errors"],
-        "preconditions": {"service": ["GateServer", "VarifyServer", "Redis", "MySQL"], "accounts": len(accounts)},
+        "preconditions": {"service": ["GateServer", "VarifyServer", "Redis", "PostgreSQL"], "accounts": len(accounts)},
         "data_mutation_summary": result["data_mutation_summary"],
         "samples": result["samples"],
     }

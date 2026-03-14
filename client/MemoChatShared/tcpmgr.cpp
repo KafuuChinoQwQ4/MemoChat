@@ -479,11 +479,23 @@ void TcpMgr::initHandlers()
         int err = jsonObj["error"].toInt();
         if (err != ErrorCodes::SUCCESS) {
             qDebug() << "Chat Msg Rsp Failed, err is " << err;
+            emit sig_message_status(jsonObj);
             return;
         }
 
+        emit sig_message_status(jsonObj);
         qDebug() << "Receive Text Chat Rsp Success " ;
 
+      });
+
+    _handlers.insert(ID_NOTIFY_MSG_STATUS_REQ, [this](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(id);
+        Q_UNUSED(len);
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+        if (jsonDoc.isNull() || !jsonDoc.isObject()) {
+            return;
+        }
+        emit sig_message_status(jsonDoc.object());
       });
 
     _handlers.insert(ID_NOTIFY_TEXT_CHAT_MSG_REQ, [this](ReqId id, int len, QByteArray data) {

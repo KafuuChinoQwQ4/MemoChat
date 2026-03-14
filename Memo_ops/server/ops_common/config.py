@@ -22,6 +22,18 @@ def load_yaml_config(path: str | Path) -> Dict[str, Any]:
 
 
 def normalize_config(data: Dict[str, Any]) -> Dict[str, Any]:
+    if "postgresql" not in data and "mysql" in data:
+        mysql_cfg = data.get("mysql", {}) or {}
+        data["postgresql"] = {
+            "host": mysql_cfg.get("host", "127.0.0.1"),
+            "port": mysql_cfg.get("port", 5432),
+            "user": mysql_cfg.get("user", "postgres"),
+            "password": mysql_cfg.get("password", ""),
+            "database": mysql_cfg.get("schema", mysql_cfg.get("database", "memo_pg")),
+            "schema": mysql_cfg.get("schema", "memo_ops"),
+            "sslmode": mysql_cfg.get("sslmode", "disable"),
+        }
+
     redis_cfg = data.setdefault("redis", {})
     if "prefix" not in redis_cfg and "key_prefix" in redis_cfg:
         redis_cfg["prefix"] = redis_cfg["key_prefix"]

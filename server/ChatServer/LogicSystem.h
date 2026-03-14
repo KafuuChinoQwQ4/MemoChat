@@ -15,13 +15,36 @@
 
 class CServer;
 typedef  function<void(shared_ptr<CSession>, const short &msg_id, const string &msg_data)> FunCallBack;
+class ChatSessionServiceRegistrar;
+class ChatRelationServiceRegistrar;
+class PrivateMessageServiceRegistrar;
+class GroupMessageServiceRegistrar;
+class AsyncEventDispatcherRegistrar;
+class ChatSessionService;
+class ChatRelationService;
+class PrivateMessageService;
+class GroupMessageService;
+class AsyncEventDispatcher;
+class MessageDeliveryService;
 class LogicSystem:public Singleton<LogicSystem>
 {
 	friend class Singleton<LogicSystem>;
+	friend class ChatSessionServiceRegistrar;
+	friend class ChatRelationServiceRegistrar;
+	friend class PrivateMessageServiceRegistrar;
+	friend class GroupMessageServiceRegistrar;
+	friend class AsyncEventDispatcherRegistrar;
+	friend class ChatSessionService;
+	friend class ChatRelationService;
+	friend class PrivateMessageService;
+	friend class GroupMessageService;
+	friend class AsyncEventDispatcher;
+	friend class MessageDeliveryService;
 public:
 	~LogicSystem();
 	void PostMsgToQue(shared_ptr < LogicNode> msg);
 	void SetServer(std::shared_ptr<CServer> pserver);
+	MessageDeliveryService& MessageDelivery();
 private:
 	LogicSystem();
 	void DealMsg();
@@ -68,11 +91,24 @@ private:
 	bool GetBaseInfo(std::string base_key, int uid, std::shared_ptr<UserInfo> &userinfo);
 	bool GetFriendApplyInfo(int to_uid, std::vector<std::shared_ptr<ApplyInfo>>& list);
 	bool GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo>> & user_list);
+	bool PublishAsyncEvent(const std::string& topic, const Json::Value& payload, std::string* error = nullptr);
+	void DealAsyncEvents();
+	void HandlePrivateAsyncEvent(const Json::Value& root);
+	void HandleGroupAsyncEvent(const Json::Value& root);
+	void NotifyMessageStatus(const Json::Value& payload);
 	std::thread _worker_thread;
+	std::thread _event_worker_thread;
 	std::queue<shared_ptr<LogicNode>> _msg_que;
 	std::mutex _mutex;
 	std::condition_variable _consume;
 	bool _b_stop;
+	bool _event_stop;
 	std::map<short, FunCallBack> _fun_callbacks;
 	std::shared_ptr<CServer> _p_server;
+	std::unique_ptr<ChatSessionService> _chat_session_service;
+	std::unique_ptr<ChatRelationService> _chat_relation_service;
+	std::unique_ptr<PrivateMessageService> _private_message_service;
+	std::unique_ptr<GroupMessageService> _group_message_service;
+	std::unique_ptr<AsyncEventDispatcher> _async_event_dispatcher;
+	std::unique_ptr<MessageDeliveryService> _message_delivery_service;
 };

@@ -1,7 +1,7 @@
 param(
     [string]$Config = ".\config.json",
     [string]$AccountsCsv = "",
-    [ValidateSet("auth", "friend", "group", "history", "media", "call", "mysql", "redis", "login", "all")]
+    [ValidateSet("auth", "friend", "group", "history", "media", "call", "postgresql", "mysql", "redis", "login", "all")]
     [string]$Scenario = "all"
 )
 
@@ -94,8 +94,8 @@ function Run-CallScenario {
     Invoke-LoadScript ".\tcp_call_invite_load.py" "10_tcp_call_invite.json" -UseAccountsCsv
 }
 
-function Run-MySqlScenario {
-    Invoke-LoadScript ".\mysql_capacity_load.py" "11_mysql_capacity.json" -UseAccountsCsv
+function Run-PostgreSqlScenario {
+    Invoke-LoadScript ".\postgresql_capacity_load.py" "11_postgresql_capacity.json" -UseAccountsCsv
 }
 
 function Run-RedisScenario {
@@ -128,8 +128,11 @@ switch ($Scenario) {
     "call" {
         Run-CallScenario
     }
+    "postgresql" {
+        Run-PostgreSqlScenario
+    }
     "mysql" {
-        Run-MySqlScenario
+        Run-PostgreSqlScenario
     }
     "redis" {
         Run-RedisScenario
@@ -145,7 +148,7 @@ switch ($Scenario) {
         Run-HistoryScenario
         Run-MediaScenario
         Run-CallScenario
-        Run-MySqlScenario
+        Run-PostgreSqlScenario
         Run-RedisScenario
     }
 }

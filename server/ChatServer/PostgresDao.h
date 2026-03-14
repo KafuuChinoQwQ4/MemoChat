@@ -3,13 +3,13 @@
 
 #include <memory>
 
-class MySqlPool;
+class PostgresPool;
 
-class MysqlDao
+class PostgresDao
 {
 public:
-	MysqlDao();
-	~MysqlDao();
+	PostgresDao();
+	~PostgresDao();
 	int RegUser(const std::string& name, const std::string& email, const std::string& pwd);
 	bool CheckEmail(const std::string& name, const std::string & email);
 	bool UpdatePwd(const std::string& name, const std::string& newpwd);
@@ -45,7 +45,7 @@ public:
 	bool InviteGroupMember(const int64_t& group_id, const int& inviter_uid, const int& target_uid, const std::string& reason);
 	bool ApplyJoinGroup(const int64_t& group_id, const int& applicant_uid, const std::string& reason);
 	bool ReviewGroupApply(const int64_t& apply_id, const int& reviewer_uid, const bool& agree, std::shared_ptr<GroupApplyInfo>& apply_info);
-	bool SaveGroupMessage(const GroupMessageInfo& msg, int64_t* out_server_msg_id = nullptr, int64_t* out_group_seq = nullptr);
+	bool SaveGroupMessage(const GroupMessageInfo& msg, int64_t* out_server_msg_id = nullptr, int64_t* out_group_seq = nullptr, int64_t assigned_group_seq = 0);
 	bool UpdateGroupMessageContent(const int64_t& group_id, const int& operator_uid, const std::string& msg_id,
 		const std::string& content, int64_t edited_at_ms = 0);
 	bool RevokeGroupMessage(const int64_t& group_id, const int& operator_uid, const std::string& msg_id,
@@ -85,5 +85,7 @@ private:
 	bool GetGroupPermissionBits(const int64_t& group_id, const int& uid, int64_t& out_bits);
 	bool HasGroupPermission(const int64_t& group_id, const int& uid, int64_t required_bits);
 	std::string GenerateRandomGroupCode();
-	std::unique_ptr<MySqlPool> pool_;
+	std::unique_ptr<PostgresPool> pool_;
+	bool use_postgres_ = false;
+	std::string postgres_connection_string_;
 };

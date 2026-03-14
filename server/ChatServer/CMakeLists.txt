@@ -1,6 +1,15 @@
 add_executable(ChatServer
     AsioIOServicePool.cpp
+    AsyncEventDispatcher.cpp
     ChatGrpcClient.cpp
+    ChatHandlerRegistrars.cpp
+    ChatRelationService.cpp
+    ChatRuntime.cpp
+    ChatSessionService.cpp
+    ChatUserSupport.cpp
+    GroupMessageService.cpp
+    MessageDeliveryService.cpp
+    PrivateMessageService.cpp
     ChatServer.cpp
     ChatServiceImpl.cpp
     ConfigMgr.cpp
@@ -11,14 +20,23 @@ add_executable(ChatServer
     MongoDao.cpp
     MongoMgr.cpp
     MsgNode.cpp
-    MysqlDao.cpp
-    MySqlPool.cpp
-    MysqlMgr.cpp
+    PostgresDao.cpp
+    PostgresPool.cpp
+    PostgresMgr.cpp
     RedisMgr.cpp
     StatusGrpcClient.cpp
     UserMgr.cpp
     AsioIOServicePool.h
+    AsyncEventDispatcher.h
     ChatGrpcClient.h
+    ChatHandlerRegistrars.h
+    ChatRelationService.h
+    ChatRuntime.h
+    ChatSessionService.h
+    ChatUserSupport.h
+    GroupMessageService.h
+    MessageDeliveryService.h
+    PrivateMessageService.h
     ChatServiceImpl.h
     ConfigMgr.h
     const.h
@@ -30,20 +48,21 @@ add_executable(ChatServer
     MongoDao.h
     MongoMgr.h
     MsgNode.h
-    MysqlDao.h
-    MySqlPool.h
-    MysqlMgr.h
+    PostgresDao.h
+    PostgresPool.h
+    PostgresMgr.h
     RedisMgr.h
     Singleton.h
     StatusGrpcClient.h
     UserMgr.h
-    message.proto
     config.ini
     chatserver1.ini
     chatserver2.ini
 )
 
-memochat_add_proto_sources(ChatServer message.proto)
 set_target_properties(ChatServer PROPERTIES FOLDER "Server")
 memochat_configure_server_target(ChatServer)
-target_link_libraries(ChatServer PRIVATE ${MEMOCHAT_MONGOCXX_TARGET} ${MEMOCHAT_BSONCXX_TARGET})
+target_link_libraries(ChatServer PRIVATE ${MEMOCHAT_MONGOCXX_TARGET} ${MEMOCHAT_BSONCXX_TARGET} ${MEMOCHAT_PQXX_TARGET})
+if(MSVC)
+    target_compile_options(ChatServer PRIVATE /bigobj /Zm200)
+endif()

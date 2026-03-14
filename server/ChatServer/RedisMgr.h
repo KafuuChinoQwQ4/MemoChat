@@ -286,6 +286,7 @@ public:
 	bool SRem(const std::string& key, const std::string& member);
 	bool SMembers(const std::string& key, std::vector<std::string>& members);
 	bool Keys(const std::string& pattern, std::vector<std::string>& keys);
+	bool Incr(const std::string& key, int64_t& value);
 	bool Del(const std::string &key);
 	bool ExistsKey(const std::string &key);
 	void Close() {

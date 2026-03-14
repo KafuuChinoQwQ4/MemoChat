@@ -152,8 +152,9 @@
     <ClCompile Include="message.grpc.pb.cc" />
     <ClCompile Include="message.pb.cc" />
     <ClCompile Include="MsgNode.cpp" />
-    <ClCompile Include="MysqlDao.cpp" />
-    <ClCompile Include="MysqlMgr.cpp" />
+    <ClCompile Include="PostgresDao.cpp" />
+    <ClCompile Include="PostgresMgr.cpp" />
+    <ClCompile Include="PostgresPool.cpp" />
     <ClCompile Include="RedisMgr.cpp" />
     <ClCompile Include="StatusGrpcClient.cpp" />
     <ClCompile Include="UserMgr.cpp" />
@@ -172,8 +173,9 @@
     <ClInclude Include="message.grpc.pb.h" />
     <ClInclude Include="message.pb.h" />
     <ClInclude Include="MsgNode.h" />
-    <ClInclude Include="MysqlDao.h" />
-    <ClInclude Include="MysqlMgr.h" />
+    <ClInclude Include="PostgresDao.h" />
+    <ClInclude Include="PostgresMgr.h" />
+    <ClInclude Include="PostgresPool.h" />
     <ClInclude Include="RedisMgr.h" />
     <ClInclude Include="Singleton.h" />
     <ClInclude Include="StatusGrpcClient.h" />

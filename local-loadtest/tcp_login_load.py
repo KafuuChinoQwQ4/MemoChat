@@ -9,12 +9,15 @@ from concurrent.futures import ThreadPoolExecutor
 
 from memochat_load_common import (
     build_summary,
+    chat_login_payload,
+    chat_protocol_version,
     finalize_report,
     get_log_dir,
     init_json_logger,
     load_accounts,
     load_json,
     new_trace_id,
+    relation_bootstrap_mode,
     top_errors,
     utc_now_str,
     xor_encode,
@@ -73,6 +76,7 @@ def main() -> int:
     login_path = cfg.get('login_path', '/user_login')
     client_ver = cfg.get('client_ver', '2.0.0')
     use_xor = bool(cfg.get('use_xor_passwd', True))
+    login_protocol_version = chat_protocol_version(cfg)
 
     accounts = load_accounts(cfg, args.accounts_csv)
     if not accounts:
@@ -112,16 +116,20 @@ def main() -> int:
 
             uid = int(login_payload.get('uid', 0))
             token = str(login_payload.get('token', ''))
+            login_ticket = str(login_payload.get('login_ticket', ''))
             host = str(login_payload.get('host', '')).strip() or '127.0.0.1'
             port = int(str(login_payload.get('port', '0')).strip() or '0')
-            if uid <= 0 or not token or port <= 0:
+            if uid <= 0 or port <= 0:
                 stage = 'http_payload_invalid'
                 return ok, stage, (time.perf_counter() - t0) * 1000.0, trace_id
+            if login_protocol_version >= 3 and not login_ticket:
+                stage = 'http_missing_login_ticket'
+                return ok, stage, (time.perf_counter() - t0) * 1000.0, trace_id
+            if login_protocol_version < 3 and not token:
+                stage = 'http_missing_token'
+                return ok, stage, (time.perf_counter() - t0) * 1000.0, trace_id
 
-            payload = json.dumps(
-                {'uid': uid, 'token': token, 'trace_id': trace_id, 'protocol_version': 2},
-                separators=(',', ':'),
-            ).encode('utf-8')
+            payload = json.dumps(chat_login_payload(cfg, login_payload, trace_id), separators=(',', ':')).encode('utf-8')
             packet = struct.pack('!HH', CHAT_LOGIN_REQ, len(payload)) + payload
 
             with socket.create_connection((host, port), timeout=tcp_timeout) as s:
@@ -183,11 +191,18 @@ def main() -> int:
             'tcp_timeout_sec': tcp_timeout,
             'accounts': len(accounts),
             'use_xor_passwd': use_xor,
+            'login_protocol_version': login_protocol_version,
+            'relation_bootstrap_mode': relation_bootstrap_mode(cfg),
         },
         'summary': summary,
         'error_counter': dict(error_counter),
         'top_errors': top_errors(error_counter),
         'phase_breakdown': {'tcp_login_chain': summary['latency_ms']},
+        'chat_login_stage_breakdown': {
+            'ticket_verify_ms': {},
+            'session_attach_ms': {},
+            'relation_bootstrap_ms': {},
+        },
         'preconditions': {'service': ['GateServer', 'StatusServer', 'ConfiguredChatNodes', 'Redis']},
         'data_mutation_summary': {'tcp_login_requests': success},
     }
@@ -203,6 +218,8 @@ def main() -> int:
                         'total': total,
                         'concurrency': concurrency,
                         'accounts': len(accounts),
+                        'login_protocol_version': login_protocol_version,
+                        'relation_bootstrap_mode': relation_bootstrap_mode(cfg),
                         'success': summary['success'],
                         'failed': summary['failed'],
                         'success_rate': summary['success_rate'],

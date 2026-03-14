@@ -274,6 +274,9 @@ Item {
             if (root.messageState === "failed") {
                 return "发送失败"
             }
+            if (root.messageState === "accepted") {
+                return "已受理"
+            }
             if (root.messageState === "read") {
                 return "已读"
             }

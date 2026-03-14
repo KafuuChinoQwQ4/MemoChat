@@ -1,4 +1,5 @@
 #include "AppController.h"
+#include "AppCoordinators.h"
 #include "ConversationSyncService.h"
 #include "LocalFilePickerService.h"
 #include "MessageContentCodec.h"
@@ -44,101 +45,22 @@ QVariantMap normalizePendingAttachment(const QVariantMap &source)
 
 void AppController::sendTextMessage(const QString &text)
 {
-    if (_current_chat_uid <= 0 && _current_group_id <= 0) {
-        return;
-    }
-
-    QString content = text;
-    if (content.trimmed().isEmpty()) {
-        return;
-    }
-
-    if (content.size() > 1024) {
-        setTip("单条消息不能超过1024字符", true);
-        return;
-    }
-
-    if (_current_group_id > 0) {
-        if (!_reply_to_msg_id.isEmpty()) {
-            content = MessageContentCodec::encodeReplyText(content,
-                                                           _reply_to_msg_id,
-                                                           _reply_target_name,
-                                                           _reply_preview_text);
-        }
-        if (!dispatchGroupChatContent(content, QString())) {
-            setTip("群消息发送失败", true);
-        } else {
-            cancelReplyMessage();
-        }
-        return;
-    }
-
-    if (!dispatchChatContent(content, content)) {
-        setTip("消息发送失败", true);
-    }
+    _media_coordinator->sendTextMessage(text);
 }
 
 void AppController::sendCurrentComposerPayload(const QString &text)
 {
-    if (_current_chat_uid <= 0 && _current_group_id <= 0) {
-        return;
-    }
-    if (_media_upload_in_progress) {
-        setTip("已有文件上传中，请稍后", true);
-        return;
-    }
-    if (!_current_pending_attachments.isEmpty()) {
-        _pending_send_dialog_uid = currentDialogUid();
-        _pending_send_chat_uid = _current_chat_uid;
-        _pending_send_group_id = _current_group_id;
-        _pending_send_queue = _current_pending_attachments;
-        _pending_send_total_count = _pending_send_queue.size();
-        processPendingAttachmentQueue();
-        return;
-    }
-    sendTextMessage(text);
+    _media_coordinator->sendCurrentComposerPayload(text);
 }
 
 void AppController::sendImageMessage()
 {
-    if (_current_chat_uid <= 0 && _current_group_id <= 0) {
-        return;
-    }
-    if (_media_upload_in_progress) {
-        setTip("已有文件上传中，请稍后", true);
-        return;
-    }
-
-    QVariantList attachments;
-    QString errorText;
-    if (!LocalFilePickerService::pickImageUrls(&attachments, &errorText)) {
-        if (!errorText.isEmpty()) {
-            setTip(errorText, true);
-        }
-        return;
-    }
-    addPendingAttachments(attachments);
+    _media_coordinator->sendImageMessage();
 }
 
 void AppController::sendFileMessage()
 {
-    if (_current_chat_uid <= 0 && _current_group_id <= 0) {
-        return;
-    }
-    if (_media_upload_in_progress) {
-        setTip("已有文件上传中，请稍后", true);
-        return;
-    }
-
-    QVariantList attachments;
-    QString errorText;
-    if (!LocalFilePickerService::pickFileUrls(&attachments, &errorText)) {
-        if (!errorText.isEmpty()) {
-            setTip(errorText, true);
-        }
-        return;
-    }
-    addPendingAttachments(attachments);
+    _media_coordinator->sendFileMessage();
 }
 
 void AppController::startMediaUploadAndSend(const QString &fileUrl, const QString &mediaType, const QString &fallbackName)
@@ -159,23 +81,12 @@ void AppController::startMediaUploadAndSend(const QString &fileUrl, const QStrin
 
 void AppController::removePendingAttachment(const QString &attachmentId)
 {
-    if (_media_upload_in_progress) {
-        return;
-    }
-    removePendingAttachmentById(attachmentId);
+    _media_coordinator->removePendingAttachment(attachmentId);
 }
 
 void AppController::clearPendingAttachments()
 {
-    if (_media_upload_in_progress) {
-        return;
-    }
-    const int dialogUid = currentDialogUid();
-    if (dialogUid == 0) {
-        return;
-    }
-    _dialog_pending_attachment_map.remove(dialogUid);
-    setCurrentPendingAttachments(QVariantList());
+    _media_coordinator->clearPendingAttachments();
 }
 
 void AppController::addPendingAttachments(const QVariantList &attachments)
@@ -500,7 +411,14 @@ bool AppController::dispatchChatContent(const QString &content, const QString &p
         return false;
     }
 
-    auto msg = std::make_shared<TextChatData>(packet.msgId, content, packet.fromUid, packet.toUid, QString(), packet.createdAt);
+    auto msg = std::make_shared<TextChatData>(packet.msgId,
+                                              content,
+                                              packet.fromUid,
+                                              packet.toUid,
+                                              QString(),
+                                              packet.createdAt,
+                                              QString(),
+                                              QStringLiteral("sending"));
     _gateway.userMgr()->AppendFriendChatMsg(_current_chat_uid, {msg});
     _private_cache_store.upsertMessages(packet.fromUid, _current_chat_uid, {msg});
     auto friendInfo = _gateway.userMgr()->GetFriendById(_current_chat_uid);

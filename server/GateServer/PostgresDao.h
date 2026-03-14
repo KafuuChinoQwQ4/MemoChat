@@ -1,129 +1,42 @@
 #pragma once
 #include "const.h"
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <pqxx/pqxx>
 #include <thread>
 #include <cstdint>
 
-class SqlConnection {
+class PooledSqlConnection {
 public:
-	SqlConnection(sql::Connection* con, int64_t lasttime):_con(con), _last_oper_time(lasttime){}
-	unique_ptr<sql::Connection> _con;
+	PooledSqlConnection(std::unique_ptr<pqxx::connection> con, int64_t lasttime)
+		: _con(std::move(con)), _last_oper_time(lasttime) {}
+	std::unique_ptr<pqxx::connection> _con;
 	int64_t _last_oper_time;
 };
 
-class MySqlPool {
+class PostgresPool {
 public:
-	MySqlPool(const std::string& url, const std::string& user, const std::string& pass, const std::string& schema, int poolSize)
-		: url_(url), user_(user), pass_(pass), schema_(schema), poolSize_(poolSize), b_stop_(false), _fail_count(0){
+	PostgresPool(const std::string& connection_string, int poolSize)
+		: connection_string_(connection_string), poolSize_(poolSize), b_stop_(false) {
 		try {
 			for (int i = 0; i < poolSize_; ++i) {
-				sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
-				auto*  con = driver->connect(url_, user_, pass_);
-				con->setSchema(schema_);
-
 				auto currentTime = std::chrono::system_clock::now().time_since_epoch();
-
 				long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
-				pool_.push(std::make_unique<SqlConnection>(con, timestamp));
+				pool_.push(std::make_unique<PooledSqlConnection>(std::make_unique<pqxx::connection>(connection_string_), timestamp));
 			}
 
 			_check_thread = 	std::thread([this]() {
 				while (!b_stop_) {
-					checkConnectionPro();
+					checkConnection();
 					std::this_thread::sleep_for(std::chrono::seconds(60));
 				}
 			});
 
 			_check_thread.detach();
 		}
-		catch (sql::SQLException& e) {
-
-			std::cout << "mysql pool init failed, error is " << e.what()<< std::endl;
-		}
-	}
-
-	void checkConnectionPro() {
-
-		size_t targetCount;
-		{
-			std::lock_guard<std::mutex> guard(mutex_);
-			targetCount = pool_.size();
-		}
-
-
-		size_t processed = 0;
-
-
-		auto now = std::chrono::system_clock::now().time_since_epoch();
-		long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(now).count();
-
-		while (processed < targetCount) {
-			std::unique_ptr<SqlConnection> con;
-			{
-				std::lock_guard<std::mutex> guard(mutex_);
-				if (pool_.empty()) {
-					break;
-				}
-				con = std::move(pool_.front());
-				pool_.pop();
-			}
-
-			bool healthy = true;
-
-			if (timestamp - con->_last_oper_time >= 5) {
-				try {
-					std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
-					stmt->executeQuery("SELECT 1");
-					con->_last_oper_time = timestamp;
-				}
-				catch (sql::SQLException& e) {
-					std::cout << "Error keeping connection alive: " << e.what() << std::endl;
-					healthy = false;
-					_fail_count++;
-				}
-
-			}
-
-			if (healthy)
-			{
-				std::lock_guard<std::mutex> guard(mutex_);
-				pool_.push(std::move(con));
-				cond_.notify_one();
-			}
-
-			++processed;
-		}
-
-		while (_fail_count > 0) {
-			auto b_res = reconnect(timestamp);
-			if (b_res) {
-				_fail_count--;
-			}
-			else {
-				break;
-			}
-		}
-	}
-
-	bool reconnect(long long timestamp) {
-		try {
-
-			sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
-			auto* con = driver->connect(url_, user_, pass_);
-			con->setSchema(schema_);
-
-			auto newCon = std::make_unique<SqlConnection>(con, timestamp);
-			{
-				std::lock_guard<std::mutex> guard(mutex_);
-				pool_.push(std::move(newCon));
-			}
-
-			std::cout << "mysql connection reconnect success" << std::endl;
-			return true;
-
-		}
-		catch (sql::SQLException& e) {
-			std::cout << "Reconnect failed, error is " << e.what() << std::endl;
-			return false;
+		catch (const std::exception& e) {
+			std::cout << "postgres pool init failed, error is " << e.what()<< std::endl;
 		}
 	}
 
@@ -146,24 +59,20 @@ public:
 			}
 			
 			try {
-				std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
-				stmt->executeQuery("SELECT 1");
+				pqxx::read_transaction txn(*con->_con);
+				txn.exec("SELECT 1");
+				txn.commit();
 				con->_last_oper_time = timestamp;
-				//std::cout << "execute timer alive query , cur is " << timestamp << std::endl;
 			}
-			catch (sql::SQLException& e) {
+			catch (const std::exception& e) {
 				std::cout << "Error keeping connection alive: " << e.what() << std::endl;
-
-				sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
-				auto* newcon = driver->connect(url_, user_, pass_);
-				newcon->setSchema(schema_);
-				con->_con.reset(newcon);
+				con->_con = std::make_unique<pqxx::connection>(connection_string_);
 				con->_last_oper_time = timestamp;
 			}
 		}
 	}
 
-	std::unique_ptr<SqlConnection> getConnection() {
+	std::unique_ptr<PooledSqlConnection> getConnection() {
 		std::unique_lock<std::mutex> lock(mutex_);
 		cond_.wait(lock, [this] { 
 			if (b_stop_) {
@@ -173,25 +82,15 @@ public:
 		if (b_stop_) {
 			return nullptr;
 		}
-		std::unique_ptr<SqlConnection> con(std::move(pool_.front()));
+		std::unique_ptr<PooledSqlConnection> con(std::move(pool_.front()));
 		pool_.pop();
 		return con;
 	}
 
-	void returnConnection(std::unique_ptr<SqlConnection> con) {
+	void returnConnection(std::unique_ptr<PooledSqlConnection> con) {
 		std::unique_lock<std::mutex> lock(mutex_);
 		if (b_stop_) {
 			return;
-		}
-		try {
-			if (con && con->_con) {
-				con->_con->rollback();
-				con->_con->setAutoCommit(true);
-				auto now = std::chrono::system_clock::now().time_since_epoch();
-				con->_last_oper_time = std::chrono::duration_cast<std::chrono::seconds>(now).count();
-			}
-		}
-		catch (sql::SQLException&) {
 		}
 		pool_.push(std::move(con));
 		cond_.notify_one();
@@ -202,7 +101,7 @@ public:
 		cond_.notify_all();
 	}
 
-	~MySqlPool() {
+	~PostgresPool() {
 		std::unique_lock<std::mutex> lock(mutex_);
 		while (!pool_.empty()) {
 			pool_.pop();
@@ -210,17 +109,13 @@ public:
 	}
 
 private:
-	std::string url_;
-	std::string user_;
-	std::string pass_;
-	std::string schema_;
+	std::string connection_string_;
 	int poolSize_;
-	std::queue<std::unique_ptr<SqlConnection>> pool_;
+	std::queue<std::unique_ptr<PooledSqlConnection>> pool_;
 	std::mutex mutex_;
 	std::condition_variable cond_;
 	std::atomic<bool> b_stop_;
 	std::thread _check_thread;
-	std::atomic<int> _fail_count;
 };
 
 struct UserInfo {
@@ -275,11 +170,11 @@ struct MediaAssetInfo {
 	int status = 1;
 };
 
-class MysqlDao
+class PostgresDao
 {
 public:
-	MysqlDao();
-	~MysqlDao();
+	PostgresDao();
+	~PostgresDao();
 	int RegUser(const std::string& name, const std::string& email, const std::string& pwd);
 	int RegUserTransaction(const std::string& name, const std::string& email, const std::string& pwd, const std::string& icon);
 	bool CheckEmail(const std::string& name, const std::string & email);
@@ -295,11 +190,8 @@ public:
 	bool GetMediaAssetByKey(const std::string& media_key, MediaAssetInfo& asset);
 	bool TestProcedure(const std::string& email, int& uid, string& name);
 private:
-	bool EnsureUserPublicIdSchemaAndBackfill();
-	bool EnsureMediaAssetSchema();
-	bool EnsureCallSessionSchema();
 	void WarmupAuthQueries();
 	std::string GenerateRandomUserPublicId();
-	std::unique_ptr<MySqlPool> pool_;
+	std::unique_ptr<PostgresPool> pool_;
 };
 

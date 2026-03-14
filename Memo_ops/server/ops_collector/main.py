@@ -56,7 +56,7 @@ def main() -> None:
     args = parser.parse_args()
 
     config = load_yaml_config(args.config)
-    init_schema(config["mysql"])
+    init_schema(config["postgresql"])
     metrics_cfg = config["metrics"]
     start_http_server(int(metrics_cfg["port"]), addr=metrics_cfg["host"])
 

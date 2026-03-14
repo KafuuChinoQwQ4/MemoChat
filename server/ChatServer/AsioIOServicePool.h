@@ -1,9 +1,8 @@
 #pragma once
-#include <vector>
-#include <memory>
-#include <thread>
 #include <boost/asio.hpp>
+#include <memory>
 #include "Singleton.h"
+#include "runtime/IoContextPool.h"
 
 class AsioIOServicePool : public Singleton<AsioIOServicePool>
 {
@@ -22,8 +21,5 @@ public:
 
 private:
     AsioIOServicePool(std::size_t size = std::thread::hardware_concurrency());
-    std::vector<IOService> _ioServices;
-    std::vector<WorkPtr> _works;
-    std::vector<std::thread> _threads;
-    std::size_t _nextIOService;
+    std::unique_ptr<memochat::runtime::IoContextPool> _pool;
 };

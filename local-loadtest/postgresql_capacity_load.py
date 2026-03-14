@@ -6,33 +6,39 @@ from memochat_load_common import (
     ensure_accounts,
     finalize_report,
     get_log_dir,
+    get_postgresql_config,
     get_runtime_accounts_csv,
     init_json_logger,
     load_json,
-    open_mysql,
+    open_postgresql,
     refresh_account_profiles,
     run_parallel,
     utc_now_str,
 )
 
 
-def seed_mysql_data(cfg, owner_uid: int, peer_uid: int) -> int:
-    conn = open_mysql(cfg)
+def seed_postgresql_data(cfg, owner_uid: int, peer_uid: int) -> int:
+    conn = open_postgresql(cfg)
     try:
         group_code = f"g{str(int(time.time()))[-9:]}"
-        group_name = f"mysql-load-{uuid.uuid4().hex[:8]}"
+        group_name = f"postgresql-load-{uuid.uuid4().hex[:8]}"
         with conn.cursor() as cursor:
             cursor.execute(
-                "INSERT INTO chat_group(group_code, name, owner_uid, announcement, member_limit, status) VALUES(%s,%s,%s,%s,%s,1)",
+                "INSERT INTO chat_group(group_code, name, owner_uid, announcement, member_limit, status) "
+                "VALUES(%s,%s,%s,%s,%s,1) RETURNING group_id",
                 [group_code, group_name, owner_uid, "loadtest", 200],
             )
-            group_id = int(cursor.lastrowid)
+            group_id = int(cursor.fetchone()["group_id"])
             cursor.execute(
-                "INSERT IGNORE INTO chat_group_member(group_id, uid, role, mute_until, join_source, status) VALUES(%s,%s,3,0,1,1)",
+                "INSERT INTO chat_group_member(group_id, uid, role, mute_until, join_source, status) "
+                "VALUES(%s,%s,3,0,1,1) "
+                "ON CONFLICT (group_id, uid) DO UPDATE SET status = 1, role = 3, mute_until = 0",
                 [group_id, owner_uid],
             )
             cursor.execute(
-                "INSERT IGNORE INTO chat_group_member(group_id, uid, role, mute_until, join_source, status) VALUES(%s,%s,1,0,1,1)",
+                "INSERT INTO chat_group_member(group_id, uid, role, mute_until, join_source, status) "
+                "VALUES(%s,%s,1,0,1,1) "
+                "ON CONFLICT (group_id, uid) DO UPDATE SET status = 1, role = 1, mute_until = 0",
                 [group_id, peer_uid],
             )
             now_ms = int(time.time() * 1000)
@@ -42,23 +48,25 @@ def seed_mysql_data(cfg, owner_uid: int, peer_uid: int) -> int:
                 cursor.execute(
                     "INSERT INTO chat_private_msg(msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, created_at) "
                     "VALUES(%s,%s,%s,%s,%s,%s,%s)",
-                    [f"mysql-private-{uuid.uuid4().hex}", conv_min, conv_max, owner_uid if idx % 2 == 0 else peer_uid,
+                    [f"postgresql-private-{uuid.uuid4().hex}", conv_min, conv_max, owner_uid if idx % 2 == 0 else peer_uid,
                      peer_uid if idx % 2 == 0 else owner_uid, f"seed-private-{idx}", now_ms + idx],
                 )
             for idx in range(30):
+                group_seq = time.time_ns()
                 cursor.execute(
-                    "INSERT INTO chat_group_msg(msg_id, group_id, group_seq, from_uid, msg_type, content, created_at) "
+                    "INSERT INTO chat_group_msg(msg_id, group_id, from_uid, msg_type, content, created_at, group_seq) "
                     "VALUES(%s,%s,%s,%s,%s,%s,%s)",
-                    [f"mysql-group-{uuid.uuid4().hex}", group_id, now_ms + idx, owner_uid if idx % 2 == 0 else peer_uid,
-                     "text", f"seed-group-{idx}", now_ms + idx],
+                    [f"postgresql-group-{uuid.uuid4().hex}", group_id, owner_uid if idx % 2 == 0 else peer_uid,
+                     "text", f"seed-group-{idx}", now_ms + idx, group_seq],
                 )
+        conn.commit()
         return group_id
     finally:
         conn.close()
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="MemoChat MySQL capacity load test")
+    parser = argparse.ArgumentParser(description="MemoChat PostgreSQL capacity load test")
     parser.add_argument("--config", default="config.json", help="Path to config.json")
     parser.add_argument("--accounts-csv", default="", help="Runtime accounts csv path")
     parser.add_argument("--report-path", default="", help="Explicit report output path")
@@ -67,19 +75,19 @@ def main() -> int:
     args = parser.parse_args()
 
     cfg = load_json(args.config)
-    logger = init_json_logger("mysql_capacity_loadtest", log_dir=get_log_dir(cfg))
-    test_cfg = cfg.get("mysql_capacity", {})
+    logger = init_json_logger("postgresql_capacity_loadtest", log_dir=get_log_dir(cfg))
+    test_cfg = cfg.get("postgresql_capacity", cfg.get("mysql_capacity", {}))
     total = args.total if args.total > 0 else int(test_cfg.get("total", 500))
     concurrency = args.concurrency if args.concurrency > 0 else int(test_cfg.get("concurrency", 20))
     workload_mix = list(test_cfg.get("workload_mix", ["read", "write", "mixed"]))
     slow_ms = float(test_cfg.get("slow_query_ms", 50))
     runtime_csv = get_runtime_accounts_csv(cfg, args.accounts_csv)
 
-    accounts = ensure_accounts(cfg, 2, runtime_csv, logger, "mysql")
+    accounts = ensure_accounts(cfg, 2, runtime_csv, logger, "postgresql")
     accounts = refresh_account_profiles(cfg, accounts)
     owner_uid = int(accounts[0]["uid"])
     peer_uid = int(accounts[1]["uid"])
-    group_id = seed_mysql_data(cfg, owner_uid, peer_uid)
+    group_id = seed_postgresql_data(cfg, owner_uid, peer_uid)
 
     def worker(i: int):
         workload = str(workload_mix[i % len(workload_mix)])
@@ -88,7 +96,7 @@ def main() -> int:
         ok = True
         conn = None
         try:
-            conn = open_mysql(cfg)
+            conn = open_postgresql(cfg)
             with conn.cursor() as cursor:
                 if workload == "read":
                     cursor.execute(
@@ -107,6 +115,7 @@ def main() -> int:
                     )
                 else:
                     now_ms = int(time.time() * 1000)
+                    group_seq = time.time_ns()
                     cursor.execute(
                         "SELECT msg_id, content, created_at FROM chat_group_msg WHERE group_id = %s "
                         "ORDER BY group_seq DESC, server_msg_id DESC LIMIT 20",
@@ -114,18 +123,20 @@ def main() -> int:
                     )
                     cursor.fetchall()
                     cursor.execute(
-                        "INSERT INTO chat_group_msg(msg_id, group_id, group_seq, from_uid, msg_type, content, created_at) "
+                        "INSERT INTO chat_group_msg(msg_id, group_id, from_uid, msg_type, content, created_at, group_seq) "
                         "VALUES(%s,%s,%s,%s,%s,%s,%s)",
-                        [f"cap-group-{uuid.uuid4().hex}", group_id, now_ms, owner_uid, "text", f"cap-group-{i}", now_ms],
+                        [f"cap-group-{uuid.uuid4().hex}", group_id, owner_uid, "text", f"cap-group-{i}", now_ms, group_seq],
                     )
+                if not conn.autocommit:
+                    conn.commit()
         except Exception as exc:  # noqa: BLE001
             ok = False
             stage = f"exception_{type(exc).__name__}"
             logger.warning(
-                "mysql capacity op failed",
+                "postgresql capacity op failed",
                 extra={
-                    "event": "loadtest.mysql_capacity.failed",
-                    "scenario": "mysql_capacity",
+                    "event": "loadtest.postgresql_capacity.failed",
+                    "scenario": "postgresql_capacity",
                     "stage": stage,
                     "payload": {"workload": workload, "error": str(exc)},
                 },
@@ -140,19 +151,20 @@ def main() -> int:
             "elapsed_ms": elapsed_ms,
             "phase_ms": {workload: elapsed_ms},
             "mutation": {
-                "mysql_reads": 1 if workload == "read" and ok else 0,
-                "mysql_writes": 1 if workload in ("write", "mixed") and ok else 0,
-                "mysql_slow_queries": 1 if elapsed_ms > slow_ms else 0,
+                "postgresql_reads": 1 if workload == "read" and ok else 0,
+                "postgresql_writes": 1 if workload in ("write", "mixed") and ok else 0,
+                "postgresql_slow_queries": 1 if elapsed_ms > slow_ms else 0,
             },
             "sample": {"workload": workload, "elapsed_ms": round(elapsed_ms, 3)},
         }
 
     result = run_parallel(total, concurrency, worker)
+    pg_cfg = get_postgresql_config(cfg)
     report = {
-        "scenario": "mysql_capacity",
-        "test": "mysql_capacity",
+        "scenario": "postgresql_capacity",
+        "test": "postgresql_capacity",
         "time_utc": utc_now_str(),
-        "target": {"database": cfg.get("mysql", {}).get("database", "memo")},
+        "target": {"database": pg_cfg.get("database", "memo_pg"), "schema": pg_cfg.get("schema", "public")},
         "config": {
             "total": total,
             "concurrency": concurrency,
@@ -167,12 +179,12 @@ def main() -> int:
         "data_mutation_summary": result["data_mutation_summary"],
         "samples": result["samples"],
     }
-    report_path = finalize_report("mysql_capacity", report, args.report_path, cfg)
+    report_path = finalize_report("postgresql_capacity", report, args.report_path, cfg)
     logger.info(
-        "mysql capacity load test completed",
+        "postgresql capacity load test completed",
         extra={
-            "event": "loadtest.mysql_capacity.summary",
-            "scenario": "mysql_capacity",
+            "event": "loadtest.postgresql_capacity.summary",
+            "scenario": "postgresql_capacity",
             "payload": {
                 "total": total,
                 "concurrency": concurrency,

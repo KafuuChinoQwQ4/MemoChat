@@ -3,7 +3,7 @@
 #include "ConfigMgr.h"
 #include "UserMgr.h"
 #include "CSession.h"
-#include "MysqlMgr.h"
+#include "PostgresMgr.h"
 #include "cluster/ChatClusterDiscovery.h"
 #include "logging/GrpcTrace.h"
 #include "logging/Logger.h"
@@ -81,7 +81,7 @@ bool ChatGrpcClient::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<
     }
     else {
         std::shared_ptr<UserInfo> user_info = nullptr;
-        user_info = MysqlMgr::GetInstance()->GetUser(uid);
+        user_info = PostgresMgr::GetInstance()->GetUser(uid);
         if (user_info == nullptr) {
             return false;
         }

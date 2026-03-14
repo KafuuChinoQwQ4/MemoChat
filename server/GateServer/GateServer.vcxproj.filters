@@ -42,13 +42,13 @@
     <ClCompile Include="RedisMgr.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="MysqlMgr.cpp">
+    <ClCompile Include="PostgresMgr.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="AsioIOServicePool.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="MysqlDao.cpp">
+    <ClCompile Include="PostgresDao.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="StatusGrpcClient.cpp">
@@ -86,13 +86,13 @@
     <ClInclude Include="RedisMgr.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="MysqlMgr.h">
+    <ClInclude Include="PostgresMgr.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="AsioIOServicePool.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="MysqlDao.h">
+    <ClInclude Include="PostgresDao.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="StatusGrpcClient.h">
