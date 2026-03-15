@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateserver
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    app.kubernetes.io/component: gateserver
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.gate.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: gateserver
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: gateserver
+        {{- include "memochat.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: gateserver
+          image: "{{ .Values.images.gate.repository }}:{{ .Values.images.gate.tag }}"
+          imagePullPolicy: {{ .Values.images.gate.pullPolicy }}
+          env:
+            - name: MEMOCHAT_POSTGRES_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-password } }
+            - name: MEMOCHAT_REDIS_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
+            - name: MEMOCHAT_CHATAUTH_HMACSECRET
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: chat-auth-secret } }
+            - name: MEMOCHAT_CALL_APIKEY
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: livekit-api-key } }
+            - name: MEMOCHAT_CALL_APISECRET
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: livekit-api-secret } }
+            - name: MEMOCHAT_RABBITMQ_PASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.ini
+              subPath: gate.ini
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            failureThreshold: 30
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.gate.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: memochat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateserver
+  namespace: {{ .Values.namespaces.prod }}
+spec:
+  selector:
+    app.kubernetes.io/component: gateserver
+    {{- include "memochat.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.gate.service.port }}
+      targetPort: http
+---
+{{- if .Values.gate.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateserver
+  namespace: {{ .Values.namespaces.prod }}
+spec:
+  minAvailable: {{ .Values.gate.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: gateserver
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+{{- end }}
+---
+{{- if .Values.gate.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gateserver
+  namespace: {{ .Values.namespaces.prod }}
+  annotations:
+    {{- toYaml .Values.gate.ingress.annotations | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.gate.ingress.className }}
+  rules:
+    - host: {{ .Values.global.domain }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateserver
+                port:
+                  number: {{ .Values.gate.service.port }}
+  tls:
+    {{- toYaml .Values.gate.ingress.tls | nindent 4 }}
+{{- end }}

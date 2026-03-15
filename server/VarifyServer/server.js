@@ -1,4 +1,5 @@
 const grpc = require('@grpc/grpc-js');
+const http = require('http');
 const message_proto = require('./proto');
 const const_module = require('./const');
 const { v4: uuidv4 } = require('uuid');
@@ -10,6 +11,7 @@ const { logger, newTraceId, redactEmail } = require('./logger');
 const { exportZipkinSpan, startServerSpan, childSpan } = require('./telemetry');
 
 let grpcServer = null;
+let healthServer = null;
 let shuttingDown = false;
 
 async function deliverVerifyTask(task) {
@@ -247,7 +249,7 @@ async function GetVarifyCode(call, callback) {
 
 function main() {
   grpcServer = new grpc.Server();
-  const bindAddress = '0.0.0.0:50051';
+  const bindAddress = `${config_module.grpc_host}:${config_module.grpc_port}`;
   grpcServer.addService(message_proto.VarifyService.service, { GetVarifyCode });
 
   grpcServer.bindAsync(bindAddress, grpc.ServerCredentials.createInsecure(), (err, port) => {
@@ -267,6 +269,29 @@ function main() {
   });
 }
 
+function startHealthServer() {
+  healthServer = http.createServer((req, res) => {
+    if (req.url !== '/healthz' && req.url !== '/readyz') {
+      res.statusCode = 404;
+      res.end('not found');
+      return;
+    }
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({
+      status: req.url === '/readyz' ? 'ready' : 'ok',
+      service: 'VarifyServer',
+    }));
+  });
+
+  healthServer.listen(config_module.health_port, '0.0.0.0', () => {
+    logger.info(
+      { event: 'service.health.start', address: `0.0.0.0:${config_module.health_port}`, module: 'http' },
+      'VarifyServer health endpoint started'
+    );
+  });
+}
+
 function stopGrpcServer() {
   return new Promise((resolve) => {
     if (!grpcServer) {
@@ -277,6 +302,16 @@ function stopGrpcServer() {
   });
 }
 
+function stopHealthServer() {
+  return new Promise((resolve) => {
+    if (!healthServer) {
+      resolve();
+      return;
+    }
+    healthServer.close(() => resolve());
+  });
+}
+
 async function shutdown(signal) {
   if (shuttingDown) {
     return;
@@ -284,6 +319,7 @@ async function shutdown(signal) {
   shuttingDown = true;
   logger.info({ event: 'service.stop', signal, module: 'grpc' }, 'shutting down VarifyServer');
   await stopGrpcServer();
+  await stopHealthServer();
   await rabbitmq_module.shutdownRabbitMq();
   await redis_module.closeRedis();
   process.exit(0);
@@ -300,6 +336,7 @@ async function bootstrap() {
   if (config_module.verify_async_outbox) {
     await rabbitmq_module.startVerifyDeliveryWorker(deliverVerifyTask);
   }
+  startHealthServer();
   main();
 }
 

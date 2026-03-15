@@ -23,8 +23,11 @@ public:
     std::string GetValue(const std::string& section, const std::string& key) const;
 
     static std::string ResolvePath(const std::string& overridePath);
+    static std::string EnvKeyFor(const std::string& section, const std::string& key);
 
 private:
+    static std::string SanitizeEnvToken(const std::string& raw);
+
     std::map<std::string, IniSection> _config;
 };
 

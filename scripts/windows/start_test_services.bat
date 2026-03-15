@@ -5,8 +5,16 @@ REM Usage:
 REM   start_test_services.bat
 REM   start_test_services.bat --no-client
 
-set "ROOT=%~dp0"
-if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
+set "SCRIPT_DIR=%~dp0"
+if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
+for %%I in ("%SCRIPT_DIR%\..\..") do set "ROOT=%%~fI"
+set "BACKGROUND=1"
+set "WITH_OPS=1"
+for %%A in (%*) do (
+  if /I "%%~A"=="--foreground" set "BACKGROUND=0"
+  if /I "%%~A"=="--no-client" set "WITH_CLIENT=0"
+  if /I "%%~A"=="--skip-ops" set "WITH_OPS=0"
+)
 
 set "SERVER_BIN_PRIMARY=%ROOT%\build-vcpkg-server\bin\Release"
 set "SERVER_BIN_FALLBACK=%ROOT%\build\bin\Release"
@@ -19,11 +27,14 @@ set "OPS_ROOT=%ROOT%\Memo_ops"
 set "OPS_RUNTIME=%OPS_ROOT%\runtime"
 set "ARTIFACT_ROOT=%OPS_ROOT%\artifacts"
 set "RUN_ROOT=%OPS_RUNTIME%\services"
+set "PID_ROOT=%ARTIFACT_ROOT%\runtime\pids"
 set "WITH_CLIENT=1"
 set "CONSOLE_CP=936"
 set "STATUS_CONFIG=%ROOT%\server\StatusServer\config.ini"
 
-if /I "%~1"=="--no-client" set "WITH_CLIENT=0"
+for %%A in (%*) do (
+  if /I "%%~A"=="--no-client" set "WITH_CLIENT=0"
+)
 
 call :select_server_bin
 if errorlevel 1 exit /b 1
@@ -87,7 +98,7 @@ if errorlevel 1 exit /b 1
 
 echo [INFO] Enabled chat nodes: !CHAT_NODE_NAMES!
 
-call "%ROOT%\stop_test_services.bat"
+call "%ROOT%\scripts\windows\stop_test_services.bat"
 if errorlevel 1 exit /b 1
 
 call :ensure_varify_deps
@@ -105,6 +116,7 @@ if not exist "%ARTIFACT_ROOT%\logs\manual-start" mkdir "%ARTIFACT_ROOT%\logs\man
 if not exist "%ARTIFACT_ROOT%\loadtest\runtime\accounts" mkdir "%ARTIFACT_ROOT%\loadtest\runtime\accounts"
 if not exist "%ARTIFACT_ROOT%\loadtest\runtime\logs" mkdir "%ARTIFACT_ROOT%\loadtest\runtime\logs"
 if not exist "%ARTIFACT_ROOT%\loadtest\runtime\reports" mkdir "%ARTIFACT_ROOT%\loadtest\runtime\reports"
+if not exist "%PID_ROOT%" mkdir "%PID_ROOT%"
 
 call :prepare_service StatusServer "%ROOT%\server\StatusServer\config.ini" "%STATUS_EXE%"
 if errorlevel 1 exit /b 1
@@ -124,12 +136,14 @@ call :prepare_service GateServer "%ROOT%\server\GateServer\config.ini" "%GATE_EX
 if errorlevel 1 exit /b 1
 
 echo [INFO] Starting VarifyServer (Node)...
-start "VarifyServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%ROOT%\server\VarifyServer"" && node server.js"
+call :launch_process "VarifyServer" "node" "server.js" "%ROOT%\server\VarifyServer" "%ARTIFACT_ROOT%\logs\manual-start\VarifyServer.out.log" "%ARTIFACT_ROOT%\logs\manual-start\VarifyServer.err.log" "%PID_ROOT%\VarifyServer.pid"
+if errorlevel 1 exit /b 1
 call :wait_for_port VarifyServer 50051 20 "%ARTIFACT_ROOT%\logs\services\VarifyServer"
 if errorlevel 1 exit /b 1
 
 echo [INFO] Starting StatusServer...
-start "StatusServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\StatusServer"" && StatusServer.exe"
+call :launch_process "StatusServer" "%RUN_ROOT%\StatusServer\StatusServer.exe" "" "%RUN_ROOT%\StatusServer" "%ARTIFACT_ROOT%\logs\manual-start\StatusServer.out.log" "%ARTIFACT_ROOT%\logs\manual-start\StatusServer.err.log" "%PID_ROOT%\StatusServer.pid"
+if errorlevel 1 exit /b 1
 call :wait_for_port StatusServer 50052 20 "%ARTIFACT_ROOT%\logs\services\StatusServer"
 if errorlevel 1 exit /b 1
 call :print_running_process_stamp StatusServer.exe
@@ -139,7 +153,8 @@ for /L %%I in (1,1,!CHAT_NODE_COUNT!) do (
   set "NODE_TCP_PORT=!CHAT_NODE_%%I_TCP_PORT!"
   set "NODE_RPC_PORT=!CHAT_NODE_%%I_RPC_PORT!"
   echo [INFO] Starting !NODE_NAME!...
-  start "ChatServer-!NODE_NAME!" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\!NODE_NAME!"" && ChatServer.exe --config .\config.ini"
+  call :launch_process "!NODE_NAME!" "%RUN_ROOT%\!NODE_NAME!\ChatServer.exe" "--config .\config.ini" "%RUN_ROOT%\!NODE_NAME!" "%ARTIFACT_ROOT%\logs\manual-start\!NODE_NAME!.out.log" "%ARTIFACT_ROOT%\logs\manual-start\!NODE_NAME!.err.log" "%PID_ROOT%\!NODE_NAME!.pid"
+  if errorlevel 1 exit /b 1
   call :wait_for_port !NODE_NAME! !NODE_TCP_PORT! 20 "%ARTIFACT_ROOT%\logs\services\!NODE_NAME!"
   if errorlevel 1 exit /b 1
   call :wait_for_port !NODE_NAME!-RPC !NODE_RPC_PORT! 20 "%ARTIFACT_ROOT%\logs\services\!NODE_NAME!"
@@ -149,7 +164,8 @@ for /L %%I in (1,1,!CHAT_NODE_COUNT!) do (
 call :print_chat_process_count
 
 echo [INFO] Starting GateServer...
-start "GateServer" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%RUN_ROOT%\GateServer"" && GateServer.exe"
+call :launch_process "GateServer" "%RUN_ROOT%\GateServer\GateServer.exe" "" "%RUN_ROOT%\GateServer" "%ARTIFACT_ROOT%\logs\manual-start\GateServer.out.log" "%ARTIFACT_ROOT%\logs\manual-start\GateServer.err.log" "%PID_ROOT%\GateServer.pid"
+if errorlevel 1 exit /b 1
 call :wait_for_port GateServer 8080 20 "%ARTIFACT_ROOT%\logs\services\GateServer"
 if errorlevel 1 exit /b 1
 call :print_running_process_stamp GateServer.exe
@@ -160,7 +176,7 @@ if "%WITH_CLIENT%"=="1" (
   )
   if exist "%CLIENT_BIN%\MemoChatQml.exe" (
     echo [INFO] Starting MemoChat QML client...
-    start "MemoChatQml" cmd /k "chcp %CONSOLE_CP%>nul && cd /d ""%CLIENT_BIN%"" && MemoChatQml.exe"
+    call :launch_process "MemoChatQml" "%CLIENT_BIN%\MemoChatQml.exe" "" "%CLIENT_BIN%" "%ARTIFACT_ROOT%\logs\manual-start\MemoChatQml.out.log" "%ARTIFACT_ROOT%\logs\manual-start\MemoChatQml.err.log" "%PID_ROOT%\MemoChatQml.pid"
   ) else (
     echo [WARN] MemoChatQml.exe not found, skip client start.
     echo [HINT] Build client first: cmake --preset msvc2022-all ^&^& cmake --build --preset msvc2022-release --target MemoChatQml
@@ -168,12 +184,16 @@ if "%WITH_CLIENT%"=="1" (
 )
 
 echo [INFO] Starting Memo_ops platform...
-if "%WITH_CLIENT%"=="1" (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPS_ROOT%\scripts\start_ops_platform.ps1"
+if "%WITH_OPS%"=="1" (
+  if "%WITH_CLIENT%"=="1" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%OPS_ROOT%\scripts\start_ops_platform.ps1" -Background -PidRoot "%PID_ROOT%"
+  ) else (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%OPS_ROOT%\scripts\start_ops_platform.ps1" -NoClient -Background -PidRoot "%PID_ROOT%"
+  )
+  if errorlevel 1 exit /b 1
 ) else (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPS_ROOT%\scripts\start_ops_platform.ps1" -NoClient
+  echo [INFO] Memo_ops platform start skipped.
 )
-if errorlevel 1 exit /b 1
 
 echo.
 echo [DONE] Services started.
@@ -181,6 +201,34 @@ echo [INFO] GateServer HTTP: http://127.0.0.1:8080
 echo [INFO] Chat cluster nodes: !CHAT_NODE_NAMES!
 echo [INFO] Ops runtime: %OPS_RUNTIME%
 echo [INFO] Artifacts root: %ARTIFACT_ROOT%
+if "%BACKGROUND%"=="1" echo [INFO] Services were launched in background mode. Logs are under %ARTIFACT_ROOT%\logs\manual-start
+exit /b 0
+
+:launch_process
+set "PROC_NAME=%~1"
+set "PROC_FILE=%~2"
+set "PROC_ARGS=%~3"
+set "PROC_WORKDIR=%~4"
+set "PROC_OUT=%~5"
+set "PROC_ERR=%~6"
+set "PROC_PID=%~7"
+if not exist "%PROC_WORKDIR%" (
+  echo [ERROR] Missing working directory for %PROC_NAME%: %PROC_WORKDIR%
+  exit /b 1
+)
+if "%PROC_FILE%"=="node" goto :launch_process_run
+if not exist "%PROC_FILE%" (
+  echo [ERROR] Missing executable for %PROC_NAME%: %PROC_FILE%
+  exit /b 1
+)
+:launch_process_run
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\start_managed_process.ps1" -FilePath "%PROC_FILE%" -ArgumentList "%PROC_ARGS%" -WorkingDirectory "%PROC_WORKDIR%" -StdOutPath "%PROC_OUT%" -StdErrPath "%PROC_ERR%" -PidFile "%PROC_PID%" -Hidden`) do set "PROC_LAUNCHED_PID=%%I"
+if not defined PROC_LAUNCHED_PID (
+  echo [ERROR] Failed to launch %PROC_NAME%
+  exit /b 1
+)
+echo [INFO] %PROC_NAME% PID: %PROC_LAUNCHED_PID%
+set "PROC_LAUNCHED_PID="
 exit /b 0
 
 :wait_for_port

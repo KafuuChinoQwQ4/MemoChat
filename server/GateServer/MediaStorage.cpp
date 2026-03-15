@@ -1,5 +1,7 @@
 #include "MediaStorage.h"
 
+#include "ConfigMgr.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cctype>
@@ -8,6 +10,18 @@
 #include <sstream>
 
 namespace {
+std::filesystem::path ResolveUploadsRoot() {
+    const auto root = ConfigMgr::Inst().GetValue("Media", "RootPath");
+    if (!root.empty()) {
+        return std::filesystem::path(root);
+    }
+    return std::filesystem::current_path() / "uploads";
+}
+
+bool LooksLikeHttpUrl(const std::string& value) {
+    return value.rfind("http://", 0) == 0 || value.rfind("https://", 0) == 0;
+}
+
 std::string BuildDateTag() {
     using clock = std::chrono::system_clock;
     const std::time_t now = clock::to_time_t(clock::now());
@@ -46,8 +60,9 @@ std::string SanitizeFileNameForStorage(const std::string& file_name) {
 }
 } // namespace
 
-LocalMediaStorage::LocalMediaStorage() {
-    _uploads_root = std::filesystem::current_path() / "uploads";
+LocalMediaStorage::LocalMediaStorage(const std::filesystem::path& uploads_root) {
+    _uploads_root = uploads_root.empty() ? ResolveUploadsRoot() : uploads_root;
+    _public_base_url = ConfigMgr::Inst().GetValue("Media", "PublicBaseUrl");
 }
 
 bool LocalMediaStorage::StoreMergedFile(const std::string& media_key,
@@ -101,12 +116,43 @@ bool LocalMediaStorage::ResolveReadPath(const std::string& storage_path,
         return false;
     }
 
+    if (LooksLikeHttpUrl(storage_path)) {
+        return false;
+    }
+
     std::filesystem::path path(storage_path);
     if (path.is_absolute()) {
         out_path = path;
     } else {
-        out_path = std::filesystem::current_path() / path;
+        const auto storage_str = path.generic_string();
+        if (storage_str.rfind("uploads/", 0) == 0) {
+            out_path = _uploads_root.parent_path() / path;
+        } else {
+            out_path = _uploads_root / path;
+        }
     }
     return true;
 }
 
+bool LocalMediaStorage::ResolvePublicUrl(const std::string& storage_path,
+                                         std::string& out_url) const {
+    if (storage_path.empty()) {
+        return false;
+    }
+
+    if (LooksLikeHttpUrl(storage_path)) {
+        out_url = storage_path;
+        return true;
+    }
+
+    if (_public_base_url.empty()) {
+        return false;
+    }
+
+    std::string suffix = storage_path;
+    if (!suffix.empty() && suffix.front() != '/') {
+        suffix = "/" + suffix;
+    }
+    out_url = _public_base_url + suffix;
+    return true;
+}

@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: varifyserver
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    app.kubernetes.io/component: varifyserver
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.varify.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: varifyserver
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: varifyserver
+        {{- include "memochat.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: varifyserver
+          image: "{{ .Values.images.varify.repository }}:{{ .Values.images.varify.tag }}"
+          imagePullPolicy: {{ .Values.images.varify.pullPolicy }}
+          env:
+            - name: MEMOCHAT_REDIS_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
+            - name: MEMOCHAT_RABBITMQ_PASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
+            - name: MEMOCHAT_MYSQL_PASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: mysql-password } }
+            - name: MEMOCHAT_EMAIL_PASS
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: smtp-pass } }
+            - name: MEMOCHAT_VARIFYSERVER_PORT
+              value: {{ .Values.varify.service.grpcPort | quote }}
+            - name: MEMOCHAT_HEALTH_PORT
+              value: {{ .Values.varify.service.healthPort | quote }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.varify.service.grpcPort }}
+            - name: health
+              containerPort: {{ .Values.varify.service.healthPort }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.json
+              subPath: varify.config.json
+          livenessProbe:
+            httpGet: { path: /healthz, port: health }
+          readinessProbe:
+            httpGet: { path: /readyz, port: health }
+          startupProbe:
+            httpGet: { path: /healthz, port: health }
+            failureThreshold: 30
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.varify.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: memochat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: varifyserver
+  namespace: {{ .Values.namespaces.prod }}
+spec:
+  selector:
+    app.kubernetes.io/component: varifyserver
+    {{- include "memochat.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: grpc
+      port: {{ .Values.varify.service.grpcPort }}
+      targetPort: grpc
+    - name: health
+      port: {{ .Values.varify.service.healthPort }}
+      targetPort: health

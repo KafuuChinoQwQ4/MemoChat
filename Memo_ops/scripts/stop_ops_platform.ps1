@@ -1,10 +1,23 @@
+param(
+    [string]$PidRoot = ""
+)
+
 $ErrorActionPreference = "SilentlyContinue"
 
-$targets = Get-CimInstance Win32_Process | Where-Object {
-    ($_.Name -like "python*.exe" -and $_.CommandLine -match "Memo_ops\.server\.ops_server\.main|Memo_ops\.server\.ops_collector\.main") -or
-    ($_.Name -eq "MemoOpsQml.exe")
+if (-not $PidRoot) {
+    $root = Split-Path -Parent $PSScriptRoot
+    $PidRoot = Join-Path $root "artifacts\runtime\pids"
 }
 
-foreach ($process in $targets) {
-    Stop-Process -Id $process.ProcessId -Force
+if (Test-Path $PidRoot) {
+    Get-ChildItem -Path $PidRoot -Filter *.pid -ErrorAction SilentlyContinue | ForEach-Object {
+        try {
+            $pidValue = Get-Content $_.FullName -ErrorAction Stop | Select-Object -First 1
+            if ($pidValue) {
+                Stop-Process -Id ([int]$pidValue) -Force -ErrorAction SilentlyContinue
+            }
+        } catch {
+        }
+        Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+    }
 }

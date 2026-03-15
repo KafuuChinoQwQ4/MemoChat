@@ -1,0 +1,371 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: memochat-config
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    {{- include "memochat.labels" . | nindent 4 }}
+data:
+  gate.ini: |
+    [GateServer]
+    Port=8080
+    [VarifyServer]
+    Host=varifyserver
+    Port=50051
+    [StatusServer]
+    Host=statusserver
+    Port=50052
+    [Cluster]
+    DiscoveryMode=k8s-statefulset
+    ServiceName={{ .Values.chat.serviceName }}
+    Namespace={{ .Values.namespaces.prod }}
+    Replicas={{ .Values.chat.replicaCount }}
+    TcpPort={{ .Values.chat.tcpPort }}
+    RpcPort={{ .Values.chat.rpcPort }}
+    Domain={{ .Values.global.clusterDomain }}
+    [Postgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.user }}
+    Passwd=
+    Database={{ .Values.externalServices.postgres.database }}
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    [Redis]
+    Host={{ .Values.externalServices.redis.host }}
+    Port={{ .Values.externalServices.redis.port }}
+    Passwd=
+    [ChatAuth]
+    HmacSecret=
+    TicketTtlSec=20
+    [LoginCache]
+    TtlSec=3600
+    [Media]
+    StorageProvider={{ .Values.gate.media.provider }}
+    RootPath={{ .Values.gate.media.rootPath }}
+    PublicBaseUrl={{ .Values.gate.media.publicBaseUrl }}
+    MaxImageMB={{ .Values.gate.media.maxImageMB }}
+    MaxFileMB={{ .Values.gate.media.maxFileMB }}
+    ChunkSizeKB={{ .Values.gate.media.chunkSizeKB }}
+    SessionExpireSec={{ .Values.gate.media.sessionExpireSec }}
+    [Call]
+    Enabled=true
+    BaseUrl=https://{{ .Values.global.domain }}
+    LiveKitUrl={{ .Values.externalServices.livekit.url }}
+    ApiKey=
+    ApiSecret=
+    RoomPrefix=memochat
+    RingTimeoutSec=45
+    BusyKeyTtlSec=50
+    TokenTtlSec=3600
+    [Log]
+    Level=info
+    Dir=/var/log/memochat/gate
+    Format=json
+    ToConsole=true
+    RotateMode=daily
+    MaxFiles=14
+    MaxSizeMB=100
+    Redact=true
+    Env=k8s
+    [Telemetry]
+    Enabled=true
+    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
+    Protocol=otlp-http
+    SampleRatio=1.0
+    ExportLogs=true
+    ExportTraces=true
+    ExportMetrics=false
+    ServiceName=GateServer
+    ServiceNamespace=memochat
+    [Kafka]
+    Brokers={{ .Values.externalServices.kafka.brokers }}
+    ClientId=memochat-gate
+    ConsumerGroup=memochat-gate-sideeffects
+    [RabbitMQ]
+    Host={{ .Values.externalServices.rabbitmq.host }}
+    Port={{ .Values.externalServices.rabbitmq.port }}
+    Username={{ .Values.externalServices.rabbitmq.username }}
+    Password=
+    VHost={{ .Values.externalServices.rabbitmq.vhost }}
+    ExchangeDirect=memochat.direct
+    ExchangeDlx=memochat.dlx
+  status.ini: |
+    [StatusServer]
+    Host=0.0.0.0
+    Port=50052
+    [Postgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.user }}
+    Passwd=
+    Database={{ .Values.externalServices.postgres.database }}
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    [Redis]
+    Host={{ .Values.externalServices.redis.host }}
+    Port={{ .Values.externalServices.redis.port }}
+    Passwd=
+    [Cluster]
+    DiscoveryMode=k8s-statefulset
+    ServiceName={{ .Values.chat.serviceName }}
+    Namespace={{ .Values.namespaces.prod }}
+    Replicas={{ .Values.chat.replicaCount }}
+    TcpPort={{ .Values.chat.tcpPort }}
+    RpcPort={{ .Values.chat.rpcPort }}
+    Domain={{ .Values.global.clusterDomain }}
+    [Log]
+    Level=info
+    Dir=/var/log/memochat/status
+    Format=json
+    ToConsole=true
+    RotateMode=daily
+    MaxFiles=14
+    MaxSizeMB=100
+    Redact=true
+    Env=k8s
+    [Telemetry]
+    Enabled=true
+    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
+    Protocol=otlp-http
+    SampleRatio=1.0
+    ExportLogs=true
+    ExportTraces=true
+    ExportMetrics=false
+    ServiceName=StatusServer
+    ServiceNamespace=memochat
+    [Kafka]
+    Brokers={{ .Values.externalServices.kafka.brokers }}
+    ClientId=memochat-status
+    ConsumerGroup=memochat-status-audit
+    [RabbitMQ]
+    Host={{ .Values.externalServices.rabbitmq.host }}
+    Port={{ .Values.externalServices.rabbitmq.port }}
+    Username={{ .Values.externalServices.rabbitmq.username }}
+    Password=
+    VHost={{ .Values.externalServices.rabbitmq.vhost }}
+    PrefetchCount=10
+    ExchangeDirect=memochat.direct
+    ExchangeDlx=memochat.dlx
+    RetryDelayMs=5000
+    MaxRetries=5
+  chat.ini: |
+    [GateServer]
+    Port=8080
+    [VarifyServer]
+    Host=varifyserver
+    Port=50051
+    [StatusServer]
+    Host=statusserver
+    Port=50052
+    [SelfServer]
+    Name=
+    [Runtime]
+    Role=hybrid
+    AsyncEventBus=kafka
+    TaskBus=rabbitmq
+    [FeatureFlags]
+    chat_private_kafka_shadow=false
+    chat_private_kafka_primary=false
+    chat_group_kafka_shadow=false
+    chat_group_kafka_primary=false
+    history_index_mongo_read=false
+    [Postgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.user }}
+    Passwd=
+    Database={{ .Values.externalServices.postgres.database }}
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    [Redis]
+    Host={{ .Values.externalServices.redis.host }}
+    Port={{ .Values.externalServices.redis.port }}
+    Passwd=
+    [ChatAuth]
+    HmacSecret=
+    TicketTtlSec=20
+    [Kafka]
+    Brokers={{ .Values.externalServices.kafka.brokers }}
+    ClientId=memochat-chatserver
+    ConsumerGroup=memochat-chat-workers
+    TopicPrivate=chat.private.v1
+    TopicGroup=chat.group.v1
+    TopicPrivateDlq=chat.private.dlq.v1
+    TopicGroupDlq=chat.group.dlq.v1
+    EnableIdempotence=true
+    BatchNumMessages=1000
+    QueueBufferingMaxMs=10
+    SessionTimeoutMs=10000
+    OutboxBatchSize=100
+    OutboxRetryBaseMs=1000
+    OutboxRetryMaxMs=30000
+    ConsumeRetryMax=5
+    [RabbitMQ]
+    Host={{ .Values.externalServices.rabbitmq.host }}
+    Port={{ .Values.externalServices.rabbitmq.port }}
+    Username={{ .Values.externalServices.rabbitmq.username }}
+    Password=
+    VHost={{ .Values.externalServices.rabbitmq.vhost }}
+    PrefetchCount=50
+    ExchangeDirect=memochat.direct
+    ExchangeDlx=memochat.dlx
+    RetryDelayMs=5000
+    MaxRetries=5
+    [RelationBootstrapCache]
+    TtlSec=15
+    [Mongo]
+    Enabled=true
+    Uri={{ .Values.externalServices.mongodb.uri }}
+    Database={{ .Values.externalServices.mongodb.database }}
+    PrivateCollection=private_messages
+    GroupCollection=group_messages
+    [Cluster]
+    DiscoveryMode=k8s-statefulset
+    ServiceName={{ .Values.chat.serviceName }}
+    Namespace={{ .Values.namespaces.prod }}
+    Replicas={{ .Values.chat.replicaCount }}
+    TcpPort={{ .Values.chat.tcpPort }}
+    RpcPort={{ .Values.chat.rpcPort }}
+    Domain={{ .Values.global.clusterDomain }}
+    [Log]
+    Level=info
+    Dir=/var/log/memochat/chat
+    Format=json
+    ToConsole=true
+    RotateMode=daily
+    MaxFiles=14
+    MaxSizeMB=100
+    Redact=true
+    Env=k8s
+    [Telemetry]
+    Enabled=true
+    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
+    Protocol=otlp-http
+    SampleRatio=1.0
+    ExportLogs=true
+    ExportTraces=true
+    ExportMetrics=false
+    ServiceName=ChatServer
+    ServiceNamespace=memochat
+  varify.config.json: |
+    {
+      "email": {
+        "host": "{{ .Values.externalServices.smtp.host }}",
+        "port": {{ .Values.externalServices.smtp.port }},
+        "secure": {{ .Values.externalServices.smtp.secure }},
+        "user": "{{ .Values.externalServices.smtp.user }}",
+        "pass": "",
+        "from": "{{ .Values.externalServices.smtp.from }}"
+      },
+      "mysql": {
+        "host": "{{ .Values.externalServices.mysql.host }}",
+        "port": {{ .Values.externalServices.mysql.port }},
+        "passwd": "",
+        "schema": "{{ .Values.externalServices.mysql.schema }}"
+      },
+      "redis": {
+        "host": "{{ .Values.externalServices.redis.host }}",
+        "port": {{ .Values.externalServices.redis.port }},
+        "passwd": ""
+      },
+      "rabbitmq": {
+        "host": "{{ .Values.externalServices.rabbitmq.host }}",
+        "port": {{ .Values.externalServices.rabbitmq.port }},
+        "username": "{{ .Values.externalServices.rabbitmq.username }}",
+        "password": "",
+        "vhost": "{{ .Values.externalServices.rabbitmq.vhost }}",
+        "prefetchCount": 8,
+        "exchangeDirect": "memochat.direct",
+        "exchangeDlx": "memochat.dlx",
+        "verifyDeliveryRoutingKey": "verify.email.delivery",
+        "retryRoutingKey": "verify.email.delivery.retry",
+        "dlqRoutingKey": "verify.email.delivery.dlq",
+        "queueVerifyDelivery": "verify.email.delivery.q",
+        "queueVerifyDeliveryRetry": "verify.email.delivery.retry.q",
+        "queueVerifyDeliveryDlq": "verify.email.delivery.dlq.q",
+        "retryDelayMs": 5000,
+        "maxRetries": 5
+      },
+      "log": {
+        "level": "info",
+        "dir": "/var/log/memochat/varify",
+        "toConsole": true,
+        "env": "k8s"
+      },
+      "telemetry": {
+        "enabled": true,
+        "otlpEndpoint": "http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces",
+        "protocol": "otlp-http",
+        "sampleRatio": 1.0,
+        "exportLogs": true,
+        "exportTraces": true,
+        "exportMetrics": false,
+        "serviceName": "VarifyServer",
+        "serviceNamespace": "memochat"
+      },
+      "featureFlags": {
+        "verify_async_outbox": true
+      }
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: memochat-ops-config
+  namespace: {{ .Values.namespaces.ops }}
+  labels:
+    {{- include "memochat.labels" . | nindent 4 }}
+data:
+  opsserver.yaml: |
+    server:
+      host: 0.0.0.0
+      port: {{ .Values.memoOps.server.service.port }}
+    postgresql:
+      host: {{ .Values.externalServices.postgres.host }}
+      port: {{ .Values.externalServices.postgres.port }}
+      user: {{ .Values.externalServices.postgres.user }}
+      password: ${MEMO_OPS_POSTGRES_PASSWORD}
+      database: {{ .Values.externalServices.postgres.database }}
+      schema: memo_ops
+      sslmode: {{ .Values.externalServices.postgres.sslMode }}
+    redis:
+      host: {{ .Values.externalServices.redis.host }}
+      port: {{ .Values.externalServices.redis.port }}
+      password: ${MEMO_OPS_REDIS_PASSWORD}
+      prefix: memo_ops:
+    cluster:
+      config: /app/config/chat.ini
+    observability:
+      loki: http://loki.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:3100
+      tempo: http://tempo.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:3200
+  opscollector.yaml: |
+    postgresql:
+      host: {{ .Values.externalServices.postgres.host }}
+      port: {{ .Values.externalServices.postgres.port }}
+      user: {{ .Values.externalServices.postgres.user }}
+      password: ${MEMO_OPS_POSTGRES_PASSWORD}
+      database: {{ .Values.externalServices.postgres.database }}
+      schema: memo_ops
+      sslmode: {{ .Values.externalServices.postgres.sslMode }}
+    redis:
+      host: {{ .Values.externalServices.redis.host }}
+      port: {{ .Values.externalServices.redis.port }}
+      password: ${MEMO_OPS_REDIS_PASSWORD}
+      prefix: memo_ops:
+    metrics:
+      host: 0.0.0.0
+      port: {{ .Values.memoOps.collector.metricsPort }}
+    collector:
+      interval_sec: 15
+    cluster:
+      config: /app/config/chat.ini
+  chat.ini: |
+    [Cluster]
+    DiscoveryMode=k8s-statefulset
+    ServiceName={{ .Values.chat.serviceName }}
+    Namespace={{ .Values.namespaces.prod }}
+    Replicas={{ .Values.chat.replicaCount }}
+    TcpPort={{ .Values.chat.tcpPort }}
+    RpcPort={{ .Values.chat.rpcPort }}
+    Domain={{ .Values.global.clusterDomain }}

@@ -35,7 +35,7 @@ void ChatConPool::Close()
 ChatGrpcClient::ChatGrpcClient()
 {
     auto& cfg = ConfigMgr::Inst();
-    const auto cluster = memochat::cluster::LoadStaticChatClusterConfig(
+    const auto cluster = memochat::cluster::LoadChatClusterConfig(
         [&cfg](const std::string& section, const std::string& key) {
             return cfg.GetValue(section, key);
         });

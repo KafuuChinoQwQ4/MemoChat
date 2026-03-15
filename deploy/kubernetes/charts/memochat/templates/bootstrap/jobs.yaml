@@ -1,0 +1,106 @@
+{{- if .Values.jobs.postgresMigrate.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: memochat-postgres-migrate
+  namespace: {{ .Values.namespaces.prod }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: postgres-migrate
+          image: {{ .Values.jobs.postgresMigrate.image }}
+          env:
+            - name: PGPASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-password } }
+          command:
+            - sh
+            - -c
+            - >
+              psql -h {{ .Values.externalServices.postgres.host }} -p {{ .Values.externalServices.postgres.port }}
+              -U {{ .Values.externalServices.postgres.user }} -d {{ .Values.externalServices.postgres.database }}
+              -f /migrations/001_business_baseline.sql &&
+              psql -h {{ .Values.externalServices.postgres.host }} -p {{ .Values.externalServices.postgres.port }}
+              -U {{ .Values.externalServices.postgres.user }} -d {{ .Values.externalServices.postgres.database }}
+              -f /migrations/002_chat_event_outbox.sql &&
+              psql -h {{ .Values.externalServices.postgres.host }} -p {{ .Values.externalServices.postgres.port }}
+              -U {{ .Values.externalServices.postgres.user }} -d {{ .Values.externalServices.postgres.database }}
+              -f /migrations/001_memo_ops_baseline.sql
+          volumeMounts:
+            - name: init
+              mountPath: /migrations
+      volumes:
+        - name: init
+          configMap:
+            name: memochat-platform-init
+{{- end }}
+---
+{{- if .Values.jobs.kafkaInit.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: memochat-kafka-init
+  namespace: {{ .Values.namespaces.prod }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: kafka-init
+          image: {{ .Values.jobs.kafkaInit.image }}
+          env:
+            - name: KAFKA_BROKERS
+              value: {{ .Values.externalServices.kafka.brokers | quote }}
+          command: ["python", "/init/init-kafka.py"]
+          volumeMounts:
+            - name: init
+              mountPath: /init
+      volumes:
+        - name: init
+          configMap:
+            name: memochat-platform-init
+{{- end }}
+---
+{{- if .Values.jobs.rabbitmqInit.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: memochat-rabbitmq-init
+  namespace: {{ .Values.namespaces.prod }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: rabbitmq-init
+          image: {{ .Values.jobs.rabbitmqInit.image }}
+          env:
+            - name: RABBITMQ_HOST
+              value: {{ .Values.externalServices.rabbitmq.host | quote }}
+            - name: RABBITMQ_PORT
+              value: {{ .Values.externalServices.rabbitmq.port | quote }}
+            - name: RABBITMQ_USERNAME
+              value: {{ .Values.externalServices.rabbitmq.username | quote }}
+            - name: RABBITMQ_PASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
+            - name: RABBITMQ_VHOST
+              value: {{ .Values.externalServices.rabbitmq.vhost | quote }}
+          command: ["python", "/init/init-rabbitmq.py"]
+          volumeMounts:
+            - name: init
+              mountPath: /init
+      volumes:
+        - name: init
+          configMap:
+            name: memochat-platform-init
+{{- end }}
