@@ -1,0 +1,44 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  zipkin:
+    endpoint: 0.0.0.0:9411
+  filelog:
+    include:
+      - /workspace/Memo_ops/runtime/**/*.json
+      - /workspace/build/bin/**/*.json
+    start_at: beginning
+    operators:
+      - type: json_parser
+        parse_from: body
+
+processors:
+  batch:
+
+exporters:
+  debug:
+    verbosity: normal
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+
+service:
+  telemetry:
+    metrics:
+      address: 0.0.0.0:9464
+  pipelines:
+    traces:
+      receivers: [otlp, zipkin]
+      processors: [batch]
+      exporters: [otlp/tempo, debug]
+    logs:
+      receivers: [filelog]
+      processors: [batch]
+      exporters: [loki, debug]

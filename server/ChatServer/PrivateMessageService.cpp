@@ -199,7 +199,7 @@ void LogPrivateRouteLocal(const std::string& event,
     memolog::LogInfo(event, "private message notify delivered", fields);
 }
 
-bool KafkaPrimaryEnabledLocal()
+bool KafkaBackendEnabledLocal()
 {
     return memochat::chatruntime::AsyncEventBusBackend() == "kafka";
 }
@@ -217,8 +217,9 @@ void PrivateMessageService::HandleTextChatMessage(const std::shared_ptr<CSession
     const auto uid = root["fromuid"].asInt();
     const auto touid = root["touid"].asInt();
     const Json::Value arrays = root["text_array"];
-    const bool kafka_primary = KafkaPrimaryEnabledLocal() || memochat::chatruntime::FeatureEnabled("chat_private_kafka_primary");
-    const bool kafka_shadow = !KafkaPrimaryEnabledLocal() && memochat::chatruntime::FeatureEnabled("chat_private_kafka_shadow");
+    const bool kafka_backend = KafkaBackendEnabledLocal();
+    const bool kafka_primary = kafka_backend && memochat::chatruntime::FeatureEnabled("chat_private_kafka_primary");
+    const bool kafka_shadow = kafka_backend && !kafka_primary && memochat::chatruntime::FeatureEnabled("chat_private_kafka_shadow");
 
     Json::Value rtvalue;
     rtvalue["error"] = ErrorCodes::Success;

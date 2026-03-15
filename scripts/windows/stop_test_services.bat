@@ -26,5 +26,13 @@ for %%P in (GateServer.exe StatusServer.exe ChatServer.exe MemoChatQml.exe MemoO
   taskkill /F /IM %%P >nul 2>nul
 )
 
+for /f "usebackq delims=" %%P in (`powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$root='%ROOT%'.ToLowerInvariant();" ^
+  "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" -ErrorAction SilentlyContinue | Where-Object {" ^
+  "  $_.CommandLine -and $_.CommandLine.ToLowerInvariant().Contains(($root + '\\server\\varifyserver\\server.js'))" ^
+  "} | ForEach-Object { $_.ProcessId }"`) do (
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "Stop-Process -Id %%P -Force -ErrorAction SilentlyContinue" >nul 2>nul
+)
+
 echo [DONE] MemoChat services stopped.
 exit /b 0

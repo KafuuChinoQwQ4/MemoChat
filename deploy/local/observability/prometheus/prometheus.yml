@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["prometheus:9090"]
+
+  - job_name: windows_exporter
+    static_configs:
+      - targets: ["host.docker.internal:9182"]
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  - job_name: memo_ops_collector
+    static_configs:
+      - targets: ["host.docker.internal:19100"]
+
+  - job_name: otel_collector
+    static_configs:
+      - targets: ["otel-collector:9464"]
+
+  - job_name: dcgm_exporter
+    static_configs:
+      - targets: ["dcgm-exporter:9400"]

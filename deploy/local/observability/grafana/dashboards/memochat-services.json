@@ -1,0 +1,127 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 0,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "expr": "memo_ops_service_cpu_percent",
+          "legendFormat": "{{service}} {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Service CPU Percent",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "expr": "memo_ops_service_rss_bytes",
+          "legendFormat": "{{service}} {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Service RSS Memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "id": 3,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "expr": "memo_ops_service_qps",
+          "legendFormat": "{{service}} {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Service QPS",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percentunit"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "id": 4,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "expr": "memo_ops_service_error_rate",
+          "legendFormat": "{{service}} {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Service Error Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "id": 5,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "expr": "memo_ops_service_latency_p95_ms",
+          "legendFormat": "{{service}} {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Service p95 Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "id": 6,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "single"}},
+      "targets": [
+        {
+          "expr": "memo_ops_service_online_users",
+          "legendFormat": "{{service}} {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Online Users",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "id": 7,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "single"}},
+      "targets": [
+        {
+          "expr": "memo_ops_service_up",
+          "legendFormat": "{{service}} {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Service Up",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["memochat", "services"],
+  "templating": {"list": []},
+  "time": {"from": "now-30m", "to": "now"},
+  "title": "MemoChat Services",
+  "uid": "memochat-services",
+  "version": 1
+}
