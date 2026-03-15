@@ -1,0 +1,13 @@
+{
+	"chunk_size" : 4194304,
+	"created_at" : 1773585720370,
+	"expires_at" : 1773672120370,
+	"file_name" : "memochat-load-lyu4yrrb.jpg",
+	"file_size" : 131072,
+	"media_type" : "image",
+	"mime" : "image/jpeg",
+	"storage_provider" : "local",
+	"total_chunks" : 1,
+	"uid" : 1005,
+	"upload_id" : "c6cf8256-cd3c-4107-bf1b-b6956a79b14e"
+}

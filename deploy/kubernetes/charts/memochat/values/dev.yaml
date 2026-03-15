@@ -1,6 +1,13 @@
 global:
   domain: memochat-dev.local
 
+observability:
+  enabled: true
+  namespace: memochat-observability
+  prometheusReleaseName: kube-prometheus-stack
+  gpu:
+    nvidiaEnabled: false
+
 gate:
   ingress:
     enabled: false

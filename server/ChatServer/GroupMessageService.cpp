@@ -41,7 +41,7 @@ bool ParseJsonObjectGroupLocal(const std::string& payload, Json::Value& root) {
     return reader->parse(payload.data(), payload.data() + payload.size(), &root, &errors) && root.isObject();
 }
 
-bool KafkaPrimaryEnabledGroupLocal() {
+bool KafkaBackendEnabledGroupLocal() {
     return memochat::chatruntime::AsyncEventBusBackend() == "kafka";
 }
 }
@@ -374,8 +374,9 @@ void GroupMessageService::HandleGroupChatMessage(const std::shared_ptr<CSession>
     const int64_t group_id = root["groupid"].asInt64();
     const Json::Value msg = root["msg"];
     const std::string client_msg_id = msg.get("msgid", "").asString();
-    const bool kafka_primary = KafkaPrimaryEnabledGroupLocal() || memochat::chatruntime::FeatureEnabled("chat_group_kafka_primary");
-    const bool kafka_shadow = !KafkaPrimaryEnabledGroupLocal() && memochat::chatruntime::FeatureEnabled("chat_group_kafka_shadow");
+    const bool kafka_backend = KafkaBackendEnabledGroupLocal();
+    const bool kafka_primary = kafka_backend && memochat::chatruntime::FeatureEnabled("chat_group_kafka_primary");
+    const bool kafka_shadow = kafka_backend && !kafka_primary && memochat::chatruntime::FeatureEnabled("chat_group_kafka_shadow");
 
     Json::Value rtvalue;
     rtvalue["error"] = ErrorCodes::Success;

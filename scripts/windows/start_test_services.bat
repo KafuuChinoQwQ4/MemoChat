@@ -100,9 +100,16 @@ echo [INFO] Enabled chat nodes: !CHAT_NODE_NAMES!
 
 call "%ROOT%\scripts\windows\stop_test_services.bat"
 if errorlevel 1 exit /b 1
+call :assert_cluster_ports_available
+if errorlevel 1 exit /b 1
 
 call :ensure_varify_deps
 if errorlevel 1 exit /b 1
+call :verify_varify_config
+if errorlevel 1 exit /b 1
+call :warn_if_port_closed RabbitMQ 5672 "async verify delivery, status presence worker, gate cache invalidate worker, chat task bus will run degraded"
+call :warn_if_port_closed Kafka 19092 "chat async event bus and audit side effects may fail or retry noisily"
+call :warn_if_port_closed Zipkin 9411 "trace export will be unavailable"
 
 if not exist "%RUN_ROOT%" mkdir "%RUN_ROOT%"
 if not exist "%ARTIFACT_ROOT%\logs\services\GateServer" mkdir "%ARTIFACT_ROOT%\logs\services\GateServer"
@@ -222,7 +229,13 @@ if not exist "%PROC_FILE%" (
   exit /b 1
 )
 :launch_process_run
-for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\start_managed_process.ps1" -FilePath "%PROC_FILE%" -ArgumentList "%PROC_ARGS%" -WorkingDirectory "%PROC_WORKDIR%" -StdOutPath "%PROC_OUT%" -StdErrPath "%PROC_ERR%" -PidFile "%PROC_PID%" -Hidden`) do set "PROC_LAUNCHED_PID=%%I"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\start_managed_process.ps1" -FilePath "%PROC_FILE%" -ArgumentList "%PROC_ARGS%" -WorkingDirectory "%PROC_WORKDIR%" -StdOutPath "%PROC_OUT%" -StdErrPath "%PROC_ERR%" -PidFile "%PROC_PID%" -Hidden >nul
+if errorlevel 1 (
+  echo [ERROR] Failed to launch %PROC_NAME%
+  exit /b 1
+)
+set "PROC_LAUNCHED_PID="
+if exist "%PROC_PID%" set /p PROC_LAUNCHED_PID=<"%PROC_PID%"
 if not defined PROC_LAUNCHED_PID (
   echo [ERROR] Failed to launch %PROC_NAME%
   exit /b 1
@@ -298,6 +311,67 @@ if not exist "%VARIFY_DIR%\node_modules\@grpc\grpc-js" (
   exit /b 1
 )
 echo [INFO] VarifyServer dependencies ready.
+exit /b 0
+
+:verify_varify_config
+set "VARIFY_DIR=%ROOT%\server\VarifyServer"
+pushd "%VARIFY_DIR%" >nul 2>nul
+if errorlevel 1 (
+  echo [ERROR] Failed to enter %VARIFY_DIR%
+  exit /b 1
+)
+node -e "require('./config.js')"
+if errorlevel 1 (
+  popd
+  echo [ERROR] VarifyServer config bootstrap failed.
+  echo [HINT] Fix server\VarifyServer\config.js or config.json before starting services.
+  exit /b 1
+)
+popd
+echo [INFO] VarifyServer config bootstrap passed.
+exit /b 0
+
+:warn_if_port_closed
+set "WARN_NAME=%~1"
+set "WARN_PORT=%~2"
+set "WARN_HINT=%~3"
+set "WARN_FOUND="
+for /f "usebackq delims=" %%L in (`netstat -ano -p TCP ^| findstr /R /C:":%WARN_PORT% .*LISTENING"`) do (
+  set "WARN_FOUND=1"
+)
+if not defined WARN_FOUND (
+  echo [WARN] %WARN_NAME% is not listening on port %WARN_PORT%.
+  if not "%WARN_HINT%"=="" echo [WARN] %WARN_HINT%
+)
+exit /b 0
+
+:assert_cluster_ports_available
+call :assert_port_available VarifyServer 50051
+if errorlevel 1 exit /b 1
+call :assert_port_available StatusServer 50052
+if errorlevel 1 exit /b 1
+call :assert_port_available GateServer 8080
+if errorlevel 1 exit /b 1
+for /L %%I in (1,1,!CHAT_NODE_COUNT!) do (
+  call :assert_port_available !CHAT_NODE_%%I_NAME! !CHAT_NODE_%%I_TCP_PORT!
+  if errorlevel 1 exit /b 1
+  call :assert_port_available !CHAT_NODE_%%I_NAME!-RPC !CHAT_NODE_%%I_RPC_PORT!
+  if errorlevel 1 exit /b 1
+)
+exit /b 0
+
+:assert_port_available
+set "PORT_NAME=%~1"
+set "PORT_VALUE=%~2"
+set "PORT_PID="
+for /f "tokens=5" %%P in ('netstat -ano -p TCP ^| findstr /R /C:":%PORT_VALUE% .*LISTENING"') do (
+  set "PORT_PID=%%P"
+)
+if defined PORT_PID (
+  echo [ERROR] %PORT_NAME% port %PORT_VALUE% is already in use by PID %PORT_PID%.
+  echo [HINT] Stop the stale process before retrying start_test_services.bat.
+  exit /b 1
+)
 exit /b 0
 
 :prepare_service

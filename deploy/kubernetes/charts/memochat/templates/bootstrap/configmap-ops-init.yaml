@@ -90,6 +90,9 @@ data:
       logging:
         verbosity: detailed
     service:
+      telemetry:
+        metrics:
+          address: 0.0.0.0:{{ .Values.otelCollector.service.metricsPort }}
       pipelines:
         traces:
           receivers: [otlp, zipkin]
