@@ -57,6 +57,24 @@ bool FeatureEnabled(const std::string& name)
     return ParseBoolFlag(ConfigMgr::Inst().GetValue("FeatureFlags", name));
 }
 
+std::string AsyncEventBusBackend()
+{
+    const auto backend = NormalizeLower(ConfigMgr::Inst().GetValue("Runtime", "AsyncEventBus"));
+    if (backend.empty()) {
+        return "redis";
+    }
+    return backend;
+}
+
+std::string TaskBusBackend()
+{
+    const auto backend = NormalizeLower(ConfigMgr::Inst().GetValue("Runtime", "TaskBus"));
+    if (backend.empty()) {
+        return "inline";
+    }
+    return backend;
+}
+
 std::string SelfServerName()
 {
     return ConfigMgr::Inst()["SelfServer"]["Name"];
@@ -75,6 +93,84 @@ std::string TopicPrivate()
 std::string TopicGroup()
 {
     return "chat.group.v1";
+}
+
+std::string TopicDialogSync()
+{
+    return "dialog.sync.v1";
+}
+
+std::string TopicRelationState()
+{
+    return "relation.state.v1";
+}
+
+std::string TopicUserProfileChanged()
+{
+    return "user.profile.changed.v1";
+}
+
+std::string TopicAuditLogin()
+{
+    return "audit.login.v1";
+}
+
+std::string TopicPrivateDlq()
+{
+    return "chat.private.dlq.v1";
+}
+
+std::string TopicGroupDlq()
+{
+    return "chat.group.dlq.v1";
+}
+
+std::string TaskRoutingDeliveryRetry()
+{
+    return "chat.delivery.retry";
+}
+
+std::string TaskRoutingOfflineNotify()
+{
+    return "chat.notify.offline";
+}
+
+std::string TaskRoutingRelationNotify()
+{
+    return "relation.notify";
+}
+
+std::string TaskRoutingOutboxRepair()
+{
+    return "chat.outbox.relay.retry";
+}
+
+int TaskRetryDelayMs()
+{
+    const auto raw = ConfigMgr::Inst().GetValue("RabbitMQ", "RetryDelayMs");
+    if (raw.empty()) {
+        return 5000;
+    }
+    try {
+        return std::max(100, std::stoi(raw));
+    }
+    catch (...) {
+        return 5000;
+    }
+}
+
+int TaskMaxRetries()
+{
+    const auto raw = ConfigMgr::Inst().GetValue("RabbitMQ", "MaxRetries");
+    if (raw.empty()) {
+        return 5;
+    }
+    try {
+        return std::max(1, std::stoi(raw));
+    }
+    catch (...) {
+        return 5;
+    }
 }
 
 }

@@ -81,6 +81,26 @@ bool PostgresMgr::SavePrivateMessage(const PrivateMessageInfo& msg) {
 	return _dao.SavePrivateMessage(msg);
 }
 
+bool PostgresMgr::EnqueueChatOutboxEvent(const ChatOutboxEventInfo& event) {
+	return _dao.EnqueueChatOutboxEvent(event);
+}
+
+bool PostgresMgr::GetPendingChatOutboxEvents(int limit, std::vector<ChatOutboxEventInfo>& events) {
+	return _dao.GetPendingChatOutboxEvents(limit, events);
+}
+
+bool PostgresMgr::MarkChatOutboxEventPublished(int64_t id, int64_t published_at_ms) {
+	return _dao.MarkChatOutboxEventPublished(id, published_at_ms);
+}
+
+bool PostgresMgr::MarkChatOutboxEventRetry(int64_t id, int retry_count, int64_t next_retry_at_ms, const std::string& last_error, bool terminal_error) {
+	return _dao.MarkChatOutboxEventRetry(id, retry_count, next_retry_at_ms, last_error, terminal_error);
+}
+
+bool PostgresMgr::ExpediteChatOutboxEventRetry(int64_t id) {
+	return _dao.ExpediteChatOutboxEventRetry(id);
+}
+
 bool PostgresMgr::GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const std::string& before_msg_id, const int& limit,
 	std::vector<std::shared_ptr<PrivateMessageInfo>>& messages, bool& has_more) {
 	return _dao.GetPrivateHistory(uid, peer_uid, before_ts, before_msg_id, limit, messages, has_more);

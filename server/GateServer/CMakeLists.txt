@@ -6,6 +6,7 @@ add_executable(GateServer
     CServer.cpp
     AuthLoginSupport.cpp
     GateHttpJsonSupport.cpp
+    GateAsyncSideEffects.cpp
     GateRouteModules.cpp
     GateServer.cpp
     HttpConnection.cpp
@@ -25,6 +26,7 @@ add_executable(GateServer
     CServer.h
     AuthLoginSupport.h
     GateHttpJsonSupport.h
+    GateAsyncSideEffects.h
     GateRouteModules.h
     HttpConnection.h
     LogicSystem.h
@@ -42,6 +44,12 @@ add_executable(GateServer
 set_target_properties(GateServer PROPERTIES FOLDER "Server")
 memochat_configure_server_target(GateServer)
 target_link_libraries(GateServer PRIVATE ${MEMOCHAT_PQXX_TARGET})
+if(MEMOCHAT_ENABLE_KAFKA)
+    target_link_libraries(GateServer PRIVATE ${MEMOCHAT_CPPKAFKA_TARGET})
+endif()
+if(MEMOCHAT_ENABLE_RABBITMQ)
+    target_link_libraries(GateServer PRIVATE ${MEMOCHAT_RABBITMQ_TARGET})
+endif()
 if(WIN32)
     target_link_libraries(GateServer PRIVATE bcrypt)
 endif()

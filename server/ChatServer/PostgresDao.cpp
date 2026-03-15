@@ -11,6 +11,7 @@
 #include <random>
 #include <stdexcept>
 #include <limits>
+#include <sstream>
 
 
 namespace {
@@ -121,6 +122,11 @@ void ExecuteIgnoreSql(sql::Statement* stmt, const std::string& sql_text) {
 	catch (const sql::SQLException&) {
 	}
 }
+
+int64_t NowMsPostgresDao() {
+	return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()).count());
+}
 }
 
 PostgresDao::PostgresDao()
@@ -130,6 +136,8 @@ PostgresDao::PostgresDao()
 	if (!use_postgres_) {
 		throw std::runtime_error("missing [Postgres] configuration for ChatServer");
 	}
+	EnsureChatMessageIdempotencySchema();
+	EnsureChatEventOutboxSchema();
 	WarmupRelationBootstrapQueries();
 }
 
@@ -1775,6 +1783,147 @@ bool PostgresDao::GetPrivateMessageByMsgId(const std::string& msg_id, std::share
 	}
 }
 
+bool PostgresDao::EnqueueChatOutboxEvent(const ChatOutboxEventInfo& event) {
+	if (!use_postgres_) {
+		return false;
+	}
+	try {
+		pqxx::connection conn(postgres_connection_string_);
+		pqxx::work txn(conn);
+		txn.exec_params0(
+			"INSERT INTO chat_event_outbox(event_id, topic, partition_key, payload_json, status, retry_count, next_retry_at, created_at, published_at, last_error) "
+			"VALUES($1,$2,$3,$4::jsonb,$5,$6,$7,$8,NULLIF($9,0),$10) "
+			"ON CONFLICT (event_id) DO NOTHING",
+			event.event_id,
+			event.topic,
+			event.partition_key,
+			event.payload_json,
+			event.status,
+			event.retry_count,
+			event.next_retry_at,
+			event.created_at > 0 ? event.created_at : NowMsPostgresDao(),
+			event.published_at,
+			event.last_error);
+		txn.commit();
+		return true;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool PostgresDao::GetPendingChatOutboxEvents(int limit, std::vector<ChatOutboxEventInfo>& events) {
+	events.clear();
+	if (!use_postgres_ || limit <= 0) {
+		return false;
+	}
+	try {
+		pqxx::connection conn(postgres_connection_string_);
+		pqxx::work txn(conn);
+		const auto now_ms = NowMsPostgresDao();
+		const auto rows = txn.exec_params(
+			"WITH picked AS ("
+			"    SELECT id FROM chat_event_outbox "
+			"    WHERE status = 0 AND next_retry_at <= $1 "
+			"    ORDER BY id ASC LIMIT $2 "
+			"    FOR UPDATE SKIP LOCKED"
+			") "
+			"UPDATE chat_event_outbox AS o "
+			"SET status = 3 "
+			"FROM picked "
+			"WHERE o.id = picked.id "
+			"RETURNING o.id, o.event_id, o.topic, o.partition_key, o.payload_json::text, o.status, o.retry_count, o.next_retry_at, o.created_at, "
+			"COALESCE(o.published_at, 0) AS published_at, COALESCE(o.last_error, '') AS last_error",
+			now_ms,
+			limit);
+		for (const auto& row : rows) {
+			ChatOutboxEventInfo one;
+			one.id = row["id"].as<int64_t>();
+			one.event_id = row["event_id"].c_str();
+			one.topic = row["topic"].c_str();
+			one.partition_key = row["partition_key"].c_str();
+			one.payload_json = row["payload_json"].c_str();
+			one.status = row["status"].as<int>();
+			one.retry_count = row["retry_count"].as<int>();
+			one.next_retry_at = row["next_retry_at"].as<int64_t>();
+			one.created_at = row["created_at"].as<int64_t>();
+			one.published_at = row["published_at"].as<int64_t>();
+			one.last_error = row["last_error"].c_str();
+			events.push_back(one);
+		}
+		txn.commit();
+		return true;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool PostgresDao::MarkChatOutboxEventPublished(int64_t id, int64_t published_at_ms) {
+	if (!use_postgres_ || id <= 0) {
+		return false;
+	}
+	try {
+		pqxx::connection conn(postgres_connection_string_);
+		pqxx::work txn(conn);
+		const auto rows = txn.exec_params(
+			"UPDATE chat_event_outbox SET status = 1, published_at = $2, last_error = '' WHERE id = $1",
+			id,
+			published_at_ms > 0 ? published_at_ms : NowMsPostgresDao());
+		txn.commit();
+		return rows.affected_rows() > 0;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool PostgresDao::MarkChatOutboxEventRetry(int64_t id, int retry_count, int64_t next_retry_at_ms, const std::string& last_error, bool terminal_error) {
+	if (!use_postgres_ || id <= 0) {
+		return false;
+	}
+	try {
+		pqxx::connection conn(postgres_connection_string_);
+		pqxx::work txn(conn);
+		const auto rows = txn.exec_params(
+			"UPDATE chat_event_outbox SET status = $2, retry_count = $3, next_retry_at = $4, last_error = $5 WHERE id = $1",
+			id,
+			terminal_error ? 2 : 0,
+			retry_count,
+			next_retry_at_ms,
+			last_error);
+		txn.commit();
+		return rows.affected_rows() > 0;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool PostgresDao::ExpediteChatOutboxEventRetry(int64_t id) {
+	if (!use_postgres_ || id <= 0) {
+		return false;
+	}
+	try {
+		pqxx::connection conn(postgres_connection_string_);
+		pqxx::work txn(conn);
+		const auto rows = txn.exec_params(
+			"UPDATE chat_event_outbox SET status = 0, next_retry_at = $2 WHERE id = $1 AND status <> 1",
+			id,
+			NowMsPostgresDao());
+		txn.commit();
+		return rows.affected_rows() > 0;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
 bool PostgresDao::UpdatePrivateMessageContent(const int& uid, const int& peer_uid, const std::string& msg_id,
 	const std::string& content, int64_t edited_at_ms) {
 	if (uid <= 0 || peer_uid <= 0 || msg_id.empty() || content.empty()) {
@@ -2738,7 +2887,12 @@ bool PostgresDao::SaveGroupMessage(const GroupMessageInfo& msg, int64_t* out_ser
 				"INSERT INTO chat_group_msg(msg_id, group_id, group_seq, from_uid, msg_type, content, "
 				"mentions_json, reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at) "
 				"VALUES($1,$2,$3,$4,$5,$6,COALESCE(NULLIF($7, ''), '[]')::jsonb,$8,NULLIF($9, '')::jsonb,$10,$11,$12) "
-				"RETURNING server_msg_id",
+				"ON CONFLICT (group_id, msg_id) DO UPDATE SET "
+				"from_uid = EXCLUDED.from_uid, msg_type = EXCLUDED.msg_type, content = EXCLUDED.content, "
+				"mentions_json = EXCLUDED.mentions_json, reply_to_server_msg_id = EXCLUDED.reply_to_server_msg_id, "
+				"forward_meta_json = EXCLUDED.forward_meta_json, edited_at_ms = EXCLUDED.edited_at_ms, "
+				"deleted_at_ms = EXCLUDED.deleted_at_ms, created_at = EXCLUDED.created_at "
+				"RETURNING server_msg_id, group_seq",
 				msg.msg_id,
 				msg.group_id,
 				next_group_seq,
@@ -2756,6 +2910,7 @@ bool PostgresDao::SaveGroupMessage(const GroupMessageInfo& msg, int64_t* out_ser
 			}
 
 			const auto server_msg_id = insert_rows[0]["server_msg_id"].as<int64_t>();
+			next_group_seq = insert_rows[0]["group_seq"].as<int64_t>();
 			if (!msg.file_name.empty() || !msg.mime.empty() || msg.size > 0) {
 				txn.exec_params0(
 					"INSERT INTO chat_group_msg_ext(msg_id, file_name, mime, size) VALUES($1,$2,$3,$4) "
@@ -4742,6 +4897,57 @@ std::string PostgresDao::GenerateRandomGroupCode() {
 	static thread_local std::mt19937_64 rng(std::random_device{}());
 	std::uniform_int_distribution<int> dist(100000000, 999999999);
 	return "g" + std::to_string(dist(rng));
+}
+
+bool PostgresDao::EnsureChatMessageIdempotencySchema() {
+	if (!use_postgres_) {
+		return false;
+	}
+	try {
+		pqxx::connection conn(postgres_connection_string_);
+		pqxx::work txn(conn);
+		txn.exec0("CREATE UNIQUE INDEX IF NOT EXISTS uk_chat_private_msg_msg_id ON chat_private_msg(msg_id)");
+		txn.exec0("CREATE UNIQUE INDEX IF NOT EXISTS uk_chat_group_msg_group_msg_id ON chat_group_msg(group_id, msg_id)");
+		txn.commit();
+		return true;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "EnsureChatMessageIdempotencySchema PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool PostgresDao::EnsureChatEventOutboxSchema() {
+	if (!use_postgres_) {
+		return false;
+	}
+	try {
+		pqxx::connection conn(postgres_connection_string_);
+		pqxx::work txn(conn);
+		txn.exec0(
+			"CREATE TABLE IF NOT EXISTS chat_event_outbox ("
+			"id BIGSERIAL PRIMARY KEY,"
+			"event_id VARCHAR(64) NOT NULL,"
+			"topic VARCHAR(128) NOT NULL,"
+			"partition_key VARCHAR(128) NOT NULL,"
+			"payload_json JSONB NOT NULL,"
+			"status SMALLINT NOT NULL DEFAULT 0,"
+			"retry_count INT NOT NULL DEFAULT 0,"
+			"next_retry_at BIGINT NOT NULL DEFAULT 0,"
+			"created_at BIGINT NOT NULL,"
+			"published_at BIGINT NULL,"
+			"last_error TEXT NOT NULL DEFAULT '',"
+			"CONSTRAINT uq_chat_event_outbox_event_id UNIQUE(event_id)"
+			")");
+		txn.exec0("CREATE INDEX IF NOT EXISTS idx_chat_event_outbox_status_retry ON chat_event_outbox(status, next_retry_at, id)");
+		txn.exec0("CREATE INDEX IF NOT EXISTS idx_chat_event_outbox_topic_status ON chat_event_outbox(topic, status, id)");
+		txn.commit();
+		return true;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "EnsureChatEventOutboxSchema PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
 }
 
 bool PostgresDao::EnsureDialogMetaSchema() {

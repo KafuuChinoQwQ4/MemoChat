@@ -9,11 +9,16 @@
 #include "ChatRuntime.h"
 #include "ChatHandlerRegistrars.h"
 #include "AsyncEventDispatcher.h"
+#include "InlineTaskBus.h"
+#include "KafkaAsyncEventBus.h"
+#include "RedisAsyncEventBus.h"
+#include "RabbitMqTaskBus.h"
 #include "ChatRelationService.h"
 #include "ChatSessionService.h"
 #include "GroupMessageService.h"
 #include "MessageDeliveryService.h"
 #include "PrivateMessageService.h"
+#include "TaskDispatcher.h"
 #include "DistLock.h"
 #include "cluster/ChatClusterDiscovery.h"
 #include "auth/ChatLoginTicket.h"
@@ -349,15 +354,83 @@ LogicSystem::LogicSystem():_b_stop(false), _event_stop(false), _p_server(nullptr
 	_chat_relation_service = std::make_unique<ChatRelationService>(*this);
 	_private_message_service = std::make_unique<PrivateMessageService>(*this);
 	_group_message_service = std::make_unique<GroupMessageService>(*this);
-	_message_delivery_service = std::make_unique<MessageDeliveryService>();
+	const auto task_bus_backend = memochat::chatruntime::TaskBusBackend();
+	if (task_bus_backend == "rabbitmq" && RabbitMqTaskBus::BuildAvailable()) {
+		_task_bus = std::make_shared<RabbitMqTaskBus>();
+		memolog::LogInfo("chat.task_bus.rabbitmq", "chat task bus backend selected",
+			{{"configured_backend", task_bus_backend}});
+	}
+	else {
+		if (task_bus_backend == "rabbitmq" && !RabbitMqTaskBus::BuildAvailable()) {
+			memolog::LogWarn("chat.task_bus.rabbitmq_unavailable",
+				"chat task bus rabbitmq backend is not available in current build, fallback to inline",
+				{{"configured_backend", task_bus_backend}, {"fallback_backend", "inline"}});
+		}
+		else if (task_bus_backend != "inline") {
+			memolog::LogWarn("chat.task_bus.unsupported_backend",
+				"task bus backend is not implemented yet, fallback to inline",
+				{{"configured_backend", task_bus_backend}, {"fallback_backend", "inline"}});
+		}
+		_task_bus = std::make_shared<InlineTaskBus>();
+	}
+	_message_delivery_service = std::make_unique<MessageDeliveryService>(
+		[this](const std::string& task_type, const std::string& routing_key, const Json::Value& payload, int delay_ms, int max_retries, std::string* error) {
+			return PublishTask(task_type, routing_key, payload, delay_ms, max_retries, error);
+		});
+	const auto async_event_bus_backend = memochat::chatruntime::AsyncEventBusBackend();
+	if (async_event_bus_backend == "kafka" && KafkaAsyncEventBus::BuildAvailable()) {
+		_async_event_bus = std::make_shared<KafkaAsyncEventBus>(
+			[this](int64_t outbox_id, int delay_ms, int max_retries, std::string* error) {
+				Json::Value payload(Json::objectValue);
+				payload["outbox_id"] = static_cast<Json::Int64>(outbox_id);
+				return PublishTask("outbox_repair",
+					memochat::chatruntime::TaskRoutingOutboxRepair(),
+					payload,
+					delay_ms,
+					max_retries,
+					error);
+			});
+		memolog::LogInfo("chat.async_event_bus.kafka", "chat async event bus backend selected",
+			{{"configured_backend", async_event_bus_backend}});
+	}
+	else {
+		if (async_event_bus_backend == "kafka" && !KafkaAsyncEventBus::BuildAvailable()) {
+			memolog::LogWarn("chat.async_event_bus.kafka_unavailable",
+				"chat async event bus kafka backend is not available in current build, fallback to redis",
+				{{"configured_backend", async_event_bus_backend}, {"fallback_backend", "redis"}});
+		}
+		else if (async_event_bus_backend != "redis") {
+			memolog::LogWarn("chat.async_event_bus.unsupported_backend",
+				"async event bus backend is not implemented yet, fallback to redis",
+				{{"configured_backend", async_event_bus_backend}, {"fallback_backend", "redis"}});
+		}
+		_async_event_bus = std::make_shared<RedisAsyncEventBus>();
+	}
 	_async_event_dispatcher = std::make_unique<AsyncEventDispatcher>(
+		_async_event_bus,
 		[this]() { return _event_stop; },
 		[this](const std::vector<int>& recipients, short msgid, const Json::Value& payload, int exclude_uid) {
 			MessageDelivery().PushPayload(recipients, msgid, payload, exclude_uid);
 		});
+	_task_dispatcher = std::make_unique<TaskDispatcher>(
+		_task_bus,
+		[this]() { return _event_stop; },
+		[this](const Json::Value& payload, bool) {
+			const int recipient_uid = payload.get("recipient_uid", 0).asInt();
+			const short msgid = static_cast<short>(payload.get("msgid", 0).asInt());
+			const int exclude_uid = payload.get("exclude_uid", 0).asInt();
+			if (recipient_uid <= 0 || msgid <= 0 || !payload.isObject() || !payload.isMember("payload")) {
+				return true;
+			}
+			return MessageDelivery().TryPushPayload({ recipient_uid }, msgid, payload["payload"], exclude_uid, false);
+		},
+		[this](int64_t outbox_id) {
+			return ExpediteOutboxRepair(outbox_id);
+		});
 	RegisterCallBacks();
 	_worker_thread = std::thread (&LogicSystem::DealMsg, this);
 	_event_worker_thread = std::thread(&LogicSystem::DealAsyncEvents, this);
+	_task_worker_thread = std::thread(&LogicSystem::DealTasks, this);
 }
 
 LogicSystem::~LogicSystem(){
@@ -369,6 +442,9 @@ LogicSystem::~LogicSystem(){
 	}
 	if (_event_worker_thread.joinable()) {
 		_event_worker_thread.join();
+	}
+	if (_task_worker_thread.joinable()) {
+		_task_worker_thread.join();
 	}
 }
 
@@ -390,6 +466,22 @@ void LogicSystem::SetServer(std::shared_ptr<CServer> pserver) {
 MessageDeliveryService& LogicSystem::MessageDelivery()
 {
 	return *_message_delivery_service;
+}
+
+bool LogicSystem::PublishTask(const std::string& task_type, const std::string& routing_key, const Json::Value& payload, int delay_ms, int max_retries, std::string* error)
+{
+	if (!_task_dispatcher) {
+		if (error) {
+			*error = "task_dispatcher_unavailable";
+		}
+		return false;
+	}
+	return _task_dispatcher->PublishTask(task_type, routing_key, payload, delay_ms, max_retries, error);
+}
+
+bool LogicSystem::ExpediteOutboxRepair(int64_t outbox_id)
+{
+	return PostgresMgr::GetInstance()->ExpediteChatOutboxEventRetry(outbox_id);
 }
 
 
@@ -431,6 +523,13 @@ void LogicSystem::DealMsg() {
 bool LogicSystem::PublishAsyncEvent(const std::string& topic, const Json::Value& payload, std::string* error)
 {
 	return _async_event_dispatcher->PublishAsyncEvent(topic, payload, error);
+}
+
+void LogicSystem::DealTasks()
+{
+	if (_task_dispatcher) {
+		_task_dispatcher->DealTasks();
+	}
 }
 
 void LogicSystem::DealAsyncEvents()

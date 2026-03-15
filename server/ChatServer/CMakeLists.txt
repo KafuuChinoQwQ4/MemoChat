@@ -1,15 +1,25 @@
 add_executable(ChatServer
     AsioIOServicePool.cpp
     AsyncEventDispatcher.cpp
+    ChatAsyncEvent.cpp
+    ChatTaskEnvelope.cpp
     ChatGrpcClient.cpp
     ChatHandlerRegistrars.cpp
+    ChatOutboxService.cpp
     ChatRelationService.cpp
     ChatRuntime.cpp
+    KafkaAsyncEventBus.cpp
+    KafkaConfig.cpp
+    RabbitMqConfig.cpp
+    RabbitMqTaskBus.cpp
+    RedisAsyncEventBus.cpp
+    InlineTaskBus.cpp
     ChatSessionService.cpp
     ChatUserSupport.cpp
     GroupMessageService.cpp
     MessageDeliveryService.cpp
     PrivateMessageService.cpp
+    TaskDispatcher.cpp
     ChatServer.cpp
     ChatServiceImpl.cpp
     ConfigMgr.cpp
@@ -28,8 +38,13 @@ add_executable(ChatServer
     UserMgr.cpp
     AsioIOServicePool.h
     AsyncEventDispatcher.h
+    ChatAsyncEvent.h
+    ChatTaskEnvelope.h
+    IAsyncEventBus.h
+    IAsyncTaskBus.h
     ChatGrpcClient.h
     ChatHandlerRegistrars.h
+    ChatOutboxService.h
     ChatRelationService.h
     ChatRuntime.h
     ChatSessionService.h
@@ -48,10 +63,17 @@ add_executable(ChatServer
     MongoDao.h
     MongoMgr.h
     MsgNode.h
+    KafkaAsyncEventBus.h
+    KafkaConfig.h
+    RabbitMqConfig.h
+    RabbitMqTaskBus.h
+    InlineTaskBus.h
     PostgresDao.h
     PostgresPool.h
     PostgresMgr.h
     RedisMgr.h
+    RedisAsyncEventBus.h
+    TaskDispatcher.h
     Singleton.h
     StatusGrpcClient.h
     UserMgr.h
@@ -63,6 +85,9 @@ add_executable(ChatServer
 set_target_properties(ChatServer PROPERTIES FOLDER "Server")
 memochat_configure_server_target(ChatServer)
 target_link_libraries(ChatServer PRIVATE ${MEMOCHAT_MONGOCXX_TARGET} ${MEMOCHAT_BSONCXX_TARGET} ${MEMOCHAT_PQXX_TARGET})
+if(MEMOCHAT_ENABLE_KAFKA)
+    target_link_libraries(ChatServer PRIVATE ${MEMOCHAT_CPPKAFKA_TARGET})
+endif()
 if(MSVC)
     target_compile_options(ChatServer PRIVATE /bigobj /Zm200)
 endif()

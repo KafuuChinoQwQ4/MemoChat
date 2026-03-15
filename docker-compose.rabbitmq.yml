@@ -1,0 +1,13 @@
+services:
+  memochat-rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: memochat-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - D:/Docker/rabbitmq/data:/var/lib/rabbitmq

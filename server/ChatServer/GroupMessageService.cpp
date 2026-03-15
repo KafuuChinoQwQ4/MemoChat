@@ -40,6 +40,10 @@ bool ParseJsonObjectGroupLocal(const std::string& payload, Json::Value& root) {
     std::string errors;
     return reader->parse(payload.data(), payload.data() + payload.size(), &root, &errors) && root.isObject();
 }
+
+bool KafkaPrimaryEnabledGroupLocal() {
+    return memochat::chatruntime::AsyncEventBusBackend() == "kafka";
+}
 }
 
 GroupMessageService::GroupMessageService(LogicSystem& logic)
@@ -370,8 +374,8 @@ void GroupMessageService::HandleGroupChatMessage(const std::shared_ptr<CSession>
     const int64_t group_id = root["groupid"].asInt64();
     const Json::Value msg = root["msg"];
     const std::string client_msg_id = msg.get("msgid", "").asString();
-    const bool kafka_shadow = memochat::chatruntime::FeatureEnabled("chat_group_kafka_shadow");
-    const bool kafka_primary = memochat::chatruntime::FeatureEnabled("chat_group_kafka_primary");
+    const bool kafka_primary = KafkaPrimaryEnabledGroupLocal() || memochat::chatruntime::FeatureEnabled("chat_group_kafka_primary");
+    const bool kafka_shadow = !KafkaPrimaryEnabledGroupLocal() && memochat::chatruntime::FeatureEnabled("chat_group_kafka_shadow");
 
     Json::Value rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
@@ -458,6 +462,7 @@ void GroupMessageService::HandleGroupChatMessage(const std::shared_ptr<CSession>
     event_payload["trace_id"] = root.get("trace_id", "").asString();
     event_payload["request_id"] = root.get("request_id", "").asString();
     event_payload["span_id"] = root.get("span_id", "").asString();
+    event_payload["event_id"] = client_msg_id;
     event_payload["accept_node"] = memochat::chatruntime::SelfServerName();
     event_payload["accept_ts"] = static_cast<Json::Int64>(accept_ts);
     event_payload["msg"] = msg;

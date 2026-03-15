@@ -147,3 +147,20 @@ struct PrivateMessageInfo {
 	int64_t edited_at_ms;
 	int64_t deleted_at_ms;
 };
+
+struct ChatOutboxEventInfo {
+	ChatOutboxEventInfo()
+		: id(0), status(0), retry_count(0), next_retry_at(0), created_at(0), published_at(0) {}
+
+	int64_t id;
+	std::string event_id;
+	std::string topic;
+	std::string partition_key;
+	std::string payload_json;
+	int status;
+	int retry_count;
+	int64_t next_retry_at;
+	int64_t created_at;
+	int64_t published_at;
+	std::string last_error;
+};

@@ -277,6 +277,12 @@ Item {
             if (root.messageState === "accepted") {
                 return "已受理"
             }
+            if (root.messageState === "queued_retry") {
+                return "排队重试"
+            }
+            if (root.messageState === "offline_pending") {
+                return "离线待补投"
+            }
             if (root.messageState === "read") {
                 return "已读"
             }
@@ -294,6 +300,9 @@ Item {
             }
             if (root.messageState === "failed") {
                 return "#c74747"
+            }
+            if (root.messageState === "queued_retry" || root.messageState === "offline_pending") {
+                return "#856404"
             }
             return "#6c7d92"
         }
