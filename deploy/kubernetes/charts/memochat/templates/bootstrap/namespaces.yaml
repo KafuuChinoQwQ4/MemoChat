@@ -1,0 +1,16 @@
+{{- if .Values.global.createNamespaces }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespaces.prod }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespaces.ops }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespaces.observability }}
+{{- end }}

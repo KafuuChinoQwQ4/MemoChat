@@ -3,7 +3,7 @@
 ## Start broker
 
 ```powershell
-docker compose -f docker-compose.kafka.yml up -d
+docker compose -f .\deploy\local\compose\kafka.yml up -d
 ```
 
 ## Create topics

@@ -104,8 +104,14 @@ int main(int argc, char** argv)
 	try {
 		ConfigMgr::InitConfigPath(ParseConfigPath(argc, argv));
 		auto& cfg = ConfigMgr::Inst();
-		const std::string server_name = cfg["SelfServer"]["Name"];
-		const auto cluster = memochat::cluster::LoadStaticChatClusterConfig(
+		std::string server_name = memochat::cluster::ResolveSelfNodeName(
+			[&cfg](const std::string& section, const std::string& key) {
+				return cfg.GetValue(section, key);
+			});
+		if (server_name.empty()) {
+			throw std::runtime_error("chat self node name is empty");
+		}
+		const auto cluster = memochat::cluster::LoadChatClusterConfig(
 			[&cfg](const std::string& section, const std::string& key) {
 				return cfg.GetValue(section, key);
 			},

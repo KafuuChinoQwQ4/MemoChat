@@ -3,6 +3,9 @@
 #include <boost/filesystem.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <iostream>
 
 namespace memochat::runtime {
@@ -25,6 +28,23 @@ std::string IniConfig::ResolvePath(const std::string& overridePath) {
         ? (currentPath / "config.ini")
         : boost::filesystem::path(overridePath);
     return configPath.string();
+}
+
+std::string IniConfig::SanitizeEnvToken(const std::string& raw) {
+    std::string token;
+    token.reserve(raw.size());
+    for (unsigned char ch : raw) {
+        if (std::isalnum(ch)) {
+            token.push_back(static_cast<char>(std::toupper(ch)));
+        } else {
+            token.push_back('_');
+        }
+    }
+    return token;
+}
+
+std::string IniConfig::EnvKeyFor(const std::string& section, const std::string& key) {
+    return "MEMOCHAT_" + SanitizeEnvToken(section) + "_" + SanitizeEnvToken(key);
 }
 
 IniConfig::IniConfig(const std::string& configPath) {
@@ -59,6 +79,11 @@ IniSection IniConfig::operator[](const std::string& section) const {
 }
 
 std::string IniConfig::GetValue(const std::string& section, const std::string& key) const {
+    const auto env_key = EnvKeyFor(section, key);
+    if (const char* env_value = std::getenv(env_key.c_str())) {
+        return std::string(env_value);
+    }
+
     const auto it = _config.find(section);
     if (it == _config.end()) {
         return "";

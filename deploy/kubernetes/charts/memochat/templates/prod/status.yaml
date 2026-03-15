@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: statusserver
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    app.kubernetes.io/component: statusserver
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.status.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: statusserver
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: statusserver
+        {{- include "memochat.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: statusserver
+          image: "{{ .Values.images.status.repository }}:{{ .Values.images.status.tag }}"
+          imagePullPolicy: {{ .Values.images.status.pullPolicy }}
+          env:
+            - name: MEMOCHAT_POSTGRES_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-password } }
+            - name: MEMOCHAT_REDIS_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
+            - name: MEMOCHAT_RABBITMQ_PASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
+          ports:
+            - name: grpc
+              containerPort: 50052
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.ini
+              subPath: status.ini
+          livenessProbe:
+            tcpSocket: { port: grpc }
+          readinessProbe:
+            tcpSocket: { port: grpc }
+          startupProbe:
+            tcpSocket: { port: grpc }
+            failureThreshold: 30
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.status.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: memochat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: statusserver
+  namespace: {{ .Values.namespaces.prod }}
+spec:
+  selector:
+    app.kubernetes.io/component: statusserver
+    {{- include "memochat.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: grpc
+      port: {{ .Values.status.service.port }}
+      targetPort: grpc
+---
+{{- if .Values.status.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: statusserver
+  namespace: {{ .Values.namespaces.prod }}
+spec:
+  minAvailable: {{ .Values.status.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: statusserver
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+{{- end }}

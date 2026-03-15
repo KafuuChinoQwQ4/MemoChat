@@ -5,7 +5,7 @@
 ChatGrpcClient::ChatGrpcClient()
 {
 	auto& cfg = ConfigMgr::Inst();
-	auto cluster = memochat::cluster::LoadStaticChatClusterConfig(
+	auto cluster = memochat::cluster::LoadChatClusterConfig(
 		[&cfg](const std::string& section, const std::string& key) {
 			return cfg.GetValue(section, key);
 		});

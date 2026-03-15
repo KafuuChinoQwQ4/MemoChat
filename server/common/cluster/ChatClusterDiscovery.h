@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <functional>
 #include <set>
 #include <sstream>
@@ -158,6 +159,105 @@ inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& ge
     }
 
     return config;
+}
+
+inline std::string GetEnvOrEmpty(const char* name) {
+    if (name == nullptr || *name == '\0') {
+        return "";
+    }
+    const char* value = std::getenv(name);
+    return value == nullptr ? "" : std::string(value);
+}
+
+inline int ParsePositiveIntOrDefault(const std::string& raw, int fallback) {
+    if (raw.empty()) {
+        return fallback;
+    }
+    try {
+        const int value = std::stoi(raw);
+        return value > 0 ? value : fallback;
+    } catch (...) {
+        return fallback;
+    }
+}
+
+inline std::string ResolveSelfNodeName(const ConfigValueGetter& getter) {
+    std::string self_name = TrimCopy(GetEnvOrEmpty("MEMOCHAT_INSTANCE_NAME"));
+    if (!self_name.empty()) {
+        return self_name;
+    }
+
+    self_name = TrimCopy(GetEnvOrEmpty("MEMOCHAT_POD_NAME"));
+    if (!self_name.empty()) {
+        return self_name;
+    }
+
+    self_name = TrimCopy(GetEnvOrEmpty("HOSTNAME"));
+    if (!self_name.empty()) {
+        return self_name;
+    }
+
+    if (getter) {
+        self_name = TrimCopy(getter("SelfServer", "Name"));
+    }
+    return self_name;
+}
+
+inline ChatClusterConfig LoadK8sStatefulSetChatClusterConfig(const ConfigValueGetter& getter,
+                                                             const std::string& self_node_name = "") {
+    if (!getter) {
+        throw std::runtime_error("cluster config getter is not set");
+    }
+
+    ChatClusterConfig config;
+    config.discovery_mode = "k8s-statefulset";
+
+    const std::string service_name = ReadRequiredValue(getter, "Cluster", "ServiceName");
+    const std::string namespace_name = ReadRequiredValue(getter, "Cluster", "Namespace");
+    const int replicas = ParsePositiveIntOrDefault(ReadRequiredValue(getter, "Cluster", "Replicas"), 1);
+    const std::string tcp_port = ReadRequiredValue(getter, "Cluster", "TcpPort");
+    const std::string rpc_port = ReadRequiredValue(getter, "Cluster", "RpcPort");
+    const std::string domain = TrimCopy(getter("Cluster", "Domain"));
+    const std::string cluster_domain = domain.empty() ? "cluster.local" : domain;
+
+    std::unordered_set<std::string> seen_names;
+    for (int ordinal = 0; ordinal < replicas; ++ordinal) {
+        ChatNodeDescriptor node;
+        node.name = service_name + "-" + std::to_string(ordinal);
+        node.tcp_host = node.name + "." + service_name + "." + namespace_name + ".svc." + cluster_domain;
+        node.tcp_port = tcp_port;
+        node.rpc_host = node.tcp_host;
+        node.rpc_port = rpc_port;
+        node.enabled = true;
+        if (!seen_names.insert(node.name).second) {
+            throw std::runtime_error("duplicate k8s chat node name: " + node.name);
+        }
+        config.nodes.push_back(node);
+    }
+
+    if (config.nodes.empty()) {
+        throw std::runtime_error("k8s cluster config has no nodes");
+    }
+
+    const std::string resolved_self = self_node_name.empty() ? ResolveSelfNodeName(getter) : self_node_name;
+    if (!resolved_self.empty() && config.findNode(resolved_self) == nullptr) {
+        throw std::runtime_error("self chat node missing from k8s cluster config: " + resolved_self);
+    }
+
+    return config;
+}
+
+inline ChatClusterConfig LoadChatClusterConfig(const ConfigValueGetter& getter,
+                                               const std::string& self_node_name = "") {
+    if (!getter) {
+        throw std::runtime_error("cluster config getter is not set");
+    }
+
+    const std::string discovery_mode = TrimCopy(getter("Cluster", "DiscoveryMode"));
+    if (discovery_mode == "k8s-statefulset") {
+        return LoadK8sStatefulSetChatClusterConfig(getter, self_node_name);
+    }
+    return LoadStaticChatClusterConfig(getter, self_node_name);
 }
 
 } // namespace memochat::cluster

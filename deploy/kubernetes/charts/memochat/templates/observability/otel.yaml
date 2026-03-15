@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: {{ .Values.namespaces.observability }}
+  labels:
+    app.kubernetes.io/component: otel-collector
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.otelCollector.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: otel-collector
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: otel-collector
+        {{- include "memochat.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: otel-collector
+          image: "{{ .Values.images.otelCollector.repository }}:{{ .Values.images.otelCollector.tag }}"
+          imagePullPolicy: {{ .Values.images.otelCollector.pullPolicy }}
+          args: ["--config=/etc/otelcol-contrib/config.yaml"]
+          ports:
+            - name: otlp-grpc
+              containerPort: {{ .Values.otelCollector.service.grpcPort }}
+            - name: otlp-http
+              containerPort: {{ .Values.otelCollector.service.httpPort }}
+            - name: zipkin
+              containerPort: {{ .Values.otelCollector.service.zipkinPort }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otelcol-contrib/config.yaml
+              subPath: config.yaml
+          resources:
+            {{- toYaml .Values.otelCollector.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: {{ .Values.namespaces.observability }}
+spec:
+  selector:
+    app.kubernetes.io/component: otel-collector
+    {{- include "memochat.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: otlp-grpc
+      port: {{ .Values.otelCollector.service.grpcPort }}
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: {{ .Values.otelCollector.service.httpPort }}
+      targetPort: otlp-http
+    - name: zipkin
+      port: {{ .Values.otelCollector.service.zipkinPort }}
+      targetPort: zipkin

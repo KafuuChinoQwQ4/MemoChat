@@ -1,0 +1,20 @@
+global:
+  domain: memochat-dev.local
+
+gate:
+  ingress:
+    enabled: false
+
+externalServices:
+  postgres:
+    host: postgres.dev.svc.cluster.local
+  redis:
+    host: redis.dev.svc.cluster.local
+  kafka:
+    brokers: redpanda.dev.svc.cluster.local:9092
+  rabbitmq:
+    host: rabbitmq.dev.svc.cluster.local
+  mysql:
+    host: mysql.dev.svc.cluster.local
+  livekit:
+    url: ws://livekit.dev.svc.cluster.local:7880

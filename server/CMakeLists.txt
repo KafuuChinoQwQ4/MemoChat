@@ -164,10 +164,6 @@ target_link_libraries(memochat_server_deps INTERFACE
     hiredis::hiredis
     JsonCpp::JsonCpp
     ${MEMOCHAT_SPDLOG_TARGET}
-    ws2_32
-    crypt32
-    advapi32
-    iphlpapi
 )
 target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_KAFKA=${MEMOCHAT_ENABLE_KAFKA} MEMOCHAT_ENABLE_RABBITMQ=${MEMOCHAT_ENABLE_RABBITMQ})
 
@@ -180,7 +176,7 @@ if(MEMOCHAT_ENABLE_RABBITMQ)
 endif()
 
 if(WIN32)
-    target_link_libraries(memochat_server_deps INTERFACE bcrypt)
+    target_link_libraries(memochat_server_deps INTERFACE bcrypt ws2_32 crypt32 advapi32 iphlpapi)
 endif()
 
 function(memochat_configure_server_target target_name)
