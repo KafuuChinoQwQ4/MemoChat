@@ -39,11 +39,11 @@ def main() -> int:
     timeout = args.timeout if args.timeout > 0 else float(reset_cfg.get("timeout_sec", 8))
     runtime_csv = get_runtime_accounts_csv(cfg, args.accounts_csv)
 
-    accounts = ensure_accounts(cfg, max(total, concurrency), runtime_csv, logger, "reset")
-    accounts = refresh_account_profiles(cfg, accounts)
-    if len(accounts) < total:
-        total = len(accounts)
-    accounts = accounts[:total]
+    all_accounts = ensure_accounts(cfg, max(total, concurrency), runtime_csv, logger, "reset")
+    all_accounts = refresh_account_profiles(cfg, all_accounts)
+    if len(all_accounts) < total:
+        total = len(all_accounts)
+    accounts = all_accounts[:total]
 
     def worker(i: int) -> Dict[str, object]:
         account = accounts[i]
@@ -102,7 +102,7 @@ def main() -> int:
         }
 
     result = run_parallel(total, concurrency, worker)
-    save_accounts_csv(runtime_csv, accounts)
+    save_accounts_csv(runtime_csv, all_accounts)
 
     report = {
         "scenario": "auth.reset_password",
@@ -119,7 +119,7 @@ def main() -> int:
         "phase_breakdown": result["phase_breakdown"],
         "error_counter": result["error_counter"],
         "top_errors": result["top_errors"],
-        "preconditions": {"service": ["GateServer", "VarifyServer", "Redis", "PostgreSQL"], "accounts": len(accounts)},
+        "preconditions": {"service": ["GateServer", "VarifyServer", "Redis", "PostgreSQL"], "accounts": len(all_accounts)},
         "data_mutation_summary": result["data_mutation_summary"],
         "samples": result["samples"],
     }

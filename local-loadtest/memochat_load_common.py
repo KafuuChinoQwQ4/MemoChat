@@ -343,18 +343,68 @@ def load_accounts(config: Dict[str, Any], csv_path: str = "") -> List[Dict[str, 
             for row in reader:
                 normalized = normalize_account(row)
                 email = normalized.get("email", "")
-                password = normalized.get("password", "")
+                password = normalized.get("password", "") or normalized.get("last_password", "")
                 if email and password:
+                    normalized["password"] = password
                     accounts.append(normalized)
         return accounts
 
     for it in config.get("accounts", []):
         normalized = normalize_account(it)
         email = normalized.get("email", "")
-        password = normalized.get("password", "")
+        password = normalized.get("password", "") or normalized.get("last_password", "")
         if email and password:
+            normalized["password"] = password
             accounts.append(normalized)
     return accounts
+
+
+def filter_login_ready_accounts(
+    cfg: Dict[str, Any],
+    accounts: List[Dict[str, str]],
+    timeout: float,
+    logger: Optional[logging.Logger] = None,
+) -> List[Dict[str, str]]:
+    ready: List[Dict[str, str]] = []
+    for account in accounts:
+        email = str(account.get("email", "")).strip()
+        password = str(account.get("password", "")).strip()
+        if not email or not password:
+            continue
+        trace_id = new_trace_id()
+        try:
+            status, payload = gate_login(cfg, email, password, timeout, trace_id)
+        except Exception as exc:  # noqa: BLE001
+            if logger is not None:
+                logger.warning(
+                    "account login probe failed",
+                    extra={
+                        "event": "loadtest.accounts.login_probe_failed",
+                        "trace_id": trace_id,
+                        "account_email": email,
+                        "payload": {"error": str(exc)},
+                    },
+                )
+            continue
+
+        if status != 200 or int(payload.get("error", -1)) != 0:
+            if logger is not None:
+                logger.warning(
+                    "account rejected by login probe",
+                    extra={
+                        "event": "loadtest.accounts.login_probe_rejected",
+                        "trace_id": trace_id,
+                        "account_email": email,
+                        "payload": {"http_status": status, "response_error": payload.get("error", -1)},
+                    },
+                )
+            continue
+
+        enriched = dict(account)
+        enriched["uid"] = str(payload.get("uid", enriched.get("uid", "")))
+        enriched["user_id"] = str(payload.get("user_id", enriched.get("user_id", "")))
+        ready.append(enriched)
+    return ready
 
 
 def save_accounts_csv(path: str, accounts: List[Dict[str, Any]]) -> None:
@@ -805,6 +855,20 @@ def relation_bootstrap_mode(cfg: Dict[str, Any]) -> str:
     return "inline"
 
 
+def message_status_notifications_enabled(cfg: Dict[str, Any], scope: str = "") -> bool:
+    feature_cfg = cfg.get("message_status_notifications", {})
+    if isinstance(feature_cfg, dict):
+        scoped = feature_cfg.get(str(scope).strip().lower(), None)
+        if scoped is not None:
+            return bool(scoped)
+        default_value = feature_cfg.get("enabled", None)
+        if default_value is not None:
+            return bool(default_value)
+    elif feature_cfg not in ({}, None):
+        return bool(feature_cfg)
+    return False
+
+
 def chat_login_payload(cfg: Dict[str, Any], login_rsp: Dict[str, Any], trace_id: str) -> Dict[str, Any]:
     protocol_version = chat_protocol_version(cfg)
     payload: Dict[str, Any] = {
@@ -930,6 +994,19 @@ def wait_for_message_status(
     raise TimeoutError(
         f"{client.label} timed out waiting for message status client_msg_id={client_msg_id} scope={scope} status={expected_status}"
     )
+
+
+def maybe_wait_for_message_status(
+    cfg: Dict[str, Any],
+    client: "TcpChatClient",
+    client_msg_id: str,
+    scope: str,
+    overall_timeout: float,
+    expected_status: str = "persisted",
+) -> Optional[Dict[str, Any]]:
+    if not message_status_notifications_enabled(cfg, scope):
+        return None
+    return wait_for_message_status(client, client_msg_id, scope, overall_timeout, expected_status)
 
 
 def encode_call_invite(call_type: str, join_url: str) -> str:
@@ -1181,10 +1258,11 @@ def ensure_accounts(
     logger: logging.Logger,
     seed_prefix: str,
 ) -> List[Dict[str, str]]:
+    timeout = float(cfg.get("default_http_timeout_sec", 8))
     accounts = load_accounts(cfg, csv_path)
     accounts = refresh_account_profiles(cfg, accounts) if accounts else []
+    accounts = filter_login_ready_accounts(cfg, accounts, timeout=timeout, logger=logger) if accounts else []
     domain = str(cfg.get("account_domain", "loadtest.local"))
-    timeout = float(cfg.get("default_http_timeout_sec", 8))
     generated: List[Dict[str, str]] = []
     while len(accounts) + len(generated) < required_count:
         account = generate_account(seed_prefix, domain)

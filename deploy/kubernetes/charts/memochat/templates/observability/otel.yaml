@@ -30,6 +30,8 @@ spec:
               containerPort: {{ .Values.otelCollector.service.httpPort }}
             - name: zipkin
               containerPort: {{ .Values.otelCollector.service.zipkinPort }}
+            - name: metrics
+              containerPort: {{ .Values.otelCollector.service.metricsPort }}
           volumeMounts:
             - name: config
               mountPath: /etc/otelcol-contrib/config.yaml
@@ -46,6 +48,13 @@ kind: Service
 metadata:
   name: otel-collector
   namespace: {{ .Values.namespaces.observability }}
+  labels:
+    app.kubernetes.io/component: otel-collector
+    {{- include "memochat.labels" . | nindent 4 }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /metrics
+    prometheus.io/port: "{{ .Values.otelCollector.service.metricsPort }}"
 spec:
   selector:
     app.kubernetes.io/component: otel-collector
@@ -60,3 +69,6 @@ spec:
     - name: zipkin
       port: {{ .Values.otelCollector.service.zipkinPort }}
       targetPort: zipkin
+    - name: metrics
+      port: {{ .Values.otelCollector.service.metricsPort }}
+      targetPort: metrics

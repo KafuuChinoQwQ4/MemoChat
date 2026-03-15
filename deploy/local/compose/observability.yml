@@ -1,0 +1,112 @@
+name: memochat-observability
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: memochat-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    volumes:
+      - ../observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - D:/docker-data/memochat/observability/prometheus:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: memochat-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ../observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ../observability/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - D:/docker-data/memochat/observability/grafana:/var/lib/grafana
+
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: memochat-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    command:
+      - -config.file=/etc/loki/config.yaml
+    volumes:
+      - ../observability/loki/config.yaml:/etc/loki/config.yaml:ro
+      - D:/docker-data/memochat/observability/loki:/loki
+
+  tempo:
+    image: grafana/tempo:2.5.0
+    container_name: memochat-tempo
+    restart: unless-stopped
+    ports:
+      - "3200:3200"
+    command:
+      - -config.file=/etc/tempo/config.yaml
+    volumes:
+      - ../observability/tempo/config.yaml:/etc/tempo/config.yaml:ro
+      - D:/docker-data/memochat/observability/tempo:/var/tempo
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.107.0
+    container_name: memochat-otel-collector
+    restart: unless-stopped
+    depends_on:
+      - loki
+      - tempo
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "9411:9411"
+      - "9464:9464"
+    command:
+      - --config=/etc/otelcol-contrib/config.yaml
+    volumes:
+      - ../observability/otel/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - ../../../Memo_ops/runtime:/workspace/Memo_ops/runtime:ro
+      - ../../../build/bin:/workspace/build/bin:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: memochat-cadvisor
+    restart: unless-stopped
+    ports:
+      - "8088:8080"
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.8-3.6.0-ubuntu22.04
+    container_name: memochat-dcgm-exporter
+    restart: unless-stopped
+    profiles:
+      - nvidia
+    ports:
+      - "9400:9400"
+    environment:
+      DCGM_EXPORTER_LISTEN: ":9400"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

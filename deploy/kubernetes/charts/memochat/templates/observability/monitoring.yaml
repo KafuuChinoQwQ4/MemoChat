@@ -1,0 +1,68 @@
+{{- if .Values.observability.enabled }}
+{{- if .Values.observability.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: memo-ops-collector
+  namespace: {{ .Values.observability.namespace }}
+  labels:
+    release: {{ .Values.observability.prometheusReleaseName | quote }}
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Values.namespaces.ops }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: memo-ops-collector
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.observability.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.observability.serviceMonitor.scrapeTimeout }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: otel-collector
+  namespace: {{ .Values.observability.namespace }}
+  labels:
+    release: {{ .Values.observability.prometheusReleaseName | quote }}
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Values.namespaces.observability }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: otel-collector
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.observability.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.observability.serviceMonitor.scrapeTimeout }}
+{{- end }}
+{{- if .Values.observability.podMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: memo-ops-collector
+  namespace: {{ .Values.observability.namespace }}
+  labels:
+    release: {{ .Values.observability.prometheusReleaseName | quote }}
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Values.namespaces.ops }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: memo-ops-collector
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+  podMetricsEndpoints:
+    - port: metrics
+      interval: {{ .Values.observability.podMonitor.interval }}
+      scrapeTimeout: {{ .Values.observability.podMonitor.scrapeTimeout }}
+{{- end }}
+{{- end }}

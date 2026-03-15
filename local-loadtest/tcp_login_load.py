@@ -11,13 +11,16 @@ from memochat_load_common import (
     build_summary,
     chat_login_payload,
     chat_protocol_version,
+    filter_login_ready_accounts,
     finalize_report,
     get_log_dir,
+    get_runtime_accounts_csv,
     init_json_logger,
     load_accounts,
     load_json,
     new_trace_id,
     relation_bootstrap_mode,
+    save_accounts_csv,
     top_errors,
     utc_now_str,
     xor_encode,
@@ -78,7 +81,17 @@ def main() -> int:
     use_xor = bool(cfg.get('use_xor_passwd', True))
     login_protocol_version = chat_protocol_version(cfg)
 
-    accounts = load_accounts(cfg, args.accounts_csv)
+    runtime_csv = get_runtime_accounts_csv(cfg, args.accounts_csv)
+    accounts = load_accounts(cfg, runtime_csv)
+    filtered_accounts = filter_login_ready_accounts(cfg, accounts, http_timeout, logger)
+    if filtered_accounts:
+        accounts = filtered_accounts
+        if runtime_csv:
+            save_accounts_csv(runtime_csv, accounts)
+    else:
+        logger.warning('login probe produced no ready accounts, fallback to raw runtime accounts',
+                       extra={'event': 'loadtest.accounts.login_probe_empty_fallback',
+                              'payload': {'raw_accounts': len(accounts)}})
     if not accounts:
         logger.error('No accounts found. Fill config.json accounts or provide --accounts-csv',
                      extra={'event': 'loadtest.input.missing_accounts'})

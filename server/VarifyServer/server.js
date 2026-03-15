@@ -334,7 +334,20 @@ process.on('SIGTERM', () => {
 
 async function bootstrap() {
   if (config_module.verify_async_outbox) {
-    await rabbitmq_module.startVerifyDeliveryWorker(deliverVerifyTask);
+    try {
+      await rabbitmq_module.startVerifyDeliveryWorker(deliverVerifyTask);
+    } catch (err) {
+      logger.warn(
+        {
+          event: 'service.bootstrap.rabbitmq_degraded',
+          error: err && err.message ? err.message : String(err),
+          module: 'grpc',
+          error_type: 'rabbitmq',
+        },
+        'RabbitMQ unavailable during bootstrap, falling back to synchronous verify delivery'
+      );
+      config_module.verify_async_outbox = false;
+    }
   }
   startHealthServer();
   main();

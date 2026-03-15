@@ -80,7 +80,7 @@ const telemetry_sample_ratio = process.env.MEMOCHAT_TELEMETRY_SAMPLERATIO !== un
   ? envNumber('MEMOCHAT_TELEMETRY_SAMPLERATIO', 1.0)
   : (config.telemetry && config.telemetry.sampleRatio !== undefined
   ? Number(config.telemetry.sampleRatio)
-  : 1.0;
+  : 1.0);
 const telemetry_export_logs = envBool('MEMOCHAT_TELEMETRY_EXPORTLOGS', config.telemetry ? config.telemetry.exportLogs !== false : true);
 const telemetry_export_traces = envBool('MEMOCHAT_TELEMETRY_EXPORTTRACES', config.telemetry ? config.telemetry.exportTraces !== false : true);
 const telemetry_export_metrics = envBool('MEMOCHAT_TELEMETRY_EXPORTMETRICS', config.telemetry ? config.telemetry.exportMetrics === true : false);

@@ -10,6 +10,21 @@ namespaces:
   ops: memochat-ops
   observability: memochat-observability
 
+observability:
+  enabled: true
+  namespace: memochat-observability
+  prometheusReleaseName: kube-prometheus-stack
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+  podMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+  gpu:
+    nvidiaEnabled: false
+
 images:
   gate:
     repository: memochat/gateserver
@@ -163,6 +178,7 @@ otelCollector:
     grpcPort: 4317
     httpPort: 4318
     zipkinPort: 9411
+    metricsPort: 8888
   resources: {}
 
 jobs:

@@ -28,11 +28,11 @@ from memochat_load_common import (
     get_runtime_accounts_csv,
     init_json_logger,
     load_json,
+    maybe_wait_for_message_status,
     open_mysql,
     refresh_account_profiles,
     run_parallel,
     utc_now_str,
-    wait_for_message_status,
 )
 
 
@@ -212,7 +212,7 @@ def main() -> int:
             if int(group_rsp.get("error", -1)) != 0:
                 raise RuntimeError(f"group message send failed: {group_rsp}")
             expect_response_status(group_rsp)
-            wait_for_message_status(owner_client, group_msg_id, "group", tcp_timeout)
+            maybe_wait_for_message_status(cfg, owner_client, group_msg_id, "group", tcp_timeout)
             member_client.recv_until([ID_NOTIFY_GROUP_CHAT_MSG_REQ], tcp_timeout)
             applicant_client.recv_until([ID_NOTIFY_GROUP_CHAT_MSG_REQ], tcp_timeout)
             phase_ms["group_message"] = (time.perf_counter() - t4) * 1000.0
