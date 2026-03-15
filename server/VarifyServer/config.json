@@ -18,6 +18,24 @@
     "port": 6379,
     "passwd": "123456"
   },
+  "rabbitmq": {
+    "host": "127.0.0.1",
+    "port": 5672,
+    "username": "guest",
+    "password": "guest",
+    "vhost": "/",
+    "prefetchCount": 8,
+    "exchangeDirect": "memochat.direct",
+    "exchangeDlx": "memochat.dlx",
+    "verifyDeliveryRoutingKey": "verify.email.delivery",
+    "retryRoutingKey": "verify.email.delivery.retry",
+    "dlqRoutingKey": "verify.email.delivery.dlq",
+    "queueVerifyDelivery": "verify.email.delivery.q",
+    "queueVerifyDeliveryRetry": "verify.email.delivery.retry.q",
+    "queueVerifyDeliveryDlq": "verify.email.delivery.dlq.q",
+    "retryDelayMs": 5000,
+    "maxRetries": 5
+  },
   "log": {
     "level": "info",
     "dir": "../../Memo_ops/artifacts/logs/services/VarifyServer",

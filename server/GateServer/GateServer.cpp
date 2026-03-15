@@ -11,6 +11,7 @@
 #include <hiredis/hiredis.h>
 #include "RedisMgr.h"
 #include "PostgresMgr.h"
+#include "GateAsyncSideEffects.h"
 #include "AsioIOServicePool.h"
 #include "logging/LogConfig.h"
 #include "logging/Logger.h"
@@ -156,6 +157,7 @@ int main()
 					std::chrono::steady_clock::now() - postgres_init_start).count())}
 			});
 		RedisMgr::GetInstance();
+		GateAsyncSideEffects::Instance().Start();
 		std::string gate_port_str = gCfgMgr["GateServer"]["Port"];
 		unsigned short gate_port = atoi(gate_port_str.c_str());
 		net::io_context ioc{ 1 };
@@ -171,6 +173,7 @@ int main()
 		memolog::LogInfo("service.start", "GateServer listening", { {"port", std::to_string(gate_port)} });
 		ioc.run();
 		memolog::LogInfo("service.stop", "GateServer stopped");
+		GateAsyncSideEffects::Instance().Stop();
 		RedisMgr::GetInstance()->Close();
 		memolog::Telemetry::Shutdown();
 		memolog::Logger::Shutdown();
@@ -179,6 +182,7 @@ int main()
 	catch (std::exception const& e)
 	{
 		memolog::LogError("service.fatal", "GateServer crashed", { {"error", e.what()} });
+		GateAsyncSideEffects::Instance().Stop();
 		RedisMgr::GetInstance()->Close();
 		memolog::Telemetry::Shutdown();
 		memolog::Logger::Shutdown();

@@ -1,10 +1,12 @@
 #include "MessageDeliveryService.h"
 
 #include "ChatGrpcClient.h"
+#include "ChatRuntime.h"
 #include "ConfigMgr.h"
 #include "CSession.h"
 #include "RedisMgr.h"
 #include "UserMgr.h"
+#include "logging/Logger.h"
 #include "cluster/ChatClusterDiscovery.h"
 
 #include <algorithm>
@@ -133,12 +135,38 @@ OnlineRouteDecision ResolveOnlineRouteDelivery(int uid) {
     ClearTrackedOnlineRouteDelivery(uid, self_name);
     return route;
 }
+
+enum class DeliveryAttemptResult {
+    Delivered,
+    Offline,
+    RetryableFailure
+};
+
+Json::Value BuildDeliveryTaskPayload(int recipient_uid, short msgid, const Json::Value& payload, int exclude_uid, const char* reason)
+{
+    Json::Value task(Json::objectValue);
+    task["recipient_uid"] = recipient_uid;
+    task["msgid"] = msgid;
+    task["exclude_uid"] = exclude_uid;
+    task["reason"] = reason;
+    task["payload"] = payload;
+    return task;
+}
+}
+
+MessageDeliveryService::MessageDeliveryService(PublishTaskFn publish_task)
+    : _publish_task(std::move(publish_task)) {
 }
 
 void MessageDeliveryService::PushPayload(const std::vector<int>& recipients, short msgid, const Json::Value& payload, int exclude_uid)
 {
+    TryPushPayload(recipients, msgid, payload, exclude_uid, true);
+}
+
+bool MessageDeliveryService::TryPushPayload(const std::vector<int>& recipients, short msgid, const Json::Value& payload, int exclude_uid, bool enqueue_on_failure)
+{
     if (recipients.empty()) {
-        return;
+        return true;
     }
 
     std::unordered_set<int> uniq;
@@ -149,11 +177,12 @@ void MessageDeliveryService::PushPayload(const std::vector<int>& recipients, sho
         uniq.insert(uid);
     }
     if (uniq.empty()) {
-        return;
+        return true;
     }
 
     const std::string payload_str = payload.toStyledString();
     std::unordered_map<std::string, std::vector<int>> remote_server_uids;
+    bool all_delivered = true;
 
     if (msgid == ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ) {
         for (int uid : uniq) {
@@ -171,6 +200,16 @@ void MessageDeliveryService::PushPayload(const std::vector<int>& recipients, sho
                 target_server = ResolveServerFromOnlineSetsDelivery(std::to_string(uid));
             }
             if (target_server.empty()) {
+                all_delivered = false;
+                if (enqueue_on_failure && _publish_task) {
+                    std::string error;
+                    _publish_task("offline_notify",
+                        memochat::chatruntime::TaskRoutingOfflineNotify(),
+                        BuildDeliveryTaskPayload(uid, msgid, payload, exclude_uid, "offline"),
+                        memochat::chatruntime::TaskRetryDelayMs(),
+                        memochat::chatruntime::TaskMaxRetries(),
+                        &error);
+                }
                 continue;
             }
 
@@ -192,9 +231,21 @@ void MessageDeliveryService::PushPayload(const std::vector<int>& recipients, sho
             auto fallback_rsp = ChatGrpcClient::GetInstance()->NotifyGroupMemberBatch(fallback_server, req);
             if (fallback_rsp.error() == ErrorCodes::Success && fallback_rsp.delivered() > 0) {
                 RedisMgr::GetInstance()->Set(USERIPPREFIX + std::to_string(uid), fallback_server);
+                continue;
+            }
+
+            all_delivered = false;
+            if (enqueue_on_failure && _publish_task) {
+                std::string error;
+                _publish_task("message_delivery_retry",
+                    memochat::chatruntime::TaskRoutingDeliveryRetry(),
+                    BuildDeliveryTaskPayload(uid, msgid, payload, exclude_uid, "rpc_failed"),
+                    memochat::chatruntime::TaskRetryDelayMs(),
+                    memochat::chatruntime::TaskMaxRetries(),
+                    &error);
             }
         }
-        return;
+        return all_delivered;
     }
 
     for (int uid : uniq) {
@@ -205,6 +256,17 @@ void MessageDeliveryService::PushPayload(const std::vector<int>& recipients, sho
         }
         if (route.kind == OnlineRouteKind::Remote) {
             remote_server_uids[route.redis_server].push_back(uid);
+            continue;
+        }
+        all_delivered = false;
+        if (enqueue_on_failure && _publish_task) {
+            std::string error;
+            _publish_task("offline_notify",
+                memochat::chatruntime::TaskRoutingOfflineNotify(),
+                BuildDeliveryTaskPayload(uid, msgid, payload, exclude_uid, "offline"),
+                memochat::chatruntime::TaskRetryDelayMs(),
+                memochat::chatruntime::TaskMaxRetries(),
+                &error);
         }
     }
 
@@ -222,7 +284,21 @@ void MessageDeliveryService::PushPayload(const std::vector<int>& recipients, sho
             for (int uid : uids) {
                 req.add_touids(uid);
             }
-            ChatGrpcClient::GetInstance()->NotifyGroupMessage(server_name, req);
+            const auto rsp = ChatGrpcClient::GetInstance()->NotifyGroupMessage(server_name, req);
+            if (rsp.error() != ErrorCodes::Success || rsp.delivered() <= 0) {
+                all_delivered = false;
+                if (enqueue_on_failure && _publish_task) {
+                    for (int uid : uids) {
+                        std::string error;
+                        _publish_task("message_delivery_retry",
+                            memochat::chatruntime::TaskRoutingDeliveryRetry(),
+                            BuildDeliveryTaskPayload(uid, msgid, payload, exclude_uid, "rpc_failed"),
+                            memochat::chatruntime::TaskRetryDelayMs(),
+                            memochat::chatruntime::TaskMaxRetries(),
+                            &error);
+                    }
+                }
+            }
             continue;
         }
 
@@ -232,6 +308,22 @@ void MessageDeliveryService::PushPayload(const std::vector<int>& recipients, sho
         for (int uid : uids) {
             req.add_touids(uid);
         }
-        ChatGrpcClient::GetInstance()->NotifyGroupEvent(server_name, req);
+        const auto rsp = ChatGrpcClient::GetInstance()->NotifyGroupEvent(server_name, req);
+        if (rsp.error() != ErrorCodes::Success || rsp.delivered() <= 0) {
+            all_delivered = false;
+            if (enqueue_on_failure && _publish_task) {
+                for (int uid : uids) {
+                    std::string error;
+                    _publish_task("message_delivery_retry",
+                        memochat::chatruntime::TaskRoutingDeliveryRetry(),
+                        BuildDeliveryTaskPayload(uid, msgid, payload, exclude_uid, "rpc_failed"),
+                        memochat::chatruntime::TaskRetryDelayMs(),
+                        memochat::chatruntime::TaskMaxRetries(),
+                        &error);
+                }
+            }
+        }
     }
+
+    return all_delivered;
 }

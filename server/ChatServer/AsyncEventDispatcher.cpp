@@ -1,6 +1,7 @@
 #include "AsyncEventDispatcher.h"
 
 #include "ChatGrpcClient.h"
+#include "ChatAsyncEvent.h"
 #include "ChatRuntime.h"
 #include "ConfigMgr.h"
 #include "CSession.h"
@@ -8,6 +9,7 @@
 #include "PostgresMgr.h"
 #include "RedisMgr.h"
 #include "UserMgr.h"
+#include "IAsyncEventBus.h"
 #include "cluster/ChatClusterDiscovery.h"
 #include "logging/Logger.h"
 
@@ -164,6 +166,22 @@ std::string JsonToCompactStringAsync(const Json::Value& value) {
     return Json::writeString(builder, value);
 }
 
+void InvalidateRelationBootstrapCacheAsync(int uid) {
+    if (uid <= 0) {
+        return;
+    }
+    RedisMgr::GetInstance()->Del(std::string("relation_bootstrap_") + std::to_string(uid));
+}
+
+void AppendUniqueUidAsync(std::vector<int>& values, int uid) {
+    if (uid <= 0) {
+        return;
+    }
+    if (std::find(values.begin(), values.end(), uid) == values.end()) {
+        values.push_back(uid);
+    }
+}
+
 bool ParseJsonObjectAsync(const std::string& payload, Json::Value& root) {
     Json::CharReaderBuilder builder;
     std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
@@ -196,30 +214,23 @@ void LogPrivateRouteAsync(const std::string& event,
 }
 }
 
-AsyncEventDispatcher::AsyncEventDispatcher(StopRequested stop_requested, PushGroupPayloadFn push_group_payload)
-    : _stop_requested(std::move(stop_requested)),
+AsyncEventDispatcher::AsyncEventDispatcher(std::shared_ptr<IAsyncEventBus> event_bus,
+    StopRequested stop_requested,
+    PushGroupPayloadFn push_group_payload)
+    : _event_bus(std::move(event_bus)),
+      _stop_requested(std::move(stop_requested)),
       _push_group_payload(std::move(push_group_payload)) {
 }
 
 bool AsyncEventDispatcher::PublishAsyncEvent(const std::string& topic, const Json::Value& payload, std::string* error)
 {
-    Json::Value envelope;
-    envelope["topic"] = topic;
-    envelope["payload"] = payload;
-    const auto serialized = JsonToCompactStringAsync(envelope);
-    if (serialized.empty()) {
+    if (!_event_bus) {
         if (error) {
-            *error = "serialize_failed";
+            *error = "event_bus_unavailable";
         }
         return false;
     }
-    if (!RedisMgr::GetInstance()->RPush(memochat::chatruntime::QueueKeyForTopic(topic), serialized)) {
-        if (error) {
-            *error = "queue_publish_failed";
-        }
-        return false;
-    }
-    return true;
+    return _event_bus->Publish(topic, payload, error);
 }
 
 void AsyncEventDispatcher::DealAsyncEvents()
@@ -230,23 +241,35 @@ void AsyncEventDispatcher::DealAsyncEvents()
             continue;
         }
 
-        bool handled = false;
-        for (const auto& topic : { memochat::chatruntime::TopicPrivate(), memochat::chatruntime::TopicGroup() }) {
-            std::string raw;
-            if (!RedisMgr::GetInstance()->LPop(memochat::chatruntime::QueueKeyForTopic(topic), raw) || raw.empty()) {
-                continue;
-            }
-            handled = true;
-            Json::Value root;
-            if (!ParseJsonObjectAsync(raw, root)) {
-                memolog::LogWarn("chat.async.invalid_event", "async chat event parse failed", { {"topic", topic} });
-                continue;
-            }
-            const auto payload = root["payload"];
-            if (topic == memochat::chatruntime::TopicPrivate()) {
-                HandlePrivateAsyncEvent(payload);
-            } else if (topic == memochat::chatruntime::TopicGroup()) {
-                HandleGroupAsyncEvent(payload);
+        AsyncConsumedEvent event;
+        std::string consume_error;
+        const bool handled = _event_bus &&
+            _event_bus->ConsumeOnce({
+                memochat::chatruntime::TopicPrivate(),
+                memochat::chatruntime::TopicGroup(),
+                memochat::chatruntime::TopicDialogSync(),
+                memochat::chatruntime::TopicRelationState()
+            }, event, &consume_error);
+        if (handled) {
+            if (!event.parsed) {
+                memolog::LogWarn("chat.async.invalid_event", "async chat event parse failed",
+                    { {"topic", event.envelope.topic}, {"error", consume_error} });
+                _event_bus->AckLastConsumed();
+            } else if (event.envelope.topic == memochat::chatruntime::TopicPrivate()) {
+                HandlePrivateAsyncEvent(event.envelope.payload());
+                _event_bus->AckLastConsumed();
+            } else if (event.envelope.topic == memochat::chatruntime::TopicGroup()) {
+                HandleGroupAsyncEvent(event.envelope.payload());
+                _event_bus->AckLastConsumed();
+            } else if (event.envelope.topic == memochat::chatruntime::TopicDialogSync()) {
+                HandleDialogSyncEvent(event.envelope.payload());
+                _event_bus->AckLastConsumed();
+            } else if (event.envelope.topic == memochat::chatruntime::TopicRelationState()) {
+                HandleRelationStateEvent(event.envelope.payload());
+                _event_bus->AckLastConsumed();
+            } else {
+                memolog::LogWarn("chat.async.unknown_topic", "async chat event topic is not registered", { {"topic", event.envelope.topic} });
+                _event_bus->AckLastConsumed();
             }
         }
         if (!handled) {
@@ -366,6 +389,24 @@ void AsyncEventDispatcher::HandlePrivateAsyncEvent(const Json::Value& root)
     status_payload["persist_ts"] = static_cast<Json::Int64>(NowMsAsync());
     status_payload["text_array"] = notify_payload["text_array"];
     NotifyMessageStatus(status_payload);
+
+    Json::Value dialog_sync(Json::objectValue);
+    dialog_sync["scope"] = "private";
+    dialog_sync["fromuid"] = from_uid;
+    dialog_sync["touid"] = to_uid;
+    dialog_sync["client_msg_id"] = first_msg_id;
+    dialog_sync["event_ts"] = static_cast<Json::Int64>(NowMsAsync());
+    dialog_sync["text_array"] = notify_payload["text_array"];
+    std::string publish_error;
+    if (!first_msg_id.empty() && !PublishAsyncEvent(memochat::chatruntime::TopicDialogSync(), dialog_sync, &publish_error)) {
+        memolog::LogWarn("chat.dialog_sync.publish_failed", "failed to publish private dialog sync event",
+            {
+                {"from_uid", std::to_string(from_uid)},
+                {"to_uid", std::to_string(to_uid)},
+                {"client_msg_id", first_msg_id},
+                {"error", publish_error}
+            });
+    }
 }
 
 void AsyncEventDispatcher::HandleGroupAsyncEvent(const Json::Value& root)
@@ -469,4 +510,91 @@ void AsyncEventDispatcher::HandleGroupAsyncEvent(const Json::Value& root)
         status_payload["from_icon"] = sender_info->icon;
     }
     NotifyMessageStatus(status_payload);
+
+    Json::Value dialog_sync(Json::objectValue);
+    dialog_sync["scope"] = "group";
+    dialog_sync["fromuid"] = from_uid;
+    dialog_sync["groupid"] = static_cast<Json::Int64>(group_id);
+    dialog_sync["client_msg_id"] = info.msg_id;
+    dialog_sync["server_msg_id"] = static_cast<Json::Int64>(info.server_msg_id);
+    dialog_sync["group_seq"] = static_cast<Json::Int64>(info.group_seq);
+    dialog_sync["event_ts"] = static_cast<Json::Int64>(NowMsAsync());
+    dialog_sync["msg"] = notify_payload["msg"];
+    std::string publish_error;
+    if (!info.msg_id.empty() && !PublishAsyncEvent(memochat::chatruntime::TopicDialogSync(), dialog_sync, &publish_error)) {
+        memolog::LogWarn("chat.dialog_sync.publish_failed", "failed to publish group dialog sync event",
+            {
+                {"from_uid", std::to_string(from_uid)},
+                {"group_id", std::to_string(group_id)},
+                {"client_msg_id", info.msg_id},
+                {"error", publish_error}
+            });
+    }
+}
+
+void AsyncEventDispatcher::HandleDialogSyncEvent(const Json::Value& root)
+{
+    if (!root.isObject()) {
+        return;
+    }
+
+    std::vector<int> owner_uids;
+    const std::string scope = root.get("scope", "").asString();
+    if (scope == "private") {
+        AppendUniqueUidAsync(owner_uids, root.get("fromuid", 0).asInt());
+        AppendUniqueUidAsync(owner_uids, root.get("touid", 0).asInt());
+    } else if (scope == "group") {
+        const int from_uid = root.get("fromuid", 0).asInt();
+        const int64_t group_id = root.get("groupid", 0).asInt64();
+        AppendUniqueUidAsync(owner_uids, from_uid);
+        if (group_id > 0) {
+            std::vector<std::shared_ptr<GroupMemberInfo>> members;
+            PostgresMgr::GetInstance()->GetGroupMemberList(group_id, members);
+            for (const auto& member : members) {
+                if (member && member->status == 1) {
+                    AppendUniqueUidAsync(owner_uids, member->uid);
+                }
+            }
+        }
+    }
+
+    for (const auto owner_uid : owner_uids) {
+        if (!PostgresMgr::GetInstance()->RefreshDialogsForOwner(owner_uid)) {
+            memolog::LogWarn("chat.dialog_sync.refresh_failed", "failed to refresh dialog runtime",
+                {
+                    {"scope", scope},
+                    {"owner_uid", std::to_string(owner_uid)},
+                    {"client_msg_id", root.get("client_msg_id", "").asString()}
+                });
+        }
+    }
+}
+
+void AsyncEventDispatcher::HandleRelationStateEvent(const Json::Value& root)
+{
+    if (!root.isObject()) {
+        return;
+    }
+
+    std::vector<int> affected_uids;
+    if (root.isMember("uids") && root["uids"].isArray()) {
+        for (const auto& uid_value : root["uids"]) {
+            AppendUniqueUidAsync(affected_uids, uid_value.asInt());
+        }
+    } else {
+        AppendUniqueUidAsync(affected_uids, root.get("uid", 0).asInt());
+        AppendUniqueUidAsync(affected_uids, root.get("touid", 0).asInt());
+        AppendUniqueUidAsync(affected_uids, root.get("recipient_uid", 0).asInt());
+    }
+
+    for (const auto uid : affected_uids) {
+        InvalidateRelationBootstrapCacheAsync(uid);
+        if (!PostgresMgr::GetInstance()->RefreshDialogsForOwner(uid)) {
+            memolog::LogWarn("chat.relation_state.refresh_failed", "failed to refresh dialogs after relation event",
+                {
+                    {"uid", std::to_string(uid)},
+                    {"event_type", root.get("event_type", "").asString()}
+                });
+        }
+    }
 }

@@ -6,6 +6,7 @@ add_executable(StatusServer
     PostgresDao.cpp
     PostgresMgr.cpp
     RedisMgr.cpp
+    StatusAsyncSideEffects.cpp
     StatusServer.cpp
     StatusServiceImpl.cpp
     AsioIOServicePool.h
@@ -17,6 +18,7 @@ add_executable(StatusServer
     PostgresMgr.h
     RedisMgr.h
     Singleton.h
+    StatusAsyncSideEffects.h
     StatusServiceImpl.h
     config.ini
 )
@@ -24,3 +26,9 @@ add_executable(StatusServer
 set_target_properties(StatusServer PROPERTIES FOLDER "Server")
 memochat_configure_server_target(StatusServer)
 target_link_libraries(StatusServer PRIVATE ${MEMOCHAT_PQXX_TARGET})
+if(MEMOCHAT_ENABLE_KAFKA)
+    target_link_libraries(StatusServer PRIVATE ${MEMOCHAT_CPPKAFKA_TARGET})
+endif()
+if(MEMOCHAT_ENABLE_RABBITMQ)
+    target_link_libraries(StatusServer PRIVATE ${MEMOCHAT_RABBITMQ_TARGET})
+endif()

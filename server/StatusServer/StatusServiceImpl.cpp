@@ -2,6 +2,7 @@
 
 #include "ConfigMgr.h"
 #include "RedisMgr.h"
+#include "StatusAsyncSideEffects.h"
 #include "const.h"
 #include "cluster/ChatClusterDiscovery.h"
 #include "logging/GrpcTrace.h"
@@ -68,6 +69,9 @@ Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatSer
                       {"selected_server", server.name},
                       {"host", server.host},
                       {"port", server.port}});
+    if (_side_effects) {
+        _side_effects->PublishPresenceRefresh(uid, server.name, "get_chat_server");
+    }
     return Status::OK;
 }
 
@@ -84,6 +88,16 @@ StatusServiceImpl::StatusServiceImpl() {
         server.host = node.tcp_host;
         server.name = node.name;
         _servers[server.name] = server;
+        _known_server_names.insert(server.name);
+    }
+    _side_effects = std::make_unique<StatusAsyncSideEffects>(_known_server_names);
+    _side_effects->Start();
+}
+
+StatusServiceImpl::~StatusServiceImpl()
+{
+    if (_side_effects) {
+        _side_effects->Stop();
     }
 }
 
@@ -188,6 +202,9 @@ Status StatusServiceImpl::Login(ServerContext* context, const LoginReq* request,
     reply->set_uid(uid);
     reply->set_token(token);
     memolog::LogInfo("status.login", "token validated", {{"uid", std::to_string(uid)}, {"module", "grpc"}});
+    if (_side_effects) {
+        _side_effects->PublishAuditLogin(uid, "", "", "", "status_login_validated");
+    }
     return Status::OK;
 }
 

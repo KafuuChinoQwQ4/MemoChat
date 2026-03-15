@@ -27,6 +27,11 @@ public:
 	bool GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& applyList, int offset, int limit );
 	bool GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo> >& user_info);
 	bool SavePrivateMessage(const PrivateMessageInfo& msg);
+	bool EnqueueChatOutboxEvent(const ChatOutboxEventInfo& event);
+	bool GetPendingChatOutboxEvents(int limit, std::vector<ChatOutboxEventInfo>& events);
+	bool MarkChatOutboxEventPublished(int64_t id, int64_t published_at_ms);
+	bool MarkChatOutboxEventRetry(int64_t id, int retry_count, int64_t next_retry_at_ms, const std::string& last_error, bool terminal_error);
+	bool ExpediteChatOutboxEventRetry(int64_t id);
 	bool GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const std::string& before_msg_id, const int& limit,
 		std::vector<std::shared_ptr<PrivateMessageInfo>>& messages, bool& has_more);
 	bool GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_ptr<PrivateMessageInfo>& message);
@@ -82,6 +87,8 @@ private:
 	bool EnsureGroupReadStateSchema();
 	bool EnsureGroupMessageOrderSchema();
 	bool EnsureGroupPermissionSchemaAndBackfill();
+	bool EnsureChatEventOutboxSchema();
+	bool EnsureChatMessageIdempotencySchema();
 	bool GetGroupPermissionBits(const int64_t& group_id, const int& uid, int64_t& out_bits);
 	bool HasGroupPermission(const int64_t& group_id, const int& uid, int64_t required_bits);
 	std::string GenerateRandomGroupCode();

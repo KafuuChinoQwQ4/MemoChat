@@ -24,6 +24,8 @@
         "boost-property-tree",
         "boost-uuid",
         "spdlog",
+        "cppkafka",
+        "librabbitmq",
         "mongo-cxx-driver",
         "libpq",
         "libpqxx"

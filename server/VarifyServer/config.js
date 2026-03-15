@@ -17,6 +17,34 @@ const redis_host = config.redis.host;
 const redis_port = config.redis.port;
 const redis_passwd = config.redis.passwd;
 const code_prefix = 'code_';
+const rabbitmq_host = config.rabbitmq ? config.rabbitmq.host || '127.0.0.1' : '127.0.0.1';
+const rabbitmq_port = config.rabbitmq ? config.rabbitmq.port || 5672 : 5672;
+const rabbitmq_username = config.rabbitmq ? config.rabbitmq.username || 'guest' : 'guest';
+const rabbitmq_password = config.rabbitmq ? config.rabbitmq.password || 'guest' : 'guest';
+const rabbitmq_vhost = config.rabbitmq ? config.rabbitmq.vhost || '/' : '/';
+const rabbitmq_prefetch_count = config.rabbitmq ? Number(config.rabbitmq.prefetchCount || 8) : 8;
+const rabbitmq_exchange_direct = config.rabbitmq ? config.rabbitmq.exchangeDirect || 'memochat.direct' : 'memochat.direct';
+const rabbitmq_exchange_dlx = config.rabbitmq ? config.rabbitmq.exchangeDlx || 'memochat.dlx' : 'memochat.dlx';
+const rabbitmq_verify_delivery_routing_key = config.rabbitmq
+  ? config.rabbitmq.verifyDeliveryRoutingKey || 'verify.email.delivery'
+  : 'verify.email.delivery';
+const rabbitmq_retry_routing_key = config.rabbitmq
+  ? config.rabbitmq.retryRoutingKey || 'verify.email.delivery.retry'
+  : 'verify.email.delivery.retry';
+const rabbitmq_dlq_routing_key = config.rabbitmq
+  ? config.rabbitmq.dlqRoutingKey || 'verify.email.delivery.dlq'
+  : 'verify.email.delivery.dlq';
+const rabbitmq_verify_delivery_queue = config.rabbitmq
+  ? config.rabbitmq.queueVerifyDelivery || 'verify.email.delivery.q'
+  : 'verify.email.delivery.q';
+const rabbitmq_verify_delivery_retry_queue = config.rabbitmq
+  ? config.rabbitmq.queueVerifyDeliveryRetry || 'verify.email.delivery.retry.q'
+  : 'verify.email.delivery.retry.q';
+const rabbitmq_verify_delivery_dlq_queue = config.rabbitmq
+  ? config.rabbitmq.queueVerifyDeliveryDlq || 'verify.email.delivery.dlq.q'
+  : 'verify.email.delivery.dlq.q';
+const rabbitmq_retry_delay_ms = config.rabbitmq ? Number(config.rabbitmq.retryDelayMs || 5000) : 5000;
+const rabbitmq_max_retries = config.rabbitmq ? Number(config.rabbitmq.maxRetries || 5) : 5;
 
 const log_level = (config.log && config.log.level) || 'info';
 const log_dir = (config.log && config.log.dir) || './logs';
@@ -49,6 +77,22 @@ module.exports = {
   redis_port,
   redis_passwd,
   code_prefix,
+  rabbitmq_host,
+  rabbitmq_port,
+  rabbitmq_username,
+  rabbitmq_password,
+  rabbitmq_vhost,
+  rabbitmq_prefetch_count,
+  rabbitmq_exchange_direct,
+  rabbitmq_exchange_dlx,
+  rabbitmq_verify_delivery_routing_key,
+  rabbitmq_retry_routing_key,
+  rabbitmq_dlq_routing_key,
+  rabbitmq_verify_delivery_queue,
+  rabbitmq_verify_delivery_retry_queue,
+  rabbitmq_verify_delivery_dlq_queue,
+  rabbitmq_retry_delay_ms,
+  rabbitmq_max_retries,
   log_level,
   log_dir,
   log_to_console,
