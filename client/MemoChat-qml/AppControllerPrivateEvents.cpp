@@ -158,6 +158,12 @@ void AppController::onMessageStatus(QJsonObject payload)
         if (status == QStringLiteral("accepted")) {
             return QStringLiteral("accepted");
         }
+        if (status == QStringLiteral("queued_retry")) {
+            return QStringLiteral("queued_retry");
+        }
+        if (status == QStringLiteral("offline_pending")) {
+            return QStringLiteral("offline_pending");
+        }
         if (status == QStringLiteral("persisted") || status == QStringLiteral("delivered")) {
             return QStringLiteral("sent");
         }

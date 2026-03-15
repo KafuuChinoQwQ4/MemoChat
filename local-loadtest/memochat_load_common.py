@@ -67,6 +67,7 @@ ID_GROUP_READ_ACK_REQ = 1071
 ID_PRIVATE_READ_ACK_REQ = 1076
 ID_NOTIFY_PRIVATE_MSG_CHANGED_REQ = 1081
 ID_NOTIFY_PRIVATE_READ_ACK_REQ = 1082
+ID_NOTIFY_MSG_STATUS_REQ = 1094
 
 
 def utc_now_str() -> str:
@@ -892,6 +893,45 @@ def build_group_message_payload(
     }
 
 
+def expect_response_status(
+    rsp: Dict[str, Any],
+    allowed_statuses: Sequence[str] = ("accepted", "persisted"),
+) -> str:
+    status = str(rsp.get("status", "")).strip().lower()
+    if status not in {one.strip().lower() for one in allowed_statuses}:
+        raise RuntimeError(f"unexpected response status: {rsp}")
+    return status
+
+
+def wait_for_message_status(
+    client: "TcpChatClient",
+    client_msg_id: str,
+    scope: str,
+    overall_timeout: float,
+    expected_status: str = "persisted",
+) -> Dict[str, Any]:
+    deadline = time.time() + overall_timeout
+    expected_status = str(expected_status).strip().lower()
+    expected_scope = str(scope).strip().lower()
+    while time.time() < deadline:
+        remaining = max(0.05, deadline - time.time())
+        msg_id, body = client.recv_until([ID_NOTIFY_MSG_STATUS_REQ], remaining)
+        if msg_id != ID_NOTIFY_MSG_STATUS_REQ:
+            continue
+        if str(body.get("client_msg_id", "")).strip() != client_msg_id:
+            continue
+        if str(body.get("scope", "")).strip().lower() != expected_scope:
+            continue
+        if str(body.get("status", "")).strip().lower() != expected_status:
+            raise RuntimeError(f"message status mismatch: {body}")
+        if int(body.get("error", -1)) != 0:
+            raise RuntimeError(f"message status error: {body}")
+        return body
+    raise TimeoutError(
+        f"{client.label} timed out waiting for message status client_msg_id={client_msg_id} scope={scope} status={expected_status}"
+    )
+
+
 def encode_call_invite(call_type: str, join_url: str) -> str:
     payload = json.dumps({"type": call_type, "url": join_url}, separators=(",", ":")).encode("utf-8")
     return "__memochat_call__:" + base64.b64encode(payload).decode("ascii")
@@ -985,12 +1025,27 @@ def query_all(conn, sql_text: str, params: Sequence[Any]) -> List[Dict[str, Any]
     return list(rows or [])
 
 
+def quoted_table_name(conn, table_name: str) -> str:
+    module_name = str(type(conn).__module__).lower()
+    if "psycopg" in module_name:
+        return f'"{table_name}"'
+    return f"`{table_name}`"
+
+
 def get_user_by_email(conn, email: str) -> Optional[Dict[str, Any]]:
-    return query_one(conn, 'SELECT uid, name, email, user_id, nick, icon FROM "user" WHERE email = %s LIMIT 1', [email])
+    return query_one(
+        conn,
+        f"SELECT uid, name, email, user_id, nick, icon FROM {quoted_table_name(conn, 'user')} WHERE email = %s LIMIT 1",
+        [email],
+    )
 
 
 def get_user_by_uid(conn, uid: int) -> Optional[Dict[str, Any]]:
-    return query_one(conn, 'SELECT uid, name, email, user_id, nick, icon FROM "user" WHERE uid = %s LIMIT 1', [uid])
+    return query_one(
+        conn,
+        f"SELECT uid, name, email, user_id, nick, icon FROM {quoted_table_name(conn, 'user')} WHERE uid = %s LIMIT 1",
+        [uid],
+    )
 
 
 def is_friend(conn, uid_a: int, uid_b: int) -> bool:

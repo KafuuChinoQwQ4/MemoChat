@@ -3,6 +3,7 @@
 #include "AuthLoginSupport.h"
 #include "CallService.h"
 #include "ConfigMgr.h"
+#include "GateAsyncSideEffects.h"
 #include "GateHttpJsonSupport.h"
 #include "HttpConnection.h"
 #include "LogicSystem.h"
@@ -122,6 +123,13 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic)
         cached_user.desc = "";
         cached_user.sex = src_root.get("sex", 0).asInt();
         gateauthsupport::CacheLoginProfile(email, cached_user);
+        GateAsyncSideEffects::Instance().PublishUserProfileChanged(uid,
+            root["user_id"].asString(),
+            email,
+            name,
+            name,
+            icon,
+            cached_user.sex);
         memolog::LogInfo("gate.user_register", "user registered", {{"email", email}, {"uid", std::to_string(uid)}});
         beast::ostream(connection->_response.body()) << root.toStyledString();
         return true;
@@ -171,6 +179,7 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic)
 
         memolog::LogInfo("gate.reset_pwd", "password updated", {{"email", email}});
         gateauthsupport::InvalidateLoginCacheByEmail(email);
+        GateAsyncSideEffects::Instance().PublishCacheInvalidate(email, name, "reset_pwd");
         root["error"] = 0;
         root["email"] = email;
         root["user"] = name;
@@ -328,6 +337,13 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic)
                 {"ticket_issue_ms", std::to_string(ticket_issue_ms)},
                 {"user_login_total_ms", std::to_string(gateauthsupport::NowMs() - login_start_ms)}
             });
+        GateAsyncSideEffects::Instance().PublishAuditLogin(userInfo.uid,
+            userInfo.user_id,
+            email,
+            route_nodes.front().name,
+            route_nodes.front().host,
+            route_nodes.front().port,
+            login_cache_hit);
         beast::ostream(connection->_response.body()) << root.toStyledString();
         return true;
     });

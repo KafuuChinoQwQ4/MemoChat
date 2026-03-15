@@ -25,7 +25,10 @@ class ChatRelationService;
 class PrivateMessageService;
 class GroupMessageService;
 class AsyncEventDispatcher;
+class IAsyncEventBus;
+class IAsyncTaskBus;
 class MessageDeliveryService;
+class TaskDispatcher;
 class LogicSystem:public Singleton<LogicSystem>
 {
 	friend class Singleton<LogicSystem>;
@@ -45,6 +48,9 @@ public:
 	void PostMsgToQue(shared_ptr < LogicNode> msg);
 	void SetServer(std::shared_ptr<CServer> pserver);
 	MessageDeliveryService& MessageDelivery();
+	bool PublishTask(const std::string& task_type, const std::string& routing_key, const Json::Value& payload, int delay_ms = 0, int max_retries = 0, std::string* error = nullptr);
+	bool PublishAsyncEvent(const std::string& topic, const Json::Value& payload, std::string* error = nullptr);
+	bool ExpediteOutboxRepair(int64_t outbox_id);
 private:
 	LogicSystem();
 	void DealMsg();
@@ -91,13 +97,14 @@ private:
 	bool GetBaseInfo(std::string base_key, int uid, std::shared_ptr<UserInfo> &userinfo);
 	bool GetFriendApplyInfo(int to_uid, std::vector<std::shared_ptr<ApplyInfo>>& list);
 	bool GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo>> & user_list);
-	bool PublishAsyncEvent(const std::string& topic, const Json::Value& payload, std::string* error = nullptr);
 	void DealAsyncEvents();
+	void DealTasks();
 	void HandlePrivateAsyncEvent(const Json::Value& root);
 	void HandleGroupAsyncEvent(const Json::Value& root);
 	void NotifyMessageStatus(const Json::Value& payload);
 	std::thread _worker_thread;
 	std::thread _event_worker_thread;
+	std::thread _task_worker_thread;
 	std::queue<shared_ptr<LogicNode>> _msg_que;
 	std::mutex _mutex;
 	std::condition_variable _consume;
@@ -110,5 +117,8 @@ private:
 	std::unique_ptr<PrivateMessageService> _private_message_service;
 	std::unique_ptr<GroupMessageService> _group_message_service;
 	std::unique_ptr<AsyncEventDispatcher> _async_event_dispatcher;
+	std::shared_ptr<IAsyncEventBus> _async_event_bus;
+	std::unique_ptr<TaskDispatcher> _task_dispatcher;
+	std::shared_ptr<IAsyncTaskBus> _task_bus;
 	std::unique_ptr<MessageDeliveryService> _message_delivery_service;
 };

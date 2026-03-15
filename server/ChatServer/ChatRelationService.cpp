@@ -1,6 +1,7 @@
 #include "ChatRelationService.h"
 
 #include "ChatGrpcClient.h"
+#include "ChatRuntime.h"
 #include "ConfigMgr.h"
 #include "CSession.h"
 #include "ChatUserSupport.h"
@@ -83,6 +84,34 @@ void CacheRelationBootstrapJsonLocal(int uid, const Json::Value& payload) {
     }
 
     RedisMgr::GetInstance()->SetEx(RelationBootstrapCacheKeyLocal(uid), json, RelationBootstrapCacheTtlSecLocal());
+}
+
+void PublishRelationStateEventLocal(LogicSystem& logic,
+    const std::string& event_type,
+    int uid,
+    int touid,
+    const std::vector<std::string>& labels)
+{
+    Json::Value event_payload(Json::objectValue);
+    event_payload["event_type"] = event_type;
+    event_payload["uid"] = uid;
+    event_payload["touid"] = touid;
+    event_payload["uids"].append(uid);
+    event_payload["uids"].append(touid);
+    event_payload["event_ts"] = static_cast<Json::Int64>(NowMsRelationLocal());
+    for (const auto& label : labels) {
+        event_payload["labels"].append(label);
+    }
+    std::string publish_error;
+    if (!logic.PublishAsyncEvent(memochat::chatruntime::TopicRelationState(), event_payload, &publish_error)) {
+        memolog::LogWarn("chat.relation_state.publish_failed", "failed to publish relation state event",
+            {
+                {"event_type", event_type},
+                {"uid", std::to_string(uid)},
+                {"touid", std::to_string(touid)},
+                {"error", publish_error}
+            });
+    }
 }
 }
 
@@ -264,46 +293,32 @@ void ChatRelationService::HandleAddFriendApply(const std::shared_ptr<CSession>& 
     PostgresMgr::GetInstance()->AddFriendApply(uid, touid);
     PostgresMgr::GetInstance()->ReplaceApplyTags(uid, touid, labels);
     InvalidateRelationBootstrapCacheLocal(touid);
-
-    std::string to_ip_value;
-    if (!RedisMgr::GetInstance()->Get(USERIPPREFIX + std::to_string(touid), to_ip_value)) {
-        return;
-    }
-
-    auto self_name = ConfigMgr::Inst()["SelfServer"]["Name"];
     auto apply_info = std::make_shared<UserInfo>();
     bool b_info = chatusersupport::GetBaseInfo(USER_BASE_INFO + std::to_string(uid), uid, apply_info);
-    if (to_ip_value == self_name) {
-        auto peer_session = UserMgr::GetInstance()->GetSession(touid);
-        if (!peer_session) {
-            return;
-        }
-        Json::Value notify;
-        notify["error"] = ErrorCodes::Success;
-        notify["applyuid"] = uid;
-        notify["name"] = applyname;
-        notify["desc"] = "";
-        if (b_info) {
-            notify["icon"] = apply_info->icon;
-            notify["sex"] = apply_info->sex;
-            notify["nick"] = apply_info->nick;
-            notify["user_id"] = apply_info->user_id;
-        }
-        peer_session->Send(notify.toStyledString(), ID_NOTIFY_ADD_FRIEND_REQ);
-        return;
-    }
-
-    AddFriendReq add_req;
-    add_req.set_applyuid(uid);
-    add_req.set_touid(touid);
-    add_req.set_name(applyname);
-    add_req.set_desc("");
+    Json::Value notify;
+    notify["error"] = ErrorCodes::Success;
+    notify["applyuid"] = uid;
+    notify["name"] = applyname;
+    notify["desc"] = "";
     if (b_info) {
-        add_req.set_icon(apply_info->icon);
-        add_req.set_sex(apply_info->sex);
-        add_req.set_nick(apply_info->nick);
+        notify["icon"] = apply_info->icon;
+        notify["sex"] = apply_info->sex;
+        notify["nick"] = apply_info->nick;
+        notify["user_id"] = apply_info->user_id;
     }
-    ChatGrpcClient::GetInstance()->NotifyAddFriend(to_ip_value, add_req);
+    Json::Value task_payload;
+    task_payload["recipient_uid"] = touid;
+    task_payload["msgid"] = ID_NOTIFY_ADD_FRIEND_REQ;
+    task_payload["exclude_uid"] = 0;
+    task_payload["payload"] = notify;
+    std::string publish_error;
+    _logic.PublishTask("relation_notify",
+        memochat::chatruntime::TaskRoutingRelationNotify(),
+        task_payload,
+        0,
+        memochat::chatruntime::TaskMaxRetries(),
+        &publish_error);
+    PublishRelationStateEventLocal(_logic, "friend_apply_created", uid, touid, labels);
 }
 
 void ChatRelationService::HandleAuthFriendApply(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
@@ -345,41 +360,34 @@ void ChatRelationService::HandleAuthFriendApply(const std::shared_ptr<CSession>&
     PostgresMgr::GetInstance()->ReplaceFriendTags(touid, uid, requesterApplyTags);
     InvalidateRelationBootstrapCacheLocal(uid);
     InvalidateRelationBootstrapCacheLocal(touid);
-
-    std::string to_ip_value;
-    if (!RedisMgr::GetInstance()->Get(USERIPPREFIX + std::to_string(touid), to_ip_value)) {
-        return;
+    Json::Value notify;
+    notify["error"] = ErrorCodes::Success;
+    notify["fromuid"] = uid;
+    notify["touid"] = touid;
+    auto current_user = std::make_shared<UserInfo>();
+    bool found = chatusersupport::GetBaseInfo(USER_BASE_INFO + std::to_string(uid), uid, current_user);
+    if (found) {
+        notify["name"] = current_user->name;
+        notify["nick"] = current_user->nick;
+        notify["icon"] = current_user->icon;
+        notify["sex"] = current_user->sex;
+        notify["user_id"] = current_user->user_id;
+    } else {
+        notify["error"] = ErrorCodes::UidInvalid;
     }
-
-    auto self_name = ConfigMgr::Inst()["SelfServer"]["Name"];
-    if (to_ip_value == self_name) {
-        auto peer_session = UserMgr::GetInstance()->GetSession(touid);
-        if (!peer_session) {
-            return;
-        }
-        Json::Value notify;
-        notify["error"] = ErrorCodes::Success;
-        notify["fromuid"] = uid;
-        notify["touid"] = touid;
-        auto current_user = std::make_shared<UserInfo>();
-        bool found = chatusersupport::GetBaseInfo(USER_BASE_INFO + std::to_string(uid), uid, current_user);
-        if (found) {
-            notify["name"] = current_user->name;
-            notify["nick"] = current_user->nick;
-            notify["icon"] = current_user->icon;
-            notify["sex"] = current_user->sex;
-            notify["user_id"] = current_user->user_id;
-        } else {
-            notify["error"] = ErrorCodes::UidInvalid;
-        }
-        peer_session->Send(notify.toStyledString(), ID_NOTIFY_AUTH_FRIEND_REQ);
-        return;
-    }
-
-    AuthFriendReq auth_req;
-    auth_req.set_fromuid(uid);
-    auth_req.set_touid(touid);
-    ChatGrpcClient::GetInstance()->NotifyAuthFriend(to_ip_value, auth_req);
+    Json::Value task_payload;
+    task_payload["recipient_uid"] = touid;
+    task_payload["msgid"] = ID_NOTIFY_AUTH_FRIEND_REQ;
+    task_payload["exclude_uid"] = 0;
+    task_payload["payload"] = notify;
+    std::string publish_error;
+    _logic.PublishTask("relation_notify",
+        memochat::chatruntime::TaskRoutingRelationNotify(),
+        task_payload,
+        0,
+        memochat::chatruntime::TaskMaxRetries(),
+        &publish_error);
+    PublishRelationStateEventLocal(_logic, "friend_apply_approved", uid, touid, labels);
 }
 
 void ChatRelationService::HandleGetDialogList(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)

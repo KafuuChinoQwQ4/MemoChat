@@ -22,7 +22,9 @@ from memochat_load_common import (
     build_group_message_payload,
     build_private_text_payload,
     connect_chat_client,
+    db_verify_friendship,
     ensure_accounts,
+    expect_response_status,
     establish_friendship,
     finalize_report,
     get_log_dir,
@@ -33,6 +35,7 @@ from memochat_load_common import (
     refresh_account_profiles,
     run_parallel,
     utc_now_str,
+    wait_for_message_status,
 )
 
 
@@ -78,22 +81,42 @@ def main() -> int:
         try:
             owner_client, owner = connect_chat_client(cfg, owner, http_timeout, tcp_timeout, f"{trace_id}-o", f"history-owner-{i}")
             peer_client, peer = connect_chat_client(cfg, peer, http_timeout, tcp_timeout, f"{trace_id}-p", f"history-peer-{i}")
-
-            phase_ms.update(establish_friendship(owner_client, peer_client, owner, peer, tcp_timeout))
+            conn = open_mysql(cfg)
+            try:
+                already_friends = db_verify_friendship(conn, int(owner["uid"]), int(peer["uid"]))
+            finally:
+                conn.close()
+            if already_friends:
+                phase_ms["friendship_reused"] = 0.0
+            else:
+                phase_ms.update(establish_friendship(owner_client, peer_client, owner, peer, tcp_timeout))
 
             t0 = time.perf_counter()
             for msg_index in range(2):
+                owner_payload = build_private_text_payload(
+                    int(owner["uid"]), int(peer["uid"]), f"owner-to-peer-{i}-{msg_index}"
+                )
+                owner_msg_id = str(owner_payload["text_array"][0]["msgid"])
                 owner_client.send_json(
                     ID_TEXT_CHAT_MSG_REQ,
-                    build_private_text_payload(int(owner["uid"]), int(peer["uid"]), f"owner-to-peer-{i}-{msg_index}"),
+                    owner_payload,
                 )
-                owner_client.recv_until([ID_TEXT_CHAT_MSG_RSP], tcp_timeout)
+                _, owner_rsp = owner_client.recv_until([ID_TEXT_CHAT_MSG_RSP], tcp_timeout)
+                expect_response_status(owner_rsp)
+                wait_for_message_status(owner_client, owner_msg_id, "private", tcp_timeout)
                 peer_client.recv_until([ID_NOTIFY_TEXT_CHAT_MSG_REQ], tcp_timeout)
+
+                peer_payload = build_private_text_payload(
+                    int(peer["uid"]), int(owner["uid"]), f"peer-to-owner-{i}-{msg_index}"
+                )
+                peer_msg_id = str(peer_payload["text_array"][0]["msgid"])
                 peer_client.send_json(
                     ID_TEXT_CHAT_MSG_REQ,
-                    build_private_text_payload(int(peer["uid"]), int(owner["uid"]), f"peer-to-owner-{i}-{msg_index}"),
+                    peer_payload,
                 )
-                peer_client.recv_until([ID_TEXT_CHAT_MSG_RSP], tcp_timeout)
+                _, peer_rsp = peer_client.recv_until([ID_TEXT_CHAT_MSG_RSP], tcp_timeout)
+                expect_response_status(peer_rsp)
+                wait_for_message_status(peer_client, peer_msg_id, "private", tcp_timeout)
                 owner_client.recv_until([ID_NOTIFY_TEXT_CHAT_MSG_REQ], tcp_timeout)
             phase_ms["private_message_warmup"] = (time.perf_counter() - t0) * 1000.0
 
@@ -110,17 +133,26 @@ def main() -> int:
             phase_ms["group_create"] = (time.perf_counter() - t1) * 1000.0
 
             t2 = time.perf_counter()
+            owner_group_payload = build_group_message_payload(int(owner["uid"]), group_id, f"group-owner-{trace_id}")
+            owner_group_msg_id = str(owner_group_payload["msg"]["msgid"])
             owner_client.send_json(
                 ID_GROUP_CHAT_MSG_REQ,
-                build_group_message_payload(int(owner["uid"]), group_id, f"group-owner-{trace_id}"),
+                owner_group_payload,
             )
-            owner_client.recv_until([ID_GROUP_CHAT_MSG_RSP], tcp_timeout)
+            _, owner_group_rsp = owner_client.recv_until([ID_GROUP_CHAT_MSG_RSP], tcp_timeout)
+            expect_response_status(owner_group_rsp)
+            wait_for_message_status(owner_client, owner_group_msg_id, "group", tcp_timeout)
             peer_client.recv_until([ID_NOTIFY_GROUP_CHAT_MSG_REQ], tcp_timeout)
+
+            peer_group_payload = build_group_message_payload(int(peer["uid"]), group_id, f"group-peer-{trace_id}")
+            peer_group_msg_id = str(peer_group_payload["msg"]["msgid"])
             peer_client.send_json(
                 ID_GROUP_CHAT_MSG_REQ,
-                build_group_message_payload(int(peer["uid"]), group_id, f"group-peer-{trace_id}"),
+                peer_group_payload,
             )
-            peer_client.recv_until([ID_GROUP_CHAT_MSG_RSP], tcp_timeout)
+            _, peer_group_rsp = peer_client.recv_until([ID_GROUP_CHAT_MSG_RSP], tcp_timeout)
+            expect_response_status(peer_group_rsp)
+            wait_for_message_status(peer_client, peer_group_msg_id, "group", tcp_timeout)
             owner_client.recv_until([ID_NOTIFY_GROUP_CHAT_MSG_REQ], tcp_timeout)
             phase_ms["group_message_warmup"] = (time.perf_counter() - t2) * 1000.0
 

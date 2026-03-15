@@ -198,6 +198,11 @@ void LogPrivateRouteLocal(const std::string& event,
     }
     memolog::LogInfo(event, "private message notify delivered", fields);
 }
+
+bool KafkaPrimaryEnabledLocal()
+{
+    return memochat::chatruntime::AsyncEventBusBackend() == "kafka";
+}
 }
 
 PrivateMessageService::PrivateMessageService(LogicSystem& logic)
@@ -212,8 +217,8 @@ void PrivateMessageService::HandleTextChatMessage(const std::shared_ptr<CSession
     const auto uid = root["fromuid"].asInt();
     const auto touid = root["touid"].asInt();
     const Json::Value arrays = root["text_array"];
-    const bool kafka_shadow = memochat::chatruntime::FeatureEnabled("chat_private_kafka_shadow");
-    const bool kafka_primary = memochat::chatruntime::FeatureEnabled("chat_private_kafka_primary");
+    const bool kafka_primary = KafkaPrimaryEnabledLocal() || memochat::chatruntime::FeatureEnabled("chat_private_kafka_primary");
+    const bool kafka_shadow = !KafkaPrimaryEnabledLocal() && memochat::chatruntime::FeatureEnabled("chat_private_kafka_shadow");
 
     Json::Value rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
@@ -306,6 +311,7 @@ void PrivateMessageService::HandleTextChatMessage(const std::shared_ptr<CSession
     event_payload["trace_id"] = root.get("trace_id", "").asString();
     event_payload["request_id"] = root.get("request_id", "").asString();
     event_payload["span_id"] = root.get("span_id", "").asString();
+    event_payload["event_id"] = first_msg_id;
     event_payload["accept_node"] = memochat::chatruntime::SelfServerName();
     event_payload["accept_ts"] = static_cast<Json::Int64>(accept_ts);
     event_payload["text_array"] = normalized;

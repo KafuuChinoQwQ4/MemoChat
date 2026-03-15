@@ -19,7 +19,9 @@ from memochat_load_common import (
     build_group_create_payload,
     build_group_message_payload,
     connect_chat_client,
+    db_verify_friendship,
     ensure_accounts,
+    expect_response_status,
     establish_friendship,
     finalize_report,
     get_log_dir,
@@ -30,6 +32,7 @@ from memochat_load_common import (
     refresh_account_profiles,
     run_parallel,
     utc_now_str,
+    wait_for_message_status,
 )
 
 
@@ -80,8 +83,15 @@ def main() -> int:
             applicant_client, applicant = connect_chat_client(
                 cfg, applicant, http_timeout, tcp_timeout, f"{trace_id}-a", f"group-applicant-{i}"
             )
-
-            phase_ms.update(establish_friendship(owner_client, member_client, owner, member, tcp_timeout))
+            conn = open_mysql(cfg)
+            try:
+                already_friends = db_verify_friendship(conn, int(owner["uid"]), int(member["uid"]))
+            finally:
+                conn.close()
+            if already_friends:
+                phase_ms["friendship_reused"] = 0.0
+            else:
+                phase_ms.update(establish_friendship(owner_client, member_client, owner, member, tcp_timeout))
 
             t0 = time.perf_counter()
             group_name = f"load-group-{i}-{trace_id[-6:]}"
@@ -188,9 +198,11 @@ def main() -> int:
             phase_ms["review_group_apply"] = (time.perf_counter() - t3) * 1000.0
 
             t4 = time.perf_counter()
+            group_payload = build_group_message_payload(int(owner["uid"]), group_id, f"group-message-{trace_id}", "text")
+            group_msg_id = str(group_payload["msg"]["msgid"])
             owner_client.send_json(
                 ID_GROUP_CHAT_MSG_REQ,
-                build_group_message_payload(int(owner["uid"]), group_id, f"group-message-{trace_id}", "text"),
+                group_payload,
             )
             _, group_rsp = owner_client.recv_until(
                 [ID_GROUP_CHAT_MSG_RSP],
@@ -199,6 +211,8 @@ def main() -> int:
             )
             if int(group_rsp.get("error", -1)) != 0:
                 raise RuntimeError(f"group message send failed: {group_rsp}")
+            expect_response_status(group_rsp)
+            wait_for_message_status(owner_client, group_msg_id, "group", tcp_timeout)
             member_client.recv_until([ID_NOTIFY_GROUP_CHAT_MSG_REQ], tcp_timeout)
             applicant_client.recv_until([ID_NOTIFY_GROUP_CHAT_MSG_REQ], tcp_timeout)
             phase_ms["group_message"] = (time.perf_counter() - t4) * 1000.0

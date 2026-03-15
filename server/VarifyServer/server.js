@@ -5,62 +5,50 @@ const { v4: uuidv4 } = require('uuid');
 const emailModule = require('./email');
 const config_module = require('./config');
 const redis_module = require('./redis');
+const rabbitmq_module = require('./rabbitmq');
 const { logger, newTraceId, redactEmail } = require('./logger');
 const { exportZipkinSpan, startServerSpan, childSpan } = require('./telemetry');
 
 let grpcServer = null;
 let shuttingDown = false;
-const verifyJobs = [];
-let verifyJobScheduled = false;
 
-function enqueueVerifyDelivery(job) {
-  verifyJobs.push(job);
-  if (verifyJobScheduled) {
-    return;
-  }
-  verifyJobScheduled = true;
-  setImmediate(async () => {
-    verifyJobScheduled = false;
-    while (verifyJobs.length > 0) {
-      const current = verifyJobs.shift();
-      if (!current) {
-        continue;
-      }
-      const span = childSpan(current.span, 'VarifyService.VerifyCodeDelivery', {
-        'job.type': 'verify_delivery',
-      });
-      try {
-        const send_res = await emailModule.SendMail(current.mailOptions);
-        logger.info(
-          {
-            event: 'varify.get_code.sent_async',
-            trace_id: span.trace_id,
-            request_id: span.request_id,
-            span_id: span.span_id,
-            email: redactEmail(current.email),
-            smtp_message: send_res,
-            module: 'job',
-          },
-          'verify code sent asynchronously'
-        );
-        exportZipkinSpan(span, { email: redactEmail(current.email), peer_service: 'smtp', delivery_mode: 'async' });
-      } catch (error) {
-        logger.error(
-          {
-            event: 'varify.get_code.async_failed',
-            trace_id: span.trace_id,
-            request_id: span.request_id,
-            span_id: span.span_id,
-            email: redactEmail(current.email),
-            error: error && error.message ? error.message : String(error),
-            module: 'job',
-            error_type: 'smtp',
-          },
-          'verify code async delivery failed'
-        );
-        exportZipkinSpan(span, { email: redactEmail(current.email), error: error && error.message ? error.message : String(error), 'otel.status_code': 'ERROR' });
-      }
+async function deliverVerifyTask(task) {
+  const payload = task && task.payload ? task.payload : {};
+  const email = payload.email || '';
+  const mailOptions = payload.mailOptions || null;
+  const span = childSpan(
+    {
+      trace_id: task.trace_id || newTraceId(),
+      request_id: task.request_id || '',
+      span_id: '',
+    },
+    'VarifyService.VerifyCodeDelivery',
+    {
+      'job.type': 'verify_delivery',
+      'messaging.system': 'rabbitmq',
+      'messaging.destination': config_module.rabbitmq_verify_delivery_queue,
     }
+  );
+  const send_res = await emailModule.SendMail(mailOptions);
+  logger.info(
+    {
+      event: 'varify.get_code.sent_async',
+      trace_id: span.trace_id,
+      request_id: span.request_id,
+      span_id: span.span_id,
+      task_id: task.task_id || '',
+      retry_count: Number(task.retry_count || 0),
+      email: redactEmail(email),
+      smtp_message: send_res,
+      module: 'job',
+    },
+    'verify code sent asynchronously'
+  );
+  exportZipkinSpan(span, {
+    email: redactEmail(email),
+    peer_service: 'smtp',
+    delivery_mode: 'rabbitmq',
+    retry_count: Number(task.retry_count || 0),
   });
 }
 
@@ -164,19 +152,54 @@ async function GetVarifyCode(call, callback) {
         text: text_str,
       };
       if (config_module.verify_async_outbox) {
-        enqueueVerifyDelivery({ email, mailOptions, span });
-        logger.info(
-          {
-            event: 'varify.get_code.queued',
-            trace_id,
-            request_id: span.request_id,
-            span_id: span.span_id,
+        try {
+          const taskId = await rabbitmq_module.publishVerifyDeliveryTask(trace_id, span.request_id, email, mailOptions);
+          logger.info(
+            {
+              event: 'varify.get_code.queued',
+              trace_id,
+              request_id: span.request_id,
+              span_id: span.span_id,
+              task_id: taskId,
+              email: redactEmail(email),
+              module: 'grpc',
+            },
+            'verify code queued for rabbitmq delivery'
+          );
+          exportZipkinSpan(span, {
             email: redactEmail(email),
-            module: 'grpc',
-          },
-          'verify code queued for async delivery'
-        );
-        exportZipkinSpan(span, { email: redactEmail(email), delivery_mode: 'async-queued', peer_service: 'redis' });
+            delivery_mode: 'rabbitmq-queued',
+            peer_service: 'rabbitmq',
+            task_id: taskId,
+          });
+        } catch (publishError) {
+          logger.warn(
+            {
+              event: 'varify.get_code.rabbitmq_publish_failed',
+              trace_id,
+              request_id: span.request_id,
+              span_id: span.span_id,
+              email: redactEmail(email),
+              error: publishError && publishError.message ? publishError.message : String(publishError),
+              module: 'grpc',
+              error_type: 'rabbitmq',
+            },
+            'verify code rabbitmq publish failed, fallback to synchronous smtp'
+          );
+          const send_res = await emailModule.SendMail(mailOptions);
+          logger.info(
+            {
+              event: 'varify.get_code.sent_fallback',
+              trace_id,
+              request_id: span.request_id,
+              span_id: span.span_id,
+              email: redactEmail(email),
+              smtp_message: send_res,
+              module: 'grpc',
+            },
+            'verify code sent via synchronous fallback'
+          );
+        }
       } else {
         const send_res = await emailModule.SendMail(mailOptions);
         logger.info(
@@ -261,6 +284,7 @@ async function shutdown(signal) {
   shuttingDown = true;
   logger.info({ event: 'service.stop', signal, module: 'grpc' }, 'shutting down VarifyServer');
   await stopGrpcServer();
+  await rabbitmq_module.shutdownRabbitMq();
   await redis_module.closeRedis();
   process.exit(0);
 }
@@ -272,4 +296,14 @@ process.on('SIGTERM', () => {
   shutdown('SIGTERM').catch((err) => logger.error({ event: 'service.stop.error', error: err.message || String(err) }));
 });
 
-main();
+async function bootstrap() {
+  if (config_module.verify_async_outbox) {
+    await rabbitmq_module.startVerifyDeliveryWorker(deliverVerifyTask);
+  }
+  main();
+}
+
+bootstrap().catch((err) => {
+  logger.error({ event: 'service.bootstrap.failed', error: err.message || String(err), module: 'grpc' }, 'VarifyServer bootstrap failed');
+  process.exit(1);
+});
