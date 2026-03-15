@@ -1,0 +1,65 @@
+{{- if .Values.gate.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gateserver
+  namespace: {{ .Values.namespaces.prod }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gateserver
+  minReplicas: {{ .Values.gate.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.gate.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.gate.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+---
+{{- if .Values.status.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: statusserver
+  namespace: {{ .Values.namespaces.prod }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: statusserver
+  minReplicas: {{ .Values.status.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.status.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.status.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+---
+{{- if .Values.varify.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: varifyserver
+  namespace: {{ .Values.namespaces.prod }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: varifyserver
+  minReplicas: {{ .Values.varify.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.varify.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.varify.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

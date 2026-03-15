@@ -1,0 +1,182 @@
+global:
+  imagePullSecrets: []
+  storageClassName: ""
+  domain: memochat.example.com
+  clusterDomain: cluster.local
+  createNamespaces: true
+
+namespaces:
+  prod: memochat-prod
+  ops: memochat-ops
+  observability: memochat-observability
+
+images:
+  gate:
+    repository: memochat/gateserver
+    tag: latest
+    pullPolicy: IfNotPresent
+  status:
+    repository: memochat/statusserver
+    tag: latest
+    pullPolicy: IfNotPresent
+  chat:
+    repository: memochat/chatserver
+    tag: latest
+    pullPolicy: IfNotPresent
+  varify:
+    repository: memochat/varifyserver
+    tag: latest
+    pullPolicy: IfNotPresent
+  memoOps:
+    repository: memochat/memo-ops
+    tag: latest
+    pullPolicy: IfNotPresent
+  otelCollector:
+    repository: otel/opentelemetry-collector-contrib
+    tag: 0.99.0
+    pullPolicy: IfNotPresent
+
+externalServices:
+  postgres:
+    host: postgres.example.internal
+    port: 5432
+    user: memochat
+    password: change-me
+    database: memo_pg
+    schema: memo
+    sslMode: disable
+  redis:
+    host: redis.example.internal
+    port: 6379
+    password: change-me
+  mongodb:
+    uri: mongodb://memochat_app:change-me@mongo.example.internal:27017/memochat
+    database: memochat
+  kafka:
+    brokers: kafka.example.internal:9092
+  rabbitmq:
+    host: rabbitmq.example.internal
+    port: 5672
+    username: guest
+    password: guest
+    vhost: /
+  mysql:
+    host: mysql.example.internal
+    port: 3306
+    password: change-me
+    schema: memo
+  smtp:
+    host: smtp.example.internal
+    port: 465
+    secure: true
+    user: noreply@example.com
+    pass: change-me
+    from: noreply@example.com
+  livekit:
+    url: wss://livekit.example.com
+    apiKey: devkey
+    apiSecret: secret
+
+gate:
+  replicaCount: 2
+  service:
+    port: 8080
+  ingress:
+    enabled: true
+    className: nginx
+    annotations: {}
+    tls: []
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  pdb:
+    enabled: true
+    minAvailable: 1
+  resources: {}
+  env: {}
+  media:
+    provider: local
+    rootPath: /data/uploads
+    publicBaseUrl: ""
+    maxImageMB: 200
+    maxFileMB: 20480
+    chunkSizeKB: 4096
+    sessionExpireSec: 86400
+
+status:
+  replicaCount: 2
+  service:
+    port: 50052
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  pdb:
+    enabled: true
+    minAvailable: 1
+  resources: {}
+  env: {}
+
+chat:
+  replicaCount: 4
+  serviceName: chatserver
+  tcpPort: 8090
+  rpcPort: 50055
+  exposeTcpLoadBalancer: false
+  tcpLoadBalancerAnnotations: {}
+  pdb:
+    enabled: true
+    minAvailable: 2
+  resources: {}
+  env: {}
+
+varify:
+  replicaCount: 2
+  service:
+    grpcPort: 50051
+    healthPort: 8081
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  resources: {}
+  env: {}
+
+memoOps:
+  server:
+    replicaCount: 1
+    service:
+      port: 9000
+    resources: {}
+  collector:
+    replicaCount: 1
+    metricsPort: 9108
+    resources: {}
+
+otelCollector:
+  replicaCount: 1
+  service:
+    grpcPort: 4317
+    httpPort: 4318
+    zipkinPort: 9411
+  resources: {}
+
+jobs:
+  postgresMigrate:
+    enabled: true
+    image: postgres:16-alpine
+  kafkaInit:
+    enabled: true
+    image: python:3.12-alpine
+  rabbitmqInit:
+    enabled: true
+    image: python:3.12-alpine
+
+secrets:
+  chatAuthSecret: memochat-dev-chat-secret
+  livekitApiKey: devkey
+  livekitApiSecret: secret

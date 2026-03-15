@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memo-ops-server
+  namespace: {{ .Values.namespaces.ops }}
+  labels:
+    app.kubernetes.io/component: memo-ops-server
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.memoOps.server.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: memo-ops-server
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: memo-ops-server
+        {{- include "memochat.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: memo-ops-server
+          image: "{{ .Values.images.memoOps.repository }}:{{ .Values.images.memoOps.tag }}"
+          imagePullPolicy: {{ .Values.images.memoOps.pullPolicy }}
+          command: ["python", "-m", "Memo_ops.server.ops_server.main", "--config", "/app/config/opsserver.yaml"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.memoOps.server.service.port }}
+          env:
+            - name: MEMO_OPS_POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-ops-secrets, key: postgres-password } }
+            - name: MEMO_OPS_REDIS_PASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-ops-secrets, key: redis-password } }
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/opsserver.yaml
+              subPath: opsserver.yaml
+            - name: cluster
+              mountPath: /app/config/chat.ini
+              subPath: chat.ini
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+          resources:
+            {{- toYaml .Values.memoOps.server.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: memochat-ops-config
+        - name: cluster
+          configMap:
+            name: memochat-ops-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memo-ops-server
+  namespace: {{ .Values.namespaces.ops }}
+spec:
+  selector:
+    app.kubernetes.io/component: memo-ops-server
+    {{- include "memochat.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.memoOps.server.service.port }}
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memo-ops-collector
+  namespace: {{ .Values.namespaces.ops }}
+  labels:
+    app.kubernetes.io/component: memo-ops-collector
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.memoOps.collector.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: memo-ops-collector
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: memo-ops-collector
+        {{- include "memochat.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: memo-ops-collector
+          image: "{{ .Values.images.memoOps.repository }}:{{ .Values.images.memoOps.tag }}"
+          imagePullPolicy: {{ .Values.images.memoOps.pullPolicy }}
+          command: ["python", "-m", "Memo_ops.server.ops_collector.main", "--config", "/app/config/opscollector.yaml"]
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.memoOps.collector.metricsPort }}
+          env:
+            - name: MEMO_OPS_POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-ops-secrets, key: postgres-password } }
+            - name: MEMO_OPS_REDIS_PASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-ops-secrets, key: redis-password } }
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/opscollector.yaml
+              subPath: opscollector.yaml
+            - name: cluster
+              mountPath: /app/config/chat.ini
+              subPath: chat.ini
+          livenessProbe:
+            tcpSocket: { port: metrics }
+          readinessProbe:
+            tcpSocket: { port: metrics }
+          resources:
+            {{- toYaml .Values.memoOps.collector.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: memochat-ops-config
+        - name: cluster
+          configMap:
+            name: memochat-ops-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memo-ops-collector
+  namespace: {{ .Values.namespaces.ops }}
+spec:
+  selector:
+    app.kubernetes.io/component: memo-ops-collector
+    {{- include "memochat.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: metrics
+      port: {{ .Values.memoOps.collector.metricsPort }}
+      targetPort: metrics

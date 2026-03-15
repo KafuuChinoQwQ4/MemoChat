@@ -881,6 +881,15 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
             }
 
             IMediaStorage& storage = MediaStorageForLocal(asset.storage_provider);
+            std::string public_url;
+            if (storage.ResolvePublicUrl(asset.storage_path, public_url) && !public_url.empty()) {
+                connection->_response.result(http::status::temporary_redirect);
+                connection->_response.set(http::field::location, public_url);
+                connection->_response.set(http::field::content_type, "text/plain");
+                beast::ostream(connection->_response.body()) << "redirecting to object storage";
+                return true;
+            }
+
             if (!storage.ResolveReadPath(asset.storage_path, full_path) || !std::filesystem::exists(full_path)) {
                 root["error"] = ErrorCodes::UidInvalid;
                 root["message"] = "file not found";

@@ -83,7 +83,7 @@ $binDir = if (
 }
 
 $requiredFiles = @(
-    "start_test_services.bat",
+    "scripts/windows/start_test_services.bat",
     "server/GateServer/config.ini",
     "server/StatusServer/config.ini",
     "server/ChatServer/config.ini",

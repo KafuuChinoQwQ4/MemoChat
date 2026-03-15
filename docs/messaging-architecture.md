@@ -50,14 +50,14 @@ RabbitMQ 当前承载：
 Kafka:
 
 ```powershell
-docker compose -f .\docker-compose.kafka.yml up -d
+docker compose -f .\deploy\local\compose\kafka.yml up -d
 powershell -ExecutionPolicy Bypass -File .\scripts\init_kafka_topics.ps1
 ```
 
 RabbitMQ:
 
 ```powershell
-docker compose -f .\docker-compose.rabbitmq.yml up -d
+docker compose -f .\deploy\local\compose\rabbitmq.yml up -d
 powershell -ExecutionPolicy Bypass -File .\scripts\init_rabbitmq_topology.ps1
 ```
 

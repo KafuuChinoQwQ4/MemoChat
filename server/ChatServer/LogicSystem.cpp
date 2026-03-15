@@ -143,7 +143,7 @@ std::string TrimCopy(const std::string& text) {
 std::vector<std::string> KnownChatServerNames() {
 	std::vector<std::string> servers;
 	auto& cfg = ConfigMgr::Inst();
-	static const auto cluster = memochat::cluster::LoadStaticChatClusterConfig(
+	static const auto cluster = memochat::cluster::LoadChatClusterConfig(
 		[&cfg](const std::string& section, const std::string& key) {
 			return cfg.GetValue(section, key);
 		},

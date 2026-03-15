@@ -13,6 +13,26 @@ namespace {
 }
 
 LogicSystem::LogicSystem() {
+	RegGet("/healthz", [](std::shared_ptr<HttpConnection> connection) {
+		Json::Value root;
+		root["status"] = "ok";
+		root["service"] = "GateServer";
+		connection->_response.result(http::status::ok);
+		connection->_response.set(http::field::content_type, "application/json");
+		beast::ostream(connection->_response.body()) << root.toStyledString();
+		return true;
+	});
+
+	RegGet("/readyz", [](std::shared_ptr<HttpConnection> connection) {
+		Json::Value root;
+		root["status"] = "ready";
+		root["service"] = "GateServer";
+		connection->_response.result(http::status::ok);
+		connection->_response.set(http::field::content_type, "application/json");
+		beast::ostream(connection->_response.body()) << root.toStyledString();
+		return true;
+	});
+
 	RegGet("/get_test", [](std::shared_ptr<HttpConnection> connection) {
 		beast::ostream(connection->_response.body()) << "receive get_test req " << std::endl;
 		int i = 0;

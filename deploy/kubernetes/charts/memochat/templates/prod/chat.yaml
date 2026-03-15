@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.chat.serviceName }}
+  namespace: {{ .Values.namespaces.prod }}
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/component: chatserver
+    {{- include "memochat.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: tcp
+      port: {{ .Values.chat.tcpPort }}
+      targetPort: tcp
+    - name: grpc
+      port: {{ .Values.chat.rpcPort }}
+      targetPort: grpc
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Values.chat.serviceName }}
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    app.kubernetes.io/component: chatserver
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ .Values.chat.serviceName }}
+  replicas: {{ .Values.chat.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: chatserver
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: chatserver
+        {{- include "memochat.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: chatserver
+          image: "{{ .Values.images.chat.repository }}:{{ .Values.images.chat.tag }}"
+          imagePullPolicy: {{ .Values.images.chat.pullPolicy }}
+          env:
+            - name: MEMOCHAT_POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: MEMOCHAT_INSTANCE_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: RUN_WITH_CONFIG_ARG
+              value: "true"
+            - name: CONFIG_PATH
+              value: /app/config/config.ini
+            - name: MEMOCHAT_POSTGRES_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-password } }
+            - name: MEMOCHAT_REDIS_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
+            - name: MEMOCHAT_CHATAUTH_HMACSECRET
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: chat-auth-secret } }
+            - name: MEMOCHAT_RABBITMQ_PASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
+          ports:
+            - name: tcp
+              containerPort: {{ .Values.chat.tcpPort }}
+            - name: grpc
+              containerPort: {{ .Values.chat.rpcPort }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/config.ini
+              subPath: chat.ini
+          livenessProbe:
+            tcpSocket: { port: grpc }
+          readinessProbe:
+            tcpSocket: { port: grpc }
+          startupProbe:
+            tcpSocket: { port: grpc }
+            failureThreshold: 30
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.chat.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: memochat-config
+---
+{{- if .Values.chat.exposeTcpLoadBalancer }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.chat.serviceName }}-tcp
+  namespace: {{ .Values.namespaces.prod }}
+  annotations:
+    {{- toYaml .Values.chat.tcpLoadBalancerAnnotations | nindent 4 }}
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/component: chatserver
+    {{- include "memochat.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: tcp
+      port: {{ .Values.chat.tcpPort }}
+      targetPort: tcp
+{{- end }}
+---
+{{- if .Values.chat.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ .Values.chat.serviceName }}
+  namespace: {{ .Values.namespaces.prod }}
+spec:
+  minAvailable: {{ .Values.chat.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: chatserver
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+{{- end }}

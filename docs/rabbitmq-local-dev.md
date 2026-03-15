@@ -1,11 +1,11 @@
 # RabbitMQ Local Dev
 
-本地 RabbitMQ 任务总线使用 [docker-compose.rabbitmq.yml](/d:/MemoChat-Qml-Drogon/docker-compose.rabbitmq.yml)。
+本地 RabbitMQ 任务总线使用 [rabbitmq.yml](/d:/MemoChat-Qml-Drogon/deploy/local/compose/rabbitmq.yml)。
 
 启动：
 
 ```powershell
-docker compose -f .\docker-compose.rabbitmq.yml up -d
+docker compose -f .\deploy\local\compose\rabbitmq.yml up -d
 ```
 
 默认地址：

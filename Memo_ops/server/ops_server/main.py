@@ -34,6 +34,14 @@ def create_app(runtime: OpsServerRuntime | None = None) -> FastAPI:
         except Exception:
             pass
 
+    @app.get("/healthz")
+    def healthz() -> dict:
+        return {"status": "ok", "service": "MemoOpsServer"}
+
+    @app.get("/readyz")
+    def readyz() -> dict:
+        return {"status": "ready", "service": "MemoOpsServer"}
+
     app.include_router(create_overview_router(server_runtime))
     app.include_router(create_loadtests_router(server_runtime))
     app.include_router(create_logs_router(server_runtime))

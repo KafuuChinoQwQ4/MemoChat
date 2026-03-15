@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from configparser import ConfigParser
+import os
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -18,7 +19,24 @@ def load_yaml_config(path: str | Path) -> Dict[str, Any]:
     data["_config_path"] = str(config_path)
     data["_config_dir"] = str(config_path.parent)
     data["_package_root"] = str(package_root())
-    return normalize_config(data)
+    return normalize_config(expand_env_placeholders(data))
+
+
+def expand_env_placeholders(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: expand_env_placeholders(val) for key, val in value.items()}
+    if isinstance(value, list):
+        return [expand_env_placeholders(item) for item in value]
+    if not isinstance(value, str):
+        return value
+    if not value.startswith("${") or not value.endswith("}"):
+        return value
+
+    body = value[2:-1]
+    if ":-" in body:
+        name, default = body.split(":-", 1)
+        return os.getenv(name, default)
+    return os.getenv(body, "")
 
 
 def normalize_config(data: Dict[str, Any]) -> Dict[str, Any]:

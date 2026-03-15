@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: memochat-platform-init
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    {{- include "memochat.labels" . | nindent 4 }}
+data:
+  init-kafka.py: |
+    import os
+    import subprocess
+    import sys
+    topics = [
+        "chat.private.v1",
+        "chat.group.v1",
+        "dialog.sync.v1",
+        "relation.state.v1",
+        "user.profile.changed.v1",
+        "audit.login.v1",
+        "chat.private.dlq.v1",
+        "chat.group.dlq.v1",
+    ]
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-cache-dir", "confluent-kafka==2.5.0"])
+    from confluent_kafka.admin import AdminClient, NewTopic
+    client = AdminClient({"bootstrap.servers": os.environ["KAFKA_BROKERS"]})
+    existing = set(client.list_topics(timeout=15).topics.keys())
+    new_topics = [NewTopic(topic, num_partitions=6, replication_factor=1) for topic in topics if topic not in existing]
+    if new_topics:
+        futures = client.create_topics(new_topics)
+        for _, future in futures.items():
+            future.result()
+  init-rabbitmq.py: |
+    import os
+    import subprocess
+    import sys
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-cache-dir", "pika==1.3.2"])
+    import pika
+    credentials = pika.PlainCredentials(os.environ["RABBITMQ_USERNAME"], os.environ["RABBITMQ_PASSWORD"])
+    parameters = pika.ConnectionParameters(
+        host=os.environ["RABBITMQ_HOST"],
+        port=int(os.environ["RABBITMQ_PORT"]),
+        virtual_host=os.environ.get("RABBITMQ_VHOST", "/"),
+        credentials=credentials,
+    )
+    connection = pika.BlockingConnection(parameters)
+    channel = connection.channel()
+    channel.exchange_declare(exchange="memochat.direct", exchange_type="direct", durable=True)
+    channel.exchange_declare(exchange="memochat.dlx", exchange_type="direct", durable=True)
+    channel.queue_declare(queue="verify.email.delivery.q", durable=True, arguments={"x-dead-letter-exchange": "memochat.dlx"})
+    channel.queue_bind(queue="verify.email.delivery.q", exchange="memochat.direct", routing_key="verify.email.delivery")
+    channel.queue_declare(queue="verify.email.delivery.retry.q", durable=True)
+    channel.queue_bind(queue="verify.email.delivery.retry.q", exchange="memochat.direct", routing_key="verify.email.delivery.retry")
+    channel.queue_declare(queue="verify.email.delivery.dlq.q", durable=True)
+    channel.queue_bind(queue="verify.email.delivery.dlq.q", exchange="memochat.dlx", routing_key="verify.email.delivery.dlq")
+    connection.close()
+  001_business_baseline.sql: |
+    CREATE SCHEMA IF NOT EXISTS memo;
+  002_chat_event_outbox.sql: |
+    CREATE TABLE IF NOT EXISTS memo.chat_event_outbox (
+      id BIGSERIAL PRIMARY KEY,
+      aggregate_type TEXT NOT NULL,
+      aggregate_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      payload JSONB NOT NULL,
+      publish_status SMALLINT NOT NULL DEFAULT 0,
+      retry_count INT NOT NULL DEFAULT 0,
+      next_retry_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      published_at TIMESTAMPTZ
+    );
+  001_memo_ops_baseline.sql: |
+    CREATE SCHEMA IF NOT EXISTS memo_ops;
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: {{ .Values.namespaces.observability }}
+  labels:
+    {{- include "memochat.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+          http:
+      zipkin:
+    exporters:
+      logging:
+        verbosity: detailed
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp, zipkin]
+          exporters: [logging]

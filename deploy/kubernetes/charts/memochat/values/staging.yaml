@@ -1,0 +1,11 @@
+global:
+  domain: memochat-staging.example.com
+
+gate:
+  replicaCount: 2
+
+status:
+  replicaCount: 2
+
+chat:
+  replicaCount: 4
