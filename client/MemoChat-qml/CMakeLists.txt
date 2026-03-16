@@ -42,6 +42,7 @@ set(SOURCES
     ChatMessageModel.cpp
     SearchResultModel.cpp
     ApplyRequestModel.cpp
+    TransportSelector.cpp
     MessageContentCodec.cpp
     PrivateChatCacheStore.cpp
     GroupChatCacheStore.cpp
@@ -70,6 +71,7 @@ set(HEADERS
     ChatMessageModel.h
     SearchResultModel.h
     ApplyRequestModel.h
+    TransportSelector.h
     MessageContentCodec.h
     MessagePayloadService.h
     PrivateChatCacheStore.h

@@ -1,6 +1,6 @@
 #include "AppController.h"
 #include "IconPathUtils.h"
-#include "tcpmgr.h"
+#include "IChatTransport.h"
 #include "usermgr.h"
 #include <QDateTime>
 #include <QJsonDocument>
@@ -17,6 +17,15 @@ constexpr int kChatReconnectDelayMs = 300;
 constexpr int kDefaultChatConnectTimeoutMs = 1200;
 constexpr int kDefaultBackupDialDelayMs = 250;
 constexpr int kDefaultChatLoginTimeoutMs = 5000;
+
+ChatTransportKind parseTransportKind(const QString &value)
+{
+    const QString normalized = value.trimmed().toLower();
+    if (normalized == QStringLiteral("quic")) {
+        return ChatTransportKind::Quic;
+    }
+    return ChatTransportKind::Tcp;
+}
 }
 
 void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
@@ -74,6 +83,8 @@ void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
     server_info.Token = obj.value("token").toString();
     server_info.LoginTicket = obj.value("login_ticket").toString();
     server_info.ProtocolVersion = obj.value("protocol_version").toInt(2);
+    server_info.PreferredTransport = parseTransportKind(obj.value("preferred_transport").toString());
+    server_info.FallbackTransport = parseTransportKind(obj.value("fallback_transport").toString());
     server_info.ConnectTimeoutMs = kDefaultChatConnectTimeoutMs;
     server_info.BackupDialDelayMs = kDefaultBackupDialDelayMs;
     server_info.TotalLoginTimeoutMs = kDefaultChatLoginTimeoutMs;
@@ -81,6 +92,7 @@ void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
     for (const auto &endpointValue : endpointArray) {
         const QJsonObject endpointObj = endpointValue.toObject();
         ChatEndpoint endpoint;
+        endpoint.transport = parseTransportKind(endpointObj.value("transport").toString());
         endpoint.host = endpointObj.value("host").toString();
         endpoint.port = endpointObj.value("port").toString();
         endpoint.serverName = endpointObj.value("server_name").toString();
@@ -91,6 +103,7 @@ void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
     }
     if (server_info.Endpoints.isEmpty() && !server_info.Host.trimmed().isEmpty() && !server_info.Port.trimmed().isEmpty()) {
         ChatEndpoint fallback;
+        fallback.transport = ChatTransportKind::Tcp;
         fallback.host = server_info.Host;
         fallback.port = server_info.Port;
         fallback.serverName = obj.value("server_name").toString();
@@ -132,7 +145,7 @@ void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
             << "protocol_version:" << _chat_protocol_version;
     setTip("正在连接聊天服务...", false);
     _chat_connect_started_ms = QDateTime::currentMSecsSinceEpoch();
-    _gateway.tcpMgr()->slot_tcp_connect(server_info);
+    _gateway.chatTransport()->connectToServer(server_info);
 }
 
 void AppController::onRegisterHttpFinished(ReqId id, QString res, ErrorCodes err)
@@ -293,7 +306,7 @@ void AppController::onTcpConnectFinished(bool success)
                        << "port:" << _chat_server_port
                        << "server:" << _chat_server_name;
             _chat_connect_started_ms = QDateTime::currentMSecsSinceEpoch();
-            _gateway.tcpMgr()->slot_tcp_connect(retryInfo);
+            _gateway.chatTransport()->connectToServer(retryInfo);
             return;
         }
         if (_reconnecting_chat && _page == ChatPage) {
@@ -325,7 +338,7 @@ void AppController::onTcpConnectFinished(bool success)
         obj["trace_id"] = _pending_trace_id;
     }
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_CHAT_LOGIN, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_CHAT_LOGIN, payload);
     _chat_login_timeout_timer.start();
 }
 
@@ -481,7 +494,7 @@ void AppController::onSwitchToChat()
 
 void AppController::requestRelationBootstrap()
 {
-    if (_chat_protocol_version < 3 || !_gateway.tcpMgr()->isConnected()) {
+    if (_chat_protocol_version < 3 || !_gateway.chatTransport()->isConnected()) {
         return;
     }
 
@@ -494,7 +507,7 @@ void AppController::requestRelationBootstrap()
         obj["trace_id"] = _pending_trace_id;
     }
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_GET_RELATION_BOOTSTRAP_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_GET_RELATION_BOOTSTRAP_REQ, payload);
 }
 
 void AppController::onRelationBootstrapUpdated()
@@ -556,14 +569,14 @@ void AppController::onHeartbeatTimeout()
         && (nowMs - _last_heartbeat_sent_ms) >= kHeartbeatAckGraceMs) {
         _closed_by_heartbeat_watchdog = true;
         _heartbeat_timer.stop();
-        _gateway.tcpMgr()->CloseConnection();
+        _gateway.chatTransport()->CloseConnection();
         return;
     }
 
     QJsonObject hb;
     hb["fromuid"] = selfInfo->_uid;
     const QByteArray payload = QJsonDocument(hb).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_HEART_BEAT_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_HEART_BEAT_REQ, payload);
     _last_heartbeat_sent_ms = nowMs;
 }
 
@@ -587,7 +600,7 @@ void AppController::onNotifyOffline()
     _heartbeat_timer.stop();
     resetReconnectState();
     resetHeartbeatTracking();
-    _gateway.tcpMgr()->CloseConnection();
+    _gateway.chatTransport()->CloseConnection();
     switchToLogin();
     setTip("同账号异地登录，该终端下线", true);
 }
@@ -690,7 +703,7 @@ bool AppController::tryReconnectChat()
             return;
         }
         _chat_connect_started_ms = QDateTime::currentMSecsSinceEpoch();
-        _gateway.tcpMgr()->slot_tcp_connect(serverInfo);
+        _gateway.chatTransport()->connectToServer(serverInfo);
     });
     return true;
 }

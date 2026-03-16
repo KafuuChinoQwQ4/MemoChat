@@ -2,6 +2,12 @@
   "name": "memochat-qml",
   "version-string": "0.1.0",
   "builtin-baseline": "2fa7118fb2ce0c27ab73e08ab1991f4cb67af880",
+  "dependencies": [
+    {
+      "name": "msquic",
+      "platform": "windows & !static"
+    }
+  ],
   "default-features": [
     "server"
   ],

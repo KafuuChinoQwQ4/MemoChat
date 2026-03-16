@@ -143,7 +143,13 @@ extern QString gate_url_prefix;
 
 #define MEMOCHAT_CLIENT_VERSION "3.0.0"
 
+enum class ChatTransportKind {
+    Tcp = 0,
+    Quic = 1
+};
+
 struct ChatEndpoint {
+    ChatTransportKind transport = ChatTransportKind::Tcp;
     QString host;
     QString port;
     QString serverName;
@@ -158,6 +164,8 @@ struct ServerInfo{
     QString LoginTicket;
     QString ServerName;
     QVector<ChatEndpoint> Endpoints;
+    ChatTransportKind PreferredTransport = ChatTransportKind::Tcp;
+    ChatTransportKind FallbackTransport = ChatTransportKind::Tcp;
     int ConnectTimeoutMs = 1200;
     int BackupDialDelayMs = 250;
     int TotalLoginTimeoutMs = 5000;

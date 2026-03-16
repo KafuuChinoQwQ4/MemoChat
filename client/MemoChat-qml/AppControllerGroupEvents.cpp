@@ -1,8 +1,8 @@
 #include "AppController.h"
 #include "ConversationSyncService.h"
+#include "IChatTransport.h"
 #include "MessagePayloadService.h"
 #include "MessageContentCodec.h"
-#include "tcpmgr.h"
 #include "usermgr.h"
 #include <QDateTime>
 #include <QJsonDocument>
@@ -53,7 +53,7 @@ void AppController::onGroupInvite(qint64 groupId, QString groupCode, QString gro
     }
     req["fromuid"] = selfInfo->_uid;
     const QByteArray payload = QJsonDocument(req).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_GET_GROUP_LIST_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_GET_GROUP_LIST_REQ, payload);
     if (_current_group_id <= 0) {
         setCurrentGroup(groupId, groupName, groupCode);
     }

@@ -1,6 +1,6 @@
 #include "ContactController.h"
 #include "ClientGateway.h"
-#include "tcpmgr.h"
+#include "IChatTransport.h"
 #include "global.h"
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -40,7 +40,7 @@ bool ContactController::sendSearchUser(const QString &uidText, QString *errorTex
     QJsonObject jsonObj;
     jsonObj["user_id"] = userId;
     const QByteArray jsonData = QJsonDocument(jsonObj).toJson(QJsonDocument::Compact);
-    _gateway->tcpMgr()->slot_send_data(ReqId::ID_SEARCH_USER_REQ, jsonData);
+    _gateway->chatTransport()->slot_send_data(ReqId::ID_SEARCH_USER_REQ, jsonData);
     return true;
 }
 
@@ -55,7 +55,7 @@ void ContactController::sendAddFriend(int selfUid, const QString &selfName, int 
     jsonObj["labels"] = buildLabelsArray(labels);
 
     const QByteArray jsonData = QJsonDocument(jsonObj).toJson(QJsonDocument::Compact);
-    _gateway->tcpMgr()->slot_send_data(ReqId::ID_ADD_FRIEND_REQ, jsonData);
+    _gateway->chatTransport()->slot_send_data(ReqId::ID_ADD_FRIEND_REQ, jsonData);
 }
 
 void ContactController::sendApproveFriend(int selfUid, int targetUid, const QString &remark,
@@ -68,5 +68,5 @@ void ContactController::sendApproveFriend(int selfUid, int targetUid, const QStr
     jsonObj["labels"] = buildLabelsArray(labels);
 
     const QByteArray jsonData = QJsonDocument(jsonObj).toJson(QJsonDocument::Compact);
-    _gateway->tcpMgr()->slot_send_data(ReqId::ID_AUTH_FRIEND_REQ, jsonData);
+    _gateway->chatTransport()->slot_send_data(ReqId::ID_AUTH_FRIEND_REQ, jsonData);
 }

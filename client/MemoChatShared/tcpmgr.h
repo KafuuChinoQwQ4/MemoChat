@@ -1,27 +1,24 @@
 #ifndef TCPMGR_H
 #define TCPMGR_H
-#include <QTcpSocket>
-#include "singleton.h"
-#include "global.h"
-#include <functional>
-#include <QObject>
-#include "userdata.h"
-#include <QJsonArray>
-#include <QJsonObject>
 #include <QTimer>
+#include <QTcpSocket>
 
-class TcpMgr:public QObject, public Singleton<TcpMgr>,
+#include "IChatTransport.h"
+#include "singleton.h"
+
+class TcpMgr: public IChatTransport, public Singleton<TcpMgr>,
         public std::enable_shared_from_this<TcpMgr>
 {
     Q_OBJECT
 public:
-   ~ TcpMgr();
-    void CloseConnection();
-    bool isConnected() const;
+   ~ TcpMgr() override;
+    void CloseConnection() override;
+    bool isConnected() const override;
+    void connectToServer(ServerInfo serverInfo) override;
+    void slot_send_data(ReqId reqId, QByteArray data) override;
 private:
     friend class Singleton<TcpMgr>;
     TcpMgr();
-    void initHandlers();
     void handleMsg(ReqId id, int len, QByteArray data);
     QTcpSocket _socket;
     QString _host;
@@ -32,37 +29,8 @@ private:
     quint16 _message_id;
     quint16 _message_len;
     QTimer _connect_timeout_timer;
-    QMap<ReqId, std::function<void(ReqId id, int len, QByteArray data)>> _handlers;
-public slots:
-    void slot_tcp_connect(ServerInfo);
-    void slot_send_data(ReqId reqId, QByteArray data);
 signals:
-    void sig_con_success(bool bsuccess);
     void sig_send_data(ReqId reqId, QByteArray data);
-    void sig_swich_chatdlg();
-    void sig_load_apply_list(QJsonArray json_array);
-    void sig_login_failed(int);
-    void sig_user_search(std::shared_ptr<SearchInfo>);
-    void sig_friend_apply(std::shared_ptr<AddFriendApply>);
-    void sig_add_auth_friend(std::shared_ptr<AuthInfo>);
-    void sig_auth_rsp(std::shared_ptr<AuthRsp>);
-    void sig_text_chat_msg(std::shared_ptr<TextChatMsg> msg);
-    void sig_group_list_updated();
-    void sig_group_invite(qint64 groupId, QString groupCode, QString groupName, int operatorUid);
-    void sig_group_apply(qint64 groupId, int applicantUid, QString applicantUserId, QString reason);
-    void sig_group_member_changed(QJsonObject payload);
-    void sig_group_chat_msg(std::shared_ptr<GroupChatMsg> msg);
-    void sig_group_rsp(ReqId reqId, int error, QJsonObject payload);
-    void sig_relation_bootstrap_updated();
-    void sig_dialog_list_rsp(QJsonObject payload);
-    void sig_private_history_rsp(QJsonObject payload);
-    void sig_private_msg_changed(QJsonObject payload);
-    void sig_private_read_ack(QJsonObject payload);
-    void sig_message_status(QJsonObject payload);
-    void sig_call_event(QJsonObject payload);
-    void sig_heartbeat_ack(qint64 ackAtMs);
-    void sig_notify_offline();
-    void sig_connection_closed();
 };
 
 #endif // TCPMGR_H
