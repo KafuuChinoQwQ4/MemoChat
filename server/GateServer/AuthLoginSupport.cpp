@@ -21,6 +21,14 @@ constexpr const char* kMinClientVersion = "2.0.0";
 constexpr int kLoginProtocolVersion = 3;
 std::atomic<uint64_t> g_gate_route_rr_counter{0};
 
+bool IsTruthyFlag(const char* raw) {
+    if (raw == nullptr) {
+        return false;
+    }
+    const std::string value(raw);
+    return value == "1" || value == "true" || value == "TRUE" || value == "on" || value == "ON";
+}
+
 bool ParseSemVer(const std::string& ver, int& major, int& minor, int& patch) {
     major = 0;
     minor = 0;
@@ -92,6 +100,10 @@ int LoginProtocolVersion() {
 int64_t NowMs() {
     return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count());
+}
+
+bool IsQuicRolloutEnabled() {
+    return IsTruthyFlag(std::getenv("MEMOCHAT_ENABLE_QUIC"));
 }
 
 bool IsClientVersionAllowed(const std::string& clientVer, const std::string& minVer) {
@@ -221,6 +233,10 @@ std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load
             route_node.name = node.name;
             route_node.host = node.tcp_host;
             route_node.port = node.tcp_port;
+            if (IsQuicRolloutEnabled()) {
+                route_node.quic_host = node.quic_host;
+                route_node.quic_port = node.quic_port;
+            }
             route_node.online_count = 0;
             nodes.push_back(route_node);
             min_online = std::min(min_online, route_node.online_count);

@@ -1,9 +1,9 @@
 #include "AppController.h"
 #include "AppCoordinators.h"
 #include "ConversationSyncService.h"
+#include "IChatTransport.h"
 #include "LocalFilePickerService.h"
 #include "MessageContentCodec.h"
-#include "tcpmgr.h"
 #include "usermgr.h"
 #include <QDateTime>
 #include <QFileInfo>
@@ -288,7 +288,7 @@ bool AppController::sendUploadedAttachmentToDialog(const QVariantMap &attachment
                 payloadObj["fromuid"] = selfInfo->_uid;
                 payloadObj["groupid"] = static_cast<qint64>(groupId);
                 payloadObj["msg"] = msgObj;
-                _gateway.tcpMgr()->slot_send_data(ReqId::ID_GROUP_CHAT_MSG_REQ,
+                _gateway.chatTransport()->slot_send_data(ReqId::ID_GROUP_CHAT_MSG_REQ,
                                                   QJsonDocument(payloadObj).toJson(QJsonDocument::Compact));
             }
             return true;
@@ -348,7 +348,7 @@ bool AppController::sendUploadedAttachmentToDialog(const QVariantMap &attachment
             payloadObj["fromuid"] = selfInfo->_uid;
             payloadObj["groupid"] = static_cast<qint64>(groupId);
             payloadObj["msg"] = msgObj;
-            _gateway.tcpMgr()->slot_send_data(ReqId::ID_GROUP_CHAT_MSG_REQ,
+            _gateway.chatTransport()->slot_send_data(ReqId::ID_GROUP_CHAT_MSG_REQ,
                                               QJsonDocument(payloadObj).toJson(QJsonDocument::Compact));
         }
         return true;
@@ -377,8 +377,8 @@ bool AppController::sendUploadedAttachmentToDialog(const QVariantMap &attachment
 
 bool AppController::isChatTransportReady() const
 {
-    const auto tcp = _gateway.tcpMgr();
-    return tcp && tcp->isConnected();
+    const auto transport = _gateway.chatTransport();
+    return transport && transport->isConnected();
 }
 
 bool AppController::dispatchChatContent(const QString &content, const QString &previewText)
@@ -508,7 +508,7 @@ bool AppController::dispatchGroupChatContent(const QString &content, const QStri
     payloadObj["groupid"] = static_cast<qint64>(_current_group_id);
     payloadObj["msg"] = msgObj;
     const QByteArray payload = QJsonDocument(payloadObj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_GROUP_CHAT_MSG_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_GROUP_CHAT_MSG_REQ, payload);
 
     const QString senderName = selfInfo->_nick.isEmpty() ? selfInfo->_name : selfInfo->_nick;
     auto msg = std::make_shared<TextChatData>(msgId,

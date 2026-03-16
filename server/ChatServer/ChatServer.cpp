@@ -13,6 +13,7 @@
 #include "PostgresMgr.h"
 #include "RedisMgr.h"
 #include "ChatServiceImpl.h"
+#include "ChatIngressCoordinator.h"
 #include "ChatRuntime.h"
 #include "const.h"
 #include "cluster/ChatClusterDiscovery.h"
@@ -152,11 +153,12 @@ int main(int argc, char** argv)
 			});
 
 		boost::asio::io_context  io_context;
-		auto port_str = self_node->tcp_port;
 		std::shared_ptr<CServer> pointer_server;
+		std::unique_ptr<memochat::chatserver::ChatIngressCoordinator> ingress_coordinator;
 		if (memochat::chatruntime::IsIngressEnabled()) {
-			pointer_server = std::make_shared<CServer>(io_context, atoi(port_str.c_str()));
-			pointer_server->StartTimer();
+			ingress_coordinator = std::make_unique<memochat::chatserver::ChatIngressCoordinator>(io_context);
+			ingress_coordinator->Start(*self_node);
+			pointer_server = ingress_coordinator->tcpServer();
 		}
 
 		std::string server_address(self_node->rpc_host + ":" + self_node->rpc_port);
@@ -189,8 +191,8 @@ int main(int argc, char** argv)
 		io_context.run();
 
 		grpc_server_thread.join();
-		if (pointer_server) {
-			pointer_server->StopTimer();
+		if (ingress_coordinator) {
+			ingress_coordinator->Stop();
 		}
 		memolog::LogInfo("service.stop", "ChatServer stopped");
 		return 0;

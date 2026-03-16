@@ -1,12 +1,13 @@
 #include "AppController.h"
 #include "AppCoordinators.h"
+#include "ChatMessageDispatcher.h"
 #include "DialogListService.h"
 #include "LocalFilePickerService.h"
 #include "MediaUploadService.h"
 #include "MessageContentCodec.h"
 #include "IconPathUtils.h"
+#include "IChatTransport.h"
 #include "httpmgr.h"
-#include "tcpmgr.h"
 #include "usermgr.h"
 #include <QDateTime>
 #include <algorithm>
@@ -103,6 +104,9 @@ AppController::AppController(QObject *parent)
       _call_coordinator(std::make_unique<CallCoordinator>(*this)),
       _profile_coordinator(std::make_unique<ProfileCoordinator>(*this))
 {
+    const auto chatTransport = _gateway.chatTransport();
+    const auto chatDispatcher = _gateway.chatMessageDispatcher();
+
     connect(_gateway.httpMgr().get(), &HttpMgr::sig_login_mod_finish,
             this, &AppController::onLoginHttpFinished);
     connect(_gateway.httpMgr().get(), &HttpMgr::sig_reg_mod_finish,
@@ -114,51 +118,51 @@ AppController::AppController(QObject *parent)
     connect(_gateway.httpMgr().get(), &HttpMgr::sig_call_mod_finish,
             this, &AppController::onCallHttpFinished);
 
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_con_success,
+    connect(chatTransport.get(), &IChatTransport::sig_con_success,
             this, &AppController::onTcpConnectFinished);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_login_failed,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_login_failed,
             this, &AppController::onChatLoginFailed);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_swich_chatdlg,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_swich_chatdlg,
             this, &AppController::onSwitchToChat);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_add_auth_friend,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_add_auth_friend,
             this, &AppController::onAddAuthFriend);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_auth_rsp,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_auth_rsp,
             this, &AppController::onAuthRsp);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_text_chat_msg,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_text_chat_msg,
             this, &AppController::onTextChatMsg);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_user_search,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_user_search,
             this, &AppController::onUserSearch);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_friend_apply,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_friend_apply,
             this, &AppController::onFriendApply);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_notify_offline,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_notify_offline,
             this, &AppController::onNotifyOffline);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_connection_closed,
+    connect(chatTransport.get(), &IChatTransport::sig_connection_closed,
             this, &AppController::onConnectionClosed);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_group_list_updated,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_list_updated,
             this, &AppController::onGroupListUpdated);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_group_invite,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_invite,
             this, &AppController::onGroupInvite);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_group_apply,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_apply,
             this, &AppController::onGroupApply);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_group_member_changed,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_member_changed,
             this, &AppController::onGroupMemberChanged);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_group_chat_msg,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_chat_msg,
             this, &AppController::onGroupChatMsg);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_group_rsp,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_rsp,
             this, &AppController::onGroupRsp);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_relation_bootstrap_updated,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_relation_bootstrap_updated,
             this, &AppController::onRelationBootstrapUpdated);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_dialog_list_rsp,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_dialog_list_rsp,
             this, &AppController::onDialogListRsp);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_private_history_rsp,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_private_history_rsp,
             this, &AppController::onPrivateHistoryRsp);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_private_msg_changed,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_private_msg_changed,
             this, &AppController::onPrivateMsgChanged);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_private_read_ack,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_private_read_ack,
             this, &AppController::onPrivateReadAck);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_message_status,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_message_status,
             this, &AppController::onMessageStatus);
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_call_event,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_call_event,
             this, &AppController::onCallEvent);
     connect(&_livekit_bridge, &LivekitBridge::roomJoined,
             this, &AppController::onLivekitRoomJoined);
@@ -175,7 +179,7 @@ AppController::AppController(QObject *parent)
     connect(&_livekit_bridge, &LivekitBridge::bridgeLog, this, [](const QString &message) {
         qInfo().noquote() << "[livekit]" << message;
     });
-    connect(_gateway.tcpMgr().get(), &TcpMgr::sig_heartbeat_ack,
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_heartbeat_ack,
             this, &AppController::onHeartbeatAck);
     connect(&_apply_request_model, &ApplyRequestModel::unapprovedCountChanged,
             this, &AppController::pendingApplyChanged);
@@ -188,13 +192,13 @@ AppController::AppController(QObject *parent)
     _chat_login_timeout_timer.setInterval(15000);
     connect(&_chat_login_timeout_timer, &QTimer::timeout, this, [this]() {
         if (_reconnecting_chat && _page == ChatPage) {
-            _gateway.tcpMgr()->CloseConnection();
+            _gateway.chatTransport()->CloseConnection();
             return;
         }
         if (!_busy || _page != LoginPage) {
             return;
         }
-        _gateway.tcpMgr()->CloseConnection();
+        _gateway.chatTransport()->CloseConnection();
         setBusy(false);
         setTip("聊天服务登录超时，请重试", true);
     });
@@ -221,7 +225,7 @@ void AppController::switchToLogin()
 {
     qInfo() << "Switching to login page, current page:" << _page
             << "pending uid:" << _pending_uid
-            << "chat connected:" << _gateway.tcpMgr()->isConnected();
+            << "chat connected:" << _gateway.chatTransport()->isConnected();
     _register_countdown_timer.stop();
     _heartbeat_timer.stop();
     _livekit_bridge.leaveRoom();
@@ -237,7 +241,7 @@ void AppController::switchToLogin()
     _chat_login_timeout_timer.stop();
     _ignore_next_login_disconnect = true;
     setPage(LoginPage);
-    _gateway.tcpMgr()->CloseConnection();
+    _gateway.chatTransport()->CloseConnection();
     _private_cache_store.close();
     _group_cache_store.close();
     _gateway.userMgr()->ResetSession();
@@ -836,7 +840,7 @@ void AppController::refreshGroupList()
     QJsonObject obj;
     obj["fromuid"] = selfInfo->_uid;
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_GET_GROUP_LIST_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_GET_GROUP_LIST_REQ, payload);
 }
 
 void AppController::requestDialogList()
@@ -848,7 +852,7 @@ void AppController::requestDialogList()
     QJsonObject obj;
     obj["fromuid"] = selfInfo->_uid;
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_GET_DIALOG_LIST_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_GET_DIALOG_LIST_REQ, payload);
 }
 
 void AppController::createGroup(const QString &name, const QVariantList &memberUserIdList)
@@ -889,7 +893,7 @@ void AppController::inviteGroupMember(const QString &userId, const QString &reas
     obj["groupid"] = static_cast<qint64>(_current_group_id);
     obj["reason"] = reason;
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_INVITE_GROUP_MEMBER_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_INVITE_GROUP_MEMBER_REQ, payload);
     setGroupStatus("邀请已发送", false);
 }
 
@@ -907,7 +911,7 @@ void AppController::applyJoinGroup(const QString &groupCode, const QString &reas
     obj["group_code"] = trimmedGroupCode;
     obj["reason"] = reason;
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_APPLY_JOIN_GROUP_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_APPLY_JOIN_GROUP_REQ, payload);
     setGroupStatus("申请已发送", false);
 }
 
@@ -958,7 +962,7 @@ void AppController::editGroupMessage(const QString &msgId, const QString &text)
         return;
     }
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(_current_group_id > 0
+    _gateway.chatTransport()->slot_send_data(_current_group_id > 0
                                           ? ReqId::ID_EDIT_GROUP_MSG_REQ
                                           : ReqId::ID_EDIT_PRIVATE_MSG_REQ,
                                       payload);
@@ -989,7 +993,7 @@ void AppController::revokeGroupMessage(const QString &msgId)
         return;
     }
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(_current_group_id > 0
+    _gateway.chatTransport()->slot_send_data(_current_group_id > 0
                                           ? ReqId::ID_REVOKE_GROUP_MSG_REQ
                                           : ReqId::ID_REVOKE_PRIVATE_MSG_REQ,
                                       payload);
@@ -1019,7 +1023,7 @@ void AppController::forwardGroupMessage(const QString &msgId)
         obj["msgid"] = trimmedMsgId;
         obj["client_msg_id"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
         const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-        _gateway.tcpMgr()->slot_send_data(ReqId::ID_FORWARD_PRIVATE_MSG_REQ, payload);
+        _gateway.chatTransport()->slot_send_data(ReqId::ID_FORWARD_PRIVATE_MSG_REQ, payload);
         return;
     }
     if (_current_group_id <= 0) {
@@ -1033,7 +1037,7 @@ void AppController::forwardGroupMessage(const QString &msgId)
     obj["msgid"] = trimmedMsgId;
     obj["client_msg_id"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_FORWARD_GROUP_MSG_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_FORWARD_GROUP_MSG_REQ, payload);
 }
 
 void AppController::loadGroupHistory()
@@ -1056,7 +1060,7 @@ void AppController::loadGroupHistory()
     obj["limit"] = 50;
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
     setPrivateHistoryLoading(true);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_GROUP_HISTORY_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_GROUP_HISTORY_REQ, payload);
 }
 
 void AppController::updateGroupAnnouncement(const QString &announcement)
@@ -1075,7 +1079,7 @@ void AppController::updateGroupAnnouncement(const QString &announcement)
     obj["groupid"] = static_cast<qint64>(_current_group_id);
     obj["announcement"] = announcement.left(1000);
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_UPDATE_GROUP_ANNOUNCEMENT_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_UPDATE_GROUP_ANNOUNCEMENT_REQ, payload);
 }
 
 void AppController::updateGroupIcon()
@@ -1135,7 +1139,7 @@ void AppController::updateGroupIcon()
         obj["groupid"] = static_cast<qint64>(targetGroupId);
         obj["icon"] = result.uploaded.remoteUrl;
         const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-        _gateway.tcpMgr()->slot_send_data(ReqId::ID_UPDATE_GROUP_ICON_REQ, payload);
+        _gateway.chatTransport()->slot_send_data(ReqId::ID_UPDATE_GROUP_ICON_REQ, payload);
         setGroupStatus("群头像更新中...", false);
     });
 
@@ -1196,7 +1200,7 @@ void AppController::setGroupAdmin(const QString &userId, bool isAdmin, qint64 pe
     obj["can_ban_users"] = (normalizedPermBits & kPermBanUsers) != 0;
     obj["can_manage_topics"] = (normalizedPermBits & kPermManageTopics) != 0;
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_SET_GROUP_ADMIN_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_SET_GROUP_ADMIN_REQ, payload);
 }
 
 void AppController::muteGroupMember(const QString &userId, int muteSeconds)
@@ -1214,7 +1218,7 @@ void AppController::muteGroupMember(const QString &userId, int muteSeconds)
     obj["target_user_id"] = trimmedUserId;
     obj["mute_seconds"] = qMax(0, muteSeconds);
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_MUTE_GROUP_MEMBER_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_MUTE_GROUP_MEMBER_REQ, payload);
 }
 
 void AppController::kickGroupMember(const QString &userId)
@@ -1231,7 +1235,7 @@ void AppController::kickGroupMember(const QString &userId)
     obj["groupid"] = static_cast<qint64>(_current_group_id);
     obj["target_user_id"] = trimmedUserId;
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_KICK_GROUP_MEMBER_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_KICK_GROUP_MEMBER_REQ, payload);
 }
 
 void AppController::quitCurrentGroup()
@@ -1283,7 +1287,7 @@ void AppController::updateCurrentDraft(const QString &text)
     }
     obj["draft_text"] = normalizedDraft;
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_SYNC_DRAFT_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_SYNC_DRAFT_REQ, payload);
 }
 
 void AppController::toggleCurrentDialogPinned()
@@ -1342,7 +1346,7 @@ void AppController::toggleDialogPinnedByUid(int dialogUid)
     }
     obj["pinned_rank"] = nextPinned ? static_cast<int>(QDateTime::currentSecsSinceEpoch()) : 0;
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_PIN_DIALOG_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_PIN_DIALOG_REQ, payload);
 
     refreshDialogModel();
 }
@@ -1391,7 +1395,7 @@ void AppController::toggleDialogMutedByUid(int dialogUid)
     obj["draft_text"] = _dialog_draft_map.value(dialogUid);
     obj["mute_state"] = nextMuteState;
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_SYNC_DRAFT_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_SYNC_DRAFT_REQ, payload);
 }
 
 void AppController::markDialogReadByUid(int dialogUid)
@@ -1458,7 +1462,7 @@ void AppController::clearDialogDraftByUid(int dialogUid)
     }
     obj["draft_text"] = "";
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_SYNC_DRAFT_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_SYNC_DRAFT_REQ, payload);
 }
 
 void AppController::beginReplyMessage(const QString &msgId, const QString &senderName, const QString &previewText)
@@ -1772,7 +1776,7 @@ void AppController::requestPrivateHistory(int peerUid, qint64 beforeTs, const QS
     _private_history_pending_before_ts = beforeTs;
     _private_history_pending_before_msg_id = beforeMsgId.trimmed();
     setPrivateHistoryLoading(true);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_PRIVATE_HISTORY_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_PRIVATE_HISTORY_REQ, payload);
 }
 
 void AppController::sendGroupReadAck(qint64 groupId, qint64 readTs)
@@ -1789,7 +1793,7 @@ void AppController::sendGroupReadAck(qint64 groupId, qint64 readTs)
     payloadObj["groupid"] = static_cast<qint64>(groupId);
     payloadObj["read_ts"] = static_cast<qint64>(readTs);
     const QByteArray payload = QJsonDocument(payloadObj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_GROUP_READ_ACK_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_GROUP_READ_ACK_REQ, payload);
 }
 
 void AppController::sendPrivateReadAck(int peerUid, qint64 readTs)
@@ -1806,7 +1810,7 @@ void AppController::sendPrivateReadAck(int peerUid, qint64 readTs)
     payloadObj["peer_uid"] = peerUid;
     payloadObj["read_ts"] = static_cast<qint64>(readTs);
     const QByteArray payload = QJsonDocument(payloadObj).toJson(QJsonDocument::Compact);
-    _gateway.tcpMgr()->slot_send_data(ReqId::ID_PRIVATE_READ_ACK_REQ, payload);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_PRIVATE_READ_ACK_REQ, payload);
 }
 
 void AppController::selectChatByUid(int uid)

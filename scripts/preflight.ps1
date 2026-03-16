@@ -149,6 +149,9 @@ foreach ($node in $clusterNodes) {
         }
         $ports.Add([int]$nodeSection[$field])
     }
+    if ($nodeSection.ContainsKey("QuicPort")) {
+        $ports.Add([int]$nodeSection["QuicPort"])
+    }
 }
 
 Write-Host "RepoRoot: $root"
