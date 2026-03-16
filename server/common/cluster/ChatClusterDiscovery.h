@@ -18,6 +18,8 @@ struct ChatNodeDescriptor {
     std::string name;
     std::string tcp_host;
     std::string tcp_port;
+    std::string quic_host;
+    std::string quic_port;
     std::string rpc_host;
     std::string rpc_port;
     bool enabled = true;
@@ -94,6 +96,12 @@ inline std::string ReadRequiredValue(const ConfigValueGetter& getter,
     return value;
 }
 
+inline std::string ReadOptionalValue(const ConfigValueGetter& getter,
+                                     const std::string& section,
+                                     const std::string& key) {
+    return getter ? TrimCopy(getter(section, key)) : "";
+}
+
 inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& getter,
                                                      const std::string& self_node_name = "") {
     if (!getter) {
@@ -116,6 +124,7 @@ inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& ge
 
     std::unordered_set<std::string> seen_names;
     std::set<std::pair<std::string, std::string>> tcp_endpoints;
+    std::set<std::pair<std::string, std::string>> quic_endpoints;
     std::set<std::pair<std::string, std::string>> rpc_endpoints;
 
     for (const auto& section : node_sections) {
@@ -123,6 +132,8 @@ inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& ge
         node.name = ReadRequiredValue(getter, section, "Name");
         node.tcp_host = ReadRequiredValue(getter, section, "TcpHost");
         node.tcp_port = ReadRequiredValue(getter, section, "TcpPort");
+        node.quic_host = ReadOptionalValue(getter, section, "QuicHost");
+        node.quic_port = ReadOptionalValue(getter, section, "QuicPort");
         node.rpc_host = ReadRequiredValue(getter, section, "RpcHost");
         node.rpc_port = ReadRequiredValue(getter, section, "RpcPort");
         node.enabled = ParseEnabledFlag(getter(section, "Enabled"));
@@ -134,6 +145,13 @@ inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& ge
         const auto tcp_endpoint = std::make_pair(node.tcp_host, node.tcp_port);
         if (!tcp_endpoints.insert(tcp_endpoint).second) {
             throw std::runtime_error("duplicate chat tcp endpoint: " + node.tcp_host + ":" + node.tcp_port);
+        }
+
+        if (!node.quic_host.empty() && !node.quic_port.empty()) {
+            const auto quic_endpoint = std::make_pair(node.quic_host, node.quic_port);
+            if (!quic_endpoints.insert(quic_endpoint).second) {
+                throw std::runtime_error("duplicate chat quic endpoint: " + node.quic_host + ":" + node.quic_port);
+            }
         }
 
         const auto rpc_endpoint = std::make_pair(node.rpc_host, node.rpc_port);
@@ -216,6 +234,7 @@ inline ChatClusterConfig LoadK8sStatefulSetChatClusterConfig(const ConfigValueGe
     const std::string namespace_name = ReadRequiredValue(getter, "Cluster", "Namespace");
     const int replicas = ParsePositiveIntOrDefault(ReadRequiredValue(getter, "Cluster", "Replicas"), 1);
     const std::string tcp_port = ReadRequiredValue(getter, "Cluster", "TcpPort");
+    const std::string quic_port = ReadOptionalValue(getter, "Cluster", "QuicPort");
     const std::string rpc_port = ReadRequiredValue(getter, "Cluster", "RpcPort");
     const std::string domain = TrimCopy(getter("Cluster", "Domain"));
     const std::string cluster_domain = domain.empty() ? "cluster.local" : domain;
@@ -226,6 +245,8 @@ inline ChatClusterConfig LoadK8sStatefulSetChatClusterConfig(const ConfigValueGe
         node.name = service_name + "-" + std::to_string(ordinal);
         node.tcp_host = node.name + "." + service_name + "." + namespace_name + ".svc." + cluster_domain;
         node.tcp_port = tcp_port;
+        node.quic_host = quic_port.empty() ? "" : node.tcp_host;
+        node.quic_port = quic_port;
         node.rpc_host = node.tcp_host;
         node.rpc_port = rpc_port;
         node.enabled = true;

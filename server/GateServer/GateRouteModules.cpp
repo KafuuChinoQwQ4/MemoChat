@@ -277,6 +277,8 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic)
         memolog::TraceContext::SetUid(std::to_string(userInfo.uid));
         root["error"] = 0;
         root["protocol_version"] = gateauthsupport::LoginProtocolVersion();
+        root["preferred_transport"] = (!route_nodes.front().quic_host.empty() && !route_nodes.front().quic_port.empty()) ? "quic" : "tcp";
+        root["fallback_transport"] = "tcp";
         root["email"] = email;
         root["uid"] = userInfo.uid;
         root["user_id"] = userInfo.user_id;
@@ -294,7 +296,17 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic)
         root["user_profile"]["email"] = userInfo.email;
         root["user_profile"]["sex"] = userInfo.sex;
         for (const auto& route_node : route_nodes) {
+            if (!route_node.quic_host.empty() && !route_node.quic_port.empty()) {
+                Json::Value quic_endpoint;
+                quic_endpoint["transport"] = "quic";
+                quic_endpoint["host"] = route_node.quic_host;
+                quic_endpoint["port"] = route_node.quic_port;
+                quic_endpoint["server_name"] = route_node.name;
+                quic_endpoint["priority"] = route_node.priority;
+                root["chat_endpoints"].append(quic_endpoint);
+            }
             Json::Value endpoint;
+            endpoint["transport"] = "tcp";
             endpoint["host"] = route_node.host;
             endpoint["port"] = route_node.port;
             endpoint["server_name"] = route_node.name;

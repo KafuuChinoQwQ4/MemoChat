@@ -34,5 +34,14 @@ for /f "usebackq delims=" %%P in (`powershell -NoProfile -ExecutionPolicy Bypass
   powershell -NoProfile -ExecutionPolicy Bypass -Command "Stop-Process -Id %%P -Force -ErrorAction SilentlyContinue" >nul 2>nul
 )
 
+for %%P in (50051 50052 8080 8090 8091 8092 8093 8190 8191 8192 8193 50055 50056 50057 50058) do (
+  for /f "tokens=5" %%I in ('netstat -ano -p TCP ^| findstr /R /C:":%%P .*LISTENING"') do (
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Stop-Process -Id %%I -Force -ErrorAction SilentlyContinue" >nul 2>nul
+  )
+  for /f "tokens=2" %%I in ('netstat -ano -p UDP ^| findstr /R /C:":%%P "') do (
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Stop-Process -Id %%I -Force -ErrorAction SilentlyContinue" >nul 2>nul
+  )
+)
+
 echo [DONE] MemoChat services stopped.
 exit /b 0

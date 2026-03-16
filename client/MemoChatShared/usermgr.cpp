@@ -1,7 +1,6 @@
 #include "usermgr.h"
 #include <QJsonArray>
 #include <algorithm>
-#include "tcpmgr.h"
 
 UserMgr::~UserMgr()
 {

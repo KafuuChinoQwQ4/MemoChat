@@ -4,16 +4,19 @@ setlocal EnableExtensions EnableDelayedExpansion
 REM Usage:
 REM   start_test_services.bat
 REM   start_test_services.bat --no-client
+REM   start_test_services.bat --enable-quic
 
 set "SCRIPT_DIR=%~dp0"
 if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 for %%I in ("%SCRIPT_DIR%\..\..") do set "ROOT=%%~fI"
 set "BACKGROUND=1"
 set "WITH_OPS=1"
+set "ENABLE_QUIC=0"
 for %%A in (%*) do (
   if /I "%%~A"=="--foreground" set "BACKGROUND=0"
   if /I "%%~A"=="--no-client" set "WITH_CLIENT=0"
   if /I "%%~A"=="--skip-ops" set "WITH_OPS=0"
+  if /I "%%~A"=="--enable-quic" set "ENABLE_QUIC=1"
 )
 
 set "SERVER_BIN_PRIMARY=%ROOT%\build-vcpkg-server\bin\Release"
@@ -36,6 +39,12 @@ for %%A in (%*) do (
   if /I "%%~A"=="--no-client" set "WITH_CLIENT=0"
 )
 
+if "%ENABLE_QUIC%"=="1" (
+  set "SERVER_BIN_PRIMARY=%ROOT%\build-vcpkg-server-msquic\bin\Release"
+  set "SERVER_BIN_FALLBACK=%ROOT%\build-vcpkg-server\bin\Release"
+  set "CLIENT_BIN=%ROOT%\build-msquic\bin\Release"
+)
+
 call :select_server_bin
 if errorlevel 1 exit /b 1
 
@@ -46,12 +55,15 @@ echo [INFO] Status exe: %STATUS_EXE%
 echo [INFO] Chat exe: %CHAT_EXE%
 echo [INFO] Client bin: %CLIENT_BIN%
 echo [INFO] Console code page: %CONSOLE_CP%
+echo [INFO] QUIC rollout: %ENABLE_QUIC%
 echo.
 
 if not exist "%GATE_EXE%" (
   echo [ERROR] Missing %GATE_EXE%
   echo [HINT] Build first with one of:
+  echo [HINT]   cmake --preset msvc2022-vcpkg-server-msquic ^&^& cmake --build --preset msvc2022-vcpkg-server-msquic-release
   echo [HINT]   cmake --preset msvc2022-vcpkg-server ^&^& cmake --build --preset msvc2022-vcpkg-server-release
+  echo [HINT]   cmake --preset msvc2022-all-msquic ^&^& cmake --build --preset msvc2022-msquic-release
   echo [HINT]   cmake --preset msvc2022-all ^&^& cmake --build --preset msvc2022-release
   exit /b 1
 )
@@ -142,6 +154,12 @@ for /L %%I in (1,1,!CHAT_NODE_COUNT!) do (
 call :prepare_service GateServer "%ROOT%\server\GateServer\config.ini" "%GATE_EXE%"
 if errorlevel 1 exit /b 1
 
+if "%ENABLE_QUIC%"=="1" (
+  set "MEMOCHAT_ENABLE_QUIC=1"
+) else (
+  set "MEMOCHAT_ENABLE_QUIC=0"
+)
+
 echo [INFO] Starting VarifyServer (Node)...
 call :launch_process "VarifyServer" "node" "server.js" "%ROOT%\server\VarifyServer" "%ARTIFACT_ROOT%\logs\manual-start\VarifyServer.out.log" "%ARTIFACT_ROOT%\logs\manual-start\VarifyServer.err.log" "%PID_ROOT%\VarifyServer.pid"
 if errorlevel 1 exit /b 1
@@ -159,6 +177,7 @@ for /L %%I in (1,1,!CHAT_NODE_COUNT!) do (
   set "NODE_NAME=!CHAT_NODE_%%I_NAME!"
   set "NODE_TCP_PORT=!CHAT_NODE_%%I_TCP_PORT!"
   set "NODE_RPC_PORT=!CHAT_NODE_%%I_RPC_PORT!"
+  set "NODE_QUIC_PORT=!CHAT_NODE_%%I_QUIC_PORT!"
   echo [INFO] Starting !NODE_NAME!...
   call :launch_process "!NODE_NAME!" "%RUN_ROOT%\!NODE_NAME!\ChatServer.exe" "--config .\config.ini" "%RUN_ROOT%\!NODE_NAME!" "%ARTIFACT_ROOT%\logs\manual-start\!NODE_NAME!.out.log" "%ARTIFACT_ROOT%\logs\manual-start\!NODE_NAME!.err.log" "%PID_ROOT%\!NODE_NAME!.pid"
   if errorlevel 1 exit /b 1
@@ -166,6 +185,9 @@ for /L %%I in (1,1,!CHAT_NODE_COUNT!) do (
   if errorlevel 1 exit /b 1
   call :wait_for_port !NODE_NAME!-RPC !NODE_RPC_PORT! 20 "%ARTIFACT_ROOT%\logs\services\!NODE_NAME!"
   if errorlevel 1 exit /b 1
+  if "%ENABLE_QUIC%"=="1" if defined NODE_QUIC_PORT (
+    call :warn_if_udp_port_closed !NODE_NAME!-QUIC !NODE_QUIC_PORT! "QUIC listener is not visible on UDP; client will fallback to TCP"
+  )
 )
 
 call :print_chat_process_count
@@ -186,7 +208,7 @@ if "%WITH_CLIENT%"=="1" (
     call :launch_process "MemoChatQml" "%CLIENT_BIN%\MemoChatQml.exe" "" "%CLIENT_BIN%" "%ARTIFACT_ROOT%\logs\manual-start\MemoChatQml.out.log" "%ARTIFACT_ROOT%\logs\manual-start\MemoChatQml.err.log" "%PID_ROOT%\MemoChatQml.pid"
   ) else (
     echo [WARN] MemoChatQml.exe not found, skip client start.
-    echo [HINT] Build client first: cmake --preset msvc2022-all ^&^& cmake --build --preset msvc2022-release --target MemoChatQml
+    echo [HINT] Build client first: cmake --preset msvc2022-all-msquic ^&^& cmake --build --preset msvc2022-msquic-release --target MemoChatQml
   )
 )
 
@@ -357,6 +379,10 @@ for /L %%I in (1,1,!CHAT_NODE_COUNT!) do (
   if errorlevel 1 exit /b 1
   call :assert_port_available !CHAT_NODE_%%I_NAME!-RPC !CHAT_NODE_%%I_RPC_PORT!
   if errorlevel 1 exit /b 1
+  if "%ENABLE_QUIC%"=="1" if defined CHAT_NODE_%%I_QUIC_PORT (
+    call :assert_udp_port_available !CHAT_NODE_%%I_NAME!-QUIC !CHAT_NODE_%%I_QUIC_PORT!
+    if errorlevel 1 exit /b 1
+  )
 )
 exit /b 0
 
@@ -374,11 +400,40 @@ if defined PORT_PID (
 )
 exit /b 0
 
+:assert_udp_port_available
+set "PORT_NAME=%~1"
+set "PORT_VALUE=%~2"
+set "PORT_PID="
+for /f "tokens=2" %%P in ('netstat -ano -p UDP ^| findstr /R /C:":%PORT_VALUE% " ') do (
+  set "PORT_PID=%%P"
+)
+if defined PORT_PID (
+  echo [ERROR] %PORT_NAME% UDP port %PORT_VALUE% is already in use by PID %PORT_PID%.
+  echo [HINT] Stop the stale process before retrying start_test_services.bat.
+  exit /b 1
+)
+exit /b 0
+
+:warn_if_udp_port_closed
+set "WARN_NAME=%~1"
+set "WARN_PORT=%~2"
+set "WARN_HINT=%~3"
+set "WARN_FOUND="
+for /f "usebackq delims=" %%L in (`netstat -ano -p UDP ^| findstr /R /C:":%WARN_PORT% "`) do (
+  set "WARN_FOUND=1"
+)
+if not defined WARN_FOUND (
+  echo [WARN] %WARN_NAME% is not bound on UDP port %WARN_PORT%.
+  if not "%WARN_HINT%"=="" echo [WARN] %WARN_HINT%
+)
+exit /b 0
+
 :prepare_service
 set "SVC_NAME=%~1"
 set "SVC_CFG=%~2"
 set "SVC_EXE=%~3"
 set "SVC_DIR=%RUN_ROOT%\%SVC_NAME%"
+set "SVC_EXE_DIR="
 
 if not exist "%SVC_CFG%" (
   echo [ERROR] Missing config: %SVC_CFG%
@@ -391,10 +446,17 @@ if not exist "%SVC_EXE%" (
 )
 
 if not exist "%SVC_DIR%" mkdir "%SVC_DIR%"
+for %%I in ("%SVC_EXE%") do set "SVC_EXE_DIR=%%~dpI"
+if "%SVC_EXE_DIR:~-1%"=="\" set "SVC_EXE_DIR=%SVC_EXE_DIR:~0,-1%"
 
 call :print_file_stamp "Source %SVC_NAME%" "%SVC_EXE%"
 copy /Y "%SVC_EXE%" "%SVC_DIR%\%~nx3" >nul
 copy /Y "%SVC_CFG%" "%SVC_DIR%\config.ini" >nul
+if defined SVC_EXE_DIR (
+  for /f "usebackq delims=" %%F in (`dir /b /a:-d "%SVC_EXE_DIR%\*.dll" 2^>nul`) do (
+    copy /Y "%SVC_EXE_DIR%\%%F" "%SVC_DIR%" >nul
+  )
+)
 call :print_file_stamp "Prepared %SVC_NAME%" "%SVC_DIR%\%~nx3"
 
 echo [INFO] Prepared %SVC_NAME% in %SVC_DIR%
@@ -406,6 +468,7 @@ for /L %%I in (1,1,32) do (
   set "CHAT_NODE_%%I_NAME="
   set "CHAT_NODE_%%I_TCP_PORT="
   set "CHAT_NODE_%%I_RPC_PORT="
+  set "CHAT_NODE_%%I_QUIC_PORT="
 )
 set "CHAT_NODE_COUNT="
 set "CHAT_NODE_NAMES="
@@ -431,8 +494,9 @@ for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass
   "  $enabledValue=if ($node.ContainsKey('Enabled')) { [string]$node['Enabled'] } else { 'true' };" ^
   "  if ($enabledValue -match '^(?i:false|0|no|off)$') { continue }" ^
   "  $name=[string]$node['Name']; $tcpPort=[string]$node['TcpPort']; $rpcPort=[string]$node['RpcPort'];" ^
+  "  $quicPort=if ($node.ContainsKey('QuicPort')) { [string]$node['QuicPort'] } else { '' };" ^
   "  if ([string]::IsNullOrWhiteSpace($name) -or [string]::IsNullOrWhiteSpace($tcpPort) -or [string]::IsNullOrWhiteSpace($rpcPort)) { throw ('incomplete node section [' + $nodeId + ']') }" ^
-  "  $enabled += [pscustomobject]@{ Name=$name; TcpPort=$tcpPort; RpcPort=$rpcPort };" ^
+  "  $enabled += [pscustomobject]@{ Name=$name; TcpPort=$tcpPort; RpcPort=$rpcPort; QuicPort=$quicPort };" ^
   "}" ^
   "if (-not $enabled) { throw 'no enabled chat nodes found' }" ^
   "Write-Output ('set CHAT_NODE_COUNT=' + $enabled.Count);" ^
@@ -442,6 +506,7 @@ for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass
   "  Write-Output ('set CHAT_NODE_' + $index + '_NAME=' + $node.Name);" ^
   "  Write-Output ('set CHAT_NODE_' + $index + '_TCP_PORT=' + $node.TcpPort);" ^
   "  Write-Output ('set CHAT_NODE_' + $index + '_RPC_PORT=' + $node.RpcPort);" ^
+  "  Write-Output ('set CHAT_NODE_' + $index + '_QUIC_PORT=' + $node.QuicPort);" ^
   "  $index++;" ^
   "}"`) do %%I
 if not defined CHAT_NODE_COUNT (

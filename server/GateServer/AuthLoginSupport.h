@@ -14,6 +14,8 @@ struct ChatRouteNode {
     std::string name;
     std::string host;
     std::string port;
+    std::string quic_host;
+    std::string quic_port;
     int online_count = 0;
     int priority = 0;
 };
@@ -21,6 +23,7 @@ struct ChatRouteNode {
 const char* MinClientVersion();
 int LoginProtocolVersion();
 int64_t NowMs();
+bool IsQuicRolloutEnabled();
 bool IsClientVersionAllowed(const std::string& clientVer, const std::string& minVer);
 std::string GetChatAuthSecret();
 int GetChatTicketTtlSec();

@@ -4,8 +4,8 @@
 #include "LocalFilePickerService.h"
 #include "MediaUploadService.h"
 #include "MessageContentCodec.h"
+#include "IChatTransport.h"
 #include "httpmgr.h"
-#include "tcpmgr.h"
 #include "usermgr.h"
 
 #include <QDateTime>
@@ -40,7 +40,7 @@ void AppSessionCoordinator::login(const QString& email, const QString& password)
     _app._chat_connect_finished_ms = 0;
     _app._chat_login_timeout_timer.stop();
     _app._ignore_next_login_disconnect = true;
-    _app._gateway.tcpMgr()->CloseConnection();
+    _app._gateway.chatTransport()->CloseConnection();
     _app.setBusy(true);
     _app.setTip("", false);
     _app._auth_controller.sendLogin(email, password);
@@ -320,7 +320,7 @@ void GroupCoordinator::createGroup(const QString& name, const QVariantList& memb
     obj["name"] = trimmedName;
     obj["member_limit"] = 200;
     obj["member_user_ids"] = memberUserIds;
-    _app._gateway.tcpMgr()->slot_send_data(ReqId::ID_CREATE_GROUP_REQ, QJsonDocument(obj).toJson(QJsonDocument::Compact));
+    _app._gateway.chatTransport()->slot_send_data(ReqId::ID_CREATE_GROUP_REQ, QJsonDocument(obj).toJson(QJsonDocument::Compact));
     _app.setGroupStatus("正在创建群聊...", false);
 }
 
@@ -347,7 +347,7 @@ void GroupCoordinator::reviewGroupApply(qint64 applyId, bool agree)
     obj["fromuid"] = selfInfo->_uid;
     obj["apply_id"] = applyId;
     obj["agree"] = agree;
-    _app._gateway.tcpMgr()->slot_send_data(ReqId::ID_REVIEW_GROUP_APPLY_REQ, QJsonDocument(obj).toJson(QJsonDocument::Compact));
+    _app._gateway.chatTransport()->slot_send_data(ReqId::ID_REVIEW_GROUP_APPLY_REQ, QJsonDocument(obj).toJson(QJsonDocument::Compact));
     _app.setGroupStatus("审核请求已发送", false);
 }
 
@@ -412,7 +412,7 @@ void GroupCoordinator::quitCurrentGroup()
     QJsonObject obj;
     obj["fromuid"] = selfInfo->_uid;
     obj["groupid"] = static_cast<qint64>(_app._current_group_id);
-    _app._gateway.tcpMgr()->slot_send_data(ReqId::ID_QUIT_GROUP_REQ, QJsonDocument(obj).toJson(QJsonDocument::Compact));
+    _app._gateway.chatTransport()->slot_send_data(ReqId::ID_QUIT_GROUP_REQ, QJsonDocument(obj).toJson(QJsonDocument::Compact));
 }
 
 MediaCoordinator::MediaCoordinator(AppController& controller)

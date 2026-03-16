@@ -1,6 +1,6 @@
 #include "ChatController.h"
 #include "ClientGateway.h"
-#include "tcpmgr.h"
+#include "IChatTransport.h"
 #include "global.h"
 #include <QUuid>
 
@@ -12,7 +12,7 @@ ChatController::ChatController(ClientGateway *gateway)
 bool ChatController::dispatchChatText(const OutgoingChatPacket &packet, QString *errorText) const
 {
     const auto sendPayload = [this](const QByteArray &payload) {
-        _gateway->tcpMgr()->slot_send_data(ReqId::ID_TEXT_CHAT_MSG_REQ, payload);
+        _gateway->chatTransport()->slot_send_data(ReqId::ID_TEXT_CHAT_MSG_REQ, payload);
     };
     return ChatDispatchService::dispatchTextPayload(packet, sendPayload, errorText);
 }

@@ -3,8 +3,11 @@ cmake_minimum_required(VERSION 3.16)
 project(MemoChatServer LANGUAGES CXX)
 
 if(MSVC)
-    # Match vcpkg x64-windows-static triplet (MT/MTd) to avoid runtime mismatch at link time.
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    if(DEFINED VCPKG_TARGET_TRIPLET AND VCPKG_TARGET_TRIPLET MATCHES "static")
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    else()
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    endif()
 endif()
 
 find_package(Boost REQUIRED COMPONENTS filesystem)
@@ -20,6 +23,7 @@ find_package(CppKafka CONFIG QUIET)
 find_package(cppkafka CONFIG QUIET)
 find_package(unofficial-librabbitmq CONFIG QUIET)
 find_package(rabbitmq-c CONFIG QUIET)
+find_package(msquic CONFIG QUIET)
 
 if(TARGET spdlog::spdlog)
     set(MEMOCHAT_SPDLOG_TARGET spdlog::spdlog)
@@ -166,6 +170,13 @@ target_link_libraries(memochat_server_deps INTERFACE
     ${MEMOCHAT_SPDLOG_TARGET}
 )
 target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_KAFKA=${MEMOCHAT_ENABLE_KAFKA} MEMOCHAT_ENABLE_RABBITMQ=${MEMOCHAT_ENABLE_RABBITMQ})
+
+if(TARGET msquic)
+    target_link_libraries(memochat_server_deps INTERFACE msquic)
+    target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_MSQUIC=1)
+else()
+    target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_MSQUIC=0)
+endif()
 
 if(MEMOCHAT_ENABLE_KAFKA)
     target_compile_definitions(memochat_server_deps INTERFACE CPPKAFKA_STATIC)

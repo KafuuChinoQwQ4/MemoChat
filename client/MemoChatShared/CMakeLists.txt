@@ -16,10 +16,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets Network)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets Network)
+find_package(msquic CONFIG QUIET)
 
 set(CORE_SOURCES
+    ChatMessageDispatcher.cpp
     global.cpp
     httpmgr.cpp
+    QuicChatTransport.cpp
     TelemetryUtils.cpp
     tcpmgr.cpp
     userdata.cpp
@@ -27,8 +30,11 @@ set(CORE_SOURCES
 )
 
 set(CORE_HEADERS
+    ChatMessageDispatcher.h
     global.h
     httpmgr.h
+    IChatTransport.h
+    QuicChatTransport.h
     TelemetryUtils.h
     tcpmgr.h
     userdata.h
@@ -44,3 +50,10 @@ target_link_libraries(MemoChatCore PUBLIC
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Network
 )
+
+if(TARGET msquic)
+    target_link_libraries(MemoChatCore PUBLIC msquic)
+    target_compile_definitions(MemoChatCore PUBLIC MEMOCHAT_HAS_MSQUIC=1)
+else()
+    target_compile_definitions(MemoChatCore PUBLIC MEMOCHAT_HAS_MSQUIC=0)
+endif()

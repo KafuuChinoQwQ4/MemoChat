@@ -9,6 +9,7 @@
 #include "LogicSystem.h"
 #include "RedisMgr.h"
 #include "ConfigMgr.h"
+#include "UserMgr.h"
 
 CSession::CSession(boost::asio::io_context& io_context, CServer* server):
 	_socket(io_context), _server(server), _b_close(false),_b_head_parse(false), _user_uid(0){
@@ -87,7 +88,9 @@ void CSession::Send(char* msg, short max_length, short msgid) {
 
 void CSession::Close() {
 	std::lock_guard<std::mutex> lock(_session_mtx);
-	_socket.close();
+	if (_socket.is_open()) {
+		_socket.close();
+	}
 	_b_close = true;
 }
 
@@ -302,7 +305,12 @@ void CSession::DealExceptionSession()
 	auto lock_key = LOCK_PREFIX + uid_str;
 	auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, ACQUIRE_TIME_OUT);
 	Defer defer([identifier, lock_key, self, this]() {
-		_server->ClearSession(_session_id);
+		if (_server != nullptr) {
+			_server->ClearSession(_session_id);
+		}
+		else if (_user_uid > 0) {
+			UserMgr::GetInstance()->RmvUserSession(_user_uid, _session_id);
+		}
 		RedisMgr::GetInstance()->releaseLock(lock_key, identifier);
 		});
 

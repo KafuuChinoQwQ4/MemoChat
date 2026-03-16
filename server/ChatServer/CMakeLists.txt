@@ -5,6 +5,7 @@ add_executable(ChatServer
     ChatTaskEnvelope.cpp
     ChatGrpcClient.cpp
     ChatHandlerRegistrars.cpp
+    ChatIngressCoordinator.cpp
     ChatOutboxService.cpp
     ChatRelationService.cpp
     ChatRuntime.cpp
@@ -19,6 +20,8 @@ add_executable(ChatServer
     GroupMessageService.cpp
     MessageDeliveryService.cpp
     PrivateMessageService.cpp
+    QuicSession.cpp
+    QuicChatServer.cpp
     TaskDispatcher.cpp
     ChatServer.cpp
     ChatServiceImpl.cpp
@@ -44,6 +47,7 @@ add_executable(ChatServer
     IAsyncTaskBus.h
     ChatGrpcClient.h
     ChatHandlerRegistrars.h
+    ChatIngressCoordinator.h
     ChatOutboxService.h
     ChatRelationService.h
     ChatRuntime.h
@@ -52,6 +56,8 @@ add_executable(ChatServer
     GroupMessageService.h
     MessageDeliveryService.h
     PrivateMessageService.h
+    QuicSession.h
+    QuicChatServer.h
     ChatServiceImpl.h
     ConfigMgr.h
     const.h
