@@ -190,6 +190,10 @@ if(WIN32)
     target_link_libraries(memochat_server_deps INTERFACE bcrypt ws2_32 crypt32 advapi32 iphlpapi)
 endif()
 
+# Fix: Override Qt's -external:W0 which excludes system include directories
+# This ensures MSVC standard library headers are found
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /external:I \"D:/VS2026stable/VC/Tools/MSVC/14.50.35717/ATLMFC/include\" /external:I \"D:/VS2026stable/VC/Tools/MSVC/14.50.35717/include\" /external:W0 /D_WIN32_WINNT=0x0601")
+
 function(memochat_configure_server_target target_name)
     target_link_libraries(${target_name} PRIVATE memochat_server_deps)
     target_include_directories(${target_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
