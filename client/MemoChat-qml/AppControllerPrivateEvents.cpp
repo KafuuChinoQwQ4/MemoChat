@@ -416,6 +416,20 @@ void AppController::onDialogListRsp(QJsonObject payload)
             selectChatIndex(0);
         }
     }
+
+    // 登录后首次拉取对话列表时，自动拉取有未读消息的对话
+    if (bootstrappingDialog) {
+        for (const auto &dialog : merged) {
+            if (!dialog) {
+                continue;
+            }
+            // 私聊且有未读消息
+            if (dialog->_uid > 0 && dialog->_unread_count > 0) {
+                // 拉取最新消息，before_ts = 0 表示拉取最新消息
+                requestPrivateHistory(dialog->_uid, 0, QString());
+            }
+        }
+    }
 }
 
 void AppController::onPrivateHistoryRsp(QJsonObject payload)
