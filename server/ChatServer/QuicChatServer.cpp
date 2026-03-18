@@ -91,7 +91,15 @@ struct QuicChatServer::Impl {
     static void closeConnectionHandles(Impl* impl, ConnectionContext* ctx);
     static void dispatchFrames(StreamContext* stream_context);
 };
+#else
+struct QuicChatServer::Impl {
+    // Stub implementation when QUIC is disabled
+    bool ensureInitialized(QuicChatServer* owner, std::string* error);
+    void shutdownHandles();
+};
+#endif
 
+#if MEMOCHAT_ENABLE_MSQUIC
 bool QuicChatServer::Impl::ensureInitialized(QuicChatServer* owner, std::string* error)
 {
     (void)owner;
@@ -173,7 +181,9 @@ bool QuicChatServer::Impl::ensureInitialized(QuicChatServer* owner, std::string*
 
     return true;
 }
+#endif
 
+#if MEMOCHAT_ENABLE_MSQUIC
 void QuicChatServer::Impl::shutdownHandles()
 {
     if (listener != nullptr && api != nullptr) {
@@ -194,7 +204,9 @@ void QuicChatServer::Impl::shutdownHandles()
         api = nullptr;
     }
 }
+#endif
 
+#if MEMOCHAT_ENABLE_MSQUIC
 void QuicChatServer::Impl::closeConnectionHandles(Impl* impl, ConnectionContext* ctx)
 {
     if (ctx == nullptr || impl == nullptr || impl->api == nullptr) {
@@ -209,7 +221,9 @@ void QuicChatServer::Impl::closeConnectionHandles(Impl* impl, ConnectionContext*
         ctx->handle = nullptr;
     }
 }
+#endif
 
+#if MEMOCHAT_ENABLE_MSQUIC
 void QuicChatServer::Impl::dispatchFrames(StreamContext* stream_context)
 {
     if (stream_context == nullptr || stream_context->connection == nullptr || !stream_context->connection->session) {
@@ -251,7 +265,9 @@ void QuicChatServer::Impl::dispatchFrames(StreamContext* stream_context)
         stream_context->connection->session->HandleInboundMessage(stream_context->msg_id, payload);
     }
 }
+#endif
 
+#if MEMOCHAT_ENABLE_MSQUIC
 QUIC_STATUS QUIC_API QuicChatServer::Impl::ListenerCallback(HQUIC, void* context, QUIC_LISTENER_EVENT* event)
 {
     auto* owner = static_cast<QuicChatServer*>(context);
@@ -315,7 +331,9 @@ QUIC_STATUS QUIC_API QuicChatServer::Impl::ListenerCallback(HQUIC, void* context
 
     return QUIC_STATUS_SUCCESS;
 }
+#endif
 
+#if MEMOCHAT_ENABLE_MSQUIC
 QUIC_STATUS QUIC_API QuicChatServer::Impl::ConnectionCallback(HQUIC connection, void* context, QUIC_CONNECTION_EVENT* event)
 {
     auto* ctx = static_cast<ConnectionContext*>(context);
@@ -355,7 +373,9 @@ QUIC_STATUS QUIC_API QuicChatServer::Impl::ConnectionCallback(HQUIC connection, 
         return QUIC_STATUS_SUCCESS;
     }
 }
+#endif
 
+#if MEMOCHAT_ENABLE_MSQUIC
 QUIC_STATUS QUIC_API QuicChatServer::Impl::StreamCallback(HQUIC stream, void* context, QUIC_STREAM_EVENT* event)
 {
     auto* stream_context = static_cast<StreamContext*>(context);
@@ -401,6 +421,9 @@ QuicChatServer::QuicChatServer(boost::asio::io_context& io_context)
 QuicChatServer::~QuicChatServer()
 {
     Stop();
+#if MEMOCHAT_ENABLE_MSQUIC
+    _impl.reset();
+#endif
 }
 
 bool QuicChatServer::Start(const std::string& host, const std::string& port, std::string* error)
@@ -464,24 +487,35 @@ bool QuicChatServer::Start(const std::string& host, const std::string& port, std
 
 void QuicChatServer::Stop()
 {
+#if MEMOCHAT_ENABLE_MSQUIC
     if (!_running && _impl == nullptr) {
         return;
     }
     closeAllSessions();
-#if MEMOCHAT_ENABLE_MSQUIC
     if (_impl != nullptr) {
         _impl->shutdownHandles();
     }
+#else
+    if (!_running) {
+        return;
+    }
+    closeAllSessions();
 #endif
     _running = false;
+#if MEMOCHAT_ENABLE_MSQUIC
     memolog::LogInfo("quic.ingress.stop",
         "ChatServer QUIC ingress stopped",
         {{"host", _host}, {"port", _port}});
+#endif
 }
 
 bool QuicChatServer::isRunning() const
 {
+#if MEMOCHAT_ENABLE_MSQUIC
     return _running;
+#else
+    return false;
+#endif
 }
 
 std::string QuicChatServer::listenHost() const

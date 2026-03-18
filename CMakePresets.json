@@ -8,7 +8,7 @@
   "configurePresets": [
     {
       "name": "msvc2022-all",
-      "displayName": "MSVC2022 All (vcpkg)",
+      "displayName": "MSVC2022 All (vcpkg dynamic)",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build",
       "environment": {
@@ -28,7 +28,7 @@
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_MAKE_PROGRAM": "D:/ninja-win/ninja.exe",
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
         "VCPKG_HOST_TRIPLET": "x64-windows",
         "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed",
         "VCPKG_MANIFEST_FEATURES": "server",
@@ -37,7 +37,7 @@
     },
     {
       "name": "msvc2022-vcpkg-server",
-      "displayName": "MSVC2022 Server (vcpkg static)",
+      "displayName": "MSVC2022 Server (vcpkg dynamic)",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build-vcpkg-server",
       "environment": {
@@ -57,7 +57,7 @@
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_MAKE_PROGRAM": "D:/ninja-win/ninja.exe",
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
         "VCPKG_HOST_TRIPLET": "x64-windows",
         "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed",
         "CMAKE_CXX_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe"
@@ -106,7 +106,9 @@
         "VCPKG_DEFAULT_BINARY_CACHE": "D:/vcpkg/bincache",
         "HTTP_PROXY": "",
         "HTTPS_PROXY": "",
-        "NO_PROXY": ""
+        "NO_PROXY": "",
+        "CMAKE_CXX_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe",
+        "CMAKE_C_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe"
       },
       "cacheVariables": {
         "BUILD_CLIENT": "OFF",
@@ -116,15 +118,14 @@
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_TARGET_TRIPLET": "x64-windows",
         "VCPKG_HOST_TRIPLET": "x64-windows",
-        "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed",
-        "CMAKE_CXX_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe"
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed"
       }
     }
   ],
   "buildPresets": [
     {
       "name": "msvc2022-release",
-      "displayName": "Build Release (Client + Server via vcpkg)",
+      "displayName": "Build Release (Client + Server via vcpkg dynamic)",
       "configurePreset": "msvc2022-all",
       "configuration": "Release",
       "jobs": 8
@@ -141,7 +142,7 @@
     },
     {
       "name": "msvc2022-vcpkg-server-release",
-      "displayName": "Build Release (Server via vcpkg)",
+      "displayName": "Build Release (Server via vcpkg dynamic)",
       "configurePreset": "msvc2022-vcpkg-server",
       "configuration": "Release",
       "jobs": 8

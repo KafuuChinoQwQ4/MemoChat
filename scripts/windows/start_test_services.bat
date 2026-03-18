@@ -520,7 +520,8 @@ set "BUILD_BIN="
 set "GATE_EXE="
 set "STATUS_EXE="
 set "CHAT_EXE="
-for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\select_server_bins.ps1" -PrimaryDir "%SERVER_BIN_PRIMARY%" -FallbackDir "%SERVER_BIN_FALLBACK%"`) do (
+set "MEMOOPS_DIR=%ROOT%\Memo_ops\runtime\services"
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\select_server_bins.ps1" -PrimaryDir "%SERVER_BIN_PRIMARY%" -FallbackDir "%SERVER_BIN_FALLBACK%" -MemoOpsDir "%MEMOOPS_DIR%"`) do (
   %%I
 )
 if not defined GATE_EXE (

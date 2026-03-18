@@ -105,30 +105,53 @@ OnlineRouteDecision ResolveOnlineRouteLocal(int uid) {
     }
 
     const auto self_name = ConfigMgr::Inst()["SelfServer"]["Name"];
+    const auto uid_str = std::to_string(uid);
+
+    // 首先检查本地 UserMgr 中是否有会话
     auto session = UserMgr::GetInstance()->GetSession(uid);
+    memolog::LogInfo("chat.private.route.debug", "resolve online route start",
+        {{"uid", uid_str}, {"self_server", self_name},
+         {"local_session_found", session ? "true" : "false"}});
+
     if (session) {
         route.kind = OnlineRouteKind::Local;
         route.session = session;
         route.redis_server = self_name;
         route.local_session_found = true;
         RepairOnlineRouteStateLocal(uid, session, self_name);
+        memolog::LogInfo("chat.private.route.debug", "resolved to local session",
+            {{"uid", uid_str}, {"self_server", self_name}});
         return route;
     }
 
-    const auto uid_str = std::to_string(uid);
+    // 检查 Redis 中的用户在线状态
     std::string redis_server;
-    if (!RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, redis_server) || redis_server.empty()) {
+    bool redis_has_key = RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, redis_server);
+    memolog::LogInfo("chat.private.route.debug", "checking redis for online status",
+        {{"uid", uid_str}, {"redis_key_found", redis_has_key ? "true" : "false"},
+         {"redis_server", redis_server}});
+
+    if (!redis_has_key || redis_server.empty()) {
+        // 尝试从 SERVER_ONLINE_USERS_SET 中查找
         redis_server = ResolveServerFromOnlineSetsLocal(uid_str);
+        memolog::LogInfo("chat.private.route.debug", "checked online sets",
+            {{"uid", uid_str}, {"found_server", redis_server}});
         if (redis_server.empty()) {
+            memolog::LogInfo("chat.private.route.debug", "user not found in redis",
+                {{"uid", uid_str}});
             return route;
         }
     }
+
     route.redis_server = redis_server;
     if (redis_server != self_name) {
         route.kind = OnlineRouteKind::Remote;
+        memolog::LogInfo("chat.private.route.debug", "resolved to remote server",
+            {{"uid", uid_str}, {"target_server", redis_server}});
         return route;
     }
 
+    // 如果 Redis 中记录的是当前服务器，但本地没有会话，说明状态过期
     std::string reloaded_server;
     if (RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, reloaded_server) && !reloaded_server.empty()) {
         route.redis_server = reloaded_server;
@@ -399,11 +422,15 @@ void PrivateMessageService::HandleForwardPrivateMessage(const std::shared_ptr<CS
     }
 
     std::shared_ptr<PrivateMessageInfo> source_msg;
-    if (!((MongoMgr::GetInstance()->Enabled() &&
-        MongoMgr::GetInstance()->GetPrivateMessageByMsgId(source_msg_id, source_msg) && source_msg) ||
-        (PostgresMgr::GetInstance()->GetPrivateMessageByMsgId(source_msg_id, source_msg) && source_msg))) {
-        rtvalue["error"] = ErrorCodes::GroupNotFound;
-        return;
+    bool mongo_success = false;
+    if (MongoMgr::GetInstance()->Enabled()) {
+        mongo_success = MongoMgr::GetInstance()->GetPrivateMessageByMsgId(source_msg_id, source_msg) && source_msg;
+    }
+    if (!mongo_success) {
+        if (!(PostgresMgr::GetInstance()->GetPrivateMessageByMsgId(source_msg_id, source_msg) && source_msg)) {
+            rtvalue["error"] = ErrorCodes::GroupNotFound;
+            return;
+        }
     }
 
     const int conv_uid_min = std::min(from_uid, peer_uid);
@@ -641,16 +668,19 @@ void PrivateMessageService::HandlePrivateHistory(const std::shared_ptr<CSession>
         rtvalue["error"] = ErrorCodes::Error_Json;
         return;
     }
-    if (!PostgresMgr::GetInstance()->IsFriend(uid, peer_uid)) {
-        rtvalue["error"] = ErrorCodes::UidInvalid;
-        return;
-    }
 
     std::vector<std::shared_ptr<PrivateMessageInfo>> messages;
     bool has_more = false;
-    if (!((MongoMgr::GetInstance()->Enabled() &&
-        MongoMgr::GetInstance()->GetPrivateHistory(uid, peer_uid, before_ts, before_msg_id, limit, messages, has_more)) ||
-        PostgresMgr::GetInstance()->GetPrivateHistory(uid, peer_uid, before_ts, before_msg_id, limit, messages, has_more))) {
+    bool mongo_success = false;
+    bool pg_success = false;
+
+    if (MongoMgr::GetInstance()->Enabled()) {
+        mongo_success = MongoMgr::GetInstance()->GetPrivateHistory(uid, peer_uid, before_ts, before_msg_id, limit, messages, has_more);
+    }
+    if (!mongo_success || messages.empty()) {
+        pg_success = PostgresMgr::GetInstance()->GetPrivateHistory(uid, peer_uid, before_ts, before_msg_id, limit, messages, has_more);
+    }
+    if (!mongo_success && !pg_success) {
         rtvalue["error"] = ErrorCodes::RPCFailed;
         return;
     }

@@ -7,6 +7,11 @@
 
 #if MEMOCHAT_HAS_MSQUIC
 #include <msquic.h>
+
+struct QuicChatTransport::SendContext {
+    QByteArray bytes;
+    QUIC_BUFFER buffer{};
+};
 #endif
 
 namespace {
@@ -188,11 +193,6 @@ void QuicChatTransport::slot_send_data(ReqId reqId, QByteArray data)
 }
 
 #if MEMOCHAT_HAS_MSQUIC
-struct QuicChatTransport::SendContext {
-    QByteArray bytes;
-    QUIC_BUFFER buffer{};
-};
-
 bool QuicChatTransport::ensureQuicReady(QString *errorText)
 {
     if (_api != nullptr && _registration != nullptr && _configuration != nullptr) {

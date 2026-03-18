@@ -193,6 +193,12 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, s
         RedisMgr::GetInstance()->Set(USERIPPREFIX + uid_str, server_name);
         UserMgr::GetInstance()->SetUserSession(uid, session);
         RepairOnlineRouteStateLocal(uid, session, server_name);
+
+        // 验证 Redis 状态是否正确设置
+        std::string verify_server;
+        RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, verify_server);
+        memolog::LogInfo("chat.login.redis_verify", "verified redis online status",
+            {{"uid", uid_str}, {"expected_server", server_name}, {"actual_server", verify_server}});
     }
 
     const auto session_attach_ms = NowMsLocal() - attach_start_ms;
@@ -253,6 +259,36 @@ void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>
 
 void ChatSessionService::HandleHeartbeat(const std::shared_ptr<CSession>& session, short, const std::string&)
 {
+    // 更新会话的心跳时间戳
+    session->UpdateHeartbeat();
+
+    // 获取当前登录的用户 ID
+    const auto uid = session->GetUserId();
+    if (uid > 0) {
+        const auto uid_str = std::to_string(uid);
+        const auto self_name = ConfigMgr::Inst()["SelfServer"]["Name"];
+
+        // 检查 UserMgr 中是否已经有正确的会话映射
+        auto existing_session = UserMgr::GetInstance()->GetSession(uid);
+        if (!existing_session || existing_session.get() != session.get()) {
+            // 修复 Redis 在线状态，确保跨服务器查询时能找到用户
+            RedisMgr::GetInstance()->Set(USERIPPREFIX + uid_str, self_name);
+            RedisMgr::GetInstance()->Set(USER_SESSION_PREFIX + uid_str, session->GetSessionId());
+            RedisMgr::GetInstance()->SAdd(std::string(SERVER_ONLINE_USERS_PREFIX) + self_name, uid_str);
+
+            // 修复本地 UserMgr 会话映射
+            UserMgr::GetInstance()->SetUserSession(uid, session);
+
+            memolog::LogInfo("chat.heartbeat.session_repair", "repaired session mapping",
+                {{"uid", uid_str}, {"session_id", session->GetSessionId()}});
+        } else {
+            // 仅刷新 Redis 在线状态
+            RedisMgr::GetInstance()->Set(USERIPPREFIX + uid_str, self_name);
+            RedisMgr::GetInstance()->Set(USER_SESSION_PREFIX + uid_str, session->GetSessionId());
+            RedisMgr::GetInstance()->SAdd(std::string(SERVER_ONLINE_USERS_PREFIX) + self_name, uid_str);
+        }
+    }
+
     Json::Value rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     session->Send(rtvalue.toStyledString(), ID_HEARTBEAT_RSP);

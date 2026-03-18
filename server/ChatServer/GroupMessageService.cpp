@@ -557,9 +557,16 @@ void GroupMessageService::HandleGroupHistory(const std::shared_ptr<CSession>& se
 
     std::vector<std::shared_ptr<GroupMessageInfo>> msgs;
     bool has_more = false;
-    if (!((MongoMgr::GetInstance()->Enabled() &&
-        MongoMgr::GetInstance()->GetGroupHistory(group_id, before_ts, before_seq, limit, msgs, has_more)) ||
-        PostgresMgr::GetInstance()->GetGroupHistory(group_id, before_ts, before_seq, limit, msgs, has_more))) {
+    bool mongo_success = false;
+    bool pg_success = false;
+
+    if (MongoMgr::GetInstance()->Enabled()) {
+        mongo_success = MongoMgr::GetInstance()->GetGroupHistory(group_id, before_ts, before_seq, limit, msgs, has_more);
+    }
+    if (!mongo_success || msgs.empty()) {
+        pg_success = PostgresMgr::GetInstance()->GetGroupHistory(group_id, before_ts, before_seq, limit, msgs, has_more);
+    }
+    if (!mongo_success && !pg_success) {
         rtvalue["error"] = ErrorCodes::RPCFailed;
         return;
     }
@@ -786,11 +793,15 @@ void GroupMessageService::HandleForwardGroupMessage(const std::shared_ptr<CSessi
     }
 
     std::shared_ptr<GroupMessageInfo> source_msg;
-    if (!((MongoMgr::GetInstance()->Enabled() &&
-        MongoMgr::GetInstance()->GetGroupMessageByMsgId(group_id, source_msg_id, source_msg) && source_msg) ||
-        (PostgresMgr::GetInstance()->GetGroupMessageByMsgId(group_id, source_msg_id, source_msg) && source_msg))) {
-        rtvalue["error"] = ErrorCodes::GroupNotFound;
-        return;
+    bool mongo_success = false;
+    if (MongoMgr::GetInstance()->Enabled()) {
+        mongo_success = MongoMgr::GetInstance()->GetGroupMessageByMsgId(group_id, source_msg_id, source_msg) && source_msg;
+    }
+    if (!mongo_success) {
+        if (!(PostgresMgr::GetInstance()->GetGroupMessageByMsgId(group_id, source_msg_id, source_msg) && source_msg)) {
+            rtvalue["error"] = ErrorCodes::GroupNotFound;
+            return;
+        }
     }
 
     const int64_t now_ms = NowMsGroupLocal();
