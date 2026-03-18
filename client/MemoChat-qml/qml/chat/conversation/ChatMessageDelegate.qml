@@ -120,6 +120,9 @@ Item {
                     property bool loadFailed: false
                     source: loadFailed ? root.defaultAvatarSource : baseSource
                     fillMode: Image.PreserveAspectCrop
+                    // 头像优化：启用缓存和异步加载
+                    cache: true
+                    asynchronous: true
                     onBaseSourceChanged: loadFailed = false
                     onStatusChanged: {
                         if (status === Image.Error) {
@@ -153,6 +156,9 @@ Item {
                     property bool loadFailed: false
                     source: loadFailed ? root.defaultAvatarSource : baseSource
                     fillMode: Image.PreserveAspectCrop
+                    // 头像优化：启用缓存和异步加载
+                    cache: true
+                    asynchronous: true
                     onBaseSourceChanged: loadFailed = false
                     onStatusChanged: {
                         if (status === Image.Error) {

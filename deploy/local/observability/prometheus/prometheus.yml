@@ -2,6 +2,11 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+remote_write:
+  - url: http://memochat-influxdb:8086/api/v1/write
+    headers:
+      X-Organization-Id: memochat
+
 scrape_configs:
   - job_name: prometheus
     static_configs:

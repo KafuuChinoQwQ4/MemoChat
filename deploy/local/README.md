@@ -18,8 +18,11 @@ This folder holds the local Docker dependencies and init payloads used by MemoCh
 - `compose/livekit.yml`
   - LiveKit `7880`
   - TURN `3478`
+- `compose/nginx-lb.yml`
+  - Nginx LB `80` (HTTP), `8090-8093` (TCP Stream)
 - `compose/observability.yml`
-  - Prometheus `9090`
+  - Prometheus `9090` (短期存储)
+  - InfluxDB `8086` (长期存储)
   - Grafana `3000`
   - Loki `3100`
   - Tempo `3200`
@@ -33,9 +36,11 @@ From the repository root:
 
 ```powershell
 scripts\windows\start_windows_exporter.ps1
+docker network create memochat-net 2>$null
 docker compose -f deploy/local/compose/datastores.yml up -d
 docker compose -f deploy/local/compose/kafka.yml up -d
 docker compose -f deploy/local/compose/rabbitmq.yml up -d
+docker compose -f deploy/local/compose/nginx-lb.yml up -d
 docker compose -f deploy/local/compose/observability.yml up -d
 ```
 

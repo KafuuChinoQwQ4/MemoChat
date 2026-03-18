@@ -11,9 +11,33 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --web.enable-lifecycle
+      - --storage.tsdb.retention.time=7d
+      - --remote.write.url=http://influxdb:8086/api/v1/write
+      - --remote.write.header=X-Organization-Id:memochat
     volumes:
       - ../observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - D:/docker-data/memochat/observability/prometheus:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - influxdb
+
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: memochat-influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: adminadmin
+      DOCKER_INFLUXDB_INIT_ORG: memochat
+      DOCKER_INFLUXDB_INIT_BUCKET: metrics
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: my-super-secret-admin-token
+    volumes:
+      - D:/docker-data/memochat/observability/influxdb:/var/lib/influxdb2
+      - D:/docker-data/memochat/observability/influxdb/config:/etc/influxdb2
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

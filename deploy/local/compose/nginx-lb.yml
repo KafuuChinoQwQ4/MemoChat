@@ -1,0 +1,141 @@
+services:
+  nginx-lb:
+    image: memochat/nginx-lb:latest
+    container_name: memochat-nginx-lb
+    build:
+      context: ../..
+      dockerfile: deploy/images/Dockerfile
+    ports:
+      - "80:80"
+      - "8090:8090"
+      - "8091:8091"
+      - "8092:8092"
+      - "8093:8093"
+    environment:
+      - GATE_SERVER_1=gate-server-1:8080
+      - GATE_SERVER_2=gate-server-2:8080
+      - CHAT_SERVER_1=chat-server-1:8090
+      - CHAT_SERVER_2=chat-server-2:8091
+      - CHAT_SERVER_3=chat-server-3:8092
+      - CHAT_SERVER_4=chat-server-4:8093
+    networks:
+      - memochat-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  gate-server-1:
+    image: memochat/gate-server:latest
+    container_name: memochat-gate-1
+    environment:
+      - GATESERVER_PORT=8080
+      - CLUSTER_NODES=chatserver1,chatserver2,chatserver3,chatserver4
+      - REDIS_HOST=memochat-redis
+      - POSTGRES_HOST=memochat-postgres
+    networks:
+      - memochat-net
+    depends_on:
+      memochat-redis:
+        condition: service_started
+      memochat-postgres:
+        condition: service_started
+
+  gate-server-2:
+    image: memochat/gate-server:latest
+    container_name: memochat-gate-2
+    environment:
+      - GATESERVER_PORT=8080
+      - CLUSTER_NODES=chatserver1,chatserver2,chatserver3,chatserver4
+      - REDIS_HOST=memochat-redis
+      - POSTGRES_HOST=memochat-postgres
+    networks:
+      - memochat-net
+    depends_on:
+      memochat-redis:
+        condition: service_started
+      memochat-postgres:
+        condition: service_started
+
+  chat-server-1:
+    image: memochat/chat-server:latest
+    container_name: memochat-chat-1
+    environment:
+      - SERVER_NAME=chatserver1
+      - TCP_PORT=8090
+      - QUIC_PORT=8190
+      - RPC_PORT=50055
+      - CLUSTER_NODES=chatserver1,chatserver2,chatserver3,chatserver4
+      - REDIS_HOST=memochat-redis
+      - POSTGRES_HOST=memochat-postgres
+    networks:
+      - memochat-net
+    depends_on:
+      memochat-redis:
+        condition: service_started
+      memochat-postgres:
+        condition: service_started
+
+  chat-server-2:
+    image: memochat/chat-server:latest
+    container_name: memochat-chat-2
+    environment:
+      - SERVER_NAME=chatserver2
+      - TCP_PORT=8091
+      - QUIC_PORT=8191
+      - RPC_PORT=50056
+      - CLUSTER_NODES=chatserver1,chatserver2,chatserver3,chatserver4
+      - REDIS_HOST=memochat-redis
+      - POSTGRES_HOST=memochat-postgres
+    networks:
+      - memochat-net
+    depends_on:
+      memochat-redis:
+        condition: service_started
+      memochat-postgres:
+        condition: service_started
+
+  chat-server-3:
+    image: memochat/chat-server:latest
+    container_name: memochat-chat-3
+    environment:
+      - SERVER_NAME=chatserver3
+      - TCP_PORT=8092
+      - QUIC_PORT=8192
+      - RPC_PORT=50057
+      - CLUSTER_NODES=chatserver1,chatserver2,chatserver3,chatserver4
+      - REDIS_HOST=memochat-redis
+      - POSTGRES_HOST=memochat-postgres
+    networks:
+      - memochat-net
+    depends_on:
+      memochat-redis:
+        condition: service_started
+      memochat-postgres:
+        condition: service_started
+
+  chat-server-4:
+    image: memochat/chat-server:latest
+    container_name: memochat-chat-4
+    environment:
+      - SERVER_NAME=chatserver4
+      - TCP_PORT=8093
+      - QUIC_PORT=8193
+      - RPC_PORT=50058
+      - CLUSTER_NODES=chatserver1,chatserver2,chatserver3,chatserver4
+      - REDIS_HOST=memochat-redis
+      - POSTGRES_HOST=memochat-postgres
+    networks:
+      - memochat-net
+    depends_on:
+      memochat-redis:
+        condition: service_started
+      memochat-postgres:
+        condition: service_started
+
+networks:
+  memochat-net:
+    external: true

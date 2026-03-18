@@ -1677,6 +1677,77 @@ void AppController::refreshDialogModel()
     syncCurrentDialogDraft();
 }
 
+void AppController::refreshDialogModelIncremental()
+{
+    const qint64 startTs = QDateTime::currentMSecsSinceEpoch();
+
+    // 增量更新会话列表：避免全量重建，使用 upsert 增量添加
+    const DialogDecorationState decorationState {
+        &_dialog_draft_map,
+        &_dialog_mention_map,
+        &_dialog_server_pinned_map,
+        &_dialog_server_mute_map,
+        &_dialog_local_pinned_set
+    };
+
+    // 增量更新私聊会话
+    const auto chats = _gateway.userMgr()->GetFriendListSnapshot();
+    for (const auto &chat : chats) {
+        if (!chat) {
+            continue;
+        }
+
+        DialogEntrySeed seed;
+        seed.dialogUid = chat->_uid;
+        seed.dialogType = QStringLiteral("private");
+        seed.userId = chat->_user_id;
+        seed.name = chat->_name;
+        seed.nick = chat->_nick;
+        seed.icon = chat->_icon;
+        seed.desc = chat->_desc;
+        seed.back = chat->_back;
+        seed.previewText = chat->_last_msg;
+        seed.sex = chat->_sex;
+        if (!chat->_chat_msgs.empty() && chat->_chat_msgs.back()) {
+            seed.lastMsgTs = chat->_chat_msgs.back()->_created_at;
+        }
+        auto entry = DialogListService::buildDialogEntry(seed, decorationState);
+        _dialog_list_model.upsertFriend(entry);
+    }
+
+    // 增量更新群组会话
+    const auto groups = _gateway.userMgr()->GetGroupListSnapshot();
+    for (const auto &group : groups) {
+        if (!group || group->_group_id <= 0) {
+            continue;
+        }
+
+        DialogEntrySeed seed;
+        seed.dialogUid = -static_cast<int>(group->_group_id);
+        seed.dialogType = QStringLiteral("group");
+        seed.name = group->_name;
+        seed.nick = group->_name;
+        seed.icon = group->_icon.trimmed().isEmpty()
+            ? QStringLiteral("qrc:/res/chat_icon.png")
+            : group->_icon;
+        seed.desc = group->_announcement;
+        seed.back = group->_announcement;
+        seed.previewText = group->_last_msg;
+        if (!group->_chat_msgs.empty() && group->_chat_msgs.back()) {
+            seed.lastMsgTs = group->_chat_msgs.back()->_created_at;
+        }
+        auto entry = DialogListService::buildDialogEntry(seed, decorationState);
+        _dialog_list_model.upsertFriend(entry);
+    }
+
+    syncCurrentDialogDraft();
+
+    const qint64 endTs = QDateTime::currentMSecsSinceEpoch();
+    qInfo() << "[PERF] refreshDialogModelIncremental - chats:" << chats.size()
+            << "| groups:" << groups.size()
+            << "| total:" << (endTs - startTs) << "ms";
+}
+
 void AppController::loadCurrentChatMessages()
 {
     if (_current_chat_uid <= 0) {
