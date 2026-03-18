@@ -26,8 +26,11 @@ Item {
         id: blurSource
         anchors.fill: parent
         readonly property Item sourceBackdrop: root.backdrop !== null ? root.backdrop : root
-        sourceItem: root.effectActive ? sourceBackdrop : null
+        sourceItem: root.effectActive && sourceBackdrop !== null ? sourceBackdrop : null
         sourceRect: {
+            if (!sourceBackdrop || sourceBackdrop === root) {
+                return Qt.rect(0, 0, root.width, root.height)
+            }
             var p = root.mapToItem(sourceBackdrop, 0, 0)
             return Qt.rect(p.x, p.y, root.width, root.height)
         }

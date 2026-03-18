@@ -49,6 +49,7 @@ public:
 
     void clear();
     void setMessages(const std::vector<std::shared_ptr<TextChatData>> &messages, int selfUid);
+    void setMessagesAtomic(const std::vector<std::shared_ptr<TextChatData>> &messages, int selfUid);
     void appendMessage(const std::shared_ptr<TextChatData> &message, int selfUid);
     void upsertMessage(const std::shared_ptr<TextChatData> &message, int selfUid);
     void updateMessageState(const QString &msgId, const QString &state);
@@ -111,6 +112,7 @@ private:
     void refreshSurroundingRows(int centerRow, const QVector<int> &roles);
     int findInsertPosition(const MessageEntry &entry) const;
     std::vector<MessageEntry> _items;
+    std::vector<MessageEntry> _itemsBuffer;
     int _download_uid = 0;
     QString _download_token;
     QTimer _time_divider_refresh_timer;

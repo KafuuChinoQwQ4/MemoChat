@@ -27,7 +27,7 @@ Item {
         id: blurSource
         anchors.fill: parent
         readonly property Item sourceBackdrop: root.backdrop !== null ? root.backdrop : root.parent
-        sourceItem: sourceBackdrop
+        sourceItem: sourceBackdrop !== null ? sourceBackdrop : null
         sourceRect: {
             if (!sourceBackdrop) {
                 return Qt.rect(0, 0, root.width, root.height)

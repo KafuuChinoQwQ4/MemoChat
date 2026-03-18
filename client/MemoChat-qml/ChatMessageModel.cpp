@@ -199,12 +199,18 @@ void ChatMessageModel::clear()
 
 void ChatMessageModel::setMessages(const std::vector<std::shared_ptr<TextChatData> > &messages, int selfUid)
 {
-    beginResetModel();
-    _items.clear();
-    _items.reserve(messages.size());
+    // 使用双缓冲：先在缓冲区构建，然后原子切换
+    setMessagesAtomic(messages, selfUid);
+}
 
-    std::vector<MessageEntry> incoming;
-    incoming.reserve(messages.size());
+void ChatMessageModel::setMessagesAtomic(const std::vector<std::shared_ptr<TextChatData> > &messages, int selfUid)
+{
+    const qint64 startTs = QDateTime::currentMSecsSinceEpoch();
+
+    // 先在缓冲区构建数据
+    _itemsBuffer.clear();
+    _itemsBuffer.reserve(messages.size());
+
     std::unordered_set<std::string> seen;
     seen.reserve(messages.size());
     for (const auto &message : messages) {
@@ -217,14 +223,30 @@ void ChatMessageModel::setMessages(const std::vector<std::shared_ptr<TextChatDat
             continue;
         }
         seen.insert(key);
-        incoming.push_back(std::move(entry));
+        _itemsBuffer.push_back(std::move(entry));
     }
 
-    std::sort(incoming.begin(), incoming.end(), lessThan);
-    _items = std::move(incoming);
-    recomputeAvatarFlags();
+    const qint64 afterBuildTs = QDateTime::currentMSecsSinceEpoch();
 
+    std::sort(_itemsBuffer.begin(), _itemsBuffer.end(), lessThan);
+
+    const qint64 afterSortTs = QDateTime::currentMSecsSinceEpoch();
+
+    // 原子切换：先触发 reset，切换缓冲区，再 end reset
+    beginResetModel();
+    _items = std::move(_itemsBuffer);
+    _itemsBuffer.clear();
+    recomputeAvatarFlags();
     endResetModel();
+
+    const qint64 endTs = QDateTime::currentMSecsSinceEpoch();
+
+    qInfo() << "[PERF] ChatMessageModel::setMessagesAtomic - messages:" << messages.size()
+            << "| build:" << (afterBuildTs - startTs) << "ms"
+            << "| sort:" << (afterSortTs - afterBuildTs) << "ms"
+            << "| ui:" << (endTs - afterSortTs) << "ms"
+            << "| total:" << (endTs - startTs) << "ms";
+
     restartTimeDividerRefreshTimer();
     emit countChanged();
 }

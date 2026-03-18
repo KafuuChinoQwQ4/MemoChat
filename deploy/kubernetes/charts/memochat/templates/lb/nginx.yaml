@@ -1,0 +1,183 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-lb-config
+  namespace: memochat
+data:
+  nginx.conf: |
+    daemon off;
+    worker_processes auto;
+    error_log /var/log/nginx/error.log warn;
+    pid /var/run/nginx.pid;
+    events {
+        worker_connections 1024;
+    }
+    http {
+        include       /etc/nginx/mime.types;
+        default_type  application/octet-stream;
+        upstream gate_backend {
+            least_conn;
+            server gate-server:8080;
+        }
+        log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                        '$status $body_bytes_sent "$http_referer" '
+                        '"$http_user_agent" "$http_x_forwarded_for"';
+        access_log /var/log/nginx/access.log main;
+        server {
+            listen 80;
+            server_name localhost;
+            location / {
+                proxy_pass http://gate_backend;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+                proxy_connect_timeout 60s;
+                proxy_send_timeout 60s;
+                proxy_read_timeout 60s;
+            }
+            location /health {
+                access_log off;
+                return 200 "OK\n";
+                add_header Content-Type text/plain;
+            }
+        }
+    }
+    stream {
+        log_format stream '$remote_addr [$time_local] '
+                          '$protocol $status $bytes_sent $bytes_received '
+                          '$session_time';
+        access_log /var/log/nginx/stream-access.log stream;
+        upstream chat_tcp_backend {
+            hash $remote_addr consistent;
+            server chat-server-1:8090;
+            server chat-server-2:8091;
+            server chat-server-3:8092;
+            server chat-server-4:8093;
+        }
+        server {
+            listen 8090;
+            proxy_pass chat_tcp_backend;
+            proxy_timeout 3600s;
+            proxy_buffer_size 4k;
+        }
+        server {
+            listen 8091;
+            proxy_pass chat_tcp_backend;
+            proxy_timeout 3600s;
+            proxy_buffer_size 4k;
+        }
+        server {
+            listen 8092;
+            proxy_pass chat_tcp_backend;
+            proxy_timeout 3600s;
+            proxy_buffer_size 4k;
+        }
+        server {
+            listen 8093;
+            proxy_pass chat_tcp_backend;
+            proxy_timeout 3600s;
+            proxy_buffer_size 4k;
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-lb
+  namespace: memochat
+  labels:
+    app: nginx-lb
+    tier: loadbalancer
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-lb
+  template:
+    metadata:
+      labels:
+        app: nginx-lb
+        tier: loadbalancer
+    spec:
+      containers:
+      - name: nginx
+        image: memochat/nginx-lb:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        - name: chat-tcp-1
+          containerPort: 8090
+          protocol: TCP
+        - name: chat-tcp-2
+          containerPort: 8091
+          protocol: TCP
+        - name: chat-tcp-3
+          containerPort: 8092
+          protocol: TCP
+        - name: chat-tcp-4
+          containerPort: 8093
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+      volumes:
+      - name: config
+        configMap:
+          name: nginx-lb-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-lb
+  namespace: memochat
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx-lb
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    protocol: TCP
+  - name: chat-tcp-1
+    port: 8090
+    targetPort: 8090
+    protocol: TCP
+  - name: chat-tcp-2
+    port: 8091
+    targetPort: 8091
+    protocol: TCP
+  - name: chat-tcp-3
+    port: 8092
+    targetPort: 8092
+    protocol: TCP
+  - name: chat-tcp-4
+    port: 8093
+    targetPort: 8093
+    protocol: TCP

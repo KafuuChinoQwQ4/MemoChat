@@ -8,6 +8,17 @@ datasources:
     url: http://prometheus:9090
     isDefault: true
     editable: false
+  - name: InfluxDB
+    uid: influxdb
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    database: metrics
+    jsonData:
+      httpMode: POST
+      organization: memochat
+      token: my-super-secret-admin-token
+    editable: false
   - name: Loki
     uid: loki
     type: loki
