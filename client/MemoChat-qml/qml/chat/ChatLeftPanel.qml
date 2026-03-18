@@ -219,6 +219,9 @@ Rectangle {
                                     property string baseSource: (icon && icon.length > 0) ? icon : fallbackSource
                                     property bool loadFailed: false
                                     source: loadFailed ? fallbackSource : baseSource
+                                    // 头像优化：启用缓存和异步加载
+                                    cache: true
+                                    asynchronous: true
                                     onBaseSourceChanged: loadFailed = false
                                     onStatusChanged: if (status === Image.Error) { loadFailed = true }
                                 }
@@ -282,6 +285,8 @@ Rectangle {
                     visible: root.sessionFilter === 0 ? root.dialogsReady : (root.sessionFilter === 1 || root.groupsReady)
                     model: root.currentSessionModel()
                     ScrollBar.vertical: GlassScrollBar { }
+                    cacheBuffer: 200
+                    maximumFlickVelocity: 4000
                     WheelHandler {
                         target: null
                         onWheel: function(event) {
@@ -323,6 +328,9 @@ Rectangle {
                                     property string baseSource: (icon && icon.length > 0) ? icon : fallbackSource
                                     property bool loadFailed: false
                                     source: loadFailed ? fallbackSource : baseSource
+                                    // 头像优化：启用缓存和异步加载
+                                    cache: true
+                                    asynchronous: true
                                     onBaseSourceChanged: loadFailed = false
                                     onStatusChanged: if (status === Image.Error) { loadFailed = true }
                                 }

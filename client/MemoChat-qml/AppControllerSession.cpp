@@ -464,6 +464,7 @@ void AppController::onSwitchToChat()
         if (_page != ChatPage) {
             return;
         }
+        qInfo() << "[PERF] Stage-0: Bootstrap dialogs start, ts:" << QDateTime::currentMSecsSinceEpoch();
         bootstrapDialogs();
 
         _heartbeat_timer.start(kHeartbeatIntervalMs);
@@ -474,6 +475,7 @@ void AppController::onSwitchToChat()
         if (_page != ChatPage || _dialogs_ready) {
             return;
         }
+        qInfo() << "[PERF] Stage-1: Ensure chat list initialized, ts:" << QDateTime::currentMSecsSinceEpoch();
         ensureChatListInitialized();
     });
 
@@ -481,6 +483,7 @@ void AppController::onSwitchToChat()
         if (_page != ChatPage) {
             return;
         }
+        qInfo() << "[PERF] Stage-2: Bootstrap applies, ts:" << QDateTime::currentMSecsSinceEpoch();
         bootstrapApplies();
     });
 
@@ -488,6 +491,7 @@ void AppController::onSwitchToChat()
         if (_page != ChatPage) {
             return;
         }
+        qInfo() << "[PERF] Stage-Bootstrap: Request relation bootstrap, ts:" << QDateTime::currentMSecsSinceEpoch();
         requestRelationBootstrap();
     });
 }
@@ -519,16 +523,29 @@ void AppController::onRelationBootstrapUpdated()
     _chat_list_initialized = false;
     ensureChatListInitialized();
 
-    _contact_list_model.clear();
+    // 增量更新联系人列表：避免全量 clear + set 操作
+    // 只有在未初始化时才全量加载，已初始化时使用增量更新
     const auto contactList = _gateway.userMgr()->GetConListPerPage();
-    _contact_list_model.setFriends(contactList);
+    if (!_contacts_ready) {
+        _contact_list_model.clear();
+        _contact_list_model.setFriends(contactList);
+    } else {
+        // 已初始化时使用 upsert 增量更新
+        for (const auto &contact : contactList) {
+            if (contact) {
+                _contact_list_model.upsertFriend(contact);
+            }
+        }
+    }
     _gateway.userMgr()->UpdateContactLoadedCount();
     refreshContactLoadMoreState();
     setContactsReady(true);
 
     refreshApplyModel();
     setApplyReady(true);
-    refreshDialogModel();
+
+    // 增量更新会话列表
+    refreshDialogModelIncremental();
     emit pendingApplyChanged();
 }
 

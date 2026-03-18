@@ -390,6 +390,7 @@ private:
     void refreshApplyModel();
     void refreshGroupModel();
     void refreshDialogModel();
+    void refreshDialogModelIncremental();
     void requestDialogList();
     void requestRelationBootstrap();
     void bootstrapDialogs();
