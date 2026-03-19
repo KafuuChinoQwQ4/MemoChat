@@ -1,0 +1,76 @@
+# Multi-stage build for MemoChat GateServer with Drogon (Linux)
+
+# Build stage
+FROM ubuntu:22.04 AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    cmake \
+    g++ \
+    make \
+    git \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up vcpkg
+WORKDIR /opt/vcpkg
+COPY vcpkg.json ./
+RUN git clone https://github.com/microsoft/vcpkg.git . && \
+    ./bootstrap-vcpkg.sh -disableMetrics
+
+# Install dependencies
+RUN ./vcpkg install drogon:linux-x64-release \
+    trantor:linux-x64-release \
+    grpc:x-linux-release \
+    protobuf:x-linux-release \
+    hiredis:x-linux-release \
+    jsoncpp:x-linux-release \
+    spdlog:x-linux-release \
+    libpqxx:x-linux-release \
+    boost:x-linux-x64-boost-null \
+    boost:x-linux-x64-boost-filesystem
+
+# Build application
+WORKDIR /build
+COPY . /build
+
+RUN cmake -B build \
+    -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
+    -DVCPKG_TARGET_TRIPLET=linux-x64-release \
+    -DBUILD_CLIENT=OFF \
+    -DBUILD_SERVER=ON
+
+RUN cmake --build build --config Release --target GateServerDrogon
+
+# Runtime stage
+FROM ubuntu:22.04
+
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    libgoogle-perftools4 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy executable and config
+COPY --from=builder /build/bin/GateServerDrogon /app/
+COPY server/GateServerDrogon/config.ini /app/
+COPY --from=builder /opt/vcpkg/installed/linux-x64-release/lib/*.so* /usr/local/lib/ || true
+
+RUN ldconfig
+
+# Create logs directory
+RUN mkdir -p /app/logs
+
+# Expose HTTP port
+EXPOSE 8081
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8081/healthz || exit 1
+
+USER nonroot:nonroot
+
+ENTRYPOINT ["/app/GateServerDrogon"]

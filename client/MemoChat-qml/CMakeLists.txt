@@ -2,11 +2,24 @@ cmake_minimum_required(VERSION 3.16)
 
 project(MemoChatQml LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+# Restore Windows SDK library paths that the vcpkg toolchain stripped
+if(WIN32 AND MSVC)
+    link_directories(
+        "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64"
+        "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64"
+        "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64"
+    )
+    # Also add as linker flags for robustness
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /LIBPATH:\"D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64\" /LIBPATH:\"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64\"")
+endif()
+
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(MSVC)
     add_compile_options(/wd4819 /utf-8)
+    # Allow standard library headers through /external:W0 so C++20 <span> etc. are visible
+    add_compile_options(/wd4819 /utf-8 /wd4038)
 endif()
 
 set(CMAKE_AUTOMOC ON)
@@ -112,7 +125,8 @@ target_link_libraries(MemoChatQml PRIVATE
 )
 
 if(WIN32)
-    target_link_libraries(MemoChatQml PRIVATE dwmapi)
+    find_library(DWMAPI_LIB dwmapi)
+    target_link_libraries(MemoChatQml PRIVATE "${DWMAPI_LIB}")
 endif()
 
 add_custom_command(TARGET MemoChatQml POST_BUILD
