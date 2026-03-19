@@ -1,0 +1,41 @@
+# Multi-stage build for MemoChat GateServer with Drogon
+# Build stage
+FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS builder
+
+# Install vcpkg and build dependencies
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+# Set up build environment
+WORKDIR C:/build
+COPY . C:/build
+
+# Build GateServerDrogon
+RUN cmake -B build -G 'Visual Studio 17 2022' -A x64 \
+    -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake \
+    -DVCPKG_TARGET_TRIPLET=x64-windows \
+    -DBUILD_CLIENT=OFF \
+    -DBUILD_SERVER=ON
+
+RUN cmake --build build --config Release --target GateServerDrogon
+
+# Runtime stage
+FROM mcr.microsoft.com/windows/servercore:ltsc2022
+
+WORKDIR C:/app
+
+# Copy built executable and dependencies
+COPY --from=builder C:/build/bin/Release/GateServerDrogon.exe C:/app/
+COPY --from=builder C:/build/bin/Release/*.dll C:/app/
+COPY server/GateServerDrogon/config.ini C:/app/
+
+# Create logs directory
+RUN mkdir C:/app/logs
+
+# Expose HTTP port
+EXPOSE 8081
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD powershell -Command "Invoke-WebRequest -Uri http://localhost:8081/healthz -UseBasicParsing -TimeoutSec 5 | Select-Object -ExpandProperty StatusCode" 
+
+ENTRYPOINT ["C:/app/GateServerDrogon.exe"]

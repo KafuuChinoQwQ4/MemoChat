@@ -19,6 +19,7 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(bsoncxx CONFIG REQUIRED)
 find_package(mongocxx CONFIG REQUIRED)
 find_package(libpqxx CONFIG REQUIRED)
+find_package(drogon CONFIG REQUIRED)
 find_package(CppKafka CONFIG QUIET)
 find_package(cppkafka CONFIG QUIET)
 find_package(unofficial-librabbitmq CONFIG QUIET)
@@ -168,6 +169,7 @@ target_link_libraries(memochat_server_deps INTERFACE
     hiredis::hiredis
     JsonCpp::JsonCpp
     ${MEMOCHAT_SPDLOG_TARGET}
+    Drogon::Drogon
 )
 target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_KAFKA=${MEMOCHAT_ENABLE_KAFKA} MEMOCHAT_ENABLE_RABBITMQ=${MEMOCHAT_ENABLE_RABBITMQ})
 
@@ -190,9 +192,14 @@ if(WIN32)
     target_link_libraries(memochat_server_deps INTERFACE bcrypt ws2_32 crypt32 advapi32 iphlpapi)
 endif()
 
+# Require C++20 for std::span and other standard library features
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # Fix: Override Qt's -external:W0 which excludes system include directories
-# This ensures MSVC standard library headers are found
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /external:I \"D:/VS2026stable/VC/Tools/MSVC/14.50.35717/ATLMFC/include\" /external:I \"D:/VS2026stable/VC/Tools/MSVC/14.50.35717/include\" /external:W0 /D_WIN32_WINNT=0x0601")
+# Try /Zc:twoPhase- to fix conformance mode issues with VS2026 + Windows SDK
+# CRITICAL: Define NOMINMAX and use std::byte namespace to fix byte ambiguity
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /external:I \"D:/VS2026stable/VC/Tools/MSVC/14.50.35717/ATLMFC/include\" /external:I \"D:/VS2026stable/VC/Tools/MSVC/14.50.35717/include\" /external:I \"C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt\" /external:I \"C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/shared\" /external:I \"C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/um\" /external:W0 /D_WIN32_WINNT=0x0601 /Zc:__cplusplus /Zc:twoPhase-")
 
 function(memochat_configure_server_target target_name)
     target_link_libraries(${target_name} PRIVATE memochat_server_deps)
@@ -217,5 +224,7 @@ endfunction()
 
 add_subdirectory(ChatServer)
 add_subdirectory(GateServer)
+# Temporarily disabled - VS2026 + Windows SDK 10.0.26100 byte type conflict
+# add_subdirectory(GateServerDrogon)
 add_subdirectory(StatusServer)
 add_subdirectory(VarifyServer)
