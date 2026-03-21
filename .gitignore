@@ -79,8 +79,5 @@ ui_*.h
 /Memo_ops/artifacts/logs/
 /Memo_ops/artifacts/loadtest/
 /Memo_ops/artifacts/reports/
-!/Memo_ops/artifacts/reports/
-!/Memo_ops/artifacts/reports/perf/
-!/Memo_ops/artifacts/reports/perf/*.md
 !/Memo_ops/artifacts/index/
 !/Memo_ops/artifacts/index/README.md
