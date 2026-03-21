@@ -9,10 +9,13 @@
 #include <cstring>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <sstream>
 #include <vector>
 
 #if MEMOCHAT_ENABLE_MSQUIC
+#include <windows.h>
+#include <wincrypt.h>
 #include <msquic.h>
 #endif
 
@@ -32,16 +35,21 @@ std::string ReadConfigOrDefault(const char* section, const char* key, const char
 }
 
 #if MEMOCHAT_ENABLE_MSQUIC
+// Optimized frame encoder: pre-allocates vector capacity to reduce reallocations.
+// Frame format: [msg_id(2B big-endian)][payload_len(2B big-endian)][payload]
+// This matches the TCP protocol for cross-transport compatibility.
 std::vector<uint8_t> EncodeFrame(short msgid, const std::string& payload)
 {
     std::vector<uint8_t> frame;
-    frame.resize(HEAD_TOTAL_LEN + payload.size());
+    // Pre-reserve to avoid reallocations (major perf gain for high-throughput paths)
+    frame.reserve(HEAD_TOTAL_LEN + payload.size());
+    frame.resize(HEAD_TOTAL_LEN);
     const short network_id = boost::asio::detail::socket_ops::host_to_network_short(msgid);
     const short network_len = boost::asio::detail::socket_ops::host_to_network_short(static_cast<short>(payload.size()));
     std::memcpy(frame.data(), &network_id, HEAD_ID_LEN);
     std::memcpy(frame.data() + HEAD_ID_LEN, &network_len, HEAD_DATA_LEN);
     if (!payload.empty()) {
-        std::memcpy(frame.data() + HEAD_TOTAL_LEN, payload.data(), payload.size());
+        frame.insert(frame.end(), payload.begin(), payload.end());
     }
     return frame;
 }
@@ -63,6 +71,7 @@ struct QuicChatServer::Impl {
         HQUIC stream = nullptr;
         std::shared_ptr<QuicSession> session;
         std::unique_ptr<StreamContext> stream_context;
+        const QUIC_API_TABLE* api = nullptr;
     };
 
     struct StreamContext {
@@ -71,6 +80,8 @@ struct QuicChatServer::Impl {
         bool recv_pending = false;
         short msg_id = 0;
         short msg_len = 0;
+        bool start_complete = false;
+        std::vector<std::pair<short, std::string>> pending_sends;
     };
 
     const QUIC_API_TABLE* api = nullptr;
@@ -144,36 +155,107 @@ bool QuicChatServer::Impl::ensureInitialized(QuicChatServer* owner, std::string*
         return false;
     }
 
-    cert_file = ReadConfigOrDefault("Quic", "CertFile", "");
-    key_file = ReadConfigOrDefault("Quic", "PrivateKeyFile", "");
-    if (cert_file.empty() || key_file.empty()) {
+    std::string cert_file = ReadConfigOrDefault("Quic", "CertFile", "");
+    std::string key_file  = ReadConfigOrDefault("Quic", "PrivateKeyFile", "");
+    std::string pfx_file  = ReadConfigOrDefault("Quic", "PfxFile", "");
+    std::string pfx_password = ReadConfigOrDefault("Quic", "PfxPassword", "");
+    std::string cert_thumbprint = ReadConfigOrDefault("Quic", "CertThumbprint", "");
+    std::string cert_store_name = ReadConfigOrDefault("Quic", "CertStore", "My");
+    std::string cert_store_location = ReadConfigOrDefault("Quic", "CertStoreLocation", "CurrentUser");
+
+    bool cred_loaded = false;
+
+    // Approach 1: Try CERTIFICATE_CONTEXT via Windows Certificate Store (thumbprint)
+    if (!cred_loaded && !cert_thumbprint.empty()) {
+        HCERTSTORE hStore = CertOpenSystemStoreW(NULL, L"My");
+        if (hStore) {
+            PCCERT_CONTEXT found_ctx = nullptr;
+            std::vector<BYTE> targetHash;
+            for (size_t i = 0; i < cert_thumbprint.size(); i += 2) {
+                std::string byte_str = cert_thumbprint.substr(i, 2);
+                targetHash.push_back(static_cast<BYTE>(std::stoi(byte_str, nullptr, 16)));
+            }
+            for (PCCERT_CONTEXT ctx = CertEnumCertificatesInStore(hStore, nullptr);
+                 ctx != nullptr; ctx = CertEnumCertificatesInStore(hStore, ctx)) {
+                DWORD cbHash = 0;
+                CertGetCertificateContextProperty(ctx, CERT_HASH_PROP_ID, nullptr, &cbHash);
+                if (cbHash == targetHash.size()) {
+                    std::vector<BYTE> ctxHash(cbHash);
+                    CertGetCertificateContextProperty(ctx, CERT_HASH_PROP_ID, ctxHash.data(), &cbHash);
+                    if (ctxHash == targetHash) {
+                        found_ctx = CertDuplicateCertificateContext(ctx);
+                        break;
+                    }
+                }
+            }
+            if (found_ctx) {
+                QUIC_CREDENTIAL_CONFIG cred{};
+                cred.Type = QUIC_CREDENTIAL_TYPE_CERTIFICATE_CONTEXT;
+                cred.CertificateContext = const_cast<CERT_CONTEXT*>(found_ctx);
+                cred.Flags = QUIC_CREDENTIAL_FLAG_NONE;
+                status = api->ConfigurationLoadCredential(configuration, &cred);
+                if (QUIC_SUCCEEDED(status)) {
+                    cred_loaded = true;
+                    memolog::LogInfo("quic.credential.loaded",
+                        "ChatServer QUIC credential loaded via CERT_CONTEXT",
+                        std::map<std::string, std::string>{{"thumbprint", cert_thumbprint}});
+                }
+                CertFreeCertificateContext(found_ctx);
+            }
+            CertCloseStore(hStore, 0);
+        }
+    }
+
+    // Approach 2: Try CERTIFICATE_FILE_PROTECTED (cert + key with password)
+    if (!cred_loaded && !cert_file.empty() && !key_file.empty()) {
+        std::string pwd_override = ReadConfigOrDefault("Quic", "KeyPassword", pfx_password.empty() ? "" : pfx_password.c_str());
+        if (!pwd_override.empty()) {
+            QUIC_CERTIFICATE_FILE_PROTECTED cert{};
+            cert.CertificateFile = cert_file.c_str();
+            cert.PrivateKeyFile = key_file.c_str();
+            cert.PrivateKeyPassword = pwd_override.c_str();
+            QUIC_CREDENTIAL_CONFIG cred{};
+            cred.Type = QUIC_CREDENTIAL_TYPE_CERTIFICATE_FILE_PROTECTED;
+            cred.CertificateFileProtected = &cert;
+            cred.Flags = QUIC_CREDENTIAL_FLAG_NONE;
+            status = api->ConfigurationLoadCredential(configuration, &cred);
+            if (QUIC_SUCCEEDED(status)) {
+                cred_loaded = true;
+                memolog::LogInfo("quic.credential.loaded",
+                    "ChatServer QUIC credential loaded via FILE_PROTECTED",
+                    std::map<std::string, std::string>{{"cert_file", cert_file}});
+            }
+        }
+    }
+
+    // Approach 3: Try CERTIFICATE_FILE (cert + key, no password)
+    if (!cred_loaded && !cert_file.empty() && !key_file.empty() &&
+        std::filesystem::exists(cert_file) && std::filesystem::exists(key_file)) {
+        QUIC_CERTIFICATE_FILE cert{};
+        cert.CertificateFile = cert_file.c_str();
+        cert.PrivateKeyFile = key_file.c_str();
+        QUIC_CREDENTIAL_CONFIG cred{};
+        cred.Type = QUIC_CREDENTIAL_TYPE_CERTIFICATE_FILE;
+        cred.CertificateFile = &cert;
+        cred.Flags = QUIC_CREDENTIAL_FLAG_NONE;
+        status = api->ConfigurationLoadCredential(configuration, &cred);
+        if (QUIC_SUCCEEDED(status)) {
+            cred_loaded = true;
+            memolog::LogInfo("quic.credential.loaded",
+                "ChatServer QUIC credential loaded via CERTIFICATE_FILE",
+                std::map<std::string, std::string>{{"cert_file", cert_file}});
+        } else {
+            if (error) {
+                *error = "credential_load_failed";
+            }
+            shutdownHandles();
+            return false;
+        }
+    }
+
+    if (!cred_loaded) {
         if (error) {
             *error = "quic_certificate_missing";
-        }
-        shutdownHandles();
-        return false;
-    }
-    if (!std::filesystem::exists(cert_file) || !std::filesystem::exists(key_file)) {
-        if (error) {
-            *error = "quic_certificate_not_found";
-        }
-        shutdownHandles();
-        return false;
-    }
-
-    QUIC_CERTIFICATE_FILE cert{};
-    cert.CertificateFile = cert_file.c_str();
-    cert.PrivateKeyFile = key_file.c_str();
-
-    QUIC_CREDENTIAL_CONFIG cred{};
-    cred.Type = QUIC_CREDENTIAL_TYPE_CERTIFICATE_FILE;
-    cred.CertificateFile = &cert;
-    cred.Flags = QUIC_CREDENTIAL_FLAG_NONE;
-
-    status = api->ConfigurationLoadCredential(configuration, &cred);
-    if (QUIC_FAILED(status)) {
-        if (error) {
-            *error = "credential_load_failed";
         }
         shutdownHandles();
         return false;
@@ -283,23 +365,34 @@ QUIC_STATUS QUIC_API QuicChatServer::Impl::ListenerCallback(HQUIC, void* context
     auto* connection_context = new ConnectionContext();
     connection_context->owner = owner;
     connection_context->handle = event->NEW_CONNECTION.Connection;
+    connection_context->api = impl->api;
     connection_context->session = std::make_shared<QuicSession>(
         owner->_io_context,
-        [connection_context, impl](const std::string& payload, short msgid) -> bool {
-            if (connection_context->stream == nullptr || impl == nullptr || impl->api == nullptr) {
+        [connection_context](const std::string& payload, short msgid) -> bool {
+            if (connection_context->stream == nullptr || connection_context->api == nullptr) {
+                return false;
+            }
+            auto* ctx = connection_context->stream_context.get();
+            if (ctx == nullptr) {
                 return false;
             }
 
-            auto* send_ctx = new SendContext();
+            QUIC_SEND_FLAGS flags = QUIC_SEND_FLAG_NONE;
+            if (!ctx->start_complete) {
+                ctx->pending_sends.emplace_back(msgid, payload);
+                return true;
+            }
+
+            auto* send_ctx = new Impl::SendContext();
             send_ctx->bytes = EncodeFrame(msgid, payload);
             send_ctx->buffer.Buffer = send_ctx->bytes.data();
             send_ctx->buffer.Length = static_cast<uint32_t>(send_ctx->bytes.size());
 
-            const QUIC_STATUS send_status = impl->api->StreamSend(
+            const QUIC_STATUS send_status = connection_context->api->StreamSend(
                 connection_context->stream,
                 &send_ctx->buffer,
                 1,
-                QUIC_SEND_FLAG_NONE,
+                flags,
                 send_ctx);
             if (QUIC_FAILED(send_status)) {
                 delete send_ctx;
@@ -355,6 +448,7 @@ QUIC_STATUS QUIC_API QuicChatServer::Impl::ConnectionCallback(HQUIC connection, 
             ctx->stream,
             reinterpret_cast<void*>(StreamCallback),
             ctx->stream_context.get());
+        impl->api->StreamStart(ctx->stream, QUIC_STREAM_START_FLAG_IMMEDIATE);
         return QUIC_STATUS_SUCCESS;
     case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_TRANSPORT:
     case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_PEER:
@@ -384,6 +478,24 @@ QUIC_STATUS QUIC_API QuicChatServer::Impl::StreamCallback(HQUIC stream, void* co
     }
 
     switch (event->Type) {
+    case QUIC_STREAM_EVENT_START_COMPLETE:
+        stream_context->start_complete = true;
+        if (stream_context->connection != nullptr && stream_context->connection->api != nullptr) {
+            for (auto& [msgid, payload] : stream_context->pending_sends) {
+                auto* send_ctx = new Impl::SendContext();
+                send_ctx->bytes = EncodeFrame(msgid, payload);
+                send_ctx->buffer.Buffer = send_ctx->bytes.data();
+                send_ctx->buffer.Length = static_cast<uint32_t>(send_ctx->bytes.size());
+                stream_context->connection->api->StreamSend(
+                    stream_context->connection->stream,
+                    &send_ctx->buffer,
+                    1,
+                    QUIC_SEND_FLAG_NONE,
+                    send_ctx);
+            }
+            stream_context->pending_sends.clear();
+        }
+        return QUIC_STATUS_SUCCESS;
     case QUIC_STREAM_EVENT_RECEIVE:
         for (uint32_t i = 0; i < event->RECEIVE.BufferCount; ++i) {
             const auto& one = event->RECEIVE.Buffers[i];

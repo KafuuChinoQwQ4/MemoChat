@@ -1,6 +1,8 @@
 #include "HttpConnection.h"
 
 #include "LogicSystem.h"
+#include "GateWorkerPool.h"
+#include "GateGlobals.h"
 #include "logging/Telemetry.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
@@ -178,18 +180,30 @@ void HttpConnection::HandleReq() {
     }
 
     if (_request.method() == http::verb::post) {
-        bool success = LogicSystem::GetInstance()->HandlePost(_request.target(), shared_from_this());
-        if (!success) {
-            _response.result(http::status::not_found);
-            _response.set(http::field::content_type, "text/plain");
-            beast::ostream(_response.body()) << "url not found\r\n";
-            WriteResponse();
-            return;
-        }
-
-        _response.result(http::status::ok);
-        _response.set(http::field::server, "GateServer");
-        WriteResponse();
+        auto self = shared_from_this();
+        GateWorkerPool::GetInstance()->post([self]() {
+            try {
+                auto* ioc = gateglobals::g_main_ioc;
+                bool handled = LogicSystem::GetInstance()->HandlePost(self->_request.target(), self);
+                boost::asio::post(*ioc, [self, handled]() {
+                    if (!handled) {
+                        self->_response.result(http::status::not_found);
+                        self->_response.set(http::field::content_type, "text/plain");
+                        beast::ostream(self->_response.body()) << "url not found\r\n";
+                    }
+                    self->_response.result(http::status::ok);
+                    self->_response.set(http::field::server, "GateServer");
+                    self->WriteResponse();
+                });
+            } catch (const std::exception& e) {
+                memolog::LogError("gate.worker.exception", "worker pool exception", {{"error", e.what()}});
+                if (auto* ioc = gateglobals::g_main_ioc) {
+                    boost::asio::post(*ioc, [self]() {
+                        self->WriteErrorResponse(http::status::internal_server_error, "internal error\r\n");
+                    });
+                }
+            }
+        });
         return;
     }
 }

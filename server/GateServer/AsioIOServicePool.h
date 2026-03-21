@@ -13,6 +13,7 @@ public:
     using Work = boost::asio::executor_work_guard<IOService::executor_type>;
     using WorkPtr = std::unique_ptr<Work>;
 
+    explicit AsioIOServicePool(std::size_t size = 1);
     ~AsioIOServicePool();
     AsioIOServicePool(const AsioIOServicePool&) = delete;
     AsioIOServicePool& operator=(const AsioIOServicePool&) = delete;
@@ -21,6 +22,5 @@ public:
     void Stop();
 
 private:
-    AsioIOServicePool(std::size_t size = 1);
     std::unique_ptr<memochat::runtime::IoContextPool> _pool;
 };

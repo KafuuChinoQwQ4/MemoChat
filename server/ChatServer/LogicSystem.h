@@ -12,6 +12,12 @@
 #include <json/reader.h>
 #include <unordered_map>
 #include "data.h"
+#include <atomic>
+#include <vector>
+#include <memory>
+#include <array>
+#include <mutex>
+#include <condition_variable>
 
 class CServer;
 typedef  function<void(shared_ptr<CSession>, const short &msg_id, const string &msg_data)> FunCallBack;
@@ -29,6 +35,7 @@ class IAsyncEventBus;
 class IAsyncTaskBus;
 class MessageDeliveryService;
 class TaskDispatcher;
+
 class LogicSystem:public Singleton<LogicSystem>
 {
 	friend class Singleton<LogicSystem>;
@@ -51,9 +58,16 @@ public:
 	bool PublishTask(const std::string& task_type, const std::string& routing_key, const Json::Value& payload, int delay_ms = 0, int max_retries = 0, std::string* error = nullptr);
 	bool PublishAsyncEvent(const std::string& topic, const Json::Value& payload, std::string* error = nullptr);
 	bool ExpediteOutboxRepair(int64_t outbox_id);
+
+	static constexpr size_t kDefaultWorkerCount = 4;
+	static constexpr size_t kMaxWorkerCount = 16;
+	uint64_t GetQueueSize() const { return _msg_que_size.load(std::memory_order_relaxed); }
+	uint64_t GetDroppedTotal() const { return _msg_dropped_total.load(std::memory_order_relaxed); }
+
 private:
 	LogicSystem();
-	void DealMsg();
+	size_t dispatchToWorker(const shared_ptr<LogicNode>& msg);
+	void workerLoop(size_t worker_id);
 	void RegisterCallBacks();
 	void LoginHandler(shared_ptr<CSession> session, const short &msg_id, const string &msg_data);
 	void GetRelationBootstrapHandler(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
@@ -102,14 +116,21 @@ private:
 	void HandlePrivateAsyncEvent(const Json::Value& root);
 	void HandleGroupAsyncEvent(const Json::Value& root);
 	void NotifyMessageStatus(const Json::Value& payload);
-	std::thread _worker_thread;
+
+	// Multi-worker thread pool for message processing
+	static constexpr size_t kMaxWorkers = 16;
+	std::array<std::thread, kMaxWorkers> _worker_threads;
+	std::array<std::queue<shared_ptr<LogicNode>>, kMaxWorkers> _worker_queues;
+	std::array<std::mutex, kMaxWorkers> _worker_mutexes;
+	std::unique_ptr<std::condition_variable[]> _worker_conds;
+	std::atomic<bool> _b_stop{false};
+	size_t _num_workers = kDefaultWorkerCount;
+	std::atomic<size_t> _next_worker{0};
+
 	std::thread _event_worker_thread;
 	std::thread _task_worker_thread;
-	std::queue<shared_ptr<LogicNode>> _msg_que;
-	std::mutex _mutex;
-	std::condition_variable _consume;
-	bool _b_stop;
-	bool _event_stop;
+	bool _event_stop = false;
+
 	std::map<short, FunCallBack> _fun_callbacks;
 	std::shared_ptr<CServer> _p_server;
 	std::unique_ptr<ChatSessionService> _chat_session_service;
@@ -121,4 +142,9 @@ private:
 	std::unique_ptr<TaskDispatcher> _task_dispatcher;
 	std::shared_ptr<IAsyncTaskBus> _task_bus;
 	std::unique_ptr<MessageDeliveryService> _message_delivery_service;
+
+	// Bounded queue metrics
+	std::atomic<uint64_t> _msg_que_size{0};
+	std::atomic<uint64_t> _msg_dropped_total{0};
+	std::atomic<uint64_t> _backpressure_log_counter{0};
 };

@@ -101,6 +101,17 @@ public:
 		cond_.notify_one();
 	}
 
+	void returnBrokenConnection(redisContext* context) {
+		std::lock_guard<std::mutex> lock(mutex_);
+		if (b_stop_) {
+			redisFree(context);
+			return;
+		}
+		redisFree(context);
+		--poolSize_;
+		cond_.notify_one();
+	}
+
 	void Close() {
 		b_stop_ = true;
 		cond_.notify_all();
@@ -287,6 +298,10 @@ public:
 		_con_pool->Close();
 		_con_pool->ClearConnections();
 	}
+
+	redisContext* getRawConnection() { return _con_pool->getConnection(); }
+	void returnConnection(redisContext* ctx) { _con_pool->returnConnection(ctx); }
+	void returnBrokenConnection(redisContext* ctx) { _con_pool->returnBrokenConnection(ctx); }
 
 	std::string acquireLock(const std::string& lockName,
 		int lockTimeout, int acquireTimeout);
