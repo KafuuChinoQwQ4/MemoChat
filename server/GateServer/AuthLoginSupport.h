@@ -27,6 +27,7 @@ bool IsQuicRolloutEnabled();
 bool IsClientVersionAllowed(const std::string& clientVer, const std::string& minVer);
 std::string GetChatAuthSecret();
 int GetChatTicketTtlSec();
+int GetLoginCacheTtlSec();
 bool TryLoadCachedLoginProfile(const std::string& email, const std::string& pwd, UserInfo& userInfo);
 void CacheLoginProfile(const std::string& email, const UserInfo& userInfo);
 void InvalidateLoginCacheByEmail(const std::string& email);

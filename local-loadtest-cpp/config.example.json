@@ -1,0 +1,24 @@
+{
+  "gate_url": "http://127.0.0.1:8080",
+  "login_path": "/user_login",
+  "client_ver": "2.0.0",
+  "use_xor_passwd": true,
+
+  "accounts_csv": "D:/MemoChat-Qml-Drogon/Memo_ops/artifacts/loadtest/runtime/accounts/accounts.local.csv",
+
+  "log_dir": "D:/MemoChat-Qml-Drogon/Memo_ops/artifacts/loadtest/runtime/logs",
+  "report_dir": "D:/MemoChat-Qml-Drogon/Memo_ops/artifacts/loadtest/runtime/reports",
+  "log_level": "INFO",
+
+  "warmup_iterations": 2,
+  "max_retries": 2,
+
+  "total": 500,
+  "concurrency": 50,
+  "http_timeout_sec": 5.0,
+  "tcp_timeout_sec": 5.0,
+  "quic_timeout_sec": 5.0,
+
+  "protocol_version": 3,
+  "quic_alpn": "memochat-chat"
+}

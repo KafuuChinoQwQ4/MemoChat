@@ -33,7 +33,7 @@ std::string BuildPostgresConnectionString() {
 		" password=" + pwd +
 		" dbname=" + database +
 		" sslmode=" + (sslmode.empty() ? "disable" : sslmode) +
-		" options='-c search_path=" + (schema.empty() ? "public" : schema) + ",public'";
+		" options=-csearch_path=" + (schema.empty() ? "public" : schema) + ",public";
 }
 
 bool IsValidUserPublicId(const std::string& user_id) {
@@ -136,6 +136,9 @@ PostgresDao::PostgresDao()
 	if (!use_postgres_) {
 		throw std::runtime_error("missing [Postgres] configuration for ChatServer");
 	}
+	auto* raw_pool = new PostgresPool(
+		postgres_connection_string_, "", "", "", 16);
+	pool_.reset(raw_pool);
 	EnsureChatMessageIdempotencySchema();
 	EnsureChatEventOutboxSchema();
 	WarmupRelationBootstrapQueries();

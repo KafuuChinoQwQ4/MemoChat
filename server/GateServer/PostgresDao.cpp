@@ -13,13 +13,14 @@ std::string BuildConnectionString() {
 	const auto schema = cfg["Postgres"]["Schema"];
 	const auto user = cfg["Postgres"]["User"];
 	const auto sslmode = cfg["Postgres"]["SslMode"];
-	return "host=" + host +
+	std::string conn = "host=" + host +
 		" port=" + port +
 		" user=" + user +
 		" password=" + pwd +
 		" dbname=" + database +
 		" sslmode=" + (sslmode.empty() ? "disable" : sslmode) +
-		" options='-c search_path=" + schema + ",public'";
+		" options=-csearch_path=" + schema + ",public";
+	return conn;
 }
 
 std::string DecodeLegacyXorPwd(const std::string& input) {
@@ -34,7 +35,7 @@ std::string DecodeLegacyXorPwd(const std::string& input) {
 
 PostgresDao::PostgresDao()
 {
-	pool_.reset(new PostgresPool(BuildConnectionString(), 5));
+	pool_.reset(new PostgresPool(BuildConnectionString(), 60));
 	WarmupAuthQueries();
 }
 
@@ -94,13 +95,14 @@ int PostgresDao::RegUserTransaction(
 			return -1;
 		}
 
+		const std::string pwd_stored = DecodeLegacyXorPwd(pwd);
 		txn.exec_params0(
 			"INSERT INTO \"user\"(uid, name, email, pwd, nick, icon, user_id) "
 			"VALUES ($1, $2, $3, $4, $5, $6, $7)",
 			new_id,
 			name,
 			email,
-			pwd,
+			pwd_stored,
 			name,
 			icon,
 			user_public_id);
@@ -224,11 +226,9 @@ bool PostgresDao::CheckPwd(const std::string& email, const std::string& pwd, Use
 
 		const auto& row = rows[0];
 		const std::string origin_pwd = row["pwd"].c_str() ? row["pwd"].c_str() : "";
-		if (pwd != origin_pwd) {
-			const auto decoded_pwd = DecodeLegacyXorPwd(pwd);
-			if (decoded_pwd != origin_pwd) {
-				return false;
-			}
+		const std::string decoded_pwd = DecodeLegacyXorPwd(origin_pwd);
+		if (pwd != origin_pwd && pwd != decoded_pwd) {
+			return false;
 		}
 
 		userInfo.name = row["name"].c_str() ? row["name"].c_str() : "";
@@ -239,7 +239,7 @@ bool PostgresDao::CheckPwd(const std::string& email, const std::string& pwd, Use
 		userInfo.icon = row["icon"].is_null() ? "" : row["icon"].c_str();
 		userInfo.desc = row["desc"].is_null() ? "" : row["desc"].c_str();
 		userInfo.sex = row["sex"].is_null() ? 0 : row["sex"].as<int>();
-		userInfo.pwd = origin_pwd;
+		userInfo.pwd = decoded_pwd;
 		return true;
 	}
 	catch (const std::exception& e) {
@@ -293,7 +293,7 @@ void PostgresDao::WarmupAuthQueries() {
 		txn.commit();
 	}
 	catch (const std::exception& e) {
-		std::cerr << "WarmupAuthQueries PostgreSQL exception: " << e.what() << std::endl;
+		std::cerr << "[DIAG WarmupAuthQueries] PostgreSQL exception: " << e.what() << "\n" << std::flush;
 	}
 }
 

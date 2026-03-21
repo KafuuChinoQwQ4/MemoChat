@@ -9,9 +9,9 @@
 #include <QDebug>
 
 namespace {
-constexpr int kHeartbeatIntervalMs = 10000;
+constexpr int kHeartbeatIntervalMs = 5000;
 constexpr int kHeartbeatAckMissThreshold = 2;
-constexpr qint64 kHeartbeatAckGraceMs = 22000;
+constexpr qint64 kHeartbeatAckGraceMs = 15000;
 constexpr int kChatReconnectMaxAttempts = 2;
 constexpr int kChatReconnectDelayMs = 300;
 constexpr int kDefaultChatConnectTimeoutMs = 1200;
@@ -464,9 +464,11 @@ void AppController::onSwitchToChat()
         if (_page != ChatPage) {
             return;
         }
-        qInfo() << "[PERF] Stage-0: Bootstrap dialogs start, ts:" << QDateTime::currentMSecsSinceEpoch();
+        qInfo() << "[PERF] Stage-0: Bootstrap all data in parallel, ts:" << QDateTime::currentMSecsSinceEpoch();
+        // Parallel bootstrap: fire all requests simultaneously for minimum latency
         bootstrapDialogs();
-
+        bootstrapApplies();
+        requestRelationBootstrap();
         _heartbeat_timer.start(kHeartbeatIntervalMs);
         onHeartbeatTimeout();
     });
@@ -477,22 +479,6 @@ void AppController::onSwitchToChat()
         }
         qInfo() << "[PERF] Stage-1: Ensure chat list initialized, ts:" << QDateTime::currentMSecsSinceEpoch();
         ensureChatListInitialized();
-    });
-
-    QTimer::singleShot(220, this, [this]() {
-        if (_page != ChatPage) {
-            return;
-        }
-        qInfo() << "[PERF] Stage-2: Bootstrap applies, ts:" << QDateTime::currentMSecsSinceEpoch();
-        bootstrapApplies();
-    });
-
-    QTimer::singleShot(40, this, [this]() {
-        if (_page != ChatPage) {
-            return;
-        }
-        qInfo() << "[PERF] Stage-Bootstrap: Request relation bootstrap, ts:" << QDateTime::currentMSecsSinceEpoch();
-        requestRelationBootstrap();
     });
 }
 

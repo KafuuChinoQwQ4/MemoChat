@@ -428,7 +428,11 @@ LogicSystem::LogicSystem():_b_stop(false), _event_stop(false), _p_server(nullptr
 			return ExpediteOutboxRepair(outbox_id);
 		});
 	RegisterCallBacks();
-	_worker_thread = std::thread (&LogicSystem::DealMsg, this);
+	_num_workers = kDefaultWorkerCount;
+	_worker_conds = std::make_unique<std::condition_variable[]>(_num_workers);
+	for (size_t i = 0; i < _num_workers; ++i) {
+		_worker_threads[i] = std::thread(&LogicSystem::workerLoop, this, i);
+	}
 	_event_worker_thread = std::thread(&LogicSystem::DealAsyncEvents, this);
 	_task_worker_thread = std::thread(&LogicSystem::DealTasks, this);
 }
@@ -436,9 +440,13 @@ LogicSystem::LogicSystem():_b_stop(false), _event_stop(false), _p_server(nullptr
 LogicSystem::~LogicSystem(){
 	_b_stop = true;
 	_event_stop = true;
-	_consume.notify_one();
-	if (_worker_thread.joinable()) {
-		_worker_thread.join();
+	for (size_t i = 0; i < _num_workers; ++i) {
+		_worker_conds[i].notify_one();
+	}
+	for (size_t i = 0; i < _num_workers; ++i) {
+		if (_worker_threads[i].joinable()) {
+			_worker_threads[i].join();
+		}
 	}
 	if (_event_worker_thread.joinable()) {
 		_event_worker_thread.join();
@@ -449,12 +457,24 @@ LogicSystem::~LogicSystem(){
 }
 
 void LogicSystem::PostMsgToQue(shared_ptr < LogicNode> msg) {
-	std::unique_lock<std::mutex> unique_lk(_mutex);
-	_msg_que.push(msg);
-
-	if (_msg_que.size() == 1) {
-		unique_lk.unlock();
-		_consume.notify_one();
+	if (_msg_que_size.load(std::memory_order_relaxed) >= MAX_MSG_QUE_SIZE) {
+		uint64_t dropped = ++_msg_dropped_total;
+		uint64_t counter = ++_backpressure_log_counter;
+		if (counter % BACKPRESSURE_DROP_LOG_INTERVAL == 1) {
+			memolog::LogWarn("logic.msg_que.backpressure",
+				"LogicSystem message queue backpressure, messages dropped",
+				{{"dropped_total", std::to_string(dropped)},
+				 {"queue_size", std::to_string(_msg_que_size.load(std::memory_order_relaxed))},
+				 {"counter", std::to_string(counter)}});
+		}
+		return;
+	}
+	size_t worker_id = dispatchToWorker(msg);
+	{
+		std::lock_guard<std::mutex> lock(_worker_mutexes[worker_id]);
+		_worker_queues[worker_id].push(msg);
+		++_msg_que_size;
+		_worker_conds[worker_id].notify_one();
 	}
 }
 
@@ -484,30 +504,33 @@ bool LogicSystem::ExpediteOutboxRepair(int64_t outbox_id)
 	return PostgresMgr::GetInstance()->ExpediteChatOutboxEventRetry(outbox_id);
 }
 
+size_t LogicSystem::dispatchToWorker(const shared_ptr<LogicNode>& msg) {
+	const size_t worker_id = _next_worker.fetch_add(1, std::memory_order_relaxed) % _num_workers;
+	return worker_id;
+}
 
-void LogicSystem::DealMsg() {
+void LogicSystem::workerLoop(size_t worker_id) {
 	for (;;) {
 		shared_ptr<LogicNode> msg_node;
 		{
-			std::unique_lock<std::mutex> unique_lk(_mutex);
-			_consume.wait(unique_lk, [this]() {
-				return _b_stop || !_msg_que.empty();
+			std::unique_lock<std::mutex> lock(_worker_mutexes[worker_id]);
+			_worker_conds[worker_id].wait(lock, [this, worker_id]() {
+				return _b_stop || !_worker_queues[worker_id].empty();
 			});
-			if (_b_stop && _msg_que.empty()) {
+			if (_b_stop && _worker_queues[worker_id].empty()) {
 				break;
 			}
-			msg_node = _msg_que.front();
-			_msg_que.pop();
+			msg_node = std::move(_worker_queues[worker_id].front());
+			_worker_queues[worker_id].pop();
+			--_msg_que_size;
 		}
 
 		if (!msg_node || !msg_node->_recvnode) {
 			continue;
 		}
 
-		cout << "recv_msg id  is " << msg_node->_recvnode->_msg_id << endl;
 		auto call_back_iter = _fun_callbacks.find(msg_node->_recvnode->_msg_id);
 		if (call_back_iter == _fun_callbacks.end()) {
-			std::cout << "msg id [" << msg_node->_recvnode->_msg_id << "] handler not found" << std::endl;
 			continue;
 		}
 		const std::string msg_data(msg_node->_recvnode->_data, msg_node->_recvnode->_cur_len);
@@ -515,10 +538,10 @@ void LogicSystem::DealMsg() {
 		Defer clear_trace([]() {
 			memolog::TraceContext::Clear();
 		});
-		call_back_iter->second(msg_node->_session, msg_node->_recvnode->_msg_id,
-			msg_data);
+		call_back_iter->second(msg_node->_session, msg_node->_recvnode->_msg_id, msg_data);
 	}
 }
+
 
 bool LogicSystem::PublishAsyncEvent(const std::string& topic, const Json::Value& payload, std::string* error)
 {

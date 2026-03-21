@@ -56,7 +56,8 @@ void QuicChatTransport::handleReceivedBytes(const QByteArray &bytes)
             const auto *raw = reinterpret_cast<const uchar *>(_recvBuffer.constData());
             _messageId = qFromBigEndian<quint16>(raw);
             _messageLen = qFromBigEndian<quint16>(raw + sizeof(quint16));
-            _recvBuffer.remove(0, 4);
+            ::memmove(_recvBuffer.data(), _recvBuffer.data() + 4, _recvBuffer.size() - 4);
+            _recvBuffer.chop(4);
             _recvPending = true;
         }
 
@@ -64,8 +65,9 @@ void QuicChatTransport::handleReceivedBytes(const QByteArray &bytes)
             return;
         }
 
-        QByteArray payload = _recvBuffer.left(_messageLen);
-        _recvBuffer.remove(0, _messageLen);
+        const QByteArray payload = QByteArray::fromRawData(_recvBuffer.constData(), _messageLen);
+        ::memmove(_recvBuffer.data(), _recvBuffer.data() + _messageLen, _recvBuffer.size() - _messageLen);
+        _recvBuffer.chop(_messageLen);
         _recvPending = false;
         emit sig_message_received(static_cast<ReqId>(_messageId), _messageLen, payload);
     }
@@ -225,7 +227,7 @@ bool QuicChatTransport::ensureQuicReady(QString *errorText)
     QUIC_SETTINGS settings{};
     settings.IdleTimeoutMs = 30000;
     settings.IsSet.IdleTimeoutMs = TRUE;
-    settings.PeerBidiStreamCount = 1;
+    settings.PeerBidiStreamCount = 4;
     settings.IsSet.PeerBidiStreamCount = TRUE;
 
     status = _api->ConfigurationOpen(_registration, &alpnBuffer, 1, &settings, sizeof(settings), nullptr, &_configuration);

@@ -77,39 +77,31 @@ void CServer::on_timer(const boost::system::error_code& ec) {
 		std::cout << "timer error: " << ec.message() << std::endl;
 		return;
 	}
-	std::vector<std::shared_ptr<CSession>> _expired_sessions;
+	std::vector<std::pair<std::string, std::weak_ptr<CSession>>> expired;
 	int session_count = 0;
-
-	std::map<std::string, shared_ptr<CSession>> sessions_copy;
 	{
-		lock_guard<mutex> lock(_mutex);
-		sessions_copy = _sessions;
-	}
-
-	time_t now = std::time(nullptr);
-	for (auto iter = sessions_copy.begin(); iter != sessions_copy.end(); iter++) {
-		auto b_expired = iter->second->IsHeartbeatExpired(now);
-		if (b_expired) {
-
-			iter->second->Close();
-
-			_expired_sessions.push_back(iter->second);
-			continue;
+		std::lock_guard<std::mutex> lock(_mutex);
+		for (const auto& [id, session_sp] : _sessions) {
+			time_t now = std::time(nullptr);
+			if (session_sp->IsHeartbeatExpired(now)) {
+				expired.emplace_back(id, session_sp);
+			} else {
+				session_count++;
+			}
 		}
-		session_count++;
 	}
 
+	for (auto& [id, wp] : expired) {
+		if (auto sp = wp.lock()) {
+			sp->Close();
+			sp->DealExceptionSession();
+		}
+	}
 
 	auto& cfg = ConfigMgr::Inst();
 	auto self_name = cfg["SelfServer"]["Name"];
 	auto count_str = std::to_string(session_count);
 	RedisMgr::GetInstance()->HSet(LOGIN_COUNT, self_name, count_str);
-
-
-	for (auto &session : _expired_sessions) {
-		session->DealExceptionSession();
-	}
-	
 
 	_timer.expires_after(std::chrono::seconds(60));
 	_timer.async_wait([this](boost::system::error_code ec) {
