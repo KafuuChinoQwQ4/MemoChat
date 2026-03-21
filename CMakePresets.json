@@ -120,6 +120,33 @@
         "VCPKG_HOST_TRIPLET": "x64-windows",
         "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed"
       }
+    },
+    {
+      "name": "msvc2022-loadtest",
+      "displayName": "MSVC2022 Local LoadTest (vcpkg dynamic)",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "D:/MemoChat-Qml-Drogon/local-loadtest-cpp/build-vcpkg-loadtest",
+      "environment": {
+        "PATH": "D:/VS2026stable/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin;D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64;C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64;$penv{PATH}",
+        "LIB": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64",
+        "INCLUDE": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/include;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/um;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/shared;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/winrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/cppwinrt",
+        "VCPKG_ROOT": "D:/vcpkg",
+        "VCPKG_DOWNLOADS": "D:/vcpkg/downloads",
+        "VCPKG_DEFAULT_BINARY_CACHE": "D:/vcpkg/bincache",
+        "HTTP_PROXY": "",
+        "HTTPS_PROXY": "",
+        "NO_PROXY": "",
+        "CMAKE_CXX_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe",
+        "CMAKE_C_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe"
+      },
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_MAKE_PROGRAM": "D:/ninja-win/ninja.exe",
+        "CMAKE_TOOLCHAIN_FILE": "D:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+        "VCPKG_HOST_TRIPLET": "x64-windows",
+        "VCPKG_INSTALLED_DIR": "D:/MemoChat-Qml-Drogon/vcpkg_installed"
+      }
     }
   ],
   "buildPresets": [
@@ -158,6 +185,13 @@
       "name": "msvc2022-vcpkg-server-msquic-release",
       "displayName": "Build Release (Server via vcpkg dynamic, MsQuic ready)",
       "configurePreset": "msvc2022-vcpkg-server-msquic",
+      "configuration": "Release",
+      "jobs": 8
+    },
+    {
+      "name": "msvc2022-loadtest-release",
+      "displayName": "Build Release (Local LoadTest)",
+      "configurePreset": "msvc2022-loadtest",
       "configuration": "Release",
       "jobs": 8
     }

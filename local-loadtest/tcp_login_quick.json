@@ -1,0 +1,69 @@
+﻿{
+  "scenario": "login.tcp",
+  "test": "tcp_login",
+  "time_utc": "20260319_075032",
+  "target": {
+    "gate_url": "http://127.0.0.1:8080",
+    "login_path": "/user_login"
+  },
+  "config": {
+    "total": 10,
+    "concurrency": 5,
+    "http_timeout_sec": 5.0,
+    "tcp_timeout_sec": 5.0,
+    "accounts": 8,
+    "use_xor_passwd": true,
+    "login_protocol_version": 3,
+    "relation_bootstrap_mode": "explicit_pull"
+  },
+  "summary": {
+    "total": 10,
+    "success": 0,
+    "failed": 10,
+    "success_rate": 0.0,
+    "elapsed_sec": 0.186009,
+    "throughput_rps": 53.761,
+    "latency_ms": {
+      "min": 12.202,
+      "avg": 76.366,
+      "p50": 61.289,
+      "p90": 129.875,
+      "p95": 135.767,
+      "p99": 135.767,
+      "max": 135.767
+    }
+  },
+  "error_counter": {
+    "http_error_1009": 10
+  },
+  "top_errors": {
+    "http_error_1009": 10
+  },
+  "phase_breakdown": {
+    "tcp_login_chain": {
+      "min": 12.202,
+      "avg": 76.366,
+      "p50": 61.289,
+      "p90": 129.875,
+      "p95": 135.767,
+      "p99": 135.767,
+      "max": 135.767
+    }
+  },
+  "chat_login_stage_breakdown": {
+    "ticket_verify_ms": {},
+    "session_attach_ms": {},
+    "relation_bootstrap_ms": {}
+  },
+  "preconditions": {
+    "service": [
+      "GateServer",
+      "StatusServer",
+      "ConfiguredChatNodes",
+      "Redis"
+    ]
+  },
+  "data_mutation_summary": {
+    "tcp_login_requests": 0
+  }
+}

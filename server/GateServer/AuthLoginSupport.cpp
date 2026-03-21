@@ -60,6 +60,10 @@ bool ParseSemVer(const std::string& ver, int& major, int& minor, int& patch) {
     return true;
 }
 
+} // namespace
+
+namespace gateauthsupport {
+
 int GetLoginCacheTtlSec() {
     auto& cfg = ConfigMgr::Inst();
     const auto ttl = cfg.GetValue("LoginCache", "TtlSec");
@@ -219,16 +223,20 @@ std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load
     if (least_loaded_snapshot) {
         least_loaded_snapshot->clear();
     }
-    try {
+
+    static const auto kCachedCluster = []() {
         auto& cfg = ConfigMgr::Inst();
-        const auto cluster = memochat::cluster::LoadChatClusterConfig(
+        return memochat::cluster::LoadChatClusterConfig(
             [&cfg](const std::string& section, const std::string& key) {
                 return cfg.GetValue(section, key);
             });
+    }();
+
+    try {
         std::vector<ChatRouteNode> nodes;
-        nodes.reserve(cluster.enabledNodes().size());
+        nodes.reserve(kCachedCluster.enabledNodes().size());
         int min_online = INT_MAX;
-        for (const auto& node : cluster.enabledNodes()) {
+        for (const auto& node : kCachedCluster.enabledNodes()) {
             ChatRouteNode route_node;
             route_node.name = node.name;
             route_node.host = node.tcp_host;

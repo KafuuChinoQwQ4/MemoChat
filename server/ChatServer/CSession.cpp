@@ -11,6 +11,14 @@
 #include "ConfigMgr.h"
 #include "UserMgr.h"
 
+#ifdef _WIN32
+#include <ws2tcpip.h>
+#include <mstcpip.h>
+#else
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+#endif
+
 CSession::CSession(boost::asio::io_context& io_context, CServer* server):
 	_socket(io_context), _server(server), _b_close(false),_b_head_parse(false), _user_uid(0){
 	boost::uuids::uuid  a_uuid = boost::uuids::random_generator()();
@@ -41,6 +49,27 @@ int CSession::GetUserId()
 }
 
 void CSession::Start(){
+#ifdef _WIN32
+	auto native_sock = _socket.native_handle();
+	int keepalive = 1;
+	::setsockopt(native_sock, SOL_SOCKET, SO_KEEPALIVE, reinterpret_cast<const char*>(&keepalive), sizeof(keepalive));
+	struct tcp_keepalive alive_out{};
+	alive_out.onoff = 1;
+	alive_out.keepalivetime = 60000;
+	alive_out.keepaliveinterval = 10000;
+	DWORD bytes_returned = 0;
+	::WSAIoctl(native_sock, SIO_KEEPALIVE_VALS, &alive_out, sizeof(alive_out), nullptr, 0, &bytes_returned, nullptr, nullptr);
+#else
+	int keepalive = 1;
+	int keepidle = 60;
+	int keepcnt = 3;
+	int keepintvl = 10;
+	auto native_sock = _socket.native_handle();
+	::setsockopt(native_sock, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive));
+	::setsockopt(native_sock, IPPROTO_TCP, TCP_KEEPIDLE, &keepidle, sizeof(keepidle));
+	::setsockopt(native_sock, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt));
+	::setsockopt(native_sock, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl));
+#endif
 	AsyncReadHead(HEAD_TOTAL_LEN);
 }
 
@@ -231,34 +260,25 @@ void CSession::HandleWrite(const boost::system::error_code& error, std::shared_p
 }
 
 
-void CSession::asyncReadFull(std::size_t maxLength, std::function<void(const boost::system::error_code&, std::size_t)> handler )
+void CSession::asyncReadFull(std::size_t maxLength, std::function<void(const boost::system::error_code&, std::size_t)> handler)
 {
-	::memset(_data, 0, MAX_LENGTH);
-	asyncReadLen(0, maxLength, handler);
+	boost::asio::async_read(_socket, boost::asio::buffer(_data, maxLength),
+		boost::asio::transfer_exactly(maxLength),
+		[handler](const boost::system::error_code& ec, std::size_t bytes) {
+			handler(ec, bytes);
+		});
 }
 
 
-void CSession::asyncReadLen(std::size_t read_len, std::size_t total_len, 
+void CSession::asyncReadLen(std::size_t read_len, std::size_t total_len,
 	std::function<void(const boost::system::error_code&, std::size_t)> handler)
 {
-	auto self = shared_from_this();
-	_socket.async_read_some(boost::asio::buffer(_data + read_len, total_len-read_len),
-		[read_len, total_len, handler, self](const boost::system::error_code& ec, std::size_t  bytesTransfered) {
-			if (ec) {
-
-				handler(ec, read_len + bytesTransfered);
-				return;
-			}
-
-			if (read_len + bytesTransfered >= total_len) {
-
-				handler(ec, read_len + bytesTransfered);
-				return;
-			}
-
-
-			self->asyncReadLen(read_len + bytesTransfered, total_len, handler);
-	});
+	boost::asio::async_read(_socket,
+		boost::asio::buffer(_data + read_len, total_len - read_len),
+		boost::asio::transfer_exactly(total_len - read_len),
+		[read_len, handler](const boost::system::error_code& ec, std::size_t bytes) {
+			handler(ec, read_len + bytes);
+		});
 }
 
 void CSession::NotifyOffline(int uid) {

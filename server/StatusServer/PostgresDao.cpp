@@ -17,7 +17,7 @@ std::string BuildConnectionString() {
 		" password=" + pwd +
 		" dbname=" + database +
 		" sslmode=" + (sslmode.empty() ? "disable" : sslmode) +
-		" options='-c search_path=" + schema + ",public'";
+		" options=-csearch_path=" + schema + ",public";
 }
 }
 

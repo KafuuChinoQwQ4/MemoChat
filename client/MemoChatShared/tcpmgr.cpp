@@ -72,7 +72,8 @@ TcpMgr::TcpMgr()
                 const auto *raw = reinterpret_cast<const uchar *>(_buffer.constData());
                 _message_id = qFromBigEndian<quint16>(raw);
                 _message_len = qFromBigEndian<quint16>(raw + sizeof(quint16));
-                _buffer.remove(0, kHeaderLen);
+                ::memmove(_buffer.data(), _buffer.data() + kHeaderLen, _buffer.size() - kHeaderLen);
+                _buffer.chop(kHeaderLen);
 
                 if (_message_len > kMaxBodyLen) {
                     qWarning() << "invalid message length:" << _message_len << ", reset parser";
@@ -89,8 +90,9 @@ TcpMgr::TcpMgr()
                 break;
             }
 
-            const QByteArray messageBody = _buffer.left(_message_len);
-            _buffer.remove(0, _message_len);
+            const QByteArray messageBody = QByteArray::fromRawData(_buffer.constData(), _message_len);
+            ::memmove(_buffer.data(), _buffer.data() + _message_len, _buffer.size() - _message_len);
+            _buffer.chop(_message_len);
             _b_recv_pending = false;
             handleMsg(ReqId(_message_id), _message_len, messageBody);
         }

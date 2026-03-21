@@ -52,7 +52,17 @@ IniConfig::IniConfig(const std::string& configPath) {
     std::cout << "Config path: " << resolvedPath << std::endl;
 
     boost::property_tree::ptree pt;
-    boost::property_tree::read_ini(resolvedPath, pt);
+    try {
+        boost::property_tree::read_ini(resolvedPath, pt);
+    } catch (const boost::property_tree::ini_parser_error& e) {
+        std::cerr << "[IniConfig] Failed to parse config file '" << resolvedPath
+                  << "': " << e.what() << std::endl;
+        return;
+    } catch (const std::exception& e) {
+        std::cerr << "[IniConfig] Error reading config file '" << resolvedPath
+                  << "': " << e.what() << std::endl;
+        return;
+    }
 
     for (const auto& sectionPair : pt) {
         IniSection section;

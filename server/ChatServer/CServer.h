@@ -2,7 +2,7 @@
 #include <boost/asio.hpp>
 #include "CSession.h"
 #include <memory.h>
-#include <map>
+#include <unordered_map>
 #include <mutex>
 #include <boost/asio/steady_timer.hpp>
 
@@ -25,7 +25,7 @@ private:
 	boost::asio::io_context &_io_context;
 	short _port;
 	tcp::acceptor _acceptor;
-	std::map<std::string, shared_ptr<CSession>> _sessions;
+	std::unordered_map<std::string, std::shared_ptr<CSession>> _sessions;
 	std::mutex _mutex;
 	boost::asio::steady_timer _timer;
 };

@@ -12,12 +12,15 @@
 #include "RedisMgr.h"
 #include "PostgresMgr.h"
 #include "GateAsyncSideEffects.h"
+#include "GateWorkerPool.h"
+#include "GateGlobals.h"
 #include "AsioIOServicePool.h"
 #include "logging/LogConfig.h"
 #include "logging/Logger.h"
 #include "logging/Telemetry.h"
 #include "logging/TelemetryConfig.h"
 #include <chrono>
+#include <thread>
 
 void TestRedis() {
 
@@ -160,7 +163,18 @@ int main()
 		GateAsyncSideEffects::Instance().Start();
 		std::string gate_port_str = gCfgMgr["GateServer"]["Port"];
 		unsigned short gate_port = atoi(gate_port_str.c_str());
-		net::io_context ioc{ 1 };
+		unsigned int num_threads = std::thread::hardware_concurrency();
+		if (num_threads < 2) num_threads = 4;
+		auto worker_threads_str = gCfgMgr.GetValue("GateServer", "WorkerThreads");
+		unsigned int worker_threads = worker_threads_str.empty() ? num_threads : std::atoi(worker_threads_str.c_str());
+		if (worker_threads < 1) worker_threads = num_threads;
+		gateglobals::g_worker_threads = worker_threads;
+		gateglobals::g_main_ioc = nullptr;
+		GateWorkerPool::GetInstance(worker_threads);
+		memolog::LogInfo("gate.thread_pool", "GateServer thread pool configured",
+			{ {"num_threads", std::to_string(num_threads)}, {"worker_threads", std::to_string(worker_threads)} });
+		net::io_context ioc{ static_cast<int>(num_threads) };
+		gateglobals::g_main_ioc = &ioc;
 		boost::asio::signal_set signals(ioc, SIGINT, SIGTERM);
 		signals.async_wait([&ioc](const boost::system::error_code& error, int signal_number) {
 
@@ -174,6 +188,7 @@ int main()
 		ioc.run();
 		memolog::LogInfo("service.stop", "GateServer stopped");
 		GateAsyncSideEffects::Instance().Stop();
+		GateWorkerPool::GetInstance()->Stop();
 		RedisMgr::GetInstance()->Close();
 		memolog::Telemetry::Shutdown();
 		memolog::Logger::Shutdown();
