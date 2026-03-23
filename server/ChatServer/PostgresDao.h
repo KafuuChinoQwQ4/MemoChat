@@ -79,6 +79,8 @@ public:
 		const int64_t& group_id, const int& pinned_rank);
 	bool UpsertDialogMuteState(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
 		const int64_t& group_id, const int& mute_state);
+	bool GetUndeliveredPrivateMessages(const int& to_uid, const int64_t& since_read_ts, int limit,
+		std::vector<std::shared_ptr<PrivateMessageInfo>>& messages);
 private:
 	void WarmupRelationBootstrapQueries();
 	bool EnsureGroupCodeSchemaAndBackfill();
@@ -91,7 +93,7 @@ private:
 	bool EnsureChatMessageIdempotencySchema();
 	bool GetGroupPermissionBits(const int64_t& group_id, const int& uid, int64_t& out_bits);
 	bool HasGroupPermission(const int64_t& group_id, const int& uid, int64_t required_bits);
-	std::string GenerateRandomGroupCode();
+	std::string GenerateGroupCode();
 	std::unique_ptr<PostgresPool> pool_;
 	bool use_postgres_ = false;
 	std::string postgres_connection_string_;

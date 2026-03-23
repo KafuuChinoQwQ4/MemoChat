@@ -75,6 +75,10 @@ Rectangle {
                 anchors.fill: parent
                 fillMode: Image.PreserveAspectCrop
                 source: root.userIcon
+                cache: true
+                asynchronous: true
+                opacity: (status === Image.Ready) ? 1.0 : 0.0
+                Behavior on opacity { NumberAnimation { duration: 200 } }
             }
 
             MouseArea {

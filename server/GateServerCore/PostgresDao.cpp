@@ -1,5 +1,6 @@
 #include "PostgresDao.h"
 #include "ConfigMgr.h"
+#include "SnowflakeUtil.h"
 #include <cctype>
 #include <random>
 
@@ -80,7 +81,7 @@ int PostgresDao::RegUserTransaction(
 
 		std::string user_public_id;
 		for (int i = 0; i < 20; ++i) {
-			user_public_id = GenerateRandomUserPublicId();
+			user_public_id = GenerateUserPublicId();
 			const auto rows = txn.exec_params(
 				"SELECT 1 FROM \"user\" WHERE user_id = $1 LIMIT 1",
 				user_public_id);
@@ -531,10 +532,8 @@ bool PostgresDao::GetMediaAssetByKey(const std::string& media_key, MediaAssetInf
 	}
 }
 
-std::string PostgresDao::GenerateRandomUserPublicId() {
-	static thread_local std::mt19937_64 rng(std::random_device{}());
-	std::uniform_int_distribution<int> dist(100000000, 999999999);
-	return "u" + std::to_string(dist(rng));
+std::string PostgresDao::GenerateUserPublicId() {
+	return SnowflakeUtil::formatPublicId(SnowflakeUtil::getInstance().nextId(), 'u');
 }
 
 bool PostgresDao::GetUserInfo(int uid, UserInfo& user_info) {

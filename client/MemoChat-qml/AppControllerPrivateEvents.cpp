@@ -384,7 +384,7 @@ void AppController::onDialogListRsp(QJsonObject payload)
     }
 
     DialogListService::sortDialogs(merged);
-    _dialog_list_model.setFriends(merged);
+    _dialog_list_model.upsertBatch(merged, true);
     if (_current_group_id > 0) {
         const int selectedGroupDialogUid = -static_cast<int>(_current_group_id);
         _dialog_list_model.clearUnread(selectedGroupDialogUid);

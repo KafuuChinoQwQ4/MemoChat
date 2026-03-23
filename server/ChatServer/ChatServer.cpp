@@ -2,6 +2,7 @@
 //
 
 #include "LogicSystem.h"
+#include "SnowflakeUtil.h"
 #include <csignal>
 #include <thread>
 #include <mutex>
@@ -122,6 +123,14 @@ int main(int argc, char** argv)
 			throw std::runtime_error("self node missing from cluster config: " + server_name);
 		}
 		SetInstanceNameEnv(server_name);
+
+		{
+			auto datacenter_id_str = cfg.GetValue("Snowflake", "DatacenterId");
+			auto worker_id_str = cfg.GetValue("Snowflake", "WorkerId");
+			int64_t datacenter_id = datacenter_id_str.empty() ? 1 : std::stoll(datacenter_id_str);
+			int64_t worker_id = worker_id_str.empty() ? 1 : std::stoll(worker_id_str);
+			SnowflakeUtil::getInstance().init(worker_id, datacenter_id);
+		}
 
 		auto log_cfg = memolog::LogConfig::FromGetter(
 			[&cfg](const std::string& section, const std::string& key) {

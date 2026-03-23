@@ -46,6 +46,10 @@ Item {
                     anchors.fill: parent
                     source: root.iconSource
                     fillMode: Image.PreserveAspectCrop
+                    cache: true
+                    asynchronous: true
+                    opacity: (status === Image.Ready) ? 1.0 : 0.0
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
                 }
             }
 

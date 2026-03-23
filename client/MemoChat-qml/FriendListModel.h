@@ -46,6 +46,7 @@ public:
     void upsertFriend(const std::shared_ptr<FriendInfo> &friendInfo);
     void upsertFriend(const std::shared_ptr<AuthInfo> &authInfo);
     void upsertFriend(const std::shared_ptr<AuthRsp> &authRsp);
+    void upsertBatch(const std::vector<std::shared_ptr<FriendInfo>> &friends, bool resetFirst = false);
     void updateLastMessage(int uid, const QString &lastMsg, qint64 lastMsgTs = 0);
     void incrementUnread(int uid, int delta = 1);
     void clearUnread(int uid);
