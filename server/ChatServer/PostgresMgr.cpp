@@ -254,3 +254,8 @@ bool PostgresMgr::UpsertDialogMuteState(const int& owner_uid, const std::string&
 	const int64_t& group_id, const int& mute_state) {
 	return _dao.UpsertDialogMuteState(owner_uid, dialog_type, peer_uid, group_id, mute_state);
 }
+
+bool PostgresMgr::GetUndeliveredPrivateMessages(const int& to_uid, const int64_t& since_read_ts, int limit,
+	std::vector<std::shared_ptr<PrivateMessageInfo>>& messages) {
+	return _dao.GetUndeliveredPrivateMessages(to_uid, since_read_ts, limit, messages);
+}

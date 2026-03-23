@@ -1,6 +1,7 @@
 #include "PostgresDao.h"
 #include "ConfigMgr.h"
 #include "PostgresPool.h"
+#include "SnowflakeUtil.h"
 #include <pqxx/pqxx>
 #include <set>
 #include <algorithm>
@@ -66,10 +67,8 @@ bool IsValidGroupCode(const std::string& group_code) {
 	return true;
 }
 
-std::string GenerateRandomUserPublicId() {
-	static thread_local std::mt19937_64 rng(std::random_device{}());
-	std::uniform_int_distribution<int> dist(100000000, 999999999);
-	return "u" + std::to_string(dist(rng));
+std::string GenerateUserPublicId() {
+	return SnowflakeUtil::formatPublicId(SnowflakeUtil::getInstance().nextId(), 'u');
 }
 
 std::string DecodeLegacyXorPwd(const std::string& input) {
@@ -262,7 +261,7 @@ int PostgresDao::RegUser(const std::string& name, const std::string& email, cons
 
 			std::string user_public_id;
 			for (int i = 0; i < 20; ++i) {
-				user_public_id = GenerateRandomUserPublicId();
+				user_public_id = GenerateUserPublicId();
 				const auto rows = txn.exec_params(
 					"SELECT 1 FROM \"user\" WHERE user_id = $1 LIMIT 1",
 					user_public_id);
@@ -1542,6 +1541,96 @@ bool PostgresDao::SavePrivateMessage(const PrivateMessageInfo& msg) {
 	}
 }
 
+bool PostgresDao::GetUndeliveredPrivateMessages(const int& to_uid, const int64_t& since_read_ts, int limit,
+	std::vector<std::shared_ptr<PrivateMessageInfo>>& messages) {
+	messages.clear();
+	if (to_uid <= 0 || limit <= 0) {
+		return false;
+	}
+
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::read_transaction txn(conn);
+			const auto rows = txn.exec_params(
+				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
+				"reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at "
+				"FROM chat_private_msg "
+				"WHERE to_uid = $1 AND created_at > $2 AND deleted_at_ms = 0 "
+				"ORDER BY created_at ASC, msg_id ASC "
+				"LIMIT $3",
+				to_uid,
+				since_read_ts,
+				limit);
+			for (const auto& row : rows) {
+				auto msg = std::make_shared<PrivateMessageInfo>();
+				msg->msg_id = row["msg_id"].is_null() ? "" : row["msg_id"].c_str();
+				msg->conv_uid_min = row["conv_uid_min"].as<int>();
+				msg->conv_uid_max = row["conv_uid_max"].as<int>();
+				msg->from_uid = row["from_uid"].as<int>();
+				msg->to_uid = row["to_uid"].as<int>();
+				msg->content = row["content"].is_null() ? "" : row["content"].c_str();
+				msg->reply_to_server_msg_id = row["reply_to_server_msg_id"].is_null() ? 0 : row["reply_to_server_msg_id"].as<int64_t>();
+				msg->forward_meta_json = row["forward_meta_json"].is_null() ? "" : row["forward_meta_json"].c_str();
+				msg->edited_at_ms = row["edited_at_ms"].is_null() ? 0 : row["edited_at_ms"].as<int64_t>();
+				msg->deleted_at_ms = row["deleted_at_ms"].is_null() ? 0 : row["deleted_at_ms"].as<int64_t>();
+				msg->created_at = row["created_at"].is_null() ? 0 : row["created_at"].as<int64_t>();
+				messages.push_back(msg);
+			}
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(
+			con->_con->prepareStatement(
+				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
+				"reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at "
+				"FROM chat_private_msg "
+				"WHERE to_uid = ? AND created_at > ? AND deleted_at_ms = 0 "
+				"ORDER BY created_at ASC, msg_id ASC "
+				"LIMIT ?"));
+		pstmt->setString(1, std::to_string(to_uid));
+		pstmt->setInt64(2, since_read_ts);
+		pstmt->setInt(3, limit);
+		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+		while (res->next()) {
+			auto msg = std::make_shared<PrivateMessageInfo>();
+			msg->msg_id = res->isNull("msg_id") ? "" : res->getString("msg_id");
+			msg->conv_uid_min = res->getInt("conv_uid_min");
+			msg->conv_uid_max = res->getInt("conv_uid_max");
+			msg->from_uid = res->getInt("from_uid");
+			msg->to_uid = res->getInt("to_uid");
+			msg->content = res->isNull("content") ? "" : res->getString("content");
+			msg->reply_to_server_msg_id = res->isNull("reply_to_server_msg_id") ? 0 : res->getInt64("reply_to_server_msg_id");
+			msg->forward_meta_json = res->isNull("forward_meta_json") ? "" : res->getString("forward_meta_json");
+			msg->edited_at_ms = res->isNull("edited_at_ms") ? 0 : res->getInt64("edited_at_ms");
+			msg->deleted_at_ms = res->isNull("deleted_at_ms") ? 0 : res->getInt64("deleted_at_ms");
+			msg->created_at = res->isNull("created_at") ? 0 : res->getInt64("created_at");
+			messages.push_back(msg);
+		}
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
 bool PostgresDao::GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const std::string& before_msg_id, const int& limit,
 	std::vector<std::shared_ptr<PrivateMessageInfo>>& messages, bool& has_more) {
 	has_more = false;
@@ -2205,7 +2294,7 @@ bool PostgresDao::CreateGroup(const int& owner_uid, const std::string& name, con
 			pqxx::work txn(conn);
 			std::string group_code;
 			for (int i = 0; i < 20; ++i) {
-				const std::string candidate = GenerateRandomGroupCode();
+				const std::string candidate = GenerateGroupCode();
 				const auto dup = txn.exec_params(
 					"SELECT 1 FROM chat_group WHERE group_code = $1 LIMIT 1",
 					candidate);
@@ -2279,7 +2368,7 @@ bool PostgresDao::CreateGroup(const int& owner_uid, const std::string& name, con
 
 		std::string group_code;
 		for (int i = 0; i < 20; ++i) {
-			const std::string candidate = GenerateRandomGroupCode();
+			const std::string candidate = GenerateGroupCode();
 			std::unique_ptr<sql::PreparedStatement> check_group_code(
 				con->_con->prepareStatement("SELECT 1 FROM chat_group WHERE group_code = ? LIMIT 1"));
 			check_group_code->setString(1, candidate);
@@ -4896,10 +4985,8 @@ bool PostgresDao::UpsertDialogMuteState(const int& owner_uid, const std::string&
 	}
 }
 
-std::string PostgresDao::GenerateRandomGroupCode() {
-	static thread_local std::mt19937_64 rng(std::random_device{}());
-	std::uniform_int_distribution<int> dist(100000000, 999999999);
-	return "g" + std::to_string(dist(rng));
+std::string PostgresDao::GenerateGroupCode() {
+	return SnowflakeUtil::formatPublicId(SnowflakeUtil::getInstance().nextId(), 'g');
 }
 
 bool PostgresDao::EnsureChatMessageIdempotencySchema() {
@@ -5362,7 +5449,7 @@ bool PostgresDao::EnsureGroupCodeSchemaAndBackfill() {
 
 			std::string new_code;
 			for (int i = 0; i < 20; ++i) {
-				const std::string candidate = GenerateRandomGroupCode();
+				const std::string candidate = GenerateGroupCode();
 				if (used_codes.find(candidate) == used_codes.end()) {
 					new_code = candidate;
 					break;

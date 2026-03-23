@@ -90,7 +90,14 @@ TcpMgr::TcpMgr()
                 break;
             }
 
-            // Deep-copy message before shifting the buffer: fromRawData() aliases _buffer
+            //修改前
+            // const QByteArray messageBody = QByteArray::fromRawData(_buffer.constData(), _message_len);
+            // ::memmove(_buffer.data(), _buffer.data() + _message_len, ...);
+            
+            // // 修改后：
+            // const QByteArray messageBody(_buffer.constData(), _message_len);
+            // ::memmove(_buffer.data(), _buffer.data() + _message_len, ...);
+            // ```
             // and memmove() would corrupt the payload when another frame is already buffered.
             const QByteArray messageBody(_buffer.constData(), _message_len);
             ::memmove(_buffer.data(), _buffer.data() + _message_len, _buffer.size() - _message_len);

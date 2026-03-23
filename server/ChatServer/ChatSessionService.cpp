@@ -6,14 +6,18 @@
 #include "CSession.h"
 #include "ChatUserSupport.h"
 #include "LogicSystem.h"
+#include "MongoMgr.h"
+#include "PostgresMgr.h"
 #include "RedisMgr.h"
 #include "UserMgr.h"
 #include "auth/ChatLoginTicket.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
 
+#include <algorithm>
 #include <chrono>
 #include <json/json.h>
+#include <thread>
 
 namespace {
 int64_t NowMsLocal() {
@@ -220,6 +224,8 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, s
          {"ticket_verify_ms", std::to_string(ticket_verify_ms)}, {"session_attach_ms", std::to_string(session_attach_ms)},
          {"relation_bootstrap_ms", "0"}, {"relation_bootstrap_mode", relation_bootstrap_mode},
          {"chat_login_total_ms", std::to_string(NowMsLocal() - login_start_ms)}});
+
+    std::thread(&ChatSessionService::PushOfflineMessages, this, session, uid).detach();
 }
 
 void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data)
@@ -299,4 +305,107 @@ void ChatSessionService::HandleHeartbeat(const std::shared_ptr<CSession>& sessio
     Json::Value rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     session->Send(JsonValueToWireString(rtvalue), ID_HEARTBEAT_RSP);
+}
+
+void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& session, int uid)
+{
+    constexpr int kOfflineBatchSize = 50;
+    constexpr int kMaxOfflineBatches = 10;
+
+    memolog::LogInfo("chat.login.offline_push_start", "starting offline message push",
+        {{"uid", std::to_string(uid)}, {"session_id", session->GetSessionId()}});
+
+    int pushed_total = 0;
+    int64_t latest_read_ts = 0;
+
+    // 获取所有好友的已读时间戳，取最大值作为基准
+    // 这样只推送真正未读的消息
+    std::vector<std::shared_ptr<UserInfo>> friend_list;
+    if (chatusersupport::GetFriendList(uid, friend_list)) {
+        for (const auto& friend_info : friend_list) {
+            if (!friend_info) continue;
+            DialogRuntimeInfo runtime;
+            if (PostgresMgr::GetInstance()->GetPrivateDialogRuntime(uid, friend_info->uid, runtime)) {
+                if (runtime.unread_count > 0 && runtime.last_msg_ts > latest_read_ts) {
+                    latest_read_ts = runtime.last_msg_ts;
+                }
+            }
+        }
+    }
+
+    // 如果没有未读消息，直接返回
+    if (latest_read_ts <= 0) {
+        memolog::LogInfo("chat.login.offline_push_skipped", "no unread messages",
+            {{"uid", std::to_string(uid)}});
+        return;
+    }
+
+    for (int batch = 0; batch < kMaxOfflineBatches; ++batch) {
+        std::vector<std::shared_ptr<PrivateMessageInfo>> messages;
+        if (!PostgresMgr::GetInstance()->GetUndeliveredPrivateMessages(uid, latest_read_ts, kOfflineBatchSize, messages)
+            || messages.empty()) {
+            break;
+        }
+
+        // 按 from_uid 分组
+        std::map<int, std::vector<std::shared_ptr<PrivateMessageInfo>>> msgs_by_sender;
+        for (const auto& msg : messages) {
+            if (msg && msg->from_uid != uid) {
+                msgs_by_sender[msg->from_uid].push_back(msg);
+            }
+        }
+
+        for (const auto& [sender_uid, sender_msgs] : msgs_by_sender) {
+            Json::Value text_array(Json::arrayValue);
+            for (const auto& msg : sender_msgs) {
+                Json::Value element;
+                element["msgid"] = msg->msg_id;
+                element["content"] = msg->content;
+                element["created_at"] = static_cast<Json::Int64>(msg->created_at);
+                if (msg->reply_to_server_msg_id > 0) {
+                    element["reply_to_server_msg_id"] = static_cast<Json::Int64>(msg->reply_to_server_msg_id);
+                }
+                if (!msg->forward_meta_json.empty()) {
+                    Json::Value forward_meta;
+                    Json::CharReaderBuilder builder;
+                    std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+                    if (reader->parse(msg->forward_meta_json.data(),
+                                       msg->forward_meta_json.data() + msg->forward_meta_json.size(),
+                                       &forward_meta, nullptr)) {
+                        element["forward_meta"] = forward_meta;
+                    }
+                }
+                if (msg->edited_at_ms > 0) {
+                    element["edited_at_ms"] = static_cast<Json::Int64>(msg->edited_at_ms);
+                }
+                if (msg->deleted_at_ms > 0) {
+                    element["deleted_at_ms"] = static_cast<Json::Int64>(msg->deleted_at_ms);
+                }
+                text_array.append(element);
+            }
+
+            Json::Value notify;
+            notify["error"] = ErrorCodes::Success;
+            notify["fromuid"] = sender_uid;
+            notify["touid"] = uid;
+            notify["text_array"] = text_array;
+
+            session->Send(JsonValueToWireString(notify), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+            pushed_total += static_cast<int>(sender_msgs.size());
+
+            memolog::LogInfo("chat.login.offline_push_batch", "pushed offline messages batch",
+                {{"uid", std::to_string(uid)},
+                 {"from_uid", std::to_string(sender_uid)},
+                 {"count", std::to_string(sender_msgs.size())}});
+        }
+
+        if (static_cast<int>(messages.size()) < kOfflineBatchSize) {
+            break;
+        }
+    }
+
+    memolog::LogInfo("chat.login.offline_push_done", "offline message push completed",
+        {{"uid", std::to_string(uid)},
+         {"session_id", session->GetSessionId()},
+         {"pushed_total", std::to_string(pushed_total)}});
 }

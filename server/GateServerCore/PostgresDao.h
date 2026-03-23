@@ -192,7 +192,7 @@ public:
 	bool TestProcedure(const std::string& email, int& uid, string& name);
 private:
 	void WarmupAuthQueries();
-	std::string GenerateRandomUserPublicId();
+	std::string GenerateUserPublicId();
 	std::unique_ptr<PostgresPool> pool_;
 };
 

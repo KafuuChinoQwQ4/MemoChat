@@ -3,6 +3,7 @@
 
 #include "GateHttp3Listener.h"
 #include "LogicSystem.h"
+#include "SnowflakeUtil.h"
 #include <iostream>
 #include <json/json.h>
 #include <json/value.h>
@@ -161,8 +162,15 @@ int main()
 				{"postgres_init_ms", std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
 					std::chrono::steady_clock::now() - postgres_init_start).count())}
 			});
-		RedisMgr::GetInstance();
-		GateAsyncSideEffects::Instance().Start();
+	RedisMgr::GetInstance();
+	{
+		auto worker_id_str = gCfgMgr.GetValue("Snowflake", "WorkerId");
+		auto datacenter_id_str = gCfgMgr.GetValue("Snowflake", "DatacenterId");
+		int64_t worker_id = worker_id_str.empty() ? 0 : std::stoll(worker_id_str);
+		int64_t datacenter_id = datacenter_id_str.empty() ? 0 : std::stoll(datacenter_id_str);
+		SnowflakeUtil::getInstance().init(worker_id, datacenter_id);
+	}
+	GateAsyncSideEffects::Instance().Start();
 		std::string gate_port_str = gCfgMgr["GateServer"]["Port"];
 		unsigned short gate_port = atoi(gate_port_str.c_str());
 		unsigned int num_threads = std::thread::hardware_concurrency();
