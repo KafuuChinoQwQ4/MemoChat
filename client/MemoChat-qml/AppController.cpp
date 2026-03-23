@@ -1561,15 +1561,7 @@ void AppController::bootstrapGroups()
 
     refreshGroupModel();
     setGroupsReady(true);
-    if (auto selfInfo = _gateway.userMgr()->GetUserInfo()) {
-        QTimer::singleShot(0, this, [this, uid = selfInfo->_uid]() {
-            auto current = _gateway.userMgr()->GetUserInfo();
-            if (!current || current->_uid != uid || _page != ChatPage) {
-                return;
-            }
-            refreshGroupList();
-        });
-    }
+    refreshGroupList();
 }
 
 void AppController::bootstrapApplies()
@@ -1673,7 +1665,7 @@ void AppController::refreshDialogModel()
     }
 
     DialogListService::sortDialogs(dialogs);
-    _dialog_list_model.setFriends(dialogs);
+    _dialog_list_model.upsertBatch(dialogs, true);
     syncCurrentDialogDraft();
 }
 
@@ -1681,7 +1673,7 @@ void AppController::refreshDialogModelIncremental()
 {
     const qint64 startTs = QDateTime::currentMSecsSinceEpoch();
 
-    // 增量更新会话列表：避免全量重建，使用 upsert 增量添加
+    std::vector<std::shared_ptr<FriendInfo>> updates;
     const DialogDecorationState decorationState {
         &_dialog_draft_map,
         &_dialog_mention_map,
@@ -1690,8 +1682,8 @@ void AppController::refreshDialogModelIncremental()
         &_dialog_local_pinned_set
     };
 
-    // 增量更新私聊会话
     const auto chats = _gateway.userMgr()->GetFriendListSnapshot();
+    updates.reserve(chats.size() + 1);
     for (const auto &chat : chats) {
         if (!chat) {
             continue;
@@ -1711,11 +1703,9 @@ void AppController::refreshDialogModelIncremental()
         if (!chat->_chat_msgs.empty() && chat->_chat_msgs.back()) {
             seed.lastMsgTs = chat->_chat_msgs.back()->_created_at;
         }
-        auto entry = DialogListService::buildDialogEntry(seed, decorationState);
-        _dialog_list_model.upsertFriend(entry);
+        updates.push_back(DialogListService::buildDialogEntry(seed, decorationState));
     }
 
-    // 增量更新群组会话
     const auto groups = _gateway.userMgr()->GetGroupListSnapshot();
     for (const auto &group : groups) {
         if (!group || group->_group_id <= 0) {
@@ -1736,9 +1726,10 @@ void AppController::refreshDialogModelIncremental()
         if (!group->_chat_msgs.empty() && group->_chat_msgs.back()) {
             seed.lastMsgTs = group->_chat_msgs.back()->_created_at;
         }
-        auto entry = DialogListService::buildDialogEntry(seed, decorationState);
-        _dialog_list_model.upsertFriend(entry);
+        updates.push_back(DialogListService::buildDialogEntry(seed, decorationState));
     }
+
+    _dialog_list_model.upsertBatch(updates);
 
     syncCurrentDialogDraft();
 

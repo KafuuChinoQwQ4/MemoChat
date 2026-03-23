@@ -219,9 +219,10 @@ Rectangle {
                                     property string baseSource: (icon && icon.length > 0) ? icon : fallbackSource
                                     property bool loadFailed: false
                                     source: loadFailed ? fallbackSource : baseSource
-                                    // 头像优化：启用缓存和异步加载
                                     cache: true
                                     asynchronous: true
+                                    opacity: (status === Image.Ready) ? 1.0 : 0.0
+                                    Behavior on opacity { NumberAnimation { duration: 200 } }
                                     onBaseSourceChanged: loadFailed = false
                                     onStatusChanged: if (status === Image.Error) { loadFailed = true }
                                 }
@@ -328,9 +329,10 @@ Rectangle {
                                     property string baseSource: (icon && icon.length > 0) ? icon : fallbackSource
                                     property bool loadFailed: false
                                     source: loadFailed ? fallbackSource : baseSource
-                                    // 头像优化：启用缓存和异步加载
                                     cache: true
                                     asynchronous: true
+                                    opacity: (status === Image.Ready) ? 1.0 : 0.0
+                                    Behavior on opacity { NumberAnimation { duration: 200 } }
                                     onBaseSourceChanged: loadFailed = false
                                     onStatusChanged: if (status === Image.Error) { loadFailed = true }
                                 }

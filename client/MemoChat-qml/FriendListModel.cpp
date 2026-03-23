@@ -206,6 +206,102 @@ void FriendListModel::upsertFriend(const std::shared_ptr<AuthRsp> &authRsp)
     upsert(entry);
 }
 
+void FriendListModel::upsertBatch(const std::vector<std::shared_ptr<FriendInfo>> &friends, bool resetFirst)
+{
+    if (friends.empty()) {
+        if (resetFirst) {
+            clear();
+        }
+        return;
+    }
+
+    if (resetFirst) {
+        beginResetModel();
+        _items.clear();
+        _items.reserve(friends.size());
+        for (const auto &friendInfo : friends) {
+            if (!friendInfo) {
+                continue;
+            }
+
+            FriendEntry entry;
+            entry.uid = friendInfo->_uid;
+            entry.userId = friendInfo->_user_id;
+            entry.name = friendInfo->_name;
+            entry.nick = friendInfo->_nick;
+            entry.icon = normalizeIcon(friendInfo->_icon);
+            entry.desc = friendInfo->_desc;
+            entry.lastMsg = friendInfo->_last_msg;
+            entry.sex = friendInfo->_sex;
+            entry.back = friendInfo->_back;
+            entry.dialogType = friendInfo->_dialog_type;
+            entry.unreadCount = friendInfo->_unread_count;
+            entry.pinnedRank = friendInfo->_pinned_rank;
+            entry.draftText = friendInfo->_draft_text;
+            entry.lastMsgTs = friendInfo->_last_msg_ts;
+            entry.muteState = friendInfo->_mute_state;
+            entry.mentionCount = friendInfo->_mention_count;
+            _items.push_back(entry);
+        }
+        endResetModel();
+        emit countChanged();
+        return;
+    }
+
+    std::vector<int> updatedIndices;
+    updatedIndices.reserve(friends.size());
+    std::vector<int> newIndices;
+    newIndices.reserve(friends.size());
+
+    for (const auto &friendInfo : friends) {
+        if (!friendInfo) {
+            continue;
+        }
+
+        FriendEntry entry;
+        entry.uid = friendInfo->_uid;
+        entry.userId = friendInfo->_user_id;
+        entry.name = friendInfo->_name;
+        entry.nick = friendInfo->_nick;
+        entry.icon = normalizeIcon(friendInfo->_icon);
+        entry.desc = friendInfo->_desc;
+        entry.lastMsg = friendInfo->_last_msg;
+        entry.sex = friendInfo->_sex;
+        entry.back = friendInfo->_back;
+        entry.dialogType = friendInfo->_dialog_type;
+        entry.unreadCount = friendInfo->_unread_count;
+        entry.pinnedRank = friendInfo->_pinned_rank;
+        entry.draftText = friendInfo->_draft_text;
+        entry.lastMsgTs = friendInfo->_last_msg_ts;
+        entry.muteState = friendInfo->_mute_state;
+        entry.mentionCount = friendInfo->_mention_count;
+
+        const int existingIdx = indexOfUid(entry.uid);
+        if (existingIdx >= 0) {
+            _items[static_cast<size_t>(existingIdx)] = entry;
+            updatedIndices.push_back(existingIdx);
+        } else {
+            _items.push_back(entry);
+            newIndices.push_back(static_cast<int>(_items.size()) - 1);
+        }
+    }
+
+    if (!updatedIndices.empty()) {
+        for (int idx : updatedIndices) {
+            emit dataChanged(index(idx, 0), index(idx, 0));
+        }
+    }
+
+    if (!newIndices.empty()) {
+        beginInsertRows(QModelIndex(), newIndices.front(), newIndices.back());
+        endInsertRows();
+    }
+
+    if (!updatedIndices.empty() || !newIndices.empty()) {
+        emit countChanged();
+    }
+}
+
 void FriendListModel::updateLastMessage(int uid, const QString &lastMsg, qint64 lastMsgTs)
 {
     const int idx = indexOfUid(uid);
