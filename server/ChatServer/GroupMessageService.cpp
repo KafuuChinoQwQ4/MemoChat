@@ -11,6 +11,7 @@
 #include <chrono>
 #include <iostream>
 #include <json/json.h>
+#include <json/writer.h>
 #include <unordered_set>
 
 namespace {
@@ -39,6 +40,13 @@ bool ParseJsonObjectGroupLocal(const std::string& payload, Json::Value& root) {
     std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
     std::string errors;
     return reader->parse(payload.data(), payload.data() + payload.size(), &root, &errors) && root.isObject();
+}
+
+// Compact wire JSON for TCP/QUIC transport (Qt QJsonDocument is strict).
+std::string JsonToWireString(const Json::Value& v) {
+    Json::StreamWriterBuilder builder;
+    builder["indentation"] = "";
+    return Json::writeString(builder, v);
 }
 
 bool KafkaBackendEnabledGroupLocal() {

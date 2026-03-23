@@ -1,7 +1,7 @@
 #pragma once
 #include <boost/asio.hpp>
 #include "CSession.h"
-#include <memory.h>
+#include <memory>
 #include <unordered_map>
 #include <mutex>
 #include <boost/asio/steady_timer.hpp>
@@ -14,13 +14,13 @@ public:
 	~CServer();
 	void ClearSession(std::string);
 
-	shared_ptr<CSession> GetSession(std::string);
+	std::shared_ptr<CSession> GetSession(std::string);
 	bool CheckValid(std::string);
 	void on_timer(const boost::system::error_code& ec);
 	void StartTimer();
 	void StopTimer();
 private:
-	void HandleAccept(shared_ptr<CSession>, const boost::system::error_code & error);
+	void HandleAccept(std::shared_ptr<CSession>, const boost::system::error_code & error);
 	void StartAccept();
 	boost::asio::io_context &_io_context;
 	short _port;

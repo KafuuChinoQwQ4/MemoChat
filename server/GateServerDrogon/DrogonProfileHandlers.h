@@ -16,8 +16,4 @@ class DrogonProfileHandlers : public drogon::HttpController<DrogonProfileHandler
 
     void HandleUserUpdateProfile(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback);
     void HandleGetUserInfo(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback);
-
-  private:
-    Json::Value CreateErrorResponse(int error_code);
-    Json::Value ParseJsonBody(const std::string& body_str);
 };

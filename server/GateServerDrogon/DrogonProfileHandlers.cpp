@@ -1,49 +1,54 @@
+#include "WinCompat.h"
 #include "DrogonProfileHandlers.h"
-#include <iostream>
-#include <json/json.h>
+#include "DrogonProfileSupport.h"
+#include "../GateServerCore/const.h"
 
 using namespace drogon;
 
-Json::Value DrogonProfileHandlers::CreateErrorResponse(int error_code)
+void DrogonProfileHandlers::HandleUserUpdateProfile(const HttpRequestPtr& req,
+    std::function<void(const HttpResponsePtr&)>&& callback)
 {
-    Json::Value resp;
-    resp["error"] = error_code;
-    return resp;
-}
-
-Json::Value DrogonProfileHandlers::ParseJsonBody(const std::string& body_str)
-{
+    auto body_str = req->getBody();
     Json::Value root;
-    Json::Reader reader;
-    if (!reader.parse(body_str, root)) {
-        return CreateErrorResponse(1);
+    if (!DrogonProfileSupport::ParseJsonBody(body_str, root)) {
+        auto resp = HttpResponse::newHttpJsonResponse(
+            DrogonProfileSupport::MakeError(1, "invalid json"));
+        callback(resp);
+        return;
     }
-    return root;
+    auto result = DrogonProfileSupport::HandleUserUpdateProfile(root);
+    Json::Value out = DrogonProfileSupport::MakeError(result.error, result.message);
+    if (result.data.isObject()) {
+        for (const auto& key : result.data.getMemberNames()) {
+            out[key] = result.data[key];
+        }
+    }
+    auto resp = HttpResponse::newHttpJsonResponse(out);
+    callback(resp);
 }
 
-void DrogonProfileHandlers::HandleUserUpdateProfile(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback)
+void DrogonProfileHandlers::HandleGetUserInfo(const HttpRequestPtr& req,
+    std::function<void(const HttpResponsePtr&)>&& callback)
 {
     auto body_str = req->getBody();
-    std::cout << "HandleUserUpdateProfile: " << body_str << std::endl;
-    
-    Json::Value resp;
-    resp["error"] = 0;
-    resp["message"] = "profile updated";
-    
-    auto response = HttpResponse::newHttpJsonResponse(resp);
-    callback(response);
-}
-
-void DrogonProfileHandlers::HandleGetUserInfo(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback)
-{
-    auto body_str = req->getBody();
-    std::cout << "HandleGetUserInfo: " << body_str << std::endl;
-    
-    Json::Value resp;
-    resp["error"] = 0;
-    resp["username"] = "stub_user";
-    resp["email"] = "stub@example.com";
-    
-    auto response = HttpResponse::newHttpJsonResponse(resp);
-    callback(response);
+    Json::Value root;
+    int uid = 0;
+    if (DrogonProfileSupport::ParseJsonBody(body_str, root)) {
+        uid = root.get("uid", 0).asInt();
+    }
+    if (uid <= 0) {
+        auto resp = HttpResponse::newHttpJsonResponse(
+            DrogonProfileSupport::MakeError(1, "invalid uid"));
+        callback(resp);
+        return;
+    }
+    auto result = DrogonProfileSupport::HandleGetUserInfo(uid);
+    Json::Value out = DrogonProfileSupport::MakeError(result.error, result.message);
+    if (result.data.isObject()) {
+        for (const auto& key : result.data.getMemberNames()) {
+            out[key] = result.data[key];
+        }
+    }
+    auto resp = HttpResponse::newHttpJsonResponse(out);
+    callback(resp);
 }

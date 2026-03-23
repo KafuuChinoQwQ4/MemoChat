@@ -137,8 +137,12 @@ public:
     }
 
     void warmup(const TestConfig& cfg, const Account& account) override {
-        TestResult r = run_one(cfg, account, "warmup");
-        (void)r;
+        // Perform multiple warmup iterations to ensure Redis cache is populated
+        // This is critical for fair comparison between TCP and QUIC tests
+        for (int i = 0; i < 3; ++i) {
+            TestResult r = run_one(cfg, account, "warmup_" + std::to_string(i));
+            (void)r;
+        }
     }
 
 private:
@@ -151,10 +155,11 @@ std::unique_ptr<IScenarioRunner> make_quic_scenario() {
 
 // ---- Scenario factory ----
 std::unique_ptr<IScenarioRunner> make_scenario(const std::string& scenario_name) {
-    if (scenario_name == "tcp") return make_tcp_scenario();
-    if (scenario_name == "quic") return make_quic_scenario();
-    if (scenario_name == "http") return make_http_scenario();
-    // Default to TCP
+    if (scenario_name == "http")  return make_http_scenario();
+    if (scenario_name == "http2") return make_http2_scenario();
+    if (scenario_name == "http3") return make_http3_scenario();
+    if (scenario_name == "tcp")   return make_tcp_scenario();
+    if (scenario_name == "quic")  return make_quic_scenario();
     return make_tcp_scenario();
 }
 

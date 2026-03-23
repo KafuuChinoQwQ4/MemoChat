@@ -17,6 +17,7 @@
 #include <chrono>
 #include <iostream>
 #include <json/json.h>
+#include <json/writer.h>
 #include <set>
 #include <unordered_set>
 #include <vector>
@@ -47,6 +48,13 @@ std::string TrimCopyLocal(const std::string& text) {
 
 std::string ServerOnlineUsersKeyLocal(const std::string& server_name) {
     return std::string(SERVER_ONLINE_USERS_PREFIX) + server_name;
+}
+
+// Compact wire JSON for TCP/QUIC transport (Qt QJsonDocument is strict).
+std::string JsonToWireString(const Json::Value& v) {
+    Json::StreamWriterBuilder builder;
+    builder["indentation"] = "";
+    return Json::writeString(builder, v);
 }
 
 std::vector<std::string> KnownChatServerNamesLocal() {

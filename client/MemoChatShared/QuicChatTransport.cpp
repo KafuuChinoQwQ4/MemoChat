@@ -65,7 +65,9 @@ void QuicChatTransport::handleReceivedBytes(const QByteArray &bytes)
             return;
         }
 
-        const QByteArray payload = QByteArray::fromRawData(_recvBuffer.constData(), _messageLen);
+        // Deep-copy before memmove: fromRawData() aliases _recvBuffer; a trailing frame would
+        // otherwise overwrite the current payload bytes in place.
+        const QByteArray payload(_recvBuffer.constData(), _messageLen);
         ::memmove(_recvBuffer.data(), _recvBuffer.data() + _messageLen, _recvBuffer.size() - _messageLen);
         _recvBuffer.chop(_messageLen);
         _recvPending = false;

@@ -1,3 +1,4 @@
+#include "WinCompat.h"
 #include "GateServerDrogon.h"
 #include <iostream>
 #include <memory>

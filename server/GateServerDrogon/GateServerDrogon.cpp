@@ -1,13 +1,11 @@
+#include "WinCompat.h"
 #include "GateServerDrogon.h"
 #include "DrogonAppCfg.h"
+#include "DrogonRoutes.h"
 #include <drogon/drogon.h>
 #include <iostream>
 
 using namespace drogon;
-
-GateServerDrogon::GateServerDrogon()
-{
-}
 
 void GateServerDrogon::Initialize()
 {

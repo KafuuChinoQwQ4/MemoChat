@@ -48,6 +48,8 @@ set(CLIENT_SRCS
 
 set(SCENARIO_SRCS
     src/scenarios/http_scenario.cpp
+    src/scenarios/http2_scenario.cpp
+    src/scenarios/http3_scenario.cpp
     src/scenarios/tcp_scenario.cpp
     src/scenarios/quic_scenario.cpp
 )

@@ -32,7 +32,6 @@ void GetUserByUid(const std::string& uid_str, Json::Value& rtvalue)
         reader.parse(info_str, root);
         rtvalue["uid"] = root["uid"].asInt();
         rtvalue["user_id"] = root["user_id"].asString();
-        rtvalue["pwd"] = root["pwd"].asString();
         rtvalue["name"] = root["name"].asString();
         rtvalue["email"] = root["email"].asString();
         rtvalue["nick"] = root["nick"].asString();
@@ -62,7 +61,6 @@ void GetUserByUid(const std::string& uid_str, Json::Value& rtvalue)
 
     rtvalue["uid"] = user_info->uid;
     rtvalue["user_id"] = user_info->user_id;
-    rtvalue["pwd"] = user_info->pwd;
     rtvalue["name"] = user_info->name;
     rtvalue["email"] = user_info->email;
     rtvalue["nick"] = user_info->nick;
@@ -83,7 +81,6 @@ void GetUserByName(const std::string& name, Json::Value& rtvalue)
         reader.parse(info_str, root);
         rtvalue["uid"] = root["uid"].asInt();
         rtvalue["user_id"] = root["user_id"].asString();
-        rtvalue["pwd"] = root["pwd"].asString();
         rtvalue["name"] = root["name"].asString();
         rtvalue["email"] = root["email"].asString();
         rtvalue["nick"] = root["nick"].asString();

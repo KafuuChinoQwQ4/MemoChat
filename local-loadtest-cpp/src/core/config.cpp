@@ -64,6 +64,8 @@ bool load_config(const std::string& path, TestConfig& out) {
     };
 
     kv("gate_url", out.gate_url);
+    kv("gate_url_https", out.gate_url_https);
+    kv("gate_url_http3", out.gate_url_http3);
     kv("accounts_csv", out.accounts_csv);
     kv("login_path", out.login_path);
     kv("client_ver", out.client_ver);

@@ -42,6 +42,13 @@ void RepairOnlineRouteStateLocal(int uid, const std::shared_ptr<CSession>& sessi
     RedisMgr::GetInstance()->Set(USER_SESSION_PREFIX + uid_str, session->GetSessionId());
     RedisMgr::GetInstance()->SAdd(std::string(SERVER_ONLINE_USERS_PREFIX) + server_name, uid_str);
 }
+
+// Compact JSON for wire (Qt QJsonDocument is strict; avoid pretty-print / stray whitespace issues).
+std::string JsonValueToWireString(const Json::Value& v) {
+    Json::StreamWriterBuilder builder;
+    builder["indentation"] = "";
+    return Json::writeString(builder, v);
+}
 }
 
 ChatSessionService::ChatSessionService(LogicSystem& logic)
@@ -72,7 +79,7 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, s
 
     Json::Value rtvalue;
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), MSG_CHAT_LOGIN_RSP);
+        session->Send(JsonValueToWireString(rtvalue), MSG_CHAT_LOGIN_RSP);
     });
     rtvalue["trace_id"] = trace_id;
     rtvalue["protocol_version"] = 2;
@@ -149,7 +156,7 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, s
         }
     }
     rtvalue["uid"] = uid;
-    rtvalue["pwd"] = user_info->pwd;
+    // Do not echo password hash over chat transport (security + avoids rare JSON/Qt parse issues).
     rtvalue["name"] = user_info->name;
     rtvalue["email"] = user_info->email;
     rtvalue["nick"] = user_info->nick;
@@ -239,7 +246,7 @@ void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>
     if (uid <= 0) {
         rtvalue["error"] = ErrorCodes::UidInvalid;
         if (session) {
-            session->Send(rtvalue.toStyledString(), ID_GET_RELATION_BOOTSTRAP_RSP);
+            session->Send(JsonValueToWireString(rtvalue), ID_GET_RELATION_BOOTSTRAP_RSP);
         }
         return;
     }
@@ -249,7 +256,7 @@ void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>
     rtvalue["uid"] = uid;
     _logic.AppendRelationBootstrapJson(uid, rtvalue);
     if (session) {
-        session->Send(rtvalue.toStyledString(), ID_GET_RELATION_BOOTSTRAP_RSP);
+        session->Send(JsonValueToWireString(rtvalue), ID_GET_RELATION_BOOTSTRAP_RSP);
     }
     memolog::LogInfo("chat.relation_bootstrap.succeeded", "relation bootstrap fetched",
         {{"uid", std::to_string(uid)}, {"tcp_msg_id", std::to_string(msg_id)},
@@ -291,5 +298,5 @@ void ChatSessionService::HandleHeartbeat(const std::shared_ptr<CSession>& sessio
 
     Json::Value rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
-    session->Send(rtvalue.toStyledString(), ID_HEARTBEAT_RSP);
+    session->Send(JsonValueToWireString(rtvalue), ID_HEARTBEAT_RSP);
 }

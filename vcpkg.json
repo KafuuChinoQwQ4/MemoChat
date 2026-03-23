@@ -36,7 +36,24 @@
         "libpq",
         "libpqxx",
         "drogon",
-        "trantor"
+        "trantor",
+        {
+          "name": "ngtcp2",
+          "features": []
+        },
+        {
+          "name": "nghttp3",
+          "features": []
+        },
+        "openssl"
+      ]
+    },
+    "http3": {
+      "description": "HTTP/3 support via ngtcp2 + nghttp3",
+      "dependencies": [
+        "ngtcp2",
+        "nghttp3",
+        "openssl"
       ]
     }
   }

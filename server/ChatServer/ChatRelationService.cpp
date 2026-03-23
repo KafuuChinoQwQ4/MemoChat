@@ -31,6 +31,13 @@ void InvalidateRelationBootstrapCacheLocal(int uid) {
     }
 }
 
+// Compact wire JSON for TCP/QUIC transport (Qt QJsonDocument is strict).
+std::string JsonToWireString(const Json::Value& v) {
+    Json::StreamWriterBuilder builder;
+    builder["indentation"] = "";
+    return Json::writeString(builder, v);
+}
+
 bool TryAppendCachedRelationBootstrapJsonLocal(int uid, Json::Value& out) {
     if (uid <= 0) {
         return false;
@@ -258,7 +265,7 @@ void ChatRelationService::HandleSearchUser(const std::shared_ptr<CSession>& sess
     reader.parse(msg_data, root);
     const std::string user_id = root["user_id"].asString();
     Json::Value rtvalue;
-    Defer defer([&rtvalue, session]() { session->Send(rtvalue.toStyledString(), ID_SEARCH_USER_RSP); });
+    Defer defer([&rtvalue, session]() { session->Send(JsonToWireString(rtvalue), ID_SEARCH_USER_RSP); });
     if (!root.isMember("user_id") || user_id.empty()) {
         rtvalue["error"] = ErrorCodes::Error_Json;
         return;
@@ -288,7 +295,7 @@ void ChatRelationService::HandleAddFriendApply(const std::shared_ptr<CSession>& 
 
     Json::Value rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
-    Defer defer([&rtvalue, session]() { session->Send(rtvalue.toStyledString(), ID_ADD_FRIEND_RSP); });
+    Defer defer([&rtvalue, session]() { session->Send(JsonToWireString(rtvalue), ID_ADD_FRIEND_RSP); });
 
     PostgresMgr::GetInstance()->AddFriendApply(uid, touid);
     PostgresMgr::GetInstance()->ReplaceApplyTags(uid, touid, labels);
@@ -351,7 +358,7 @@ void ChatRelationService::HandleAuthFriendApply(const std::shared_ptr<CSession>&
     } else {
         rtvalue["error"] = ErrorCodes::UidInvalid;
     }
-    Defer defer([&rtvalue, session]() { session->Send(rtvalue.toStyledString(), ID_AUTH_FRIEND_RSP); });
+    Defer defer([&rtvalue, session]() { session->Send(JsonToWireString(rtvalue), ID_AUTH_FRIEND_RSP); });
 
     PostgresMgr::GetInstance()->AuthFriendApply(uid, touid);
     PostgresMgr::GetInstance()->AddFriend(uid, touid, back_name);
@@ -401,7 +408,7 @@ void ChatRelationService::HandleGetDialogList(const std::shared_ptr<CSession>& s
     rtvalue["error"] = ErrorCodes::Success;
     rtvalue["uid"] = uid;
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_GET_DIALOG_LIST_RSP);
+        session->Send(JsonToWireString(rtvalue), ID_GET_DIALOG_LIST_RSP);
     });
 
     if (uid <= 0) {
@@ -439,7 +446,7 @@ void ChatRelationService::HandleSyncDraft(const std::shared_ptr<CSession>& sessi
         rtvalue["mute_state"] = mute_state > 0 ? 1 : 0;
     }
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_SYNC_DRAFT_RSP);
+        session->Send(JsonToWireString(rtvalue), ID_SYNC_DRAFT_RSP);
     });
 
     if (uid <= 0 || (dialog_type != "private" && dialog_type != "group")) {
@@ -498,7 +505,7 @@ void ChatRelationService::HandlePinDialog(const std::shared_ptr<CSession>& sessi
     rtvalue["group_id"] = static_cast<Json::Int64>(group_id);
     rtvalue["pinned_rank"] = pinned_rank;
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_PIN_DIALOG_RSP);
+        session->Send(JsonToWireString(rtvalue), ID_PIN_DIALOG_RSP);
     });
 
     if (uid <= 0 || (dialog_type != "private" && dialog_type != "group")) {

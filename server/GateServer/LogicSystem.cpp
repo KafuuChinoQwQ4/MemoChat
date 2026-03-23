@@ -1,16 +1,16 @@
 #include "LogicSystem.h"
 #include "HttpConnection.h"
+#include "GateHttpJsonSupport.h"
 #include "PostgresMgr.h"
 #include "GateRouteModules.h"
+#include "../GateServerHttp3/GateHttp3Connection.h"
+#include "../GateServerHttp3/GateHttp3ServiceRoutes.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <iostream>
 #include <json/json.h>
-
-namespace {
-}
 
 LogicSystem::LogicSystem() {
 	RegGet("/healthz", [](std::shared_ptr<HttpConnection> connection) {
@@ -81,14 +81,18 @@ LogicSystem::LogicSystem() {
 		std::string jsonstr = root.toStyledString();
 		beast::ostream(connection->_response.body()) << jsonstr;
 		return true;
-		
 	});
+	
+	// Register H1 routes
 	AuthHttpService::RegisterRoutes(*this);
 	MediaHttpService::RegisterRoutes(*this);
-
 	ProfileHttpService::RegisterRoutes(*this);
 	CallHttpServiceRoutes::RegisterRoutes(*this);
+
+	// Register H3 routes from GateServerHttp3
+	GateHttp3Service::RegisterRoutes(*this);
 }
+
 void LogicSystem::RegGet(std::string url, HttpHandler handler) {
 	_get_handlers.insert(make_pair(url, handler));
 }
@@ -98,7 +102,6 @@ void LogicSystem::RegPost(std::string url, HttpHandler handler) {
 }
 
 LogicSystem::~LogicSystem() {
-
 }
 
 bool LogicSystem::HandleGet(std::string path, std::shared_ptr<HttpConnection> con) {
@@ -119,5 +122,34 @@ bool LogicSystem::HandlePost(std::string path, std::shared_ptr<HttpConnection> c
 	memolog::TraceContext::SetTraceId(con ? con->_trace_id : "");
 	memolog::LogInfo("gate.http.post.dispatch", "dispatch post route", { {"route", path} });
 	_post_handlers[path](con);
+	return true;
+}
+
+void LogicSystem::RegGet(std::string url, Http3Handler handler) {
+	_get3_handlers.insert(make_pair(url, handler));
+}
+
+void LogicSystem::RegPost(std::string url, Http3Handler handler) {
+	_post3_handlers.insert(make_pair(url, handler));
+}
+
+bool LogicSystem::HandleGet(std::string path, std::shared_ptr<GateHttp3Connection> con) {
+	if (_get3_handlers.find(path) == _get3_handlers.end()) {
+		return false;
+	}
+	memolog::TraceContext::SetTraceId(con ? con->GetTraceId() : "");
+	memolog::LogInfo("gate.http3.get.dispatch", "dispatch HTTP/3 GET route", { {"route", path} });
+	_get3_handlers[path](con);
+	return true;
+}
+
+bool LogicSystem::HandlePost(std::string path, std::shared_ptr<GateHttp3Connection> con) {
+	if (_post3_handlers.find(path) == _post3_handlers.end()) {
+		memolog::LogWarn("gate.http3.post.not_found", "HTTP/3 post route not found", { {"route", path} });
+		return false;
+	}
+	memolog::TraceContext::SetTraceId(con ? con->GetTraceId() : "");
+	memolog::LogInfo("gate.http3.post.dispatch", "dispatch HTTP/3 POST route", { {"route", path} });
+	_post3_handlers[path](con);
 	return true;
 }

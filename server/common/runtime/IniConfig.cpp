@@ -96,9 +96,48 @@ std::string IniConfig::GetValue(const std::string& section, const std::string& k
 
     const auto it = _config.find(section);
     if (it == _config.end()) {
+        if (_etcd_config) {
+            std::string etcd_value;
+            if (_etcd_config->Get(section, key, etcd_value)) {
+                return etcd_value;
+            }
+        }
         return "";
     }
     return it->second.GetValue(key);
+}
+
+bool IniConfig::TryLoadFromEtcd(const std::string& endpoints, const std::string& service_name) {
+    _etcd_config = EtcdConfigLoader::TryCreate(endpoints, service_name);
+    if (!_etcd_config) {
+        std::cout << "[IniConfig] etcd not available, using INI file only" << std::endl;
+        return false;
+    }
+
+    std::cout << "[IniConfig] etcd available, loading config from etcd" << std::endl;
+
+    _etcd_config->SetChangeCallback([this](const std::string& section, const std::string& key, const std::string& value) {
+        OnEtcdConfigChange(section, key, value);
+    });
+
+    return true;
+}
+
+void IniConfig::StartEtcdWatch() {
+    if (_etcd_config) {
+        _etcd_config->StartWatch();
+    }
+}
+
+void IniConfig::StopEtcdWatch() {
+    if (_etcd_config) {
+        _etcd_config->Stop();
+    }
+}
+
+void IniConfig::OnEtcdConfigChange(const std::string& section, const std::string& key, const std::string& value) {
+    std::cout << "[IniConfig] Config changed: [" << section << "] " << key << " = " << value << std::endl;
+    _config[section].values[key] = value;
 }
 
 } // namespace memochat::runtime

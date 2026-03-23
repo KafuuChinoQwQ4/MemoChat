@@ -89,6 +89,12 @@ void InvalidateRelationBootstrapCache(int uid) {
 	RedisMgr::GetInstance()->Del(RelationBootstrapCacheKey(uid));
 }
 
+std::string JsonValueToWireString(const Json::Value& v) {
+	Json::StreamWriterBuilder builder;
+	builder["indentation"] = "";
+	return Json::writeString(builder, v);
+}
+
 bool TryAppendCachedRelationBootstrapJson(int uid, Json::Value& out) {
 	if (uid <= 0) {
 		return false;
@@ -616,8 +622,7 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 
 	Json::Value  rtvalue;
 	Defer defer([this, &rtvalue, session]() {
-		std::string return_str = rtvalue.toStyledString();
-		session->Send(return_str, MSG_CHAT_LOGIN_RSP);
+		session->Send(JsonValueToWireString(rtvalue), MSG_CHAT_LOGIN_RSP);
 		});
 	rtvalue["trace_id"] = trace_id;
 	rtvalue["protocol_version"] = 2;
@@ -698,7 +703,6 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 		}
 	}
 	rtvalue["uid"] = uid;
-	rtvalue["pwd"] = user_info->pwd;
 	rtvalue["name"] = user_info->name;
 	rtvalue["email"] = user_info->email;
 	rtvalue["nick"] = user_info->nick;
@@ -821,7 +825,7 @@ void LogicSystem::GetRelationBootstrapHandler(std::shared_ptr<CSession> session,
 	if (uid <= 0) {
 		rtvalue["error"] = ErrorCodes::UidInvalid;
 		if (session) {
-			session->Send(rtvalue.toStyledString(), ID_GET_RELATION_BOOTSTRAP_RSP);
+			session->Send(JsonValueToWireString(rtvalue), ID_GET_RELATION_BOOTSTRAP_RSP);
 		}
 		return;
 	}
@@ -831,7 +835,7 @@ void LogicSystem::GetRelationBootstrapHandler(std::shared_ptr<CSession> session,
 	rtvalue["uid"] = uid;
 	AppendRelationBootstrapJson(uid, rtvalue);
 	if (session) {
-		session->Send(rtvalue.toStyledString(), ID_GET_RELATION_BOOTSTRAP_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_GET_RELATION_BOOTSTRAP_RSP);
 	}
 	memolog::LogInfo("chat.relation_bootstrap.succeeded", "relation bootstrap fetched",
 		{
@@ -857,9 +861,8 @@ void LogicSystem::SearchInfo(std::shared_ptr<CSession> session, const short& msg
 	Json::Value  rtvalue;
 
 	Defer defer([this, &rtvalue, session]() {
-		std::string return_str = rtvalue.toStyledString();
-		session->Send(return_str, ID_SEARCH_USER_RSP);
-		});
+		session->Send(JsonValueToWireString(rtvalue), ID_SEARCH_USER_RSP);
+	});
 
 	if (!root.isMember("user_id") || user_id.empty()) {
 		rtvalue["error"] = ErrorCodes::Error_Json;
@@ -900,9 +903,8 @@ void LogicSystem::AddFriendApply(std::shared_ptr<CSession> session, const short&
 	Json::Value  rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	Defer defer([this, &rtvalue, session]() {
-		std::string return_str = rtvalue.toStyledString();
-		session->Send(return_str, ID_ADD_FRIEND_RSP);
-		});
+		session->Send(JsonValueToWireString(rtvalue), ID_ADD_FRIEND_RSP);
+	});
 
 
 	PostgresMgr::GetInstance()->AddFriendApply(uid, touid);
@@ -943,8 +945,7 @@ void LogicSystem::AddFriendApply(std::shared_ptr<CSession> session, const short&
 				notify["nick"] = apply_info->nick;
 				notify["user_id"] = apply_info->user_id;
 			}
-			std::string return_str = notify.toStyledString();
-			session->Send(return_str, ID_NOTIFY_ADD_FRIEND_REQ);
+			session->Send(JsonValueToWireString(notify), ID_NOTIFY_ADD_FRIEND_REQ);
 		}
 
 		return ;
@@ -1008,9 +1009,8 @@ void LogicSystem::AuthFriendApply(std::shared_ptr<CSession> session, const short
 
 
 	Defer defer([this, &rtvalue, session]() {
-		std::string return_str = rtvalue.toStyledString();
-		session->Send(return_str, ID_AUTH_FRIEND_RSP);
-		});
+		session->Send(JsonValueToWireString(rtvalue), ID_AUTH_FRIEND_RSP);
+	});
 
 
 	PostgresMgr::GetInstance()->AuthFriendApply(uid, touid);
@@ -1058,8 +1058,7 @@ void LogicSystem::AuthFriendApply(std::shared_ptr<CSession> session, const short
 			}
 
 
-			std::string return_str = notify.toStyledString();
-			session->Send(return_str, ID_NOTIFY_AUTH_FRIEND_REQ);
+			session->Send(JsonValueToWireString(notify), ID_NOTIFY_AUTH_FRIEND_REQ);
 		}
 
 		return ;
@@ -1245,7 +1244,7 @@ void LogicSystem::HeartBeatHandler(std::shared_ptr<CSession> session, const shor
 	std::cout << "receive heart beat msg, uid is " << uid << std::endl;
 	Json::Value  rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
-	session->Send(rtvalue.toStyledString(), ID_HEARTBEAT_RSP);
+	session->Send(JsonValueToWireString(rtvalue), ID_HEARTBEAT_RSP);
 }
 
 bool LogicSystem::isPureDigit(const std::string& str)
@@ -1495,7 +1494,7 @@ void LogicSystem::GetDialogListHandler(std::shared_ptr<CSession> session, const 
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["uid"] = uid;
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_GET_DIALOG_LIST_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_GET_DIALOG_LIST_RSP);
 		});
 
 	if (uid <= 0) {
@@ -1538,7 +1537,7 @@ void LogicSystem::SyncDraftHandler(std::shared_ptr<CSession> session, const shor
 		rtvalue["mute_state"] = mute_state > 0 ? 1 : 0;
 	}
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_SYNC_DRAFT_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_SYNC_DRAFT_RSP);
 		});
 
 	if (uid <= 0 || (dialog_type != "private" && dialog_type != "group")) {
@@ -1604,7 +1603,7 @@ void LogicSystem::PinDialogHandler(std::shared_ptr<CSession> session, const shor
 	rtvalue["group_id"] = static_cast<Json::Int64>(group_id);
 	rtvalue["pinned_rank"] = pinned_rank;
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_PIN_DIALOG_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_PIN_DIALOG_RSP);
 		});
 
 	if (uid <= 0 || (dialog_type != "private" && dialog_type != "group")) {
@@ -1658,7 +1657,7 @@ void LogicSystem::ForwardGroupMsgHandler(std::shared_ptr<CSession> session, cons
 		rtvalue["client_msg_id"] = client_msg_id;
 	}
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_FORWARD_GROUP_MSG_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_FORWARD_GROUP_MSG_RSP);
 		});
 
 	if (from_uid <= 0 || group_id <= 0 || source_msg_id.empty()) {
@@ -1822,7 +1821,7 @@ void LogicSystem::ForwardPrivateMsgHandler(std::shared_ptr<CSession> session, co
 		rtvalue["client_msg_id"] = client_msg_id;
 	}
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_FORWARD_PRIVATE_MSG_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_FORWARD_PRIVATE_MSG_RSP);
 		});
 
 	if (from_uid <= 0 || peer_uid <= 0 || source_msg_id.empty()) {
@@ -1916,7 +1915,7 @@ void LogicSystem::ForwardPrivateMsgHandler(std::shared_ptr<CSession> session, co
 	}
 
 	if (route.kind == OnlineRouteKind::Local && route.session) {
-		route.session->Send(rtvalue.toStyledString(), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+		route.session->Send(JsonValueToWireString(rtvalue), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
 		LogPrivateRoute("chat.private.forward.route", from_uid, peer_uid, info.msg_id, route, "n/a", true);
 		return;
 	}
@@ -2053,7 +2052,7 @@ void LogicSystem::CreateGroupHandler(std::shared_ptr<CSession> session, const sh
 	Json::Value rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_CREATE_GROUP_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_CREATE_GROUP_RSP);
 		});
 
 	if (owner_uid <= 0 || group_name.empty() || group_name.size() > 64 || invalid_member_user_id) {
@@ -2109,12 +2108,12 @@ void LogicSystem::GetGroupListHandler(std::shared_ptr<CSession> session, const s
 	rtvalue["error"] = ErrorCodes::Success;
 	if (uid <= 0) {
 		rtvalue["error"] = ErrorCodes::Error_Json;
-		session->Send(rtvalue.toStyledString(), ID_GET_GROUP_LIST_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_GET_GROUP_LIST_RSP);
 		return;
 	}
 
 	BuildGroupListJson(uid, rtvalue);
-	session->Send(rtvalue.toStyledString(), ID_GET_GROUP_LIST_RSP);
+	session->Send(JsonValueToWireString(rtvalue), ID_GET_GROUP_LIST_RSP);
 }
 
 void LogicSystem::InviteGroupMemberHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
@@ -2141,7 +2140,7 @@ void LogicSystem::InviteGroupMemberHandler(std::shared_ptr<CSession> session, co
 	rtvalue["touid"] = to_uid;
 	rtvalue["target_user_id"] = target_user_id;
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_INVITE_GROUP_MEMBER_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_INVITE_GROUP_MEMBER_RSP);
 		});
 
 	if (from_uid <= 0 || to_uid <= 0 || group_id <= 0 || target_user_id.empty()) {
@@ -2191,7 +2190,7 @@ void LogicSystem::ApplyJoinGroupHandler(std::shared_ptr<CSession> session, const
 	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
 	rtvalue["group_code"] = group_code;
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_APPLY_JOIN_GROUP_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_APPLY_JOIN_GROUP_RSP);
 		});
 
 	if (from_uid <= 0 || group_id <= 0 || group_code.empty()) {
@@ -2244,7 +2243,7 @@ void LogicSystem::ReviewGroupApplyHandler(std::shared_ptr<CSession> session, con
 	rtvalue["apply_id"] = static_cast<Json::Int64>(apply_id);
 	rtvalue["agree"] = agree;
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_REVIEW_GROUP_APPLY_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_REVIEW_GROUP_APPLY_RSP);
 		});
 
 	if (reviewer_uid <= 0 || apply_id <= 0) {
@@ -2316,7 +2315,7 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 		rtvalue["client_msg_id"] = client_msg_id;
 	}
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_GROUP_CHAT_MSG_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_GROUP_CHAT_MSG_RSP);
 		});
 
 	if (from_uid <= 0 || group_id <= 0 || !msg.isObject()) {
@@ -2482,7 +2481,7 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 	rtvalue["has_more"] = false;
 	rtvalue["next_before_seq"] = static_cast<Json::Int64>(0);
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_GROUP_HISTORY_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_GROUP_HISTORY_RSP);
 		});
 
 	if (uid <= 0 || group_id <= 0 || !PostgresMgr::GetInstance()->IsUserInGroup(group_id, uid)) {
@@ -2599,7 +2598,7 @@ void LogicSystem::EditPrivateMsgHandler(std::shared_ptr<CSession> session, const
 	rtvalue["content"] = content;
 	rtvalue["edited_at_ms"] = static_cast<Json::Int64>(now_ms);
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_EDIT_PRIVATE_MSG_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_EDIT_PRIVATE_MSG_RSP);
 		});
 
 	if (uid <= 0 || peer_uid <= 0 || target_msg_id.empty() || content.empty() || content.size() > 4096) {
@@ -2653,7 +2652,7 @@ void LogicSystem::RevokePrivateMsgHandler(std::shared_ptr<CSession> session, con
 	rtvalue["content"] = "[消息已撤回]";
 	rtvalue["deleted_at_ms"] = static_cast<Json::Int64>(now_ms);
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_REVOKE_PRIVATE_MSG_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_REVOKE_PRIVATE_MSG_RSP);
 		});
 
 	if (uid <= 0 || peer_uid <= 0 || target_msg_id.empty()) {
@@ -2707,7 +2706,7 @@ void LogicSystem::EditGroupMsgHandler(std::shared_ptr<CSession> session, const s
 	rtvalue["content"] = content;
 	rtvalue["edited_at_ms"] = static_cast<Json::Int64>(now_ms);
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_EDIT_GROUP_MSG_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_EDIT_GROUP_MSG_RSP);
 		});
 
 	if (uid <= 0 || group_id <= 0 || target_msg_id.empty() || content.empty() || content.size() > 4096) {
@@ -2771,7 +2770,7 @@ void LogicSystem::RevokeGroupMsgHandler(std::shared_ptr<CSession> session, const
 	rtvalue["content"] = "[消息已撤回]";
 	rtvalue["deleted_at_ms"] = static_cast<Json::Int64>(now_ms);
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_REVOKE_GROUP_MSG_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_REVOKE_GROUP_MSG_RSP);
 		});
 
 	if (uid <= 0 || group_id <= 0 || target_msg_id.empty()) {
@@ -2832,7 +2831,7 @@ void LogicSystem::PrivateHistoryHandler(std::shared_ptr<CSession> session, const
 	rtvalue["peer_uid"] = peer_uid;
 	rtvalue["has_more"] = false;
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_PRIVATE_HISTORY_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_PRIVATE_HISTORY_RSP);
 		});
 
 	if (uid <= 0 || peer_uid <= 0 || limit <= 0) {
@@ -2915,7 +2914,7 @@ void LogicSystem::UpdateGroupAnnouncementHandler(std::shared_ptr<CSession> sessi
 		rtvalue["group_code"] = group_info->group_code;
 	}
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_UPDATE_GROUP_ANNOUNCEMENT_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_UPDATE_GROUP_ANNOUNCEMENT_RSP);
 		});
 
 	if (!PostgresMgr::GetInstance()->UpdateGroupAnnouncement(group_id, uid, announcement)) {
@@ -2965,7 +2964,7 @@ void LogicSystem::UpdateGroupIconHandler(std::shared_ptr<CSession> session, cons
 		rtvalue["group_code"] = group_info->group_code;
 	}
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_UPDATE_GROUP_ICON_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_UPDATE_GROUP_ICON_RSP);
 		});
 
 	if (uid <= 0 || group_id <= 0 || icon.empty() || icon.size() > 512) {
@@ -3064,7 +3063,7 @@ void LogicSystem::SetGroupAdminHandler(std::shared_ptr<CSession> session, const 
 		rtvalue["group_code"] = group_info->group_code;
 	}
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_SET_GROUP_ADMIN_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_SET_GROUP_ADMIN_RSP);
 		});
 
 	if (target_uid <= 0 || target_user_id.empty() ||
@@ -3134,7 +3133,7 @@ void LogicSystem::MuteGroupMemberHandler(std::shared_ptr<CSession> session, cons
 		rtvalue["group_code"] = group_info->group_code;
 	}
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_MUTE_GROUP_MEMBER_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_MUTE_GROUP_MEMBER_RSP);
 		});
 
 	if (target_uid <= 0 || target_user_id.empty() ||
@@ -3191,7 +3190,7 @@ void LogicSystem::KickGroupMemberHandler(std::shared_ptr<CSession> session, cons
 		rtvalue["group_code"] = group_info->group_code;
 	}
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_KICK_GROUP_MEMBER_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_KICK_GROUP_MEMBER_RSP);
 		});
 
 	if (target_uid <= 0 || target_user_id.empty() ||
@@ -3242,7 +3241,7 @@ void LogicSystem::QuitGroupHandler(std::shared_ptr<CSession> session, const shor
 		rtvalue["group_code"] = group_info->group_code;
 	}
 	Defer defer([&rtvalue, session]() {
-		session->Send(rtvalue.toStyledString(), ID_QUIT_GROUP_RSP);
+		session->Send(JsonValueToWireString(rtvalue), ID_QUIT_GROUP_RSP);
 		});
 
 	if (!PostgresMgr::GetInstance()->QuitGroup(group_id, uid)) {

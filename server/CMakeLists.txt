@@ -25,6 +25,28 @@ find_package(cppkafka CONFIG QUIET)
 find_package(unofficial-librabbitmq CONFIG QUIET)
 find_package(rabbitmq-c CONFIG QUIET)
 find_package(msquic CONFIG QUIET)
+find_package(OpenSSL CONFIG QUIET)
+
+# HTTP/3 requires ngtcp2 + nghttp3 + openssl (always try for server feature)
+set(MEMOCHAT_ENABLE_HTTP3 0)
+if(TARGET ngtcp2::ngtcp2 AND TARGET nghttp3::nghttp3 AND TARGET OpenSSL::SSL)
+    set(MEMOCHAT_ENABLE_HTTP3 1)
+    message(STATUS "HTTP/3: ngtcp2 + nghttp3 + OpenSSL found, enabling HTTP/3 support")
+else()
+    find_package(ngtcp2 CONFIG QUIET)
+    find_package(nghttp3 CONFIG QUIET)
+    if(TARGET ngtcp2::ngtcp2 AND TARGET nghttp3::nghttp3)
+        find_package(OpenSSL CONFIG QUIET)
+        if(TARGET OpenSSL::SSL)
+            set(MEMOCHAT_ENABLE_HTTP3 1)
+            message(STATUS "HTTP/3: ngtcp2 + nghttp3 + OpenSSL found, enabling HTTP/3 support")
+        else()
+            message(STATUS "HTTP/3: OpenSSL not found, HTTP/3 support disabled")
+        endif()
+    else()
+        message(STATUS "HTTP/3: ngtcp2 or nghttp3 not found, HTTP/3 support disabled")
+    endif()
+endif()
 
 if(TARGET spdlog::spdlog)
     set(MEMOCHAT_SPDLOG_TARGET spdlog::spdlog)
@@ -105,6 +127,7 @@ target_link_libraries(memochat_logging PUBLIC
 add_library(memochat_runtime STATIC
     common/runtime/IniConfig.cpp
     common/runtime/IoContextPool.cpp
+    common/runtime/EtcdConfig.cpp
 )
 target_compile_features(memochat_runtime PUBLIC cxx_std_17)
 target_include_directories(memochat_runtime PUBLIC
@@ -171,13 +194,20 @@ target_link_libraries(memochat_server_deps INTERFACE
     ${MEMOCHAT_SPDLOG_TARGET}
     Drogon::Drogon
 )
-target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_KAFKA=${MEMOCHAT_ENABLE_KAFKA} MEMOCHAT_ENABLE_RABBITMQ=${MEMOCHAT_ENABLE_RABBITMQ})
+target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_KAFKA=${MEMOCHAT_ENABLE_KAFKA} MEMOCHAT_ENABLE_RABBITMQ=${MEMOCHAT_ENABLE_RABBITMQ} MEMOCHAT_ENABLE_HTTP3=${MEMOCHAT_ENABLE_HTTP3})
 
 if(TARGET msquic)
     target_link_libraries(memochat_server_deps INTERFACE msquic)
     target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_MSQUIC=1)
 else()
     target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_MSQUIC=0)
+endif()
+
+if(MEMOCHAT_ENABLE_HTTP3)
+    target_link_libraries(memochat_server_deps INTERFACE ngtcp2::ngtcp2 nghttp3::nghttp3 OpenSSL::SSL OpenSSL::Crypto)
+    target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_HTTP3=1)
+else()
+    target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_HTTP3=0)
 endif()
 
 if(MEMOCHAT_ENABLE_KAFKA)
@@ -223,8 +253,9 @@ function(memochat_configure_server_target target_name)
 endfunction()
 
 add_subdirectory(ChatServer)
+add_subdirectory(GateServerCore)
+add_subdirectory(GateServerHttp3)
 add_subdirectory(GateServer)
-# Temporarily disabled - VS2026 + Windows SDK 10.0.26100 byte type conflict
-# add_subdirectory(GateServerDrogon)
+add_subdirectory(GateServerDrogon)
 add_subdirectory(StatusServer)
 add_subdirectory(VarifyServer)

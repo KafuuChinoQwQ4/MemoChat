@@ -10,8 +10,6 @@
 #include <memory>
 #include "const.h"
 #include "MsgNode.h"
-using namespace std;
-
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -57,7 +55,7 @@ private:
 	char _data[MAX_LENGTH];
 	CServer* _server;
 	bool _b_close;
-	std::queue<shared_ptr<SendNode> > _send_que;
+	std::queue<std::shared_ptr<SendNode> > _send_que;
 	std::mutex _send_lock;
 
 	std::shared_ptr<RecvNode> _recv_msg_node;
@@ -66,7 +64,7 @@ private:
 	std::shared_ptr<MsgNode> _recv_head_node;
 	int _user_uid;
 
-	std::atomic<time_t> _last_heartbeat;
+	std::atomic<std::time_t> _last_heartbeat;
 
 	std::mutex _session_mtx;
 };
@@ -74,8 +72,8 @@ private:
 class LogicNode {
 	friend class LogicSystem;
 public:
-	LogicNode(shared_ptr<CSession>, shared_ptr<RecvNode>);
+	LogicNode(std::shared_ptr<CSession>, std::shared_ptr<RecvNode>);
 private:
-	shared_ptr<CSession> _session;
-	shared_ptr<RecvNode> _recvnode;
+	std::shared_ptr<CSession> _session;
+	std::shared_ptr<RecvNode> _recvnode;
 };
