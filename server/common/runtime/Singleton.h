@@ -16,11 +16,20 @@ protected:
 
     static std::shared_ptr<T> _instance;
 
+    struct PrivateDeleter {
+        void operator()(T* ptr) const {
+            ptr->~T();
+            ::operator delete(ptr);
+        }
+    };
+
 public:
     static std::shared_ptr<T> GetInstance() {
         static std::once_flag s_flag;
         std::call_once(s_flag, []() {
-            _instance = std::shared_ptr<T>(new T);
+            T* raw = static_cast<T*>(::operator new(sizeof(T)));
+            ::new (raw) T();
+            _instance = std::shared_ptr<T>(raw, PrivateDeleter{});
         });
         return _instance;
     }
@@ -29,7 +38,9 @@ public:
     static std::shared_ptr<T> GetInstance(Args&&... args) {
         static std::once_flag s_flag;
         std::call_once(s_flag, [&]() {
-            _instance = std::shared_ptr<T>(new T(std::forward<Args>(args)...));
+            T* raw = static_cast<T*>(::operator new(sizeof(T)));
+            ::new (raw) T(std::forward<Args>(args)...);
+            _instance = std::shared_ptr<T>(raw, PrivateDeleter{});
         });
         return _instance;
     }
@@ -45,3 +56,9 @@ public:
 
 template <typename T>
 std::shared_ptr<T> Singleton<T>::_instance = nullptr;
+
+// Macro to be used inside classes that inherit from Singleton<T>
+// to declare Singleton<T> as a friend so GetInstance() can call the private constructor
+// Usage: put DECLARE_SINGLETON_FRIEND(); inside your class definition
+#define DECLARE_SINGLETON_FRIEND() \
+    template<typename> friend class ::Singleton

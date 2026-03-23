@@ -48,18 +48,42 @@ public:
     explicit HttpSessionPool(int pool_size = 64);
     ~HttpSessionPool();
 
+    // Disable copy
+    HttpSessionPool(const HttpSessionPool&) = delete;
+    HttpSessionPool& operator=(const HttpSessionPool&) = delete;
+
     // Acquire a session for a given host:port (creates or reuses)
     Handle* acquire(const std::string& host, int port);
     void release(Handle* h);
+
+    // Warmup: pre-establish connections to target host:port
+    // Returns number of connections successfully warmed up
+    int warmup(const std::string& host, int port, int count);
+
+    // Pool statistics
+    int pool_size() const { return pool_size_; }
+    int available_count() const;
+    int in_use_count() const;
+    int total_acquires() const { return total_acquires_.load(); }
+    int total_releases() const { return total_releases_.load(); }
+
+    // Reset statistics
+    void reset_stats();
 
 private:
     std::vector<Handle> handles_;
     std::mutex mu_;
     int pool_size_;
+    mutable std::atomic<int> total_acquires_{0};
+    mutable std::atomic<int> total_releases_{0};
 };
 
-// Global HTTP session pool
-HttpSessionPool& http_pool();
+// Global HTTP session pool with configurable size
+// Call once at startup with desired pool_size (default: 200)
+HttpSessionPool& http_pool(int pool_size = 200);
+
+// Reset global pool (for reconfiguration)
+void reset_http_pool();
 
 // ---- HTTP client ----
 struct HttpResponse {
@@ -81,11 +105,17 @@ HttpResponse http_post_json(const std::string& url,
                             double timeout_sec,
                             const std::string& trace_id = "");
 
-// Gate login -> returns uid, token, host, port, login_ticket
+// Gate login via plaintext HTTP/1.1 (gate_url)
 std::optional<std::unordered_map<std::string, std::string>>
 gate_login(const TestConfig& cfg,
            const Account& account,
            const std::string& trace_id);
+
+// Gate login via HTTPS/HTTP/2 (gate_url_https)
+std::optional<std::unordered_map<std::string, std::string>>
+gate_login_https(const TestConfig& cfg,
+                 const Account& account,
+                 const std::string& trace_id);
 
 // ---- TCP chat client ----
 class TcpChatClient {

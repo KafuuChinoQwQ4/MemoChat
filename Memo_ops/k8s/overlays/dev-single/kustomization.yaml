@@ -1,0 +1,88 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: memochat-dev
+
+bases:
+  - ../../base
+  - ../../etcd
+  - ../../backend
+  - ../../infra
+
+patches:
+  # 单节点 etcd
+  - patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: memochat-etcd
+      spec:
+        replicas: 1
+    target:
+      kind: StatefulSet
+      name: memochat-etcd
+
+  # GateServer 单副本
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: memochat-gateserver
+      spec:
+        replicas: 1
+    target:
+      kind: Deployment
+      name: memochat-gateserver
+
+  # StatusServer 单副本
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: memochat-statusserver
+      spec:
+        replicas: 1
+    target:
+      kind: Deployment
+      name: memochat-statusserver
+
+  # VarifyServer 单副本
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: memochat-varifyserver
+      spec:
+        replicas: 1
+    target:
+      kind: Deployment
+      name: memochat-varifyserver
+
+  # ChatServer 单副本
+  - patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: memochat-chatserver
+      spec:
+        replicas: 1
+    target:
+      kind: StatefulSet
+      name: memochat-chatserver
+
+configMapGenerator:
+  - name: memochat-config
+    behavior: merge
+    literals:
+      - LOG_LEVEL=debug
+      - ETCD_ENDPOINTS=http://memochat-etcd:2379
+
+images:
+  - name: memochat/gateserver
+    newTag: dev-latest
+  - name: memochat/statusserver
+    newTag: dev-latest
+  - name: memochat/chatserver
+    newTag: dev-latest
+  - name: memochat/varifyserver
+    newTag: dev-latest

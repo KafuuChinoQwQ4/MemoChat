@@ -19,7 +19,7 @@ using namespace memochat::loadtest;
 
 static void print_banner() {
     std::cout << "\n============================================================\n";
-    std::cout << "  MemoChat Load Test Framework  (C++ / msquic)\n";
+    std::cout << "  MemoChat Load Test Framework  (C++ / msquic / HTTP1-3)\n";
     std::cout << "============================================================\n\n";
 }
 
@@ -96,6 +96,7 @@ int main(int argc, char* argv[]) {
     std::string cfg_path = "config.json";
     std::string scenario = "tcp";
     bool filter_accounts = false;
+    int pool_size = 200;  // Default HTTP connection pool size
 
     // Parse CLI args
     for (int i = 1; i < argc; ++i) {
@@ -107,10 +108,11 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--help" || arg == "-h") {
             std::cout << "Usage: " << argv[0] << " [options]\n"
                       << "  --config <path>       Config file (default: config.json)\n"
-                      << "  --scenario <name>     tcp|quic|http (default: tcp)\n"
+                      << "  --scenario <name>     http|http2|http3|tcp|quic (default: tcp)\n"
                       << "  --total <n>          Total requests\n"
                       << "  --concurrency <n>     Concurrent workers\n"
                       << "  --warmup <n>         Warmup iterations\n"
+                      << "  --pool-size <n>      HTTP connection pool size (default: 200)\n"
                       << "  --filter-accounts     Probe each account via HTTP and keep only valid ones\n";
             return 0;
         }
@@ -144,6 +146,9 @@ int main(int argc, char* argv[]) {
             runner.max_retries = std::atoi(argv[++i]);
         } else if (arg == "--filter-accounts") {
             filter_accounts = true;
+        } else if (arg == "--pool-size" && i + 1 < argc) {
+            pool_size = std::atoi(argv[++i]);
+            if (pool_size <= 0) pool_size = 200;
         }
     }
 
@@ -179,6 +184,29 @@ int main(int argc, char* argv[]) {
         logger.info("Filtered to " + std::to_string(accounts.size()) + " valid accounts");
     } else {
         logger.info("Loaded " + std::to_string(accounts.size()) + " accounts");
+
+    // Initialize HTTP connection pool with configured size
+    logger.info("Initializing HTTP connection pool: size=" + std::to_string(pool_size));
+    http_pool(pool_size);  // Trigger lazy initialization
+
+    // Warmup phase: pre-establish connections to reduce cold-start latency
+    if (runner.warmup_iters > 0) {
+        logger.info("Warming up HTTP connection pool...");
+        // Extract host/port from gate_url
+        std::string gate_host = cfg.gate_url;
+        if (gate_host.find("http://") == 0) gate_host = gate_host.substr(7);
+        else if (gate_host.find("https://") == 0) gate_host = gate_host.substr(8);
+        auto slash = gate_host.find('/');
+        if (slash != std::string::npos) gate_host = gate_host.substr(0, slash);
+        int gate_port = 80;
+        auto colon = gate_host.find(':');
+        if (colon != std::string::npos) {
+            gate_port = std::stoi(gate_host.substr(colon + 1));
+            gate_host = gate_host.substr(0, colon);
+        }
+        int warmed = http_pool(pool_size).warmup(gate_host, gate_port, pool_size);
+        logger.info("HTTP connection pool warmed up: " + std::to_string(warmed) + "/" + std::to_string(pool_size) + " connections");
+    }
     }
 
     // Adjust total if there aren't enough accounts

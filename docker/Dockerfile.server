@@ -1,0 +1,43 @@
+# MemoChat C++ Services Dockerfile
+# Build: docker build -f docker/Dockerfile.server -t memochat/server:latest .
+# Build Args:
+#   --build-arg SERVICE=ChatServer
+#   --build-arg BUILD_MODE=Release
+#   --build-arg SOURCE_DIR=Memo_ops/runtime/services/ChatServer  (默认: 从本地开发目录复制)
+#             设置为 build/bin/Release 可直接使用 CMake 编译产物
+
+FROM mcr.microsoft.com/windows/servercore:ltsc2022
+
+ARG SERVICE=GateServer
+ARG BUILD_MODE=Release
+# SOURCE_DIR: 相对于构建上下文的可执行文件来源目录
+ARG SOURCE_DIR=Memo_ops/runtime/services/${SERVICE}
+
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+# Install MSVC runtime libraries
+RUN New-Item -ItemType Directory -Path C:\deps -Force; \
+    Invoke-WebRequest -Uri 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile C:\deps\vc_redist.x64.exe; \
+    Start-Process -Wait -FilePath C:\deps\vc_redist.x64.exe -ArgumentList '/install', '/quiet', '/norestart'; \
+    Remove-Item C:\deps\vc_redist.x64.exe -Force
+
+WORKDIR C:/app
+
+# Copy service executable and dependencies from SOURCE_DIR (defaults to Memo_ops/runtime/services/)
+COPY ${SOURCE_DIR}/ C:/app/
+
+# Set environment variables
+ENV MEMOCHAT_LOG_LEVEL=info \
+    MEMOCHAT_DISCOVERY_MODE=etcd \
+    MEMOCHAT_SERVICE_NAME=${SERVICE}
+
+# Expose ports
+EXPOSE 8080 50054
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 `
+    CMD powershell -Command "try { \
+        $response = Invoke-WebRequest -Uri http://localhost:8080/health -UseBasicParsing -TimeoutSec 5 -ErrorAction SilentlyContinue; \
+        if ($response.StatusCode -eq 200) { exit 0 } else { exit 1 } \
+    } catch { exit 1 }"
+
+ENTRYPOINT ["C:/app/${SERVICE}.exe"]

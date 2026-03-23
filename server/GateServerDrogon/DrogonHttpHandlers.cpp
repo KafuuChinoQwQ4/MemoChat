@@ -1,5 +1,6 @@
+#include "WinCompat.h"
 #include "DrogonHttpHandlers.h"
-#include "../GateServer/PostgresMgr.h"
+#include "../GateServerCore/PostgresMgr.h"
 #include <drogon/HttpResponse.h>
 #include <drogon/HttpTypes.h>
 #include <iostream>

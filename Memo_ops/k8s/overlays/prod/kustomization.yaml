@@ -1,0 +1,79 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: memochat
+
+bases:
+  - ../../base
+  - ../../etcd
+  - ../../backend
+  - ../../infra
+
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: memochat-gateserver
+      spec:
+        replicas: 3
+        strategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+    target:
+      kind: Deployment
+      name: memochat-gateserver
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: memochat-statusserver
+      spec:
+        replicas: 3
+    target:
+      kind: Deployment
+      name: memochat-statusserver
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: memochat-varifyserver
+      spec:
+        replicas: 3
+    target:
+      kind: Deployment
+      name: memochat-varifyserver
+  - patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: memochat-chatserver
+      spec:
+        replicas: 4
+        strategy:
+          type: RollingUpdate
+          rollingUpdate:
+            partition: 0
+    target:
+      kind: StatefulSet
+      name: memochat-chatserver
+
+configMapGenerator:
+  - name: memochat-config
+    behavior: merge
+    literals:
+      - LOG_LEVEL=warn
+      - ETCD_ENDPOINTS=http://memochat-etcd:2379
+      - TELEMETRY_ENABLED=true
+
+images:
+  - name: memochat/gateserver
+    newTag: latest
+  - name: memochat/statusserver
+    newTag: latest
+  - name: memochat/chatserver
+    newTag: latest
+  - name: memochat/varifyserver
+    newTag: latest

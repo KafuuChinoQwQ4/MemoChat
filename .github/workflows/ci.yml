@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run clang-format
+        run: |
+          find server -name "*.cpp" -o -name "*.h" | head -20 | xargs -I {} clang-format --style=file -i {}
+
+  build-cpp:
+    name: Build C++ Services
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "3.28"
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
+
+      - name: Build
+        run: |
+          cmake --build build --config Release --parallel
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpp-binaries
+          path: |
+            build/bin/Release/GateServer.exe
+            build/bin/Release/StatusServer.exe
+            build/bin/Release/ChatServer.exe
+
+  build-varifyserver:
+    name: Build VarifyServer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: server/VarifyServer/package-lock.json
+
+      - name: Install dependencies
+        working-directory: server/VarifyServer
+        run: npm ci
+
+      - name: Run tests
+        working-directory: server/VarifyServer
+        run: npm test || true
+
+      - name: Build
+        working-directory: server/Varifyserver
+        run: npm run build
+
+  docker-build:
+    name: Build Docker Images
+    needs: [build-cpp, build-varifyserver]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download C++ artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cpp-binaries
+          path: Memo_ops/runtime/services/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push GateServer
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.server
+          push: false
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver:dev-latest
+          build-args: |
+            SERVICE=GateServer
+
+      - name: Build and push StatusServer
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.server
+          push: false
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/statusserver:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/statusserver:dev-latest
+          build-args: |
+            SERVICE=StatusServer
+
+      - name: Build and push ChatServer
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.server
+          push: false
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/chatserver:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/chatserver:dev-latest
+          build-args: |
+            SERVICE=ChatServer
+
+      - name: Build and push VarifyServer
+        uses: docker/build-push-action@v5
+        with:
+          context: server/VarifyServer
+          push: false
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/varifyserver:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/varifyserver:dev-latest

@@ -98,14 +98,46 @@ void HttpSessionPool::release(Handle* h) {
     h->in_use = false;
 }
 
-static HttpSessionPool* g_http_pool = nullptr;
+int HttpSessionPool::warmup(const std::string& host, int port, int count) {
+    int warmed = 0;
+    for (int i = 0; i < count && warmed < pool_size_; ++i) {
+        Handle* h = acquire(host, port);
+        if (h) {
+            ++warmed;
+            release(h);
+        } else {
+            break;
+        }
+    }
+    return warmed;
+}
 
-HttpSessionPool& http_pool() {
-    if (!g_http_pool) {
-        // Use a pool size of 200 to handle 200+ concurrent workers
-        g_http_pool = new HttpSessionPool(200);
+// =====================================================================
+// Global HTTP session pool (lazy init, thread-safe, configurable)
+// =====================================================================
+
+static HttpSessionPool* g_http_pool = nullptr;
+static int g_pool_size = 200;
+static std::mutex g_pool_mu;
+
+HttpSessionPool& http_pool(int pool_size) {
+    std::lock_guard<std::mutex> lk(g_pool_mu);
+    if (!g_http_pool || g_pool_size != pool_size) {
+        if (g_http_pool) {
+            delete g_http_pool;
+        }
+        g_pool_size = pool_size;
+        g_http_pool = new HttpSessionPool(pool_size);
     }
     return *g_http_pool;
+}
+
+void reset_http_pool() {
+    std::lock_guard<std::mutex> lk(g_pool_mu);
+    if (g_http_pool) {
+        delete g_http_pool;
+        g_http_pool = nullptr;
+    }
 }
 
 // =====================================================================
@@ -176,8 +208,8 @@ HttpResponse http_post_json_pooled(const std::string& url,
     HttpSessionPool::Handle* h = nullptr;
     HINTERNET request = nullptr;
 
-    // Try pool first
-    h = http_pool().acquire(host, port);
+    // Try pool first (use default pool size 200)
+    h = http_pool(200).acquire(host, port);
     bool use_pool = (h != nullptr);
 
     if (!use_pool) {
@@ -273,7 +305,7 @@ HttpResponse http_post_json_pooled(const std::string& url,
         WINHTTP_DEFAULT_ACCEPT_TYPES, flags);
     if (!request) {
         rsp.error = "WinHttpOpenRequest failed: " + std::to_string(GetLastError());
-        http_pool().release(h);
+        http_pool(200).release(h);
         return rsp;
     }
 
@@ -292,7 +324,7 @@ HttpResponse http_post_json_pooled(const std::string& url,
     if (!ok) {
         rsp.error = "WinHttpSendRequest failed: " + std::to_string(GetLastError());
         WinHttpCloseHandle(request);
-        http_pool().release(h);
+        http_pool(200).release(h);
         return rsp;
     }
 
@@ -300,7 +332,7 @@ HttpResponse http_post_json_pooled(const std::string& url,
     if (!ok) {
         rsp.error = "WinHttpReceiveResponse failed: " + std::to_string(GetLastError());
         WinHttpCloseHandle(request);
-        http_pool().release(h);
+        http_pool(200).release(h);
         return rsp;
     }
 
@@ -324,7 +356,7 @@ HttpResponse http_post_json_pooled(const std::string& url,
     rsp.body = response_body;
 
     WinHttpCloseHandle(request);
-    http_pool().release(h);
+    http_pool(200).release(h);
 
     return rsp;
 }
@@ -466,6 +498,92 @@ HttpResponse http_post_json(const std::string& url,
     WinHttpCloseHandle(session);
 
     return rsp;
+}
+
+// ---- HTTPS (HTTP/2) Gate login via WinHTTP + TLS ----
+// WinHTTP automatically negotiates HTTP/2 via ALPN when the server supports it.
+std::optional<std::unordered_map<std::string, std::string>>
+gate_login_https(const TestConfig& cfg,
+                 const Account& account,
+                 const std::string& trace_id) {
+    std::string passwd = account.password;
+    if (cfg.use_xor_passwd) {
+        passwd = xor_encode(passwd);
+    }
+
+    std::ostringstream body_ss;
+    body_ss << "{\"email\":\"" << json_escape(account.email) << "\","
+            << "\"passwd\":\"" << json_escape(passwd) << "\","
+            << "\"client_ver\":\"" << json_escape(cfg.client_ver) << "\"}";
+
+    // Use HTTPS URL — WinHTTP will use HTTP/2 over TLS via ALPN
+    HttpResponse rsp = http_post_json_pooled(
+        cfg.gate_url_https + cfg.login_path,
+        body_ss.str(),
+        cfg.http_timeout_sec,
+        trace_id);
+
+    if (!rsp.success()) {
+        return std::nullopt;
+    }
+
+    auto extract_str = [&](const std::string& json, const std::string& key) -> std::string {
+        std::string pattern = "\"" + key + "\"";
+        size_t pos = json.find(pattern);
+        if (pos == std::string::npos) return "";
+        size_t colon = json.find(':', pos);
+        if (colon == std::string::npos) return "";
+        size_t quote1 = json.find('"', colon + 1);
+        if (quote1 == std::string::npos) return "";
+        size_t quote2 = json.find('"', quote1 + 1);
+        if (quote2 == std::string::npos) return "";
+        return json.substr(quote1 + 1, quote2 - quote1 - 1);
+    };
+
+    auto extract_int = [&](const std::string& json, const std::string& key) -> int {
+        std::string pattern = "\"" + key + "\"";
+        size_t pos = json.find(pattern);
+        if (pos == std::string::npos) return 0;
+        size_t colon = json.find(':', pos);
+        if (colon == std::string::npos) return 0;
+        size_t end = colon + 1;
+        while (end < json.size() && (json[end] == ' ' || json[end] == '\t')) ++end;
+        size_t comma = json.find(',', end);
+        size_t brace = json.find('}', end);
+        size_t tok_end = std::min(comma, brace);
+        std::string token = json.substr(end, tok_end - end);
+        return std::stoi(token);
+    };
+
+    std::unordered_map<std::string, std::string> fields;
+    fields["email"] = account.email;
+    fields["uid"] = std::to_string(extract_int(rsp.body, "uid"));
+    fields["token"] = extract_str(rsp.body, "token");
+    fields["login_ticket"] = extract_str(rsp.body, "login_ticket");
+    fields["host"] = extract_str(rsp.body, "host");
+    fields["port"] = std::to_string(extract_int(rsp.body, "port"));
+    fields["server_name"] = extract_str(rsp.body, "server_name");
+    fields["error"] = std::to_string(extract_int(rsp.body, "error"));
+
+    size_t ep_pos = rsp.body.find("\"chat_endpoints\"");
+    if (ep_pos != std::string::npos) {
+        size_t quic_pos = rsp.body.find("\"transport\":\"quic\"", ep_pos);
+        if (quic_pos != std::string::npos && quic_pos < ep_pos + 2048) {
+            std::string sub = rsp.body.substr(quic_pos);
+            fields["quic_host"] = extract_str(sub, "host");
+            std::string port_str = std::to_string(extract_int(sub, "port"));
+            if (!fields["quic_host"].empty() && !port_str.empty() && port_str != "0") {
+                fields["quic_port"] = port_str;
+            }
+        }
+    }
+
+    int error_code = std::stoi(fields["error"]);
+    if (error_code != 0) {
+        return std::nullopt;
+    }
+
+    return fields;
 }
 
 std::optional<std::unordered_map<std::string, std::string>>

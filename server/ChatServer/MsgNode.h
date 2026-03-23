@@ -5,7 +5,8 @@
 #include <boost/asio.hpp>
 #include <cstdint>
 #include <cstring>
-using namespace std;
+#include <memory>
+
 using boost::asio::ip::tcp;
 class LogicSystem;
 

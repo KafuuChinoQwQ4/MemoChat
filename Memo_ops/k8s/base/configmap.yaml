@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: memochat-config
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: config
+data:
+  GATESERVER_PORT: "8080"
+  GATESERVER_RPC_PORT: "50054"
+  STATUSSERVER_PORT: "50052"
+  VARIFYSERVER_PORT: "50051"
+  CHATSERVER_TCP_BASE_PORT: "8090"
+  CHATSERVER_QUIC_BASE_PORT: "8190"
+  CHATSERVER_RPC_BASE_PORT: "50055"
+  DISCOVERY_MODE: "etcd"
+  ETCD_ENDPOINTS: "http://memochat-etcd:2379"
+  KAFKA_BROKERS: "memochat-kafka:19092"
+  RABBITMQ_HOST: "memochat-rabbitmq"
+  RABBITMQ_PORT: "5672"
+  POSTGRES_HOST: "memochat-postgres"
+  POSTGRES_PORT: "5432"
+  REDIS_HOST: "memochat-redis"
+  REDIS_PORT: "6379"
+  MONGODB_URI: "mongodb://memochat-mongodb:27017"
+  LOG_LEVEL: "info"
+  TELEMETRY_ENABLED: "true"
+  TELEMETRY_OTLP_ENDPOINT: "http://memochat-otel-collector:4317"

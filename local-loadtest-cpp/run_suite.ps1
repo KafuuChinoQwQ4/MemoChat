@@ -5,7 +5,9 @@ param(
                  "postgresql", "mysql", "redis", "login",
                  "tcp", "quic", "http",
                  "all")]
-    [string]$Scenario = "all"
+    [string]$Scenario = "all",
+    [int]$WarmupIterations = 10,
+    [int]$PoolSize = 200
 )
 
 $ErrorActionPreference = "Stop"
@@ -69,7 +71,7 @@ $suiteDir = Join-Path $reportRoot ("suite_" + $timestamp)
 New-Item -ItemType Directory -Force -Path $suiteDir | Out-Null
 
 # ---------------------------------------------------------------------------
-# Invoke C++ binary for login scenarios via cpp_run.py
+# Invoke C++ binary directly for login scenarios
 # ---------------------------------------------------------------------------
 function Invoke-CppLogin {
     param(
@@ -80,25 +82,31 @@ function Invoke-CppLogin {
 
     $reportPath = Join-Path $suiteDir $ReportName
 
+    $cppExe = Get-CppBinary
+    if (-not $cppExe) {
+        Write-Host "[ERROR] C++ binary not found"
+        throw "C++ binary not found"
+    }
+
     $args = @(
-        (Get-PythonPath),
-        (Join-Path $PSScriptRoot "cpp_run.py"),
+        $cppExe,
+        "--config", $Config,
         "--scenario", $ScenarioName,
-        "--config",   $Config,
-        "--report-path", $reportPath
+        "--warmup", $WarmupIterations,
+        "--pool-size", $PoolSize
     )
     if ($ExtraArgs.Count -gt 0) {
         $args += $ExtraArgs
     }
 
-    Write-Host "[STEP] C++ $ScenarioName login: $($args -join ' ')"
+    Write-Host "[STEP] C++ $ScenarioName login (warmup=$WarmupIterations, pool=$PoolSize): $cppExe"
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $args[0]
     $psi.Arguments = ($args[1..($args.Count-1)] -join ' ')
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
-    $psi.WorkingDirectory = $PSScriptRoot
+    $psi.WorkingDirectory = (Split-Path -Parent $cppExe)
 
     $proc = [System.Diagnostics.Process]::Start($psi)
     $stdout = $proc.StandardOutput.ReadToEnd()
@@ -109,7 +117,7 @@ function Invoke-CppLogin {
     if ($stderr -and $proc.ExitCode -ne 0) { Write-Host $stderr }
 
     if ($proc.ExitCode -ne 0) {
-        throw "cpp_run.py (scenario=$ScenarioName) failed with exit code $($proc.ExitCode)"
+        throw "C++ binary (scenario=$ScenarioName) failed with exit code $($proc.ExitCode)"
     }
 
     return $reportPath
@@ -185,6 +193,55 @@ function Get-ReportData {
 }
 
 # ---------------------------------------------------------------------------
+# Pre-test warmup: ensure Redis cache is hot before running tests
+# ---------------------------------------------------------------------------
+function Invoke-PreTestWarmup {
+    param(
+        [string]$ScenarioName,
+        [int]$Iterations
+    )
+
+    if ($Iterations -le 0) {
+        Write-Host "[INFO] Pre-test warmup disabled (warmup=$Iterations)"
+        return
+    }
+
+    Write-Host "[INFO] Pre-test warmup for $ScenarioName ($Iterations iterations)"
+
+    $cppExe = Get-CppBinary
+    if (-not $cppExe) {
+        Write-Host "[WARN] C++ binary not found, skipping warmup"
+        return
+    }
+
+    $args = @(
+        $cppExe,
+        "--config", $Config,
+        "--scenario", $ScenarioName,
+        "--warmup", $Iterations,
+        "--pool-size", $PoolSize
+    )
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $args[0]
+    $psi.Arguments = ($args[1..($args.Count-1)] -join ' ')
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.WorkingDirectory = (Split-Path -Parent $cppExe)
+
+    $proc = [System.Diagnostics.Process]::Start($psi)
+    $stdout = $proc.StandardOutput.ReadToEnd()
+    $stderr = $proc.StandardError.ReadToEnd()
+    $proc.WaitForExit()
+
+    if ($stdout) { Write-Host $stdout }
+    if ($stderr -and $proc.ExitCode -ne 0) { Write-Host $stderr }
+
+    Write-Host "[INFO] Pre-test warmup completed"
+}
+
+# ---------------------------------------------------------------------------
 # Scenario runners
 # ---------------------------------------------------------------------------
 function Run-AuthScenario {
@@ -199,6 +256,9 @@ function Run-AuthScenario {
 }
 
 function Run-LoginScenario {
+    # Pre-test warmup: populate Redis cache before measuring
+    Invoke-PreTestWarmup -ScenarioName "tcp" -Iterations $WarmupIterations
+
     # TCP and HTTP via C++ binary
     $reports = @{}
     $extra = if ($AccountsCsv) { @("--config", $Config) } else { @() }
@@ -210,16 +270,26 @@ function Run-LoginScenario {
 }
 
 function Run-TcpScenario {
+    # Pre-test warmup
+    Invoke-PreTestWarmup -ScenarioName "tcp" -Iterations $WarmupIterations
+
     $r = Invoke-CppLogin "tcp" "tcp_login.json"
     return @{ "tcp" = (Get-ReportData $r) }
 }
 
 function Run-QuicScenario {
+    # Pre-test warmup: critical for fair comparison with TCP
+    # QUIC tests often run first and suffer from cold cache
+    Invoke-PreTestWarmup -ScenarioName "quic" -Iterations $WarmupIterations
+
     $r = Invoke-CppLogin "quic" "quic_login.json"
     return @{ "quic" = (Get-ReportData $r) }
 }
 
 function Run-HttpScenario {
+    # Pre-test warmup
+    Invoke-PreTestWarmup -ScenarioName "http" -Iterations $WarmupIterations
+
     $r = Invoke-CppLogin "http" "http_login.json"
     return @{ "http" = (Get-ReportData $r) }
 }

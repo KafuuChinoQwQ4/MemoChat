@@ -41,8 +41,15 @@ public:
 
 // ---- Concrete scenario implementations ----
 
-// HTTP-only login (no persistent connection)
+// HTTP-only login via HTTP/1.1 (plaintext, port 8080)
 std::unique_ptr<IScenarioRunner> make_http_scenario();
+
+// HTTP-only login via HTTP/2 (TLS + ALPN, port 8443)
+std::unique_ptr<IScenarioRunner> make_http2_scenario();
+
+// HTTP-only login via HTTP/3 (raw QUIC, port 8081)
+// Tests QUIC handshake + HTTP/3 framing to GateServer HTTP/3 listener
+std::unique_ptr<IScenarioRunner> make_http3_scenario();
 
 // TCP login with persistent socket per iteration
 std::unique_ptr<IScenarioRunner> make_tcp_scenario();

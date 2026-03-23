@@ -1,6 +1,8 @@
 
 //
 
+#include "GateHttp3Listener.h"
+#include "LogicSystem.h"
 #include <iostream>
 #include <json/json.h>
 #include <json/value.h>
@@ -185,6 +187,21 @@ int main()
 			});
 		std::make_shared<CServer>(ioc, gate_port)->Start();
 		memolog::LogInfo("service.start", "GateServer listening", { {"port", std::to_string(gate_port)} });
+
+		// Start HTTP/3 listener on alternate port (port + 1)
+#if defined(MEMOCHAT_ENABLE_HTTP3)
+		int http3_port = gate_port + 1;
+		std::string http3_error;
+		auto http3_listener = std::make_shared<GateHttp3Listener>(ioc, *LogicSystem::GetInstance(), http3_port);
+		if (http3_listener->Start(http3_error)) {
+			memolog::LogInfo("service.http3.start", "GateServer HTTP/3 listener started",
+				{{"port", std::to_string(http3_port)}});
+		} else {
+			memolog::LogWarn("service.http3.start.fail", "GateServer HTTP/3 listener failed to start",
+				{{"error", http3_error}});
+		}
+#endif
+
 		ioc.run();
 		memolog::LogInfo("service.stop", "GateServer stopped");
 		GateAsyncSideEffects::Instance().Stop();

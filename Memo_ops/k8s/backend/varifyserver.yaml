@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: memochat-varifyserver
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: varifyserver
+spec:
+  type: ClusterIP
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+      protocol: TCP
+    - name: http
+      port: 8081
+      targetPort: 8081
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: varifyserver
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memochat-varifyserver
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: varifyserver
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: memochat
+      app.kubernetes.io/component: varifyserver
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: memochat
+        app.kubernetes.io/component: varifyserver
+    spec:
+      containers:
+        - name: varifyserver
+          image: memochat/varifyserver:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 50051
+              name: grpc
+            - containerPort: 8081
+              name: http
+          env:
+            - name: MEMOCHAT_VARIFYSERVER_HOST
+              value: "0.0.0.0"
+            - name: MEMOCHAT_VARIFYSERVER_PORT
+              value: "50051"
+            - name: MEMOCHAT_HEALTH_PORT
+              value: "8081"
+            - name: MEMOCHAT_MYSQL_HOST
+              value: "memochat-mysql"
+            - name: MEMOCHAT_REDIS_HOST
+              value: "memochat-redis"
+            - name: MEMOCHAT_RABBITMQ_HOST
+              value: "memochat-rabbitmq"
+            - name: MEMOCHAT_LOG_LEVEL
+              value: "info"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 5

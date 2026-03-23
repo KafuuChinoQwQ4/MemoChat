@@ -11,8 +11,12 @@ namespace memochat {
 namespace loadtest {
 
 struct TestConfig {
-    // HTTP gate
+    // HTTP gate (HTTP/1.1 — plaintext, port 8080)
     std::string gate_url = "http://127.0.0.1:8080";
+    // HTTP/2 gate (HTTPS — TLS + ALPN, port 8443)
+    std::string gate_url_https = "https://127.0.0.1:8443";
+    // HTTP/3 gate (raw QUIC, port 8081)
+    std::string gate_url_http3 = "http://127.0.0.1:8081";
     std::string login_path = "/user_login";
     std::string client_ver = "2.0.0";
     bool use_xor_passwd = true;

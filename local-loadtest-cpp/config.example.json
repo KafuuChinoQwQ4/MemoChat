@@ -1,5 +1,7 @@
 {
   "gate_url": "http://127.0.0.1:8080",
+  "gate_url_https": "https://127.0.0.1:8443",
+  "gate_url_http3": "http://127.0.0.1:8081",
   "login_path": "/user_login",
   "client_ver": "2.0.0",
   "use_xor_passwd": true,

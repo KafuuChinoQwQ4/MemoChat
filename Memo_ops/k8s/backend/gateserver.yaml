@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: memochat-gateserver
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: gateserver
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+    - name: rpc
+      port: 50054
+      targetPort: 50054
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: gateserver
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memochat-gateserver
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: gateserver
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: memochat
+      app.kubernetes.io/component: gateserver
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: memochat
+        app.kubernetes.io/component: gateserver
+    spec:
+      containers:
+        - name: gateserver
+          image: memochat/gateserver:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 50054
+              name: rpc
+          env:
+            - name: MEMOCHAT_INSTANCE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MEMOCHAT_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MEMOCHAT_CLUSTER_DISCOVERYMODE
+              value: "etcd"
+            - name: MEMOCHAT_CLUSTER_ETCDENDPOINTS
+              value: "http://memochat-etcd:2379"
+            - name: MEMOCHAT_POSTGRES_HOST
+              value: "memochat-postgres"
+            - name: MEMOCHAT_REDIS_HOST
+              value: "memochat-redis"
+            - name: MEMOCHAT_KAFKA_BROKERS
+              value: "memochat-kafka:19092"
+            - name: MEMOCHAT_RABBITMQ_HOST
+              value: "memochat-rabbitmq"
+            - name: MEMOCHAT_LOG_LEVEL
+              value: "info"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
