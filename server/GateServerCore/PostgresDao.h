@@ -188,6 +188,7 @@ public:
 	bool GetCallSession(const std::string& call_id, CallSessionInfo& session);
 	bool InsertMediaAsset(const MediaAssetInfo& asset);
 	bool GetMediaAssetByKey(const std::string& media_key, MediaAssetInfo& asset);
+	bool GetUserInfo(int uid, UserInfo& user_info);
 	bool TestProcedure(const std::string& email, int& uid, string& name);
 private:
 	void WarmupAuthQueries();

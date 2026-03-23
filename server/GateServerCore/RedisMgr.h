@@ -294,6 +294,20 @@ public:
 	bool HDel(const std::string& key, const std::string& field);
 	bool Del(const std::string &key);
 	bool ExistsKey(const std::string &key);
+
+	// Pipeline operations for reduced RTT
+	// MGET: fetch multiple keys in one round-trip (returns map of key->value)
+	// Keys with no value or error are omitted from result
+	std::unordered_map<std::string, std::string> MGet(const std::vector<std::string>& keys);
+
+	// MSET: set multiple key-value pairs in one round-trip
+	bool MSet(const std::unordered_map<std::string, std::string>& kvs);
+
+	// MPipeline: execute arbitrary commands in pipeline (advanced)
+	// Returns vector of results in same order as commands
+	// Caller must free each redisReply* in the returned vector
+	std::vector<redisReply*> MPipeline(const std::vector<std::string>& commands);
+
 	void Close() {
 		_con_pool->Close();
 		_con_pool->ClearConnections();

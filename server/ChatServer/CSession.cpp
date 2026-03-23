@@ -4,12 +4,20 @@
 #include <sstream>
 #include <json/json.h>
 #include <json/value.h>
+#include <json/writer.h>
 #include <json/reader.h>
 #include <limits>
 #include "LogicSystem.h"
 #include "RedisMgr.h"
 #include "ConfigMgr.h"
 #include "UserMgr.h"
+
+// Compact wire JSON for TCP/QUIC transport (Qt QJsonDocument is strict).
+static std::string JsonToWireString(const Json::Value& v) {
+    Json::StreamWriterBuilder builder;
+    builder["indentation"] = "";
+    return Json::writeString(builder, v);
+}
 
 #ifdef _WIN32
 #include <ws2tcpip.h>
@@ -288,9 +296,7 @@ void CSession::NotifyOffline(int uid) {
 	rtvalue["uid"] = uid;
 
 
-	std::string return_str = rtvalue.toStyledString();
-
-	Send(return_str, ID_NOTIFY_OFF_LINE_REQ);
+	Send(JsonToWireString(rtvalue), ID_NOTIFY_OFF_LINE_REQ);
 	return;
 }
 

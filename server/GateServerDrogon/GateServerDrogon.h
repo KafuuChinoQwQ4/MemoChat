@@ -10,8 +10,8 @@ class GateServerDrogon : public Singleton<GateServerDrogon>
 public:
     void Initialize();
     void Start();
+    void Stop();
 
-private:
     GateServerDrogon() = default;
     ~GateServerDrogon() = default;
 };

@@ -278,6 +278,9 @@ inline ChatClusterConfig LoadChatClusterConfig(const ConfigValueGetter& getter,
     if (discovery_mode == "k8s-statefulset") {
         return LoadK8sStatefulSetChatClusterConfig(getter, self_node_name);
     }
+    if (discovery_mode == "etcd") {
+        throw std::runtime_error("etcd discovery mode requires EtcdClusterDiscovery class");
+    }
     return LoadStaticChatClusterConfig(getter, self_node_name);
 }
 

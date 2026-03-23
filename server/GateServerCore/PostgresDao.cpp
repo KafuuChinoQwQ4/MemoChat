@@ -537,6 +537,43 @@ std::string PostgresDao::GenerateRandomUserPublicId() {
 	return "u" + std::to_string(dist(rng));
 }
 
+bool PostgresDao::GetUserInfo(int uid, UserInfo& user_info) {
+	if (uid <= 0) {
+		return false;
+	}
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+	});
+
+	try {
+		pqxx::read_transaction txn(*con->_con);
+		const auto rows = txn.exec(
+			"SELECT uid, name, email, nick, icon, \"desc\", sex "
+			"FROM memo.user_base WHERE uid = " + std::to_string(uid) + " LIMIT 1");
+		if (rows.empty()) {
+			return false;
+		}
+		const auto& row = rows[0];
+		user_info.uid = row["uid"].as<int>();
+		user_info.name = row["name"].is_null() ? "" : row["name"].c_str();
+		user_info.email = row["email"].is_null() ? "" : row["email"].c_str();
+		user_info.nick = row["nick"].is_null() ? "" : row["nick"].c_str();
+		user_info.icon = row["icon"].is_null() ? "" : row["icon"].c_str();
+		user_info.desc = row["desc"].is_null() ? "" : row["desc"].c_str();
+		user_info.sex = row["sex"].is_null() ? 0 : row["sex"].as<int>();
+		return true;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "GetUserInfo PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
 bool PostgresDao::TestProcedure(const std::string& email, int& uid, string& name) {
 	auto con = pool_->getConnection();
 	if (con == nullptr) {

@@ -56,6 +56,10 @@ bool PostgresMgr::GetMediaAssetByKey(const std::string& media_key, MediaAssetInf
 	return _dao.GetMediaAssetByKey(media_key, asset);
 }
 
+bool PostgresMgr::GetUserInfo(int uid, UserInfo& user_info) {
+	return _dao.GetUserInfo(uid, user_info);
+}
+
 bool PostgresMgr::TestProcedure(const std::string& email, int& uid, string& name) {
 	return _dao.TestProcedure(email,uid, name);
 }

@@ -26,7 +26,4 @@ class DrogonCallHandlers : public drogon::HttpController<DrogonCallHandlers>
     void HandleCallHangup(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback);
     void HandleCallToken(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback);
     void HandleCallTokenPost(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback);
-
-  private:
-    Json::Value ParseJsonBody(const std::string& body_str);
 };

@@ -1,10 +1,11 @@
-#include "GateRouteModules.h"
+#include "GateHttpJsonSupport.h"
 
 #include "AuthLoginSupport.h"
 #include "CallService.h"
 #include "ConfigMgr.h"
 #include "GateAsyncSideEffects.h"
 #include "GateHttpJsonSupport.h"
+#include "GateRouteModules.h"
 #include "HttpConnection.h"
 #include "LogicSystem.h"
 #include "PostgresMgr.h"
@@ -13,6 +14,8 @@
 #include "VerifyGrpcClient.h"
 #include "const.h"
 #include "auth/ChatLoginTicket.h"
+#include "logging/Logger.h"
+#include "logging/TraceContext.h"
 
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
@@ -21,17 +24,29 @@
 #include <cstdlib>
 #include <functional>
 #include <json/json.h>
-#include "logging/Logger.h"
-#include "logging/TraceContext.h"
 
 namespace beast = boost::beast;
 namespace http = beast::http;
 
 namespace {
+
+gateauthsupport::UserInfo ToGateAuthUserInfo(const UserInfo& src) {
+    gateauthsupport::UserInfo dst;
+    dst.name = src.name;
+    dst.pwd = src.pwd;
+    dst.uid = src.uid;
+    dst.user_id = src.user_id;
+    dst.email = src.email;
+    dst.nick = src.nick;
+    dst.icon = src.icon;
+    dst.desc = src.desc;
+    dst.sex = src.sex;
+    return dst;
 }
 
-void AuthHttpService::RegisterRoutes(LogicSystem& logic)
-{
+}  // namespace
+
+void AuthHttpService::RegisterRoutes(LogicSystem& logic) {
     logic.RegPost("/get_varifycode", [](std::shared_ptr<HttpConnection> connection) {
         Json::Value root;
         Json::Value src_root;
@@ -112,7 +127,7 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic)
         root["confirm"] = confirm;
         root["icon"] = icon;
         root["varifycode"] = src_root["varifycode"].asString();
-        UserInfo cached_user;
+        gateauthsupport::UserInfo cached_user;
         cached_user.uid = uid;
         cached_user.user_id = root["user_id"].asString();
         cached_user.name = name;
@@ -213,15 +228,29 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic)
             return true;
         }
 
-        UserInfo userInfo;
+        gateauthsupport::UserInfo userInfo;
         const auto mysql_start_ms = gateauthsupport::NowMs();
-        bool login_cache_hit = gateauthsupport::TryLoadCachedLoginProfile(email, pwd, userInfo);
+        gateauthsupport::UserInfo tempUser;
+        bool login_cache_hit = gateauthsupport::TryLoadCachedLoginProfile(email, pwd, tempUser);
+        if (login_cache_hit) {
+            userInfo = tempUser;
+        }
         bool pwd_valid = login_cache_hit;
         int64_t mysql_check_pwd_ms = 0;
         if (!pwd_valid) {
-            pwd_valid = PostgresMgr::GetInstance()->CheckPwd(email, pwd, userInfo);
+            UserInfo dbUser;
+            pwd_valid = PostgresMgr::GetInstance()->CheckPwd(email, pwd, dbUser);
             mysql_check_pwd_ms = gateauthsupport::NowMs() - mysql_start_ms;
             if (pwd_valid) {
+                userInfo.name = dbUser.name;
+                userInfo.pwd = dbUser.pwd;
+                userInfo.uid = dbUser.uid;
+                userInfo.user_id = dbUser.user_id;
+                userInfo.email = dbUser.email;
+                userInfo.nick = dbUser.nick;
+                userInfo.icon = dbUser.icon;
+                userInfo.desc = dbUser.desc;
+                userInfo.sex = dbUser.sex;
                 gateauthsupport::CacheLoginProfile(email, userInfo);
             }
         }

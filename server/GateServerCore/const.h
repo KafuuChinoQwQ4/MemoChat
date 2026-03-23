@@ -22,6 +22,7 @@ namespace beast = boost::beast;
 namespace http = beast::http;
 namespace net = boost::asio;
 using tcp = boost::asio::ip::tcp;
+using udp = boost::asio::ip::udp;
 
 enum ErrorCodes {
     Success = 0,

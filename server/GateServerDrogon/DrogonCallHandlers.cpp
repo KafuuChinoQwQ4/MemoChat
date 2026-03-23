@@ -1,108 +1,149 @@
+#include "WinCompat.h"
 #include "DrogonCallHandlers.h"
-#include <iostream>
-#include <json/json.h>
+#include "DrogonCallSupport.h"
+#include <drogon/HttpRequest.h>
+#include <drogon/HttpResponse.h>
 
 using namespace drogon;
 
-Json::Value DrogonCallHandlers::ParseJsonBody(const std::string& body_str)
-{
-    Json::Value root;
-    Json::Reader reader;
-    if (!reader.parse(body_str, root)) {
-        Json::Value err;
-        err["error"] = 1;
-        return err;
+static Json::Value MakeCallError(int error_code, const std::string& message) {
+    Json::Value resp;
+    resp["error"] = error_code;
+    if (!message.empty()) {
+        resp["message"] = message;
     }
-    return root;
+    return resp;
 }
 
-void DrogonCallHandlers::HandleCallStart(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback)
-{
-    auto body_str = req->getBody();
-    std::cout << "HandleCallStart: " << body_str << std::endl;
-    
+static Json::Value MakeCallOk(const Json::Value& data) {
     Json::Value resp;
-    resp["error"] = 0;
-    resp["message"] = "call started";
-    
-    auto response = HttpResponse::newHttpJsonResponse(resp);
-    callback(response);
+    resp["error"] = 0;  // Success
+    if (data.isObject()) {
+        for (const auto& key : data.getMemberNames()) {
+            resp[key] = data[key];
+        }
+    }
+    return resp;
 }
 
-void DrogonCallHandlers::HandleCallAccept(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback)
-{
-    auto body_str = req->getBody();
-    std::cout << "HandleCallAccept: " << body_str << std::endl;
-    
-    Json::Value resp;
-    resp["error"] = 0;
-    resp["message"] = "call accepted";
-    
-    auto response = HttpResponse::newHttpJsonResponse(resp);
-    callback(response);
+std::string ExtractTraceId(const HttpRequestPtr& req) {
+    auto trace_id = req->getHeader("X-Trace-Id");
+    if (trace_id.empty()) {
+        trace_id = req->getHeader("x-trace-id");
+    }
+    return trace_id;
 }
 
-void DrogonCallHandlers::HandleCallReject(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback)
+void DrogonCallHandlers::HandleCallStart(const HttpRequestPtr& req,
+    std::function<void(const HttpResponsePtr&)>&& callback)
 {
     auto body_str = req->getBody();
-    std::cout << "HandleCallReject: " << body_str << std::endl;
-    
-    Json::Value resp;
-    resp["error"] = 0;
-    resp["message"] = "call rejected";
-    
-    auto response = HttpResponse::newHttpJsonResponse(resp);
-    callback(response);
+    Json::Value root;
+    if (!DrogonCallSupport::ParseJsonBody(body_str, root)) {
+        callback(HttpResponse::newHttpJsonResponse(MakeCallError(1, "invalid json")));
+        return;
+    }
+    auto trace_id = ExtractTraceId(req);
+    auto result = DrogonCallSupport::HandleCallStart(root, trace_id);
+    Json::Value out = MakeCallOk(result.data);
+    callback(HttpResponse::newHttpJsonResponse(out));
 }
 
-void DrogonCallHandlers::HandleCallCancel(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback)
+void DrogonCallHandlers::HandleCallAccept(const HttpRequestPtr& req,
+    std::function<void(const HttpResponsePtr&)>&& callback)
 {
     auto body_str = req->getBody();
-    std::cout << "HandleCallCancel: " << body_str << std::endl;
-    
-    Json::Value resp;
-    resp["error"] = 0;
-    resp["message"] = "call cancelled";
-    
-    auto response = HttpResponse::newHttpJsonResponse(resp);
-    callback(response);
+    Json::Value root;
+    if (!DrogonCallSupport::ParseJsonBody(body_str, root)) {
+        callback(HttpResponse::newHttpJsonResponse(MakeCallError(1, "invalid json")));
+        return;
+    }
+    auto trace_id = ExtractTraceId(req);
+    auto result = DrogonCallSupport::HandleCallAccept(root, trace_id);
+    Json::Value out = MakeCallOk(result.data);
+    callback(HttpResponse::newHttpJsonResponse(out));
 }
 
-void DrogonCallHandlers::HandleCallHangup(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback)
+void DrogonCallHandlers::HandleCallReject(const HttpRequestPtr& req,
+    std::function<void(const HttpResponsePtr&)>&& callback)
 {
     auto body_str = req->getBody();
-    std::cout << "HandleCallHangup: " << body_str << std::endl;
-    
-    Json::Value resp;
-    resp["error"] = 0;
-    resp["message"] = "call hung up";
-    
-    auto response = HttpResponse::newHttpJsonResponse(resp);
-    callback(response);
+    Json::Value root;
+    if (!DrogonCallSupport::ParseJsonBody(body_str, root)) {
+        callback(HttpResponse::newHttpJsonResponse(MakeCallError(1, "invalid json")));
+        return;
+    }
+    auto trace_id = ExtractTraceId(req);
+    auto result = DrogonCallSupport::HandleCallReject(root, trace_id);
+    Json::Value out = MakeCallOk(result.data);
+    callback(HttpResponse::newHttpJsonResponse(out));
 }
 
-void DrogonCallHandlers::HandleCallToken(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback)
+void DrogonCallHandlers::HandleCallCancel(const HttpRequestPtr& req,
+    std::function<void(const HttpResponsePtr&)>&& callback)
 {
     auto body_str = req->getBody();
-    std::cout << "HandleCallToken: " << body_str << std::endl;
-    
-    Json::Value resp;
-    resp["error"] = 0;
-    resp["token"] = "stub_call_token";
-    
-    auto response = HttpResponse::newHttpJsonResponse(resp);
-    callback(response);
+    Json::Value root;
+    if (!DrogonCallSupport::ParseJsonBody(body_str, root)) {
+        callback(HttpResponse::newHttpJsonResponse(MakeCallError(1, "invalid json")));
+        return;
+    }
+    auto trace_id = ExtractTraceId(req);
+    auto result = DrogonCallSupport::HandleCallCancel(root, trace_id);
+    Json::Value out = MakeCallOk(result.data);
+    callback(HttpResponse::newHttpJsonResponse(out));
 }
 
-void DrogonCallHandlers::HandleCallTokenPost(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback)
+void DrogonCallHandlers::HandleCallHangup(const HttpRequestPtr& req,
+    std::function<void(const HttpResponsePtr&)>&& callback)
 {
     auto body_str = req->getBody();
-    std::cout << "HandleCallTokenPost: " << body_str << std::endl;
-    
-    Json::Value resp;
-    resp["error"] = 0;
-    resp["token"] = "stub_call_token";
-    
-    auto response = HttpResponse::newHttpJsonResponse(resp);
-    callback(response);
+    Json::Value root;
+    if (!DrogonCallSupport::ParseJsonBody(body_str, root)) {
+        callback(HttpResponse::newHttpJsonResponse(MakeCallError(1, "invalid json")));
+        return;
+    }
+    auto trace_id = ExtractTraceId(req);
+    auto result = DrogonCallSupport::HandleCallHangup(root, trace_id);
+    Json::Value out = MakeCallOk(result.data);
+    callback(HttpResponse::newHttpJsonResponse(out));
+}
+
+void DrogonCallHandlers::HandleCallToken(const HttpRequestPtr& req,
+    std::function<void(const HttpResponsePtr&)>&& callback)
+{
+    auto body_str = req->getBody();
+    Json::Value root;
+    int uid = 0;
+    std::string token;
+    std::string call_id;
+    std::string role;
+
+    // Try to parse JSON body first
+    if (DrogonCallSupport::ParseJsonBody(body_str, root)) {
+        uid = root.get("uid", 0).asInt();
+        token = root.get("token", "").asString();
+        call_id = root.get("call_id", "").asString();
+        role = root.get("role", "").asString();
+    }
+
+    auto trace_id = ExtractTraceId(req);
+    auto result = DrogonCallSupport::HandleCallTokenGet(uid, token, call_id, role, trace_id);
+    Json::Value out = MakeCallOk(result.data);
+    callback(HttpResponse::newHttpJsonResponse(out));
+}
+
+void DrogonCallHandlers::HandleCallTokenPost(const HttpRequestPtr& req,
+    std::function<void(const HttpResponsePtr&)>&& callback)
+{
+    auto body_str = req->getBody();
+    Json::Value root;
+    if (!DrogonCallSupport::ParseJsonBody(body_str, root)) {
+        callback(HttpResponse::newHttpJsonResponse(MakeCallError(1, "invalid json")));
+        return;
+    }
+    auto trace_id = ExtractTraceId(req);
+    auto result = DrogonCallSupport::HandleCallTokenPost(root, trace_id);
+    Json::Value out = MakeCallOk(result.data);
+    callback(HttpResponse::newHttpJsonResponse(out));
 }

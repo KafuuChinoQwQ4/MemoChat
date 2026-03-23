@@ -6,11 +6,21 @@
 #include "logging/TraceContext.h"
 #include <json/json.h>
 #include <json/value.h>
+#include <json/writer.h>
 #include <json/reader.h>
 #include <chrono>
 #include "RedisMgr.h"
 #include "PostgresMgr.h"
 #include "MongoMgr.h"
+
+namespace {
+// Compact wire JSON for TCP/QUIC transport (Qt QJsonDocument is strict).
+std::string JsonToWireString(const Json::Value& v) {
+    Json::StreamWriterBuilder builder;
+    builder["indentation"] = "";
+    return Json::writeString(builder, v);
+}
+}
 
 ChatServiceImpl::ChatServiceImpl()
 {
@@ -48,8 +58,7 @@ Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendR
         rtvalue["user_id"] = apply_info->user_id;
     }
 
-    std::string return_str = rtvalue.toStyledString();
-    session->Send(return_str, ID_NOTIFY_ADD_FRIEND_REQ);
+    session->Send(JsonToWireString(rtvalue), ID_NOTIFY_ADD_FRIEND_REQ);
     return Status::OK;
 }
 
@@ -92,8 +101,7 @@ Status ChatServiceImpl::NotifyAuthFriend(ServerContext* context, const AuthFrien
         rtvalue["error"] = ErrorCodes::UidInvalid;
     }
 
-    std::string return_str = rtvalue.toStyledString();
-    session->Send(return_str, ID_NOTIFY_AUTH_FRIEND_REQ);
+    session->Send(JsonToWireString(rtvalue), ID_NOTIFY_AUTH_FRIEND_REQ);
     return Status::OK;
 }
 
@@ -137,8 +145,7 @@ Status ChatServiceImpl::NotifyTextChatMsg(::grpc::ServerContext* context,
     }
     rtvalue["text_array"] = text_array;
 
-    std::string return_str = rtvalue.toStyledString();
-    session->Send(return_str, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+    session->Send(JsonToWireString(rtvalue), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
     return Status::OK;
 }
 

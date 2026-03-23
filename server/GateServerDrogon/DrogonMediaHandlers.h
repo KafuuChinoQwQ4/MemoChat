@@ -24,7 +24,4 @@ class DrogonMediaHandlers : public drogon::HttpController<DrogonMediaHandlers>
     void HandleUploadMediaComplete(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback);
     void HandleUploadMedia(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback);
     void HandleMediaDownload(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback);
-
-  private:
-    Json::Value CreateErrorResponse(int error_code);
 };

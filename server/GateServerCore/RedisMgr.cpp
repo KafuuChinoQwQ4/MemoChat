@@ -1,6 +1,10 @@
 #include "RedisMgr.h"
 #include "const.h"
 #include "ConfigMgr.h"
+#include <unordered_map>
+#include <vector>
+#include <cstring>
+
 RedisMgr::RedisMgr() {
 	auto& gCfgMgr = ConfigMgr::Inst();
 	auto host = gCfgMgr["Redis"]["Host"];
@@ -360,6 +364,135 @@ bool RedisMgr::ExistsKey(const std::string &key)
 	freeReplyObject(reply);
 	_con_pool->returnConnection(connect);
 	return true;
+}
+
+// =====================================================================
+// Pipeline operations — reduce RTT by batching Redis commands
+// =====================================================================
+
+std::unordered_map<std::string, std::string> RedisMgr::MGet(const std::vector<std::string>& keys) {
+    std::unordered_map<std::string, std::string> results;
+
+    if (keys.empty()) {
+        return results;
+    }
+
+    auto connect = _con_pool->getConnection();
+    if (connect == nullptr) {
+        return results;
+    }
+
+    Defer defer([&connect, this]() {
+        _con_pool->returnConnection(connect);
+    });
+
+    // Use MGET command: O(N) single RTT instead of N RTTs
+    // Build command arguments
+    std::vector<const char*> argv;
+    std::vector<size_t> argvlen;
+    argv.reserve(keys.size() + 1);
+    argvlen.reserve(keys.size() + 1);
+
+    argv.push_back("MGET");
+    argvlen.push_back(4);
+
+    for (const auto& key : keys) {
+        argv.push_back(key.c_str());
+        argvlen.push_back(key.size());
+    }
+
+    auto* reply = (redisReply*)redisCommandArgv(connect, (int)argv.size(), argv.data(), argvlen.data());
+    if (reply == nullptr) {
+        return results;
+    }
+
+    if (reply->type == REDIS_REPLY_ARRAY) {
+        for (size_t i = 0; i < reply->elements && i < keys.size(); ++i) {
+            auto* elem = reply->element[i];
+            if (elem && elem->type == REDIS_REPLY_STRING && elem->str && elem->len > 0) {
+                results[keys[i]] = std::string(elem->str, elem->len);
+            }
+        }
+    }
+
+    freeReplyObject(reply);
+    return results;
+}
+
+bool RedisMgr::MSet(const std::unordered_map<std::string, std::string>& kvs) {
+    if (kvs.empty()) {
+        return true;
+    }
+
+    auto connect = _con_pool->getConnection();
+    if (connect == nullptr) {
+        return false;
+    }
+
+    Defer defer([&connect, this]() {
+        _con_pool->returnConnection(connect);
+    });
+
+    // MSET: SET key1 val1 key2 val2 ...
+    // Build command arguments
+    std::vector<const char*> argv;
+    std::vector<size_t> argvlen;
+    argv.reserve(kvs.size() * 2 + 1);
+    argvlen.reserve(kvs.size() * 2 + 1);
+
+    argv.push_back("MSET");
+    argvlen.push_back(4);
+
+    for (const auto& [key, value] : kvs) {
+        argv.push_back(key.c_str());
+        argvlen.push_back(key.size());
+        argv.push_back(value.c_str());
+        argvlen.push_back(value.size());
+    }
+
+    auto* reply = (redisReply*)redisCommandArgv(connect, (int)argv.size(), argv.data(), argvlen.data());
+    if (reply == nullptr) {
+        return false;
+    }
+
+    bool ok = (reply->type == REDIS_REPLY_STATUS);
+    freeReplyObject(reply);
+    return ok;
+}
+
+std::vector<redisReply*> RedisMgr::MPipeline(const std::vector<std::string>& commands) {
+    std::vector<redisReply*> results;
+
+    if (commands.empty()) {
+        return results;
+    }
+
+    auto connect = _con_pool->getConnection();
+    if (connect == nullptr) {
+        return results;
+    }
+
+    // Append all commands using redisAppendCommand
+    for (const auto& cmd : commands) {
+        if (redisAppendCommand(connect, cmd.c_str()) != REDIS_OK) {
+            // Connection error, return what we have
+            break;
+        }
+    }
+
+    // Collect all responses
+    for (size_t i = 0; i < commands.size(); ++i) {
+        redisReply* reply = nullptr;
+        if (redisGetReply(connect, (void**)&reply) == REDIS_OK && reply != nullptr) {
+            results.push_back(reply);
+        } else {
+            // Early termination
+            break;
+        }
+    }
+
+    _con_pool->returnConnection(connect);
+    return results;
 }
 
 
