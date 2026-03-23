@@ -18,109 +18,166 @@ Rectangle {
     signal voiceChatClicked()
     signal videoChatClicked()
 
+    readonly property string genderIconSource: {
+        if (root.contactSex === 1) return "qrc:/icons/gender_female.png"
+        if (root.contactSex === 0) return "qrc:/icons/gender_male.png"
+        return "qrc:/icons/gender_unknown.png"
+    }
+    readonly property string genderLabelText: {
+        if (root.contactSex === 1) return "女"
+        if (root.contactSex === 0) return "男"
+        return ""
+    }
+
+    readonly property int avatarSide: 72
+    readonly property int actionIcon: 28
+
     ColumnLayout {
         anchors.fill: parent
-        anchors.leftMargin: 120
-        anchors.rightMargin: 120
-        anchors.topMargin: 90
-        anchors.bottomMargin: 80
-        spacing: 26
+        anchors.leftMargin: 24
+        anchors.rightMargin: 24
+        anchors.topMargin: 28
+        anchors.bottomMargin: 24
+        spacing: 0
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: 18
+            Layout.alignment: Qt.AlignTop
+            spacing: 16
 
-            Rectangle {
-                Layout.preferredWidth: 85
-                Layout.preferredHeight: 85
-                radius: 6
-                clip: true
-                color: Qt.rgba(0.73, 0.83, 0.93, 0.54)
+            // 左：头像 + 三按钮（按钮整体在头像正下方、水平居中）
+            ColumnLayout {
+                id: leftBlock
+                spacing: 12
+                Layout.alignment: Qt.AlignTop
 
-                Image {
-                    anchors.fill: parent
-                    source: root.contactIcon
-                    fillMode: Image.PreserveAspectCrop
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    width: root.avatarSide
+                    height: root.avatarSide
+                    radius: 8
+                    clip: true
+                    color: Qt.rgba(0.73, 0.83, 0.93, 0.45)
+
+                    Image {
+                        anchors.fill: parent
+                        source: root.contactIcon
+                        fillMode: Image.PreserveAspectCrop
+                        smooth: true
+                        mipmap: true
+                    }
+                }
+
+                RowLayout {
+                    spacing: 10
+                    Layout.alignment: Qt.AlignHCenter
+
+                    ContactActionIconButton {
+                        iconSize: root.actionIcon
+                        labelText: "发消息"
+                        normalSource: "qrc:/icons/contact_message.png"
+                        hoverSource: "qrc:/icons/contact_message.png"
+                        pressedSource: "qrc:/icons/contact_message.png"
+                        enabled: root.hasContact
+                        onClicked: root.messageChatClicked()
+                    }
+
+                    ContactActionIconButton {
+                        iconSize: root.actionIcon
+                        labelText: "语音"
+                        normalSource: "qrc:/icons/phone.png"
+                        hoverSource: "qrc:/icons/phone.png"
+                        pressedSource: "qrc:/icons/phone.png"
+                        enabled: root.hasContact
+                        onClicked: root.voiceChatClicked()
+                    }
+
+                    ContactActionIconButton {
+                        iconSize: root.actionIcon
+                        labelText: "视频"
+                        normalSource: "qrc:/icons/video.png"
+                        hoverSource: "qrc:/icons/video.png"
+                        pressedSource: "qrc:/icons/video.png"
+                        enabled: root.hasContact
+                        onClicked: root.videoChatClicked()
+                    }
                 }
             }
 
+            // 右：昵称、性别、备注、ID — 与头像顶对齐、左齐
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                Layout.alignment: Qt.AlignTop
+                spacing: 6
 
                 Label {
                     text: root.contactName
-                    color: "#243246"
-                    font.pixelSize: 22
+                    color: "#1e2a3a"
+                    font.pixelSize: 18
                     font.bold: true
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
                 }
 
                 RowLayout {
                     spacing: 6
-                    Image {
-                        width: 18
-                        height: 18
-                        source: root.contactSex === 1 ? "qrc:/res/female.png" : "qrc:/res/male.png"
-                        fillMode: Image.PreserveAspectFit
+                    Layout.preferredHeight: 18
+
+                    Item {
+                        Layout.preferredWidth: 16
+                        Layout.preferredHeight: 16
+                        Layout.maximumWidth: 16
+                        Layout.maximumHeight: 16
+                        clip: true
+
+                        Image {
+                            anchors.fill: parent
+                            source: root.genderIconSource
+                            fillMode: Image.PreserveAspectFit
+                            smooth: true
+                            mipmap: true
+                        }
+                    }
+
+                    Label {
+                        visible: root.genderLabelText.length > 0
+                        text: root.genderLabelText
+                        color: "#3d4f66"
+                        font.pixelSize: 13
                     }
                 }
 
                 RowLayout {
-                    spacing: 8
+                    spacing: 6
                     Label {
-                        text: "备注:"
-                        color: "#243246"
-                        font.pixelSize: 14
+                        text: "备注"
+                        color: "#5a6b82"
+                        font.pixelSize: 13
                     }
                     Label {
                         text: root.contactBack.length > 0 ? root.contactBack : root.contactNick
-                        color: "#243246"
-                        font.pixelSize: 14
+                        color: "#1e2a3a"
+                        font.pixelSize: 13
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
                     }
                 }
 
                 RowLayout {
-                    spacing: 8
+                    spacing: 6
                     Label {
-                        text: "ID:"
-                        color: "#243246"
-                        font.pixelSize: 14
+                        text: "ID"
+                        color: "#5a6b82"
+                        font.pixelSize: 13
                     }
                     Label {
                         text: root.contactUserId
-                        color: "#243246"
-                        font.pixelSize: 14
+                        color: "#1e2a3a"
+                        font.pixelSize: 13
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
                     }
                 }
-            }
-        }
-
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 40
-
-            ContactActionIconButton {
-                normalSource: "qrc:/res/msg_chat_normal.png"
-                hoverSource: "qrc:/res/msg_chat_hover.png"
-                pressedSource: "qrc:/res/msg_chat_press.png"
-                enabled: root.hasContact
-                onClicked: root.messageChatClicked()
-            }
-
-            ContactActionIconButton {
-                normalSource: "qrc:/res/voice_chat_normal.png"
-                hoverSource: "qrc:/res/voice_chat_hover.png"
-                pressedSource: "qrc:/res/voice_chat_press.png"
-                enabled: root.hasContact
-                onClicked: root.voiceChatClicked()
-            }
-
-            ContactActionIconButton {
-                normalSource: "qrc:/res/video_chat_normal.png"
-                hoverSource: "qrc:/res/video_chat_hover.png"
-                pressedSource: "qrc:/res/video_chat_press.png"
-                enabled: root.hasContact
-                onClicked: root.videoChatClicked()
             }
         }
 
