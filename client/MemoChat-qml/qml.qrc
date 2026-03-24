@@ -63,6 +63,7 @@
         <file alias="icons/add.png">src/team.png</file>
         <file alias="icons/moments.png">src/朋友圈.png</file>
         <file>qml/moments/MomentsFeedPane.qml</file>
+        <file>qml/moments/MomentsPublishPage.qml</file>
         <file>qml/moments/MomentsDelegate.qml</file>
         <file>qml/moments/MomentsPostComposer.qml</file>
         <file>qml/moments/MomentsDetailPopup.qml</file>
