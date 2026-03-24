@@ -351,7 +351,7 @@ int main(int argc, char *argv[])
         gate_port = "8080";
     }
 
-    gate_url_prefix = "http://" + gate_host + ":" + gate_port;
+    gate_url_prefix = (gate_port == "8443") ? "https://" + gate_host + ":" + gate_port : "http://" + gate_host + ":" + gate_port;
 
     qmlRegisterUncreatableType<AppController>(
         "MemoChat", 1, 0, "AppController", "Enum only");

@@ -18,6 +18,8 @@
 #include <QUrl>
 #include <QUrlQuery>
 #include <QtGlobal>
+#include <QSslConfiguration>
+#include <QSslSocket>
 
 namespace {
 QString resolveLocalPath(const QString &localFileUrl)
@@ -64,6 +66,14 @@ bool postJson(const QUrl &url, const QJsonObject &payload, QJsonObject *response
 {
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    // Enable HTTPS with self-signed cert support
+    if (url.scheme().toLower() == "https") {
+        QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
+        sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
+        request.setSslConfiguration(sslConfig);
+    }
+
     QString traceId;
     QString requestId;
     QString spanId;
@@ -146,6 +156,14 @@ bool postBinary(const QUrl &url,
 {
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/octet-stream");
+
+    // Enable HTTPS with self-signed cert support
+    if (url.scheme().toLower() == "https") {
+        QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
+        sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
+        request.setSslConfiguration(sslConfig);
+    }
+
     QString traceId;
     QString requestId;
     QString spanId;
@@ -226,6 +244,14 @@ bool postBinary(const QUrl &url,
 bool getJson(const QUrl &url, QJsonObject *responseObj, QString *errorText)
 {
     QNetworkRequest request(url);
+
+    // Enable HTTPS with self-signed cert support
+    if (url.scheme().toLower() == "https") {
+        QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
+        sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
+        request.setSslConfiguration(sslConfig);
+    }
+
     QString traceId;
     QString requestId;
     QString spanId;

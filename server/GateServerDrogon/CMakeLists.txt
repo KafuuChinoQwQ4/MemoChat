@@ -85,6 +85,12 @@ endif()
 find_package(OpenSSL CONFIG REQUIRED)
 if(TARGET OpenSSL::SSL AND TARGET OpenSSL::Crypto)
     target_link_libraries(GateServerDrogon PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    # vcpkg OpenSSL DLL on Windows requires OPENSSL_Applink to be registered.
+    # OpenSSL::applink adds openssl/applink.c as a source, providing OPENSSL_Applink().
+    # Without this, libcrypto-3-x64.dll crashes with "no OPENSSL_Applink".
+    if(TARGET OpenSSL::applink)
+        target_link_libraries(GateServerDrogon PRIVATE OpenSSL::applink)
+    endif()
     message(STATUS "GateServerDrogon: OpenSSL found for TLS/HTTP2")
 else()
     message(FATAL_ERROR "GateServerDrogon: OpenSSL not found - HTTP/2 requires TLS")

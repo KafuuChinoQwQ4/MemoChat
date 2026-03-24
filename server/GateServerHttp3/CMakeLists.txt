@@ -48,6 +48,12 @@ if(MEMOCHAT_ENABLE_HTTP3)
             "/LIBPATH:D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64")
     endif()
 
+    # OpenSSL required by CertUtil (PKCS12/self-signed cert generation)
+    find_package(OpenSSL CONFIG)
+    if(TARGET OpenSSL::SSL AND TARGET OpenSSL::Crypto)
+        target_link_libraries(GateServerHttp3 PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    endif()
+
     # msquic.dll is in vcpkg_installed/x64-windows/bin, copy to output
     find_path(MSQUIC_BIN_DIR NAMES msquic.dll PATHS
         "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-windows/bin"

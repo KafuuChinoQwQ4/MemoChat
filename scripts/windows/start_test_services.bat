@@ -19,8 +19,9 @@ for %%A in (%*) do (
   if /I "%%~A"=="--enable-quic" set "ENABLE_QUIC=1"
 )
 
-set "SERVER_BIN_PRIMARY=%ROOT%\build-vcpkg-server\bin\Release"
-set "SERVER_BIN_FALLBACK=%ROOT%\build\bin\Release"
+REM Unified build dir: build/ (via preset msvc2022-all-msquic)
+set "SERVER_BIN_PRIMARY=%ROOT%\build\bin"
+set "SERVER_BIN_FALLBACK=%ROOT%\build-vcpkg-server\bin\Release"
 set "BUILD_BIN=%SERVER_BIN_PRIMARY%"
 set "GATE_EXE="
 set "STATUS_EXE="
@@ -40,8 +41,8 @@ for %%A in (%*) do (
 )
 
 if "%ENABLE_QUIC%"=="1" (
-  set "SERVER_BIN_PRIMARY=%ROOT%\build-vcpkg-server-msquic\bin\Release"
-  set "SERVER_BIN_FALLBACK=%ROOT%\build-vcpkg-server\bin\Release"
+  set "SERVER_BIN_PRIMARY=%ROOT%\build-msquic\bin"
+  set "SERVER_BIN_FALLBACK=%ROOT%\build\bin"
   set "CLIENT_BIN=%ROOT%\build-msquic\bin\Release"
 )
 
@@ -185,7 +186,7 @@ for /L %%I in (1,1,!CHAT_NODE_COUNT!) do (
   if errorlevel 1 exit /b 1
   call :wait_for_port !NODE_NAME!-RPC !NODE_RPC_PORT! 20 "%ARTIFACT_ROOT%\logs\services\!NODE_NAME!"
   if errorlevel 1 exit /b 1
-  if "%ENABLE_QUIC%"=="1" if defined NODE_QUIC_PORT (
+  if "%ENABLE_QUIC%"=="1" if not "!NODE_QUIC_PORT!"=="" (
     call :warn_if_udp_port_closed !NODE_NAME!-QUIC !NODE_QUIC_PORT! "QUIC listener is not visible on UDP; client will fallback to TCP"
   )
 )
@@ -198,6 +199,43 @@ if errorlevel 1 exit /b 1
 call :wait_for_port GateServer 8080 20 "%ARTIFACT_ROOT%\logs\services\GateServer"
 if errorlevel 1 exit /b 1
 call :print_running_process_stamp GateServer.exe
+
+REM GateServerDrogon section: start after GateServer on port 8443
+call :start_gatedrogon
+
+:after_gatedrogon
+if not exist "%BUILD_BIN%\GateServerDrogon.exe" (
+    if not exist "%GATEDROGON_EXE%" (
+        echo [INFO] GateServerDrogon.exe not found, HTTP/2 (port 8443) will not be available.
+        goto :after_gatedrogon
+    )
+)
+if not exist "%ROOT%\server\GateServerDrogon\config.ini" (
+    echo [INFO] GateServerDrogon config not found, HTTP/2 (port 8443) will not be available.
+    goto :after_gatedrogon
+)
+set "GATEDROGON_EXE_FINAL=%GATEDROGON_EXE%"
+if not defined GATEDROGON_EXE_FINAL (
+    set "GATEDROGON_EXE_FINAL=%BUILD_BIN%\GateServerDrogon.exe"
+)
+echo [INFO] Starting GateServerDrogon (HTTPS/HTTP2 on port 8443)...
+call :prepare_service GateServerDrogon "%ROOT%\server\GateServerDrogon\config.ini" "%GATEDROGON_EXE_FINAL%"
+if errorlevel 1 (
+    echo [WARN] Failed to prepare GateServerDrogon, skipping HTTP/2 server.
+    goto :after_gatedrogon
+)
+call :launch_process "GateServerDrogon" "%RUN_ROOT%\GateServerDrogon\GateServerDrogon.exe" "" "%RUN_ROOT%\GateServerDrogon" "%ARTIFACT_ROOT%\logs\manual-start\GateServerDrogon.out.log" "%ARTIFACT_ROOT%\logs\manual-start\GateServerDrogon.err.log" "%PID_ROOT%\GateServerDrogon.pid"
+if errorlevel 1 (
+    echo [WARN] Failed to start GateServerDrogon.
+    goto :after_gatedrogon
+)
+call :wait_for_port GateServerDrogon 8443 20 "%ARTIFACT_ROOT%\logs\services\GateServerDrogon"
+if errorlevel 1 (
+    echo [WARN] GateServerDrogon failed to listen on port 8443, HTTP/2 may be unavailable.
+    goto :after_gatedrogon
+)
+call :print_running_process_stamp GateServerDrogon.exe
+goto :after_gatedrogon
 
 if "%WITH_CLIENT%"=="1" (
   if not exist "%CLIENT_BIN%\MemoChatQml.exe" (
@@ -379,7 +417,7 @@ for /L %%I in (1,1,!CHAT_NODE_COUNT!) do (
   if errorlevel 1 exit /b 1
   call :assert_port_available !CHAT_NODE_%%I_NAME!-RPC !CHAT_NODE_%%I_RPC_PORT!
   if errorlevel 1 exit /b 1
-  if "%ENABLE_QUIC%"=="1" if defined CHAT_NODE_%%I_QUIC_PORT (
+  if "%ENABLE_QUIC%"=="1" if not "!CHAT_NODE_%%I_QUIC_PORT!"=="" (
     call :assert_udp_port_available !CHAT_NODE_%%I_NAME!-QUIC !CHAT_NODE_%%I_QUIC_PORT!
     if errorlevel 1 exit /b 1
   )
@@ -521,65 +559,115 @@ set "GATE_EXE="
 set "STATUS_EXE="
 set "CHAT_EXE="
 set "MEMOOPS_DIR=%ROOT%\Memo_ops\runtime\services"
+REM First check the unified build/ directory (no Release subdir for Ninja)
+for %%E in ("%SERVER_BIN_PRIMARY%\GateServer.exe" "%SERVER_BIN_PRIMARY%\Release\GateServer.exe") do (
+    if exist "%%~E" set "BUILD_BIN=%SERVER_BIN_PRIMARY%" && goto :select_server_bin_found
+)
+REM Then check fallback dirs
+for %%E in ("%SERVER_BIN_FALLBACK%\GateServer.exe" "%SERVER_BIN_FALLBACK%\bin\GateServer.exe") do (
+    if exist "%%~E" set "BUILD_BIN=%SERVER_BIN_FALLBACK%" && goto :select_server_bin_found
+)
+for %%E in ("%ROOT%\build\bin\Release\GateServer.exe" "%ROOT%\build-msquic\bin\Release\GateServer.exe") do (
+    if exist "%%~E" set "BUILD_BIN=%%~dpE" && set "BUILD_BIN=!BUILD_BIN:~0,-1!" && goto :select_server_bin_found
+)
+goto :select_server_bin_try_ps
+
+:select_server_bin_found
+if exist "%BUILD_BIN%\GateServer.exe" set "GATE_EXE=%BUILD_BIN%\GateServer.exe"
+if exist "%BUILD_BIN%\StatusServer.exe" set "STATUS_EXE=%BUILD_BIN%\StatusServer.exe"
+if exist "%BUILD_BIN%\ChatServer.exe" set "CHAT_EXE=%BUILD_BIN%\ChatServer.exe"
+if exist "%BUILD_BIN%\GateServerDrogon.exe" set "GATEDROGON_EXE=%BUILD_BIN%\GateServerDrogon.exe"
+if defined GATE_EXE if defined STATUS_EXE if defined CHAT_EXE goto :select_server_bin_ok
+
+:select_server_bin_try_ps
 for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\select_server_bins.ps1" -PrimaryDir "%SERVER_BIN_PRIMARY%" -FallbackDir "%SERVER_BIN_FALLBACK%" -MemoOpsDir "%MEMOOPS_DIR%"`) do (
   %%I
 )
 if not defined GATE_EXE (
-  echo [ERROR] No GateServer.exe found.
-  echo [HINT] Checked:
-  echo [HINT]   %SERVER_BIN_PRIMARY%
-  echo [HINT]   %SERVER_BIN_FALLBACK%
-  exit /b 1
+    echo [ERROR] No GateServer.exe found.
+    echo [HINT] Checked:
+    echo [HINT]   %SERVER_BIN_PRIMARY%
+    echo [HINT]   %SERVER_BIN_FALLBACK%
+    echo [HINT]   %ROOT%\build\bin
+    echo [HINT]   %ROOT%\build\bin\Release
+    echo [HINT]   %ROOT%\build-msquic\bin\Release
+    exit /b 1
 )
 if not defined STATUS_EXE (
-  echo [ERROR] No StatusServer.exe found.
-  echo [HINT] Checked:
-  echo [HINT]   %SERVER_BIN_PRIMARY%
-  echo [HINT]   %SERVER_BIN_FALLBACK%
-  exit /b 1
+    echo [ERROR] No StatusServer.exe found.
+    exit /b 1
 )
 if not defined CHAT_EXE (
-  echo [ERROR] No ChatServer.exe found.
-  echo [HINT] Checked:
-  echo [HINT]   %SERVER_BIN_PRIMARY%
-  echo [HINT]   %SERVER_BIN_FALLBACK%
-  exit /b 1
+    echo [ERROR] No ChatServer.exe found.
+    exit /b 1
 )
+:select_server_bin_ok
 for %%I in ("%CHAT_EXE%") do set "BUILD_BIN=%%~dpI"
 if "%BUILD_BIN:~-1%"=="\" set "BUILD_BIN=%BUILD_BIN:~0,-1%"
 call :print_file_stamp "Selected GateServer" "%GATE_EXE%"
 call :print_file_stamp "Selected StatusServer" "%STATUS_EXE%"
 call :print_file_stamp "Selected ChatServer" "%CHAT_EXE%"
+if defined GATEDROGON_EXE (
+    call :print_file_stamp "Selected GateServerDrogon" "%GATEDROGON_EXE%"
+)
 exit /b 0
 
 :print_running_process_stamp
 set "RUN_EXE=%~1"
-for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$proc = Get-CimInstance Win32_Process -Filter \"Name='%RUN_EXE%'\" -ErrorAction SilentlyContinue | Select-Object -First 1;" ^
-  "if (-not $proc) { exit 1 }" ^
-  "$path = $proc.ExecutablePath;" ^
-  "if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path $path)) { exit 1 }" ^
-  "$item = Get-Item $path;" ^
-  "Write-Output ('[INFO] Running {0}: {1} ({2} bytes, {3})' -f '%RUN_EXE%', $item.FullName, $item.Length, $item.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"`) do echo %%I
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0print_process_stamp.ps1" -ExeName "%RUN_EXE%"`) do echo %%I
 if errorlevel 1 (
-  echo [WARN] Unable to inspect running process image for %RUN_EXE%
+    echo [WARN] Unable to inspect running process image for %RUN_EXE%
 )
 exit /b 0
 
 :print_chat_process_count
-for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$count = (Get-Process -Name 'ChatServer' -ErrorAction SilentlyContinue | Measure-Object).Count;" ^
-  "Write-Output ('[INFO] Running ChatServer.exe instances: ' + $count)"`) do echo %%I
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0print_chat_count.ps1" -ExeName "ChatServer"`) do echo %%I
 exit /b 0
 
 :print_file_stamp
 set "STAMP_LABEL=%~1"
 set "STAMP_PATH=%~2"
 if not exist "%STAMP_PATH%" (
-  echo [WARN] %STAMP_LABEL% missing: %STAMP_PATH%
-  exit /b 0
+    echo [WARN] %STAMP_LABEL% missing: %STAMP_PATH%
+    exit /b 0
 )
-for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$item = Get-Item '%STAMP_PATH%';" ^
-  "Write-Output ('[INFO] {0}: {1} ({2} bytes, {3})' -f '%STAMP_LABEL%', $item.FullName, $item.Length, $item.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"`) do echo %%I
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0print_file_stamp.ps1" -Label "%STAMP_LABEL%" -Path "%STAMP_PATH%"`) do echo %%I
 exit /b 0
+
+:check_var_defined
+set "CHECK_VAR=%~1"
+for /f "delims=" %%I in ('powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0check_var_defined.ps1" -VarName "%CHECK_VAR%"') do set "CHECK_RESULT=%%I"
+if defined CHECK_RESULT (
+    set "CHECK_RESULT="
+    exit /b 0
+)
+set "CHECK_RESULT="
+exit /b 1
+
+:start_gatedrogon
+if not exist "%BUILD_BIN%\GateServerDrogon.exe" (
+    echo [INFO] GateServerDrogon.exe not found, HTTP/2 (port 8443) will not be available.
+    goto :after_gatedrogon
+)
+if not exist "%ROOT%\server\GateServerDrogon\config.ini" (
+    echo [INFO] GateServerDrogon config not found, HTTP/2 (port 8443) will not be available.
+    goto :after_gatedrogon
+)
+echo [INFO] Starting GateServerDrogon (HTTPS/HTTP2 on port 8443)...
+call :prepare_service GateServerDrogon "%ROOT%\server\GateServerDrogon\config.ini" "%GATEDROGON_EXE%"
+if errorlevel 1 (
+    echo [WARN] Failed to prepare GateServerDrogon, skipping HTTP/2 server.
+    goto :after_gatedrogon
+)
+call :launch_process "GateServerDrogon" "%RUN_ROOT%\GateServerDrogon\GateServerDrogon.exe" "" "%RUN_ROOT%\GateServerDrogon" "%ARTIFACT_ROOT%\logs\manual-start\GateServerDrogon.out.log" "%ARTIFACT_ROOT%\logs\manual-start\GateServerDrogon.err.log" "%PID_ROOT%\GateServerDrogon.pid"
+if errorlevel 1 (
+    echo [WARN] Failed to start GateServerDrogon.
+    goto :after_gatedrogon
+)
+call :wait_for_port GateServerDrogon 8443 20 "%ARTIFACT_ROOT%\logs\services\GateServerDrogon"
+if errorlevel 1 (
+    echo [WARN] GateServerDrogon failed to listen on port 8443, HTTP/2 may be unavailable.
+    goto :after_gatedrogon
+)
+call :print_running_process_stamp GateServerDrogon.exe
+goto :after_gatedrogon
