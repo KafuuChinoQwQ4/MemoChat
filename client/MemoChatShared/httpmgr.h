@@ -4,6 +4,7 @@
 #include <QString>
 #include <QUrl>
 #include <QObject>
+#include <QByteArray>
 #include <QNetworkAccessManager>
 #include "global.h"
 
@@ -19,6 +20,12 @@ public:
 private:
     friend class Singleton<HttpMgr>;
     HttpMgr();
+    void postHttpReqInternal(const QUrl &url,
+        const QByteArray &data,
+        ReqId req_id,
+        Modules mod,
+        const QString &module,
+        bool allowPlaintextFallback);
     QNetworkAccessManager _manager;
 public slots:
     void slot_http_finish(ReqId id, QString res, ErrorCodes err, Modules mod);

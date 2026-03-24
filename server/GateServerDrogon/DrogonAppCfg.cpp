@@ -25,7 +25,6 @@ bool EnsureSelfSignedCert(std::string& crt_path, std::string& key_path) {
 
 void DrogonAppCfg::Configure()
 {
-    app().addListener("0.0.0.0", 8443);  // HTTPS port for HTTP/2
     app().setThreadNum(4);
     app().setUploadPath("./uploads");
     app().setLogLevel(trantor::Logger::LogLevel::kInfo);
@@ -33,30 +32,27 @@ void DrogonAppCfg::Configure()
 
     // Enable HTTP/2 over TLS with a self-signed certificate.
     // HTTP/2 requires TLS with ALPN negotiation.
-    // Drogon automatically negotiates HTTP/2 over TLS when the client supports it.
-    // If cert generation fails, Drogon will still start in HTTP/1.1 mode.
+    // setSSLFiles() configures the SSL certificate, then addListener() uses it.
     std::string crt_path, key_path;
     if (EnsureSelfSignedCert(crt_path, key_path)) {
         try {
             app().setSSLFiles(crt_path, key_path);
-            LOG_INFO << "GateServerDrogon: HTTPS enabled on port 8443 (HTTP/2 via ALPN)";
+            app().addListener("0.0.0.0", 8443, true);
+            LOG_INFO << "GateServerDrogon: HTTPS/HTTP2 enabled on port 8443";
             LOG_INFO << "GateServerDrogon: TLS cert=" << crt_path;
             LOG_INFO << "GateServerDrogon: TLS key=" << key_path;
         } catch (const std::exception& ex) {
             LOG_ERROR << "GateServerDrogon: failed to enable HTTPS TLS: " << ex.what();
+            app().addListener("0.0.0.0", 8443, false);
         }
     } else {
         LOG_WARN << "GateServerDrogon: TLS cert generation failed, running in HTTP mode";
+        app().addListener("0.0.0.0", 8443);
     }
-
-    // Note: Port 8081 is reserved for GateServer.exe (HTTP/1.1)
-    // GateServerDrogon serves HTTPS/HTTP2 on port 8443 only
 }
 
 void DrogonAppCfg::ConfigureFromConfig(const std::string& host, int port, int threads)
 {
-    // HTTPS port for HTTP/2
-    app().addListener(host, port);
     app().setThreadNum(threads);
     app().setUploadPath("./uploads");
     app().setLogLevel(trantor::Logger::LogLevel::kInfo);
@@ -66,9 +62,14 @@ void DrogonAppCfg::ConfigureFromConfig(const std::string& host, int port, int th
     if (EnsureSelfSignedCert(crt_path, key_path)) {
         try {
             app().setSSLFiles(crt_path, key_path);
-            LOG_INFO << "GateServerDrogon: HTTPS enabled on " << host << ":" << port << " (HTTP/2 via ALPN)";
+            app().addListener(host, port, true);
+            LOG_INFO << "GateServerDrogon: HTTPS/HTTP2 enabled on " << host << ":" << port;
         } catch (const std::exception& ex) {
             LOG_ERROR << "GateServerDrogon: failed to enable HTTPS TLS: " << ex.what();
+            app().addListener(host, port, false);
         }
+    } else {
+        LOG_WARN << "GateServerDrogon: TLS cert generation failed, running in HTTP mode";
+        app().addListener(host, port, false);
     }
 }

@@ -22,7 +22,7 @@ if exist "%PID_ROOT%" (
   )
 )
 
-for %%P in (GateServer.exe StatusServer.exe ChatServer.exe MemoChatQml.exe MemoOpsQml.exe) do (
+for %%P in (GateServer.exe StatusServer.exe ChatServer.exe MemoChatQml.exe MemoOpsQml.exe GateServerDrogon.exe) do (
   taskkill /F /IM %%P >nul 2>nul
 )
 
@@ -34,7 +34,7 @@ for /f "usebackq delims=" %%P in (`powershell -NoProfile -ExecutionPolicy Bypass
   powershell -NoProfile -ExecutionPolicy Bypass -Command "Stop-Process -Id %%P -Force -ErrorAction SilentlyContinue" >nul 2>nul
 )
 
-for %%P in (50051 50052 8080 8090 8091 8092 8093 8190 8191 8192 8193 50055 50056 50057 50058) do (
+for %%P in (50051 50052 8080 8081 8443 8090 8091 8092 8093 8190 8191 8192 8193 50055 50056 50057 50058) do (
   for /f "tokens=5" %%I in ('netstat -ano -p TCP ^| findstr /R /C:":%%P .*LISTENING"') do (
     powershell -NoProfile -ExecutionPolicy Bypass -Command "Stop-Process -Id %%I -Force -ErrorAction SilentlyContinue" >nul 2>nul
   )

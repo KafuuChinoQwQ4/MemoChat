@@ -2,19 +2,74 @@ build-MemoChat*
 build-*
 /build/
 /开发文档/
+
+# ---- Sensitive files (must ignore *.key/*.pfx, keep only checked-in certs) ----
+/.secrets/
+*.key
+*.pfx
+*.pem
+# Keep only the source-tree cert/key pairs (NOT the runtime/ generated ones)
+!/server/GateServerDrogon/server.crt
+!/server/GateServerDrogon/server.key
+!/server/GateServer/server.crt
+!/server/GateServer/server.key
+
+# Runtime-generated certs and keys (auto-generated at startup, never commit)
+Memo_ops/runtime/services/GateServer/server.crt
+Memo_ops/runtime/services/GateServer/server.key
+Memo_ops/runtime/services/GateServer/server.pfx
+Memo_ops/runtime/services/GateServerDrogon/server.crt
+Memo_ops/runtime/services/GateServerDrogon/server.key
+Memo_ops/runtime/services/GateServerDrogon/server.pfx
+
+# Runtime artifacts (logs, pids, uploads, var)
+Memo_ops/runtime/services/*/logs/
+Memo_ops/runtime/services/*/uploads/
+Memo_ops/runtime/pids/
+Memo_ops/runtime/varify/logs/
+Memo_ops/runtime/loadtest/
+Memo_ops/runtime/artifacts/
+
+# Load-test accounts (keep examples only)
+local-loadtest/accounts.local.csv
+local-loadtest/accounts.smoke.csv
+local-loadtest/accounts.e2e.csv
+local-loadtest/accounts.register.smoke.csv
+!/local-loadtest/accounts.example.csv
+
+# Legacy artifacts
+/logs/
+/reports/
+/server/*/logs/
+/artifacts/
+/Memo_ops/artifacts/logs/
+/Memo_ops/artifacts/loadtest/
+/Memo_ops/artifacts/reports/
+!/Memo_ops/artifacts/index/
+!/Memo_ops/artifacts/index/README.md
+/Memo_ops/runtime/artifacts/postgresql_rehearsal/
+
+# vcpkg artifacts
+/vcpkg_installed/
+/vcpkg/buildtrees/
+/vcpkg/packages/
+/vcpkg/downloads/
+
+# Python artifacts
+/Memo_ops/.venv/
+/Memo_ops/**/__pycache__/
+/Memo_ops/*.log
+
+# ---- IDE / build artifacts ----
 /.vscode/
+/.vs/
 /sql备份/
 Debug
 x64
-.vs
 MemoChat.pro.user
 node_modules
-config.ini
-config.json
-!client/**/config.ini
-!client/**/config.json
-!server/**/config.ini
-!server/**/config.json
+
+# Qt Creator legacy client
 /client/MemoChat/.qmake.stash
 /client/MemoChat/bin/MemoChat.exe
 /client/MemoChat/bin/MemoChat.ilk
@@ -25,59 +80,22 @@ config.json
 /client/MemoChat/MemoChat.vcxproj.filters
 /client/MemoChat/MemoChat.vcxproj.user
 /client/MemoChat/MemoChat_resource.rc
-/client/MemoChat/release/moc_predefs.h.cbt
-/client/MemoChat/ui_adduseritem.h
-/client/MemoChat/ui_applyfriend.h
-/client/MemoChat/ui_chatdialog.h
-/client/MemoChat/ui_chatuserwid.h
-/client/MemoChat/ui_findsuccessdlg.h
-/client/MemoChat/ui_friendlabel.h
-/client/MemoChat/ui_loadingdlg.h
-/client/MemoChat/ui_logindialog.h
-/client/MemoChat/ui_mainwindow.h
-/client/MemoChat/ui_registerdialog.h
-/client/MemoChat/ui_resetdialog.h
-ui_*.h
-/server/VarifyServer/.idea/*.iml
-/server/VarifyServer/.idea
-/server/ChatServer/*.log
 /client/MemoChat/MemoChat.pro.user.92bdd7d
+/client/MemoChat/release/moc_predefs.h.cbt
+/client/MemoChat/ui_*.h
+ui_*.h
 
-# vcpkg artifacts (downloaded/compiled libs)
-/vcpkg_installed/
-/vcpkg/buildtrees/
-/vcpkg/packages/
-/vcpkg/downloads/
+# VarifyServer IDE
+/server/VarifyServer/.idea/
+/server/VarifyServer/.idea/*.iml
 
-# Memo_ops local artifacts
-/Memo_ops/.venv/
-/Memo_ops/**/__pycache__/
-/Memo_ops/*.log
-/build-memo-ops/
+# ChatServer logs
+/server/ChatServer/*.log
 
-# Legacy local runtime logs and private artifacts
-/logs/
-/reports/
-/server/*/logs/
-/Memo_ops/runtime/services/**/logs/
-/Memo_ops/runtime/artifacts/logs/
-/Memo_ops/runtime/varify/logs/
-/Memo_ops/runtime/loadtest/
-/local-loadtest/logs/
-/local-loadtest/reports/
-
-# Private local account material
-/local-loadtest/accounts.local.csv
-/local-loadtest/accounts.smoke.csv
-/local-loadtest/accounts.e2e.csv
-/local-loadtest/accounts.register.smoke.csv
-!/local-loadtest/accounts.example.csv
-
-# Unified artifacts root
-/artifacts/
-/Memo_ops/runtime/artifacts/postgresql_rehearsal/
-/Memo_ops/artifacts/logs/
-/Memo_ops/artifacts/loadtest/
-/Memo_ops/artifacts/reports/
-!/Memo_ops/artifacts/index/
-!/Memo_ops/artifacts/index/README.md
+# Config files (keep source-tree configs only)
+/config.ini
+/config.json
+!client/**/config.ini
+!client/**/config.json
+!server/**/config.ini
+!server/**/config.json

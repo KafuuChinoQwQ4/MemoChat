@@ -18,6 +18,8 @@ add_executable(GateServer
     # Drogon media/profile support used by both H1 and H3 routes
     ../GateServerDrogon/DrogonMediaSupport.cpp
     ../GateServerDrogon/DrogonProfileSupport.cpp
+    # CertUtil for self-signed certificate generation (HTTP/3 and HTTP/2)
+    ../GateServerDrogon/CertUtil.cpp
 )
 
 set_target_properties(GateServer PROPERTIES FOLDER "Server")
@@ -44,6 +46,17 @@ if(WIN32)
         "/LIBPATH:C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64"
         "/LIBPATH:C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64"
         "/LIBPATH:D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64")
+endif()
+
+# CertUtil.cpp requires OpenSSL — link DLL + applink to fix OPENSSL_Uplink on Windows DLL builds
+find_package(OpenSSL CONFIG)
+if(TARGET OpenSSL::SSL AND TARGET OpenSSL::Crypto)
+    target_link_libraries(GateServer PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    # vcpkg OpenSSL DLL on Windows requires OPENSSL_Applink to be registered.
+    # Without this, libcrypto-3-x64.dll crashes with "no OPENSSL_Applink".
+    if(TARGET OpenSSL::applink)
+        target_link_libraries(GateServer PRIVATE OpenSSL::applink)
+    endif()
 endif()
 
 if(MEMOCHAT_ENABLE_HTTP3)
