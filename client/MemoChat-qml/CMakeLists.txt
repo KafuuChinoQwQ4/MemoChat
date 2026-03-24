@@ -64,10 +64,13 @@ set(SOURCES
     MediaUploadService.cpp
     MessagePayloadService.cpp
     WindowShapeService.cpp
+    MomentsController.cpp
+    MomentsModel.cpp
     ${SHARED_CLIENT_DIR}/imagecropperlabel.cpp
 )
 
 set(HEADERS
+    ClientWinCompat.h
     AppController.h
     AppCoordinators.h
     AuthController.h
@@ -94,6 +97,8 @@ set(HEADERS
     MediaUploadService.h
     WindowShapeService.h
     IconPathUtils.h
+    MomentsController.h
+    MomentsModel.h
     ${SHARED_CLIENT_DIR}/imagecropperdialog.h
     ${SHARED_CLIENT_DIR}/imagecropperlabel.h
 )

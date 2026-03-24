@@ -131,4 +131,8 @@ void HttpMgr::slot_http_finish(ReqId id, QString res, ErrorCodes err, Modules mo
     if (mod == Modules::CALLMOD) {
         emit sig_call_mod_finish(id, res, err);
     }
+
+    if (mod == Modules::MOMENTSMOD) {
+        emit sig_moments_mod_finish(id, res, err);
+    }
 }

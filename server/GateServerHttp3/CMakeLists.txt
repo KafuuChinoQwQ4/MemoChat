@@ -26,6 +26,13 @@ target_include_directories(GateServerHttp3 PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/../common
 )
 
+# MongoDB include paths (transitively needed by GateHttp3ServiceRoutes.cpp via MongoMgr.h)
+target_include_directories(GateServerHttp3 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg_installed/x64-windows/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg_installed/x64-windows/include/mongocxx/v_noabi
+    ${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg_installed/x64-windows/include/bsoncxx/v_noabi
+)
+
 target_link_libraries(GateServerHttp3 PUBLIC
     GateServerCore
 )
@@ -43,10 +50,16 @@ if(MEMOCHAT_ENABLE_HTTP3)
 
     # msquic.dll is in vcpkg_installed/x64-windows/bin, copy to output
     find_path(MSQUIC_BIN_DIR NAMES msquic.dll PATHS
-        "${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg_installed/x64-windows/bin"
+        "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-windows/bin"
         NO_DEFAULT_PATH)
     if(MSQUIC_BIN_DIR)
         message(STATUS "GateServerHttp3: msquic.dll found at ${MSQUIC_BIN_DIR}")
+        add_custom_command(TARGET GateServerHttp3 POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${MSQUIC_BIN_DIR}/msquic.dll"
+            "$<TARGET_FILE_DIR:GateServerHttp3>/../../bin"
+            COMMAND_EXPAND_LISTS
+        )
     else()
         message(WARNING "GateServerHttp3: msquic.dll not found in vcpkg_installed")
     endif()
