@@ -60,5 +60,11 @@
         <file alias="icons/gender_male.png">src/性别_男.png</file>
         <file alias="icons/gender_female.png">src/性别女.png</file>
         <file alias="icons/gender_unknown.png">src/无性别.png</file>
+        <file alias="icons/add.png">src/team.png</file>
+        <file alias="icons/moments.png">src/朋友圈.png</file>
+        <file>qml/moments/MomentsFeedPane.qml</file>
+        <file>qml/moments/MomentsDelegate.qml</file>
+        <file>qml/moments/MomentsPostComposer.qml</file>
+        <file>qml/moments/MomentsDetailPopup.qml</file>
     </qresource>
 </RCC>

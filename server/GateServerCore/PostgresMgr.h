@@ -21,6 +21,23 @@ public:
 	bool GetMediaAssetByKey(const std::string& media_key, MediaAssetInfo& asset);
 	bool GetUserInfo(int uid, UserInfo& user_info);
 	bool TestProcedure(const std::string &email, int& uid, string & name);
+
+	// Moments operations
+	bool AddMoment(const MomentInfo& moment);
+	bool GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int limit,
+		std::vector<MomentInfo>& moments, bool& has_more);
+	bool GetMomentById(int64_t moment_id, MomentInfo& moment);
+	bool DeleteMoment(int64_t moment_id, int uid);
+	bool AddMomentLike(int64_t moment_id, int uid);
+	bool RemoveMomentLike(int64_t moment_id, int uid);
+	bool HasLikedMoment(int64_t moment_id, int uid);
+	bool GetMomentLikes(int64_t moment_id, int limit,
+		std::vector<MomentLikeInfo>& likes, bool& has_more);
+	bool AddMomentComment(const MomentCommentInfo& comment);
+	bool DeleteMomentComment(int64_t comment_id, int uid);
+	bool GetMomentComments(int64_t moment_id, int64_t last_comment_id, int limit,
+		std::vector<MomentCommentInfo>& comments, bool& has_more);
+
 private:
 	PostgresMgr();
 	PostgresDao  _dao;

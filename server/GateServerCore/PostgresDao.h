@@ -170,6 +170,34 @@ struct MediaAssetInfo {
 	int status = 1;
 };
 
+struct MomentInfo {
+	int64_t moment_id = 0;
+	int uid = 0;
+	int visibility = 0;   // 0=public, 1=friends, 2=private
+	std::string location;
+	int64_t created_at = 0;
+	int64_t deleted_at = 0;
+	int like_count = 0;
+	int comment_count = 0;
+};
+
+struct MomentLikeInfo {
+	int64_t id = 0;
+	int64_t moment_id = 0;
+	int uid = 0;
+	int64_t created_at = 0;
+};
+
+struct MomentCommentInfo {
+	int64_t id = 0;
+	int64_t moment_id = 0;
+	int uid = 0;
+	std::string content;
+	int reply_uid = 0;
+	int64_t created_at = 0;
+	int64_t deleted_at = 0;
+};
+
 class PostgresDao
 {
 public:
@@ -190,6 +218,23 @@ public:
 	bool GetMediaAssetByKey(const std::string& media_key, MediaAssetInfo& asset);
 	bool GetUserInfo(int uid, UserInfo& user_info);
 	bool TestProcedure(const std::string& email, int& uid, string& name);
+
+	// Moments operations
+	bool AddMoment(const MomentInfo& moment);
+	bool GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int limit,
+		std::vector<MomentInfo>& moments, bool& has_more);
+	bool GetMomentById(int64_t moment_id, MomentInfo& moment);
+	bool DeleteMoment(int64_t moment_id, int uid);
+	bool AddMomentLike(int64_t moment_id, int uid);
+	bool RemoveMomentLike(int64_t moment_id, int uid);
+	bool HasLikedMoment(int64_t moment_id, int uid);
+	bool GetMomentLikes(int64_t moment_id, int limit,
+		std::vector<MomentLikeInfo>& likes, bool& has_more);
+	bool AddMomentComment(const MomentCommentInfo& comment);
+	bool DeleteMomentComment(int64_t comment_id, int uid);
+	bool GetMomentComments(int64_t moment_id, int64_t last_comment_id, int limit,
+		std::vector<MomentCommentInfo>& comments, bool& has_more);
+
 private:
 	void WarmupAuthQueries();
 	std::string GenerateUserPublicId();

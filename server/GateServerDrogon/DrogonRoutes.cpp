@@ -5,6 +5,7 @@
 #include "DrogonMediaHandlers.h"
 #include "DrogonProfileHandlers.h"
 #include "DrogonHttpHandlers.h"
+#include "DrogonMomentsSupport.h"
 #include <drogon/drogon.h>
 
 using namespace drogon;
@@ -31,14 +32,6 @@ void DrogonRoutes::RegisterRoutes()
     // Call routes: registered automatically via DrogonCallHandlers HttpController + METHOD_LIST macros
     // Media routes: registered automatically via DrogonMediaHandlers HttpController + METHOD_LIST macros
 
-    // Test handlers (non-HttpController, need manual registration)
-    app().registerHandler("/test/get",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
-            DrogonHttpHandlers::HandleGetTest(req, std::move(callback));
-        }, {Get, "NoFilter"});
-
-    app().registerHandler("/test/procedure",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
-            DrogonHttpHandlers::HandleTestProcedure(req, std::move(callback));
-        }, {Post, "NoFilter"});
+    // Moments routes
+    RegisterMomentsDrogonRoutes();
 }

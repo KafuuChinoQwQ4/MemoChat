@@ -9,6 +9,8 @@ project(GateServerCore LANGUAGES CXX)
 add_library(GateServerCore STATIC
     AsioIOServicePool.cpp
     AsioIOServicePool.h
+    AuthLoginSupport.cpp
+    AuthLoginSupport.h
     CallService.cpp
     CallService.h
     ChatGrpcClient.cpp
@@ -24,6 +26,10 @@ add_library(GateServerCore STATIC
     MediaHttpService.h
     MediaStorage.cpp
     MediaStorage.h
+    MongoDao.cpp
+    MongoDao.h
+    MongoMgr.cpp
+    MongoMgr.h
     PostgresDao.cpp
     PostgresDao.h
     PostgresMgr.cpp
@@ -37,8 +43,6 @@ add_library(GateServerCore STATIC
     StatusGrpcClient.h
     VerifyGrpcClient.cpp
     VerifyGrpcClient.h
-    AuthLoginSupport.cpp
-    AuthLoginSupport.h
 )
 
 target_compile_features(GateServerCore PUBLIC cxx_std_17)
@@ -54,6 +58,7 @@ target_link_libraries(GateServerCore PUBLIC
 
 # Additional libs needed by GateServerCore
 target_link_libraries(GateServerCore PRIVATE ${MEMOCHAT_PQXX_TARGET})
+target_link_libraries(GateServerCore PRIVATE ${MEMOCHAT_MONGOCXX_TARGET} ${MEMOCHAT_BSONCXX_TARGET})
 if(MEMOCHAT_ENABLE_KAFKA)
     target_link_libraries(GateServerCore PRIVATE ${MEMOCHAT_CPPKAFKA_TARGET})
 endif()

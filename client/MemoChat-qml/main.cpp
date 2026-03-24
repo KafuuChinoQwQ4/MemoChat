@@ -1,3 +1,4 @@
+#include "ClientWinCompat.h"
 #include <QApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>

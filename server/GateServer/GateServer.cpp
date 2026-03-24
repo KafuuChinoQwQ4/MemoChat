@@ -14,6 +14,7 @@
 #include <hiredis/hiredis.h>
 #include "RedisMgr.h"
 #include "PostgresMgr.h"
+#include "MongoMgr.h"
 #include "GateAsyncSideEffects.h"
 #include "GateWorkerPool.h"
 #include "GateGlobals.h"
@@ -163,6 +164,7 @@ int main()
 					std::chrono::steady_clock::now() - postgres_init_start).count())}
 			});
 	RedisMgr::GetInstance();
+	MongoMgr::GetInstance();
 	{
 		auto worker_id_str = gCfgMgr.GetValue("Snowflake", "WorkerId");
 		auto datacenter_id_str = gCfgMgr.GetValue("Snowflake", "DatacenterId");

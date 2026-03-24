@@ -35,6 +35,8 @@ add_executable(GateServerDrogon
     DrogonMediaSupport.cpp
     CertUtil.h
     CertUtil.cpp
+    DrogonMomentsHandlers.cpp
+    DrogonMomentsSupport.h
     WinCompat.h
     config.ini
 )

@@ -209,6 +209,16 @@ ApplyRequestModel *AppController::applyRequestModel()
     return &_apply_request_model;
 }
 
+MomentsModel *AppController::momentsModel() const
+{
+    return _moments_controller.model();
+}
+
+MomentsController *AppController::momentsController() const
+{
+    return const_cast<MomentsController*>(&_moments_controller);
+}
+
 bool AppController::searchPending() const
 {
     return _search_pending;

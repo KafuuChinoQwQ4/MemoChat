@@ -600,3 +600,433 @@ bool PostgresDao::TestProcedure(const std::string& email, int& uid, string& name
 		return false;
 	}
 }
+
+bool PostgresDao::AddMoment(const MomentInfo& moment) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+	});
+
+	try {
+		pqxx::work txn(*con->_con);
+		txn.exec_params(
+			"INSERT INTO moments(uid, visibility, location, created_at, like_count, comment_count) "
+			"VALUES ($1, $2, $3, $4, $5, $6)",
+			moment.uid,
+			moment.visibility,
+			moment.location,
+			moment.created_at,
+			moment.like_count,
+			moment.comment_count);
+		txn.commit();
+		return true;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "AddMoment PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool PostgresDao::GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int limit,
+	std::vector<MomentInfo>& moments, bool& has_more) {
+	moments.clear();
+	has_more = false;
+	if (limit <= 0) {
+		limit = 20;
+	}
+	limit = std::min(limit, 50);
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+	});
+
+	try {
+		pqxx::read_transaction txn(*con->_con);
+
+		std::string query;
+		pqxx::result rows;
+		if (last_moment_id <= 0) {
+			query = R"(
+				SELECT m.moment_id, m.uid, m.visibility, m.location, m.created_at,
+				       m.like_count, m.comment_count
+				FROM moments m
+				WHERE m.deleted_at = 0
+				  AND (
+					-- public moments
+					m.visibility = 0
+					-- poster's own moments
+					OR m.uid = )" + std::to_string(viewer_uid) + R"(
+					-- friends' moments (bidirectional)
+					OR (m.visibility = 1 AND EXISTS (
+						SELECT 1 FROM friend f WHERE
+							((f.self_id = m.uid AND f.friend_id = )" + std::to_string(viewer_uid) + R"()
+							OR (f.self_id = )" + std::to_string(viewer_uid) + R"() AND f.friend_id = m.uid)
+					))
+				  )
+				ORDER BY m.created_at DESC
+				LIMIT )" + std::to_string(limit + 1);
+			rows = txn.exec(query);
+		}
+		else {
+			query = R"(
+				SELECT m.moment_id, m.uid, m.visibility, m.location, m.created_at,
+				       m.like_count, m.comment_count
+				FROM moments m
+				WHERE m.deleted_at = 0
+				  AND m.moment_id < )" + std::to_string(last_moment_id) + R"(
+				  AND (
+					m.visibility = 0
+					OR m.uid = )" + std::to_string(viewer_uid) + R"(
+					OR (m.visibility = 1 AND EXISTS (
+						SELECT 1 FROM friend f WHERE
+							((f.self_id = m.uid AND f.friend_id = )" + std::to_string(viewer_uid) + R"()
+							OR (f.self_id = )" + std::to_string(viewer_uid) + R"() AND f.friend_id = m.uid)
+					))
+				  )
+				ORDER BY m.created_at DESC
+				LIMIT )" + std::to_string(limit + 1);
+			rows = txn.exec(query);
+		}
+
+		if (static_cast<int>(rows.size()) > limit) {
+			has_more = true;
+		}
+
+		for (size_t i = 0; i < rows.size() && static_cast<int>(moments.size()) < limit; ++i) {
+			const auto& row = rows[i];
+			MomentInfo info;
+			info.moment_id = row["moment_id"].as<int64_t>();
+			info.uid = row["uid"].as<int>();
+			info.visibility = row["visibility"].as<int>();
+			info.location = row["location"].is_null() ? "" : row["location"].c_str();
+			info.created_at = row["created_at"].as<int64_t>();
+			info.like_count = row["like_count"].as<int>();
+			info.comment_count = row["comment_count"].as<int>();
+			moments.push_back(info);
+		}
+
+		return true;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "GetMomentsFeed PostgreSQL exception: " << e.what() << std::endl;
+		moments.clear();
+		return false;
+	}
+}
+
+bool PostgresDao::GetMomentById(int64_t moment_id, MomentInfo& moment) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+	});
+
+	try {
+		pqxx::read_transaction txn(*con->_con);
+		const auto rows = txn.exec_params(
+			"SELECT moment_id, uid, visibility, location, created_at, deleted_at, like_count, comment_count "
+			"FROM moments WHERE moment_id = $1 LIMIT 1",
+			moment_id);
+		if (rows.empty()) {
+			return false;
+		}
+
+		const auto& row = rows[0];
+		moment.moment_id = row["moment_id"].as<int64_t>();
+		moment.uid = row["uid"].as<int>();
+		moment.visibility = row["visibility"].as<int>();
+		moment.location = row["location"].is_null() ? "" : row["location"].c_str();
+		moment.created_at = row["created_at"].as<int64_t>();
+		moment.deleted_at = row["deleted_at"].as<int64_t>();
+		moment.like_count = row["like_count"].as<int>();
+		moment.comment_count = row["comment_count"].as<int>();
+		return true;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "GetMomentById PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool PostgresDao::DeleteMoment(int64_t moment_id, int uid) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+	});
+
+	try {
+		pqxx::work txn(*con->_con);
+		auto now = std::chrono::duration_cast<std::chrono::seconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count();
+		txn.exec_params(
+			"UPDATE moments SET deleted_at = $1 WHERE moment_id = $2 AND uid = $3",
+			now, moment_id, uid);
+		txn.commit();
+		return true;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "DeleteMoment PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool PostgresDao::AddMomentLike(int64_t moment_id, int uid) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+	});
+
+	try {
+		pqxx::work txn(*con->_con);
+		txn.exec_params(
+			"INSERT INTO moments_like(moment_id, uid, created_at) VALUES ($1, $2, $3) "
+			"ON CONFLICT (moment_id, uid) DO NOTHING",
+			moment_id, uid,
+			static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
+				std::chrono::system_clock::now().time_since_epoch()).count()));
+		txn.exec_params(
+			"UPDATE moments SET like_count = like_count + 1 WHERE moment_id = $1",
+			moment_id);
+		txn.commit();
+		return true;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "AddMomentLike PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool PostgresDao::RemoveMomentLike(int64_t moment_id, int uid) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+	});
+
+	try {
+		pqxx::work txn(*con->_con);
+		txn.exec_params(
+			"DELETE FROM moments_like WHERE moment_id = $1 AND uid = $2",
+			moment_id, uid);
+		txn.exec_params(
+			"UPDATE moments SET like_count = GREATEST(like_count - 1, 0) WHERE moment_id = $1",
+			moment_id);
+		txn.commit();
+		return true;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "RemoveMomentLike PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool PostgresDao::HasLikedMoment(int64_t moment_id, int uid) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+	});
+
+	try {
+		pqxx::read_transaction txn(*con->_con);
+		const auto rows = txn.exec_params(
+			"SELECT 1 FROM moments_like WHERE moment_id = $1 AND uid = $2 LIMIT 1",
+			moment_id, uid);
+		return !rows.empty();
+	}
+	catch (const std::exception& e) {
+		std::cerr << "HasLikedMoment PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool PostgresDao::GetMomentLikes(int64_t moment_id, int limit,
+	std::vector<MomentLikeInfo>& likes, bool& has_more) {
+	likes.clear();
+	has_more = false;
+	if (limit <= 0) {
+		limit = 20;
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+	});
+
+	try {
+		pqxx::read_transaction txn(*con->_con);
+		const auto rows = txn.exec_params(
+			"SELECT id, moment_id, uid, created_at FROM moments_like "
+			"WHERE moment_id = $1 ORDER BY created_at DESC LIMIT $2",
+			moment_id, limit + 1);
+
+		if (static_cast<int>(rows.size()) > limit) {
+			has_more = true;
+		}
+
+		for (size_t i = 0; i < rows.size() && static_cast<int>(likes.size()) < limit; ++i) {
+			const auto& row = rows[i];
+			MomentLikeInfo info;
+			info.id = row["id"].as<int64_t>();
+			info.moment_id = row["moment_id"].as<int64_t>();
+			info.uid = row["uid"].as<int>();
+			info.created_at = row["created_at"].as<int64_t>();
+			likes.push_back(info);
+		}
+
+		return true;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "GetMomentLikes PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool PostgresDao::AddMomentComment(const MomentCommentInfo& comment) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+	});
+
+	try {
+		pqxx::work txn(*con->_con);
+		txn.exec_params(
+			"INSERT INTO moments_comment(moment_id, uid, content, reply_uid, created_at) "
+			"VALUES ($1, $2, $3, $4, $5)",
+			comment.moment_id,
+			comment.uid,
+			comment.content,
+			comment.reply_uid,
+			comment.created_at);
+		txn.exec_params(
+			"UPDATE moments SET comment_count = comment_count + 1 WHERE moment_id = $1",
+			comment.moment_id);
+		txn.commit();
+		return true;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "AddMomentComment PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool PostgresDao::DeleteMomentComment(int64_t comment_id, int uid) {
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+	});
+
+	try {
+		pqxx::work txn(*con->_con);
+		auto now = std::chrono::duration_cast<std::chrono::seconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count();
+		txn.exec_params(
+			"UPDATE moments_comment SET deleted_at = $1 WHERE id = $2 AND uid = $3 AND deleted_at = 0",
+			now, comment_id, uid);
+		txn.commit();
+		return true;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "DeleteMomentComment PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+
+bool PostgresDao::GetMomentComments(int64_t moment_id, int64_t last_comment_id, int limit,
+	std::vector<MomentCommentInfo>& comments, bool& has_more) {
+	comments.clear();
+	has_more = false;
+	if (limit <= 0) {
+		limit = 20;
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+	});
+
+	try {
+		pqxx::read_transaction txn(*con->_con);
+		pqxx::result rows;
+		if (last_comment_id <= 0) {
+			rows = txn.exec_params(
+				"SELECT id, moment_id, uid, content, reply_uid, created_at, deleted_at "
+				"FROM moments_comment WHERE moment_id = $1 AND deleted_at = 0 "
+				"ORDER BY created_at ASC LIMIT $2",
+				moment_id, limit + 1);
+		}
+		else {
+			rows = txn.exec_params(
+				"SELECT id, moment_id, uid, content, reply_uid, created_at, deleted_at "
+				"FROM moments_comment WHERE moment_id = $1 AND deleted_at = 0 AND id > $2 "
+				"ORDER BY created_at ASC LIMIT $3",
+				moment_id, last_comment_id, limit + 1);
+		}
+
+		if (static_cast<int>(rows.size()) > limit) {
+			has_more = true;
+		}
+
+		for (size_t i = 0; i < rows.size() && static_cast<int>(comments.size()) < limit; ++i) {
+			const auto& row = rows[i];
+			MomentCommentInfo info;
+			info.id = row["id"].as<int64_t>();
+			info.moment_id = row["moment_id"].as<int64_t>();
+			info.uid = row["uid"].as<int>();
+			info.content = row["content"].is_null() ? "" : row["content"].c_str();
+			info.reply_uid = row["reply_uid"].as<int>();
+			info.created_at = row["created_at"].as<int64_t>();
+			info.deleted_at = row["deleted_at"].as<int64_t>();
+			comments.push_back(info);
+		}
+
+		return true;
+	}
+	catch (const std::exception& e) {
+		std::cerr << "GetMomentComments PostgreSQL exception: " << e.what() << std::endl;
+		return false;
+	}
+}
+

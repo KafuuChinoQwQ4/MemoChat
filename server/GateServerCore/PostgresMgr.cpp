@@ -64,3 +64,50 @@ bool PostgresMgr::TestProcedure(const std::string& email, int& uid, string& name
 	return _dao.TestProcedure(email,uid, name);
 }
 
+bool PostgresMgr::AddMoment(const MomentInfo& moment) {
+	return _dao.AddMoment(moment);
+}
+
+bool PostgresMgr::GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int limit,
+	std::vector<MomentInfo>& moments, bool& has_more) {
+	return _dao.GetMomentsFeed(viewer_uid, last_moment_id, limit, moments, has_more);
+}
+
+bool PostgresMgr::GetMomentById(int64_t moment_id, MomentInfo& moment) {
+	return _dao.GetMomentById(moment_id, moment);
+}
+
+bool PostgresMgr::DeleteMoment(int64_t moment_id, int uid) {
+	return _dao.DeleteMoment(moment_id, uid);
+}
+
+bool PostgresMgr::AddMomentLike(int64_t moment_id, int uid) {
+	return _dao.AddMomentLike(moment_id, uid);
+}
+
+bool PostgresMgr::RemoveMomentLike(int64_t moment_id, int uid) {
+	return _dao.RemoveMomentLike(moment_id, uid);
+}
+
+bool PostgresMgr::HasLikedMoment(int64_t moment_id, int uid) {
+	return _dao.HasLikedMoment(moment_id, uid);
+}
+
+bool PostgresMgr::GetMomentLikes(int64_t moment_id, int limit,
+	std::vector<MomentLikeInfo>& likes, bool& has_more) {
+	return _dao.GetMomentLikes(moment_id, limit, likes, has_more);
+}
+
+bool PostgresMgr::AddMomentComment(const MomentCommentInfo& comment) {
+	return _dao.AddMomentComment(comment);
+}
+
+bool PostgresMgr::DeleteMomentComment(int64_t comment_id, int uid) {
+	return _dao.DeleteMomentComment(comment_id, uid);
+}
+
+bool PostgresMgr::GetMomentComments(int64_t moment_id, int64_t last_comment_id, int limit,
+	std::vector<MomentCommentInfo>& comments, bool& has_more) {
+	return _dao.GetMomentComments(moment_id, last_comment_id, limit, comments, has_more);
+}
+
