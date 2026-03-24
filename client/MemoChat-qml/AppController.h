@@ -21,6 +21,8 @@
 #include "SearchResultModel.h"
 #include "ApplyRequestModel.h"
 #include "ProfileController.h"
+#include "MomentsController.h"
+#include "MomentsModel.h"
 #include "PrivateChatCacheStore.h"
 #include "GroupChatCacheStore.h"
 #include "LivekitBridge.h"
@@ -75,6 +77,8 @@ class AppController : public QObject
     Q_PROPERTY(ChatMessageModel* messageModel READ messageModel CONSTANT)
     Q_PROPERTY(SearchResultModel* searchResultModel READ searchResultModel CONSTANT)
     Q_PROPERTY(ApplyRequestModel* applyRequestModel READ applyRequestModel CONSTANT)
+    Q_PROPERTY(MomentsModel* momentsModel READ momentsModel CONSTANT)
+    Q_PROPERTY(MomentsController* momentsController READ momentsController CONSTANT)
     Q_PROPERTY(bool searchPending READ searchPending NOTIFY searchPendingChanged)
     Q_PROPERTY(QString searchStatusText READ searchStatusText NOTIFY searchStatusChanged)
     Q_PROPERTY(bool searchStatusError READ searchStatusError NOTIFY searchStatusChanged)
@@ -121,7 +125,8 @@ public:
     enum ChatTab {
         ChatTabPage = 0,
         ContactTabPage = 1,
-        SettingsTabPage = 2
+        SettingsTabPage = 2,
+        MomentsTabPage = 3
     };
     Q_ENUM(ChatTab)
 
@@ -172,6 +177,8 @@ public:
     ChatMessageModel *messageModel();
     SearchResultModel *searchResultModel();
     ApplyRequestModel *applyRequestModel();
+    MomentsModel *momentsModel() const;
+    MomentsController *momentsController() const;
     bool searchPending() const;
     QString searchStatusText() const;
     bool searchStatusError() const;
@@ -555,6 +562,7 @@ private:
     ChatController _chat_controller;
     ContactController _contact_controller;
     ProfileController _profile_controller;
+    MomentsController _moments_controller;
     PrivateChatCacheStore _private_cache_store;
     GroupChatCacheStore _group_cache_store;
     QTimer _register_countdown_timer;

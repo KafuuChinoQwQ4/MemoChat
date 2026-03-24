@@ -8,6 +8,8 @@ add_executable(GateServer
     LogicSystem.cpp
     GateServer.cpp
     MediaHttpService.cpp
+    MomentsRouteModules.cpp
+    MomentsRouteModules.h
     # GateServerCore header for H3 service interface
     GateRouteModules.h
     # GateHttp3Service is defined in GateServerHttp3

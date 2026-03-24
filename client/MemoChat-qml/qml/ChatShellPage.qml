@@ -7,6 +7,7 @@ import "components"
 import "chat"
 import "chat/group"
 import "call"
+import "moments"
 
 Rectangle {
     id: root
@@ -287,6 +288,19 @@ Rectangle {
                             backdrop: backdropLayer
                             onSwitchAccountRequested: controller.switchToLogin()
                             onLogoutRequested: controller.switchToLogin()
+                        }
+                    }
+                }
+
+                Loader {
+                    anchors.fill: parent
+                    active: root.viewMode === 0 && controller.chatTab === AppController.MomentsTabPage
+                    asynchronous: true
+                    sourceComponent: Component {
+                        MomentsFeedPane {
+                            backdrop: backdropLayer
+                            momentsModel: controller.momentsModel
+                            momentsController: controller.momentsController
                         }
                     }
                 }

@@ -354,7 +354,7 @@ void AppController::switchToReset()
 
 void AppController::switchChatTab(int tab)
 {
-    const int normalized = qBound(0, tab, 2);
+    const int normalized = qBound(0, tab, 3);
     const ChatTab target = static_cast<ChatTab>(normalized);
     if (_chat_tab == target) {
         return;
@@ -363,6 +363,12 @@ void AppController::switchChatTab(int tab)
     if (target == ContactTabPage) {
         ensureContactsInitialized();
         ensureApplyInitialized();
+    }
+    else if (target == MomentsTabPage) {
+        // Trigger initial load if model is empty
+        if (_moments_controller.model()->count() == 0) {
+            _moments_controller.loadFeed();
+        }
     }
     emit chatTabChanged();
 }

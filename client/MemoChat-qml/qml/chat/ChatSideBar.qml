@@ -19,6 +19,9 @@ Rectangle {
         if (tab === 1) {
             return selected ? "qrc:/res/contact_list_press.png" : "qrc:/res/contact_list.png"
         }
+        if (tab === 3) {
+            return selected ? "qrc:/icons/moments.png" : "qrc:/icons/moments.png"
+        }
         return selected ? "qrc:/res/settings_select_press.png" : "qrc:/res/settings.png"
     }
 
@@ -28,6 +31,9 @@ Rectangle {
         }
         if (tab === 1) {
             return "联系人"
+        }
+        if (tab === 3) {
+            return "朋友圈"
         }
         return "更多"
     }
@@ -95,7 +101,7 @@ Rectangle {
         }
 
         Repeater {
-            model: [0, 1]
+            model: [0, 1, 3]
             delegate: Item {
                 width: 32
                 height: 32
