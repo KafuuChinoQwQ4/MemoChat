@@ -10,8 +10,8 @@
 #include "VerifyGrpcClient.h"
 #include "GateAsyncSideEffects.h"
 #include "AuthLoginSupport.h"
-#include "../GateServerDrogon/DrogonMediaSupport.h"
-#include "../GateServerDrogon/DrogonProfileSupport.h"
+#include "DrogonMediaSupport.h"
+#include "DrogonProfileSupport.h"
 
 #include "const.h"
 #include "auth/ChatLoginTicket.h"

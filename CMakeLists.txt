@@ -14,7 +14,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Options to control what gets built
 option(BUILD_CLIENT "Build MemoChat QML client" ON)
-option(BUILD_SERVER "Build all backend servers (GateServer, GateServerDrogon, StatusServer, ChatServer, VarifyServer)" ON)
+option(BUILD_SERVER "Build all backend servers (GateServer, GateServerHttp2, StatusServer, ChatServer, VarifyServer)" ON)
 option(BUILD_OPS "Build MemoOps monitoring platform" ON)
 option(BUILD_LOADTEST "Build load test tool" OFF)
 
@@ -50,12 +50,14 @@ add_custom_target(build-all
 if(BUILD_SERVER)
     add_dependencies(build-all
         GateServer
-        GateServerDrogon
-        GateServerHttp3
         StatusServer
         ChatServer
         VarifyServer
     )
+    # GateServerHttp2 requires libh2o which may not be available
+    if(TARGET GateServerHttp2)
+        add_dependencies(build-all GateServerHttp2)
+    endif()
 endif()
 
 if(BUILD_CLIENT)

@@ -14,12 +14,10 @@ add_executable(GateServer
     GateRouteModules.h
     # GateHttp3Service is defined in GateServerHttp3
     ../GateServerHttp3/GateHttp3ServiceRoutes.h
+    # CertUtil for self-signed certificate generation (HTTP/3)
+    CertUtil.cpp
+    CertUtil.h
     config.ini
-    # Drogon media/profile support used by both H1 and H3 routes
-    ../GateServerDrogon/DrogonMediaSupport.cpp
-    ../GateServerDrogon/DrogonProfileSupport.cpp
-    # CertUtil for self-signed certificate generation (HTTP/3 and HTTP/2)
-    ../GateServerDrogon/CertUtil.cpp
 )
 
 set_target_properties(GateServer PROPERTIES FOLDER "Server")
@@ -36,7 +34,6 @@ target_include_directories(GateServer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../GateServerCore
     ${CMAKE_CURRENT_SOURCE_DIR}/../GateServerHttp3
-    ${CMAKE_CURRENT_SOURCE_DIR}/../GateServerDrogon
 )
 
 if(WIN32)
