@@ -200,42 +200,42 @@ call :wait_for_port GateServer 8080 20 "%ARTIFACT_ROOT%\logs\services\GateServer
 if errorlevel 1 exit /b 1
 call :print_running_process_stamp GateServer.exe
 
-REM GateServerDrogon section: start after GateServer on port 8443
-call :start_gatedrogon
+REM GateServerHttp2 section: start after GateServer on port 8443
+call :start_gatehttp2
 
-:after_gatedrogon
-if not exist "%BUILD_BIN%\GateServerDrogon.exe" (
-    if not exist "%GATEDROGON_EXE%" (
-        echo [INFO] GateServerDrogon.exe not found, HTTP/2 (port 8443) will not be available.
-        goto :after_gatedrogon
+:after_gatehttp2
+if not exist "%BUILD_BIN%\GateServerHttp2.exe" (
+    if not exist "%GATEHTTP2_EXE%" (
+        echo [INFO] GateServerHttp2.exe not found, HTTP/2 (port 8443) will not be available.
+        goto :after_gatehttp2
     )
 )
-if not exist "%ROOT%\server\GateServerDrogon\config.ini" (
-    echo [INFO] GateServerDrogon config not found, HTTP/2 (port 8443) will not be available.
-    goto :after_gatedrogon
+if not exist "%ROOT%\server\GateServerHttp2\config.ini" (
+    echo [INFO] GateServerHttp2 config not found, HTTP/2 (port 8443) will not be available.
+    goto :after_gatehttp2
 )
-set "GATEDROGON_EXE_FINAL=%GATEDROGON_EXE%"
-if not defined GATEDROGON_EXE_FINAL (
-    set "GATEDROGON_EXE_FINAL=%BUILD_BIN%\GateServerDrogon.exe"
+set "GATEHTTP2_EXE_FINAL=%GATEHTTP2_EXE%"
+if not defined GATEHTTP2_EXE_FINAL (
+    set "GATEHTTP2_EXE_FINAL=%BUILD_BIN%\GateServerHttp2.exe"
 )
-echo [INFO] Starting GateServerDrogon (HTTPS/HTTP2 on port 8443)...
-call :prepare_service GateServerDrogon "%ROOT%\server\GateServerDrogon\config.ini" "%GATEDROGON_EXE_FINAL%"
+echo [INFO] Starting GateServerHttp2 (HTTPS/HTTP2 on port 8443)...
+call :prepare_service GateServerHttp2 "%ROOT%\server\GateServerHttp2\config.ini" "%GATEHTTP2_EXE_FINAL%"
 if errorlevel 1 (
-    echo [WARN] Failed to prepare GateServerDrogon, skipping HTTP/2 server.
-    goto :after_gatedrogon
+    echo [WARN] Failed to prepare GateServerHttp2, skipping HTTP/2 server.
+    goto :after_gatehttp2
 )
-call :launch_process "GateServerDrogon" "%RUN_ROOT%\GateServerDrogon\GateServerDrogon.exe" "" "%RUN_ROOT%\GateServerDrogon" "%ARTIFACT_ROOT%\logs\manual-start\GateServerDrogon.out.log" "%ARTIFACT_ROOT%\logs\manual-start\GateServerDrogon.err.log" "%PID_ROOT%\GateServerDrogon.pid"
+call :launch_process "GateServerHttp2" "%RUN_ROOT%\GateServerHttp2\GateServerHttp2.exe" "" "%RUN_ROOT%\GateServerHttp2" "%ARTIFACT_ROOT%\logs\manual-start\GateServerHttp2.out.log" "%ARTIFACT_ROOT%\logs\manual-start\GateServerHttp2.err.log" "%PID_ROOT%\GateServerHttp2.pid"
 if errorlevel 1 (
-    echo [WARN] Failed to start GateServerDrogon.
-    goto :after_gatedrogon
+    echo [WARN] Failed to start GateServerHttp2.
+    goto :after_gatehttp2
 )
-call :wait_for_port GateServerDrogon 8443 20 "%ARTIFACT_ROOT%\logs\services\GateServerDrogon"
+call :wait_for_port GateServerHttp2 8443 20 "%ARTIFACT_ROOT%\logs\services\GateServerHttp2"
 if errorlevel 1 (
-    echo [WARN] GateServerDrogon failed to listen on port 8443, HTTP/2 may be unavailable.
-    goto :after_gatedrogon
+    echo [WARN] GateServerHttp2 failed to listen on port 8443, HTTP/2 may be unavailable.
+    goto :after_gatehttp2
 )
-call :print_running_process_stamp GateServerDrogon.exe
-goto :after_gatedrogon
+call :print_running_process_stamp GateServerHttp2.exe
+goto :after_gatehttp2
 
 if "%WITH_CLIENT%"=="1" (
   if not exist "%CLIENT_BIN%\MemoChatQml.exe" (
@@ -576,7 +576,7 @@ goto :select_server_bin_try_ps
 if exist "%BUILD_BIN%\GateServer.exe" set "GATE_EXE=%BUILD_BIN%\GateServer.exe"
 if exist "%BUILD_BIN%\StatusServer.exe" set "STATUS_EXE=%BUILD_BIN%\StatusServer.exe"
 if exist "%BUILD_BIN%\ChatServer.exe" set "CHAT_EXE=%BUILD_BIN%\ChatServer.exe"
-if exist "%BUILD_BIN%\GateServerDrogon.exe" set "GATEDROGON_EXE=%BUILD_BIN%\GateServerDrogon.exe"
+if exist "%BUILD_BIN%\GateServerHttp2.exe" set "GATEHTTP2_EXE=%BUILD_BIN%\GateServerHttp2.exe"
 if defined GATE_EXE if defined STATUS_EXE if defined CHAT_EXE goto :select_server_bin_ok
 
 :select_server_bin_try_ps
@@ -607,8 +607,8 @@ if "%BUILD_BIN:~-1%"=="\" set "BUILD_BIN=%BUILD_BIN:~0,-1%"
 call :print_file_stamp "Selected GateServer" "%GATE_EXE%"
 call :print_file_stamp "Selected StatusServer" "%STATUS_EXE%"
 call :print_file_stamp "Selected ChatServer" "%CHAT_EXE%"
-if defined GATEDROGON_EXE (
-    call :print_file_stamp "Selected GateServerDrogon" "%GATEDROGON_EXE%"
+if defined GATEHTTP2_EXE (
+    call :print_file_stamp "Selected GateServerHttp2" "%GATEHTTP2_EXE%"
 )
 exit /b 0
 
@@ -644,30 +644,30 @@ if defined CHECK_RESULT (
 set "CHECK_RESULT="
 exit /b 1
 
-:start_gatedrogon
-if not exist "%BUILD_BIN%\GateServerDrogon.exe" (
-    echo [INFO] GateServerDrogon.exe not found, HTTP/2 (port 8443) will not be available.
-    goto :after_gatedrogon
+:start_gatehttp2
+if not exist "%BUILD_BIN%\GateServerHttp2.exe" (
+    echo [INFO] GateServerHttp2.exe not found, HTTP/2 (port 8443) will not be available.
+    goto :after_gatehttp2
 )
-if not exist "%ROOT%\server\GateServerDrogon\config.ini" (
-    echo [INFO] GateServerDrogon config not found, HTTP/2 (port 8443) will not be available.
-    goto :after_gatedrogon
+if not exist "%ROOT%\server\GateServerHttp2\config.ini" (
+    echo [INFO] GateServerHttp2 config not found, HTTP/2 (port 8443) will not be available.
+    goto :after_gatehttp2
 )
-echo [INFO] Starting GateServerDrogon (HTTPS/HTTP2 on port 8443)...
-call :prepare_service GateServerDrogon "%ROOT%\server\GateServerDrogon\config.ini" "%GATEDROGON_EXE%"
+echo [INFO] Starting GateServerHttp2 (HTTPS/HTTP2 on port 8443)...
+call :prepare_service GateServerHttp2 "%ROOT%\server\GateServerHttp2\config.ini" "%GATEHTTP2_EXE%"
 if errorlevel 1 (
-    echo [WARN] Failed to prepare GateServerDrogon, skipping HTTP/2 server.
-    goto :after_gatedrogon
+    echo [WARN] Failed to prepare GateServerHttp2, skipping HTTP/2 server.
+    goto :after_gatehttp2
 )
-call :launch_process "GateServerDrogon" "%RUN_ROOT%\GateServerDrogon\GateServerDrogon.exe" "" "%RUN_ROOT%\GateServerDrogon" "%ARTIFACT_ROOT%\logs\manual-start\GateServerDrogon.out.log" "%ARTIFACT_ROOT%\logs\manual-start\GateServerDrogon.err.log" "%PID_ROOT%\GateServerDrogon.pid"
+call :launch_process "GateServerHttp2" "%RUN_ROOT%\GateServerHttp2\GateServerHttp2.exe" "" "%RUN_ROOT%\GateServerHttp2" "%ARTIFACT_ROOT%\logs\manual-start\GateServerHttp2.out.log" "%ARTIFACT_ROOT%\logs\manual-start\GateServerHttp2.err.log" "%PID_ROOT%\GateServerHttp2.pid"
 if errorlevel 1 (
-    echo [WARN] Failed to start GateServerDrogon.
-    goto :after_gatedrogon
+    echo [WARN] Failed to start GateServerHttp2.
+    goto :after_gatehttp2
 )
-call :wait_for_port GateServerDrogon 8443 20 "%ARTIFACT_ROOT%\logs\services\GateServerDrogon"
+call :wait_for_port GateServerHttp2 8443 20 "%ARTIFACT_ROOT%\logs\services\GateServerHttp2"
 if errorlevel 1 (
-    echo [WARN] GateServerDrogon failed to listen on port 8443, HTTP/2 may be unavailable.
-    goto :after_gatedrogon
+    echo [WARN] GateServerHttp2 failed to listen on port 8443, HTTP/2 may be unavailable.
+    goto :after_gatehttp2
 )
-call :print_running_process_stamp GateServerDrogon.exe
-goto :after_gatedrogon
+call :print_running_process_stamp GateServerHttp2.exe
+goto :after_gatehttp2

@@ -22,7 +22,6 @@ target_include_directories(GateServerHttp3 PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../GateServer
     ${CMAKE_CURRENT_SOURCE_DIR}/../GateServerCore
-    ${CMAKE_CURRENT_SOURCE_DIR}/../GateServerDrogon
     ${CMAKE_CURRENT_SOURCE_DIR}/../common
 )
 
