@@ -43,6 +43,10 @@ add_library(GateServerCore STATIC
     StatusGrpcClient.h
     VerifyGrpcClient.cpp
     VerifyGrpcClient.h
+    Http2MediaSupport.cpp
+    Http2MediaSupport.h
+    Http2ProfileSupport.cpp
+    Http2ProfileSupport.h
 )
 
 target_compile_features(GateServerCore PUBLIC cxx_std_17)
