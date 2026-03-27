@@ -146,9 +146,8 @@ bool LoadJsonFileLocal(const std::filesystem::path& path, Json::Value& root) {
 }
 
 IMediaStorage& MediaStorageForLocal(const std::string& provider) {
-    static LocalMediaStorage local_storage;
     (void)provider;
-    return local_storage;
+    return GetMediaStorage();
 }
 
 std::string NewIdStringLocal() {

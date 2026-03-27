@@ -5,6 +5,7 @@
 #include "H1LogicSystem.h"
 #include "ConfigMgr.h"
 #include "MediaStorage.h"
+#include "S3MediaStorage.h"
 #include "PostgresMgr.h"
 #include "RedisMgr.h"
 #include "const.h"
@@ -194,9 +195,8 @@ std::set<int> ListUploadedChunkIndexesLocal(const std::filesystem::path& chunk_d
 }
 
 IMediaStorage& MediaStorageForLocal(const std::string& provider) {
-    static LocalMediaStorage local_storage;
     (void)provider;
-    return local_storage;
+    return GetMediaStorage();
 }
 
 bool IsMediaTypeImageLocal(const std::string& media_type) {

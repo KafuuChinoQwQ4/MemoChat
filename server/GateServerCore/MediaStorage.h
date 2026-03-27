@@ -40,3 +40,5 @@ private:
     std::filesystem::path _uploads_root;
     std::string _public_base_url;
 };
+
+IMediaStorage& GetMediaStorage();

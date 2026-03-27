@@ -47,6 +47,8 @@ add_library(GateServerCore STATIC
     Http2MediaSupport.h
     Http2ProfileSupport.cpp
     Http2ProfileSupport.h
+    S3MediaStorage.cpp
+    S3MediaStorage.h
 )
 
 target_compile_features(GateServerCore PUBLIC cxx_std_17)
