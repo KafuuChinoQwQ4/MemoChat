@@ -45,7 +45,13 @@
           "name": "nghttp3",
           "features": []
         },
-        "openssl"
+        "openssl",
+        {
+          "name": "aws-sdk-cpp",
+          "features": [
+            "s3"
+          ]
+        }
       ]
     },
     "http3": {

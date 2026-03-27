@@ -1,4 +1,5 @@
 #include "MediaStorage.h"
+#include "S3MediaStorage.h"
 
 #include "ConfigMgr.h"
 
@@ -155,4 +156,21 @@ bool LocalMediaStorage::ResolvePublicUrl(const std::string& storage_path,
     }
     out_url = _public_base_url + suffix;
     return true;
+}
+
+IMediaStorage& GetMediaStorage() {
+    static LocalMediaStorage local_instance;
+    static S3MediaStorage s3_instance;
+    static bool inited = false;
+    static std::string provider;
+    if (!inited) {
+        provider = ConfigMgr::Inst().GetValue("Media", "StorageProvider");
+        std::transform(provider.begin(), provider.end(), provider.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        inited = true;
+    }
+    if (provider == "s3" || provider == "minio") {
+        return s3_instance;
+    }
+    return local_instance;
 }

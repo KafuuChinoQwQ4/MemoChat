@@ -26,6 +26,18 @@ find_package(unofficial-librabbitmq CONFIG QUIET)
 find_package(rabbitmq-c CONFIG QUIET)
 find_package(msquic CONFIG QUIET)
 find_package(OpenSSL CONFIG QUIET)
+find_package(AWSSDK CONFIG QUIET)
+if(AWSSDK_FOUND)
+    # AWSSDK found but doesn't provide CMake IMPORTED targets.
+    # Fall back to per-service vcpkg packages which have proper targets.
+    unset(AWSSDK_FOUND)
+endif()
+
+# vcpkg aws-sdk-cpp installs per-service packages with proper CMake IMPORTED targets.
+find_package(aws-cpp-sdk-s3 CONFIG QUIET)
+if(aws-cpp-sdk-s3_FOUND)
+    set(AWSSDK_FOUND TRUE)
+endif()
 
 # HTTP/3 requires ngtcp2 + nghttp3 + openssl (always try for server feature)
 set(MEMOCHAT_ENABLE_HTTP3 0)
@@ -216,6 +228,26 @@ endif()
 
 if(MEMOCHAT_ENABLE_RABBITMQ)
     target_link_libraries(memochat_server_deps INTERFACE ${MEMOCHAT_RABBITMQ_TARGET})
+endif()
+
+    if(AWSSDK_FOUND)
+    # vcpkg builds aws-sdk-cpp and aws-crt-cpp as SHARED DLLs. The .lib files are
+    # DLL import stubs (NULL_THUNK_DATA). We need USE_IMPORT_EXPORT=1 so our code
+    # uses __declspec(dllimport), and we must explicitly link all aws .lib files
+    # since Ninja doesn't reliably propagate transitive IMPORTED_LINK_DEPENDENT_LIBRARIES.
+    target_compile_definitions(memochat_server_deps INTERFACE USE_IMPORT_EXPORT=1)
+    if(WIN32)
+        set(_VCPKG_AWS_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg_installed/x64-windows/lib")
+        foreach(_aws_lib aws-cpp-sdk-core aws-cpp-sdk-s3 aws-crt-cpp aws-c-http aws-c-mqtt aws-c-auth aws-c-cal aws-c-common aws-c-io aws-checksums aws-c-event-stream aws-c-s3 aws-c-compression aws-c-sdkutils)
+            set(_lib_path "${_VCPKG_AWS_LIB_DIR}/${_aws_lib}.lib")
+            if(EXISTS "${_lib_path}")
+                target_link_libraries(memochat_server_deps INTERFACE "${_lib_path}")
+            endif()
+        endforeach()
+    endif()
+    message(STATUS "MinIO/S3: AWS SDK found — object storage support enabled")
+else()
+    message(STATUS "MinIO/S3: AWS SDK not found — S3 storage will be unavailable")
 endif()
 
 if(WIN32)
