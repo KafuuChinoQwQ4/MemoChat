@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project(GateServerCore LANGUAGES CXX)
 
-# GateServerCore - shared library for all GateServer variants (H1, H2/Drogon, H3)
+# GateServerCore - shared library for all GateServer variants (H1, H2, H3)
 # Contains: gRPC clients, Postgres/Redis managers, Auth/Call services, etc.
 # This library does NOT include any HTTP protocol-specific code.
 

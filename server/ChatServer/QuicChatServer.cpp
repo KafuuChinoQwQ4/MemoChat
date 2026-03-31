@@ -253,6 +253,35 @@ bool QuicChatServer::Impl::ensureInitialized(QuicChatServer* owner, std::string*
         }
     }
 
+    // Approach 4: Try CERTIFICATE_PKCS12 (PFX blob with password) — mirrors GateServer fallback
+    if (!cred_loaded && !pfx_file.empty() && std::filesystem::exists(pfx_file)) {
+        std::ifstream pfx_stream(pfx_file, std::ios::binary);
+        if (pfx_stream) {
+            std::vector<uint8_t> pfx_data(
+                (std::istreambuf_iterator<char>(pfx_stream)),
+                std::istreambuf_iterator<char>());
+            pfx_stream.close();
+            if (!pfx_data.empty()) {
+                std::string pwd = pfx_password.empty() ? "memochat" : pfx_password;
+                QUIC_CERTIFICATE_PKCS12 pkcs12{};
+                pkcs12.Asn1Blob = pfx_data.data();
+                pkcs12.Asn1BlobLength = static_cast<uint32_t>(pfx_data.size());
+                pkcs12.PrivateKeyPassword = const_cast<char*>(pwd.c_str());
+                QUIC_CREDENTIAL_CONFIG cred{};
+                cred.Type = QUIC_CREDENTIAL_TYPE_CERTIFICATE_PKCS12;
+                cred.Flags = QUIC_CREDENTIAL_FLAG_NONE;
+                cred.CertificatePkcs12 = &pkcs12;
+                status = api->ConfigurationLoadCredential(configuration, &cred);
+                if (QUIC_SUCCEEDED(status)) {
+                    cred_loaded = true;
+                    memolog::LogInfo("quic.credential.loaded",
+                        "ChatServer QUIC credential loaded via PKCS12 blob",
+                        std::map<std::string, std::string>{{"pfx_file", pfx_file}});
+                }
+            }
+        }
+    }
+
     if (!cred_loaded) {
         if (error) {
             *error = "quic_certificate_missing";

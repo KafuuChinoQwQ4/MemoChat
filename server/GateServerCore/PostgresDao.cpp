@@ -36,7 +36,7 @@ std::string DecodeLegacyXorPwd(const std::string& input) {
 
 PostgresDao::PostgresDao()
 {
-	pool_.reset(new PostgresPool(BuildConnectionString(), 60));
+	pool_.reset(new PostgresPool(BuildConnectionString(), 20));
 	WarmupAuthQueries();
 }
 

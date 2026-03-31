@@ -1,12 +1,15 @@
 param(
     [switch]$NoClient,
     [switch]$Background,
+    [switch]$SkipBuild,
     [string]$PidRoot = "",
     [string]$ConfigurePreset = "msvc2022-memo-ops",
     [string]$BuildPreset = "msvc2022-memo-ops-release"
 )
 
 $ErrorActionPreference = "Stop"
+$env:MEMOCHAT_ENABLE_KAFKA = "1"
+$env:MEMOCHAT_ENABLE_RABBITMQ = "1"
 $root = Split-Path -Parent $PSScriptRoot
 $repoRoot = Split-Path -Parent $root
 $python = "python"
@@ -49,40 +52,52 @@ try {
     $env:PYTHONPATH = $repoRoot
     & $python "$root\scripts\init_memo_ops_schema.py"
 
-    $opsServerArgs = @(
-        "-NoProfile",
-        "-Command",
-        "Set-Location '$repoRoot'; `$env:PYTHONPATH='$repoRoot'; python -m Memo_ops.server.ops_server.main --config '$opsServerConfig'"
-    )
-    $opsCollectorArgs = @(
-        "-NoProfile",
-        "-Command",
-        "Set-Location '$repoRoot'; `$env:PYTHONPATH='$repoRoot'; python -m Memo_ops.server.ops_collector.main --config '$opsCollectorConfig'"
-    )
+    $opsServerScriptPath = Join-Path $env:TEMP "memochat_ops_server_$$.py"
+    $opsCollectorScriptPath = Join-Path $env:TEMP "memochat_ops_collector_$$.py"
 
-    if (-not $Background) {
-        $opsServerArgs = @("-NoExit") + $opsServerArgs
-        $opsCollectorArgs = @("-NoExit") + $opsCollectorArgs
-    }
+    $opsServerScript = @"
+import sys
+sys.path.insert(0, r'$repoRoot')
+from Memo_ops.server.ops_server.main import main
+sys.argv = ['ops_server', '--config', r'$opsServerConfig']
+main()
+"@
+    $opsCollectorScript = @"
+import sys
+sys.path.insert(0, r'$repoRoot')
+from Memo_ops.server.ops_collector.main import main
+sys.argv = ['ops_collector', '--config', r'$opsCollectorConfig']
+main()
+"@
+
+    $opsServerScript | Out-File -FilePath $opsServerScriptPath -Encoding utf8
+    $opsCollectorScript | Out-File -FilePath $opsCollectorScriptPath -Encoding utf8
 
     $serverStartParams = @{
-        FilePath = "powershell"
-        ArgumentList = $opsServerArgs
+        FilePath = $python
+        ArgumentList = $opsServerScriptPath
         PassThru = $true
-    }
-    $collectorStartParams = @{
-        FilePath = "powershell"
-        ArgumentList = $opsCollectorArgs
-        PassThru = $true
+        RedirectStandardOutput = Join-Path $manualStartLogDir "MemoOpsServer.out.log"
+        RedirectStandardError = Join-Path $manualStartLogDir "MemoOpsServer.err.log"
+        WorkingDirectory = $repoRoot
     }
 
-    if ($Background) {
-        $serverStartParams.WindowStyle = "Hidden"
-        $serverStartParams.RedirectStandardOutput = (Join-Path $manualStartLogDir "MemoOpsServer.out.log")
-        $serverStartParams.RedirectStandardError = (Join-Path $manualStartLogDir "MemoOpsServer.err.log")
-        $collectorStartParams.WindowStyle = "Hidden"
-        $collectorStartParams.RedirectStandardOutput = (Join-Path $manualStartLogDir "MemoOpsCollector.out.log")
-        $collectorStartParams.RedirectStandardError = (Join-Path $manualStartLogDir "MemoOpsCollector.err.log")
+    $collectorStartParams = @{
+        FilePath = $python
+        ArgumentList = $opsCollectorScriptPath
+        PassThru = $true
+        RedirectStandardOutput = Join-Path $manualStartLogDir "MemoOpsCollector.out.log"
+        RedirectStandardError = Join-Path $manualStartLogDir "MemoOpsCollector.err.log"
+        WorkingDirectory = $repoRoot
+    }
+
+    if (-not $Background) {
+        $serverStartParams.WindowStyle = "Normal"
+        $collectorStartParams.WindowStyle = "Normal"
+        $serverStartParams.Remove("RedirectStandardOutput")
+        $serverStartParams.Remove("RedirectStandardError")
+        $collectorStartParams.Remove("RedirectStandardOutput")
+        $collectorStartParams.Remove("RedirectStandardError")
     }
 
     $opsServerProc = Start-Process @serverStartParams
@@ -93,8 +108,10 @@ try {
     if (-not $NoClient) {
         try {
             Push-Location $root
-            cmake --preset $ConfigurePreset | Out-Null
-            cmake --build --preset $BuildPreset --target MemoOpsQml | Out-Null
+            if (-not $SkipBuild) {
+                cmake --preset $ConfigurePreset | Out-Null
+                cmake --build --preset $BuildPreset --target MemoOpsQml | Out-Null
+            }
             Pop-Location
             $clientExe = Join-Path $repoRoot "build-memo-ops\bin\Release\MemoOpsQml.exe"
             if (Test-Path $clientExe) {
@@ -111,7 +128,6 @@ try {
                     PassThru = $true
                 }
                 if ($Background) {
-                    $clientStartParams.WindowStyle = "Hidden"
                     $clientStartParams.RedirectStandardOutput = (Join-Path $manualStartLogDir "MemoOpsQml.out.log")
                     $clientStartParams.RedirectStandardError = (Join-Path $manualStartLogDir "MemoOpsQml.err.log")
                 }
@@ -131,4 +147,6 @@ try {
 }
 finally {
     Pop-Location
+    if (Test-Path $opsServerScriptPath) { Remove-Item $opsServerScriptPath -ErrorAction SilentlyContinue }
+    if (Test-Path $opsCollectorScriptPath) { Remove-Item $opsCollectorScriptPath -ErrorAction SilentlyContinue }
 }

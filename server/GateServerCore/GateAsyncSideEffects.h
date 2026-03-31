@@ -51,9 +51,12 @@ private:
     void ConsumeCacheInvalidateLoop();
     void HandleCacheInvalidate(const Json::Value& payload);
     void CloseRabbit();
+    void CloseKafka();
 
     std::string _kafka_brokers;
     std::string _kafka_client_id;
+    std::shared_ptr<void> _kafka_producer;
+    std::mutex _kafka_mutex;
     std::string _rabbit_host;
     int _rabbit_port = 5672;
     std::string _rabbit_username;

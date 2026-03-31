@@ -4,22 +4,6 @@ services:
   #######################
   # Data Stores
   #######################
-  memochat-mysql:
-    image: mysql:8.0.45
-    container_name: memochat-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: "123456"
-      MYSQL_DATABASE: memo
-    command:
-      - --default-authentication-plugin=mysql_native_password
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
-    ports:
-      - "3306:3306"
-    volumes:
-      - D:/docker-data/memochat/mysql:/var/lib/mysql
-
   memochat-redis:
     image: redis:7.2.5
     container_name: memochat-redis
@@ -43,6 +27,12 @@ services:
       POSTGRES_USER: memochat
       POSTGRES_PASSWORD: "123456"
       POSTGRES_DB: memo_pg
+    command:
+      - postgres
+      - -c
+      - max_connections=500
+      - -c
+      - shared_buffers=256MB
     ports:
       - "5432:5432"
     volumes:
@@ -61,6 +51,29 @@ services:
     volumes:
       - D:/docker-data/memochat/mongo:/data/db
 
+  memochat-minio:
+    image: minio/minio:latest
+    container_name: memochat-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: "memochat_admin"
+      MINIO_ROOT_PASSWORD: "MinioPass2026!"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command:
+      - server
+      - /data
+      - --console-address
+      - ":9001"
+    volumes:
+      - D:/docker-data/memochat/minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   #######################
   # Message Queue
   #######################
@@ -75,9 +88,9 @@ services:
       - redpanda
       - start
       - --kafka-addr=0.0.0.0:19092
-      - --advertise-kafka-addr=host.docker.internal:19092
+      - --advertise-kafka-addr=127.0.0.1:19092
       - --pandaproxy-addr=0.0.0.0:18082
-      - --advertise-pandaproxy-addr=host.docker.internal:18082
+      - --advertise-pandaproxy-addr=127.0.0.1:18082
     volumes:
       - D:/docker-data/memochat/redpanda:/var/lib/redpanda
 
@@ -108,8 +121,6 @@ services:
       - --storage.tsdb.path=/prometheus
       - --web.enable-lifecycle
       - --storage.tsdb.retention.time=7d
-      - --remote.write.url=http://memochat-influxdb:8086/api/v1/write
-      - --remote.write.header=X-Organization-Id:memochat
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - D:/docker-data/memochat/observability/prometheus:/prometheus
@@ -213,79 +224,3 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
 
-  #######################
-  # Application Services
-  #######################
-  memochat-gatedrogon:
-    build:
-      context: ../..
-      dockerfile: deploy/images/Dockerfile.gatedrogon.linux
-    container_name: memochat-gatedrogon
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    environment:
-      - CONFIG_FILE=config.ini
-    volumes:
-      - D:/docker-data/memochat/gatedrogon/logs:/app/logs
-    depends_on:
-      memochat-redis:
-        condition: service_healthy
-      memochat-postgres:
-        condition: service_healthy
-      memochat-mongo:
-        condition: service_healthy
-      memochat-redpanda:
-        condition: service_started
-      memochat-rabbitmq:
-        condition: service_started
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - memochat-network
-
-  # Backend gRPC services (called by GateServerDrogon)
-  memochat-chatserver:
-    image: memochat-chatserver:latest
-    container_name: memochat-chatserver
-    restart: unless-stopped
-    ports:
-      - "8090:8090"
-      - "8091:8091"
-      - "8092:8092"
-      - "8093:8093"
-      - "50055:50055"
-      - "50056:50056"
-      - "50057:50057"
-      - "50058:50058"
-    depends_on:
-      - memochat-redis
-      - memochat-postgres
-    networks:
-      - memochat-network
-
-  memochat-verifyserver:
-    image: memochat-verifyserver:latest
-    container_name: memochat-verifyserver
-    restart: unless-stopped
-    ports:
-      - "50051:50051"
-    depends_on:
-      - memochat-mysql
-    networks:
-      - memochat-network
-
-  memochat-statusserver:
-    image: memochat-statusserver:latest
-    container_name: memochat-statusserver
-    restart: unless-stopped
-    ports:
-      - "50052:50052"
-    depends_on:
-      - memochat-mongo
-    networks:
-      - memochat-network
-
-networks:
-  memochat-network:
-    driver: bridge

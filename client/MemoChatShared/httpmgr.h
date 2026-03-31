@@ -17,6 +17,8 @@ class HttpMgr:public QObject, public Singleton<HttpMgr>,
 public:
     ~HttpMgr();
     void PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod, const QString &module = QStringLiteral("http"));
+    /** Drop pooled idle sockets (e.g. after logout) so the next login does not reuse a dead connection. */
+    void clearConnectionCache();
 private:
     friend class Singleton<HttpMgr>;
     HttpMgr();
