@@ -9,6 +9,40 @@
 #include <QDebug>
 
 namespace {
+/// GateServer `ErrorCodes` values (see server/GateServerCore/const.h) for register / reset / verify-code responses.
+QString gateAuthBusinessErrorTip(int errorCode, const QJsonObject& obj)
+{
+    switch (errorCode) {
+    case 0:
+        return {};
+    case 1:
+        // QJsonObject::toInt default when "error" missing or non-numeric
+        return QStringLiteral("服务器响应异常，请重试");
+    case 1001:
+        return QStringLiteral("请求参数格式错误");
+    case 1002:
+        return QStringLiteral("认证服务暂时不可用，请稍后重试");
+    case 1003:
+        return QStringLiteral("验证码已过期，请点击「获取」重新发送");
+    case 1004:
+        return QStringLiteral("验证码不正确");
+    case 1005:
+        return QStringLiteral("用户名或邮箱已被注册");
+    case 1006:
+        return QStringLiteral("密码校验失败，请检查两次密码是否一致");
+    case 1007:
+        return QStringLiteral("用户名与邮箱不匹配");
+    case 1008:
+        return QStringLiteral("密码更新失败，请稍后重试");
+    case 1014: {
+        const QString minVersion = obj.value(QStringLiteral("min_version")).toString(QStringLiteral("2.0.0"));
+        return QStringLiteral("客户端版本过低，请升级到 %1 或以上").arg(minVersion);
+    }
+    default:
+        return QStringLiteral("操作失败（错误码 %1）").arg(errorCode);
+    }
+}
+
 constexpr int kHeartbeatIntervalMs = 5000;
 constexpr int kHeartbeatAckMissThreshold = 2;
 constexpr qint64 kHeartbeatAckGraceMs = 15000;
@@ -166,7 +200,7 @@ void AppController::onRegisterHttpFinished(ReqId id, QString res, ErrorCodes err
     const int error = obj.value("error").toInt(ErrorCodes::ERR_JSON);
     if (error != ErrorCodes::SUCCESS) {
         setBusy(false);
-        setTip("参数错误", true);
+        setTip(gateAuthBusinessErrorTip(error, obj), true);
         return;
     }
 
@@ -208,7 +242,7 @@ void AppController::onResetHttpFinished(ReqId id, QString res, ErrorCodes err)
     const int error = obj.value("error").toInt(ErrorCodes::ERR_JSON);
     if (error != ErrorCodes::SUCCESS) {
         setBusy(false);
-        setTip("参数错误", true);
+        setTip(gateAuthBusinessErrorTip(error, obj), true);
         return;
     }
 

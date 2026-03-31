@@ -20,7 +20,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = "D:\MemoChat-Qml-Drogon"
-$BinDir = "$ProjectRoot\Memo_ops\bin"
+$ServicesDir = "$ProjectRoot\Memo_ops\runtime\services"
+$env:MEMOCHAT_ENABLE_KAFKA = "1"
+$env:MEMOCHAT_ENABLE_RABBITMQ = "1"
 
 # 颜色输出
 function Write-Step { param($msg) Write-Host "[步骤] $msg" -ForegroundColor Cyan }
@@ -97,18 +99,21 @@ if (-not $SkipBuild) {
 Write-Step "启动后端服务..."
 
 $services = @(
-    @{ Name = "GateServer"; Config = "$ProjectRoot\Memo_ops\config\GateServer.json" },
-    @{ Name = "StatusServer"; Config = "$ProjectRoot\Memo_ops\config\StatusServer.json" },
-    @{ Name = "ChatServer-1"; Config = "$ProjectRoot\Memo_ops\config\ChatServer1.json" },
-    @{ Name = "ChatServer-2"; Config = "$ProjectRoot\Memo_ops\config\ChatServer2.json" },
-    @{ Name = "ChatServer-3"; Config = "$ProjectRoot\Memo_ops\config\ChatServer3.json" },
-    @{ Name = "ChatServer-4"; Config = "$ProjectRoot\Memo_ops\config\ChatServer4.json" }
+    @{ Name = "GateServer";       Exe = "GateServer.exe";   Config = "$ServicesDir\GateServer\config.ini" },
+    @{ Name = "StatusServer";     Exe = "StatusServer.exe"; Config = "$ServicesDir\StatusServer\config.ini" },
+    @{ Name = "ChatServer-1";      Exe = "ChatServer.exe";   Config = "$ServicesDir\chatserver1\config.ini" },
+    @{ Name = "ChatServer-2";      Exe = "ChatServer.exe";   Config = "$ServicesDir\chatserver2\config.ini" },
+    @{ Name = "ChatServer-3";      Exe = "ChatServer.exe";   Config = "$ServicesDir\chatserver3\config.ini" },
+    @{ Name = "ChatServer-4";      Exe = "ChatServer.exe";   Config = "$ServicesDir\chatserver4\config.ini" }
 )
 
 foreach ($svc in $services) {
-    $exePath = "$BinDir\$($svc.Name.Split('-')[0]).exe"
+    $svcDir = Split-Path $svc.Config -Parent
+    $exePath = "$svcDir\$($svc.Exe)"
     if (Test-Path $exePath) {
+        Push-Location $svcDir
         Start-Process -FilePath $exePath -ArgumentList "--config $($svc.Config)" -WindowStyle Hidden
+        Pop-Location
         Write-Host "  ✓ $($svc.Name) 启动" -ForegroundColor Green
     } else {
         Write-Warn "  ✗ $($svc.Name) 未找到: $exePath"
@@ -117,7 +122,7 @@ foreach ($svc in $services) {
 
 # 启动 VarifyServer (Node.js)
 Write-Step "启动 VarifyServer..."
-$vsDir = "$ProjectRoot\Memo_ops\services\VarifyServer"
+$vsDir = "$ProjectRoot\server\VarifyServer"
 if (Test-Path $vsDir) {
     $pkgJson = "$vsDir\package.json"
     if (Test-Path $pkgJson) {
@@ -126,7 +131,8 @@ if (Test-Path $vsDir) {
             Write-Step "安装 Node.js 依赖..."
             npm install
         }
-        Start-Process -FilePath "node" -ArgumentList "src\index.js" -WindowStyle Hidden
+        $env:MEMOCHAT_HEALTH_PORT = "8082"
+        Start-Process -FilePath "node" -ArgumentList "server.js" -WindowStyle Hidden
         Pop-Location
         Write-Success "VarifyServer 启动"
     }
@@ -143,7 +149,7 @@ if (-not $SkipClient) {
     Write-Step "启动 QML 客户端..."
 
     $clientDir = "$ProjectRoot\client\MemoChat-qml"
-    $clientExe = "$clientDir\build\Release\MemoChatQml.exe"
+    $clientExe = "$ServicesDir\GateServerHttp2\MemoChatQml.exe"
 
     if (Test-Path $clientExe) {
         Start-Process -FilePath $clientExe
@@ -169,7 +175,7 @@ $ports = @(
     "GateServer HTTP : 8080",
     "GateServer gRPC : 50054",
     "StatusServer    : 50052",
-    "VarifyServer    : 50051 / 8081",
+    "VarifyServer    : 50051 / 8082",
     "ChatServer TCP  : 8090",
     "ChatServer QUIC : 8190",
     "PostgreSQL      : 5432",

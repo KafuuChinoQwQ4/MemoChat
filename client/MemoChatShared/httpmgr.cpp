@@ -1,6 +1,9 @@
 #include "httpmgr.h"
 #include "TelemetryUtils.h"
+#include <QCoreApplication>
 #include <QDateTime>
+#include <QDir>
+#include <QSettings>
 #include <QTimer>
 #include <QSslConfiguration>
 #include <QSslSocket>
@@ -16,17 +19,43 @@ bool isGateHttpsPrimaryPort(const QUrl &url)
     return url.port(443) == 8443;
 }
 
+int gatePlaintextFallbackPort()
+{
+    const QString path =
+        QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("config.ini"));
+    QSettings settings(path, QSettings::IniFormat);
+    QString p = settings.value(QStringLiteral("GateServer/http_port")).toString().trimmed();
+    if (p.isEmpty()) {
+        p = settings.value(QStringLiteral("GateServer/HttpPort")).toString().trimmed();
+    }
+    if (!p.isEmpty()) {
+        bool ok = false;
+        const int n = p.toInt(&ok);
+        if (ok && n > 0) {
+            return n;
+        }
+    }
+    return 8080;
+}
+
 QUrl gatePlaintextFallback(const QUrl &httpsUrl)
 {
     QUrl fb = httpsUrl;
     fb.setScheme(QStringLiteral("http"));
-    fb.setPort(8080);
+    fb.setPort(gatePlaintextFallbackPort());
     return fb;
 }
 }  // namespace
 
 HttpMgr::~HttpMgr()
 {
+}
+
+void HttpMgr::clearConnectionCache()
+{
+#if QT_VERSION >= QT_VERSION_CHECK(5, 9, 0)
+    _manager.clearConnectionCache();
+#endif
 }
 
 void HttpMgr::PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod, const QString &module)
@@ -44,6 +73,9 @@ void HttpMgr::postHttpReqInternal(const QUrl &url,
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setHeader(QNetworkRequest::ContentLengthHeader, QByteArray::number(data.length()));
+    // Server closes the socket after each response (keep_alive false). Force fresh TCP for each
+    // request so Qt does not reuse a half-dead connection from the pool (fixes "login once" issues).
+    request.setRawHeader(QByteArrayLiteral("Connection"), QByteArrayLiteral("close"));
 
     if (url.scheme().toLower() == QLatin1String("https")) {
         QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
@@ -109,7 +141,10 @@ void HttpMgr::postHttpReqInternal(const QUrl &url,
             return;
         }
 
-        gate_url_prefix = url.scheme() + QStringLiteral("://") + url.authority();
+        const QUrl replyBase = reply->url();
+        if (replyBase.isValid() && !replyBase.scheme().isEmpty() && !replyBase.authority().isEmpty()) {
+            gate_url_prefix = replyBase.scheme() + QStringLiteral("://") + replyBase.authority();
+        }
 
         QString res = reply->readAll();
         const QByteArray responseTrace = reply->rawHeader("X-Trace-Id");

@@ -19,7 +19,6 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(bsoncxx CONFIG REQUIRED)
 find_package(mongocxx CONFIG REQUIRED)
 find_package(libpqxx CONFIG REQUIRED)
-find_package(drogon CONFIG REQUIRED)
 find_package(CppKafka CONFIG QUIET)
 find_package(cppkafka CONFIG QUIET)
 find_package(unofficial-librabbitmq CONFIG QUIET)
@@ -204,7 +203,6 @@ target_link_libraries(memochat_server_deps INTERFACE
     hiredis::hiredis
     JsonCpp::JsonCpp
     ${MEMOCHAT_SPDLOG_TARGET}
-    Drogon::Drogon
 )
 target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_KAFKA=${MEMOCHAT_ENABLE_KAFKA} MEMOCHAT_ENABLE_RABBITMQ=${MEMOCHAT_ENABLE_RABBITMQ} MEMOCHAT_ENABLE_HTTP3=${MEMOCHAT_ENABLE_HTTP3})
 

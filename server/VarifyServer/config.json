@@ -21,8 +21,8 @@
   "rabbitmq": {
     "host": "127.0.0.1",
     "port": 5672,
-    "username": "guest",
-    "password": "guest",
+    "username": "memochat",
+    "password": "123456",
     "vhost": "/",
     "prefetchCount": 8,
     "exchangeDirect": "memochat.direct",
