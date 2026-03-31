@@ -10,8 +10,8 @@
 #include "VerifyGrpcClient.h"
 #include "GateAsyncSideEffects.h"
 #include "AuthLoginSupport.h"
-#include "DrogonMediaSupport.h"
-#include "DrogonProfileSupport.h"
+#include "Http2MediaSupport.h"
+#include "Http2ProfileSupport.h"
 
 #include "const.h"
 #include "auth/ChatLoginTicket.h"
@@ -355,7 +355,7 @@ void RegisterRoutes(LogicSystem& logic) {
             const std::string file_name = src_root.get("file_name", "").asString();
             const std::string mime = src_root.get("mime", "").asString();
             const int64_t file_size = src_root.get("file_size", 0).asInt64();
-            auto result = DrogonMediaSupport::HandleUploadMediaInit(uid, token, media_type, file_name, mime, file_size);
+            auto result = Http2MediaSupport::HandleUploadMediaInit(uid, token, media_type, file_name, mime, file_size);
             root = result.data;
             root["error"] = result.error;
             if (!result.message.empty()) root["message"] = result.message;
@@ -371,7 +371,7 @@ void RegisterRoutes(LogicSystem& logic) {
             const std::string upload_id = src_root.get("upload_id", "").asString();
             const int index = src_root.get("index", -1).asInt();
             const std::string chunk_data_base64 = src_root.get("data_base64", "").asString();
-            auto result = DrogonMediaSupport::HandleUploadMediaChunk(uid, token, upload_id, index, chunk_data_base64);
+            auto result = Http2MediaSupport::HandleUploadMediaChunk(uid, token, upload_id, index, chunk_data_base64);
             root = result.data;
             root["error"] = result.error;
             if (!result.message.empty()) root["message"] = result.message;
@@ -385,7 +385,7 @@ void RegisterRoutes(LogicSystem& logic) {
             const int uid = src_root.get("uid", 0).asInt();
             const std::string token = src_root.get("token", "").asString();
             const std::string upload_id = src_root.get("upload_id", "").asString();
-            auto result = DrogonMediaSupport::HandleUploadMediaComplete(uid, token, upload_id);
+            auto result = Http2MediaSupport::HandleUploadMediaComplete(uid, token, upload_id);
             root = result.data;
             root["error"] = result.error;
             if (!result.message.empty()) root["message"] = result.message;
@@ -402,7 +402,7 @@ void RegisterRoutes(LogicSystem& logic) {
             const std::string file_name = src_root.get("file_name", "").asString();
             const std::string mime = src_root.get("mime", "").asString();
             const std::string data_base64 = src_root.get("data_base64", "").asString();
-            auto result = DrogonMediaSupport::HandleUploadMediaSimple(uid, token, media_type, file_name, mime, data_base64);
+            auto result = Http2MediaSupport::HandleUploadMediaSimple(uid, token, media_type, file_name, mime, data_base64);
             root = result.data;
             root["error"] = result.error;
             if (!result.message.empty()) root["message"] = result.message;
@@ -430,7 +430,7 @@ void RegisterRoutes(LogicSystem& logic) {
                 }
             }
         }
-        auto result = DrogonMediaSupport::HandleUploadMediaStatus(uid, token, upload_id);
+        auto result = Http2MediaSupport::HandleUploadMediaStatus(uid, token, upload_id);
         Json::Value root = result.data;
         root["error"] = result.error;
         if (!result.message.empty()) root["message"] = result.message;
@@ -453,7 +453,7 @@ void RegisterRoutes(LogicSystem& logic) {
             connection->SendResponse(400, root.toStyledString(), "application/json");
             return true;
         }
-        auto result = DrogonMediaSupport::HandleMediaDownloadInfo(uid, token, media_key);
+        auto result = Http2MediaSupport::HandleMediaDownloadInfo(uid, token, media_key);
         if (result.error != 0) {
             Json::Value root = result.data;
             root["error"] = result.error;
@@ -497,7 +497,7 @@ void RegisterRoutes(LogicSystem& logic) {
                 root["message"] = "invalid uid";
                 return false;
             }
-            auto result = DrogonProfileSupport::HandleGetUserInfo(uid);
+            auto result = Http2ProfileSupport::HandleGetUserInfo(uid);
             root = result.data;
             root["error"] = result.error;
             if (!result.message.empty()) root["message"] = result.message;

@@ -1,0 +1,172 @@
+Config path: D:\MemoChat-Qml-Drogon\Memo_ops\runtime\services\GateServer\config.ini
+[Call]
+ApiKey=devkey
+ApiSecret=secret
+BaseUrl=http://127.0.0.1:8080
+BusyKeyTtlSec=50
+Enabled=true
+LiveKitUrl=ws://127.0.0.1:7880
+RingTimeoutSec=45
+RoomPrefix=memochat
+TokenTtlSec=3600
+[ChatAuth]
+HmacSecret=memochat-dev-chat-secret
+TicketTtlSec=20
+[Cluster]
+DiscoveryMode=static
+Nodes=chatserver1,chatserver2,chatserver3,chatserver4
+[GateServer]
+Port=8080
+WorkerThreads=
+[Kafka]
+Brokers=127.0.0.1:19092
+ClientId=memochat-gate
+ConsumerGroup=memochat-gate-sideeffects
+[Log]
+Dir=../../artifacts/logs/services/GateServer
+Env=local
+Format=json
+Level=info
+MaxFiles=14
+MaxSizeMB=100
+Redact=true
+RotateMode=daily
+ToConsole=true
+[LoginCache]
+TtlSec=3600
+[Media]
+ChunkSizeKB=4096
+MaxFileMB=20480
+MaxImageMB=200
+SessionExpireSec=86400
+StorageProvider=s3
+[MinIO]
+BucketAvatar=memochat-avatar
+BucketFile=memochat-file
+BucketImage=memochat-image
+BucketVideo=memochat-video
+Enabled=true
+Endpoint=127.0.0.1:9000
+PublicUrl=http://127.0.0.1:9000
+Region=us-east-1
+[Mongo]
+Database=memochat
+Enabled=true
+MomentsCollection=moments_content
+Uri=mongodb://memochat_app:123456@127.0.0.1:27017/memochat
+[Postgres]
+Database=memo_pg
+Host=127.0.0.1
+Passwd=123456
+Port=5432
+Schema=memo
+SslMode=disable
+User=memochat
+[RabbitMQ]
+ExchangeDirect=memochat.direct
+ExchangeDlx=memochat.dlx
+Host=127.0.0.1
+Password=123456
+Port=5672
+Username=memochat
+VHost=/
+[Redis]
+Host=127.0.0.1
+Passwd=123456
+PoolSize=30
+Port=6379
+[Snowflake]
+DatacenterId=0
+WorkerId=1
+[StatusServer]
+Host=127.0.0.1
+Port=50052
+[Telemetry]
+Enabled=true
+ExportLogs=true
+ExportMetrics=false
+ExportTraces=true
+OtlpEndpoint=http://127.0.0.1:9411/api/v2/spans
+Protocol=zipkin-json
+SampleRatio=1.0
+ServiceName=GateServer
+ServiceNamespace=memochat
+[VarifyServer]
+Host=127.0.0.1
+Port=50051
+[chatserver1]
+Enabled=true
+Name=chatserver1
+QuicHost=127.0.0.1
+QuicPort=8190
+RpcHost=127.0.0.1
+RpcPort=50055
+TcpHost=127.0.0.1
+TcpPort=8090
+[chatserver2]
+Enabled=true
+Name=chatserver2
+QuicHost=127.0.0.1
+QuicPort=8191
+RpcHost=127.0.0.1
+RpcPort=50056
+TcpHost=127.0.0.1
+TcpPort=8091
+[chatserver3]
+Enabled=true
+Name=chatserver3
+QuicHost=127.0.0.1
+QuicPort=8192
+RpcHost=127.0.0.1
+RpcPort=50057
+TcpHost=127.0.0.1
+TcpPort=8092
+[chatserver4]
+Enabled=true
+Name=chatserver4
+QuicHost=127.0.0.1
+QuicPort=8193
+RpcHost=127.0.0.1
+RpcPort=50058
+TcpHost=127.0.0.1
+TcpPort=8093
+{"attrs":{"postgres_init_ms":"406"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.postgres_ready","level":"info","message":"GateServer postgres ready","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:24936","ts":"2026-03-31T09:04:52.298Z"}
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+{"attrs":{"num_threads":"12","worker_threads":"12"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.thread_pool","level":"info","message":"GateServer thread pool configured","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:24936","ts":"2026-03-31T09:04:52.535Z"}
+{"attrs":{"port":"8080"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.start","level":"info","message":"GateServer listening","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:24936","ts":"2026-03-31T09:04:52.536Z"}
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http3.msquic.ok","level":"info","message":"MsQuic API opened","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:24936","ts":"2026-03-31T09:04:52.538Z"}
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http3.reg.ok","level":"info","message":"MsQuic registration opened","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:24936","ts":"2026-03-31T09:04:52.540Z"}
+{"attrs":{"crt":"D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\services\\GateServer\\server.crt","key":"D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\services\\GateServer\\server.key","pfx":"D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\services\\GateServer\\server.pfx"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"certutil.pfx.ok","level":"info","message":"self-signed PEM+PFX cert/key generated","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:24936","ts":"2026-03-31T09:04:52.634Z"}
+{"attrs":{"crt":"D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\services\\GateServer\\server.crt","key":"D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\services\\GateServer\\server.key","status":"-2147467262"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http3.cred.fail.file_protected","level":"error","message":"ConfigurationLoadCredential (FILE_PROTECTED) failed","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:24936","ts":"2026-03-31T09:04:52.635Z"}
+{"attrs":{"error":"Both FILE_PROTECTED and PFX certificate loading failed: ConfigurationLoadCredential (PKCS12) failed with status: -2147467262"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.http3.start.fail","level":"warn","message":"GateServer HTTP/3 listener failed to start","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:24936","ts":"2026-03-31T09:04:52.651Z"}
+{"attrs":{"method":"GET","route":"/health"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"c98fa505e38a455b82dc9513175f68f4","service":"GateServer","service_instance":"GateServer@YKSL:24936","span_id":"26c2542673f9434d","trace_id":"a7e7160c7a3748e6be3158e2b0d87482","ts":"2026-03-31T09:07:31.871Z"}
+{"attrs":{"method":"GET","route":"/api/gate/ping"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"08452f35159f4478861d5a358a9bac34","service":"GateServer","service_instance":"GateServer@YKSL:24936","span_id":"046caba3cc594837","trace_id":"582fd2578b1042978996692f26b0e92a","ts":"2026-03-31T09:08:15.327Z"}

@@ -23,6 +23,8 @@
 #include <cppkafka/cppkafka.h>
 #endif
 
+#include <memory>
+
 #if MEMOCHAT_ENABLE_RABBITMQ
 #include <winsock2.h>
 #include <rabbitmq-c/amqp.h>
@@ -128,6 +130,7 @@ void GateAsyncSideEffects::Stop()
     if (_worker.joinable()) {
         _worker.join();
     }
+    CloseKafka();
     CloseRabbit();
 }
 
@@ -217,18 +220,24 @@ bool GateAsyncSideEffects::PublishKafka(const std::string& topic,
     envelope["created_at_ms"] = static_cast<Json::Int64>(NowMsGate());
     envelope["retry_count"] = 0;
     envelope["payload"] = payload;
+    const auto serialized = WriteCompactJsonGate(envelope);
     try {
-        cppkafka::Configuration config = {
-            { "metadata.broker.list", _kafka_brokers },
-            { "client.id", _kafka_client_id.empty() ? "memochat-gate" : _kafka_client_id }
-        };
-        cppkafka::Producer producer(config);
+        std::lock_guard<std::mutex> guard(_kafka_mutex);
+        if (!_kafka_producer) {
+            cppkafka::Configuration config = {
+                { "metadata.broker.list", _kafka_brokers },
+                { "client.id", _kafka_client_id.empty() ? "memochat-gate" : _kafka_client_id },
+                { "socket.timeout.ms", "3000" },
+                { "message.timeout.ms", "5000" }
+            };
+            _kafka_producer = std::make_shared<cppkafka::Producer>(config);
+        }
+        auto producer = std::static_pointer_cast<cppkafka::Producer>(_kafka_producer);
         cppkafka::MessageBuilder builder(topic);
-        const auto serialized = WriteCompactJsonGate(envelope);
         builder.key(partition_key);
         builder.payload(serialized);
-        producer.produce(builder);
-        producer.flush();
+        producer->produce(builder);
+        producer->flush(std::chrono::milliseconds(3000));
         return true;
     }
     catch (const std::exception& ex) {
@@ -448,6 +457,18 @@ void GateAsyncSideEffects::CloseRabbit()
         amqp_connection_close(connection, AMQP_REPLY_SUCCESS);
         amqp_destroy_connection(connection);
         _rabbit_connection = nullptr;
+    }
+#endif
+}
+
+void GateAsyncSideEffects::CloseKafka()
+{
+#if MEMOCHAT_ENABLE_KAFKA
+    std::lock_guard<std::mutex> guard(_kafka_mutex);
+    if (_kafka_producer) {
+        auto producer = std::static_pointer_cast<cppkafka::Producer>(_kafka_producer);
+        producer->flush(std::chrono::milliseconds(1000));
+        _kafka_producer.reset();
     }
 #endif
 }

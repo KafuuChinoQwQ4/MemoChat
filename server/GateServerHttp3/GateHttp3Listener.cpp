@@ -527,6 +527,27 @@ do_dispatch:
     }
 }
 
+static bool ValidatePfxReadable(const std::string& pfx_path) {
+    if (pfx_path.empty() || !std::filesystem::exists(pfx_path)) {
+        return false;
+    }
+    std::ifstream pfx_file(pfx_path, std::ios::binary);
+    if (!pfx_file) {
+        return false;
+    }
+    std::vector<uint8_t> data(
+        (std::istreambuf_iterator<char>(pfx_file)),
+        std::istreambuf_iterator<char>());
+    pfx_file.close();
+    if (data.empty() || data.size() < 4) {
+        return false;
+    }
+    if (data[0] != 0x30 || data[1] != 0x80) {
+        return false;
+    }
+    return true;
+}
+
 static bool EnsureSelfSignedCert(std::string& crt_path,
                                  std::string& key_path,
                                  std::string& pfx_path) {
@@ -537,7 +558,8 @@ static bool EnsureSelfSignedCert(std::string& crt_path,
 
     if (std::filesystem::exists(pfx_path) &&
         std::filesystem::exists(crt_path) &&
-        std::filesystem::exists(key_path)) {
+        std::filesystem::exists(key_path) &&
+        ValidatePfxReadable(pfx_path)) {
         return true;
     }
 

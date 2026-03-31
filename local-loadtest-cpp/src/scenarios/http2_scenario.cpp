@@ -5,7 +5,7 @@ namespace memochat {
 namespace loadtest {
 
 // HTTP/2 scenario: measures end-to-end latency of a single HTTPS POST
-// to the GateServerDrogon HTTPS endpoint (port 8443).
+// to the GateServer HTTP/2 endpoint.
 // WinHTTP automatically negotiates HTTP/2 via ALPN over TLS.
 // This is a pure HTTP-layer test — no persistent connection reuse
 // between requests (each worker thread owns its WinHTTP session from the pool).

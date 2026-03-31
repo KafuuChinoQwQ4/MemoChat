@@ -1,0 +1,184 @@
+Config path: D:\MemoChat-Qml-Drogon\Memo_ops\runtime\services\GateServer\config.ini
+[Call]
+ApiKey=devkey
+ApiSecret=secret
+BaseUrl=http://127.0.0.1:8080
+BusyKeyTtlSec=50
+Enabled=true
+LiveKitUrl=ws://127.0.0.1:7880
+RingTimeoutSec=45
+RoomPrefix=memochat
+TokenTtlSec=3600
+[ChatAuth]
+HmacSecret=memochat-dev-chat-secret
+TicketTtlSec=20
+[Cluster]
+DiscoveryMode=static
+Nodes=chatserver1,chatserver2,chatserver3,chatserver4
+[GateServer]
+Port=8080
+WorkerThreads=
+[Kafka]
+Brokers=127.0.0.1:19092
+ClientId=memochat-gate
+ConsumerGroup=memochat-gate-sideeffects
+[Log]
+Dir=../../artifacts/logs/services/GateServer
+Env=local
+Format=json
+Level=info
+MaxFiles=14
+MaxSizeMB=100
+Redact=true
+RotateMode=daily
+ToConsole=true
+[LoginCache]
+TtlSec=3600
+[Media]
+ChunkSizeKB=4096
+MaxFileMB=20480
+MaxImageMB=200
+SessionExpireSec=86400
+StorageProvider=s3
+[MinIO]
+BucketAvatar=memochat-avatar
+BucketFile=memochat-file
+BucketImage=memochat-image
+BucketVideo=memochat-video
+Enabled=true
+Endpoint=127.0.0.1:9000
+PublicUrl=http://127.0.0.1:9000
+Region=us-east-1
+[Mongo]
+Database=memochat
+Enabled=true
+MomentsCollection=moments_content
+Uri=mongodb://memochat_app:123456@127.0.0.1:27017/memochat
+[Postgres]
+Database=memo_pg
+Host=127.0.0.1
+Passwd=123456
+Port=5432
+Schema=memo
+SslMode=disable
+User=memochat
+[RabbitMQ]
+ExchangeDirect=memochat.direct
+ExchangeDlx=memochat.dlx
+Host=127.0.0.1
+Password=123456
+Port=5672
+Username=memochat
+VHost=/
+[Redis]
+Host=127.0.0.1
+Passwd=123456
+PoolSize=30
+Port=6379
+[Snowflake]
+DatacenterId=0
+WorkerId=1
+[StatusServer]
+Host=127.0.0.1
+Port=50052
+[Telemetry]
+Enabled=true
+ExportLogs=true
+ExportMetrics=false
+ExportTraces=true
+OtlpEndpoint=http://127.0.0.1:9411/api/v2/spans
+Protocol=zipkin-json
+SampleRatio=1.0
+ServiceName=GateServer
+ServiceNamespace=memochat
+[VarifyServer]
+Host=127.0.0.1
+Port=50051
+[chatserver1]
+Enabled=true
+Name=chatserver1
+QuicHost=127.0.0.1
+QuicPort=8190
+RpcHost=127.0.0.1
+RpcPort=50055
+TcpHost=127.0.0.1
+TcpPort=8090
+[chatserver2]
+Enabled=true
+Name=chatserver2
+QuicHost=127.0.0.1
+QuicPort=8191
+RpcHost=127.0.0.1
+RpcPort=50056
+TcpHost=127.0.0.1
+TcpPort=8091
+[chatserver3]
+Enabled=true
+Name=chatserver3
+QuicHost=127.0.0.1
+QuicPort=8192
+RpcHost=127.0.0.1
+RpcPort=50057
+TcpHost=127.0.0.1
+TcpPort=8092
+[chatserver4]
+Enabled=true
+Name=chatserver4
+QuicHost=127.0.0.1
+QuicPort=8193
+RpcHost=127.0.0.1
+RpcPort=50058
+TcpHost=127.0.0.1
+TcpPort=8093
+postgres pool init failed, error is connection to server at "127.0.0.1", port 5432 failed: FATAL:  remaining connection slots are reserved for roles with the SUPERUSER attribute
+
+{"attrs":{"postgres_init_ms":"2021"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.postgres_ready","level":"info","message":"GateServer postgres ready","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","ts":"2026-03-28T15:39:11.883Z"}
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+{"attrs":{"num_threads":"12","worker_threads":"12"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.thread_pool","level":"info","message":"GateServer thread pool configured","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","ts":"2026-03-28T15:39:12.398Z"}
+{"attrs":{"port":"8080"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.start","level":"info","message":"GateServer listening","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","ts":"2026-03-28T15:39:12.399Z"}
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http3.msquic.ok","level":"info","message":"MsQuic API opened","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","ts":"2026-03-28T15:39:12.401Z"}
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http3.reg.ok","level":"info","message":"MsQuic registration opened","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","ts":"2026-03-28T15:39:12.402Z"}
+{"attrs":{"crt":"D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\services\\GateServer\\server.crt","key":"D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\services\\GateServer\\server.key","status":"-2147467262"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http3.cred.fail.file_protected","level":"error","message":"ConfigurationLoadCredential (FILE_PROTECTED) failed","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","ts":"2026-03-28T15:39:12.404Z"}
+{"attrs":{"error":"Both FILE_PROTECTED and PFX certificate loading failed: ConfigurationLoadCredential (PKCS12) failed with status: -2147467262"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.http3.start.fail","level":"warn","message":"GateServer HTTP/3 listener failed to start","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","ts":"2026-03-28T15:39:12.405Z"}
+{"attrs":{"error":"end of stream [beast.http:1 at D:\\MemoChat-Qml-Drogon\\vcpkg_installed\\x64-windows\\include\\boost/beast/http/impl/read.hpp:241:21 in function 'void __cdecl boost::beast::http::detail::read_some_op<class boost::asio::basic_stream_socket<class boost::asio::ip::tcp,class boost::asio::any_io_executor>,class boost::beast::basic_flat_buffer<class std::allocator<char> >,1>::operator ()<class boost::asio::detail::composed_op<class boost::beast::http::detail::read_some_op<class boost::asio::basic_stream_socket<class boost::asio::ip::tcp,class boost::asio::any_io_executor>,class boost::beast::basic_flat_buffer<class std::allocator<char> >,1>,struct boost::asio::detail::composed_work<void __cdecl(class boost::asio::any_io_executor)>,class boost::asio::detail::composed_op<class boost::beast::http::detail::read_op<class boost::asio::basic_stream_socket<class boost::asio::ip::tcp,class boost::asio::any_io_executor>,class boost::beast::basic_flat_buffer<class std::allocator<char> >,1,struct boost::beast::http::detail::parser_is_done>,struct boost::asio::detail::composed_work<void __cdecl(class boost::asio::any_io_executor)>,class boost::beast::http::detail::read_msg_op<class boost::asio::basic_stream_socket<class boost::asio::ip::tcp,class boost::asio::any_io_executor>,class boost::beast::basic_flat_buffer<class std::allocator<char> >,1,struct boost::beast::http::basic_dynamic_body<class boost::beast::basic_multi_buffer<class std::allocator<char> > >,class std::allocator<char>,class `public: void __cdecl HttpConnection::Start(void)'::`2'::<lambda_1> >,void __cdecl(class boost::system::error_code,unsigned __int64)>,void __cdecl(class boost::system::error_code,unsigned __int64)>>(class boost::asio::detail::composed_op<class boost::beast::http::detail::read_some_op<class boost::asio::basic_stream_socket<class boost::asio::ip::tcp,class boost::asio::any_io_executor>,class boost::beast::basic_flat_buffer<class std::allocator<char> >,1>,struct boost::asio::detail::composed_work<void __cdecl(class boost::asio::any_io_executor)>,class boost::asio::detail::composed_op<class boost::beast::http::detail::read_op<class boost::asio::basic_stream_socket<class boost::asio::ip::tcp,class boost::asio::any_io_executor>,class boost::beast::basic_flat_buffer<class std::allocator<char> >,1,struct boost::beast::http::detail::parser_is_done>,struct boost::asio::detail::composed_work<void __cdecl(class boost::asio::any_io_executor)>,class boost::beast::http::detail::read_msg_op<class boost::asio::basic_stream_socket<class boost::asio::ip::tcp,class boost::asio::any_io_executor>,class boost::beast::basic_flat_buffer<class std::allocator<char> >,1,struct boost::beast::http::basic_dynamic_body<class boost::beast::basic_multi_buffer<class std::allocator<char> > >,class std::allocator<char>,class `public: void __cdecl HttpConnection::Start(void)'::`2'::<lambda_1> >,void __cdecl(class boost::system::error_code,unsigned __int64)>,void __cdecl(class boost::system::error_code,unsigned __int64)> &,class boost::system::error_code,unsigned __int64)']"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.read.failed","level":"warn","message":"http read failed","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","ts":"2026-03-28T15:39:12.434Z"}
+{"attrs":{"method":"POST","route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"58560b5f9c30488e8af6bbf34b88db1b","service":"GateServer","service_instance":"GateServer@YKSL:25412","span_id":"9bbe12d9bc484727","trace_id":"8bc809bc8ffd4f8eae253029a45bc607","ts":"2026-03-28T15:44:28.302Z"}
+this is singleton destruct
+{"attrs":{"route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","trace_id":"8bc809bc8ffd4f8eae253029a45bc607","ts":"2026-03-28T15:44:28.331Z"}
+{"attrs":{"chat_host":"127.0.0.1","chat_port":"8090","chat_server":"chatserver1","login_cache_hit":"true","mysql_check_pwd_ms":"0","route":"/user_login","route_select_ms":"0","server_loads":"chatserver1=0,chatserver2=0,chatserver3=0,chatserver4=0","ticket_issue_ms":"1","user_login_total_ms":"3"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.user_login","level":"info","message":"user login succeeded","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","trace_id":"8bc809bc8ffd4f8eae253029a45bc607","ts":"2026-03-28T15:44:28.334Z","uid":"1059"}
+{"attrs":{"login_cache_hit":"true","mysql_check_pwd_ms":"0","route_select_ms":"0","ticket_issue_ms":"1","user_login_total_ms":"3"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"login.stage.summary","level":"info","message":"gate login stage summary","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","trace_id":"8bc809bc8ffd4f8eae253029a45bc607","ts":"2026-03-28T15:44:28.334Z","uid":"1059"}
+{"attrs":{"method":"POST","route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"58560b5f9c30488e8af6bbf34b88db1b","service":"GateServer","service_instance":"GateServer@YKSL:25412","span_id":"4b26122f57c54268","trace_id":"8bc809bc8ffd4f8eae253029a45bc607","ts":"2026-03-28T15:44:28.357Z"}
+{"attrs":{"route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","trace_id":"8bc809bc8ffd4f8eae253029a45bc607","ts":"2026-03-28T15:44:28.358Z"}
+{"attrs":{"chat_host":"127.0.0.1","chat_port":"8090","chat_server":"chatserver1","login_cache_hit":"true","mysql_check_pwd_ms":"0","route":"/user_login","route_select_ms":"0","server_loads":"chatserver1=0,chatserver2=0,chatserver3=0,chatserver4=0","ticket_issue_ms":"22","user_login_total_ms":"28"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.user_login","level":"info","message":"user login succeeded","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","trace_id":"8bc809bc8ffd4f8eae253029a45bc607","ts":"2026-03-28T15:44:28.386Z","uid":"1059"}
+{"attrs":{"login_cache_hit":"true","mysql_check_pwd_ms":"0","route_select_ms":"0","ticket_issue_ms":"22","user_login_total_ms":"28"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"login.stage.summary","level":"info","message":"gate login stage summary","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","trace_id":"8bc809bc8ffd4f8eae253029a45bc607","ts":"2026-03-28T15:44:28.386Z","uid":"1059"}
+{"attrs":{"error":"Local: Timed out"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.side_effect.audit_publish_failed","level":"warn","message":"failed to publish login audit event","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","trace_id":"8bc809bc8ffd4f8eae253029a45bc607","ts":"2026-03-28T15:44:29.359Z","uid":"1059"}
+{"attrs":{"error":"Local: Timed out"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.side_effect.audit_publish_failed","level":"warn","message":"failed to publish login audit event","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:25412","trace_id":"8bc809bc8ffd4f8eae253029a45bc607","ts":"2026-03-28T15:44:29.410Z","uid":"1059"}
+{"attrs":{"method":"GET","route":"/media/download?asset=26127883-33f5-492d-afaa-47693152f970&uid=1059&token=aadf4e76-4f75-499c-9b9c-bab9f7fbcfad"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"4721b80b38184e768ffd63eea7372aa2","service":"GateServer","service_instance":"GateServer@YKSL:25412","span_id":"54c6b8feef324bc1","trace_id":"c0478782d89148e487f9ae686075a61d","ts":"2026-03-28T15:44:31.641Z"}

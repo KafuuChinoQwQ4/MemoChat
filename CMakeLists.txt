@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.29)
 
 project(MemoChat LANGUAGES CXX)
 
@@ -54,7 +54,6 @@ if(BUILD_SERVER)
         ChatServer
         VarifyServer
     )
-    # GateServerHttp2 requires libh2o which may not be available
     if(TARGET GateServerHttp2)
         add_dependencies(build-all GateServerHttp2)
     endif()

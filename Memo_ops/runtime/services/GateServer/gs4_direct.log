@@ -1,0 +1,218 @@
+Config path: D:\MemoChat-Qml-Drogon\Memo_ops\runtime\services\GateServer\config.ini
+[Call]
+ApiKey=devkey
+ApiSecret=secret
+BaseUrl=http://127.0.0.1:8080
+BusyKeyTtlSec=50
+Enabled=true
+LiveKitUrl=ws://127.0.0.1:7880
+RingTimeoutSec=45
+RoomPrefix=memochat
+TokenTtlSec=3600
+[ChatAuth]
+HmacSecret=memochat-dev-chat-secret
+TicketTtlSec=20
+[Cluster]
+DiscoveryMode=static
+Nodes=chatserver1,chatserver2,chatserver3,chatserver4
+[GateServer]
+Port=8080
+WorkerThreads=
+[Kafka]
+Brokers=127.0.0.1:19092
+ClientId=memochat-gate
+ConsumerGroup=memochat-gate-sideeffects
+[Log]
+Dir=../../artifacts/logs/services/GateServer
+Env=local
+Format=json
+Level=info
+MaxFiles=14
+MaxSizeMB=100
+Redact=true
+RotateMode=daily
+ToConsole=true
+[LoginCache]
+TtlSec=3600
+[Media]
+ChunkSizeKB=4096
+MaxFileMB=20480
+MaxImageMB=200
+SessionExpireSec=86400
+StorageProvider=s3
+[MinIO]
+BucketAvatar=memochat-avatar
+BucketFile=memochat-file
+BucketImage=memochat-image
+BucketVideo=memochat-video
+Enabled=true
+Endpoint=127.0.0.1:9000
+PublicUrl=http://127.0.0.1:9000
+Region=us-east-1
+[Mongo]
+Database=memochat
+Enabled=true
+MomentsCollection=moments_content
+Uri=mongodb://memochat_app:123456@127.0.0.1:27017/memochat
+[Postgres]
+Database=memo_pg
+Host=127.0.0.1
+Passwd=123456
+Port=5432
+Schema=memo
+SslMode=disable
+User=memochat
+[RabbitMQ]
+ExchangeDirect=memochat.direct
+ExchangeDlx=memochat.dlx
+Host=127.0.0.1
+Password=123456
+Port=5672
+Username=memochat
+VHost=/
+[Redis]
+Host=127.0.0.1
+Passwd=123456
+PoolSize=30
+Port=6379
+[Snowflake]
+DatacenterId=0
+WorkerId=1
+[StatusServer]
+Host=127.0.0.1
+Port=50052
+[Telemetry]
+Enabled=true
+ExportLogs=true
+ExportMetrics=false
+ExportTraces=true
+OtlpEndpoint=http://127.0.0.1:9411/api/v2/spans
+Protocol=zipkin-json
+SampleRatio=1.0
+ServiceName=GateServer
+ServiceNamespace=memochat
+[VarifyServer]
+Host=127.0.0.1
+Port=50051
+[chatserver1]
+Enabled=true
+Name=chatserver1
+QuicHost=127.0.0.1
+QuicPort=8190
+RpcHost=127.0.0.1
+RpcPort=50055
+TcpHost=127.0.0.1
+TcpPort=8090
+[chatserver2]
+Enabled=true
+Name=chatserver2
+QuicHost=127.0.0.1
+QuicPort=8191
+RpcHost=127.0.0.1
+RpcPort=50056
+TcpHost=127.0.0.1
+TcpPort=8091
+[chatserver3]
+Enabled=true
+Name=chatserver3
+QuicHost=127.0.0.1
+QuicPort=8192
+RpcHost=127.0.0.1
+RpcPort=50057
+TcpHost=127.0.0.1
+TcpPort=8092
+[chatserver4]
+Enabled=true
+Name=chatserver4
+QuicHost=127.0.0.1
+QuicPort=8193
+RpcHost=127.0.0.1
+RpcPort=50058
+TcpHost=127.0.0.1
+TcpPort=8093
+{"attrs":{"postgres_init_ms":"7184"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.postgres_ready","level":"info","message":"GateServer postgres ready","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","ts":"2026-03-28T16:01:31.171Z"}
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+redis auth success
+{"attrs":{"num_threads":"12","worker_threads":"12"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.thread_pool","level":"info","message":"GateServer thread pool configured","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","ts":"2026-03-28T16:01:31.787Z"}
+{"attrs":{"port":"8080"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.start","level":"info","message":"GateServer listening","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","ts":"2026-03-28T16:01:31.789Z"}
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http3.msquic.ok","level":"info","message":"MsQuic API opened","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","ts":"2026-03-28T16:01:31.791Z"}
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http3.reg.ok","level":"info","message":"MsQuic registration opened","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","ts":"2026-03-28T16:01:31.794Z"}
+{"attrs":{"crt":"D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\services\\GateServer\\server.crt","key":"D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\services\\GateServer\\server.key","status":"-2147467262"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http3.cred.fail.file_protected","level":"error","message":"ConfigurationLoadCredential (FILE_PROTECTED) failed","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","ts":"2026-03-28T16:01:31.795Z"}
+{"attrs":{"error":"Both FILE_PROTECTED and PFX certificate loading failed: ConfigurationLoadCredential (PKCS12) failed with status: -2147467262"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.http3.start.fail","level":"warn","message":"GateServer HTTP/3 listener failed to start","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","ts":"2026-03-28T16:01:31.797Z"}
+{"attrs":{"method":"POST","route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"e55e4700bf5a4e5483e9a7e4fd648985","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"9ac6255590964268","trace_id":"b033aab81609401eb30f528a64b7e16c","ts":"2026-03-28T16:08:25.663Z"}
+this is singleton destruct
+{"attrs":{"route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"b033aab81609401eb30f528a64b7e16c","ts":"2026-03-28T16:08:25.749Z"}
+{"attrs":{"method":"POST","route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"e55e4700bf5a4e5483e9a7e4fd648985","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"e2f0b19d03764896","trace_id":"b033aab81609401eb30f528a64b7e16c","ts":"2026-03-28T16:08:25.773Z"}
+{"attrs":{"route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"b033aab81609401eb30f528a64b7e16c","ts":"2026-03-28T16:08:25.774Z"}
+{"attrs":{"email":"12***@qq.com"},"duration_ms":0,"env":"local","error_code":"1009","error_type":"","event":"gate.user_login.failed","level":"warn","message":"password invalid","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"b033aab81609401eb30f528a64b7e16c","ts":"2026-03-28T16:08:25.813Z"}
+{"attrs":{"email":"12***@qq.com"},"duration_ms":0,"env":"local","error_code":"1009","error_type":"","event":"gate.user_login.failed","level":"warn","message":"password invalid","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"b033aab81609401eb30f528a64b7e16c","ts":"2026-03-28T16:08:25.830Z"}
+{"attrs":{"method":"POST","route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"02cf5a4bb4654977ba28bd3209bc7dae","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"a1fb07bd628e4813","trace_id":"61c53704c8504c1eb06163f4697eb341","ts":"2026-03-28T16:08:51.639Z"}
+{"attrs":{"route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"61c53704c8504c1eb06163f4697eb341","ts":"2026-03-28T16:08:51.640Z"}
+{"attrs":{"email":"ya***@gmail.com"},"duration_ms":0,"env":"local","error_code":"1009","error_type":"","event":"gate.user_login.failed","level":"warn","message":"password invalid","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"61c53704c8504c1eb06163f4697eb341","ts":"2026-03-28T16:08:52.012Z"}
+{"attrs":{"method":"POST","route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"415abbc5efc24d69b1720e1e2c8aa33a","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"052afe04b0f1472b","trace_id":"8c39baed3f504bc5b0a7a9d95507ecea","ts":"2026-03-28T16:10:17.122Z"}
+{"attrs":{"route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"8c39baed3f504bc5b0a7a9d95507ecea","ts":"2026-03-28T16:10:17.122Z"}
+{"attrs":{"method":"POST","route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"415abbc5efc24d69b1720e1e2c8aa33a","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"16dee1eeb50543a3","trace_id":"8c39baed3f504bc5b0a7a9d95507ecea","ts":"2026-03-28T16:10:17.165Z"}
+{"attrs":{"route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"8c39baed3f504bc5b0a7a9d95507ecea","ts":"2026-03-28T16:10:17.166Z"}
+{"attrs":{"email":"ya***@gmail.com"},"duration_ms":0,"env":"local","error_code":"1009","error_type":"","event":"gate.user_login.failed","level":"warn","message":"password invalid","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"8c39baed3f504bc5b0a7a9d95507ecea","ts":"2026-03-28T16:10:17.287Z"}
+{"attrs":{"email":"ya***@gmail.com"},"duration_ms":0,"env":"local","error_code":"1009","error_type":"","event":"gate.user_login.failed","level":"warn","message":"password invalid","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"8c39baed3f504bc5b0a7a9d95507ecea","ts":"2026-03-28T16:10:17.323Z"}
+{"attrs":{"method":"POST","route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"78a626c88a094579b30bdc13a594f4d3","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"f3b13f193d2949bc","trace_id":"a3f34b516e5944d9a22d666ca554879a","ts":"2026-03-28T16:10:17.911Z"}
+{"attrs":{"route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"a3f34b516e5944d9a22d666ca554879a","ts":"2026-03-28T16:10:17.911Z"}
+{"attrs":{"email":"ya***@gmail.com"},"duration_ms":0,"env":"local","error_code":"1009","error_type":"","event":"gate.user_login.failed","level":"warn","message":"password invalid","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"a3f34b516e5944d9a22d666ca554879a","ts":"2026-03-28T16:10:17.978Z"}
+{"attrs":{"method":"POST","route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"aeb1eba5df48410fb89c0b518dd9774d","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"621930437d2f43ca","trace_id":"67d05a557673478991ab10406a495c2c","ts":"2026-03-28T16:10:18.262Z"}
+{"attrs":{"route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"67d05a557673478991ab10406a495c2c","ts":"2026-03-28T16:10:18.263Z"}
+{"attrs":{"email":"ya***@gmail.com"},"duration_ms":0,"env":"local","error_code":"1009","error_type":"","event":"gate.user_login.failed","level":"warn","message":"password invalid","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"67d05a557673478991ab10406a495c2c","ts":"2026-03-28T16:10:18.274Z"}
+{"attrs":{"method":"POST","route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"d1893b57043746af849d5351203eac5b","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"cd5f1d2c0d5f4b7d","trace_id":"b175342a05c240718c93717da53a0ff4","ts":"2026-03-28T16:10:18.621Z"}
+{"attrs":{"route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"b175342a05c240718c93717da53a0ff4","ts":"2026-03-28T16:10:18.622Z"}
+{"attrs":{"email":"ya***@gmail.com"},"duration_ms":0,"env":"local","error_code":"1009","error_type":"","event":"gate.user_login.failed","level":"warn","message":"password invalid","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"b175342a05c240718c93717da53a0ff4","ts":"2026-03-28T16:10:18.638Z"}
+{"attrs":{"method":"POST","route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"f46a434ff29049d98f141baf997330cf","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"6c2e859bb3454a17","trace_id":"5c221514e928436288be7fffbc8cd0fc","ts":"2026-03-28T16:10:28.254Z"}
+{"attrs":{"route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"5c221514e928436288be7fffbc8cd0fc","ts":"2026-03-28T16:10:28.255Z"}
+{"attrs":{"email":"ya***@gmail.com"},"duration_ms":0,"env":"local","error_code":"1009","error_type":"","event":"gate.user_login.failed","level":"warn","message":"password invalid","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"5c221514e928436288be7fffbc8cd0fc","ts":"2026-03-28T16:10:28.738Z"}
+{"attrs":{"method":"POST","route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"55ff9359d17348339595ad6698359312","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"fb29495047ee47d9","trace_id":"7d3823f1f8b14a6784e3d966d37a4a5b","ts":"2026-03-28T16:25:11.122Z"}
+{"attrs":{"route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"7d3823f1f8b14a6784e3d966d37a4a5b","ts":"2026-03-28T16:25:11.122Z"}
+{"attrs":{"method":"POST","route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"55ff9359d17348339595ad6698359312","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"e3fb0dfda6254e44","trace_id":"7d3823f1f8b14a6784e3d966d37a4a5b","ts":"2026-03-28T16:25:11.128Z"}
+{"attrs":{"route":"/user_login"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"7d3823f1f8b14a6784e3d966d37a4a5b","ts":"2026-03-28T16:25:11.129Z"}
+{"attrs":{"email":"12***@qq.com"},"duration_ms":0,"env":"local","error_code":"1009","error_type":"","event":"gate.user_login.failed","level":"warn","message":"password invalid","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"7d3823f1f8b14a6784e3d966d37a4a5b","ts":"2026-03-28T16:25:11.149Z"}
+{"attrs":{"email":"12***@qq.com"},"duration_ms":0,"env":"local","error_code":"1009","error_type":"","event":"gate.user_login.failed","level":"warn","message":"password invalid","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"7d3823f1f8b14a6784e3d966d37a4a5b","ts":"2026-03-28T16:25:11.149Z"}
+{"attrs":{"method":"POST","route":"/get_varifycode"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"93ffa3ba558c4f7d83c7c25e5eb4962a","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"d4a79e131a124c4d","trace_id":"096072f62ba143a6b4f036badb01bb1f","ts":"2026-03-28T16:25:38.191Z"}
+{"attrs":{"route":"/get_varifycode"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"096072f62ba143a6b4f036badb01bb1f","ts":"2026-03-28T16:25:38.195Z"}
+{"attrs":{"email":"12***@qq.com","route":"/get_varifycode"},"duration_ms":0,"env":"local","error_code":"1002","error_type":"","event":"gate.get_varifycode","level":"info","message":"verify code requested","module":"","peer_service":"","request_id":"b0b9e57a3df940909f1e66193c4f0a20","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"096072f62ba143a6b4f036badb01bb1f","ts":"2026-03-28T16:25:38.333Z"}
+{"attrs":{"method":"POST","route":"/get_varifycode"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"74da180323bb4d9c9f976fd17df11adb","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"06d0118ae4794e16","trace_id":"48b17e9a38864e688c8fc63de63b3f6c","ts":"2026-03-28T16:25:47.471Z"}
+{"attrs":{"route":"/get_varifycode"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"48b17e9a38864e688c8fc63de63b3f6c","ts":"2026-03-28T16:25:47.475Z"}
+{"attrs":{"email":"12***@qq.com","route":"/get_varifycode"},"duration_ms":0,"env":"local","error_code":"1002","error_type":"","event":"gate.get_varifycode","level":"info","message":"verify code requested","module":"","peer_service":"","request_id":"9ffece3580d9441197ca6a49d8b94c67","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"48b17e9a38864e688c8fc63de63b3f6c","ts":"2026-03-28T16:25:49.524Z"}
+{"attrs":{"method":"POST","route":"/get_varifycode"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"29420acb411e42548d9be8b975d62271","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"42b148779f3b474a","trace_id":"6619c1ec6f8042b592d27b3a37bd2a5b","ts":"2026-03-28T16:26:07.045Z"}
+{"attrs":{"route":"/get_varifycode"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"6619c1ec6f8042b592d27b3a37bd2a5b","ts":"2026-03-28T16:26:07.046Z"}
+{"attrs":{"email":"12***@qq.com","route":"/get_varifycode"},"duration_ms":0,"env":"local","error_code":"1002","error_type":"","event":"gate.get_varifycode","level":"info","message":"verify code requested","module":"","peer_service":"","request_id":"7a502a1dca6a49f794693555f6c614d7","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"6619c1ec6f8042b592d27b3a37bd2a5b","ts":"2026-03-28T16:26:07.061Z"}
+{"attrs":{"method":"POST","route":"/get_varifycode"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"3ee18d0c59b44718a14b270ac2c1c6bb","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"4969e7c82f524e5e","trace_id":"fbaa95897ab44d09a5b1f1f6dc9dea0a","ts":"2026-03-28T16:26:07.950Z"}
+{"attrs":{"route":"/get_varifycode"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"fbaa95897ab44d09a5b1f1f6dc9dea0a","ts":"2026-03-28T16:26:07.951Z"}
+{"attrs":{"email":"12***@qq.com","route":"/get_varifycode"},"duration_ms":0,"env":"local","error_code":"1002","error_type":"","event":"gate.get_varifycode","level":"info","message":"verify code requested","module":"","peer_service":"","request_id":"aa5e853277104be48ab770d97341865f","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"fbaa95897ab44d09a5b1f1f6dc9dea0a","ts":"2026-03-28T16:26:07.964Z"}
+{"attrs":{"method":"POST","route":"/get_varifycode"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"http.request.received","level":"info","message":"incoming http request","module":"http","peer_service":"","request_id":"40a25a884a644c058d54a89d875a9e02","service":"GateServer","service_instance":"GateServer@YKSL:22080","span_id":"41ad638d2f4f4a52","trace_id":"915bc5fbffd94190ae86a51b8fab00e4","ts":"2026-03-28T16:26:08.715Z"}
+{"attrs":{"route":"/get_varifycode"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"gate.http.post.dispatch","level":"info","message":"dispatch post route","module":"","peer_service":"","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"915bc5fbffd94190ae86a51b8fab00e4","ts":"2026-03-28T16:26:08.715Z"}
+{"attrs":{"email":"12***@qq.com","route":"/get_varifycode"},"duration_ms":0,"env":"local","error_code":"1002","error_type":"","event":"gate.get_varifycode","level":"info","message":"verify code requested","module":"","peer_service":"","request_id":"3268a8a541f643bcad480bca33bf375e","service":"GateServer","service_instance":"GateServer@YKSL:22080","trace_id":"915bc5fbffd94190ae86a51b8fab00e4","ts":"2026-03-28T16:26:08.728Z"}

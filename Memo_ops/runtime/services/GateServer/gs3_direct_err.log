@@ -1,0 +1,2 @@
+%4|1774712669.354|TERMINATE|memochat-gate#producer-1| [thrd:app]: Producer terminating with 1 message (411 bytes) still in queue or transit: use flush() to wait for outstanding message delivery
+%4|1774712669.401|TERMINATE|memochat-gate#producer-2| [thrd:app]: Producer terminating with 1 message (411 bytes) still in queue or transit: use flush() to wait for outstanding message delivery

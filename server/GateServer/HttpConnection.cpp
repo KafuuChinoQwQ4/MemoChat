@@ -190,8 +190,9 @@ void HttpConnection::HandleReq() {
                         self->_response.result(http::status::not_found);
                         self->_response.set(http::field::content_type, "text/plain");
                         beast::ostream(self->_response.body()) << "url not found\r\n";
+                    } else {
+                        self->_response.result(http::status::ok);
                     }
-                    self->_response.result(http::status::ok);
                     self->_response.set(http::field::server, "GateServer");
                     self->WriteResponse();
                 });

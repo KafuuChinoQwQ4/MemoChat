@@ -242,6 +242,9 @@ void AppController::switchToLogin()
     _ignore_next_login_disconnect = true;
     setPage(LoginPage);
     _gateway.chatTransport()->CloseConnection();
+    if (auto http = _gateway.httpMgr()) {
+        http->clearConnectionCache();
+    }
     _private_cache_store.close();
     _group_cache_store.close();
     _gateway.userMgr()->ResetSession();

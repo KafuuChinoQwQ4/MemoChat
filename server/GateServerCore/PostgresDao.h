@@ -73,13 +73,16 @@ public:
 	}
 
 	std::unique_ptr<PooledSqlConnection> getConnection() {
+		if (closed_.load(std::memory_order_acquire)) {
+			return nullptr;
+		}
 		std::unique_lock<std::mutex> lock(mutex_);
 		cond_.wait(lock, [this] { 
 			if (b_stop_) {
 				return true;
 			}		
 			return !pool_.empty(); });
-		if (b_stop_) {
+		if (b_stop_ || closed_.load(std::memory_order_acquire)) {
 			return nullptr;
 		}
 		std::unique_ptr<PooledSqlConnection> con(std::move(pool_.front()));
@@ -97,6 +100,7 @@ public:
 	}
 
 	void Close() {
+		closed_.store(true, std::memory_order_release);
 		b_stop_ = true;
 		cond_.notify_all();
 	}
@@ -115,6 +119,7 @@ private:
 	std::mutex mutex_;
 	std::condition_variable cond_;
 	std::atomic<bool> b_stop_;
+	std::atomic<bool> closed_{false};
 	std::thread _check_thread;
 };
 

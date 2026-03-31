@@ -81,8 +81,12 @@ S3MediaStorage::S3MediaStorage() {
 
     if (!_enabled) return;
 
-    const std::string access_key = GetEnvOrDefault("MINIO_ACCESS_KEY");
-    const std::string secret_key = GetEnvOrDefault("MINIO_SECRET_KEY");
+    const std::string access_key = minio["AccessKey"].empty()
+        ? GetEnvOrDefault("MINIO_ACCESS_KEY")
+        : minio["AccessKey"];
+    const std::string secret_key = minio["SecretKey"].empty()
+        ? GetEnvOrDefault("MINIO_SECRET_KEY")
+        : minio["SecretKey"];
 
     if (access_key.empty() || secret_key.empty()) {
         return;

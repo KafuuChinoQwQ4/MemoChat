@@ -1,0 +1,302 @@
+Config path: config.ini
+[ChatAuth]
+HmacSecret=memochat-dev-chat-secret
+TicketTtlSec=20
+[Cluster]
+DiscoveryMode=static
+Nodes=chatserver1,chatserver2,chatserver3,chatserver4
+[FeatureFlags]
+chat_group_kafka_primary=false
+chat_group_kafka_shadow=false
+chat_private_kafka_primary=false
+chat_private_kafka_shadow=false
+history_index_mongo_read=false
+[GateServer]
+Port=8080
+[Kafka]
+BatchNumMessages=1000
+Brokers=127.0.0.1:19092
+ClientId=memochat-chatserver1
+ConsumeRetryMax=5
+ConsumerGroup=memochat-chat-workers
+EnableIdempotence=true
+OutboxBatchSize=100
+OutboxRetryBaseMs=1000
+OutboxRetryMaxMs=30000
+QueueBufferingMaxMs=10
+SessionTimeoutMs=10000
+TopicGroup=chat.group.v1
+TopicGroupDlq=chat.group.dlq.v1
+TopicPrivate=chat.private.v1
+TopicPrivateDlq=chat.private.dlq.v1
+[Log]
+Dir=../../artifacts/logs/services/chatserver1
+Env=local
+Format=json
+Level=info
+MaxFiles=14
+MaxSizeMB=100
+Redact=true
+RotateMode=daily
+ToConsole=true
+[Mongo]
+Database=memochat
+Enabled=true
+GroupCollection=group_messages
+PrivateCollection=private_messages
+Uri=mongodb://memochat_app:123456@127.0.0.1:27017/memochat
+[Postgres]
+Database=memo_pg
+Host=127.0.0.1
+Passwd=123456
+Port=5432
+Schema=memo
+SslMode=disable
+User=memochat
+[Quic]
+Alpn=memochat-chat
+CertFile=D:\MemoChat-Qml-Drogon\artifacts\certs\quic-dev\server-cert.pem
+PfxFile=D:\MemoChat-Qml-Drogon\artifacts\certs\quic-dev\server-schannel3.pfx
+PrivateKeyFile=D:\MemoChat-Qml-Drogon\artifacts\certs\quic-dev\server-key.pem
+[RabbitMQ]
+ExchangeDirect=memochat.direct
+ExchangeDlx=memochat.dlx
+Host=127.0.0.1
+MaxRetries=5
+Password=123456
+Port=5672
+PrefetchCount=50
+RetryDelayMs=5000
+Username=memochat
+VHost=/
+[Redis]
+Host=127.0.0.1
+Passwd=123456
+Port=6379
+[RelationBootstrapCache]
+TtlSec=15
+[Runtime]
+AsyncEventBus=kafka
+Role=hybrid
+TaskBus=rabbitmq
+[SelfServer]
+Name=chatserver1
+[Snowflake]
+DatacenterId=1
+WorkerId=1
+[StatusServer]
+Host=127.0.0.1
+Port=50052
+[Telemetry]
+Enabled=true
+ExportLogs=true
+ExportMetrics=false
+ExportTraces=true
+OtlpEndpoint=http://127.0.0.1:9411/api/v2/spans
+Protocol=zipkin-json
+SampleRatio=1.0
+ServiceName=ChatServer
+ServiceNamespace=memochat
+[VarifyServer]
+Host=127.0.0.1
+Port=50051
+[chatserver1]
+Enabled=true
+Name=chatserver1
+QuicHost=127.0.0.1
+QuicPort=8190
+RpcHost=127.0.0.1
+RpcPort=50055
+TcpHost=127.0.0.1
+TcpPort=8090
+[chatserver2]
+Enabled=true
+Name=chatserver2
+QuicHost=127.0.0.1
+QuicPort=8191
+RpcHost=127.0.0.1
+RpcPort=50056
+TcpHost=127.0.0.1
+TcpPort=8091
+[chatserver3]
+Enabled=true
+Name=chatserver3
+QuicHost=127.0.0.1
+QuicPort=8192
+RpcHost=127.0.0.1
+RpcPort=50057
+TcpHost=127.0.0.1
+TcpPort=8092
+[chatserver4]
+Enabled=true
+Name=chatserver4
+QuicHost=127.0.0.1
+QuicPort=8193
+RpcHost=127.0.0.1
+RpcPort=50058
+TcpHost=127.0.0.1
+TcpPort=8093
+{"attrs":{"name":"chatserver1","storage_init_ms":"97"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.postgresql_ready","level":"info","message":"ChatServer postgresql ready","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","ts":"2026-03-31T08:36:47.079Z"}
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+redis auth status
+Execut command [ Del server_online_users_chatserver1 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+{"attrs":{"name":"chatserver1","tracked_uid_count":"0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.online_state_reset","level":"info","message":"ChatServer online state reset","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","ts":"2026-03-31T08:36:47.464Z"}
+Server start success, listen on port : 8090
+{"attrs":{"error":"credential_load_failed","host":"127.0.0.1","port":"8190"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"quic.ingress.init_failed","level":"warn","message":"ChatServer QUIC ingress initialization failed","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","ts":"2026-03-31T08:36:47.471Z"}
+{"attrs":{"error":"credential_load_failed","host":"127.0.0.1","name":"chatserver1","port":"8190"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"quic.ingress.start_failed","level":"warn","message":"ChatServer QUIC ingress start failed","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","ts":"2026-03-31T08:36:47.471Z"}
+{"attrs":{"host":"127.0.0.1","port":"8190"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"quic.ingress.stop","level":"info","message":"ChatServer QUIC ingress stopped","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","ts":"2026-03-31T08:36:47.472Z"}
+{"attrs":{"name":"chatserver1","rpc_address":"127.0.0.1:50055"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"service.start","level":"info","message":"ChatServer listening","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","ts":"2026-03-31T08:36:47.476Z"}
+{"attrs":{"configured_backend":"rabbitmq"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.task_bus.rabbitmq","level":"info","message":"chat task bus backend selected","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","ts":"2026-03-31T08:36:47.551Z"}
+{"attrs":{"batch_size":"100","retry_base_ms":"1000","retry_max_ms":"30000"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.outbox.started","level":"info","message":"chat outbox relay started","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","ts":"2026-03-31T08:36:47.552Z"}
+{"attrs":{"brokers":"127.0.0.1:19092","client_id":"memochat-chatserver1","consumer_group":"memochat-chat-workers","topic_group":"chat.group.v1","topic_private":"chat.private.v1"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.kafka.started","level":"info","message":"chat kafka event bus started","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","ts":"2026-03-31T08:36:47.553Z"}
+{"attrs":{"configured_backend":"kafka"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.async_event_bus.kafka","level":"info","message":"chat async event bus backend selected","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","ts":"2026-03-31T08:36:47.554Z"}
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+msg_id is 1005
+msg_len is 610
+receive data is {"login_ticket":"eyJkZXNjIjoiIiwiZW1haWwiOiIxMjIwNzQzNzc3QHFxLmNvbSIsImV4cGlyZV9hdF9tcyI6MTc3NDk0NjU0MzI3NywiaWNvbiI6ImZpbGU6Ly8vQzovVXNlcnMveWFuZ2tlc2hpbGllL0FwcERhdGEvUm9hbWluZy9NZW1vQ2hhdFFtbC9hdmF0YXJzL2hlYWQucG5nIiwiaXNzdWVkX2F0X21zIjoxNzc0OTQ2NTIzMjc3LCJuYW1lIjoieWtzbCIsIm5pY2siOiJ5a3NsIiwicHJvdG9jb2xfdmVyc2lvbiI6Mywic2V4IjowLCJ0YXJnZXRfc2VydmVyIjoiY2hhdHNlcnZlcjEiLCJ1aWQiOjEwNTksInVzZXJfaWQiOiJ1ODY0MjkxNzk0In0.ERAa2ecv93m35GwfvPvbUW0xIBS9XDwMWhmB9An9S4o","protocol_version":3,"request_id":"cb5644a0ae1c4002a448ae5d2281591f","span_id":"b573521dfaec4735","trace_id":"6e0a6706f89843c7afd3336f8ee9fcae"}
+{"attrs":{"tcp_msg_id":"1005"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.login.received","level":"info","message":"chat login request received","module":"","peer_service":"","request_id":"16ad44cf52a84a4799ef389617f510a9","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","session_id":"253ffe52-53c0-47c9-9eea-c3e0874f6a1a","span_id":"b573521dfaec4735","trace_id":"6e0a6706f89843c7afd3336f8ee9fcae","ts":"2026-03-31T08:42:03.561Z","uid":"0"}
+[ GET  uip_1059 ] failed
+Execut command [ SET uip_1059  chatserver1 ] success ! 
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"usermgr.set_session","level":"info","message":"setting session","module":"","peer_service":"","request_id":"16ad44cf52a84a4799ef389617f510a9","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","session_id":"253ffe52-53c0-47c9-9eea-c3e0874f6a1a","span_id":"b573521dfaec4735","trace_id":"6e0a6706f89843c7afd3336f8ee9fcae","ts":"2026-03-31T08:42:03.679Z","uid":"1059"}
+Execut command [ SET uip_1059  chatserver1 ] success ! 
+Execut command [ SET usession_1059  253ffe52-53c0-47c9-9eea-c3e0874f6a1a ] success ! 
+Succeed to execute command [ GET uip_1059  ]
+{"attrs":{"actual_server":"chatserver1","expected_server":"chatserver1"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.login.redis_verify","level":"info","message":"verified redis online status","module":"","peer_service":"","request_id":"16ad44cf52a84a4799ef389617f510a9","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","session_id":"253ffe52-53c0-47c9-9eea-c3e0874f6a1a","span_id":"b573521dfaec4735","trace_id":"6e0a6706f89843c7afd3336f8ee9fcae","ts":"2026-03-31T08:42:03.729Z","uid":"1059"}
+{"attrs":{"chat_login_total_ms":"252","login_protocol_version":"3","relation_bootstrap_mode":"explicit_pull","relation_bootstrap_ms":"0","session_attach_ms":"251","ticket_verify_ms":"1"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.login.succeeded","level":"info","message":"chat login success","module":"","peer_service":"","request_id":"16ad44cf52a84a4799ef389617f510a9","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","session_id":"253ffe52-53c0-47c9-9eea-c3e0874f6a1a","span_id":"b573521dfaec4735","trace_id":"6e0a6706f89843c7afd3336f8ee9fcae","ts":"2026-03-31T08:42:03.813Z","uid":"1059"}
+{"attrs":{"chat_login_total_ms":"253","login_protocol_version":"3","relation_bootstrap_mode":"explicit_pull","relation_bootstrap_ms":"0","session_attach_ms":"251","ticket_verify_ms":"1"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"login.stage.summary","level":"info","message":"chat login stage summary","module":"","peer_service":"","request_id":"16ad44cf52a84a4799ef389617f510a9","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","session_id":"253ffe52-53c0-47c9-9eea-c3e0874f6a1a","span_id":"b573521dfaec4735","trace_id":"6e0a6706f89843c7afd3336f8ee9fcae","ts":"2026-03-31T08:42:03.814Z","uid":"1059"}
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.login.offline_push_start","level":"info","message":"starting offline message push","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","session_id":"253ffe52-53c0-47c9-9eea-c3e0874f6a1a","ts":"2026-03-31T08:42:03.817Z","uid":"1059"}
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.login.offline_push_skipped","level":"info","message":"no unread messages","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","ts":"2026-03-31T08:42:04.475Z","uid":"1059"}
+msg_id is 1063
+msg_len is 139
+receive data is {"fromuid":1059,"request_id":"0b96bfd3d59342348954e5ec1428ec83","span_id":"6458afe3afb6480e","trace_id":"fce86fe50aa8449d8f8cefae315618b4"}
+msg_id is 1092
+msg_len is 156
+receive data is {"protocol_version":3,"request_id":"5a2e4fd9f2374a8da765700c4dae9dd2","span_id":"718664e26e4c4bad","trace_id":"6e0a6706f89843c7afd3336f8ee9fcae","uid":1059}
+msg_id is 1023
+msg_len is 139
+receive data is {"fromuid":1059,"request_id":"fdd6fd8fcb5d43468d009800b552e677","span_id":"3e543f02c62f40f3","trace_id":"783aa7c8ae77419e82f2ba292fded6fa"}
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"usermgr.get_session","level":"info","message":"session found in local map","module":"","peer_service":"","request_id":"fdd6fd8fcb5d43468d009800b552e677","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","session_id":"253ffe52-53c0-47c9-9eea-c3e0874f6a1a","span_id":"3e543f02c62f40f3","trace_id":"783aa7c8ae77419e82f2ba292fded6fa","ts":"2026-03-31T08:42:05.677Z","uid":"1059"}
+[ GET  relation_bootstrap_1059 ] failed
+Execut command [ SET uip_1059  chatserver1 ] success ! 
+Execut command [ SET usession_1059  253ffe52-53c0-47c9-9eea-c3e0874f6a1a ] success ! 
+{"attrs":{"relation_bootstrap_ms":"633"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.relation_bootstrap.cache_fill","level":"info","message":"relation bootstrap cache populated","module":"","peer_service":"","request_id":"530ca4440272414685f8cebe6c392553","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","session_id":"253ffe52-53c0-47c9-9eea-c3e0874f6a1a","span_id":"718664e26e4c4bad","trace_id":"6e0a6706f89843c7afd3336f8ee9fcae","ts":"2026-03-31T08:42:06.309Z","uid":"1059"}
+{"attrs":{"relation_bootstrap_mode":"explicit_pull","relation_bootstrap_ms":"633","tcp_msg_id":"1092"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.relation_bootstrap.succeeded","level":"info","message":"relation bootstrap fetched","module":"","peer_service":"","request_id":"530ca4440272414685f8cebe6c392553","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","session_id":"253ffe52-53c0-47c9-9eea-c3e0874f6a1a","span_id":"718664e26e4c4bad","trace_id":"6e0a6706f89843c7afd3336f8ee9fcae","ts":"2026-03-31T08:42:06.309Z","uid":"1059"}
+msg_id is 1076
+msg_len is 179
+receive data is {"fromuid":1059,"peer_uid":1060,"read_ts":1774792260349,"request_id":"d3e441275d704eefa561381c1e2def27","span_id":"d63caff451ba4b7a","trace_id":"0da1d4a598764c1e8cfddc8ee9907ca6"}
+msg_id is 1059
+msg_len is 249
+receive data is {"before_msg_id":"{43aef888-85ec-4a25-96aa-c192f158007d}","before_ts":1774533816899,"fromuid":1059,"limit":20,"peer_uid":1060,"request_id":"e6b7c007b0b64215b87b4086cf5e74c7","span_id":"853bb86e70a04859","trace_id":"8d4d27283bf343858e7cbda5bcde573d"}
+{"attrs":{"map_size":"1"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"usermgr.get_session","level":"info","message":"session not found in local map","module":"","peer_service":"","request_id":"d3e441275d704eefa561381c1e2def27","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","session_id":"253ffe52-53c0-47c9-9eea-c3e0874f6a1a","span_id":"d63caff451ba4b7a","trace_id":"0da1d4a598764c1e8cfddc8ee9907ca6","ts":"2026-03-31T08:42:07.443Z","uid":"1060"}
+[ GET  uip_1060 ] failed
+{"attrs":{"map_size":"1"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"usermgr.get_session","level":"info","message":"session not found in local map","module":"","peer_service":"","request_id":"d3e441275d704eefa561381c1e2def27","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","trace_id":"0da1d4a598764c1e8cfddc8ee9907ca6","ts":"2026-03-31T08:42:07.722Z","uid":"1060"}
+[ GET  uip_1060 ] failed
+msg_id is 1076
+msg_len is 179
+receive data is {"fromuid":1059,"peer_uid":1060,"read_ts":1774792260349,"request_id":"d44622840aad439c84f5ba7054bbea18","span_id":"33e98e4613164615","trace_id":"08cdb90f6e4f4626810297a000a54497"}
+{"attrs":{"error":"task_handler_failed","publish_error":"","retry_count":"1","routing_key":"chat.notify.offline","task_id":"ee926dfd-2336-4b9e-a737-c809f0411636","task_type":"offline_notify"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.taskbus.rabbitmq_nack","level":"warn","message":"rabbitmq task requeued or dead-lettered","module":"","peer_service":"","request_id":"d3e441275d704eefa561381c1e2def27","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","trace_id":"0da1d4a598764c1e8cfddc8ee9907ca6","ts":"2026-03-31T08:42:07.891Z"}
+{"attrs":{"map_size":"1"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"usermgr.get_session","level":"info","message":"session not found in local map","module":"","peer_service":"","request_id":"d44622840aad439c84f5ba7054bbea18","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","session_id":"253ffe52-53c0-47c9-9eea-c3e0874f6a1a","span_id":"33e98e4613164615","trace_id":"08cdb90f6e4f4626810297a000a54497","ts":"2026-03-31T08:42:08.247Z","uid":"1060"}
+[ GET  uip_1060 ] failed
+msg_id is 1023
+msg_len is 139
+receive data is {"fromuid":1059,"request_id":"3b9ca8f8ffee46e08de7448519ad5089","span_id":"339377289a824218","trace_id":"fa4d3e3557ee4a3cbcb80b2987e70f74"}
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"usermgr.get_session","level":"info","message":"session found in local map","module":"","peer_service":"","request_id":"3b9ca8f8ffee46e08de7448519ad5089","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","session_id":"253ffe52-53c0-47c9-9eea-c3e0874f6a1a","span_id":"339377289a824218","trace_id":"fa4d3e3557ee4a3cbcb80b2987e70f74","ts":"2026-03-31T08:42:10.676Z","uid":"1059"}
+Execut command [ SET uip_1059  chatserver1 ] success ! 
+Execut command [ SET usession_1059  253ffe52-53c0-47c9-9eea-c3e0874f6a1a ] success ! 
+handle read failed, error is End of file [asio.misc:2 at D:\MemoChat-Qml-Drogon\vcpkg_installed\x64-windows\include\boost/asio/detail/win_iocp_socket_recv_op.hpp:89:5 in function 'void __cdecl boost::asio::detail::win_iocp_socket_recv_op<class boost::asio::mutable_buffer,class boost::asio::detail::read_op<class boost::asio::basic_stream_socket<class boost::asio::ip::tcp,class boost::asio::any_io_executor>,class boost::asio::mutable_buffer,class boost::asio::mutable_buffer const *,class boost::asio::detail::transfer_exactly_t,class `private: void __cdecl CSession::asyncReadFull(unsigned __int64,class std::function<void __cdecl(class boost::system::error_code const &,unsigned __int64)>)'::`2'::<lambda_1> >,class boost::asio::any_io_executor>::do_complete(void *,class boost::asio::detail::win_iocp_operation *,const class boost::system::error_code &,unsigned __int64)']
+Succeed to execute command [ GET usession_1059  ]
+Execut command [ Del usession_1059 ] success ! 
+Execut command [ Del uip_1059 ] success ! 
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"usermgr.rmv_session","level":"info","message":"removing session","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","session_id":"253ffe52-53c0-47c9-9eea-c3e0874f6a1a","ts":"2026-03-31T08:42:13.686Z","uid":"1059"}
+{"attrs":{},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"usermgr.rmv_session","level":"info","message":"session removed","module":"","peer_service":"","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","ts":"2026-03-31T08:42:13.686Z","uid":"1059"}
+~CSession destruct
+{"attrs":{"map_size":"0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"usermgr.get_session","level":"info","message":"session not found in local map","module":"","peer_service":"","request_id":"d3e441275d704eefa561381c1e2def27","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","trace_id":"0da1d4a598764c1e8cfddc8ee9907ca6","ts":"2026-03-31T08:42:19.539Z","uid":"1060"}
+[ GET  uip_1060 ] failed
+{"attrs":{"error":"task_handler_failed","publish_error":"","retry_count":"3","routing_key":"chat.notify.offline","task_id":"ee926dfd-2336-4b9e-a737-c809f0411636","task_type":"offline_notify"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.taskbus.rabbitmq_nack","level":"warn","message":"rabbitmq task requeued or dead-lettered","module":"","peer_service":"","request_id":"d3e441275d704eefa561381c1e2def27","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","trace_id":"0da1d4a598764c1e8cfddc8ee9907ca6","ts":"2026-03-31T08:42:19.549Z"}
+{"attrs":{"map_size":"0"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"usermgr.get_session","level":"info","message":"session not found in local map","module":"","peer_service":"","request_id":"d3e441275d704eefa561381c1e2def27","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","trace_id":"0da1d4a598764c1e8cfddc8ee9907ca6","ts":"2026-03-31T08:42:28.997Z","uid":"1060"}
+[ GET  uip_1060 ] failed
+{"attrs":{"error":"task_handler_failed","publish_error":"","retry_count":"5","routing_key":"chat.notify.offline","task_id":"ee926dfd-2336-4b9e-a737-c809f0411636","task_type":"offline_notify"},"duration_ms":0,"env":"local","error_code":"","error_type":"","event":"chat.taskbus.rabbitmq_nack","level":"warn","message":"rabbitmq task requeued or dead-lettered","module":"","peer_service":"","request_id":"d3e441275d704eefa561381c1e2def27","service":"ChatServer","service_instance":"ChatServer@chatserver1.YKSL:12472","trace_id":"0da1d4a598764c1e8cfddc8ee9907ca6","ts":"2026-03-31T08:42:29.004Z"}
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
+Execut command [ HSet logincount  chatserver1  0 ] success ! 
