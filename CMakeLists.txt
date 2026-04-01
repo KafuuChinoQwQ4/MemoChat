@@ -17,6 +17,7 @@ option(BUILD_CLIENT "Build MemoChat QML client" ON)
 option(BUILD_SERVER "Build all backend servers (GateServer, GateServerHttp2, StatusServer, ChatServer, VarifyServer)" ON)
 option(BUILD_OPS "Build MemoOps monitoring platform" ON)
 option(BUILD_LOADTEST "Build load test tool" OFF)
+option(BUILD_TESTS "Build unit tests with Google Test" OFF)
 
 # Determine what was already configured via preset (used by start_all_services.bat)
 # If the user used a preset that configured only certain things, respect those settings
@@ -38,6 +39,16 @@ endif()
 
 if(BUILD_LOADTEST)
     add_subdirectory(local-loadtest-cpp)
+endif()
+
+if(BUILD_TESTS)
+    enable_testing()
+    # GTest package must be found here because tests/ subdirectories reference
+    # GTest_TestLib before they are processed.
+    find_package(GTest CONFIG REQUIRED)
+    add_library(GTest_TestLib INTERFACE)
+    target_link_libraries(GTest_TestLib INTERFACE GTest::gtest GTest::gmock GTest::gtest_main)
+    add_subdirectory(tests)
 endif()
 
 # Custom target to build everything at once
@@ -69,4 +80,8 @@ endif()
 
 if(BUILD_LOADTEST)
     add_dependencies(build-all memochat_loadtest)
+endif()
+
+if(BUILD_TESTS)
+    add_dependencies(build-all gtest_tests)
 endif()

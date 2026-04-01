@@ -7,6 +7,8 @@
 #include "PostgresMgr.h"
 #include "logging/TraceContext.h"
 
+#include "logging/Logger.h"
+
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <chrono>
@@ -252,22 +254,27 @@ void MomentsHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
 
     // POST /api/moments/detail
     logic.RegPost("/api/moments/detail", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::LogInfo("gate.moments.detail", "detail handler entered");
         return GateHttpJsonSupport::HandleJsonPost(connection,
             [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
                 int uid = 0;
                 if (!ValidateAuth(src_root, root, uid)) {
+                    memolog::LogWarn("gate.moments.detail", "auth failed");
                     return true;
                 }
 
                 int64_t moment_id = src_root.get("moment_id", 0).asInt64();
+                memolog::LogInfo("gate.moments.detail", "moment_id=" + std::to_string(moment_id));
                 if (moment_id <= 0) {
                     root["error"] = ErrorCodes::Error_Json;
+                    memolog::LogWarn("gate.moments.detail", "invalid moment_id");
                     return true;
                 }
 
                 MomentInfo moment;
                 if (!PostgresMgr::GetInstance()->GetMomentById(moment_id, moment)) {
                     root["error"] = ErrorCodes::RPCFailed;
+                    memolog::LogWarn("gate.moments.detail", "GetMomentById failed, moment_id=" + std::to_string(moment_id));
                     return true;
                 }
 
@@ -288,6 +295,7 @@ void MomentsHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
                 std::vector<MomentCommentInfo> comments;
                 bool comments_has_more = false;
                 PostgresMgr::GetInstance()->GetMomentComments(moment_id, 0, 100, comments, comments_has_more);
+                memolog::LogInfo("gate.moments.detail", "found comments=" + std::to_string(comments.size()));
 
                 Json::Value moment_json;
                 BuildMomentJson(moment, has_liked, &content, &likes, &comments, moment_json);
