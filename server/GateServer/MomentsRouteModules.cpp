@@ -60,7 +60,38 @@ void BuildUserProfile(int uid, Json::Value& json) {
     }
 }
 
-void BuildMomentJson(const MomentInfo& moment, bool has_liked, const MomentContentInfo* content, Json::Value& json) {
+void BuildLikeList(const std::vector<MomentLikeInfo>& likes, Json::Value& json) {
+    json = Json::Value(Json::arrayValue);
+    for (const auto& like : likes) {
+        Json::Value item;
+        item["uid"] = like.uid;
+        item["user_nick"] = like.user_nick;
+        item["user_icon"] = like.user_icon;
+        item["created_at"] = static_cast<Json::Int64>(like.created_at);
+        json.append(item);
+    }
+}
+
+void BuildCommentList(const std::vector<MomentCommentInfo>& comments, Json::Value& json) {
+    json = Json::Value(Json::arrayValue);
+    for (const auto& comment : comments) {
+        Json::Value item;
+        item["id"] = static_cast<Json::Int64>(comment.id);
+        item["uid"] = comment.uid;
+        item["user_nick"] = comment.user_nick;
+        item["user_icon"] = comment.user_icon;
+        item["content"] = comment.content;
+        item["reply_uid"] = comment.reply_uid;
+        item["reply_nick"] = comment.reply_nick;
+        item["created_at"] = static_cast<Json::Int64>(comment.created_at);
+        json.append(item);
+    }
+}
+
+void BuildMomentJson(const MomentInfo& moment, bool has_liked, const MomentContentInfo* content,
+                      const std::vector<MomentLikeInfo>* likes,
+                      const std::vector<MomentCommentInfo>* comments,
+                      Json::Value& json) {
     json["moment_id"] = static_cast<Json::Int64>(moment.moment_id);
     json["uid"] = moment.uid;
     json["visibility"] = moment.visibility;
@@ -82,6 +113,30 @@ void BuildMomentJson(const MomentInfo& moment, bool has_liked, const MomentConte
     }
     else {
         json["items"] = Json::arrayValue;
+    }
+
+    if (likes) {
+        Json::Value like_names(Json::arrayValue);
+        for (const auto& like : *likes) {
+            if (!like.user_nick.empty()) {
+                like_names.append(like.user_nick);
+            }
+        }
+        json["like_names"] = like_names;
+        json["likes"] = Json::Value(Json::arrayValue);
+        BuildLikeList(*likes, json["likes"]);
+    }
+    else {
+        json["like_names"] = Json::Value(Json::arrayValue);
+        json["likes"] = Json::Value(Json::arrayValue);
+    }
+
+    if (comments) {
+        json["comments"] = Json::Value(Json::arrayValue);
+        BuildCommentList(*comments, json["comments"]);
+    }
+    else {
+        json["comments"] = Json::Value(Json::arrayValue);
     }
 }
 
@@ -187,7 +242,7 @@ void MomentsHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
                     MongoMgr::GetInstance()->GetMomentContent(moment.moment_id, content);
 
                     Json::Value moment_json;
-                    BuildMomentJson(moment, has_liked, &content, moment_json);
+                    BuildMomentJson(moment, has_liked, &content, nullptr, nullptr, moment_json);
                     moments_arr.append(moment_json);
                 }
                 root["moments"] = moments_arr;
@@ -226,8 +281,16 @@ void MomentsHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
                 MomentContentInfo content;
                 MongoMgr::GetInstance()->GetMomentContent(moment_id, content);
 
+                std::vector<MomentLikeInfo> likes;
+                bool likes_has_more = false;
+                PostgresMgr::GetInstance()->GetMomentLikes(moment_id, 100, likes, likes_has_more);
+
+                std::vector<MomentCommentInfo> comments;
+                bool comments_has_more = false;
+                PostgresMgr::GetInstance()->GetMomentComments(moment_id, 0, 100, comments, comments_has_more);
+
                 Json::Value moment_json;
-                BuildMomentJson(moment, has_liked, &content, moment_json);
+                BuildMomentJson(moment, has_liked, &content, &likes, &comments, moment_json);
                 root["error"] = ErrorCodes::Success;
                 root["moment"] = moment_json;
                 return true;
@@ -255,6 +318,7 @@ void MomentsHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
                 }
 
                 root["error"] = ErrorCodes::Success;
+                root["moment_id"] = static_cast<Json::Int64>(moment_id);
                 return true;
             });
     });
@@ -311,6 +375,8 @@ void MomentsHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
                     }
                     bool ok = PostgresMgr::GetInstance()->DeleteMomentComment(comment_id, uid);
                     root["error"] = ok ? ErrorCodes::Success : ErrorCodes::RPCFailed;
+                    root["moment_id"] = static_cast<Json::Int64>(moment_id);
+                    root["delete"] = true;
                     return true;
                 }
 
@@ -328,6 +394,8 @@ void MomentsHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
 
                 bool ok = PostgresMgr::GetInstance()->AddMomentComment(comment);
                 root["error"] = ok ? ErrorCodes::Success : ErrorCodes::RPCFailed;
+                root["moment_id"] = static_cast<Json::Int64>(moment_id);
+                root["delete"] = false;
                 return true;
             });
     });

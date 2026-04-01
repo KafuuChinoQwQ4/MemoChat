@@ -190,6 +190,8 @@ struct MomentLikeInfo {
 	int64_t id = 0;
 	int64_t moment_id = 0;
 	int uid = 0;
+	std::string user_nick;
+	std::string user_icon;
 	int64_t created_at = 0;
 };
 
@@ -197,8 +199,11 @@ struct MomentCommentInfo {
 	int64_t id = 0;
 	int64_t moment_id = 0;
 	int uid = 0;
+	std::string user_nick;
+	std::string user_icon;
 	std::string content;
 	int reply_uid = 0;
+	std::string reply_nick;
 	int64_t created_at = 0;
 	int64_t deleted_at = 0;
 };

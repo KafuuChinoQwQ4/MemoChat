@@ -4,6 +4,8 @@
 #include <QObject>
 #include <QString>
 #include <QJsonArray>
+#include <QQueue>
+#include <QSet>
 #include <QVector>
 #include <memory>
 #include "MomentsModel.h"
@@ -51,6 +53,8 @@ signals:
     void publishError(const QString& msg);
     void likeToggled(qint64 momentId, bool liked, int likeCount);
     void commentAdded(qint64 momentId);
+    /// Emitted after /api/moments/detail succeeds and model is updated.
+    void momentRefreshed(qint64 momentId);
 
 private slots:
     void onLoadFeedRsp(ReqId id, const QString& res, ErrorCodes err);
@@ -67,12 +71,22 @@ private:
     QJsonObject buildAuthJson() const;
     MomentEntry parseMomentEntry(const QJsonObject& obj) const;
 
+    struct PendingLike {
+        qint64 momentId = 0;
+        bool wasLiked = false;
+        int prevCount = 0;
+    };
+
     MomentsModel* _model;
     bool _loading = false;
     bool _has_more = false;
     QString _error_text;
     qint64 _last_moment_id = 0;
     static constexpr int kPageSize = 20;
+
+    /// One in-flight like per moment; paired queue for optimistic revert on error.
+    QSet<qint64> _like_in_flight;
+    QQueue<PendingLike> _like_pending_queue;
 };
 
 #endif  // MOMENTSCONTROLLER_H

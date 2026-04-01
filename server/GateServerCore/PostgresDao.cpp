@@ -886,8 +886,11 @@ bool PostgresDao::GetMomentLikes(int64_t moment_id, int limit,
 	try {
 		pqxx::read_transaction txn(*con->_con);
 		const auto rows = txn.exec_params(
-			"SELECT id, moment_id, uid, created_at FROM moments_like "
-			"WHERE moment_id = $1 ORDER BY created_at DESC LIMIT $2",
+			"SELECT ml.id, ml.moment_id, ml.uid, ml.created_at, "
+			"       COALESCE(ub.nick, '') AS user_nick, COALESCE(ub.icon, '') AS user_icon "
+			"FROM moments_like ml "
+			"LEFT JOIN memo.user_base ub ON ml.uid = ub.uid "
+			"WHERE ml.moment_id = $1 ORDER BY ml.created_at DESC LIMIT $2",
 			moment_id, limit + 1);
 
 		if (static_cast<int>(rows.size()) > limit) {
@@ -900,6 +903,8 @@ bool PostgresDao::GetMomentLikes(int64_t moment_id, int limit,
 			info.id = row["id"].as<int64_t>();
 			info.moment_id = row["moment_id"].as<int64_t>();
 			info.uid = row["uid"].as<int>();
+			info.user_nick = row["user_nick"].is_null() ? "" : row["user_nick"].c_str();
+			info.user_icon = row["user_icon"].is_null() ? "" : row["user_icon"].c_str();
 			info.created_at = row["created_at"].as<int64_t>();
 			likes.push_back(info);
 		}
@@ -992,16 +997,26 @@ bool PostgresDao::GetMomentComments(int64_t moment_id, int64_t last_comment_id, 
 		pqxx::result rows;
 		if (last_comment_id <= 0) {
 			rows = txn.exec_params(
-				"SELECT id, moment_id, uid, content, reply_uid, created_at, deleted_at "
-				"FROM moments_comment WHERE moment_id = $1 AND deleted_at = 0 "
-				"ORDER BY created_at ASC LIMIT $2",
+				"SELECT mc.id, mc.moment_id, mc.uid, mc.content, mc.reply_uid, mc.created_at, mc.deleted_at, "
+				"       COALESCE(ub.nick, '') AS user_nick, COALESCE(ub.icon, '') AS user_icon, "
+				"       COALESCE(rub.nick, '') AS reply_nick "
+				"FROM moments_comment mc "
+				"LEFT JOIN memo.user_base ub ON mc.uid = ub.uid "
+				"LEFT JOIN memo.user_base rub ON mc.reply_uid = rub.uid "
+				"WHERE mc.moment_id = $1 AND mc.deleted_at = 0 "
+				"ORDER BY mc.created_at ASC LIMIT $2",
 				moment_id, limit + 1);
 		}
 		else {
 			rows = txn.exec_params(
-				"SELECT id, moment_id, uid, content, reply_uid, created_at, deleted_at "
-				"FROM moments_comment WHERE moment_id = $1 AND deleted_at = 0 AND id > $2 "
-				"ORDER BY created_at ASC LIMIT $3",
+				"SELECT mc.id, mc.moment_id, mc.uid, mc.content, mc.reply_uid, mc.created_at, mc.deleted_at, "
+				"       COALESCE(ub.nick, '') AS user_nick, COALESCE(ub.icon, '') AS user_icon, "
+				"       COALESCE(rub.nick, '') AS reply_nick "
+				"FROM moments_comment mc "
+				"LEFT JOIN memo.user_base ub ON mc.uid = ub.uid "
+				"LEFT JOIN memo.user_base rub ON mc.reply_uid = rub.uid "
+				"WHERE mc.moment_id = $1 AND mc.deleted_at = 0 AND mc.id > $2 "
+				"ORDER BY mc.created_at ASC LIMIT $3",
 				moment_id, last_comment_id, limit + 1);
 		}
 
@@ -1017,6 +1032,9 @@ bool PostgresDao::GetMomentComments(int64_t moment_id, int64_t last_comment_id, 
 			info.uid = row["uid"].as<int>();
 			info.content = row["content"].is_null() ? "" : row["content"].c_str();
 			info.reply_uid = row["reply_uid"].as<int>();
+			info.user_nick = row["user_nick"].is_null() ? "" : row["user_nick"].c_str();
+			info.user_icon = row["user_icon"].is_null() ? "" : row["user_icon"].c_str();
+			info.reply_nick = row["reply_nick"].is_null() ? "" : row["reply_nick"].c_str();
 			info.created_at = row["created_at"].as<int64_t>();
 			info.deleted_at = row["deleted_at"].as<int64_t>();
 			comments.push_back(info);
