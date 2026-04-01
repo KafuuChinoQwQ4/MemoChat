@@ -19,6 +19,24 @@ struct MomentItem {
     int durationMs = 0;
 };
 
+struct MomentLike {
+    int uid = 0;
+    QString userNick;
+    QString userIcon;
+    qint64 createdAt = 0;
+};
+
+struct MomentComment {
+    qint64 id = 0;
+    int uid = 0;
+    QString userNick;
+    QString userIcon;
+    QString content;
+    int replyUid = 0;
+    QString replyNick;
+    qint64 createdAt = 0;
+};
+
 struct MomentEntry {
     qint64 momentId = 0;
     int uid = 0;
@@ -33,6 +51,8 @@ struct MomentEntry {
     int commentCount = 0;
     bool hasLiked = false;
     QVector<MomentItem> items;
+    QVector<MomentLike> likes;
+    QVector<MomentComment> comments;
 };
 
 class MomentsModel : public QAbstractListModel
@@ -54,7 +74,9 @@ public:
         LikeCountRole,
         CommentCountRole,
         HasLikedRole,
-        ItemsRole
+        ItemsRole,
+        LikesRole,
+        CommentsRole
     };
 
     explicit MomentsModel(QObject* parent = nullptr);
@@ -71,12 +93,16 @@ public:
     void upsertMoment(const MomentEntry& moment);
     void updateLiked(qint64 momentId, bool liked, int likeCount);
     void updateCommentCount(qint64 momentId, int delta);
+    void updateDetail(qint64 momentId, const QVector<MomentLike>& likes, const QVector<MomentComment>& comments);
     void removeMoment(qint64 momentId);
 
     Q_INVOKABLE QVariantMap get(int index) const;
     Q_INVOKABLE MomentEntry getMoment(int index) const;
     Q_INVOKABLE qint64 getMomentId(int index) const;
     Q_INVOKABLE bool getMomentLiked(qint64 momentId) const;
+    Q_INVOKABLE int getMomentLikeCount(qint64 momentId) const;
+    /// Full row for detail popup (includes items[]).
+    Q_INVOKABLE QVariantMap snapshotMoment(qint64 momentId) const;
 
 signals:
     void countChanged();

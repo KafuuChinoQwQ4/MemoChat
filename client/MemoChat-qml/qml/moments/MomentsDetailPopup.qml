@@ -8,218 +8,226 @@ Popup {
     id: root
     modal: true
     focus: true
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    // 只有点 X 或按 Escape 才关闭
+    closePolicy: Popup.CloseOnEscape
 
-    width: Math.min(480, (parent ? parent.width : 700) - 48)
-    height: Math.min(560, (parent ? parent.height : 640) - 48)
+    width: Math.min(480, (parent && parent.width > 0 ? parent.width : 700) - 48)
+    height: Math.min(640, (parent && parent.height > 0 ? parent.height : 700) - 48)
     anchors.centerIn: parent
 
     property var backdrop: null
     property var controller: null
-    property var currentMomentId: 0
+    property int currentMomentId: 0
 
-    GlassSurface {
-        anchors.fill: parent
-        backdrop: root.backdrop
-        cornerRadius: 14
-        blurRadius: 22
-        fillColor: Qt.rgba(1, 1, 1, 0.96)
-        strokeColor: Qt.rgba(0.85, 0.85, 0.90, 0.6)
+    // ── 纯白底背景 ──────────────────────────────────────
+    background: Rectangle {
+        color: "#ffffff"
+        border.color: Qt.rgba(0.82, 0.84, 0.90, 0.6)
+        border.width: 1
+        radius: 14
+        Rectangle {
+            anchors.fill: parent; anchors.margins: -2; z: -1
+            color: "transparent"
+            border.color: Qt.rgba(0, 0, 0, 0.10); border.width: 1; radius: 16
+        }
     }
 
-    ColumnLayout {
+    // 阻止事件穿透，防止点击内容时关闭弹窗
+    MouseArea {
         anchors.fill: parent
-        anchors.margins: 16
-        spacing: 10
+        onPressed: (mouse) => mouse.accepted = false
+    }
 
-        // Header
-        RowLayout {
-            Layout.fillWidth: true
-            Label {
-                text: "朋友圈详情"
-                font.pixelSize: 15
-                font.weight: Font.Medium
-                color: "#1a1a1a"
+    // ── 整体垂直布局 ────────────────────────────────────
+    Column {
+        anchors.fill: parent
+        spacing: 0
+
+        // ── 标题栏: 固定 48px ─────────────────────────
+        Rectangle {
+            width: parent.width
+            height: 48
+            color: "transparent"
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 8
+                spacing: 8
+                Label {
+                    text: "朋友圈详情"
+                    font.pixelSize: 15
+                    font.weight: Font.Medium
+                    color: "#1a1a1a"
+                }
+                Item { Layout.fillWidth: true }
+                ToolButton {
+                    icon.source: "qrc:/icons/close.png"
+                    icon.width: 18
+                    icon.height: 18
+                    onClicked: root.close()
+                }
             }
-            Item { Layout.fillWidth: true }
-            ToolButton {
-                icon.source: "qrc:/icons/close.png"
-                icon.width: 18
-                icon.height: 18
-                onClicked: root.closed()
+
+            // 标题栏底部细线
+            Rectangle {
+                anchors.bottom: parent.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: 1
+                color: Qt.rgba(0.88, 0.88, 0.92, 0.6)
             }
         }
 
-        // Content area (scrollable)
+        // ── 正文滚动区: 撑满中间空间 ───────────────────
         Flickable {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            id: flick
+            width: parent.width
+            height: parent.height - 48 - 56
             clip: true
             contentWidth: width
-            contentHeight: contentColumn.height
+            contentHeight: contentCol.height + 16
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: ScrollBar {}
 
+            // 内容列
             Column {
-                id: contentColumn
-                width: parent.width
-                spacing: 8
+                id: contentCol
+                width: flick.width - 32
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: parent.top
+                anchors.topMargin: 12
+                spacing: 10
 
-                // Moment content
-                Column {
+                // ── 用户信息 ────────────────────────────
+                RowLayout {
                     width: parent.width
-                    spacing: 6
-
-                    // User info
-                    RowLayout {
-                        width: parent.width
-                        spacing: 8
-
-                        Rectangle {
-                            width: 38
-                            height: 38
-                            radius: 6
-                            clip: true
-                            color: Qt.rgba(0.8, 0.85, 0.95, 0.5)
-                            Image {
-                                anchors.fill: parent
-                                fillMode: Image.PreserveAspectCrop
-                                source: momentUserIcon
-                                cache: true
-                                asynchronous: true
-                            }
+                    spacing: 10
+                    Rectangle {
+                        width: 42; height: 42; radius: 10; clip: true
+                        color: Qt.rgba(0.85, 0.88, 0.97, 1.0)
+                        Image {
+                            anchors.fill: parent; fillMode: Image.PreserveAspectCrop
+                            source: momentUserIcon; cache: true; asynchronous: true
                         }
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true; spacing: 3
+                        Label {
+                            text: momentUserNick || " "
+                            font.pixelSize: 14; font.weight: Font.Medium; color: "#1a1a1a"
+                            wrapMode: Text.Wrap; Layout.fillWidth: true
+                        }
+                        Label {
+                            text: momentLocation ? momentLocation : momentTimeText
+                            font.pixelSize: 12; color: "#888888"
+                            visible: text.length > 0; Layout.fillWidth: true
+                        }
+                    }
+                }
 
-                        ColumnLayout {
+                // ── 正文文字 ────────────────────────────
+                Label {
+                    width: parent.width; text: momentText
+                    font.pixelSize: 15; color: "#1a1a1a"; wrapMode: Text.Wrap
+                    visible: momentText.length > 0
+                }
+
+                // ── 图片网格 ────────────────────────────
+                GridLayout {
+                    width: parent.width; visible: momentImages.length > 0
+                    columns: momentImages.length === 1 ? 1 : 3
+                    rowSpacing: 6; columnSpacing: 6
+
+                    Repeater {
+                        model: momentImages
+                        delegate: Rectangle {
                             Layout.fillWidth: true
-                            spacing: 2
-                            Label {
-                                text: momentUserNick
-                                font.pixelSize: 13
-                                font.weight: Font.Medium
-                                color: "#1a1a1a"
+                            Layout.preferredHeight: imgHeight(modelData)
+                            radius: 8; color: Qt.rgba(0.93, 0.95, 0.98, 1.0); clip: true
+                            Image {
+                                anchors.fill: parent; fillMode: Image.Cover
+                                source: imgUrl(modelData.key); cache: true; asynchronous: true
                             }
-                            Label {
-                                text: momentLocation || ""
-                                font.pixelSize: 11
-                                color: "#888888"
-                                visible: momentLocation !== ""
-                            }
-                        }
-                    }
-
-                    // Content text
-                    Label {
-                        width: parent.width
-                        text: momentText
-                        font.pixelSize: 14
-                        color: "#1a1a1a"
-                        wrapMode: Text.Wrap
-                        visible: momentText !== ""
-                    }
-
-                    // Image grid
-                    GridLayout {
-                        width: parent.width
-                        columns: 3
-                        rowSpacing: 4
-                        columnSpacing: 4
-                        Repeater {
-                            model: momentImages
-                            delegate: Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: imgHeight(modelData)
-                                radius: 6
-                                color: Qt.rgba(0.92, 0.94, 0.97, 1.0)
-                                clip: true
-                                Image {
-                                    anchors.fill: parent
-                                    fillMode: Image.Cover
-                                    source: imgUrl(modelData.key)
-                                    cache: true
-                                    asynchronous: true
-                                }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        imgPopupLoader.active = true
-                                        if (imgPopupLoader.item) {
-                                            imgPopupLoader.item.open(modelData.key)
-                                        }
-                                    }
+                            MouseArea {
+                                anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    imgPopupLoader.active = true
+                                    if (imgPopupLoader.item) imgPopupLoader.item.open(modelData.key)
                                 }
                             }
                         }
                     }
                 }
 
-                // Divider
+                // ── 点赞 ────────────────────────────────
+                Column {
+                    width: parent.width; spacing: 3; visible: likeCount > 0
+                    Label {
+                        text: "♥ " + likeCount + " 人觉得很赞"
+                        font.pixelSize: 13; color: "#e84141"
+                    }
+                    Label {
+                        visible: likeNames.length > 0; text: likeNames.join("、")
+                        font.pixelSize: 12; color: "#555555"; wrapMode: Text.Wrap
+                    }
+                }
+
+                // ── 分隔线 ──────────────────────────────
+                Rectangle {
+                    width: parent.width; height: 1
+                    color: Qt.rgba(0.88, 0.88, 0.92, 0.5)
+                }
+
+                // ── 评论区白底卡片 ──────────────────────
                 Rectangle {
                     width: parent.width
-                    height: 1
-                    color: Qt.rgba(0.85, 0.85, 0.90, 0.4)
-                }
+                    height: Math.max(64, commentCardHeight)
+                    color: "#ffffff"
+                    border.color: Qt.rgba(0.82, 0.84, 0.90, 0.5)
+                    border.width: 1
+                    radius: 10
 
-                // Likes section
-                Column {
-                    width: parent.width
-                    spacing: 4
-                    visible: likeCount > 0
-
-                    RowLayout {
-                        width: parent.width
+                    Column {
+                        anchors.fill: parent
+                        anchors.margins: 10
                         spacing: 6
-                        Label {
-                            text: "♥ " + likeCount + " 个赞"
-                            font.pixelSize: 12
-                            color: "#e84141"
-                        }
-                        Item { Layout.fillWidth: true }
-                    }
 
-                    Repeater {
-                        model: likeNames
-                        delegate: Label {
-                            width: parent ? parent.width : implicitWidth
-                            text: modelData
-                            font.pixelSize: 12
-                            color: "#555555"
-                            wrapMode: Text.NoWrap
-                            elide: Text.ElideRight
-                        }
-                    }
-                }
-
-                // Comments section
-                Column {
-                    width: parent.width
-                    spacing: 6
-                    visible: commentCount > 0
-
-                    Label {
-                        text: "评论 (" + commentCount + ")"
-                        font.pixelSize: 12
-                        font.weight: Font.Medium
-                        color: "#1a1a1a"
-                    }
-
-                    Repeater {
-                        model: commentList
-                        delegate: RowLayout {
-                            width: parent ? parent.width : implicitWidth
-                            spacing: 6
-
+                        // 标题行
+                        Row {
+                            spacing: 4
                             Label {
-                                text: modelData.nick + ": "
-                                font.pixelSize: 12
-                                color: "#2a7ae2"
-                                font.weight: Font.Medium
+                                text: "评论"
+                                font.pixelSize: 13; font.weight: Font.Medium; color: "#1a1a1a"
                             }
                             Label {
-                                text: modelData.content
-                                font.pixelSize: 12
-                                color: "#1a1a1a"
-                                wrapMode: Text.Wrap
-                                Layout.fillWidth: true
+                                text: "(" + commentCount + ")"
+                                font.pixelSize: 13; color: "#888888"
+                                visible: (commentCount !== undefined && commentCount > 0)
+                            }
+                        }
+
+                        // 无评论
+                        Label {
+                            text: "暂无评论，快来抢沙发"
+                            font.pixelSize: 12; color: "#bbbbbb"
+                            visible: (commentCount === 0) || (commentCount === undefined)
+                        }
+
+                        // 加载中（count>0 但 list 为空）
+                        Label {
+                            text: "评论加载中..."
+                            font.pixelSize: 12; color: "#999999"
+                            visible: (commentCount > 0) && (!commentList || commentList.length === 0)
+                        }
+
+                        // 评论列表
+                        Column {
+                            spacing: 8
+                            visible: commentList && commentList.length > 0
+                            Repeater {
+                                model: commentList
+                                delegate: commentItem
                             }
                         }
                     }
@@ -227,101 +235,230 @@ Popup {
             }
         }
 
-        // Comment input bar
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 8
+        // ── 底部输入框: 固定高度 56px ──────────────────
+        // 底部左右下角圆角跟外层背景一致，融入而不溢出
+        Rectangle {
+            width: parent.width
+            height: 56
+            color: "#ffffff"
+            clip: true   // 裁掉超出圆角的部分
 
-            TextField {
-                id: commentInput
-                Layout.fillWidth: true
-                placeholderText: "写评论..."
-                placeholderTextColor: "#aaaaaa"
-                font.pixelSize: 13
-                color: "#1a1a1a"
-                background: Rectangle {
-                    color: Qt.rgba(0.95, 0.95, 0.97, 0.8)
-                    radius: 8
-                }
-                onAccepted: sendComment()
+            // 输入框顶部分隔线
+            Rectangle {
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: 1
+                color: Qt.rgba(0.88, 0.88, 0.92, 0.5)
             }
 
-            Button {
-                id: sendBtn
-                Layout.preferredWidth: 56
-                Layout.preferredHeight: 32
-                enabled: commentInput.text.length > 0
-                background: Rectangle {
-                    radius: 8
-                    color: sendBtn.enabled ? "#2a7ae2" : Qt.rgba(0.85, 0.88, 0.92, 0.8)
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: 8
+                spacing: 8
+
+                TextField {
+                    id: commentInput
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    placeholderText: "写评论..."
+                    placeholderTextColor: "#aaaaaa"
+                    font.pixelSize: 14
+                    color: "#1a1a1a"
+                    background: Rectangle {
+                        color: "#f5f6f9"
+                        radius: 6
+                        border.color: Qt.rgba(0.82, 0.84, 0.90, 0.4)
+                        border.width: 1
+                    }
+                    leftPadding: 12; rightPadding: 12
+                    verticalAlignment: TextInput.AlignVCenter
+                    onAccepted: sendComment()
                 }
-                contentItem: Label {
-                    anchors.centerIn: parent
-                    text: "发送"
-                    color: sendBtn.enabled ? "#ffffff" : "#aaaaaa"
-                    font.pixelSize: 13
+
+                Button {
+                    id: sendBtn
+                    Layout.preferredWidth: 60
+                    Layout.fillHeight: true
+                    enabled: commentInput.text.trim().length > 0 && !commentSending
+                    background: Rectangle {
+                        radius: 6
+                        color: sendBtn.enabled ? "#2a7ae2" : Qt.rgba(0.82, 0.85, 0.90, 1.0)
+                    }
+                    contentItem: Label {
+                        anchors.centerIn: parent
+                        text: commentSending ? "..." : "发送"
+                        color: sendBtn.enabled ? "#ffffff" : "#aaaaaa"
+                        font.pixelSize: 14; font.weight: Font.Medium
+                    }
+                    onClicked: sendComment()
                 }
-                onClicked: sendComment()
             }
         }
     }
 
-    // State
+    // ── 单条评论条目 ─────────────────────────────────────
+    component commentItem: Rectangle {
+        width: parent ? parent.width : 0
+        height: commentCol.height + 12
+        color: Qt.rgba(0.93, 0.95, 1.0, 0.55)
+        radius: 6
+
+        Column {
+            id: commentCol
+            anchors.fill: parent
+            anchors.margins: 8
+            spacing: 3
+
+            RowLayout {
+                anchors.fill: parent
+                spacing: 3
+                Label {
+                    text: modelData.user_nick || "用户"
+                    font.pixelSize: 12; font.weight: Font.Medium; color: "#2a7ae2"
+                }
+                Label {
+                    text: modelData.reply_uid && modelData.reply_uid !== 0
+                          ? (" 回复 " + (modelData.reply_nick || "用户")) : ""
+                    font.pixelSize: 12; color: "#2a7ae2"
+                    visible: modelData.reply_uid && modelData.reply_uid !== 0
+                }
+                Label { text: "："; font.pixelSize: 12; color: "#555555" }
+            }
+            Label {
+                anchors.fill: parent
+                text: modelData.content || ""
+                font.pixelSize: 13; color: "#1a1a1a"; wrapMode: Text.Wrap
+            }
+        }
+    }
+
+    // ── Data ─────────────────────────────────────────────
     property string momentUserNick: ""
     property string momentUserIcon: "qrc:/res/head_1.jpg"
     property string momentLocation: ""
+    property string momentTimeText: ""
     property string momentText: ""
     property var momentImages: []
     property int likeCount: 0
     property var likeNames: []
     property int commentCount: 0
     property var commentList: []
-
-    // Comment state
     property int replyUid: 0
     property string replyNick: ""
+    property bool commentSending: false
+
+    // 评论卡片高度: 有内容就撑开，最小64px
+    property int commentCardHeight: {
+        if (!commentList || commentList.length === 0) return 62
+        var total = 22  // 标题
+        for (var i = 0; i < commentList.length; i++) {
+            total += 50
+            if (i > 0) total += 8
+        }
+        return total + 10
+    }
+
+    // ── Helpers ─────────────────────────────────────────
+    function timeAgo(ts) {
+        if (!ts) return ""
+        var nowSec = Math.floor(Date.now() / 1000)
+        var diff = nowSec - Math.floor(ts / 1000)
+        if (diff < 60) return "刚刚"
+        if (diff < 3600) return Math.floor(diff / 60) + "分钟前"
+        if (diff < 86400) return Math.floor(diff / 3600) + "小时前"
+        if (diff < 604800) return Math.floor(diff / 86400) + "天前"
+        return new Date(ts).toLocaleDateString()
+    }
+
+    function imgHeight(item) {
+        var w = item.width || 200, h = item.height || 200
+        return Math.min(160, Math.max(72, 120 * (h / (w || 1))))
+    }
+
+    function imgUrl(key) {
+        return key ? (gate_url_prefix + "/media/download?asset=" + key) : ""
+    }
+
+    function applySnapshot() {
+        if (!controller || !controller.model || currentMomentId <= 0) {
+            console.log("[MomentsDetail] applySnapshot: skipped, controller=" + !!controller + " model=" + (controller ? !!controller.model : false) + " momentId=" + currentMomentId)
+            return
+        }
+        var snap = controller.model.snapshotMoment(currentMomentId)
+        if (!snap || snap.momentId === undefined) {
+            console.log("[MomentsDetail] applySnapshot: snap not found for momentId=" + currentMomentId)
+            return
+        }
+
+        console.log("[MomentsDetail] applySnapshot: got snap, commentCount=" + snap.commentCount + " comments=" + (snap.comments ? snap.comments.length : 0))
+        momentUserNick = snap.userNick || ""
+        momentUserIcon = (snap.userIcon && snap.userIcon.length) ? snap.userIcon : "qrc:/res/head_1.jpg"
+        momentLocation = snap.location || ""
+        momentTimeText = timeAgo(snap.createdAt)
+        likeCount = snap.likeCount !== undefined ? snap.likeCount : 0
+        commentCount = snap.commentCount !== undefined ? snap.commentCount : 0
+
+        var items = snap.items || [], textParts = [], imgs = []
+        for (var i = 0; i < items.length; i++) {
+            var it = items[i]
+            if (it.media_type === "text") { if (it.content) textParts.push(it.content) }
+            else if (it.media_type === "image") {
+                imgs.push({ key: it.media_key || "", width: it.width, height: it.height })
+            }
+        }
+        momentText = textParts.join("\n")
+        momentImages = imgs
+
+        var rawLikes = snap.likes || [], names = []
+        for (var j = 0; j < rawLikes.length; j++) {
+            if (rawLikes[j].user_nick) names.push(rawLikes[j].user_nick)
+        }
+        likeNames = names
+        commentList = snap.comments || []
+    }
 
     function openMoment(momentId) {
+        console.log("[MomentsDetail] openMoment called, momentId=" + momentId + " controller=" + !!root.controller)
         root.currentMomentId = momentId
+        applySnapshot()
         root.open()
-        // Load comments
+        console.log("[MomentsDetail] openMoment: calling refreshMoment")
         if (root.controller) {
-            // Trigger detail load - the controller will emit a signal when loaded
             root.controller.refreshMoment(momentId)
+        } else {
+            console.log("[MomentsDetail] openMoment: NO CONTROLLER!")
         }
     }
 
     function sendComment() {
-        if (!commentInput.text || commentInput.text.length === 0) return
-        if (root.controller && root.currentMomentId > 0) {
-            root.controller.addComment(root.currentMomentId, commentInput.text, replyUid)
-            commentInput.clear()
-            replyUid = 0
-            replyNick = ""
+        var text = commentInput.text.trim()
+        if (!text || !root.controller || root.currentMomentId <= 0) return
+        commentSending = true
+        root.controller.addComment(root.currentMomentId, text, replyUid)
+        commentInput.clear()
+        replyUid = 0; replyNick = ""
+    }
+
+    Connections {
+        target: controller
+        enabled: controller !== null
+        function onMomentRefreshed(momentId) {
+            console.log("[MomentsDetail] onMomentRefreshed received, momentId=" + momentId)
+            if (root.visible && momentId === root.currentMomentId) {
+                commentSending = false
+                applySnapshot()
+            }
         }
     }
 
-    function imgHeight(item) {
-        var w = item.width || 200
-        var h = item.height || 200
-        var aspect = h / (w || 1)
-        return Math.min(140, Math.max(60, 120 * aspect))
-    }
-
-    function imgUrl(key) {
-        if (!key) return ""
-        return gate_url_prefix + "/media/download?asset=" + key
-    }
-
-    // Image popup
     Loader {
         id: imgPopupLoader
         active: false
         sourceComponent: Component {
             Popup {
                 id: imgPopup
-                modal: true
-                focus: true
+                modal: true; focus: true
                 closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
                 property string currentKey: ""
                 function open(key) { currentKey = key; imgPopup.open() }
@@ -330,8 +467,7 @@ Popup {
                 anchors.centerIn: Overlay.overlay
                 background: Rectangle { color: "#111111"; anchors.fill: parent }
                 Image {
-                    anchors.fill: parent
-                    fillMode: Image.Contain
+                    anchors.fill: parent; fillMode: Image.Contain
                     source: gate_url_prefix + "/media/download?asset=" + imgPopup.currentKey
                     cache: false
                 }

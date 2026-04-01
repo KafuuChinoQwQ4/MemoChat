@@ -16,3 +16,4 @@ void AsioIOServicePool::Stop()
 {
     _pool->Stop();
 }
+

@@ -7,6 +7,8 @@ import "../components"
 Rectangle {
     id: root
     color: "transparent"
+    // Loader 未设 height：用内容固有高度 + 上下边距，避免正文与点赞行重叠
+    implicitHeight: contentLayout.implicitHeight + 24
 
     property var backdrop: null
     property var momentData: null
@@ -35,9 +37,12 @@ Rectangle {
     }
 
     ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 12
-        spacing: 8
+        id: contentLayout
+        width: parent.width - 24
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
+        anchors.topMargin: 12
+        spacing: 10
 
         // Header row: avatar + name + location
         RowLayout {
@@ -83,61 +88,55 @@ Rectangle {
             Item { Layout.fillWidth: true }
         }
 
-        // Content items (images / text)
+        // Content items (images / text) — Layout.* 仅对 Layout 容器的直接子项生效，故用 Item + 显式宽高
         Repeater {
             model: root.items
             delegate: Item {
+                id: blockRoot
                 Layout.fillWidth: true
-                Layout.preferredHeight: contentHeight
+                Layout.preferredHeight: blockColumn.implicitHeight
 
-                property real contentHeight: {
-                    var type = modelData.media_type
-                    if (type === "text") {
-                        return textItem.contentHeight
-                    }
-                    if (type === "image") {
-                        return 180
-                    }
-                    return 200
-                }
+                Column {
+                    id: blockColumn
+                    width: parent.width
+                    spacing: 8
 
-                // Text content
-                Label {
-                    id: textItem
-                    property real contentHeight: visible ? implicitHeight : 0
-                    visible: modelData.media_type === "text"
-                    text: modelData.content || ""
-                    font.pixelSize: 14
-                    color: "#1a1a1a"
-                    wrapMode: Text.Wrap
-                    Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignLeft
-                }
-
-                // Image grid
-                Rectangle {
-                    visible: modelData.media_type === "image"
-                    width: parent ? Math.min(parent.width, imageMaxDim(modelData)) : 200
-                    height: visible ? imageHeight(modelData) : 0
-                    color: Qt.rgba(0.92, 0.94, 0.97, 1.0)
-                    radius: 8
-                    clip: true
-
-                    Image {
-                        anchors.fill: parent
-                        fillMode: Image.PreserveAspectCrop
-                        source: mediaUrl(modelData.media_key)
-                        cache: true
-                        asynchronous: true
+                    Label {
+                        id: textItem
+                        visible: modelData.media_type === "text"
+                        width: parent.width
+                        text: modelData.content || ""
+                        font.pixelSize: 15
+                        color: "#1a1a1a"
+                        wrapMode: Text.Wrap
+                        horizontalAlignment: Text.AlignLeft
                     }
 
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            imageViewerLoader.active = true
-                            if (imageViewerLoader.item) {
-                                imageViewerLoader.item.open(modelData.media_key)
+                    Rectangle {
+                        id: imageBlock
+                        visible: modelData.media_type === "image"
+                        width: Math.min(blockRoot.width, imageMaxDim(modelData))
+                        height: visible ? imageHeight(modelData) : 0
+                        color: Qt.rgba(0.92, 0.94, 0.97, 1.0)
+                        radius: 8
+                        clip: true
+
+                        Image {
+                            anchors.fill: parent
+                            fillMode: Image.PreserveAspectCrop
+                            source: mediaUrl(modelData.media_key)
+                            cache: true
+                            asynchronous: true
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                imageViewerLoader.active = true
+                                if (imageViewerLoader.item) {
+                                    imageViewerLoader.item.open(modelData.media_key)
+                                }
                             }
                         }
                     }
@@ -145,19 +144,20 @@ Rectangle {
             }
         }
 
-        // Action row: like + comment
+        // Action row: 独占一行、右对齐，与正文留出间距
         RowLayout {
             Layout.fillWidth: true
-            spacing: 20
+            Layout.topMargin: 10
+            spacing: 0
 
             Item { Layout.fillWidth: true }
 
-            // Like button
             RowLayout {
-                spacing: 4
+                spacing: 20
+
                 MouseArea {
-                    implicitWidth: likeLabel.width + 8
-                    implicitHeight: 28
+                    implicitWidth: Math.max(44, likeLabel.width + 16)
+                    implicitHeight: 36
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.likeClicked()
@@ -170,10 +170,9 @@ Rectangle {
                     }
                 }
 
-                // Comment button
                 MouseArea {
-                    implicitWidth: commentLabel.width + 8
-                    implicitHeight: 28
+                    implicitWidth: Math.max(44, commentLabel.width + 16)
+                    implicitHeight: 36
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.commentClicked()
@@ -188,12 +187,54 @@ Rectangle {
             }
         }
 
-        // Comment preview (last 2 comments)
-        Repeater {
-            model: root.commentCount > 0 ? 2 : 0
-            delegate: Item {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 24
+        // Comment preview (up to 2 comments)
+        Column {
+            Layout.fillWidth: true
+            Layout.topMargin: 4
+            spacing: 2
+            visible: root.commentCount > 0 && commentPreviewItems.length > 0
+
+            property var commentPreviewItems: root.momentData && root.momentData.comments ? root.momentData.comments : []
+
+            Repeater {
+                model: Math.min(2, commentPreviewItems.length)
+                delegate: Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: commentRow.implicitHeight + 2
+
+                    RowLayout {
+                        id: commentRow
+                        anchors.fill: parent
+                        spacing: 4
+                        Label {
+                            text: (commentPreviewItems[index].user_nick || "用户") + "："
+                            font.pixelSize: 12
+                            font.weight: Font.Medium
+                            color: "#2a7ae2"
+                        }
+                        Label {
+                            text: commentPreviewItems[index].reply_uid && commentPreviewItems[index].reply_uid !== 0
+                                  ? ("回复 " + (commentPreviewItems[index].reply_nick || "用户") + "：") : ""
+                            font.pixelSize: 12
+                            color: "#2a7ae2"
+                            visible: commentPreviewItems[index].reply_uid && commentPreviewItems[index].reply_uid !== 0
+                        }
+                        Label {
+                            text: commentPreviewItems[index].content || ""
+                            font.pixelSize: 12
+                            color: "#555555"
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                    }
+                }
+            }
+
+            Label {
+                visible: root.commentCount > 2
+                text: "共 " + root.commentCount + " 条评论"
+                font.pixelSize: 11
+                color: "#888888"
             }
         }
     }
