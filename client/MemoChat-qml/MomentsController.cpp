@@ -418,21 +418,25 @@ void MomentsController::onCommentRsp(ReqId id, const QString& res, ErrorCodes er
 
 void MomentsController::onDetailRsp(ReqId id, const QString& res, ErrorCodes err) {
     if (id != ReqId::ID_MOMENTS_DETAIL) return;
+    qDebug() << "[MomentsController] onDetailRsp called, res length=" << res.length() << " err=" << err;
 
     QJsonParseError parseErr;
     const QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8(), &parseErr);
     if (parseErr.error != QJsonParseError::NoError || !doc.isObject()) {
+        qDebug() << "[MomentsController] onDetailRsp: JSON parse error" << parseErr.errorString();
         return;
     }
 
     const QJsonObject root = doc.object();
     const int errorCode = root["error"].toInt();
+    qDebug() << "[MomentsController] onDetailRsp: errorCode=" << errorCode;
     if (errorCode != 0) {
         return;
     }
 
     const QJsonObject momentObj = root["moment"].toObject();
     const MomentEntry entry = parseMomentEntry(momentObj);
+    qDebug() << "[MomentsController] onDetailRsp: parsed momentId=" << entry.momentId << " comments=" << entry.comments.size();
     _model->upsertMoment(entry);
     _model->updateDetail(entry.momentId, entry.likes, entry.comments);
     emit momentRefreshed(entry.momentId);

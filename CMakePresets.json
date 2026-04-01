@@ -7,8 +7,8 @@
   },
   "configurePresets": [
     {
-      "name": "msvc2022-all",
-      "displayName": "MSVC2022 All (vcpkg dynamic)",
+      "name": "msvc2022-full",
+      "displayName": "Full: Client + Server + Ops + Tests",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build",
       "environment": {
@@ -25,6 +25,8 @@
       "cacheVariables": {
         "BUILD_CLIENT": "ON",
         "BUILD_SERVER": "ON",
+        "BUILD_OPS": "ON",
+        "BUILD_TESTS": "ON",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_MAKE_PROGRAM": "D:/ninja-win/ninja.exe",
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
@@ -36,38 +38,10 @@
       }
     },
     {
-      "name": "msvc2022-vcpkg-server",
-      "displayName": "MSVC2022 Server (vcpkg dynamic)",
+      "name": "msvc2022-server",
+      "displayName": "Server: Client + Server only",
       "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build-vcpkg-server",
-      "environment": {
-        "PATH": "D:/VS2026stable/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin;D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64;C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64;$penv{PATH}",
-        "LIB": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64",
-        "INCLUDE": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/include;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/um;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/shared;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/winrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/cppwinrt",
-        "VCPKG_ROOT": "D:/vcpkg",
-        "VCPKG_DOWNLOADS": "D:/vcpkg/downloads",
-        "VCPKG_DEFAULT_BINARY_CACHE": "D:/vcpkg/bincache",
-        "HTTP_PROXY": "",
-        "HTTPS_PROXY": "",
-        "NO_PROXY": ""
-      },
-      "cacheVariables": {
-        "BUILD_CLIENT": "OFF",
-        "BUILD_SERVER": "ON",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "CMAKE_MAKE_PROGRAM": "D:/ninja-win/ninja.exe",
-        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-        "VCPKG_TARGET_TRIPLET": "x64-windows",
-        "VCPKG_HOST_TRIPLET": "x64-windows",
-        "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed",
-        "CMAKE_CXX_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe"
-      }
-    },
-    {
-      "name": "msvc2022-all-msquic",
-      "displayName": "MSVC2022 All (vcpkg dynamic, MsQuic ready)",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build-msquic",
+      "binaryDir": "${sourceDir}/build-server",
       "environment": {
         "PATH": "D:/VS2026stable/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin;D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64;C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64;$penv{PATH}",
         "LIB": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64",
@@ -82,6 +56,8 @@
       "cacheVariables": {
         "BUILD_CLIENT": "ON",
         "BUILD_SERVER": "ON",
+        "BUILD_OPS": "OFF",
+        "BUILD_TESTS": "OFF",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_MAKE_PROGRAM": "D:/ninja-win/ninja.exe",
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
@@ -93,10 +69,10 @@
       }
     },
     {
-      "name": "msvc2022-vcpkg-server-msquic",
-      "displayName": "MSVC2022 Server (vcpkg dynamic, MsQuic ready)",
+      "name": "msvc2022-ops",
+      "displayName": "Ops: MemoOps platform only",
       "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build-vcpkg-server-msquic",
+      "binaryDir": "${sourceDir}/build-ops",
       "environment": {
         "PATH": "D:/VS2026stable/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin;D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64;C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64;$penv{PATH}",
         "LIB": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64",
@@ -106,26 +82,28 @@
         "VCPKG_DEFAULT_BINARY_CACHE": "D:/vcpkg/bincache",
         "HTTP_PROXY": "",
         "HTTPS_PROXY": "",
-        "NO_PROXY": "",
-        "CMAKE_CXX_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe",
-        "CMAKE_C_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe"
+        "NO_PROXY": ""
       },
       "cacheVariables": {
         "BUILD_CLIENT": "OFF",
-        "BUILD_SERVER": "ON",
+        "BUILD_SERVER": "OFF",
+        "BUILD_OPS": "ON",
+        "BUILD_TESTS": "OFF",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_MAKE_PROGRAM": "D:/ninja-win/ninja.exe",
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_TARGET_TRIPLET": "x64-windows",
         "VCPKG_HOST_TRIPLET": "x64-windows",
-        "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed"
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed",
+        "VCPKG_MANIFEST_FEATURES": "server",
+        "CMAKE_CXX_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe"
       }
     },
     {
-      "name": "msvc2022-loadtest",
-      "displayName": "MSVC2022 Local LoadTest (vcpkg dynamic)",
+      "name": "msvc2022-tests",
+      "displayName": "Tests: Unit tests only (proto + logging)",
       "generator": "Ninja Multi-Config",
-      "binaryDir": "D:/MemoChat-Qml-Drogon/local-loadtest-cpp/build-vcpkg-loadtest",
+      "binaryDir": "${sourceDir}/build-tests",
       "environment": {
         "PATH": "D:/VS2026stable/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin;D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64;C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64;$penv{PATH}",
         "LIB": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64",
@@ -135,65 +113,66 @@
         "VCPKG_DEFAULT_BINARY_CACHE": "D:/vcpkg/bincache",
         "HTTP_PROXY": "",
         "HTTPS_PROXY": "",
-        "NO_PROXY": "",
-        "CMAKE_CXX_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe",
-        "CMAKE_C_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe"
+        "NO_PROXY": ""
       },
       "cacheVariables": {
+        "BUILD_CLIENT": "OFF",
+        "BUILD_SERVER": "OFF",
+        "BUILD_OPS": "OFF",
+        "BUILD_TESTS": "ON",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_MAKE_PROGRAM": "D:/ninja-win/ninja.exe",
-        "CMAKE_TOOLCHAIN_FILE": "D:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_TARGET_TRIPLET": "x64-windows",
         "VCPKG_HOST_TRIPLET": "x64-windows",
-        "VCPKG_INSTALLED_DIR": "D:/MemoChat-Qml-Drogon/vcpkg_installed"
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed",
+        "VCPKG_MANIFEST_FEATURES": "server",
+        "CMAKE_CXX_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "msvc2022-release",
-      "displayName": "Build Release (Client + Server via vcpkg dynamic)",
-      "configurePreset": "msvc2022-all",
+      "name": "msvc2022-full",
+      "displayName": "Build Release: Client + Server + Ops + Tests",
+      "configurePreset": "msvc2022-full",
       "configuration": "Release",
       "jobs": 8
     },
     {
-      "name": "msvc2022-debug-client",
-      "displayName": "Build Debug (Client via vcpkg)",
-      "configurePreset": "msvc2022-all",
-      "configuration": "Debug",
-      "targets": [
-        "MemoChatQml"
-      ],
-      "jobs": 8
-    },
-    {
-      "name": "msvc2022-vcpkg-server-release",
-      "displayName": "Build Release (Server via vcpkg dynamic)",
-      "configurePreset": "msvc2022-vcpkg-server",
+      "name": "msvc2022-server",
+      "displayName": "Build Release: Client + Server only",
+      "configurePreset": "msvc2022-server",
       "configuration": "Release",
       "jobs": 8
     },
     {
-      "name": "msvc2022-msquic-release",
-      "displayName": "Build Release (Client + Server via vcpkg dynamic, MsQuic ready)",
-      "configurePreset": "msvc2022-all-msquic",
+      "name": "msvc2022-ops",
+      "displayName": "Build Release: MemoOps platform only",
+      "configurePreset": "msvc2022-ops",
       "configuration": "Release",
       "jobs": 8
     },
     {
-      "name": "msvc2022-vcpkg-server-msquic-release",
-      "displayName": "Build Release (Server via vcpkg dynamic, MsQuic ready)",
-      "configurePreset": "msvc2022-vcpkg-server-msquic",
+      "name": "msvc2022-tests",
+      "displayName": "Build Release: Unit tests only",
+      "configurePreset": "msvc2022-tests",
       "configuration": "Release",
       "jobs": 8
-    },
+    }
+  ],
+  "testPresets": [
     {
-      "name": "msvc2022-loadtest-release",
-      "displayName": "Build Release (Local LoadTest)",
-      "configurePreset": "msvc2022-loadtest",
+      "name": "msvc2022-tests",
+      "displayName": "Run Tests (Release)",
+      "configurePreset": "msvc2022-tests",
       "configuration": "Release",
-      "jobs": 8
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
     }
   ]
 }

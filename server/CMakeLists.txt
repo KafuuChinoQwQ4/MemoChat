@@ -249,7 +249,7 @@ else()
 endif()
 
 if(WIN32)
-    target_link_libraries(memochat_server_deps INTERFACE bcrypt ws2_32 crypt32 advapi32 iphlpapi)
+    target_link_libraries(memochat_server_deps INTERFACE bcrypt ws2_32 wsock32 crypt32 advapi32 iphlpapi)
 endif()
 
 # Require C++20 for std::span and other standard library features
@@ -281,6 +281,13 @@ function(memochat_configure_server_target target_name)
         )
     endforeach()
 endfunction()
+
+if(BUILD_TESTS)
+    # GTest package is loaded and GTest_TestLib is defined in the root tests/CMakeLists.txt.
+    # Test subdirectories are registered there (including the ones below).
+    # Keep this guard so "cmake --build server/" without BUILD_TESTS still works.
+    find_package(GTest CONFIG REQUIRED)
+endif()
 
 add_subdirectory(ChatServer)
 add_subdirectory(GateServerCore)
