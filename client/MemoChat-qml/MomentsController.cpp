@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QUrl>
 #include <QUuid>
+#include <QtGlobal>
 
 MomentsController::MomentsController(QObject* parent)
     : QObject(parent)
@@ -91,6 +92,33 @@ MomentEntry MomentsController::parseMomentEntry(const QJsonObject& obj) const {
         item.durationMs = itemObj["duration_ms"].toInt();
         entry.items.append(item);
     }
+
+    const QJsonArray likes = obj["likes"].toArray();
+    for (const auto& likeVar : likes) {
+        const QJsonObject likeObj = likeVar.toObject();
+        MomentLike lk;
+        lk.uid = likeObj["uid"].toInt();
+        lk.userNick = likeObj["user_nick"].toString();
+        lk.userIcon = likeObj["user_icon"].toString();
+        lk.createdAt = likeObj["created_at"].toVariant().toLongLong();
+        entry.likes.append(lk);
+    }
+
+    const QJsonArray comments = obj["comments"].toArray();
+    for (const auto& cmVar : comments) {
+        const QJsonObject cmObj = cmVar.toObject();
+        MomentComment cm;
+        cm.id = cmObj["id"].toVariant().toLongLong();
+        cm.uid = cmObj["uid"].toInt();
+        cm.userNick = cmObj["user_nick"].toString();
+        cm.userIcon = cmObj["user_icon"].toString();
+        cm.content = cmObj["content"].toString();
+        cm.replyUid = cmObj["reply_uid"].toInt();
+        cm.replyNick = cmObj["reply_nick"].toString();
+        cm.createdAt = cmObj["created_at"].toVariant().toLongLong();
+        entry.comments.append(cm);
+    }
+
     return entry;
 }
 
@@ -168,10 +196,26 @@ void MomentsController::deleteMoment(qint64 momentId) {
 }
 
 void MomentsController::toggleLike(qint64 momentId) {
+    if (momentId <= 0 || _like_in_flight.contains(momentId)) {
+        return;
+    }
+
+    const bool wasLiked = _model->getMomentLiked(momentId);
+    const int prevCount = _model->getMomentLikeCount(momentId);
+    const int nextCount = wasLiked ? qMax(0, prevCount - 1) : prevCount + 1;
+
+    PendingLike pl;
+    pl.momentId = momentId;
+    pl.wasLiked = wasLiked;
+    pl.prevCount = prevCount;
+    _like_pending_queue.enqueue(pl);
+    _like_in_flight.insert(momentId);
+
+    _model->updateLiked(momentId, !wasLiked, nextCount);
+
     QJsonObject payload = buildAuthJson();
     payload["moment_id"] = momentId;
-    bool currentlyLiked = _model->getMomentLiked(momentId);
-    payload["like"] = !currentlyLiked;
+    payload["like"] = !wasLiked;
 
     HttpMgr::GetInstance()->PostHttpReq(
         QUrl(gate_url_prefix + "/api/moments/like"),
@@ -296,30 +340,58 @@ void MomentsController::onDeleteRsp(ReqId id, const QString& res, ErrorCodes err
 
     QJsonParseError parseErr;
     const QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8(), &parseErr);
-    if (parseErr.error == QJsonParseError::NoError && doc.isObject()) {
-        const QJsonObject root = doc.object();
-        const int errorCode = root["error"].toInt();
-        if (errorCode == 0) {
-            // Get moment_id from request - we don't have it here, so model will refresh on next load
-        }
-    }
-}
-
-void MomentsController::onLikeRsp(ReqId id, const QString& res, ErrorCodes err) {
-    if (id != ReqId::ID_MOMENTS_LIKE) return;
-
-    QJsonParseError parseErr;
-    const QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8(), &parseErr);
     if (parseErr.error != QJsonParseError::NoError || !doc.isObject()) {
         return;
     }
 
     const QJsonObject root = doc.object();
     const int errorCode = root["error"].toInt();
-    if (errorCode != 0) {
+    if (errorCode == 0) {
+        const qint64 momentId = root["moment_id"].toVariant().toLongLong();
+        if (momentId > 0) {
+            _model->removeMoment(momentId);
+        }
+    }
+}
+
+void MomentsController::onLikeRsp(ReqId id, const QString& res, ErrorCodes err) {
+    if (id != ReqId::ID_MOMENTS_LIKE) {
         return;
     }
-    // Model update is optimistic - toggleLike already updated local state
+
+    PendingLike p;
+    if (!_like_pending_queue.isEmpty()) {
+        p = _like_pending_queue.dequeue();
+    }
+    if (p.momentId > 0) {
+        _like_in_flight.remove(p.momentId);
+    }
+
+    auto revert = [this, p]() {
+        if (p.momentId > 0) {
+            _model->updateLiked(p.momentId, p.wasLiked, p.prevCount);
+        }
+    };
+
+    if (err != ErrorCodes::SUCCESS) {
+        revert();
+        return;
+    }
+
+    QJsonParseError parseErr;
+    const QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8(), &parseErr);
+    if (parseErr.error != QJsonParseError::NoError || !doc.isObject()) {
+        revert();
+        return;
+    }
+
+    const QJsonObject root = doc.object();
+    const int errorCode = root["error"].toInt();
+    if (errorCode != 0) {
+        revert();
+        return;
+    }
+    // Success: optimistic UI already applied in toggleLike
 }
 
 void MomentsController::onCommentRsp(ReqId id, const QString& res, ErrorCodes err) {
@@ -336,7 +408,12 @@ void MomentsController::onCommentRsp(ReqId id, const QString& res, ErrorCodes er
     if (errorCode != 0) {
         return;
     }
-    // Comment was added successfully
+
+    const qint64 momentId = root["moment_id"].toVariant().toLongLong();
+    const bool deleted = root["delete"].toBool();
+    if (momentId > 0) {
+        _model->updateCommentCount(momentId, deleted ? -1 : 1);
+    }
 }
 
 void MomentsController::onDetailRsp(ReqId id, const QString& res, ErrorCodes err) {
@@ -357,6 +434,8 @@ void MomentsController::onDetailRsp(ReqId id, const QString& res, ErrorCodes err
     const QJsonObject momentObj = root["moment"].toObject();
     const MomentEntry entry = parseMomentEntry(momentObj);
     _model->upsertMoment(entry);
+    _model->updateDetail(entry.momentId, entry.likes, entry.comments);
+    emit momentRefreshed(entry.momentId);
 }
 
 // Static helpers
