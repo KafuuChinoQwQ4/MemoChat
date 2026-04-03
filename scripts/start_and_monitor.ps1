@@ -1,6 +1,8 @@
 # Monitor script - starts all services with log redirection
 $ErrorActionPreference = "Stop"
-$diagDir = "D:\MemoChat-Qml-Drogon\diag"
+$ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$diagDir = "$ProjectRoot\Memo_ops\artifacts\logs\diag"
+New-Item -ItemType Directory -Force -Path $diagDir | Out-Null
 
 # === 1. 清理残留进程 ===
 Write-Host "=== 清理残留进程 ==="
@@ -23,17 +25,17 @@ Write-Host "=== 启动所有服务 ==="
 $env:MEMOCHAT_HEALTH_PORT = "8082"
 $env:MEMOCHAT_ENABLE_KAFKA = "1"
 $env:MEMOCHAT_ENABLE_RABBITMQ = "1"
-$varifyProc = Start-Process -FilePath "node" -ArgumentList "server.js" -WorkingDirectory "D:\MemoChat-Qml-Drogon\server\VarifyServer" -PassThru -RedirectStandardOutput "$diagDir\varify_out.log" -RedirectStandardError "$diagDir\varify_err.log" -WindowStyle Hidden
+$varifyProc = Start-Process -FilePath "node" -ArgumentList "server.js" -WorkingDirectory "$ProjectRoot\server\VarifyServer" -PassThru -RedirectStandardOutput "$diagDir\varify_out.log" -RedirectStandardError "$diagDir\varify_err.log" -WindowStyle Hidden
 Write-Host "[VarifyServer] PID: $($varifyProc.Id)"
 Start-Sleep -Seconds 3
 
 # === 4. 启动 GateServer ===
-$gateProc = Start-Process -FilePath "D:\MemoChat-Qml-Drogon\Memo_ops\runtime\services\GateServer\GateServer.exe" -ArgumentList "--config","config.ini" -WorkingDirectory "D:\MemoChat-Qml-Drogon\Memo_ops\runtime\services\GateServer" -PassThru -RedirectStandardOutput "$diagDir\gate_out.log" -RedirectStandardError "$diagDir\gate_err.log" -WindowStyle Hidden
+$gateProc = Start-Process -FilePath "$ProjectRoot\Memo_ops\runtime\services\GateServer\GateServer.exe" -ArgumentList "--config","config.ini" -WorkingDirectory "$ProjectRoot\Memo_ops\runtime\services\GateServer" -PassThru -RedirectStandardOutput "$diagDir\gate_out.log" -RedirectStandardError "$diagDir\gate_err.log" -WindowStyle Hidden
 Write-Host "[GateServer] PID: $($gateProc.Id)"
 Start-Sleep -Seconds 2
 
 # === 5. 启动 StatusServer ===
-$statusProc = Start-Process -FilePath "D:\MemoChat-Qml-Drogon\Memo_ops\runtime\services\StatusServer\StatusServer.exe" -ArgumentList "--config","config.ini" -WorkingDirectory "D:\MemoChat-Qml-Drogon\Memo_ops\runtime\services\StatusServer" -PassThru -RedirectStandardOutput "$diagDir\status_out.log" -RedirectStandardError "$diagDir\status_err.log" -WindowStyle Hidden
+$statusProc = Start-Process -FilePath "$ProjectRoot\Memo_ops\runtime\services\StatusServer\StatusServer.exe" -ArgumentList "--config","config.ini" -WorkingDirectory "$ProjectRoot\Memo_ops\runtime\services\StatusServer" -PassThru -RedirectStandardOutput "$diagDir\status_out.log" -RedirectStandardError "$diagDir\status_err.log" -WindowStyle Hidden
 Write-Host "[StatusServer] PID: $($statusProc.Id)"
 Start-Sleep -Seconds 2
 
@@ -41,7 +43,7 @@ Start-Sleep -Seconds 2
 $chatProcs = @()
 $chatNodes = @("chatserver1","chatserver2","chatserver3","chatserver4")
 foreach ($node in $chatNodes) {
-    $proc = Start-Process -FilePath "D:\MemoChat-Qml-Drogon\Memo_ops\runtime\services\$node\ChatServer.exe" -ArgumentList "--config","config.ini" -WorkingDirectory "D:\MemoChat-Qml-Drogon\Memo_ops\runtime\services\$node" -PassThru -RedirectStandardOutput "$diagDir\chat_$node.log" -RedirectStandardError "$diagDir\chat_${node}_err.log" -WindowStyle Hidden
+    $proc = Start-Process -FilePath "$ProjectRoot\Memo_ops\runtime\services\$node\ChatServer.exe" -ArgumentList "--config","config.ini" -WorkingDirectory "$ProjectRoot\Memo_ops\runtime\services\$node" -PassThru -RedirectStandardOutput "$diagDir\chat_$node.log" -RedirectStandardError "$diagDir\chat_${node}_err.log" -WindowStyle Hidden
     $chatProcs += $proc
     Write-Host "[$node] PID: $($proc.Id)"
     Start-Sleep -Seconds 1

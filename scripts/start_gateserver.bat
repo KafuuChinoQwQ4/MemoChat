@@ -45,7 +45,7 @@ if exist "!MC_BIN!" (
 )
 
 echo [INFO] Starting GateServer...
-cd /d "D:\MemoChat-Qml-Drogon\Memo_ops\runtime\services\GateServer"
-"D:\MemoChat-Qml-Drogon\Memo_ops\runtime\services\GateServer\GateServer.exe" --config="D:\MemoChat-Qml-Drogon\server\GateServer\config.ini"
+cd /d "D:\MemoChat-Qml\Memo_ops\runtime\services\GateServer"
+"D:\MemoChat-Qml\Memo_ops\runtime\services\GateServer\GateServer.exe" --config="D:\MemoChat-Qml\server\GateServer\config.ini"
 echo GateServer exit code: %ERRORLEVEL%
 endlocal

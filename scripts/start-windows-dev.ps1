@@ -19,7 +19,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ProjectRoot = "D:\MemoChat-Qml-Drogon"
+$ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $ServicesDir = "$ProjectRoot\Memo_ops\runtime\services"
 $env:MEMOCHAT_ENABLE_KAFKA = "1"
 $env:MEMOCHAT_ENABLE_RABBITMQ = "1"

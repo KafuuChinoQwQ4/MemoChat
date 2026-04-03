@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ProjectRoot = "D:\MemoChat-Qml-Drogon"
+$ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $K8sDir = "$ProjectRoot\Memo_ops\k8s"
 $Overlay = "dev-single"
 

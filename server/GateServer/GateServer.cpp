@@ -25,6 +25,7 @@
 #include "logging/TelemetryConfig.h"
 #include <chrono>
 #include <thread>
+#include <aws/core/Aws.h>
 
 void TestRedis() {
 
@@ -143,6 +144,8 @@ void TestPostgresMgr() {
 
 int main()
 {
+	Aws::SDKOptions aws_options;
+	bool aws_inited = false;
 	try
 	{
 		auto & gCfgMgr = ConfigMgr::Inst();
@@ -156,6 +159,8 @@ int main()
 			});
 		memolog::Logger::Init("GateServer", log_cfg);
 		memolog::Telemetry::Init("GateServer", telemetry_cfg);
+		Aws::InitAPI(aws_options);
+		aws_inited = true;
 		const auto postgres_init_start = std::chrono::steady_clock::now();
 		PostgresMgr::GetInstance();
 		memolog::LogInfo("service.postgres_ready", "GateServer postgres ready",
@@ -217,6 +222,7 @@ int main()
 		GateAsyncSideEffects::Instance().Stop();
 		GateWorkerPool::GetInstance()->Stop();
 		RedisMgr::GetInstance()->Close();
+		Aws::ShutdownAPI(aws_options);
 		memolog::Telemetry::Shutdown();
 		memolog::Logger::Shutdown();
 		return EXIT_SUCCESS;
@@ -226,6 +232,9 @@ int main()
 		memolog::LogError("service.fatal", "GateServer crashed", { {"error", e.what()} });
 		GateAsyncSideEffects::Instance().Stop();
 		RedisMgr::GetInstance()->Close();
+		if (aws_inited) {
+			Aws::ShutdownAPI(aws_options);
+		}
 		memolog::Telemetry::Shutdown();
 		memolog::Logger::Shutdown();
 		return EXIT_FAILURE;
