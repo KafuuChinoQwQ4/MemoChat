@@ -1,6 +1,0 @@
-%4|1774712069.914|TERMINATE|memochat-gate#producer-1| [thrd:app]: Producer terminating with 1 message (411 bytes) still in queue or transit: use flush() to wait for outstanding message delivery
-%4|1774712069.920|TERMINATE|memochat-gate#producer-2| [thrd:app]: Producer terminating with 1 message (411 bytes) still in queue or transit: use flush() to wait for outstanding message delivery
-GetUserInfo PostgreSQL exception: ERROR:  relation "memo.user_base" does not exist
-LINE 1: ...CT uid, name, email, nick, icon, "desc", sex FROM memo.user_...
-                                                             ^
-

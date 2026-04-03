@@ -6,6 +6,7 @@ server:
 
 repo:
   root: ../..
+  _package_root: Memo_ops
 
 cluster:
   config: ../../server/StatusServer/config.ini
@@ -41,15 +42,27 @@ observability:
 
 paths:
   report_globs:
-    - ../runtime/loadtest/reports/**/*.json
+    - artifacts/reports/loadtest/**/*.json
+    - artifacts/reports/perf/**/*.json
+    - artifacts/reports/perf/**/*.md
   log_globs:
-    - ../runtime/services/*/logs/*.json
-    - ../runtime/varify/logs/*.json
-    - ../runtime/loadtest/logs/*.json
-    - ../../build/bin/Release/logs/*.json
-    - ../../build/bin/Debug/logs/*.json
+    - artifacts/logs/services/*/logs/*.json
+    - artifacts/logs/services/*/*.json
+    - artifacts/logs/varify/logs/*.json
+    - artifacts/logs/varify/*.json
+    - artifacts/logs/loadtest/logs/*.json
+    - artifacts/logs/loadtest/*.json
+    - artifacts/logs/diag/*.log
+    - artifacts/logs/manual-start/*.log
+    - build/bin/Release/logs/*.json
+    - build/bin/Debug/logs/*.json
 
 platform:
   overview_limit: 10
   run_list_limit: 100
   log_query_limit: 200
+
+loadtest:
+  binary_path: ../local-loadtest-cpp/build/Release/memochat_loadtest.exe
+  config_path: ../local-loadtest-cpp/config.json
+  report_dir: artifacts/reports/loadtest

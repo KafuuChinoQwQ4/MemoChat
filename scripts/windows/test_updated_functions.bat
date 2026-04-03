@@ -13,7 +13,7 @@ call :print_chat_process_count
 echo.
 
 echo 3. Testing :print_file_stamp
-call :print_file_stamp "Test File" "D:\MemoChat-Qml-Drogon\Memo_ops\runtime\services\GateServer\GateServer.exe"
+call :print_file_stamp "Test File" "D:\MemoChat-Qml\Memo_ops\runtime\services\GateServer\GateServer.exe"
 echo.
 
 echo All tests completed

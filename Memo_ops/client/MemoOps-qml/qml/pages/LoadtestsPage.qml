@@ -6,8 +6,10 @@ import QtCharts 2.15
 SplitView {
     id: root
     required property var opsApi
+    signal openRunPage()
 
     function rows(value) { return value ? value : [] }
+    function n(value) { return value === undefined || value === null || value === "" ? 0 : Number(value) }
     function clipText(value, limit) {
         var text = value ? String(value) : ""
         return text.length <= limit ? text : text.slice(0, limit - 1) + "…"
@@ -34,7 +36,15 @@ SplitView {
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 14
-            Label { text: "Runs"; font.pixelSize: 20; font.bold: true }
+            RowLayout {
+                Layout.fillWidth: true
+                Label { text: "Runs"; font.pixelSize: 20; font.bold: true }
+                Item { Layout.fillWidth: true }
+                Button {
+                    text: "+ New Run"
+                    onClicked: root.openRunPage()
+                }
+            }
             ListView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -67,6 +77,7 @@ SplitView {
             y: 14
             width: parent.width - 28
             spacing: 14
+
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 280
@@ -101,12 +112,66 @@ SplitView {
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: 12
-                    Label { text: "Selected Run"; font.pixelSize: 20; font.bold: true }
-                    Label { text: JSON.stringify(root.opsApi.selectedRun.run || {}, null, 2); font.family: "Consolas"; wrapMode: Text.WrapAnywhere }
-                    Label { text: "Cases"; font.pixelSize: 18; font.bold: true }
-                    Label { text: JSON.stringify(root.opsApi.selectedRun.cases || [], null, 2); font.family: "Consolas"; wrapMode: Text.WrapAnywhere }
-                    Label { text: "Errors"; font.pixelSize: 18; font.bold: true }
-                    Label { text: JSON.stringify(root.opsApi.selectedRun.errors || [], null, 2); font.family: "Consolas"; wrapMode: Text.WrapAnywhere }
+                    Label { text: "Selected Run Summary"; font.pixelSize: 20; font.bold: true }
+                    Label { text: JSON.stringify(root.opsApi.selectedRun.run || {}, null, 2); font.family: "Consolas"; wrapMode: Text.WrapAnywhere; font.pixelSize: 12 }
+                }
+            }
+
+            // Cases expandable section
+            Rectangle {
+                Layout.fillWidth: true
+                radius: 18
+                color: "#f4f1e6"
+                border.color: "#d3d8cf"
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    Label { text: "Cases (" + root.rows(root.opsApi.selectedRun.cases).length + ")"; font.pixelSize: 18; font.bold: true }
+                    ListView {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.min(root.rows(root.opsApi.selectedRun.cases).length * 60, 300)
+                        clip: true
+                        model: root.opsApi.selectedRun.cases
+                        spacing: 4
+                        delegate: Rectangle {
+                            width: ListView.view.width
+                            implicitHeight: 52
+                            radius: 8
+                            color: modelData.status === "passed" ? "#dde7d5" : "#f0d9d2"
+                            Column {
+                                anchors.fill: parent; anchors.margins: 8
+                                Label { text: modelData.case_name + "  ok=" + (modelData.success_count || 0) + " fail=" + (modelData.failure_count || 0) + "  p50=" + n(modelData.p50_ms).toFixed(1) + "ms  p95=" + n(modelData.p95_ms).toFixed(1) + "ms"; font.pixelSize: 11 }
+                                Label { text: JSON.stringify(modelData.extras_json || {}); font.pixelSize: 10; color: "#576155"; font.family: "Consolas" }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Errors section
+            Rectangle {
+                Layout.fillWidth: true
+                radius: 18
+                color: "#f4f1e6"
+                border.color: "#d3d8cf"
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    Label { text: "Errors (" + root.rows(root.opsApi.selectedRun.errors).length + ")"; font.pixelSize: 18; font.bold: true; color: root.rows(root.opsApi.selectedRun.errors).length > 0 ? "#8c2f24" : "#203022" }
+                    Repeater {
+                        model: root.rows(root.opsApi.selectedRun.errors)
+                        delegate: Rectangle {
+                            Layout.fillWidth: true
+                            implicitHeight: 50
+                            radius: 8
+                            color: "#f0d9d2"
+                            RowLayout {
+                                anchors.fill: parent; anchors.margins: 8
+                                Label { text: "[" + (modelData.error_key || modelData.error_count) + "x]"; font.bold: true; color: "#8c2f24" }
+                                Label { text: root.clipText(modelData.sample_message || "", 100); color: "#576155"; font.family: "Consolas"; font.pixelSize: 11; Layout.fillWidth: true }
+                            }
+                        }
+                    }
                 }
             }
         }

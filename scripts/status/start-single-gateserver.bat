@@ -4,7 +4,8 @@ REM  MemoChat 单 GateServer 启动脚本
 REM  只启动: StatusServer + ChatServer1 + 一个 GateServer
 REM ============================================================
 setlocal enabledelayedexpansion
-set "PROJECT_ROOT=D:\MemoChat-Qml-Drogon"
+cd /d "%~dp0..\.."
+set "PROJECT_ROOT=%CD%"
 set "RUNTIME_DIR=%PROJECT_ROOT%\Memo_ops\runtime\services"
 set "MEMO_OPS_ROOT=%PROJECT_ROOT%\Memo_ops"
 echo  ============================================================

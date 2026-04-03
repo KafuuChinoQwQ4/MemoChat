@@ -82,6 +82,35 @@ SplitView {
                     }
                 }
             }
+            // Tail controls
+    property bool tailing: false
+    RowLayout {
+        Layout.fillWidth: true
+        Button {
+            text: root.tailing ? "Stop Tail" : "Live Tail"
+            onClicked: {
+                if (root.tailing) {
+                    root.opsApi.stopTailLogs()
+                    tailTimer.stop()
+                    root.tailing = false
+                } else {
+                    root.tailing = true
+                    tailTimer.restart()
+                }
+            }
+        }
+        ComboBox {
+            id: tailLevelBox
+            Layout.preferredWidth: 80
+            model: ["", "info", "warn", "error"]
+        }
+        Label { text: "tail:" + root.opsApi.tailLogItems.length + " lines"; color: root.tailing ? "#9c5d14" : "#5c6659"; font.pixelSize: 11 }
+        Timer { id: tailTimer; interval: 3000; repeat: true; triggeredOnStart: true
+            onTriggered: {
+                root.opsApi.fetchTailLogs(serviceField.text, tailLevelBox.currentText, 50)
+            }
+        }
+    }
             Label { text: "Total " + Number(root.opsApi.logSearchResult.total || 0) + " logs"; color: "#5c6659" }
             ListView {
                 Layout.fillWidth: true
@@ -158,14 +187,59 @@ SplitView {
                     anchors.fill: parent
                     anchors.margins: 12
                     Label { text: "Log Detail"; font.pixelSize: 20; font.bold: true }
-                    Label { text: JSON.stringify(root.selectedLogItem || {}, null, 2); font.family: "Consolas"; wrapMode: Text.WrapAnywhere }
-                    Button {
-                        text: "Open Related Service Trend"
-                        enabled: !!root.selectedLogItem.service_name
-                        onClicked: root.openService(root.selectedLogItem.service_name || "", root.selectedLogItem.service_instance || "")
+                    Label { text: JSON.stringify(root.selectedLogItem || {}, null, 2); font.family: "Consolas"; wrapMode: Text.WrapAnywhere; font.pixelSize: 12 }
+                    RowLayout {
+                        Button {
+                            text: "Open Related Service Trend"
+                            enabled: !!root.selectedLogItem.service_name
+                            onClicked: root.openService(root.selectedLogItem.service_name || "", root.selectedLogItem.service_instance || "")
+                        }
+                        Button {
+                            text: "Trace Logs"
+                            enabled: !!root.selectedLogItem.trace_id
+                            onClicked: {
+                                if (root.selectedLogItem.trace_id) {
+                                    traceField.text = root.selectedLogItem.trace_id
+                                    root.opsApi.refreshLogSearch(serviceField.text, instanceField.text, levelBox.currentText,
+                                                                 eventField.text, root.selectedLogItem.trace_id, requestField.text,
+                                                                 keywordField.text, fromField.text, toField.text, 1, 100, "ts_desc")
+                                }
+                            }
+                        }
                     }
                     Label { text: "Trace"; font.pixelSize: 18; font.bold: true }
-                    Label { text: JSON.stringify(root.opsApi.selectedTrace || {}, null, 2); font.family: "Consolas"; wrapMode: Text.WrapAnywhere }
+                    Label { text: JSON.stringify(root.opsApi.selectedTrace || {}, null, 2); font.family: "Consolas"; wrapMode: Text.WrapAnywhere; font.pixelSize: 12 }
+                }
+            }
+
+            // Live tail panel
+            Rectangle {
+                Layout.fillWidth: true
+                radius: 18
+                color: root.tailing ? "#fef9e7" : "#f4f1e6"
+                border.color: root.tailing ? "#e0c87a" : "#d3d8cf"
+                visible: root.opsApi.tailLogItems.length > 0
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    Label { text: "Live Tail (" + root.opsApi.tailLogItems.length + " lines)"; font.pixelSize: 18; font.bold: true }
+                    ListView {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 200
+                        clip: true
+                        model: root.opsApi.tailLogItems
+                        delegate: Rectangle {
+                            width: ListView.view.width
+                            implicitHeight: 50
+                            color: modelData.level === "error" ? "#f0d8d2" : "#e4eadf"
+                            radius: 8
+                            Column {
+                                anchors.fill: parent; anchors.margins: 6
+                                Label { text: String(modelData.ts_utc || "").slice(0, 23) + " " + (modelData.service_name || "") + " [" + (modelData.level || "") + "]"; font.pixelSize: 10; font.bold: true }
+                                Label { text: root.clipText(modelData.message || "", 120); font.pixelSize: 10; color: "#4f5b4a"; font.family: "Consolas" }
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -22,9 +22,12 @@
 #include "logging/TelemetryConfig.h"
 #include <chrono>
 #include <thread>
+#include <aws/core/Aws.h>
 
 int main()
 {
+    Aws::SDKOptions aws_options;
+    bool aws_inited = false;
     try
     {
         auto& gCfgMgr = ConfigMgr::Inst();
@@ -38,6 +41,8 @@ int main()
             });
         memolog::Logger::Init("GateServerHttp1.1", log_cfg);
         memolog::Telemetry::Init("GateServerHttp1.1", telemetry_cfg);
+        Aws::InitAPI(aws_options);
+        aws_inited = true;
 
         const auto postgres_init_start = std::chrono::steady_clock::now();
         PostgresMgr::GetInstance();
@@ -91,6 +96,7 @@ int main()
         GateAsyncSideEffects::Instance().Stop();
         H1WorkerPool::GetInstance()->Stop();
         RedisMgr::GetInstance()->Close();
+        Aws::ShutdownAPI(aws_options);
         memolog::Telemetry::Shutdown();
         memolog::Logger::Shutdown();
         return EXIT_SUCCESS;
@@ -100,6 +106,9 @@ int main()
         memolog::LogError("service.fatal", "GateServerHttp1.1 crashed", { {"error", e.what()} });
         GateAsyncSideEffects::Instance().Stop();
         RedisMgr::GetInstance()->Close();
+        if (aws_inited) {
+            Aws::ShutdownAPI(aws_options);
+        }
         memolog::Telemetry::Shutdown();
         memolog::Logger::Shutdown();
         return EXIT_FAILURE;

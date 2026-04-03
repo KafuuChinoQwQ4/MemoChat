@@ -1,6 +1,3 @@
-email,password,uid,user_id,user
-loadtest_0001@example.com,ChangeMe123!,,,,seed
-loadtest_0002@example.com,ChangeMe123!,,,,seed
-loadtest_0003@example.com,ChangeMe123!,,,,seed
-loadtest_0004@example.com,ChangeMe123!,,,,seed
-loadtest_0005@example.com,ChangeMe123!,,,,seed
+email,password,user,uid,user_id,last_password,tags
+your_test_email_1@example.com,your_password_1,load_user_1,,,,seed
+your_test_email_2@example.com,your_password_2,load_user_2,,,,seed
