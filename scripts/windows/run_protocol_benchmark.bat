@@ -1,8 +1,10 @@
 @echo off
 setlocal enabledelayedexpansion
 
-set "REPORT_DIR=D:\MemoChat-Qml-Drogon\Memo_ops\artifacts\loadtest\runtime\reports"
-set "LOG_DIR=D:\MemoChat-Qml-Drogon\Memo_ops\artifacts\loadtest\runtime\logs"
+set "REPORT_DIR=D:\MemoChat-Qml\Memo_ops\artifacts\reports\loadtest"
+set "LOG_DIR=D:\MemoChat-Qml\Memo_ops\artifacts\logs\loadtest"
+set "LOADTEST_EXE=D:\MemoChat-Qml\local-loadtest-cpp\build-vcpkg-loadtest\Release\memochat_loadtest.exe"
+set "CONFIG=D:\MemoChat-Qml\local-loadtest-cpp\config.json"
 set "GATE_URL=http://127.0.0.1:8080"
 
 echo ================================================
@@ -22,9 +24,9 @@ echo [1/3] 测试 HTTP/1.1 登录 (100并发, 500总请求)
 echo.
 
 :: HTTP/1.1 登录测试
-"D:\MemoChat-Qml-Drogon\local-loadtest-cpp\build\bin\Release\memochat_loadtest.exe" ^
+"%LOADTEST_EXE%" ^
     --scenario http ^
-    --config "D:\MemoChat-Qml-Drogon\local-loadtest-cpp\config.json" ^
+    --config "%CONFIG%" ^
     --gate-url "%GATE_URL%" ^
     --total 500 ^
     --concurrency 100 ^
@@ -36,9 +38,9 @@ echo [2/3] 测试 TCP 长连接登录 (50并发, 500总请求)
 echo.
 
 :: TCP 长连接测试
-"D:\MemoChat-Qml-Drogon\local-loadtest-cpp\build\bin\Release\memochat_loadtest.exe" ^
+"%LOADTEST_EXE%" ^
     --scenario tcp ^
-    --config "D:\MemoChat-Qml-Drogon\local-loadtest-cpp\config.json" ^
+    --config "%CONFIG%" ^
     --gate-url "%GATE_URL%" ^
     --total 500 ^
     --concurrency 50 ^
@@ -50,9 +52,9 @@ echo [3/3] 测试 QUIC 长连接登录 (50并发, 500总请求)
 echo.
 
 :: QUIC 测试
-"D:\MemoChat-Qml-Drogon\local-loadtest-cpp\build\bin\Release\memochat_loadtest.exe" ^
+"%LOADTEST_EXE%" ^
     --scenario quic ^
-    --config "D:\MemoChat-Qml-Drogon\local-loadtest-cpp\config.json" ^
+    --config "%CONFIG%" ^
     --gate-url "%GATE_URL%" ^
     --total 500 ^
     --concurrency 50 ^

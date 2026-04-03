@@ -26,6 +26,9 @@ class OpsApiClient : public QObject
     Q_PROPERTY(QJsonObject selectedLogFilters READ selectedLogFilters NOTIFY selectedLogFiltersChanged)
     Q_PROPERTY(QJsonArray alerts READ alerts NOTIFY alertsChanged)
     Q_PROPERTY(QJsonObject dataSources READ dataSources NOTIFY dataSourcesChanged)
+    Q_PROPERTY(QJsonArray systemMetrics READ systemMetrics NOTIFY systemMetricsChanged)
+    Q_PROPERTY(QJsonObject loadtestRunStatus READ loadtestRunStatus NOTIFY loadtestRunStatusChanged)
+    Q_PROPERTY(QJsonArray tailLogItems READ tailLogItems NOTIFY tailLogsChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
 
@@ -48,6 +51,9 @@ public:
     QJsonObject selectedLogFilters() const;
     QJsonArray alerts() const;
     QJsonObject dataSources() const;
+    QJsonArray systemMetrics() const;
+    QJsonObject loadtestRunStatus() const;
+    QJsonArray tailLogItems() const;
     bool busy() const;
     QString lastError() const;
 
@@ -94,6 +100,15 @@ public:
     Q_INVOKABLE void collectNow();
     Q_INVOKABLE void importReports();
     Q_INVOKABLE void importLogs();
+    Q_INVOKABLE void refreshSystemMetrics();
+    Q_INVOKABLE void refreshLoadtestStatus(const QString &runId);
+    Q_INVOKABLE void startLoadtest(const QString &scenario = QStringLiteral("all"),
+                                    int warmup = 10,
+                                    int poolSize = 200);
+    Q_INVOKABLE void fetchTailLogs(const QString &service = QString(),
+                               const QString &level = QString(),
+                               int limit = 50);
+    Q_INVOKABLE void stopTailLogs();
 
 signals:
     void overviewChanged();
@@ -110,12 +125,17 @@ signals:
     void selectedLogFiltersChanged();
     void alertsChanged();
     void dataSourcesChanged();
+    void systemMetricsChanged();
+    void loadtestRunStatusChanged();
+    void tailLogsChanged();
     void busyChanged();
     void lastErrorChanged();
 
 private:
     void getJson(const QString &path, const std::function<void(const QJsonObject &)> &onObject);
     void postJson(const QString &path, const std::function<void(const QJsonObject &)> &onObject);
+    void postJsonWithQuery(const QString &path, const QUrlQuery &query,
+                           const std::function<void(const QJsonObject &)> &onObject);
     QJsonObject buildLogFilterState(const QString &service,
                                     const QString &instance,
                                     const QString &level,
@@ -151,6 +171,10 @@ private:
     QJsonObject m_selectedLogFilters;
     QJsonArray m_alerts;
     QJsonObject m_dataSources;
+    QJsonArray m_systemMetrics;
+    QJsonObject m_loadtestRunStatus;
+    QJsonArray m_tailLogs;
+    QTimer *m_tailTimer = nullptr;
     bool m_busy = false;
     int m_inFlight = 0;
     QString m_lastError;

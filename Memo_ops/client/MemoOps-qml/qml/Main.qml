@@ -25,6 +25,15 @@ ApplicationWindow {
             Button { text: "Import Reports"; onClicked: opsApi.importReports() }
             Button { text: "Import Logs"; onClicked: opsApi.importLogs() }
             Button { text: "Refresh"; onClicked: opsApi.refreshAll() }
+            Button {
+                text: loadtestRunning ? "Loadtest Running..." : "Start Loadtest"
+                enabled: !loadtestRunning
+                onClicked: {
+                    tabBar.currentIndex = 4  // jump to Loadtests tab
+                    stack.currentIndex = 4
+                }
+                property bool loadtestRunning: opsApi.loadtestRunStatus.status === "running"
+            }
         }
     }
 
@@ -45,18 +54,37 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 54
                 radius: 16
-                color: "#faf8ef"
-                border.color: "#d4dacd"
+                color: loadtestRunningColor()
+                border.color: loadtestRunningBorderColor()
                 RowLayout {
                     anchors.fill: parent
                     anchors.margins: 14
-                    Label { text: opsApi.busy ? "Syncing..." : "Idle"; color: opsApi.busy ? "#9c5d14" : "#2d5a3d"; font.bold: true }
+                    Label {
+                        text: {
+                            if (opsApi.busy) return "Syncing..."
+                            if (loadtestRunning) return "Loadtest running: " + opsApi.loadtestRunStatus.scenario + "  (" + opsApi.loadtestRunStatus.completed_scenarios + "/" + opsApi.loadtestRunStatus.total_scenarios + " scenarios)"
+                            return "Idle"
+                        }
+                        color: opsApi.busy ? "#9c5d14" : (loadtestRunning ? "#7a5a10" : "#2d5a3d")
+                        font.bold: true
+                    }
                     Label {
                         Layout.fillWidth: true
                         text: opsApi.lastError.length > 0 ? opsApi.lastError : "No client-side errors"
                         color: opsApi.lastError.length > 0 ? "#8c2f24" : "#5c6659"
                         elide: Text.ElideRight
                     }
+                }
+                property bool loadtestRunning: opsApi.loadtestRunStatus.status === "running"
+                function loadtestRunningColor() {
+                    if (loadtestRunning) return "#fef9e7"
+                    if (opsApi.busy) return "#f4f1e6"
+                    return "#faf8ef"
+                }
+                function loadtestRunningBorderColor() {
+                    if (loadtestRunning) return "#e0c87a"
+                    if (opsApi.busy) return "#d4dacd"
+                    return "#d4dacd"
                 }
             }
 
@@ -78,9 +106,10 @@ ApplicationWindow {
                         currentIndex: stack.currentIndex
                         onCurrentIndexChanged: stack.currentIndex = currentIndex
                         TabButton { text: "Overview" }
-                        TabButton { text: "Loadtests" }
-                        TabButton { text: "Logs" }
                         TabButton { text: "Monitoring" }
+                        TabButton { text: "System" }
+                        TabButton { text: "Logs" }
+                        TabButton { text: "Loadtests" }
                         TabButton { text: "Config" }
                     }
 
@@ -93,28 +122,47 @@ ApplicationWindow {
                             opsApi: opsApi
                             onOpenRun: function(runId) {
                                 opsApi.selectRun(runId)
-                                tabBar.currentIndex = 1
+                                tabBar.currentIndex = 4
+                                stack.currentIndex = 4
                             }
                             onOpenService: function(serviceName, instanceName) {
                                 opsApi.selectService(serviceName, instanceName)
-                                tabBar.currentIndex = 3
+                                tabBar.currentIndex = 1
+                                stack.currentIndex = 1
                             }
                         }
 
-                        LoadtestsPage {
+                        MonitoringPage {
                             opsApi: opsApi
+                            onOpenLogs: function(serviceName, instanceName, level) {
+                                tabBar.currentIndex = 3
+                                stack.currentIndex = 3
+                            }
+                        }
+
+                        SystemPage {
+                            opsApi: opsApi
+                            onOpenLogs: function(serviceName, instanceName, level) {
+                                tabBar.currentIndex = 3
+                                stack.currentIndex = 3
+                            }
                         }
 
                         LogsPage {
                             opsApi: opsApi
                             onOpenService: function(serviceName, instanceName) {
                                 opsApi.selectService(serviceName, instanceName)
-                                tabBar.currentIndex = 3
+                                tabBar.currentIndex = 1
+                                stack.currentIndex = 1
                             }
                         }
 
-                        MonitoringPage {
+                        LoadtestsPage {
                             opsApi: opsApi
+                            onOpenRunPage: function() {
+                                tabBar.currentIndex = 4
+                                stack.currentIndex = 4
+                            }
                         }
 
                         ConfigPage {

@@ -6,6 +6,7 @@ import QtCharts 2.15
 ScrollView {
     id: root
     required property var opsApi
+    signal openLogs(string serviceName, string instanceName, string level)
 
     function rows(value) { return value ? value : [] }
     function fill(series, axis, items, valueKey) {
@@ -16,14 +17,29 @@ ScrollView {
             axis.append(String(items[i].minute_utc), i)
         }
     }
+    function n(v) { return v === undefined || v === null || v === "" ? 0 : Number(v) }
 
     contentWidth: availableWidth
 
     ColumnLayout {
-        x: 14
-        y: 14
+        x: 14; y: 14
         width: parent.width - 28
         spacing: 14
+
+        // Header with time range selector
+        RowLayout {
+            Layout.fillWidth: true
+            Label { text: "Monitoring"; font.pixelSize: 24; font.bold: true; color: "#203022" }
+            Item { Layout.fillWidth: true }
+            Label { text: "Range:" }
+            ComboBox {
+                id: rangeBox
+                Layout.preferredWidth: 120
+                model: ["1h", "6h", "24h", "7d"]
+                currentIndex: 0
+            }
+            Button { text: "Refresh"; onClicked: applyRange() }
+        }
 
         Rectangle {
             Layout.fillWidth: true
@@ -51,6 +67,15 @@ ScrollView {
                                 Label { text: modelData.service_name + " / " + modelData.instance_name; font.bold: true }
                                 Label { text: "cpu=" + Number(modelData.cpu_percent).toFixed(1) + "% qps=" + Number(modelData.qps).toFixed(2) }
                                 Label { text: "err=" + Number(modelData.error_rate).toFixed(2) + " p95=" + Number(modelData.latency_p95_ms).toFixed(1) }
+                                Button {
+                                    text: "Trace Logs"
+                                    anchors.bottom: parent.bottom
+                                    anchors.right: parent.right
+                                    anchors.margins: 4
+                                    font.pixelSize: 10
+                                    padding: 2
+                                    onClicked: root.openLogs(modelData.service_name, modelData.instance_name, "")
+                                }
                             }
                         }
                     }
@@ -124,6 +149,27 @@ ScrollView {
                     function onServiceTrendChanged() { root.fill(onlineSeries, onlineAxisX, root.rows(root.opsApi.serviceTrend.items), "online_users_avg") }
                 }
             }
+        }
+
+        function applyRange() {
+            var now = new Date()
+            var from = new Date(now.getTime() - rangeMs(rangeBox.currentText))
+            var fromUtc = from.toISOString().replace(".000Z", "Z")
+            var toUtc = now.toISOString().replace(".000Z", "Z")
+            var svc = root.opsApi.selectedService
+            root.opsApi.refreshServiceTrend(
+                svc.service_name || "",
+                svc.instance || "",
+                fromUtc,
+                toUtc
+            )
+        }
+        function rangeMs(label) {
+            if (label === "1h") return 3600 * 1000
+            if (label === "6h") return 6 * 3600 * 1000
+            if (label === "24h") return 24 * 3600 * 1000
+            if (label === "7d") return 7 * 24 * 3600 * 1000
+            return 3600 * 1000
         }
     }
 }

@@ -7,6 +7,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QSettings>
+#include <QTimer>
 #include <QUrlQuery>
 
 namespace {
@@ -45,6 +46,9 @@ QJsonObject OpsApiClient::selectedService() const { return m_selectedService; }
 QJsonObject OpsApiClient::selectedLogFilters() const { return m_selectedLogFilters; }
 QJsonArray OpsApiClient::alerts() const { return m_alerts; }
 QJsonObject OpsApiClient::dataSources() const { return m_dataSources; }
+QJsonArray OpsApiClient::systemMetrics() const { return m_systemMetrics; }
+QJsonObject OpsApiClient::loadtestRunStatus() const { return m_loadtestRunStatus; }
+QJsonArray OpsApiClient::tailLogItems() const { return m_tailLogs; }
 bool OpsApiClient::busy() const { return m_busy; }
 QString OpsApiClient::lastError() const { return m_lastError; }
 
@@ -412,4 +416,86 @@ void OpsApiClient::importLogs()
         refreshSelectedLogs();
         refreshServices();
     });
+}
+
+void OpsApiClient::postJsonWithQuery(const QString &path, const QUrlQuery &query,
+                                      const std::function<void(const QJsonObject &)> &onObject)
+{
+    ++m_inFlight;
+    setBusy(true);
+    const QString urlStr = m_baseUrl + path + (query.isEmpty() ? QString() : QStringLiteral("?") + query.toString(QUrl::FullyEncoded));
+    QNetworkRequest req_{QUrl(urlStr)};
+    req_.setRawHeader("Content-Type", "application/json");
+    auto *reply_ = m_network.post(req_, QByteArray{"{}"});
+    connect(reply_, &QNetworkReply::finished, this, [this, reply_, onObject]() {
+        --m_inFlight;
+        setBusy(m_inFlight > 0);
+        const QByteArray body = reply_->readAll();
+        if (reply_->error() != QNetworkReply::NoError) {
+            setLastError(reply_->errorString());
+            reply_->deleteLater();
+            return;
+        }
+        const auto doc = QJsonDocument::fromJson(body);
+        if (doc.isObject()) {
+            setLastError(QString());
+            onObject(doc.object());
+        }
+        reply_->deleteLater();
+    });
+}
+
+void OpsApiClient::refreshSystemMetrics()
+{
+    getJson("/api/system/metrics", [this](const QJsonObject &payload) {
+        m_systemMetrics = payload.value("services").toArray();
+        emit systemMetricsChanged();
+    });
+}
+
+void OpsApiClient::refreshLoadtestStatus(const QString &runId)
+{
+    if (runId.isEmpty()) {
+        return;
+    }
+    getJson("/api/loadtests/run/" + runId + "/status", [this](const QJsonObject &payload) {
+        m_loadtestRunStatus = payload;
+        emit loadtestRunStatusChanged();
+    });
+}
+
+void OpsApiClient::startLoadtest(const QString &scenario, int warmup, int poolSize)
+{
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("scenario"), scenario);
+    query.addQueryItem(QStringLiteral("warmup"), QString::number(warmup));
+    query.addQueryItem(QStringLiteral("pool_size"), QString::number(poolSize));
+    postJsonWithQuery("/api/loadtests/run", query, [this](const QJsonObject &payload) {
+        m_loadtestRunStatus = payload;
+        emit loadtestRunStatusChanged();
+    });
+}
+
+void OpsApiClient::fetchTailLogs(const QString &service, const QString &level, int limit)
+{
+    QUrlQuery query;
+    if (!service.isEmpty()) {
+        query.addQueryItem(QStringLiteral("service"), service);
+    }
+    if (!level.isEmpty()) {
+        query.addQueryItem(QStringLiteral("level"), level);
+    }
+    query.addQueryItem(QStringLiteral("limit"), QString::number(limit));
+
+    getJson("/api/logs/tail?" + query.toString(QUrl::FullyEncoded), [this](const QJsonObject &payload) {
+        m_tailLogs = payload.value("items").toArray();
+        emit tailLogsChanged();
+    });
+}
+
+void OpsApiClient::stopTailLogs()
+{
+    if (m_tailTimer) {
+        m_tailTimer->stop();
+    }
 }

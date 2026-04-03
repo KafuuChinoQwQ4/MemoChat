@@ -3,8 +3,10 @@
         <file>qml/Main.qml</file>
         <file>qml/pages/OverviewPage.qml</file>
         <file>qml/pages/LoadtestsPage.qml</file>
+        <file>qml/pages/LoadtestRunPage.qml</file>
         <file>qml/pages/LogsPage.qml</file>
         <file>qml/pages/MonitoringPage.qml</file>
+        <file>qml/pages/SystemPage.qml</file>
         <file>qml/pages/ConfigPage.qml</file>
     </qresource>
 </RCC>

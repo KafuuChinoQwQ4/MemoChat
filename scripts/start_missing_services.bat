@@ -1,7 +1,7 @@
 @echo off
 set MEMOCHAT_ENABLE_KAFKA=1
 set MEMOCHAT_ENABLE_RABBITMQ=1
-set RUNTIME_DIR=D:\MemoChat-Qml-Drogon\Memo_ops\runtime\services
+set RUNTIME_DIR=D:\MemoChat-Qml\Memo_ops\runtime\services
 
 echo Starting StatusServer...
 start "StatusServer" cmd /k "cd /d %RUNTIME_DIR%\StatusServer && set MEMOCHAT_ENABLE_KAFKA=1 && set MEMOCHAT_ENABLE_RABBITMQ=1 && StatusServer.exe --config config.ini"

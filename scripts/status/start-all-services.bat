@@ -3,7 +3,8 @@ REM ============================================================
 REM  MemoChat 一键启动 (start-all-services.bat)
 REM ============================================================
 setlocal enabledelayedexpansion
-set "PROJECT_ROOT=D:\MemoChat-Qml-Drogon"
+cd /d "%~dp0..\.."
+set "PROJECT_ROOT=%CD%"
 set "BUILD_DIR=%PROJECT_ROOT%\build"
 set "RUNTIME_DIR=%PROJECT_ROOT%\Memo_ops\runtime\services"
 set "MEMO_OPS_ROOT=%PROJECT_ROOT%\Memo_ops"
@@ -35,6 +36,14 @@ if exist "%VARIFY_DIR%\server.js" (
     echo   [OK] VarifyServer started
 ) else (
     echo   [X] VarifyServer not found
+)
+echo.
+
+REM ---- 检查 / 自动部署 C++ 服务 ----
+if not exist "%RUNTIME_DIR%\GateServer\GateServer.exe" (
+    echo   [!] 未找到 GateServer.exe，正在自动部署...
+    call "%~dp0deploy_services.bat"
+    echo.
 )
 echo.
 

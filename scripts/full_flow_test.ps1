@@ -15,12 +15,12 @@ try {
 }
 
 Write-Host "`n=== Step 2: Poll Redis for code ==="
-$env:NODE_PATH = "D:\MemoChat-Qml-Drogon\server\VarifyServer\node_modules"
+$env:NODE_PATH = "D:\MemoChat-Qml\server\VarifyServer\node_modules"
 $node = "D:\Node.js\node.exe"
 $found = $false
 for ($i = 0; $i -lt 10; $i++) {
     Start-Sleep -Milliseconds 300
-    $result = & $node "D:\MemoChat-Qml-Drogon\scripts\read_verify.js" $email 2>$null
+    $result = & $node "D:\MemoChat-Qml\scripts\read_verify.js" $email 2>$null
     if ($result -match "Verify code: (\S+)") {
         $code = $matches[1]
         Write-Host "Found code: $code"

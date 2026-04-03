@@ -3,6 +3,7 @@ from .loadtests import create_loadtests_router
 from .logs import create_logs_router
 from .metrics import create_metrics_router
 from .overview import create_overview_router
+from .system import create_system_router
 
 __all__ = [
     "create_admin_router",
@@ -10,4 +11,5 @@ __all__ = [
     "create_logs_router",
     "create_metrics_router",
     "create_overview_router",
+    "create_system_router",
 ]

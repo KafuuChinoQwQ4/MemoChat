@@ -12,6 +12,7 @@ from Memo_ops.server.ops_server.routes import (
     create_logs_router,
     create_metrics_router,
     create_overview_router,
+    create_system_router,
 )
 from Memo_ops.server.ops_server.runtime import DEFAULT_CONFIG, OpsServerRuntime
 
@@ -47,6 +48,7 @@ def create_app(runtime: OpsServerRuntime | None = None) -> FastAPI:
     app.include_router(create_logs_router(server_runtime))
     app.include_router(create_metrics_router(server_runtime))
     app.include_router(create_admin_router(server_runtime))
+    app.include_router(create_system_router(server_runtime))
     return app
 
 

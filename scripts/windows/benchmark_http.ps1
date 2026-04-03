@@ -248,7 +248,7 @@ foreach ($r in $results) {
 }
 
 # Save to JSON
-$reportDir = "D:\MemoChat-Qml-Drogon\Memo_ops\artifacts\loadtest\runtime\reports"
+$reportDir = "D:\MemoChat-Qml\Memo_ops\artifacts\reports\loadtest"
 if (-not (Test-Path $reportDir)) {
     New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
 }

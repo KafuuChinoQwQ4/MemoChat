@@ -17,7 +17,7 @@ try {
 Write-Host "Polling Redis..."
 for ($i = 0; $i -lt 10; $i++) {
     Start-Sleep -Milliseconds 300
-    $result = cmd /c "set NODE_PATH=D:\MemoChat-Qml-Drogon\server\VarifyServer\node_modules && node D:\MemoChat-Qml-Drogon\scripts\read_verify.js $email 2>nul"
+    $result = cmd /c "set NODE_PATH=D:\MemoChat-Qml\server\VarifyServer\node_modules && node D:\MemoChat-Qml\scripts\read_verify.js $email 2>nul"
     if ($result -match "Verify code: (\w+)") {
         $code = $matches[1]
         Write-Host "FOUND CODE: $code"

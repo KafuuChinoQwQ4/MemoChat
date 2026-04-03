@@ -17,12 +17,15 @@
 #include <csignal>
 #include <memory>
 #include <chrono>
+#include <aws/core/Aws.h>
 
 static volatile bool g_running = true;
 
 int main(int argc, char* argv[])
 {
     (void)argc; (void)argv;
+    Aws::SDKOptions aws_options;
+    bool aws_inited = false;
 
     signal(SIGINT, [](int) {
         std::cout << "GateServerHttp2: SIGINT received, shutting down..." << std::endl;
@@ -46,6 +49,8 @@ int main(int argc, char* argv[])
             });
         memolog::Logger::Init("GateServerHttp2", log_cfg);
         memolog::Telemetry::Init("GateServerHttp2", telemetry_cfg);
+        Aws::InitAPI(aws_options);
+        aws_inited = true;
 
         const auto postgres_init_start = std::chrono::steady_clock::now();
         PostgresMgr::GetInstance();
@@ -77,6 +82,7 @@ int main(int argc, char* argv[])
         memolog::LogInfo("service.stop", "GateServerHttp2 stopped");
         GateAsyncSideEffects::Instance().Stop();
         RedisMgr::GetInstance()->Close();
+        Aws::ShutdownAPI(aws_options);
         memolog::Telemetry::Shutdown();
         memolog::Logger::Shutdown();
         return EXIT_SUCCESS;
@@ -85,6 +91,9 @@ int main(int argc, char* argv[])
         memolog::LogError("service.fatal", "GateServerHttp2 crashed", { {"error", e.what()} });
         GateAsyncSideEffects::Instance().Stop();
         RedisMgr::GetInstance()->Close();
+        if (aws_inited) {
+            Aws::ShutdownAPI(aws_options);
+        }
         memolog::Telemetry::Shutdown();
         memolog::Logger::Shutdown();
         return EXIT_FAILURE;
