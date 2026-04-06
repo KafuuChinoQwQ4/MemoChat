@@ -168,20 +168,23 @@ void Http2MediaHandlers::HandleMediaDownload(const Http2Request& req, Http2Respo
         return;
     }
 
-    if (result.data.isMember("redirect")) {
-        resp.SetStatus(302, "Found");
-        resp.SetHeader("Location", result.data["redirect"].asString());
-        resp.SetJsonBody(R"({})");
+    if (result.data.isMember("data")) {
+        resp.status_code = 200;
+        resp.content_type = result.data["content_type"].asString();
+        resp.body = result.data["data"].asString();
         return;
     }
 
     if (result.data.isMember("path")) {
         resp.SetHeader("Content-Type", result.data["content_type"].asString());
         resp.SetHeader("X-Media-Path", result.data["path"].asString());
-        resp.SetJsonBody(R"({"status":"file","path":""})".replace(26, 5, result.data["path"].asString()));
+        Json::Value body;
+        body["status"] = "file";
+        body["path"] = result.data["path"].asString();
+        resp.SetJsonBody(body.toStyledString());
         return;
     }
 
-    Json::Value out = MakeMediaError(1, "file not found");
+    Json::Value out = MakeMediaError(1, result.message.empty() ? "file not found" : result.message);
     resp.SetJsonBody(out.toStyledString());
 }

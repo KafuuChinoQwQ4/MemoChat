@@ -325,7 +325,7 @@ Rectangle {
                             root.viewMode = 0
                             controller.switchChatTab(root.lastMainTab)
                         }
-                        onChooseAvatarRequested: controller.chooseAvatar()
+                        onChooseAvatarRequested: function(source) { controller.chooseAvatar(source) }
                         onSaveProfileRequested: function(nick, desc) { controller.saveProfile(nick, desc) }
                         onStatusCleared: controller.clearSettingsStatus()
                     }
@@ -405,7 +405,7 @@ Rectangle {
                             onRefreshRequested: controller.refreshGroupList()
                             onLoadHistoryRequested: controller.loadGroupHistory()
                             onUpdateAnnouncementRequested: function(announcement) { controller.updateGroupAnnouncement(announcement) }
-                            onUpdateGroupIconRequested: controller.updateGroupIcon()
+                            onUpdateGroupIconRequested: function(source) { controller.updateGroupIcon(source) }
                             onQuitRequested: {
                                 controller.quitCurrentGroup()
                                 groupManagePopup.close()

@@ -16,7 +16,7 @@ GlassSurface {
     signal refreshRequested()
     signal loadHistoryRequested()
     signal updateAnnouncementRequested(string announcement)
-    signal updateGroupIconRequested()
+    signal updateGroupIconRequested(int source)
     signal quitRequested()
 
     cornerRadius: 10
@@ -81,6 +81,7 @@ GlassSurface {
             }
 
             GlassButton {
+                id: iconBtn
                 Layout.preferredWidth: 96
                 text: "修改群头像"
                 implicitHeight: 30
@@ -90,7 +91,24 @@ GlassSurface {
                 hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
                 pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
                 disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                onClicked: root.updateGroupIconRequested()
+                onClicked: groupIconMenu.open()
+            }
+        }
+
+        Menu {
+            id: groupIconMenu
+            width: 160
+            MenuItem {
+                text: "从相册选择"
+                onClicked: root.updateGroupIconRequested(0)
+            }
+            MenuItem {
+                text: "屏幕截图"
+                onClicked: root.updateGroupIconRequested(1)
+            }
+            MenuItem {
+                text: "拍照上传"
+                onClicked: root.updateGroupIconRequested(2)
             }
         }
 

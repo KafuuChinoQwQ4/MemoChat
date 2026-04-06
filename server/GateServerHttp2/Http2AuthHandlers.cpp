@@ -7,11 +7,11 @@ void Http2AuthHandlers::HandleGetVarifyCode(const Http2Request& req, Http2Respon
 {
     Json::Value root;
     if (!Http2AuthSupport::ParseJsonBody(req.body, root)) {
-        resp.SetJsonBody(Http2AuthSupport::MakeError(ErrorCodes::Error_Json, "invalid json"));
+        resp.SetJsonBody(Http2AuthSupport::MakeError(ErrorCodes::Error_Json, "invalid json").toStyledString());
         return;
     }
     if (!root.isMember("email")) {
-        resp.SetJsonBody(Http2AuthSupport::MakeError(ErrorCodes::Error_Json, "email is required"));
+        resp.SetJsonBody(Http2AuthSupport::MakeError(ErrorCodes::Error_Json, "email is required").toStyledString());
         return;
     }
     auto result = Http2AuthSupport::HandleGetVarifyCode(root["email"].asString());
@@ -28,7 +28,7 @@ void Http2AuthHandlers::HandleUserRegister(const Http2Request& req, Http2Respons
 {
     Json::Value root;
     if (!Http2AuthSupport::ParseJsonBody(req.body, root)) {
-        resp.SetJsonBody(Http2AuthSupport::MakeError(ErrorCodes::Error_Json, "invalid json"));
+        resp.SetJsonBody(Http2AuthSupport::MakeError(ErrorCodes::Error_Json, "invalid json").toStyledString());
         return;
     }
     auto result = Http2AuthSupport::HandleUserRegister(root);
@@ -45,7 +45,7 @@ void Http2AuthHandlers::HandleResetPwd(const Http2Request& req, Http2Response& r
 {
     Json::Value root;
     if (!Http2AuthSupport::ParseJsonBody(req.body, root)) {
-        resp.SetJsonBody(Http2AuthSupport::MakeError(ErrorCodes::Error_Json, "invalid json"));
+        resp.SetJsonBody(Http2AuthSupport::MakeError(ErrorCodes::Error_Json, "invalid json").toStyledString());
         return;
     }
     auto result = Http2AuthSupport::HandleResetPwd(root);
@@ -62,7 +62,7 @@ void Http2AuthHandlers::HandleUserLogin(const Http2Request& req, Http2Response& 
 {
     Json::Value root;
     if (!Http2AuthSupport::ParseJsonBody(req.body, root)) {
-        resp.SetJsonBody(Http2AuthSupport::MakeError(ErrorCodes::Error_Json, "invalid json"));
+        resp.SetJsonBody(Http2AuthSupport::MakeError(ErrorCodes::Error_Json, "invalid json").toStyledString());
         return;
     }
     auto result = Http2AuthSupport::HandleUserLogin(root);

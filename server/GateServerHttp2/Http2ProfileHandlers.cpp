@@ -7,7 +7,7 @@ void Http2ProfileHandlers::HandleUserUpdateProfile(const Http2Request& req, Http
 {
     Json::Value root;
     if (!Http2ProfileSupport::ParseJsonBody(req.body, root)) {
-        resp.SetJsonBody(Http2ProfileSupport::MakeError(1, "invalid json"));
+        resp.SetJsonBody(Http2ProfileSupport::MakeError(1, "invalid json").toStyledString());
         return;
     }
     auto result = Http2ProfileSupport::HandleUserUpdateProfile(root);
@@ -28,7 +28,7 @@ void Http2ProfileHandlers::HandleGetUserInfo(const Http2Request& req, Http2Respo
         uid = root.get("uid", 0).asInt();
     }
     if (uid <= 0) {
-        resp.SetJsonBody(Http2ProfileSupport::MakeError(1, "invalid uid"));
+        resp.SetJsonBody(Http2ProfileSupport::MakeError(1, "invalid uid").toStyledString());
         return;
     }
     auto result = Http2ProfileSupport::HandleGetUserInfo(uid);

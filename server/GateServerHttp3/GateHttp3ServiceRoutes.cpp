@@ -461,13 +461,10 @@ void RegisterRoutes(LogicSystem& logic) {
             connection->SendResponse(400, root.toStyledString(), "application/json");
             return true;
         }
-        if (result.data.isMember("redirect")) {
-            Json::Value root;
-            root["error"] = 0;
-            root["redirect"] = result.data["redirect"].asString();
-            root["content_type"] = result.data["content_type"].asString();
-            root["file_name"] = result.data["file_name"].asString();
-            connection->SendResponse(200, root.toStyledString(), "application/json");
+        if (result.data.isMember("data")) {
+            const std::string& ct = result.data["content_type"].asString();
+            const std::string& body_data = result.data["data"].asString();
+            connection->SendResponse(200, body_data, ct);
             return true;
         }
         if (result.data.isMember("path")) {
@@ -482,7 +479,7 @@ void RegisterRoutes(LogicSystem& logic) {
         }
         Json::Value root;
         root["error"] = 1;
-        root["message"] = "file not found";
+        root["message"] = result.message.empty() ? "file not found" : result.message;
         connection->SendResponse(404, root.toStyledString(), "application/json");
         return true;
     });

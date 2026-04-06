@@ -20,7 +20,6 @@ add_executable(StatusServer
     Singleton.h
     StatusAsyncSideEffects.h
     StatusServiceImpl.h
-    config.ini
 )
 
 set_target_properties(StatusServer PROPERTIES FOLDER "Server")

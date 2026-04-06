@@ -59,6 +59,18 @@ else()
     endif()
 endif()
 
+# HTTP/2 requires nghttp2 (Boost.Asio + OpenSSL for TLS/ALPN, nghttp2 for HPACK/H2 framing)
+set(MEMOCHAT_HAVE_NGHTTP2 0)
+find_package(nghttp2 CONFIG QUIET)
+# Use nghttp2::nghttp2_static (the actual .lib/.a) to avoid DLL dependency.
+# nghttp2::nghttp2 maps to a SHARED library and requires nghttp2.dll at runtime.
+if((TARGET nghttp2::nghttp2_static OR TARGET nghttp2::nghttp2) AND TARGET OpenSSL::SSL)
+    set(MEMOCHAT_HAVE_NGHTTP2 1)
+    message(STATUS "HTTP/2: nghttp2 (static) found, enabling HTTP/2 support")
+else()
+    message(STATUS "HTTP/2: nghttp2 or OpenSSL not found — HTTP/2 support disabled")
+endif()
+
 if(TARGET spdlog::spdlog)
     set(MEMOCHAT_SPDLOG_TARGET spdlog::spdlog)
 elseif(TARGET spdlog::spdlog_header_only)
@@ -204,7 +216,7 @@ target_link_libraries(memochat_server_deps INTERFACE
     JsonCpp::JsonCpp
     ${MEMOCHAT_SPDLOG_TARGET}
 )
-target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_KAFKA=${MEMOCHAT_ENABLE_KAFKA} MEMOCHAT_ENABLE_RABBITMQ=${MEMOCHAT_ENABLE_RABBITMQ} MEMOCHAT_ENABLE_HTTP3=${MEMOCHAT_ENABLE_HTTP3})
+target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_KAFKA=${MEMOCHAT_ENABLE_KAFKA} MEMOCHAT_ENABLE_RABBITMQ=${MEMOCHAT_ENABLE_RABBITMQ} MEMOCHAT_ENABLE_HTTP3=${MEMOCHAT_ENABLE_HTTP3} MEMOCHAT_HAVE_NGHTTP2=${MEMOCHAT_HAVE_NGHTTP2})
 
 if(TARGET msquic)
     target_link_libraries(memochat_server_deps INTERFACE msquic)
@@ -218,6 +230,18 @@ if(MEMOCHAT_ENABLE_HTTP3)
     target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_HTTP3=1)
 else()
     target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_HTTP3=0)
+endif()
+
+if(MEMOCHAT_HAVE_NGHTTP2)
+    # Prefer the static library target to avoid DLL dependency.
+    if(TARGET nghttp2::nghttp2_static)
+        target_link_libraries(memochat_server_deps INTERFACE nghttp2::nghttp2_static)
+    else()
+        target_link_libraries(memochat_server_deps INTERFACE nghttp2::nghttp2)
+    endif()
+    target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_HAVE_NGHTTP2=1)
+else()
+    target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_HAVE_NGHTTP2=0)
 endif()
 
 if(MEMOCHAT_ENABLE_KAFKA)
@@ -266,10 +290,6 @@ function(memochat_configure_server_target target_name)
     target_include_directories(${target_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     set_target_properties(${target_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
-    # Services share one output folder; copying config.ini here causes collisions
-    # between targets (and with client config). start_test_services.bat already
-    # prepares per-service run directories with matching config.ini files.
-
     file(GLOB local_dlls "${CMAKE_CURRENT_SOURCE_DIR}/*.dll")
     foreach(local_dll IN LISTS local_dlls)
         add_custom_command(
@@ -280,6 +300,20 @@ function(memochat_configure_server_target target_name)
             "$<TARGET_FILE_DIR:${target_name}>"
         )
     endforeach()
+
+    # Auto-deploy to Memo_ops runtime directory after each build.
+    if(WIN32)
+        set(RUNTIME_BASE "D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\services")
+        add_custom_command(TARGET ${target_name} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:${target_name}>"
+                "${RUNTIME_BASE}\\${target_name}\\"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE_DIR:${target_name}>/config.ini"
+                "${RUNTIME_BASE}\\${target_name}\\"
+            COMMENT "Auto-deploying ${target_name} -> ${RUNTIME_BASE}\\${target_name}\\"
+        )
+    endif()
 endfunction()
 
 if(BUILD_TESTS)
@@ -291,18 +325,7 @@ endif()
 
 add_subdirectory(ChatServer)
 add_subdirectory(GateServerCore)
-
-# libh2o for GateServerHttp2 (optional — skip if not found)
-find_package(libh2o CONFIG QUIET)
-if(libh2o_FOUND)
-    add_subdirectory(GateServerHttp2)
-    message(STATUS "GateServerHttp2: libh2o found — HTTP/2 support enabled")
-else()
-    message(STATUS "GateServerHttp2: libh2o not found — skipping HTTP/2 server")
-endif()
-
 add_subdirectory(GateServerHttp3)
-add_subdirectory(GateServerHttp1.1)
 add_subdirectory(GateServer)
 add_subdirectory(StatusServer)
 add_subdirectory(VarifyServer)

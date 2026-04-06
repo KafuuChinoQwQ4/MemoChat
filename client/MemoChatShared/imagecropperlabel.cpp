@@ -3,6 +3,8 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QMouseEvent>
+#include <QWheelEvent>
+#include <QKeyEvent>
 #include <QDebug>
 #include <QBitmap>
 
@@ -12,6 +14,7 @@ ImageCropperLabel::ImageCropperLabel(int width, int height, QWidget* parent) :
     this->setFixedSize(width, height);
     this->setAlignment(Qt::AlignCenter);
     this->setMouseTracking(true);
+    this->setFocusPolicy(Qt::StrongFocus);
 
     borderPen.setWidth(1);
     borderPen.setColor(Qt::white);
@@ -710,4 +713,67 @@ void ImageCropperLabel::mouseReleaseEvent(QMouseEvent *) {
     isLButtonPressed = false;
     isCursorPosCalculated = false;
     setCursor(Qt::ArrowCursor);
+}
+
+void ImageCropperLabel::wheelEvent(QWheelEvent *event) {
+    if (cropperShape == CropperShape::UNDEFINED) return;
+
+    const int delta = event->angleDelta().y();
+    if (delta == 0) return;
+
+    const bool zoomIn = delta > 0;
+    const qreal factor = zoomIn ? 1.10 : 0.90;
+
+    int centerX = cropperRect.center().x();
+    int centerY = cropperRect.center().y();
+    int newW = int(cropperRect.width() * factor);
+    int newH = int(cropperRect.height() * factor);
+
+    // Clamp to minimum size
+    if (newW < cropperMinimumWidth) newW = cropperMinimumWidth;
+    if (newH < cropperMinimumHeight) newH = cropperMinimumHeight;
+
+    // Clamp to image bounds
+    if (centerX - newW/2 < imageRect.left()) newW = (centerX - imageRect.left()) * 2;
+    if (centerX + newW/2 > imageRect.right()) newW = (imageRect.right() - centerX) * 2;
+    if (centerY - newH/2 < imageRect.top()) newH = (centerY - imageRect.top()) * 2;
+    if (centerY + newH/2 > imageRect.bottom()) newH = (imageRect.bottom() - centerY) * 2;
+
+    // For SQUARE/CIRCLE, keep 1:1 aspect ratio
+    if (cropperShape == CropperShape::SQUARE || cropperShape == CropperShape::CIRCLE) {
+        newH = newW;
+    }
+
+    if (newW < cropperMinimumWidth || newH < cropperMinimumHeight) return;
+
+    cropperRect.setRect(centerX - newW/2, centerY - newH/2, newW, newH);
+    emit croppedImageChanged();
+    repaint();
+}
+
+void ImageCropperLabel::keyPressEvent(QKeyEvent *event) {
+    const int step = 1;
+    switch (event->key()) {
+        case Qt::Key_Left:
+            cropperRect.moveLeft(cropperRect.left() - step);
+            emit croppedImageChanged();
+            break;
+        case Qt::Key_Right:
+            cropperRect.moveLeft(cropperRect.left() + step);
+            emit croppedImageChanged();
+            break;
+        case Qt::Key_Up:
+            cropperRect.moveTop(cropperRect.top() - step);
+            emit croppedImageChanged();
+            break;
+        case Qt::Key_Down:
+            cropperRect.moveTop(cropperRect.top() + step);
+            emit croppedImageChanged();
+            break;
+        default:
+            QLabel::keyPressEvent(event);
+            return;
+    }
+    repaint();
+    event->accept();
 }

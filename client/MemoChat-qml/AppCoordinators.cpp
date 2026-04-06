@@ -250,7 +250,7 @@ ProfileCoordinator::ProfileCoordinator(AppController& controller)
     : _app(controller) {
 }
 
-void ProfileCoordinator::chooseAvatar()
+void ProfileCoordinator::chooseAvatar(int source)
 {
     auto selfInfo = _app._gateway.userMgr()->GetUserInfo();
     if (!selfInfo) {
@@ -260,7 +260,15 @@ void ProfileCoordinator::chooseAvatar()
 
     QString avatarUrl;
     QString errorText;
-    if (!LocalFilePickerService::pickAvatarUrl(&avatarUrl, &errorText)) {
+    bool ok = false;
+    if (source == 0) {
+        ok = LocalFilePickerService::pickAvatarUrl(&avatarUrl, &errorText);
+    } else if (source == 1) {
+        ok = LocalFilePickerService::pickAvatarFromScreen(&avatarUrl, &errorText);
+    } else {
+        ok = LocalFilePickerService::pickAvatarFromWebcam(&avatarUrl, &errorText);
+    }
+    if (!ok) {
         if (!errorText.isEmpty()) {
             _app.setSettingsStatus(errorText, true);
         }

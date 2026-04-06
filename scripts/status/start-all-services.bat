@@ -31,8 +31,8 @@ if exist "%VARIFY_DIR%\server.js" (
         echo   [*] 安装 Node.js 依赖...
         cd /d "%VARIFY_DIR%" && npm install
     )
-    set MEMOCHAT_HEALTH_PORT=8082
-    start "VarifyServer" cmd /c "cd /d "%VARIFY_DIR%" && set MEMOCHAT_ENABLE_KAFKA=1 && set MEMOCHAT_ENABLE_RABBITMQ=1 && set MEMOCHAT_HEALTH_PORT=8082 && node server.js"
+    set MEMOCHAT_HEALTH_PORT=8083
+    start "VarifyServer" cmd /c "cd /d "%VARIFY_DIR%" && set MEMOCHAT_ENABLE_KAFKA=1 && set MEMOCHAT_ENABLE_RABBITMQ=1 && set MEMOCHAT_HEALTH_PORT=8083 && node server.js"
     echo   [OK] VarifyServer started
 ) else (
     echo   [X] VarifyServer not found

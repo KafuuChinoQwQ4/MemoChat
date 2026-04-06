@@ -1,14 +1,26 @@
-
-//
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <iphlpapi.h>
+#pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "iphlpapi.lib")
+#pragma comment(lib, "bcrypt.lib")
+// OPENSSL_Applink: must be compiled once per EXE (not per translation unit).
+// Use the OpenSSL::applink target from vcpkg instead of including the .c file directly.
+#endif
 
 #include "GateHttp3Listener.h"
+#if defined(MEMOCHAT_HAVE_NGHTTP2)
+#include "NgHttp2Server.h"
+#endif
 #include "LogicSystem.h"
 #include "SnowflakeUtil.h"
-#include <iostream>
-#include <json/json.h>
-#include <json/value.h>
-#include <json/reader.h>
-#include "const.h"
 #include "CServer.h"
 #include "ConfigMgr.h"
 #include <hiredis/hiredis.h>
@@ -26,220 +38,119 @@
 #include <chrono>
 #include <thread>
 #include <aws/core/Aws.h>
+#include <iostream>
+#include <json/json.h>
+#include <json/value.h>
+#include <json/reader.h>
+#include "const.h"
+#include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
+#include <boost/beast/version.hpp>
+#include <boost/asio/ip/tcp.hpp>
 
-void TestRedis() {
+using namespace memolog;
 
+static Aws::SDKOptions g_aws_options;
 
-	redisContext* c = redisConnect("127.0.0.1", 6380);
-	if (c->err)
-	{
-		printf("Connect to redisServer faile:%s\n", c->errstr);
-		redisFree(c);        return;
-	}
-	printf("Connect to redisServer Success\n");
+int main(int argc, char* argv[]) {
+    (void)argc; (void)argv;
 
-	std::string redis_password = "123456";
-	redisReply* r = (redisReply*)redisCommand(c, "AUTH %s", redis_password.c_str());
-	 if (r->type == REDIS_REPLY_ERROR) {
-		 printf("Redis auth failed!\n");
-	}else {
-		printf("Redis auth success!\n");
-		 }
+    Aws::InitAPI(g_aws_options);
 
+    auto& cfgMgr = ConfigMgr::Inst();
+    memolog::Logger::Init("GateServer", memolog::LogConfig::FromGetter(
+        [&cfgMgr](const std::string& section, const std::string& key) {
+            return cfgMgr.GetValue(section, key);
+        }));
 
-	const char* command1 = "set stest1 value1";
+    memolog::LogInfo("gate.start", "GateServer starting...");
 
+    // Initialize Snowflake ID generator
+    {
+        auto worker_id_str = cfgMgr.GetValue("Snowflake", "WorkerId");
+        auto datacenter_id_str = cfgMgr.GetValue("Snowflake", "DatacenterId");
+        int64_t worker_id = worker_id_str.empty() ? 0 : std::stoll(worker_id_str);
+        int64_t datacenter_id = datacenter_id_str.empty() ? 0 : std::stoll(datacenter_id_str);
+        SnowflakeUtil::getInstance().init(worker_id, datacenter_id);
+    }
+    GateAsyncSideEffects::Instance().Start();
 
-    r = (redisReply*)redisCommand(c, command1);
+    std::string gate_port_str = cfgMgr["GateServer"]["Port"];
+    unsigned short gate_port = atoi(gate_port_str.c_str());
+    unsigned int num_threads = std::thread::hardware_concurrency();
+    if (num_threads < 2) num_threads = 4;
+    auto worker_threads_str = cfgMgr.GetValue("GateServer", "WorkerThreads");
+    unsigned int worker_threads = worker_threads_str.empty() ? num_threads : std::atoi(worker_threads_str.c_str());
+    if (worker_threads < 1) worker_threads = num_threads;
+    gateglobals::g_worker_threads = worker_threads;
+    gateglobals::g_main_ioc = nullptr;
+    GateWorkerPool::GetInstance(worker_threads);
+    memolog::LogInfo("gate.thread_pool", "GateServer thread pool configured",
+        { {"num_threads", std::to_string(num_threads)}, {"worker_threads", std::to_string(worker_threads)} });
 
+    // ── Start HTTP/1.1 server (Boost.Asio) on gate_port ───────────────────────
+    net::io_context ioc{ static_cast<int>(num_threads) };
+    gateglobals::g_main_ioc = &ioc;
+    std::make_shared<CServer>(ioc, gate_port)->Start();
+    memolog::LogInfo("service.start", "GateServer listening",
+        { {"port", std::to_string(gate_port)} });
 
-	if (NULL == r)
-	{
-		printf("Execut command1 failure\n");
-		redisFree(c);        return;
-	}
+    boost::asio::signal_set signals(ioc, SIGINT, SIGTERM);
+    signals.async_wait([&ioc](const boost::system::error_code& error, int signal_number) {
+        (void)signal_number;
+        if (error) { return; }
+        memolog::LogInfo("gate.signal", "GateServer received shutdown signal");
+        ioc.stop();
+    });
 
-
-	if (!(r->type == REDIS_REPLY_STATUS && (strcmp(r->str, "OK") == 0 || strcmp(r->str, "ok") == 0)))
-	{
-		printf("Failed to execute command[%s]\n", command1);
-		freeReplyObject(r);
-		redisFree(c);        return;
-	}
-
-
-	freeReplyObject(r);
-	printf("Succeed to execute command[%s]\n", command1);
-
-	const char* command2 = "strlen stest1";
-	r = (redisReply*)redisCommand(c, command2);
-
-
-	if (r->type != REDIS_REPLY_INTEGER)
-	{
-		printf("Failed to execute command[%s]\n", command2);
-		freeReplyObject(r);
-		redisFree(c);        return;
-	}
-
-
-	int length = r->integer;
-	freeReplyObject(r);
-	printf("The length of 'stest1' is %d.\n", length);
-	printf("Succeed to execute command[%s]\n", command2);
-
-
-	const char* command3 = "get stest1";
-	r = (redisReply*)redisCommand(c, command3);
-	if (r->type != REDIS_REPLY_STRING)
-	{
-		printf("Failed to execute command[%s]\n", command3);
-		freeReplyObject(r);
-		redisFree(c);        return;
-	}
-	printf("The value of 'stest1' is %s\n", r->str);
-	freeReplyObject(r);
-	printf("Succeed to execute command[%s]\n", command3);
-
-	const char* command4 = "get stest2";
-	r = (redisReply*)redisCommand(c, command4);
-	if (r->type != REDIS_REPLY_NIL)
-	{
-		printf("Failed to execute command[%s]\n", command4);
-		freeReplyObject(r);
-		redisFree(c);        return;
-	}
-	freeReplyObject(r);
-	printf("Succeed to execute command[%s]\n", command4);
-
-
-	redisFree(c);
-
-}
-
-void TestRedisMgr() {
-	assert(RedisMgr::GetInstance()->Set("blogwebsite","llfc.club"));
-	std::string value="";
-	assert(RedisMgr::GetInstance()->Get("blogwebsite", value) );
-	assert(RedisMgr::GetInstance()->Get("nonekey", value) == false);
-	assert(RedisMgr::GetInstance()->HSet("bloginfo","blogwebsite", "llfc.club"));
-	assert(RedisMgr::GetInstance()->HGet("bloginfo","blogwebsite") != "");
-	assert(RedisMgr::GetInstance()->ExistsKey("bloginfo"));
-	assert(RedisMgr::GetInstance()->Del("bloginfo"));
-	assert(RedisMgr::GetInstance()->Del("bloginfo"));
-	assert(RedisMgr::GetInstance()->ExistsKey("bloginfo") == false);
-	assert(RedisMgr::GetInstance()->LPush("lpushkey1", "lpushvalue1"));
-	assert(RedisMgr::GetInstance()->LPush("lpushkey1", "lpushvalue2"));
-	assert(RedisMgr::GetInstance()->LPush("lpushkey1", "lpushvalue3"));
-	assert(RedisMgr::GetInstance()->RPop("lpushkey1", value));
-	assert(RedisMgr::GetInstance()->RPop("lpushkey1", value));
-	assert(RedisMgr::GetInstance()->LPop("lpushkey1", value));
-	assert(RedisMgr::GetInstance()->LPop("lpushkey2", value)==false);
-}
-
-void TestPostgresMgr() {
-	int id = PostgresMgr::GetInstance()->RegUser("wwc","secondtonone1@163.com","123456",": / res / head_1.jpg");
-	std::cout << "id  is " << id << std::endl;
-}
-
-int main()
-{
-	Aws::SDKOptions aws_options;
-	bool aws_inited = false;
-	try
-	{
-		auto & gCfgMgr = ConfigMgr::Inst();
-		auto log_cfg = memolog::LogConfig::FromGetter(
-			[&gCfgMgr](const std::string& section, const std::string& key) {
-				return gCfgMgr.GetValue(section, key);
-			});
-		auto telemetry_cfg = memolog::TelemetryConfig::FromGetter(
-			[&gCfgMgr](const std::string& section, const std::string& key) {
-				return gCfgMgr.GetValue(section, key);
-			});
-		memolog::Logger::Init("GateServer", log_cfg);
-		memolog::Telemetry::Init("GateServer", telemetry_cfg);
-		Aws::InitAPI(aws_options);
-		aws_inited = true;
-		const auto postgres_init_start = std::chrono::steady_clock::now();
-		PostgresMgr::GetInstance();
-		memolog::LogInfo("service.postgres_ready", "GateServer postgres ready",
-			{
-				{"postgres_init_ms", std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
-					std::chrono::steady_clock::now() - postgres_init_start).count())}
-			});
-	RedisMgr::GetInstance();
-	MongoMgr::GetInstance();
-	{
-		auto worker_id_str = gCfgMgr.GetValue("Snowflake", "WorkerId");
-		auto datacenter_id_str = gCfgMgr.GetValue("Snowflake", "DatacenterId");
-		int64_t worker_id = worker_id_str.empty() ? 0 : std::stoll(worker_id_str);
-		int64_t datacenter_id = datacenter_id_str.empty() ? 0 : std::stoll(datacenter_id_str);
-		SnowflakeUtil::getInstance().init(worker_id, datacenter_id);
-	}
-	GateAsyncSideEffects::Instance().Start();
-		std::string gate_port_str = gCfgMgr["GateServer"]["Port"];
-		unsigned short gate_port = atoi(gate_port_str.c_str());
-		unsigned int num_threads = std::thread::hardware_concurrency();
-		if (num_threads < 2) num_threads = 4;
-		auto worker_threads_str = gCfgMgr.GetValue("GateServer", "WorkerThreads");
-		unsigned int worker_threads = worker_threads_str.empty() ? num_threads : std::atoi(worker_threads_str.c_str());
-		if (worker_threads < 1) worker_threads = num_threads;
-		gateglobals::g_worker_threads = worker_threads;
-		gateglobals::g_main_ioc = nullptr;
-		GateWorkerPool::GetInstance(worker_threads);
-		memolog::LogInfo("gate.thread_pool", "GateServer thread pool configured",
-			{ {"num_threads", std::to_string(num_threads)}, {"worker_threads", std::to_string(worker_threads)} });
-		net::io_context ioc{ static_cast<int>(num_threads) };
-		gateglobals::g_main_ioc = &ioc;
-		boost::asio::signal_set signals(ioc, SIGINT, SIGTERM);
-		signals.async_wait([&ioc](const boost::system::error_code& error, int signal_number) {
-
-			if (error) {
-				return;
-			}
-			ioc.stop();
-			});
-		std::make_shared<CServer>(ioc, gate_port)->Start();
-		memolog::LogInfo("service.start", "GateServer listening", { {"port", std::to_string(gate_port)} });
-
-		// Start HTTP/3 listener on alternate port (port + 1)
+    // ── Start HTTP/3 listener on port gate_port + 1 (QUIC) ────────────────────
 #if defined(MEMOCHAT_ENABLE_HTTP3)
-		int http3_port = gate_port + 1;
-		std::string http3_error;
-		auto http3_listener = std::make_shared<GateHttp3Listener>(ioc, *LogicSystem::GetInstance(), http3_port);
-		if (http3_listener->Start(http3_error)) {
-			memolog::LogInfo("service.http3.start", "GateServer HTTP/3 listener started",
-				{{"port", std::to_string(http3_port)}});
-		} else {
-			memolog::LogWarn("service.http3.start.fail", "GateServer HTTP/3 listener failed to start",
-				{{"error", http3_error}});
-		}
+    int http3_port = gate_port + 1;
+    std::string http3_error;
+    auto http3_listener = std::make_shared<GateHttp3Listener>(ioc, *LogicSystem::GetInstance(), http3_port);
+    if (http3_listener->Start(http3_error)) {
+        memolog::LogInfo("service.http3.start", "GateServer HTTP/3 listener started",
+            {{"port", std::to_string(http3_port)}});
+    } else {
+        memolog::LogWarn("service.http3.start.fail", "GateServer HTTP/3 listener failed to start",
+            {{"error", http3_error}});
+    }
 #endif
 
-		ioc.run();
-		memolog::LogInfo("service.stop", "GateServer stopped");
-		GateAsyncSideEffects::Instance().Stop();
-		GateWorkerPool::GetInstance()->Stop();
-		RedisMgr::GetInstance()->Close();
-		Aws::ShutdownAPI(aws_options);
-		memolog::Telemetry::Shutdown();
-		memolog::Logger::Shutdown();
-		return EXIT_SUCCESS;
-	}
-	catch (std::exception const& e)
-	{
-		memolog::LogError("service.fatal", "GateServer crashed", { {"error", e.what()} });
-		GateAsyncSideEffects::Instance().Stop();
-		RedisMgr::GetInstance()->Close();
-		if (aws_inited) {
-			Aws::ShutdownAPI(aws_options);
-		}
-		memolog::Telemetry::Shutdown();
-		memolog::Logger::Shutdown();
-		return EXIT_FAILURE;
-	}
+    // ── Start HTTP/2 server (Boost.Asio + nghttp2) on port gate_port + 2 ──────
+#if defined(MEMOCHAT_HAVE_NGHTTP2)
+    auto h2_port_str = cfgMgr.GetValue("GateServer", "Http2Port");
+    int h2_port = h2_port_str.empty() ? static_cast<int>(gate_port) + 2 : std::atoi(h2_port_str.c_str());
+    auto& h2_server = NgHttp2Server::GetInstance();
+    h2_server.SetPort(h2_port);
+    if (h2_server.Initialize()) {
+        memolog::LogInfo("service.http2.start", "GateServer HTTP/2 (nghttp2) initializing",
+            {{"port", std::to_string(h2_port)}});
+        std::thread h2_thread([&h2_server, h2_port]() {
+            memolog::LogInfo("service.http2.run", "NgHttp2Server thread started",
+                {{"port", std::to_string(h2_port)}});
+            try {
+                h2_server.Run();
+            } catch (const std::exception& e) {
+                memolog::LogError("gate.http2.thread.exc", "NgHttp2Server thread threw uncaught exception",
+                    {{"error", e.what()}});
+            } catch (...) {
+                memolog::LogError("gate.http2.thread.exc", "NgHttp2Server thread threw unknown exception");
+            }
+            memolog::LogInfo("service.http2.stop", "NgHttp2Server thread stopped");
+        });
+        h2_thread.detach();
+    } else {
+        memolog::LogWarn("service.http2.init.fail", "NgHttp2Server Initialize() returned false — HTTP/2 disabled");
+    }
+#endif
 
+    ioc.run();
+    memolog::LogInfo("service.stop", "GateServer stopped");
+    GateAsyncSideEffects::Instance().Stop();
+    GateWorkerPool::GetInstance()->Stop();
+    RedisMgr::GetInstance()->Close();
+    Aws::ShutdownAPI(g_aws_options);
+    memolog::Logger::Shutdown();
+    return 0;
 }
-
-

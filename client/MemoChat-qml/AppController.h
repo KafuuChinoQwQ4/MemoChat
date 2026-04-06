@@ -250,7 +250,7 @@ public:
     Q_INVOKABLE void endCurrentCall();
     Q_INVOKABLE void toggleCallMuted();
     Q_INVOKABLE void toggleCallCamera();
-    Q_INVOKABLE void chooseAvatar();
+    Q_INVOKABLE void chooseAvatar(int source = 0);
     Q_INVOKABLE void saveProfile(const QString &nick, const QString &desc);
     Q_INVOKABLE void clearSettingsStatus();
     Q_INVOKABLE void refreshGroupList();
@@ -266,7 +266,7 @@ public:
     Q_INVOKABLE void forwardGroupMessage(const QString &msgId);
     Q_INVOKABLE void loadGroupHistory();
     Q_INVOKABLE void updateGroupAnnouncement(const QString &announcement);
-    Q_INVOKABLE void updateGroupIcon();
+    Q_INVOKABLE void updateGroupIcon(int source = 0);
     Q_INVOKABLE void setGroupAdmin(const QString &userId, bool isAdmin, qint64 permissionBits = 0);
     Q_INVOKABLE void muteGroupMember(const QString &userId, int muteSeconds);
     Q_INVOKABLE void kickGroupMember(const QString &userId);

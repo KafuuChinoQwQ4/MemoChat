@@ -15,7 +15,7 @@ Item {
     property string statusText: ""
     property bool statusError: false
     signal backRequested()
-    signal chooseAvatarRequested()
+    signal chooseAvatarRequested(int source)
     signal saveProfileRequested(string nick, string desc)
     signal statusCleared()
 
@@ -133,7 +133,7 @@ Item {
                             Layout.preferredHeight: 210
                             backdrop: root.backdrop
                             iconSource: root.userIcon
-                            onChooseAvatarRequested: root.chooseAvatarRequested()
+                            onChooseAvatarRequested: root.chooseAvatarRequested(source)
                         }
 
                         SettingsProfileForm {
