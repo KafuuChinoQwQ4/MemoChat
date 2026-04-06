@@ -15,7 +15,7 @@ Rectangle {
     property string userId: ""
     property string statusText: ""
     property bool statusError: false
-    signal chooseAvatarRequested()
+    signal chooseAvatarRequested(int source)
     signal saveProfileRequested(string nick, string desc)
     signal statusCleared()
 
@@ -29,7 +29,7 @@ Rectangle {
             Layout.fillHeight: true
             backdrop: root.backdrop
             iconSource: root.userIcon
-            onChooseAvatarRequested: root.chooseAvatarRequested()
+            onChooseAvatarRequested: root.chooseAvatarRequested(source)
         }
 
         SettingsProfileForm {

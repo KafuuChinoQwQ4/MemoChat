@@ -57,7 +57,7 @@ class ProfileCoordinator {
 public:
     explicit ProfileCoordinator(AppController& controller);
 
-    void chooseAvatar();
+    void chooseAvatar(int source = 0);
     void saveProfile(const QString& nick, const QString& desc);
 
 private:

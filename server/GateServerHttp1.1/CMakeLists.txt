@@ -11,7 +11,6 @@ add_executable(GateServerHttp1.1
     H1AuthRoutes.cpp
     H1MomentsRoutes.cpp
     H1MediaService.cpp
-    config.ini
 )
 
 set_target_properties(GateServerHttp1.1 PROPERTIES FOLDER "Server")

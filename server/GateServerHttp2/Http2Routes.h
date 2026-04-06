@@ -5,7 +5,6 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
-#include <h2o.h>
 
 struct Http2Request {
     std::string method;

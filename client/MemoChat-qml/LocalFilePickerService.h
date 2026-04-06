@@ -12,6 +12,8 @@ public:
     static bool pickImageUrls(QVariantList *attachments, QString *errorText);
     static bool pickFileUrls(QVariantList *attachments, QString *errorText);
     static bool pickAvatarUrl(QString *avatarUrl, QString *errorText);
+    static bool pickAvatarFromScreen(QString *avatarUrl, QString *errorText);
+    static bool pickAvatarFromWebcam(QString *avatarUrl, QString *errorText);
     static bool openUrl(const QString &urlText, QString *errorText);
 };
 

@@ -6,7 +6,7 @@ REM ============================================================
 setlocal enabledelayedexpansion
 cd /d "%~dp0..\.."
 set "PROJECT_ROOT=%CD%"
-set "BUILD_BIN=%PROJECT_ROOT%\build\bin\Release"
+set "BUILD_BIN=%PROJECT_ROOT%\build-vcpkg-server\bin\Release"
 set "RUNTIME_DIR=%PROJECT_ROOT%\Memo_ops\runtime\services"
 
 echo ============================================================
@@ -55,16 +55,8 @@ set "VCPKG_DIR=%PROJECT_ROOT%\vcpkg_installed\x64-windows\bin"
 if exist "%VCPKG_DIR%" (
     echo [DLL] Copying vcpkg DLLs...
     for %%F in (
-        "DrogonController.dll"
-        "Trantor.dll"
-        "JsonCpp.dll"
-        "brotlicommon.dll"
-        "brotlidec.dll"
-        "brotlienc.dll"
-        "zlib.dll"
-        "libcrypto-3-x64.dll"
-        "libssl-3-x64.dll"
-        "libcurl.dll"
+        "drogon.dll"
+        "abseil_dll.dll"
         "aws-c-auth.dll"
         "aws-c-cal.dll"
         "aws-c-common.dll"
@@ -79,28 +71,47 @@ if exist "%VCPKG_DIR%" (
         "aws-cpp-sdk-core.dll"
         "aws-cpp-sdk-s3.dll"
         "aws-crt-cpp.dll"
-        "cares.dll"
-        "curlpp.dll"
-        "fmt.dll"
-        "hiredis.dll"
-        "libprotobuf.dll"
-        "mongoc-1.0.dll"
-        "mongocxx-v_noabi-rhi-md.dll"
+        "boost_atomic-vc145-mt-x64-1_90.dll"
+        "boost_chrono-vc145-mt-x64-1_90.dll"
+        "boost_container-vc145-mt-x64-1_90.dll"
+        "boost_context-vc145-mt-x64-1_90.dll"
+        "boost_date_time-vc145-mt-x64-1_90.dll"
+        "boost_filesystem-vc145-mt-x64-1_90.dll"
+        "boost_program_options-vc145-mt-x64-1_90.dll"
+        "boost_serialization-vc145-mt-x64-1_90.dll"
+        "boost_thread-vc145-mt-x64-1_90.dll"
+        "boost_wserialization-vc145-mt-x64-1_90.dll"
+        "brotlicommon.dll"
+        "brotlidec.dll"
+        "brotlienc.dll"
         "bson-1.0.dll"
         "bsoncxx-v_noabi-rhi-md.dll"
-        "pqxx.dll"
+        "cares.dll"
         "cppkafka.dll"
+        "fmt.dll"
+        "hiredis.dll"
+        "jsoncpp.dll"
+        "libcrypto-3-x64.dll"
+        "libssl-3-x64.dll"
+        "libpq.dll"
+        "libprotobuf.dll"
+        "libprotobuf-lite.dll"
+        "lz4.dll"
+        "mongoc-1.0.dll"
+        "mongocxx-v_noabi-rhi-md.dll"
+        "msquic.dll"
+        "nghttp2.dll"
+        "nghttp3.dll"
+        "ngtcp2.dll"
+        "pqxx.dll"
         "rabbitmq.4.dll"
         "rdkafka.dll"
+        "rdkafka++.dll"
         "re2.dll"
         "spdlog.dll"
-        "ngtcp2.dll"
-        "msquic.dll"
-        "boost_filesystem-vc145-mt-x64-1_90.dll"
-        "boost_regex-vc145-mt-x64-1_90.dll"
-        "libpq.dll"
-        "mysqlcppconn-9-vs14.dll"
-        "mysqlcppconn8-2-vs14.dll"
+        "trantor.dll"
+        "utf8proc.dll"
+        "zlib1.dll"
     ) do (
         if exist "%VCPKG_DIR%\%%~nxF" copy /y "%VCPKG_DIR%\%%~nxF" "%RUNTIME_DIR%\GateServer\" >nul
         if exist "%VCPKG_DIR%\%%~nxF" copy /y "%VCPKG_DIR%\%%~nxF" "%RUNTIME_DIR%\StatusServer\" >nul
@@ -115,8 +126,8 @@ echo.
 
 REM ---- 拷贝各服务 config.ini ----
 set "SRC=%PROJECT_ROOT%\server"
-call :copyOne "%SRC%\GateServer\config.ini"          "%RUNTIME_DIR%\GateServer\config.ini"
-call :copyOne "%SRC%\StatusServer\config.ini"         "%RUNTIME_DIR%\StatusServer\config.ini"
+call :copyOne "%SRC%\StatusServer\config.ini"        "%RUNTIME_DIR%\StatusServer\config.ini"
+call :copyOne "%SRC%\GateServer\config.ini"           "%RUNTIME_DIR%\GateServer\config.ini"
 call :copyOne "%SRC%\ChatServer\config.ini"           "%RUNTIME_DIR%\chatserver1\config.ini"
 call :copyOne "%SRC%\ChatServer\config.ini"           "%RUNTIME_DIR%\chatserver2\config.ini"
 call :copyOne "%SRC%\ChatServer\config.ini"           "%RUNTIME_DIR%\chatserver3\config.ini"
@@ -169,10 +180,10 @@ if exist "%CONF%" (
     powershell -NoProfile -Command ^
         "$f='%CONF%'; $name='%NAME%'; $worker='%WORKER%'; " ^
         "$c=[IO.File]::ReadAllText($f); " ^
-        "$c=$c -replace '(?m)^Name\s*=\s*\S+','Name=%NAME%'; " ^
-        "$c=$c -replace '(?m)^WorkerId\s*=\s*\S+','WorkerId=%WORKER%'; " ^
+        "$c=$c -replace '(?m)^\[SelfServer\]\r?\nName=.*\r?\n', ('[SelfServer]`r`nName=' + $name + '`r`n'); " ^
+        "$c=$c -replace '(?s)^\[Snowflake\]\r?\nDatacenterId=\d+\r?\nWorkerId=\d+\r?\n', ('[Snowflake]`r`nDatacenterId=1`r`nWorkerId=' + $worker + '`r`n'); " ^
         "[IO.File]::WriteAllText($f,$c); " ^
-        "Write-Host \"[PATCH] $f - Name=%NAME%, WorkerId=%WORKER%\"" 2>nul
+        "Write-Host \"[PATCH] $f - Name=$name, WorkerId=$worker\"" 2>nul
 )
 exit /b 0
 

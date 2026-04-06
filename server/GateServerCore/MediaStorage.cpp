@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
+#include <vector>
 
 namespace {
 std::filesystem::path ResolveUploadsRoot() {
@@ -21,6 +23,24 @@ std::filesystem::path ResolveUploadsRoot() {
 
 bool LooksLikeHttpUrl(const std::string& value) {
     return value.rfind("http://", 0) == 0 || value.rfind("https://", 0) == 0;
+}
+
+std::string GuessContentTypeLocal(const std::string& fileName, const std::string& mimeHint) {
+    if (!mimeHint.empty()) return mimeHint;
+    static const std::unordered_map<std::string, std::string> extMap = {
+        {".png", "image/png"}, {".jpg", "image/jpeg"}, {".jpeg", "image/jpeg"},
+        {".webp", "image/webp"}, {".bmp", "image/bmp"}, {".gif", "image/gif"},
+        {".txt", "text/plain"}, {".pdf", "application/pdf"}
+    };
+    const auto pos = fileName.rfind('.');
+    if (pos != std::string::npos) {
+        std::string ext = fileName.substr(pos);
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        auto it = extMap.find(ext);
+        if (it != extMap.end()) return it->second;
+    }
+    return "application/octet-stream";
 }
 
 std::string BuildDateTag() {
@@ -66,7 +86,8 @@ LocalMediaStorage::LocalMediaStorage(const std::filesystem::path& uploads_root) 
     _public_base_url = ConfigMgr::Inst().GetValue("Media", "PublicBaseUrl");
 }
 
-bool LocalMediaStorage::StoreMergedFile(const std::string& media_key,
+bool LocalMediaStorage::StoreMergedFile(const std::string& media_type,
+                                        const std::string& media_key,
                                         const std::string& origin_file_name,
                                         const std::filesystem::path& merged_file,
                                         std::string& out_storage_path,
@@ -75,6 +96,8 @@ bool LocalMediaStorage::StoreMergedFile(const std::string& media_key,
         error_text = "media key is empty";
         return false;
     }
+
+    (void)media_type;
 
     if (!std::filesystem::exists(merged_file)) {
         error_text = "merged temp file not found";
@@ -136,7 +159,9 @@ bool LocalMediaStorage::ResolveReadPath(const std::string& storage_path,
 }
 
 bool LocalMediaStorage::ResolvePublicUrl(const std::string& storage_path,
+                                         const std::string& media_type,
                                          std::string& out_url) const {
+    (void)media_type;
     if (storage_path.empty()) {
         return false;
     }
@@ -155,6 +180,38 @@ bool LocalMediaStorage::ResolvePublicUrl(const std::string& storage_path,
         suffix = "/" + suffix;
     }
     out_url = _public_base_url + suffix;
+    return true;
+}
+
+bool LocalMediaStorage::ReadObject(const std::string& storage_path,
+                                    const std::string& media_type,
+                                    std::vector<char>& out_data,
+                                    std::string& out_content_type,
+                                    std::string& error_text) {
+    (void)media_type;
+    out_data.clear();
+    out_content_type = "application/octet-stream";
+
+    std::filesystem::path full_path;
+    if (!ResolveReadPath(storage_path, full_path)) {
+        error_text = "failed to resolve local read path";
+        return false;
+    }
+    if (!std::filesystem::exists(full_path)) {
+        error_text = "file does not exist: " + full_path.string();
+        return false;
+    }
+
+    std::ifstream ifs(full_path, std::ios::binary);
+    if (!ifs) {
+        error_text = "failed to open file: " + full_path.string();
+        return false;
+    }
+    out_data.assign(std::istreambuf_iterator<char>(ifs),
+                    std::istreambuf_iterator<char>());
+    ifs.close();
+
+    out_content_type = GuessContentTypeLocal(full_path.filename().string(), "");
     return true;
 }
 
