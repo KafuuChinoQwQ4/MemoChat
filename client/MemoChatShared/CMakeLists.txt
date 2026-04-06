@@ -17,6 +17,12 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets Network)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets Network)
 find_package(msquic CONFIG QUIET)
+find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Multimedia QUIET)
+if(Qt${QT_VERSION_MAJOR}_Multimedia_FOUND)
+    set(HAVE_QT_MULTIMEDIA 1)
+else()
+    set(HAVE_QT_MULTIMEDIA 0)
+endif()
 
 set(CORE_SOURCES
     ChatMessageDispatcher.cpp
@@ -27,6 +33,10 @@ set(CORE_SOURCES
     tcpmgr.cpp
     userdata.cpp
     usermgr.cpp
+    imagecropperlabel.cpp
+    ScreenCaptureWidget.cpp
+    ScreenCaptureService.cpp
+    WebcamCaptureDialog.cpp
 )
 
 set(CORE_HEADERS
@@ -40,6 +50,10 @@ set(CORE_HEADERS
     userdata.h
     usermgr.h
     singleton.h
+    imagecropperlabel.h
+    ScreenCaptureWidget.h
+    ScreenCaptureService.h
+    WebcamCaptureDialog.h
 )
 
 add_library(MemoChatCore STATIC ${CORE_SOURCES} ${CORE_HEADERS})
@@ -50,6 +64,13 @@ target_link_libraries(MemoChatCore PUBLIC
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Network
 )
+
+if(Qt${QT_VERSION_MAJOR}_Multimedia_FOUND)
+    target_link_libraries(MemoChatCore PUBLIC Qt${QT_VERSION_MAJOR}::Multimedia)
+    target_compile_definitions(MemoChatCore PUBLIC HAVE_QT_MULTIMEDIA=1)
+else()
+    target_compile_definitions(MemoChatCore PUBLIC HAVE_QT_MULTIMEDIA=0)
+endif()
 
 if(TARGET msquic)
     target_link_libraries(MemoChatCore PUBLIC msquic)

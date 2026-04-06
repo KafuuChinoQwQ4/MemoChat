@@ -754,9 +754,13 @@ void AppController::toggleCallCamera()
     _call_coordinator->toggleCallCamera();
 }
 
-void AppController::chooseAvatar()
+void AppController::chooseAvatar(int source)
 {
-    _profile_coordinator->chooseAvatar();
+    if (source == 0) {
+        _profile_coordinator->chooseAvatar();
+    } else {
+        setSettingsStatus("屏幕截图/拍照功能开发中", false);
+    }
 }
 
 void AppController::saveProfile(const QString &nick, const QString &desc)
@@ -1091,7 +1095,7 @@ void AppController::updateGroupAnnouncement(const QString &announcement)
     _gateway.chatTransport()->slot_send_data(ReqId::ID_UPDATE_GROUP_ANNOUNCEMENT_REQ, payload);
 }
 
-void AppController::updateGroupIcon()
+void AppController::updateGroupIcon(int source)
 {
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
     if (!selfInfo || _current_group_id <= 0) {
@@ -1114,7 +1118,15 @@ void AppController::updateGroupIcon()
 
     QString avatarUrl;
     QString errorText;
-    if (!LocalFilePickerService::pickAvatarUrl(&avatarUrl, &errorText)) {
+    bool ok = false;
+    if (source == 0) {
+        ok = LocalFilePickerService::pickAvatarUrl(&avatarUrl, &errorText);
+    } else if (source == 1) {
+        ok = LocalFilePickerService::pickAvatarFromScreen(&avatarUrl, &errorText);
+    } else {
+        ok = LocalFilePickerService::pickAvatarFromWebcam(&avatarUrl, &errorText);
+    }
+    if (!ok) {
         if (!errorText.isEmpty()) {
             setGroupStatus(errorText, true);
         }

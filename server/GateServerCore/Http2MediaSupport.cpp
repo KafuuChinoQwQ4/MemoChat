@@ -457,7 +457,7 @@ MediaResult HandleUploadMediaComplete(int uid, const std::string& token,
     std::string storage_path;
     std::string storage_error;
     IMediaStorage& storage = MediaStorageForLocal(storage_provider);
-    if (!storage.StoreMergedFile(media_key, file_name, merged_path, storage_path, storage_error)) {
+    if (!storage.StoreMergedFile(media_type, media_key, file_name, merged_path, storage_path, storage_error)) {
         result.error = ErrorCodes::MediaUploadFailed;
         result.message = storage_error.empty() ? "persist media failed" : storage_error;
         return result;
@@ -547,7 +547,7 @@ MediaResult HandleUploadMediaSimple(int uid, const std::string& token,
     std::string storage_path;
     std::string storage_error;
     IMediaStorage& storage = MediaStorageForLocal(cfg.storage_provider);
-    if (!storage.StoreMergedFile(media_key, safe_name, temp_file, storage_path, storage_error)) {
+    if (!storage.StoreMergedFile(safe_type, media_key, safe_name, temp_file, storage_path, storage_error)) {
         result.error = ErrorCodes::MediaUploadFailed;
         result.message = storage_error.empty() ? "persist media failed" : storage_error;
         return result;
@@ -601,23 +601,37 @@ MediaResult HandleMediaDownloadInfo(int uid, const std::string& token,
 
     IMediaStorage& storage = MediaStorageForLocal(asset.storage_provider);
     std::string public_url;
-    if (storage.ResolvePublicUrl(asset.storage_path, public_url) && !public_url.empty()) {
-        result.error = ErrorCodes::Success;
-        result.data["redirect"] = public_url;
-        return result;
+    if (storage.ResolvePublicUrl(asset.storage_path, asset.media_type, public_url) &&
+        !public_url.empty()) {
+        // Do NOT expose MinIO public URL if the bucket is not publicly accessible.
+        // Instead, let the client fall through to stream via /media/download.
+        // Skip the redirect and serve locally or via ReadObject below.
+        // (public_url is intentionally not used here)
     }
 
     std::filesystem::path full_path;
-    if (!storage.ResolveReadPath(asset.storage_path, full_path)
-        || !std::filesystem::exists(full_path)) {
-        result.error = ErrorCodes::UidInvalid;
-        result.message = "file not found";
+    if (storage.ResolveReadPath(asset.storage_path, full_path)
+        && std::filesystem::exists(full_path)) {
+        result.error = ErrorCodes::Success;
+        result.data["path"] = full_path.string();
+        result.data["content_type"] = GuessContentTypeLocal(asset.origin_file_name, asset.mime);
         return result;
     }
 
-    result.error = ErrorCodes::Success;
-    result.data["path"] = full_path.string();
-    result.data["content_type"] = GuessContentTypeLocal(asset.origin_file_name, asset.mime);
+    // Last resort: try ReadObject for S3
+    std::vector<char> data;
+    std::string ct_from_storage;
+    std::string storage_err;
+    if (storage.ReadObject(asset.storage_path, asset.media_type,
+                          data, ct_from_storage, storage_err)) {
+        result.error = ErrorCodes::Success;
+        result.data["data"] = std::string(data.begin(), data.end());
+        result.data["content_type"] = ct_from_storage.empty() ? "application/octet-stream" : ct_from_storage;
+        return result;
+    }
+
+    result.error = ErrorCodes::UidInvalid;
+    result.message = storage_err.empty() ? "file not found" : storage_err;
     return result;
 }
 

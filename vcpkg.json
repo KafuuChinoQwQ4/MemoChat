@@ -45,6 +45,10 @@
           "name": "nghttp3",
           "features": []
         },
+        {
+          "name": "nghttp2",
+          "features": []
+        },
         "openssl",
         {
           "name": "aws-sdk-cpp",
@@ -53,6 +57,12 @@
           ]
         },
         "gtest"
+      ]
+    },
+    "http2": {
+      "description": "HTTP/2 support via nghttp2",
+      "dependencies": [
+        "nghttp2"
       ]
     },
     "http3": {

@@ -6,7 +6,6 @@
 #include "Http2ProfileHandlers.h"
 #include "Http2Handlers.h"
 #include "Http2MomentsSupport.h"
-#include <h2o.h>
 #include <iostream>
 #include <mutex>
 

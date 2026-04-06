@@ -66,7 +66,6 @@ set(SOURCES
     WindowShapeService.cpp
     MomentsController.cpp
     MomentsModel.cpp
-    ${SHARED_CLIENT_DIR}/imagecropperlabel.cpp
 )
 
 set(HEADERS
@@ -100,7 +99,11 @@ set(HEADERS
     MomentsController.h
     MomentsModel.h
     ${SHARED_CLIENT_DIR}/imagecropperdialog.h
+)
+
+set_source_files_properties(
     ${SHARED_CLIENT_DIR}/imagecropperlabel.h
+    PROPERTIES SKIP_AUTOMOC ON
 )
 
 set(RESOURCES

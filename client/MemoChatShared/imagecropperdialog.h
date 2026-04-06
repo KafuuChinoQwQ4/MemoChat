@@ -30,6 +30,7 @@ public:
         this->setWindowTitle("Image Cropper");
         this->setMouseTracking(true);
         this->setModal(true);
+        this->setFocusPolicy(Qt::StrongFocus);
 
         imageLabel = new ImageCropperLabel(windowWidth, windowHeight, this);
         imageLabel->setCropper(shape, cropperSize);
@@ -73,8 +74,8 @@ private:
 ********************************************************************/
 class ImageCropperDialog : QObject {
 public:
-    static QPixmap getCroppedImage(const QString& filename,int windowWidth, int windowHeight,
-                                   CropperShape cropperShape, QSize crooperSize = QSize())
+    static QPixmap getCroppedImage(const QString& filename, int windowWidth, int windowHeight,
+                                   CropperShape cropperShape, QSize cropperSize = QSize())
     {
         QPixmap inputImage;
         QPixmap outputImage;
@@ -87,9 +88,22 @@ public:
         ImageCropperDialogPrivate* imageCropperDo =
             new ImageCropperDialogPrivate(inputImage, outputImage,
                                           windowWidth, windowHeight,
-                                          cropperShape, crooperSize);
+                                          cropperShape, cropperSize);
         imageCropperDo->exec();
 
+        return outputImage;
+    }
+
+    static QPixmap getCroppedImage(const QPixmap& inputImage,
+                                   int windowWidth, int windowHeight,
+                                   CropperShape cropperShape, QSize cropperSize = QSize())
+    {
+        QPixmap outputImage;
+        ImageCropperDialogPrivate* imageCropperDo =
+            new ImageCropperDialogPrivate(inputImage, outputImage,
+                                          windowWidth, windowHeight,
+                                          cropperShape, cropperSize);
+        imageCropperDo->exec();
         return outputImage;
     }
 };

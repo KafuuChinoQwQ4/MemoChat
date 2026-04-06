@@ -7,7 +7,7 @@ Item {
     id: root
     property Item backdrop: null
     property string iconSource: "qrc:/res/head_1.jpg"
-    signal chooseAvatarRequested()
+    signal chooseAvatarRequested(int source)
 
     implicitWidth: 260
     implicitHeight: 190
@@ -54,6 +54,7 @@ Item {
             }
 
             GlassButton {
+                id: avatarBtn
                 Layout.alignment: Qt.AlignHCenter
                 text: "更换头像"
                 textPixelSize: 13
@@ -62,8 +63,27 @@ Item {
                 hoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.30)
                 pressedColor: Qt.rgba(0.54, 0.70, 0.93, 0.38)
                 disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                onClicked: root.chooseAvatarRequested()
+                onClicked: avatarMenu.open()
             }
+        }
+    }
+
+    Menu {
+        id: avatarMenu
+        y: avatarBtn.y + avatarBtn.height + 4
+        x: avatarBtn.x + (avatarBtn.width - width) / 2
+        width: 160
+        MenuItem {
+            text: "从相册选择"
+            onClicked: root.chooseAvatarRequested(0)
+        }
+        MenuItem {
+            text: "屏幕截图"
+            onClicked: root.chooseAvatarRequested(1)
+        }
+        MenuItem {
+            text: "拍照上传"
+            onClicked: root.chooseAvatarRequested(2)
         }
     }
 }

@@ -83,7 +83,6 @@ add_executable(ChatServer
     Singleton.h
     StatusGrpcClient.h
     UserMgr.h
-    config.ini
     chatserver1.ini
     chatserver2.ini
 )

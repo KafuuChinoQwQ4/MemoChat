@@ -8,12 +8,14 @@
 #include "PostgresMgr.h"
 #include "RedisMgr.h"
 #include "const.h"
+#include "logging/Logger.h"
 
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <algorithm>
+#include <vector>
 #include <chrono>
 #include <cctype>
 #include <filesystem>
@@ -682,7 +684,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         std::string storage_path;
         std::string storage_error;
         IMediaStorage& storage = MediaStorageForLocal(storage_provider);
-        if (!storage.StoreMergedFile(media_key, file_name, merged_path, storage_path, storage_error)) {
+        if (!storage.StoreMergedFile(media_type, media_key, file_name, merged_path, storage_path, storage_error)) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = storage_error.empty() ? "persist media failed" : storage_error;
             beast::ostream(connection->_response.body()) << root.toStyledString();
@@ -803,7 +805,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         std::string storage_path;
         std::string storage_error;
         IMediaStorage& storage = MediaStorageForLocal(media_cfg.storage_provider);
-        if (!storage.StoreMergedFile(media_key, file_name, temp_file, storage_path, storage_error)) {
+        if (!storage.StoreMergedFile(media_type, media_key, file_name, temp_file, storage_path, storage_error)) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = storage_error.empty() ? "persist media failed" : storage_error;
             beast::ostream(connection->_response.body()) << root.toStyledString();
@@ -881,8 +883,35 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
             }
 
             IMediaStorage& storage = MediaStorageForLocal(asset.storage_provider);
+
+            std::vector<char> data;
+            std::string ct_from_storage;
+            std::string storage_err;
+            memolog::LogInfo("media.download.attempt",
+                "MediaHttpService /media/download ReadObject attempt: media_key=" + media_key +
+                " storage_provider=" + asset.storage_provider +
+                " storage_path=" + asset.storage_path);
+            if (storage.ReadObject(asset.storage_path, asset.media_type,
+                                   data, ct_from_storage, storage_err)) {
+                memolog::LogInfo("media.download.ok",
+                    "MediaHttpService /media/download ReadObject success: media_key=" + media_key +
+                    " data_size=" + std::to_string(data.size()) +
+                    " content_type=" + ct_from_storage);
+                connection->_response.result(http::status::ok);
+                content_type = ct_from_storage.empty() ? "application/octet-stream" : ct_from_storage;
+                connection->_response.set(http::field::content_type, content_type);
+                beast::ostream(connection->_response.body()).write(data.data(), static_cast<std::streamsize>(data.size()));
+                return true;
+            } else {
+                memolog::LogWarn("media.download.read_failed",
+                    "MediaHttpService /media/download ReadObject failed: media_key=" + media_key +
+                    " storage_err=" + storage_err +
+                    " storage_path=" + asset.storage_path);
+            }
+
             std::string public_url;
-            if (storage.ResolvePublicUrl(asset.storage_path, public_url) && !public_url.empty()) {
+            if (storage.ResolvePublicUrl(asset.storage_path, asset.media_type, public_url) &&
+                !public_url.empty()) {
                 connection->_response.result(http::status::temporary_redirect);
                 connection->_response.set(http::field::location, public_url);
                 connection->_response.set(http::field::content_type, "text/plain");
@@ -892,7 +921,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
 
             if (!storage.ResolveReadPath(asset.storage_path, full_path) || !std::filesystem::exists(full_path)) {
                 root["error"] = ErrorCodes::UidInvalid;
-                root["message"] = "file not found";
+                root["message"] = storage_err.empty() ? "file not found" : storage_err;
                 beast::ostream(connection->_response.body()) << root.toStyledString();
                 return true;
             }

@@ -38,7 +38,6 @@ add_executable(GateServerHttp2
     CertUtil.h
     CertUtil.cpp
     WinCompat.h
-    config.ini
 )
 
 set_target_properties(GateServerHttp2 PROPERTIES FOLDER "Server")

@@ -1,30 +1,49 @@
 add_executable(GateServer
-    # H1-specific entry point and listeners
+    GateServer.cpp
     CServer.cpp
     GateHttpJsonSupport.cpp
     GateServerH1Routes.cpp
     GateWorkerPool.cpp
     HttpConnection.cpp
     LogicSystem.cpp
-    GateServer.cpp
     MediaHttpService.cpp
     MomentsRouteModules.cpp
     MomentsRouteModules.h
-    # GateServerCore header for H3 service interface
     GateRouteModules.h
-    # GateHttp3Service is defined in GateServerHttp3
     ../GateServerHttp3/GateHttp3ServiceRoutes.h
-    # CertUtil for self-signed certificate generation (HTTP/3)
     CertUtil.cpp
     CertUtil.h
-    config.ini
 )
+
+# When nghttp2 is available, embed NgHttp2Server (HTTP/2) directly inside GateServer.
+# NOTE: GateServer's CertUtil.cpp is already in the main target above; we do NOT
+# compile GateServerHttp2/CertUtil.cpp here to avoid duplicate symbol errors.
+if(MEMOCHAT_HAVE_NGHTTP2)
+    target_sources(GateServer PRIVATE
+        NgHttp2Server.cpp
+        ../GateServerHttp2/Http2Routes.cpp
+        ../GateServerHttp2/Http2Handlers.cpp
+        ../GateServerHttp2/Http2AuthHandlers.cpp
+        ../GateServerHttp2/Http2AuthSupport.cpp
+        ../GateServerHttp2/Http2CallHandlers.cpp
+        ../GateServerHttp2/Http2CallSupport.cpp
+        ../GateServerHttp2/Http2MediaHandlers.cpp
+        ../GateServerHttp2/Http2ProfileHandlers.cpp
+        ../GateServerHttp2/Http2MomentsSupport.cpp
+    )
+    # Header-only support modules
+    target_sources(GateServer PRIVATE
+        ../GateServerHttp2/Http2MediaSupport.h
+        ../GateServerHttp2/Http2ProfileSupport.h
+    )
+    target_include_directories(GateServer PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../GateServerHttp2
+    )
+endif()
 
 set_target_properties(GateServer PROPERTIES FOLDER "Server")
 memochat_configure_server_target(GateServer)
 
-# GateServer links against GateServerCore (all shared services)
-# and GateServerHttp3 (H3 listener + routes)
 target_link_libraries(GateServer PRIVATE
     GateServerCore
     GateServerHttp3
@@ -43,21 +62,12 @@ if(WIN32)
         "/LIBPATH:C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64"
         "/LIBPATH:C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64"
         "/LIBPATH:D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64")
-endif()
-
-# CertUtil.cpp requires OpenSSL — link DLL + applink to fix OPENSSL_Uplink on Windows DLL builds
-find_package(OpenSSL CONFIG)
-if(TARGET OpenSSL::SSL AND TARGET OpenSSL::Crypto)
-    target_link_libraries(GateServer PRIVATE OpenSSL::SSL OpenSSL::Crypto)
-    # vcpkg OpenSSL DLL on Windows requires OPENSSL_Applink to be registered.
-    # Without this, libcrypto-3-x64.dll crashes with "no OPENSSL_Applink".
     if(TARGET OpenSSL::applink)
         target_link_libraries(GateServer PRIVATE OpenSSL::applink)
     endif()
 endif()
 
 if(MEMOCHAT_ENABLE_HTTP3)
-    # msquic.dll is in vcpkg_installed/x64-windows/bin, copy to output
     find_path(MSQUIC_BIN_DIR NAMES msquic.dll PATHS
         "${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg_installed/x64-windows/bin"
         NO_DEFAULT_PATH)
@@ -66,9 +76,5 @@ if(MEMOCHAT_ENABLE_HTTP3)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${MSQUIC_BIN_DIR}/msquic.dll"
                 "$<TARGET_FILE_DIR:GateServer>")
-        message(STATUS "HTTP/3: will copy msquic.dll from ${MSQUIC_BIN_DIR}")
-    else()
-        message(WARNING "HTTP/3: msquic.dll not found in vcpkg_installed, "
-            "copy it manually if QUIC listener fails to start")
     endif()
 endif()

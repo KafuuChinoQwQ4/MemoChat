@@ -7,7 +7,6 @@
 #include <h2o/http2.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
-#include <openssl/applink.c>
 #include <filesystem>
 #include <iostream>
 #include <thread>
