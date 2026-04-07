@@ -48,6 +48,9 @@ enum ErrorCodes {
     ChatTicketInvalid = 1095,
     ChatTicketExpired = 1096,
     ChatServerMismatch = 1097,
+    RateLimited = 1020,
+    InvalidEmail = 1021,
+    EmailSendFailed = 1022,
 };
 
 class Defer {
