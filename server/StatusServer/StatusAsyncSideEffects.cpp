@@ -266,22 +266,31 @@ void StatusAsyncSideEffects::ConsumePresenceRefreshLoop()
     bool consume_started = false;
     while (!_stop.load()) {
         std::string error;
+        bool connected = false;
         {
             std::lock_guard<std::mutex> guard(_mutex);
-            if (!EnsureRabbitConnected(&error)) {
-                memolog::LogWarn("status.presence_worker.connect_failed", "failed to connect rabbitmq presence worker",
-                    {{"error", error}});
-            } else if (!consume_started) {
-                amqp_basic_consume(static_cast<amqp_connection_state_t>(_rabbit_connection), 1,
-                    amqp_cstring_bytes("status.presence.refresh.q"), amqp_empty_bytes, 0, 0, 0, amqp_empty_table);
-                amqp_get_rpc_reply(static_cast<amqp_connection_state_t>(_rabbit_connection));
-                consume_started = true;
-            }
+            connected = EnsureRabbitConnected(&error);
         }
-        if (!_rabbit_connection) {
-            consume_started = false;
+        if (!connected) {
+            if (error == "rabbitmq_not_configured") {
+                memolog::LogInfo("status.presence_worker", "RabbitMQ not configured, presence worker disabled");
+                break;
+            }
+            memolog::LogWarn("status.presence_worker.connect_failed", "failed to connect rabbitmq presence worker",
+                {{"error", error}});
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
             continue;
+        }
+        if (!_rabbit_connection) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            continue;
+        }
+
+        if (!consume_started) {
+            amqp_basic_consume(static_cast<amqp_connection_state_t>(_rabbit_connection), 1,
+                amqp_cstring_bytes("status.presence.refresh.q"), amqp_empty_bytes, 0, 0, 0, amqp_empty_table);
+            amqp_get_rpc_reply(static_cast<amqp_connection_state_t>(_rabbit_connection));
+            consume_started = true;
         }
 
         timeval timeout;

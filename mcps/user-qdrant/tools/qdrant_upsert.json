@@ -1,0 +1,18 @@
+{
+  "name": "qdrant_upsert",
+  "description": "Insert or update points (vectors with payload) in a Qdrant collection.",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "collection_name": {
+        "type": "string",
+        "description": "The name of the collection."
+      },
+      "points": {
+        "type": "array",
+        "description": "List of points to upsert. Each point must have 'id', 'vector', and 'payload'."
+      }
+    },
+    "required": ["collection_name", "points"]
+  }
+}

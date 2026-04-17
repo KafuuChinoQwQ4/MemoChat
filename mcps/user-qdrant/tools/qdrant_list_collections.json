@@ -1,0 +1,8 @@
+{
+  "name": "qdrant_list_collections",
+  "description": "List all collections in the Qdrant vector database.",
+  "arguments": {
+    "type": "object",
+    "properties": {}
+  }
+}

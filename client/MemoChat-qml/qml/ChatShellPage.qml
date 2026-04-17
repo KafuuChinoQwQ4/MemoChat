@@ -8,6 +8,7 @@ import "chat"
 import "chat/group"
 import "call"
 import "moments"
+import "agent"
 
 Rectangle {
     id: root
@@ -70,54 +71,6 @@ Rectangle {
                 onAvatarClicked: {
                     root.lastMainTab = controller.chatTab
                     root.viewMode = 1
-                }
-            }
-
-            Rectangle {
-                id: sideDragBar
-                z: 10
-                anchors.top: parent.top
-                anchors.topMargin: 11
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 11
-                anchors.right: parent.right
-                property bool hovering: dragArea.containsMouse
-                property bool pressed: dragArea.pressed
-                width: pressed || hovering ? 6 : 4
-                radius: 3
-                color: pressed ? Qt.rgba(0.56, 0.74, 0.96, 0.42)
-                               : hovering ? Qt.rgba(0.56, 0.74, 0.96, 0.30)
-                                          : Qt.rgba(0.56, 0.74, 0.96, 0.18)
-                border.width: 1
-                border.color: (pressed || hovering)
-                              ? Qt.rgba(1, 1, 1, 0.24)
-                              : Qt.rgba(1, 1, 1, 0.10)
-
-                Behavior on color {
-                    ColorAnimation {
-                        duration: 120
-                        easing.type: Easing.OutQuad
-                    }
-                }
-                Behavior on width {
-                    NumberAnimation {
-                        duration: 120
-                        easing.type: Easing.OutQuad
-                    }
-                }
-
-                MouseArea {
-                    id: dragArea
-                    anchors.fill: parent
-                    acceptedButtons: Qt.LeftButton
-                    hoverEnabled: true
-                    cursorShape: Qt.SizeAllCursor
-                    onPressed: function(mouse) {
-                        mouse.accepted = true
-                        if (Window.window) {
-                            Window.window.startSystemMove()
-                        }
-                    }
                 }
             }
         }
@@ -288,6 +241,26 @@ Rectangle {
                             backdrop: backdropLayer
                             onSwitchAccountRequested: controller.switchToLogin()
                             onLogoutRequested: controller.switchToLogin()
+                        }
+                    }
+                }
+
+                Loader {
+                    anchors.fill: parent
+                    active: root.viewMode === 0 && controller.chatTab === AppController.AgentTabPage
+                    asynchronous: true
+                    sourceComponent: Component {
+                        AgentPane {
+                            agentController: controller.agentController
+                            messageModel: controller.agentMessageModel
+                            sessions: controller.agentController ? controller.agentController.sessions : []
+                            currentSessionId: controller.agentController ? controller.agentController.currentSessionId : ""
+                            currentModel: controller.agentController ? controller.agentController.currentModel : ""
+                            availableModels: controller.agentController ? controller.agentController.availableModels : []
+                            loading: controller.agentController ? controller.agentController.loading : false
+                            streaming: controller.agentController ? controller.agentController.streaming : false
+                            errorMsg: controller.agentController ? controller.agentController.error : ""
+                            kbList: []
                         }
                     }
                 }

@@ -1,0 +1,28 @@
+{
+  "name": "qdrant_scroll",
+  "description": "Scroll through all points in a collection (equivalent to paginated list/query).",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "collection_name": {
+        "type": "string",
+        "description": "The name of the collection."
+      },
+      "limit": {
+        "type": "number",
+        "default": 100,
+        "description": "Maximum number of points to return per scroll."
+      },
+      "offset": {
+        "type": "string",
+        "description": "Point ID to continue scrolling from (omit for first page)."
+      },
+      "with_payload": {
+        "type": "boolean",
+        "default": true,
+        "description": "Include payload in results."
+      }
+    },
+    "required": ["collection_name"]
+  }
+}

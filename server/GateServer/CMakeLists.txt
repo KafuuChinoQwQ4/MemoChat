@@ -7,9 +7,12 @@ add_executable(GateServer
     HttpConnection.cpp
     LogicSystem.cpp
     MediaHttpService.cpp
+    AIServiceClient.cpp
     MomentsRouteModules.cpp
+    AIRouteModules.cpp
     MomentsRouteModules.h
     GateRouteModules.h
+    AIRouteModules.h
     ../GateServerHttp3/GateHttp3ServiceRoutes.h
     CertUtil.cpp
     CertUtil.h
@@ -56,12 +59,11 @@ target_include_directories(GateServer PRIVATE
 )
 
 if(WIN32)
-    target_link_libraries(GateServer PRIVATE
-        "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64/bcrypt.lib")
+    # Environment variables: WINSDK_LIB_UM, WINSDK_LIB_UCRT, VC_TOOLS_LIB
     target_link_options(GateServer PRIVATE
-        "/LIBPATH:C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64"
-        "/LIBPATH:C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64"
-        "/LIBPATH:D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64")
+        "/LIBPATH:$ENV{WINSDK_LIB_UM}"
+        "/LIBPATH:$ENV{WINSDK_LIB_UCRT}"
+        "/LIBPATH:$ENV{VC_TOOLS_LIB}")
     if(TARGET OpenSSL::applink)
         target_link_libraries(GateServer PRIVATE OpenSSL::applink)
     endif()

@@ -12,6 +12,7 @@ class HttpConnection: public std::enable_shared_from_this<HttpConnection>
 	friend class ProfileHttpService;
 	friend class CallHttpServiceRoutes;
 	friend class GateHttpJsonSupport;
+	friend class AIHttpServiceRoutes;
 public:
 	HttpConnection(boost::asio::io_context& ioc);
 	void Start();

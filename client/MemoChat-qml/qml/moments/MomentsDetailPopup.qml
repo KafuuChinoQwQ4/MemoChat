@@ -161,15 +161,18 @@ Popup {
                 }
 
                 // ── 点赞 ────────────────────────────────
-                Column {
-                    width: parent.width; spacing: 3; visible: likeCount > 0
-                    Label {
-                        text: "♥ " + likeCount + " 人觉得很赞"
-                        font.pixelSize: 13; color: "#e84141"
+                Row {
+                    width: parent.width; spacing: 6; visible: likeCount > 0
+                    Image {
+                        width: 16; height: 16
+                        source: "qrc:/icons/like_active.png"
+                        fillMode: Image.PreserveAspectFit
+                        anchors.verticalCenter: parent.verticalCenter
                     }
                     Label {
-                        visible: likeNames.length > 0; text: likeNames.join("、")
-                        font.pixelSize: 12; color: "#555555"; wrapMode: Text.Wrap
+                        text: likeCount + " 人觉得很赞"
+                        font.pixelSize: 13; color: "#e84141"
+                        anchors.verticalCenter: parent.verticalCenter
                     }
                 }
 
@@ -298,37 +301,40 @@ Popup {
     }
 
     // ── 单条评论条目 ─────────────────────────────────────
-    component commentItem: Rectangle {
-        width: parent ? parent.width : 0
-        height: commentCol.height + 12
-        color: Qt.rgba(0.93, 0.95, 1.0, 0.55)
-        radius: 6
+    Component {
+        id: commentItem
+        Rectangle {
+            width: parent ? parent.width : 0
+            height: commentCol.height + 12
+            color: Qt.rgba(0.93, 0.95, 1.0, 0.55)
+            radius: 6
 
-        Column {
-            id: commentCol
-            anchors.fill: parent
-            anchors.margins: 8
-            spacing: 3
-
-            RowLayout {
+            Column {
+                id: commentCol
                 anchors.fill: parent
+                anchors.margins: 8
                 spacing: 3
-                Label {
-                    text: modelData.user_nick || "用户"
-                    font.pixelSize: 12; font.weight: Font.Medium; color: "#2a7ae2"
+
+                RowLayout {
+                    anchors.fill: parent
+                    spacing: 3
+                    Label {
+                        text: modelData.user_nick || "用户"
+                        font.pixelSize: 12; font.weight: Font.Medium; color: "#2a7ae2"
+                    }
+                    Label {
+                        text: modelData.reply_uid && modelData.reply_uid !== 0
+                              ? (" 回复 " + (modelData.reply_nick || "用户")) : ""
+                        font.pixelSize: 12; color: "#2a7ae2"
+                        visible: modelData.reply_uid && modelData.reply_uid !== 0
+                    }
+                    Label { text: "："; font.pixelSize: 12; color: "#555555" }
                 }
                 Label {
-                    text: modelData.reply_uid && modelData.reply_uid !== 0
-                          ? (" 回复 " + (modelData.reply_nick || "用户")) : ""
-                    font.pixelSize: 12; color: "#2a7ae2"
-                    visible: modelData.reply_uid && modelData.reply_uid !== 0
+                    anchors.fill: parent
+                    text: modelData.content || ""
+                    font.pixelSize: 13; color: "#1a1a1a"; wrapMode: Text.Wrap
                 }
-                Label { text: "："; font.pixelSize: 12; color: "#555555" }
-            }
-            Label {
-                anchors.fill: parent
-                text: modelData.content || ""
-                font.pixelSize: 13; color: "#1a1a1a"; wrapMode: Text.Wrap
             }
         }
     }
@@ -442,10 +448,9 @@ Popup {
 
     Connections {
         target: controller
-        enabled: controller !== null
         function onMomentRefreshed(momentId) {
             console.log("[MomentsDetail] onMomentRefreshed received, momentId=" + momentId)
-            if (root.visible && momentId === root.currentMomentId) {
+            if (root.opened && momentId === root.currentMomentId) {
                 commentSending = false
                 applySnapshot()
             }

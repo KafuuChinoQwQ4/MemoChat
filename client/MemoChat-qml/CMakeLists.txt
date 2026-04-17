@@ -3,14 +3,15 @@ cmake_minimum_required(VERSION 3.16)
 project(MemoChatQml LANGUAGES CXX)
 
 # Restore Windows SDK library paths that the vcpkg toolchain stripped
+# Environment variables: VC_TOOLS_LIB, WINSDK_LIB_UM, WINSDK_LIB_UCRT
 if(WIN32 AND MSVC)
     link_directories(
-        "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64"
-        "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64"
-        "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64"
+        "$ENV{VC_TOOLS_LIB}"
+        "$ENV{WINSDK_LIB_UM}"
+        "$ENV{WINSDK_LIB_UCRT}"
     )
     # Also add as linker flags for robustness
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /LIBPATH:\"D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64\" /LIBPATH:\"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64\"")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /LIBPATH:\"$ENV{VC_TOOLS_LIB}\" /LIBPATH:\"$ENV{WINSDK_LIB_UM}\"")
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
@@ -66,6 +67,8 @@ set(SOURCES
     WindowShapeService.cpp
     MomentsController.cpp
     MomentsModel.cpp
+    AgentController.cpp
+    AgentMessageModel.cpp
 )
 
 set(HEADERS
@@ -98,6 +101,8 @@ set(HEADERS
     IconPathUtils.h
     MomentsController.h
     MomentsModel.h
+    AgentController.h
+    AgentMessageModel.h
     ${SHARED_CLIENT_DIR}/imagecropperdialog.h
 )
 

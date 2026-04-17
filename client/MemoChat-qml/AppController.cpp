@@ -97,6 +97,7 @@ AppController::AppController(QObject *parent)
       _chat_controller(&_gateway),
       _contact_controller(&_gateway),
       _profile_controller(&_gateway),
+      _agent_controller(&_gateway),
       _session_coordinator(std::make_unique<AppSessionCoordinator>(*this)),
       _contact_coordinator_shell(std::make_unique<ContactCoordinatorShell>(*this)),
       _group_coordinator(std::make_unique<GroupCoordinator>(*this)),

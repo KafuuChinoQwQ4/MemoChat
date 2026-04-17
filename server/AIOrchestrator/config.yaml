@@ -1,0 +1,148 @@
+service:
+  host: "0.0.0.0"
+  port: 8096
+
+llm:
+  default_backend: "ollama"
+  default_model: "qwen2.5:7b"
+
+  ollama:
+    base_url: "http://127.0.0.1:11434"
+    models:
+      - name: "qwen2.5:7b"
+        display: "Qwen 2.5 7B"
+        context_window: 8192
+      - name: "qwen2.5:14b"
+        display: "Qwen 2.5 14B"
+        context_window: 8192
+      - name: "llama3.1:8b"
+        display: "Llama 3.1 8B"
+        context_window: 8192
+    enabled: true
+
+  openai:
+    api_key: ""
+    base_url: "https://api.openai.com/v1"
+    models:
+      - name: "gpt-4o"
+        display: "GPT-4o"
+        context_window: 128000
+      - name: "gpt-4o-mini"
+        display: "GPT-4o Mini"
+        context_window: 128000
+    enabled: false
+
+  anthropic:
+    api_key: ""
+    base_url: "https://api.anthropic.com/v1"
+    models:
+      - name: "claude-3-5-sonnet-20241022"
+        display: "Claude 3.5 Sonnet"
+        context_window: 200000
+    enabled: false
+
+  kimi:
+    api_key: ""
+    base_url: "https://api.moonshot.cn/v1"
+    models:
+      - name: "moonshot-v1-8k"
+        display: "Kimi 8K"
+        context_window: 8192
+    enabled: false
+
+embedding:
+  backend: "local"
+  local_model: "all-MiniLM-L6-v2"
+  ollama_model: "nomic-embed-text"
+  openai_model: "text-embedding-3-small"
+  dimension: 384
+
+rag:
+  qdrant:
+    # 宿主机访问：127.0.0.1（Docker 端口映射 6333:6333）
+    # Docker 网络内访问：memochat-qdrant
+    host: "127.0.0.1"
+    port: 6333
+    grpc_port: 6334     # gRPC API
+    collection_prefix: "user_"
+  chunk_size: 500
+  chunk_overlap: 50
+  top_k: 5
+  score_threshold: 0.7
+
+tools:
+  enabled:
+    - "duckduckgo_search"
+    - "knowledge_base"
+    - "calculator"
+    - "translator"
+  rate_limit_per_minute: 10
+
+agent:
+  max_iterations: 10
+  timeout_per_step_sec: 30
+  timeout_total_sec: 300
+  fallback_on_error: true
+  max_tokens_per_response: 2048
+  temperature: 0.7
+  hitl_enabled: false
+  system_prompt: |
+    你是一个专业的 AI 助手，可以帮助用户回答问题、搜索信息、管理知识库。
+    如果用户的问题涉及上传的文档，优先使用知识库检索。
+    如果需要最新信息，使用 DuckDuckGo 搜索。
+    如果需要计算，使用计算器工具。
+    如果涉及用户关系、群组分析或推荐，请使用图数据库查询。
+    如果操作可能影响用户隐私或财产安全（如发送消息给陌生人），请先询问用户确认。
+    请用简洁清晰的语言回答。
+
+neo4j:
+  # 宿主机访问：127.0.0.1（Docker 端口映射 7687:7687）
+  # Docker 网络内访问：memochat-neo4j（需在 docker-compose.yml 中加入 AI Orchestrator）
+  host: "127.0.0.1"
+  port: 7687
+  username: "neo4j"
+  password: "password"
+  database: "neo4j"
+  vector_dimension: 384
+  enabled: true  # Docker 中运行: docker compose -f docker-compose.yml up -d
+
+observability:
+  enabled: false
+  backend: "langfuse"
+  langfuse:
+    public_key: ""
+    secret_key: ""
+    host: "http://127.0.0.1:3000"
+  otel:
+    endpoint: "http://127.0.0.1:4317"
+    service_name: "ai-orchestrator"
+  trace_llm_calls: true
+  trace_tool_calls: true
+  track_ttft: true
+
+llm_fallback:
+  ollama:
+    - openai
+    - kimi
+  openai:
+    - kimi
+  claude:
+    - openai
+  kimi:
+    - openai
+  retry_count: 2
+  retry_delay_sec: 2
+
+mcp:
+  enabled: false
+  servers:
+    - name: filesystem
+      command: ["npx", "-y", "@modelcontextprotocol/server-filesystem"]
+      args: ["/path/to/allowed"]
+      enabled: false
+    - name: github
+      command: ["npx", "-y", "@modelcontextprotocol/server-github"]
+      args: []
+      env:
+        GITHUB_TOKEN: ""
+      enabled: false
