@@ -6,13 +6,12 @@ Popup {
     property Item anchorItem: null
     property Item hostItem: null
     property Item backdrop: null
-    property Item popupHost: Overlay.overlay ? Overlay.overlay : (root.hostItem ? root.hostItem : parent)
 
     signal registerClicked()
     signal resetClicked()
     property real popupScale: 1.0
 
-    parent: popupHost
+    parent: Overlay.overlay
     z: 1000
     width: 108
     height: 94
@@ -68,7 +67,7 @@ Popup {
             return
         }
 
-        var host = root.popupHost ? root.popupHost : (root.hostItem ? root.hostItem : parent)
+        var host = root.hostItem ? root.hostItem : parent
         var p = root.anchorItem.mapToItem(host, 0, root.anchorItem.height)
         if (!isFinite(p.x) || !isFinite(p.y)) {
             return

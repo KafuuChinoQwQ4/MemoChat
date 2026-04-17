@@ -111,6 +111,9 @@ bool IsQuicRolloutEnabled() {
 }
 
 bool IsClientVersionAllowed(const std::string& clientVer, const std::string& minVer) {
+    if (clientVer.empty()) {
+        return true;
+    }
     int cMaj = 0, cMin = 0, cPatch = 0;
     int mMaj = 0, mMin = 0, mPatch = 0;
     if (!ParseSemVer(clientVer, cMaj, cMin, cPatch)) {

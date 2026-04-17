@@ -1,5 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import QtQuick.Window 2.15
 
 Rectangle {
     id: root
@@ -22,6 +23,9 @@ Rectangle {
         if (tab === 3) {
             return selected ? "qrc:/icons/moments.png" : "qrc:/icons/moments.png"
         }
+        if (tab === 4) {
+            return selected ? "qrc:/icons/ai.png" : "qrc:/icons/ai.png"
+        }
         return selected ? "qrc:/res/settings_select_press.png" : "qrc:/res/settings.png"
     }
 
@@ -35,6 +39,9 @@ Rectangle {
         if (tab === 3) {
             return "朋友圈"
         }
+        if (tab === 4) {
+            return "AI助手"
+        }
         return "更多"
     }
 
@@ -45,7 +52,22 @@ Rectangle {
         border.color: Qt.rgba(1, 1, 1, 0.16)
     }
 
+    // 全局拖动区域：覆盖整个侧边栏背景（底层）
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton
+        cursorShape: Qt.SizeAllCursor
+        onPressed: function(mouse) {
+            mouse.accepted = false
+            if (Window.window) {
+                Window.window.startSystemMove()
+            }
+        }
+    }
+
+    // 内容层（头像 + 标签图标）
     Column {
+        z: 1
         anchors.left: parent.left
         anchors.top: parent.top
         anchors.leftMargin: 10
@@ -101,7 +123,7 @@ Rectangle {
         }
 
         Repeater {
-            model: [0, 1, 3]
+            model: [0, 1, 3, 4]
             delegate: Item {
                 width: 32
                 height: 32
@@ -163,6 +185,7 @@ Rectangle {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
+                    propagateComposedEvents: true
                     onClicked: root.tabSelected(modelData)
                 }
 
@@ -173,7 +196,9 @@ Rectangle {
         }
     }
 
+    // 底部内容层（R18 + 设置）
     Column {
+        z: 1
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 16
@@ -281,6 +306,7 @@ Rectangle {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
+                propagateComposedEvents: true
                 onClicked: root.tabSelected(2)
             }
 

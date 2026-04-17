@@ -1,0 +1,191 @@
+"""
+配置管理：从 config.yaml 加载所有配置项
+使用 pydantic-settings 做类型验证
+"""
+import os
+from pathlib import Path
+from typing import Optional
+
+import yaml
+from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings
+
+
+class ServiceConfig(BaseModel):
+    host: str = "0.0.0.0"
+    port: int = 8096
+
+
+class OllamaModelConfig(BaseModel):
+    name: str
+    display: str
+    context_window: int = 8192
+
+
+class OllamaLLMConfig(BaseModel):
+    base_url: str = "http://127.0.0.1:11434"
+    models: list[OllamaModelConfig] = []
+    enabled: bool = True
+
+
+class OpenAIModelConfig(BaseModel):
+    name: str
+    display: str
+    context_window: int = 128000
+
+
+class OpenAILLMConfig(BaseModel):
+    api_key: str = ""
+    base_url: str = "https://api.openai.com/v1"
+    models: list[OpenAIModelConfig] = []
+    enabled: bool = False
+
+
+class AnthropicModelConfig(BaseModel):
+    name: str
+    display: str
+    context_window: int = 200000
+
+
+class AnthropicLLMConfig(BaseModel):
+    api_key: str = ""
+    base_url: str = "https://api.anthropic.com/v1"
+    models: list[AnthropicModelConfig] = []
+    enabled: bool = False
+
+
+class KimiModelConfig(BaseModel):
+    name: str
+    display: str
+    context_window: int = 8192
+
+
+class KimiLLMConfig(BaseModel):
+    api_key: str = ""
+    base_url: str = "https://api.moonshot.cn/v1"
+    models: list[KimiModelConfig] = []
+    enabled: bool = False
+
+
+class LLMConfig(BaseModel):
+    default_backend: str = "ollama"
+    default_model: str = "qwen2.5:7b"
+    ollama: OllamaLLMConfig = OllamaLLMConfig()
+    openai: OpenAILLMConfig = OpenAILLMConfig()
+    anthropic: AnthropicLLMConfig = AnthropicLLMConfig()
+    kimi: KimiLLMConfig = KimiLLMConfig()
+
+
+class EmbeddingConfig(BaseModel):
+    backend: str = "local"
+    local_model: str = "all-MiniLM-L6-v2"
+    ollama_model: str = "nomic-embed-text"
+    openai_model: str = "text-embedding-3-small"
+    dimension: int = 384
+
+
+class QdrantConfig(BaseModel):
+    host: str = "127.0.0.1"
+    port: int = 6333
+    grpc_port: int = 6334
+    collection_prefix: str = "user_"
+
+
+class RAGConfig(BaseModel):
+    qdrant: QdrantConfig = QdrantConfig()
+    chunk_size: int = 500
+    chunk_overlap: int = 50
+    top_k: int = 5
+    score_threshold: float = 0.7
+
+
+class ToolsConfig(BaseModel):
+    enabled: list[str] = ["duckduckgo_search", "knowledge_base", "calculator", "translator"]
+    rate_limit_per_minute: int = 10
+
+
+class AgentConfig(BaseModel):
+    max_iterations: int = 10
+    timeout_per_step_sec: int = 30
+    timeout_total_sec: int = 300
+    fallback_on_error: bool = True
+    max_tokens_per_response: int = 2048
+    temperature: float = 0.7
+    hitl_enabled: bool = False
+    system_prompt: str = "你是一个专业的 AI 助手。"
+
+
+class Neo4jConfig(BaseModel):
+    host: str = "127.0.0.1"
+    port: int = 7687
+    username: str = "neo4j"
+    password: str = "password"
+    database: str = "neo4j"
+    vector_dimension: int = 384
+    enabled: bool = False
+
+
+class LangfuseConfig(BaseModel):
+    public_key: str = ""
+    secret_key: str = ""
+    host: str = "http://127.0.0.1:3000"
+
+
+class OtelConfig(BaseModel):
+    endpoint: str = "http://127.0.0.1:4317"
+    service_name: str = "ai-orchestrator"
+
+
+class ObservabilityConfig(BaseModel):
+    enabled: bool = False
+    backend: str = "langfuse"
+    langfuse: LangfuseConfig = LangfuseConfig()
+    otel: OtelConfig = OtelConfig()
+    trace_llm_calls: bool = True
+    trace_tool_calls: bool = True
+    track_ttft: bool = True
+
+
+class LLMFallbackConfig(BaseModel):
+    ollama: list[str] = ["openai", "kimi"]
+    openai: list[str] = ["kimi"]
+    claude: list[str] = ["openai"]
+    kimi: list[str] = ["openai"]
+    retry_count: int = 2
+    retry_delay_sec: int = 2
+
+
+class MCPServerConfig(BaseModel):
+    name: str
+    command: list[str]
+    args: list[str] = []
+    env: dict[str, str] = {}
+    enabled: bool = True
+
+
+class MCPConfig(BaseModel):
+    enabled: bool = False
+    servers: list[MCPServerConfig] = []
+
+
+class Settings(BaseSettings):
+    service: ServiceConfig = ServiceConfig()
+    llm: LLMConfig = LLMConfig()
+    embedding: EmbeddingConfig = EmbeddingConfig()
+    rag: RAGConfig = RAGConfig()
+    tools: ToolsConfig = ToolsConfig()
+    agent: AgentConfig = AgentConfig()
+    neo4j: Neo4jConfig = Neo4jConfig()
+    observability: ObservabilityConfig = ObservabilityConfig()
+    llm_fallback: LLMFallbackConfig = LLMFallbackConfig()
+    mcp: MCPConfig = MCPConfig()
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> "Settings":
+        with open(path, "r", encoding="utf-8") as f:
+            raw = yaml.safe_load(f)
+        return cls.model_validate(raw or {})
+
+
+_config_path = Path(__file__).parent / "config.yaml"
+settings = Settings.from_yaml(_config_path)

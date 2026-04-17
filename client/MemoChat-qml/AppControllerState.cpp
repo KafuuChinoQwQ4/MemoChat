@@ -219,6 +219,16 @@ MomentsController *AppController::momentsController() const
     return const_cast<MomentsController*>(&_moments_controller);
 }
 
+AgentController *AppController::agentController() const
+{
+    return const_cast<AgentController*>(&_agent_controller);
+}
+
+AgentMessageModel *AppController::agentMessageModel() const
+{
+    return _agent_controller.model();
+}
+
 bool AppController::searchPending() const
 {
     return _search_pending;

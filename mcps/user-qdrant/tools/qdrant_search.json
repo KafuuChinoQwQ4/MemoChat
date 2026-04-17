@@ -1,0 +1,29 @@
+{
+  "name": "qdrant_search",
+  "description": "Search for similar vectors in a Qdrant collection. Returns the most relevant results based on cosine similarity.",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "collection_name": {
+        "type": "string",
+        "description": "The name of the collection to search in."
+      },
+      "query_vector": {
+        "type": "array",
+        "items": {"type": "number"},
+        "description": "The query vector (embedding) as a list of floats. Must match the collection's vector dimension."
+      },
+      "limit": {
+        "type": "number",
+        "default": 5,
+        "description": "Maximum number of results to return."
+      },
+      "score_threshold": {
+        "type": "number",
+        "default": 0.7,
+        "description": "Minimum similarity score threshold (0.0-1.0)."
+      }
+    },
+    "required": ["collection_name", "query_vector"]
+  }
+}

@@ -156,32 +156,56 @@ Rectangle {
                 spacing: 20
 
                 MouseArea {
-                    implicitWidth: Math.max(44, likeLabel.width + 16)
+                    implicitWidth: Math.max(44, likeRow.implicitWidth + 16)
                     implicitHeight: 36
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.likeClicked()
-                    Label {
-                        id: likeLabel
+
+                    Row {
+                        id: likeRow
                         anchors.centerIn: parent
-                        text: (root.hasLiked ? "♥ " : "♡ ") + (root.likeCount > 0 ? root.likeCount : "")
-                        font.pixelSize: 13
-                        color: root.hasLiked ? "#e84141" : "#555555"
+                        spacing: 4
+
+                        Image {
+                            width: 18
+                            height: 18
+                            source: root.hasLiked ? "qrc:/icons/like_active.png" : "qrc:/icons/like.png"
+                            fillMode: Image.PreserveAspectFit
+                        }
+                        Label {
+                            text: root.likeCount > 0 ? root.likeCount : ""
+                            font.pixelSize: 13
+                            color: root.hasLiked ? "#e84141" : "#555555"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
                     }
                 }
 
                 MouseArea {
-                    implicitWidth: Math.max(44, commentLabel.width + 16)
+                    implicitWidth: Math.max(44, commentRow.implicitWidth + 16)
                     implicitHeight: 36
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.commentClicked()
-                    Label {
-                        id: commentLabel
+
+                    Row {
+                        id: commentRow
                         anchors.centerIn: parent
-                        text: "💬 " + (root.commentCount > 0 ? root.commentCount : "")
-                        font.pixelSize: 13
-                        color: "#555555"
+                        spacing: 4
+
+                        Image {
+                            width: 18
+                            height: 18
+                            source: "qrc:/icons/comment.png"
+                            fillMode: Image.PreserveAspectFit
+                        }
+                        Label {
+                            text: root.commentCount > 0 ? root.commentCount : ""
+                            font.pixelSize: 13
+                            color: "#555555"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
                     }
                 }
             }

@@ -1,0 +1,19 @@
+{
+  "name": "write_neo4j_cypher",
+  "description": "Execute a write Cypher query on the Neo4j graph database. Use for CREATE, MERGE, SET, DELETE, DETACH DELETE, REMOVE, etc.",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "The Cypher query to execute (can include write operations)."
+      },
+      "params": {
+        "type": "object",
+        "default": {},
+        "description": "Query parameters as key-value pairs."
+      }
+    },
+    "required": ["query"]
+  }
+}

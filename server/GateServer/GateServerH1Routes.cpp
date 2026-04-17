@@ -220,6 +220,8 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic) {
         const auto client_ver = src_root.get("client_ver", "").asString();
         root["min_version"] = gateauthsupport::MinClientVersion();
         root["feature_group_chat"] = true;
+        memolog::LogInfo("gate.user_login.version_check", "version check",
+            {{"client_ver", client_ver}, {"min_ver", gateauthsupport::MinClientVersion()}});
         if (!gateauthsupport::IsClientVersionAllowed(client_ver, gateauthsupport::MinClientVersion())) {
             root["error"] = ErrorCodes::ClientVersionTooLow;
             memolog::LogWarn("gate.user_login.failed", "client version too low",

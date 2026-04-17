@@ -187,7 +187,13 @@ int main(int argc, char** argv)
 			});
 
 	
-		boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
+		boost::asio::signal_set signals(io_context
+#ifdef _WIN32
+			, SIGINT, SIGBREAK
+#else
+			, SIGINT, SIGTERM
+#endif
+		);
 		signals.async_wait([&io_context, pool, &server](auto, auto) {
 			io_context.stop();
 			pool->Stop();

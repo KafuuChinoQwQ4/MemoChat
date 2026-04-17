@@ -26,10 +26,11 @@ target_include_directories(GateServerHttp3 PUBLIC
 )
 
 # MongoDB include paths (transitively needed by GateHttp3ServiceRoutes.cpp via MongoMgr.h)
+# Environment variables: VCPKG_INSTALLED_DIR (defined via CMake cache)
 target_include_directories(GateServerHttp3 PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg_installed/x64-windows/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg_installed/x64-windows/include/mongocxx/v_noabi
-    ${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg_installed/x64-windows/include/bsoncxx/v_noabi
+    "${VCPKG_INSTALLED_DIR}/x64-windows/include"
+    "${VCPKG_INSTALLED_DIR}/x64-windows/include/mongocxx/v_noabi"
+    "${VCPKG_INSTALLED_DIR}/x64-windows/include/bsoncxx/v_noabi"
 )
 
 target_link_libraries(GateServerHttp3 PUBLIC
@@ -39,12 +40,13 @@ target_link_libraries(GateServerHttp3 PUBLIC
 # HTTP/3 specific libraries
 if(MEMOCHAT_ENABLE_HTTP3)
     if(WIN32)
+        # Environment variables: WINSDK_LIB_UM, WINSDK_LIB_UCRT, VC_TOOLS_LIB
         target_link_libraries(GateServerHttp3 PRIVATE
-            "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64/bcrypt.lib")
+            "$ENV{WINSDK_LIB_UM}/bcrypt.lib")
         target_link_options(GateServerHttp3 PRIVATE
-            "/LIBPATH:C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64"
-            "/LIBPATH:C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64"
-            "/LIBPATH:D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64")
+            "/LIBPATH:$ENV{WINSDK_LIB_UM}"
+            "/LIBPATH:$ENV{WINSDK_LIB_UCRT}"
+            "/LIBPATH:$ENV{VC_TOOLS_LIB}")
     endif()
 
     # OpenSSL required by CertUtil (PKCS12/self-signed cert generation)

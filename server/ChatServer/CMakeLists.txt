@@ -91,10 +91,11 @@ set_target_properties(ChatServer PROPERTIES FOLDER "Server")
 memochat_configure_server_target(ChatServer)
 target_link_libraries(ChatServer PRIVATE ${MEMOCHAT_MONGOCXX_TARGET} ${MEMOCHAT_BSONCXX_TARGET} ${MEMOCHAT_PQXX_TARGET})
 if(WIN32)
+    # Environment variables: WINSDK_LIB_UM, WINSDK_LIB_UCRT, VC_TOOLS_LIB
     target_link_directories(ChatServer PRIVATE
-        "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64"
-        "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64"
-        "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64")
+        "$ENV{WINSDK_LIB_UM}"
+        "$ENV{WINSDK_LIB_UCRT}"
+        "$ENV{VC_TOOLS_LIB}")
     target_link_libraries(ChatServer PRIVATE bcrypt)
 endif()
 if(MEMOCHAT_ENABLE_KAFKA)

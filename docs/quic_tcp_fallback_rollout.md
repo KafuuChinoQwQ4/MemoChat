@@ -1,10 +1,10 @@
-# MemoChat QUIC + TCP Fallback Rollout
+# MemoChat QUIC + TCP 回退部署计划
 
-## Goal
+## 目标
 
-Use QUIC as the preferred client-to-chat transport while keeping TCP as the automatic fallback path.
+使用 QUIC 作为首选的客户端到聊天传输层，同时保持 TCP 作为自动回退路径。
 
-The client transport layer is already abstracted as:
+客户端传输层已经抽象为：
 
 - `IChatTransport`
 - `ChatMessageDispatcher`
@@ -12,17 +12,17 @@ The client transport layer is already abstracted as:
 - `TcpMgr`
 - `QuicChatTransport`
 
-## Current State
+## 当前状态
 
-Client-side selector behavior is already wired:
+客户端选择器行为已经接线完成：
 
-1. Parse `preferred_transport`
-2. Parse `fallback_transport`
-3. Parse `chat_endpoints[].transport`
-4. Try preferred transport first
-5. If preferred transport fails, fall back to the configured fallback transport
+1. 解析 `preferred_transport`
+2. 解析 `fallback_transport`
+3. 解析 `chat_endpoints[].transport`
+4. 首先尝试首选传输层
+5. 如果首选传输层失败，回退到配置的回退传输层
 
-Current code locations:
+当前代码位置：
 
 - `client/MemoChatShared/global.h`
 - `client/MemoChatShared/IChatTransport.h`
@@ -32,11 +32,11 @@ Current code locations:
 - `client/MemoChat-qml/TransportSelector.*`
 - `client/MemoChat-qml/AppControllerSession.cpp`
 
-## Target Contract
+## 目标协议
 
-Gate login response should provide transport-aware endpoints.
+Gate 登录响应应提供支持传输的端点。
 
-Example:
+示例：
 
 ```json
 {
@@ -62,80 +62,80 @@ Example:
 }
 ```
 
-## Client Work
+## 客户端工作
 
-### Phase 1
+### 第一阶段
 
-- Keep the existing message framing format on top of QUIC
-- Reuse the current application message IDs and JSON payloads
-- Do not redesign business payloads while landing QUIC
+- 在 QUIC 之上保持现有的消息封装格式
+- 重用当前的应用程序消息 ID 和 JSON 负载
+- 在落地 QUIC 时不要重新设计业务负载
 
-### Phase 2
+### 第二阶段
 
-Implement real MsQuic-backed client transport in `QuicChatTransport`.
+在 `QuicChatTransport` 中实现真正的 MsQuic 支持的客户端传输。
 
-Required work:
+必需工作：
 
-- Open MsQuic API and registration
-- Create client configuration and credential setup
-- Open one connection per chat session
-- Open one bidirectional stream for app traffic
-- Frame outgoing packets using the existing `ReqId + len + payload` shape
-- Reassemble incoming stream data before dispatching to `ChatMessageDispatcher`
+- 打开 MsQuic API 和注册
+- 创建客户端配置和凭证设置
+- 为每个聊天会话打开一个连接
+- 打开一个双向流用于应用程序流量
+- 使用现有的 `ReqId + len + payload` 形状封装传出数据包
+- 在派发到 `ChatMessageDispatcher` 之前重新组装传入流数据
 
-### Phase 3
+### 第三阶段
 
-Improve selector behavior:
+改进选择器行为：
 
-- Distinguish handshake timeout vs. transport unavailable vs. server reject
-- Persist last successful transport choice for a short local cache window
-- Avoid repeated QUIC/TCP oscillation within the same login session
+- 区分握手超时与传输不可用与服务器拒绝
+- 为短本地缓存窗口持久化最后成功的传输选择
+- 避免在同一次登录会话内重复 QUIC/TCP 振荡
 
-## Server Work
+## 服务端工作
 
 ### ChatServer
 
-Add a QUIC listener and session adapter.
+添加 QUIC 监听器和会话适配器。
 
-Required shape:
+必需形状：
 
 - `QuicChatSession`
 - `QuicChatServer`
-- Same business message ingress as current TCP sessions
+- 与当前 TCP 会话相同的业务消息入口
 
-Do not duplicate chat business handlers for QUIC.
+不要为 QUIC 复制聊天业务处理程序。
 
-TCP and QUIC should both feed the same message-processing path.
+TCP 和 QUIC 都应使用相同的消息处理路径。
 
 ### GateServer
 
-Extend login response generation:
+扩展登录响应生成：
 
-- choose preferred transport per environment
-- include transport-aware endpoints
-- keep fallback transport explicit
+- 按环境选择首选传输层
+- 包含支持传输的端点
+- 保持回退传输层明确
 
-## Rollout Order
+## 部署顺序
 
-1. Land MsQuic dependency and compile guards
-2. Implement client QUIC handshake
-3. Implement ChatServer QUIC listener
-4. Enable GateServer transport-aware endpoint response
-5. Run local end-to-end login through QUIC
-6. Verify automatic fallback to TCP when QUIC fails
+1. 落地 MsQuic 依赖和编译守卫
+2. 实现客户端 QUIC 握手
+3. 实现 ChatServer QUIC 监听器
+4. 启用 GateServer 支持传输的端点响应
+5. 通过 QUIC 运行本地端到端登录
+6. 验证 QUIC 失败时自动回退到 TCP
 
-## Verification Checklist
+## 验证清单
 
-- QUIC login succeeds when QUIC endpoint is healthy
-- TCP fallback succeeds when QUIC endpoint is missing
-- Message send/receive works over QUIC
-- Heartbeat path works over QUIC
-- Reconnect path reuses the selector instead of bypassing it
-- Dispatcher behavior stays transport-agnostic
+- QUIC 端点健康时 QUIC 登录成功
+- QUIC 端点缺失时 TCP 回退成功
+- 通过 QUIC 发送/接收消息正常工作
+- 心跳路径通过 QUIC 正常工作
+- 重连路径重用选择器而不是绕过它
+- 调度器行为保持传输无关
 
-## Non-Goals For First Landing
+## 首次落地的非目标
 
-- HTTP/3 migration
-- Multi-stream app multiplexing
-- Media transport over QUIC
-- Replacing all server-side TCP paths at once
+- HTTP/3 迁移
+- 多流应用程序多路复用
+- 通过 QUIC 传输媒体
+- 一次性替换所有服务端 TCP 路径

@@ -3,6 +3,7 @@
 #include "httpmgr.h"
 #include "usermgr.h"
 #include "global.h"
+#include "IconPathUtils.h"
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QUrl>
@@ -70,7 +71,7 @@ MomentEntry MomentsController::parseMomentEntry(const QJsonObject& obj) const {
     entry.userId = obj["user_id"].toString();
     entry.userName = obj["user_name"].toString();
     entry.userNick = obj["user_nick"].toString();
-    entry.userIcon = obj["user_icon"].toString();
+    entry.userIcon = normalizeIconForQml(obj["user_icon"].toString());
     entry.visibility = obj["visibility"].toInt();
     entry.location = obj["location"].toString();
     entry.createdAt = obj["created_at"].toVariant().toLongLong();
@@ -99,7 +100,7 @@ MomentEntry MomentsController::parseMomentEntry(const QJsonObject& obj) const {
         MomentLike lk;
         lk.uid = likeObj["uid"].toInt();
         lk.userNick = likeObj["user_nick"].toString();
-        lk.userIcon = likeObj["user_icon"].toString();
+        lk.userIcon = normalizeIconForQml(likeObj["user_icon"].toString());
         lk.createdAt = likeObj["created_at"].toVariant().toLongLong();
         entry.likes.append(lk);
     }
@@ -111,7 +112,7 @@ MomentEntry MomentsController::parseMomentEntry(const QJsonObject& obj) const {
         cm.id = cmObj["id"].toVariant().toLongLong();
         cm.uid = cmObj["uid"].toInt();
         cm.userNick = cmObj["user_nick"].toString();
-        cm.userIcon = cmObj["user_icon"].toString();
+        cm.userIcon = normalizeIconForQml(cmObj["user_icon"].toString());
         cm.content = cmObj["content"].toString();
         cm.replyUid = cmObj["reply_uid"].toInt();
         cm.replyNick = cmObj["reply_nick"].toString();
