@@ -11,7 +11,8 @@ if(MSVC)
     # Suppress winsock warnings from msquic.h
     add_compile_options(/wd4005 /wd4090)
     # Ensure standard library headers are found (order matters: standard lib BEFORE vcpkg)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /external:I \"D:/VS2026stable/VC/Tools/MSVC/14.50.35717/include\" /external:I \"C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt\" /external:I \"C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/shared\" /external:I \"C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/um\"")
+    # Environment variables: VC_TOOLS_INCLUDE, WINSDK_INCLUDE
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /external:I \"$ENV{VC_TOOLS_INCLUDE}\" /external:I \"$ENV{WINSDK_INCLUDE}/ucrt\" /external:I \"$ENV{WINSDK_INCLUDE}/shared\" /external:I \"$ENV{WINSDK_INCLUDE}/um\"")
 else()
     add_compile_options(-Wall -Wextra -Wpedantic -DMEMOCHAT_ENABLE_MSQUIC)
 endif()

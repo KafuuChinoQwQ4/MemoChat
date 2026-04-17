@@ -14,7 +14,12 @@ PostgresPool::PostgresPool(const std::string& url, const std::string& user, cons
 	const std::string& schema, int poolSize)
 	: url_(url), user_(user), pass_(pass), schema_(schema), poolSize_(poolSize), b_stop_(false), _fail_count(0) {
 	for (int i = 0; i < poolSize_; ++i) {
-		pool_.push(std::make_unique<PooledSqlConnection>(new sql::Connection(), CurrentUnixSeconds()));
+		try {
+			pool_.push(std::make_unique<PooledSqlConnection>(new sql::Connection(), CurrentUnixSeconds()));
+		}
+		catch (const std::exception&) {
+			break;
+		}
 	}
 }
 
@@ -34,9 +39,11 @@ void PostgresPool::checkConnection() {}
 
 std::unique_ptr<PooledSqlConnection> PostgresPool::getConnection() {
 	std::unique_lock<std::mutex> lock(mutex_);
-	cond_.wait(lock, [this] {
+	if (!cond_.wait_for(lock, std::chrono::seconds(5), [this] {
 		return b_stop_ || !pool_.empty();
-	});
+	})) {
+		return nullptr;
+	}
 	if (b_stop_) {
 		return nullptr;
 	}

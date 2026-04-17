@@ -73,12 +73,13 @@ if(MEMOCHAT_ENABLE_RABBITMQ)
 endif()
 
 if(WIN32)
+    # Environment variables: WINSDK_LIB_UM, WINSDK_LIB_UCRT, VC_TOOLS_LIB
     target_link_libraries(GateServerCore PRIVATE
-        "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64/bcrypt.lib")
+        "$ENV{WINSDK_LIB_UM}/bcrypt.lib")
     target_link_options(GateServerCore PRIVATE
-        "/LIBPATH:C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64"
-        "/LIBPATH:C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64"
-        "/LIBPATH:D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64")
+        "/LIBPATH:$ENV{WINSDK_LIB_UM}"
+        "/LIBPATH:$ENV{WINSDK_LIB_UCRT}"
+        "/LIBPATH:$ENV{VC_TOOLS_LIB}")
 endif()
 
 set_target_properties(GateServerCore PROPERTIES FOLDER "Server/GateServer")

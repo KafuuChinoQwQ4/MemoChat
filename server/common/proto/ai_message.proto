@@ -1,0 +1,248 @@
+syntax = "proto3";
+
+package ai;
+
+// =============================================================================
+// 基础对话
+// =============================================================================
+
+message AIChatReq {
+    int32 from_uid = 1;           // 用户 UID
+    string session_id = 2;          // 会话 ID（UUID，空则创建新会话）
+    string content = 3;           // 用户消息内容
+    string model_type = 4;        // 模型类型："ollama" / "openai" / "claude" / "kimi"
+    string model_name = 5;        // 具体模型名："qwen2.5:7b" / "gpt-4o" 等
+    bool stream = 6;               // 是否流式响应
+}
+
+message AIChatRsp {
+    int32 code = 1;               // 0=成功，非0=错误码
+    string message = 2;            // 错误描述
+    string session_id = 3;        // 会话 ID
+    string ai_content = 4;         // AI 回复（非流式时使用）
+    int64 tokens_used = 5;        // 本次消耗 Token 数
+    string model_name = 6;        // 实际使用的模型
+}
+
+// 流式响应（server-side streaming）
+message AIChatStreamReq {
+    AIChatReq req = 1;
+}
+
+message AIChatStreamChunk {
+    string chunk = 1;             // 增量文本片段
+    bool is_final = 2;            // 是否为最后一块
+    string msg_id = 3;            // 消息 ID
+    int64 total_tokens = 4;      // 当前累计 Token 数
+}
+
+// =============================================================================
+// 会话管理
+// =============================================================================
+
+message AICreateSessionReq {
+    int32 uid = 1;                // 用户 UID
+    string model_type = 2;        // 模型类型
+    string model_name = 3;        // 模型名
+}
+
+message AISessionInfo {
+    string session_id = 1;       // 会话 ID
+    string title = 2;              // 会话标题
+    string model_type = 3;        // 模型类型
+    string model_name = 4;        // 模型名
+    int64 created_at = 5;         // 创建时间（毫秒时间戳）
+    int64 updated_at = 6;        // 最后活跃时间
+    int32 message_count = 7;     // 消息数
+}
+
+message AISessionRsp {
+    int32 code = 1;
+    string message = 2;
+    AISessionInfo session = 3;                // 单条会话详情
+    repeated AISessionInfo sessions = 4;     // 列表查询时返回
+}
+
+message AIDeleteSessionReq {
+    int32 uid = 1;
+    string session_id = 2;
+}
+
+message AIDeleteSessionRsp {
+    int32 code = 1;
+    string message = 2;
+}
+
+// =============================================================================
+// 智能功能
+// =============================================================================
+
+message AISmartReq {
+    int32 from_uid = 1;           // 用户 UID
+    string feature_type = 2;       // 功能类型："summary" / "suggest" / "translate"
+    string content = 3;            // 待处理内容
+    string target_lang = 4;       // 翻译目标语言
+    string context_json = 5;       // 额外上下文（JSON）
+}
+
+message AISmartRsp {
+    int32 code = 1;
+    string message = 2;
+    string result = 3;             // 处理结果（JSON 格式）
+}
+
+// =============================================================================
+// 对话历史
+// =============================================================================
+
+message AIHistoryReq {
+    int32 from_uid = 1;
+    string session_id = 2;
+    int32 limit = 3;               // 最大返回条数
+    int32 offset = 4;              // 偏移量
+}
+
+message AIMessage {
+    string msg_id = 1;            // 消息 ID
+    string role = 2;              // "user" / "assistant"
+    string content = 3;           // 消息内容
+    int64 created_at = 4;         // 创建时间
+}
+
+message AIHistoryRsp {
+    int32 code = 1;
+    repeated AIMessage messages = 2;
+}
+
+// =============================================================================
+// RAG 知识库
+// =============================================================================
+
+message AIKbUploadReq {
+    int32 uid = 1;
+    string file_name = 2;         // 文件名
+    string file_type = 3;          // 文件类型："pdf" / "txt" / "md" / "docx"
+    bytes content = 4;             // 文件内容（Base64 编码后传输）
+}
+
+message AIKbUploadRsp {
+    int32 code = 1;
+    string message = 2;
+    int32 chunks = 3;             // 分块数量
+    string kb_id = 4;             // 知识库 ID
+}
+
+message AIKbSearchReq {
+    int32 uid = 1;
+    string query = 2;             // 检索问题
+    int32 top_k = 3;              // 返回 top_k 条
+}
+
+message AIKbChunk {
+    string content = 1;           // 片段内容
+    float score = 2;             // 相似度分数
+    string source = 3;           // 来源文件
+}
+
+message AIKbSearchRsp {
+    int32 code = 1;
+    string message = 2;
+    repeated AIKbChunk chunks = 3;
+}
+
+message AIKbListReq {
+    int32 uid = 1;
+}
+
+message AIKbInfo {
+    string kb_id = 1;
+    string name = 2;
+    int32 chunk_count = 3;
+    int64 created_at = 4;
+    string status = 5;            // "ready" / "indexing" / "error"
+}
+
+message AIKbListRsp {
+    int32 code = 1;
+    repeated AIKbInfo knowledge_bases = 2;
+}
+
+message AIKbDeleteReq {
+    int32 uid = 1;
+    string kb_id = 2;
+}
+
+message AIKbDeleteRsp {
+    int32 code = 1;
+    string message = 2;
+}
+
+// =============================================================================
+// 模型列表
+// =============================================================================
+
+message AIListModelsReq {}
+
+message ModelInfo {
+    string model_type = 1;        // "ollama" / "openai" / "claude" / "kimi"
+    string model_name = 2;         // "qwen2.5:7b" 等
+    string display_name = 3;       // 显示名称
+    bool is_enabled = 4;           // 是否启用
+    int64 context_window = 5;      // 上下文窗口大小
+}
+
+message AIListModelsRsp {
+    int32 code = 1;
+    repeated ModelInfo models = 2;
+    ModelInfo default_model = 3;   // 默认模型
+}
+
+// =============================================================================
+// Human-in-the-Loop 确认
+// =============================================================================
+
+message AIConfirmReq {
+    int32 uid = 1;
+    string session_id = 2;
+    string confirm_id = 3;        // 确认任务 ID（由 AI 返回）
+    bool approved = 4;            // true=批准，false=拒绝
+}
+
+message AIConfirmRsp {
+    int32 code = 1;
+    string message = 2;
+    string result = 3;             // 批准后的执行结果
+}
+
+// =============================================================================
+// gRPC Service 定义
+// =============================================================================
+
+service AIService {
+    // 对话
+    rpc Chat(AIChatReq) returns (AIChatRsp) {}
+    rpc ChatStream(AIChatStreamReq) returns (stream AIChatStreamChunk) {}
+
+    // 智能功能
+    rpc Smart(AISmartReq) returns (AISmartRsp) {}
+
+    // 历史
+    rpc GetHistory(AIHistoryReq) returns (AIHistoryRsp) {}
+
+    // 会话管理
+    rpc CreateSession(AICreateSessionReq) returns (AISessionRsp) {}
+    rpc ListSessions(AICreateSessionReq) returns (AISessionRsp) {}
+    rpc DeleteSession(AIDeleteSessionReq) returns (AIDeleteSessionRsp) {}
+
+    // 模型列表
+    rpc ListModels(AIListModelsReq) returns (AIListModelsRsp) {}
+
+    // 知识库
+    rpc KbUpload(AIKbUploadReq) returns (AIKbUploadRsp) {}
+    rpc KbSearch(AIKbSearchReq) returns (AIKbSearchRsp) {}
+    rpc KbList(AIKbListReq) returns (AIKbListRsp) {}
+    rpc KbDelete(AIKbDeleteReq) returns (AIKbDeleteRsp) {}
+
+    // 人类确认
+    rpc Confirm(AIConfirmReq) returns (AIConfirmRsp) {}
+}

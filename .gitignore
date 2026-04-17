@@ -69,6 +69,10 @@ x64
 MemoChat.pro.user
 node_modules
 
+# Runtime binaries (DLLs and EXEs in runtime/services/)
+Memo_ops/runtime/services/*/*.dll
+Memo_ops/runtime/services/*/*.exe
+
 # Qt Creator legacy client
 /client/MemoChat/.qmake.stash
 /client/MemoChat/bin/MemoChat.exe

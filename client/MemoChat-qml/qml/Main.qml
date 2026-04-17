@@ -15,7 +15,7 @@ ApplicationWindow {
     property int windowRadius: isMaximized ? 0 : 20
     property string appTitle: "MemoChat QML"
     property size loginWindowSize: Qt.size(300, 500)
-    property size chatWindowSize: Qt.size(1100, 820)
+    property size chatWindowSize: Qt.size(900, 640)
     property var chatWindowRef: null
 
     function centerWindow(win) {
@@ -255,8 +255,8 @@ ApplicationWindow {
             title: root.appTitle
             flags: Qt.Window | Qt.FramelessWindowHint
             color: "transparent"
-            minimumWidth: 980
-            minimumHeight: 760
+            minimumWidth: 800
+            minimumHeight: 600
             maximumWidth: 100000
             maximumHeight: 100000
             width: root.chatWindowSize.width

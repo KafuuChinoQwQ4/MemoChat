@@ -162,11 +162,16 @@ target_link_libraries(memochat_runtime PUBLIC
 
 set(MEMOCHAT_PROTO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 set(MEMOCHAT_PROTO_SRC "${CMAKE_CURRENT_SOURCE_DIR}/common/proto/message.proto")
+set(MEMOCHAT_PROTO_AI_SRC "${CMAKE_CURRENT_SOURCE_DIR}/common/proto/ai_message.proto")
 set(MEMOCHAT_PROTO_GEN_DIR "${CMAKE_BINARY_DIR}/generated")
 set(MEMOCHAT_PROTO_CC "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/message.pb.cc")
 set(MEMOCHAT_PROTO_H "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/message.pb.h")
 set(MEMOCHAT_GRPC_CC "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/message.grpc.pb.cc")
 set(MEMOCHAT_GRPC_H "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/message.grpc.pb.h")
+set(MEMOCHAT_PROTO_AI_CC "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/ai_message.pb.cc")
+set(MEMOCHAT_PROTO_AI_H "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/ai_message.pb.h")
+set(MEMOCHAT_GRPC_AI_CC "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/ai_message.grpc.pb.cc")
+set(MEMOCHAT_GRPC_AI_H "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/ai_message.grpc.pb.h")
 
 add_custom_command(
     OUTPUT
@@ -174,11 +179,18 @@ add_custom_command(
         "${MEMOCHAT_PROTO_H}"
         "${MEMOCHAT_GRPC_CC}"
         "${MEMOCHAT_GRPC_H}"
+        "${MEMOCHAT_PROTO_AI_CC}"
+        "${MEMOCHAT_PROTO_AI_H}"
+        "${MEMOCHAT_GRPC_AI_CC}"
+        "${MEMOCHAT_GRPC_AI_H}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${MEMOCHAT_PROTO_GEN_DIR}/common/proto"
     COMMAND $<TARGET_FILE:protobuf::protoc> --proto_path=${MEMOCHAT_PROTO_ROOT} --cpp_out=${MEMOCHAT_PROTO_GEN_DIR} ${MEMOCHAT_PROTO_SRC}
+    COMMAND $<TARGET_FILE:protobuf::protoc> --proto_path=${MEMOCHAT_PROTO_ROOT} --cpp_out=${MEMOCHAT_PROTO_GEN_DIR} ${MEMOCHAT_PROTO_AI_SRC}
     COMMAND $<TARGET_FILE:protobuf::protoc> --proto_path=${MEMOCHAT_PROTO_ROOT} --grpc_out=${MEMOCHAT_PROTO_GEN_DIR} --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin> ${MEMOCHAT_PROTO_SRC}
+    COMMAND $<TARGET_FILE:protobuf::protoc> --proto_path=${MEMOCHAT_PROTO_ROOT} --grpc_out=${MEMOCHAT_PROTO_GEN_DIR} --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin> ${MEMOCHAT_PROTO_AI_SRC}
     DEPENDS
         "${MEMOCHAT_PROTO_SRC}"
+        "${MEMOCHAT_PROTO_AI_SRC}"
         protobuf::protoc
         gRPC::grpc_cpp_plugin
     VERBATIM
@@ -189,6 +201,10 @@ add_library(memochat_proto STATIC
     "${MEMOCHAT_PROTO_H}"
     "${MEMOCHAT_GRPC_CC}"
     "${MEMOCHAT_GRPC_H}"
+    "${MEMOCHAT_PROTO_AI_CC}"
+    "${MEMOCHAT_PROTO_AI_H}"
+    "${MEMOCHAT_GRPC_AI_CC}"
+    "${MEMOCHAT_GRPC_AI_H}"
 )
 target_compile_features(memochat_proto PUBLIC cxx_std_17)
 target_include_directories(memochat_proto PUBLIC
@@ -259,7 +275,14 @@ endif()
     # since Ninja doesn't reliably propagate transitive IMPORTED_LINK_DEPENDENT_LIBRARIES.
     target_compile_definitions(memochat_server_deps INTERFACE USE_IMPORT_EXPORT=1)
     if(WIN32)
-        set(_VCPKG_AWS_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg_installed/x64-windows/lib")
+        # VCPKG_INSTALLED_DIR is set by CMakePresets.json cacheVariables or environment
+        if(DEFINED VCPKG_INSTALLED_DIR)
+            set(_VCPKG_AWS_LIB_DIR "${VCPKG_INSTALLED_DIR}/x64-windows/lib")
+        elseif(DEFINED ENV{VCPKG_INSTALLED_DIR})
+            set(_VCPKG_AWS_LIB_DIR "$ENV{VCPKG_INSTALLED_DIR}/x64-windows/lib")
+        else()
+            set(_VCPKG_AWS_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg_installed/x64-windows/lib")
+        endif()
         foreach(_aws_lib aws-cpp-sdk-core aws-cpp-sdk-s3 aws-crt-cpp aws-c-http aws-c-mqtt aws-c-auth aws-c-cal aws-c-common aws-c-io aws-checksums aws-c-event-stream aws-c-s3 aws-c-compression aws-c-sdkutils)
             set(_lib_path "${_VCPKG_AWS_LIB_DIR}/${_aws_lib}.lib")
             if(EXISTS "${_lib_path}")
@@ -283,7 +306,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Fix: Override Qt's -external:W0 which excludes system include directories
 # Try /Zc:twoPhase- to fix conformance mode issues with VS2026 + Windows SDK
 # CRITICAL: Define NOMINMAX and use std::byte namespace to fix byte ambiguity
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /external:I \"D:/VS2026stable/VC/Tools/MSVC/14.50.35717/ATLMFC/include\" /external:I \"D:/VS2026stable/VC/Tools/MSVC/14.50.35717/include\" /external:I \"C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt\" /external:I \"C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/shared\" /external:I \"C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/um\" /external:W0 /D_WIN32_WINNT=0x0601 /Zc:__cplusplus /Zc:twoPhase-")
+# Environment variables: VC_TOOLS_INCLUDE, WINSDK_INCLUDE
+set(_SERVER_EXTERNAL_INCLUDES
+    "$ENV{VC_TOOLS_INCLUDE}/ATLMFC/include"
+    "$ENV{VC_TOOLS_INCLUDE}"
+    "$ENV{WINSDK_INCLUDE}/ucrt"
+    "$ENV{WINSDK_INCLUDE}/shared"
+    "$ENV{WINSDK_INCLUDE}/um"
+)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /external:I \"${_SERVER_EXTERNAL_INCLUDES}\" /external:W0 /D_WIN32_WINNT=0x0601 /Zc:__cplusplus /Zc:twoPhase-")
 
 function(memochat_configure_server_target target_name)
     target_link_libraries(${target_name} PRIVATE memochat_server_deps)
@@ -302,8 +333,13 @@ function(memochat_configure_server_target target_name)
     endforeach()
 
     # Auto-deploy to Memo_ops runtime directory after each build.
+    # Environment variable: MEMOCHAT_RUNTIME_BASE (defaults to ${sourceDir}/Memo_ops/runtime/services)
     if(WIN32)
-        set(RUNTIME_BASE "D:\\MemoChat-Qml-Drogon\\Memo_ops\\runtime\\services")
+        if(DEFINED ENV{MEMOCHAT_RUNTIME_BASE})
+            set(RUNTIME_BASE "$ENV{MEMOCHAT_RUNTIME_BASE}")
+        else()
+            set(RUNTIME_BASE "${CMAKE_SOURCE_DIR}/Memo_ops/runtime/services")
+        endif()
         add_custom_command(TARGET ${target_name} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "$<TARGET_FILE:${target_name}>"
@@ -329,3 +365,5 @@ add_subdirectory(GateServerHttp3)
 add_subdirectory(GateServer)
 add_subdirectory(StatusServer)
 add_subdirectory(VarifyServer)
+add_subdirectory(AIServer)
+

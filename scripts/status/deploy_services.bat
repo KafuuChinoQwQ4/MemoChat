@@ -6,7 +6,7 @@ REM ============================================================
 setlocal enabledelayedexpansion
 cd /d "%~dp0..\.."
 set "PROJECT_ROOT=%CD%"
-set "BUILD_BIN=%PROJECT_ROOT%\build-vcpkg-server\bin\Release"
+set "BUILD_BIN=%PROJECT_ROOT%\build\bin\Release"
 set "RUNTIME_DIR=%PROJECT_ROOT%\Memo_ops\runtime\services"
 
 echo ============================================================
@@ -34,6 +34,8 @@ mkdir "%RUNTIME_DIR%\chatserver3"       2>nul
 mkdir "%RUNTIME_DIR%\chatserver4"       2>nul
 mkdir "%RUNTIME_DIR%\GateServerHttp1.1" 2>nul
 mkdir "%RUNTIME_DIR%\GateServerHttp2"    2>nul
+mkdir "%RUNTIME_DIR%\MemoChatQml"       2>nul
+mkdir "%RUNTIME_DIR%\MemoOpsQml"        2>nul
 echo.
 
 REM ---- 拷贝各服务 exe ----
@@ -46,8 +48,8 @@ call :copyOne "%BUILD_BIN%\ChatServer.exe"            "%RUNTIME_DIR%\chatserver4
 call :copyOne "%BUILD_BIN%\GateServerHttp1.1.exe"    "%RUNTIME_DIR%\GateServerHttp1.1\GateServerHttp1.1.exe"
 call :copyOne "%BUILD_BIN%\GateServerHttp1.1.exe"    "%RUNTIME_DIR%\GateServerHttp2\GateServerHttp1.1.exe"
 call :copyOne "%BUILD_BIN%\GateServerDrogon.exe"     "%RUNTIME_DIR%\GateServer\GateServerDrogon.exe"
-call :copyOne "%BUILD_BIN%\MemoChatQml.exe"          "%RUNTIME_DIR%\MemoChatQml\MemoChatQml.exe"
-call :copyOne "%BUILD_BIN%\MemoOpsQml.exe"          "%RUNTIME_DIR%\MemoOpsQml\MemoOpsQml.exe"
+call :copyOne "%BUILD_BIN%\MemoChatQml.exe"        "%RUNTIME_DIR%\MemoChatQml\MemoChatQml.exe"
+call :copyOne "%BUILD_BIN%\MemoOpsQml.exe"        "%RUNTIME_DIR%\MemoOpsQml\MemoOpsQml.exe"
 echo.
 
 REM ---- 拷贝 vcpkg 依赖 DLL ----
@@ -134,6 +136,8 @@ call :copyOne "%SRC%\ChatServer\config.ini"           "%RUNTIME_DIR%\chatserver3
 call :copyOne "%SRC%\ChatServer\config.ini"           "%RUNTIME_DIR%\chatserver4\config.ini"
 call :copyOne "%SRC%\GateServerHttp1.1\config.ini"   "%RUNTIME_DIR%\GateServerHttp1.1\config.ini"
 call :copyOne "%SRC%\GateServerHttp2\config.ini"     "%RUNTIME_DIR%\GateServerHttp2\config.ini"
+call :copyOne "%BUILD_BIN%\config.ini"                "%RUNTIME_DIR%\MemoChatQml\config.ini"
+call :copyOne "%BUILD_BIN%\memoops-qml.ini"           "%RUNTIME_DIR%\MemoOpsQml\memoops-qml.ini"
 echo.
 
 REM ---- 为每个 ChatServer 实例生成唯一配置 ----
@@ -155,11 +159,16 @@ call :check "%RUNTIME_DIR%\chatserver2\ChatServer.exe"
 call :check "%RUNTIME_DIR%\chatserver3\ChatServer.exe"
 call :check "%RUNTIME_DIR%\chatserver4\ChatServer.exe"
 call :check "%RUNTIME_DIR%\GateServer\config.ini"
+call :check "%RUNTIME_DIR%\GateServer\config.ini"
 call :check "%RUNTIME_DIR%\StatusServer\config.ini"
 call :check "%RUNTIME_DIR%\chatserver1\config.ini"
 call :check "%RUNTIME_DIR%\chatserver2\config.ini"
 call :check "%RUNTIME_DIR%\chatserver3\config.ini"
 call :check "%RUNTIME_DIR%\chatserver4\config.ini"
+call :check "%RUNTIME_DIR%\MemoChatQml\MemoChatQml.exe"
+call :check "%RUNTIME_DIR%\MemoChatQml\config.ini"
+call :check "%RUNTIME_DIR%\MemoOpsQml\MemoOpsQml.exe"
+call :check "%RUNTIME_DIR%\MemoOpsQml\memoops-qml.ini"
 echo.
 if "!ALL_OK!"=="1" (
     echo [SUCCESS] All services deployed to %RUNTIME_DIR%
@@ -178,12 +187,21 @@ set "NAME=%~2"
 set "WORKER=%~3"
 if exist "%CONF%" (
     powershell -NoProfile -Command ^
-        "$f='%CONF%'; $name='%NAME%'; $worker='%WORKER%'; " ^
-        "$c=[IO.File]::ReadAllText($f); " ^
-        "$c=$c -replace '(?m)^\[SelfServer\]\r?\nName=.*\r?\n', ('[SelfServer]`r`nName=' + $name + '`r`n'); " ^
-        "$c=$c -replace '(?s)^\[Snowflake\]\r?\nDatacenterId=\d+\r?\nWorkerId=\d+\r?\n', ('[Snowflake]`r`nDatacenterId=1`r`nWorkerId=' + $worker + '`r`n'); " ^
-        "[IO.File]::WriteAllText($f,$c); " ^
-        "Write-Host \"[PATCH] $f - Name=$name, WorkerId=$worker\"" 2>nul
+        "$conf='%CONF%'; $name='%NAME%'; $worker='%WORKER%'; " ^
+        "$lines=[System.IO.File]::ReadAllLines($conf); " ^
+        "$out=@(); $in_self=$false; $in_snow=$false; $self_name_added=$false; $snow_ids_added=$false; foreach($l in $lines) { " ^
+        "if($l -cmatch '^\[([^\]]+)\]$') { " ^
+        "$in_self=($matches[1] -eq 'SelfServer'); " ^
+        "$in_snow=($matches[1] -eq 'Snowflake'); " ^
+        "$self_name_added=$false; $snow_ids_added=$false; " ^
+        "$out+=$l; " ^
+        "if($in_self) { $out+='Name='+$name; $self_name_added=$true } " ^
+        "elseif($in_snow) { $out+='DatacenterId=1'; $out+='WorkerId='+$worker; $snow_ids_added=$true } } " ^
+        "elseif($in_self -and $l -cmatch '^Name=' -and $self_name_added) { } " ^
+        "elseif($in_snow -and ($l -cmatch '^DatacenterId=' -or $l -cmatch '^WorkerId=') -and $snow_ids_added) { } " ^
+        "else { $out+=$l } }; " ^
+        "[System.IO.File]::WriteAllLines($conf,$out); " ^
+        "Write-Host '[PATCH]'$conf' Name='$name' WorkerId='$worker"
 )
 exit /b 0
 

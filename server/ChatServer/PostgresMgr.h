@@ -2,6 +2,7 @@
 #include "const.h"
 #include "PostgresDao.h"
 #include "Singleton.h"
+#include <memory>
 #include <vector>
 
 class PostgresMgr: public Singleton<PostgresMgr>
@@ -81,5 +82,6 @@ public:
 		std::vector<std::shared_ptr<PrivateMessageInfo>>& messages);
 private:
 	PostgresMgr();
-	PostgresDao  _dao;
+	static void EnsurePostgresDaoInitialized(PostgresMgr* mgr);
+	std::unique_ptr<PostgresDao> _dao;
 };

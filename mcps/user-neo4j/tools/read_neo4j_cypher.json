@@ -1,0 +1,19 @@
+{
+  "name": "read_neo4j_cypher",
+  "description": "Execute a read Cypher query on the Neo4j graph database. Use for MATCH, RETURN, WITH, WHERE, ORDER BY, LIMIT, SKIP, DISTINCT, COUNT, COLLECT, etc. This is read-only.",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "The read-only Cypher query to execute (MATCH/OPTIONAL MATCH only)."
+      },
+      "params": {
+        "type": "object",
+        "default": {},
+        "description": "Query parameters as key-value pairs."
+      }
+    },
+    "required": ["query"]
+  }
+}

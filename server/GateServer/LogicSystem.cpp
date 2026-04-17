@@ -4,6 +4,7 @@
 #include "PostgresMgr.h"
 #include "GateRouteModules.h"
 #include "MomentsRouteModules.h"
+#include "AIRouteModules.h"
 #include "../GateServerHttp3/GateHttp3Connection.h"
 #include "../GateServerHttp3/GateHttp3ServiceRoutes.h"
 #include "logging/Logger.h"
@@ -90,6 +91,9 @@ LogicSystem::LogicSystem() {
 	ProfileHttpService::RegisterRoutes(*this);
 	CallHttpServiceRoutes::RegisterRoutes(*this);
 	MomentsHttpServiceRoutes::RegisterRoutes(*this);
+
+	// Register AI routes
+	AIHttpServiceRoutes::RegisterRoutes(*this);
 
 	// Register H3 routes from GateServerHttp3
 	GateHttp3Service::RegisterRoutes(*this);
