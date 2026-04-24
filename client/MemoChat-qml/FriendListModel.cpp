@@ -413,6 +413,19 @@ void FriendListModel::setMentionCount(int uid, int count)
     emit dataChanged(modelIndex, modelIndex, {MentionCountRole});
 }
 
+void FriendListModel::removeByUid(int uid)
+{
+    const int idx = indexOfUid(uid);
+    if (idx < 0) {
+        return;
+    }
+
+    beginRemoveRows(QModelIndex(), idx, idx);
+    _items.erase(_items.begin() + idx);
+    endRemoveRows();
+    emit countChanged();
+}
+
 void FriendListModel::setDialogMeta(int uid, const QString &dialogType, int unreadCount,
                                     int pinnedRank, const QString &draftText, qint64 lastMsgTs, int muteState)
 {

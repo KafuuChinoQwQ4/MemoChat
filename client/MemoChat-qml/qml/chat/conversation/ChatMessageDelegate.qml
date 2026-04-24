@@ -14,6 +14,7 @@ Item {
     property string rawContent: ""
     property string fileName: ""
     property string senderName: ""
+    property int senderUid: 0
     property bool showAvatar: true
     property bool showTimeDivider: false
     property string timeDividerText: ""
@@ -36,6 +37,7 @@ Item {
     signal forwardRequested(string msgId)
     signal editRequested(string msgId, string text)
     signal revokeRequested(string msgId)
+    signal avatarClicked(int uid, string name, string icon)
 
     property int avatarSize: 34
     property int avatarSlotWidth: 42
@@ -131,6 +133,12 @@ Item {
                         }
                     }
                 }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.avatarClicked(root.senderUid, root.senderName, root.avatarSource)
+                }
             }
         }
 
@@ -167,6 +175,12 @@ Item {
                             loadFailed = true
                         }
                     }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.avatarClicked(root.senderUid, root.senderName, root.avatarSource)
                 }
             }
         }

@@ -107,6 +107,11 @@ QString AppController::currentContactUserId() const
     return _current_contact_user_id;
 }
 
+int AppController::currentContactUid() const
+{
+    return _current_contact_uid;
+}
+
 bool AppController::hasCurrentContact() const
 {
     return _current_contact_uid > 0;

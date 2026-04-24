@@ -16,6 +16,7 @@ public:
     void HandleSearchUser(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
     void HandleAddFriendApply(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
     void HandleAuthFriendApply(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
+    void HandleDeleteFriend(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
     void HandleGetDialogList(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
     void HandleSyncDraft(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
     void HandlePinDialog(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);

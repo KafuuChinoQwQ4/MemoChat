@@ -22,6 +22,8 @@ void ChatRelationServiceRegistrar::Register(LogicSystem& logic, std::map<short, 
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
     callbacks[ID_AUTH_FRIEND_REQ] = std::bind(&ChatRelationService::HandleAuthFriendApply, logic._chat_relation_service.get(),
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+    callbacks[ID_DELETE_FRIEND_REQ] = std::bind(&ChatRelationService::HandleDeleteFriend, logic._chat_relation_service.get(),
+        std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
     callbacks[ID_GET_DIALOG_LIST_REQ] = std::bind(&ChatRelationService::HandleGetDialogList, logic._chat_relation_service.get(),
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
     callbacks[ID_SYNC_DRAFT_REQ] = std::bind(&ChatRelationService::HandleSyncDraft, logic._chat_relation_service.get(),

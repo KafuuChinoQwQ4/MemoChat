@@ -26,6 +26,7 @@ public:
 	bool AddMoment(const MomentInfo& moment);
 	bool GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int limit,
 		std::vector<MomentInfo>& moments, bool& has_more);
+	bool CanViewMoment(int viewer_uid, const MomentInfo& moment);
 	bool GetMomentById(int64_t moment_id, MomentInfo& moment);
 	bool DeleteMoment(int64_t moment_id, int uid);
 	bool AddMomentLike(int64_t moment_id, int uid);

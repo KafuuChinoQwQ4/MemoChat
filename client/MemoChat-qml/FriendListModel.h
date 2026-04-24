@@ -53,6 +53,7 @@ public:
     void incrementMention(int uid, int delta = 1);
     void clearMention(int uid);
     void setMentionCount(int uid, int count);
+    void removeByUid(int uid);
     void setDialogMeta(int uid, const QString &dialogType, int unreadCount, int pinnedRank,
                        const QString &draftText, qint64 lastMsgTs, int muteState);
 

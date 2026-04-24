@@ -702,6 +702,51 @@ bool PostgresDao::AddFriend(const int& from, const int& to, std::string back_nam
 	return true;
 }
 
+bool PostgresDao::DeleteFriend(const int& from, const int& to) {
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			txn.exec_params(
+				"DELETE FROM friend WHERE (self_id = $1 AND friend_id = $2) OR (self_id = $2 AND friend_id = $1)",
+				from,
+				to);
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+
+	try {
+		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement(
+			"DELETE FROM friend WHERE (self_id = ? AND friend_id = ?) OR (self_id = ? AND friend_id = ?)"));
+		pstmt->setInt(1, from);
+		pstmt->setInt(2, to);
+		pstmt->setInt(3, to);
+		pstmt->setInt(4, from);
+		pstmt->executeUpdate();
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
 bool PostgresDao::ReplaceApplyTags(const int& from, const int& to, const std::vector<std::string>& tags) {
 	if (use_postgres_) {
 		try {
