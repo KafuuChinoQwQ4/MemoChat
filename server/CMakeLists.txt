@@ -2,19 +2,53 @@ cmake_minimum_required(VERSION 3.16)
 
 project(MemoChatServer LANGUAGES CXX)
 
+# Require C++23 for std::expected, std::unreachable, std::byteswap (glaze library requires C++23).
+# Must be set BEFORE any add_subdirectory() calls so it takes effect for all targets.
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 if(MSVC)
     if(DEFINED VCPKG_TARGET_TRIPLET AND VCPKG_TARGET_TRIPLET MATCHES "static")
         set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     else()
         set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     endif()
+    
+    # Add MSVC system include paths for vcpkg's /external mode compatibility
+    # vcpkg's toolchain adds -external:I and -external:W0 which requires explicit system include paths
+    if(DEFINED ENV{VC_TOOLS_INCLUDE} AND NOT "$ENV{VC_TOOLS_INCLUDE}" STREQUAL "")
+        set(_VC_TOOLS_INCLUDE "$ENV{VC_TOOLS_INCLUDE}")
+    else()
+        set(_VC_TOOLS_INCLUDE "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/include")
+    endif()
+    if(DEFINED ENV{WINSDK_INCLUDE} AND NOT "$ENV{WINSDK_INCLUDE}" STREQUAL "")
+        set(_WINSDK_INCLUDE "$ENV{WINSDK_INCLUDE}")
+    else()
+        set(_WINSDK_INCLUDE "C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.0")
+    endif()
+    
+    # Store paths in a global variable for use by subdirectories
+    set(MEMOCHAT_MSVC_SYSTEM_INCLUDES
+        "${_VC_TOOLS_INCLUDE}"
+        "${_WINSDK_INCLUDE}/ucrt"
+        "${_WINSDK_INCLUDE}/shared"
+        "${_WINSDK_INCLUDE}/um"
+        "${_WINSDK_INCLUDE}/winrt"
+        "${_WINSDK_INCLUDE}/cppwinrt"
+    )
+    
+    # Add these as external includes using CMAKE_CXX_FLAGS
+    foreach(_path IN LISTS MEMOCHAT_MSVC_SYSTEM_INCLUDES)
+        if(EXISTS "${_path}")
+            string(APPEND CMAKE_CXX_FLAGS " /external:I \"${_path}\"")
+        endif()
+    endforeach()
 endif()
 
 find_package(Boost REQUIRED COMPONENTS filesystem)
 find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(hiredis CONFIG REQUIRED)
-find_package(jsoncpp CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(bsoncxx CONFIG REQUIRED)
 find_package(mongocxx CONFIG REQUIRED)
@@ -25,6 +59,7 @@ find_package(unofficial-librabbitmq CONFIG QUIET)
 find_package(rabbitmq-c CONFIG QUIET)
 find_package(msquic CONFIG QUIET)
 find_package(OpenSSL CONFIG QUIET)
+find_package(libh2o CONFIG QUIET)
 find_package(AWSSDK CONFIG QUIET)
 if(AWSSDK_FOUND)
     # AWSSDK found but doesn't provide CMake IMPORTED targets.
@@ -130,6 +165,17 @@ if(NOT TARGET gRPC::grpc_cpp_plugin)
     message(FATAL_ERROR "gRPC::grpc_cpp_plugin target not found. Install grpc[codegen].")
 endif()
 
+add_library(memochat_boost_stubs STATIC
+    common/BoostStubs.cpp
+)
+target_compile_features(memochat_boost_stubs PUBLIC cxx_std_23)
+target_include_directories(memochat_boost_stubs PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+)
+target_link_libraries(memochat_boost_stubs PUBLIC
+    Boost::headers
+)
+
 add_library(memochat_logging STATIC
     common/logging/LogConfig.cpp
     common/logging/Logger.cpp
@@ -138,13 +184,14 @@ add_library(memochat_logging STATIC
     common/logging/TelemetryConfig.cpp
     common/logging/GrpcTrace.cpp
 )
-target_compile_features(memochat_logging PUBLIC cxx_std_17)
+target_compile_features(memochat_logging PUBLIC cxx_std_23)
 target_include_directories(memochat_logging PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 target_link_libraries(memochat_logging PUBLIC
-    JsonCpp::JsonCpp
     ${MEMOCHAT_SPDLOG_TARGET}
+    Boost::headers
+    memochat_boost_stubs
 )
 
 add_library(memochat_runtime STATIC
@@ -152,12 +199,14 @@ add_library(memochat_runtime STATIC
     common/runtime/IoContextPool.cpp
     common/runtime/EtcdConfig.cpp
 )
-target_compile_features(memochat_runtime PUBLIC cxx_std_17)
+target_compile_features(memochat_runtime PUBLIC cxx_std_23)
 target_include_directories(memochat_runtime PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 target_link_libraries(memochat_runtime PUBLIC
     Boost::filesystem
+    Boost::headers
+    memochat_boost_stubs
 )
 
 set(MEMOCHAT_PROTO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -206,7 +255,7 @@ add_library(memochat_proto STATIC
     "${MEMOCHAT_GRPC_AI_CC}"
     "${MEMOCHAT_GRPC_AI_H}"
 )
-target_compile_features(memochat_proto PUBLIC cxx_std_17)
+target_compile_features(memochat_proto PUBLIC cxx_std_23)
 target_include_directories(memochat_proto PUBLIC
     ${MEMOCHAT_PROTO_GEN_DIR}
 )
@@ -216,20 +265,23 @@ target_link_libraries(memochat_proto PUBLIC
 )
 
 add_library(memochat_server_deps INTERFACE)
-target_compile_features(memochat_server_deps INTERFACE cxx_std_17)
+target_compile_features(memochat_server_deps INTERFACE cxx_std_23)
 target_include_directories(memochat_server_deps INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    "${VCPKG_INSTALLED_DIR}/x64-windows/include/mongocxx/v_noabi"
+    "${VCPKG_INSTALLED_DIR}/x64-windows/include/bsoncxx/v_noabi"
 )
 target_link_libraries(memochat_server_deps INTERFACE
     memochat_logging
     memochat_runtime
     memochat_proto
+    memochat_boost_stubs
     Boost::filesystem
+    Boost::headers
     gRPC::grpc++
     gRPC::grpc++_reflection
     protobuf::libprotobuf
     hiredis::hiredis
-    JsonCpp::JsonCpp
     ${MEMOCHAT_SPDLOG_TARGET}
 )
 target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_KAFKA=${MEMOCHAT_ENABLE_KAFKA} MEMOCHAT_ENABLE_RABBITMQ=${MEMOCHAT_ENABLE_RABBITMQ} MEMOCHAT_ENABLE_HTTP3=${MEMOCHAT_ENABLE_HTTP3} MEMOCHAT_HAVE_NGHTTP2=${MEMOCHAT_HAVE_NGHTTP2})
@@ -268,7 +320,7 @@ if(MEMOCHAT_ENABLE_RABBITMQ)
     target_link_libraries(memochat_server_deps INTERFACE ${MEMOCHAT_RABBITMQ_TARGET})
 endif()
 
-    if(AWSSDK_FOUND)
+if(AWSSDK_FOUND)
     # vcpkg builds aws-sdk-cpp and aws-crt-cpp as SHARED DLLs. The .lib files are
     # DLL import stubs (NULL_THUNK_DATA). We need USE_IMPORT_EXPORT=1 so our code
     # uses __declspec(dllimport), and we must explicitly link all aws .lib files
@@ -296,25 +348,14 @@ else()
 endif()
 
 if(WIN32)
-    target_link_libraries(memochat_server_deps INTERFACE bcrypt ws2_32 wsock32 crypt32 advapi32 iphlpapi)
+    # Use full path for bcrypt so the Windows SDK directory is always found,
+    # regardless of how vcpkg or other deps configure LIBPATH.
+    target_link_directories(memochat_server_deps INTERFACE
+        "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.28000.0/um/x64")
+    target_link_libraries(memochat_server_deps INTERFACE
+        "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.28000.0/um/x64/bcrypt.lib"
+        ws2_32 wsock32 crypt32 advapi32 iphlpapi)
 endif()
-
-# Require C++20 for std::span and other standard library features
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Fix: Override Qt's -external:W0 which excludes system include directories
-# Try /Zc:twoPhase- to fix conformance mode issues with VS2026 + Windows SDK
-# CRITICAL: Define NOMINMAX and use std::byte namespace to fix byte ambiguity
-# Environment variables: VC_TOOLS_INCLUDE, WINSDK_INCLUDE
-set(_SERVER_EXTERNAL_INCLUDES
-    "$ENV{VC_TOOLS_INCLUDE}/ATLMFC/include"
-    "$ENV{VC_TOOLS_INCLUDE}"
-    "$ENV{WINSDK_INCLUDE}/ucrt"
-    "$ENV{WINSDK_INCLUDE}/shared"
-    "$ENV{WINSDK_INCLUDE}/um"
-)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /external:I \"${_SERVER_EXTERNAL_INCLUDES}\" /external:W0 /D_WIN32_WINNT=0x0601 /Zc:__cplusplus /Zc:twoPhase-")
 
 function(memochat_configure_server_target target_name)
     target_link_libraries(${target_name} PRIVATE memochat_server_deps)
@@ -336,18 +377,19 @@ function(memochat_configure_server_target target_name)
     # Environment variable: MEMOCHAT_RUNTIME_BASE (defaults to ${sourceDir}/Memo_ops/runtime/services)
     if(WIN32)
         if(DEFINED ENV{MEMOCHAT_RUNTIME_BASE})
-            set(RUNTIME_BASE "$ENV{MEMOCHAT_RUNTIME_BASE}")
+            file(TO_CMAKE_PATH "$ENV{MEMOCHAT_RUNTIME_BASE}" RUNTIME_BASE_NATIVE)
         else()
-            set(RUNTIME_BASE "${CMAKE_SOURCE_DIR}/Memo_ops/runtime/services")
+            file(TO_CMAKE_PATH "${CMAKE_SOURCE_DIR}/Memo_ops/runtime/services" RUNTIME_BASE_NATIVE)
         endif()
         add_custom_command(TARGET ${target_name} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${RUNTIME_BASE_NATIVE}/${target_name}"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "$<TARGET_FILE:${target_name}>"
-                "${RUNTIME_BASE}\\${target_name}\\"
+                "${RUNTIME_BASE_NATIVE}/${target_name}"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "$<TARGET_FILE_DIR:${target_name}>/config.ini"
-                "${RUNTIME_BASE}\\${target_name}\\"
-            COMMENT "Auto-deploying ${target_name} -> ${RUNTIME_BASE}\\${target_name}\\"
+                "${CMAKE_SOURCE_DIR}/server/${target_name}/config.ini"
+                "${RUNTIME_BASE_NATIVE}/${target_name}"
+            COMMENT "Auto-deploying ${target_name} -> ${RUNTIME_BASE_NATIVE}/${target_name}"
         )
     endif()
 endfunction()
@@ -362,6 +404,9 @@ endif()
 add_subdirectory(ChatServer)
 add_subdirectory(GateServerCore)
 add_subdirectory(GateServerHttp3)
+if(libh2o_FOUND)
+    add_subdirectory(GateServerHttp2)
+endif()
 add_subdirectory(GateServer)
 add_subdirectory(StatusServer)
 add_subdirectory(VarifyServer)

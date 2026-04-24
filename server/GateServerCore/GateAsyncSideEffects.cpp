@@ -1,4 +1,5 @@
-#include "GateAsyncSideEffects.h"
+﻿#include "GateAsyncSideEffects.h"
+#include "json/GlazeCompat.h"
 
 #include "AuthLoginSupport.h"
 #include "ConfigMgr.h"
@@ -8,7 +9,6 @@
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <chrono>
-#include <json/json.h>
 #include <mutex>
 
 #ifndef MEMOCHAT_ENABLE_KAFKA
@@ -26,7 +26,7 @@
 #include <memory>
 
 #if MEMOCHAT_ENABLE_RABBITMQ
-#include <winsock2.h>
+#include "../common/WinsockCompat.h"
 #include <rabbitmq-c/amqp.h>
 #include <rabbitmq-c/framing.h>
 #include <rabbitmq-c/tcp_socket.h>
@@ -52,11 +52,9 @@ int64_t NowMsGate()
         std::chrono::system_clock::now().time_since_epoch()).count());
 }
 
-std::string WriteCompactJsonGate(const Json::Value& value)
+std::string WriteCompactJsonGate(const memochat::json::JsonValue& value)
 {
-    Json::StreamWriterBuilder builder;
-    builder["indentation"] = "";
-    return Json::writeString(builder, value);
+    return memochat::json::glaze_stringify(value);
 }
 
 #if MEMOCHAT_ENABLE_RABBITMQ
@@ -142,7 +140,7 @@ void GateAsyncSideEffects::PublishUserProfileChanged(int uid,
     const std::string& icon,
     int sex)
 {
-    Json::Value payload(Json::objectValue);
+    memochat::json::JsonValue payload(memochat::json::JsonValue{});
     payload["uid"] = uid;
     payload["user_id"] = user_id;
     payload["email"] = email;
@@ -165,7 +163,7 @@ void GateAsyncSideEffects::PublishAuditLogin(int uid,
     const std::string& chat_port,
     bool login_cache_hit)
 {
-    Json::Value payload(Json::objectValue);
+    memochat::json::JsonValue payload(memochat::json::JsonValue{});
     payload["uid"] = uid;
     payload["user_id"] = user_id;
     payload["email"] = email;
@@ -182,7 +180,7 @@ void GateAsyncSideEffects::PublishAuditLogin(int uid,
 
 void GateAsyncSideEffects::PublishCacheInvalidate(const std::string& email, const std::string& user_name, const std::string& reason)
 {
-    Json::Value payload(Json::objectValue);
+    memochat::json::JsonValue payload(memochat::json::JsonValue{});
     payload["email"] = email;
     payload["user_name"] = user_name;
     payload["reason"] = reason;
@@ -200,7 +198,7 @@ void GateAsyncSideEffects::PublishCacheInvalidate(const std::string& email, cons
 bool GateAsyncSideEffects::PublishKafka(const std::string& topic,
     const std::string& partition_key,
     const std::string& event_type,
-    const Json::Value& payload,
+    const memochat::json::JsonValue& payload,
     std::string* error)
 {
 #if MEMOCHAT_ENABLE_KAFKA
@@ -210,14 +208,14 @@ bool GateAsyncSideEffects::PublishKafka(const std::string& topic,
         }
         return false;
     }
-    Json::Value envelope(Json::objectValue);
+    memochat::json::JsonValue envelope(memochat::json::JsonValue{});
     envelope["event_id"] = boost::uuids::to_string(boost::uuids::random_generator()());
     envelope["topic"] = topic;
     envelope["partition_key"] = partition_key;
     envelope["event_type"] = event_type;
     envelope["trace_id"] = memolog::TraceContext::GetTraceId();
     envelope["request_id"] = memolog::TraceContext::GetRequestId();
-    envelope["created_at_ms"] = static_cast<Json::Int64>(NowMsGate());
+    envelope["created_at_ms"] = static_cast<int64_t>(NowMsGate());
     envelope["retry_count"] = 0;
     envelope["payload"] = payload;
     const auto serialized = WriteCompactJsonGate(envelope);
@@ -260,7 +258,7 @@ bool GateAsyncSideEffects::PublishKafka(const std::string& topic,
 
 bool GateAsyncSideEffects::PublishRabbit(const std::string& routing_key,
     const std::string& task_type,
-    const Json::Value& payload,
+    const memochat::json::JsonValue& payload,
     std::string* error)
 {
 #if MEMOCHAT_ENABLE_RABBITMQ
@@ -268,12 +266,12 @@ bool GateAsyncSideEffects::PublishRabbit(const std::string& routing_key,
     if (!EnsureRabbitConnected(error)) {
         return false;
     }
-    Json::Value envelope(Json::objectValue);
+    memochat::json::JsonValue envelope(memochat::json::JsonValue{});
     envelope["task_id"] = boost::uuids::to_string(boost::uuids::random_generator()());
     envelope["task_type"] = task_type;
     envelope["trace_id"] = memolog::TraceContext::GetTraceId();
     envelope["request_id"] = memolog::TraceContext::GetRequestId();
-    envelope["created_at_ms"] = static_cast<Json::Int64>(NowMsGate());
+    envelope["created_at_ms"] = static_cast<int64_t>(NowMsGate());
     envelope["retry_count"] = 0;
     envelope["max_retries"] = 5;
     envelope["routing_key"] = routing_key;
@@ -347,12 +345,9 @@ void GateAsyncSideEffects::ConsumeCacheInvalidateLoop()
             continue;
         }
 
-        Json::CharReaderBuilder builder;
-        std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-        Json::Value root;
-        std::string parse_errors;
+        memochat::json::JsonValue root;
         const auto serialized = BytesToStringGate(envelope.message.body);
-        if (reader->parse(serialized.data(), serialized.data() + serialized.size(), &root, &parse_errors) && root.isObject()) {
+        if (memochat::json::glaze_parse(root, serialized) && memochat::json::glaze_is_object(root)) {
             HandleCacheInvalidate(root["payload"]);
         }
         amqp_basic_ack(static_cast<amqp_connection_state_t>(_rabbit_connection), 1, envelope.delivery_tag, false);
@@ -440,13 +435,13 @@ bool GateAsyncSideEffects::EnsureRabbitTopology(std::string* error)
 #endif
 }
 
-void GateAsyncSideEffects::HandleCacheInvalidate(const Json::Value& payload)
+void GateAsyncSideEffects::HandleCacheInvalidate(const memochat::json::JsonValue& payload)
 {
-    if (!payload.isObject()) {
+    if (!memochat::json::glaze_is_object(payload)) {
         return;
     }
-    const auto email = payload.get("email", "").asString();
-    const auto reason = payload.get("reason", "").asString();
+    const auto email = memochat::json::glaze_safe_get<std::string>(payload, "email", "");
+    const auto reason = memochat::json::glaze_safe_get<std::string>(payload, "reason", "");
     if (email.empty()) {
         memolog::LogWarn("gate.cache_invalidate.invalid_payload", "cache invalidate payload missing email");
         return;
@@ -481,3 +476,4 @@ void GateAsyncSideEffects::CloseKafka()
     }
 #endif
 }
+

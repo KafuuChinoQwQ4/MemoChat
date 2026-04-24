@@ -7,9 +7,9 @@
 #include "common/proto/message.pb.h"
 #include <queue>
 #include "data.h"
-#include <json/json.h>
-#include <json/value.h>
-#include <json/reader.h>
+#include "json/GlazeCompat.h"
+
+
 
 using grpc::Channel;
 using grpc::Status;
@@ -103,7 +103,7 @@ public:
     AddFriendRsp NotifyAddFriend(std::string server_ip, const AddFriendReq& req);
     AuthFriendRsp NotifyAuthFriend(std::string server_ip, const AuthFriendReq& req);
     bool GetBaseInfo(std::string base_key, int uid, std::shared_ptr<UserInfo>& userinfo);
-    TextChatMsgRsp NotifyTextChatMsg(std::string server_ip, const TextChatMsgReq& req, const Json::Value& rtvalue);
+    TextChatMsgRsp NotifyTextChatMsg(std::string server_ip, const TextChatMsgReq& req, const memochat::json::JsonValue& rtvalue);
     KickUserRsp NotifyKickUser(std::string server_ip, const KickUserReq& req);
     GroupMessageNotifyRsp NotifyGroupMessage(std::string server_ip, const GroupMessageNotifyReq& req);
     GroupEventNotifyRsp NotifyGroupEvent(std::string server_ip, const GroupEventNotifyReq& req);

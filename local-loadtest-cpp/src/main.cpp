@@ -11,7 +11,7 @@
 #include <cstdlib>
 
 #ifdef _WIN32
-#include <winsock2.h>
+#include "../../../server/common/WinsockCompat.h"
 #endif
 
 namespace fs = std::filesystem;

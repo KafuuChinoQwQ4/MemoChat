@@ -1,15 +1,12 @@
 #pragma once
 
 #include <atomic>
+#include "json/GlazeCompat.h"
 #include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_set>
-
-namespace Json {
-class Value;
-}
 
 class StatusAsyncSideEffects {
 public:
@@ -29,17 +26,17 @@ private:
     bool PublishKafka(const std::string& topic,
         const std::string& partition_key,
         const std::string& event_type,
-        const Json::Value& payload,
+        const memochat::json::JsonValue& payload,
         std::string* error);
     bool PublishRabbit(const std::string& routing_key,
         const std::string& task_type,
-        const Json::Value& payload,
+        const memochat::json::JsonValue& payload,
         std::string* error);
     void ConsumePresenceRefreshLoop();
     bool EnsureRabbitConnected(std::string* error);
     bool EnsureRabbitTopology(std::string* error);
     void CloseRabbit();
-    void HandlePresenceRefresh(const Json::Value& payload);
+    void HandlePresenceRefresh(const memochat::json::JsonValue& payload);
 
     std::unordered_set<std::string> _known_servers;
     std::string _kafka_brokers;

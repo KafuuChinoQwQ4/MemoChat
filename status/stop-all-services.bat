@@ -15,7 +15,7 @@ REM    stop-all-services.bat  仅停止所有 exe 进程 (保留 Docker 容器)
 REM ============================================================
 setlocal enabledelayedexpansion
 
-cd /d "%~dp0..\.."
+cd /d "%~dp0.."
 set "PROJECT_ROOT=%CD%"
 set "MEMO_OPS_ROOT=%PROJECT_ROOT%\Memo_ops"
 

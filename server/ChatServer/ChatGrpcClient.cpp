@@ -67,17 +67,18 @@ bool ChatGrpcClient::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<
     std::string info_str = "";
     bool b_base = RedisMgr::GetInstance()->Get(base_key, info_str);
     if (b_base) {
-        Json::Reader reader;
-        Json::Value root;
-        reader.parse(info_str, root);
-        userinfo->uid = root["uid"].asInt();
-        userinfo->name = root["name"].asString();
-        userinfo->pwd = root["pwd"].asString();
-        userinfo->email = root["email"].asString();
-        userinfo->nick = root["nick"].asString();
-        userinfo->desc = root["desc"].asString();
-        userinfo->sex = root["sex"].asInt();
-        userinfo->icon = root["icon"].asString();
+        memochat::json::JsonValue root;
+        if (!memochat::json::reader_parse(info_str, root)) {
+            return false;
+        }
+        userinfo->uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
+        userinfo->name = memochat::json::glaze_safe_get<std::string>(root, "name", "");
+        userinfo->pwd = memochat::json::glaze_safe_get<std::string>(root, "pwd", "");
+        userinfo->email = memochat::json::glaze_safe_get<std::string>(root, "email", "");
+        userinfo->nick = memochat::json::glaze_safe_get<std::string>(root, "nick", "");
+        userinfo->desc = memochat::json::glaze_safe_get<std::string>(root, "desc", "");
+        userinfo->sex = memochat::json::glaze_safe_get<int>(root, "sex", 0);
+        userinfo->icon = memochat::json::glaze_safe_get<std::string>(root, "icon", "");
     }
     else {
         std::shared_ptr<UserInfo> user_info = nullptr;
@@ -88,7 +89,7 @@ bool ChatGrpcClient::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<
 
         userinfo = user_info;
 
-        Json::Value redis_root;
+        memochat::json::JsonValue redis_root;
         redis_root["uid"] = uid;
         redis_root["pwd"] = userinfo->pwd;
         redis_root["name"] = userinfo->name;
@@ -97,7 +98,7 @@ bool ChatGrpcClient::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<
         redis_root["desc"] = userinfo->desc;
         redis_root["sex"] = userinfo->sex;
         redis_root["icon"] = userinfo->icon;
-        RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
+        RedisMgr::GetInstance()->Set(base_key, memochat::json::writeString(redis_root));
     }
 
     return true;
@@ -138,7 +139,7 @@ AuthFriendRsp ChatGrpcClient::NotifyAuthFriend(std::string server_ip, const Auth
 }
 
 TextChatMsgRsp ChatGrpcClient::NotifyTextChatMsg(std::string server_ip,
-    const TextChatMsgReq& req, const Json::Value& rtvalue) {
+    const TextChatMsgReq& req, const memochat::json::JsonValue& rtvalue) {
     memolog::SpanScope span("ChatService.NotifyTextChatMsg", "CLIENT",
         {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyTextChatMsg"}, {"peer_service", server_ip}});
 

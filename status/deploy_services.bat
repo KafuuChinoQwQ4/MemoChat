@@ -4,11 +4,12 @@ REM  将 build\bin\Release 的可执行文件部署到 Memo_ops\runtime\services
 REM  自动适配项目根目录（从脚本所在位置推算）
 REM ============================================================
 setlocal enabledelayedexpansion
-cd /d "%~dp0..\.."
+cd /d "%~dp0.."
 set "PROJECT_ROOT=%CD%"
 set "BUILD_BIN=%PROJECT_ROOT%\build\bin\Release"
 set "RUNTIME_DIR=%PROJECT_ROOT%\Memo_ops\runtime\services"
 
+REM 脚本注释说明
 echo ============================================================
 echo   Deploy C++ services to runtime directory
 echo   PROJECT_ROOT: %PROJECT_ROOT%
@@ -32,24 +33,27 @@ mkdir "%RUNTIME_DIR%\chatserver1"       2>nul
 mkdir "%RUNTIME_DIR%\chatserver2"       2>nul
 mkdir "%RUNTIME_DIR%\chatserver3"       2>nul
 mkdir "%RUNTIME_DIR%\chatserver4"       2>nul
-mkdir "%RUNTIME_DIR%\GateServerHttp1.1" 2>nul
-mkdir "%RUNTIME_DIR%\GateServerHttp2"    2>nul
+mkdir "%RUNTIME_DIR%\AIServer"          2>nul
+mkdir "%RUNTIME_DIR%\VarifyServer"      2>nul
 mkdir "%RUNTIME_DIR%\MemoChatQml"       2>nul
 mkdir "%RUNTIME_DIR%\MemoOpsQml"        2>nul
 echo.
 
 REM ---- 拷贝各服务 exe ----
+REM msvc2022-full 预设的 binaryDir = ${sourceDir}/build
+REM 所有 server + client 的产物都统一输出到 build/bin/Release
+REM MemoChatQml.exe / MemoOpsQml.exe 的配置文件由 CMake POST_BUILD 自动复制到 build/bin/Release，
+REM 所以和 server exe 一样统一从 BUILD_BIN 拷贝。
 call :copyOne "%BUILD_BIN%\GateServer.exe"           "%RUNTIME_DIR%\GateServer\GateServer.exe"
 call :copyOne "%BUILD_BIN%\StatusServer.exe"         "%RUNTIME_DIR%\StatusServer\StatusServer.exe"
 call :copyOne "%BUILD_BIN%\ChatServer.exe"           "%RUNTIME_DIR%\chatserver1\ChatServer.exe"
 call :copyOne "%BUILD_BIN%\ChatServer.exe"            "%RUNTIME_DIR%\chatserver2\ChatServer.exe"
 call :copyOne "%BUILD_BIN%\ChatServer.exe"            "%RUNTIME_DIR%\chatserver3\ChatServer.exe"
 call :copyOne "%BUILD_BIN%\ChatServer.exe"            "%RUNTIME_DIR%\chatserver4\ChatServer.exe"
-call :copyOne "%BUILD_BIN%\GateServerHttp1.1.exe"    "%RUNTIME_DIR%\GateServerHttp1.1\GateServerHttp1.1.exe"
-call :copyOne "%BUILD_BIN%\GateServerHttp1.1.exe"    "%RUNTIME_DIR%\GateServerHttp2\GateServerHttp1.1.exe"
-call :copyOne "%BUILD_BIN%\GateServerDrogon.exe"     "%RUNTIME_DIR%\GateServer\GateServerDrogon.exe"
-call :copyOne "%BUILD_BIN%\MemoChatQml.exe"        "%RUNTIME_DIR%\MemoChatQml\MemoChatQml.exe"
-call :copyOne "%BUILD_BIN%\MemoOpsQml.exe"        "%RUNTIME_DIR%\MemoOpsQml\MemoOpsQml.exe"
+call :copyOne "%BUILD_BIN%\AIServer.exe"              "%RUNTIME_DIR%\AIServer\AIServer.exe"
+call :copyOne "%BUILD_BIN%\VarifyServer.exe"          "%RUNTIME_DIR%\VarifyServer\VarifyServer.exe"
+call :copyOne "%BUILD_BIN%\MemoChatQml.exe"           "%RUNTIME_DIR%\MemoChatQml\MemoChatQml.exe"
+call :copyOne "%BUILD_BIN%\MemoOpsQml.exe"          "%RUNTIME_DIR%\MemoOpsQml\MemoOpsQml.exe"
 echo.
 
 REM ---- 拷贝 vcpkg 依赖 DLL ----
@@ -92,7 +96,6 @@ if exist "%VCPKG_DIR%" (
         "cppkafka.dll"
         "fmt.dll"
         "hiredis.dll"
-        "jsoncpp.dll"
         "libcrypto-3-x64.dll"
         "libssl-3-x64.dll"
         "libpq.dll"
@@ -117,6 +120,8 @@ if exist "%VCPKG_DIR%" (
     ) do (
         if exist "%VCPKG_DIR%\%%~nxF" copy /y "%VCPKG_DIR%\%%~nxF" "%RUNTIME_DIR%\GateServer\" >nul
         if exist "%VCPKG_DIR%\%%~nxF" copy /y "%VCPKG_DIR%\%%~nxF" "%RUNTIME_DIR%\StatusServer\" >nul
+        if exist "%VCPKG_DIR%\%%~nxF" copy /y "%VCPKG_DIR%\%%~nxF" "%RUNTIME_DIR%\AIServer\" >nul
+        if exist "%VCPKG_DIR%\%%~nxF" copy /y "%VCPKG_DIR%\%%~nxF" "%RUNTIME_DIR%\VarifyServer\" >nul
         if exist "%VCPKG_DIR%\%%~nxF" copy /y "%VCPKG_DIR%\%%~nxF" "%RUNTIME_DIR%\chatserver1\" >nul
         if exist "%VCPKG_DIR%\%%~nxF" copy /y "%VCPKG_DIR%\%%~nxF" "%RUNTIME_DIR%\chatserver2\" >nul
         if exist "%VCPKG_DIR%\%%~nxF" copy /y "%VCPKG_DIR%\%%~nxF" "%RUNTIME_DIR%\chatserver3\" >nul
@@ -134,10 +139,12 @@ call :copyOne "%SRC%\ChatServer\config.ini"           "%RUNTIME_DIR%\chatserver1
 call :copyOne "%SRC%\ChatServer\config.ini"           "%RUNTIME_DIR%\chatserver2\config.ini"
 call :copyOne "%SRC%\ChatServer\config.ini"           "%RUNTIME_DIR%\chatserver3\config.ini"
 call :copyOne "%SRC%\ChatServer\config.ini"           "%RUNTIME_DIR%\chatserver4\config.ini"
-call :copyOne "%SRC%\GateServerHttp1.1\config.ini"   "%RUNTIME_DIR%\GateServerHttp1.1\config.ini"
-call :copyOne "%SRC%\GateServerHttp2\config.ini"     "%RUNTIME_DIR%\GateServerHttp2\config.ini"
-call :copyOne "%BUILD_BIN%\config.ini"                "%RUNTIME_DIR%\MemoChatQml\config.ini"
-call :copyOne "%BUILD_BIN%\memoops-qml.ini"           "%RUNTIME_DIR%\MemoOpsQml\memoops-qml.ini"
+call :copyOne "%SRC%\AIServer\config.ini"             "%RUNTIME_DIR%\AIServer\config.ini"
+call :copyOne "%SRC%\VarifyServer\config.ini"         "%RUNTIME_DIR%\VarifyServer\config.ini"
+REM MemoChatQml.exe 的 config.ini 由 CMake POST_BUILD 复制到 build/bin/Release，
+REM MemoOpsQml.exe 的 memoops-qml.ini 同理，统一从 BUILD_BIN 拷贝即可。
+call :copyOne "%BUILD_BIN%\config.ini"               "%RUNTIME_DIR%\MemoChatQml\config.ini"
+call :copyOne "%BUILD_BIN%\memoops-qml.ini"          "%RUNTIME_DIR%\MemoOpsQml\memoops-qml.ini"
 echo.
 
 REM ---- 为每个 ChatServer 实例生成唯一配置 ----
@@ -154,13 +161,16 @@ echo [VERIFY] Checking deployment results...
 set "ALL_OK=1"
 call :check "%RUNTIME_DIR%\GateServer\GateServer.exe"
 call :check "%RUNTIME_DIR%\StatusServer\StatusServer.exe"
+call :check "%RUNTIME_DIR%\AIServer\AIServer.exe"
+call :check "%RUNTIME_DIR%\VarifyServer\VarifyServer.exe"
 call :check "%RUNTIME_DIR%\chatserver1\ChatServer.exe"
 call :check "%RUNTIME_DIR%\chatserver2\ChatServer.exe"
 call :check "%RUNTIME_DIR%\chatserver3\ChatServer.exe"
 call :check "%RUNTIME_DIR%\chatserver4\ChatServer.exe"
 call :check "%RUNTIME_DIR%\GateServer\config.ini"
-call :check "%RUNTIME_DIR%\GateServer\config.ini"
 call :check "%RUNTIME_DIR%\StatusServer\config.ini"
+call :check "%RUNTIME_DIR%\AIServer\config.ini"
+call :check "%RUNTIME_DIR%\VarifyServer\config.ini"
 call :check "%RUNTIME_DIR%\chatserver1\config.ini"
 call :check "%RUNTIME_DIR%\chatserver2\config.ini"
 call :check "%RUNTIME_DIR%\chatserver3\config.ini"

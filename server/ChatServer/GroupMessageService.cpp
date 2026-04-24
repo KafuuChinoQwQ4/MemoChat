@@ -1,4 +1,4 @@
-#include "GroupMessageService.h"
+﻿#include "GroupMessageService.h"
 
 #include "ChatRuntime.h"
 #include "CSession.h"
@@ -10,8 +10,7 @@
 
 #include <chrono>
 #include <iostream>
-#include <json/json.h>
-#include <json/writer.h>
+#include "json/GlazeCompat.h"
 #include <unordered_set>
 
 namespace {
@@ -35,18 +34,18 @@ int64_t NowSecGroupLocal() {
         std::chrono::system_clock::now().time_since_epoch()).count());
 }
 
-bool ParseJsonObjectGroupLocal(const std::string& payload, Json::Value& root) {
-    Json::CharReaderBuilder builder;
-    std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+bool ParseJsonObjectGroupLocal(const std::string& payload, memochat::json::JsonValue& root) {
+    memochat::json::JsonCharReaderBuilder builder;
+    std::unique_ptr<memochat::json::JsonCharReader> reader(builder.newCharReader());
     std::string errors;
-    return reader->parse(payload.data(), payload.data() + payload.size(), &root, &errors) && root.isObject();
+    return reader->parse(payload.data(), payload.data() + payload.size(), &root, &errors) && root.is_object();
 }
 
 // Compact wire JSON for TCP/QUIC transport (Qt QJsonDocument is strict).
-std::string JsonToWireString(const Json::Value& v) {
-    Json::StreamWriterBuilder builder;
+std::string JsonToWireString(const memochat::json::JsonValue& v) {
+    memochat::json::JsonStreamWriterBuilder builder;
     builder["indentation"] = "";
-    return Json::writeString(builder, v);
+    return memochat::json::writeString(builder, v);
 }
 
 bool KafkaBackendEnabledGroupLocal() {
@@ -58,7 +57,7 @@ GroupMessageService::GroupMessageService(LogicSystem& logic)
     : _logic(logic) {
 }
 
-void GroupMessageService::BuildGroupListJson(int uid, Json::Value& out)
+void GroupMessageService::BuildGroupListJson(int uid, memochat::json::JsonValue& out)
 {
     std::vector<std::shared_ptr<GroupInfo>> groups;
     PostgresMgr::GetInstance()->GetUserGroupList(uid, groups);
@@ -66,8 +65,8 @@ void GroupMessageService::BuildGroupListJson(int uid, Json::Value& out)
         if (!group) {
             continue;
         }
-        Json::Value one;
-        one["groupid"] = static_cast<Json::Int64>(group->group_id);
+        memochat::json::JsonValue one;
+        one["groupid"] = static_cast<int64_t>(group->group_id);
         one["group_code"] = group->group_code;
         one["name"] = group->name;
         one["icon"] = group->icon;
@@ -77,7 +76,7 @@ void GroupMessageService::BuildGroupListJson(int uid, Json::Value& out)
         one["member_count"] = group->member_count;
         one["is_all_muted"] = group->is_all_muted;
         one["role"] = group->role;
-        one["permission_bits"] = static_cast<Json::Int64>(group->permission_bits);
+        one["permission_bits"] = static_cast<int64_t>(group->permission_bits);
         one["can_change_group_info"] = (group->permission_bits & kPermChangeGroupInfoLocal) != 0;
         one["can_delete_messages"] = (group->permission_bits & kPermDeleteMessagesLocal) != 0;
         one["can_invite_users"] = (group->permission_bits & kPermInviteUsersLocal) != 0;
@@ -85,7 +84,7 @@ void GroupMessageService::BuildGroupListJson(int uid, Json::Value& out)
         one["can_pin_messages"] = (group->permission_bits & kPermPinMessagesLocal) != 0;
         one["can_ban_users"] = (group->permission_bits & kPermBanUsersLocal) != 0;
         one["can_manage_topics"] = (group->permission_bits & kPermManageTopicsLocal) != 0;
-        out["group_list"].append(one);
+        append(out["group_list"], one);
     }
 
     std::vector<std::shared_ptr<GroupApplyInfo>> applies;
@@ -94,9 +93,9 @@ void GroupMessageService::BuildGroupListJson(int uid, Json::Value& out)
         if (!apply) {
             continue;
         }
-        Json::Value one;
-        one["apply_id"] = static_cast<Json::Int64>(apply->apply_id);
-        one["groupid"] = static_cast<Json::Int64>(apply->group_id);
+        memochat::json::JsonValue one;
+        one["apply_id"] = static_cast<int64_t>(apply->apply_id);
+        one["groupid"] = static_cast<int64_t>(apply->group_id);
         std::shared_ptr<GroupInfo> group_info;
         if (PostgresMgr::GetInstance()->GetGroupById(apply->group_id, group_info) && group_info) {
             one["group_code"] = group_info->group_code;
@@ -116,14 +115,14 @@ void GroupMessageService::BuildGroupListJson(int uid, Json::Value& out)
         one["type"] = apply->type;
         one["status"] = apply->status;
         one["reason"] = apply->reason;
-        out["pending_group_apply_list"].append(one);
+        append(out["pending_group_apply_list"], one);
     }
 }
 
 void GroupMessageService::HandleCreateGroup(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
 
     const int owner_uid = root["fromuid"].asInt();
@@ -133,7 +132,7 @@ void GroupMessageService::HandleCreateGroup(const std::shared_ptr<CSession>& ses
     std::vector<int> members;
     std::unordered_set<int> member_set;
     bool invalid_member_user_id = false;
-    if (root.isMember("member_user_ids") && root["member_user_ids"].isArray()) {
+    if (isMember(root, "member_user_ids") && root["member_user_ids"].is_array()) {
         for (const auto& one : root["member_user_ids"]) {
             const std::string member_user_id = one.asString();
             int uid = 0;
@@ -151,10 +150,10 @@ void GroupMessageService::HandleCreateGroup(const std::shared_ptr<CSession>& ses
         members.push_back(uid);
     }
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_CREATE_GROUP_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_CREATE_GROUP_RSP);
     });
 
     if (owner_uid <= 0 || group_name.empty() || group_name.size() > 64 || invalid_member_user_id) {
@@ -175,17 +174,17 @@ void GroupMessageService::HandleCreateGroup(const std::shared_ptr<CSession>& ses
         return;
     }
 
-    rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+    rtvalue["groupid"] = static_cast<int64_t>(group_id);
     rtvalue["group_code"] = group_code;
     rtvalue["name"] = group_name;
     rtvalue["announcement"] = announcement;
     BuildGroupListJson(owner_uid, rtvalue);
 
     if (!members.empty()) {
-        Json::Value notify;
+        memochat::json::JsonValue notify;
         notify["error"] = ErrorCodes::Success;
         notify["event"] = "group_invite";
-        notify["groupid"] = static_cast<Json::Int64>(group_id);
+        notify["groupid"] = static_cast<int64_t>(group_id);
         notify["group_code"] = group_code;
         notify["name"] = group_name;
         notify["operator_uid"] = owner_uid;
@@ -195,27 +194,27 @@ void GroupMessageService::HandleCreateGroup(const std::shared_ptr<CSession>& ses
 
 void GroupMessageService::HandleGetGroupList(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int uid = root["fromuid"].asInt();
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     if (uid <= 0) {
         rtvalue["error"] = ErrorCodes::Error_Json;
-        session->Send(rtvalue.toStyledString(), ID_GET_GROUP_LIST_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_GET_GROUP_LIST_RSP);
         return;
     }
 
     BuildGroupListJson(uid, rtvalue);
-    session->Send(rtvalue.toStyledString(), ID_GET_GROUP_LIST_RSP);
+    session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_GET_GROUP_LIST_RSP);
 }
 
 void GroupMessageService::HandleInviteGroupMember(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int from_uid = root["fromuid"].asInt();
     const std::string target_user_id = root.get("target_user_id", "").asString();
@@ -226,13 +225,13 @@ void GroupMessageService::HandleInviteGroupMember(const std::shared_ptr<CSession
         to_uid = 0;
     }
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+    rtvalue["groupid"] = static_cast<int64_t>(group_id);
     rtvalue["touid"] = to_uid;
     rtvalue["target_user_id"] = target_user_id;
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_INVITE_GROUP_MEMBER_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_INVITE_GROUP_MEMBER_RSP);
     });
 
     if (from_uid <= 0 || to_uid <= 0 || group_id <= 0 || target_user_id.empty()) {
@@ -247,10 +246,10 @@ void GroupMessageService::HandleInviteGroupMember(const std::shared_ptr<CSession
     std::shared_ptr<GroupInfo> group_info;
     PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
 
-    Json::Value notify;
+    memochat::json::JsonValue notify;
     notify["error"] = ErrorCodes::Success;
     notify["event"] = "group_invite";
-    notify["groupid"] = static_cast<Json::Int64>(group_id);
+    notify["groupid"] = static_cast<int64_t>(group_id);
     notify["group_code"] = group_info ? group_info->group_code : "";
     notify["name"] = group_info ? group_info->name : "";
     notify["operator_uid"] = from_uid;
@@ -261,8 +260,8 @@ void GroupMessageService::HandleInviteGroupMember(const std::shared_ptr<CSession
 
 void GroupMessageService::HandleApplyJoinGroup(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int from_uid = root["fromuid"].asInt();
     const std::string group_code = root.get("group_code", "").asString();
@@ -272,12 +271,12 @@ void GroupMessageService::HandleApplyJoinGroup(const std::shared_ptr<CSession>& 
     }
     const std::string reason = root.get("reason", "").asString();
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+    rtvalue["groupid"] = static_cast<int64_t>(group_id);
     rtvalue["group_code"] = group_code;
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_APPLY_JOIN_GROUP_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_APPLY_JOIN_GROUP_RSP);
     });
 
     if (from_uid <= 0 || group_id <= 0 || group_code.empty()) {
@@ -297,10 +296,10 @@ void GroupMessageService::HandleApplyJoinGroup(const std::shared_ptr<CSession>& 
             admins.push_back(one->uid);
         }
     }
-    Json::Value notify;
+    memochat::json::JsonValue notify;
     notify["error"] = ErrorCodes::Success;
     notify["event"] = "group_apply";
-    notify["groupid"] = static_cast<Json::Int64>(group_id);
+    notify["groupid"] = static_cast<int64_t>(group_id);
     notify["group_code"] = group_code;
     notify["applicant_uid"] = from_uid;
     auto applicant = PostgresMgr::GetInstance()->GetUser(from_uid);
@@ -313,19 +312,19 @@ void GroupMessageService::HandleApplyJoinGroup(const std::shared_ptr<CSession>& 
 
 void GroupMessageService::HandleReviewGroupApply(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int reviewer_uid = root["fromuid"].asInt();
     const int64_t apply_id = root["apply_id"].asInt64();
     const bool agree = root.get("agree", false).asBool();
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["apply_id"] = static_cast<Json::Int64>(apply_id);
+    rtvalue["apply_id"] = static_cast<int64_t>(apply_id);
     rtvalue["agree"] = agree;
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_REVIEW_GROUP_APPLY_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_REVIEW_GROUP_APPLY_RSP);
     });
 
     if (reviewer_uid <= 0 || apply_id <= 0) {
@@ -339,7 +338,7 @@ void GroupMessageService::HandleReviewGroupApply(const std::shared_ptr<CSession>
         return;
     }
 
-    rtvalue["groupid"] = static_cast<Json::Int64>(apply_info->group_id);
+    rtvalue["groupid"] = static_cast<int64_t>(apply_info->group_id);
     rtvalue["applicant_uid"] = apply_info->applicant_uid;
     std::shared_ptr<GroupInfo> apply_group;
     if (PostgresMgr::GetInstance()->GetGroupById(apply_info->group_id, apply_group) && apply_group) {
@@ -360,10 +359,10 @@ void GroupMessageService::HandleReviewGroupApply(const std::shared_ptr<CSession>
     }
     recipients.push_back(apply_info->applicant_uid);
 
-    Json::Value notify;
+    memochat::json::JsonValue notify;
     notify["error"] = ErrorCodes::Success;
     notify["event"] = "group_member_changed";
-    notify["groupid"] = static_cast<Json::Int64>(apply_info->group_id);
+    notify["groupid"] = static_cast<int64_t>(apply_info->group_id);
     notify["group_code"] = apply_group ? apply_group->group_code : "";
     notify["applicant_uid"] = apply_info->applicant_uid;
     if (applicant) {
@@ -376,28 +375,28 @@ void GroupMessageService::HandleReviewGroupApply(const std::shared_ptr<CSession>
 
 void GroupMessageService::HandleGroupChatMessage(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Value root;
+    memochat::json::JsonValue root;
     ParseJsonObjectGroupLocal(msg_data, root);
     const int from_uid = root["fromuid"].asInt();
     const int64_t group_id = root["groupid"].asInt64();
-    const Json::Value msg = root["msg"];
+    const memochat::json::JsonValue msg = root["msg"];
     const std::string client_msg_id = msg.get("msgid", "").asString();
     const bool kafka_backend = KafkaBackendEnabledGroupLocal();
     const bool kafka_primary = kafka_backend && memochat::chatruntime::FeatureEnabled("chat_group_kafka_primary");
     const bool kafka_shadow = kafka_backend && !kafka_primary && memochat::chatruntime::FeatureEnabled("chat_group_kafka_shadow");
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     rtvalue["fromuid"] = from_uid;
-    rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+    rtvalue["groupid"] = static_cast<int64_t>(group_id);
     if (!client_msg_id.empty()) {
         rtvalue["client_msg_id"] = client_msg_id;
     }
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_GROUP_CHAT_MSG_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_GROUP_CHAT_MSG_RSP);
     });
 
-    if (from_uid <= 0 || group_id <= 0 || !msg.isObject()) {
+    if (from_uid <= 0 || group_id <= 0 || !msg.is_object()) {
         rtvalue["error"] = ErrorCodes::Error_Json;
         return;
     }
@@ -431,13 +430,13 @@ void GroupMessageService::HandleGroupChatMessage(const std::shared_ptr<CSession>
     info.from_uid = from_uid;
     info.msg_type = msg.get("msgtype", "text").asString();
     info.content = msg.get("content", "").asString();
-    info.mentions_json = msg.get("mentions", Json::arrayValue).toStyledString();
+    info.mentions_json = msg.get("mentions", memochat::json::array_t{}).and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
     info.file_name = msg.get("file_name", "").asString();
     info.mime = msg.get("mime", "").asString();
     info.size = msg.get("size", 0).asInt();
     info.reply_to_server_msg_id = msg.get("reply_to_server_msg_id", 0).asInt64();
-    if (msg.isMember("forward_meta")) {
-        info.forward_meta_json = msg["forward_meta"].toStyledString();
+    if (isMember(msg, "forward_meta")) {
+        info.forward_meta_json = msg["forward_meta"].and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
     }
     info.edited_at_ms = msg.get("edited_at_ms", 0).asInt64();
     info.deleted_at_ms = msg.get("deleted_at_ms", 0).asInt64();
@@ -449,7 +448,7 @@ void GroupMessageService::HandleGroupChatMessage(const std::shared_ptr<CSession>
 
     const auto accept_ts = NowMsGroupLocal();
     rtvalue["accept_node"] = memochat::chatruntime::SelfServerName();
-    rtvalue["accept_ts"] = static_cast<Json::Int64>(accept_ts);
+    rtvalue["accept_ts"] = static_cast<int64_t>(accept_ts);
     rtvalue["status"] = kafka_primary ? "accepted" : "persisted";
 
     auto sender_info = PostgresMgr::GetInstance()->GetUser(from_uid);
@@ -465,15 +464,15 @@ void GroupMessageService::HandleGroupChatMessage(const std::shared_ptr<CSession>
         rtvalue["group_code"] = group_info->group_code;
     }
 
-    Json::Value event_payload;
+    memochat::json::JsonValue event_payload;
     event_payload["fromuid"] = from_uid;
-    event_payload["groupid"] = static_cast<Json::Int64>(group_id);
+    event_payload["groupid"] = static_cast<int64_t>(group_id);
     event_payload["trace_id"] = root.get("trace_id", "").asString();
     event_payload["request_id"] = root.get("request_id", "").asString();
     event_payload["span_id"] = root.get("span_id", "").asString();
     event_payload["event_id"] = client_msg_id;
     event_payload["accept_node"] = memochat::chatruntime::SelfServerName();
-    event_payload["accept_ts"] = static_cast<Json::Int64>(accept_ts);
+    event_payload["accept_ts"] = static_cast<int64_t>(accept_ts);
     event_payload["msg"] = msg;
     if (sender_info) {
         event_payload["from_name"] = sender_info->name;
@@ -520,14 +519,14 @@ void GroupMessageService::HandleGroupChatMessage(const std::shared_ptr<CSession>
         std::cerr << "[MongoMgr] SaveGroupMessage dual-write failed for msg_id=" << info.msg_id << std::endl;
     }
 
-    Json::Value msg_out = msg;
-    msg_out["created_at"] = static_cast<Json::Int64>(now_ms);
-    msg_out["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
-    msg_out["group_seq"] = static_cast<Json::Int64>(group_seq);
+    memochat::json::JsonValue msg_out = msg;
+    msg_out["created_at"] = static_cast<int64_t>(now_ms);
+    msg_out["server_msg_id"] = static_cast<int64_t>(server_msg_id);
+    msg_out["group_seq"] = static_cast<int64_t>(group_seq);
     rtvalue["msg"] = msg_out;
-    rtvalue["created_at"] = static_cast<Json::Int64>(now_ms);
-    rtvalue["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
-    rtvalue["group_seq"] = static_cast<Json::Int64>(group_seq);
+    rtvalue["created_at"] = static_cast<int64_t>(now_ms);
+    rtvalue["server_msg_id"] = static_cast<int64_t>(server_msg_id);
+    rtvalue["group_seq"] = static_cast<int64_t>(group_seq);
 
     std::vector<int> recipients;
     for (const auto& member : members) {
@@ -540,8 +539,8 @@ void GroupMessageService::HandleGroupChatMessage(const std::shared_ptr<CSession>
 
 void GroupMessageService::HandleGroupHistory(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int uid = root["fromuid"].asInt();
     const int64_t group_id = root["groupid"].asInt64();
@@ -549,13 +548,13 @@ void GroupMessageService::HandleGroupHistory(const std::shared_ptr<CSession>& se
     const int64_t before_seq = root.get("before_seq", 0).asInt64();
     const int limit = root.get("limit", 20).asInt();
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+    rtvalue["groupid"] = static_cast<int64_t>(group_id);
     rtvalue["has_more"] = false;
-    rtvalue["next_before_seq"] = static_cast<Json::Int64>(0);
+    rtvalue["next_before_seq"] = static_cast<int64_t>(0);
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_GROUP_HISTORY_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_GROUP_HISTORY_RSP);
     });
 
     if (uid <= 0 || group_id <= 0 || !PostgresMgr::GetInstance()->IsUserInGroup(group_id, uid)) {
@@ -588,17 +587,17 @@ void GroupMessageService::HandleGroupHistory(const std::shared_ptr<CSession>& se
         if (!one) {
             continue;
         }
-        Json::Value item;
+        memochat::json::JsonValue item;
         item["msgid"] = one->msg_id;
-        item["groupid"] = static_cast<Json::Int64>(one->group_id);
+        item["groupid"] = static_cast<int64_t>(one->group_id);
         item["fromuid"] = one->from_uid;
         item["msgtype"] = one->msg_type;
         item["content"] = one->content;
-        Json::Value mentions(Json::arrayValue);
+        memochat::json::JsonValue mentions(memochat::json::array_t{});
         if (!one->mentions_json.empty()) {
-            Json::Reader mentions_reader;
-            Json::Value parsed_mentions;
-            if (mentions_reader.parse(one->mentions_json, parsed_mentions) && parsed_mentions.isArray()) {
+            memochat::json::JsonReader mentions_reader;
+            memochat::json::JsonValue parsed_mentions;
+            if (mentions_reader.parse(one->mentions_json, parsed_mentions) && parsed_mentions.is_array()) {
                 mentions = parsed_mentions;
             }
         }
@@ -612,24 +611,24 @@ void GroupMessageService::HandleGroupHistory(const std::shared_ptr<CSession>& se
         if (one->size > 0) {
             item["size"] = one->size;
         }
-        item["created_at"] = static_cast<Json::Int64>(one->created_at);
-        item["server_msg_id"] = static_cast<Json::Int64>(one->server_msg_id);
-        item["group_seq"] = static_cast<Json::Int64>(one->group_seq);
+        item["created_at"] = static_cast<int64_t>(one->created_at);
+        item["server_msg_id"] = static_cast<int64_t>(one->server_msg_id);
+        item["group_seq"] = static_cast<int64_t>(one->group_seq);
         if (one->reply_to_server_msg_id > 0) {
-            item["reply_to_server_msg_id"] = static_cast<Json::Int64>(one->reply_to_server_msg_id);
+            item["reply_to_server_msg_id"] = static_cast<int64_t>(one->reply_to_server_msg_id);
         }
         if (!one->forward_meta_json.empty()) {
-            Json::Reader forward_reader;
-            Json::Value forward_meta;
+            memochat::json::JsonReader forward_reader;
+            memochat::json::JsonValue forward_meta;
             if (forward_reader.parse(one->forward_meta_json, forward_meta)) {
                 item["forward_meta"] = forward_meta;
             }
         }
         if (one->edited_at_ms > 0) {
-            item["edited_at_ms"] = static_cast<Json::Int64>(one->edited_at_ms);
+            item["edited_at_ms"] = static_cast<int64_t>(one->edited_at_ms);
         }
         if (one->deleted_at_ms > 0) {
-            item["deleted_at_ms"] = static_cast<Json::Int64>(one->deleted_at_ms);
+            item["deleted_at_ms"] = static_cast<int64_t>(one->deleted_at_ms);
         }
         item["from_name"] = one->from_name;
         item["from_nick"] = one->from_nick;
@@ -642,10 +641,10 @@ void GroupMessageService::HandleGroupHistory(const std::shared_ptr<CSession>& se
                 item["from_icon"] = from_user->icon;
             }
         }
-        rtvalue["messages"].append(item);
+        append(rtvalue["messages"], item);
     }
     if (!msgs.empty() && msgs.back()) {
-        rtvalue["next_before_seq"] = static_cast<Json::Int64>(msgs.back()->group_seq);
+        rtvalue["next_before_seq"] = static_cast<int64_t>(msgs.back()->group_seq);
     }
     int64_t read_ts = 0;
     if (!msgs.empty() && msgs.front()) {
@@ -659,8 +658,8 @@ void GroupMessageService::HandleGroupHistory(const std::shared_ptr<CSession>& se
 
 void GroupMessageService::HandleEditGroupMessage(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int uid = root["fromuid"].asInt();
     const int64_t group_id = root["groupid"].asInt64();
@@ -668,14 +667,14 @@ void GroupMessageService::HandleEditGroupMessage(const std::shared_ptr<CSession>
     const std::string content = root.get("content", "").asString();
     const int64_t now_ms = NowMsGroupLocal();
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+    rtvalue["groupid"] = static_cast<int64_t>(group_id);
     rtvalue["msgid"] = target_msg_id;
     rtvalue["content"] = content;
-    rtvalue["edited_at_ms"] = static_cast<Json::Int64>(now_ms);
+    rtvalue["edited_at_ms"] = static_cast<int64_t>(now_ms);
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_EDIT_GROUP_MSG_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_EDIT_GROUP_MSG_RSP);
     });
 
     if (uid <= 0 || group_id <= 0 || target_msg_id.empty() || content.empty() || content.size() > 4096) {
@@ -703,35 +702,35 @@ void GroupMessageService::HandleEditGroupMessage(const std::shared_ptr<CSession>
         }
     }
 
-    Json::Value notify;
+    memochat::json::JsonValue notify;
     notify["error"] = ErrorCodes::Success;
     notify["event"] = "group_msg_edited";
-    notify["groupid"] = static_cast<Json::Int64>(group_id);
+    notify["groupid"] = static_cast<int64_t>(group_id);
     notify["msgid"] = target_msg_id;
     notify["content"] = content;
-    notify["edited_at_ms"] = static_cast<Json::Int64>(now_ms);
+    notify["edited_at_ms"] = static_cast<int64_t>(now_ms);
     notify["operator_uid"] = uid;
     _logic.MessageDelivery().PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify, 0);
 }
 
 void GroupMessageService::HandleRevokeGroupMessage(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int uid = root["fromuid"].asInt();
     const int64_t group_id = root["groupid"].asInt64();
     const std::string target_msg_id = root.get("msgid", "").asString();
     const int64_t now_ms = NowMsGroupLocal();
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+    rtvalue["groupid"] = static_cast<int64_t>(group_id);
     rtvalue["msgid"] = target_msg_id;
     rtvalue["content"] = "[消息已撤回]";
-    rtvalue["deleted_at_ms"] = static_cast<Json::Int64>(now_ms);
+    rtvalue["deleted_at_ms"] = static_cast<int64_t>(now_ms);
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_REVOKE_GROUP_MSG_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_REVOKE_GROUP_MSG_RSP);
     });
 
     if (uid <= 0 || group_id <= 0 || target_msg_id.empty()) {
@@ -759,36 +758,36 @@ void GroupMessageService::HandleRevokeGroupMessage(const std::shared_ptr<CSessio
         }
     }
 
-    Json::Value notify;
+    memochat::json::JsonValue notify;
     notify["error"] = ErrorCodes::Success;
     notify["event"] = "group_msg_revoked";
-    notify["groupid"] = static_cast<Json::Int64>(group_id);
+    notify["groupid"] = static_cast<int64_t>(group_id);
     notify["msgid"] = target_msg_id;
     notify["content"] = "[消息已撤回]";
-    notify["deleted_at_ms"] = static_cast<Json::Int64>(now_ms);
+    notify["deleted_at_ms"] = static_cast<int64_t>(now_ms);
     notify["operator_uid"] = uid;
     _logic.MessageDelivery().PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify, 0);
 }
 
 void GroupMessageService::HandleForwardGroupMessage(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
-    const int from_uid = root.get("fromuid", root.get("uid", 0)).asInt();
+    const int from_uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
     const int64_t group_id = root.get("groupid", 0).asInt64();
     const std::string source_msg_id = root.get("msgid", "").asString();
     std::string client_msg_id = root.get("client_msg_id", "").asString();
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     rtvalue["fromuid"] = from_uid;
-    rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+    rtvalue["groupid"] = static_cast<int64_t>(group_id);
     if (!client_msg_id.empty()) {
         rtvalue["client_msg_id"] = client_msg_id;
     }
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_FORWARD_GROUP_MSG_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_FORWARD_GROUP_MSG_RSP);
     });
 
     if (from_uid <= 0 || group_id <= 0 || source_msg_id.empty()) {
@@ -829,19 +828,19 @@ void GroupMessageService::HandleForwardGroupMessage(const std::shared_ptr<CSessi
     info.mime = source_msg->mime;
     info.size = source_msg->size;
     info.reply_to_server_msg_id = source_msg->reply_to_server_msg_id;
-    Json::Value forward_meta;
+    memochat::json::JsonValue forward_meta;
     forward_meta["forwarded_from_msgid"] = source_msg_id;
-    forward_meta["source_server_msg_id"] = static_cast<Json::Int64>(source_msg->server_msg_id);
-    forward_meta["source_group_seq"] = static_cast<Json::Int64>(source_msg->group_seq);
+    forward_meta["source_server_msg_id"] = static_cast<int64_t>(source_msg->server_msg_id);
+    forward_meta["source_group_seq"] = static_cast<int64_t>(source_msg->group_seq);
     forward_meta["source_from_uid"] = source_msg->from_uid;
     if (!source_msg->forward_meta_json.empty()) {
-        Json::Reader prev_forward_reader;
-        Json::Value prev_forward_meta;
+        memochat::json::JsonReader prev_forward_reader;
+        memochat::json::JsonValue prev_forward_meta;
         if (prev_forward_reader.parse(source_msg->forward_meta_json, prev_forward_meta)) {
             forward_meta["prev_forward_meta"] = prev_forward_meta;
         }
     }
-    info.forward_meta_json = forward_meta.toStyledString();
+    info.forward_meta_json = forward_meta.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
     info.created_at = now_ms;
 
     int64_t server_msg_id = 0;
@@ -862,15 +861,15 @@ void GroupMessageService::HandleForwardGroupMessage(const std::shared_ptr<CSessi
         std::cerr << "[MongoMgr] SaveGroupMessage dual-write failed for msg_id=" << info.msg_id << std::endl;
     }
 
-    Json::Value forwarded_msg;
+    memochat::json::JsonValue forwarded_msg;
     forwarded_msg["msgid"] = info.msg_id;
     forwarded_msg["msgtype"] = info.msg_type;
     forwarded_msg["content"] = info.content;
-    Json::Value mentions(Json::arrayValue);
+    memochat::json::JsonValue mentions(memochat::json::array_t{});
     if (!info.mentions_json.empty()) {
-        Json::Reader mentions_reader;
-        Json::Value parsed_mentions;
-        if (mentions_reader.parse(info.mentions_json, parsed_mentions) && parsed_mentions.isArray()) {
+        memochat::json::JsonReader mentions_reader;
+        memochat::json::JsonValue parsed_mentions;
+        if (mentions_reader.parse(info.mentions_json, parsed_mentions) && parsed_mentions.is_array()) {
             mentions = parsed_mentions;
         }
     }
@@ -885,26 +884,26 @@ void GroupMessageService::HandleForwardGroupMessage(const std::shared_ptr<CSessi
         forwarded_msg["size"] = info.size;
     }
     forwarded_msg["forwarded_from_msgid"] = source_msg_id;
-    forwarded_msg["created_at"] = static_cast<Json::Int64>(now_ms);
-    forwarded_msg["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
-    forwarded_msg["group_seq"] = static_cast<Json::Int64>(group_seq);
+    forwarded_msg["created_at"] = static_cast<int64_t>(now_ms);
+    forwarded_msg["server_msg_id"] = static_cast<int64_t>(server_msg_id);
+    forwarded_msg["group_seq"] = static_cast<int64_t>(group_seq);
     if (info.reply_to_server_msg_id > 0) {
-        forwarded_msg["reply_to_server_msg_id"] = static_cast<Json::Int64>(info.reply_to_server_msg_id);
+        forwarded_msg["reply_to_server_msg_id"] = static_cast<int64_t>(info.reply_to_server_msg_id);
     }
     {
-        Json::Reader forward_reader;
-        Json::Value parsed_forward_meta;
+        memochat::json::JsonReader forward_reader;
+        memochat::json::JsonValue parsed_forward_meta;
         if (forward_reader.parse(info.forward_meta_json, parsed_forward_meta)) {
             forwarded_msg["forward_meta"] = parsed_forward_meta;
         }
     }
 
     rtvalue["msg"] = forwarded_msg;
-    rtvalue["created_at"] = static_cast<Json::Int64>(now_ms);
-    rtvalue["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
-    rtvalue["group_seq"] = static_cast<Json::Int64>(group_seq);
+    rtvalue["created_at"] = static_cast<int64_t>(now_ms);
+    rtvalue["server_msg_id"] = static_cast<int64_t>(server_msg_id);
+    rtvalue["group_seq"] = static_cast<int64_t>(group_seq);
     if (info.reply_to_server_msg_id > 0) {
-        rtvalue["reply_to_server_msg_id"] = static_cast<Json::Int64>(info.reply_to_server_msg_id);
+        rtvalue["reply_to_server_msg_id"] = static_cast<int64_t>(info.reply_to_server_msg_id);
     }
     rtvalue["forward_meta"] = forward_meta;
 
@@ -933,10 +932,10 @@ void GroupMessageService::HandleForwardGroupMessage(const std::shared_ptr<CSessi
 
 void GroupMessageService::HandleGroupReadAck(const std::shared_ptr<CSession>&, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
-    const int uid = root.get("fromuid", root.get("uid", 0)).asInt();
+    const int uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
     const int64_t group_id = root.get("groupid", 0).asInt64();
     int64_t read_ts = root.get("read_ts", 0).asInt64();
     if (uid <= 0 || group_id <= 0) {
@@ -958,27 +957,27 @@ void GroupMessageService::HandleGroupReadAck(const std::shared_ptr<CSession>&, s
             recipients.push_back(member->uid);
         }
     }
-    Json::Value notify;
+    memochat::json::JsonValue notify;
     notify["error"] = ErrorCodes::Success;
     notify["event"] = "group_read_ack";
-    notify["groupid"] = static_cast<Json::Int64>(group_id);
+    notify["groupid"] = static_cast<int64_t>(group_id);
     notify["fromuid"] = uid;
-    notify["read_ts"] = static_cast<Json::Int64>(read_ts);
+    notify["read_ts"] = static_cast<int64_t>(read_ts);
     _logic.MessageDelivery().PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify, uid);
 }
 
 void GroupMessageService::HandleUpdateGroupAnnouncement(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int uid = root["fromuid"].asInt();
     const int64_t group_id = root["groupid"].asInt64();
     const std::string announcement = root.get("announcement", "").asString();
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+    rtvalue["groupid"] = static_cast<int64_t>(group_id);
     rtvalue["announcement"] = announcement;
     std::shared_ptr<GroupInfo> group_info;
     PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
@@ -986,7 +985,7 @@ void GroupMessageService::HandleUpdateGroupAnnouncement(const std::shared_ptr<CS
         rtvalue["group_code"] = group_info->group_code;
     }
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_UPDATE_GROUP_ANNOUNCEMENT_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_UPDATE_GROUP_ANNOUNCEMENT_RSP);
     });
 
     if (!PostgresMgr::GetInstance()->UpdateGroupAnnouncement(group_id, uid, announcement)) {
@@ -1003,10 +1002,10 @@ void GroupMessageService::HandleUpdateGroupAnnouncement(const std::shared_ptr<CS
         }
     }
 
-    Json::Value notify;
+    memochat::json::JsonValue notify;
     notify["error"] = ErrorCodes::Success;
     notify["event"] = "group_announcement_updated";
-    notify["groupid"] = static_cast<Json::Int64>(group_id);
+    notify["groupid"] = static_cast<int64_t>(group_id);
     notify["group_code"] = group_info ? group_info->group_code : "";
     notify["announcement"] = announcement;
     notify["operator_uid"] = uid;
@@ -1015,16 +1014,16 @@ void GroupMessageService::HandleUpdateGroupAnnouncement(const std::shared_ptr<CS
 
 void GroupMessageService::HandleUpdateGroupIcon(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int uid = root["fromuid"].asInt();
     const int64_t group_id = root["groupid"].asInt64();
     const std::string icon = root.get("icon", "").asString();
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+    rtvalue["groupid"] = static_cast<int64_t>(group_id);
     rtvalue["icon"] = icon;
     std::shared_ptr<GroupInfo> group_info;
     PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
@@ -1032,7 +1031,7 @@ void GroupMessageService::HandleUpdateGroupIcon(const std::shared_ptr<CSession>&
         rtvalue["group_code"] = group_info->group_code;
     }
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_UPDATE_GROUP_ICON_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_UPDATE_GROUP_ICON_RSP);
     });
 
     if (uid <= 0 || group_id <= 0 || icon.empty() || icon.size() > 512) {
@@ -1053,10 +1052,10 @@ void GroupMessageService::HandleUpdateGroupIcon(const std::shared_ptr<CSession>&
         }
     }
 
-    Json::Value notify;
+    memochat::json::JsonValue notify;
     notify["error"] = ErrorCodes::Success;
     notify["event"] = "group_icon_updated";
-    notify["groupid"] = static_cast<Json::Int64>(group_id);
+    notify["groupid"] = static_cast<int64_t>(group_id);
     notify["group_code"] = group_info ? group_info->group_code : "";
     notify["icon"] = icon;
     notify["operator_uid"] = uid;
@@ -1065,14 +1064,14 @@ void GroupMessageService::HandleUpdateGroupIcon(const std::shared_ptr<CSession>&
 
 void GroupMessageService::HandleSetGroupAdmin(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int uid = root["fromuid"].asInt();
     const std::string target_user_id = root.get("target_user_id", "").asString();
     const int64_t group_id = root["groupid"].asInt64();
     const bool is_admin = root.get("is_admin", true).asBool();
-    bool has_permission_bits = root.isMember("permission_bits");
+    bool has_permission_bits = isMember(root, "permission_bits");
     int64_t permission_bits = root.get("permission_bits", 0).asInt64();
     auto merge_perm_flag = [&](const char* key, int64_t bit) {
         if (!root.isMember(key)) {
@@ -1105,13 +1104,13 @@ void GroupMessageService::HandleSetGroupAdmin(const std::shared_ptr<CSession>& s
         target_uid = 0;
     }
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+    rtvalue["groupid"] = static_cast<int64_t>(group_id);
     rtvalue["touid"] = target_uid;
     rtvalue["target_user_id"] = target_user_id;
     rtvalue["is_admin"] = is_admin;
-    rtvalue["permission_bits"] = static_cast<Json::Int64>(requested_permission_bits);
+    rtvalue["permission_bits"] = static_cast<int64_t>(requested_permission_bits);
     rtvalue["can_change_group_info"] = (requested_permission_bits & kPermChangeGroupInfoLocal) != 0;
     rtvalue["can_delete_messages"] = (requested_permission_bits & kPermDeleteMessagesLocal) != 0;
     rtvalue["can_invite_users"] = (requested_permission_bits & kPermInviteUsersLocal) != 0;
@@ -1125,7 +1124,7 @@ void GroupMessageService::HandleSetGroupAdmin(const std::shared_ptr<CSession>& s
         rtvalue["group_code"] = group_info->group_code;
     }
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_SET_GROUP_ADMIN_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_SET_GROUP_ADMIN_RSP);
     });
 
     if (target_uid <= 0 || target_user_id.empty() ||
@@ -1142,16 +1141,16 @@ void GroupMessageService::HandleSetGroupAdmin(const std::shared_ptr<CSession>& s
             recipients.push_back(one->uid);
         }
     }
-    Json::Value notify;
+    memochat::json::JsonValue notify;
     notify["error"] = ErrorCodes::Success;
     notify["event"] = "group_admin_changed";
-    notify["groupid"] = static_cast<Json::Int64>(group_id);
+    notify["groupid"] = static_cast<int64_t>(group_id);
     notify["group_code"] = group_info ? group_info->group_code : "";
     notify["operator_uid"] = uid;
     notify["target_uid"] = target_uid;
     notify["target_user_id"] = target_user_id;
     notify["is_admin"] = is_admin;
-    notify["permission_bits"] = static_cast<Json::Int64>(requested_permission_bits);
+    notify["permission_bits"] = static_cast<int64_t>(requested_permission_bits);
     notify["can_change_group_info"] = (requested_permission_bits & kPermChangeGroupInfoLocal) != 0;
     notify["can_delete_messages"] = (requested_permission_bits & kPermDeleteMessagesLocal) != 0;
     notify["can_invite_users"] = (requested_permission_bits & kPermInviteUsersLocal) != 0;
@@ -1164,8 +1163,8 @@ void GroupMessageService::HandleSetGroupAdmin(const std::shared_ptr<CSession>& s
 
 void GroupMessageService::HandleMuteGroupMember(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int uid = root["fromuid"].asInt();
     const std::string target_user_id = root.get("target_user_id", "").asString();
@@ -1177,19 +1176,19 @@ void GroupMessageService::HandleMuteGroupMember(const std::shared_ptr<CSession>&
     }
     const int64_t mute_until = (mute_seconds > 0) ? NowSecGroupLocal() + mute_seconds : 0;
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+    rtvalue["groupid"] = static_cast<int64_t>(group_id);
     rtvalue["touid"] = target_uid;
     rtvalue["target_user_id"] = target_user_id;
-    rtvalue["mute_until"] = static_cast<Json::Int64>(mute_until);
+    rtvalue["mute_until"] = static_cast<int64_t>(mute_until);
     std::shared_ptr<GroupInfo> group_info;
     PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
     if (group_info) {
         rtvalue["group_code"] = group_info->group_code;
     }
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_MUTE_GROUP_MEMBER_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_MUTE_GROUP_MEMBER_RSP);
     });
 
     if (target_uid <= 0 || target_user_id.empty() ||
@@ -1206,22 +1205,22 @@ void GroupMessageService::HandleMuteGroupMember(const std::shared_ptr<CSession>&
             recipients.push_back(one->uid);
         }
     }
-    Json::Value notify;
+    memochat::json::JsonValue notify;
     notify["error"] = ErrorCodes::Success;
     notify["event"] = "group_mute_changed";
-    notify["groupid"] = static_cast<Json::Int64>(group_id);
+    notify["groupid"] = static_cast<int64_t>(group_id);
     notify["group_code"] = group_info ? group_info->group_code : "";
     notify["operator_uid"] = uid;
     notify["target_uid"] = target_uid;
     notify["target_user_id"] = target_user_id;
-    notify["mute_until"] = static_cast<Json::Int64>(mute_until);
+    notify["mute_until"] = static_cast<int64_t>(mute_until);
     _logic.MessageDelivery().PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
 }
 
 void GroupMessageService::HandleKickGroupMember(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int uid = root["fromuid"].asInt();
     const std::string target_user_id = root.get("target_user_id", "").asString();
@@ -1231,9 +1230,9 @@ void GroupMessageService::HandleKickGroupMember(const std::shared_ptr<CSession>&
         target_uid = 0;
     }
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+    rtvalue["groupid"] = static_cast<int64_t>(group_id);
     rtvalue["touid"] = target_uid;
     rtvalue["target_user_id"] = target_user_id;
     std::shared_ptr<GroupInfo> group_info;
@@ -1242,7 +1241,7 @@ void GroupMessageService::HandleKickGroupMember(const std::shared_ptr<CSession>&
         rtvalue["group_code"] = group_info->group_code;
     }
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_KICK_GROUP_MEMBER_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_KICK_GROUP_MEMBER_RSP);
     });
 
     if (target_uid <= 0 || target_user_id.empty() ||
@@ -1261,10 +1260,10 @@ void GroupMessageService::HandleKickGroupMember(const std::shared_ptr<CSession>&
     }
     recipients.push_back(target_uid);
 
-    Json::Value notify;
+    memochat::json::JsonValue notify;
     notify["error"] = ErrorCodes::Success;
     notify["event"] = "group_member_kicked";
-    notify["groupid"] = static_cast<Json::Int64>(group_id);
+    notify["groupid"] = static_cast<int64_t>(group_id);
     notify["group_code"] = group_info ? group_info->group_code : "";
     notify["operator_uid"] = uid;
     notify["target_uid"] = target_uid;
@@ -1274,22 +1273,22 @@ void GroupMessageService::HandleKickGroupMember(const std::shared_ptr<CSession>&
 
 void GroupMessageService::HandleQuitGroup(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int uid = root["fromuid"].asInt();
     const int64_t group_id = root["groupid"].asInt64();
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+    rtvalue["groupid"] = static_cast<int64_t>(group_id);
     std::shared_ptr<GroupInfo> group_info;
     PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
     if (group_info) {
         rtvalue["group_code"] = group_info->group_code;
     }
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_QUIT_GROUP_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_QUIT_GROUP_RSP);
     });
 
     if (!PostgresMgr::GetInstance()->QuitGroup(group_id, uid)) {
@@ -1306,10 +1305,10 @@ void GroupMessageService::HandleQuitGroup(const std::shared_ptr<CSession>& sessi
         }
     }
 
-    Json::Value notify;
+    memochat::json::JsonValue notify;
     notify["error"] = ErrorCodes::Success;
     notify["event"] = "group_member_quit";
-    notify["groupid"] = static_cast<Json::Int64>(group_id);
+    notify["groupid"] = static_cast<int64_t>(group_id);
     notify["group_code"] = group_info ? group_info->group_code : "";
     notify["target_uid"] = uid;
     _logic.MessageDelivery().PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);

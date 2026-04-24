@@ -14,7 +14,10 @@
 
 // Define NGHTTP2_STATICLIB before including nghttp2.h so it produces extern
 // declarations without any DLL import/export annotations (no __declspec).
+// Guard against redefinition since nghttp2 also defines it.
+#ifndef NGHTTP2_STATICLIB
 #define NGHTTP2_STATICLIB
+#endif
 
 // MSVC on Windows x64: define ssize_t before nghttp2.h sees it.
 // nghttp2.h uses ssize_t in callback signatures. The system <sys/types.h>

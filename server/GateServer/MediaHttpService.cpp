@@ -20,7 +20,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
-#include <json/json.h>
+#include "json/GlazeCompat.h"
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -243,7 +243,7 @@ bool ResolveLegacyMediaPathLocal(const std::string& legacy_file, std::filesystem
     return false;
 }
 
-bool SaveJsonFileLocal(const std::filesystem::path& path, const Json::Value& root) {
+bool SaveJsonFileLocal(const std::filesystem::path& path, const memochat::json::JsonValue& root) {
     std::error_code ec;
     std::filesystem::create_directories(path.parent_path(), ec);
     if (ec) {
@@ -253,11 +253,11 @@ bool SaveJsonFileLocal(const std::filesystem::path& path, const Json::Value& roo
     if (!ofs.is_open()) {
         return false;
     }
-    ofs << root.toStyledString();
+    ofs << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
     return ofs.good();
 }
 
-bool LoadJsonFileLocal(const std::filesystem::path& path, Json::Value& root) {
+bool LoadJsonFileLocal(const std::filesystem::path& path, memochat::json::JsonValue& root) {
     if (!std::filesystem::exists(path)) {
         return false;
     }
@@ -266,7 +266,7 @@ bool LoadJsonFileLocal(const std::filesystem::path& path, Json::Value& root) {
         return false;
     }
     std::string json((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-    Json::Reader reader;
+    memochat::json::JsonReader reader;
     return reader.parse(json, root);
 }
 
@@ -332,13 +332,13 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
     logic.RegPost("/upload_media_init", [](std::shared_ptr<HttpConnection> connection) {
         const auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
         connection->_response.set(http::field::content_type, "text/json");
-        Json::Value root;
-        Json::Value src_root;
-        Json::Reader reader;
+        memochat::json::JsonValue root;
+        memochat::json::JsonValue src_root;
+        memochat::json::JsonReader reader;
         if (!reader.parse(body_str, src_root)) {
             root["error"] = ErrorCodes::Error_Json;
             root["message"] = "invalid json";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -354,7 +354,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (uid <= 0 || file_name.empty() || file_size <= 0 || !ValidateUserTokenLocal(uid, token)) {
             root["error"] = ErrorCodes::TokenInvalid;
             root["message"] = "token invalid or params invalid";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -363,8 +363,8 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (file_size > limit) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "file too large";
-            root["limit_bytes"] = static_cast<Json::Int64>(limit);
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            root["limit_bytes"] = static_cast<int64_t>(limit);
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -379,26 +379,26 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (ec) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "create chunk dir failed";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
-        Json::Value session;
+        memochat::json::JsonValue session;
         session["uid"] = uid;
         session["upload_id"] = upload_id;
         session["media_type"] = media_type;
         session["file_name"] = file_name;
         session["mime"] = mime;
-        session["file_size"] = static_cast<Json::Int64>(file_size);
+        session["file_size"] = static_cast<int64_t>(file_size);
         session["chunk_size"] = chunk_size;
         session["total_chunks"] = total_chunks;
-        session["created_at"] = static_cast<Json::Int64>(NowMsLocal());
-        session["expires_at"] = static_cast<Json::Int64>(NowMsLocal() + static_cast<int64_t>(media_cfg.session_expire_sec) * 1000);
+        session["created_at"] = static_cast<int64_t>(NowMsLocal());
+        session["expires_at"] = static_cast<int64_t>(NowMsLocal() + static_cast<int64_t>(media_cfg.session_expire_sec) * 1000);
         session["storage_provider"] = media_cfg.storage_provider;
         if (!SaveJsonFileLocal(SessionPathForLocal(upload_id), session)) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "create upload session failed";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -406,14 +406,14 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         root["upload_id"] = upload_id;
         root["chunk_size"] = chunk_size;
         root["total_chunks"] = total_chunks;
-        root["uploaded_chunks"] = Json::arrayValue;
-        beast::ostream(connection->_response.body()) << root.toStyledString();
+        root["uploaded_chunks"] = memochat::json::array_t{};
+        beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
         return true;
     });
 
     logic.RegPost("/upload_media_chunk", [](std::shared_ptr<HttpConnection> connection) {
         connection->_response.set(http::field::content_type, "text/json");
-        Json::Value root;
+        memochat::json::JsonValue root;
         int uid = 0;
         int index = -1;
         std::string token;
@@ -431,12 +431,12 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
 
         if (content_type.find("application/json") != std::string::npos) {
             const auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
-            Json::Value src_root;
-            Json::Reader reader;
+            memochat::json::JsonValue src_root;
+            memochat::json::JsonReader reader;
             if (!reader.parse(body_str, src_root)) {
                 root["error"] = ErrorCodes::Error_Json;
                 root["message"] = "invalid json";
-                beast::ostream(connection->_response.body()) << root.toStyledString();
+                beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
                 return true;
             }
 
@@ -448,7 +448,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
             if (encoded.empty() || !DecodeBase64Local(encoded, binary)) {
                 root["error"] = ErrorCodes::Error_Json;
                 root["message"] = "base64 decode failed";
-                beast::ostream(connection->_response.body()) << root.toStyledString();
+                beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
                 return true;
             }
         } else {
@@ -469,28 +469,28 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (uid <= 0 || upload_id.empty() || index < 0 || binary.empty() || !ValidateUserTokenLocal(uid, token)) {
             root["error"] = ErrorCodes::TokenInvalid;
             root["message"] = "token invalid or params invalid";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
-        Json::Value session;
+        memochat::json::JsonValue session;
         if (!LoadJsonFileLocal(SessionPathForLocal(upload_id), session)) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "upload session not found";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
         if (session.get("uid", 0).asInt() != uid) {
             root["error"] = ErrorCodes::TokenInvalid;
             root["message"] = "session uid mismatch";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
         const int64_t expires_at = session.get("expires_at", 0).asInt64();
         if (expires_at > 0 && NowMsLocal() > expires_at) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "upload session expired";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -499,14 +499,14 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (index >= total_chunks || total_chunks <= 0 || chunk_size <= 0) {
             root["error"] = ErrorCodes::Error_Json;
             root["message"] = "invalid chunk index";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
         if (static_cast<int>(binary.size()) > chunk_size) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "invalid chunk size";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -516,7 +516,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (ec) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "create chunk dir failed";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -525,7 +525,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (!ofs.is_open()) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "write chunk failed";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
         ofs.write(binary.data(), static_cast<std::streamsize>(binary.size()));
@@ -534,35 +534,35 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         root["error"] = ErrorCodes::Success;
         root["upload_id"] = upload_id;
         root["index"] = index;
-        root["size"] = static_cast<Json::Int64>(binary.size());
-        beast::ostream(connection->_response.body()) << root.toStyledString();
+        root["size"] = static_cast<int64_t>(binary.size());
+        beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
         return true;
     });
 
     logic.RegGet("/upload_media_status", [](std::shared_ptr<HttpConnection> connection) {
         connection->_response.set(http::field::content_type, "text/json");
-        Json::Value root;
+        memochat::json::JsonValue root;
         const int uid = std::atoi(connection->_get_params["uid"].c_str());
         const std::string token = connection->_get_params["token"];
         const std::string upload_id = connection->_get_params["upload_id"];
         if (uid <= 0 || token.empty() || upload_id.empty() || !ValidateUserTokenLocal(uid, token)) {
             root["error"] = ErrorCodes::TokenInvalid;
             root["message"] = "token invalid or params invalid";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
-        Json::Value session;
+        memochat::json::JsonValue session;
         if (!LoadJsonFileLocal(SessionPathForLocal(upload_id), session)) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "upload session not found";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
         if (session.get("uid", 0).asInt() != uid) {
             root["error"] = ErrorCodes::TokenInvalid;
             root["message"] = "session uid mismatch";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -570,24 +570,25 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         root["upload_id"] = upload_id;
         root["total_chunks"] = session.get("total_chunks", 0).asInt();
         root["chunk_size"] = session.get("chunk_size", 0).asInt();
-        root["uploaded_chunks"] = Json::arrayValue;
+        root["uploaded_chunks"] = memochat::json::array_t{};
+        auto uploaded_chunks_arr = root["uploaded_chunks"];
         for (int idx : ListUploadedChunkIndexesLocal(ChunkDirForLocal(upload_id))) {
-            root["uploaded_chunks"].append(idx);
+            memochat::json::glaze_array_append(uploaded_chunks_arr, idx);
         }
-        beast::ostream(connection->_response.body()) << root.toStyledString();
+        beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
         return true;
     });
 
     logic.RegPost("/upload_media_complete", [](std::shared_ptr<HttpConnection> connection) {
         const auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
         connection->_response.set(http::field::content_type, "text/json");
-        Json::Value root;
-        Json::Value src_root;
-        Json::Reader reader;
+        memochat::json::JsonValue root;
+        memochat::json::JsonValue src_root;
+        memochat::json::JsonReader reader;
         if (!reader.parse(body_str, src_root)) {
             root["error"] = ErrorCodes::Error_Json;
             root["message"] = "invalid json";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -597,21 +598,21 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (uid <= 0 || token.empty() || upload_id.empty() || !ValidateUserTokenLocal(uid, token)) {
             root["error"] = ErrorCodes::TokenInvalid;
             root["message"] = "token invalid or params invalid";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
-        Json::Value session;
+        memochat::json::JsonValue session;
         if (!LoadJsonFileLocal(SessionPathForLocal(upload_id), session)) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "upload session not found";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
         if (session.get("uid", 0).asInt() != uid) {
             root["error"] = ErrorCodes::TokenInvalid;
             root["message"] = "session uid mismatch";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -625,7 +626,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (total_chunks <= 0 || chunk_size <= 0 || file_size <= 0 || file_name.empty()) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "invalid upload session";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -636,7 +637,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
                 root["error"] = ErrorCodes::MediaUploadFailed;
                 root["message"] = "chunks not complete";
                 root["missing_index"] = i;
-                beast::ostream(connection->_response.body()) << root.toStyledString();
+                beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
                 return true;
             }
         }
@@ -647,7 +648,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
             if (!merged.is_open()) {
                 root["error"] = ErrorCodes::MediaUploadFailed;
                 root["message"] = "create merged file failed";
-                beast::ostream(connection->_response.body()) << root.toStyledString();
+                beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
                 return true;
             }
             for (int i = 0; i < total_chunks; ++i) {
@@ -657,7 +658,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
                     root["error"] = ErrorCodes::MediaUploadFailed;
                     root["message"] = "open chunk failed";
                     root["chunk_index"] = i;
-                    beast::ostream(connection->_response.body()) << root.toStyledString();
+                    beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
                     return true;
                 }
                 merged << one.rdbuf();
@@ -666,7 +667,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
             if (!merged.good()) {
                 root["error"] = ErrorCodes::MediaUploadFailed;
                 root["message"] = "merge chunks failed";
-                beast::ostream(connection->_response.body()) << root.toStyledString();
+                beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
                 return true;
             }
         }
@@ -676,7 +677,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (ec || merged_size != file_size) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "merged file size mismatch";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -687,7 +688,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (!storage.StoreMergedFile(media_type, media_key, file_name, merged_path, storage_path, storage_error)) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = storage_error.empty() ? "persist media failed" : storage_error;
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -706,7 +707,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (!PostgresMgr::GetInstance()->InsertMediaAsset(asset)) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "save media metadata failed";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -718,22 +719,22 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         root["media_type"] = media_type;
         root["file_name"] = file_name;
         root["mime"] = mime;
-        root["size"] = static_cast<Json::Int64>(merged_size);
+        root["size"] = static_cast<int64_t>(merged_size);
         root["url"] = std::string("/media/download?asset=") + media_key;
-        beast::ostream(connection->_response.body()) << root.toStyledString();
+        beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
         return true;
     });
 
     logic.RegPost("/upload_media", [](std::shared_ptr<HttpConnection> connection) {
         const auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
         connection->_response.set(http::field::content_type, "text/json");
-        Json::Value root;
-        Json::Value src_root;
-        Json::Reader reader;
+        memochat::json::JsonValue root;
+        memochat::json::JsonValue src_root;
+        memochat::json::JsonReader reader;
         if (!reader.parse(body_str, src_root)) {
             root["error"] = ErrorCodes::Error_Json;
             root["message"] = "invalid json";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -749,7 +750,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (uid <= 0 || file_name.empty() || encoded.empty() || !ValidateUserTokenLocal(uid, token)) {
             root["error"] = ErrorCodes::TokenInvalid;
             root["message"] = "token invalid or params invalid";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -757,13 +758,13 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (!DecodeBase64Local(encoded, binary)) {
             root["error"] = ErrorCodes::Error_Json;
             root["message"] = "base64 decode failed";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
         if (binary.empty()) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "file empty";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -772,8 +773,8 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (static_cast<int64_t>(binary.size()) > limit) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "file too large";
-            root["limit_bytes"] = static_cast<Json::Int64>(limit);
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            root["limit_bytes"] = static_cast<int64_t>(limit);
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
         if (mime.empty()) {
@@ -787,7 +788,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (ec) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "create temp dir failed";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
         const std::filesystem::path temp_file = temp_dir / "merged.tmp";
@@ -796,7 +797,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
             if (!ofs.is_open()) {
                 root["error"] = ErrorCodes::MediaUploadFailed;
                 root["message"] = "open temp file failed";
-                beast::ostream(connection->_response.body()) << root.toStyledString();
+                beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
                 return true;
             }
             ofs.write(binary.data(), static_cast<std::streamsize>(binary.size()));
@@ -808,7 +809,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (!storage.StoreMergedFile(media_type, media_key, file_name, temp_file, storage_path, storage_error)) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = storage_error.empty() ? "persist media failed" : storage_error;
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -827,7 +828,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (!PostgresMgr::GetInstance()->InsertMediaAsset(asset)) {
             root["error"] = ErrorCodes::MediaUploadFailed;
             root["message"] = "save media metadata failed";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -837,15 +838,15 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         root["media_type"] = media_type;
         root["file_name"] = file_name;
         root["mime"] = mime;
-        root["size"] = static_cast<Json::Int64>(binary.size());
+        root["size"] = static_cast<int64_t>(binary.size());
         root["url"] = std::string("/media/download?asset=") + media_key;
-        beast::ostream(connection->_response.body()) << root.toStyledString();
+        beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
         return true;
     });
 
     logic.RegGet("/media/download", [](std::shared_ptr<HttpConnection> connection) {
         connection->_response.set(http::field::content_type, "text/json");
-        Json::Value root;
+        memochat::json::JsonValue root;
         const auto asset_it = connection->_get_params.find("asset");
         const auto file_it = connection->_get_params.find("file");
         const auto uid_it = connection->_get_params.find("uid");
@@ -855,7 +856,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
             token_it == connection->_get_params.end()) {
             root["error"] = ErrorCodes::Error_Json;
             root["message"] = "missing media key or auth params";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -866,7 +867,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
         if (uid <= 0 || !ValidateUserTokenLocal(uid, token)) {
             root["error"] = ErrorCodes::TokenInvalid;
             root["message"] = "token invalid";
-            beast::ostream(connection->_response.body()) << root.toStyledString();
+            beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
             return true;
         }
 
@@ -878,7 +879,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
                 || asset.status != 1 || asset.deleted_at_ms > 0) {
                 root["error"] = ErrorCodes::UidInvalid;
                 root["message"] = "asset not found";
-                beast::ostream(connection->_response.body()) << root.toStyledString();
+                beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
                 return true;
             }
 
@@ -922,7 +923,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
             if (!storage.ResolveReadPath(asset.storage_path, full_path) || !std::filesystem::exists(full_path)) {
                 root["error"] = ErrorCodes::UidInvalid;
                 root["message"] = storage_err.empty() ? "file not found" : storage_err;
-                beast::ostream(connection->_response.body()) << root.toStyledString();
+                beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
                 return true;
             }
             content_type = GuessContentTypeLocal(asset.origin_file_name, asset.mime);
@@ -930,7 +931,7 @@ void MediaHttpService::RegisterRoutes(LogicSystem& logic)
             if (!ResolveLegacyMediaPathLocal(legacy_file, full_path) || !std::filesystem::exists(full_path)) {
                 root["error"] = ErrorCodes::UidInvalid;
                 root["message"] = "legacy file not found";
-                beast::ostream(connection->_response.body()) << root.toStyledString();
+                beast::ostream(connection->_response.body()) << root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
                 return true;
             }
             content_type = GuessContentTypeLocal(full_path.filename().string(), "");

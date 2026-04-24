@@ -4,7 +4,7 @@
 #include "logging/Telemetry.h"
 #include "logging/TraceContext.h"
 
-#include <json/json.h>
+#include "json/GlazeCompat.h"
 #include <spdlog/logger.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/daily_file_sink.h>
@@ -159,7 +159,7 @@ void Logger::Log(spdlog::level::level_enum level,
         return;
     }
 
-    Json::Value root(Json::objectValue);
+    memochat::json::JsonValue root(memochat::json::object_t{});
     root["ts"] = NowIso8601();
     root["level"] = ToLevelString(level);
     root["service"] = service_name_;
@@ -194,7 +194,7 @@ void Logger::Log(spdlog::level::level_enum level,
         root["session_id"] = session_id;
     }
 
-    Json::Value attrs(Json::objectValue);
+    memochat::json::JsonValue attrs(memochat::json::object_t{});
     for (const auto& it : fields) {
         const std::string redacted = RedactValue(it.first, it.second, config_.redact);
         if (it.first == "uid") {
@@ -221,9 +221,9 @@ void Logger::Log(spdlog::level::level_enum level,
     }
     root["attrs"] = attrs;
 
-    Json::StreamWriterBuilder builder;
+    memochat::json::JsonStreamWriterBuilder builder;
     builder["indentation"] = "";
-    std::string line = Json::writeString(builder, root);
+    std::string line = memochat::json::writeString(builder, root);
     if (!line.empty() && line.back() == '\n') {
         line.pop_back();
     }

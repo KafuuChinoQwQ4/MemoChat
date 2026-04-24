@@ -1,11 +1,9 @@
-#include "CSession.h"
+﻿#include "CSession.h"
 #include "CServer.h"
 #include <iostream>
 #include <sstream>
-#include <json/json.h>
-#include <json/value.h>
-#include <json/writer.h>
-#include <json/reader.h>
+#include "json/GlazeCompat.h"
+
 #include <limits>
 #include "LogicSystem.h"
 #include "RedisMgr.h"
@@ -13,10 +11,10 @@
 #include "UserMgr.h"
 
 // Compact wire JSON for TCP/QUIC transport (Qt QJsonDocument is strict).
-static std::string JsonToWireString(const Json::Value& v) {
-    Json::StreamWriterBuilder builder;
+static std::string JsonToWireString(const memochat::json::JsonValue& v) {
+    memochat::json::JsonStreamWriterBuilder builder;
     builder["indentation"] = "";
-    return Json::writeString(builder, v);
+    return memochat::json::writeString(builder, v);
 }
 
 #ifdef _WIN32
@@ -291,7 +289,7 @@ void CSession::asyncReadLen(std::size_t read_len, std::size_t total_len,
 
 void CSession::NotifyOffline(int uid) {
 
-	Json::Value  rtvalue;
+	memochat::json::JsonValue  rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["uid"] = uid;
 

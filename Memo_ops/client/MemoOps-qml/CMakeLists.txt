@@ -6,7 +6,7 @@ if(NOT MSVC OR NOT CMAKE_CXX_COMPILER MATCHES [[(^|[\\/])cl(\.exe)?$]])
     message(FATAL_ERROR "MemoOpsQml supports only the MSVC toolchain. MinGW/g++ is not supported with the current Qt msvc2022_64 kit.")
 endif()
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)

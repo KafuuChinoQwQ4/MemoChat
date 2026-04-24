@@ -1,4 +1,4 @@
-#include "ChatSessionService.h"
+﻿#include "ChatSessionService.h"
 
 #include "ChatGrpcClient.h"
 #include "ConfigMgr.h"
@@ -16,7 +16,7 @@
 
 #include <algorithm>
 #include <chrono>
-#include <json/json.h>
+#include "json/GlazeCompat.h"
 #include <thread>
 
 namespace {
@@ -48,10 +48,10 @@ void RepairOnlineRouteStateLocal(int uid, const std::shared_ptr<CSession>& sessi
 }
 
 // Compact JSON for wire (Qt QJsonDocument is strict; avoid pretty-print / stray whitespace issues).
-std::string JsonValueToWireString(const Json::Value& v) {
-    Json::StreamWriterBuilder builder;
+std::string JsonValueToWireString(const memochat::json::JsonValue& v) {
+    memochat::json::JsonStreamWriterBuilder builder;
     builder["indentation"] = "";
-    return Json::writeString(builder, v);
+    return memochat::json::writeString(builder, v);
 }
 }
 
@@ -62,12 +62,16 @@ ChatSessionService::ChatSessionService(LogicSystem& logic)
 void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data)
 {
     const auto login_start_ms = NowMsLocal();
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
-    auto uid = root["uid"].asInt();
-    auto token = root["token"].asString();
-    const int protocol_version = root.get("protocol_version", 1).asInt();
+    const int protocol_version = memochat::json::glaze_safe_get<int>(root, "protocol_version", 1);
+    auto uid = 0;
+    auto token = std::string{};
+    if (protocol_version < 3) {
+        uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
+        token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
+    }
     const auto verify_start_ms = NowMsLocal();
     auto trace_id = root.get("trace_id", "").asString();
     if (trace_id.empty()) {
@@ -81,7 +85,7 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, s
     memolog::LogInfo("chat.login.received", "chat login request received",
         {{"uid", std::to_string(uid)}, {"session_id", session->GetSessionId()}, {"tcp_msg_id", std::to_string(msg_id)}});
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     Defer defer([&rtvalue, session]() {
         session->Send(JsonValueToWireString(rtvalue), MSG_CHAT_LOGIN_RSP);
     });
@@ -231,8 +235,8 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, s
 void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data)
 {
     const auto bootstrap_start_ms = NowMsLocal();
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     auto trace_id = root.get("trace_id", "").asString();
     if (trace_id.empty()) {
@@ -245,7 +249,7 @@ void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>
     }
     Defer clear_trace([]() { memolog::TraceContext::Clear(); });
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["trace_id"] = trace_id;
     rtvalue["protocol_version"] = root.get("protocol_version", 3).asInt();
     const int uid = session ? session->GetUserId() : 0;
@@ -302,13 +306,20 @@ void ChatSessionService::HandleHeartbeat(const std::shared_ptr<CSession>& sessio
         }
     }
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     session->Send(JsonValueToWireString(rtvalue), ID_HEARTBEAT_RSP);
 }
 
 void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& session, int uid)
 {
+    try {
+    if (!session) {
+        memolog::LogWarn("chat.login.offline_push_skipped", "offline push skipped for null session",
+            {{"uid", std::to_string(uid)}});
+        return;
+    }
+
     constexpr int kOfflineBatchSize = 50;
     constexpr int kMaxOfflineBatches = 10;
 
@@ -356,19 +367,19 @@ void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& se
         }
 
         for (const auto& [sender_uid, sender_msgs] : msgs_by_sender) {
-            Json::Value text_array(Json::arrayValue);
+            memochat::json::JsonValue text_array(memochat::json::array_t{});
             for (const auto& msg : sender_msgs) {
-                Json::Value element;
+                memochat::json::JsonValue element;
                 element["msgid"] = msg->msg_id;
                 element["content"] = msg->content;
-                element["created_at"] = static_cast<Json::Int64>(msg->created_at);
+                element["created_at"] = static_cast<int64_t>(msg->created_at);
                 if (msg->reply_to_server_msg_id > 0) {
-                    element["reply_to_server_msg_id"] = static_cast<Json::Int64>(msg->reply_to_server_msg_id);
+                    element["reply_to_server_msg_id"] = static_cast<int64_t>(msg->reply_to_server_msg_id);
                 }
                 if (!msg->forward_meta_json.empty()) {
-                    Json::Value forward_meta;
-                    Json::CharReaderBuilder builder;
-                    std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+                    memochat::json::JsonValue forward_meta;
+                    memochat::json::JsonCharReaderBuilder builder;
+                    std::unique_ptr<memochat::json::JsonCharReader> reader(builder.newCharReader());
                     if (reader->parse(msg->forward_meta_json.data(),
                                        msg->forward_meta_json.data() + msg->forward_meta_json.size(),
                                        &forward_meta, nullptr)) {
@@ -376,15 +387,15 @@ void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& se
                     }
                 }
                 if (msg->edited_at_ms > 0) {
-                    element["edited_at_ms"] = static_cast<Json::Int64>(msg->edited_at_ms);
+                    element["edited_at_ms"] = static_cast<int64_t>(msg->edited_at_ms);
                 }
                 if (msg->deleted_at_ms > 0) {
-                    element["deleted_at_ms"] = static_cast<Json::Int64>(msg->deleted_at_ms);
+                    element["deleted_at_ms"] = static_cast<int64_t>(msg->deleted_at_ms);
                 }
-                text_array.append(element);
+                append(text_array, element);
             }
 
-            Json::Value notify;
+            memochat::json::JsonValue notify;
             notify["error"] = ErrorCodes::Success;
             notify["fromuid"] = sender_uid;
             notify["touid"] = uid;
@@ -408,4 +419,13 @@ void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& se
         {{"uid", std::to_string(uid)},
          {"session_id", session->GetSessionId()},
          {"pushed_total", std::to_string(pushed_total)}});
+    }
+    catch (const std::exception& e) {
+        memolog::LogError("chat.login.offline_push_failed", "offline message push failed",
+            {{"uid", std::to_string(uid)}, {"error", e.what()}});
+    }
+    catch (...) {
+        memolog::LogError("chat.login.offline_push_failed", "offline message push failed with unknown exception",
+            {{"uid", std::to_string(uid)}});
+    }
 }

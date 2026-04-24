@@ -9,7 +9,7 @@
 #include <QGuiApplication>
 #include <QPainter>
 
-#include <windows.h>
+#include "WinSdkCompat.h"
 #include <vector>
 
 static QPixmap grabScreenRect(const QRect &rect)

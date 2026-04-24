@@ -3,24 +3,20 @@
 #include "ChatRuntime.h"
 
 #include <algorithm>
-#include <json/json.h>
+#include "json/GlazeCompat.h"
 #include <memory>
 #include <utility>
 
 namespace {
-std::string JsonString(const Json::Value& value, const char* key)
-{
-    return value.get(key, "").asString();
-}
 
-Json::Value CloneJson(const Json::Value& value)
+memochat::json::JsonValue CloneJson(const memochat::json::JsonValue& value)
 {
-    return Json::Value(value);
+    return memochat::json::JsonValue(value);
 }
 }
 
 AsyncEventEnvelope::AsyncEventEnvelope()
-    : payload_ptr(new Json::Value(Json::objectValue)) {
+    : payload(memochat::json::object_t{}) {
 }
 
 AsyncEventEnvelope::AsyncEventEnvelope(const AsyncEventEnvelope& other)
@@ -30,7 +26,7 @@ AsyncEventEnvelope::AsyncEventEnvelope(const AsyncEventEnvelope& other)
       trace_id(other.trace_id),
       request_id(other.request_id),
       retry_count(other.retry_count),
-      payload_ptr(new Json::Value(other.payload())) {
+      payload(other.payload) {
 }
 
 AsyncEventEnvelope& AsyncEventEnvelope::operator=(const AsyncEventEnvelope& other)
@@ -44,92 +40,73 @@ AsyncEventEnvelope& AsyncEventEnvelope::operator=(const AsyncEventEnvelope& othe
     trace_id = other.trace_id;
     request_id = other.request_id;
     retry_count = other.retry_count;
-    *payload_ptr = other.payload();
+    payload = other.payload;
     return *this;
 }
 
-AsyncEventEnvelope::~AsyncEventEnvelope()
-{
-    delete payload_ptr;
-}
+AsyncEventEnvelope::~AsyncEventEnvelope() = default;
 
-const Json::Value& AsyncEventEnvelope::payload() const
-{
-    return *payload_ptr;
-}
-
-Json::Value& AsyncEventEnvelope::payload()
-{
-    return *payload_ptr;
-}
-
-void AsyncEventEnvelope::setPayload(const Json::Value& value)
-{
-    *payload_ptr = value;
-}
-
-std::string BuildAsyncEventPartitionKey(const std::string& topic, const Json::Value& payload)
+std::string BuildAsyncEventPartitionKey(const std::string& topic, const memochat::json::JsonValue& payload)
 {
     if (topic == memochat::chatruntime::TopicPrivate()) {
-        const int from_uid = payload.get("fromuid", 0).asInt();
-        const int to_uid = payload.get("touid", 0).asInt();
+        auto mk = memochat::json::make_member_ref(payload);
+        const int from_uid = memochat::json::glaze_safe_get<int>(mk, "fromuid", 0);
+        const int to_uid = memochat::json::glaze_safe_get<int>(mk, "touid", 0);
         const int uid_min = std::min(from_uid, to_uid);
         const int uid_max = std::max(from_uid, to_uid);
         return std::to_string(uid_min) + ":" + std::to_string(uid_max);
     }
 
     if (topic == memochat::chatruntime::TopicGroup()) {
-        return std::to_string(payload.get("groupid", 0).asInt64());
+        return std::to_string(memochat::json::make_member_ref(payload)["groupid"].asInt64());
     }
 
     return topic;
 }
 
-AsyncEventEnvelope BuildAsyncEventEnvelope(const std::string& topic, const Json::Value& payload)
+AsyncEventEnvelope BuildAsyncEventEnvelope(const std::string& topic, const memochat::json::JsonValue& payload)
 {
     AsyncEventEnvelope envelope;
     envelope.topic = topic;
-    envelope.event_id = JsonString(payload, "event_id");
-    envelope.trace_id = JsonString(payload, "trace_id");
-    envelope.request_id = JsonString(payload, "request_id");
-    envelope.retry_count = payload.get("retry_count", 0).asInt();
+    auto mk = memochat::json::make_member_ref(payload);
+    envelope.event_id = memochat::json::glaze_safe_get<std::string>(mk, "event_id", "");
+    envelope.trace_id = memochat::json::glaze_safe_get<std::string>(mk, "trace_id", "");
+    envelope.request_id = memochat::json::glaze_safe_get<std::string>(mk, "request_id", "");
+    envelope.retry_count = memochat::json::glaze_safe_get<int>(mk, "retry_count", 0);
     envelope.partition_key = BuildAsyncEventPartitionKey(topic, payload);
-    envelope.setPayload(payload);
+    envelope.payload = payload;
     return envelope;
 }
 
 bool ParseAsyncEventEnvelope(const std::string& serialized, AsyncEventEnvelope& envelope)
 {
-    Json::CharReaderBuilder builder;
-    std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-    Json::Value root;
+    memochat::json::JsonValue root;
     std::string errors;
-    if (!reader->parse(serialized.data(), serialized.data() + serialized.size(), &root, &errors) || !root.isObject()) {
+    if (!memochat::json::glaze_parse(root, serialized, &errors) || !root.is_object()) {
         return false;
     }
 
-    envelope.event_id = root.get("event_id", "").asString();
-    envelope.topic = root.get("topic", "").asString();
-    envelope.partition_key = root.get("partition_key", "").asString();
-    envelope.trace_id = root.get("trace_id", "").asString();
-    envelope.request_id = root.get("request_id", "").asString();
-    envelope.retry_count = root.get("retry_count", 0).asInt();
-    envelope.setPayload(root.get("payload", Json::Value(Json::objectValue)));
+    auto mk = memochat::json::make_member_ref(root);
+    envelope.event_id = memochat::json::glaze_safe_get<std::string>(mk, "event_id", "");
+    envelope.topic = memochat::json::glaze_safe_get<std::string>(mk, "topic", "");
+    envelope.partition_key = memochat::json::glaze_safe_get<std::string>(mk, "partition_key", "");
+    envelope.trace_id = memochat::json::glaze_safe_get<std::string>(mk, "trace_id", "");
+    envelope.request_id = memochat::json::glaze_safe_get<std::string>(mk, "request_id", "");
+    envelope.retry_count = memochat::json::glaze_safe_get<int>(mk, "retry_count", 0);
+    envelope.payload = mk["payload"].asValue();
     return true;
 }
 
 std::string SerializeAsyncEventEnvelope(const AsyncEventEnvelope& envelope)
 {
-    Json::Value root(Json::objectValue);
+    memochat::json::JsonValue root(memochat::json::object_t{});
     root["event_id"] = envelope.event_id;
     root["topic"] = envelope.topic;
     root["partition_key"] = envelope.partition_key;
     root["trace_id"] = envelope.trace_id;
     root["request_id"] = envelope.request_id;
     root["retry_count"] = envelope.retry_count;
-    root["payload"] = CloneJson(envelope.payload());
+    root["payload"] = envelope.payload;
 
-    Json::StreamWriterBuilder builder;
-    builder["indentation"] = "";
-    return Json::writeString(builder, root);
+    return memochat::json::writeString(root);
 }

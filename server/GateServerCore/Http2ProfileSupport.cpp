@@ -1,20 +1,20 @@
-#include "Http2ProfileSupport.h"
+﻿#include "Http2ProfileSupport.h"
 #include "PostgresMgr.h"
 #include "RedisMgr.h"
 #include "const.h"
 #include "AuthLoginSupport.h"
 #include "logging/Logger.h"
+#include "json/GlazeCompat.h"
 
 namespace Http2ProfileSupport {
 
-bool ParseJsonBody(std::string_view body_sv, Json::Value& root) {
+bool ParseJsonBody(std::string_view body_sv, memochat::json::JsonValue& root) {
     std::string body_str(body_sv);
-    Json::Reader reader;
-    return reader.parse(body_str, root) && root.isObject();
+    return memochat::json::glaze_parse(root, body_str) && memochat::json::glaze_is_object(root);
 }
 
-Json::Value MakeError(int error_code, const std::string& message) {
-    Json::Value resp;
+memochat::json::JsonValue MakeError(int error_code, const std::string& message) {
+    memochat::json::JsonValue resp;
     resp["error"] = error_code;
     if (!message.empty()) {
         resp["message"] = message;
@@ -22,20 +22,20 @@ Json::Value MakeError(int error_code, const std::string& message) {
     return resp;
 }
 
-ProfileResult HandleUserUpdateProfile(const Json::Value& req) {
+ProfileResult HandleUserUpdateProfile(const memochat::json::JsonValue& req) {
     ProfileResult result;
-    if (!req.isMember("uid") || !req.isMember("nick") ||
-        !req.isMember("desc") || !req.isMember("icon")) {
+    if (!memochat::json::glaze_has_key(req, "uid") || !memochat::json::glaze_has_key(req, "nick") ||
+        !memochat::json::glaze_has_key(req, "desc") || !memochat::json::glaze_has_key(req, "icon")) {
         result.error = 1;
         result.message = "missing required fields";
         return result;
     }
 
-    const auto uid = req["uid"].asInt();
-    const auto name = req.get("name", "").asString();
-    const auto nick = req["nick"].asString();
-    const auto desc = req["desc"].asString();
-    const auto icon = req["icon"].asString();
+    const auto uid = memochat::json::glaze_safe_get<int>(req, "uid", 0);
+    const auto name = memochat::json::glaze_safe_get<std::string>(req, "name", "");
+    const auto nick = memochat::json::glaze_safe_get<std::string>(req, "nick", "");
+    const auto desc = memochat::json::glaze_safe_get<std::string>(req, "desc", "");
+    const auto icon = memochat::json::glaze_safe_get<std::string>(req, "icon", "");
 
     if (uid <= 0 || nick.empty()) {
         result.error = 1;
@@ -93,3 +93,4 @@ ProfileResult HandleGetUserInfo(int uid) {
 }
 
 }  // namespace Http2ProfileSupport
+

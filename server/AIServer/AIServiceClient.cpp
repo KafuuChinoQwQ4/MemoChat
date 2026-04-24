@@ -4,7 +4,6 @@
 #include <boost/beast.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/asio.hpp>
-#include <json/json.h>
 #include <sstream>
 #include <thread>
 #include <future>
@@ -13,6 +12,7 @@ namespace beast = boost::beast;
 namespace http = beast::http;
 namespace net = boost::asio;
 using tcp = net::ip::tcp;
+namespace json = memochat::json;
 
 class AIServiceClient::Impl {
 public:
@@ -24,8 +24,8 @@ public:
     }
 
     grpc::Status PostJson(const std::string& path,
-                          const Json::Value& body,
-                          Json::Value* out_result) {
+                          const json::JsonValue& body,
+                          json::JsonValue* out_result) {
         try {
             net::io_context ioc;
             tcp::resolver resolver(ioc);
@@ -34,9 +34,7 @@ public:
             auto const results = resolver.resolve(_host, _port);
             stream.connect(results);
 
-            Json::StreamWriterBuilder builder;
-            builder["indentation"] = "";
-            std::string body_str = Json::writeString(builder, body);
+            std::string body_str = memochat::json::glaze_stringify(body);
 
             http::request<http::string_body> req{http::verb::post, path, 11};
             req.set(http::field::host, _host);
@@ -55,11 +53,9 @@ public:
                                    "AIOrchestrator returned " + std::to_string(res.result_int()));
             }
 
-            std::istringstream iss(res.body());
-            Json::CharReaderBuilder reader;
-            std::string err;
-            if (!Json::parseFromStream(reader, iss, out_result, &err)) {
-                return grpc::Status(grpc::StatusCode::INTERNAL, "JSON parse error: " + err);
+            bool ok = memochat::json::reader_parse(res.body(), *out_result);
+            if (!ok) {
+                return grpc::Status(grpc::StatusCode::INTERNAL, "JSON parse error");
             }
 
             stream.socket().close();
@@ -70,9 +66,9 @@ public:
     }
 
     grpc::Status PostJsonSSE(const std::string& path,
-                              const Json::Value& body,
+                              const json::JsonValue& body,
                               ChunkCallback on_chunk,
-                              Json::Value* out_result) {
+                              json::JsonValue* out_result) {
         try {
             net::io_context ioc;
             tcp::resolver resolver(ioc);
@@ -81,9 +77,7 @@ public:
             auto const results = resolver.resolve(_host, _port);
             stream.connect(results);
 
-            Json::StreamWriterBuilder builder;
-            builder["indentation"] = "";
-            std::string body_str = Json::writeString(builder, body);
+            std::string body_str = memochat::json::glaze_stringify(body);
 
             http::request<http::string_body> req{http::verb::post, path, 11};
             req.set(http::field::host, _host);
@@ -106,18 +100,17 @@ public:
                 std::string json_str = line.substr(6);
                 if (json_str == "[DONE]") return true;
 
-                std::istringstream iss(json_str);
-                Json::CharReaderBuilder reader;
-                Json::Value chunk_obj;
-                std::string err;
-                if (!Json::parseFromStream(reader, iss, &chunk_obj, &err)) return false;
+                json::JsonValue chunk_obj = json::JsonValue{};
+                bool ok = memochat::json::reader_parse(json_str, chunk_obj);
+                if (!ok) return false;
 
-                std::string chunk_text = chunk_obj.get("chunk", "").asString();
-                bool final_flag = chunk_obj.get("is_final", false).asBool();
-                if (!chunk_obj.get("msg_id", "").asString().empty()) {
-                    current_msg_id = chunk_obj.get("msg_id", "").asString();
+                std::string chunk_text = json::glaze_safe_get<std::string>(chunk_obj["chunk"], "");
+                bool final_flag = json::glaze_safe_get<bool>(chunk_obj["is_final"], false);
+                std::string msg_id = json::glaze_safe_get<std::string>(chunk_obj["msg_id"], "");
+                if (!msg_id.empty()) {
+                    current_msg_id = msg_id;
                 }
-                int64_t tokens = chunk_obj.get("total_tokens", 0).asInt64();
+                int64_t tokens = json::glaze_safe_get<int64_t>(chunk_obj, "total_tokens", 0);
                 if (tokens > 0) total_tokens = tokens;
 
                 accumulated += chunk_text;
@@ -126,7 +119,7 @@ public:
                 if (final_flag && out_result) {
                     (*out_result)["code"] = 0;
                     (*out_result)["content"] = accumulated;
-                    (*out_result)["tokens"] = static_cast<Json::Int64>(total_tokens);
+                    (*out_result)["tokens"] = total_tokens;
                 }
                 return final_flag;
             };
@@ -166,8 +159,8 @@ grpc::Status AIServiceClient::Chat(int32_t uid,
                                     const std::string& content,
                                     const std::string& model_type,
                                     const std::string& model_name,
-                                    Json::Value* out_result) {
-    Json::Value body;
+                                    json::JsonValue* out_result) {
+    json::JsonValue body = json::JsonValue{};
     body["uid"] = uid;
     body["session_id"] = session_id;
     body["content"] = content;
@@ -184,8 +177,8 @@ grpc::Status AIServiceClient::ChatStream(int32_t uid,
                                           const std::string& model_type,
                                           const std::string& model_name,
                                           ChunkCallback on_chunk,
-                                          Json::Value* out_result) {
-    Json::Value body;
+                                          json::JsonValue* out_result) {
+    json::JsonValue body = json::JsonValue{};
     body["uid"] = uid;
     body["session_id"] = session_id;
     body["content"] = content;
@@ -200,8 +193,8 @@ grpc::Status AIServiceClient::Smart(const std::string& feature_type,
                                      const std::string& content,
                                      const std::string& target_lang,
                                      const std::string& context_json,
-                                     Json::Value* out_result) {
-    Json::Value body;
+                                     json::JsonValue* out_result) {
+    json::JsonValue body = json::JsonValue{};
     body["feature_type"] = feature_type;
     body["content"] = content;
     body["target_lang"] = target_lang;
@@ -214,8 +207,8 @@ grpc::Status AIServiceClient::KbUpload(int32_t uid,
                                         const std::string& file_name,
                                         const std::string& file_type,
                                         const std::string& base64_content,
-                                        Json::Value* out_result) {
-    Json::Value body;
+                                        json::JsonValue* out_result) {
+    json::JsonValue body = json::JsonValue{};
     body["uid"] = uid;
     body["file_name"] = file_name;
     body["file_type"] = file_type;
@@ -227,8 +220,8 @@ grpc::Status AIServiceClient::KbUpload(int32_t uid,
 grpc::Status AIServiceClient::KbSearch(int32_t uid,
                                         const std::string& query,
                                         int top_k,
-                                        Json::Value* out_result) {
-    Json::Value body;
+                                        json::JsonValue* out_result) {
+    json::JsonValue body = json::JsonValue{};
     body["uid"] = uid;
     body["query"] = query;
     body["top_k"] = top_k;

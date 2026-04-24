@@ -32,14 +32,12 @@ static std::mutex g_routes_mutex;
 
 }  // namespace
 
-void Http2Routes::RegisterHandler(const std::string& method, const std::string& path, Http2Handler handler)
-{
+void Http2Routes::RegisterHandler(const std::string& method, const std::string& path, Http2Handler handler) {
     std::lock_guard<std::mutex> lock(g_routes_mutex);
     g_routes[{method, path}] = std::move(handler);
 }
 
-void Http2Routes::HandleRequest(const Http2Request& req, Http2Response& resp)
-{
+void Http2Routes::HandleRequest(const Http2Request& req, Http2Response& resp) {
     RouteKey key{req.method, req.path};
     std::lock_guard<std::mutex> lock(g_routes_mutex);
     auto it = g_routes.find(key);
@@ -51,14 +49,12 @@ void Http2Routes::HandleRequest(const Http2Request& req, Http2Response& resp)
     }
 }
 
-void Http2Routes::RegisterRoutes()
-{
+void Http2Routes::RegisterRoutes() {
     // Health check endpoints
     RegisterHandler("GET", "/healthz", [](const Http2Request& req, Http2Response& resp) {
         (void)req;
         resp.SetJsonBody(R"({"status":"ok","service":"GateServerHttp2"})");
     });
-
     RegisterHandler("GET", "/readyz", [](const Http2Request& req, Http2Response& resp) {
         (void)req;
         resp.SetJsonBody(R"({"status":"ready","service":"GateServerHttp2"})");

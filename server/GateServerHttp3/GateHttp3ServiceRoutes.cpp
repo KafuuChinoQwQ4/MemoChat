@@ -18,7 +18,7 @@
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
 
-#include <json/json.h>
+#include "json/GlazeCompat.h"
 #include <chrono>
 
 namespace GateHttp3ServiceImpl {
@@ -26,7 +26,7 @@ namespace GateHttp3ServiceImpl {
 void RegisterRoutes(LogicSystem& logic) {
     logic.RegPost("/get_varifycode", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             (void)trace_id;
             if (!src_root.isMember("email")) {
                 root["error"] = ErrorCodes::Error_Json;
@@ -44,7 +44,7 @@ void RegisterRoutes(LogicSystem& logic) {
 
     logic.RegPost("/user_register", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             (void)trace_id;
             const auto email = src_root["email"].asString();
             const auto name = src_root["user"].asString();
@@ -109,7 +109,7 @@ void RegisterRoutes(LogicSystem& logic) {
 
     logic.RegPost("/reset_pwd", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             (void)trace_id;
             if (!src_root.isMember("email")) {
                 root["error"] = ErrorCodes::Error_Json;
@@ -125,7 +125,7 @@ void RegisterRoutes(LogicSystem& logic) {
 
     logic.RegPost("/user_login", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             memolog::TraceContext::SetTraceId(trace_id);
             const auto email = src_root["email"].asString();
             const auto pwd = src_root["passwd"].asString();
@@ -209,7 +209,7 @@ void RegisterRoutes(LogicSystem& logic) {
             root["host"] = route_nodes.front().host;
             root["port"] = route_nodes.front().port;
             root["login_ticket"] = login_ticket;
-            root["ticket_expire_ms"] = static_cast<Json::Int64>(claims.expire_at_ms);
+            root["ticket_expire_ms"] = static_cast<int64_t>(claims.expire_at_ms);
             root["user_profile"]["uid"] = userInfo.uid;
             root["user_profile"]["user_id"] = userInfo.user_id;
             root["user_profile"]["name"] = userInfo.name;
@@ -220,7 +220,7 @@ void RegisterRoutes(LogicSystem& logic) {
             root["user_profile"]["sex"] = userInfo.sex;
             for (const auto& route_node : route_nodes) {
                 if (!route_node.quic_host.empty() && !route_node.quic_port.empty()) {
-                    Json::Value quic_ep;
+                    memochat::json::JsonValue quic_ep;
                     quic_ep["transport"] = "quic";
                     quic_ep["host"] = route_node.quic_host;
                     quic_ep["port"] = route_node.quic_port;
@@ -228,7 +228,7 @@ void RegisterRoutes(LogicSystem& logic) {
                     quic_ep["priority"] = route_node.priority;
                     root["chat_endpoints"].append(quic_ep);
                 }
-                Json::Value tcp_ep;
+                memochat::json::JsonValue tcp_ep;
                 tcp_ep["transport"] = "tcp";
                 tcp_ep["host"] = route_node.host;
                 tcp_ep["port"] = route_node.port;
@@ -248,7 +248,7 @@ void RegisterRoutes(LogicSystem& logic) {
 
     logic.RegPost("/user_update_profile", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             (void)trace_id;
             if (!src_root.isMember("uid") || !src_root.isMember("nick")
                 || !src_root.isMember("desc") || !src_root.isMember("icon")) {
@@ -284,7 +284,7 @@ void RegisterRoutes(LogicSystem& logic) {
     });
 
     logic.RegGet("/healthz", [](std::shared_ptr<GateHttp3Connection> connection) {
-        Json::Value root;
+        memochat::json::JsonValue root;
         root["status"] = "ok";
         root["service"] = "GateServer-HTTP3";
         connection->SendResponse(200, root.toStyledString(), "application/json");
@@ -292,7 +292,7 @@ void RegisterRoutes(LogicSystem& logic) {
     });
 
     logic.RegGet("/readyz", [](std::shared_ptr<GateHttp3Connection> connection) {
-        Json::Value root;
+        memochat::json::JsonValue root;
         root["status"] = "ready";
         root["service"] = "GateServer-HTTP3";
         connection->SendResponse(200, root.toStyledString(), "application/json");
@@ -301,7 +301,7 @@ void RegisterRoutes(LogicSystem& logic) {
 
     logic.RegPost("/api/call/token", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             const int uid = src_root.get("uid", 0).asInt();
             const std::string token = src_root.get("token", "").asString();
             const std::string call_id = src_root.get("call_id", "").asString();
@@ -312,35 +312,35 @@ void RegisterRoutes(LogicSystem& logic) {
 
     logic.RegPost("/api/call/start", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             return CallService::GetInstance()->StartCall(src_root, root, trace_id);
         });
     });
 
     logic.RegPost("/api/call/accept", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             return CallService::GetInstance()->AcceptCall(src_root, root, trace_id);
         });
     });
 
     logic.RegPost("/api/call/reject", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             return CallService::GetInstance()->RejectCall(src_root, root, trace_id);
         });
     });
 
     logic.RegPost("/api/call/cancel", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             return CallService::GetInstance()->CancelCall(src_root, root, trace_id);
         });
     });
 
     logic.RegPost("/api/call/hangup", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             return CallService::GetInstance()->HangupCall(src_root, root, trace_id);
         });
     });
@@ -348,7 +348,7 @@ void RegisterRoutes(LogicSystem& logic) {
     // Media upload routes
     logic.RegPost("/upload_media_init", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string&) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string&) {
             const int uid = src_root.get("uid", 0).asInt();
             const std::string token = src_root.get("token", "").asString();
             const std::string media_type = src_root.get("media_type", "file").asString();
@@ -365,7 +365,7 @@ void RegisterRoutes(LogicSystem& logic) {
 
     logic.RegPost("/upload_media_chunk", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string&) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string&) {
             const int uid = src_root.get("uid", 0).asInt();
             const std::string token = src_root.get("token", "").asString();
             const std::string upload_id = src_root.get("upload_id", "").asString();
@@ -381,7 +381,7 @@ void RegisterRoutes(LogicSystem& logic) {
 
     logic.RegPost("/upload_media_complete", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string&) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string&) {
             const int uid = src_root.get("uid", 0).asInt();
             const std::string token = src_root.get("token", "").asString();
             const std::string upload_id = src_root.get("upload_id", "").asString();
@@ -395,7 +395,7 @@ void RegisterRoutes(LogicSystem& logic) {
 
     logic.RegPost("/upload_media", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string&) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string&) {
             const int uid = src_root.get("uid", 0).asInt();
             const std::string token = src_root.get("token", "").asString();
             const std::string media_type = src_root.get("media_type", "file").asString();
@@ -421,9 +421,8 @@ void RegisterRoutes(LogicSystem& logic) {
         if (uid == 0 || token.empty() || upload_id.empty()) {
             const std::string body = connection->GetRequestBody();
             if (!body.empty()) {
-                Json::Value src_root;
-                Json::Reader reader;
-                if (reader.parse(body, src_root)) {
+                memochat::json::JsonValue src_root;
+                if (memochat::json::glaze_parse(src_root, body)) {
                     if (uid == 0) uid = src_root.get("uid", 0).asInt();
                     if (token.empty()) token = src_root.get("token", "").asString();
                     if (upload_id.empty()) upload_id = src_root.get("upload_id", "").asString();
@@ -431,7 +430,7 @@ void RegisterRoutes(LogicSystem& logic) {
             }
         }
         auto result = Http2MediaSupport::HandleUploadMediaStatus(uid, token, upload_id);
-        Json::Value root = result.data;
+        memochat::json::JsonValue root = result.data;
         root["error"] = result.error;
         if (!result.message.empty()) root["message"] = result.message;
         connection->SendResponse(result.error == 0 ? 200 : 400, root.toStyledString(), "application/json");
@@ -447,7 +446,7 @@ void RegisterRoutes(LogicSystem& logic) {
         token = connection->GetQueryParam("token");
         media_key = connection->GetQueryParam("asset");
         if (uid <= 0 || token.empty() || media_key.empty()) {
-            Json::Value root;
+            memochat::json::JsonValue root;
             root["error"] = 1;
             root["message"] = "missing media key or auth params";
             connection->SendResponse(400, root.toStyledString(), "application/json");
@@ -455,7 +454,7 @@ void RegisterRoutes(LogicSystem& logic) {
         }
         auto result = Http2MediaSupport::HandleMediaDownloadInfo(uid, token, media_key);
         if (result.error != 0) {
-            Json::Value root = result.data;
+            memochat::json::JsonValue root = result.data;
             root["error"] = result.error;
             if (!result.message.empty()) root["message"] = result.message;
             connection->SendResponse(400, root.toStyledString(), "application/json");
@@ -468,7 +467,7 @@ void RegisterRoutes(LogicSystem& logic) {
             return true;
         }
         if (result.data.isMember("path")) {
-            Json::Value root;
+            memochat::json::JsonValue root;
             root["error"] = 0;
             root["path"] = result.data["path"].asString();
             root["content_type"] = result.data["content_type"].asString();
@@ -477,7 +476,7 @@ void RegisterRoutes(LogicSystem& logic) {
             connection->SendResponse(200, root.toStyledString(), "application/json");
             return true;
         }
-        Json::Value root;
+        memochat::json::JsonValue root;
         root["error"] = 1;
         root["message"] = result.message.empty() ? "file not found" : result.message;
         connection->SendResponse(404, root.toStyledString(), "application/json");
@@ -487,7 +486,7 @@ void RegisterRoutes(LogicSystem& logic) {
     // User profile routes
     logic.RegPost("/get_user_info", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string&) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string&) {
             const int uid = src_root.get("uid", 0).asInt();
             if (uid <= 0) {
                 root["error"] = 1;
@@ -505,7 +504,7 @@ void RegisterRoutes(LogicSystem& logic) {
     // Moments routes (HTTP/3)
     logic.RegPost("/api/moments/publish", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string&) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string&) {
             int uid = 0;
             if (!src_root.isMember("uid") || !src_root.isMember("login_ticket")) {
                 root["error"] = ErrorCodes::Error_Json;
@@ -567,14 +566,14 @@ void RegisterRoutes(LogicSystem& logic) {
             }
 
             root["error"] = ErrorCodes::Success;
-            root["moment_id"] = static_cast<Json::Int64>(moment_id);
+            root["moment_id"] = static_cast<int64_t>(moment_id);
             return true;
         });
     });
 
     logic.RegPost("/api/moments/list", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string&) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string&) {
             int uid = 0;
             if (!src_root.isMember("uid") || !src_root.isMember("login_ticket")) {
                 root["error"] = ErrorCodes::Error_Json;
@@ -597,17 +596,17 @@ void RegisterRoutes(LogicSystem& logic) {
 
             root["error"] = ErrorCodes::Success;
             root["has_more"] = has_more;
-            Json::Value moments_arr(Json::arrayValue);
+            memochat::json::JsonValue moments_arr(memochat::json::array_t{});
             for (const auto& moment : moments) {
                 bool has_liked = PostgresMgr::GetInstance()->HasLikedMoment(moment.moment_id, uid);
                 MomentContentInfo content;
                 MongoMgr::GetInstance()->GetMomentContent(moment.moment_id, content);
-                Json::Value moment_json;
-                moment_json["moment_id"] = static_cast<Json::Int64>(moment.moment_id);
+                memochat::json::JsonValue moment_json;
+                moment_json["moment_id"] = static_cast<int64_t>(moment.moment_id);
                 moment_json["uid"] = moment.uid;
                 moment_json["visibility"] = moment.visibility;
                 moment_json["location"] = moment.location;
-                moment_json["created_at"] = static_cast<Json::Int64>(moment.created_at);
+                moment_json["created_at"] = static_cast<int64_t>(moment.created_at);
                 moment_json["like_count"] = moment.like_count;
                 moment_json["comment_count"] = moment.comment_count;
                 moment_json["has_liked"] = has_liked;
@@ -616,9 +615,9 @@ void RegisterRoutes(LogicSystem& logic) {
                 moment_json["user_name"] = uinfo.name;
                 moment_json["user_nick"] = uinfo.nick;
                 moment_json["user_icon"] = uinfo.icon;
-                Json::Value items_arr(Json::arrayValue);
+                memochat::json::JsonValue items_arr(memochat::json::array_t{});
                 for (const auto& item : content.items) {
-                    Json::Value item_json;
+                    memochat::json::JsonValue item_json;
                     item_json["seq"] = item.seq;
                     item_json["media_type"] = item.media_type;
                     item_json["media_key"] = item.media_key;
@@ -639,7 +638,7 @@ void RegisterRoutes(LogicSystem& logic) {
 
     logic.RegPost("/api/moments/detail", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string&) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string&) {
             int uid = 0;
             if (!src_root.isMember("uid") || !src_root.isMember("login_ticket")) {
                 root["error"] = ErrorCodes::Error_Json;
@@ -665,12 +664,12 @@ void RegisterRoutes(LogicSystem& logic) {
             bool has_liked = PostgresMgr::GetInstance()->HasLikedMoment(moment_id, uid);
             MomentContentInfo content;
             MongoMgr::GetInstance()->GetMomentContent(moment_id, content);
-            Json::Value moment_json;
-            moment_json["moment_id"] = static_cast<Json::Int64>(moment.moment_id);
+            memochat::json::JsonValue moment_json;
+            moment_json["moment_id"] = static_cast<int64_t>(moment.moment_id);
             moment_json["uid"] = moment.uid;
             moment_json["visibility"] = moment.visibility;
             moment_json["location"] = moment.location;
-            moment_json["created_at"] = static_cast<Json::Int64>(moment.created_at);
+            moment_json["created_at"] = static_cast<int64_t>(moment.created_at);
             moment_json["like_count"] = moment.like_count;
             moment_json["comment_count"] = moment.comment_count;
             moment_json["has_liked"] = has_liked;
@@ -679,9 +678,9 @@ void RegisterRoutes(LogicSystem& logic) {
             moment_json["user_name"] = uinfo.name;
             moment_json["user_nick"] = uinfo.nick;
             moment_json["user_icon"] = uinfo.icon;
-            Json::Value items_arr(Json::arrayValue);
+            memochat::json::JsonValue items_arr(memochat::json::array_t{});
             for (const auto& item : content.items) {
-                Json::Value item_json;
+                memochat::json::JsonValue item_json;
                 item_json["media_type"] = item.media_type;
                 item_json["media_key"] = item.media_key;
                 item_json["content"] = item.content;
@@ -696,7 +695,7 @@ void RegisterRoutes(LogicSystem& logic) {
 
     logic.RegPost("/api/moments/delete", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string&) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string&) {
             int uid = 0;
             if (!src_root.isMember("uid") || !src_root.isMember("login_ticket")) {
                 root["error"] = ErrorCodes::Error_Json;
@@ -716,7 +715,7 @@ void RegisterRoutes(LogicSystem& logic) {
 
     logic.RegPost("/api/moments/like", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string&) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string&) {
             int uid = 0;
             if (!src_root.isMember("uid") || !src_root.isMember("login_ticket")) {
                 root["error"] = ErrorCodes::Error_Json;
@@ -739,7 +738,7 @@ void RegisterRoutes(LogicSystem& logic) {
 
     logic.RegPost("/api/moments/comment", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string&) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string&) {
             int uid = 0;
             if (!src_root.isMember("uid") || !src_root.isMember("login_ticket")) {
                 root["error"] = ErrorCodes::Error_Json;
@@ -783,7 +782,7 @@ void RegisterRoutes(LogicSystem& logic) {
 
     logic.RegPost("/api/moments/comment/list", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
-            [](const Json::Value& src_root, Json::Value& root, const std::string&) {
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string&) {
             int uid = 0;
             if (!src_root.isMember("uid") || !src_root.isMember("login_ticket")) {
                 root["error"] = ErrorCodes::Error_Json;
@@ -805,15 +804,15 @@ void RegisterRoutes(LogicSystem& logic) {
             PostgresMgr::GetInstance()->GetMomentComments(moment_id, last_comment_id, limit, comments, has_more);
             root["error"] = ErrorCodes::Success;
             root["has_more"] = has_more;
-            Json::Value comments_arr(Json::arrayValue);
+            memochat::json::JsonValue comments_arr(memochat::json::array_t{});
             for (const auto& comment : comments) {
-                Json::Value comment_json;
-                comment_json["id"] = static_cast<Json::Int64>(comment.id);
-                comment_json["moment_id"] = static_cast<Json::Int64>(comment.moment_id);
+                memochat::json::JsonValue comment_json;
+                comment_json["id"] = static_cast<int64_t>(comment.id);
+                comment_json["moment_id"] = static_cast<int64_t>(comment.moment_id);
                 comment_json["uid"] = comment.uid;
                 comment_json["content"] = comment.content;
                 comment_json["reply_uid"] = comment.reply_uid;
-                comment_json["created_at"] = static_cast<Json::Int64>(comment.created_at);
+                comment_json["created_at"] = static_cast<int64_t>(comment.created_at);
                 UserInfo uinfo;
                 PostgresMgr::GetInstance()->GetUserInfo(comment.uid, uinfo);
                 comment_json["user_name"] = uinfo.name;
@@ -838,3 +837,6 @@ void RegisterRoutes(LogicSystem& logic) {
 void GateHttp3Service::RegisterRoutes(LogicSystem& logic) {
     GateHttp3ServiceImpl::RegisterRoutes(logic);
 }
+
+
+

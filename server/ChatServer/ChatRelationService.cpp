@@ -6,13 +6,14 @@
 #include "CSession.h"
 #include "ChatUserSupport.h"
 #include "LogicSystem.h"
+#include "MessageDeliveryService.h"
 #include "PostgresMgr.h"
 #include "RedisMgr.h"
 #include "UserMgr.h"
 #include "logging/Logger.h"
 
 #include <chrono>
-#include <json/json.h>
+#include "json/GlazeCompat.h"
 #include <unordered_map>
 
 namespace {
@@ -137,6 +138,10 @@ void ChatRelationService::AppendRelationBootstrapJson(int uid, Json::Value& out)
     }
 
     Json::Value cache_payload(Json::objectValue);
+    out["apply_list"] = memochat::json::array_t{};
+    out["friend_list"] = memochat::json::array_t{};
+    cache_payload["apply_list"] = memochat::json::array_t{};
+    cache_payload["friend_list"] = memochat::json::array_t{};
     std::vector<std::shared_ptr<ApplyInfo>> apply_list;
     if (chatusersupport::GetFriendApplyInfo(uid, apply_list)) {
         for (auto& apply : apply_list) {
@@ -319,12 +324,17 @@ void ChatRelationService::HandleAddFriendApply(const std::shared_ptr<CSession>& 
     task_payload["exclude_uid"] = 0;
     task_payload["payload"] = notify;
     std::string publish_error;
-    _logic.PublishTask("relation_notify",
+    const bool delivered = _logic.MessageDelivery().TryPushPayload({touid}, ID_NOTIFY_ADD_FRIEND_REQ, notify, 0, false);
+    const bool published = delivered || _logic.PublishTask("relation_notify",
         memochat::chatruntime::TaskRoutingRelationNotify(),
         task_payload,
         0,
         memochat::chatruntime::TaskMaxRetries(),
         &publish_error);
+    if (!published) {
+        memolog::LogWarn("chat.relation_notify.publish_failed", "failed to publish add friend notification",
+            {{"uid", std::to_string(uid)}, {"touid", std::to_string(touid)}, {"error", publish_error}});
+    }
     PublishRelationStateEventLocal(_logic, "friend_apply_created", uid, touid, labels);
 }
 
@@ -388,12 +398,17 @@ void ChatRelationService::HandleAuthFriendApply(const std::shared_ptr<CSession>&
     task_payload["exclude_uid"] = 0;
     task_payload["payload"] = notify;
     std::string publish_error;
-    _logic.PublishTask("relation_notify",
+    const bool delivered = _logic.MessageDelivery().TryPushPayload({touid}, ID_NOTIFY_AUTH_FRIEND_REQ, notify, 0, false);
+    const bool published = delivered || _logic.PublishTask("relation_notify",
         memochat::chatruntime::TaskRoutingRelationNotify(),
         task_payload,
         0,
         memochat::chatruntime::TaskMaxRetries(),
         &publish_error);
+    if (!published) {
+        memolog::LogWarn("chat.relation_notify.publish_failed", "failed to publish auth friend notification",
+            {{"uid", std::to_string(uid)}, {"touid", std::to_string(touid)}, {"error", publish_error}});
+    }
     PublishRelationStateEventLocal(_logic, "friend_apply_approved", uid, touid, labels);
 }
 
@@ -402,7 +417,7 @@ void ChatRelationService::HandleGetDialogList(const std::shared_ptr<CSession>& s
     Json::Reader reader;
     Json::Value root;
     reader.parse(msg_data, root);
-    const int uid = root.get("fromuid", root.get("uid", 0)).asInt();
+    const int uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
 
     Json::Value rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
@@ -424,10 +439,10 @@ void ChatRelationService::HandleSyncDraft(const std::shared_ptr<CSession>& sessi
     Json::Reader reader;
     Json::Value root;
     reader.parse(msg_data, root);
-    const int uid = root.get("fromuid", root.get("uid", 0)).asInt();
+    const int uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
     const std::string dialog_type = root.get("dialog_type", "").asString();
     const int peer_uid = root.get("peer_uid", 0).asInt();
-    const int64_t group_id = root.get("groupid", root.get("group_id", 0)).asInt64();
+    const int64_t group_id = root.isMember("groupid") ? root["groupid"].asInt64() : root["group_id"].asInt64();
     const bool has_mute_state = root.isMember("mute_state");
     const int mute_state = root.get("mute_state", 0).asInt();
     std::string draft_text = root.get("draft_text", "").asString();
@@ -485,10 +500,10 @@ void ChatRelationService::HandlePinDialog(const std::shared_ptr<CSession>& sessi
     Json::Reader reader;
     Json::Value root;
     reader.parse(msg_data, root);
-    const int uid = root.get("fromuid", root.get("uid", 0)).asInt();
+    const int uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
     const std::string dialog_type = root.get("dialog_type", "").asString();
     const int peer_uid = root.get("peer_uid", 0).asInt();
-    const int64_t group_id = root.get("groupid", root.get("group_id", 0)).asInt64();
+    const int64_t group_id = root.isMember("groupid") ? root["groupid"].asInt64() : root["group_id"].asInt64();
     int pinned_rank = root.get("pinned_rank", 0).asInt();
     if (pinned_rank < 0) {
         pinned_rank = 0;
@@ -533,3 +548,6 @@ void ChatRelationService::HandlePinDialog(const std::shared_ptr<CSession>& sessi
         rtvalue["error"] = ErrorCodes::RPCFailed;
     }
 }
+
+
+

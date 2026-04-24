@@ -1,27 +1,24 @@
-#pragma once
+﻿#pragma once
 
-#include <json/json.h>
 #include <string>
 #include <string_view>
+#include "json/GlazeCompat.h"
 
 namespace Http2CallSupport {
 
 struct CallResult {
     int error = 0;
     std::string message;
-    Json::Value data;
+    memochat::json::JsonValue data;
 };
 
-bool ParseJsonBody(std::string_view body_sv, Json::Value& root);
+bool ParseJsonBody(std::string_view body_sv, memochat::json::JsonValue& root);
+CallResult HandleCallStart(const memochat::json::JsonValue& req, const std::string& trace_id);
+CallResult HandleCallAccept(const memochat::json::JsonValue& req, const std::string& trace_id);
+CallResult HandleCallReject(const memochat::json::JsonValue& req, const std::string& trace_id);
+CallResult HandleCallCancel(const memochat::json::JsonValue& req, const std::string& trace_id);
+CallResult HandleCallHangup(const memochat::json::JsonValue& req, const std::string& trace_id);
+CallResult HandleCallTokenGet(int uid, const std::string& token, const std::string& call_id, const std::string& role, const std::string& trace_id);
+CallResult HandleCallTokenPost(const memochat::json::JsonValue& req, const std::string& trace_id);
 
-CallResult HandleCallStart(const Json::Value& req, const std::string& trace_id);
-CallResult HandleCallAccept(const Json::Value& req, const std::string& trace_id);
-CallResult HandleCallReject(const Json::Value& req, const std::string& trace_id);
-CallResult HandleCallCancel(const Json::Value& req, const std::string& trace_id);
-CallResult HandleCallHangup(const Json::Value& req, const std::string& trace_id);
-CallResult HandleCallTokenGet(int uid, const std::string& token,
-                               const std::string& call_id, const std::string& role,
-                               const std::string& trace_id);
-CallResult HandleCallTokenPost(const Json::Value& req, const std::string& trace_id);
-
-}  // namespace Http2CallSupport
+} // namespace Http2CallSupport

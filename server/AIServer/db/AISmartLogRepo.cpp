@@ -1,8 +1,8 @@
 #include "db/AISmartLogRepo.h"
 #include "ConfigMgr.h"
 #include "logging/Logger.h"
-#include <libpqxx/pqxx>
-#include <libpqxx/transaction.hxx>
+#include <pqxx/pqxx>
+#include <pqxx/transaction.hxx>
 #include <chrono>
 #include <sstream>
 

@@ -14,7 +14,7 @@
 #include <vector>
 
 #if MEMOCHAT_ENABLE_MSQUIC
-#include <windows.h>
+#include "../../server/common/WinSdkCompat.h"
 #include <wincrypt.h>
 #include <msquic.h>
 #endif

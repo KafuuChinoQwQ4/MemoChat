@@ -1,7 +1,3 @@
-#ifndef _HAS_STD_BYTE
-#define _HAS_STD_BYTE 0
-#endif
-
 #include "KafkaAsyncEventBus.h"
 
 #include "ChatAsyncEvent.h"
@@ -12,7 +8,6 @@
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <chrono>
-#include <json/json.h>
 #include <memory>
 
 #ifndef MEMOCHAT_ENABLE_KAFKA
@@ -20,8 +15,23 @@
 #endif
 
 #if MEMOCHAT_ENABLE_KAFKA
-#include <cppkafka/cppkafka.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 #endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <cppkafka/cppkafka.h>
+#ifdef byte
+#undef byte
+#endif
+#endif
+
+// Must come after cppkafka to avoid _HAS_STD_BYTE conflict with glaze's std::byte usage
+#ifdef byte
+#undef byte
+#endif
+#include "json/GlazeCompat.h"
 
 namespace {
 int64_t NowMsKafkaBus()
@@ -101,7 +111,7 @@ KafkaAsyncEventBus::~KafkaAsyncEventBus()
     }
 }
 
-bool KafkaAsyncEventBus::Publish(const std::string& topic, const Json::Value& payload, std::string* error)
+bool KafkaAsyncEventBus::Publish(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error)
 {
 #if MEMOCHAT_ENABLE_KAFKA
     if (!_producer || !_config.valid()) {
@@ -114,9 +124,9 @@ bool KafkaAsyncEventBus::Publish(const std::string& topic, const Json::Value& pa
     auto envelope = BuildAsyncEventEnvelope(topic, payload);
     if (envelope.event_id.empty()) {
         envelope.event_id = boost::uuids::to_string(boost::uuids::random_generator()());
-        auto payload_copy = envelope.payload();
+        auto payload_copy = envelope.payload;
         payload_copy["event_id"] = envelope.event_id;
-        envelope.setPayload(payload_copy);
+        envelope.payload = payload_copy;
     }
     const auto serialized = SerializeAsyncEventEnvelope(envelope);
     if (serialized.empty()) {
@@ -279,3 +289,4 @@ void KafkaAsyncEventBus::ClearLastConsumed()
     _last_message.reset();
     _last_consumed = AsyncConsumedEvent();
 }
+

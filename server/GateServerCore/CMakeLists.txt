@@ -51,7 +51,12 @@ add_library(GateServerCore STATIC
     S3MediaStorage.h
 )
 
-target_compile_features(GateServerCore PUBLIC cxx_std_17)
+target_compile_features(GateServerCore PUBLIC cxx_std_23)
+
+# GateServerCore pulls in GlazeCompat.h (glaze library) which requires C++23.
+# The parent CMAKE_CXX_STANDARD may not propagate correctly to static libraries
+# in subdirectory builds — enforce it here to override any inherited value.
+set(CMAKE_CXX_STANDARD 23)
 target_include_directories(GateServerCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../common
@@ -74,12 +79,20 @@ endif()
 
 if(WIN32)
     # Environment variables: WINSDK_LIB_UM, WINSDK_LIB_UCRT, VC_TOOLS_LIB
-    target_link_libraries(GateServerCore PRIVATE
-        "$ENV{WINSDK_LIB_UM}/bcrypt.lib")
+    if(DEFINED ENV{WINSDK_LIB_UM} AND NOT "$ENV{WINSDK_LIB_UM}" STREQUAL "")
+        set(_WINSDK_LIB_UM "$ENV{WINSDK_LIB_UM}")
+    else()
+        set(_WINSDK_LIB_UM "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.28000.0/um/x64")
+    endif()
+    if(DEFINED ENV{WINSDK_LIB_UCRT} AND NOT "$ENV{WINSDK_LIB_UCRT}" STREQUAL "")
+        set(_WINSDK_LIB_UCRT "$ENV{WINSDK_LIB_UCRT}")
+    else()
+        set(_WINSDK_LIB_UCRT "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.28000.0/ucrt/x64")
+    endif()
+    target_link_libraries(GateServerCore PRIVATE "${_WINSDK_LIB_UM}/bcrypt.lib")
     target_link_options(GateServerCore PRIVATE
-        "/LIBPATH:$ENV{WINSDK_LIB_UM}"
-        "/LIBPATH:$ENV{WINSDK_LIB_UCRT}"
-        "/LIBPATH:$ENV{VC_TOOLS_LIB}")
+        "/LIBPATH:${_WINSDK_LIB_UM}"
+        "/LIBPATH:${_WINSDK_LIB_UCRT}")
 endif()
 
 set_target_properties(GateServerCore PROPERTIES FOLDER "Server/GateServer")

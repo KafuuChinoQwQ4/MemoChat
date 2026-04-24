@@ -30,7 +30,6 @@
 #include <algorithm>
 #include <chrono>
 #include <iostream>
-#include <json/writer.h>
 #include <sstream>
 #include "CServer.h"
 using namespace std;
@@ -89,13 +88,13 @@ void InvalidateRelationBootstrapCache(int uid) {
 	RedisMgr::GetInstance()->Del(RelationBootstrapCacheKey(uid));
 }
 
-std::string JsonValueToWireString(const Json::Value& v) {
-	Json::StreamWriterBuilder builder;
+std::string JsonValueToWireString(const memochat::json::JsonValue& v) {
+	memochat::json::JsonStreamWriterBuilder builder;
 	builder["indentation"] = "";
-	return Json::writeString(builder, v);
+	return memochat::json::writeString(builder, v);
 }
 
-bool TryAppendCachedRelationBootstrapJson(int uid, Json::Value& out) {
+bool TryAppendCachedRelationBootstrapJson(int uid, memochat::json::JsonValue& out) {
 	if (uid <= 0) {
 		return false;
 	}
@@ -105,9 +104,9 @@ bool TryAppendCachedRelationBootstrapJson(int uid, Json::Value& out) {
 		return false;
 	}
 
-	Json::CharReaderBuilder builder;
-	std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-	Json::Value cached;
+	memochat::json::JsonCharReaderBuilder builder;
+	std::unique_ptr<memochat::json::JsonCharReader> reader(builder.newCharReader());
+	memochat::json::JsonValue cached;
 	std::string errors;
 	if (!reader->parse(payload.data(), payload.data() + payload.size(), &cached, &errors) || !cached.isObject()) {
 		return false;
@@ -122,14 +121,14 @@ bool TryAppendCachedRelationBootstrapJson(int uid, Json::Value& out) {
 	return true;
 }
 
-void CacheRelationBootstrapJson(int uid, const Json::Value& payload) {
+void CacheRelationBootstrapJson(int uid, const memochat::json::JsonValue& payload) {
 	if (uid <= 0 || !payload.isObject()) {
 		return;
 	}
 
-	Json::StreamWriterBuilder builder;
+	memochat::json::JsonStreamWriterBuilder builder;
 	builder["indentation"] = "";
-	const auto json = Json::writeString(builder, payload);
+	const auto json = memochat::json::writeString(builder, payload);
 	if (json.empty()) {
 		return;
 	}
@@ -271,15 +270,15 @@ std::string GetChatAuthSecret() {
 	return secret;
 }
 
-std::string JsonToCompactString(const Json::Value& value) {
-	Json::StreamWriterBuilder builder;
+std::string JsonToCompactString(const memochat::json::JsonValue& value) {
+	memochat::json::JsonStreamWriterBuilder builder;
 	builder["indentation"] = "";
-	return Json::writeString(builder, value);
+	return memochat::json::writeString(builder, value);
 }
 
-bool ParseJsonObject(const std::string& payload, Json::Value& root) {
-	Json::CharReaderBuilder builder;
-	std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+bool ParseJsonObject(const std::string& payload, memochat::json::JsonValue& root) {
+	memochat::json::JsonCharReaderBuilder builder;
+	std::unique_ptr<memochat::json::JsonCharReader> reader(builder.newCharReader());
 	std::string errors;
 	return reader->parse(payload.data(), payload.data() + payload.size(), &root, &errors) && root.isObject();
 }
@@ -297,8 +296,8 @@ int64_t AllocateGroupSeq(int64_t group_id) {
 }
 
 void BindTcpTraceContext(const std::shared_ptr<CSession>& session, const std::string& msg_data) {
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	if (!reader.parse(msg_data, root) || !root.isObject()) {
 		memolog::TraceContext::SetTraceId(memolog::TraceContext::NewId());
 		memolog::TraceContext::SetRequestId(memolog::TraceContext::NewId());
@@ -380,15 +379,15 @@ LogicSystem::LogicSystem():_b_stop(false), _event_stop(false), _p_server(nullptr
 		_task_bus = std::make_shared<InlineTaskBus>();
 	}
 	_message_delivery_service = std::make_unique<MessageDeliveryService>(
-		[this](const std::string& task_type, const std::string& routing_key, const Json::Value& payload, int delay_ms, int max_retries, std::string* error) {
+		[this](const std::string& task_type, const std::string& routing_key, const memochat::json::JsonValue& payload, int delay_ms, int max_retries, std::string* error) {
 			return PublishTask(task_type, routing_key, payload, delay_ms, max_retries, error);
 		});
 	const auto async_event_bus_backend = memochat::chatruntime::AsyncEventBusBackend();
 	if (async_event_bus_backend == "kafka" && KafkaAsyncEventBus::BuildAvailable()) {
 		_async_event_bus = std::make_shared<KafkaAsyncEventBus>(
 			[this](int64_t outbox_id, int delay_ms, int max_retries, std::string* error) {
-				Json::Value payload(Json::objectValue);
-				payload["outbox_id"] = static_cast<Json::Int64>(outbox_id);
+				memochat::json::JsonValue payload(memochat::json::object_t{});
+				payload["outbox_id"] = static_cast<int64_t>(outbox_id);
 				return PublishTask("outbox_repair",
 					memochat::chatruntime::TaskRoutingOutboxRepair(),
 					payload,
@@ -415,13 +414,13 @@ LogicSystem::LogicSystem():_b_stop(false), _event_stop(false), _p_server(nullptr
 	_async_event_dispatcher = std::make_unique<AsyncEventDispatcher>(
 		_async_event_bus,
 		[this]() { return _event_stop; },
-		[this](const std::vector<int>& recipients, short msgid, const Json::Value& payload, int exclude_uid) {
+		[this](const std::vector<int>& recipients, short msgid, const memochat::json::JsonValue& payload, int exclude_uid) {
 			MessageDelivery().PushPayload(recipients, msgid, payload, exclude_uid);
 		});
 	_task_dispatcher = std::make_unique<TaskDispatcher>(
 		_task_bus,
 		[this]() { return _event_stop; },
-		[this](const Json::Value& payload, bool) {
+		[this](const memochat::json::JsonValue& payload, bool) {
 			const int recipient_uid = payload.get("recipient_uid", 0).asInt();
 			const short msgid = static_cast<short>(payload.get("msgid", 0).asInt());
 			const int exclude_uid = payload.get("exclude_uid", 0).asInt();
@@ -494,7 +493,7 @@ MessageDeliveryService& LogicSystem::MessageDelivery()
 	return *_message_delivery_service;
 }
 
-bool LogicSystem::PublishTask(const std::string& task_type, const std::string& routing_key, const Json::Value& payload, int delay_ms, int max_retries, std::string* error)
+bool LogicSystem::PublishTask(const std::string& task_type, const std::string& routing_key, const memochat::json::JsonValue& payload, int delay_ms, int max_retries, std::string* error)
 {
 	if (!_task_dispatcher) {
 		if (error) {
@@ -544,12 +543,25 @@ void LogicSystem::workerLoop(size_t worker_id) {
 		Defer clear_trace([]() {
 			memolog::TraceContext::Clear();
 		});
-		call_back_iter->second(msg_node->_session, msg_node->_recvnode->_msg_id, msg_data);
+		try {
+			call_back_iter->second(msg_node->_session, msg_node->_recvnode->_msg_id, msg_data);
+		}
+		catch (const std::exception& e) {
+			memolog::LogError("logic.callback.exception",
+				"LogicSystem callback threw exception",
+				{{"msg_id", std::to_string(msg_node->_recvnode->_msg_id)},
+				 {"error", e.what()}});
+		}
+		catch (...) {
+			memolog::LogError("logic.callback.exception",
+				"LogicSystem callback threw unknown exception",
+				{{"msg_id", std::to_string(msg_node->_recvnode->_msg_id)}});
+		}
 	}
 }
 
 
-bool LogicSystem::PublishAsyncEvent(const std::string& topic, const Json::Value& payload, std::string* error)
+bool LogicSystem::PublishAsyncEvent(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error)
 {
 	return _async_event_dispatcher->PublishAsyncEvent(topic, payload, error);
 }
@@ -566,17 +578,17 @@ void LogicSystem::DealAsyncEvents()
 	_async_event_dispatcher->DealAsyncEvents();
 }
 
-void LogicSystem::NotifyMessageStatus(const Json::Value& payload)
+void LogicSystem::NotifyMessageStatus(const memochat::json::JsonValue& payload)
 {
 	_async_event_dispatcher->NotifyMessageStatus(payload);
 }
 
-void LogicSystem::HandlePrivateAsyncEvent(const Json::Value& root)
+void LogicSystem::HandlePrivateAsyncEvent(const memochat::json::JsonValue& root)
 {
 	_async_event_dispatcher->HandlePrivateAsyncEvent(root);
 }
 
-void LogicSystem::HandleGroupAsyncEvent(const Json::Value& root)
+void LogicSystem::HandleGroupAsyncEvent(const memochat::json::JsonValue& root)
 {
 	_async_event_dispatcher->HandleGroupAsyncEvent(root);
 }
@@ -595,8 +607,8 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 		return;
 	}
 	const auto login_start_ms = NowMs();
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	auto uid = root["uid"].asInt();
 	auto token = root["token"].asString();
@@ -620,7 +632,7 @@ void LogicSystem::LoginHandler(shared_ptr<CSession> session, const short &msg_id
 			{"tcp_msg_id", std::to_string(msg_id)}
 		});
 
-	Json::Value  rtvalue;
+	memochat::json::JsonValue  rtvalue;
 	Defer defer([this, &rtvalue, session]() {
 		session->Send(JsonValueToWireString(rtvalue), MSG_CHAT_LOGIN_RSP);
 		});
@@ -802,8 +814,8 @@ void LogicSystem::GetRelationBootstrapHandler(std::shared_ptr<CSession> session,
 		return;
 	}
 	const auto bootstrap_start_ms = NowMs();
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	auto trace_id = root.get("trace_id", "").asString();
 	if (trace_id.empty()) {
@@ -818,7 +830,7 @@ void LogicSystem::GetRelationBootstrapHandler(std::shared_ptr<CSession> session,
 		memolog::TraceContext::Clear();
 		});
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["trace_id"] = trace_id;
 	rtvalue["protocol_version"] = root.get("protocol_version", 3).asInt();
 	const int uid = session ? session->GetUserId() : 0;
@@ -852,13 +864,13 @@ void LogicSystem::SearchInfo(std::shared_ptr<CSession> session, const short& msg
 		_chat_relation_service->HandleSearchUser(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const std::string user_id = root["user_id"].asString();
 	std::cout << "user SearchInfo user_id is " << user_id << endl;
 
-	Json::Value  rtvalue;
+	memochat::json::JsonValue  rtvalue;
 
 	Defer defer([this, &rtvalue, session]() {
 		session->Send(JsonValueToWireString(rtvalue), ID_SEARCH_USER_RSP);
@@ -884,8 +896,8 @@ void LogicSystem::AddFriendApply(std::shared_ptr<CSession> session, const short&
 		_chat_relation_service->HandleAddFriendApply(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	auto uid = root["uid"].asInt();
 	auto applyname = root["applyname"].asString();
@@ -900,7 +912,7 @@ void LogicSystem::AddFriendApply(std::shared_ptr<CSession> session, const short&
 	std::cout << "user login uid is  " << uid << " applyname  is "
 		<< applyname << " bakname is " << bakname << " touid is " << touid << endl;
 
-	Json::Value  rtvalue;
+	memochat::json::JsonValue  rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	Defer defer([this, &rtvalue, session]() {
 		session->Send(JsonValueToWireString(rtvalue), ID_ADD_FRIEND_RSP);
@@ -934,7 +946,7 @@ void LogicSystem::AddFriendApply(std::shared_ptr<CSession> session, const short&
 		auto session = UserMgr::GetInstance()->GetSession(touid);
 		if (session) {
 
-			Json::Value  notify;
+			memochat::json::JsonValue  notify;
 			notify["error"] = ErrorCodes::Success;
 			notify["applyuid"] = uid;
 			notify["name"] = applyname;
@@ -974,8 +986,8 @@ void LogicSystem::AuthFriendApply(std::shared_ptr<CSession> session, const short
 		return;
 	}
 
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 
 	auto uid = root["fromuid"].asInt();
@@ -989,7 +1001,7 @@ void LogicSystem::AuthFriendApply(std::shared_ptr<CSession> session, const short
 	}
 	std::cout << "from " << uid << " auth friend to " << touid << std::endl;
 
-	Json::Value  rtvalue;
+	memochat::json::JsonValue  rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	auto user_info = std::make_shared<UserInfo>();
 
@@ -1039,7 +1051,7 @@ void LogicSystem::AuthFriendApply(std::shared_ptr<CSession> session, const short
 		auto session = UserMgr::GetInstance()->GetSession(touid);
 		if (session) {
 
-			Json::Value  notify;
+			memochat::json::JsonValue  notify;
 			notify["error"] = ErrorCodes::Success;
 			notify["fromuid"] = uid;
 			notify["touid"] = touid;
@@ -1078,16 +1090,16 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 		_private_message_service->HandleTextChatMessage(session, msg_id, msg_data);
 		return;
 	}
-	Json::Value root;
+	memochat::json::JsonValue root;
 	ParseJsonObject(msg_data, root);
 
 	const auto uid = root["fromuid"].asInt();
 	const auto touid = root["touid"].asInt();
-	const Json::Value arrays = root["text_array"];
+	const memochat::json::JsonValue arrays = root["text_array"];
 	const bool kafka_shadow = memochat::chatruntime::FeatureEnabled("chat_private_kafka_shadow");
 	const bool kafka_primary = memochat::chatruntime::FeatureEnabled("chat_private_kafka_primary");
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["fromuid"] = uid;
 	rtvalue["touid"] = touid;
@@ -1101,7 +1113,7 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 		return;
 	}
 
-	Json::Value normalized(Json::arrayValue);
+	memochat::json::JsonValue normalized(memochat::json::array_t{});
 	std::vector<PrivateMessageInfo> pending_messages;
 	TextChatMsgReq text_msg_req;
 	text_msg_req.set_fromuid(uid);
@@ -1137,24 +1149,24 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 		}
 		pending_messages.push_back(msg);
 
-		Json::Value element;
+		memochat::json::JsonValue element;
 		element["msgid"] = msg.msg_id;
 		element["content"] = msg.content;
-		element["created_at"] = static_cast<Json::Int64>(msg.created_at);
+		element["created_at"] = static_cast<int64_t>(msg.created_at);
 		if (msg.reply_to_server_msg_id > 0) {
-			element["reply_to_server_msg_id"] = static_cast<Json::Int64>(msg.reply_to_server_msg_id);
+			element["reply_to_server_msg_id"] = static_cast<int64_t>(msg.reply_to_server_msg_id);
 		}
 		if (!msg.forward_meta_json.empty()) {
-			Json::Value forward_meta;
+			memochat::json::JsonValue forward_meta;
 			if (ParseJsonObject(msg.forward_meta_json, forward_meta)) {
 				element["forward_meta"] = forward_meta;
 			}
 		}
 		if (msg.edited_at_ms > 0) {
-			element["edited_at_ms"] = static_cast<Json::Int64>(msg.edited_at_ms);
+			element["edited_at_ms"] = static_cast<int64_t>(msg.edited_at_ms);
 		}
 		if (msg.deleted_at_ms > 0) {
-			element["deleted_at_ms"] = static_cast<Json::Int64>(msg.deleted_at_ms);
+			element["deleted_at_ms"] = static_cast<int64_t>(msg.deleted_at_ms);
 		}
 		normalized.append(element);
 
@@ -1166,20 +1178,20 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 	const auto accept_ts = NowMs();
 	rtvalue["client_msg_id"] = first_msg_id;
 	rtvalue["accept_node"] = memochat::chatruntime::SelfServerName();
-	rtvalue["accept_ts"] = static_cast<Json::Int64>(accept_ts);
+	rtvalue["accept_ts"] = static_cast<int64_t>(accept_ts);
 	rtvalue["status"] = kafka_primary ? "accepted" : "persisted";
 	if (!kafka_primary) {
 		rtvalue["text_array"] = normalized;
 	}
 
-	Json::Value event_payload;
+	memochat::json::JsonValue event_payload;
 	event_payload["fromuid"] = uid;
 	event_payload["touid"] = touid;
 	event_payload["trace_id"] = root.get("trace_id", "").asString();
 	event_payload["request_id"] = root.get("request_id", "").asString();
 	event_payload["span_id"] = root.get("span_id", "").asString();
 	event_payload["accept_node"] = memochat::chatruntime::SelfServerName();
-	event_payload["accept_ts"] = static_cast<Json::Int64>(accept_ts);
+	event_payload["accept_ts"] = static_cast<int64_t>(accept_ts);
 	event_payload["text_array"] = normalized;
 
 	if (kafka_primary || kafka_shadow) {
@@ -1237,12 +1249,12 @@ void LogicSystem::HeartBeatHandler(std::shared_ptr<CSession> session, const shor
 		_chat_session_service->HandleHeartbeat(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	auto uid = root["fromuid"].asInt();
 	std::cout << "receive heart beat msg, uid is " << uid << std::endl;
-	Json::Value  rtvalue;
+	memochat::json::JsonValue  rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	session->Send(JsonValueToWireString(rtvalue), ID_HEARTBEAT_RSP);
 }
@@ -1257,7 +1269,7 @@ bool LogicSystem::isPureDigit(const std::string& str)
 	return true;
 }
 
-void LogicSystem::GetUserByUid(std::string uid_str, Json::Value& rtvalue)
+void LogicSystem::GetUserByUid(std::string uid_str, memochat::json::JsonValue& rtvalue)
 {
 	rtvalue["error"] = ErrorCodes::Success;
 
@@ -1267,8 +1279,8 @@ void LogicSystem::GetUserByUid(std::string uid_str, Json::Value& rtvalue)
 	std::string info_str = "";
 	bool b_base = RedisMgr::GetInstance()->Get(base_key, info_str);
 	if (b_base) {
-		Json::Reader reader;
-		Json::Value root;
+		memochat::json::JsonReader reader;
+		memochat::json::JsonValue root;
 		reader.parse(info_str, root);
 		auto uid = root["uid"].asInt();
 		auto user_id = root["user_id"].asString();
@@ -1305,7 +1317,7 @@ void LogicSystem::GetUserByUid(std::string uid_str, Json::Value& rtvalue)
 	}
 
 
-	Json::Value redis_root;
+	memochat::json::JsonValue redis_root;
 	redis_root["uid"] = user_info->uid;
 	redis_root["user_id"] = user_info->user_id;
 	redis_root["pwd"] = user_info->pwd;
@@ -1316,7 +1328,7 @@ void LogicSystem::GetUserByUid(std::string uid_str, Json::Value& rtvalue)
 	redis_root["sex"] = user_info->sex;
 	redis_root["icon"] = user_info->icon;
 
-	RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
+	RedisMgr::GetInstance()->Set(base_key, redis_root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"));
 
 
 	rtvalue["uid"] = user_info->uid;
@@ -1330,7 +1342,7 @@ void LogicSystem::GetUserByUid(std::string uid_str, Json::Value& rtvalue)
 	rtvalue["icon"] = user_info->icon;
 }
 
-void LogicSystem::GetUserByName(std::string name, Json::Value& rtvalue)
+void LogicSystem::GetUserByName(std::string name, memochat::json::JsonValue& rtvalue)
 {
 	rtvalue["error"] = ErrorCodes::Success;
 
@@ -1340,8 +1352,8 @@ void LogicSystem::GetUserByName(std::string name, Json::Value& rtvalue)
 	std::string info_str = "";
 	bool b_base = RedisMgr::GetInstance()->Get(base_key, info_str);
 	if (b_base) {
-		Json::Reader reader;
-		Json::Value root;
+		memochat::json::JsonReader reader;
+		memochat::json::JsonValue root;
 		reader.parse(info_str, root);
 		auto uid = root["uid"].asInt();
 		auto user_id = root["user_id"].asString();
@@ -1375,7 +1387,7 @@ void LogicSystem::GetUserByName(std::string name, Json::Value& rtvalue)
 	}
 
 
-	Json::Value redis_root;
+	memochat::json::JsonValue redis_root;
 	redis_root["uid"] = user_info->uid;
 	redis_root["user_id"] = user_info->user_id;
 	redis_root["pwd"] = user_info->pwd;
@@ -1385,7 +1397,7 @@ void LogicSystem::GetUserByName(std::string name, Json::Value& rtvalue)
 	redis_root["desc"] = user_info->desc;
 	redis_root["sex"] = user_info->sex;
 
-	RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
+	RedisMgr::GetInstance()->Set(base_key, redis_root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"));
 	
 
 	rtvalue["uid"] = user_info->uid;
@@ -1404,8 +1416,8 @@ bool LogicSystem::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<Use
 	std::string info_str = "";
 	bool b_base = RedisMgr::GetInstance()->Get(base_key, info_str);
 	if (b_base) {
-		Json::Reader reader;
-		Json::Value root;
+		memochat::json::JsonReader reader;
+		memochat::json::JsonValue root;
 		reader.parse(info_str, root);
 		userinfo->uid = root["uid"].asInt();
 		userinfo->user_id = root["user_id"].asString();
@@ -1431,7 +1443,7 @@ bool LogicSystem::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<Use
 		userinfo = user_info;
 
 
-		Json::Value redis_root;
+		memochat::json::JsonValue redis_root;
 		redis_root["uid"] = uid;
 		redis_root["user_id"] = userinfo->user_id;
 		redis_root["pwd"] = userinfo->pwd;
@@ -1441,7 +1453,7 @@ bool LogicSystem::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<Use
 		redis_root["desc"] = userinfo->desc;
 		redis_root["sex"] = userinfo->sex;
 		redis_root["icon"] = userinfo->icon;
-		RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
+		RedisMgr::GetInstance()->Set(base_key, redis_root.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"));
 	}
 
 	return true;
@@ -1457,21 +1469,21 @@ bool LogicSystem::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInf
 	return PostgresMgr::GetInstance()->GetFriendList(self_id, user_list);
 }
 
-void LogicSystem::AppendRelationBootstrapJson(int uid, Json::Value& out)
+void LogicSystem::AppendRelationBootstrapJson(int uid, memochat::json::JsonValue& out)
 {
 	if (_chat_relation_service) {
 		_chat_relation_service->AppendRelationBootstrapJson(uid, out);
 	}
 }
 
-void LogicSystem::BuildGroupListJson(int uid, Json::Value& out)
+void LogicSystem::BuildGroupListJson(int uid, memochat::json::JsonValue& out)
 {
 	if (_group_message_service) {
 		_group_message_service->BuildGroupListJson(uid, out);
 	}
 }
 
-void LogicSystem::BuildDialogListJson(int uid, Json::Value& out)
+void LogicSystem::BuildDialogListJson(int uid, memochat::json::JsonValue& out)
 {
 	if (_chat_relation_service) {
 		_chat_relation_service->BuildDialogListJson(uid, out);
@@ -1485,12 +1497,12 @@ void LogicSystem::GetDialogListHandler(std::shared_ptr<CSession> session, const 
 		return;
 	}
 	(void)msg_id;
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
-	const int uid = root.get("fromuid", root.get("uid", 0)).asInt();
+	const int uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["uid"] = uid;
 	Defer defer([&rtvalue, session]() {
@@ -1512,13 +1524,13 @@ void LogicSystem::SyncDraftHandler(std::shared_ptr<CSession> session, const shor
 		return;
 	}
 	(void)msg_id;
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
-	const int uid = root.get("fromuid", root.get("uid", 0)).asInt();
+	const int uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
 	const std::string dialog_type = root.get("dialog_type", "").asString();
 	const int peer_uid = root.get("peer_uid", 0).asInt();
-	const int64_t group_id = root.get("groupid", root.get("group_id", 0)).asInt64();
+	const int64_t group_id = root.isMember("groupid") ? root["groupid"].asInt64() : root["group_id"].asInt64();
 	const bool has_mute_state = root.isMember("mute_state");
 	const int mute_state = root.get("mute_state", 0).asInt();
 	std::string draft_text = root.get("draft_text", "").asString();
@@ -1526,12 +1538,12 @@ void LogicSystem::SyncDraftHandler(std::shared_ptr<CSession> session, const shor
 		draft_text.resize(2000);
 	}
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["uid"] = uid;
 	rtvalue["dialog_type"] = dialog_type;
 	rtvalue["peer_uid"] = peer_uid;
-	rtvalue["group_id"] = static_cast<Json::Int64>(group_id);
+	rtvalue["group_id"] = static_cast<int64_t>(group_id);
 	rtvalue["draft_text"] = draft_text;
 	if (has_mute_state) {
 		rtvalue["mute_state"] = mute_state > 0 ? 1 : 0;
@@ -1580,13 +1592,13 @@ void LogicSystem::PinDialogHandler(std::shared_ptr<CSession> session, const shor
 		return;
 	}
 	(void)msg_id;
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
-	const int uid = root.get("fromuid", root.get("uid", 0)).asInt();
+	const int uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
 	const std::string dialog_type = root.get("dialog_type", "").asString();
 	const int peer_uid = root.get("peer_uid", 0).asInt();
-	const int64_t group_id = root.get("groupid", root.get("group_id", 0)).asInt64();
+	const int64_t group_id = root.isMember("groupid") ? root["groupid"].asInt64() : root["group_id"].asInt64();
 	int pinned_rank = root.get("pinned_rank", 0).asInt();
 	if (pinned_rank < 0) {
 		pinned_rank = 0;
@@ -1595,12 +1607,12 @@ void LogicSystem::PinDialogHandler(std::shared_ptr<CSession> session, const shor
 		pinned_rank = 1000000000;
 	}
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["uid"] = uid;
 	rtvalue["dialog_type"] = dialog_type;
 	rtvalue["peer_uid"] = peer_uid;
-	rtvalue["group_id"] = static_cast<Json::Int64>(group_id);
+	rtvalue["group_id"] = static_cast<int64_t>(group_id);
 	rtvalue["pinned_rank"] = pinned_rank;
 	Defer defer([&rtvalue, session]() {
 		session->Send(JsonValueToWireString(rtvalue), ID_PIN_DIALOG_RSP);
@@ -1641,18 +1653,18 @@ void LogicSystem::ForwardGroupMsgHandler(std::shared_ptr<CSession> session, cons
 		return;
 	}
 	(void)msg_id;
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
-	const int from_uid = root.get("fromuid", root.get("uid", 0)).asInt();
+	const int from_uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
 	const int64_t group_id = root.get("groupid", 0).asInt64();
 	const std::string source_msg_id = root.get("msgid", "").asString();
 	std::string client_msg_id = root.get("client_msg_id", "").asString();
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["fromuid"] = from_uid;
-	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["groupid"] = static_cast<int64_t>(group_id);
 	if (!client_msg_id.empty()) {
 		rtvalue["client_msg_id"] = client_msg_id;
 	}
@@ -1696,19 +1708,19 @@ void LogicSystem::ForwardGroupMsgHandler(std::shared_ptr<CSession> session, cons
 	info.mime = source_msg->mime;
 	info.size = source_msg->size;
 	info.reply_to_server_msg_id = source_msg->reply_to_server_msg_id;
-	Json::Value forward_meta;
+	memochat::json::JsonValue forward_meta;
 	forward_meta["forwarded_from_msgid"] = source_msg_id;
-	forward_meta["source_server_msg_id"] = static_cast<Json::Int64>(source_msg->server_msg_id);
-	forward_meta["source_group_seq"] = static_cast<Json::Int64>(source_msg->group_seq);
+	forward_meta["source_server_msg_id"] = static_cast<int64_t>(source_msg->server_msg_id);
+	forward_meta["source_group_seq"] = static_cast<int64_t>(source_msg->group_seq);
 	forward_meta["source_from_uid"] = source_msg->from_uid;
 	if (!source_msg->forward_meta_json.empty()) {
-		Json::Reader prev_forward_reader;
-		Json::Value prev_forward_meta;
+		memochat::json::JsonReader prev_forward_reader;
+		memochat::json::JsonValue prev_forward_meta;
 		if (prev_forward_reader.parse(source_msg->forward_meta_json, prev_forward_meta)) {
 			forward_meta["prev_forward_meta"] = prev_forward_meta;
 		}
 	}
-	info.forward_meta_json = forward_meta.toStyledString();
+	info.forward_meta_json = forward_meta.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
 	info.created_at = now_ms;
 	int64_t server_msg_id = 0;
 	int64_t group_seq = 0;
@@ -1728,14 +1740,14 @@ void LogicSystem::ForwardGroupMsgHandler(std::shared_ptr<CSession> session, cons
 		std::cerr << "[MongoMgr] SaveGroupMessage dual-write failed for msg_id=" << info.msg_id << std::endl;
 	}
 
-	Json::Value forwarded_msg;
+	memochat::json::JsonValue forwarded_msg;
 	forwarded_msg["msgid"] = info.msg_id;
 	forwarded_msg["msgtype"] = info.msg_type;
 	forwarded_msg["content"] = info.content;
-	Json::Value mentions(Json::arrayValue);
+	memochat::json::JsonValue mentions(memochat::json::array_t{});
 	if (!info.mentions_json.empty()) {
-		Json::Reader mentions_reader;
-		Json::Value parsed_mentions;
+		memochat::json::JsonReader mentions_reader;
+		memochat::json::JsonValue parsed_mentions;
 		if (mentions_reader.parse(info.mentions_json, parsed_mentions) && parsed_mentions.isArray()) {
 			mentions = parsed_mentions;
 		}
@@ -1751,26 +1763,26 @@ void LogicSystem::ForwardGroupMsgHandler(std::shared_ptr<CSession> session, cons
 		forwarded_msg["size"] = info.size;
 	}
 	forwarded_msg["forwarded_from_msgid"] = source_msg_id;
-	forwarded_msg["created_at"] = static_cast<Json::Int64>(now_ms);
-	forwarded_msg["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
-	forwarded_msg["group_seq"] = static_cast<Json::Int64>(group_seq);
+	forwarded_msg["created_at"] = static_cast<int64_t>(now_ms);
+	forwarded_msg["server_msg_id"] = static_cast<int64_t>(server_msg_id);
+	forwarded_msg["group_seq"] = static_cast<int64_t>(group_seq);
 	if (info.reply_to_server_msg_id > 0) {
-		forwarded_msg["reply_to_server_msg_id"] = static_cast<Json::Int64>(info.reply_to_server_msg_id);
+		forwarded_msg["reply_to_server_msg_id"] = static_cast<int64_t>(info.reply_to_server_msg_id);
 	}
 	{
-		Json::Reader forward_reader;
-		Json::Value parsed_forward_meta;
+		memochat::json::JsonReader forward_reader;
+		memochat::json::JsonValue parsed_forward_meta;
 		if (forward_reader.parse(info.forward_meta_json, parsed_forward_meta)) {
 			forwarded_msg["forward_meta"] = parsed_forward_meta;
 		}
 	}
 
 	rtvalue["msg"] = forwarded_msg;
-	rtvalue["created_at"] = static_cast<Json::Int64>(now_ms);
-	rtvalue["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
-	rtvalue["group_seq"] = static_cast<Json::Int64>(group_seq);
+	rtvalue["created_at"] = static_cast<int64_t>(now_ms);
+	rtvalue["server_msg_id"] = static_cast<int64_t>(server_msg_id);
+	rtvalue["group_seq"] = static_cast<int64_t>(group_seq);
 	if (info.reply_to_server_msg_id > 0) {
-		rtvalue["reply_to_server_msg_id"] = static_cast<Json::Int64>(info.reply_to_server_msg_id);
+		rtvalue["reply_to_server_msg_id"] = static_cast<int64_t>(info.reply_to_server_msg_id);
 	}
 	rtvalue["forward_meta"] = forward_meta;
 
@@ -1804,15 +1816,15 @@ void LogicSystem::ForwardPrivateMsgHandler(std::shared_ptr<CSession> session, co
 		return;
 	}
 	(void)msg_id;
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
-	const int from_uid = root.get("fromuid", root.get("uid", 0)).asInt();
-	const int peer_uid = root.get("peer_uid", root.get("touid", 0)).asInt();
+	const int from_uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
+	const int peer_uid = root.isMember("peer_uid") ? root["peer_uid"].asInt() : root["touid"].asInt();
 	const std::string source_msg_id = root.get("msgid", "").asString();
 	std::string client_msg_id = root.get("client_msg_id", "").asString();
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["fromuid"] = from_uid;
 	rtvalue["peer_uid"] = peer_uid;
@@ -1866,20 +1878,20 @@ void LogicSystem::ForwardPrivateMsgHandler(std::shared_ptr<CSession> session, co
 	info.reply_to_server_msg_id = source_msg->reply_to_server_msg_id;
 	info.created_at = now_ms;
 
-	Json::Value forward_meta;
+	memochat::json::JsonValue forward_meta;
 	forward_meta["forwarded_from_msgid"] = source_msg_id;
 	forward_meta["source_from_uid"] = source_msg->from_uid;
 	forward_meta["source_conv_uid_min"] = source_msg->conv_uid_min;
 	forward_meta["source_conv_uid_max"] = source_msg->conv_uid_max;
-	forward_meta["source_created_at"] = static_cast<Json::Int64>(source_msg->created_at);
+	forward_meta["source_created_at"] = static_cast<int64_t>(source_msg->created_at);
 	if (!source_msg->forward_meta_json.empty()) {
-		Json::Reader prev_forward_reader;
-		Json::Value prev_forward_meta;
+		memochat::json::JsonReader prev_forward_reader;
+		memochat::json::JsonValue prev_forward_meta;
 		if (prev_forward_reader.parse(source_msg->forward_meta_json, prev_forward_meta)) {
 			forward_meta["prev_forward_meta"] = prev_forward_meta;
 		}
 	}
-	info.forward_meta_json = forward_meta.toStyledString();
+	info.forward_meta_json = forward_meta.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
 
 	if (!PostgresMgr::GetInstance()->SavePrivateMessage(info)) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
@@ -1889,17 +1901,17 @@ void LogicSystem::ForwardPrivateMsgHandler(std::shared_ptr<CSession> session, co
 		std::cerr << "[MongoMgr] SavePrivateMessage dual-write failed for msg_id=" << info.msg_id << std::endl;
 	}
 
-	Json::Value msg_obj;
+	memochat::json::JsonValue msg_obj;
 	msg_obj["msgid"] = info.msg_id;
 	msg_obj["content"] = info.content;
-	msg_obj["created_at"] = static_cast<Json::Int64>(now_ms);
+	msg_obj["created_at"] = static_cast<int64_t>(now_ms);
 	if (info.reply_to_server_msg_id > 0) {
-		msg_obj["reply_to_server_msg_id"] = static_cast<Json::Int64>(info.reply_to_server_msg_id);
+		msg_obj["reply_to_server_msg_id"] = static_cast<int64_t>(info.reply_to_server_msg_id);
 	}
 	msg_obj["forward_meta"] = forward_meta;
 	rtvalue["msg"] = msg_obj;
 	rtvalue["text_array"].append(msg_obj);
-	rtvalue["created_at"] = static_cast<Json::Int64>(now_ms);
+	rtvalue["created_at"] = static_cast<int64_t>(now_ms);
 
 	TextChatMsgReq text_msg_req;
 	text_msg_req.set_fromuid(from_uid);
@@ -1939,10 +1951,10 @@ void LogicSystem::GroupReadAckHandler(std::shared_ptr<CSession> session, const s
 	}
 	(void)session;
 	(void)msg_id;
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
-	const int uid = root.get("fromuid", root.get("uid", 0)).asInt();
+	const int uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
 	const int64_t group_id = root.get("groupid", 0).asInt64();
 	int64_t read_ts = root.get("read_ts", 0).asInt64();
 	if (uid <= 0 || group_id <= 0) {
@@ -1965,12 +1977,12 @@ void LogicSystem::GroupReadAckHandler(std::shared_ptr<CSession> session, const s
 			recipients.push_back(member->uid);
 		}
 	}
-	Json::Value notify;
+	memochat::json::JsonValue notify;
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_read_ack";
-	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["groupid"] = static_cast<int64_t>(group_id);
 	notify["fromuid"] = uid;
-	notify["read_ts"] = static_cast<Json::Int64>(read_ts);
+	notify["read_ts"] = static_cast<int64_t>(read_ts);
 	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify, uid);
 }
 
@@ -1982,10 +1994,10 @@ void LogicSystem::PrivateReadAckHandler(std::shared_ptr<CSession> session, const
 	}
 	(void)session;
 	(void)msg_id;
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
-	const int uid = root.get("fromuid", root.get("uid", 0)).asInt();
+	const int uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
 	const int peer_uid = root.get("peer_uid", 0).asInt();
 	int64_t read_ts = root.get("read_ts", 0).asInt64();
 	if (uid <= 0 || peer_uid <= 0) {
@@ -2000,16 +2012,16 @@ void LogicSystem::PrivateReadAckHandler(std::shared_ptr<CSession> session, const
 	}
 	PostgresMgr::GetInstance()->UpsertPrivateReadState(uid, peer_uid, read_ts);
 
-	Json::Value notify;
+	memochat::json::JsonValue notify;
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "private_read_ack";
 	notify["fromuid"] = uid;
 	notify["peer_uid"] = peer_uid;
-	notify["read_ts"] = static_cast<Json::Int64>(read_ts);
+	notify["read_ts"] = static_cast<int64_t>(read_ts);
 	PushGroupPayload({ peer_uid }, ID_NOTIFY_PRIVATE_READ_ACK_REQ, notify);
 }
 
-void LogicSystem::PushGroupPayload(const std::vector<int>& recipients, short msgid, const Json::Value& payload, int exclude_uid)
+void LogicSystem::PushGroupPayload(const std::vector<int>& recipients, short msgid, const memochat::json::JsonValue& payload, int exclude_uid)
 {
 	MessageDelivery().PushPayload(recipients, msgid, payload, exclude_uid);
 }
@@ -2020,8 +2032,8 @@ void LogicSystem::CreateGroupHandler(std::shared_ptr<CSession> session, const sh
 		_group_message_service->HandleCreateGroup(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 
 	const int owner_uid = root["fromuid"].asInt();
@@ -2049,7 +2061,7 @@ void LogicSystem::CreateGroupHandler(std::shared_ptr<CSession> session, const sh
 		members.push_back(uid);
 	}
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	Defer defer([&rtvalue, session]() {
 		session->Send(JsonValueToWireString(rtvalue), ID_CREATE_GROUP_RSP);
@@ -2075,17 +2087,17 @@ void LogicSystem::CreateGroupHandler(std::shared_ptr<CSession> session, const sh
 		return;
 	}
 
-	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["groupid"] = static_cast<int64_t>(group_id);
 	rtvalue["group_code"] = group_code;
 	rtvalue["name"] = group_name;
 	rtvalue["announcement"] = announcement;
 	BuildGroupListJson(owner_uid, rtvalue);
 
 	if (!members.empty()) {
-		Json::Value notify;
+		memochat::json::JsonValue notify;
 		notify["error"] = ErrorCodes::Success;
 		notify["event"] = "group_invite";
-		notify["groupid"] = static_cast<Json::Int64>(group_id);
+		notify["groupid"] = static_cast<int64_t>(group_id);
 		notify["group_code"] = group_code;
 		notify["name"] = group_name;
 		notify["operator_uid"] = owner_uid;
@@ -2099,12 +2111,12 @@ void LogicSystem::GetGroupListHandler(std::shared_ptr<CSession> session, const s
 		_group_message_service->HandleGetGroupList(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	if (uid <= 0) {
 		rtvalue["error"] = ErrorCodes::Error_Json;
@@ -2122,8 +2134,8 @@ void LogicSystem::InviteGroupMemberHandler(std::shared_ptr<CSession> session, co
 		_group_message_service->HandleInviteGroupMember(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int from_uid = root["fromuid"].asInt();
 	const std::string target_user_id = root.get("target_user_id", "").asString();
@@ -2134,9 +2146,9 @@ void LogicSystem::InviteGroupMemberHandler(std::shared_ptr<CSession> session, co
 		to_uid = 0;
 	}
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
-	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["groupid"] = static_cast<int64_t>(group_id);
 	rtvalue["touid"] = to_uid;
 	rtvalue["target_user_id"] = target_user_id;
 	Defer defer([&rtvalue, session]() {
@@ -2156,10 +2168,10 @@ void LogicSystem::InviteGroupMemberHandler(std::shared_ptr<CSession> session, co
 	std::shared_ptr<GroupInfo> group_info;
 	PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
 
-	Json::Value notify;
+	memochat::json::JsonValue notify;
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_invite";
-	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["groupid"] = static_cast<int64_t>(group_id);
 	notify["group_code"] = group_info ? group_info->group_code : "";
 	notify["name"] = group_info ? group_info->name : "";
 	notify["operator_uid"] = from_uid;
@@ -2174,8 +2186,8 @@ void LogicSystem::ApplyJoinGroupHandler(std::shared_ptr<CSession> session, const
 		_group_message_service->HandleApplyJoinGroup(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int from_uid = root["fromuid"].asInt();
 	const std::string group_code = root.get("group_code", "").asString();
@@ -2185,9 +2197,9 @@ void LogicSystem::ApplyJoinGroupHandler(std::shared_ptr<CSession> session, const
 	}
 	const std::string reason = root.get("reason", "").asString();
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
-	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["groupid"] = static_cast<int64_t>(group_id);
 	rtvalue["group_code"] = group_code;
 	Defer defer([&rtvalue, session]() {
 		session->Send(JsonValueToWireString(rtvalue), ID_APPLY_JOIN_GROUP_RSP);
@@ -2211,10 +2223,10 @@ void LogicSystem::ApplyJoinGroupHandler(std::shared_ptr<CSession> session, const
 			admins.push_back(one->uid);
 		}
 	}
-	Json::Value notify;
+	memochat::json::JsonValue notify;
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_apply";
-	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["groupid"] = static_cast<int64_t>(group_id);
 	notify["group_code"] = group_code;
 	notify["applicant_uid"] = from_uid;
 	auto applicant = PostgresMgr::GetInstance()->GetUser(from_uid);
@@ -2231,16 +2243,16 @@ void LogicSystem::ReviewGroupApplyHandler(std::shared_ptr<CSession> session, con
 		_group_message_service->HandleReviewGroupApply(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int reviewer_uid = root["fromuid"].asInt();
 	const int64_t apply_id = root["apply_id"].asInt64();
 	const bool agree = root.get("agree", false).asBool();
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
-	rtvalue["apply_id"] = static_cast<Json::Int64>(apply_id);
+	rtvalue["apply_id"] = static_cast<int64_t>(apply_id);
 	rtvalue["agree"] = agree;
 	Defer defer([&rtvalue, session]() {
 		session->Send(JsonValueToWireString(rtvalue), ID_REVIEW_GROUP_APPLY_RSP);
@@ -2257,7 +2269,7 @@ void LogicSystem::ReviewGroupApplyHandler(std::shared_ptr<CSession> session, con
 		return;
 	}
 
-	rtvalue["groupid"] = static_cast<Json::Int64>(apply_info->group_id);
+	rtvalue["groupid"] = static_cast<int64_t>(apply_info->group_id);
 	rtvalue["applicant_uid"] = apply_info->applicant_uid;
 	std::shared_ptr<GroupInfo> apply_group;
 	if (PostgresMgr::GetInstance()->GetGroupById(apply_info->group_id, apply_group) && apply_group) {
@@ -2278,10 +2290,10 @@ void LogicSystem::ReviewGroupApplyHandler(std::shared_ptr<CSession> session, con
 	}
 	recipients.push_back(apply_info->applicant_uid);
 
-	Json::Value notify;
+	memochat::json::JsonValue notify;
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_member_changed";
-	notify["groupid"] = static_cast<Json::Int64>(apply_info->group_id);
+	notify["groupid"] = static_cast<int64_t>(apply_info->group_id);
 	notify["group_code"] = apply_group ? apply_group->group_code : "";
 	notify["applicant_uid"] = apply_info->applicant_uid;
 	if (applicant) {
@@ -2298,19 +2310,19 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 		_group_message_service->HandleGroupChatMessage(session, msg_id, msg_data);
 		return;
 	}
-	Json::Value root;
+	memochat::json::JsonValue root;
 	ParseJsonObject(msg_data, root);
 	const int from_uid = root["fromuid"].asInt();
 	const int64_t group_id = root["groupid"].asInt64();
-	const Json::Value msg = root["msg"];
+	const memochat::json::JsonValue msg = root["msg"];
 	const std::string client_msg_id = msg.get("msgid", "").asString();
 	const bool kafka_shadow = memochat::chatruntime::FeatureEnabled("chat_group_kafka_shadow");
 	const bool kafka_primary = memochat::chatruntime::FeatureEnabled("chat_group_kafka_primary");
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["fromuid"] = from_uid;
-	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["groupid"] = static_cast<int64_t>(group_id);
 	if (!client_msg_id.empty()) {
 		rtvalue["client_msg_id"] = client_msg_id;
 	}
@@ -2354,13 +2366,13 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 	info.from_uid = from_uid;
 	info.msg_type = msg.get("msgtype", "text").asString();
 	info.content = msg.get("content", "").asString();
-	info.mentions_json = msg.get("mentions", Json::arrayValue).toStyledString();
+	info.mentions_json = msg.get("mentions", memochat::json::array_t{}).and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
 	info.file_name = msg.get("file_name", "").asString();
 	info.mime = msg.get("mime", "").asString();
 	info.size = msg.get("size", 0).asInt();
 	info.reply_to_server_msg_id = msg.get("reply_to_server_msg_id", 0).asInt64();
 	if (msg.isMember("forward_meta")) {
-		info.forward_meta_json = msg["forward_meta"].toStyledString();
+		info.forward_meta_json = msg["forward_meta"].and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
 	}
 	info.edited_at_ms = msg.get("edited_at_ms", 0).asInt64();
 	info.deleted_at_ms = msg.get("deleted_at_ms", 0).asInt64();
@@ -2372,7 +2384,7 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 
 	const auto accept_ts = NowMs();
 	rtvalue["accept_node"] = memochat::chatruntime::SelfServerName();
-	rtvalue["accept_ts"] = static_cast<Json::Int64>(accept_ts);
+	rtvalue["accept_ts"] = static_cast<int64_t>(accept_ts);
 	rtvalue["status"] = kafka_primary ? "accepted" : "persisted";
 
 	auto sender_info = PostgresMgr::GetInstance()->GetUser(from_uid);
@@ -2388,14 +2400,14 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 		rtvalue["group_code"] = group_info->group_code;
 	}
 
-	Json::Value event_payload;
+	memochat::json::JsonValue event_payload;
 	event_payload["fromuid"] = from_uid;
-	event_payload["groupid"] = static_cast<Json::Int64>(group_id);
+	event_payload["groupid"] = static_cast<int64_t>(group_id);
 	event_payload["trace_id"] = root.get("trace_id", "").asString();
 	event_payload["request_id"] = root.get("request_id", "").asString();
 	event_payload["span_id"] = root.get("span_id", "").asString();
 	event_payload["accept_node"] = memochat::chatruntime::SelfServerName();
-	event_payload["accept_ts"] = static_cast<Json::Int64>(accept_ts);
+	event_payload["accept_ts"] = static_cast<int64_t>(accept_ts);
 	event_payload["msg"] = msg;
 	if (sender_info) {
 		event_payload["from_name"] = sender_info->name;
@@ -2442,14 +2454,14 @@ void LogicSystem::DealGroupChatMsg(std::shared_ptr<CSession> session, const shor
 		std::cerr << "[MongoMgr] SaveGroupMessage dual-write failed for msg_id=" << info.msg_id << std::endl;
 	}
 
-	Json::Value msg_out = msg;
-	msg_out["created_at"] = static_cast<Json::Int64>(now_ms);
-	msg_out["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
-	msg_out["group_seq"] = static_cast<Json::Int64>(group_seq);
+	memochat::json::JsonValue msg_out = msg;
+	msg_out["created_at"] = static_cast<int64_t>(now_ms);
+	msg_out["server_msg_id"] = static_cast<int64_t>(server_msg_id);
+	msg_out["group_seq"] = static_cast<int64_t>(group_seq);
 	rtvalue["msg"] = msg_out;
-	rtvalue["created_at"] = static_cast<Json::Int64>(now_ms);
-	rtvalue["server_msg_id"] = static_cast<Json::Int64>(server_msg_id);
-	rtvalue["group_seq"] = static_cast<Json::Int64>(group_seq);
+	rtvalue["created_at"] = static_cast<int64_t>(now_ms);
+	rtvalue["server_msg_id"] = static_cast<int64_t>(server_msg_id);
+	rtvalue["group_seq"] = static_cast<int64_t>(group_seq);
 
 	std::vector<int> recipients;
 	for (const auto& member : members) {
@@ -2466,8 +2478,8 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 		_group_message_service->HandleGroupHistory(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
 	const int64_t group_id = root["groupid"].asInt64();
@@ -2475,11 +2487,11 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 	const int64_t before_seq = root.get("before_seq", 0).asInt64();
 	const int limit = root.get("limit", 20).asInt();
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
-	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["groupid"] = static_cast<int64_t>(group_id);
 	rtvalue["has_more"] = false;
-	rtvalue["next_before_seq"] = static_cast<Json::Int64>(0);
+	rtvalue["next_before_seq"] = static_cast<int64_t>(0);
 	Defer defer([&rtvalue, session]() {
 		session->Send(JsonValueToWireString(rtvalue), ID_GROUP_HISTORY_RSP);
 		});
@@ -2509,16 +2521,16 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 			continue;
 		}
 		const int64_t created_at = one->created_at;
-		Json::Value item;
+		memochat::json::JsonValue item;
 		item["msgid"] = one->msg_id;
-		item["groupid"] = static_cast<Json::Int64>(one->group_id);
+		item["groupid"] = static_cast<int64_t>(one->group_id);
 		item["fromuid"] = one->from_uid;
 		item["msgtype"] = one->msg_type;
 		item["content"] = one->content;
-		Json::Value mentions(Json::arrayValue);
+		memochat::json::JsonValue mentions(memochat::json::array_t{});
 		if (!one->mentions_json.empty()) {
-			Json::Reader mentions_reader;
-			Json::Value parsed_mentions;
+			memochat::json::JsonReader mentions_reader;
+			memochat::json::JsonValue parsed_mentions;
 			if (mentions_reader.parse(one->mentions_json, parsed_mentions)) {
 				mentions = parsed_mentions;
 			}
@@ -2527,24 +2539,24 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 		item["file_name"] = one->file_name;
 		item["mime"] = one->mime;
 		item["size"] = one->size;
-		item["created_at"] = static_cast<Json::Int64>(created_at);
-		item["server_msg_id"] = static_cast<Json::Int64>(one->server_msg_id);
-		item["group_seq"] = static_cast<Json::Int64>(one->group_seq);
+		item["created_at"] = static_cast<int64_t>(created_at);
+		item["server_msg_id"] = static_cast<int64_t>(one->server_msg_id);
+		item["group_seq"] = static_cast<int64_t>(one->group_seq);
 		if (one->reply_to_server_msg_id > 0) {
-			item["reply_to_server_msg_id"] = static_cast<Json::Int64>(one->reply_to_server_msg_id);
+			item["reply_to_server_msg_id"] = static_cast<int64_t>(one->reply_to_server_msg_id);
 		}
 		if (!one->forward_meta_json.empty()) {
-			Json::Reader forward_reader;
-			Json::Value forward_meta;
+			memochat::json::JsonReader forward_reader;
+			memochat::json::JsonValue forward_meta;
 			if (forward_reader.parse(one->forward_meta_json, forward_meta)) {
 				item["forward_meta"] = forward_meta;
 			}
 		}
 		if (one->edited_at_ms > 0) {
-			item["edited_at_ms"] = static_cast<Json::Int64>(one->edited_at_ms);
+			item["edited_at_ms"] = static_cast<int64_t>(one->edited_at_ms);
 		}
 		if (one->deleted_at_ms > 0) {
-			item["deleted_at_ms"] = static_cast<Json::Int64>(one->deleted_at_ms);
+			item["deleted_at_ms"] = static_cast<int64_t>(one->deleted_at_ms);
 		}
 		item["from_name"] = one->from_name;
 		item["from_nick"] = one->from_nick;
@@ -2560,7 +2572,7 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 		rtvalue["messages"].append(item);
 	}
 	if (!msgs.empty() && msgs.back()) {
-		rtvalue["next_before_seq"] = static_cast<Json::Int64>(msgs.back()->group_seq);
+		rtvalue["next_before_seq"] = static_cast<int64_t>(msgs.back()->group_seq);
 	}
 	int64_t read_ts = 0;
 	if (!msgs.empty() && msgs.front()) {
@@ -2580,8 +2592,8 @@ void LogicSystem::EditPrivateMsgHandler(std::shared_ptr<CSession> session, const
 		return;
 	}
 	(void)msg_id;
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
 	const int peer_uid = root["peer_uid"].asInt();
@@ -2590,13 +2602,13 @@ void LogicSystem::EditPrivateMsgHandler(std::shared_ptr<CSession> session, const
 	const int64_t now_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::system_clock::now().time_since_epoch()).count());
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["fromuid"] = uid;
 	rtvalue["peer_uid"] = peer_uid;
 	rtvalue["msgid"] = target_msg_id;
 	rtvalue["content"] = content;
-	rtvalue["edited_at_ms"] = static_cast<Json::Int64>(now_ms);
+	rtvalue["edited_at_ms"] = static_cast<int64_t>(now_ms);
 	Defer defer([&rtvalue, session]() {
 		session->Send(JsonValueToWireString(rtvalue), ID_EDIT_PRIVATE_MSG_RSP);
 		});
@@ -2617,14 +2629,14 @@ void LogicSystem::EditPrivateMsgHandler(std::shared_ptr<CSession> session, const
 		std::cerr << "[MongoMgr] UpdatePrivateMessageContent sync failed for msg_id=" << target_msg_id << std::endl;
 	}
 
-	Json::Value notify;
+	memochat::json::JsonValue notify;
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "private_msg_edited";
 	notify["fromuid"] = uid;
 	notify["peer_uid"] = peer_uid;
 	notify["msgid"] = target_msg_id;
 	notify["content"] = content;
-	notify["edited_at_ms"] = static_cast<Json::Int64>(now_ms);
+	notify["edited_at_ms"] = static_cast<int64_t>(now_ms);
 	PushGroupPayload({ uid, peer_uid }, ID_NOTIFY_PRIVATE_MSG_CHANGED_REQ, notify);
 }
 
@@ -2635,8 +2647,8 @@ void LogicSystem::RevokePrivateMsgHandler(std::shared_ptr<CSession> session, con
 		return;
 	}
 	(void)msg_id;
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
 	const int peer_uid = root["peer_uid"].asInt();
@@ -2644,13 +2656,13 @@ void LogicSystem::RevokePrivateMsgHandler(std::shared_ptr<CSession> session, con
 	const int64_t now_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::system_clock::now().time_since_epoch()).count());
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["fromuid"] = uid;
 	rtvalue["peer_uid"] = peer_uid;
 	rtvalue["msgid"] = target_msg_id;
 	rtvalue["content"] = "[消息已撤回]";
-	rtvalue["deleted_at_ms"] = static_cast<Json::Int64>(now_ms);
+	rtvalue["deleted_at_ms"] = static_cast<int64_t>(now_ms);
 	Defer defer([&rtvalue, session]() {
 		session->Send(JsonValueToWireString(rtvalue), ID_REVOKE_PRIVATE_MSG_RSP);
 		});
@@ -2671,14 +2683,14 @@ void LogicSystem::RevokePrivateMsgHandler(std::shared_ptr<CSession> session, con
 		std::cerr << "[MongoMgr] RevokePrivateMessage sync failed for msg_id=" << target_msg_id << std::endl;
 	}
 
-	Json::Value notify;
+	memochat::json::JsonValue notify;
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "private_msg_revoked";
 	notify["fromuid"] = uid;
 	notify["peer_uid"] = peer_uid;
 	notify["msgid"] = target_msg_id;
 	notify["content"] = "[消息已撤回]";
-	notify["deleted_at_ms"] = static_cast<Json::Int64>(now_ms);
+	notify["deleted_at_ms"] = static_cast<int64_t>(now_ms);
 	PushGroupPayload({ uid, peer_uid }, ID_NOTIFY_PRIVATE_MSG_CHANGED_REQ, notify);
 }
 
@@ -2689,8 +2701,8 @@ void LogicSystem::EditGroupMsgHandler(std::shared_ptr<CSession> session, const s
 		return;
 	}
 	(void)msg_id;
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
 	const int64_t group_id = root["groupid"].asInt64();
@@ -2699,12 +2711,12 @@ void LogicSystem::EditGroupMsgHandler(std::shared_ptr<CSession> session, const s
 	const int64_t now_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::system_clock::now().time_since_epoch()).count());
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
-	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["groupid"] = static_cast<int64_t>(group_id);
 	rtvalue["msgid"] = target_msg_id;
 	rtvalue["content"] = content;
-	rtvalue["edited_at_ms"] = static_cast<Json::Int64>(now_ms);
+	rtvalue["edited_at_ms"] = static_cast<int64_t>(now_ms);
 	Defer defer([&rtvalue, session]() {
 		session->Send(JsonValueToWireString(rtvalue), ID_EDIT_GROUP_MSG_RSP);
 		});
@@ -2736,13 +2748,13 @@ void LogicSystem::EditGroupMsgHandler(std::shared_ptr<CSession> session, const s
 		}
 	}
 
-	Json::Value notify;
+	memochat::json::JsonValue notify;
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_msg_edited";
-	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["groupid"] = static_cast<int64_t>(group_id);
 	notify["msgid"] = target_msg_id;
 	notify["content"] = content;
-	notify["edited_at_ms"] = static_cast<Json::Int64>(now_ms);
+	notify["edited_at_ms"] = static_cast<int64_t>(now_ms);
 	notify["operator_uid"] = uid;
 	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify, 0);
 }
@@ -2754,8 +2766,8 @@ void LogicSystem::RevokeGroupMsgHandler(std::shared_ptr<CSession> session, const
 		return;
 	}
 	(void)msg_id;
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
 	const int64_t group_id = root["groupid"].asInt64();
@@ -2763,12 +2775,12 @@ void LogicSystem::RevokeGroupMsgHandler(std::shared_ptr<CSession> session, const
 	const int64_t now_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::system_clock::now().time_since_epoch()).count());
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
-	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["groupid"] = static_cast<int64_t>(group_id);
 	rtvalue["msgid"] = target_msg_id;
 	rtvalue["content"] = "[消息已撤回]";
-	rtvalue["deleted_at_ms"] = static_cast<Json::Int64>(now_ms);
+	rtvalue["deleted_at_ms"] = static_cast<int64_t>(now_ms);
 	Defer defer([&rtvalue, session]() {
 		session->Send(JsonValueToWireString(rtvalue), ID_REVOKE_GROUP_MSG_RSP);
 		});
@@ -2800,13 +2812,13 @@ void LogicSystem::RevokeGroupMsgHandler(std::shared_ptr<CSession> session, const
 		}
 	}
 
-	Json::Value notify;
+	memochat::json::JsonValue notify;
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_msg_revoked";
-	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["groupid"] = static_cast<int64_t>(group_id);
 	notify["msgid"] = target_msg_id;
 	notify["content"] = "[消息已撤回]";
-	notify["deleted_at_ms"] = static_cast<Json::Int64>(now_ms);
+	notify["deleted_at_ms"] = static_cast<int64_t>(now_ms);
 	notify["operator_uid"] = uid;
 	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify, 0);
 }
@@ -2817,8 +2829,8 @@ void LogicSystem::PrivateHistoryHandler(std::shared_ptr<CSession> session, const
 		_private_message_service->HandlePrivateHistory(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
 	const int peer_uid = root["peer_uid"].asInt();
@@ -2826,7 +2838,7 @@ void LogicSystem::PrivateHistoryHandler(std::shared_ptr<CSession> session, const
 	const std::string before_msg_id = root.get("before_msg_id", "").asString();
 	const int limit = root.get("limit", 20).asInt();
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
 	rtvalue["peer_uid"] = peer_uid;
 	rtvalue["has_more"] = false;
@@ -2859,27 +2871,27 @@ void LogicSystem::PrivateHistoryHandler(std::shared_ptr<CSession> session, const
 		if (!one) {
 			continue;
 		}
-		Json::Value item;
+		memochat::json::JsonValue item;
 		item["msgid"] = one->msg_id;
 		item["content"] = one->content;
 		item["fromuid"] = one->from_uid;
 		item["touid"] = one->to_uid;
-		item["created_at"] = static_cast<Json::Int64>(one->created_at);
+		item["created_at"] = static_cast<int64_t>(one->created_at);
 		if (one->reply_to_server_msg_id > 0) {
-			item["reply_to_server_msg_id"] = static_cast<Json::Int64>(one->reply_to_server_msg_id);
+			item["reply_to_server_msg_id"] = static_cast<int64_t>(one->reply_to_server_msg_id);
 		}
 		if (!one->forward_meta_json.empty()) {
-			Json::Reader forward_reader;
-			Json::Value forward_meta;
+			memochat::json::JsonReader forward_reader;
+			memochat::json::JsonValue forward_meta;
 			if (forward_reader.parse(one->forward_meta_json, forward_meta)) {
 				item["forward_meta"] = forward_meta;
 			}
 		}
 		if (one->edited_at_ms > 0) {
-			item["edited_at_ms"] = static_cast<Json::Int64>(one->edited_at_ms);
+			item["edited_at_ms"] = static_cast<int64_t>(one->edited_at_ms);
 		}
 		if (one->deleted_at_ms > 0) {
-			item["deleted_at_ms"] = static_cast<Json::Int64>(one->deleted_at_ms);
+			item["deleted_at_ms"] = static_cast<int64_t>(one->deleted_at_ms);
 		}
 		rtvalue["messages"].append(item);
 		if (one->from_uid == peer_uid && one->created_at > max_peer_read_ts) {
@@ -2897,16 +2909,16 @@ void LogicSystem::UpdateGroupAnnouncementHandler(std::shared_ptr<CSession> sessi
 		_group_message_service->HandleUpdateGroupAnnouncement(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
 	const int64_t group_id = root["groupid"].asInt64();
 	const std::string announcement = root.get("announcement", "").asString();
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
-	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["groupid"] = static_cast<int64_t>(group_id);
 	rtvalue["announcement"] = announcement;
 	std::shared_ptr<GroupInfo> group_info;
 	PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
@@ -2931,10 +2943,10 @@ void LogicSystem::UpdateGroupAnnouncementHandler(std::shared_ptr<CSession> sessi
 		}
 	}
 
-	Json::Value notify;
+	memochat::json::JsonValue notify;
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_announcement_updated";
-	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["groupid"] = static_cast<int64_t>(group_id);
 	notify["group_code"] = group_info ? group_info->group_code : "";
 	notify["announcement"] = announcement;
 	notify["operator_uid"] = uid;
@@ -2947,16 +2959,16 @@ void LogicSystem::UpdateGroupIconHandler(std::shared_ptr<CSession> session, cons
 		_group_message_service->HandleUpdateGroupIcon(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
 	const int64_t group_id = root["groupid"].asInt64();
 	const std::string icon = root.get("icon", "").asString();
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
-	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["groupid"] = static_cast<int64_t>(group_id);
 	rtvalue["icon"] = icon;
 	std::shared_ptr<GroupInfo> group_info;
 	PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
@@ -2986,10 +2998,10 @@ void LogicSystem::UpdateGroupIconHandler(std::shared_ptr<CSession> session, cons
 		}
 	}
 
-	Json::Value notify;
+	memochat::json::JsonValue notify;
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_icon_updated";
-	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["groupid"] = static_cast<int64_t>(group_id);
 	notify["group_code"] = group_info ? group_info->group_code : "";
 	notify["icon"] = icon;
 	notify["operator_uid"] = uid;
@@ -3002,8 +3014,8 @@ void LogicSystem::SetGroupAdminHandler(std::shared_ptr<CSession> session, const 
 		_group_message_service->HandleSetGroupAdmin(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
 	const std::string target_user_id = root.get("target_user_id", "").asString();
@@ -3043,13 +3055,13 @@ void LogicSystem::SetGroupAdminHandler(std::shared_ptr<CSession> session, const 
 		target_uid = 0;
 	}
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
-	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["groupid"] = static_cast<int64_t>(group_id);
 	rtvalue["touid"] = target_uid;
 	rtvalue["target_user_id"] = target_user_id;
 	rtvalue["is_admin"] = is_admin;
-	rtvalue["permission_bits"] = static_cast<Json::Int64>(requested_permission_bits);
+	rtvalue["permission_bits"] = static_cast<int64_t>(requested_permission_bits);
 	rtvalue["can_change_group_info"] = (requested_permission_bits & kPermChangeGroupInfo) != 0;
 	rtvalue["can_delete_messages"] = (requested_permission_bits & kPermDeleteMessages) != 0;
 	rtvalue["can_invite_users"] = (requested_permission_bits & kPermInviteUsers) != 0;
@@ -3080,16 +3092,16 @@ void LogicSystem::SetGroupAdminHandler(std::shared_ptr<CSession> session, const 
 			recipients.push_back(one->uid);
 		}
 	}
-	Json::Value notify;
+	memochat::json::JsonValue notify;
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_admin_changed";
-	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["groupid"] = static_cast<int64_t>(group_id);
 	notify["group_code"] = group_info ? group_info->group_code : "";
 	notify["operator_uid"] = uid;
 	notify["target_uid"] = target_uid;
 	notify["target_user_id"] = target_user_id;
 	notify["is_admin"] = is_admin;
-	notify["permission_bits"] = static_cast<Json::Int64>(requested_permission_bits);
+	notify["permission_bits"] = static_cast<int64_t>(requested_permission_bits);
 	notify["can_change_group_info"] = (requested_permission_bits & kPermChangeGroupInfo) != 0;
 	notify["can_delete_messages"] = (requested_permission_bits & kPermDeleteMessages) != 0;
 	notify["can_invite_users"] = (requested_permission_bits & kPermInviteUsers) != 0;
@@ -3106,8 +3118,8 @@ void LogicSystem::MuteGroupMemberHandler(std::shared_ptr<CSession> session, cons
 		_group_message_service->HandleMuteGroupMember(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
 	const std::string target_user_id = root.get("target_user_id", "").asString();
@@ -3121,12 +3133,12 @@ void LogicSystem::MuteGroupMemberHandler(std::shared_ptr<CSession> session, cons
 		std::chrono::system_clock::now().time_since_epoch()).count());
 	const int64_t mute_until = (mute_seconds > 0) ? now + mute_seconds : 0;
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
-	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["groupid"] = static_cast<int64_t>(group_id);
 	rtvalue["touid"] = target_uid;
 	rtvalue["target_user_id"] = target_user_id;
-	rtvalue["mute_until"] = static_cast<Json::Int64>(mute_until);
+	rtvalue["mute_until"] = static_cast<int64_t>(mute_until);
 	std::shared_ptr<GroupInfo> group_info;
 	PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
 	if (group_info) {
@@ -3150,15 +3162,15 @@ void LogicSystem::MuteGroupMemberHandler(std::shared_ptr<CSession> session, cons
 			recipients.push_back(one->uid);
 		}
 	}
-	Json::Value notify;
+	memochat::json::JsonValue notify;
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_mute_changed";
-	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["groupid"] = static_cast<int64_t>(group_id);
 	notify["group_code"] = group_info ? group_info->group_code : "";
 	notify["operator_uid"] = uid;
 	notify["target_uid"] = target_uid;
 	notify["target_user_id"] = target_user_id;
-	notify["mute_until"] = static_cast<Json::Int64>(mute_until);
+	notify["mute_until"] = static_cast<int64_t>(mute_until);
 	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
 }
 
@@ -3168,8 +3180,8 @@ void LogicSystem::KickGroupMemberHandler(std::shared_ptr<CSession> session, cons
 		_group_message_service->HandleKickGroupMember(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
 	const std::string target_user_id = root.get("target_user_id", "").asString();
@@ -3179,9 +3191,9 @@ void LogicSystem::KickGroupMemberHandler(std::shared_ptr<CSession> session, cons
 		target_uid = 0;
 	}
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
-	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["groupid"] = static_cast<int64_t>(group_id);
 	rtvalue["touid"] = target_uid;
 	rtvalue["target_user_id"] = target_user_id;
 	std::shared_ptr<GroupInfo> group_info;
@@ -3209,10 +3221,10 @@ void LogicSystem::KickGroupMemberHandler(std::shared_ptr<CSession> session, cons
 	}
 	recipients.push_back(target_uid);
 
-	Json::Value notify;
+	memochat::json::JsonValue notify;
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_member_kicked";
-	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["groupid"] = static_cast<int64_t>(group_id);
 	notify["group_code"] = group_info ? group_info->group_code : "";
 	notify["operator_uid"] = uid;
 	notify["target_uid"] = target_uid;
@@ -3226,15 +3238,15 @@ void LogicSystem::QuitGroupHandler(std::shared_ptr<CSession> session, const shor
 		_group_message_service->HandleQuitGroup(session, msg_id, msg_data);
 		return;
 	}
-	Json::Reader reader;
-	Json::Value root;
+	memochat::json::JsonReader reader;
+	memochat::json::JsonValue root;
 	reader.parse(msg_data, root);
 	const int uid = root["fromuid"].asInt();
 	const int64_t group_id = root["groupid"].asInt64();
 
-	Json::Value rtvalue;
+	memochat::json::JsonValue rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
-	rtvalue["groupid"] = static_cast<Json::Int64>(group_id);
+	rtvalue["groupid"] = static_cast<int64_t>(group_id);
 	std::shared_ptr<GroupInfo> group_info;
 	PostgresMgr::GetInstance()->GetGroupById(group_id, group_info);
 	if (group_info) {
@@ -3258,10 +3270,10 @@ void LogicSystem::QuitGroupHandler(std::shared_ptr<CSession> session, const shor
 		}
 	}
 
-	Json::Value notify;
+	memochat::json::JsonValue notify;
 	notify["error"] = ErrorCodes::Success;
 	notify["event"] = "group_member_quit";
-	notify["groupid"] = static_cast<Json::Int64>(group_id);
+	notify["groupid"] = static_cast<int64_t>(group_id);
 	notify["group_code"] = group_info ? group_info->group_code : "";
 	notify["target_uid"] = uid;
 	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);

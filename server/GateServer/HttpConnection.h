@@ -21,6 +21,10 @@ public:
 	tcp::socket& GetSocket() {
 		return _socket;
 	}
+	void SetResponseField(http::field f, const std::string& value) {
+		_response.set(f, value);
+	}
+	http::response<http::dynamic_body>& GetResponse() { return _response; }
 private:
 	using FileResponse = http::response<http::file_body>;
 

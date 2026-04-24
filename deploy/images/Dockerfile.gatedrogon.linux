@@ -25,7 +25,6 @@ RUN ./vcpkg install drogon:linux-x64-release \
     grpc:x-linux-release \
     protobuf:x-linux-release \
     hiredis:x-linux-release \
-    jsoncpp:x-linux-release \
     spdlog:x-linux-release \
     libpqxx:x-linux-release \
     boost:x-linux-x64-boost-null \

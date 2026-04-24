@@ -9,7 +9,7 @@
 #endif
 
 #if MEMOCHAT_ENABLE_RABBITMQ
-#include <winsock2.h>
+#include "../common/WinsockCompat.h"
 #include <rabbitmq-c/amqp.h>
 #include <rabbitmq-c/framing.h>
 #include <rabbitmq-c/tcp_socket.h>

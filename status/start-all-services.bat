@@ -3,7 +3,7 @@ REM ============================================================
 REM  MemoChat 一键启动 (start-all-services.bat)
 REM ============================================================
 setlocal enabledelayedexpansion
-cd /d "%~dp0..\.."
+cd /d "%~dp0.."
 set "PROJECT_ROOT=%CD%"
 set "BUILD_DIR=%PROJECT_ROOT%\build"
 set "RUNTIME_DIR=%PROJECT_ROOT%\Memo_ops\runtime\services"

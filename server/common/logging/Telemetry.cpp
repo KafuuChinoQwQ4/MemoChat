@@ -1,4 +1,4 @@
-#include "logging/Telemetry.h"
+﻿#include "logging/Telemetry.h"
 
 #include "logging/TraceContext.h"
 
@@ -8,7 +8,7 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
-#include <json/json.h>
+#include "json/GlazeCompat.h"
 
 #include <chrono>
 #include <condition_variable>
@@ -138,14 +138,8 @@ void PostJsonBestEffort(const std::string& endpoint, const std::string& body) {
     }
 }
 
-std::string ToJsonPayload(const Json::Value& value) {
-    Json::StreamWriterBuilder builder;
-    builder["indentation"] = "";
-    std::string out = Json::writeString(builder, value);
-    if (!out.empty() && out.back() == '\n') {
-        out.pop_back();
-    }
-    return out;
+std::string ToJsonPayload(const memochat::json::JsonValue& value) {
+    return memochat::json::glaze_stringify(value);
 }
 
 void ExportWorkerLoop() {
@@ -255,22 +249,22 @@ void Telemetry::ExportSpan(const std::string& trace_id,
         return;
     }
 
-    Json::Value span(Json::objectValue);
+    memochat::json::JsonValue span = memochat::json::glaze_empty_object();
     span["traceId"] = trace_id;
     span["id"] = span_id;
     if (!parent_span_id.empty()) {
         span["parentId"] = parent_span_id;
     }
     span["name"] = name;
-    span["timestamp"] = Json::Int64(start_time_unix_us);
-    span["duration"] = Json::Int64(duration_us);
+    span["timestamp"] = static_cast<double>(start_time_unix_us);
+    span["duration"] = static_cast<double>(duration_us);
     span["kind"] = kind;
 
-    Json::Value local_endpoint(Json::objectValue);
+    memochat::json::JsonValue local_endpoint = memochat::json::glaze_empty_object();
     local_endpoint["serviceName"] = config_.service_name.empty() ? service_name_ : config_.service_name;
     span["localEndpoint"] = local_endpoint;
 
-    Json::Value tags(Json::objectValue);
+    memochat::json::JsonValue tags = memochat::json::glaze_empty_object();
     tags["service.instance.id"] = service_instance_;
     tags["service.namespace"] = config_.service_namespace;
     for (const auto& entry : attributes) {
@@ -280,8 +274,8 @@ void Telemetry::ExportSpan(const std::string& trace_id,
     }
     span["tags"] = tags;
 
-    Json::Value payload(Json::arrayValue);
-    payload.append(span);
+    memochat::json::JsonValue payload = memochat::json::glaze_empty_array();
+    memochat::json::append(payload, span);
     EnqueueJsonBestEffort(config_.otlp_endpoint, ToJsonPayload(payload));
 }
 

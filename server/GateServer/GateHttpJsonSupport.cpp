@@ -5,16 +5,16 @@
 
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
-#include <json/json.h>
 
 namespace beast = boost::beast;
 namespace http = beast::http;
+namespace json = memochat::json;
 
-bool GateHttpJsonSupport::ParseJsonBody(std::shared_ptr<HttpConnection> connection, Json::Value& root, Json::Value& src_root) {
+bool GateHttpJsonSupport::ParseJsonBody(std::shared_ptr<HttpConnection> connection, json::JsonValue& root, json::JsonValue& src_root) {
     memolog::TraceContext::SetTraceId(connection ? connection->_trace_id : "");
-    connection->_response.set(http::field::content_type, "text/json");
+    connection->_response.set(http::field::content_type, "application/json");
     const auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
-    Json::Reader reader;
+    json::JsonReader reader;
     if (!reader.parse(body_str, src_root)) {
         root["error"] = ErrorCodes::Error_Json;
         return false;
@@ -24,17 +24,17 @@ bool GateHttpJsonSupport::ParseJsonBody(std::shared_ptr<HttpConnection> connecti
 
 bool GateHttpJsonSupport::HandleJsonPost(
     std::shared_ptr<HttpConnection> connection,
-    const std::function<bool(const Json::Value&, Json::Value&, const std::string&)>& fn) {
-    Json::Value root;
-    Json::Value src_root;
+    const std::function<bool(const json::JsonValue&, json::JsonValue&, const std::string&)>& fn) {
+    json::JsonValue root = json::JsonValue{};
+    json::JsonValue src_root = json::JsonValue{};
     if (!ParseJsonBody(connection, root, src_root)) {
-        beast::ostream(connection->_response.body()) << root.toStyledString();
+        std::string err_str = json::glaze_stringify(root);
+        beast::ostream(connection->_response.body()) << err_str;
         return true;
     }
     fn(src_root, root, connection->_trace_id);
-    if (!root.isMember("trace_id")) {
-        root["trace_id"] = connection->_trace_id;
-    }
-    beast::ostream(connection->_response.body()) << root.toStyledString();
+    root["trace_id"] = connection->_trace_id;
+    std::string response_str = json::glaze_stringify(root);
+    beast::ostream(connection->_response.body()) << response_str;
     return true;
 }

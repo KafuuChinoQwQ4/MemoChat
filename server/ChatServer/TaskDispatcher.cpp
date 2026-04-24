@@ -7,7 +7,7 @@
 #include "logging/TraceContext.h"
 
 #include <chrono>
-#include <json/json.h>
+#include "json/GlazeCompat.h"
 #include <thread>
 
 namespace {
@@ -35,7 +35,7 @@ TaskDispatcher::TaskDispatcher(std::shared_ptr<IAsyncTaskBus> task_bus,
 
 bool TaskDispatcher::PublishTask(const std::string& task_type,
     const std::string& routing_key,
-    const Json::Value& payload,
+    const memochat::json::JsonValue& payload,
     int delay_ms,
     int max_retries,
     std::string* error)
@@ -63,7 +63,7 @@ void TaskDispatcher::DealTasks()
 
         memolog::TraceContext::SetTraceId(task.envelope.trace_id);
         memolog::TraceContext::SetRequestId(task.envelope.request_id);
-        const bool ok = HandleTask(task.envelope.payload(), task.envelope.task_type);
+        const bool ok = HandleTask(task.envelope.payload, task.envelope.task_type);
         if (ok) {
             _task_bus->AckLastConsumed();
         } else {
@@ -73,7 +73,7 @@ void TaskDispatcher::DealTasks()
     }
 }
 
-bool TaskDispatcher::HandleTask(const Json::Value& payload, const std::string& task_type)
+bool TaskDispatcher::HandleTask(const memochat::json::JsonValue& payload, const std::string& task_type)
 {
     if (task_type == "message_delivery_retry" ||
         task_type == "offline_notify" ||
@@ -90,3 +90,4 @@ bool TaskDispatcher::HandleTask(const Json::Value& payload, const std::string& t
         });
     return true;
 }
+
