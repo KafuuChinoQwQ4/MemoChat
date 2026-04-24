@@ -192,6 +192,11 @@ Rectangle {
                             onRevokeMessage: function(msgId) { controller.revokeGroupMessage(msgId) }
                             onEditMessage: function(msgId, text) { controller.editGroupMessage(msgId, text) }
                             onReplyMessage: function(msgId, senderName, previewText) { controller.beginReplyMessage(msgId, senderName, previewText) }
+                            onAvatarProfileRequested: function(uid, name, icon) {
+                                if (uid > 0) {
+                                    contactProfilePopup.openProfile(uid, name || controller.currentChatPeerName || "用户", icon || controller.currentChatPeerIcon || "qrc:/res/head_1.jpg", "")
+                                }
+                            }
                             onCancelReplyMessage: controller.cancelReplyMessage()
                             onOpenGroupManageRequested: {
                                 if (controller.hasCurrentGroup) {
@@ -228,6 +233,7 @@ Rectangle {
                             onMessageChatRequested: controller.jumpChatWithCurrentContact()
                             onVoiceChatRequested: controller.startVoiceChat()
                             onVideoChatRequested: controller.startVideoChat()
+                            onDeleteContactRequested: controller.deleteFriend(controller.currentContactUid)
                         }
                     }
                 }
@@ -272,6 +278,7 @@ Rectangle {
                     sourceComponent: Component {
                         MomentsFeedPane {
                             backdrop: backdropLayer
+                            appController: controller
                             momentsModel: controller.momentsModel
                             momentsController: controller.momentsController
                         }
@@ -420,5 +427,10 @@ Rectangle {
         onEndRequested: controller.endCurrentCall()
         onMuteToggled: controller.toggleCallMuted()
         onCameraToggled: controller.toggleCallCamera()
+    }
+
+    ContactProfilePopup {
+        id: contactProfilePopup
+        appController: controller
     }
 }

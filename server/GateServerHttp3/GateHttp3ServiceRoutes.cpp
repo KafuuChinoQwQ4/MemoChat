@@ -656,7 +656,7 @@ void RegisterRoutes(LogicSystem& logic) {
                 root["error"] = ErrorCodes::RPCFailed;
                 return false;
             }
-            if (moment.uid != uid && moment.visibility == 2) {
+            if (!PostgresMgr::GetInstance()->CanViewMoment(uid, moment)) {
                 root["error"] = ErrorCodes::CallPermissionDenied;
                 return false;
             }

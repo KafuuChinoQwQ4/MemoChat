@@ -61,6 +61,11 @@ bool PostgresMgr::AddFriend(const int& from, const int& to, std::string back_nam
 	return _dao->AddFriend(from, to, back_name);
 }
 
+bool PostgresMgr::DeleteFriend(const int& from, const int& to) {
+	EnsurePostgresDaoInitialized(this);
+	return _dao->DeleteFriend(from, to);
+}
+
 bool PostgresMgr::ReplaceApplyTags(const int& from, const int& to, const std::vector<std::string>& tags) {
 	EnsurePostgresDaoInitialized(this);
 	return _dao->ReplaceApplyTags(from, to, tags);

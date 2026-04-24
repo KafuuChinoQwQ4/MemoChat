@@ -368,6 +368,18 @@ std::shared_ptr<FriendInfo> UserMgr::GetFriendById(int uid)
     return *find_it;
 }
 
+void UserMgr::RemoveFriend(int uid)
+{
+    _friend_map.remove(uid);
+    _friend_list.erase(std::remove_if(_friend_list.begin(), _friend_list.end(),
+                                      [uid](const std::shared_ptr<FriendInfo>& info) {
+                                          return info && info->_uid == uid;
+                                      }),
+                       _friend_list.end());
+    if (_chat_loaded > static_cast<int>(_friend_list.size())) _chat_loaded = static_cast<int>(_friend_list.size());
+    if (_contact_loaded > static_cast<int>(_friend_list.size())) _contact_loaded = static_cast<int>(_friend_list.size());
+}
+
 std::vector<std::shared_ptr<FriendInfo> > UserMgr::GetFriendListSnapshot() const
 {
     return _friend_list;

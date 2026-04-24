@@ -28,6 +28,7 @@ signals:
     void sig_friend_apply(std::shared_ptr<AddFriendApply>);
     void sig_add_auth_friend(std::shared_ptr<AuthInfo>);
     void sig_auth_rsp(std::shared_ptr<AuthRsp>);
+    void sig_delete_friend_rsp(int error, int friendUid);
     void sig_text_chat_msg(std::shared_ptr<TextChatMsg> msg);
     void sig_group_list_updated();
     void sig_group_invite(qint64 groupId, QString groupCode, QString groupName, int operatorUid);

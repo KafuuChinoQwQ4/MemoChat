@@ -192,6 +192,20 @@ void ChatMessageDispatcher::initHandlers()
         emit sig_auth_rsp(rsp);
     });
 
+    _handlers.insert(ID_DELETE_FRIEND_RSP, [this](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(id);
+        Q_UNUSED(len);
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+        if (jsonDoc.isNull() || !jsonDoc.isObject()) {
+            emit sig_delete_friend_rsp(ErrorCodes::ERR_JSON, 0);
+            return;
+        }
+
+        const QJsonObject jsonObj = jsonDoc.object();
+        emit sig_delete_friend_rsp(jsonObj.value("error").toInt(ErrorCodes::ERR_JSON),
+                                   jsonObj.value("friend_uid").toInt());
+    });
+
     _handlers.insert(ID_TEXT_CHAT_MSG_RSP, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(id);
         Q_UNUSED(len);

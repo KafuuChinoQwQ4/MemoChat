@@ -48,7 +48,7 @@ void AppController::onGroupInvite(qint64 groupId, QString groupCode, QString gro
     setGroupStatus(QString("收到群邀请：%1").arg(groupName), false);
     QJsonObject req;
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo) {
+    if (!selfInfo || selfInfo->_uid <= 0) {
         return;
     }
     req["fromuid"] = selfInfo->_uid;

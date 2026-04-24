@@ -63,6 +63,44 @@ void AppController::onAuthRsp(std::shared_ptr<AuthRsp> authRsp)
     }
 }
 
+void AppController::onDeleteFriendRsp(int error, int friendUid)
+{
+    if (error != ErrorCodes::SUCCESS || friendUid <= 0) {
+        setAuthStatus(QString("删除联系人失败（错误码:%1）").arg(error), true);
+        return;
+    }
+
+    _gateway.userMgr()->RemoveFriend(friendUid);
+    _chat_list_model.removeByUid(friendUid);
+    _contact_list_model.removeByUid(friendUid);
+    _dialog_list_model.removeByUid(friendUid);
+    _dialog_draft_map.remove(friendUid);
+    _dialog_mention_map.remove(friendUid);
+    _dialog_local_pinned_set.remove(friendUid);
+    _dialog_server_pinned_map.remove(friendUid);
+    _dialog_server_mute_map.remove(friendUid);
+
+    if (_current_chat_uid == friendUid) {
+        _current_chat_uid = 0;
+        _message_model.clear();
+        setCurrentChatPeerName("");
+        setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
+        setCurrentDraftText("");
+        setCurrentDialogPinned(false);
+        setCurrentDialogMuted(false);
+        emitCurrentDialogUidChangedIfNeeded();
+    }
+
+    if (_current_contact_uid == friendUid) {
+        setCurrentContact(0, "", "", "qrc:/res/head_1.jpg", "", 0);
+        setContactPane(ApplyRequestPane);
+    }
+
+    refreshChatLoadMoreState();
+    refreshContactLoadMoreState();
+    setAuthStatus("联系人已删除", false);
+}
+
 void AppController::onTextChatMsg(std::shared_ptr<TextChatMsg> msg)
 {
     if (!msg || msg->_chat_msgs.empty()) {

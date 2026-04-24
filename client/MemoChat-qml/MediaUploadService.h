@@ -5,6 +5,7 @@
 #include <functional>
 
 struct UploadedMediaInfo {
+    QString mediaKey;
     QString remoteUrl;
     QString fileName;
     QString mimeType;

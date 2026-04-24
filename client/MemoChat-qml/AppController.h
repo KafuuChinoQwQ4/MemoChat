@@ -46,6 +46,7 @@ class AppController : public QObject
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(bool registerSuccessPage READ registerSuccessPage NOTIFY registerSuccessPageChanged)
     Q_PROPERTY(int registerCountdown READ registerCountdown NOTIFY registerCountdownChanged)
+    Q_PROPERTY(QString loginCredentialCacheJson READ loginCredentialCacheJson NOTIFY loginCredentialCacheChanged)
     Q_PROPERTY(ChatTab chatTab READ chatTab NOTIFY chatTabChanged)
     Q_PROPERTY(QString currentUserName READ currentUserName NOTIFY currentUserChanged)
     Q_PROPERTY(QString currentUserNick READ currentUserNick NOTIFY currentUserChanged)
@@ -59,6 +60,7 @@ class AppController : public QObject
     Q_PROPERTY(QString currentContactBack READ currentContactBack NOTIFY currentContactChanged)
     Q_PROPERTY(int currentContactSex READ currentContactSex NOTIFY currentContactChanged)
     Q_PROPERTY(QString currentContactUserId READ currentContactUserId NOTIFY currentContactChanged)
+    Q_PROPERTY(int currentContactUid READ currentContactUid NOTIFY currentContactChanged)
     Q_PROPERTY(bool hasCurrentContact READ hasCurrentContact NOTIFY currentContactChanged)
     Q_PROPERTY(QString currentChatPeerName READ currentChatPeerName NOTIFY currentChatPeerChanged)
     Q_PROPERTY(QString currentChatPeerIcon READ currentChatPeerIcon NOTIFY currentChatPeerChanged)
@@ -163,6 +165,7 @@ public:
     QString currentContactBack() const;
     int currentContactSex() const;
     QString currentContactUserId() const;
+    int currentContactUid() const;
     bool hasCurrentContact() const;
     QString currentChatPeerName() const;
     QString currentChatPeerIcon() const;
@@ -233,6 +236,8 @@ public:
     Q_INVOKABLE void selectGroupIndex(int index);
     Q_INVOKABLE void selectDialogByUid(int uid);
     Q_INVOKABLE void selectContactIndex(int index);
+    Q_INVOKABLE QVariantMap contactProfileByUid(int uid) const;
+    Q_INVOKABLE void deleteFriend(int uid);
     Q_INVOKABLE void showApplyRequests();
     Q_INVOKABLE void jumpChatWithCurrentContact();
     Q_INVOKABLE void loadMoreChats();
@@ -289,6 +294,9 @@ public:
     Q_INVOKABLE void beginReplyMessage(const QString &msgId, const QString &senderName, const QString &previewText);
     Q_INVOKABLE void cancelReplyMessage();
 
+    Q_INVOKABLE QString loginCredentialCacheJson() const;
+    Q_INVOKABLE void saveLoginCredential(const QString &email, const QString &password);
+
     Q_INVOKABLE void login(const QString &email, const QString &password);
     Q_INVOKABLE void requestRegisterCode(const QString &email);
     Q_INVOKABLE void registerUser(const QString &user, const QString &email, const QString &password,
@@ -303,6 +311,7 @@ signals:
     void busyChanged();
     void registerSuccessPageChanged();
     void registerCountdownChanged();
+    void loginCredentialCacheChanged();
     void chatTabChanged();
     void contactPaneChanged();
     void currentContactChanged();
@@ -344,6 +353,7 @@ private slots:
     void onHeartbeatTimeout();
     void onHeartbeatAck(qint64 ackAtMs);
     void onAddAuthFriend(std::shared_ptr<AuthInfo> authInfo);
+    void onDeleteFriendRsp(int error, int friendUid);
     void onAuthRsp(std::shared_ptr<AuthRsp> authRsp);
     void onTextChatMsg(std::shared_ptr<TextChatMsg> msg);
     void onUserSearch(std::shared_ptr<SearchInfo> searchInfo);

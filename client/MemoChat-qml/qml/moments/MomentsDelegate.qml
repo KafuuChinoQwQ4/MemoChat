@@ -140,6 +140,61 @@ Rectangle {
                             }
                         }
                     }
+
+                    Rectangle {
+                        id: videoBlock
+                        visible: modelData.media_type === "video"
+                        width: Math.min(blockRoot.width, 320)
+                        height: visible ? 188 : 0
+                        radius: 10
+                        clip: true
+                        color: "#202834"
+                        border.color: Qt.rgba(0.18, 0.22, 0.28, 0.85)
+
+                        Rectangle {
+                            anchors.fill: parent
+                            gradient: Gradient {
+                                GradientStop { position: 0.0; color: "#324257" }
+                                GradientStop { position: 1.0; color: "#131922" }
+                            }
+                        }
+
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: 8
+
+                            Label {
+                                text: "▶"
+                                font.pixelSize: 34
+                                color: "#ffffff"
+                                horizontalAlignment: Text.AlignHCenter
+                                width: 120
+                            }
+
+                            Label {
+                                text: videoDurationText(modelData.duration_ms)
+                                font.pixelSize: 12
+                                color: "#dbe7f6"
+                                horizontalAlignment: Text.AlignHCenter
+                                width: 120
+                            }
+                        }
+
+                        Label {
+                            anchors.left: parent.left
+                            anchors.bottom: parent.bottom
+                            anchors.margins: 12
+                            text: "视频内容"
+                            font.pixelSize: 12
+                            color: "#dbe5f2"
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Qt.openUrlExternally(mediaUrl(modelData.media_key))
+                        }
+                    }
                 }
             }
         }
@@ -292,6 +347,15 @@ Rectangle {
         var h = item.height || 200
         var aspect = h / (w || 1)
         return Math.min(240, Math.max(60, 200 * aspect))
+    }
+
+    function videoDurationText(durationMs) {
+        if (!durationMs || durationMs <= 0)
+            return "点击打开视频"
+        var totalSec = Math.floor(durationMs / 1000)
+        var minutes = Math.floor(totalSec / 60)
+        var seconds = totalSec % 60
+        return minutes + ":" + (seconds < 10 ? "0" + seconds : seconds)
     }
 
     // Image viewer popup

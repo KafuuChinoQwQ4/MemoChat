@@ -17,6 +17,7 @@ Rectangle {
     signal messageChatClicked()
     signal voiceChatClicked()
     signal videoChatClicked()
+    signal deleteContactClicked()
 
     readonly property string genderIconSource: {
         if (root.contactSex === 1) return "qrc:/icons/gender_female.png"
@@ -192,5 +193,26 @@ Rectangle {
             font.pixelSize: 14
             Layout.alignment: Qt.AlignHCenter
         }
+
+        Button {
+            Layout.fillWidth: true
+            visible: root.hasContact
+            text: "删除联系人"
+            onClicked: deleteConfirm.open()
+        }
+    }
+
+    Dialog {
+        id: deleteConfirm
+        modal: true
+        title: "删除联系人"
+        standardButtons: Dialog.Cancel | Dialog.Ok
+        anchors.centerIn: Overlay.overlay
+        Label {
+            text: "确定删除 “" + (root.contactBack || root.contactNick || root.contactName) + "” 吗？"
+            wrapMode: Text.Wrap
+            width: 260
+        }
+        onAccepted: root.deleteContactClicked()
     }
 }
