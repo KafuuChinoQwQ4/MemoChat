@@ -111,6 +111,7 @@ ApplicationWindow {
     Component {
         id: loginPageComponent
         LoginPage {
+            credentialProvider: controller
             tipText: controller.tipText
             tipError: controller.tipError
             busy: controller.busy

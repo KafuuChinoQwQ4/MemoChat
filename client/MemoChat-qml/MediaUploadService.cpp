@@ -523,6 +523,12 @@ bool MediaUploadService::uploadLocalFile(const QString &localFileUrl,
     if (remoteUrl.startsWith("/")) {
         remoteUrl = gate_url_prefix + remoteUrl;
     }
+    QString mediaKey = completeRsp.value("media_key").toString();
+    if (mediaKey.isEmpty()) {
+        const QUrl remoteUrlObj(remoteUrl);
+        const QUrlQuery remoteQuery(remoteUrlObj);
+        mediaKey = remoteQuery.queryItemValue(QStringLiteral("asset"));
+    }
     if (remoteUrl.isEmpty()) {
         if (errorText) {
             *errorText = "上传失败：无可用地址";
@@ -531,6 +537,7 @@ bool MediaUploadService::uploadLocalFile(const QString &localFileUrl,
     }
 
     if (outInfo) {
+        outInfo->mediaKey = mediaKey;
         outInfo->remoteUrl = remoteUrl;
         outInfo->fileName = completeRsp.value("file_name").toString(fileInfo.fileName());
         outInfo->mimeType = completeRsp.value("mime").toString(mimeType);

@@ -204,7 +204,7 @@ void H1MomentsServiceRoutes::RegisterRoutes(H1LogicSystem& logic) {
                     return true;
                 }
 
-                if (moment.uid != uid && moment.visibility == 2) {
+                if (!PostgresMgr::GetInstance()->CanViewMoment(uid, moment)) {
                     root["error"] = ErrorCodes::CallPermissionDenied;
                     return true;
                 }

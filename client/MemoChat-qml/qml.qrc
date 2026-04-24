@@ -17,6 +17,7 @@
         <file>qml/components/LoginSubmitButton.qml</file>
         <file>qml/components/LoginFooterLinks.qml</file>
         <file>qml/components/LoginMoreOptionsPopup.qml</file>
+        <file>qml/components/ContactProfilePopup.qml</file>
         <file>qml/chat/ChatSideBar.qml</file>
         <file>qml/chat/ChatLeftPanel.qml</file>
         <file>qml/chat/ChatConversationPane.qml</file>

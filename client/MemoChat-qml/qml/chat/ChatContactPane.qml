@@ -25,6 +25,7 @@ Rectangle {
     signal messageChatRequested()
     signal voiceChatRequested()
     signal videoChatRequested()
+    signal deleteContactRequested()
 
     ColumnLayout {
         anchors.fill: parent
@@ -91,6 +92,7 @@ Rectangle {
                 onMessageChatClicked: root.messageChatRequested()
                 onVoiceChatClicked: root.voiceChatRequested()
                 onVideoChatClicked: root.videoChatRequested()
+                onDeleteContactClicked: root.deleteContactRequested()
             }
         }
     }

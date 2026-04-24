@@ -50,6 +50,7 @@ Rectangle {
     signal editMessage(string msgId, string text)
     signal replyMessage(string msgId, string senderName, string previewText)
     signal cancelReplyMessage()
+    signal avatarProfileRequested(int uid, string name, string icon)
 
     property string _editMsgId: ""
     property string _editText: ""
@@ -278,6 +279,7 @@ Rectangle {
                 delegate: ChatMessageDelegate {
                     width: messageList.width
                     msgId: model.msgId
+                    senderUid: model.outgoing ? 0 : model.fromUid
                     outgoing: model.outgoing
                     msgType: model.msgType
                     content: model.content
@@ -306,6 +308,7 @@ Rectangle {
                     onRevokeRequested: function(msgId) { root.revokeMessage(msgId) }
                     onReplyRequested: function(msgId, senderName, previewText) { root.replyMessage(msgId, senderName, previewText) }
                     onMentionRequested: function(mentionText) { composer.insertMention(mentionText) }
+                    onAvatarClicked: function(uid, name, icon) { root.avatarProfileRequested(uid, name, icon) }
                     onEditRequested: function(msgId, text) {
                         root._editMsgId = msgId
                         root._editText = text

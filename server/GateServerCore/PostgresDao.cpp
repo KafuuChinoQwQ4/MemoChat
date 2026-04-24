@@ -654,24 +654,36 @@ bool PostgresDao::GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int lim
 
 		std::string query;
 		pqxx::result rows;
+		const std::string visible_scope = R"(
+			  AND (
+				m.visibility = 0
+				OR m.uid = )" + std::to_string(viewer_uid) + R"(
+				OR (
+					m.visibility = 1
+					AND (
+						EXISTS (
+							SELECT 1
+							FROM friend f
+							WHERE ((f.self_id = m.uid AND f.friend_id = )" + std::to_string(viewer_uid) + R"()
+								OR (f.self_id = )" + std::to_string(viewer_uid) + R"() AND f.friend_id = m.uid))
+						)
+						OR EXISTS (
+							SELECT 1
+							FROM friend_apply fa
+							WHERE fa.status = 1
+							  AND ((fa.from_uid = m.uid AND fa.to_uid = )" + std::to_string(viewer_uid) + R"()
+								OR (fa.from_uid = )" + std::to_string(viewer_uid) + R"() AND fa.to_uid = m.uid))
+						)
+					)
+				)
+			  )
+		)";
 		if (last_moment_id <= 0) {
 			query = R"(
 				SELECT m.moment_id, m.uid, m.visibility, m.location, m.created_at,
 				       m.like_count, m.comment_count
 				FROM moments m
-				WHERE m.deleted_at = 0
-				  AND (
-					-- public moments
-					m.visibility = 0
-					-- poster's own moments
-					OR m.uid = )" + std::to_string(viewer_uid) + R"(
-					-- friends' moments (bidirectional)
-					OR (m.visibility = 1 AND EXISTS (
-						SELECT 1 FROM friend f WHERE
-							((f.self_id = m.uid AND f.friend_id = )" + std::to_string(viewer_uid) + R"()
-							OR (f.self_id = )" + std::to_string(viewer_uid) + R"() AND f.friend_id = m.uid)
-					))
-				  )
+				WHERE m.deleted_at = 0)" + visible_scope + R"(
 				ORDER BY m.created_at DESC
 				LIMIT )" + std::to_string(limit + 1);
 			rows = txn.exec(query);
@@ -682,16 +694,7 @@ bool PostgresDao::GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int lim
 				       m.like_count, m.comment_count
 				FROM moments m
 				WHERE m.deleted_at = 0
-				  AND m.moment_id < )" + std::to_string(last_moment_id) + R"(
-				  AND (
-					m.visibility = 0
-					OR m.uid = )" + std::to_string(viewer_uid) + R"(
-					OR (m.visibility = 1 AND EXISTS (
-						SELECT 1 FROM friend f WHERE
-							((f.self_id = m.uid AND f.friend_id = )" + std::to_string(viewer_uid) + R"()
-							OR (f.self_id = )" + std::to_string(viewer_uid) + R"() AND f.friend_id = m.uid)
-					))
-				  )
+				  AND m.moment_id < )" + std::to_string(last_moment_id) + visible_scope + R"(
 				ORDER BY m.created_at DESC
 				LIMIT )" + std::to_string(limit + 1);
 			rows = txn.exec(query);
@@ -719,6 +722,52 @@ bool PostgresDao::GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int lim
 	catch (const std::exception& e) {
 		std::cerr << "GetMomentsFeed PostgreSQL exception: " << e.what() << std::endl;
 		moments.clear();
+		return false;
+	}
+}
+
+bool PostgresDao::CanViewMoment(int viewer_uid, const MomentInfo& moment) {
+	if (viewer_uid <= 0 || moment.uid <= 0) {
+		return false;
+	}
+	if (viewer_uid == moment.uid) {
+		return true;
+	}
+	if (moment.visibility == 0) {
+		return true;
+	}
+	if (moment.visibility != 1) {
+		return false;
+	}
+
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+	});
+
+	try {
+		pqxx::read_transaction txn(*con->_con);
+		const auto rows = txn.exec_params(
+			"SELECT 1 "
+			"WHERE EXISTS ("
+			"    SELECT 1 FROM friend f "
+			"    WHERE ((f.self_id = $1 AND f.friend_id = $2) OR (f.self_id = $2 AND f.friend_id = $1))"
+			") "
+			"OR EXISTS ("
+			"    SELECT 1 FROM friend_apply fa "
+			"    WHERE fa.status = 1 "
+			"      AND ((fa.from_uid = $1 AND fa.to_uid = $2) OR (fa.from_uid = $2 AND fa.to_uid = $1))"
+			")",
+			viewer_uid,
+			moment.uid);
+		return !rows.empty();
+	}
+	catch (const std::exception& e) {
+		std::cerr << "CanViewMoment PostgreSQL exception: " << e.what() << std::endl;
 		return false;
 	}
 }

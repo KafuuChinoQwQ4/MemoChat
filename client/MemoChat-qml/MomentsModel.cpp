@@ -254,6 +254,7 @@ QVariantMap MomentsModel::snapshotMoment(qint64 momentId) const {
         }
         map[QStringLiteral("momentId")] = item.momentId;
         map[QStringLiteral("uid")] = item.uid;
+        map[QStringLiteral("userId")] = item.userId;
         map[QStringLiteral("userName")] = item.userName;
         map[QStringLiteral("userNick")] = item.userNick;
         map[QStringLiteral("userIcon")] = item.userIcon;

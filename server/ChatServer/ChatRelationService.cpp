@@ -412,6 +412,35 @@ void ChatRelationService::HandleAuthFriendApply(const std::shared_ptr<CSession>&
     PublishRelationStateEventLocal(_logic, "friend_apply_approved", uid, touid, labels);
 }
 
+void ChatRelationService::HandleDeleteFriend(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
+{
+    Json::Reader reader;
+    Json::Value root;
+    reader.parse(msg_data, root);
+    const int uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
+    const int friendUid = root.isMember("friend_uid") ? root["friend_uid"].asInt() : root["touid"].asInt();
+
+    Json::Value rtvalue;
+    rtvalue["error"] = ErrorCodes::Success;
+    rtvalue["fromuid"] = uid;
+    rtvalue["friend_uid"] = friendUid;
+
+    if (uid <= 0 || friendUid <= 0 || uid == friendUid) {
+        rtvalue["error"] = ErrorCodes::Error_Json;
+        session->Send(JsonToWireString(rtvalue), ID_DELETE_FRIEND_RSP);
+        return;
+    }
+
+    if (!PostgresMgr::GetInstance()->DeleteFriend(uid, friendUid)) {
+        rtvalue["error"] = ErrorCodes::RPCFailed;
+        session->Send(JsonToWireString(rtvalue), ID_DELETE_FRIEND_RSP);
+        return;
+    }
+
+    session->Send(JsonToWireString(rtvalue), ID_DELETE_FRIEND_RSP);
+    PublishRelationStateEventLocal(_logic, "friend_deleted", uid, friendUid, {});
+}
+
 void ChatRelationService::HandleGetDialogList(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
     Json::Reader reader;

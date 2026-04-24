@@ -235,7 +235,7 @@ void RegisterHttp2MomentsRoutes() {
                 return;
             }
 
-            if (moment.uid != uid && moment.visibility == 2) {
+            if (!PostgresMgr::GetInstance()->CanViewMoment(uid, moment)) {
                 resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsError(ErrorCodes::CallPermissionDenied, "permission denied")));
                 return;
             }

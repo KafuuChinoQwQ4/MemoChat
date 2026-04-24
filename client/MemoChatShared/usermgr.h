@@ -41,6 +41,7 @@ public:
     void AddFriend(std::shared_ptr<AuthRsp> auth_rsp);
     void AddFriend(std::shared_ptr<AuthInfo> auth_info);
     std::shared_ptr<FriendInfo> GetFriendById(int uid);
+    void RemoveFriend(int uid);
     std::vector<std::shared_ptr<FriendInfo>> GetFriendListSnapshot() const;
     void AppendFriendChatMsg(int friend_id,std::vector<std::shared_ptr<TextChatData>>);
     bool UpdatePrivateChatMsgState(int peer_uid, const QString &msgId, const QString &state);

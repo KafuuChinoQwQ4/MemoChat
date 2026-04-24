@@ -73,6 +73,10 @@ bool PostgresMgr::GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int lim
 	return _dao.GetMomentsFeed(viewer_uid, last_moment_id, limit, moments, has_more);
 }
 
+bool PostgresMgr::CanViewMoment(int viewer_uid, const MomentInfo& moment) {
+	return _dao.CanViewMoment(viewer_uid, moment);
+}
+
 bool PostgresMgr::GetMomentById(int64_t moment_id, MomentInfo& moment) {
 	return _dao.GetMomentById(moment_id, moment);
 }

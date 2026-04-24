@@ -9,6 +9,7 @@ Rectangle {
     color: "transparent"
 
     property var backdrop: null
+    property var appController: null
     property var momentsModel: null
     property var momentsController: null
     property bool showPublishPage: false
@@ -110,7 +111,10 @@ Rectangle {
                                     }
                                 }
                                 onAvatarClicked: {
-                                    Qt.openUrlExternally("memochat://user/" + model.uid)
+                                    contactProfilePopup.openProfile(model.uid,
+                                                                    model.userNick || model.userName || "用户",
+                                                                    model.userIcon || "qrc:/res/head_1.jpg",
+                                                                    model.userId || "")
                                 }
                             }
                         }
@@ -168,8 +172,16 @@ Rectangle {
                 anchors.centerIn: Overlay.overlay
                 backdrop: root.backdrop
                 controller: root.momentsController
+                onAvatarProfileRequested: function(uid, name, icon, userId) {
+                    contactProfilePopup.openProfile(uid, name, icon, userId)
+                }
                 onClosed: detailLoader.active = false
             }
         }
+    }
+
+    ContactProfilePopup {
+        id: contactProfilePopup
+        appController: root.appController
     }
 }

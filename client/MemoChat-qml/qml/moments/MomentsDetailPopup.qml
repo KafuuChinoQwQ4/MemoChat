@@ -18,6 +18,11 @@ Popup {
     property var backdrop: null
     property var controller: null
     property int currentMomentId: 0
+    property int momentUid: 0
+    property string momentUserId: ""
+    property string momentUserName: ""
+
+    signal avatarProfileRequested(int uid, string name, string icon, string userId)
 
     // ── 纯白底背景 ──────────────────────────────────────
     background: Rectangle {
@@ -110,6 +115,14 @@ Popup {
                             anchors.fill: parent; fillMode: Image.PreserveAspectCrop
                             source: momentUserIcon; cache: true; asynchronous: true
                         }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.avatarProfileRequested(root.momentUid,
+                                                                   root.momentUserNick || root.momentUserName || "用户",
+                                                                   root.momentUserIcon,
+                                                                   root.momentUserId)
+                        }
                     }
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 3
@@ -135,25 +148,58 @@ Popup {
 
                 // ── 图片网格 ────────────────────────────
                 GridLayout {
-                    width: parent.width; visible: momentImages.length > 0
-                    columns: momentImages.length === 1 ? 1 : 3
+                    width: parent.width; visible: momentMediaTiles.length > 0
+                    columns: momentMediaTiles.length === 1 ? 1 : 3
                     rowSpacing: 6; columnSpacing: 6
 
                     Repeater {
-                        model: momentImages
+                        model: momentMediaTiles
                         delegate: Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: imgHeight(modelData)
+                            Layout.preferredHeight: mediaTileHeight(modelData)
                             radius: 8; color: Qt.rgba(0.93, 0.95, 0.98, 1.0); clip: true
                             Image {
-                                anchors.fill: parent; fillMode: Image.Cover
-                                source: imgUrl(modelData.key); cache: true; asynchronous: true
+                                anchors.fill: parent; fillMode: Image.PreserveAspectCrop
+                                source: modelData.type === "image" ? imgUrl(modelData.key) : ""
+                                cache: true; asynchronous: true
+                                visible: modelData.type === "image"
+                            }
+                            Rectangle {
+                                anchors.fill: parent
+                                visible: modelData.type === "video"
+                                color: "#1d2430"
+                                gradient: Gradient {
+                                    GradientStop { position: 0.0; color: "#2d3b50" }
+                                    GradientStop { position: 1.0; color: "#121821" }
+                                }
+                                Column {
+                                    anchors.centerIn: parent
+                                    spacing: 6
+                                    Label {
+                                        text: "▶"
+                                        font.pixelSize: 30
+                                        color: "#ffffff"
+                                        horizontalAlignment: Text.AlignHCenter
+                                        width: 80
+                                    }
+                                    Label {
+                                        text: videoDuration(modelData.duration)
+                                        font.pixelSize: 11
+                                        color: "#d6e3f2"
+                                        horizontalAlignment: Text.AlignHCenter
+                                        width: 80
+                                    }
+                                }
                             }
                             MouseArea {
                                 anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                 onClicked: {
-                                    imgPopupLoader.active = true
-                                    if (imgPopupLoader.item) imgPopupLoader.item.open(modelData.key)
+                                    if (modelData.type === "image") {
+                                        imgPopupLoader.active = true
+                                        if (imgPopupLoader.item) imgPopupLoader.item.open(modelData.key)
+                                    } else {
+                                        Qt.openUrlExternally(imgUrl(modelData.key))
+                                    }
                                 }
                             }
                         }
@@ -214,14 +260,14 @@ Popup {
                         Label {
                             text: "暂无评论，快来抢沙发"
                             font.pixelSize: 12; color: "#bbbbbb"
-                            visible: (commentCount === 0) || (commentCount === undefined)
+                            visible: !commentsLoading && (!commentList || commentList.length === 0)
                         }
 
                         // 加载中（count>0 但 list 为空）
                         Label {
                             text: "评论加载中..."
                             font.pixelSize: 12; color: "#999999"
-                            visible: (commentCount > 0) && (!commentList || commentList.length === 0)
+                            visible: commentsLoading && (!commentList || commentList.length === 0)
                         }
 
                         // 评论列表
@@ -345,7 +391,7 @@ Popup {
     property string momentLocation: ""
     property string momentTimeText: ""
     property string momentText: ""
-    property var momentImages: []
+    property var momentMediaTiles: []
     property int likeCount: 0
     property var likeNames: []
     property int commentCount: 0
@@ -353,6 +399,7 @@ Popup {
     property int replyUid: 0
     property string replyNick: ""
     property bool commentSending: false
+    property bool commentsLoading: false
 
     // 评论卡片高度: 有内容就撑开，最小64px
     property int commentCardHeight: {
@@ -382,6 +429,21 @@ Popup {
         return Math.min(160, Math.max(72, 120 * (h / (w || 1))))
     }
 
+    function mediaTileHeight(item) {
+        if (item.type === "video")
+            return 124
+        return imgHeight(item)
+    }
+
+    function videoDuration(durationMs) {
+        if (!durationMs || durationMs <= 0)
+            return "点击打开视频"
+        var totalSec = Math.floor(durationMs / 1000)
+        var minutes = Math.floor(totalSec / 60)
+        var seconds = totalSec % 60
+        return minutes + ":" + (seconds < 10 ? "0" + seconds : seconds)
+    }
+
     function imgUrl(key) {
         return key ? (gate_url_prefix + "/media/download?asset=" + key) : ""
     }
@@ -398,6 +460,9 @@ Popup {
         }
 
         console.log("[MomentsDetail] applySnapshot: got snap, commentCount=" + snap.commentCount + " comments=" + (snap.comments ? snap.comments.length : 0))
+        momentUid = snap.uid || 0
+        momentUserId = snap.userId || ""
+        momentUserName = snap.userName || ""
         momentUserNick = snap.userNick || ""
         momentUserIcon = (snap.userIcon && snap.userIcon.length) ? snap.userIcon : "qrc:/res/head_1.jpg"
         momentLocation = snap.location || ""
@@ -405,16 +470,18 @@ Popup {
         likeCount = snap.likeCount !== undefined ? snap.likeCount : 0
         commentCount = snap.commentCount !== undefined ? snap.commentCount : 0
 
-        var items = snap.items || [], textParts = [], imgs = []
+        var items = snap.items || [], textParts = [], mediaTiles = []
         for (var i = 0; i < items.length; i++) {
             var it = items[i]
             if (it.media_type === "text") { if (it.content) textParts.push(it.content) }
             else if (it.media_type === "image") {
-                imgs.push({ key: it.media_key || "", width: it.width, height: it.height })
+                mediaTiles.push({ type: "image", key: it.media_key || "", width: it.width, height: it.height })
+            } else if (it.media_type === "video") {
+                mediaTiles.push({ type: "video", key: it.media_key || "", duration: it.duration_ms || 0 })
             }
         }
         momentText = textParts.join("\n")
-        momentImages = imgs
+        momentMediaTiles = mediaTiles
 
         var rawLikes = snap.likes || [], names = []
         for (var j = 0; j < rawLikes.length; j++) {
@@ -427,11 +494,13 @@ Popup {
     function openMoment(momentId) {
         console.log("[MomentsDetail] openMoment called, momentId=" + momentId + " controller=" + !!root.controller)
         root.currentMomentId = momentId
+        commentsLoading = true
         applySnapshot()
         root.open()
         console.log("[MomentsDetail] openMoment: calling refreshMoment")
         if (root.controller) {
             root.controller.refreshMoment(momentId)
+            root.controller.refreshComments(momentId)
         } else {
             console.log("[MomentsDetail] openMoment: NO CONTROLLER!")
         }
@@ -441,6 +510,7 @@ Popup {
         var text = commentInput.text.trim()
         if (!text || !root.controller || root.currentMomentId <= 0) return
         commentSending = true
+        commentsLoading = true
         root.controller.addComment(root.currentMomentId, text, replyUid)
         commentInput.clear()
         replyUid = 0; replyNick = ""
@@ -448,6 +518,17 @@ Popup {
 
     Connections {
         target: controller
+        function onCommentsLoadingChanged(momentId, loading) {
+            if (root.opened && momentId === root.currentMomentId) {
+                commentsLoading = loading
+            }
+        }
+        function onCommentAdded(momentId) {
+            if (root.opened && (momentId <= 0 || momentId === root.currentMomentId)) {
+                commentSending = false
+                applySnapshot()
+            }
+        }
         function onMomentRefreshed(momentId) {
             console.log("[MomentsDetail] onMomentRefreshed received, momentId=" + momentId)
             if (root.opened && momentId === root.currentMomentId) {

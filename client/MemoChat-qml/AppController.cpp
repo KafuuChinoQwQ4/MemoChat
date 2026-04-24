@@ -17,6 +17,9 @@
 #include <QUrl>
 #include <QSettings>
 #include <QVariantMap>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QFutureWatcher>
 #include <QtConcurrent>
 #include <QtGlobal>
@@ -44,6 +47,14 @@ constexpr int kHeartbeatAckMissThreshold = 2;
 constexpr qint64 kHeartbeatAckGraceMs = 22000;
 constexpr int kChatReconnectMaxAttempts = 2;
 constexpr int kChatReconnectDelayMs = 300;
+constexpr int kMaxLoginCredentialCache = 8;
+const char kLoginCredentialSettingsGroup[] = "LoginCredentialCache";
+const char kLoginCredentialCacheKey[] = "credentialCacheJson";
+
+QSettings makeAppLocalSettings()
+{
+    return QSettings(QStringLiteral("MemoChat"), QStringLiteral("MemoChatQml"));
+}
 
 }
 
@@ -129,6 +140,8 @@ AppController::AppController(QObject *parent)
             this, &AppController::onAddAuthFriend);
     connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_auth_rsp,
             this, &AppController::onAuthRsp);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_delete_friend_rsp,
+            this, &AppController::onDeleteFriendRsp);
     connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_text_chat_msg,
             this, &AppController::onTextChatMsg);
     connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_user_search,
@@ -358,7 +371,7 @@ void AppController::switchToReset()
 
 void AppController::switchChatTab(int tab)
 {
-    const int normalized = qBound(0, tab, 3);
+    const int normalized = qBound(0, tab, static_cast<int>(AgentTabPage));
     const ChatTab target = static_cast<ChatTab>(normalized);
     if (_chat_tab == target) {
         return;
@@ -486,6 +499,41 @@ void AppController::selectContactIndex(int index)
                       item.value("userId").toString());
     setContactPane(FriendInfoPane);
     setAuthStatus("", false);
+}
+
+QVariantMap AppController::contactProfileByUid(int uid) const
+{
+    const auto friendInfo = _gateway.userMgr()->GetFriendById(uid);
+    if (!friendInfo) {
+        return {};
+    }
+
+    return {
+        {"uid", friendInfo->_uid},
+        {"userId", friendInfo->_user_id},
+        {"name", friendInfo->_name},
+        {"nick", friendInfo->_nick},
+        {"icon", friendInfo->_icon.trimmed().isEmpty() ? QStringLiteral("qrc:/res/head_1.jpg") : friendInfo->_icon},
+        {"desc", friendInfo->_desc},
+        {"back", friendInfo->_back},
+        {"sex", friendInfo->_sex}
+    };
+}
+
+void AppController::deleteFriend(int uid)
+{
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || selfInfo->_uid <= 0 || uid <= 0 || uid == selfInfo->_uid) {
+        setAuthStatus("联系人状态异常，无法删除", true);
+        return;
+    }
+
+    QJsonObject obj;
+    obj["fromuid"] = selfInfo->_uid;
+    obj["friend_uid"] = uid;
+    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_DELETE_FRIEND_REQ, payload);
+    setAuthStatus("正在删除联系人...", false);
 }
 
 void AppController::selectGroupIndex(int index)
@@ -847,7 +895,7 @@ void AppController::refreshGroupList()
         return;
     }
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo) {
+    if (!selfInfo || selfInfo->_uid <= 0) {
         setGroupStatus("用户状态异常，请重新登录", true);
         return;
     }
@@ -1505,8 +1553,54 @@ void AppController::cancelReplyMessage()
     setPendingReplyContext(QString(), QString(), QString());
 }
 
+QString AppController::loginCredentialCacheJson() const
+{
+    QSettings settings = makeAppLocalSettings();
+    settings.beginGroup(QString::fromLatin1(kLoginCredentialSettingsGroup));
+    const QString json = settings.value(QString::fromLatin1(kLoginCredentialCacheKey), QStringLiteral("[]")).toString();
+    settings.endGroup();
+    return json.trimmed().isEmpty() ? QStringLiteral("[]") : json;
+}
+
+void AppController::saveLoginCredential(const QString &email, const QString &password)
+{
+    const QString normalizedEmail = email.trimmed();
+    if (normalizedEmail.isEmpty() || password.isEmpty()) {
+        return;
+    }
+
+    QJsonArray next;
+    next.append(QJsonObject{{QStringLiteral("email"), normalizedEmail},
+                            {QStringLiteral("password"), password}});
+
+    QJsonParseError parseError;
+    const QJsonDocument doc = QJsonDocument::fromJson(loginCredentialCacheJson().toUtf8(), &parseError);
+    if (parseError.error == QJsonParseError::NoError && doc.isArray()) {
+        const QString normalizedLower = normalizedEmail.toLower();
+        const QJsonArray current = doc.array();
+        for (const QJsonValue &value : current) {
+            if (!value.isObject()) continue;
+            const QJsonObject obj = value.toObject();
+            const QString itemEmail = obj.value(QStringLiteral("email")).toString().trimmed();
+            if (itemEmail.isEmpty() || itemEmail.toLower() == normalizedLower) continue;
+            next.append(QJsonObject{{QStringLiteral("email"), itemEmail},
+                                    {QStringLiteral("password"), obj.value(QStringLiteral("password")).toString()}});
+            if (next.size() >= kMaxLoginCredentialCache) break;
+        }
+    }
+
+    QSettings settings = makeAppLocalSettings();
+    settings.beginGroup(QString::fromLatin1(kLoginCredentialSettingsGroup));
+    settings.setValue(QString::fromLatin1(kLoginCredentialCacheKey),
+                      QString::fromUtf8(QJsonDocument(next).toJson(QJsonDocument::Compact)));
+    settings.endGroup();
+    settings.sync();
+    emit loginCredentialCacheChanged();
+}
+
 void AppController::login(const QString &email, const QString &password)
 {
+    saveLoginCredential(email, password);
     _session_coordinator->login(email, password);
 }
 
