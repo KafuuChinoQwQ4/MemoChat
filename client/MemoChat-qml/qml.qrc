@@ -53,6 +53,7 @@
         <file alias="icons/r18.svg">src/r18.svg</file>
         <file alias="icons/user.png">src/user.png</file>
         <file alias="icons/team.png">src/team.png</file>
+        <file alias="icons/dropdown.png">src/下拉.png</file>
         <file alias="icons/image.png">src/图片.png</file>
         <file alias="icons/phone.png">src/电话.png</file>
         <file alias="icons/video.png">src/视频.png</file>

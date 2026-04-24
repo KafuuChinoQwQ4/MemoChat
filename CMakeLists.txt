@@ -2,28 +2,21 @@ cmake_minimum_required(VERSION 3.29)
 
 project(MemoChat LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Locate rc.exe from the installed Windows SDK so CMake can compile .rc resources
-# (Required because the SDK bin dir is not in the default PATH)
-# Environment variables: WINSDK_BIN, WINSDK_VERSION
 find_program(CMAKE_RC_COMPILER NAMES rc.exe
     HINTS "$ENV{WINSDK_BIN}"
           "$ENV{VC_TOOLS_BIN}"
     NO_DEFAULT_PATH)
 
 if(MSVC)
-    # MSVC external include paths from environment variables
-    # WINSDK_INCLUDE, VC_TOOLS_INCLUDE
-    set(_MSVC_EXTERNAL_INCLUDES
-        "$ENV{VC_TOOLS_INCLUDE}"
-        "$ENV{WINSDK_INCLUDE}/ucrt"
-        "$ENV{WINSDK_INCLUDE}/shared"
-        "$ENV{WINSDK_INCLUDE}/um"
-    )
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /external:I \"${_MSVC_EXTERNAL_INCLUDES}\"")
-    # MSVC library paths from environment variable: VC_TOOLS_LIB
+    # MSVC-specific settings
+    if(DEFINED VCPKG_TARGET_TRIPLET AND VCPKG_TARGET_TRIPLET MATCHES "static")
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    else()
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    endif()
     list(PREPEND CMAKE_LIBRARY_PATH "$ENV{VC_TOOLS_LIB}")
 endif()
 
@@ -33,8 +26,8 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 option(BUILD_CLIENT "Build MemoChat QML client" ON)
 option(BUILD_SERVER "Build all backend servers (GateServer, GateServerHttp2, StatusServer, ChatServer, VarifyServer)" ON)
 option(BUILD_OPS "Build MemoOps monitoring platform" ON)
-option(BUILD_LOADTEST "Build load test tool" OFF)
-option(BUILD_TESTS "Build unit tests with Google Test" OFF)
+option(BUILD_LOADTEST "Build load test tool" ON)
+option(BUILD_TESTS "Build unit tests with Google Test" ON)
 
 # Determine what was already configured via preset (used by start_all_services.bat)
 # If the user used a preset that configured only certain things, respect those settings

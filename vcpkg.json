@@ -23,7 +23,7 @@
         },
         "protobuf",
         "hiredis",
-        "jsoncpp",
+        "glaze",
         "boost-asio",
         "boost-beast",
         "boost-filesystem",

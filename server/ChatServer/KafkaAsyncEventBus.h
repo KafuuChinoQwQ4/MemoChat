@@ -24,7 +24,7 @@ public:
     explicit KafkaAsyncEventBus(PublishOutboxRepairTaskFn publish_outbox_repair_task = nullptr);
     ~KafkaAsyncEventBus() override;
 
-    bool Publish(const std::string& topic, const Json::Value& payload, std::string* error = nullptr) override;
+    bool Publish(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error = nullptr) override;
     bool ConsumeOnce(const std::vector<std::string>& topics, AsyncConsumedEvent& event, std::string* error = nullptr) override;
     void AckLastConsumed() override;
     void NackLastConsumed(const std::string& error) override;

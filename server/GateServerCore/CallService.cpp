@@ -5,17 +5,17 @@
 #include "PostgresMgr.h"
 #include "RedisMgr.h"
 #include "logging/Logger.h"
+#include "json/GlazeCompat.h"
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <algorithm>
 #include <chrono>
-#include <json/writer.h>
 #include <sstream>
 #include <unordered_map>
 #include <vector>
 
 #ifdef _WIN32
-#include <windows.h>
+#include "../common/WinSdkCompat.h"
 #include <bcrypt.h>
 #pragma comment(lib, "bcrypt.lib")
 #endif
@@ -142,11 +142,11 @@ CallService::CallConfig CallService::LoadConfig() const
     return cfg;
 }
 
-bool CallService::ParseAuthRequest(const Json::Value& request, int& uid, std::string& token, std::string& call_id) const
+bool CallService::ParseAuthRequest(const memochat::json::JsonValue& request, int& uid, std::string& token, std::string& call_id) const
 {
-    uid = request.get("uid", 0).asInt();
-    token = request.get("token", "").asString();
-    call_id = request.get("call_id", "").asString();
+    uid = memochat::json::glaze_safe_get<int>(request, "uid", 0);
+    token = memochat::json::glaze_safe_get<std::string>(request, "token", "");
+    call_id = memochat::json::glaze_safe_get<std::string>(request, "call_id", "");
     return uid > 0 && !token.empty();
 }
 
@@ -154,23 +154,22 @@ bool CallService::LoadSession(const std::string& call_id, CallSessionInfo& sessi
 {
     std::string json_value;
     if (RedisMgr::GetInstance()->Get(std::string(CALL_SESSION_PREFIX) + call_id, json_value)) {
-        Json::Value root;
-        Json::Reader reader;
-        if (reader.parse(json_value, root)) {
-            session.call_id = root.get("call_id", "").asString();
-            session.room_name = root.get("room_name", "").asString();
-            session.call_type = root.get("call_type", "").asString();
-            session.caller_uid = root.get("caller_uid", 0).asInt();
-            session.callee_uid = root.get("callee_uid", 0).asInt();
-            session.state = root.get("state", "").asString();
-            session.started_at_ms = root.get("started_at_ms", 0).asInt64();
-            session.accepted_at_ms = root.get("accepted_at_ms", 0).asInt64();
-            session.ended_at_ms = root.get("ended_at_ms", 0).asInt64();
-            session.expires_at_ms = root.get("expires_at_ms", 0).asInt64();
-            session.duration_sec = root.get("duration_sec", 0).asInt();
-            session.reason = root.get("reason", "").asString();
-            session.trace_id = root.get("trace_id", "").asString();
-            session.updated_at_ms = root.get("updated_at_ms", 0).asInt64();
+        memochat::json::JsonValue root;
+        if (memochat::json::glaze_parse(root, json_value)) {
+            session.call_id = memochat::json::glaze_safe_get<std::string>(root, "call_id", "");
+            session.room_name = memochat::json::glaze_safe_get<std::string>(root, "room_name", "");
+            session.call_type = memochat::json::glaze_safe_get<std::string>(root, "call_type", "");
+            session.caller_uid = memochat::json::glaze_safe_get<int>(root, "caller_uid", 0);
+            session.callee_uid = memochat::json::glaze_safe_get<int>(root, "callee_uid", 0);
+            session.state = memochat::json::glaze_safe_get<std::string>(root, "state", "");
+            session.started_at_ms = memochat::json::glaze_safe_get<int64_t>(root, "started_at_ms", 0);
+            session.accepted_at_ms = memochat::json::glaze_safe_get<int64_t>(root, "accepted_at_ms", 0);
+            session.ended_at_ms = memochat::json::glaze_safe_get<int64_t>(root, "ended_at_ms", 0);
+            session.expires_at_ms = memochat::json::glaze_safe_get<int64_t>(root, "expires_at_ms", 0);
+            session.duration_sec = memochat::json::glaze_safe_get<int>(root, "duration_sec", 0);
+            session.reason = memochat::json::glaze_safe_get<std::string>(root, "reason", "");
+            session.trace_id = memochat::json::glaze_safe_get<std::string>(root, "trace_id", "");
+            session.updated_at_ms = memochat::json::glaze_safe_get<int64_t>(root, "updated_at_ms", 0);
             return !session.call_id.empty();
         }
     }
@@ -179,22 +178,22 @@ bool CallService::LoadSession(const std::string& call_id, CallSessionInfo& sessi
 
 bool CallService::SaveSession(const CallSessionInfo& session, int ttl_seconds) const
 {
-    Json::Value root;
+    memochat::json::JsonValue root = memochat::json::make_document();
     root["call_id"] = session.call_id;
     root["room_name"] = session.room_name;
     root["call_type"] = session.call_type;
     root["caller_uid"] = session.caller_uid;
     root["callee_uid"] = session.callee_uid;
     root["state"] = session.state;
-    root["started_at_ms"] = static_cast<Json::Int64>(session.started_at_ms);
-    root["accepted_at_ms"] = static_cast<Json::Int64>(session.accepted_at_ms);
-    root["ended_at_ms"] = static_cast<Json::Int64>(session.ended_at_ms);
-    root["expires_at_ms"] = static_cast<Json::Int64>(session.expires_at_ms);
+    root["started_at_ms"] = session.started_at_ms;
+    root["accepted_at_ms"] = session.accepted_at_ms;
+    root["ended_at_ms"] = session.ended_at_ms;
+    root["expires_at_ms"] = session.expires_at_ms;
     root["duration_sec"] = session.duration_sec;
     root["reason"] = session.reason;
     root["trace_id"] = session.trace_id;
-    root["updated_at_ms"] = static_cast<Json::Int64>(session.updated_at_ms);
-    const std::string payload = Json::writeString(Json::StreamWriterBuilder(), root);
+    root["updated_at_ms"] = session.updated_at_ms;
+    const std::string payload = memochat::json::glaze_stringify(root);
     if (ttl_seconds > 0) {
         RedisMgr::GetInstance()->SetEx(std::string(CALL_SESSION_PREFIX) + session.call_id, payload, ttl_seconds);
     } else {
@@ -228,7 +227,7 @@ void CallService::SetActiveState(const CallSessionInfo& session) const
         cfg.busy_key_ttl_sec);
 }
 
-bool CallService::NotifyUsers(const std::vector<int>& touids, const Json::Value& payload) const
+bool CallService::NotifyUsers(const std::vector<int>& touids, const memochat::json::JsonValue& payload) const
 {
     std::unordered_map<std::string, std::vector<int>> routed;
     for (int uid : touids) {
@@ -239,7 +238,7 @@ bool CallService::NotifyUsers(const std::vector<int>& touids, const Json::Value&
         routed[server_name].push_back(uid);
     }
 
-    const std::string payload_json = Json::writeString(Json::StreamWriterBuilder(), payload);
+    const std::string payload_json = memochat::json::glaze_stringify(payload);
     for (const auto& entry : routed) {
         GroupEventNotifyReq req;
         req.set_tcp_msgid(kCallEventMsgId);
@@ -252,14 +251,14 @@ bool CallService::NotifyUsers(const std::vector<int>& touids, const Json::Value&
     return true;
 }
 
-Json::Value CallService::BuildEventPayload(const std::string& event_type,
+memochat::json::JsonValue CallService::BuildEventPayload(const std::string& event_type,
                                            const CallSessionInfo& session,
                                            const CallUserProfile& caller,
                                            const CallUserProfile& callee,
                                            const std::string& reason) const
 {
     const auto cfg = LoadConfig();
-    Json::Value payload;
+    memochat::json::JsonValue payload = memochat::json::make_document();
     payload["error"] = ErrorCodes::Success;
     payload["event_type"] = event_type;
     payload["call_id"] = session.call_id;
@@ -271,10 +270,10 @@ Json::Value CallService::BuildEventPayload(const std::string& event_type,
     payload["callee_name"] = callee.nick.empty() ? callee.name : callee.nick;
     payload["caller_icon"] = caller.icon;
     payload["callee_icon"] = callee.icon;
-    payload["started_at"] = static_cast<Json::Int64>(session.started_at_ms);
-    payload["accepted_at"] = static_cast<Json::Int64>(session.accepted_at_ms);
-    payload["ended_at"] = static_cast<Json::Int64>(session.ended_at_ms);
-    payload["expires_at"] = static_cast<Json::Int64>(session.expires_at_ms);
+    payload["started_at"] = session.started_at_ms;
+    payload["accepted_at"] = session.accepted_at_ms;
+    payload["ended_at"] = session.ended_at_ms;
+    payload["expires_at"] = session.expires_at_ms;
     payload["state"] = session.state;
     payload["reason"] = reason.empty() ? session.reason : reason;
     payload["trace_id"] = session.trace_id;
@@ -286,30 +285,30 @@ std::string CallService::CreateToken(const CallSessionInfo& session, int uid, co
 {
     const auto cfg = LoadConfig();
     const int64_t now_sec = NowMs() / 1000;
-    Json::Value header;
+    memochat::json::JsonValue header = memochat::json::make_document();
     header["alg"] = "HS256";
     header["typ"] = "JWT";
-    Json::Value video;
+    memochat::json::JsonValue video = memochat::json::make_document();
     video["room"] = session.room_name;
     video["roomJoin"] = true;
     video["canPublish"] = true;
     video["canSubscribe"] = true;
-    Json::Value payload;
+    memochat::json::JsonValue payload = memochat::json::make_document();
     payload["iss"] = cfg.api_key;
     payload["sub"] = std::to_string(uid);
-    payload["nbf"] = static_cast<Json::Int64>(now_sec - 5);
-    payload["exp"] = static_cast<Json::Int64>(now_sec + cfg.token_ttl_sec);
+    payload["nbf"] = now_sec - 5;
+    payload["exp"] = now_sec + cfg.token_ttl_sec;
     payload["name"] = std::string("memochat-") + role + "-" + std::to_string(uid);
     payload["video"] = video;
 
-    const std::string encoded_header = Base64UrlEncode(Json::writeString(Json::StreamWriterBuilder(), header));
-    const std::string encoded_payload = Base64UrlEncode(Json::writeString(Json::StreamWriterBuilder(), payload));
+    const std::string encoded_header = Base64UrlEncode(memochat::json::glaze_stringify(header));
+    const std::string encoded_payload = Base64UrlEncode(memochat::json::glaze_stringify(payload));
     const std::string signing_input = encoded_header + "." + encoded_payload;
     const std::string signature = Base64UrlEncode(HmacSha256(cfg.api_secret, signing_input));
     return signing_input + "." + signature;
 }
 
-bool CallService::StartCall(const Json::Value& request, Json::Value& response, const std::string& trace_id)
+bool CallService::StartCall(const memochat::json::JsonValue& request, memochat::json::JsonValue& response, const std::string& trace_id)
 {
     const auto cfg = LoadConfig();
     if (!cfg.enabled) {
@@ -317,14 +316,14 @@ bool CallService::StartCall(const Json::Value& request, Json::Value& response, c
         return true;
     }
     int uid = 0;
-    int peer_uid = request.get("peer_uid", 0).asInt();
+    int peer_uid = memochat::json::glaze_safe_get<int>(request, "peer_uid", 0);
     std::string token;
     std::string unused_call_id;
     if (!ParseAuthRequest(request, uid, token, unused_call_id) || !ValidateGateUserToken(uid, token) || peer_uid <= 0 || uid == peer_uid) {
         response["error"] = ErrorCodes::TokenInvalid;
         return true;
     }
-    const std::string call_type = request.get("call_type", "").asString();
+    const std::string call_type = memochat::json::glaze_safe_get<std::string>(request, "call_type", "");
     if (call_type != "voice" && call_type != "video") {
         response["error"] = ErrorCodes::Error_Json;
         return true;
@@ -379,7 +378,7 @@ bool CallService::StartCall(const Json::Value& request, Json::Value& response, c
     return true;
 }
 
-bool CallService::AcceptCall(const Json::Value& request, Json::Value& response, const std::string& trace_id)
+bool CallService::AcceptCall(const memochat::json::JsonValue& request, memochat::json::JsonValue& response, const std::string& trace_id)
 {
     int uid = 0;
     std::string token;
@@ -418,7 +417,7 @@ bool CallService::AcceptCall(const Json::Value& request, Json::Value& response, 
     return true;
 }
 
-bool CallService::RejectCall(const Json::Value& request, Json::Value& response, const std::string& trace_id)
+bool CallService::RejectCall(const memochat::json::JsonValue& request, memochat::json::JsonValue& response, const std::string& trace_id)
 {
     int uid = 0;
     std::string token;
@@ -456,7 +455,7 @@ bool CallService::RejectCall(const Json::Value& request, Json::Value& response, 
     return true;
 }
 
-bool CallService::CancelCall(const Json::Value& request, Json::Value& response, const std::string& trace_id)
+bool CallService::CancelCall(const memochat::json::JsonValue& request, memochat::json::JsonValue& response, const std::string& trace_id)
 {
     int uid = 0;
     std::string token;
@@ -495,7 +494,7 @@ bool CallService::CancelCall(const Json::Value& request, Json::Value& response, 
     return true;
 }
 
-bool CallService::HangupCall(const Json::Value& request, Json::Value& response, const std::string& trace_id)
+bool CallService::HangupCall(const memochat::json::JsonValue& request, memochat::json::JsonValue& response, const std::string& trace_id)
 {
     int uid = 0;
     std::string token;
@@ -537,7 +536,7 @@ bool CallService::HangupCall(const Json::Value& request, Json::Value& response, 
 }
 
 bool CallService::GetToken(int uid, const std::string& token, const std::string& call_id, const std::string& role,
-                           Json::Value& response, const std::string& trace_id)
+                           memochat::json::JsonValue& response, const std::string& trace_id)
 {
     if (!ValidateGateUserToken(uid, token)) {
         response["error"] = ErrorCodes::TokenInvalid;
@@ -567,7 +566,8 @@ bool CallService::GetToken(int uid, const std::string& token, const std::string&
     response["room_name"] = session.room_name;
     response["role"] = role.empty() ? (is_caller ? "caller" : "callee") : role;
     response["livekit_url"] = LoadConfig().livekit_url;
-    response["token"] = CreateToken(session, uid, response["role"].asString());
+    response["token"] = CreateToken(session, uid, memochat::json::glaze_safe_get<std::string>(response, "role", ""));
     response["trace_id"] = session.trace_id;
     return true;
 }
+

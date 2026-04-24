@@ -1,19 +1,17 @@
-#include "AuthLoginSupport.h"
-
+﻿#include "AuthLoginSupport.h"
+#include "json/GlazeCompat.h"
 #include "ConfigMgr.h"
 #include "PostgresDao.h"
 #include "RedisMgr.h"
 #include "auth/ChatLoginTicket.h"
 #include "cluster/ChatClusterDiscovery.h"
 #include "logging/Logger.h"
-
 #include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <climits>
 #include <cstdlib>
 #include <cctype>
-#include <json/json.h>
 #include <sstream>
 
 namespace {
@@ -36,7 +34,6 @@ bool ParseSemVer(const std::string& ver, int& major, int& minor, int& patch) {
     if (ver.empty()) {
         return false;
     }
-
     std::stringstream ss(ver);
     std::string token;
     std::vector<int> parts;
@@ -59,7 +56,6 @@ bool ParseSemVer(const std::string& ver, int& major, int& minor, int& patch) {
     patch = (parts.size() >= 3) ? parts[2] : 0;
     return true;
 }
-
 } // namespace
 
 namespace gateauthsupport {
@@ -89,6 +85,7 @@ std::string DecodeLegacyXorPwd(const std::string& input) {
     }
     return decoded;
 }
+
 } // namespace
 
 namespace gateauthsupport {
@@ -122,7 +119,6 @@ bool IsClientVersionAllowed(const std::string& clientVer, const std::string& min
     if (!ParseSemVer(minVer, mMaj, mMin, mPatch)) {
         return true;
     }
-
     if (cMaj != mMaj) {
         return cMaj > mMaj;
     }
@@ -155,35 +151,31 @@ bool TryLoadCachedLoginProfile(const std::string& email, const std::string& pwd,
     if (!RedisMgr::GetInstance()->Get(BuildLoginCacheKey(email), cached_json) || cached_json.empty()) {
         return false;
     }
-
-    Json::Value root;
-    Json::Reader reader;
-    if (!reader.parse(cached_json, root) || !root.isObject()) {
+    memochat::json::JsonValue root;
+    if (!memochat::json::reader_parse(cached_json, root) || !memochat::json::glaze_is_object(root)) {
         return false;
     }
-
-    const auto cached_pwd = root.get("pwd", "").asString();
+    const auto cached_pwd = memochat::json::glaze_safe_get<std::string>(root["pwd"], "");
     if (cached_pwd.empty()) {
         return false;
     }
     if (pwd != cached_pwd && DecodeLegacyXorPwd(pwd) != cached_pwd) {
         return false;
     }
-
     userInfo.pwd = cached_pwd;
-    userInfo.name = root.get("name", "").asString();
-    userInfo.email = root.get("email", "").asString();
-    userInfo.uid = root.get("uid", 0).asInt();
-    userInfo.user_id = root.get("user_id", "").asString();
-    userInfo.nick = root.get("nick", "").asString();
-    userInfo.icon = root.get("icon", "").asString();
-    userInfo.desc = root.get("desc", "").asString();
-    userInfo.sex = root.get("sex", 0).asInt();
+    userInfo.name = memochat::json::glaze_safe_get<std::string>(root["name"], "");
+    userInfo.email = memochat::json::glaze_safe_get<std::string>(root["email"], "");
+    userInfo.uid = memochat::json::glaze_safe_get<int64_t>(root["uid"], 0LL);
+    userInfo.user_id = memochat::json::glaze_safe_get<std::string>(root["user_id"], "");
+    userInfo.nick = memochat::json::glaze_safe_get<std::string>(root["nick"], "");
+    userInfo.icon = memochat::json::glaze_safe_get<std::string>(root["icon"], "");
+    userInfo.desc = memochat::json::glaze_safe_get<std::string>(root["desc"], "");
+    userInfo.sex = memochat::json::glaze_safe_get<int64_t>(root["sex"], 0LL);
     return userInfo.uid > 0;
 }
 
 void CacheLoginProfile(const std::string& email, const UserInfo& userInfo) {
-    Json::Value root(Json::objectValue);
+    memochat::json::JsonValue root{};
     root["uid"] = userInfo.uid;
     root["pwd"] = userInfo.pwd;
     root["name"] = userInfo.name;
@@ -194,7 +186,7 @@ void CacheLoginProfile(const std::string& email, const UserInfo& userInfo) {
     root["desc"] = userInfo.desc;
     root["sex"] = userInfo.sex;
     const auto ttl = GetLoginCacheTtlSec();
-    RedisMgr::GetInstance()->SetEx(BuildLoginCacheKey(email), root.toStyledString(), ttl);
+    RedisMgr::GetInstance()->SetEx(BuildLoginCacheKey(email), memochat::json::glaze_stringify(root), ttl);
     if (userInfo.uid > 0) {
         RedisMgr::GetInstance()->SetEx(BuildLoginCacheUidKey(userInfo.uid), email, ttl);
     }
@@ -226,7 +218,6 @@ std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load
     if (least_loaded_snapshot) {
         least_loaded_snapshot->clear();
     }
-
     static const auto kCachedCluster = []() {
         auto& cfg = ConfigMgr::Inst();
         return memochat::cluster::LoadChatClusterConfig(
@@ -257,12 +248,14 @@ std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load
                 load_snapshot->push_back(one.str());
             }
         }
+
         std::sort(nodes.begin(), nodes.end(), [](const ChatRouteNode& lhs, const ChatRouteNode& rhs) {
             if (lhs.online_count != rhs.online_count) {
                 return lhs.online_count < rhs.online_count;
             }
             return lhs.name < rhs.name;
         });
+
         int priority = 0;
         for (auto& node : nodes) {
             node.priority = priority++;
@@ -270,6 +263,7 @@ std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load
                 least_loaded_snapshot->push_back(node.name);
             }
         }
+
         if (!nodes.empty()) {
             const auto next_index = static_cast<size_t>(g_gate_route_rr_counter.fetch_add(1, std::memory_order_relaxed));
             std::stable_sort(nodes.begin(), nodes.end(), [next_index, min_online](const ChatRouteNode& lhs, const ChatRouteNode& rhs) {
@@ -296,3 +290,4 @@ std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load
 }
 
 } // namespace gateauthsupport
+

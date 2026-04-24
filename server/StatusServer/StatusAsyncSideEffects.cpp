@@ -1,4 +1,5 @@
-#include "StatusAsyncSideEffects.h"
+﻿#include "StatusAsyncSideEffects.h"
+#include "json/GlazeCompat.h"
 
 #include "ConfigMgr.h"
 #include "RedisMgr.h"
@@ -9,8 +10,6 @@
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <chrono>
-#include <json/json.h>
-
 #ifndef MEMOCHAT_ENABLE_KAFKA
 #define MEMOCHAT_ENABLE_KAFKA 0
 #endif
@@ -24,7 +23,7 @@
 #endif
 
 #if MEMOCHAT_ENABLE_RABBITMQ
-#include <winsock2.h>
+#include "../common/WinsockCompat.h"
 #include <rabbitmq-c/amqp.h>
 #include <rabbitmq-c/framing.h>
 #include <rabbitmq-c/tcp_socket.h>
@@ -50,11 +49,9 @@ int64_t NowMsStatus()
         std::chrono::system_clock::now().time_since_epoch()).count());
 }
 
-std::string WriteCompactJsonStatus(const Json::Value& value)
+std::string WriteCompactJsonStatus(const memochat::json::JsonValue& value)
 {
-    Json::StreamWriterBuilder builder;
-    builder["indentation"] = "";
-    return Json::writeString(builder, value);
+    return memochat::json::glaze_stringify(value);
 }
 
 #if MEMOCHAT_ENABLE_RABBITMQ
@@ -134,7 +131,7 @@ void StatusAsyncSideEffects::PublishAuditLogin(int uid,
     const std::string& port,
     const std::string& event_type)
 {
-    Json::Value payload(Json::objectValue);
+    memochat::json::JsonValue payload(memochat::json::JsonValue{});
     payload["uid"] = uid;
     payload["server_name"] = server_name;
     payload["host"] = host;
@@ -148,7 +145,7 @@ void StatusAsyncSideEffects::PublishAuditLogin(int uid,
 
 void StatusAsyncSideEffects::PublishPresenceRefresh(int uid, const std::string& selected_server, const std::string& reason)
 {
-    Json::Value payload(Json::objectValue);
+    memochat::json::JsonValue payload(memochat::json::JsonValue{});
     payload["uid"] = uid;
     payload["selected_server"] = selected_server;
     payload["reason"] = reason;
@@ -162,7 +159,7 @@ void StatusAsyncSideEffects::PublishPresenceRefresh(int uid, const std::string& 
 bool StatusAsyncSideEffects::PublishKafka(const std::string& topic,
     const std::string& partition_key,
     const std::string& event_type,
-    const Json::Value& payload,
+    const memochat::json::JsonValue& payload,
     std::string* error)
 {
 #if MEMOCHAT_ENABLE_KAFKA
@@ -172,14 +169,14 @@ bool StatusAsyncSideEffects::PublishKafka(const std::string& topic,
         }
         return false;
     }
-    Json::Value envelope(Json::objectValue);
+    memochat::json::JsonValue envelope(memochat::json::JsonValue{});
     envelope["event_id"] = boost::uuids::to_string(boost::uuids::random_generator()());
     envelope["topic"] = topic;
     envelope["partition_key"] = partition_key;
     envelope["event_type"] = event_type;
     envelope["trace_id"] = memolog::TraceContext::GetTraceId();
     envelope["request_id"] = memolog::TraceContext::GetRequestId();
-    envelope["created_at_ms"] = static_cast<Json::Int64>(NowMsStatus());
+    envelope["created_at_ms"] = static_cast<int64_t>(NowMsStatus());
     envelope["retry_count"] = 0;
     envelope["payload"] = payload;
     try {
@@ -216,7 +213,7 @@ bool StatusAsyncSideEffects::PublishKafka(const std::string& topic,
 
 bool StatusAsyncSideEffects::PublishRabbit(const std::string& routing_key,
     const std::string& task_type,
-    const Json::Value& payload,
+    const memochat::json::JsonValue& payload,
     std::string* error)
 {
 #if MEMOCHAT_ENABLE_RABBITMQ
@@ -224,12 +221,12 @@ bool StatusAsyncSideEffects::PublishRabbit(const std::string& routing_key,
     if (!EnsureRabbitConnected(error)) {
         return false;
     }
-    Json::Value envelope(Json::objectValue);
+    memochat::json::JsonValue envelope(memochat::json::JsonValue{});
     envelope["task_id"] = boost::uuids::to_string(boost::uuids::random_generator()());
     envelope["task_type"] = task_type;
     envelope["trace_id"] = memolog::TraceContext::GetTraceId();
     envelope["request_id"] = memolog::TraceContext::GetRequestId();
-    envelope["created_at_ms"] = static_cast<Json::Int64>(NowMsStatus());
+    envelope["created_at_ms"] = static_cast<int64_t>(NowMsStatus());
     envelope["retry_count"] = 0;
     envelope["max_retries"] = _rabbit_max_retries;
     envelope["routing_key"] = routing_key;
@@ -303,12 +300,9 @@ void StatusAsyncSideEffects::ConsumePresenceRefreshLoop()
             continue;
         }
 
-        Json::CharReaderBuilder builder;
-        std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-        Json::Value root;
-        std::string parse_errors;
+        memochat::json::JsonValue root;
         const auto serialized = BytesToStringStatus(envelope.message.body);
-        if (reader->parse(serialized.data(), serialized.data() + serialized.size(), &root, &parse_errors) && root.isObject()) {
+        if (memochat::json::glaze_parse(root, serialized) && memochat::json::glaze_is_object(root)) {
             HandlePresenceRefresh(root["payload"]);
         }
         amqp_basic_ack(static_cast<amqp_connection_state_t>(_rabbit_connection), 1, envelope.delivery_tag, false);
@@ -411,13 +405,13 @@ void StatusAsyncSideEffects::CloseRabbit()
 #endif
 }
 
-void StatusAsyncSideEffects::HandlePresenceRefresh(const Json::Value& payload)
+void StatusAsyncSideEffects::HandlePresenceRefresh(const memochat::json::JsonValue& payload)
 {
-    if (!payload.isObject()) {
+    if (!memochat::json::glaze_is_object(payload)) {
         return;
     }
-    const int uid = payload.get("uid", 0).asInt();
-    const auto selected_server = payload.get("selected_server", "").asString();
+    const int uid = memochat::json::glaze_safe_get<int>(payload, "uid", 0);
+    const auto selected_server = memochat::json::glaze_safe_get<std::string>(payload, "selected_server", "");
     if (uid <= 0) {
         return;
     }
@@ -429,5 +423,6 @@ void StatusAsyncSideEffects::HandlePresenceRefresh(const Json::Value& payload)
         return;
     }
     memolog::LogInfo("status.presence_refresh.processed", "processed presence refresh task",
-        {{"uid", std::to_string(uid)}, {"selected_server", selected_server}, {"reason", payload.get("reason", "").asString()}});
+        {{"uid", std::to_string(uid)}, {"selected_server", selected_server}, {"reason", memochat::json::glaze_safe_get<std::string>(payload, "reason", "")}});
 }
+

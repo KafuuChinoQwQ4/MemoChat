@@ -1,4 +1,4 @@
-#include "AIServiceCore.h"
+﻿#include "AIServiceCore.h"
 #include "AIServiceClient.h"
 #include "ConversationContext.h"
 #include "db/AISessionRepo.h"
@@ -9,18 +9,16 @@
 #include <boost/uuid/string_generator.hpp>
 #include <boost/uuid/random_generator.hpp>
 
+
 using namespace std::chrono;
 
 AIServiceCore::AIServiceCore()
     : _ai_client(std::make_unique<AIServiceClient>()),
-      _session_repo(std::make_unique<AISessionRepo>()) {
-}
+      _session_repo(std::make_unique<AISessionRepo>()) {}
 
 AIServiceCore::~AIServiceCore() = default;
 
-std::string AIServiceCore::GetOrCreateSessionId(int32_t uid,
-                                                 const std::string& model_type,
-                                                 const std::string& model_name) {
+std::string AIServiceCore::GetOrCreateSessionId(int32_t uid, const std::string& model_type, const std::string& model_name) {
     if (!model_type.empty() && !model_name.empty()) {
         return _session_repo->Create(uid, model_type, model_name);
     }
@@ -30,75 +28,54 @@ std::string AIServiceCore::GetOrCreateSessionId(int32_t uid,
     return _session_repo->Create(uid, default_type, default_model);
 }
 
-void AIServiceCore::SaveUserMessage(const std::string& session_id, int32_t uid,
-                                    const std::string& content,
-                                    const std::string& model_name) {
+void AIServiceCore::SaveUserMessage(const std::string& session_id, int32_t uid, const std::string& content, const std::string& model_name) {
     _session_repo->SaveMessage(session_id, uid, "user", content, model_name, 0);
 }
 
-void AIServiceCore::SaveAIMessage(const std::string& session_id, int32_t uid,
-                                  const std::string& content,
-                                  const std::string& model_name,
-                                  int64_t tokens_used) {
+void AIServiceCore::SaveAIMessage(const std::string& session_id, int32_t uid, const std::string& content, const std::string& model_name, int64_t tokens_used) {
     _session_repo->SaveMessage(session_id, uid, "assistant", content, model_name, tokens_used);
 }
 
-grpc::Status AIServiceCore::HandleChat(const ai::AIChatReq& req,
-                                        ai::AIChatRsp* reply) {
+grpc::Status AIServiceCore::HandleChat(const ai::AIChatReq& req, ai::AIChatRsp* reply) {
     reply->set_code(0);
     reply->set_message("ok");
-
     std::string session_id = req.session_id();
     if (session_id.empty()) {
-        session_id = GetOrCreateSessionId(req.from_uid(), req.model_type(),
-                                          req.model_name());
+        session_id = GetOrCreateSessionId(req.from_uid(), req.model_type(), req.model_name());
     }
     reply->set_session_id(session_id);
-
     SaveUserMessage(session_id, req.from_uid(), req.content(), req.model_name());
 
-    Json::Value result;
-    auto status = _ai_client->Chat(req.from_uid(), session_id, req.content(),
-                                    req.model_type(), req.model_name(), &result);
-
+    memochat::json::JsonValue result;
+    auto status = _ai_client->Chat(req.from_uid(), session_id, req.content(), req.model_type(), req.model_name(), &result);
     if (!status.ok()) {
         reply->set_code(500);
         reply->set_message("AI orchestrator unavailable: " + status.error_message());
         return grpc::Status::OK;
     }
-
-    if (result.isMember("error") && !result["error"].empty()) {
+    if (memochat::json::glaze_has_key(result, "error") && !memochat::json::glaze_safe_get<std::string>(result["error"], "").empty()) {
         reply->set_code(400);
-        reply->set_message(result["error"].asString());
+        reply->set_message(memochat::json::glaze_safe_get<std::string>(result["error"], ""));
         return grpc::Status::OK;
     }
-
-    reply->set_ai_content(result["content"].asString());
-    reply->set_tokens_used(result.get("tokens", 0).asInt64());
-    reply->set_model_name(result.get("model", req.model_name()).asString());
-
-    SaveAIMessage(session_id, req.from_uid(), reply->ai_content(),
-                 reply->model_name(), reply->tokens_used());
-
+    reply->set_ai_content(memochat::json::glaze_safe_get<std::string>(result["content"], ""));
+    reply->set_tokens_used(memochat::json::glaze_safe_get<int>(result["tokens"], 0));
+    reply->set_model_name(memochat::json::glaze_safe_get<std::string>(result["model"], req.model_name()));
+    SaveAIMessage(session_id, req.from_uid(), reply->ai_content(), reply->model_name(), reply->tokens_used());
     return grpc::Status::OK;
 }
 
-grpc::Status AIServiceCore::HandleChatStream(const ai::AIChatReq& req,
-                                             grpc::ServerWriter<ai::AIChatStreamChunk>* writer) {
+grpc::Status AIServiceCore::HandleChatStream(const ai::AIChatReq& req, grpc::ServerWriter<ai::AIChatStreamChunk>* writer) {
     std::string session_id = req.session_id();
     if (session_id.empty()) {
-        session_id = GetOrCreateSessionId(req.from_uid(), req.model_type(),
-                                          req.model_name());
+        session_id = GetOrCreateSessionId(req.from_uid(), req.model_type(), req.model_name());
     }
-
     SaveUserMessage(session_id, req.from_uid(), req.content(), req.model_name());
 
-    Json::Value result;
+    memochat::json::JsonValue result;
     auto status = _ai_client->ChatStream(
-        req.from_uid(), session_id, req.content(),
-        req.model_type(), req.model_name(),
-        [writer](const std::string& chunk, bool is_final,
-                 const std::string& msg_id, int64_t total_tokens) {
+        req.from_uid(), session_id, req.content(), req.model_type(), req.model_name(),
+        [writer](const std::string& chunk, bool is_final, const std::string& msg_id, int64_t total_tokens) {
             ai::AIChatStreamChunk out;
             out.set_chunk(chunk);
             out.set_is_final(is_final);
@@ -107,52 +84,39 @@ grpc::Status AIServiceCore::HandleChatStream(const ai::AIChatReq& req,
             writer->Write(out);
         },
         &result);
-
     if (!status.ok()) {
         return grpc::Status(status.error_code(), status.error_message());
     }
-
-    if (result.isMember("error") && !result["error"].empty()) {
+    if (memochat::json::glaze_has_key(result, "error") && !memochat::json::glaze_safe_get<std::string>(result["error"], "").empty()) {
         ai::AIChatStreamChunk err;
-        err.set_chunk(result["error"].asString());
+        err.set_chunk(memochat::json::glaze_safe_get<std::string>(result["error"], ""));
         err.set_is_final(true);
         writer->Write(err);
     } else {
-        std::string ai_content = result["content"].asString();
-        std::string model_name_used = result.get("model", req.model_name()).asString();
-        SaveAIMessage(session_id, req.from_uid(), ai_content,
-                     model_name_used,
-                     result.get("tokens", 0).asInt64());
+        std::string ai_content = memochat::json::glaze_safe_get<std::string>(result["content"], "");
+        std::string model_name_used = memochat::json::glaze_safe_get<std::string>(result["model"], req.model_name());
+        SaveAIMessage(session_id, req.from_uid(), ai_content, model_name_used, memochat::json::glaze_safe_get<int>(result["tokens"], 0));
     }
-
     return grpc::Status::OK;
 }
 
-grpc::Status AIServiceCore::HandleSmart(const ai::AISmartReq& req,
-                                         ai::AISmartRsp* reply) {
+grpc::Status AIServiceCore::HandleSmart(const ai::AISmartReq& req, ai::AISmartRsp* reply) {
     reply->set_code(0);
     reply->set_message("ok");
-
-    Json::Value result;
-    auto status = _ai_client->Smart(req.feature_type(), req.content(),
-                                     req.target_lang(), req.context_json(), &result);
+    memochat::json::JsonValue result;
+    auto status = _ai_client->Smart(req.feature_type(), req.content(), req.target_lang(), req.context_json(), &result);
     if (!status.ok()) {
         reply->set_code(500);
         reply->set_message("AI orchestrator unavailable");
         return grpc::Status::OK;
     }
-
-    reply->set_result(result["content"].asString());
+    reply->set_result(memochat::json::glaze_safe_get<std::string>(result["content"], ""));
     return grpc::Status::OK;
 }
 
-grpc::Status AIServiceCore::GetHistory(const ai::AIHistoryReq& req,
-                                       ai::AIHistoryRsp* reply) {
+grpc::Status AIServiceCore::GetHistory(const ai::AIHistoryReq& req, ai::AIHistoryRsp* reply) {
     reply->set_code(0);
-
-    auto messages = _session_repo->GetMessages(req.session_id(),
-                                               req.limit() > 0 ? req.limit() : 20,
-                                               req.offset());
+    auto messages = _session_repo->GetMessages(req.session_id(), req.limit() > 0 ? req.limit() : 20, req.offset());
     for (auto& it : messages) {
         auto* m = reply->add_messages();
         m->set_msg_id(it.msg_id());
@@ -163,13 +127,10 @@ grpc::Status AIServiceCore::GetHistory(const ai::AIHistoryReq& req,
     return grpc::Status::OK;
 }
 
-grpc::Status AIServiceCore::CreateSession(const ai::AICreateSessionReq& req,
-                                            ai::AISessionRsp* reply) {
+grpc::Status AIServiceCore::CreateSession(const ai::AICreateSessionReq& req, ai::AISessionRsp* reply) {
     reply->set_code(0);
     reply->set_message("ok");
-
-    std::string session_id = GetOrCreateSessionId(req.uid(), req.model_type(),
-                                                  req.model_name());
+    std::string session_id = GetOrCreateSessionId(req.uid(), req.model_type(), req.model_name());
     auto info = _session_repo->GetSession(session_id);
     if (info) {
         reply->set_allocated_session(info.release());
@@ -177,11 +138,9 @@ grpc::Status AIServiceCore::CreateSession(const ai::AICreateSessionReq& req,
     return grpc::Status::OK;
 }
 
-grpc::Status AIServiceCore::ListSessions(const ai::AICreateSessionReq& req,
-                                          ai::AISessionRsp* reply) {
+grpc::Status AIServiceCore::ListSessions(const ai::AICreateSessionReq& req, ai::AISessionRsp* reply) {
     reply->set_code(0);
     reply->set_message("ok");
-
     auto sessions = _session_repo->ListByUid(req.uid());
     for (auto& s : sessions) {
         reply->add_sessions()->CopyFrom(s);
@@ -189,11 +148,9 @@ grpc::Status AIServiceCore::ListSessions(const ai::AICreateSessionReq& req,
     return grpc::Status::OK;
 }
 
-grpc::Status AIServiceCore::DeleteSession(const ai::AIDeleteSessionReq& req,
-                                           ai::AIDeleteSessionRsp* reply) {
+grpc::Status AIServiceCore::DeleteSession(const ai::AIDeleteSessionReq& req, ai::AIDeleteSessionRsp* reply) {
     reply->set_code(0);
     reply->set_message("ok");
-
     if (!_session_repo->SoftDelete(req.session_id())) {
         reply->set_code(404);
         reply->set_message("session not found");
@@ -201,16 +158,11 @@ grpc::Status AIServiceCore::DeleteSession(const ai::AIDeleteSessionReq& req,
     return grpc::Status::OK;
 }
 
-grpc::Status AIServiceCore::ListModels(const ai::AIListModelsReq& req,
-                                        ai::AIListModelsRsp* reply) {
+grpc::Status AIServiceCore::ListModels(const ai::AIListModelsReq& req, ai::AIListModelsRsp* reply) {
     reply->set_code(0);
-
     auto& cfg = ConfigMgr::Inst();
     std::string default_model = cfg["AI"]["DefaultModel"];
-
-    auto add_model = [&](const std::string& type, const std::string& name,
-                          const std::string& display, bool enabled,
-                          int64_t ctx_window, bool is_default) {
+    auto add_model = [&](const std::string& type, const std::string& name, const std::string& display, bool enabled, int64_t ctx_window, bool is_default) {
         auto* m = reply->add_models();
         m->set_model_type(type);
         m->set_model_name(name);
@@ -221,87 +173,70 @@ grpc::Status AIServiceCore::ListModels(const ai::AIListModelsReq& req,
             reply->set_allocated_default_model(m);
         }
     };
-
     if (cfg["Ollama"]["Enabled"] == "true") {
-        add_model("ollama", "qwen2.5:7b", "Qwen 2.5 7B", true, 8192,
-                  default_model == "qwen2.5:7b");
-        add_model("ollama", "qwen2.5:14b", "Qwen 2.5 14B", true, 8192,
-                  default_model == "qwen2.5:14b");
+        add_model("ollama", "qwen2.5:7b", "Qwen 2.5 7B", true, 8192, default_model == "qwen2.5:7b");
+        add_model("ollama", "qwen2.5:14b", "Qwen 2.5 14B", true, 8192, default_model == "qwen2.5:14b");
     }
     if (cfg["OpenAI"]["Enabled"] == "true") {
-        add_model("openai", "gpt-4o", "GPT-4o", true, 128000,
-                  default_model == "gpt-4o");
-        add_model("openai", "gpt-4o-mini", "GPT-4o Mini", true, 128000,
-                  default_model == "gpt-4o-mini");
+        add_model("openai", "gpt-4o", "GPT-4o", true, 128000, default_model == "gpt-4o");
+        add_model("openai", "gpt-4o-mini", "GPT-4o Mini", true, 128000, default_model == "gpt-4o-mini");
     }
     if (cfg["Claude"]["Enabled"] == "true") {
-        add_model("claude", "claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet", true, 200000,
-                  default_model == "claude-3-5-sonnet-20241022");
+        add_model("claude", "claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet", true, 200000, default_model == "claude-3-5-sonnet-20241022");
     }
     if (cfg["Kimi"]["Enabled"] == "true") {
-        add_model("kimi", "moonshot-v1-8k", "Kimi 8K", true, 8192,
-                  default_model == "moonshot-v1-8k");
+        add_model("kimi", "moonshot-v1-8k", "Kimi 8K", true, 8192, default_model == "moonshot-v1-8k");
     }
-
     return grpc::Status::OK;
 }
 
-grpc::Status AIServiceCore::HandleKbUpload(const ai::AIKbUploadReq& req,
-                                             ai::AIKbUploadRsp* reply) {
+grpc::Status AIServiceCore::HandleKbUpload(const ai::AIKbUploadReq& req, ai::AIKbUploadRsp* reply) {
     reply->set_code(0);
     reply->set_message("ok");
-
     std::string content_b64(req.content().begin(), req.content().end());
-    Json::Value result;
-    auto status = _ai_client->KbUpload(req.uid(), req.file_name(),
-                                        req.file_type(), content_b64, &result);
+    memochat::json::JsonValue result;
+    auto status = _ai_client->KbUpload(req.uid(), req.file_name(), req.file_type(), content_b64, &result);
     if (!status.ok()) {
         reply->set_code(500);
         reply->set_message("upload failed");
         return grpc::Status::OK;
     }
-
-    reply->set_chunks(result.get("chunks", 0).asInt());
-    reply->set_kb_id(result.get("kb_id", "").asString());
+    reply->set_chunks(memochat::json::glaze_safe_get<int>(result["chunks"], 0));
+    reply->set_kb_id(memochat::json::glaze_safe_get<std::string>(result["kb_id"], ""));
     return grpc::Status::OK;
 }
 
-grpc::Status AIServiceCore::HandleKbSearch(const ai::AIKbSearchReq& req,
-                                             ai::AIKbSearchRsp* reply) {
+grpc::Status AIServiceCore::HandleKbSearch(const ai::AIKbSearchReq& req, ai::AIKbSearchRsp* reply) {
     reply->set_code(0);
-
-    Json::Value result;
+    memochat::json::JsonValue result;
     auto status = _ai_client->KbSearch(req.uid(), req.query(), req.top_k(), &result);
     if (!status.ok()) {
         reply->set_code(500);
         reply->set_message("search failed");
         return grpc::Status::OK;
     }
-
-    for (const auto& chunk : result["chunks"]) {
+    auto chunks = memochat::json::glaze_safe_get<std::vector<memochat::json::JsonValue>>(result["chunks"], {});
+    for (const auto& chunk : chunks) {
         auto* c = reply->add_chunks();
-        c->set_content(chunk["content"].asString());
-        c->set_score(chunk.get("score", 0.0f).asFloat());
-        c->set_source(chunk.get("source", "").asString());
+        c->set_content(memochat::json::glaze_safe_get<std::string>(chunk["content"], ""));
+        c->set_score(static_cast<float>(memochat::json::glaze_safe_get<double>(chunk["score"], 0.0)));
+        c->set_source(memochat::json::glaze_safe_get<std::string>(chunk["source"], ""));
     }
     return grpc::Status::OK;
 }
 
-grpc::Status AIServiceCore::ListKb(const ai::AIKbListReq& req,
-                                     ai::AIKbListRsp* reply) {
+grpc::Status AIServiceCore::ListKb(const ai::AIKbListReq& req, ai::AIKbListRsp* reply) {
     reply->set_code(0);
     return grpc::Status::OK;
 }
 
-grpc::Status AIServiceCore::DeleteKb(const ai::AIKbDeleteReq& req,
-                                        ai::AIKbDeleteRsp* reply) {
+grpc::Status AIServiceCore::DeleteKb(const ai::AIKbDeleteReq& req, ai::AIKbDeleteRsp* reply) {
     reply->set_code(0);
     reply->set_message("ok");
     return grpc::Status::OK;
 }
 
-grpc::Status AIServiceCore::HandleConfirm(const ai::AIConfirmReq& req,
-                                            ai::AIConfirmRsp* reply) {
+grpc::Status AIServiceCore::HandleConfirm(const ai::AIConfirmReq& req, ai::AIConfirmRsp* reply) {
     reply->set_code(0);
     reply->set_message("ok");
     return grpc::Status::OK;

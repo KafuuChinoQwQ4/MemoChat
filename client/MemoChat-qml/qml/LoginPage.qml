@@ -1,5 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import Qt.labs.settings 1.1
 import "components"
 
 Rectangle {
@@ -8,6 +9,7 @@ Rectangle {
     property bool tipError: false
     property bool busy: false
     property bool pwdVisible: false
+    property int maxCachedCredentials: 8
 
     signal loginRequested(string email, string password)
     signal switchToRegisterRequested()
@@ -34,7 +36,83 @@ Rectangle {
         return Math.max(0, Math.min(1, (revealProgress - start) / span))
     }
 
-    Component.onCompleted: revealProgress = 1.0
+    function parseCredentialCache() {
+        try {
+            const parsed = JSON.parse(credentialSettings.credentialCacheJson || "[]")
+            return Array.isArray(parsed) ? parsed : []
+        } catch (e) {
+            return []
+        }
+    }
+
+    function refreshCredentialModel() {
+        credentialModel.clear()
+        const records = parseCredentialCache()
+        for (let i = 0; i < records.length; ++i) {
+            const email = String(records[i].email || "").trim()
+            const password = String(records[i].password || "")
+            if (email.length > 0) {
+                credentialModel.append({ "email": email, "password": password })
+            }
+        }
+    }
+
+    function loadLastCredential(fillOnlyEmpty) {
+        refreshCredentialModel()
+        if (credentialModel.count <= 0) {
+            return
+        }
+        if (fillOnlyEmpty && (emailField.text.length > 0 || pwdField.text.length > 0)) {
+            return
+        }
+        emailField.text = credentialModel.get(0).email
+        pwdField.text = credentialModel.get(0).password
+    }
+
+    function saveCredential(email, password) {
+        const normalizedEmail = String(email || "").trim()
+        if (normalizedEmail.length <= 0 || String(password || "").length <= 0) {
+            return
+        }
+        const records = parseCredentialCache().filter(function(item) {
+            return String(item.email || "").trim().toLowerCase() !== normalizedEmail.toLowerCase()
+        })
+        records.unshift({ "email": normalizedEmail, "password": String(password || "") })
+        credentialSettings.credentialCacheJson = JSON.stringify(records.slice(0, maxCachedCredentials))
+        refreshCredentialModel()
+    }
+
+    function applyCredential(index) {
+        if (index < 0 || index >= credentialModel.count) {
+            return
+        }
+        const record = credentialModel.get(index)
+        emailField.text = record.email
+        pwdField.text = record.password
+        credentialPopup.close()
+        loginRoot.clearTipRequested()
+    }
+
+    Component.onCompleted: {
+        revealProgress = 1.0
+        loadLastCredential(false)
+    }
+
+    onVisibleChanged: {
+        if (visible) {
+            loadLastCredential(true)
+        }
+    }
+
+    Settings {
+        id: credentialSettings
+        category: "LoginCredentialCache"
+        property string credentialCacheJson: "[]"
+    }
+
+    ListModel {
+        id: credentialModel
+    }
 
     Behavior on revealProgress {
         NumberAnimation {
@@ -106,23 +184,141 @@ Rectangle {
             }
         }
 
-        GlassTextField {
-            id: emailField
+        Item {
             width: parent.width
             height: 46
-            backdrop: backdropLayer
-            blurRadius: 28
-            cornerRadius: 11
-            leftInset: 16
-            rightInset: 16
-            textPixelSize: 17
-            placeholderText: "输入邮箱"
-            inputMethodHints: Qt.ImhEmailCharactersOnly | Qt.ImhNoPredictiveText | Qt.ImhPreferLatin
-            maximumLength: 128
-            validator: emailInputValidator
             opacity: loginRoot.stageValue(0.19, 0.18)
             scale: 0.97 + 0.03 * opacity
-            onTextChanged: loginRoot.clearTipRequested()
+
+            GlassTextField {
+                id: emailField
+                anchors.fill: parent
+                backdrop: backdropLayer
+                blurRadius: 28
+                cornerRadius: 11
+                leftInset: 16
+                rightInset: 46
+                textPixelSize: 17
+                placeholderText: "输入邮箱"
+                inputMethodHints: Qt.ImhEmailCharactersOnly | Qt.ImhNoPredictiveText | Qt.ImhPreferLatin
+                maximumLength: 128
+                validator: emailInputValidator
+                onTextChanged: loginRoot.clearTipRequested()
+            }
+
+            Rectangle {
+                id: credentialDropButton
+                z: 2
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                anchors.rightMargin: 9
+                width: 28
+                height: 28
+                radius: 14
+                color: credentialDropArea.pressed ? Qt.rgba(0.35, 0.61, 0.90, 0.24)
+                                                  : credentialDropArea.containsMouse ? Qt.rgba(0.35, 0.61, 0.90, 0.14)
+                                                                                     : "transparent"
+                border.width: credentialPopup.visible ? 1 : 0
+                border.color: Qt.rgba(0.65, 0.84, 1.0, 0.75)
+                visible: true
+                opacity: credentialModel.count > 0 ? 1.0 : 0.45
+
+                Image {
+                    anchors.centerIn: parent
+                    width: 16
+                    height: 16
+                    source: "qrc:/icons/dropdown.png"
+                    fillMode: Image.PreserveAspectFit
+                    opacity: credentialDropArea.containsMouse || credentialPopup.visible ? 0.95 : 0.75
+                    rotation: credentialPopup.visible ? 180 : 0
+
+                    Behavior on rotation {
+                        NumberAnimation {
+                            duration: 120
+                            easing.type: Easing.OutQuad
+                        }
+                    }
+
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: 120
+                            easing.type: Easing.OutQuad
+                        }
+                    }
+                }
+            }
+
+            MouseArea {
+                id: credentialDropArea
+                z: 3
+                anchors.fill: credentialDropButton
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                enabled: true
+                onClicked: {
+                    refreshCredentialModel()
+                    if (credentialModel.count <= 0) {
+                        return
+                    }
+                    if (credentialPopup.visible) {
+                        credentialPopup.close()
+                    } else {
+                        credentialPopup.open()
+                    }
+                }
+            }
+
+            Popup {
+                id: credentialPopup
+                x: 0
+                y: parent.height + 6
+                width: parent.width
+                height: Math.min(credentialList.contentHeight + 12, 190)
+                padding: 6
+                modal: false
+                focus: true
+                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+                background: Rectangle {
+                    radius: 12
+                    color: Qt.rgba(255, 255, 255, 0.92)
+                    border.width: 1
+                    border.color: Qt.rgba(0.70, 0.82, 0.94, 0.95)
+                }
+
+                ListView {
+                    id: credentialList
+                    anchors.fill: parent
+                    clip: true
+                    model: credentialModel
+                    boundsBehavior: Flickable.StopAtBounds
+                    delegate: Rectangle {
+                        width: credentialList.width
+                        height: 38
+                        radius: 8
+                        color: credentialMouse.containsMouse ? Qt.rgba(0.35, 0.61, 0.90, 0.14) : "transparent"
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+                            text: email
+                            color: "#26384d"
+                            font.pixelSize: 14
+                            elide: Text.ElideRight
+                        }
+
+                        MouseArea {
+                            id: credentialMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: loginRoot.applyCredential(index)
+                        }
+                    }
+                }
+            }
         }
 
         Item {
@@ -222,7 +418,8 @@ Rectangle {
                 if (!ready) {
                     return
                 }
-                loginRoot.loginRequested(emailField.text, pwdField.text)
+                saveCredential(emailField.text, pwdField.text)
+                loginRoot.loginRequested(emailField.text.trim(), pwdField.text)
             }
 
             onTriggered: triggerLogin()

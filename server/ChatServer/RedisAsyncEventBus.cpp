@@ -4,10 +4,10 @@
 #include "ChatRuntime.h"
 #include "RedisMgr.h"
 
-#include <json/json.h>
+#include "json/GlazeCompat.h"
 #include <memory>
 
-bool RedisAsyncEventBus::Publish(const std::string& topic, const Json::Value& payload, std::string* error)
+bool RedisAsyncEventBus::Publish(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error)
 {
     auto envelope = BuildAsyncEventEnvelope(topic, payload);
     const auto serialized = SerializeAsyncEventEnvelope(envelope);

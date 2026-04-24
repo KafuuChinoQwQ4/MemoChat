@@ -14,14 +14,7 @@
 #include <algorithm>
 
 #ifdef _WIN32
-#include <winsock2.h>
-// Undef Windows min/max macros before STL usage
-#ifdef min
-#undef min
-#endif
-#ifdef max
-#undef max
-#endif
+#include "../../../server/common/WinsockCompat.h"
 #endif
 
 namespace memochat {

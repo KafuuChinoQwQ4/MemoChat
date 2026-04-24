@@ -1,5 +1,6 @@
 #include "scenario.hpp"
 #include "client.hpp"
+#include "quic_lib.hpp"
 
 #if defined(MEMOCHAT_ENABLE_MSQUIC)
 #include <msquic.h>
@@ -329,9 +330,14 @@ struct Http3Client {
         switch (ev->Type) {
             case QUIC_STREAM_EVENT_RECEIVE: {
                 std::lock_guard<std::mutex> lk(self->recv_mu_);
-                const uint8_t* data = static_cast<const uint8_t*>(ev->RECEIVE.Data);
-                self->receive_buf_.insert(self->receive_buf_.end(),
-                    data, data + ev->RECEIVE.DataLength);
+                const QUIC_BUFFER* buf = ev->RECEIVE.Buffers;
+                uint32_t count = ev->RECEIVE.BufferCount;
+                for (uint32_t i = 0; i < count; ++i) {
+                    if (buf[i].Buffer && buf[i].Length > 0) {
+                        auto* d = static_cast<const uint8_t*>(buf[i].Buffer);
+                        self->receive_buf_.insert(self->receive_buf_.end(), d, d + buf[i].Length);
+                    }
+                }
                 self->parse_http3_frames();
                 return QUIC_STATUS_SUCCESS;
             }

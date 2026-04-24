@@ -23,7 +23,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <cstdlib>
 #include <functional>
-#include <json/json.h>
+#include "json/GlazeCompat.h"
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -48,15 +48,15 @@ gateauthsupport::UserInfo ToGateAuthUserInfo(const UserInfo& src) {
 
 void AuthHttpService::RegisterRoutes(LogicSystem& logic) {
     logic.RegPost("/get_varifycode", [](std::shared_ptr<HttpConnection> connection) {
-        Json::Value root;
-        Json::Value src_root;
+        memochat::json::JsonValue root;
+        memochat::json::JsonValue src_root;
         if (!GateHttpJsonSupport::ParseJsonBody(connection, root, src_root)) {
             memolog::LogWarn("gate.get_varifycode.invalid_json", "request json parse failed");
             beast::ostream(connection->_response.body()) << root.toStyledString();
             return true;
         }
 
-        if (!src_root.isMember("email")) {
+        if (!isMember(src_root, "email")) {
             memolog::LogWarn("gate.get_varifycode.invalid_body", "email is missing");
             root["error"] = ErrorCodes::Error_Json;
             beast::ostream(connection->_response.body()) << root.toStyledString();
@@ -74,8 +74,8 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic) {
     });
 
     logic.RegPost("/user_register", [](std::shared_ptr<HttpConnection> connection) {
-        Json::Value root;
-        Json::Value src_root;
+        memochat::json::JsonValue root;
+        memochat::json::JsonValue src_root;
         if (!GateHttpJsonSupport::ParseJsonBody(connection, root, src_root)) {
             memolog::LogWarn("gate.user_register.invalid_json", "request json parse failed");
             beast::ostream(connection->_response.body()) << root.toStyledString();
@@ -151,8 +151,8 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic) {
     });
 
     logic.RegPost("/reset_pwd", [](std::shared_ptr<HttpConnection> connection) {
-        Json::Value root;
-        Json::Value src_root;
+        memochat::json::JsonValue root;
+        memochat::json::JsonValue src_root;
         if (!GateHttpJsonSupport::ParseJsonBody(connection, root, src_root)) {
             memolog::LogWarn("gate.reset_pwd.invalid_json", "request json parse failed");
             beast::ostream(connection->_response.body()) << root.toStyledString();
@@ -206,8 +206,8 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic) {
 
     logic.RegPost("/user_login", [](std::shared_ptr<HttpConnection> connection) {
         const auto login_start_ms = gateauthsupport::NowMs();
-        Json::Value root;
-        Json::Value src_root;
+        memochat::json::JsonValue root;
+        memochat::json::JsonValue src_root;
         root["trace_id"] = connection->_trace_id;
         if (!GateHttpJsonSupport::ParseJsonBody(connection, root, src_root)) {
             memolog::LogWarn("gate.user_login.invalid_json", "request json parse failed");
@@ -317,7 +317,7 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic) {
         root["host"] = route_nodes.front().host;
         root["port"] = route_nodes.front().port;
         root["login_ticket"] = login_ticket;
-        root["ticket_expire_ms"] = static_cast<Json::Int64>(claims.expire_at_ms);
+        root["ticket_expire_ms"] = static_cast<int64_t>(claims.expire_at_ms);
         root["user_profile"]["uid"] = userInfo.uid;
         root["user_profile"]["user_id"] = userInfo.user_id;
         root["user_profile"]["name"] = userInfo.name;
@@ -326,28 +326,29 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic) {
         root["user_profile"]["desc"] = userInfo.desc;
         root["user_profile"]["email"] = userInfo.email;
         root["user_profile"]["sex"] = userInfo.sex;
+        auto chat_endpoints_arr = root["chat_endpoints"];
         for (const auto& route_node : route_nodes) {
             if (!route_node.quic_host.empty() && !route_node.quic_port.empty()) {
-                Json::Value quic_endpoint;
+                memochat::json::JsonValue quic_endpoint;
                 quic_endpoint["transport"] = "quic";
                 quic_endpoint["host"] = route_node.quic_host;
                 quic_endpoint["port"] = route_node.quic_port;
                 quic_endpoint["server_name"] = route_node.name;
                 quic_endpoint["priority"] = route_node.priority;
-                root["chat_endpoints"].append(quic_endpoint);
+                memochat::json::glaze_array_append(chat_endpoints_arr, quic_endpoint);
             }
-            Json::Value endpoint;
+            memochat::json::JsonValue endpoint;
             endpoint["transport"] = "tcp";
             endpoint["host"] = route_node.host;
             endpoint["port"] = route_node.port;
             endpoint["server_name"] = route_node.name;
             endpoint["priority"] = route_node.priority;
-            root["chat_endpoints"].append(endpoint);
+            memochat::json::glaze_array_append(chat_endpoints_arr, endpoint);
         }
-        root["stage_metrics"]["mysql_check_pwd_ms"] = static_cast<Json::Int64>(mysql_check_pwd_ms);
-        root["stage_metrics"]["route_select_ms"] = static_cast<Json::Int64>(route_select_ms);
-        root["stage_metrics"]["ticket_issue_ms"] = static_cast<Json::Int64>(ticket_issue_ms);
-        root["stage_metrics"]["user_login_total_ms"] = static_cast<Json::Int64>(gateauthsupport::NowMs() - login_start_ms);
+        root["stage_metrics"]["mysql_check_pwd_ms"] = static_cast<int64_t>(mysql_check_pwd_ms);
+        root["stage_metrics"]["route_select_ms"] = static_cast<int64_t>(route_select_ms);
+        root["stage_metrics"]["ticket_issue_ms"] = static_cast<int64_t>(ticket_issue_ms);
+        root["stage_metrics"]["user_login_total_ms"] = static_cast<int64_t>(gateauthsupport::NowMs() - login_start_ms);
         memolog::LogInfo("gate.user_login", "user login succeeded",
             {
                 {"uid", std::to_string(userInfo.uid)},
@@ -395,15 +396,15 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic) {
 void ProfileHttpService::RegisterRoutes(LogicSystem& logic)
 {
     logic.RegPost("/user_update_profile", [](std::shared_ptr<HttpConnection> connection) {
-        Json::Value root;
-        Json::Value src_root;
+        memochat::json::JsonValue root;
+        memochat::json::JsonValue src_root;
         if (!GateHttpJsonSupport::ParseJsonBody(connection, root, src_root)) {
             beast::ostream(connection->_response.body()) << root.toStyledString();
             return true;
         }
 
-        if (!src_root.isMember("uid") || !src_root.isMember("nick")
-            || !src_root.isMember("desc") || !src_root.isMember("icon")) {
+        if (!isMember(src_root, "uid") || !isMember(src_root, "nick")
+            || !isMember(src_root, "desc") || !isMember(src_root, "icon")) {
             root["error"] = ErrorCodes::Error_Json;
             beast::ostream(connection->_response.body()) << root.toStyledString();
             return true;
@@ -446,51 +447,55 @@ void ProfileHttpService::RegisterRoutes(LogicSystem& logic)
 void CallHttpServiceRoutes::RegisterRoutes(LogicSystem& logic)
 {
     logic.RegPost("/api/call/start", [](std::shared_ptr<HttpConnection> connection) {
-        return GateHttpJsonSupport::HandleJsonPost(connection, [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+        return GateHttpJsonSupport::HandleJsonPost(connection, [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             memolog::LogInfo("call.start.requested", "call start requested", {{"trace_id", trace_id}, {"module", "call"}});
             return CallService::GetInstance()->StartCall(src_root, root, trace_id);
         });
     });
     logic.RegPost("/api/call/accept", [](std::shared_ptr<HttpConnection> connection) {
-        return GateHttpJsonSupport::HandleJsonPost(connection, [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+        return GateHttpJsonSupport::HandleJsonPost(connection, [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             return CallService::GetInstance()->AcceptCall(src_root, root, trace_id);
         });
     });
     logic.RegPost("/api/call/reject", [](std::shared_ptr<HttpConnection> connection) {
-        return GateHttpJsonSupport::HandleJsonPost(connection, [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+        return GateHttpJsonSupport::HandleJsonPost(connection, [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             return CallService::GetInstance()->RejectCall(src_root, root, trace_id);
         });
     });
     logic.RegPost("/api/call/cancel", [](std::shared_ptr<HttpConnection> connection) {
-        return GateHttpJsonSupport::HandleJsonPost(connection, [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+        return GateHttpJsonSupport::HandleJsonPost(connection, [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             return CallService::GetInstance()->CancelCall(src_root, root, trace_id);
         });
     });
     logic.RegPost("/api/call/hangup", [](std::shared_ptr<HttpConnection> connection) {
-        return GateHttpJsonSupport::HandleJsonPost(connection, [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
+        return GateHttpJsonSupport::HandleJsonPost(connection, [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
             return CallService::GetInstance()->HangupCall(src_root, root, trace_id);
         });
     });
     logic.RegGet("/api/call/token", [](std::shared_ptr<HttpConnection> connection) {
         connection->_response.set(http::field::content_type, "text/json");
-        Json::Value root;
         const int uid = std::atoi(connection->_get_params["uid"].c_str());
         const std::string token = connection->_get_params["token"];
         const std::string call_id = connection->_get_params["call_id"];
         const std::string role = connection->_get_params["role"];
+        memochat::json::JsonValue root;
         CallService::GetInstance()->GetToken(uid, token, call_id, role, root, connection->_trace_id);
-        if (!root.isMember("trace_id")) {
-            root["trace_id"] = connection->_trace_id;
+        std::string json_str = memochat::json::glaze_stringify(root);
+        if (json_str.find("\"trace_id\"") == std::string::npos) {
+            if (json_str.back() == '}') {
+                json_str.pop_back();
+                json_str += ",\"trace_id\":\"" + connection->_trace_id + "\"}";
+            }
         }
-        beast::ostream(connection->_response.body()) << root.toStyledString();
+        beast::ostream(connection->_response.body()) << json_str;
         return true;
     });
     logic.RegPost("/api/call/token", [](std::shared_ptr<HttpConnection> connection) {
-        return GateHttpJsonSupport::HandleJsonPost(connection, [](const Json::Value& src_root, Json::Value& root, const std::string& trace_id) {
-            const int uid = src_root.get("uid", 0).asInt();
-            const std::string token = src_root.get("token", "").asString();
-            const std::string call_id = src_root.get("call_id", "").asString();
-            const std::string role = src_root.get("role", "").asString();
+        return GateHttpJsonSupport::HandleJsonPost(connection, [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
+            const int uid = memochat::json::glaze_safe_get<int>(src_root, "uid", 0);
+            const std::string token = memochat::json::glaze_safe_get<std::string>(src_root, "token", "");
+            const std::string call_id = memochat::json::glaze_safe_get<std::string>(src_root, "call_id", "");
+            const std::string role = memochat::json::glaze_safe_get<std::string>(src_root, "role", "");
             return CallService::GetInstance()->GetToken(uid, token, call_id, role, root, trace_id);
         });
     });

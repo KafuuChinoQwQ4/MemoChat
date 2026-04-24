@@ -1,19 +1,16 @@
 #pragma once
 
+#include "json/GlazeCompat.h"
 #include <memory>
 #include <string>
 
 class CSession;
 class LogicSystem;
-namespace Json {
-class Value;
-}
-
 class GroupMessageService {
 public:
     explicit GroupMessageService(LogicSystem& logic);
 
-    void BuildGroupListJson(int uid, Json::Value& out);
+    void BuildGroupListJson(int uid, memochat::json::JsonValue& out);
     void HandleCreateGroup(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
     void HandleGetGroupList(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
     void HandleInviteGroupMember(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);

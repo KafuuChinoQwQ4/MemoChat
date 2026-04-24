@@ -10,16 +10,9 @@
 #include <filesystem>
 
 #ifdef _WIN32
-#include <windows.h>
+#include "../../../server/common/WinSdkCompat.h"
 #include <psapi.h>
 #include <processthreadsapi.h>
-// Undef Windows min/max macros before STL usage
-#ifdef min
-#undef min
-#endif
-#ifdef max
-#undef max
-#endif
 #else
 #include <sys/resource.h>
 #include <unistd.h>

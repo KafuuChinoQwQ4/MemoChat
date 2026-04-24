@@ -27,10 +27,12 @@ struct Http2Response {
         body = json_body;
         content_type = "application/json";
     }
+
     void SetStatus(int code, const std::string& msg) {
         status_code = code;
         status_message = msg;
     }
+
     void SetHeader(const std::string& key, const std::string& value) {
         headers[key] = value;
     }
@@ -38,11 +40,9 @@ struct Http2Response {
 
 using Http2Handler = std::function<void(const Http2Request&, Http2Response&)>;
 
-class Http2Routes
-{
+class Http2Routes {
 public:
     static void RegisterRoutes();
     static void HandleRequest(const Http2Request& req, Http2Response& resp);
-
     static void RegisterHandler(const std::string& method, const std::string& path, Http2Handler handler);
 };

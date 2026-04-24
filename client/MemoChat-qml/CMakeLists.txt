@@ -14,12 +14,12 @@ if(WIN32 AND MSVC)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /LIBPATH:\"$ENV{VC_TOOLS_LIB}\" /LIBPATH:\"$ENV{WINSDK_LIB_UM}\"")
 endif()
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(MSVC)
     add_compile_options(/wd4819 /utf-8)
-    # Allow standard library headers through /external:W0 so C++20 <span> etc. are visible
+    # Allow standard library headers through /external:W0 so C++23 features are visible
     add_compile_options(/wd4819 /utf-8 /wd4038)
 endif()
 

@@ -12,11 +12,11 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <iostream>
-#include <json/json.h>
+#include "json/GlazeCompat.h"
 
 LogicSystem::LogicSystem() {
 	RegGet("/healthz", [](std::shared_ptr<HttpConnection> connection) {
-		Json::Value root;
+		memochat::json::JsonValue root;
 		root["status"] = "ok";
 		root["service"] = "GateServer";
 		connection->_response.result(http::status::ok);
@@ -26,7 +26,7 @@ LogicSystem::LogicSystem() {
 	});
 
 	RegGet("/readyz", [](std::shared_ptr<HttpConnection> connection) {
-		Json::Value root;
+		memochat::json::JsonValue root;
 		root["status"] = "ready";
 		root["service"] = "GateServer";
 		connection->_response.result(http::status::ok);
@@ -51,9 +51,9 @@ LogicSystem::LogicSystem() {
 		auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
 		std::cout << "receive body is " << body_str << std::endl;
 		connection->_response.set(http::field::content_type, "text/json");
-		Json::Value root;
-		Json::Reader reader;
-		Json::Value src_root;
+		memochat::json::JsonValue root;
+		memochat::json::JsonReader reader;
+		memochat::json::JsonValue src_root;
 		bool parse_success = reader.parse(body_str, src_root);
 		if (!parse_success) {
 			std::cout << "Failed to parse JSON data!" << std::endl;
@@ -63,7 +63,7 @@ LogicSystem::LogicSystem() {
 			return true;
 		}
 
-		if (!src_root.isMember("email")) {
+		if (!isMember(src_root, "email")) {
 			std::cout << "Failed to parse JSON data!" << std::endl;
 			root["error"] = ErrorCodes::Error_Json;
 			std::string jsonstr = root.toStyledString();

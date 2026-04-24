@@ -3,11 +3,30 @@ build-*
 /build/
 /开发文档/
 
+# ---- Local environment / credentials ----
+.env
+.env.*
+!.env.example
+*.local
+*.secret
+*.secrets
+*.token
+*.credentials
+*.credentials.json
+*.password
+id_rsa*
+id_ed25519*
+*.ppk
+*.pub
+
 # ---- Sensitive files (must ignore *.key/*.pfx, keep only checked-in certs) ----
 /.secrets/
 *.key
 *.pfx
 *.pem
+*.cert
+*.jks
+*.keystore
 # Keep only the source-tree cert/key pairs (NOT the runtime/ generated ones)
 !/server/GateServerDrogon/server.crt
 !/server/GateServerDrogon/server.key
@@ -15,6 +34,9 @@ build-*
 !/server/GateServer/server.key
 
 # Runtime-generated certs and keys (auto-generated at startup, never commit)
+/server.crt
+/server.key
+/server.pfx
 Memo_ops/runtime/services/GateServer/server.crt
 Memo_ops/runtime/services/GateServer/server.key
 Memo_ops/runtime/services/GateServer/server.pfx
@@ -23,6 +45,11 @@ Memo_ops/runtime/services/GateServerDrogon/server.key
 Memo_ops/runtime/services/GateServerDrogon/server.pfx
 
 # Runtime artifacts (logs, pids, uploads, var)
+Memo_ops/runtime/
+!Memo_ops/runtime/services/
+!Memo_ops/runtime/services/**/
+!Memo_ops/runtime/services/**/config.ini
+!Memo_ops/runtime/services/MemoOpsQml/memoops-qml.ini
 Memo_ops/runtime/services/*/logs/
 Memo_ops/runtime/services/*/uploads/
 Memo_ops/runtime/pids/
@@ -40,6 +67,9 @@ local-loadtest/accounts.register.smoke.csv
 # Legacy artifacts
 /logs/
 /reports/
+/tmp/
+/temp/
+/cache/
 /server/*/logs/
 /artifacts/
 /Memo_ops/artifacts/logs/
@@ -59,19 +89,80 @@ local-loadtest/accounts.register.smoke.csv
 /Memo_ops/.venv/
 /Memo_ops/**/__pycache__/
 /Memo_ops/*.log
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
 
 # ---- IDE / build artifacts ----
 /.vscode/
 /.vs/
+/.idea/
 /sql备份/
 Debug
 x64
 MemoChat.pro.user
 node_modules
+.cache/
+.qt/
+.qmake.stash
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+Testing/
+CTestTestfile.cmake
+
+# Common native build outputs
+*.obj
+*.o
+*.lo
+*.pch
+*.pdb
+*.ilk
+*.idb
+*.ipdb
+*.iobj
+*.exp
+*.lib
+*.dll
+*.exe
+*.so
+*.dylib
+*.a
+*.app
+*.ninja
+*.rsp
+*.tlog
+*.lastbuildstate
+*.vcxproj.user
+*.suo
+*.user
 
 # Runtime binaries (DLLs and EXEs in runtime/services/)
 Memo_ops/runtime/services/*/*.dll
 Memo_ops/runtime/services/*/*.exe
+
+# Local databases / generated logs
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.log
+*.log.*
+*.trace
+*.pid
+*.dump
+*.dmp
+*.core
+*.minidump
+*.jsonl
 
 # Qt Creator legacy client
 /client/MemoChat/.qmake.stash

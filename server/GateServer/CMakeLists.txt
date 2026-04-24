@@ -50,24 +50,30 @@ memochat_configure_server_target(GateServer)
 target_link_libraries(GateServer PRIVATE
     GateServerCore
     GateServerHttp3
+    memochat_boost_stubs
 )
+
+if(WIN32)
+    if(DEFINED ENV{WINSDK_LIB_UM} AND NOT "$ENV{WINSDK_LIB_UM}" STREQUAL "")
+        set(_WINSDK_LIB_UM "$ENV{WINSDK_LIB_UM}")
+    else()
+        set(_WINSDK_LIB_UM "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.28000.0/um/x64")
+    endif()
+    if(DEFINED ENV{WINSDK_LIB_UCRT} AND NOT "$ENV{WINSDK_LIB_UCRT}" STREQUAL "")
+        set(_WINSDK_LIB_UCRT "$ENV{WINSDK_LIB_UCRT}")
+    else()
+        set(_WINSDK_LIB_UCRT "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.28000.0/ucrt/x64")
+    endif()
+    target_link_options(GateServer PRIVATE
+        "/LIBPATH:${_WINSDK_LIB_UM}"
+        "/LIBPATH:${_WINSDK_LIB_UCRT}")
+endif()
 
 target_include_directories(GateServer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../GateServerCore
     ${CMAKE_CURRENT_SOURCE_DIR}/../GateServerHttp3
 )
-
-if(WIN32)
-    # Environment variables: WINSDK_LIB_UM, WINSDK_LIB_UCRT, VC_TOOLS_LIB
-    target_link_options(GateServer PRIVATE
-        "/LIBPATH:$ENV{WINSDK_LIB_UM}"
-        "/LIBPATH:$ENV{WINSDK_LIB_UCRT}"
-        "/LIBPATH:$ENV{VC_TOOLS_LIB}")
-    if(TARGET OpenSSL::applink)
-        target_link_libraries(GateServer PRIVATE OpenSSL::applink)
-    endif()
-endif()
 
 if(MEMOCHAT_ENABLE_HTTP3)
     find_path(MSQUIC_BIN_DIR NAMES msquic.dll PATHS

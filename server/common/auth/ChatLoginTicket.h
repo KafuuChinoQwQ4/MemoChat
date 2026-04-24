@@ -1,10 +1,9 @@
 #pragma once
 
-#include <json/json.h>
-#include <json/reader.h>
-#include <json/writer.h>
+#include <glaze/glaze.hpp>
 #include <algorithm>
 #include <cstdint>
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -30,7 +29,31 @@ struct ChatLoginTicketClaims {
     int protocol_version = 3;
     int64_t issued_at_ms = 0;
     int64_t expire_at_ms = 0;
+}; // end struct ChatLoginTicketClaims
+
+} // namespace memochat::auth
+
+// Glaze 6.x reflection using glz::meta specialization - must be at global or glz namespace scope
+template <>
+struct glz::meta<memochat::auth::ChatLoginTicketClaims> {
+    using T = memochat::auth::ChatLoginTicketClaims;
+    static constexpr auto value = glz::object(
+        "uid", &T::uid,
+        "user_id", &T::user_id,
+        "name", &T::name,
+        "nick", &T::nick,
+        "icon", &T::icon,
+        "desc", &T::desc,
+        "email", &T::email,
+        "sex", &T::sex,
+        "target_server", &T::target_server,
+        "protocol_version", &T::protocol_version,
+        "issued_at_ms", &T::issued_at_ms,
+        "expire_at_ms", &T::expire_at_ms
+    );
 };
+
+namespace memochat::auth {
 
 inline std::string Base64UrlEncode(const std::string& input) {
     static const char table[] =
@@ -151,46 +174,9 @@ inline bool HmacSha256(const std::string& key, const std::string& data, std::str
 #endif
 }
 
-inline Json::Value ClaimsToJson(const ChatLoginTicketClaims& claims) {
-    Json::Value root(Json::objectValue);
-    root["uid"] = claims.uid;
-    root["user_id"] = claims.user_id;
-    root["name"] = claims.name;
-    root["nick"] = claims.nick;
-    root["icon"] = claims.icon;
-    root["desc"] = claims.desc;
-    root["email"] = claims.email;
-    root["sex"] = claims.sex;
-    root["target_server"] = claims.target_server;
-    root["protocol_version"] = claims.protocol_version;
-    root["issued_at_ms"] = static_cast<Json::Int64>(claims.issued_at_ms);
-    root["expire_at_ms"] = static_cast<Json::Int64>(claims.expire_at_ms);
-    return root;
-}
-
-inline bool ClaimsFromJson(const Json::Value& root, ChatLoginTicketClaims& claims) {
-    if (!root.isObject()) {
-        return false;
-    }
-    claims.uid = root.get("uid", 0).asInt();
-    claims.user_id = root.get("user_id", "").asString();
-    claims.name = root.get("name", "").asString();
-    claims.nick = root.get("nick", "").asString();
-    claims.icon = root.get("icon", "").asString();
-    claims.desc = root.get("desc", "").asString();
-    claims.email = root.get("email", "").asString();
-    claims.sex = root.get("sex", 0).asInt();
-    claims.target_server = root.get("target_server", "").asString();
-    claims.protocol_version = root.get("protocol_version", 0).asInt();
-    claims.issued_at_ms = root.get("issued_at_ms", 0).asInt64();
-    claims.expire_at_ms = root.get("expire_at_ms", 0).asInt64();
-    return claims.uid > 0 && !claims.target_server.empty();
-}
-
 inline std::string EncodeTicket(const ChatLoginTicketClaims& claims, const std::string& secret) {
-    Json::StreamWriterBuilder builder;
-    builder["indentation"] = "";
-    const std::string payload = Json::writeString(builder, ClaimsToJson(claims));
+    std::string payload;
+    (void)glz::write_json(claims, payload);
     std::string mac;
     if (!HmacSha256(secret, payload, mac)) {
         return std::string();
@@ -218,6 +204,7 @@ inline bool DecodeAndVerifyTicket(const std::string& ticket,
         }
         return false;
     }
+
     std::string expected_mac;
     if (!HmacSha256(secret, payload, expected_mac) || expected_mac != signature) {
         if (error_code) {
@@ -226,15 +213,14 @@ inline bool DecodeAndVerifyTicket(const std::string& ticket,
         return false;
     }
 
-    Json::Value root;
-    Json::Reader reader;
-    if (!reader.parse(payload, root) || !ClaimsFromJson(root, claims)) {
+    auto ec = glz::read_json(claims, payload);
+    if (ec) {
         if (error_code) {
             *error_code = "payload";
         }
         return false;
     }
-    return true;
+    return claims.uid > 0 && !claims.target_server.empty();
 }
 
 } // namespace memochat::auth

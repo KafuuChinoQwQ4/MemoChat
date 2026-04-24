@@ -3,18 +3,15 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include "json/GlazeCompat.h"
 
 class GateHttp3Connection;
-
-namespace Json {
-class Value;
-}
 
 class GateHttp3JsonSupport {
 public:
     static bool ParseJsonBody(std::shared_ptr<GateHttp3Connection> connection,
-                              Json::Value& root, Json::Value& src_root);
+                              memochat::json::JsonValue& root, memochat::json::JsonValue& src_root);
     static bool HandleJsonPost(
         std::shared_ptr<GateHttp3Connection> connection,
-        std::function<bool(const Json::Value&, Json::Value&, const std::string&)> fn);
+        std::function<bool(const memochat::json::JsonValue&, memochat::json::JsonValue&, const std::string&)> fn);
 };

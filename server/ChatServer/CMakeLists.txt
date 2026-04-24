@@ -89,7 +89,7 @@ add_executable(ChatServer
 
 set_target_properties(ChatServer PROPERTIES FOLDER "Server")
 memochat_configure_server_target(ChatServer)
-target_link_libraries(ChatServer PRIVATE ${MEMOCHAT_MONGOCXX_TARGET} ${MEMOCHAT_BSONCXX_TARGET} ${MEMOCHAT_PQXX_TARGET})
+target_link_libraries(ChatServer PRIVATE memochat_boost_stubs ${MEMOCHAT_MONGOCXX_TARGET} ${MEMOCHAT_BSONCXX_TARGET} ${MEMOCHAT_PQXX_TARGET})
 if(WIN32)
     # Environment variables: WINSDK_LIB_UM, WINSDK_LIB_UCRT, VC_TOOLS_LIB
     target_link_directories(ChatServer PRIVATE

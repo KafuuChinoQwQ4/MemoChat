@@ -2,10 +2,7 @@
 
 #include <cstdint>
 #include <string>
-
-namespace Json {
-class Value;
-}
+#include "json/GlazeCompat.h"
 
 struct AsyncEventEnvelope {
     std::string event_id;
@@ -14,16 +11,12 @@ struct AsyncEventEnvelope {
     std::string trace_id;
     std::string request_id;
     int retry_count = 0;
-    Json::Value* payload_ptr = nullptr;
+    memochat::json::JsonValue payload;
 
     AsyncEventEnvelope();
     AsyncEventEnvelope(const AsyncEventEnvelope& other);
     AsyncEventEnvelope& operator=(const AsyncEventEnvelope& other);
     ~AsyncEventEnvelope();
-
-    const Json::Value& payload() const;
-    Json::Value& payload();
-    void setPayload(const Json::Value& value);
 };
 
 struct AsyncConsumedEvent {
@@ -46,7 +39,7 @@ struct AsyncOutboxRecord {
     std::string last_error;
 };
 
-std::string BuildAsyncEventPartitionKey(const std::string& topic, const Json::Value& payload);
-AsyncEventEnvelope BuildAsyncEventEnvelope(const std::string& topic, const Json::Value& payload);
+std::string BuildAsyncEventPartitionKey(const std::string& topic, const memochat::json::JsonValue& payload);
+AsyncEventEnvelope BuildAsyncEventEnvelope(const std::string& topic, const memochat::json::JsonValue& payload);
 bool ParseAsyncEventEnvelope(const std::string& serialized, AsyncEventEnvelope& envelope);
 std::string SerializeAsyncEventEnvelope(const AsyncEventEnvelope& envelope);

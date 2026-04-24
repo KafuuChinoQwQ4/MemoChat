@@ -1,15 +1,15 @@
 #include "logging/Redaction.h"
-
 #include <algorithm>
 #include <cctype>
 
 namespace memolog {
+
+using JsonValue = glz::generic_json<>;
 namespace {
 
 std::string ToLower(std::string value) {
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return value;
 }
 
@@ -39,8 +39,8 @@ bool IsSensitiveKey(const std::string& key) {
     const std::string lower = ToLower(key);
     return lower == "passwd" || lower == "password" || lower == "token" ||
            lower == "access_token" || lower == "refresh_token" ||
-           lower == "authorization" || lower == "cookie" ||
-           lower == "email" || lower == "phone" || lower == "verify_code";
+           lower == "authorization" || lower == "cookie" || lower == "email" ||
+           lower == "phone" || lower == "verify_code";
 }
 
 std::string RedactValue(const std::string& key, const std::string& value, bool enabled) {
@@ -58,30 +58,37 @@ std::string RedactValue(const std::string& key, const std::string& value, bool e
     return "****";
 }
 
-Json::Value RedactJson(const Json::Value& input, bool enabled) {
+JsonValue RedactJson(const JsonValue& input, bool enabled) {
     if (!enabled) {
         return input;
     }
-    if (input.isObject()) {
-        Json::Value out(Json::objectValue);
-        const auto members = input.getMemberNames();
-        for (const auto& key : members) {
-            const auto& value = input[key];
-            if (value.isString() && IsSensitiveKey(key)) {
-                out[key] = RedactValue(key, value.asString(), true);
-            } else {
-                out[key] = RedactJson(value, enabled);
+
+    if (input.is_object()) {
+        using object_t = JsonValue::object_t;
+        JsonValue out{object_t{}};
+        if (auto* obj = input.get_if<object_t>()) {
+            for (const auto& [key, value] : *obj) {
+                if (value.is_string() && IsSensitiveKey(key)) {
+                    out.get_object()[key] = JsonValue{RedactValue(key, value.get_string(), true)};
+                } else {
+                    out.get_object()[key] = RedactJson(value, enabled);
+                }
             }
         }
         return out;
     }
-    if (input.isArray()) {
-        Json::Value out(Json::arrayValue);
-        for (const auto& v : input) {
-            out.append(RedactJson(v, enabled));
+
+    if (input.is_array()) {
+        using array_t = JsonValue::array_t;
+        array_t arr;
+        if (auto* vec = input.get_if<array_t>()) {
+            for (const auto& v : *vec) {
+                arr.push_back(RedactJson(v, enabled));
+            }
         }
-        return out;
+        return JsonValue{std::move(arr)};
     }
+
     return input;
 }
 
