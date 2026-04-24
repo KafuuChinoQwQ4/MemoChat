@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.14)
 project(MemoChatShared LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(MSVC)
@@ -57,7 +57,10 @@ set(CORE_HEADERS
 )
 
 add_library(MemoChatCore STATIC ${CORE_SOURCES} ${CORE_HEADERS})
-target_include_directories(MemoChatCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(MemoChatCore PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/server/common
+)
 target_link_libraries(MemoChatCore PUBLIC
     Qt${QT_VERSION_MAJOR}::Core
     Qt${QT_VERSION_MAJOR}::Gui

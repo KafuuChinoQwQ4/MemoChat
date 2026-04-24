@@ -1,4 +1,5 @@
-#include "WinCompat.h"
+﻿#include "WinCompat.h"
+#include "json/GlazeCompat.h"
 #include "Http2CallSupport.h"
 #include "../GateServerCore/CallService.h"
 #include "../GateServerCore/const.h"
@@ -16,58 +17,57 @@ int64_t NowMs() {
 
 namespace Http2CallSupport {
 
-bool ParseJsonBody(std::string_view body_sv, Json::Value& root) {
+bool ParseJsonBody(std::string_view body_sv, memochat::json::JsonValue& root) {
     std::string body_str(body_sv);
-    Json::Reader reader;
-    return reader.parse(body_str, root) && root.isObject();
+    return memochat::json::glaze_parse(root, body_str) && memochat::json::glaze_is_object(root);
 }
 
-CallResult HandleCallStart(const Json::Value& req, const std::string& trace_id) {
+CallResult HandleCallStart(const memochat::json::JsonValue& req, const std::string& trace_id) {
     CallResult result;
-    Json::Value response;
+    memochat::json::JsonValue response;
     bool ok = CallService::GetInstance()->StartCall(req, response, trace_id);
-    result.error = ok ? response.get("error", 0).asInt()
-                       : response.get("error", 1).asInt();
+    result.error = ok ? memochat::json::glaze_safe_get<int>(response, "error", 0)
+                       : memochat::json::glaze_safe_get<int>(response, "error", 1);
     result.data = response;
     return result;
 }
 
-CallResult HandleCallAccept(const Json::Value& req, const std::string& trace_id) {
+CallResult HandleCallAccept(const memochat::json::JsonValue& req, const std::string& trace_id) {
     CallResult result;
-    Json::Value response;
+    memochat::json::JsonValue response;
     bool ok = CallService::GetInstance()->AcceptCall(req, response, trace_id);
-    result.error = ok ? response.get("error", 0).asInt()
-                       : response.get("error", 1).asInt();
+    result.error = ok ? memochat::json::glaze_safe_get<int>(response, "error", 0)
+                       : memochat::json::glaze_safe_get<int>(response, "error", 1);
     result.data = response;
     return result;
 }
 
-CallResult HandleCallReject(const Json::Value& req, const std::string& trace_id) {
+CallResult HandleCallReject(const memochat::json::JsonValue& req, const std::string& trace_id) {
     CallResult result;
-    Json::Value response;
+    memochat::json::JsonValue response;
     bool ok = CallService::GetInstance()->RejectCall(req, response, trace_id);
-    result.error = ok ? response.get("error", 0).asInt()
-                       : response.get("error", 1).asInt();
+    result.error = ok ? memochat::json::glaze_safe_get<int>(response, "error", 0)
+                       : memochat::json::glaze_safe_get<int>(response, "error", 1);
     result.data = response;
     return result;
 }
 
-CallResult HandleCallCancel(const Json::Value& req, const std::string& trace_id) {
+CallResult HandleCallCancel(const memochat::json::JsonValue& req, const std::string& trace_id) {
     CallResult result;
-    Json::Value response;
+    memochat::json::JsonValue response;
     bool ok = CallService::GetInstance()->CancelCall(req, response, trace_id);
-    result.error = ok ? response.get("error", 0).asInt()
-                       : response.get("error", 1).asInt();
+    result.error = ok ? memochat::json::glaze_safe_get<int>(response, "error", 0)
+                       : memochat::json::glaze_safe_get<int>(response, "error", 1);
     result.data = response;
     return result;
 }
 
-CallResult HandleCallHangup(const Json::Value& req, const std::string& trace_id) {
+CallResult HandleCallHangup(const memochat::json::JsonValue& req, const std::string& trace_id) {
     CallResult result;
-    Json::Value response;
+    memochat::json::JsonValue response;
     bool ok = CallService::GetInstance()->HangupCall(req, response, trace_id);
-    result.error = ok ? response.get("error", 0).asInt()
-                       : response.get("error", 1).asInt();
+    result.error = ok ? memochat::json::glaze_safe_get<int>(response, "error", 0)
+                       : memochat::json::glaze_safe_get<int>(response, "error", 1);
     result.data = response;
     return result;
 }
@@ -76,24 +76,25 @@ CallResult HandleCallTokenGet(int uid, const std::string& token,
                                const std::string& call_id, const std::string& role,
                                const std::string& trace_id) {
     CallResult result;
-    Json::Value response;
+    memochat::json::JsonValue response;
     CallService::GetInstance()->GetToken(uid, token, call_id, role, response, trace_id);
-    result.error = response.get("error", 0).asInt();
+    result.error = memochat::json::glaze_safe_get<int>(response, "error", 0);
     result.data = response;
     return result;
 }
 
-CallResult HandleCallTokenPost(const Json::Value& req, const std::string& trace_id) {
+CallResult HandleCallTokenPost(const memochat::json::JsonValue& req, const std::string& trace_id) {
     CallResult result;
-    const int uid = req.get("uid", 0).asInt();
-    const std::string token = req.get("token", "").asString();
-    const std::string call_id = req.get("call_id", "").asString();
-    const std::string role = req.get("role", "").asString();
-    Json::Value response;
+    const int uid = memochat::json::glaze_safe_get<int>(req, "uid", 0);
+    const std::string token = memochat::json::glaze_safe_get<std::string>(req, "token", "");
+    const std::string call_id = memochat::json::glaze_safe_get<std::string>(req, "call_id", "");
+    const std::string role = memochat::json::glaze_safe_get<std::string>(req, "role", "");
+    memochat::json::JsonValue response;
     CallService::GetInstance()->GetToken(uid, token, call_id, role, response, trace_id);
-    result.error = response.get("error", 0).asInt();
+    result.error = memochat::json::glaze_safe_get<int>(response, "error", 0);
     result.data = response;
     return result;
 }
 
 }  // namespace Http2CallSupport
+

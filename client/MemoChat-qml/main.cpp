@@ -31,9 +31,7 @@
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
 
 #ifdef Q_OS_WIN
-#include <windows.h>
-#include <dwmapi.h>
-#pragma comment(lib, "dwmapi.lib")
+// DWM functions are declared in ClientWinCompat.h, no need to re-include
 
 #ifndef DWMWA_SYSTEMBACKDROP_TYPE
 #define DWMWA_SYSTEMBACKDROP_TYPE 38

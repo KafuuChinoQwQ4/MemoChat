@@ -35,6 +35,7 @@ target_include_directories(GateServerHttp3 PRIVATE
 
 target_link_libraries(GateServerHttp3 PUBLIC
     GateServerCore
+    memochat_boost_stubs
 )
 
 # HTTP/3 specific libraries

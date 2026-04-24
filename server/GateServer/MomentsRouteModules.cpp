@@ -12,19 +12,19 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <chrono>
-#include <json/json.h>
 
 namespace beast = boost::beast;
 namespace http = beast::http;
+namespace json = memochat::json;
 
 namespace {
 
-bool ValidateAuth(const Json::Value& src_root, Json::Value& root, int& uid) {
-    if (!src_root.isMember("uid") || !src_root.isMember("login_ticket")) {
+bool ValidateAuth(const json::JsonValue& src_root, json::JsonValue& root, int& uid) {
+    if (!json::isMember(src_root, "uid") || !json::isMember(src_root, "login_ticket")) {
         root["error"] = ErrorCodes::Error_Json;
         return false;
     }
-    uid = src_root["uid"].asInt();
+    uid = json::glaze_safe_get<int>(src_root, "uid", 0);
     if (uid <= 0) {
         root["error"] = ErrorCodes::UidInvalid;
         return false;
@@ -37,7 +37,7 @@ int64_t NowMs() {
         std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
-void BuildMomentItem(const MomentItemInfo& item, Json::Value& json) {
+void BuildMomentItem(const MomentItemInfo& item, json::JsonValue& json) {
     json["seq"] = item.seq;
     json["media_type"] = item.media_type;
     json["media_key"] = item.media_key;
@@ -48,7 +48,7 @@ void BuildMomentItem(const MomentItemInfo& item, Json::Value& json) {
     json["duration_ms"] = item.duration_ms;
 }
 
-void BuildUserProfile(int uid, Json::Value& json) {
+void BuildUserProfile(int uid, json::JsonValue& json) {
     UserInfo user_info;
     if (PostgresMgr::GetInstance()->GetUserInfo(uid, user_info)) {
         json["user_name"] = user_info.name;
@@ -62,83 +62,85 @@ void BuildUserProfile(int uid, Json::Value& json) {
     }
 }
 
-void BuildLikeList(const std::vector<MomentLikeInfo>& likes, Json::Value& json) {
-    json = Json::Value(Json::arrayValue);
+void BuildLikeList(const std::vector<MomentLikeInfo>& likes, json::JsonValue& json) {
+    json = json::glaze_make_array();
     for (const auto& like : likes) {
-        Json::Value item;
+        json::JsonValue item;
         item["uid"] = like.uid;
         item["user_nick"] = like.user_nick;
         item["user_icon"] = like.user_icon;
-        item["created_at"] = static_cast<Json::Int64>(like.created_at);
-        json.append(item);
+        item["created_at"] = static_cast<int64_t>(like.created_at);
+        json::glaze_append(json, item);
     }
 }
 
-void BuildCommentList(const std::vector<MomentCommentInfo>& comments, Json::Value& json) {
-    json = Json::Value(Json::arrayValue);
+void BuildCommentList(const std::vector<MomentCommentInfo>& comments, json::JsonValue& json) {
+    json = json::glaze_make_array();
     for (const auto& comment : comments) {
-        Json::Value item;
-        item["id"] = static_cast<Json::Int64>(comment.id);
+        json::JsonValue item;
+        item["id"] = static_cast<int64_t>(comment.id);
         item["uid"] = comment.uid;
         item["user_nick"] = comment.user_nick;
         item["user_icon"] = comment.user_icon;
         item["content"] = comment.content;
         item["reply_uid"] = comment.reply_uid;
         item["reply_nick"] = comment.reply_nick;
-        item["created_at"] = static_cast<Json::Int64>(comment.created_at);
-        json.append(item);
+        item["created_at"] = static_cast<int64_t>(comment.created_at);
+        json::glaze_append(json, item);
     }
 }
 
 void BuildMomentJson(const MomentInfo& moment, bool has_liked, const MomentContentInfo* content,
                       const std::vector<MomentLikeInfo>* likes,
                       const std::vector<MomentCommentInfo>* comments,
-                      Json::Value& json) {
-    json["moment_id"] = static_cast<Json::Int64>(moment.moment_id);
+                      json::JsonValue& json) {
+    json["moment_id"] = static_cast<int64_t>(moment.moment_id);
     json["uid"] = moment.uid;
     json["visibility"] = moment.visibility;
     json["location"] = moment.location;
-    json["created_at"] = static_cast<Json::Int64>(moment.created_at);
+    json["created_at"] = static_cast<int64_t>(moment.created_at);
     json["like_count"] = moment.like_count;
     json["comment_count"] = moment.comment_count;
     json["has_liked"] = has_liked;
     BuildUserProfile(moment.uid, json);
 
     if (content) {
-        Json::Value items_json(Json::arrayValue);
+        json::JsonValue items_json = json::glaze_make_array();
         for (const auto& item : content->items) {
-            Json::Value item_json;
+            json::JsonValue item_json;
             BuildMomentItem(item, item_json);
-            items_json.append(item_json);
+            json::glaze_append(items_json, item_json);
         }
         json["items"] = items_json;
     }
     else {
-        json["items"] = Json::arrayValue;
+        json["items"] = json::glaze_make_array();
     }
 
     if (likes) {
-        Json::Value like_names(Json::arrayValue);
+        json::JsonValue like_names = json::glaze_make_array();
         for (const auto& like : *likes) {
             if (!like.user_nick.empty()) {
-                like_names.append(like.user_nick);
+                json::glaze_append(like_names, like.user_nick);
             }
         }
         json["like_names"] = like_names;
-        json["likes"] = Json::Value(Json::arrayValue);
-        BuildLikeList(*likes, json["likes"]);
+        json::JsonValue likes_arr = json::glaze_make_array();
+        BuildLikeList(*likes, likes_arr);
+        json["likes"] = likes_arr;
     }
     else {
-        json["like_names"] = Json::Value(Json::arrayValue);
-        json["likes"] = Json::Value(Json::arrayValue);
+        json["like_names"] = json::glaze_make_array();
+        json["likes"] = json::glaze_make_array();
     }
 
     if (comments) {
-        json["comments"] = Json::Value(Json::arrayValue);
-        BuildCommentList(*comments, json["comments"]);
+        json::JsonValue comments_arr = json::glaze_make_array();
+        BuildCommentList(*comments, comments_arr);
+        json["comments"] = comments_arr;
     }
     else {
-        json["comments"] = Json::Value(Json::arrayValue);
+        json["comments"] = json::glaze_make_array();
     }
 }
 

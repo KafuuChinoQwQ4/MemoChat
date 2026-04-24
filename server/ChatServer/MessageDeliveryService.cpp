@@ -1,4 +1,4 @@
-#include "MessageDeliveryService.h"
+﻿#include "MessageDeliveryService.h"
 
 #include "ChatGrpcClient.h"
 #include "ChatRuntime.h"
@@ -10,7 +10,7 @@
 #include "cluster/ChatClusterDiscovery.h"
 
 #include <algorithm>
-#include <json/json.h>
+#include "json/GlazeCompat.h"
 #include <unordered_map>
 #include <unordered_set>
 
@@ -142,9 +142,9 @@ enum class DeliveryAttemptResult {
     RetryableFailure
 };
 
-Json::Value BuildDeliveryTaskPayload(int recipient_uid, short msgid, const Json::Value& payload, int exclude_uid, const char* reason)
+memochat::json::JsonValue BuildDeliveryTaskPayload(int recipient_uid, short msgid, const memochat::json::JsonValue& payload, int exclude_uid, const char* reason)
 {
-    Json::Value task(Json::objectValue);
+    memochat::json::JsonValue task(memochat::json::object_t{});
     task["recipient_uid"] = recipient_uid;
     task["msgid"] = msgid;
     task["exclude_uid"] = exclude_uid;
@@ -158,12 +158,12 @@ MessageDeliveryService::MessageDeliveryService(PublishTaskFn publish_task)
     : _publish_task(std::move(publish_task)) {
 }
 
-void MessageDeliveryService::PushPayload(const std::vector<int>& recipients, short msgid, const Json::Value& payload, int exclude_uid)
+void MessageDeliveryService::PushPayload(const std::vector<int>& recipients, short msgid, const memochat::json::JsonValue& payload, int exclude_uid)
 {
     TryPushPayload(recipients, msgid, payload, exclude_uid, true);
 }
 
-bool MessageDeliveryService::TryPushPayload(const std::vector<int>& recipients, short msgid, const Json::Value& payload, int exclude_uid, bool enqueue_on_failure)
+bool MessageDeliveryService::TryPushPayload(const std::vector<int>& recipients, short msgid, const memochat::json::JsonValue& payload, int exclude_uid, bool enqueue_on_failure)
 {
     if (recipients.empty()) {
         return true;
@@ -180,7 +180,7 @@ bool MessageDeliveryService::TryPushPayload(const std::vector<int>& recipients, 
         return true;
     }
 
-    const std::string payload_str = payload.toStyledString();
+    const std::string payload_str = payload.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
     std::unordered_map<std::string, std::vector<int>> remote_server_uids;
     bool all_delivered = true;
 

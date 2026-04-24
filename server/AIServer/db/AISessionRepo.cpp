@@ -1,8 +1,8 @@
 #include "db/AISessionRepo.h"
 #include "ConfigMgr.h"
 #include "logging/Logger.h"
-#include <libpqxx/pqxx>
-#include <libpqxx/transaction.hxx>
+#include <pqxx/pqxx>
+#include <pqxx/transaction.hxx>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/string_generator.hpp>
 #include <boost/uuid/random_generator.hpp>

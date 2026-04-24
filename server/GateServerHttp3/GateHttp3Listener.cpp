@@ -4,19 +4,17 @@
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
 
-#ifdef MEMOCHAT_ENABLE_HTTP3
-
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-
-#include <msquic.h>
-#include <nghttp3/nghttp3.h>
-
 #include <fstream>
 #include <sstream>
 #include <filesystem>
+#include <map>
+
+#ifdef MEMOCHAT_ENABLE_HTTP3
+
+#include "../common/WinSdkCompat.h"
+
+#include <msquic.h>
+#include <nghttp3/nghttp3.h>
 
 static const QUIC_API_TABLE* g_QuicApi = nullptr;
 static HQUIC g_Registration = nullptr;

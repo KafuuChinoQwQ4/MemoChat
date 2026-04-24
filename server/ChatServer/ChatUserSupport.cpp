@@ -6,7 +6,7 @@
 
 #include <cctype>
 #include <iostream>
-#include <json/json.h>
+#include "json/GlazeCompat.h"
 
 namespace chatusersupport {
 
@@ -20,26 +20,10 @@ bool IsPureDigit(const std::string& str)
     return true;
 }
 
-void GetUserByUid(const std::string& uid_str, Json::Value& rtvalue)
+void GetUserByUid(const std::string& uid_str, memochat::json::JsonValue& rtvalue)
 {
     rtvalue["error"] = ErrorCodes::Success;
     const std::string base_key = USER_BASE_INFO + uid_str;
-
-    std::string info_str;
-    if (RedisMgr::GetInstance()->Get(base_key, info_str)) {
-        Json::Reader reader;
-        Json::Value root;
-        reader.parse(info_str, root);
-        rtvalue["uid"] = root["uid"].asInt();
-        rtvalue["user_id"] = root["user_id"].asString();
-        rtvalue["name"] = root["name"].asString();
-        rtvalue["email"] = root["email"].asString();
-        rtvalue["nick"] = root["nick"].asString();
-        rtvalue["desc"] = root["desc"].asString();
-        rtvalue["sex"] = root["sex"].asInt();
-        rtvalue["icon"] = root["icon"].asString();
-        return;
-    }
 
     auto user_info = PostgresMgr::GetInstance()->GetUser(std::stoi(uid_str));
     if (!user_info) {
@@ -47,7 +31,7 @@ void GetUserByUid(const std::string& uid_str, Json::Value& rtvalue)
         return;
     }
 
-    Json::Value redis_root;
+    memochat::json::JsonValue redis_root;
     redis_root["uid"] = user_info->uid;
     redis_root["user_id"] = user_info->user_id;
     redis_root["pwd"] = user_info->pwd;
@@ -69,15 +53,15 @@ void GetUserByUid(const std::string& uid_str, Json::Value& rtvalue)
     rtvalue["icon"] = user_info->icon;
 }
 
-void GetUserByName(const std::string& name, Json::Value& rtvalue)
+void GetUserByName(const std::string& name, memochat::json::JsonValue& rtvalue)
 {
     rtvalue["error"] = ErrorCodes::Success;
     const std::string base_key = NAME_INFO + name;
 
     std::string info_str;
     if (RedisMgr::GetInstance()->Get(base_key, info_str)) {
-        Json::Reader reader;
-        Json::Value root;
+        memochat::json::JsonReader reader;
+        memochat::json::JsonValue root;
         reader.parse(info_str, root);
         rtvalue["uid"] = root["uid"].asInt();
         rtvalue["user_id"] = root["user_id"].asString();
@@ -95,7 +79,7 @@ void GetUserByName(const std::string& name, Json::Value& rtvalue)
         return;
     }
 
-    Json::Value redis_root;
+    memochat::json::JsonValue redis_root;
     redis_root["uid"] = user_info->uid;
     redis_root["user_id"] = user_info->user_id;
     redis_root["pwd"] = user_info->pwd;
@@ -120,8 +104,8 @@ bool GetBaseInfo(const std::string& base_key, int uid, std::shared_ptr<UserInfo>
 {
     std::string info_str;
     if (RedisMgr::GetInstance()->Get(base_key, info_str)) {
-        Json::Reader reader;
-        Json::Value root;
+        memochat::json::JsonReader reader;
+        memochat::json::JsonValue root;
         reader.parse(info_str, root);
         userinfo->uid = root["uid"].asInt();
         userinfo->user_id = root["user_id"].asString();
@@ -141,7 +125,7 @@ bool GetBaseInfo(const std::string& base_key, int uid, std::shared_ptr<UserInfo>
     }
     userinfo = user_info;
 
-    Json::Value redis_root;
+    memochat::json::JsonValue redis_root;
     redis_root["uid"] = uid;
     redis_root["user_id"] = userinfo->user_id;
     redis_root["pwd"] = userinfo->pwd;

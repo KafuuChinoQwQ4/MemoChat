@@ -7,9 +7,9 @@
 #include <map>
 #include <functional>
 #include "const.h"
-#include <json/json.h>
-#include <json/value.h>
-#include <json/reader.h>
+#include "json/GlazeCompat.h"
+
+
 #include <unordered_map>
 #include "data.h"
 #include <atomic>
@@ -55,8 +55,8 @@ public:
 	void PostMsgToQue(shared_ptr < LogicNode> msg);
 	void SetServer(std::shared_ptr<CServer> pserver);
 	MessageDeliveryService& MessageDelivery();
-	bool PublishTask(const std::string& task_type, const std::string& routing_key, const Json::Value& payload, int delay_ms = 0, int max_retries = 0, std::string* error = nullptr);
-	bool PublishAsyncEvent(const std::string& topic, const Json::Value& payload, std::string* error = nullptr);
+	bool PublishTask(const std::string& task_type, const std::string& routing_key, const memochat::json::JsonValue& payload, int delay_ms = 0, int max_retries = 0, std::string* error = nullptr);
+	bool PublishAsyncEvent(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error = nullptr);
 	bool ExpediteOutboxRepair(int64_t outbox_id);
 
 	static constexpr size_t kDefaultWorkerCount = 4;
@@ -101,21 +101,21 @@ private:
 	void MuteGroupMemberHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void KickGroupMemberHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void QuitGroupHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
-	void PushGroupPayload(const std::vector<int>& recipients, short msgid, const Json::Value& payload, int exclude_uid = 0);
-	void BuildGroupListJson(int uid, Json::Value& out);
-	void BuildDialogListJson(int uid, Json::Value& out);
-	void AppendRelationBootstrapJson(int uid, Json::Value& out);
+	void PushGroupPayload(const std::vector<int>& recipients, short msgid, const memochat::json::JsonValue& payload, int exclude_uid = 0);
+	void BuildGroupListJson(int uid, memochat::json::JsonValue& out);
+	void BuildDialogListJson(int uid, memochat::json::JsonValue& out);
+	void AppendRelationBootstrapJson(int uid, memochat::json::JsonValue& out);
 	bool isPureDigit(const std::string& str);
-	void GetUserByUid(std::string uid_str, Json::Value& rtvalue);
-	void GetUserByName(std::string name, Json::Value& rtvalue);
+	void GetUserByUid(std::string uid_str, memochat::json::JsonValue& rtvalue);
+	void GetUserByName(std::string name, memochat::json::JsonValue& rtvalue);
 	bool GetBaseInfo(std::string base_key, int uid, std::shared_ptr<UserInfo> &userinfo);
 	bool GetFriendApplyInfo(int to_uid, std::vector<std::shared_ptr<ApplyInfo>>& list);
 	bool GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo>> & user_list);
 	void DealAsyncEvents();
 	void DealTasks();
-	void HandlePrivateAsyncEvent(const Json::Value& root);
-	void HandleGroupAsyncEvent(const Json::Value& root);
-	void NotifyMessageStatus(const Json::Value& payload);
+	void HandlePrivateAsyncEvent(const memochat::json::JsonValue& root);
+	void HandleGroupAsyncEvent(const memochat::json::JsonValue& root);
+	void NotifyMessageStatus(const memochat::json::JsonValue& payload);
 
 	// Multi-worker thread pool for message processing
 	static constexpr size_t kMaxWorkers = 16;

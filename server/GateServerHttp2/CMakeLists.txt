@@ -44,7 +44,7 @@ set_target_properties(GateServerHttp2 PROPERTIES FOLDER "Server")
 memochat_configure_server_target(GateServerHttp2)
 
 # GateServerHttp2 links against GateServerCore for all shared services
-target_link_libraries(GateServerHttp2 PRIVATE GateServerCore)
+target_link_libraries(GateServerHttp2 PRIVATE GateServerCore memochat_boost_stubs)
 
 # Include directory for WinCompat.h (local dir), GateServerCore, and GateServerHttp3
 target_include_directories(GateServerHttp2 PRIVATE
@@ -54,7 +54,7 @@ target_include_directories(GateServerHttp2 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 
-target_compile_features(GateServerHttp2 PRIVATE cxx_std_20)
+target_compile_features(GateServerHttp2 PRIVATE cxx_std_23)
 set_target_properties(GateServerHttp2 PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )

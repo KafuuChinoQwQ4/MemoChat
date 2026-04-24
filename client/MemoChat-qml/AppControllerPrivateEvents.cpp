@@ -383,6 +383,26 @@ void AppController::onDialogListRsp(QJsonObject payload)
         }
     }
 
+    if (merged.empty()
+        && (!_gateway.userMgr()->GetFriendListSnapshot().empty()
+            || !_gateway.userMgr()->GetGroupListSnapshot().empty())) {
+        refreshDialogModel();
+        if (bootstrappingDialog && _current_chat_uid <= 0 && _current_group_id <= 0
+            && _dialog_list_model.count() > 0) {
+            const QVariantMap firstDialog = _dialog_list_model.get(0);
+            const int firstUid = firstDialog.value("uid").toInt();
+            if (firstUid > 0) {
+                selectChatByUid(firstUid);
+            } else if (firstUid < 0) {
+                const int groupIndex = _group_list_model.indexOfUid(firstUid);
+                if (groupIndex >= 0) {
+                    selectGroupIndex(groupIndex);
+                }
+            }
+        }
+        return;
+    }
+
     DialogListService::sortDialogs(merged);
     _dialog_list_model.upsertBatch(merged, true);
     if (_current_group_id > 0) {

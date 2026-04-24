@@ -1,9 +1,10 @@
-#include "WinCompat.h"
+﻿#include "WinCompat.h"
+#include "json/GlazeCompat.h"
 #include "Http2CallHandlers.h"
 #include "Http2CallSupport.h"
 
-static Json::Value MakeCallError(int error_code, const std::string& message) {
-    Json::Value resp;
+static memochat::json::JsonValue MakeCallError(int error_code, const std::string& message) {
+    memochat::json::JsonValue resp;
     resp["error"] = error_code;
     if (!message.empty()) {
         resp["message"] = message;
@@ -11,11 +12,11 @@ static Json::Value MakeCallError(int error_code, const std::string& message) {
     return resp;
 }
 
-static Json::Value MakeCallOk(const Json::Value& data) {
-    Json::Value resp;
+static memochat::json::JsonValue MakeCallOk(const memochat::json::JsonValue& data) {
+    memochat::json::JsonValue resp;
     resp["error"] = 0;
-    if (data.isObject()) {
-        for (const auto& key : data.getMemberNames()) {
+    if (memochat::json::glaze_is_object(data)) {
+        for (const auto& key : memochat::json::getMemberNames(data)) {
             resp[key] = data[key];
         }
     }
@@ -32,99 +33,100 @@ static std::string ExtractTraceId(const Http2Request& req) {
 
 void Http2CallHandlers::HandleCallStart(const Http2Request& req, Http2Response& resp)
 {
-    Json::Value root;
+    memochat::json::JsonValue root;
     if (!Http2CallSupport::ParseJsonBody(req.body, root)) {
-        resp.SetJsonBody(MakeCallError(1, "invalid json").toStyledString());
+        resp.SetJsonBody(memochat::json::glaze_stringify(MakeCallError(1, "invalid json")));
         return;
     }
     auto trace_id = ExtractTraceId(req);
     auto result = Http2CallSupport::HandleCallStart(root, trace_id);
-    Json::Value out = MakeCallOk(result.data);
-    resp.SetJsonBody(out.toStyledString());
+    memochat::json::JsonValue out = MakeCallOk(result.data);
+    resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }
 
 void Http2CallHandlers::HandleCallAccept(const Http2Request& req, Http2Response& resp)
 {
-    Json::Value root;
+    memochat::json::JsonValue root;
     if (!Http2CallSupport::ParseJsonBody(req.body, root)) {
-        resp.SetJsonBody(MakeCallError(1, "invalid json").toStyledString());
+        resp.SetJsonBody(memochat::json::glaze_stringify(MakeCallError(1, "invalid json")));
         return;
     }
     auto trace_id = ExtractTraceId(req);
     auto result = Http2CallSupport::HandleCallAccept(root, trace_id);
-    Json::Value out = MakeCallOk(result.data);
-    resp.SetJsonBody(out.toStyledString());
+    memochat::json::JsonValue out = MakeCallOk(result.data);
+    resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }
 
 void Http2CallHandlers::HandleCallReject(const Http2Request& req, Http2Response& resp)
 {
-    Json::Value root;
+    memochat::json::JsonValue root;
     if (!Http2CallSupport::ParseJsonBody(req.body, root)) {
-        resp.SetJsonBody(MakeCallError(1, "invalid json").toStyledString());
+        resp.SetJsonBody(memochat::json::glaze_stringify(MakeCallError(1, "invalid json")));
         return;
     }
     auto trace_id = ExtractTraceId(req);
     auto result = Http2CallSupport::HandleCallReject(root, trace_id);
-    Json::Value out = MakeCallOk(result.data);
-    resp.SetJsonBody(out.toStyledString());
+    memochat::json::JsonValue out = MakeCallOk(result.data);
+    resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }
 
 void Http2CallHandlers::HandleCallCancel(const Http2Request& req, Http2Response& resp)
 {
-    Json::Value root;
+    memochat::json::JsonValue root;
     if (!Http2CallSupport::ParseJsonBody(req.body, root)) {
-        resp.SetJsonBody(MakeCallError(1, "invalid json").toStyledString());
+        resp.SetJsonBody(memochat::json::glaze_stringify(MakeCallError(1, "invalid json")));
         return;
     }
     auto trace_id = ExtractTraceId(req);
     auto result = Http2CallSupport::HandleCallCancel(root, trace_id);
-    Json::Value out = MakeCallOk(result.data);
-    resp.SetJsonBody(out.toStyledString());
+    memochat::json::JsonValue out = MakeCallOk(result.data);
+    resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }
 
 void Http2CallHandlers::HandleCallHangup(const Http2Request& req, Http2Response& resp)
 {
-    Json::Value root;
+    memochat::json::JsonValue root;
     if (!Http2CallSupport::ParseJsonBody(req.body, root)) {
-        resp.SetJsonBody(MakeCallError(1, "invalid json").toStyledString());
+        resp.SetJsonBody(memochat::json::glaze_stringify(MakeCallError(1, "invalid json")));
         return;
     }
     auto trace_id = ExtractTraceId(req);
     auto result = Http2CallSupport::HandleCallHangup(root, trace_id);
-    Json::Value out = MakeCallOk(result.data);
-    resp.SetJsonBody(out.toStyledString());
+    memochat::json::JsonValue out = MakeCallOk(result.data);
+    resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }
 
 void Http2CallHandlers::HandleCallToken(const Http2Request& req, Http2Response& resp)
 {
-    Json::Value root;
+    memochat::json::JsonValue root;
     int uid = 0;
     std::string token;
     std::string call_id;
     std::string role;
 
     if (Http2CallSupport::ParseJsonBody(req.body, root)) {
-        uid = root.get("uid", 0).asInt();
-        token = root.get("token", "").asString();
-        call_id = root.get("call_id", "").asString();
-        role = root.get("role", "").asString();
+        uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
+        token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
+        call_id = memochat::json::glaze_safe_get<std::string>(root, "call_id", "");
+        role = memochat::json::glaze_safe_get<std::string>(root, "role", "");
     }
 
     auto trace_id = ExtractTraceId(req);
     auto result = Http2CallSupport::HandleCallTokenGet(uid, token, call_id, role, trace_id);
-    Json::Value out = MakeCallOk(result.data);
-    resp.SetJsonBody(out.toStyledString());
+    memochat::json::JsonValue out = MakeCallOk(result.data);
+    resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }
 
 void Http2CallHandlers::HandleCallTokenPost(const Http2Request& req, Http2Response& resp)
 {
-    Json::Value root;
+    memochat::json::JsonValue root;
     if (!Http2CallSupport::ParseJsonBody(req.body, root)) {
-        resp.SetJsonBody(MakeCallError(1, "invalid json").toStyledString());
+        resp.SetJsonBody(memochat::json::glaze_stringify(MakeCallError(1, "invalid json")));
         return;
     }
     auto trace_id = ExtractTraceId(req);
     auto result = Http2CallSupport::HandleCallTokenPost(root, trace_id);
-    Json::Value out = MakeCallOk(result.data);
-    resp.SetJsonBody(out.toStyledString());
+    memochat::json::JsonValue out = MakeCallOk(result.data);
+    resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }
+

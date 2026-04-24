@@ -127,7 +127,7 @@ bool MongoDao::EnsureIndexes() {
         mongocxx::options::index opts;
         opts.name("idx_moment_id");
         opts.unique(true);
-        coll.create_index(make_document(kvp("moment_id", 1)), opts);
+        coll.create_index(bsoncxx::builder::basic::make_document(kvp("moment_id", 1)), opts);
 
         return true;
     }
@@ -152,15 +152,14 @@ bool MongoDao::InsertMomentContent(const MomentContentInfo& content) {
         bsoncxx::builder::basic::array items_arr;
         for (const auto& item : content.items) {
             bsoncxx::builder::basic::document item_doc;
-            item_doc.append(
-                kvp("seq", item.seq),
-                kvp("media_type", item.media_type),
-                kvp("media_key", item.media_key),
-                kvp("thumb_key", item.thumb_key),
-                kvp("content", item.content),
-                kvp("width", item.width),
-                kvp("height", item.height),
-                kvp("duration_ms", item.duration_ms));
+            item_doc.append(kvp("seq", item.seq));
+            item_doc.append(kvp("media_type", item.media_type));
+            item_doc.append(kvp("media_key", item.media_key));
+            item_doc.append(kvp("thumb_key", item.thumb_key));
+            item_doc.append(kvp("content", item.content));
+            item_doc.append(kvp("width", item.width));
+            item_doc.append(kvp("height", item.height));
+            item_doc.append(kvp("duration_ms", item.duration_ms));
             items_arr.append(item_doc);
         }
         doc.append(kvp("items", items_arr));
@@ -168,7 +167,7 @@ bool MongoDao::InsertMomentContent(const MomentContentInfo& content) {
 
         mongocxx::options::replace replace_opts;
         replace_opts.upsert(true);
-        collection.replace_one(make_document(kvp("moment_id", content.moment_id)), doc.view(), replace_opts);
+        collection.replace_one(bsoncxx::builder::basic::make_document(kvp("moment_id", content.moment_id)), doc.view(), replace_opts);
         return true;
     }
     catch (const std::exception& e) {
@@ -185,7 +184,7 @@ bool MongoDao::GetMomentContent(int64_t moment_id, MomentContentInfo& content) {
     try {
         auto client = pool_->acquire();
         auto collection = (*client)[database_name_][moments_collection_name_];
-        auto result = collection.find_one(make_document(kvp("moment_id", moment_id)));
+        auto result = collection.find_one(bsoncxx::builder::basic::make_document(kvp("moment_id", moment_id)));
         if (!result) {
             return false;
         }
@@ -231,7 +230,7 @@ bool MongoDao::DeleteMomentContent(int64_t moment_id) {
     try {
         auto client = pool_->acquire();
         auto collection = (*client)[database_name_][moments_collection_name_];
-        collection.delete_one(make_document(kvp("moment_id", moment_id)));
+        collection.delete_one(bsoncxx::builder::basic::make_document(kvp("moment_id", moment_id)));
         return true;
     }
     catch (const std::exception& e) {

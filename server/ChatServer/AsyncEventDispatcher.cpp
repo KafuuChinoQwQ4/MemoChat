@@ -15,7 +15,7 @@
 
 #include <algorithm>
 #include <chrono>
-#include <json/json.h>
+#include "json/GlazeCompat.h"
 #include <thread>
 #include <vector>
 
@@ -160,10 +160,8 @@ int64_t NowMsAsync() {
         std::chrono::system_clock::now().time_since_epoch()).count());
 }
 
-std::string JsonToCompactStringAsync(const Json::Value& value) {
-    Json::StreamWriterBuilder builder;
-    builder["indentation"] = "";
-    return Json::writeString(builder, value);
+std::string JsonToCompactStringAsync(const memochat::json::JsonValue& value) {
+    return memochat::json::glaze_json(value);
 }
 
 void InvalidateRelationBootstrapCacheAsync(int uid) {
@@ -182,9 +180,9 @@ void AppendUniqueUidAsync(std::vector<int>& values, int uid) {
     }
 }
 
-bool ParseJsonObjectAsync(const std::string& payload, Json::Value& root) {
-    Json::CharReaderBuilder builder;
-    std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+bool ParseJsonObjectAsync(const std::string& payload, memochat::json::JsonValue& root) {
+    memochat::json::JsonCharReaderBuilder builder;
+    std::unique_ptr<memochat::json::JsonCharReader> reader(memochat::json::newCharReader(builder));
     std::string errors;
     return reader->parse(payload.data(), payload.data() + payload.size(), &root, &errors) && root.isObject();
 }
@@ -222,7 +220,7 @@ AsyncEventDispatcher::AsyncEventDispatcher(std::shared_ptr<IAsyncEventBus> event
       _push_group_payload(std::move(push_group_payload)) {
 }
 
-bool AsyncEventDispatcher::PublishAsyncEvent(const std::string& topic, const Json::Value& payload, std::string* error)
+bool AsyncEventDispatcher::PublishAsyncEvent(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error)
 {
     if (!_event_bus) {
         if (error) {
@@ -243,29 +241,30 @@ void AsyncEventDispatcher::DealAsyncEvents()
 
         AsyncConsumedEvent event;
         std::string consume_error;
+        static const std::vector<std::string> s_async_topics{
+            memochat::chatruntime::TopicPrivate(),
+            memochat::chatruntime::TopicGroup(),
+            memochat::chatruntime::TopicDialogSync(),
+            memochat::chatruntime::TopicRelationState()
+        };
         const bool handled = _event_bus &&
-            _event_bus->ConsumeOnce({
-                memochat::chatruntime::TopicPrivate(),
-                memochat::chatruntime::TopicGroup(),
-                memochat::chatruntime::TopicDialogSync(),
-                memochat::chatruntime::TopicRelationState()
-            }, event, &consume_error);
+            _event_bus->ConsumeOnce(s_async_topics, event, &consume_error);
         if (handled) {
             if (!event.parsed) {
                 memolog::LogWarn("chat.async.invalid_event", "async chat event parse failed",
                     { {"topic", event.envelope.topic}, {"error", consume_error} });
                 _event_bus->AckLastConsumed();
             } else if (event.envelope.topic == memochat::chatruntime::TopicPrivate()) {
-                HandlePrivateAsyncEvent(event.envelope.payload());
+                HandlePrivateAsyncEvent(event.envelope.payload);
                 _event_bus->AckLastConsumed();
             } else if (event.envelope.topic == memochat::chatruntime::TopicGroup()) {
-                HandleGroupAsyncEvent(event.envelope.payload());
+                HandleGroupAsyncEvent(event.envelope.payload);
                 _event_bus->AckLastConsumed();
             } else if (event.envelope.topic == memochat::chatruntime::TopicDialogSync()) {
-                HandleDialogSyncEvent(event.envelope.payload());
+                HandleDialogSyncEvent(event.envelope.payload);
                 _event_bus->AckLastConsumed();
             } else if (event.envelope.topic == memochat::chatruntime::TopicRelationState()) {
-                HandleRelationStateEvent(event.envelope.payload());
+                HandleRelationStateEvent(event.envelope.payload);
                 _event_bus->AckLastConsumed();
             } else {
                 memolog::LogWarn("chat.async.unknown_topic", "async chat event topic is not registered", { {"topic", event.envelope.topic} });
@@ -278,7 +277,7 @@ void AsyncEventDispatcher::DealAsyncEvents()
     }
 }
 
-void AsyncEventDispatcher::NotifyMessageStatus(const Json::Value& payload)
+void AsyncEventDispatcher::NotifyMessageStatus(const memochat::json::JsonValue& payload)
 {
     const int uid = payload.get("fromuid", 0).asInt();
     if (uid <= 0) {
@@ -299,14 +298,14 @@ void AsyncEventDispatcher::NotifyMessageStatus(const Json::Value& payload)
     }
 }
 
-void AsyncEventDispatcher::HandlePrivateAsyncEvent(const Json::Value& root)
+void AsyncEventDispatcher::HandlePrivateAsyncEvent(const memochat::json::JsonValue& root)
 {
     if (!root.isObject()) {
         return;
     }
     const int from_uid = root.get("fromuid", 0).asInt();
     const int to_uid = root.get("touid", 0).asInt();
-    const Json::Value text_array = root["text_array"];
+    const memochat::json::JsonValue text_array = root["text_array"];
     if (from_uid <= 0 || to_uid <= 0 || !text_array.isArray() || text_array.empty()) {
         return;
     }
@@ -316,11 +315,11 @@ void AsyncEventDispatcher::HandlePrivateAsyncEvent(const Json::Value& root)
     TextChatMsgReq text_msg_req;
     text_msg_req.set_fromuid(from_uid);
     text_msg_req.set_touid(to_uid);
-    Json::Value notify_payload;
+    memochat::json::JsonValue notify_payload;
     notify_payload["error"] = ErrorCodes::Success;
     notify_payload["fromuid"] = from_uid;
     notify_payload["touid"] = to_uid;
-    notify_payload["text_array"] = Json::arrayValue;
+    notify_payload["text_array"] = memochat::json::arrayValue;
     std::string first_msg_id;
 
     for (const auto& txt_obj : text_array) {
@@ -357,12 +356,12 @@ void AsyncEventDispatcher::HandlePrivateAsyncEvent(const Json::Value& root)
         text_msg->set_msgid(msg.msg_id);
         text_msg->set_msgcontent(msg.content);
 
-        Json::Value one;
+        memochat::json::JsonValue one;
         one["msgid"] = msg.msg_id;
         one["content"] = msg.content;
-        one["created_at"] = static_cast<Json::Int64>(msg.created_at);
+        one["created_at"] = static_cast<int64_t>(msg.created_at);
         if (msg.reply_to_server_msg_id > 0) {
-            one["reply_to_server_msg_id"] = static_cast<Json::Int64>(msg.reply_to_server_msg_id);
+            one["reply_to_server_msg_id"] = static_cast<int64_t>(msg.reply_to_server_msg_id);
         }
         notify_payload["text_array"].append(one);
     }
@@ -378,7 +377,7 @@ void AsyncEventDispatcher::HandlePrivateAsyncEvent(const Json::Value& root)
         LogPrivateRouteAsync("chat.private.route.async", from_uid, to_uid, first_msg_id, route, "skipped", false);
     }
 
-    Json::Value status_payload;
+    memochat::json::JsonValue status_payload;
     status_payload["error"] = ErrorCodes::Success;
     status_payload["scope"] = "private";
     status_payload["fromuid"] = from_uid;
@@ -386,16 +385,16 @@ void AsyncEventDispatcher::HandlePrivateAsyncEvent(const Json::Value& root)
     status_payload["peer_uid"] = to_uid;
     status_payload["client_msg_id"] = first_msg_id;
     status_payload["status"] = "persisted";
-    status_payload["persist_ts"] = static_cast<Json::Int64>(NowMsAsync());
+    status_payload["persist_ts"] = static_cast<int64_t>(NowMsAsync());
     status_payload["text_array"] = notify_payload["text_array"];
     NotifyMessageStatus(status_payload);
 
-    Json::Value dialog_sync(Json::objectValue);
+    memochat::json::JsonValue dialog_sync(memochat::json::objectValue);
     dialog_sync["scope"] = "private";
     dialog_sync["fromuid"] = from_uid;
     dialog_sync["touid"] = to_uid;
     dialog_sync["client_msg_id"] = first_msg_id;
-    dialog_sync["event_ts"] = static_cast<Json::Int64>(NowMsAsync());
+    dialog_sync["event_ts"] = static_cast<int64_t>(NowMsAsync());
     dialog_sync["text_array"] = notify_payload["text_array"];
     std::string publish_error;
     if (!first_msg_id.empty() && !PublishAsyncEvent(memochat::chatruntime::TopicDialogSync(), dialog_sync, &publish_error)) {
@@ -409,14 +408,14 @@ void AsyncEventDispatcher::HandlePrivateAsyncEvent(const Json::Value& root)
     }
 }
 
-void AsyncEventDispatcher::HandleGroupAsyncEvent(const Json::Value& root)
+void AsyncEventDispatcher::HandleGroupAsyncEvent(const memochat::json::JsonValue& root)
 {
     if (!root.isObject()) {
         return;
     }
     const int from_uid = root.get("fromuid", 0).asInt();
     const int64_t group_id = root.get("groupid", 0).asInt64();
-    Json::Value msg = root["msg"];
+    memochat::json::JsonValue msg = root["msg"];
     if (from_uid <= 0 || group_id <= 0 || !msg.isObject()) {
         return;
     }
@@ -427,7 +426,7 @@ void AsyncEventDispatcher::HandleGroupAsyncEvent(const Json::Value& root)
     info.from_uid = from_uid;
     info.msg_type = msg.get("msgtype", "text").asString();
     info.content = msg.get("content", "").asString();
-    info.mentions_json = msg.get("mentions", Json::arrayValue).toStyledString();
+    info.mentions_json = msg.get("mentions", memochat::json::arrayValue).toStyledString();
     info.file_name = msg.get("file_name", "").asString();
     info.mime = msg.get("mime", "").asString();
     info.size = msg.get("size", 0).asInt();
@@ -460,18 +459,18 @@ void AsyncEventDispatcher::HandleGroupAsyncEvent(const Json::Value& root)
         MongoMgr::GetInstance()->SaveGroupMessage(info);
     }
 
-    Json::Value notify_payload;
+    memochat::json::JsonValue notify_payload;
     notify_payload["error"] = ErrorCodes::Success;
     notify_payload["fromuid"] = from_uid;
-    notify_payload["groupid"] = static_cast<Json::Int64>(group_id);
+    notify_payload["groupid"] = static_cast<int64_t>(group_id);
     notify_payload["client_msg_id"] = info.msg_id;
-    notify_payload["created_at"] = static_cast<Json::Int64>(info.created_at);
-    notify_payload["server_msg_id"] = static_cast<Json::Int64>(info.server_msg_id);
-    notify_payload["group_seq"] = static_cast<Json::Int64>(info.group_seq);
+    notify_payload["created_at"] = static_cast<int64_t>(info.created_at);
+    notify_payload["server_msg_id"] = static_cast<int64_t>(info.server_msg_id);
+    notify_payload["group_seq"] = static_cast<int64_t>(info.group_seq);
     notify_payload["msg"] = msg;
-    notify_payload["msg"]["created_at"] = static_cast<Json::Int64>(info.created_at);
-    notify_payload["msg"]["server_msg_id"] = static_cast<Json::Int64>(info.server_msg_id);
-    notify_payload["msg"]["group_seq"] = static_cast<Json::Int64>(info.group_seq);
+    notify_payload["msg"]["created_at"] = static_cast<int64_t>(info.created_at);
+    notify_payload["msg"]["server_msg_id"] = static_cast<int64_t>(info.server_msg_id);
+    notify_payload["msg"]["group_seq"] = static_cast<int64_t>(info.group_seq);
     if (sender_info) {
         notify_payload["from_name"] = sender_info->name;
         notify_payload["from_nick"] = sender_info->nick;
@@ -493,16 +492,16 @@ void AsyncEventDispatcher::HandleGroupAsyncEvent(const Json::Value& root)
     }
     _push_group_payload(recipients, ID_NOTIFY_GROUP_CHAT_MSG_REQ, notify_payload, from_uid);
 
-    Json::Value status_payload;
+    memochat::json::JsonValue status_payload;
     status_payload["error"] = ErrorCodes::Success;
     status_payload["scope"] = "group";
     status_payload["fromuid"] = from_uid;
-    status_payload["groupid"] = static_cast<Json::Int64>(group_id);
+    status_payload["groupid"] = static_cast<int64_t>(group_id);
     status_payload["client_msg_id"] = info.msg_id;
-    status_payload["server_msg_id"] = static_cast<Json::Int64>(info.server_msg_id);
-    status_payload["group_seq"] = static_cast<Json::Int64>(info.group_seq);
+    status_payload["server_msg_id"] = static_cast<int64_t>(info.server_msg_id);
+    status_payload["group_seq"] = static_cast<int64_t>(info.group_seq);
     status_payload["status"] = "persisted";
-    status_payload["persist_ts"] = static_cast<Json::Int64>(NowMsAsync());
+    status_payload["persist_ts"] = static_cast<int64_t>(NowMsAsync());
     status_payload["msg"] = notify_payload["msg"];
     if (sender_info) {
         status_payload["from_name"] = sender_info->name;
@@ -511,14 +510,14 @@ void AsyncEventDispatcher::HandleGroupAsyncEvent(const Json::Value& root)
     }
     NotifyMessageStatus(status_payload);
 
-    Json::Value dialog_sync(Json::objectValue);
+    memochat::json::JsonValue dialog_sync(memochat::json::objectValue);
     dialog_sync["scope"] = "group";
     dialog_sync["fromuid"] = from_uid;
-    dialog_sync["groupid"] = static_cast<Json::Int64>(group_id);
+    dialog_sync["groupid"] = static_cast<int64_t>(group_id);
     dialog_sync["client_msg_id"] = info.msg_id;
-    dialog_sync["server_msg_id"] = static_cast<Json::Int64>(info.server_msg_id);
-    dialog_sync["group_seq"] = static_cast<Json::Int64>(info.group_seq);
-    dialog_sync["event_ts"] = static_cast<Json::Int64>(NowMsAsync());
+    dialog_sync["server_msg_id"] = static_cast<int64_t>(info.server_msg_id);
+    dialog_sync["group_seq"] = static_cast<int64_t>(info.group_seq);
+    dialog_sync["event_ts"] = static_cast<int64_t>(NowMsAsync());
     dialog_sync["msg"] = notify_payload["msg"];
     std::string publish_error;
     if (!info.msg_id.empty() && !PublishAsyncEvent(memochat::chatruntime::TopicDialogSync(), dialog_sync, &publish_error)) {
@@ -532,7 +531,7 @@ void AsyncEventDispatcher::HandleGroupAsyncEvent(const Json::Value& root)
     }
 }
 
-void AsyncEventDispatcher::HandleDialogSyncEvent(const Json::Value& root)
+void AsyncEventDispatcher::HandleDialogSyncEvent(const memochat::json::JsonValue& root)
 {
     if (!root.isObject()) {
         return;
@@ -570,7 +569,7 @@ void AsyncEventDispatcher::HandleDialogSyncEvent(const Json::Value& root)
     }
 }
 
-void AsyncEventDispatcher::HandleRelationStateEvent(const Json::Value& root)
+void AsyncEventDispatcher::HandleRelationStateEvent(const memochat::json::JsonValue& root)
 {
     if (!root.isObject()) {
         return;
@@ -598,3 +597,4 @@ void AsyncEventDispatcher::HandleRelationStateEvent(const Json::Value& root)
         }
     }
 }
+

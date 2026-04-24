@@ -1,4 +1,4 @@
-#include "PrivateMessageService.h"
+﻿#include "PrivateMessageService.h"
 
 #include "ChatGrpcClient.h"
 #include "ChatRuntime.h"
@@ -16,8 +16,7 @@
 #include <algorithm>
 #include <chrono>
 #include <iostream>
-#include <json/json.h>
-#include <json/writer.h>
+#include "json/GlazeCompat.h"
 #include <set>
 #include <unordered_set>
 #include <vector>
@@ -51,10 +50,10 @@ std::string ServerOnlineUsersKeyLocal(const std::string& server_name) {
 }
 
 // Compact wire JSON for TCP/QUIC transport (Qt QJsonDocument is strict).
-std::string JsonToWireString(const Json::Value& v) {
-    Json::StreamWriterBuilder builder;
+std::string JsonToWireString(const memochat::json::JsonValue& v) {
+    memochat::json::JsonStreamWriterBuilder builder;
     builder["indentation"] = "";
-    return Json::writeString(builder, v);
+    return memochat::json::writeString(builder, v);
 }
 
 std::vector<std::string> KnownChatServerNamesLocal() {
@@ -193,17 +192,17 @@ int64_t NowMsLocal() {
         std::chrono::system_clock::now().time_since_epoch()).count());
 }
 
-std::string JsonToCompactStringLocal(const Json::Value& value) {
-    Json::StreamWriterBuilder builder;
+std::string JsonToCompactStringLocal(const memochat::json::JsonValue& value) {
+    memochat::json::JsonStreamWriterBuilder builder;
     builder["indentation"] = "";
-    return Json::writeString(builder, value);
+    return memochat::json::writeString(builder, value);
 }
 
-bool ParseJsonObjectLocal(const std::string& payload, Json::Value& root) {
-    Json::CharReaderBuilder builder;
-    std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+bool ParseJsonObjectLocal(const std::string& payload, memochat::json::JsonValue& root) {
+    memochat::json::JsonCharReaderBuilder builder;
+    std::unique_ptr<memochat::json::JsonCharReader> reader(builder.newCharReader());
     std::string errors;
-    return reader->parse(payload.data(), payload.data() + payload.size(), &root, &errors) && root.isObject();
+    return reader->parse(payload.data(), payload.data() + payload.size(), &root, &errors) && root.is_object();
 }
 
 void LogPrivateRouteLocal(const std::string& event,
@@ -242,17 +241,17 @@ PrivateMessageService::PrivateMessageService(LogicSystem& logic)
 
 void PrivateMessageService::HandleTextChatMessage(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Value root;
+    memochat::json::JsonValue root;
     ParseJsonObjectLocal(msg_data, root);
 
     const auto uid = root["fromuid"].asInt();
     const auto touid = root["touid"].asInt();
-    const Json::Value arrays = root["text_array"];
+    const memochat::json::JsonValue arrays = root["text_array"];
     const bool kafka_backend = KafkaBackendEnabledLocal();
     const bool kafka_primary = kafka_backend && memochat::chatruntime::FeatureEnabled("chat_private_kafka_primary");
     const bool kafka_shadow = kafka_backend && !kafka_primary && memochat::chatruntime::FeatureEnabled("chat_private_kafka_shadow");
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     rtvalue["fromuid"] = uid;
     rtvalue["touid"] = touid;
@@ -261,12 +260,12 @@ void PrivateMessageService::HandleTextChatMessage(const std::shared_ptr<CSession
         session->Send(JsonToCompactStringLocal(rtvalue), ID_TEXT_CHAT_MSG_RSP);
     });
 
-    if (uid <= 0 || touid <= 0 || !arrays.isArray() || arrays.empty()) {
+    if (uid <= 0 || touid <= 0 || !arrays.is_array() || arrays.empty()) {
         rtvalue["error"] = ErrorCodes::Error_Json;
         return;
     }
 
-    Json::Value normalized(Json::arrayValue);
+    memochat::json::JsonValue normalized(memochat::json::array_t{});
     std::vector<PrivateMessageInfo> pending_messages;
     TextChatMsgReq text_msg_req;
     text_msg_req.set_fromuid(uid);
@@ -287,7 +286,7 @@ void PrivateMessageService::HandleTextChatMessage(const std::shared_ptr<CSession
         msg.edited_at_ms = txt_obj.get("edited_at_ms", 0).asInt64();
         msg.deleted_at_ms = txt_obj.get("deleted_at_ms", 0).asInt64();
         msg.created_at = txt_obj.get("created_at", 0).asInt64();
-        if (txt_obj.isMember("forward_meta")) {
+        if (isMember(txt_obj, "forward_meta")) {
             msg.forward_meta_json = JsonToCompactStringLocal(txt_obj["forward_meta"]);
         }
         if (msg.created_at <= 0) {
@@ -302,26 +301,26 @@ void PrivateMessageService::HandleTextChatMessage(const std::shared_ptr<CSession
         }
         pending_messages.push_back(msg);
 
-        Json::Value element;
+        memochat::json::JsonValue element;
         element["msgid"] = msg.msg_id;
         element["content"] = msg.content;
-        element["created_at"] = static_cast<Json::Int64>(msg.created_at);
+        element["created_at"] = static_cast<int64_t>(msg.created_at);
         if (msg.reply_to_server_msg_id > 0) {
-            element["reply_to_server_msg_id"] = static_cast<Json::Int64>(msg.reply_to_server_msg_id);
+            element["reply_to_server_msg_id"] = static_cast<int64_t>(msg.reply_to_server_msg_id);
         }
         if (!msg.forward_meta_json.empty()) {
-            Json::Value forward_meta;
+            memochat::json::JsonValue forward_meta;
             if (ParseJsonObjectLocal(msg.forward_meta_json, forward_meta)) {
                 element["forward_meta"] = forward_meta;
             }
         }
         if (msg.edited_at_ms > 0) {
-            element["edited_at_ms"] = static_cast<Json::Int64>(msg.edited_at_ms);
+            element["edited_at_ms"] = static_cast<int64_t>(msg.edited_at_ms);
         }
         if (msg.deleted_at_ms > 0) {
-            element["deleted_at_ms"] = static_cast<Json::Int64>(msg.deleted_at_ms);
+            element["deleted_at_ms"] = static_cast<int64_t>(msg.deleted_at_ms);
         }
-        normalized.append(element);
+        append(normalized, element);
 
         auto* text_msg = text_msg_req.add_textmsgs();
         text_msg->set_msgid(msg.msg_id);
@@ -331,13 +330,13 @@ void PrivateMessageService::HandleTextChatMessage(const std::shared_ptr<CSession
     const auto accept_ts = NowMsLocal();
     rtvalue["client_msg_id"] = first_msg_id;
     rtvalue["accept_node"] = memochat::chatruntime::SelfServerName();
-    rtvalue["accept_ts"] = static_cast<Json::Int64>(accept_ts);
+    rtvalue["accept_ts"] = static_cast<int64_t>(accept_ts);
     rtvalue["status"] = kafka_primary ? "accepted" : "persisted";
     if (!kafka_primary) {
         rtvalue["text_array"] = normalized;
     }
 
-    Json::Value event_payload;
+    memochat::json::JsonValue event_payload;
     event_payload["fromuid"] = uid;
     event_payload["touid"] = touid;
     event_payload["trace_id"] = root.get("trace_id", "").asString();
@@ -345,7 +344,7 @@ void PrivateMessageService::HandleTextChatMessage(const std::shared_ptr<CSession
     event_payload["span_id"] = root.get("span_id", "").asString();
     event_payload["event_id"] = first_msg_id;
     event_payload["accept_node"] = memochat::chatruntime::SelfServerName();
-    event_payload["accept_ts"] = static_cast<Json::Int64>(accept_ts);
+    event_payload["accept_ts"] = static_cast<int64_t>(accept_ts);
     event_payload["text_array"] = normalized;
 
     if (kafka_primary || kafka_shadow) {
@@ -400,15 +399,15 @@ void PrivateMessageService::HandleTextChatMessage(const std::shared_ptr<CSession
 
 void PrivateMessageService::HandleForwardPrivateMessage(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
-    const int from_uid = root.get("fromuid", root.get("uid", 0)).asInt();
-    const int peer_uid = root.get("peer_uid", root.get("touid", 0)).asInt();
+    const int from_uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
+    const int peer_uid = root.isMember("peer_uid") ? root["peer_uid"].asInt() : root["touid"].asInt();
     const std::string source_msg_id = root.get("msgid", "").asString();
     std::string client_msg_id = root.get("client_msg_id", "").asString();
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     rtvalue["fromuid"] = from_uid;
     rtvalue["peer_uid"] = peer_uid;
@@ -417,7 +416,7 @@ void PrivateMessageService::HandleForwardPrivateMessage(const std::shared_ptr<CS
         rtvalue["client_msg_id"] = client_msg_id;
     }
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_FORWARD_PRIVATE_MSG_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_FORWARD_PRIVATE_MSG_RSP);
     });
 
     if (from_uid <= 0 || peer_uid <= 0 || source_msg_id.empty()) {
@@ -464,20 +463,20 @@ void PrivateMessageService::HandleForwardPrivateMessage(const std::shared_ptr<CS
     info.reply_to_server_msg_id = source_msg->reply_to_server_msg_id;
     info.created_at = now_ms;
 
-    Json::Value forward_meta;
+    memochat::json::JsonValue forward_meta;
     forward_meta["forwarded_from_msgid"] = source_msg_id;
     forward_meta["source_from_uid"] = source_msg->from_uid;
     forward_meta["source_conv_uid_min"] = source_msg->conv_uid_min;
     forward_meta["source_conv_uid_max"] = source_msg->conv_uid_max;
-    forward_meta["source_created_at"] = static_cast<Json::Int64>(source_msg->created_at);
+    forward_meta["source_created_at"] = static_cast<int64_t>(source_msg->created_at);
     if (!source_msg->forward_meta_json.empty()) {
-        Json::Reader prev_forward_reader;
-        Json::Value prev_forward_meta;
+        memochat::json::JsonReader prev_forward_reader;
+        memochat::json::JsonValue prev_forward_meta;
         if (prev_forward_reader.parse(source_msg->forward_meta_json, prev_forward_meta)) {
             forward_meta["prev_forward_meta"] = prev_forward_meta;
         }
     }
-    info.forward_meta_json = forward_meta.toStyledString();
+    info.forward_meta_json = forward_meta.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}");
 
     if (!PostgresMgr::GetInstance()->SavePrivateMessage(info)) {
         rtvalue["error"] = ErrorCodes::RPCFailed;
@@ -487,17 +486,17 @@ void PrivateMessageService::HandleForwardPrivateMessage(const std::shared_ptr<CS
         std::cerr << "[MongoMgr] SavePrivateMessage dual-write failed for msg_id=" << info.msg_id << std::endl;
     }
 
-    Json::Value msg_obj;
+    memochat::json::JsonValue msg_obj;
     msg_obj["msgid"] = info.msg_id;
     msg_obj["content"] = info.content;
-    msg_obj["created_at"] = static_cast<Json::Int64>(now_ms);
+    msg_obj["created_at"] = static_cast<int64_t>(now_ms);
     if (info.reply_to_server_msg_id > 0) {
-        msg_obj["reply_to_server_msg_id"] = static_cast<Json::Int64>(info.reply_to_server_msg_id);
+        msg_obj["reply_to_server_msg_id"] = static_cast<int64_t>(info.reply_to_server_msg_id);
     }
     msg_obj["forward_meta"] = forward_meta;
     rtvalue["msg"] = msg_obj;
-    rtvalue["text_array"].append(msg_obj);
-    rtvalue["created_at"] = static_cast<Json::Int64>(now_ms);
+    append(rtvalue["text_array"], msg_obj);
+    rtvalue["created_at"] = static_cast<int64_t>(now_ms);
 
     TextChatMsgReq text_msg_req;
     text_msg_req.set_fromuid(from_uid);
@@ -512,7 +511,7 @@ void PrivateMessageService::HandleForwardPrivateMessage(const std::shared_ptr<CS
         return;
     }
     if (route.kind == OnlineRouteKind::Local && route.session) {
-        route.session->Send(rtvalue.toStyledString(), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+        route.session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
         LogPrivateRouteLocal("chat.private.forward.route", from_uid, peer_uid, info.msg_id, route, "n/a", true);
         return;
     }
@@ -530,10 +529,10 @@ void PrivateMessageService::HandleForwardPrivateMessage(const std::shared_ptr<CS
 
 void PrivateMessageService::HandlePrivateReadAck(const std::shared_ptr<CSession>&, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
-    const int uid = root.get("fromuid", root.get("uid", 0)).asInt();
+    const int uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
     const int peer_uid = root.get("peer_uid", 0).asInt();
     int64_t read_ts = root.get("read_ts", 0).asInt64();
     if (uid <= 0 || peer_uid <= 0) {
@@ -547,19 +546,19 @@ void PrivateMessageService::HandlePrivateReadAck(const std::shared_ptr<CSession>
     }
     PostgresMgr::GetInstance()->UpsertPrivateReadState(uid, peer_uid, read_ts);
 
-    Json::Value notify;
+    memochat::json::JsonValue notify;
     notify["error"] = ErrorCodes::Success;
     notify["event"] = "private_read_ack";
     notify["fromuid"] = uid;
     notify["peer_uid"] = peer_uid;
-    notify["read_ts"] = static_cast<Json::Int64>(read_ts);
+    notify["read_ts"] = static_cast<int64_t>(read_ts);
     _logic.MessageDelivery().PushPayload({ peer_uid }, ID_NOTIFY_PRIVATE_READ_ACK_REQ, notify);
 }
 
 void PrivateMessageService::HandleEditPrivateMessage(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int uid = root["fromuid"].asInt();
     const int peer_uid = root["peer_uid"].asInt();
@@ -567,15 +566,15 @@ void PrivateMessageService::HandleEditPrivateMessage(const std::shared_ptr<CSess
     const std::string content = root.get("content", "").asString();
     const int64_t now_ms = NowMsLocal();
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     rtvalue["fromuid"] = uid;
     rtvalue["peer_uid"] = peer_uid;
     rtvalue["msgid"] = target_msg_id;
     rtvalue["content"] = content;
-    rtvalue["edited_at_ms"] = static_cast<Json::Int64>(now_ms);
+    rtvalue["edited_at_ms"] = static_cast<int64_t>(now_ms);
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_EDIT_PRIVATE_MSG_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_EDIT_PRIVATE_MSG_RSP);
     });
 
     if (uid <= 0 || peer_uid <= 0 || target_msg_id.empty() || content.empty() || content.size() > 4096) {
@@ -594,36 +593,36 @@ void PrivateMessageService::HandleEditPrivateMessage(const std::shared_ptr<CSess
         std::cerr << "[MongoMgr] UpdatePrivateMessageContent sync failed for msg_id=" << target_msg_id << std::endl;
     }
 
-    Json::Value notify;
+    memochat::json::JsonValue notify;
     notify["error"] = ErrorCodes::Success;
     notify["event"] = "private_msg_edited";
     notify["fromuid"] = uid;
     notify["peer_uid"] = peer_uid;
     notify["msgid"] = target_msg_id;
     notify["content"] = content;
-    notify["edited_at_ms"] = static_cast<Json::Int64>(now_ms);
+    notify["edited_at_ms"] = static_cast<int64_t>(now_ms);
     _logic.MessageDelivery().PushPayload({ uid, peer_uid }, ID_NOTIFY_PRIVATE_MSG_CHANGED_REQ, notify);
 }
 
 void PrivateMessageService::HandleRevokePrivateMessage(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int uid = root["fromuid"].asInt();
     const int peer_uid = root["peer_uid"].asInt();
     const std::string target_msg_id = root.get("msgid", "").asString();
     const int64_t now_ms = NowMsLocal();
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     rtvalue["fromuid"] = uid;
     rtvalue["peer_uid"] = peer_uid;
     rtvalue["msgid"] = target_msg_id;
     rtvalue["content"] = "[消息已撤回]";
-    rtvalue["deleted_at_ms"] = static_cast<Json::Int64>(now_ms);
+    rtvalue["deleted_at_ms"] = static_cast<int64_t>(now_ms);
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_REVOKE_PRIVATE_MSG_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_REVOKE_PRIVATE_MSG_RSP);
     });
 
     if (uid <= 0 || peer_uid <= 0 || target_msg_id.empty()) {
@@ -642,21 +641,21 @@ void PrivateMessageService::HandleRevokePrivateMessage(const std::shared_ptr<CSe
         std::cerr << "[MongoMgr] RevokePrivateMessage sync failed for msg_id=" << target_msg_id << std::endl;
     }
 
-    Json::Value notify;
+    memochat::json::JsonValue notify;
     notify["error"] = ErrorCodes::Success;
     notify["event"] = "private_msg_revoked";
     notify["fromuid"] = uid;
     notify["peer_uid"] = peer_uid;
     notify["msgid"] = target_msg_id;
     notify["content"] = "[消息已撤回]";
-    notify["deleted_at_ms"] = static_cast<Json::Int64>(now_ms);
+    notify["deleted_at_ms"] = static_cast<int64_t>(now_ms);
     _logic.MessageDelivery().PushPayload({ uid, peer_uid }, ID_NOTIFY_PRIVATE_MSG_CHANGED_REQ, notify);
 }
 
 void PrivateMessageService::HandlePrivateHistory(const std::shared_ptr<CSession>& session, short, const std::string& msg_data)
 {
-    Json::Reader reader;
-    Json::Value root;
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     const int uid = root["fromuid"].asInt();
     const int peer_uid = root["peer_uid"].asInt();
@@ -664,12 +663,12 @@ void PrivateMessageService::HandlePrivateHistory(const std::shared_ptr<CSession>
     const std::string before_msg_id = root.get("before_msg_id", "").asString();
     const int limit = root.get("limit", 20).asInt();
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     rtvalue["peer_uid"] = peer_uid;
     rtvalue["has_more"] = false;
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.toStyledString(), ID_PRIVATE_HISTORY_RSP);
+        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_PRIVATE_HISTORY_RSP);
     });
 
     if (uid <= 0 || peer_uid <= 0 || limit <= 0) {
@@ -698,29 +697,29 @@ void PrivateMessageService::HandlePrivateHistory(const std::shared_ptr<CSession>
         if (!one) {
             continue;
         }
-        Json::Value item;
+        memochat::json::JsonValue item;
         item["msgid"] = one->msg_id;
         item["content"] = one->content;
         item["fromuid"] = one->from_uid;
         item["touid"] = one->to_uid;
-        item["created_at"] = static_cast<Json::Int64>(one->created_at);
+        item["created_at"] = static_cast<int64_t>(one->created_at);
         if (one->reply_to_server_msg_id > 0) {
-            item["reply_to_server_msg_id"] = static_cast<Json::Int64>(one->reply_to_server_msg_id);
+            item["reply_to_server_msg_id"] = static_cast<int64_t>(one->reply_to_server_msg_id);
         }
         if (!one->forward_meta_json.empty()) {
-            Json::Reader forward_reader;
-            Json::Value forward_meta;
+            memochat::json::JsonReader forward_reader;
+            memochat::json::JsonValue forward_meta;
             if (forward_reader.parse(one->forward_meta_json, forward_meta)) {
                 item["forward_meta"] = forward_meta;
             }
         }
         if (one->edited_at_ms > 0) {
-            item["edited_at_ms"] = static_cast<Json::Int64>(one->edited_at_ms);
+            item["edited_at_ms"] = static_cast<int64_t>(one->edited_at_ms);
         }
         if (one->deleted_at_ms > 0) {
-            item["deleted_at_ms"] = static_cast<Json::Int64>(one->deleted_at_ms);
+            item["deleted_at_ms"] = static_cast<int64_t>(one->deleted_at_ms);
         }
-        rtvalue["messages"].append(item);
+        append(rtvalue["messages"], item);
         if (one->from_uid == peer_uid && one->created_at > max_peer_read_ts) {
             max_peer_read_ts = one->created_at;
         }

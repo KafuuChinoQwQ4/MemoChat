@@ -4,7 +4,8 @@
  * Include as the FIRST line of every GateServerHttp2 .cpp file.
  *
  * Fixes:
- *   1. htonll / ntohll — Winsock2 only provides 32/16-bit variants.
+ *   1. htonll / ntohll — Winsock2 may or may not provide 64-bit variants
+ *      depending on Windows SDK version. We provide portable fallbacks.
  *   2. byte macro conflict — rpcndr.h defines `typedef unsigned char byte;`
  *      which conflicts with C++20 std::byte.
  */
@@ -13,15 +14,6 @@
 
 #ifdef _WIN32
 
-static inline unsigned long long htonll(unsigned long long v) noexcept {
-    return ((unsigned long long)(
-        (unsigned long)((v >> 32) & 0xFFFFFFFFUL)) << 32) |
-        (unsigned long long)((unsigned long)(v & 0xFFFFFFFFUL));
-}
-static inline unsigned long long ntohll(unsigned long long v) noexcept {
-    return htonll(v);
-}
-
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -29,7 +21,11 @@ static inline unsigned long long ntohll(unsigned long long v) noexcept {
 #define NOMINMAX
 #endif
 
-#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+// htonll/ntohll are already defined by ws2def.h (part of winsock2.h).
+// We must NOT redefine them — remove our definitions entirely.
 
 #ifdef byte
 #undef byte

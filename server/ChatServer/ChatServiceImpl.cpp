@@ -1,13 +1,11 @@
-#include "ChatServiceImpl.h"
+﻿#include "ChatServiceImpl.h"
 #include "UserMgr.h"
 #include "CSession.h"
 #include "logging/GrpcTrace.h"
 #include "logging/Telemetry.h"
 #include "logging/TraceContext.h"
-#include <json/json.h>
-#include <json/value.h>
-#include <json/writer.h>
-#include <json/reader.h>
+#include "json/GlazeCompat.h"
+
 #include <chrono>
 #include "RedisMgr.h"
 #include "PostgresMgr.h"
@@ -15,10 +13,10 @@
 
 namespace {
 // Compact wire JSON for TCP/QUIC transport (Qt QJsonDocument is strict).
-std::string JsonToWireString(const Json::Value& v) {
-    Json::StreamWriterBuilder builder;
+std::string JsonToWireString(const memochat::json::JsonValue& v) {
+    memochat::json::JsonStreamWriterBuilder builder;
     builder["indentation"] = "";
-    return Json::writeString(builder, v);
+    return memochat::json::writeString(builder, v);
 }
 }
 
@@ -45,7 +43,7 @@ Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendR
         return Status::OK;
     }
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     rtvalue["applyuid"] = request->applyuid();
     rtvalue["name"] = request->name();
@@ -82,7 +80,7 @@ Status ChatServiceImpl::NotifyAuthFriend(ServerContext* context, const AuthFrien
         return Status::OK;
     }
 
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     rtvalue["fromuid"] = request->fromuid();
     rtvalue["touid"] = request->touid();
@@ -120,14 +118,14 @@ Status ChatServiceImpl::NotifyTextChatMsg(::grpc::ServerContext* context,
     }
 
     reply->set_error(ErrorCodes::Success);
-    Json::Value rtvalue;
+    memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
     rtvalue["fromuid"] = request->fromuid();
     rtvalue["touid"] = request->touid();
 
-    Json::Value text_array;
+    memochat::json::JsonValue text_array;
     for (auto& msg : request->textmsgs()) {
-        Json::Value element;
+        memochat::json::JsonValue element;
         element["content"] = msg.msgcontent();
         element["msgid"] = msg.msgid();
         std::shared_ptr<PrivateMessageInfo> private_msg;
@@ -140,8 +138,8 @@ Status ChatServiceImpl::NotifyTextChatMsg(::grpc::ServerContext* context,
             created_at = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count());
         }
-        element["created_at"] = static_cast<Json::Int64>(created_at);
-        text_array.append(element);
+        element["created_at"] = static_cast<int64_t>(created_at);
+        append(text_array, element);
     }
     rtvalue["text_array"] = text_array;
 
@@ -154,8 +152,8 @@ bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr
     std::string info_str = "";
     bool b_base = RedisMgr::GetInstance()->Get(base_key, info_str);
     if (b_base) {
-        Json::Reader reader;
-        Json::Value root;
+        memochat::json::JsonReader reader;
+        memochat::json::JsonValue root;
         reader.parse(info_str, root);
         userinfo->uid = root["uid"].asInt();
         userinfo->user_id = root["user_id"].asString();
@@ -176,7 +174,7 @@ bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr
 
         userinfo = user_info;
 
-        Json::Value redis_root;
+        memochat::json::JsonValue redis_root;
         redis_root["uid"] = uid;
         redis_root["user_id"] = userinfo->user_id;
         redis_root["pwd"] = userinfo->pwd;
