@@ -11,10 +11,12 @@ logger = structlog.get_logger()
 class DuckDuckGoSearchTool:
     """DuckDuckGo 搜索工具 — 搜索互联网获取最新信息"""
 
-    @tool("duckduckgo_search", description="使用 DuckDuckGo 搜索互联网。输入搜索关键词，返回相关结果摘要。适用于需要实时信息、新闻、天气预报等场景。")
+    @tool("duckduckgo_search")
     async def duckduckgo_search(self, query: str) -> str:
         """
         使用 DuckDuckGo 搜索互联网。
+        输入搜索关键词，返回相关结果摘要。
+        适用于需要实时信息、新闻、天气预报等场景。
         """
         try:
             async with AsyncDDGS() as ddgs:

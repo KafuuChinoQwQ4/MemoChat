@@ -12,11 +12,12 @@ logger = structlog.get_logger()
 class CalculatorTool:
     """计算器工具 — 安全数学计算，避免 eval"""
 
-    @tool("calculator", description="执行数学计算。输入数学表达式（如 2+3*4），返回计算结果。支持加减乘除、幂运算、平方根等。")
+    @tool("calculator")
     async def calculator(self, expression: str) -> str:
         """
         执行安全数学计算。
-        只允许数字、运算符和数学函数。
+        输入数学表达式，返回计算结果。
+        支持加减乘除、幂运算、平方根等。
         """
         allowed_names = {
             "abs": abs, "round": round, "min": min, "max": max,

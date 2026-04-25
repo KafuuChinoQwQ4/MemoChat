@@ -1,5 +1,7 @@
 #include "MomentsModel.h"
 #include <QJsonArray>
+#include <QStringList>
+#include <QtGlobal>
 
 MomentsModel::MomentsModel(QObject* parent)
     : QAbstractListModel(parent) {
@@ -47,6 +49,21 @@ QVariant MomentsModel::data(const QModelIndex& index, int role) const {
         }
         return list;
     }
+    case TextContentRole: {
+        QStringList parts;
+        for (const auto& it : item.items) {
+            const QString type = it.mediaType.trimmed().toLower();
+            const bool mediaWithKey = (type == QStringLiteral("image") || type == QStringLiteral("video"))
+                && !it.mediaKey.trimmed().isEmpty();
+            if (mediaWithKey) {
+                continue;
+            }
+            if (!it.content.trimmed().isEmpty()) {
+                parts.append(it.content);
+            }
+        }
+        return parts.join(QLatin1Char('\n'));
+    }
     case LikesRole: {
         QVariantList list;
         for (const auto& lk : item.likes) {
@@ -71,6 +88,18 @@ QVariant MomentsModel::data(const QModelIndex& index, int role) const {
             m["reply_uid"] = cm.replyUid;
             m["reply_nick"] = cm.replyNick;
             m["created_at"] = cm.createdAt;
+            m["like_count"] = cm.likeCount;
+            m["has_liked"] = cm.hasLiked;
+            QVariantList likes;
+            for (const auto& lk : cm.likes) {
+                QVariantMap likeMap;
+                likeMap["uid"] = lk.uid;
+                likeMap["user_nick"] = lk.userNick;
+                likeMap["user_icon"] = lk.userIcon;
+                likeMap["created_at"] = lk.createdAt;
+                likes.append(likeMap);
+            }
+            m["likes"] = likes;
             list.append(m);
         }
         return list;
@@ -94,6 +123,7 @@ QHash<int, QByteArray> MomentsModel::roleNames() const {
     roles[CommentCountRole]  = "commentCount";
     roles[HasLikedRole]      = "hasLiked";
     roles[ItemsRole]         = "items";
+    roles[TextContentRole]   = "textContent";
     roles[LikesRole]         = "likes";
     roles[CommentsRole]      = "comments";
     return roles;
@@ -146,6 +176,31 @@ void MomentsModel::upsertMoment(const MomentEntry& moment) {
     emit countChanged();
 }
 
+void MomentsModel::prependOrUpdateMoment(const MomentEntry& moment) {
+    for (int i = 0; i < _items.size(); ++i) {
+        if (_items[i].momentId == moment.momentId) {
+            _items[i] = moment;
+            if (i == 0) {
+                const QModelIndex idx = index(0);
+                emit dataChanged(idx, idx);
+                return;
+            }
+
+            beginMoveRows(QModelIndex(), i, i, QModelIndex(), 0);
+            _items.move(i, 0);
+            endMoveRows();
+            const QModelIndex idx = index(0);
+            emit dataChanged(idx, idx);
+            return;
+        }
+    }
+
+    beginInsertRows(QModelIndex(), 0, 0);
+    _items.prepend(moment);
+    endInsertRows();
+    emit countChanged();
+}
+
 void MomentsModel::updateLiked(qint64 momentId, bool liked, int likeCount) {
     for (int i = 0; i < _items.size(); ++i) {
         if (_items[i].momentId == momentId) {
@@ -163,6 +218,17 @@ void MomentsModel::updateCommentCount(qint64 momentId, int delta) {
         if (_items[i].momentId == momentId) {
             _items[i].commentCount += delta;
             if (_items[i].commentCount < 0) _items[i].commentCount = 0;
+            QModelIndex idx = index(i);
+            emit dataChanged(idx, idx, {CommentCountRole});
+            return;
+        }
+    }
+}
+
+void MomentsModel::setCommentCount(qint64 momentId, int count) {
+    for (int i = 0; i < _items.size(); ++i) {
+        if (_items[i].momentId == momentId) {
+            _items[i].commentCount = qMax(0, count);
             QModelIndex idx = index(i);
             emit dataChanged(idx, idx, {CommentCountRole});
             return;
@@ -221,6 +287,15 @@ MomentEntry MomentsModel::getMoment(int index) const {
     return _items.at(index);
 }
 
+MomentEntry MomentsModel::getMomentById(qint64 momentId) const {
+    for (const auto& item : _items) {
+        if (item.momentId == momentId) {
+            return item;
+        }
+    }
+    return MomentEntry();
+}
+
 qint64 MomentsModel::getMomentId(int index) const {
     if (index < 0 || index >= _items.size()) {
         return 0;
@@ -244,6 +319,15 @@ int MomentsModel::getMomentLikeCount(qint64 momentId) const {
         }
     }
     return 0;
+}
+
+bool MomentsModel::hasMoment(qint64 momentId) const {
+    for (const auto& item : _items) {
+        if (item.momentId == momentId) {
+            return true;
+        }
+    }
+    return false;
 }
 
 QVariantMap MomentsModel::snapshotMoment(qint64 momentId) const {
@@ -299,6 +383,18 @@ QVariantMap MomentsModel::snapshotMoment(qint64 momentId) const {
             m[QStringLiteral("reply_uid")] = cm.replyUid;
             m[QStringLiteral("reply_nick")] = cm.replyNick;
             m[QStringLiteral("created_at")] = cm.createdAt;
+            m[QStringLiteral("like_count")] = cm.likeCount;
+            m[QStringLiteral("has_liked")] = cm.hasLiked;
+            QVariantList commentLikes;
+            for (const auto& lk : cm.likes) {
+                QVariantMap likeMap;
+                likeMap[QStringLiteral("uid")] = lk.uid;
+                likeMap[QStringLiteral("user_nick")] = lk.userNick;
+                likeMap[QStringLiteral("user_icon")] = lk.userIcon;
+                likeMap[QStringLiteral("created_at")] = lk.createdAt;
+                commentLikes.append(likeMap);
+            }
+            m[QStringLiteral("likes")] = commentLikes;
             commentsList.append(m);
         }
         map[QStringLiteral("comments")] = commentsList;

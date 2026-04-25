@@ -24,7 +24,7 @@ class LLMUsage:
 @dataclass
 class LLMResponse:
     content: str
-    usage: LLMUsage = LLMUsage()
+    usage: LLMUsage = field(default_factory=LLMUsage)
     model: str = ""
     finish_reason: str = ""
     metadata: dict = field(default_factory=dict)

@@ -77,6 +77,12 @@ QString AppController::currentUserId() const
     return _current_user_id;
 }
 
+int AppController::currentUserUid() const
+{
+    const auto userMgr = _gateway.userMgr();
+    return userMgr ? userMgr->GetUid() : 0;
+}
+
 QString AppController::currentContactName() const
 {
     return _current_contact_name;

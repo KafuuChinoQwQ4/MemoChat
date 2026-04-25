@@ -8,6 +8,58 @@ name: memochat
 
 services:
   #######################
+  # AI Harness App
+  #######################
+  memochat-ai-orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: memochat-ai-orchestrator
+    restart: unless-stopped
+    ports:
+      - "8096:8096"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HF_HOME=/app/.cache/huggingface
+      - SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence_transformers
+      - MEMOCHAT_AI_LLM__OLLAMA__BASE_URL=http://memochat-ollama:11434
+      - MEMOCHAT_AI_RAG__QDRANT__HOST=memochat-qdrant
+      - MEMOCHAT_AI_NEO4J__HOST=memochat-neo4j
+      - MEMOCHAT_AI_POSTGRES__HOST=host.docker.internal
+      - MEMOCHAT_AI_POSTGRES__PORT=5432
+      - MEMOCHAT_AI_POSTGRES__USER=memochat
+      - MEMOCHAT_AI_POSTGRES__PASSWORD=123456
+      - MEMOCHAT_AI_POSTGRES__DATABASE=memo_pg
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./.cache/huggingface:/app/.cache/huggingface
+      - ./.cache/sentence_transformers:/app/.cache/sentence_transformers
+    depends_on:
+      - memochat-ollama
+      - memochat-neo4j
+      - memochat-qdrant
+
+  #######################
+  # Local LLM API
+  # local_api: Ollama
+  #######################
+  memochat-ollama:
+    image: ollama/ollama:latest
+    container_name: memochat-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./.data/ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  #######################
   # Neo4j 图数据库
   #######################
   memochat-neo4j:

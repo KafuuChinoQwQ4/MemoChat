@@ -15,17 +15,17 @@ _pg_pool: asyncpg.Pool | None = None
 async def get_pg_pool() -> asyncpg.Pool:
     global _pg_pool
     if _pg_pool is None:
-        cfg = settings
+        cfg = settings.postgres
         _pg_pool = await asyncpg.create_pool(
-            host="127.0.0.1",
-            port=5432,
-            user="memochat",
-            password="123456",
-            database="memo_pg",
-            min_size=2,
-            max_size=10,
+            host=cfg.host,
+            port=cfg.port,
+            user=cfg.user,
+            password=cfg.password,
+            database=cfg.database,
+            min_size=cfg.min_pool_size,
+            max_size=cfg.max_pool_size,
         )
-        logger.info("postgres.pool_created")
+        logger.info("postgres.pool_created", host=cfg.host, port=cfg.port, database=cfg.database)
     return _pg_pool
 
 

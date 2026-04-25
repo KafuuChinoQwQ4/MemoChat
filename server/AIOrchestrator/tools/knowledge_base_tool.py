@@ -13,10 +13,11 @@ logger = structlog.get_logger()
 class KnowledgeBaseTool:
     """知识库检索工具 — 从 Qdrant 中检索用户上传的文档片段"""
 
-    @tool("knowledge_base_search", description="在用户的私有知识库中检索相关内容。输入搜索问题，返回相关文档片段和来源。适用于用户问及上传过的文档内容。")
+    @tool("knowledge_base_search")
     async def knowledge_base_search(self, query: str, uid: int = 0, top_k: int = 5) -> str:
         """
         从用户的私有知识库中检索相关文档片段。
+        输入搜索问题，返回相关文档片段和来源。
         """
         try:
             rag = RAGChain()

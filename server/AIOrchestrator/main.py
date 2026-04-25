@@ -18,6 +18,8 @@ from api.smart_router import router as smart_router
 from api.kb_router import router as kb_router
 from api.model_router import router as model_router
 from api.recommend_router import router as recommend_router
+from api.agent_router import router as agent_router
+from harness import HarnessContainer
 from observability.tracer import init_tracing
 from observability.langfuse_instrument import init_langfuse
 
@@ -37,10 +39,13 @@ async def lifespan(app: FastAPI):
     from tools.registry import ToolRegistry
     registry = ToolRegistry.get_instance()
     await registry.initialize_mcp()
+    await HarnessContainer.get_instance().startup()
 
     yield
 
     logger.info("service.stopping", service="AIOrchestrator")
+
+    await HarnessContainer.get_instance().shutdown()
 
     # 关闭 MCP Server
     from tools.registry import ToolRegistry
@@ -69,8 +74,8 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(
         title="MemoChat AIOrchestrator",
-        version="1.0.0",
-        description="MemoChat AI Agent 编排层：LangGraph + LangChain + Qdrant RAG",
+        version="2.0.0",
+        description="MemoChat AI Agent Harness：编排层 + 执行层 + 反馈层 + 记忆层",
         lifespan=lifespan,
     )
 
@@ -87,6 +92,7 @@ def create_app() -> FastAPI:
     app.include_router(kb_router, prefix="/kb", tags=["knowledge-base"])
     app.include_router(model_router, prefix="/models", tags=["models"])
     app.include_router(recommend_router, prefix="/recommend", tags=["recommendation"])
+    app.include_router(agent_router, prefix="/agent", tags=["agent-harness"])
 
     @app.get("/health")
     async def health():

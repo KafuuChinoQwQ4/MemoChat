@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
@@ -17,6 +19,7 @@ Popup {
 
     property var backdrop: null
     property var controller: null
+    property int currentUserUid: 0
     property int currentMomentId: 0
     property int momentUid: 0
     property string momentUserId: ""
@@ -88,7 +91,7 @@ Popup {
         Flickable {
             id: flick
             width: parent.width
-            height: parent.height - 48 - 56
+            height: parent.height - 48 - commentInputBar.height
             clip: true
             contentWidth: width
             contentHeight: contentCol.height + 16
@@ -231,13 +234,14 @@ Popup {
                 // ── 评论区白底卡片 ──────────────────────
                 Rectangle {
                     width: parent.width
-                    height: Math.max(64, commentCardHeight)
+                    height: Math.max(64, commentColumn.implicitHeight + 20)
                     color: "#ffffff"
                     border.color: Qt.rgba(0.82, 0.84, 0.90, 0.5)
                     border.width: 1
                     radius: 10
 
                     Column {
+                        id: commentColumn
                         anchors.fill: parent
                         anchors.margins: 10
                         spacing: 6
@@ -272,10 +276,11 @@ Popup {
 
                         // 评论列表
                         Column {
+                            width: parent.width
                             spacing: 8
-                            visible: commentList && commentList.length > 0
+                            visible: commentListModel.count > 0
                             Repeater {
-                                model: commentList
+                                model: commentListModel
                                 delegate: commentItem
                             }
                         }
@@ -287,8 +292,9 @@ Popup {
         // ── 底部输入框: 固定高度 56px ──────────────────
         // 底部左右下角圆角跟外层背景一致，融入而不溢出
         Rectangle {
+            id: commentInputBar
             width: parent.width
-            height: 56
+            height: replyUid > 0 ? 92 : 64
             color: "#ffffff"
             clip: true   // 裁掉超出圆角的部分
 
@@ -301,46 +307,97 @@ Popup {
                 color: Qt.rgba(0.88, 0.88, 0.92, 0.5)
             }
 
-            RowLayout {
+            ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 8
-                spacing: 8
+                spacing: 6
 
-                TextField {
-                    id: commentInput
+                Rectangle {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    placeholderText: "写评论..."
-                    placeholderTextColor: "#aaaaaa"
-                    font.pixelSize: 14
-                    color: "#1a1a1a"
-                    background: Rectangle {
-                        color: "#f5f6f9"
-                        radius: 6
-                        border.color: Qt.rgba(0.82, 0.84, 0.90, 0.4)
-                        border.width: 1
+                    Layout.preferredHeight: 26
+                    visible: replyUid > 0
+                    radius: 13
+                    color: Qt.rgba(0.16, 0.48, 0.89, 0.08)
+                    border.color: Qt.rgba(0.16, 0.48, 0.89, 0.18)
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 4
+                        spacing: 6
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "回复 " + (replyNick || "用户")
+                            color: "#2a7ae2"
+                            font.pixelSize: 12
+                            elide: Text.ElideRight
+                            verticalAlignment: Text.AlignVCenter
+                        }
+
+                        ToolButton {
+                            id: clearReplyButton
+                            implicitWidth: 22
+                            implicitHeight: 22
+                            padding: 0
+                            text: "×"
+                            font.pixelSize: 13
+                            background: Rectangle {
+                                radius: 11
+                                color: clearReplyButton.hovered ? Qt.rgba(0.16, 0.24, 0.36, 0.08) : "transparent"
+                            }
+                            onClicked: {
+                                replyUid = 0
+                                replyNick = ""
+                                commentInput.placeholderText = "写评论..."
+                            }
+                        }
                     }
-                    leftPadding: 12; rightPadding: 12
-                    verticalAlignment: TextInput.AlignVCenter
-                    onAccepted: sendComment()
                 }
 
-                Button {
-                    id: sendBtn
-                    Layout.preferredWidth: 60
+                RowLayout {
+                    Layout.fillWidth: true
                     Layout.fillHeight: true
-                    enabled: commentInput.text.trim().length > 0 && !commentSending
-                    background: Rectangle {
-                        radius: 6
-                        color: sendBtn.enabled ? "#2a7ae2" : Qt.rgba(0.82, 0.85, 0.90, 1.0)
+                    spacing: 8
+
+                    TextField {
+                        id: commentInput
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        placeholderText: "写评论..."
+                        placeholderTextColor: "#aaaaaa"
+                        font.pixelSize: 14
+                        color: "#1a1a1a"
+                        background: Rectangle {
+                            color: "#f5f6f9"
+                            radius: 12
+                            border.color: Qt.rgba(0.82, 0.84, 0.90, 0.4)
+                            border.width: 1
+                        }
+                        leftPadding: 12; rightPadding: 12
+                        verticalAlignment: TextInput.AlignVCenter
+                        onAccepted: sendComment()
                     }
-                    contentItem: Label {
-                        anchors.centerIn: parent
-                        text: commentSending ? "..." : "发送"
-                        color: sendBtn.enabled ? "#ffffff" : "#aaaaaa"
-                        font.pixelSize: 14; font.weight: Font.Medium
+
+                    Button {
+                        id: sendBtn
+                        Layout.preferredWidth: 64
+                        Layout.fillHeight: true
+                        enabled: commentInput.text.trim().length > 0 && !commentSending
+                        background: Rectangle {
+                            radius: 12
+                            color: sendBtn.enabled ? "#2a7ae2" : Qt.rgba(0.82, 0.85, 0.90, 1.0)
+                        }
+                        contentItem: Label {
+                            anchors.centerIn: parent
+                            text: commentSending ? "..." : "发送"
+                            color: sendBtn.enabled ? "#ffffff" : "#aaaaaa"
+                            font.pixelSize: 14; font.weight: Font.Medium
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        onClicked: sendComment()
                     }
-                    onClicked: sendComment()
                 }
             }
         }
@@ -350,36 +407,185 @@ Popup {
     Component {
         id: commentItem
         Rectangle {
+            id: commentRoot
             width: parent ? parent.width : 0
-            height: commentCol.height + 12
-            color: Qt.rgba(0.93, 0.95, 1.0, 0.55)
-            radius: 6
+            height: commentCol.implicitHeight + 16
+            color: Qt.rgba(0.96, 0.98, 1.0, 0.92)
+            radius: 10
+            border.color: Qt.rgba(0.82, 0.86, 0.92, 0.45)
+
+            required property int commentId
+            required property int commentUid
+            required property string commentNick
+            required property string commentText
+            required property int targetReplyUid
+            required property string targetReplyNick
+            required property bool likedByMe
+            required property int commentLikeCount
+            required property string commentLikeText
+            property bool ownComment: root.currentUserUid <= 0 || commentUid === Number(root.currentUserUid)
 
             Column {
                 id: commentCol
-                anchors.fill: parent
+                width: parent.width - 16
+                anchors.left: parent.left
+                anchors.top: parent.top
                 anchors.margins: 8
-                spacing: 3
+                spacing: 6
 
                 RowLayout {
-                    anchors.fill: parent
-                    spacing: 3
+                    width: parent.width
+                    height: 24
+                    spacing: 4
                     Label {
-                        text: modelData.user_nick || "用户"
+                        text: commentRoot.commentNick
                         font.pixelSize: 12; font.weight: Font.Medium; color: "#2a7ae2"
+                        Layout.maximumWidth: parent.width * 0.42
+                        elide: Text.ElideRight
                     }
                     Label {
-                        text: modelData.reply_uid && modelData.reply_uid !== 0
-                              ? (" 回复 " + (modelData.reply_nick || "用户")) : ""
+                        text: commentRoot.targetReplyUid > 0 ? (" 回复 " + commentRoot.targetReplyNick) : ""
                         font.pixelSize: 12; color: "#2a7ae2"
-                        visible: modelData.reply_uid && modelData.reply_uid !== 0
+                        visible: commentRoot.targetReplyUid > 0
+                        Layout.maximumWidth: parent.width * 0.32
+                        elide: Text.ElideRight
                     }
                     Label { text: "："; font.pixelSize: 12; color: "#555555" }
+                    Item { Layout.fillWidth: true }
+                    ToolButton {
+                        id: commentMoreButton
+                        Layout.preferredWidth: 30
+                        Layout.preferredHeight: 24
+                        text: "..."
+                        padding: 0
+                        font.pixelSize: 14
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 120
+                        ToolTip.text: "更多"
+                        background: Rectangle {
+                            radius: 9
+                            color: commentMoreButton.down ? Qt.rgba(0.16, 0.24, 0.36, 0.12)
+                                  : commentMoreButton.hovered ? Qt.rgba(0.16, 0.24, 0.36, 0.08)
+                                  : "transparent"
+                            border.width: commentMoreButton.hovered ? 1 : 0
+                            border.color: Qt.rgba(0.16, 0.24, 0.36, 0.12)
+                        }
+                        onClicked: commentMenu.open()
+                    }
                 }
                 Label {
-                    anchors.fill: parent
-                    text: modelData.content || ""
+                    width: parent.width
+                    text: commentRoot.commentText.length > 0 ? commentRoot.commentText : " "
                     font.pixelSize: 13; color: "#1a1a1a"; wrapMode: Text.Wrap
+                }
+
+                Row {
+                    width: parent.width
+                    height: commentRoot.commentLikeCount > 0 ? 22 : 0
+                    visible: height > 0
+                    spacing: 6
+
+                    Rectangle {
+                        width: Math.min(parent.width, likedLabel.implicitWidth + 38)
+                        height: 22
+                        radius: 11
+                        color: Qt.rgba(0.91, 0.20, 0.20, 0.07)
+                        border.color: Qt.rgba(0.91, 0.20, 0.20, 0.14)
+
+                        Image {
+                            id: commentLikeIcon
+                            width: 13
+                            height: 13
+                            source: "qrc:/icons/like_active.png"
+                            anchors.left: parent.left
+                            anchors.leftMargin: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            fillMode: Image.PreserveAspectFit
+                        }
+
+                        Label {
+                            id: likedLabel
+                            anchors.left: commentLikeIcon.right
+                            anchors.leftMargin: 5
+                            anchors.right: parent.right
+                            anchors.rightMargin: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: commentRoot.commentLikeText.length > 0
+                                  ? commentRoot.commentLikeText
+                                  : (commentRoot.commentLikeCount + " 人点赞")
+                            color: "#d64545"
+                            font.pixelSize: 11
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+            }
+
+            Menu {
+                id: commentMenu
+                y: commentMoreButton.y + commentMoreButton.height + 4
+                x: Math.max(0, parent.width - width - 8)
+                width: 132
+                background: Rectangle {
+                    color: "#ffffff"
+                    radius: 10
+                    border.color: Qt.rgba(0.82, 0.84, 0.90, 0.75)
+                }
+                MenuItem {
+                    id: replyCommentAction
+                    height: 36
+                    text: "回复"
+                    contentItem: Label {
+                        text: replyCommentAction.text
+                        color: "#26384d"
+                        font.pixelSize: 13
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        radius: 8
+                        color: replyCommentAction.hovered ? Qt.rgba(0.16, 0.24, 0.36, 0.08) : "transparent"
+                    }
+                    onTriggered: root.prepareReply(commentRoot.commentUid, commentRoot.commentNick)
+                }
+                MenuItem {
+                    id: likeCommentAction
+                    height: 36
+                    text: commentRoot.likedByMe ? "取消点赞" : "点赞评论"
+                    contentItem: Label {
+                        text: likeCommentAction.text
+                        color: "#26384d"
+                        font.pixelSize: 13
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        radius: 8
+                        color: likeCommentAction.hovered ? Qt.rgba(0.16, 0.24, 0.36, 0.08) : "transparent"
+                    }
+                    onTriggered: root.toggleCommentLike(commentRoot.commentId, !commentRoot.likedByMe)
+                }
+                MenuSeparator {
+                    visible: commentRoot.ownComment
+                }
+                MenuItem {
+                    id: deleteCommentAction
+                    height: 36
+                    text: "删除"
+                    visible: commentRoot.ownComment
+                    enabled: visible
+                    contentItem: Label {
+                        text: deleteCommentAction.text
+                        color: "#d64545"
+                        font.pixelSize: 13
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        radius: 8
+                        color: deleteCommentAction.hovered ? Qt.rgba(0.86, 0.18, 0.18, 0.08) : "transparent"
+                    }
+                    onTriggered: root.deleteOwnComment(commentRoot.commentId)
                 }
             }
         }
@@ -401,12 +607,16 @@ Popup {
     property bool commentSending: false
     property bool commentsLoading: false
 
+    ListModel {
+        id: commentListModel
+    }
+
     // 评论卡片高度: 有内容就撑开，最小64px
     property int commentCardHeight: {
         if (!commentList || commentList.length === 0) return 62
         var total = 22  // 标题
         for (var i = 0; i < commentList.length; i++) {
-            total += 50
+            total += 64
             if (i > 0) total += 8
         }
         return total + 10
@@ -473,11 +683,17 @@ Popup {
         var items = snap.items || [], textParts = [], mediaTiles = []
         for (var i = 0; i < items.length; i++) {
             var it = items[i]
-            if (it.media_type === "text") { if (it.content) textParts.push(it.content) }
-            else if (it.media_type === "image") {
-                mediaTiles.push({ type: "image", key: it.media_key || "", width: it.width, height: it.height })
-            } else if (it.media_type === "video") {
-                mediaTiles.push({ type: "video", key: it.media_key || "", duration: it.duration_ms || 0 })
+            var type = String(it.media_type || it.mediaType || it.type || "").toLowerCase()
+            var content = String(it.content || "")
+            var key = String(it.media_key || it.mediaKey || it.key || "")
+            if ((type === "image" || type === "video") && key.length > 0) {
+                if (type === "image") {
+                    mediaTiles.push({ type: "image", key: key, width: it.width || 0, height: it.height || 0 })
+                } else {
+                    mediaTiles.push({ type: "video", key: key, duration: it.duration_ms || it.durationMs || 0 })
+                }
+            } else if (content.length > 0) {
+                textParts.push(content)
             }
         }
         momentText = textParts.join("\n")
@@ -488,12 +704,73 @@ Popup {
             if (rawLikes[j].user_nick) names.push(rawLikes[j].user_nick)
         }
         likeNames = names
-        commentList = snap.comments || []
+        var rawComments = snap.comments || []
+        var normalizedComments = []
+        commentListModel.clear()
+        for (var c = 0; c < rawComments.length; c++) {
+            var cm = rawComments[c]
+            var normalizedComment = {
+                id: Number(cm.id || cm.comment_id || 0),
+                uid: Number(cm.uid || 0),
+                user_nick: String(cm.user_nick || cm.userNick || "用户"),
+                user_icon: String(cm.user_icon || cm.userIcon || ""),
+                content: String(cm.content || cm.text || cm.comment || ""),
+                reply_uid: Number(cm.reply_uid || cm.replyUid || 0),
+                reply_nick: String(cm.reply_nick || cm.replyNick || "用户"),
+                created_at: cm.created_at || cm.createdAt || 0,
+                has_liked: !!(cm.has_liked || cm.hasLiked),
+                like_count: Number(cm.like_count || cm.likeCount || 0),
+                likes: cm.likes || []
+            }
+            var commentLikeNames = []
+            for (var li = 0; li < normalizedComment.likes.length; li++) {
+                var likeItem = normalizedComment.likes[li]
+                var likeName = String(likeItem.user_nick || likeItem.userNick || "")
+                if (likeName.length > 0)
+                    commentLikeNames.push(likeName)
+            }
+            if (normalizedComment.like_count <= 0)
+                normalizedComment.like_count = commentLikeNames.length
+            normalizedComments.push(normalizedComment)
+            commentListModel.append({
+                commentId: normalizedComment.id,
+                commentUid: normalizedComment.uid,
+                commentNick: normalizedComment.user_nick,
+                commentText: normalizedComment.content,
+                targetReplyUid: normalizedComment.reply_uid,
+                targetReplyNick: normalizedComment.reply_nick,
+                likedByMe: normalizedComment.has_liked,
+                commentLikeCount: normalizedComment.like_count,
+                commentLikeText: commentLikeNames.join("、")
+            })
+        }
+        commentList = normalizedComments
+    }
+
+    function clearSnapshot() {
+        momentUid = 0
+        momentUserId = ""
+        momentUserName = ""
+        momentUserNick = ""
+        momentUserIcon = "qrc:/res/head_1.jpg"
+        momentLocation = ""
+        momentTimeText = ""
+        momentText = ""
+        momentMediaTiles = []
+        likeCount = 0
+        likeNames = []
+        commentCount = 0
+        commentList = []
+        commentListModel.clear()
     }
 
     function openMoment(momentId) {
         console.log("[MomentsDetail] openMoment called, momentId=" + momentId + " controller=" + !!root.controller)
         root.currentMomentId = momentId
+        clearSnapshot()
+        replyUid = 0
+        replyNick = ""
+        commentInput.placeholderText = "写评论..."
         commentsLoading = true
         applySnapshot()
         root.open()
@@ -514,6 +791,27 @@ Popup {
         root.controller.addComment(root.currentMomentId, text, replyUid)
         commentInput.clear()
         replyUid = 0; replyNick = ""
+        commentInput.placeholderText = "写评论..."
+    }
+
+    function prepareReply(uid, nick) {
+        replyUid = uid || 0
+        replyNick = nick || "用户"
+        commentInput.placeholderText = replyUid > 0 ? ("回复 " + replyNick + "...") : "写评论..."
+        commentInput.forceActiveFocus()
+    }
+
+    function toggleCommentLike(commentId, liked) {
+        if (!commentId || commentId <= 0 || !root.controller || root.currentMomentId <= 0)
+            return
+        root.controller.toggleCommentLike(root.currentMomentId, commentId, liked)
+    }
+
+    function deleteOwnComment(commentId) {
+        if (!root.controller || root.currentMomentId <= 0 || commentId <= 0)
+            return
+        commentsLoading = true
+        root.controller.deleteComment(root.currentMomentId, commentId)
     }
 
     Connections {
@@ -526,6 +824,8 @@ Popup {
         function onCommentAdded(momentId) {
             if (root.opened && (momentId <= 0 || momentId === root.currentMomentId)) {
                 commentSending = false
+                if (replyUid === 0)
+                    commentInput.placeholderText = "写评论..."
                 applySnapshot()
             }
         }
@@ -553,7 +853,7 @@ Popup {
                 anchors.centerIn: Overlay.overlay
                 background: Rectangle { color: "#111111"; anchors.fill: parent }
                 Image {
-                    anchors.fill: parent; fillMode: Image.Contain
+                    anchors.fill: parent; fillMode: Image.PreserveAspectFit
                     source: gate_url_prefix + "/media/download?asset=" + imgPopup.currentKey
                     cache: false
                 }

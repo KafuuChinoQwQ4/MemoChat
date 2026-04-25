@@ -83,6 +83,7 @@ ProfileResult HandleGetUserInfo(int uid) {
     }
     result.error = 0;
     result.data["uid"] = user_info.uid;
+    result.data["user_id"] = user_info.user_id;
     result.data["name"] = user_info.name;
     result.data["email"] = user_info.email;
     result.data["nick"] = user_info.nick;

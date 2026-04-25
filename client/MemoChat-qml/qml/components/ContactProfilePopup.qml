@@ -27,7 +27,7 @@ Popup {
         var profile = appController ? appController.contactProfileByUid(profileUid) : ({})
         isFriend = profile && profile.uid !== undefined
         profileName = isFriend ? (profile.name || fallbackName || "用户") : (fallbackName || "用户")
-        profileNick = isFriend ? (profile.nick || "") : ""
+        profileNick = isFriend ? (profile.nick || fallbackName || "") : (fallbackName || "")
         profileIcon = isFriend ? (profile.icon || fallbackIcon || "qrc:/res/head_1.jpg") : (fallbackIcon || "qrc:/res/head_1.jpg")
         profileUserId = isFriend ? (profile.userId || fallbackUserId || "") : (fallbackUserId || "")
         profileDesc = isFriend ? (profile.desc || "") : ""
@@ -80,7 +80,7 @@ Popup {
 
         Rectangle { Layout.fillWidth: true; height: 1; color: "#e5e7eb" }
 
-        Label { Layout.fillWidth: true; text: "昵称：" + (root.profileNick || "未设置"); color: "#374151"; font.pixelSize: 14 }
+        Label { Layout.fillWidth: true; text: "昵称：" + (root.profileNick || root.profileName || "未设置"); color: "#374151"; font.pixelSize: 14 }
         Label { Layout.fillWidth: true; text: "备注：" + (root.profileBack || "未设置"); color: "#374151"; font.pixelSize: 14; visible: root.isFriend }
         Label { Layout.fillWidth: true; text: "性别：" + (root.profileSex === 1 ? "女" : (root.profileSex === 2 ? "男" : "未设置")); color: "#374151"; font.pixelSize: 14 }
         Label { Layout.fillWidth: true; text: "签名：" + (root.profileDesc || "暂无"); color: "#374151"; font.pixelSize: 14; wrapMode: Text.Wrap }

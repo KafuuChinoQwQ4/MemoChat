@@ -59,6 +59,8 @@ MomentsController::MomentsController(QObject* parent)
         QObject::connect(httpMgr.get(), &HttpMgr::sig_moments_mod_finish,
                         this, &MomentsController::onCommentRsp);
         QObject::connect(httpMgr.get(), &HttpMgr::sig_moments_mod_finish,
+                        this, &MomentsController::onCommentLikeRsp);
+        QObject::connect(httpMgr.get(), &HttpMgr::sig_moments_mod_finish,
                         this, &MomentsController::onDetailRsp);
         QObject::connect(httpMgr.get(), &HttpMgr::sig_moments_mod_finish,
                         this, &MomentsController::onCommentListRsp);
@@ -113,6 +115,9 @@ MomentEntry MomentsController::parseMomentEntry(const QJsonObject& obj) const {
     entry.userId = obj["user_id"].toString();
     entry.userName = obj["user_name"].toString();
     entry.userNick = obj["user_nick"].toString();
+    if (entry.userNick.trimmed().isEmpty()) {
+        entry.userNick = entry.userName;
+    }
     entry.userIcon = normalizeIconForQml(obj["user_icon"].toString());
     entry.visibility = obj["visibility"].toInt();
     entry.location = obj["location"].toString();
@@ -142,6 +147,9 @@ MomentEntry MomentsController::parseMomentEntry(const QJsonObject& obj) const {
         MomentLike lk;
         lk.uid = likeObj["uid"].toInt();
         lk.userNick = likeObj["user_nick"].toString();
+        if (lk.userNick.trimmed().isEmpty()) {
+            lk.userNick = QStringLiteral("用户");
+        }
         lk.userIcon = normalizeIconForQml(likeObj["user_icon"].toString());
         lk.createdAt = likeObj["created_at"].toVariant().toLongLong();
         entry.likes.append(lk);
@@ -154,15 +162,55 @@ MomentEntry MomentsController::parseMomentEntry(const QJsonObject& obj) const {
         cm.id = cmObj["id"].toVariant().toLongLong();
         cm.uid = cmObj["uid"].toInt();
         cm.userNick = cmObj["user_nick"].toString();
+        if (cm.userNick.trimmed().isEmpty()) {
+            cm.userNick = QStringLiteral("用户");
+        }
         cm.userIcon = normalizeIconForQml(cmObj["user_icon"].toString());
         cm.content = cmObj["content"].toString();
         cm.replyUid = cmObj["reply_uid"].toInt();
         cm.replyNick = cmObj["reply_nick"].toString();
         cm.createdAt = cmObj["created_at"].toVariant().toLongLong();
+        cm.likeCount = qMax(0, cmObj["like_count"].toInt());
+        cm.hasLiked = cmObj["has_liked"].toBool();
+        const QJsonArray commentLikes = cmObj["likes"].toArray();
+        for (const auto& likeVar : commentLikes) {
+            const QJsonObject likeObj = likeVar.toObject();
+            MomentLike lk;
+            lk.uid = likeObj["uid"].toInt();
+            lk.userNick = likeObj["user_nick"].toString();
+            if (lk.userNick.trimmed().isEmpty()) {
+                lk.userNick = QStringLiteral("用户");
+            }
+            lk.userIcon = normalizeIconForQml(likeObj["user_icon"].toString());
+            lk.createdAt = likeObj["created_at"].toVariant().toLongLong();
+            cm.likes.append(lk);
+        }
         entry.comments.append(cm);
     }
 
+    applyAuthoritativeState(entry);
     return entry;
+}
+
+void MomentsController::applyAuthoritativeState(MomentEntry& entry) const {
+    if (entry.momentId <= 0) {
+        return;
+    }
+    const auto pendingIt = _pending_likes.constFind(entry.momentId);
+    if (pendingIt != _pending_likes.constEnd()) {
+        entry.hasLiked = pendingIt.value().desiredLiked;
+        entry.likeCount = qMax(0, pendingIt.value().desiredCount);
+        return;
+    }
+    if (_authoritative_liked.contains(entry.momentId)) {
+        entry.hasLiked = _authoritative_liked.value(entry.momentId);
+    }
+    if (_authoritative_like_counts.contains(entry.momentId)) {
+        entry.likeCount = qMax(0, _authoritative_like_counts.value(entry.momentId));
+    }
+    if (_authoritative_comment_counts.contains(entry.momentId)) {
+        entry.commentCount = qMax(0, _authoritative_comment_counts.value(entry.momentId));
+    }
 }
 
 void MomentsController::loadFeed() {
@@ -377,15 +425,23 @@ void MomentsController::submitPublishRequest(const QString& location, int visibi
     payload["visibility"] = visibility;
 
     QJsonArray itemsArr;
+    QString firstTextContent;
     for (const auto& itemVar : items) {
         const QVariantMap itemMap = itemVar.toMap();
         QJsonObject itemObj;
         for (auto it = itemMap.constBegin(); it != itemMap.constEnd(); ++it) {
             itemObj[it.key()] = QJsonValue::fromVariant(it.value());
         }
+        if (firstTextContent.isEmpty()
+            && itemMap.value(QStringLiteral("media_type")).toString() == QStringLiteral("text")) {
+            firstTextContent = itemMap.value(QStringLiteral("content")).toString();
+        }
         itemsArr.append(itemObj);
     }
     payload["items"] = itemsArr;
+    if (!firstTextContent.trimmed().isEmpty()) {
+        payload["content"] = firstTextContent;
+    }
 
     HttpMgr::GetInstance()->PostHttpReq(
         QUrl(gate_url_prefix + "/api/moments/publish"),
@@ -407,27 +463,10 @@ void MomentsController::deleteMoment(qint64 momentId) {
         QStringLiteral("moments"));
 }
 
-void MomentsController::toggleLike(qint64 momentId) {
-    if (momentId <= 0 || _like_in_flight.contains(momentId)) {
-        return;
-    }
-
-    const bool wasLiked = _model->getMomentLiked(momentId);
-    const int prevCount = _model->getMomentLikeCount(momentId);
-    const int nextCount = wasLiked ? qMax(0, prevCount - 1) : prevCount + 1;
-
-    PendingLike pl;
-    pl.momentId = momentId;
-    pl.wasLiked = wasLiked;
-    pl.prevCount = prevCount;
-    _like_pending_queue.enqueue(pl);
-    _like_in_flight.insert(momentId);
-
-    _model->updateLiked(momentId, !wasLiked, nextCount);
-
+void MomentsController::submitLikeRequest(qint64 momentId, bool liked) {
     QJsonObject payload = buildAuthJson();
     payload["moment_id"] = momentId;
-    payload["like"] = !wasLiked;
+    payload["like"] = liked;
 
     HttpMgr::GetInstance()->PostHttpReq(
         QUrl(gate_url_prefix + "/api/moments/like"),
@@ -435,6 +474,49 @@ void MomentsController::toggleLike(qint64 momentId) {
         ReqId::ID_MOMENTS_LIKE,
         Modules::MOMENTSMOD,
         QStringLiteral("moments"));
+}
+
+void MomentsController::toggleLike(qint64 momentId) {
+    qDebug() << "[MomentsController] toggleLike requested momentId=" << momentId
+             << "inFlight=" << _like_in_flight.contains(momentId);
+    if (momentId <= 0) {
+        return;
+    }
+
+    const bool wasLiked = _model->getMomentLiked(momentId);
+    const int prevCount = _model->getMomentLikeCount(momentId);
+    const int nextCount = wasLiked ? qMax(0, prevCount - 1) : prevCount + 1;
+
+    auto it = _pending_likes.find(momentId);
+    if (it == _pending_likes.end()) {
+        PendingLike pending;
+        pending.momentId = momentId;
+        pending.rollbackLiked = wasLiked;
+        pending.rollbackCount = prevCount;
+        pending.desiredLiked = !wasLiked;
+        pending.desiredCount = nextCount;
+        pending.requestInFlight = true;
+        pending.requestLiked = pending.desiredLiked;
+        _pending_likes.insert(momentId, pending);
+        _like_in_flight.insert(momentId);
+        _model->updateLiked(momentId, pending.desiredLiked, pending.desiredCount);
+        emit likeToggled(momentId, pending.desiredLiked, pending.desiredCount);
+        submitLikeRequest(momentId, pending.requestLiked);
+        return;
+    }
+
+    PendingLike& pending = it.value();
+    pending.desiredLiked = !wasLiked;
+    pending.desiredCount = nextCount;
+    _model->updateLiked(momentId, pending.desiredLiked, pending.desiredCount);
+    emit likeToggled(momentId, pending.desiredLiked, pending.desiredCount);
+
+    if (!pending.requestInFlight) {
+        pending.requestInFlight = true;
+        pending.requestLiked = pending.desiredLiked;
+        _like_in_flight.insert(momentId);
+        submitLikeRequest(momentId, pending.requestLiked);
+    }
 }
 
 void MomentsController::addComment(qint64 momentId, const QString& content, int replyUid) {
@@ -481,6 +563,23 @@ void MomentsController::refreshMoment(qint64 momentId) {
         QUrl(gate_url_prefix + "/api/moments/detail"),
         payload,
         ReqId::ID_MOMENTS_DETAIL,
+        Modules::MOMENTSMOD,
+        QStringLiteral("moments"));
+}
+
+void MomentsController::toggleCommentLike(qint64 momentId, qint64 commentId, bool liked) {
+    if (momentId <= 0 || commentId <= 0) return;
+
+    QJsonObject payload = buildAuthJson();
+    payload["comment_id"] = commentId;
+    payload["like"] = liked;
+
+    _pending_comment_moments[ReqId::ID_MOMENTS_COMMENT_LIKE] = momentId;
+
+    HttpMgr::GetInstance()->PostHttpReq(
+        QUrl(gate_url_prefix + "/api/moments/comment/like"),
+        payload,
+        ReqId::ID_MOMENTS_COMMENT_LIKE,
         Modules::MOMENTSMOD,
         QStringLiteral("moments"));
 }
@@ -532,22 +631,36 @@ void MomentsController::onLoadFeedRsp(ReqId id, const QString& res, ErrorCodes e
     const bool hasMore = root["has_more"].toBool();
     setHasMore(hasMore);
 
+    const bool freshLoad = (_last_moment_id == 0);
     QVector<MomentEntry> moments;
-    qint64 lastId = 0;
+    qint64 cursorMomentId = 0;
     for (const auto& momentVar : momentsArr) {
         const QJsonObject momentObj = momentVar.toObject();
         moments.append(parseMomentEntry(momentObj));
         const qint64 mid = momentObj["moment_id"].toVariant().toLongLong();
-        if (mid > lastId) lastId = mid;
+        if (mid > 0 && (cursorMomentId == 0 || mid < cursorMomentId)) {
+            cursorMomentId = mid;
+        }
     }
 
-    // If last_moment_id was 0, this is a fresh load
-    if (_last_moment_id == 0) {
+    if (freshLoad) {
         _model->setMoments(moments);
     } else {
         _model->appendMoments(moments);
     }
-    _last_moment_id = lastId;
+    if (cursorMomentId > 0) {
+        _last_moment_id = cursorMomentId;
+    } else if (freshLoad) {
+        _last_moment_id = 0;
+    }
+
+    if (freshLoad && _pending_published_moment_id > 0) {
+        if (_model->hasMoment(_pending_published_moment_id)) {
+            _pending_published_moment_id = 0;
+        } else {
+            refreshMoment(_pending_published_moment_id);
+        }
+    }
 
     setProgressText(QString());
     setLoading(false);
@@ -576,12 +689,11 @@ void MomentsController::onPublishRsp(ReqId id, const QString& res, ErrorCodes er
 
     const qint64 momentId = root["moment_id"].toVariant().toLongLong();
     setProgressText(QString());
-    emit publishSuccess(momentId);
-
-    // Refresh the feed
+    _pending_published_moment_id = momentId;
     _last_moment_id = 0;
     setLoading(false);
     loadFeed();
+    emit publishSuccess(momentId);
 }
 
 void MomentsController::onDeleteRsp(ReqId id, const QString& res, ErrorCodes err) {
@@ -607,40 +719,105 @@ void MomentsController::onLikeRsp(ReqId id, const QString& res, ErrorCodes err) 
     if (id != ReqId::ID_MOMENTS_LIKE) {
         return;
     }
+    qDebug() << "[MomentsController] onLikeRsp err=" << err << "res=" << res;
 
-    PendingLike p;
-    if (!_like_pending_queue.isEmpty()) {
-        p = _like_pending_queue.dequeue();
-    }
-    if (p.momentId > 0) {
-        _like_in_flight.remove(p.momentId);
-    }
-
-    auto reconcile = [this, p]() {
-        if (p.momentId > 0) {
-            refreshMoment(p.momentId);
+    auto firstInFlightMoment = [this]() -> qint64 {
+        for (auto it = _pending_likes.constBegin(); it != _pending_likes.constEnd(); ++it) {
+            if (it.value().requestInFlight) {
+                return it.key();
+            }
         }
+        return 0;
+    };
+
+    auto failPending = [this](qint64 momentId) {
+        auto it = _pending_likes.find(momentId);
+        if (it == _pending_likes.end()) {
+            return;
+        }
+
+        PendingLike& pending = it.value();
+        pending.requestInFlight = false;
+        _like_in_flight.remove(momentId);
+
+        if (pending.desiredLiked != pending.rollbackLiked) {
+            const int desiredCount = pending.desiredLiked
+                ? pending.rollbackCount + 1
+                : qMax(0, pending.rollbackCount - 1);
+            pending.desiredCount = desiredCount;
+            _model->updateLiked(momentId, pending.desiredLiked, desiredCount);
+            emit likeToggled(momentId, pending.desiredLiked, desiredCount);
+            pending.requestInFlight = true;
+            pending.requestLiked = pending.desiredLiked;
+            _like_in_flight.insert(momentId);
+            submitLikeRequest(momentId, pending.requestLiked);
+            return;
+        }
+
+        _model->updateLiked(momentId, pending.rollbackLiked, pending.rollbackCount);
+        emit likeToggled(momentId, pending.rollbackLiked, pending.rollbackCount);
+        _pending_likes.erase(it);
     };
 
     if (err != ErrorCodes::SUCCESS) {
-        reconcile();
+        failPending(firstInFlightMoment());
         return;
     }
 
     QJsonParseError parseErr;
     const QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8(), &parseErr);
     if (parseErr.error != QJsonParseError::NoError || !doc.isObject()) {
-        reconcile();
+        failPending(firstInFlightMoment());
         return;
     }
 
     const QJsonObject root = doc.object();
     const int errorCode = root["error"].toInt();
+    const qint64 responseMomentId = root.value(QStringLiteral("moment_id")).toVariant().toLongLong();
+    const qint64 momentId = responseMomentId > 0 ? responseMomentId : firstInFlightMoment();
     if (errorCode != 0) {
-        reconcile();
+        failPending(momentId);
         return;
     }
-    reconcile();
+
+    if (root.contains(QStringLiteral("has_liked")) && root.contains(QStringLiteral("like_count"))) {
+        const bool liked = root.value(QStringLiteral("has_liked")).toBool();
+        const int likeCount = qMax(0, root.value(QStringLiteral("like_count")).toInt());
+        auto it = _pending_likes.find(momentId);
+        if (it == _pending_likes.end()) {
+            _authoritative_liked[momentId] = liked;
+            _authoritative_like_counts[momentId] = likeCount;
+            _model->updateLiked(momentId, liked, likeCount);
+            emit likeToggled(momentId, liked, likeCount);
+            return;
+        }
+
+        PendingLike& pending = it.value();
+        pending.requestInFlight = false;
+        _like_in_flight.remove(momentId);
+
+        if (pending.desiredLiked == liked) {
+            _authoritative_liked[momentId] = liked;
+            _authoritative_like_counts[momentId] = likeCount;
+            _model->updateLiked(momentId, liked, likeCount);
+            emit likeToggled(momentId, liked, likeCount);
+            _pending_likes.erase(it);
+            return;
+        }
+
+        pending.rollbackLiked = liked;
+        pending.rollbackCount = likeCount;
+        pending.desiredCount = pending.desiredLiked ? likeCount + 1 : qMax(0, likeCount - 1);
+        _model->updateLiked(momentId, pending.desiredLiked, pending.desiredCount);
+        emit likeToggled(momentId, pending.desiredLiked, pending.desiredCount);
+        pending.requestInFlight = true;
+        pending.requestLiked = pending.desiredLiked;
+        _like_in_flight.insert(momentId);
+        submitLikeRequest(momentId, pending.requestLiked);
+        return;
+    }
+
+    refreshMoment(momentId);
 }
 
 void MomentsController::onCommentRsp(ReqId id, const QString& res, ErrorCodes err) {
@@ -677,9 +854,24 @@ void MomentsController::onCommentRsp(ReqId id, const QString& res, ErrorCodes er
 
     const bool deleted = root["delete"].toBool();
     if (momentId > 0) {
-        _model->updateCommentCount(momentId, deleted ? -1 : 1);
+        if (root.contains(QStringLiteral("comment_count"))) {
+            const int commentCount = qMax(0, root.value(QStringLiteral("comment_count")).toInt());
+            _authoritative_comment_counts[momentId] = commentCount;
+            _model->setCommentCount(momentId, commentCount);
+        } else {
+            _model->updateCommentCount(momentId, deleted ? -1 : 1);
+        }
     }
     finishComment(momentId);
+}
+
+void MomentsController::onCommentLikeRsp(ReqId id, const QString& res, ErrorCodes err) {
+    if (id != ReqId::ID_MOMENTS_COMMENT_LIKE) return;
+
+    const qint64 pendingMomentId = _pending_comment_moments.take(ReqId::ID_MOMENTS_COMMENT_LIKE);
+    if (pendingMomentId > 0) {
+        refreshComments(pendingMomentId);
+    }
 }
 
 void MomentsController::onDetailRsp(ReqId id, const QString& res, ErrorCodes err) {
@@ -703,12 +895,22 @@ void MomentsController::onDetailRsp(ReqId id, const QString& res, ErrorCodes err
     const QJsonObject momentObj = root["moment"].toObject();
     const MomentEntry entry = parseMomentEntry(momentObj);
     qDebug() << "[MomentsController] onDetailRsp: parsed momentId=" << entry.momentId << " comments=" << entry.comments.size();
-    _model->upsertMoment(entry);
-    if (!entry.comments.isEmpty()) {
+    const MomentEntry previous = _model->getMomentById(entry.momentId);
+    if (_pending_published_moment_id > 0 && entry.momentId == _pending_published_moment_id) {
+        _model->prependOrUpdateMoment(entry);
+        _pending_published_moment_id = 0;
+    } else {
+        _model->upsertMoment(entry);
+    }
+    const int authoritativeCommentCount = _authoritative_comment_counts.value(entry.momentId, -1);
+    if (authoritativeCommentCount >= 0
+        && previous.comments.size() >= authoritativeCommentCount
+        && previous.comments.size() > entry.comments.size()) {
+        _model->updateDetail(entry.momentId, entry.likes, previous.comments);
+    } else if (!entry.comments.isEmpty()) {
         _model->updateDetail(entry.momentId, entry.likes, entry.comments);
     } else {
-        const MomentEntry current = _model->getMoment(entry.momentId);
-        _model->updateDetail(entry.momentId, entry.likes, current.comments);
+        _model->updateDetail(entry.momentId, entry.likes, previous.comments);
     }
     emit momentRefreshed(entry.momentId);
 }
@@ -750,16 +952,39 @@ void MomentsController::onCommentListRsp(ReqId id, const QString& res, ErrorCode
         cm.id = cmObj["id"].toVariant().toLongLong();
         cm.uid = cmObj["uid"].toInt();
         cm.userNick = cmObj["user_nick"].toString();
+        if (cm.userNick.trimmed().isEmpty()) {
+            cm.userNick = QStringLiteral("用户");
+        }
         cm.userIcon = normalizeIconForQml(cmObj["user_icon"].toString());
         cm.content = cmObj["content"].toString();
         cm.replyUid = cmObj["reply_uid"].toInt();
         cm.replyNick = cmObj["reply_nick"].toString();
         cm.createdAt = cmObj["created_at"].toVariant().toLongLong();
+        cm.likeCount = qMax(0, cmObj["like_count"].toInt());
+        cm.hasLiked = cmObj["has_liked"].toBool();
+        const QJsonArray commentLikes = cmObj["likes"].toArray();
+        for (const auto& likeVar : commentLikes) {
+            const QJsonObject likeObj = likeVar.toObject();
+            MomentLike lk;
+            lk.uid = likeObj["uid"].toInt();
+            lk.userNick = likeObj["user_nick"].toString();
+            if (lk.userNick.trimmed().isEmpty()) {
+                lk.userNick = QStringLiteral("用户");
+            }
+            lk.userIcon = normalizeIconForQml(likeObj["user_icon"].toString());
+            lk.createdAt = likeObj["created_at"].toVariant().toLongLong();
+            cm.likes.append(lk);
+        }
         comments.append(cm);
     }
 
-    const MomentEntry current = _model->getMoment(momentId);
+    const MomentEntry current = _model->getMomentById(momentId);
     _model->updateDetail(momentId, current.likes, comments);
+    if (root.contains(QStringLiteral("comment_count"))) {
+        const int commentCount = qMax(0, root.value(QStringLiteral("comment_count")).toInt());
+        _authoritative_comment_counts[momentId] = commentCount;
+        _model->setCommentCount(momentId, commentCount);
+    }
     finishLoading(momentId);
     emit momentRefreshed(momentId);
 }

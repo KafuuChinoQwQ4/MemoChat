@@ -8,7 +8,7 @@ from typing import Optional
 
 import yaml
 from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ServiceConfig(BaseModel):
@@ -69,7 +69,7 @@ class KimiLLMConfig(BaseModel):
 
 class LLMConfig(BaseModel):
     default_backend: str = "ollama"
-    default_model: str = "qwen2.5:7b"
+    default_model: str = "qwen3:4b"
     ollama: OllamaLLMConfig = OllamaLLMConfig()
     openai: OpenAILLMConfig = OpenAILLMConfig()
     anthropic: AnthropicLLMConfig = AnthropicLLMConfig()
@@ -168,7 +168,75 @@ class MCPConfig(BaseModel):
     servers: list[MCPServerConfig] = []
 
 
+class HarnessModelConfig(BaseModel):
+    name: str
+    display: str
+    context_window: int = 128000
+
+
+class HarnessEndpointConfig(BaseModel):
+    name: str
+    adapter: str = "openai_compatible"
+    deployment: str = "external_api"
+    base_url: str = ""
+    api_key: str = ""
+    api_key_env: str = ""
+    default_model: str = ""
+    enabled: bool = False
+    timeout_sec: int = 120
+    models: list[HarnessModelConfig] = []
+
+
+class HarnessProvidersConfig(BaseModel):
+    endpoints: list[HarnessEndpointConfig] = []
+
+
+class HarnessSkillsConfig(BaseModel):
+    enabled: list[str] = [
+        "general_chat",
+        "knowledge_copilot",
+        "research_assistant",
+        "summarize_thread",
+        "reply_suggester",
+        "translate_text",
+        "graph_recommender",
+        "mcp_operator",
+    ]
+
+
+class HarnessConfig(BaseModel):
+    enabled: bool = True
+    canonical_root: str = "server/AIOrchestrator/harness"
+    industrial_target_year: int = 2026
+    default_mode: str = "agent"
+    max_planning_steps: int = 6
+    max_tool_rounds: int = 4
+    trace_persist: bool = True
+    auto_reflection: bool = True
+    short_term_limit: int = 24
+    episodic_limit: int = 6
+    knowledge_top_k: int = 5
+    providers: HarnessProvidersConfig = HarnessProvidersConfig()
+    skills: HarnessSkillsConfig = HarnessSkillsConfig()
+
+
+class PostgresRuntimeConfig(BaseModel):
+    host: str = "127.0.0.1"
+    port: int = 5432
+    user: str = "memochat"
+    password: str = "123456"
+    database: str = "memo_pg"
+    min_pool_size: int = 2
+    max_pool_size: int = 10
+
+
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="MEMOCHAT_AI_",
+        env_nested_delimiter="__",
+        extra="ignore",
+    )
+
     service: ServiceConfig = ServiceConfig()
     llm: LLMConfig = LLMConfig()
     embedding: EmbeddingConfig = EmbeddingConfig()
@@ -179,13 +247,21 @@ class Settings(BaseSettings):
     observability: ObservabilityConfig = ObservabilityConfig()
     llm_fallback: LLMFallbackConfig = LLMFallbackConfig()
     mcp: MCPConfig = MCPConfig()
+    harness: HarnessConfig = HarnessConfig()
+    postgres: PostgresRuntimeConfig = PostgresRuntimeConfig()
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "Settings":
         with open(path, "r", encoding="utf-8") as f:
             raw = yaml.safe_load(f)
-        return cls.model_validate(raw or {})
+        return cls(**(raw or {}))
 
 
-_config_path = Path(__file__).parent / "config.yaml"
+_base_dir = Path(__file__).parent.resolve()
+_cache_root = _base_dir / ".cache"
+
+os.environ.setdefault("HF_HOME", str(_cache_root / "huggingface"))
+os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", str(_cache_root / "sentence_transformers"))
+
+_config_path = _base_dir / "config.yaml"
 settings = Settings.from_yaml(_config_path)

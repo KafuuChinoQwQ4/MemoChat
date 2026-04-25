@@ -3,6 +3,7 @@ Ollama LLM 适配器 — 支持本地大模型
 """
 import httpx
 import json
+import re
 from typing import AsyncIterator
 
 from .base import BaseLLM, LLMMessage, LLMResponse, LLMStreamChunk, LLMUsage
@@ -11,11 +12,20 @@ from .base import BaseLLM, LLMMessage, LLMResponse, LLMStreamChunk, LLMUsage
 class OllamaLLM(BaseLLM):
     _instance: "OllamaLLM | None" = None
 
-    def __init__(self, base_url: str = "http://127.0.0.1:11434", model_name: str = "qwen2.5:7b"):
+    def __init__(self, base_url: str = "http://127.0.0.1:11434", model_name: str = "qwen3:4b"):
         super().__init__(model_name)
         self.base_url = base_url.rstrip("/")
         self._client: httpx.AsyncClient | None = None
         OllamaLLM._instance = self
+
+    @staticmethod
+    def _strip_think_blocks(content: str) -> str:
+        if not content:
+            return ""
+        if "</think>" in content:
+            content = content.rsplit("</think>", 1)[-1]
+        content = re.sub(r"<think>.*?</think>\s*", "", content, flags=re.DOTALL)
+        return content.strip()
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
@@ -28,6 +38,7 @@ class OllamaLLM(BaseLLM):
             "model": self.model_name,
             "messages": self._messages_to_dict(messages),
             "stream": False,
+            "think": False,
             "options": {
                 "temperature": kwargs.get("temperature", 0.7),
                 "num_predict": kwargs.get("max_tokens", 2048),
@@ -39,7 +50,7 @@ class OllamaLLM(BaseLLM):
             resp.raise_for_status()
             data = resp.json()
 
-            content = data.get("message", {}).get("content", "")
+            content = self._strip_think_blocks(data.get("message", {}).get("content", ""))
             usage_data = data.get("eval_count", 0)
             prompt_eval_count = data.get("prompt_eval_count", 0)
 
@@ -64,6 +75,7 @@ class OllamaLLM(BaseLLM):
             "model": self.model_name,
             "messages": self._messages_to_dict(messages),
             "stream": True,
+            "think": False,
             "options": {
                 "temperature": kwargs.get("temperature", 0.7),
                 "num_predict": kwargs.get("max_tokens", 2048),
@@ -74,6 +86,7 @@ class OllamaLLM(BaseLLM):
             resp.raise_for_status()
             accumulated = ""
             total_tokens = 0
+            in_think_block = False
 
             async for line in resp.aiter_lines():
                 if not line.strip():
@@ -84,6 +97,15 @@ class OllamaLLM(BaseLLM):
                     continue
 
                 delta = data.get("message", {}).get("content", "")
+                if "<think>" in delta:
+                    in_think_block = True
+                    delta = delta.split("<think>", 1)[0]
+                if in_think_block and "</think>" in delta:
+                    delta = delta.split("</think>", 1)[1]
+                    in_think_block = False
+                elif in_think_block:
+                    delta = ""
+                delta = self._strip_think_blocks(delta)
                 accumulated += delta
 
                 eval_count = data.get("eval_count", 0)
