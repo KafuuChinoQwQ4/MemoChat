@@ -35,6 +35,9 @@ struct MomentComment {
     int replyUid = 0;
     QString replyNick;
     qint64 createdAt = 0;
+    int likeCount = 0;
+    bool hasLiked = false;
+    QVector<MomentLike> likes;
 };
 
 struct MomentEntry {
@@ -75,6 +78,7 @@ public:
         CommentCountRole,
         HasLikedRole,
         ItemsRole,
+        TextContentRole,
         LikesRole,
         CommentsRole
     };
@@ -91,16 +95,20 @@ public:
     void setMoments(const QVector<MomentEntry>& moments);
     void appendMoments(const QVector<MomentEntry>& moments);
     void upsertMoment(const MomentEntry& moment);
+    void prependOrUpdateMoment(const MomentEntry& moment);
     void updateLiked(qint64 momentId, bool liked, int likeCount);
     void updateCommentCount(qint64 momentId, int delta);
+    void setCommentCount(qint64 momentId, int count);
     void updateDetail(qint64 momentId, const QVector<MomentLike>& likes, const QVector<MomentComment>& comments);
     void removeMoment(qint64 momentId);
 
     Q_INVOKABLE QVariantMap get(int index) const;
     Q_INVOKABLE MomentEntry getMoment(int index) const;
+    MomentEntry getMomentById(qint64 momentId) const;
     Q_INVOKABLE qint64 getMomentId(int index) const;
     Q_INVOKABLE bool getMomentLiked(qint64 momentId) const;
     Q_INVOKABLE int getMomentLikeCount(qint64 momentId) const;
+    Q_INVOKABLE bool hasMoment(qint64 momentId) const;
     /// Full row for detail popup (includes items[]).
     Q_INVOKABLE QVariantMap snapshotMoment(qint64 momentId) const;
 

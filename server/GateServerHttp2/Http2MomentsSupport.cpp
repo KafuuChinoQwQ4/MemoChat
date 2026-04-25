@@ -5,6 +5,7 @@
 #include "../GateServerCore/MongoMgr.h"
 #include "../GateServerCore/PostgresMgr.h"
 #include "../GateServerCore/const.h"
+#include "logging/Logger.h"
 #include "logging/TraceContext.h"
 
 #include <chrono>
@@ -18,6 +19,22 @@ int64_t NowMs() {
         std::chrono::system_clock::now().time_since_epoch()).count());
 }
 
+void NormalizeMomentItem(MomentItemInfo& item) {
+    if (item.media_type != "image" && item.media_type != "video") {
+        item.media_type = "text";
+    }
+    if ((item.media_type == "image" || item.media_type == "video") && item.media_key.empty()) {
+        item.media_type = "text";
+    }
+    if (item.media_type == "text") {
+        item.media_key.clear();
+        item.thumb_key.clear();
+        item.width = 0;
+        item.height = 0;
+        item.duration_ms = 0;
+    }
+}
+
 bool ValidateAuth(const memochat::json::JsonValue& src_root, int& uid) {
     if (!memochat::json::glaze_has_key(src_root, "uid") || !memochat::json::glaze_has_key(src_root, "login_ticket")) {
         return false;
@@ -29,10 +46,12 @@ bool ValidateAuth(const memochat::json::JsonValue& src_root, int& uid) {
 void BuildUserProfile(int uid, memochat::json::JsonValue& json) {
     ::UserInfo user_info;
     if (PostgresMgr::GetInstance()->GetUserInfo(uid, user_info)) {
+        json["user_id"] = user_info.user_id;
         json["user_name"] = user_info.name;
         json["user_nick"] = user_info.nick;
         json["user_icon"] = user_info.icon;
     } else {
+        json["user_id"] = std::string();
         json["user_name"] = std::string();
         json["user_nick"] = std::string();
         json["user_icon"] = std::string();
@@ -72,6 +91,30 @@ void BuildMomentJson(const MomentInfo& moment, bool has_liked,
     } else {
         json["items"] = memochat::json::glaze_make_array();
     }
+}
+
+void FillCommentLikeJson(int viewer_uid, int64_t comment_id, memochat::json::JsonValue& json) {
+    std::vector<MomentLikeInfo> likes;
+    bool has_more = false;
+    PostgresMgr::GetInstance()->GetMomentCommentLikes(comment_id, 100, likes, has_more);
+    json["has_liked"] = PostgresMgr::GetInstance()->HasLikedMomentComment(comment_id, viewer_uid);
+    json["like_count"] = static_cast<double>(likes.size());
+
+    memochat::json::JsonValue like_names = memochat::json::glaze_make_array();
+    memochat::json::JsonValue likes_arr = memochat::json::glaze_make_array();
+    for (const auto& like : likes) {
+        if (!like.user_nick.empty()) {
+            memochat::json::glaze_append(like_names, like.user_nick);
+        }
+        memochat::json::JsonValue like_json;
+        like_json["uid"] = static_cast<double>(like.uid);
+        like_json["user_nick"] = like.user_nick;
+        like_json["user_icon"] = like.user_icon;
+        like_json["created_at"] = static_cast<double>(like.created_at);
+        memochat::json::glaze_append(likes_arr, like_json);
+    }
+    json["like_names"] = like_names;
+    json["likes"] = likes_arr;
 }
 
 memochat::json::JsonValue MakeMomentsError(int error_code, const std::string& message) {
@@ -121,20 +164,10 @@ void RegisterHttp2MomentsRoutes() {
             moment.like_count = 0;
             moment.comment_count = 0;
 
-            if (!PostgresMgr::GetInstance()->AddMoment(moment)) {
+            int64_t moment_id = 0;
+            if (!PostgresMgr::GetInstance()->AddMoment(moment, &moment_id)) {
                 resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsError(ErrorCodes::RPCFailed, "add moment failed")));
                 return;
-            }
-
-            std::vector<MomentInfo> moments;
-            bool has_more = false;
-            PostgresMgr::GetInstance()->GetMomentsFeed(uid, 0, 1, moments, has_more);
-            int64_t moment_id = 0;
-            for (const auto& m : moments) {
-                if (m.uid == uid && m.created_at == now_ms) {
-                    moment_id = m.moment_id;
-                    break;
-                }
             }
 
             MomentContentInfo content;
@@ -155,13 +188,24 @@ void RegisterHttp2MomentsRoutes() {
                         item.width = memochat::json::glaze_safe_get<int>(item_json, "width", 0);
                         item.height = memochat::json::glaze_safe_get<int>(item_json, "height", 0);
                         item.duration_ms = memochat::json::glaze_safe_get<int>(item_json, "duration_ms", 0);
+                        NormalizeMomentItem(item);
                         content.items.push_back(item);
                         }
                     }
                 }
             }
-            if (moment_id > 0) {
-                MongoMgr::GetInstance()->InsertMomentContent(content);
+            const std::string raw_content = memochat::json::glaze_safe_get<std::string>(root, "content", std::string());
+            if (content.items.empty() && !raw_content.empty()) {
+                MomentItemInfo item;
+                item.media_type = "text";
+                item.content = raw_content;
+                NormalizeMomentItem(item);
+                content.items.push_back(item);
+            }
+            if (moment_id > 0 && !MongoMgr::GetInstance()->InsertMomentContent(content)) {
+                PostgresMgr::GetInstance()->DeleteMoment(moment_id, uid);
+                resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsError(ErrorCodes::RPCFailed, "store moment content failed")));
+                return;
             }
 
             memochat::json::JsonValue data;
@@ -306,7 +350,13 @@ void RegisterHttp2MomentsRoutes() {
                 resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsError(ErrorCodes::RPCFailed, "like operation failed")));
                 return;
             }
-            resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsOk(memochat::json::JsonValue())));
+            MomentInfo moment;
+            PostgresMgr::GetInstance()->GetMomentById(moment_id, moment);
+            memochat::json::JsonValue data;
+            data["moment_id"] = static_cast<double>(moment_id);
+            data["has_liked"] = PostgresMgr::GetInstance()->HasLikedMoment(moment_id, uid);
+            data["like_count"] = static_cast<double>(moment.like_count);
+            resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsOk(data)));
         });
 
     Http2Routes::RegisterHandler("POST", "/api/moments/comment",
@@ -327,7 +377,8 @@ void RegisterHttp2MomentsRoutes() {
             std::string content_str = memochat::json::glaze_safe_get<std::string>(root, "content", std::string());
             int reply_uid = memochat::json::glaze_safe_get<int>(root, "reply_uid", 0);
             int64_t comment_id = memochat::json::glaze_safe_get<int64_t>(root, "comment_id", 0LL);
-            bool delete_mode = memochat::json::glaze_safe_get<bool>(root, "delete", false);
+            bool delete_mode = memochat::json::glaze_safe_get<bool>(root, "delete", false)
+                || (comment_id > 0 && content_str.empty());
 
             if (delete_mode) {
                 if (comment_id <= 0) {
@@ -335,8 +386,19 @@ void RegisterHttp2MomentsRoutes() {
                     return;
                 }
                 bool ok = PostgresMgr::GetInstance()->DeleteMomentComment(comment_id, uid);
-                resp.SetJsonBody(ok ? memochat::json::glaze_stringify(MakeMomentsOk(memochat::json::JsonValue()))
-                                    : memochat::json::glaze_stringify(MakeMomentsError(ErrorCodes::RPCFailed, "delete failed")));
+                if (!ok) {
+                    memolog::LogWarn("gate.http2.moments.comment.delete", "delete comment failed",
+                        { {"comment_id", std::to_string(comment_id)}, {"uid", std::to_string(uid)} });
+                    resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsError(ErrorCodes::RPCFailed, "delete failed")));
+                    return;
+                }
+                MomentInfo moment;
+                PostgresMgr::GetInstance()->GetMomentById(moment_id, moment);
+                memochat::json::JsonValue data;
+                data["moment_id"] = static_cast<double>(moment_id);
+                data["delete"] = true;
+                data["comment_count"] = static_cast<double>(moment.comment_count);
+                resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsOk(data)));
                 return;
             }
 
@@ -357,7 +419,13 @@ void RegisterHttp2MomentsRoutes() {
                 resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsError(ErrorCodes::RPCFailed, "add comment failed")));
                 return;
             }
-            resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsOk(memochat::json::JsonValue())));
+            MomentInfo moment;
+            PostgresMgr::GetInstance()->GetMomentById(moment_id, moment);
+            memochat::json::JsonValue data;
+            data["moment_id"] = static_cast<double>(moment_id);
+            data["delete"] = false;
+            data["comment_count"] = static_cast<double>(moment.comment_count);
+            resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsOk(data)));
         });
 
     Http2Routes::RegisterHandler("POST", "/api/moments/comment/list",
@@ -392,7 +460,12 @@ void RegisterHttp2MomentsRoutes() {
             }
 
             memochat::json::JsonValue data;
+            data["moment_id"] = static_cast<double>(moment_id);
             data["has_more"] = has_more;
+            MomentInfo moment;
+            if (PostgresMgr::GetInstance()->GetMomentById(moment_id, moment)) {
+                data["comment_count"] = static_cast<double>(moment.comment_count);
+            }
             data["comments"] = memochat::json::glaze_make_array();
             for (const auto& comment : comments) {
                 memochat::json::JsonValue comment_json;
@@ -409,8 +482,44 @@ void RegisterHttp2MomentsRoutes() {
                         comment_json["reply_nick"] = reply_user.nick;
                     }
                 }
+                FillCommentLikeJson(uid, comment.id, comment_json);
                 memochat::json::glaze_append(data["comments"], comment_json);
             }
+            resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsOk(data)));
+        });
+
+    Http2Routes::RegisterHandler("POST", "/api/moments/comment/like",
+        [](const Http2Request& req, Http2Response& resp) {
+            memochat::json::JsonValue root;
+            if (!Http2MediaSupport::ParseJsonBody(req.body, root)) {
+                resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsError(1, "invalid json")));
+                return;
+            }
+
+            int uid = 0;
+            if (!ValidateAuth(root, uid)) {
+                resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsError(ErrorCodes::Error_Json, "invalid auth params")));
+                return;
+            }
+
+            int64_t comment_id = memochat::json::glaze_safe_get<int64_t>(root, "comment_id", 0LL);
+            bool like = memochat::json::glaze_safe_get<bool>(root, "like", true);
+            if (comment_id <= 0) {
+                resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsError(ErrorCodes::Error_Json, "invalid comment_id")));
+                return;
+            }
+
+            bool ok = like
+                ? PostgresMgr::GetInstance()->AddMomentCommentLike(comment_id, uid)
+                : PostgresMgr::GetInstance()->RemoveMomentCommentLike(comment_id, uid);
+            if (!ok) {
+                resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsError(ErrorCodes::RPCFailed, "comment like failed")));
+                return;
+            }
+
+            memochat::json::JsonValue data;
+            data["comment_id"] = static_cast<double>(comment_id);
+            FillCommentLikeJson(uid, comment_id, data);
             resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsOk(data)));
         });
 }

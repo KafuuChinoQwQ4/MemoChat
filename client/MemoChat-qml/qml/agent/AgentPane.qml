@@ -9,45 +9,67 @@ Rectangle {
 
     property var agentController: null
     property var messageModel: null
-    property string currentSessionId: ""
     property var sessions: []
+    property string currentSessionId: ""
     property string currentModel: ""
     property var availableModels: []
     property bool loading: false
     property bool streaming: false
     property string errorMsg: ""
-    property var kbList: []
-    property var pendingSmartResult: null
-    property int _viewMode: 0  // 0: chat, 1: kb management
+    property string selfAvatar: "qrc:/res/head_1.jpg"
 
     signal backRequested()
 
+    function currentSessionTitle() {
+        if (!sessions || currentSessionId.length === 0) {
+            return "未选择会话"
+        }
+        for (var i = 0; i < sessions.length; ++i) {
+            var session = sessions[i]
+            if (session.session_id === currentSessionId) {
+                return session.title && session.title.length > 0 ? session.title : "新会话"
+            }
+        }
+        return "当前会话"
+    }
+
+    function sessionSummary() {
+        if (currentSessionId.length === 0) {
+            return "从左侧选择或新建会话开始。"
+        }
+        if (streaming) {
+            return "AI 正在生成回复。"
+        }
+        if (loading) {
+            return "AI 正在处理你的问题。"
+        }
+        return "当前会话已就绪，可以继续追问。"
+    }
+
     ColumnLayout {
         anchors.fill: parent
-        spacing: 0
+        spacing: 10
 
-        // 顶部标题栏
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 64
-            radius: 10
-            color: Qt.rgba(1, 1, 1, 0.24)
+            Layout.preferredHeight: 78
+            radius: 12
+            color: Qt.rgba(1, 1, 1, 0.22)
             border.color: Qt.rgba(1, 1, 1, 0.46)
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 20
+                anchors.leftMargin: 18
                 anchors.rightMargin: 18
-                spacing: 8
+                spacing: 12
 
-                Item {
+                ColumnLayout {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    visible: root._viewMode === 0
+                    spacing: 4
 
                     RowLayout {
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 12
+                        Layout.fillWidth: true
+                        spacing: 8
 
                         Label {
                             text: "AI 助手"
@@ -56,59 +78,78 @@ Rectangle {
                             font.bold: true
                         }
 
-                        Label {
-                            text: "• " + root.currentModel
-                            color: "#6a7b92"
-                            font.pixelSize: 12
-                            visible: root.currentModel.length > 0
+                        Rectangle {
+                            Layout.preferredHeight: 24
+                            Layout.preferredWidth: sessionTitleLabel.implicitWidth + 18
+                            radius: 12
+                            color: Qt.rgba(1, 1, 1, 0.32)
+                            border.width: 1
+                            border.color: Qt.rgba(1, 1, 1, 0.36)
+
+                            Label {
+                                id: sessionTitleLabel
+                                anchors.centerIn: parent
+                                text: root.currentSessionTitle()
+                                color: "#4e5d74"
+                                font.pixelSize: 11
+                                font.bold: true
+                                elide: Text.ElideRight
+                            }
                         }
 
-                        Label {
-                            text: "..."
-                            color: "#6a7b92"
-                            font.pixelSize: 12
-                            visible: root.loading || root.streaming
+                        Rectangle {
+                            Layout.preferredHeight: 24
+                            Layout.preferredWidth: modelChipLabel.implicitWidth + 16
+                            radius: 12
+                            color: Qt.rgba(0.36, 0.62, 0.92, 0.16)
+                            visible: root.currentModel.length > 0
+
+                            Label {
+                                id: modelChipLabel
+                                anchors.centerIn: parent
+                                text: root.currentModel
+                                color: "#2d6fb4"
+                                font.pixelSize: 11
+                                font.bold: true
+                            }
                         }
                     }
-                }
-
-                Item {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    visible: root._viewMode === 1
 
                     Label {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "我的知识库"
-                        color: "#2a3649"
-                        font.pixelSize: 18
-                        font.bold: true
+                        Layout.fillWidth: true
+                        text: root.sessionSummary()
+                        color: "#6a7b92"
+                        font.pixelSize: 12
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
                     }
                 }
 
                 GlassButton {
-                    Layout.preferredWidth: 88
-                    Layout.preferredHeight: 32
-                    text: root._viewMode === 0 ? "知识库" : "返回聊天"
+                    Layout.preferredWidth: 84
+                    Layout.preferredHeight: 34
+                    text: root.streaming ? "停止" : "新会话"
                     textPixelSize: 13
                     cornerRadius: 9
-                    normalColor: Qt.rgba(0.54, 0.70, 0.93, 0.22)
-                    hoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.32)
-                    pressedColor: Qt.rgba(0.54, 0.70, 0.93, 0.40)
+                    normalColor: root.streaming ? Qt.rgba(0.89, 0.27, 0.27, 0.22) : Qt.rgba(0.35, 0.61, 0.90, 0.22)
+                    hoverColor: root.streaming ? Qt.rgba(0.89, 0.27, 0.27, 0.32) : Qt.rgba(0.35, 0.61, 0.90, 0.32)
+                    pressedColor: root.streaming ? Qt.rgba(0.89, 0.27, 0.27, 0.42) : Qt.rgba(0.35, 0.61, 0.90, 0.40)
                     onClicked: {
-                        if (root._viewMode === 0) {
-                            root._viewMode = 1
-                            root.reloadKnowledgeBases()
+                        if (!root.agentController) {
+                            return
+                        }
+                        if (root.streaming) {
+                            root.agentController.cancelStream()
                         } else {
-                            root._viewMode = 0
+                            root.agentController.createSession()
                         }
                     }
                 }
 
                 GlassButton {
-                    Layout.preferredWidth: 88
-                    Layout.preferredHeight: 32
-                    text: "设置"
+                    Layout.preferredWidth: 74
+                    Layout.preferredHeight: 34
+                    text: "模型"
                     textPixelSize: 13
                     cornerRadius: 9
                     normalColor: Qt.rgba(0.42, 0.56, 0.74, 0.22)
@@ -119,106 +160,46 @@ Rectangle {
             }
         }
 
-        // 主内容区
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            radius: 10
+            radius: 12
             color: Qt.rgba(1, 1, 1, 0.16)
             border.color: Qt.rgba(1, 1, 1, 0.42)
 
-            Loader {
+            AgentConversationPane {
                 anchors.fill: parent
-                anchors.margins: 14
-                active: root._viewMode === 0
-                sourceComponent: Component {
-                    AgentConversationPane {
-                        agentController: root.agentController
-                        messageModel: root.messageModel
-                        loading: root.loading
-                        streaming: root.streaming
-                        errorMsg: root.errorMsg
-                        sessions: root.sessions
-                        currentSessionId: root.currentSessionId
-                        onReloadSessions: {
-                            if (root.agentController) root.agentController.loadSessions()
-                        }
-                        onSwitchSession: function(sid) {
-                            if (root.agentController) root.agentController.switchSession(sid)
-                        }
-                        onDeleteSession: function(sid) {
-                            if (root.agentController) root.agentController.deleteSession(sid)
-                        }
-                    }
-                }
-            }
-
-            Loader {
-                anchors.fill: parent
-                anchors.margins: 14
-                active: root._viewMode === 1
-                sourceComponent: Component {
-                    KnowledgeBasePane {
-                        agentController: root.agentController
-                        kbList: root.kbList
-                        onReloadRequested: root.reloadKnowledgeBases()
-                    }
-                }
+                anchors.margins: 12
+                agentController: root.agentController
+                messageModel: root.messageModel
+                loading: root.loading
+                streaming: root.streaming
+                errorMsg: root.errorMsg
+                sessions: root.sessions
+                currentSessionId: root.currentSessionId
+                selfAvatar: root.selfAvatar
             }
         }
 
-        // 智能功能工具栏
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 56
-            radius: 10
-            color: Qt.rgba(1, 1, 1, 0.22)
-            border.color: Qt.rgba(1, 1, 1, 0.46)
-            visible: root._viewMode === 0
-
-            SmartFeatureBar {
-                anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
-                smartResult: root.pendingSmartResult
-                onSummaryRequested: {
-                    var chatHistory = collectChatHistory()
-                    if (root.agentController) root.agentController.summarizeChat("current", chatHistory)
-                }
-                onSuggestRequested: {
-                    var chatHistory = collectChatHistory()
-                    if (root.agentController) root.agentController.suggestReply("current", chatHistory)
-                }
-                onTranslateRequested: {
-                    if (root.agentController) root.agentController.translateMessage(lastSelectedText, "中文")
-                }
-            }
-        }
-
-        // 输入框
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 156
-            radius: 10
-            color: Qt.rgba(1, 1, 1, 0.22)
-            border.color: Qt.rgba(1, 1, 1, 0.46)
-            visible: root._viewMode === 0
+            Layout.preferredHeight: 148
+            radius: 12
+            color: Qt.rgba(1, 1, 1, 0.20)
+            border.color: Qt.rgba(1, 1, 1, 0.44)
 
             AgentComposerBar {
-                id: composerBar
                 anchors.fill: parent
-                enabledComposer: !root.loading
+                enabledComposer: !root.loading && !root.streaming
                 onSendComposer: function(text) {
-                    if (root.agentController) root.agentController.sendMessage(text)
-                }
-                onNewSession: {
-                    if (root.agentController) root.agentController.createSession()
+                    if (root.agentController) {
+                        root.agentController.sendMessage(text)
+                    }
                 }
             }
         }
     }
 
-    // 模型设置面板
     Loader {
         id: modelSettingsLoader
         anchors.fill: parent
@@ -226,7 +207,8 @@ Rectangle {
         sourceComponent: Component {
             Rectangle {
                 anchors.fill: parent
-                color: Qt.rgba(0, 0, 0, 0.3)
+                color: Qt.rgba(0, 0, 0, 0.28)
+
                 MouseArea {
                     anchors.fill: parent
                     onClicked: modelSettingsLoader.active = false
@@ -234,11 +216,11 @@ Rectangle {
 
                 Rectangle {
                     anchors.centerIn: parent
-                    width: 360
-                    height: 280
-                    radius: 12
-                    color: Qt.rgba(1, 1, 1, 0.95)
-                    border.color: Qt.rgba(1, 1, 1, 0.6)
+                    width: 380
+                    height: 320
+                    radius: 14
+                    color: Qt.rgba(1, 1, 1, 0.96)
+                    border.color: Qt.rgba(1, 1, 1, 0.60)
 
                     ColumnLayout {
                         anchors.fill: parent
@@ -246,10 +228,18 @@ Rectangle {
                         spacing: 12
 
                         Label {
-                            text: "模型设置"
+                            text: "选择模型"
                             font.pixelSize: 16
                             font.bold: true
                             color: "#2a3649"
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: root.currentModel.length > 0 ? ("当前使用: " + root.currentModel) : "当前模型尚未加载"
+                            color: "#6a7b92"
+                            font.pixelSize: 12
+                            wrapMode: Text.Wrap
                         }
 
                         ListView {
@@ -257,30 +247,52 @@ Rectangle {
                             Layout.fillHeight: true
                             clip: true
                             model: root.availableModels
+                            spacing: 6
+
                             delegate: Rectangle {
                                 width: ListView.view.width
-                                height: 44
-                                radius: 6
-                                color: mouseArea.containsMouse ? Qt.rgba(0.54, 0.70, 0.93, 0.15) : "transparent"
-                                border.color: Qt.rgba(1, 1, 1, 0.3)
-                                Label {
-                                    anchors.left: parent.left
+                                height: 48
+                                radius: 8
+                                color: {
+                                    const fullName = (modelData.model_type || "") + ":" + (modelData.model_name || "")
+                                    if (fullName === root.currentModel) {
+                                        return Qt.rgba(0.54, 0.70, 0.93, 0.18)
+                                    }
+                                    return modelMouseArea.containsMouse ? Qt.rgba(0.54, 0.70, 0.93, 0.10) : "transparent"
+                                }
+                                border.color: Qt.rgba(1, 1, 1, 0.32)
+
+                                RowLayout {
+                                    anchors.fill: parent
                                     anchors.leftMargin: 12
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: modelData.display_name || modelData.model_name || ""
-                                    color: "#2a3649"
-                                    font.pixelSize: 14
-                                }
-                                Label {
-                                    anchors.right: parent.right
                                     anchors.rightMargin: 12
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: modelData.model_type || ""
-                                    color: "#6a7b92"
-                                    font.pixelSize: 11
+                                    spacing: 8
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: modelData.display_name || modelData.model_name || ""
+                                            color: "#2a3649"
+                                            font.pixelSize: 14
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: modelData.model_type || ""
+                                            color: "#6a7b92"
+                                            font.pixelSize: 11
+                                            elide: Text.ElideRight
+                                        }
+                                    }
                                 }
+
                                 MouseArea {
-                                    id: mouseArea
+                                    id: modelMouseArea
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
@@ -294,39 +306,30 @@ Rectangle {
                             }
                         }
 
-                        GlassButton {
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: 32
-                            Layout.alignment: Qt.AlignRight
-                            text: "刷新模型"
-                            textPixelSize: 13
-                            cornerRadius: 8
-                            normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
-                            onClicked: {
-                                if (root.agentController) root.agentController.refreshModelList()
+                        RowLayout {
+                            Layout.fillWidth: true
+
+                            Item { Layout.fillWidth: true }
+
+                            GlassButton {
+                                Layout.preferredWidth: 96
+                                Layout.preferredHeight: 32
+                                text: "刷新模型"
+                                textPixelSize: 13
+                                cornerRadius: 8
+                                normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
+                                hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
+                                pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
+                                onClicked: {
+                                    if (root.agentController) {
+                                        root.agentController.refreshModelList()
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
-
-    function collectChatHistory() {
-        if (!root.messageModel) return "[]"
-        var msgs = []
-        var count = root.messageModel.rowCount()
-        for (var i = 0; i < count; i++) {
-            var item = root.messageModel.data(root.messageModel.index(i, 0), Qt.DisplayRole)
-        }
-        return JSON.stringify(msgs)
-    }
-
-    function reloadKnowledgeBases() {
-        if (root.agentController) root.agentController.listKnowledgeBases()
-    }
-
-    function refreshSessions() {
-        if (root.agentController) root.agentController.loadSessions()
     }
 }

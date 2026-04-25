@@ -13,6 +13,7 @@ Rectangle {
     property var momentsModel: null
     property var momentsController: null
     property bool showPublishPage: false
+    property int pendingDeleteMomentId: 0
 
     GlassSurface {
         anchors.fill: parent
@@ -64,14 +65,36 @@ Rectangle {
 
                         ToolButton {
                             id: publishButton
-                            icon.source: "qrc:/icons/add.png"
-                            icon.width: 22
-                            icon.height: 22
-                            icon.color: "#2a7ae2"
+                            implicitWidth: 38
+                            implicitHeight: 38
                             hoverEnabled: true
                             ToolTip.visible: hovered
                             ToolTip.delay: 120
                             ToolTip.text: "发布朋友圈"
+                            background: Rectangle {
+                                radius: 10
+                                color: publishButton.down ? "#dbe8fb"
+                                      : publishButton.hovered ? "#edf5ff" : "#ffffff"
+                                border.width: 1
+                                border.color: publishButton.hovered ? "#9fc4f4" : "#d5dfec"
+                            }
+                            contentItem: Item {
+                                Rectangle {
+                                    width: 24
+                                    height: 24
+                                    radius: 6
+                                    clip: true
+                                    color: "transparent"
+                                    anchors.centerIn: parent
+
+                                    Image {
+                                        anchors.fill: parent
+                                        source: "qrc:/icons/add.png"
+                                        fillMode: Image.PreserveAspectCrop
+                                        smooth: true
+                                    }
+                                }
+                            }
 
                             onClicked: {
                                 root.showPublishPage = true
@@ -99,6 +122,10 @@ Rectangle {
                                 width: feedView.width
                                 backdrop: root.backdrop
                                 momentData: model
+                                listTextContent: model.textContent || ""
+                                canDelete: root.appController
+                                           && root.appController.currentUserUid > 0
+                                           && model.uid === root.appController.currentUserUid
                                 onLikeClicked: {
                                     if (root.momentsController) {
                                         root.momentsController.toggleLike(model.momentId)
@@ -116,6 +143,10 @@ Rectangle {
                                                                     model.userIcon || "qrc:/res/head_1.jpg",
                                                                     model.userId || "")
                                 }
+                                onDeleteClicked: {
+                                    root.pendingDeleteMomentId = model.momentId
+                                    deleteConfirmDialog.open()
+                                }
                             }
                         }
                     }
@@ -130,7 +161,7 @@ Rectangle {
                     // Empty state
                     Label {
                         anchors.centerIn: parent
-                        visible: feedView.count === 0
+                        visible: feedView.count === 0 && !(root.momentsController && root.momentsController.loading)
                         text: "暂无朋友圈内容"
                         font.pixelSize: 14
                         color: "#999999"
@@ -172,6 +203,7 @@ Rectangle {
                 anchors.centerIn: Overlay.overlay
                 backdrop: root.backdrop
                 controller: root.momentsController
+                currentUserUid: root.appController ? root.appController.currentUserUid : 0
                 onAvatarProfileRequested: function(uid, name, icon, userId) {
                     contactProfilePopup.openProfile(uid, name, icon, userId)
                 }
@@ -183,5 +215,30 @@ Rectangle {
     ContactProfilePopup {
         id: contactProfilePopup
         appController: root.appController
+    }
+
+    Dialog {
+        id: deleteConfirmDialog
+        modal: true
+        focus: true
+        anchors.centerIn: parent
+        width: Math.min(320, root.width - 48)
+        title: "删除朋友圈"
+        standardButtons: Dialog.Cancel | Dialog.Ok
+
+        onAccepted: {
+            if (root.momentsController && root.pendingDeleteMomentId > 0) {
+                root.momentsController.deleteMoment(root.pendingDeleteMomentId)
+            }
+            root.pendingDeleteMomentId = 0
+        }
+        onRejected: root.pendingDeleteMomentId = 0
+
+        contentItem: Label {
+            text: "确认删除这条朋友圈？"
+            font.pixelSize: 14
+            color: "#2a2f39"
+            wrapMode: Text.Wrap
+        }
     }
 }

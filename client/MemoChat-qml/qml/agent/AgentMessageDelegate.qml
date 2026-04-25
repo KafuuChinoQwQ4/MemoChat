@@ -2,9 +2,8 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
-Rectangle {
+Item {
     id: root
-    color: "transparent"
 
     property string msgId: ""
     property string content: ""
@@ -16,133 +15,134 @@ Rectangle {
     property int createdAt: 0
     property string sourcesJson: ""
 
-    property real avatarSize: 36
+    property real avatarSize: 34
     property string selfAvatar: "qrc:/res/head_1.jpg"
     property string aiAvatar: "qrc:/res/ai_icon.png"
+    property real bubbleMaxWidth: Math.min(560, width * 0.72)
 
-    Rectangle {
-        id: bubble
-        anchors.left: root.isUser ? parent.right : parent.left
-        anchors.leftMargin: root.isUser ? 0 : 12
-        anchors.right: root.isUser ? undefined : parent.right
-        anchors.rightMargin: root.isUser ? 0 : 60
-        anchors.top: parent.top
-        anchors.topMargin: 4
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 4
-        radius: 12
-        color: {
-            if (root.isUser) return Qt.rgba(0.35, 0.61, 0.90, 0.85)
-            return Qt.rgba(0.94, 0.96, 0.98, 0.95)
+    implicitHeight: messageRow.implicitHeight + 10
+
+    RowLayout {
+        id: messageRow
+        anchors.fill: parent
+        anchors.leftMargin: 10
+        anchors.rightMargin: 10
+        anchors.topMargin: 5
+        anchors.bottomMargin: 5
+        spacing: 10
+        layoutDirection: root.isUser ? Qt.RightToLeft : Qt.LeftToRight
+
+        Rectangle {
+            Layout.preferredWidth: root.avatarSize
+            Layout.preferredHeight: root.avatarSize
+            Layout.alignment: Qt.AlignTop
+            radius: root.avatarSize / 2
+            clip: true
+            color: root.isUser ? Qt.rgba(0.43, 0.64, 0.90, 0.18) : Qt.rgba(0.91, 0.94, 0.98, 0.88)
+            border.width: 1
+            border.color: root.isUser ? Qt.rgba(0.35, 0.61, 0.90, 0.22) : Qt.rgba(1, 1, 1, 0.56)
+
+            Image {
+                anchors.fill: parent
+                source: root.isUser ? root.selfAvatar : root.aiAvatar
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+                cache: true
+            }
         }
-
-        border.color: Qt.rgba(1, 1, 1, 0.4)
-        border.width: 1
 
         ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 10
+            Layout.preferredWidth: root.bubbleMaxWidth
+            Layout.maximumWidth: root.bubbleMaxWidth
+            Layout.alignment: Qt.AlignTop
             spacing: 4
 
-            TextEdit {
-                Layout.fillWidth: true
-                text: root.isStreaming ? root.streamingContent : root.content
-                wrapMode: Text.Wrap
-                color: root.isUser ? "#ffffff" : "#253247"
-                font.pixelSize: 14
-                textFormat: Text.PlainText
-                readOnly: true
-                selectByMouse: true
-                cursorVisible: false
-                onTextChanged: {
-                    if (root.isStreaming) {
-                        Qt.callLater(function() {
-                            root.forceActiveFocus()
-                        })
-                    }
-                }
-
-                Label {
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    anchors.rightMargin: -4
-                    anchors.bottomMargin: -4
-                    text: root.isStreaming ? "..." : ""
-                    font.pixelSize: 10
-                    color: root.isUser ? Qt.rgba(255,255,255,0.6) : "#6a7b92"
-                    visible: root.isStreaming
-                }
+            Label {
+                Layout.alignment: root.isUser ? Qt.AlignRight : Qt.AlignLeft
+                text: root.isUser ? "你" : "AI 助手"
+                color: "#718098"
+                font.pixelSize: 11
+                font.bold: true
             }
 
-            // RAG 来源标注
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: sourceLabel.height + 8
-                visible: root.sourcesJson.length > 0 && !root.isUser
-                radius: 4
-                color: Qt.rgba(0.54, 0.70, 0.93, 0.15)
+                radius: 14
+                color: root.isUser ? Qt.rgba(0.35, 0.61, 0.90, 0.92) : Qt.rgba(0.97, 0.98, 1.0, 0.92)
+                border.width: 1
+                border.color: root.isUser ? Qt.rgba(0.22, 0.48, 0.78, 0.36) : Qt.rgba(1, 1, 1, 0.54)
 
-                Label {
-                    id: sourceLabel
+                ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 4
-                    text: "📚 " + root.sourcesJson
-                    font.pixelSize: 11
-                    color: "#4a6fa5"
-                    wrapMode: Text.Wrap
-                    elide: Text.ElideRight
-                    maximumLineCount: 2
+                    anchors.margins: 12
+                    spacing: 8
+
+                    TextEdit {
+                        Layout.fillWidth: true
+                        text: root.isStreaming ? root.streamingContent : root.content
+                        wrapMode: Text.Wrap
+                        color: root.isUser ? "#ffffff" : "#253247"
+                        font.pixelSize: 14
+                        textFormat: Text.PlainText
+                        readOnly: true
+                        selectByMouse: true
+                        cursorVisible: false
+                        leftPadding: 0
+                        rightPadding: 0
+                        topPadding: 0
+                        bottomPadding: 0
+                    }
+
+                    Rectangle {
+                        Layout.alignment: Qt.AlignLeft
+                        Layout.preferredHeight: 24
+                        Layout.preferredWidth: streamLabel.implicitWidth + 14
+                        radius: 12
+                        color: Qt.rgba(1, 1, 1, root.isUser ? 0.14 : 0.55)
+                        visible: root.isStreaming
+
+                        Label {
+                            id: streamLabel
+                            anchors.centerIn: parent
+                            text: "正在生成"
+                            font.pixelSize: 11
+                            font.bold: true
+                            color: root.isUser ? Qt.rgba(255, 255, 255, 0.86) : "#6a7b92"
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        radius: 8
+                        color: Qt.rgba(0.54, 0.70, 0.93, 0.10)
+                        border.width: 1
+                        border.color: Qt.rgba(0.54, 0.70, 0.93, 0.16)
+                        visible: root.sourcesJson.length > 0 && !root.isUser
+
+                        Label {
+                            anchors.fill: parent
+                            anchors.margins: 8
+                            text: "参考: " + root.sourcesJson
+                            font.pixelSize: 11
+                            color: "#5373a4"
+                            wrapMode: Text.Wrap
+                        }
+                    }
                 }
+            }
+
+            Label {
+                Layout.alignment: root.isUser ? Qt.AlignRight : Qt.AlignLeft
+                text: root.createdAt > 0 ? formatTime(root.createdAt) : ""
+                color: "#93a0b2"
+                font.pixelSize: 10
+                visible: root.createdAt > 0
             }
         }
 
-        // 气泡尖角
-        Rectangle {
-            anchors.left: root.isUser ? parent.right : undefined
-            anchors.leftMargin: root.isUser ? -6 : undefined
-            anchors.right: root.isUser ? undefined : parent.left
-            anchors.rightMargin: root.isUser ? undefined : -6
-            anchors.verticalCenter: parent.verticalCenter
-            width: 8
-            height: 14
-            rotation: root.isUser ? -45 : 45
-            visible: false
+        Item {
+            Layout.fillWidth: true
         }
-    }
-
-    // 头像
-    Rectangle {
-        anchors.right: root.isUser ? parent.right : undefined
-        anchors.rightMargin: root.isUser ? 8 : undefined
-        anchors.left: root.isUser ? undefined : parent.left
-        anchors.leftMargin: root.isUser ? undefined : 4
-        anchors.top: parent.top
-        anchors.topMargin: 4
-        width: root.avatarSize
-        height: root.avatarSize
-        radius: root.avatarSize / 2
-        clip: true
-
-        Image {
-            anchors.fill: parent
-            source: root.isUser ? root.selfAvatar : root.aiAvatar
-            fillMode: Image.PreserveAspectCrop
-            asynchronous: true
-        }
-    }
-
-    // 时间戳
-    Label {
-        anchors.top: bubble.bottom
-        anchors.topMargin: 2
-        anchors.right: root.isUser ? parent.right : undefined
-        anchors.rightMargin: root.isUser ? 8 : undefined
-        anchors.left: root.isUser ? undefined : bubble.right
-        anchors.leftMargin: root.isUser ? undefined : 8
-        text: root.createdAt > 0 ? formatTime(root.createdAt) : ""
-        font.pixelSize: 10
-        color: "#6a7b92"
-        visible: root.createdAt > 0
     }
 
     function formatTime(timestamp) {

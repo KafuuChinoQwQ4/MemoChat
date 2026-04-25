@@ -87,6 +87,9 @@ local-loadtest/accounts.register.smoke.csv
 
 # Python artifacts
 /Memo_ops/.venv/
+/server/AIOrchestrator/.venv/
+/server/AIOrchestrator/.cache/
+/server/AIOrchestrator/.data/
 /Memo_ops/**/__pycache__/
 /Memo_ops/*.log
 __pycache__/

@@ -387,6 +387,10 @@ void AppController::switchChatTab(int tab)
             _moments_controller.loadFeed();
         }
     }
+    else if (target == AgentTabPage) {
+        _agent_controller.loadSessions();
+        _agent_controller.refreshModelList();
+    }
     emit chatTabChanged();
 }
 
