@@ -53,6 +53,7 @@ class AppController : public QObject
     Q_PROPERTY(QString currentUserIcon READ currentUserIcon NOTIFY currentUserChanged)
     Q_PROPERTY(QString currentUserDesc READ currentUserDesc NOTIFY currentUserChanged)
     Q_PROPERTY(QString currentUserId READ currentUserId NOTIFY currentUserChanged)
+    Q_PROPERTY(int currentUserUid READ currentUserUid NOTIFY currentUserChanged)
     Q_PROPERTY(ContactPane contactPane READ contactPane NOTIFY contactPaneChanged)
     Q_PROPERTY(QString currentContactName READ currentContactName NOTIFY currentContactChanged)
     Q_PROPERTY(QString currentContactNick READ currentContactNick NOTIFY currentContactChanged)
@@ -159,6 +160,7 @@ public:
     QString currentUserIcon() const;
     QString currentUserDesc() const;
     QString currentUserId() const;
+    int currentUserUid() const;
     QString currentContactName() const;
     QString currentContactNick() const;
     QString currentContactIcon() const;

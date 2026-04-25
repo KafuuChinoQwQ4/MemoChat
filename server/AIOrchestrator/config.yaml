@@ -4,19 +4,19 @@ service:
 
 llm:
   default_backend: "ollama"
-  default_model: "qwen2.5:7b"
+  default_model: "qwen3:4b"
 
   ollama:
     base_url: "http://127.0.0.1:11434"
     models:
-      - name: "qwen2.5:7b"
-        display: "Qwen 2.5 7B"
+      - name: "qwen3:4b"
+        display: "Qwen 3 4B"
         context_window: 8192
-      - name: "qwen2.5:14b"
-        display: "Qwen 2.5 14B"
+      - name: "qwen2.5:3b"
+        display: "Qwen 2.5 3B"
         context_window: 8192
-      - name: "llama3.1:8b"
-        display: "Llama 3.1 8B"
+      - name: "qwen2.5-coder:3b"
+        display: "Qwen 2.5 Coder 3B"
         context_window: 8192
     enabled: true
 
@@ -146,3 +146,49 @@ mcp:
       env:
         GITHUB_TOKEN: ""
       enabled: false
+
+harness:
+  enabled: true
+  canonical_root: "server/AIOrchestrator/harness"
+  industrial_target_year: 2026
+  default_mode: "agent"
+  max_planning_steps: 6
+  max_tool_rounds: 4
+  trace_persist: true
+  auto_reflection: true
+  short_term_limit: 24
+  episodic_limit: 6
+  knowledge_top_k: 5
+  skills:
+    enabled:
+      - "general_chat"
+      - "knowledge_copilot"
+      - "research_assistant"
+      - "summarize_thread"
+      - "reply_suggester"
+      - "translate_text"
+      - "graph_recommender"
+      - "mcp_operator"
+  providers:
+    endpoints:
+      - name: "local-vllm"
+        adapter: "openai_compatible"
+        deployment: "local_api"
+        base_url: "http://127.0.0.1:8000/v1"
+        api_key: "EMPTY"
+        default_model: "Qwen/Qwen3-14B"
+        enabled: false
+        timeout_sec: 120
+        models:
+          - name: "Qwen/Qwen3-14B"
+            display: "Qwen 3 14B (Local OpenAI-Compatible)"
+            context_window: 32768
+
+postgres:
+  host: "127.0.0.1"
+  port: 5432
+  user: "memochat"
+  password: "123456"
+  database: "memo_pg"
+  min_pool_size: 2
+  max_pool_size: 10

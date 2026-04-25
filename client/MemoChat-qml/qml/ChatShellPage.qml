@@ -110,6 +110,10 @@ Rectangle {
                 contactLoadingMore: controller.contactLoadingMore
                 groupStatusText: controller.groupStatusText
                 groupStatusError: controller.groupStatusError
+                agentSessions: controller.agentController ? controller.agentController.sessions : []
+                agentCurrentSessionId: controller.agentController ? controller.agentController.currentSessionId : ""
+                agentCurrentModel: controller.agentController ? controller.agentController.currentModel : ""
+                agentBusy: controller.agentController ? (controller.agentController.loading || controller.agentController.streaming) : false
                 onDialogUidSelected: function(uid) { controller.selectDialogByUid(uid) }
                 onChatIndexSelected: function(index) { controller.selectChatIndex(index) }
                 onGroupIndexSelected: function(index) { controller.selectGroupIndex(index) }
@@ -124,6 +128,27 @@ Rectangle {
                     createGroupDialogActivated = true
                     if (createGroupDialogLoader.item) {
                         createGroupDialogLoader.item.open()
+                    }
+                }
+                onAgentRefreshRequested: {
+                    if (controller.agentController) {
+                        controller.agentController.loadSessions()
+                        controller.agentController.refreshModelList()
+                    }
+                }
+                onAgentNewSessionRequested: {
+                    if (controller.agentController) {
+                        controller.agentController.createSession()
+                    }
+                }
+                onAgentSessionSelected: function(sessionId) {
+                    if (controller.agentController) {
+                        controller.agentController.switchSession(sessionId)
+                    }
+                }
+                onAgentSessionDeleted: function(sessionId) {
+                    if (controller.agentController) {
+                        controller.agentController.deleteSession(sessionId)
                     }
                 }
                 onDialogPinToggled: function(uid) { controller.toggleDialogPinnedByUid(uid) }
@@ -259,14 +284,13 @@ Rectangle {
                         AgentPane {
                             agentController: controller.agentController
                             messageModel: controller.agentMessageModel
-                            sessions: controller.agentController ? controller.agentController.sessions : []
                             currentSessionId: controller.agentController ? controller.agentController.currentSessionId : ""
                             currentModel: controller.agentController ? controller.agentController.currentModel : ""
                             availableModels: controller.agentController ? controller.agentController.availableModels : []
                             loading: controller.agentController ? controller.agentController.loading : false
                             streaming: controller.agentController ? controller.agentController.streaming : false
                             errorMsg: controller.agentController ? controller.agentController.error : ""
-                            kbList: []
+                            selfAvatar: controller.currentUserIcon
                         }
                     }
                 }

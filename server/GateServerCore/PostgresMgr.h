@@ -23,7 +23,7 @@ public:
 	bool TestProcedure(const std::string &email, int& uid, string & name);
 
 	// Moments operations
-	bool AddMoment(const MomentInfo& moment);
+	bool AddMoment(const MomentInfo& moment, int64_t* moment_id = nullptr);
 	bool GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int limit,
 		std::vector<MomentInfo>& moments, bool& has_more);
 	bool CanViewMoment(int viewer_uid, const MomentInfo& moment);
@@ -38,6 +38,11 @@ public:
 	bool DeleteMomentComment(int64_t comment_id, int uid);
 	bool GetMomentComments(int64_t moment_id, int64_t last_comment_id, int limit,
 		std::vector<MomentCommentInfo>& comments, bool& has_more);
+	bool AddMomentCommentLike(int64_t comment_id, int uid);
+	bool RemoveMomentCommentLike(int64_t comment_id, int uid);
+	bool HasLikedMomentComment(int64_t comment_id, int uid);
+	bool GetMomentCommentLikes(int64_t comment_id, int limit,
+		std::vector<MomentLikeInfo>& likes, bool& has_more);
 
 private:
 	PostgresMgr();

@@ -23,6 +23,50 @@
 
 namespace GateHttp3ServiceImpl {
 
+namespace {
+
+void NormalizeMomentItem(MomentItemInfo& item) {
+    if (item.media_type != "image" && item.media_type != "video") {
+        item.media_type = "text";
+    }
+    if ((item.media_type == "image" || item.media_type == "video") && item.media_key.empty()) {
+        item.media_type = "text";
+    }
+    if (item.media_type == "text") {
+        item.media_key.clear();
+        item.thumb_key.clear();
+        item.width = 0;
+        item.height = 0;
+        item.duration_ms = 0;
+    }
+}
+
+void FillCommentLikeJson(int viewer_uid, int64_t comment_id, memochat::json::JsonValue& json) {
+    std::vector<MomentLikeInfo> likes;
+    bool has_more = false;
+    PostgresMgr::GetInstance()->GetMomentCommentLikes(comment_id, 100, likes, has_more);
+    json["has_liked"] = PostgresMgr::GetInstance()->HasLikedMomentComment(comment_id, viewer_uid);
+    json["like_count"] = static_cast<int>(likes.size());
+
+    memochat::json::JsonValue like_names(memochat::json::array_t{});
+    memochat::json::JsonValue likes_arr(memochat::json::array_t{});
+    for (const auto& like : likes) {
+        if (!like.user_nick.empty()) {
+            like_names.append(like.user_nick);
+        }
+        memochat::json::JsonValue like_json;
+        like_json["uid"] = like.uid;
+        like_json["user_nick"] = like.user_nick;
+        like_json["user_icon"] = like.user_icon;
+        like_json["created_at"] = static_cast<int64_t>(like.created_at);
+        likes_arr.append(like_json);
+    }
+    json["like_names"] = like_names;
+    json["likes"] = likes_arr;
+}
+
+} // namespace
+
 void RegisterRoutes(LogicSystem& logic) {
     logic.RegPost("/get_varifycode", [](std::shared_ptr<GateHttp3Connection> connection) {
         return GateHttp3JsonSupport::HandleJsonPost(connection,
@@ -527,22 +571,10 @@ void RegisterRoutes(LogicSystem& logic) {
             moment.location = location;
             moment.created_at = now_ms;
 
-            if (!PostgresMgr::GetInstance()->AddMoment(moment)) {
+            int64_t moment_id = 0;
+            if (!PostgresMgr::GetInstance()->AddMoment(moment, &moment_id)) {
                 root["error"] = ErrorCodes::RPCFailed;
                 return false;
-            }
-
-            int64_t moment_id = now_ms;
-            {
-                std::vector<MomentInfo> moments;
-                bool has_more = false;
-                PostgresMgr::GetInstance()->GetMomentsFeed(uid, 0, 1, moments, has_more);
-                for (const auto& m : moments) {
-                    if (m.uid == uid && m.created_at == now_ms) {
-                        moment_id = m.moment_id;
-                        break;
-                    }
-                }
             }
 
             MomentContentInfo content;
@@ -558,11 +590,24 @@ void RegisterRoutes(LogicSystem& logic) {
                     item.width = item_json.get("width", 0).asInt();
                     item.height = item_json.get("height", 0).asInt();
                     item.duration_ms = item_json.get("duration_ms", 0).asInt();
+                    NormalizeMomentItem(item);
                     content.items.push_back(item);
                 }
             }
-            if (moment_id > 0) {
-                MongoMgr::GetInstance()->InsertMomentContent(content);
+            const std::string raw_content = src_root.get("content", "").asString();
+            if (content.items.empty() && !raw_content.empty()) {
+                MomentItemInfo item;
+                item.media_type = "text";
+                item.content = raw_content;
+                NormalizeMomentItem(item);
+                content.items.push_back(item);
+            }
+            if (moment_id > 0 && !MongoMgr::GetInstance()->InsertMomentContent(content)) {
+                PostgresMgr::GetInstance()->DeleteMoment(moment_id, uid);
+                root["error"] = ErrorCodes::RPCFailed;
+                memolog::LogError("gate.http3.moments.publish", "failed to store moment content in MongoDB",
+                    { {"moment_id", std::to_string(moment_id)}, {"uid", std::to_string(uid)} });
+                return false;
             }
 
             root["error"] = ErrorCodes::Success;
@@ -612,6 +657,7 @@ void RegisterRoutes(LogicSystem& logic) {
                 moment_json["has_liked"] = has_liked;
                 UserInfo uinfo;
                 PostgresMgr::GetInstance()->GetUserInfo(moment.uid, uinfo);
+                moment_json["user_id"] = uinfo.user_id;
                 moment_json["user_name"] = uinfo.name;
                 moment_json["user_nick"] = uinfo.nick;
                 moment_json["user_icon"] = uinfo.icon;
@@ -675,6 +721,7 @@ void RegisterRoutes(LogicSystem& logic) {
             moment_json["has_liked"] = has_liked;
             UserInfo uinfo;
             PostgresMgr::GetInstance()->GetUserInfo(moment.uid, uinfo);
+            moment_json["user_id"] = uinfo.user_id;
             moment_json["user_name"] = uinfo.name;
             moment_json["user_nick"] = uinfo.nick;
             moment_json["user_icon"] = uinfo.icon;
@@ -732,6 +779,13 @@ void RegisterRoutes(LogicSystem& logic) {
                 ? PostgresMgr::GetInstance()->AddMomentLike(moment_id, uid)
                 : PostgresMgr::GetInstance()->RemoveMomentLike(moment_id, uid);
             root["error"] = ok ? ErrorCodes::Success : ErrorCodes::RPCFailed;
+            root["moment_id"] = static_cast<int64_t>(moment_id);
+            if (ok) {
+                MomentInfo moment;
+                PostgresMgr::GetInstance()->GetMomentById(moment_id, moment);
+                root["has_liked"] = PostgresMgr::GetInstance()->HasLikedMoment(moment_id, uid);
+                root["like_count"] = moment.like_count;
+            }
             return true;
         });
     });
@@ -748,6 +802,8 @@ void RegisterRoutes(LogicSystem& logic) {
             int64_t moment_id = src_root.get("moment_id", 0).asInt64();
             int64_t comment_id = src_root.get("comment_id", 0).asInt64();
             bool delete_mode = src_root.get("delete", false).asBool();
+            std::string content_str = src_root.get("content", "").asString();
+            delete_mode = delete_mode || (comment_id > 0 && content_str.empty());
 
             if (delete_mode) {
                 if (comment_id <= 0) {
@@ -756,11 +812,16 @@ void RegisterRoutes(LogicSystem& logic) {
                 else {
                     bool ok = PostgresMgr::GetInstance()->DeleteMomentComment(comment_id, uid);
                     root["error"] = ok ? ErrorCodes::Success : ErrorCodes::RPCFailed;
+                    root["moment_id"] = static_cast<int64_t>(moment_id);
+                    root["delete"] = true;
+                    MomentInfo moment;
+                    if (moment_id > 0 && PostgresMgr::GetInstance()->GetMomentById(moment_id, moment)) {
+                        root["comment_count"] = moment.comment_count;
+                    }
                 }
                 return true;
             }
 
-            std::string content_str = src_root.get("content", "").asString();
             int reply_uid = src_root.get("reply_uid", 0).asInt();
             if (moment_id <= 0 || content_str.empty()) {
                 root["error"] = ErrorCodes::Error_Json;
@@ -776,6 +837,12 @@ void RegisterRoutes(LogicSystem& logic) {
                 std::chrono::system_clock::now().time_since_epoch()).count();
             bool ok = PostgresMgr::GetInstance()->AddMomentComment(comment);
             root["error"] = ok ? ErrorCodes::Success : ErrorCodes::RPCFailed;
+            root["moment_id"] = static_cast<int64_t>(moment_id);
+            root["delete"] = false;
+            MomentInfo moment;
+            if (PostgresMgr::GetInstance()->GetMomentById(moment_id, moment)) {
+                root["comment_count"] = moment.comment_count;
+            }
             return true;
         });
     });
@@ -803,7 +870,12 @@ void RegisterRoutes(LogicSystem& logic) {
             bool has_more = false;
             PostgresMgr::GetInstance()->GetMomentComments(moment_id, last_comment_id, limit, comments, has_more);
             root["error"] = ErrorCodes::Success;
+            root["moment_id"] = static_cast<int64_t>(moment_id);
             root["has_more"] = has_more;
+            MomentInfo moment;
+            if (PostgresMgr::GetInstance()->GetMomentById(moment_id, moment)) {
+                root["comment_count"] = moment.comment_count;
+            }
             memochat::json::JsonValue comments_arr(memochat::json::array_t{});
             for (const auto& comment : comments) {
                 memochat::json::JsonValue comment_json;
@@ -815,6 +887,7 @@ void RegisterRoutes(LogicSystem& logic) {
                 comment_json["created_at"] = static_cast<int64_t>(comment.created_at);
                 UserInfo uinfo;
                 PostgresMgr::GetInstance()->GetUserInfo(comment.uid, uinfo);
+                comment_json["user_id"] = uinfo.user_id;
                 comment_json["user_name"] = uinfo.name;
                 comment_json["user_nick"] = uinfo.nick;
                 comment_json["user_icon"] = uinfo.icon;
@@ -824,9 +897,41 @@ void RegisterRoutes(LogicSystem& logic) {
                         comment_json["reply_nick"] = reply_user.nick;
                     }
                 }
+                FillCommentLikeJson(uid, comment.id, comment_json);
                 comments_arr.append(comment_json);
             }
             root["comments"] = comments_arr;
+            return true;
+        });
+    });
+
+    logic.RegPost("/api/moments/comment/like", [](std::shared_ptr<GateHttp3Connection> connection) {
+        return GateHttp3JsonSupport::HandleJsonPost(connection,
+            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string&) {
+            if (!src_root.isMember("uid") || !src_root.isMember("login_ticket")) {
+                root["error"] = ErrorCodes::Error_Json;
+                return false;
+            }
+
+            const int uid = src_root["uid"].asInt();
+            const int64_t comment_id = src_root.get("comment_id", 0).asInt64();
+            const bool like = src_root.get("like", true).asBool();
+            if (uid <= 0 || comment_id <= 0) {
+                root["error"] = ErrorCodes::Error_Json;
+                return false;
+            }
+
+            const bool ok = like
+                ? PostgresMgr::GetInstance()->AddMomentCommentLike(comment_id, uid)
+                : PostgresMgr::GetInstance()->RemoveMomentCommentLike(comment_id, uid);
+            if (!ok) {
+                root["error"] = ErrorCodes::RPCFailed;
+                return false;
+            }
+
+            root["error"] = ErrorCodes::Success;
+            root["comment_id"] = static_cast<int64_t>(comment_id);
+            FillCommentLikeJson(uid, comment_id, root);
             return true;
         });
     });

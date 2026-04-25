@@ -160,14 +160,30 @@ bool MongoDao::InsertMomentContent(const MomentContentInfo& content) {
             item_doc.append(kvp("width", item.width));
             item_doc.append(kvp("height", item.height));
             item_doc.append(kvp("duration_ms", item.duration_ms));
-            items_arr.append(item_doc);
+            items_arr.append(item_doc.extract());
         }
-        doc.append(kvp("items", items_arr));
+        doc.append(kvp("items", items_arr.extract()));
         doc.append(kvp("server_time", content.server_time));
 
-        mongocxx::options::replace replace_opts;
-        replace_opts.upsert(true);
-        collection.replace_one(bsoncxx::builder::basic::make_document(kvp("moment_id", content.moment_id)), doc.view(), replace_opts);
+        const auto filter = bsoncxx::builder::basic::make_document(kvp("moment_id", content.moment_id));
+        const auto doc_value = doc.extract();
+        collection.delete_one(filter.view());
+        const auto inserted = collection.insert_one(doc_value.view());
+        if (!inserted) {
+            std::cerr << "[MongoDao] InsertMomentContent insert_one returned null, moment_id="
+                      << content.moment_id << std::endl;
+            return false;
+        }
+
+        const auto verify = collection.find_one(filter.view());
+        if (!verify) {
+            std::cerr << "[MongoDao] InsertMomentContent verify failed, moment_id="
+                      << content.moment_id
+                      << " db=" << database_name_
+                      << " collection=" << moments_collection_name_
+                      << " items=" << content.items.size() << std::endl;
+            return false;
+        }
         return true;
     }
     catch (const std::exception& e) {

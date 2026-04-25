@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
@@ -14,6 +16,7 @@ Rectangle {
     property var momentData: null
     property int momentId: momentData ? momentData.momentId : 0
     property int uid: momentData ? momentData.uid : 0
+    property string userName: momentData ? momentData.userName : ""
     property string userNick: momentData ? momentData.userNick : ""
     property string userIcon: momentData ? momentData.userIcon : "qrc:/res/head_1.jpg"
     property string location: momentData ? momentData.location : ""
@@ -22,10 +25,17 @@ Rectangle {
     property int commentCount: momentData ? momentData.commentCount : 0
     property bool hasLiked: momentData ? momentData.hasLiked : false
     property var items: momentData ? momentData.items : []
+    property string listTextContent: ""
+    property string textContent: listTextContent.length > 0 ? listTextContent
+                                 : (momentData && momentData.textContent ? String(momentData.textContent) : buildTextContent(items))
+    property bool hasMediaContent: containsMediaContent(items)
+    property bool hasRenderableContent: textContent.length > 0 || hasMediaContent
+    property bool canDelete: false
 
     signal likeClicked()
     signal commentClicked()
     signal avatarClicked()
+    signal deleteClicked()
 
     GlassSurface {
         anchors.fill: parent
@@ -73,7 +83,7 @@ Rectangle {
                 Layout.fillWidth: true
                 spacing: 2
                 Label {
-                    text: root.userNick
+                    text: root.userNick || root.userName || "用户"
                     font.pixelSize: 14
                     font.weight: Font.Medium
                     color: "#1a1a1a"
@@ -86,9 +96,85 @@ Rectangle {
             }
 
             Item { Layout.fillWidth: true }
+
+            ToolButton {
+                id: moreButton
+                visible: root.canDelete
+                implicitWidth: 32
+                implicitHeight: 32
+                hoverEnabled: true
+                ToolTip.visible: hovered
+                ToolTip.delay: 120
+                ToolTip.text: "更多"
+                background: Rectangle {
+                    radius: 10
+                    color: moreButton.down ? Qt.rgba(0.16, 0.24, 0.36, 0.12)
+                          : moreButton.hovered ? Qt.rgba(0.16, 0.24, 0.36, 0.08)
+                          : "transparent"
+                    border.width: moreButton.hovered ? 1 : 0
+                    border.color: Qt.rgba(0.16, 0.24, 0.36, 0.12)
+                }
+                contentItem: Label {
+                    text: "..."
+                    color: "#4d5f73"
+                    font.pixelSize: 16
+                    font.weight: Font.Medium
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                onClicked: postMenu.open()
+
+                Menu {
+                    id: postMenu
+                    y: moreButton.height + 4
+                    width: 116
+                    background: Rectangle {
+                        color: "#ffffff"
+                        radius: 10
+                        border.color: Qt.rgba(0.82, 0.84, 0.90, 0.75)
+                        layer.enabled: true
+                    }
+                    MenuItem {
+                        id: postDeleteAction
+                        height: 38
+                        text: "删除"
+                        contentItem: Label {
+                            text: postDeleteAction.text
+                            color: "#d64545"
+                            font.pixelSize: 13
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        background: Rectangle {
+                            radius: 8
+                            color: postDeleteAction.hovered ? Qt.rgba(0.86, 0.18, 0.18, 0.08) : "transparent"
+                        }
+                        onTriggered: root.deleteClicked()
+                    }
+                }
+            }
         }
 
         // Content items (images / text) — Layout.* 仅对 Layout 容器的直接子项生效，故用 Item + 显式宽高
+        Label {
+            Layout.fillWidth: true
+            visible: !root.hasRenderableContent
+            text: "内容未保存，请重新发布"
+            font.pixelSize: 14
+            color: "#8a93a3"
+            wrapMode: Text.Wrap
+        }
+
+        Label {
+            Layout.fillWidth: true
+            visible: root.textContent.length > 0
+            text: root.textContent
+            font.pixelSize: 15
+            color: "#1a1a1a"
+            wrapMode: Text.Wrap
+            horizontalAlignment: Text.AlignLeft
+        }
+
         Repeater {
             model: root.items
             delegate: Item {
@@ -101,20 +187,9 @@ Rectangle {
                     width: parent.width
                     spacing: 8
 
-                    Label {
-                        id: textItem
-                        visible: modelData.media_type === "text"
-                        width: parent.width
-                        text: modelData.content || ""
-                        font.pixelSize: 15
-                        color: "#1a1a1a"
-                        wrapMode: Text.Wrap
-                        horizontalAlignment: Text.AlignLeft
-                    }
-
                     Rectangle {
                         id: imageBlock
-                        visible: modelData.media_type === "image"
+                        visible: itemType(modelData) === "image" && itemMediaKey(modelData).length > 0
                         width: Math.min(blockRoot.width, imageMaxDim(modelData))
                         height: visible ? imageHeight(modelData) : 0
                         color: Qt.rgba(0.92, 0.94, 0.97, 1.0)
@@ -124,7 +199,7 @@ Rectangle {
                         Image {
                             anchors.fill: parent
                             fillMode: Image.PreserveAspectCrop
-                            source: mediaUrl(modelData.media_key)
+                            source: mediaUrl(itemMediaKey(modelData))
                             cache: true
                             asynchronous: true
                         }
@@ -135,7 +210,7 @@ Rectangle {
                             onClicked: {
                                 imageViewerLoader.active = true
                                 if (imageViewerLoader.item) {
-                                    imageViewerLoader.item.open(modelData.media_key)
+                                    imageViewerLoader.item.open(itemMediaKey(modelData))
                                 }
                             }
                         }
@@ -143,7 +218,7 @@ Rectangle {
 
                     Rectangle {
                         id: videoBlock
-                        visible: modelData.media_type === "video"
+                        visible: itemType(modelData) === "video" && itemMediaKey(modelData).length > 0
                         width: Math.min(blockRoot.width, 320)
                         height: visible ? 188 : 0
                         radius: 10
@@ -192,7 +267,7 @@ Rectangle {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: Qt.openUrlExternally(mediaUrl(modelData.media_key))
+                            onClicked: Qt.openUrlExternally(mediaUrl(itemMediaKey(modelData)))
                         }
                     }
                 }
@@ -211,8 +286,8 @@ Rectangle {
                 spacing: 20
 
                 MouseArea {
-                    implicitWidth: Math.max(44, likeRow.implicitWidth + 16)
-                    implicitHeight: 36
+                    Layout.preferredWidth: Math.max(44, likeRow.implicitWidth + 16)
+                    Layout.preferredHeight: 36
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.likeClicked()
@@ -238,14 +313,14 @@ Rectangle {
                 }
 
                 MouseArea {
-                    implicitWidth: Math.max(44, commentRow.implicitWidth + 16)
-                    implicitHeight: 36
+                    Layout.preferredWidth: Math.max(44, commentActionRow.implicitWidth + 16)
+                    Layout.preferredHeight: 36
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.commentClicked()
 
                     Row {
-                        id: commentRow
+                        id: commentActionRow
                         anchors.centerIn: parent
                         spacing: 4
 
@@ -335,6 +410,49 @@ Rectangle {
         return gate_url_prefix + "/media/download?asset=" + key
     }
 
+    function itemType(item) {
+        return String((item && (item.media_type || item.mediaType || item.type)) || "").toLowerCase()
+    }
+
+    function itemMediaKey(item) {
+        return String((item && (item.media_key || item.mediaKey || item.key)) || "")
+    }
+
+    function itemContent(item) {
+        return String((item && item.content) || "")
+    }
+
+    function buildTextContent(items) {
+        if (!items || items.length === 0)
+            return ""
+        var parts = []
+        for (var i = 0; i < items.length; i++) {
+            var it = items[i]
+            var content = itemContent(it)
+            if (content.length > 0 && (!isMediaItem(it) || !itemMediaKey(it))) {
+                parts.push(content)
+            }
+        }
+        return parts.join("\n")
+    }
+
+    function containsMediaContent(items) {
+        if (!items || items.length === 0)
+            return false
+        for (var i = 0; i < items.length; i++) {
+            var it = items[i]
+            if (isMediaItem(it) && itemMediaKey(it).length > 0) {
+                return true
+            }
+        }
+        return false
+    }
+
+    function isMediaItem(item) {
+        var type = itemType(item)
+        return type === "image" || type === "video"
+    }
+
     function imageMaxDim(item) {
         var w = item.width || 200
         var h = item.height || 200
@@ -382,7 +500,7 @@ Rectangle {
                 background: Rectangle { color: "#111111"; anchors.fill: parent }
                 Image {
                     anchors.fill: parent
-                    fillMode: Image.Contain
+                    fillMode: Image.PreserveAspectFit
                     source: gate_url_prefix + "/media/download?asset=" + imgPopup.currentKey
                     cache: false
                 }

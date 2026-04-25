@@ -5,7 +5,6 @@
 #include <QString>
 #include <QJsonArray>
 #include <QHash>
-#include <QQueue>
 #include <QSet>
 #include <QVariantList>
 #include <QVector>
@@ -44,6 +43,7 @@ public:
     Q_INVOKABLE void toggleLike(qint64 momentId);
     Q_INVOKABLE void addComment(qint64 momentId, const QString& content, int replyUid = 0);
     Q_INVOKABLE void deleteComment(qint64 momentId, qint64 commentId);
+    Q_INVOKABLE void toggleCommentLike(qint64 momentId, qint64 commentId, bool liked);
     Q_INVOKABLE void refreshMoment(qint64 momentId);
     Q_INVOKABLE void refreshComments(qint64 momentId);
 
@@ -72,6 +72,7 @@ private slots:
     void onDeleteRsp(ReqId id, const QString& res, ErrorCodes err);
     void onLikeRsp(ReqId id, const QString& res, ErrorCodes err);
     void onCommentRsp(ReqId id, const QString& res, ErrorCodes err);
+    void onCommentLikeRsp(ReqId id, const QString& res, ErrorCodes err);
     void onDetailRsp(ReqId id, const QString& res, ErrorCodes err);
     void onCommentListRsp(ReqId id, const QString& res, ErrorCodes err);
 
@@ -84,11 +85,17 @@ private:
                               const QVariantList& items, bool manageLoading);
     QJsonObject buildAuthJson() const;
     MomentEntry parseMomentEntry(const QJsonObject& obj) const;
+    void applyAuthoritativeState(MomentEntry& entry) const;
+    void submitLikeRequest(qint64 momentId, bool liked);
 
     struct PendingLike {
         qint64 momentId = 0;
-        bool wasLiked = false;
-        int prevCount = 0;
+        bool rollbackLiked = false;
+        int rollbackCount = 0;
+        bool desiredLiked = false;
+        int desiredCount = 0;
+        bool requestInFlight = false;
+        bool requestLiked = false;
     };
 
     MomentsModel* _model;
@@ -97,13 +104,17 @@ private:
     QString _error_text;
     QString _progress_text;
     qint64 _last_moment_id = 0;
+    qint64 _pending_published_moment_id = 0;
     static constexpr int kPageSize = 20;
 
-    /// One in-flight like per moment; paired queue for optimistic revert on error.
+    /// One network request per moment at a time. Extra taps update desired state and are sent after the current request resolves.
     QSet<qint64> _like_in_flight;
-    QQueue<PendingLike> _like_pending_queue;
+    QHash<qint64, PendingLike> _pending_likes;
     QHash<ReqId, qint64> _pending_comment_moments;
     QSet<qint64> _comments_loading;
+    QHash<qint64, bool> _authoritative_liked;
+    QHash<qint64, int> _authoritative_like_counts;
+    QHash<qint64, int> _authoritative_comment_counts;
 };
 
 #endif  // MOMENTSCONTROLLER_H

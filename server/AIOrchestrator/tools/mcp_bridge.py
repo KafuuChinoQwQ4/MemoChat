@@ -17,7 +17,7 @@ import os
 import structlog
 from typing import Any, Optional
 from dataclasses import dataclass, field
-from langchain_core.tools import BaseTool, tool
+from langchain_core.tools import BaseTool, StructuredTool
 
 logger = structlog.get_logger()
 
@@ -180,12 +180,6 @@ class MCPBridge:
         """将 MCP 工具元数据转换为 LangChain @tool"""
         tool_name = mcp_tool.get("name", "")
         description = mcp_tool.get("description", f"MCP tool from {server_name}")
-        input_schema = mcp_tool.get("inputSchema", {})
-        properties = input_schema.get("properties", {}) if isinstance(input_schema, dict) else {}
-
-        base_id = self._call_id_counter + 1
-
-        @tool(f"mcp_{server_name}_{tool_name}", description=description)
         async def mcp_tool_wrapper(**kwargs) -> str:
             call_id = self._next_id()
             req = {
@@ -226,7 +220,11 @@ class MCPBridge:
             except Exception as e:
                 return f"工具调用异常: {str(e)}"
 
-        return mcp_tool_wrapper
+        return StructuredTool.from_function(
+            coroutine=mcp_tool_wrapper,
+            name=f"mcp_{server_name}_{tool_name}",
+            description=description,
+        )
 
     def get_tools(self) -> list[BaseTool]:
         """返回所有已注册的 MCP 工具"""
