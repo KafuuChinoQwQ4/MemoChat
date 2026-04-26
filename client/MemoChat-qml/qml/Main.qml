@@ -256,6 +256,7 @@ ApplicationWindow {
             title: root.appTitle
             flags: Qt.Window | Qt.FramelessWindowHint
             color: "transparent"
+            property real acrylicPinkProgress: 0.0
             minimumWidth: 800
             minimumHeight: 600
             maximumWidth: 100000
