@@ -19,6 +19,9 @@ Rectangle {
     property int lastMainTab: controller.chatTab
     property bool createGroupDialogActivated: false
     property bool groupManagePopupActivated: false
+    property bool r18Mode: false
+    property real flipAngle: 0
+    readonly property real pinkProgress: Math.max(0, Math.min(1, root.flipAngle / 180))
 
     Connections {
         target: controller
@@ -33,36 +36,93 @@ Rectangle {
         return Math.max(0, Math.min(1, (revealProgress - start) / span))
     }
 
+    function mixColor(fromColor, toColor) {
+        return Qt.rgba(fromColor.r + (toColor.r - fromColor.r) * root.pinkProgress,
+                       fromColor.g + (toColor.g - fromColor.g) * root.pinkProgress,
+                       fromColor.b + (toColor.b - fromColor.b) * root.pinkProgress,
+                       fromColor.a + (toColor.a - fromColor.a) * root.pinkProgress)
+    }
+
+    function syncWindowAcrylicTint() {
+        if (Window.window && Window.window.hasOwnProperty("acrylicPinkProgress")) {
+            Window.window.acrylicPinkProgress = root.pinkProgress
+        }
+    }
+
+    function toggleR18Mode() {
+        if (flipAnimation.running) {
+            return
+        }
+        r18Mode = !r18Mode
+        flipAnimation.to = r18Mode ? 180 : 0
+        flipAnimation.start()
+    }
+
+    NumberAnimation {
+        id: flipAnimation
+        target: root
+        property: "flipAngle"
+        duration: 520
+        easing.type: Easing.InOutCubic
+    }
+
     GlassBackdrop {
         id: backdropLayer
         anchors.fill: parent
+        pinkProgress: root.pinkProgress
     }
 
-    RowLayout {
+    Component.onCompleted: syncWindowAcrylicTint()
+    onPinkProgressChanged: syncWindowAcrylicTint()
+
+    Item {
+        id: flipDeck
         anchors.fill: parent
         anchors.leftMargin: 12
         anchors.rightMargin: 12
         anchors.bottomMargin: 12
         anchors.topMargin: 12 + root.topInset
-        spacing: 10
 
-        GlassSurface {
-            Layout.preferredWidth: 56
-            Layout.fillHeight: true
-            backdrop: backdropLayer
-            cornerRadius: 14
-            blurRadius: 18
-            fillColor: Qt.rgba(0.20, 0.28, 0.38, 0.34)
-            strokeColor: Qt.rgba(1, 1, 1, 0.36)
-            glowTopColor: Qt.rgba(1, 1, 1, 0.16)
-            glowBottomColor: Qt.rgba(1, 1, 1, 0.02)
-            opacity: root.stageValue(0.02, 0.20)
+        RowLayout {
+            id: normalFace
+            anchors.fill: parent
+            spacing: 10
+            visible: root.flipAngle < 90
+            enabled: visible
+            layer.enabled: true
+            transform: Rotation {
+                origin.x: normalFace.width / 2
+                origin.y: normalFace.height / 2
+                axis.x: 0
+                axis.y: 1
+                axis.z: 0
+                angle: root.flipAngle
+            }
+
+            GlassSurface {
+                Layout.preferredWidth: 56
+                Layout.fillHeight: true
+                backdrop: backdropLayer
+                cornerRadius: 14
+                blurRadius: 18
+                fillColor: root.mixColor(Qt.rgba(0.20, 0.28, 0.38, 0.34), Qt.rgba(1.0, 0.58, 0.76, 0.22))
+                strokeColor: root.mixColor(Qt.rgba(1, 1, 1, 0.36), Qt.rgba(1.0, 0.78, 0.88, 0.42))
+                glowTopColor: root.mixColor(Qt.rgba(1, 1, 1, 0.16), Qt.rgba(1.0, 0.88, 0.94, 0.28))
+                glowBottomColor: root.mixColor(Qt.rgba(1, 1, 1, 0.02), Qt.rgba(1.0, 0.56, 0.74, 0.08))
+                opacity: root.stageValue(0.02, 0.20)
 
             ChatSideBar {
                 anchors.fill: parent
                 currentTab: controller.chatTab
                 userIcon: controller.currentUserIcon
                 hasPendingApply: controller.hasPendingApply
+                backgroundColor: root.mixColor(Qt.rgba(0.16, 0.22, 0.31, 0.44), Qt.rgba(1.0, 0.62, 0.78, 0.18))
+                borderColor: root.mixColor(Qt.rgba(1, 1, 1, 0.16), Qt.rgba(1.0, 0.82, 0.90, 0.26))
+                buttonHoverColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.18), Qt.rgba(1.0, 0.46, 0.68, 0.16))
+                buttonPressedColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.26), Qt.rgba(1.0, 0.42, 0.66, 0.24))
+                buttonSelectedColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.30), Qt.rgba(1.0, 0.48, 0.70, 0.22))
+                buttonSelectedPressedColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.44), Qt.rgba(1.0, 0.42, 0.66, 0.32))
+                onR18Toggled: root.toggleR18Mode()
                 onTabSelected: function(tab) {
                     root.viewMode = 0
                     root.lastMainTab = tab
@@ -334,6 +394,66 @@ Rectangle {
                         onStatusCleared: controller.clearSettingsStatus()
                     }
                 }
+            }
+            }
+        }
+
+        RowLayout {
+            id: r18Face
+            anchors.fill: parent
+            spacing: 10
+            visible: root.flipAngle >= 90
+            enabled: visible
+            layer.enabled: true
+            transform: Rotation {
+                origin.x: r18Face.width / 2
+                origin.y: r18Face.height / 2
+                axis.x: 0
+                axis.y: 1
+                axis.z: 0
+                angle: root.flipAngle - 180
+            }
+
+            GlassSurface {
+                Layout.preferredWidth: 56
+                Layout.fillHeight: true
+                backdrop: backdropLayer
+                cornerRadius: 14
+                blurRadius: 18
+                fillColor: root.mixColor(Qt.rgba(0.20, 0.28, 0.38, 0.34), Qt.rgba(1.0, 0.58, 0.76, 0.22))
+                strokeColor: root.mixColor(Qt.rgba(1, 1, 1, 0.36), Qt.rgba(1.0, 0.78, 0.88, 0.42))
+                glowTopColor: root.mixColor(Qt.rgba(1, 1, 1, 0.16), Qt.rgba(1.0, 0.88, 0.94, 0.28))
+                glowBottomColor: root.mixColor(Qt.rgba(1, 1, 1, 0.02), Qt.rgba(1.0, 0.56, 0.74, 0.08))
+
+                ChatSideBar {
+                    anchors.fill: parent
+                    minimalMode: true
+                    currentTab: controller.chatTab
+                    userIcon: controller.currentUserIcon
+                    hasPendingApply: controller.hasPendingApply
+                    backgroundColor: root.mixColor(Qt.rgba(0.16, 0.22, 0.31, 0.44), Qt.rgba(1.0, 0.62, 0.78, 0.18))
+                    borderColor: root.mixColor(Qt.rgba(1, 1, 1, 0.16), Qt.rgba(1.0, 0.82, 0.90, 0.26))
+                    buttonHoverColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.18), Qt.rgba(1.0, 0.46, 0.68, 0.16))
+                    buttonPressedColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.26), Qt.rgba(1.0, 0.42, 0.66, 0.24))
+                    buttonSelectedColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.30), Qt.rgba(1.0, 0.48, 0.70, 0.22))
+                    buttonSelectedPressedColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.44), Qt.rgba(1.0, 0.42, 0.66, 0.32))
+                    onR18Toggled: root.toggleR18Mode()
+                    onTabSelected: function(tab) {
+                        controller.switchChatTab(tab)
+                    }
+                }
+            }
+
+            GlassSurface {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                backdrop: backdropLayer
+                cornerRadius: 16
+                blurRadius: 22
+                fillColor: Qt.rgba(1.0, 0.68, 0.82, 0.14)
+                strokeColor: Qt.rgba(1.0, 0.84, 0.92, 0.42)
+                glowTopColor: Qt.rgba(1.0, 0.92, 0.96, 0.30)
+                glowBottomColor: Qt.rgba(1.0, 0.64, 0.80, 0.06)
             }
         }
     }

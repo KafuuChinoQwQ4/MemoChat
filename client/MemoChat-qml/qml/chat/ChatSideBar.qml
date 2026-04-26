@@ -10,8 +10,16 @@ Rectangle {
     property int currentTab: 0
     property string userIcon: "qrc:/res/head_1.jpg"
     property bool hasPendingApply: false
+    property bool minimalMode: false
+    property color backgroundColor: Qt.rgba(0.16, 0.22, 0.31, 0.44)
+    property color borderColor: Qt.rgba(1, 1, 1, 0.16)
+    property color buttonHoverColor: Qt.rgba(0.75, 0.87, 1.0, 0.18)
+    property color buttonPressedColor: Qt.rgba(0.75, 0.87, 1.0, 0.26)
+    property color buttonSelectedColor: Qt.rgba(0.75, 0.87, 1.0, 0.30)
+    property color buttonSelectedPressedColor: Qt.rgba(0.75, 0.87, 1.0, 0.44)
     signal avatarClicked()
     signal tabSelected(int tab)
+    signal r18Toggled()
 
     function iconForTab(tab, selected) {
         if (tab === 0) {
@@ -48,8 +56,8 @@ Rectangle {
     Rectangle {
         anchors.fill: parent
         radius: 12
-        color: Qt.rgba(0.16, 0.22, 0.31, 0.44)
-        border.color: Qt.rgba(1, 1, 1, 0.16)
+        color: root.backgroundColor
+        border.color: root.borderColor
     }
 
     // 全局拖动区域：覆盖整个侧边栏背景（底层）
@@ -68,6 +76,7 @@ Rectangle {
     // 内容层（头像 + 标签图标）
     Column {
         z: 1
+        visible: !root.minimalMode
         anchors.left: parent.left
         anchors.top: parent.top
         anchors.leftMargin: 10
@@ -143,13 +152,13 @@ Rectangle {
                     radius: 8
                     color: {
                         if (root.currentTab === modelData) {
-                            return tabArea.pressed ? Qt.rgba(0.75, 0.87, 1.0, 0.44) : Qt.rgba(0.75, 0.87, 1.0, 0.30)
+                            return tabArea.pressed ? root.buttonSelectedPressedColor : root.buttonSelectedColor
                         }
                         if (tabArea.pressed) {
-                            return Qt.rgba(0.75, 0.87, 1.0, 0.26)
+                            return root.buttonPressedColor
                         }
                         if (tabArea.containsMouse) {
-                            return Qt.rgba(0.75, 0.87, 1.0, 0.18)
+                            return root.buttonHoverColor
                         }
                         return "transparent"
                     }
@@ -222,8 +231,8 @@ Rectangle {
             Rectangle {
                 anchors.fill: parent
                 radius: 8
-                color: r18Hover.pressed ? Qt.rgba(0.75, 0.87, 1.0, 0.28)
-                                        : r18Hover.containsMouse ? Qt.rgba(0.75, 0.87, 1.0, 0.18)
+                color: r18Hover.pressed ? root.buttonPressedColor
+                                        : r18Hover.containsMouse ? root.buttonHoverColor
                                                                  : "transparent"
 
                 Behavior on color {
@@ -247,6 +256,7 @@ Rectangle {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
+                onClicked: root.r18Toggled()
             }
 
             ToolTip.visible: r18Hover.containsMouse
@@ -274,13 +284,13 @@ Rectangle {
                 radius: 8
                 color: {
                     if (root.currentTab === 2) {
-                        return settingsArea.pressed ? Qt.rgba(0.75, 0.87, 1.0, 0.44) : Qt.rgba(0.75, 0.87, 1.0, 0.30)
+                        return settingsArea.pressed ? root.buttonSelectedPressedColor : root.buttonSelectedColor
                     }
                     if (settingsArea.pressed) {
-                        return Qt.rgba(0.75, 0.87, 1.0, 0.26)
+                        return root.buttonPressedColor
                     }
                     if (settingsArea.containsMouse) {
-                        return Qt.rgba(0.75, 0.87, 1.0, 0.18)
+                        return root.buttonHoverColor
                     }
                     return "transparent"
                 }
