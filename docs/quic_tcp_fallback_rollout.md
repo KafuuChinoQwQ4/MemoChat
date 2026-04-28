@@ -1,5 +1,8 @@
 # MemoChat QUIC + TCP 回退部署计划
 
+> 当前版本：2026-04-26  
+> 当前代码路径：客户端在 `apps/client/desktop`，ChatServer 在 `apps/server/core/ChatServer`。TCP 端口为 `8090-8093`，QUIC 端口为 `8190-8193`。
+
 ## 目标
 
 使用 QUIC 作为首选的客户端到聊天传输层，同时保持 TCP 作为自动回退路径。
@@ -24,13 +27,13 @@
 
 当前代码位置：
 
-- `client/MemoChatShared/global.h`
-- `client/MemoChatShared/IChatTransport.h`
-- `client/MemoChatShared/QuicChatTransport.*`
-- `client/MemoChatShared/tcpmgr.*`
-- `client/MemoChatShared/ChatMessageDispatcher.*`
-- `client/MemoChat-qml/TransportSelector.*`
-- `client/MemoChat-qml/AppControllerSession.cpp`
+- `apps/client/desktop/MemoChatShared/global.h`
+- `apps/client/desktop/MemoChatShared/IChatTransport.h`
+- `apps/client/desktop/MemoChatShared/QuicChatTransport.*`
+- `apps/client/desktop/MemoChatShared/tcpmgr.*`
+- `apps/client/desktop/MemoChatShared/ChatMessageDispatcher.*`
+- `apps/client/desktop/MemoChat-qml/TransportSelector.*`
+- `apps/client/desktop/MemoChat-qml/AppControllerSession.cpp`
 
 ## 目标协议
 
@@ -47,7 +50,7 @@ Gate 登录响应应提供支持传输的端点。
     {
       "transport": "quic",
       "host": "127.0.0.1",
-      "port": "8092",
+      "port": "8192",
       "server_name": "chat-1",
       "priority": 0
     },

@@ -1,0 +1,63 @@
+.git
+.github
+
+# Native build outputs
+build/
+build-*/
+build_*/
+build_test/
+vcpkg_installed/
+vcpkg/
+.cache/
+.qt/
+
+# Local runtime data
+logs/
+artifacts/
+status/
+infra/Memo_ops/runtime/
+infra/Memo_ops/artifacts/logs/
+infra/Memo_ops/artifacts/loadtest/
+infra/Memo_ops/artifacts/reports/
+infra/Memo_ops/artifacts/postgresql_rehearsal/
+
+# Python local environments and caches
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+apps/server/core/AIOrchestrator/.cache/
+apps/server/core/AIOrchestrator/.data/
+
+# Local databases, logs, dumps, and secrets
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.log
+*.log.*
+*.jsonl
+*.dump
+*.dmp
+*.core
+.env
+.env.*
+*.key
+*.pfx
+*.pem
+*.cert
+
+# Windows and IDE artifacts
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.obj
+*.lib
+.vs/
+.vscode/
+.idea/
+
+# Client is not needed for server image builds by default.
+apps/client/

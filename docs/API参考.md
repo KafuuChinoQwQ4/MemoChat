@@ -1,6 +1,8 @@
 # MemoChat API 参考文档
 
-> 文档版本：2026-03-23
+> 文档版本：2026-04-26  
+> 当前入口：本地 GateServer `http://127.0.0.1:8080`  
+> 当前运行约束：业务服务连接 Docker 中的 PostgreSQL/MongoDB/Redis/MinIO/Redpanda/RabbitMQ；PostgreSQL 宿主机端口为 `15432`，不是 `5432`。
 
 ---
 
@@ -14,6 +16,20 @@
 | 开发环境 | `https://api-dev.memochat.example.com` |
 | 预发布环境 | `https://api-staging.memochat.example.com` |
 | 生产环境 | `https://api.memochat.example.com` |
+
+### 1.1.1 当前本地路由总览
+
+当前 GateServer 主目标已注册的本地 HTTP 路由包括：
+
+| 类别 | 路由 |
+|------|------|
+| 健康检查 | `GET /healthz`, `GET /readyz` |
+| 认证 | `POST /get_varifycode`, `POST /user_register`, `POST /user_login`, `POST /reset_pwd`, `POST /user_update_profile` |
+| 媒体 | `POST /upload_media_init`, `POST /upload_media_chunk`, `GET /upload_media_status`, `POST /upload_media_complete`, `POST /upload_media`, `GET /media/download?asset=<asset>` |
+| 动态 | `POST /api/moments/publish`, `POST /api/moments/list`, `POST /api/moments/detail`, `POST /api/moments/delete`, `POST /api/moments/like`, `POST /api/moments/comment`, `POST /api/moments/comment/list`, `POST /api/moments/comment/like` |
+| 通话 | `POST /api/call/start`, `POST /api/call/accept`, `POST /api/call/reject`, `POST /api/call/cancel`, `POST /api/call/hangup`, `GET/POST /api/call/token` |
+| AI | `POST /ai/chat`, `POST /ai/chat/stream`, `POST /ai/smart`, `GET /ai/history`, `POST /ai/session`, `GET /ai/session/list`, `POST /ai/session/delete`, `GET /ai/model/list`, `POST /ai/kb/upload`, `POST /ai/kb/search`, `GET /ai/kb/list`, `POST /ai/kb/delete` |
+| R18 分区 | `GET /api/r18/sources`, `POST /api/r18/source/import`, `POST /api/r18/source/enable`, `POST /api/r18/source/disable`, `POST /api/r18/search`, `POST /api/r18/comic/detail`, `POST /api/r18/chapter/pages`, `POST /api/r18/favorite/toggle`, `POST /api/r18/history/update`, `GET /api/r18/history`, `GET /api/r18/image` |
 
 ### 1.2 认证方式
 
@@ -775,7 +791,7 @@ Authorization: Bearer {token}
 **请求**
 
 ```
-POST /api/media/upload
+POST /upload_media
 Content-Type: multipart/form-data
 Authorization: Bearer {token}
 
@@ -812,7 +828,7 @@ type: image
 **请求**
 
 ```
-GET /api/media/download/{media_id}
+GET /media/download?asset={asset}
 Authorization: Bearer {token}
 ```
 
@@ -972,6 +988,7 @@ GET /healthz
 
 ```json
 {
+  "service": "GateServer",
   "status": "ok"
 }
 ```
@@ -1002,15 +1019,86 @@ GET /readyz
 
 ---
 
-## 十、WebSocket 实时 API
+## 十、AI 与 R18 扩展 API
 
-### 10.1 连接建立
+### 10.1 AI 对话
 
+**请求**
+
+```http
+POST /ai/chat
+Content-Type: application/json
 ```
-wss://api.memochat.example.com/ws?token={token}&uid={uid}
+
+```json
+{
+  "uid": 1059,
+  "session_id": "optional-session",
+  "message": "请总结最近的聊天",
+  "model": "optional-model"
+}
 ```
 
-### 10.2 接收消息格式
+**说明**
+
+- 实际模型、RAG 和工具调用由 AIOrchestrator 决定。
+- AIOrchestrator 运行在 Docker 容器中，依赖 Ollama、Qdrant、Neo4j 和 Docker Postgres。
+
+### 10.2 AI 流式对话
+
+```http
+POST /ai/chat/stream
+```
+
+返回可按 SSE 或分块流式方式处理，具体以客户端实现为准。
+
+### 10.3 R18 源列表
+
+```http
+GET /api/r18/sources
+```
+
+用于列出用户可用漫画源。R18 源协议由服务端插件层统一适配，客户端不直接绑定第三方爬虫实现。
+
+### 10.4 R18 导入源
+
+```http
+POST /api/r18/source/import
+Content-Type: application/json
+```
+
+```json
+{
+  "name": "example-source",
+  "version": "1.0",
+  "definition": {}
+}
+```
+
+### 10.5 R18 搜索
+
+```http
+POST /api/r18/search
+Content-Type: application/json
+```
+
+```json
+{
+  "source_id": "example-source",
+  "keyword": "keyword",
+  "page": 1
+}
+```
+
+## 十一、实时消息 API
+
+当前聊天主链路不是 WebSocket，而是 TCP/QUIC 自定义二进制协议。旧 WebSocket 设计可以作为未来网关兼容方案，但不是当前本地默认链路。
+
+### 11.1 TCP/QUIC 连接建立
+
+客户端先调用 `/user_login` 获取 `login_ticket`、目标 ChatServer 和 transport 偏好，然后连接 `8090-8093` TCP 或 `8190-8193` QUIC。
+
+### 11.2 接收消息格式
 
 ```json
 {
@@ -1024,7 +1112,7 @@ wss://api.memochat.example.com/ws?token={token}&uid={uid}
 }
 ```
 
-### 10.3 消息类型
+### 11.3 消息类型
 
 | type | 说明 |
 |------|------|
@@ -1037,9 +1125,9 @@ wss://api.memochat.example.com/ws?token={token}&uid={uid}
 
 ---
 
-## 十一、错误处理
+## 十二、错误处理
 
-### 11.1 错误响应格式
+### 12.1 错误响应格式
 
 ```json
 {
@@ -1052,7 +1140,7 @@ wss://api.memochat.example.com/ws?token={token}&uid={uid}
 }
 ```
 
-### 11.2 重试策略
+### 12.2 重试策略
 
 | 错误类型 | 重试次数 | 重试间隔 |
 |---------|---------|---------|
@@ -1060,7 +1148,7 @@ wss://api.memochat.example.com/ws?token={token}&uid={uid}
 | 服务器错误 (5xx) | 2 | 1s, 2s |
 | 限流 (429) | 5 | 1s, 2s, 4s, 8s, 16s |
 
-### 11.3 限流说明
+### 12.3 限流说明
 
 | 接口 | 限制 |
 |------|------|
@@ -1070,9 +1158,9 @@ wss://api.memochat.example.com/ws?token={token}&uid={uid}
 
 ---
 
-## 十二、SDK 示例
+## 十三、SDK 示例
 
-### 12.1 Python SDK 示例
+### 13.1 Python SDK 示例
 
 ```python
 import requests
@@ -1107,7 +1195,7 @@ class MemoChatClient:
         pass
 ```
 
-### 12.2 JavaScript SDK 示例
+### 13.2 JavaScript SDK 示例
 
 ```javascript
 class MemoChatClient {

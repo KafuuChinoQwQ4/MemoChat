@@ -69,7 +69,7 @@ jobs:
 
       - name: Deploy to Dev
         run: |
-          kubectl apply -k Memo_ops/k8s/overlays/dev
+          kubectl apply -k infra/Memo_ops/k8s/overlays/dev
 
       - name: Wait for rollout
         run: |
@@ -154,7 +154,7 @@ jobs:
 
       - name: Deploy to Production
         run: |
-          kubectl apply -k Memo_ops/k8s/overlays/prod
+          kubectl apply -k infra/Memo_ops/k8s/overlays/prod
 
       - name: Wait for rollout (RollingUpdate)
         run: |
