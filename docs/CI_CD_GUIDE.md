@@ -1,8 +1,40 @@
 # MemoChat CI/CD 自动部署指南
 
+> 当前版本：2026-04-26  
+> 当前目录基准：镜像和部署配置在 `infra/deploy`，Kubernetes Chart 在 `infra/deploy/kubernetes` 和 `infra/helm`。本地开发依赖 Docker-only；生产环境应使用 Secret/ConfigMap 覆盖本地固定密码和端口。
+
 ## 概述
 
 MemoChat 使用 GitHub Actions 实现 CI/CD，代码 push 后自动构建 Docker 镜像并部署到 Kubernetes 集群。
+
+当前仓库已经拆分为 `apps/`、`infra/`、`tools/` 三个主要域。CI 需要分别覆盖：
+
+- C++ 服务端：`apps/server/core`
+- Qt/QML 客户端：`apps/client/desktop`
+- 运营平台：`infra/Memo_ops`
+- 压测工具：`tools/loadtest/local-loadtest-cpp`
+- 部署资产：`infra/deploy`
+- 测试：`tests`
+
+本地 Docker-only 约束不直接等同于生产部署。生产环境可以使用 Kubernetes 内部 PostgreSQL `5432` 或托管数据库，但本地开发固定使用 Docker 暴露的 `15432`。CI/CD 中不能硬编码本地密码和本地端口，应通过环境变量、Secret 或 Helm values 注入。
+
+## 当前构建边界
+
+| 目标 | 推荐检查 |
+|------|----------|
+| C++ 编译 | `cmake --preset ...` + `cmake --build ...` |
+| 单元测试 | `ctest` 或直接运行 GTest 可执行 |
+| Docker 镜像 | `infra/deploy/images` 下的 Dockerfile |
+| Helm/K8s | `infra/deploy/kubernetes`、`infra/helm` |
+| 文档 | `docs` 中路径和端口不得回退到旧结构 |
+
+建议 CI 至少做以下静态检查：
+
+```powershell
+rg -n "localhost:5432|Port=5432|memochat-mysql|D:\\\\MemoChat-Qml-Drogon\\\\server" docs apps infra tools
+```
+
+允许 Kubernetes 内部端口 `5432` 出现在 chart values 中，但必须清楚标注它是集群内部端口。
 
 ## 部署流程
 

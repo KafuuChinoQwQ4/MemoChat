@@ -1,0 +1,57 @@
+collector:
+  interval_sec: 10
+  cpu_warn: 85.0
+  missing_service_after_sec: 30
+  error_rate_warn: 0.25
+  import_reports: true
+  import_logs: true
+  collect_metrics: true
+
+metrics:
+  host: 127.0.0.1
+  port: 19100
+
+repo:
+  root: ../..
+
+cluster:
+  config: ../../server/StatusServer/config.ini
+
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  password: "123456"
+  schema: memo_ops
+  charset: utf8mb4
+
+postgresql:
+  host: 127.0.0.1
+  port: 15432
+  user: memochat
+  password: "123456"
+  database: memo_pg
+  schema: memo_ops
+  sslmode: disable
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  password: "123456"
+  db: 0
+  prefix: ops
+
+observability:
+  grafana: http://127.0.0.1:3000
+  loki: http://127.0.0.1:3100
+  tempo: http://127.0.0.1:3200
+
+paths:
+  report_globs:
+    - ../runtime/loadtest/reports/**/*.json
+  log_globs:
+    - ../runtime/services/*/logs/*.json
+    - ../runtime/varify/logs/*.json
+    - ../runtime/loadtest/logs/*.json
+    - ../../build/bin/Release/logs/*.json
+    - ../../build/bin/Debug/logs/*.json
