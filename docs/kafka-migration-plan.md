@@ -5,11 +5,12 @@
 - `ChatServer` 已经有一条私聊和群聊的异步消息路径。
 - `PrivateMessageService` 可以运行在 `shadow` 或 `primary` 异步模式。
 - `AsyncEventDispatcher` 现在通过 `IAsyncEventBus` 解耦了 Redis 队列操作。
-- 当前的运行时后端仍然是 `redis`，通过 `Runtime.AsyncEventBus` 配置。
+- 当前本地默认目标是 `Runtime.AsyncEventBus=kafka`，由 Redpanda 提供 Kafka 兼容 broker。
+- `RedisAsyncEventBus` 保留为降级和回归验证路径，不再是当前本地推荐默认。
 
 ## 第一阶段
 
-- 保持 `RedisAsyncEventBus` 作为生产安全基线。
+- 保持 `RedisAsyncEventBus` 作为降级安全基线。
 - 验证私聊和群聊异步流程在新抽象层下仍能正常工作。
 - 在发布失败、消费延迟和处理程序延迟周围添加指标。
 
@@ -31,8 +32,12 @@
 
 - `chat.private.v1`
 - `chat.group.v1`
-- `relation.friend_apply.v1`
-- `relation.friend_auth.v1`
+- `chat.private.dlq.v1`
+- `chat.group.dlq.v1`
+- `dialog.sync.v1`
+- `relation.state.v1`
+- `user.profile.changed.v1`
+- `audit.login.v1`
 
 ## 分区键计划
 

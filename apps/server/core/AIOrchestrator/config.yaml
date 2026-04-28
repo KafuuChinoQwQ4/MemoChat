@@ -1,0 +1,194 @@
+service:
+  host: "0.0.0.0"
+  port: 8096
+
+llm:
+  default_backend: "ollama"
+  default_model: "qwen3:4b"
+
+  ollama:
+    base_url: "http://127.0.0.1:11434"
+    models:
+      - name: "qwen3:4b"
+        display: "Qwen 3 4B"
+        context_window: 8192
+      - name: "qwen2.5:3b"
+        display: "Qwen 2.5 3B"
+        context_window: 8192
+      - name: "qwen2.5-coder:3b"
+        display: "Qwen 2.5 Coder 3B"
+        context_window: 8192
+    enabled: true
+
+  openai:
+    api_key: ""
+    base_url: "https://api.openai.com/v1"
+    models:
+      - name: "gpt-4o"
+        display: "GPT-4o"
+        context_window: 128000
+      - name: "gpt-4o-mini"
+        display: "GPT-4o Mini"
+        context_window: 128000
+    enabled: false
+
+  anthropic:
+    api_key: ""
+    base_url: "https://api.anthropic.com/v1"
+    models:
+      - name: "claude-3-5-sonnet-20241022"
+        display: "Claude 3.5 Sonnet"
+        context_window: 200000
+    enabled: false
+
+  kimi:
+    api_key: ""
+    base_url: "https://api.moonshot.cn/v1"
+    models:
+      - name: "moonshot-v1-8k"
+        display: "Kimi 8K"
+        context_window: 8192
+    enabled: false
+
+embedding:
+  backend: "local"
+  local_model: "all-MiniLM-L6-v2"
+  ollama_model: "nomic-embed-text"
+  openai_model: "text-embedding-3-small"
+  dimension: 384
+
+rag:
+  qdrant:
+    # 宿主机访问：127.0.0.1（Docker 端口映射 6333:6333）
+    # Docker 网络内访问：memochat-qdrant
+    host: "127.0.0.1"
+    port: 6333
+    grpc_port: 6334     # gRPC API
+    collection_prefix: "user_"
+  chunk_size: 500
+  chunk_overlap: 50
+  top_k: 5
+  score_threshold: 0.7
+
+tools:
+  enabled:
+    - "duckduckgo_search"
+    - "knowledge_base"
+    - "calculator"
+    - "translator"
+  rate_limit_per_minute: 10
+
+agent:
+  max_iterations: 10
+  timeout_per_step_sec: 30
+  timeout_total_sec: 300
+  fallback_on_error: true
+  max_tokens_per_response: 2048
+  temperature: 0.7
+  hitl_enabled: false
+  system_prompt: |
+    你是一个专业的 AI 助手，可以帮助用户回答问题、搜索信息、管理知识库。
+    如果用户的问题涉及上传的文档，优先使用知识库检索。
+    如果需要最新信息，使用 DuckDuckGo 搜索。
+    如果需要计算，使用计算器工具。
+    如果涉及用户关系、群组分析或推荐，请使用图数据库查询。
+    如果操作可能影响用户隐私或财产安全（如发送消息给陌生人），请先询问用户确认。
+    请用简洁清晰的语言回答。
+
+neo4j:
+  # 宿主机访问：127.0.0.1（Docker 端口映射 7687:7687）
+  # Docker 网络内访问：memochat-neo4j（需在 docker-compose.yml 中加入 AI Orchestrator）
+  host: "127.0.0.1"
+  port: 7687
+  username: "neo4j"
+  password: "password"
+  database: "neo4j"
+  vector_dimension: 384
+  enabled: true  # Docker 中运行: docker compose -f docker-compose.yml up -d
+
+observability:
+  enabled: false
+  backend: "langfuse"
+  langfuse:
+    public_key: ""
+    secret_key: ""
+    host: "http://127.0.0.1:3000"
+  otel:
+    endpoint: "http://127.0.0.1:4317"
+    service_name: "ai-orchestrator"
+  trace_llm_calls: true
+  trace_tool_calls: true
+  track_ttft: true
+
+llm_fallback:
+  ollama:
+    - openai
+    - kimi
+  openai:
+    - kimi
+  claude:
+    - openai
+  kimi:
+    - openai
+  retry_count: 2
+  retry_delay_sec: 2
+
+mcp:
+  enabled: false
+  servers:
+    - name: filesystem
+      command: ["npx", "-y", "@modelcontextprotocol/server-filesystem"]
+      args: ["/path/to/allowed"]
+      enabled: false
+    - name: github
+      command: ["npx", "-y", "@modelcontextprotocol/server-github"]
+      args: []
+      env:
+        GITHUB_TOKEN: ""
+      enabled: false
+
+harness:
+  enabled: true
+  canonical_root: "server/AIOrchestrator/harness"
+  industrial_target_year: 2026
+  default_mode: "agent"
+  max_planning_steps: 6
+  max_tool_rounds: 4
+  trace_persist: true
+  auto_reflection: true
+  short_term_limit: 24
+  episodic_limit: 6
+  knowledge_top_k: 5
+  skills:
+    enabled:
+      - "general_chat"
+      - "knowledge_copilot"
+      - "research_assistant"
+      - "summarize_thread"
+      - "reply_suggester"
+      - "translate_text"
+      - "graph_recommender"
+      - "mcp_operator"
+  providers:
+    endpoints:
+      - name: "local-vllm"
+        adapter: "openai_compatible"
+        deployment: "local_api"
+        base_url: "http://127.0.0.1:8000/v1"
+        api_key: "EMPTY"
+        default_model: "Qwen/Qwen3-14B"
+        enabled: false
+        timeout_sec: 120
+        models:
+          - name: "Qwen/Qwen3-14B"
+            display: "Qwen 3 14B (Local OpenAI-Compatible)"
+            context_window: 32768
+
+postgres:
+  host: "127.0.0.1"
+  port: 15432
+  user: "memochat"
+  password: "123456"
+  database: "memo_pg"
+  min_pool_size: 2
+  max_pool_size: 10

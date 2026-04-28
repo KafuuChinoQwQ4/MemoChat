@@ -20,7 +20,7 @@ jobs:
 
       - name: Run clang-format
         run: |
-          find server -name "*.cpp" -o -name "*.h" | head -20 | xargs -I {} clang-format --style=file -i {}
+          find apps/server/core -name "*.cpp" -o -name "*.h" | head -20 | xargs -I {} clang-format --style=file -i {}
 
   build-cpp:
     name: Build C++ Services
@@ -63,18 +63,18 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: server/VarifyServer/package-lock.json
+          cache-dependency-path: apps/server/core/VarifyServer/package-lock.json
 
       - name: Install dependencies
-        working-directory: server/VarifyServer
+        working-directory: apps/server/core/VarifyServer
         run: npm ci
 
       - name: Run tests
-        working-directory: server/VarifyServer
+        working-directory: apps/server/core/VarifyServer
         run: npm test || true
 
       - name: Build
-        working-directory: server/Varifyserver
+        working-directory: apps/server/core/VarifyServer
         run: npm run build
 
   docker-build:
@@ -89,7 +89,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cpp-binaries
-          path: Memo_ops/runtime/services/
+          path: infra/Memo_ops/runtime/services/
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -105,7 +105,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: docker/Dockerfile.server
+          file: infra/docker/Dockerfile.server
           push: false
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver:${{ github.sha }}
@@ -117,7 +117,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: docker/Dockerfile.server
+          file: infra/docker/Dockerfile.server
           push: false
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/statusserver:${{ github.sha }}
@@ -129,7 +129,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: docker/Dockerfile.server
+          file: infra/docker/Dockerfile.server
           push: false
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/chatserver:${{ github.sha }}
@@ -140,7 +140,8 @@ jobs:
       - name: Build and push VarifyServer
         uses: docker/build-push-action@v5
         with:
-          context: server/VarifyServer
+          context: .
+          file: infra/deploy/images/services/varifyserver.Dockerfile
           push: false
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/varifyserver:${{ github.sha }}

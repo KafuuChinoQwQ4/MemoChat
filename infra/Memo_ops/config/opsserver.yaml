@@ -1,0 +1,68 @@
+server:
+  host: 127.0.0.1
+  port: 18080
+  cors_origins:
+    - "*"
+
+repo:
+  root: ../..
+  _package_root: Memo_ops
+
+cluster:
+  config: ../../server/StatusServer/config.ini
+
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  password: "123456"
+  schema: memo_ops
+  charset: utf8mb4
+
+postgresql:
+  host: 127.0.0.1
+  port: 15432
+  user: memochat
+  password: "123456"
+  database: memo_pg
+  schema: memo_ops
+  sslmode: disable
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  password: "123456"
+  db: 0
+  prefix: ops
+
+observability:
+  grafana: http://127.0.0.1:3000
+  loki: http://127.0.0.1:3100
+  tempo: http://127.0.0.1:3200
+
+paths:
+  report_globs:
+    - artifacts/reports/loadtest/**/*.json
+    - artifacts/reports/perf/**/*.json
+    - artifacts/reports/perf/**/*.md
+  log_globs:
+    - artifacts/logs/services/*/logs/*.json
+    - artifacts/logs/services/*/*.json
+    - artifacts/logs/varify/logs/*.json
+    - artifacts/logs/varify/*.json
+    - artifacts/logs/loadtest/logs/*.json
+    - artifacts/logs/loadtest/*.json
+    - artifacts/logs/diag/*.log
+    - artifacts/logs/manual-start/*.log
+    - build/bin/Release/logs/*.json
+    - build/bin/Debug/logs/*.json
+
+platform:
+  overview_limit: 10
+  run_list_limit: 100
+  log_query_limit: 200
+
+loadtest:
+  binary_path: ../local-loadtest-cpp/build/Release/memochat_loadtest.exe
+  config_path: ../local-loadtest-cpp/config.json
+  report_dir: artifacts/reports/loadtest

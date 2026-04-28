@@ -24,7 +24,7 @@ if ! command -v kustomize &> /dev/null; then
 fi
 
 echo "Applying K8s manifests..."
-kubectl apply -k "Memo_ops/k8s/overlays/${ENV}/" --namespace="$NAMESPACE"
+kubectl apply -k "infra/Memo_ops/k8s/overlays/${ENV}/" --namespace="$NAMESPACE"
 
 echo "Waiting for deployments..."
 kubectl rollout status deployment -n "$NAMESPACE" --timeout=300s || true

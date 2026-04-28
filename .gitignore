@@ -43,6 +43,12 @@ Memo_ops/runtime/services/GateServer/server.pfx
 Memo_ops/runtime/services/GateServerDrogon/server.crt
 Memo_ops/runtime/services/GateServerDrogon/server.key
 Memo_ops/runtime/services/GateServerDrogon/server.pfx
+infra/Memo_ops/runtime/services/GateServer/server.crt
+infra/Memo_ops/runtime/services/GateServer/server.key
+infra/Memo_ops/runtime/services/GateServer/server.pfx
+infra/Memo_ops/runtime/services/GateServerDrogon/server.crt
+infra/Memo_ops/runtime/services/GateServerDrogon/server.key
+infra/Memo_ops/runtime/services/GateServerDrogon/server.pfx
 
 # Runtime artifacts (logs, pids, uploads, var)
 Memo_ops/runtime/
@@ -56,6 +62,17 @@ Memo_ops/runtime/pids/
 Memo_ops/runtime/varify/logs/
 Memo_ops/runtime/loadtest/
 Memo_ops/runtime/artifacts/
+infra/Memo_ops/runtime/
+!infra/Memo_ops/runtime/services/
+!infra/Memo_ops/runtime/services/**/
+!infra/Memo_ops/runtime/services/**/config.ini
+!infra/Memo_ops/runtime/services/MemoOpsQml/memoops-qml.ini
+infra/Memo_ops/runtime/services/*/logs/
+infra/Memo_ops/runtime/services/*/uploads/
+infra/Memo_ops/runtime/pids/
+infra/Memo_ops/runtime/varify/logs/
+infra/Memo_ops/runtime/loadtest/
+infra/Memo_ops/runtime/artifacts/
 
 # Load-test accounts (keep examples only)
 local-loadtest/accounts.local.csv
@@ -63,6 +80,14 @@ local-loadtest/accounts.smoke.csv
 local-loadtest/accounts.e2e.csv
 local-loadtest/accounts.register.smoke.csv
 !/local-loadtest/accounts.example.csv
+tools/loadtest/local-loadtest-cpp/accounts.local.csv
+tools/loadtest/local-loadtest-cpp/accounts.smoke.csv
+tools/loadtest/local-loadtest-cpp/accounts.e2e.csv
+tools/loadtest/local-loadtest-cpp/accounts.register.smoke.csv
+!tools/loadtest/local-loadtest-cpp/accounts.example.csv
+tools/loadtest/local-loadtest-cpp/build/
+tools/loadtest/local-loadtest-cpp/__pycache__/
+tools/scripts/__pycache__/
 
 # Legacy artifacts
 /logs/
@@ -71,6 +96,7 @@ local-loadtest/accounts.register.smoke.csv
 /temp/
 /cache/
 /server/*/logs/
+/apps/server/core/*/logs/
 /artifacts/
 /Memo_ops/artifacts/logs/
 /Memo_ops/artifacts/loadtest/
@@ -78,6 +104,13 @@ local-loadtest/accounts.register.smoke.csv
 !/Memo_ops/artifacts/index/
 !/Memo_ops/artifacts/index/README.md
 /Memo_ops/runtime/artifacts/postgresql_rehearsal/
+/infra/Memo_ops/artifacts/logs/
+/infra/Memo_ops/artifacts/loadtest/
+/infra/Memo_ops/artifacts/reports/
+!/infra/Memo_ops/artifacts/index/
+!/infra/Memo_ops/artifacts/index/README.md
+/infra/Memo_ops/runtime/artifacts/postgresql_rehearsal/
+/infra/Memo_ops/artifacts/postgresql_rehearsal/
 
 # vcpkg artifacts
 /vcpkg_installed/
@@ -92,6 +125,12 @@ local-loadtest/accounts.register.smoke.csv
 /server/AIOrchestrator/.data/
 /Memo_ops/**/__pycache__/
 /Memo_ops/*.log
+/infra/Memo_ops/.venv/
+/apps/server/core/AIOrchestrator/.venv/
+/apps/server/core/AIOrchestrator/.cache/
+/apps/server/core/AIOrchestrator/.data/
+/infra/Memo_ops/**/__pycache__/
+/infra/Memo_ops/*.log
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -150,6 +189,8 @@ CTestTestfile.cmake
 # Runtime binaries (DLLs and EXEs in runtime/services/)
 Memo_ops/runtime/services/*/*.dll
 Memo_ops/runtime/services/*/*.exe
+infra/Memo_ops/runtime/services/*/*.dll
+infra/Memo_ops/runtime/services/*/*.exe
 
 # Local databases / generated logs
 *.db

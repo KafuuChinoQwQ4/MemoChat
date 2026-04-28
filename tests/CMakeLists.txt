@@ -10,8 +10,8 @@ add_custom_target(gtest_tests)
 
 # --- Register test groups ---
 # Each subdirectory creates an executable and calls add_dependencies(gtest_tests ...).
-add_subdirectory(../server/common/proto/tests   ${CMAKE_CURRENT_BINARY_DIR}/proto)
-add_subdirectory(../server/common/logging/tests ${CMAKE_CURRENT_BINARY_DIR}/logging)
+add_subdirectory(../apps/server/core/common/proto/tests   ${CMAKE_CURRENT_BINARY_DIR}/proto)
+add_subdirectory(../apps/server/core/common/logging/tests ${CMAKE_CURRENT_BINARY_DIR}/logging)
 
 # Hook into CTest so "ctest" / "RUN_TESTS" discovers everything.
 # Discovery is handled in each subdirectory's CMakeLists.txt via

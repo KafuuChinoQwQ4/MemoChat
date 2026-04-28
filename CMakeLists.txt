@@ -35,20 +35,26 @@ if(NOT DEFINED CMAKE_PROJECT_INVOKED_WITH_PRESET)
     # Invoked directly without preset
 endif()
 
-if(BUILD_SERVER)
-    add_subdirectory(server)
+if(BUILD_TESTS AND NOT BUILD_SERVER)
+    set(BUILD_SERVER_SERVICES OFF CACHE BOOL "Build backend service executables" FORCE)
+else()
+    set(BUILD_SERVER_SERVICES ${BUILD_SERVER} CACHE BOOL "Build backend service executables" FORCE)
+endif()
+
+if(BUILD_SERVER OR BUILD_TESTS)
+    add_subdirectory(apps/server/core)
 endif()
 
 if(BUILD_CLIENT)
-    add_subdirectory(client)
+    add_subdirectory(apps/client/desktop)
 endif()
 
 if(BUILD_OPS)
-    add_subdirectory(Memo_ops)
+    add_subdirectory(infra/Memo_ops)
 endif()
 
 if(BUILD_LOADTEST)
-    add_subdirectory(local-loadtest-cpp)
+    add_subdirectory(tools/loadtest/local-loadtest-cpp)
 endif()
 
 if(BUILD_TESTS)

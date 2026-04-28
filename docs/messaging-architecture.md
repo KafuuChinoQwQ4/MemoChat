@@ -1,7 +1,8 @@
 # MemoChat 消息架构文档
 
-> 文档版本：2026-04-10
+> 文档版本：2026-04-26
 > 项目路径：D:\MemoChat-Qml-Drogon
+> 当前本地依赖：Redpanda、RabbitMQ、Redis、PostgreSQL、MongoDB 均运行在 Docker 中；PostgreSQL 宿主机端口为 `15432`。
 
 ---
 
@@ -1258,7 +1259,7 @@ Step 4: 发送私聊消息
 ### 7.1 Kafka Topic 初始化
 
 ```powershell
-# scripts/init_kafka_topics.ps1
+# tools/scripts/init_kafka_topics.ps1
 
 $kafkaBrokers = "127.0.0.1:19092"
 $topics = @(
@@ -1335,12 +1336,12 @@ foreach ($topic in $topics) {
 ### 7.2 RabbitMQ 拓扑初始化
 
 ```powershell
-# scripts/init_rabbitmq_topology.ps1
+# tools/scripts/init_rabbitmq_topology.ps1
 
 $rabbitmqHost = "127.0.0.1"
 $rabbitmqPort = 5672
-$rabbitmqUser = "guest"
-$rabbitmqPass = "guest"
+$rabbitmqUser = "memochat"
+$rabbitmqPass = "123456"
 
 # 定义交换机和队列拓扑
 $topology = @{

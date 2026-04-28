@@ -23,7 +23,7 @@
         "VCPKG_ROOT": "D:/vcpkg",
         "VCPKG_DOWNLOADS": "D:/vcpkg/downloads",
         "VCPKG_DEFAULT_BINARY_CACHE": "D:/vcpkg/bincache",
-        "VCPKG_BINARY_SOURCES": "clear",
+        "VCPKG_BINARY_SOURCES": "clear;files,D:/vcpkg/bincache,readwrite",
         "HTTP_PROXY": "",
         "HTTPS_PROXY": "",
         "NO_PROXY": ""
@@ -33,6 +33,7 @@
         "BUILD_SERVER": "ON",
         "BUILD_OPS": "ON",
         "BUILD_TESTS": "ON",
+        "MEMOCHAT_AUTO_DEPLOY_RUNTIME": "OFF",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_MAKE_PROGRAM": "D:/ninja-win/ninja.exe",
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
@@ -60,7 +61,7 @@
         "VCPKG_ROOT": "D:/vcpkg",
         "VCPKG_DOWNLOADS": "D:/vcpkg/downloads",
         "VCPKG_DEFAULT_BINARY_CACHE": "D:/vcpkg/bincache",
-        "VCPKG_BINARY_SOURCES": "clear",
+        "VCPKG_BINARY_SOURCES": "clear;files,D:/vcpkg/bincache,readwrite",
         "HTTP_PROXY": "",
         "HTTPS_PROXY": "",
         "NO_PROXY": ""
@@ -70,6 +71,7 @@
         "BUILD_SERVER": "ON",
         "BUILD_OPS": "ON",
         "BUILD_TESTS": "ON",
+        "MEMOCHAT_AUTO_DEPLOY_RUNTIME": "OFF",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_MAKE_PROGRAM": "D:/ninja-win/ninja.exe",
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
@@ -96,7 +98,7 @@
         "VCPKG_ROOT": "D:/vcpkg",
         "VCPKG_DOWNLOADS": "D:/vcpkg/downloads",
         "VCPKG_DEFAULT_BINARY_CACHE": "D:/vcpkg/bincache",
-        "VCPKG_BINARY_SOURCES": "clear",
+        "VCPKG_BINARY_SOURCES": "clear;files,D:/vcpkg/bincache,readwrite",
         "HTTP_PROXY": "",
         "HTTPS_PROXY": "",
         "NO_PROXY": ""
@@ -106,6 +108,7 @@
         "BUILD_SERVER": "OFF",
         "BUILD_OPS": "ON",
         "BUILD_TESTS": "OFF",
+        "MEMOCHAT_AUTO_DEPLOY_RUNTIME": "OFF",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_MAKE_PROGRAM": "D:/ninja-win/ninja.exe",
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
@@ -132,7 +135,7 @@
         "VCPKG_ROOT": "D:/vcpkg",
         "VCPKG_DOWNLOADS": "D:/vcpkg/downloads",
         "VCPKG_DEFAULT_BINARY_CACHE": "D:/vcpkg/bincache",
-        "VCPKG_BINARY_SOURCES": "clear",
+        "VCPKG_BINARY_SOURCES": "clear;files,D:/vcpkg/bincache,readwrite",
         "HTTP_PROXY": "",
         "HTTPS_PROXY": "",
         "NO_PROXY": ""
@@ -142,6 +145,7 @@
         "BUILD_SERVER": "OFF",
         "BUILD_OPS": "OFF",
         "BUILD_TESTS": "ON",
+        "MEMOCHAT_AUTO_DEPLOY_RUNTIME": "OFF",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_MAKE_PROGRAM": "D:/ninja-win/ninja.exe",
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
@@ -149,7 +153,36 @@
         "VCPKG_HOST_TRIPLET": "x64-windows",
         "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed",
         "VCPKG_MANIFEST_FEATURES": "server",
+        "VCPKG_BUILD_TYPE": "release",
         "CMAKE_CXX_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe"
+      }
+    },
+    {
+      "name": "msvc2022-server-verify",
+      "displayName": "Verify: Server only",
+      "inherits": "msvc2022-tests",
+      "binaryDir": "${sourceDir}/build-verify-server",
+      "cacheVariables": {
+        "BUILD_CLIENT": "OFF",
+        "BUILD_SERVER": "ON",
+        "BUILD_OPS": "OFF",
+        "BUILD_LOADTEST": "OFF",
+        "BUILD_TESTS": "OFF",
+        "MEMOCHAT_AUTO_DEPLOY_RUNTIME": "OFF"
+      }
+    },
+    {
+      "name": "msvc2022-client-verify",
+      "displayName": "Verify: Client only",
+      "inherits": "msvc2022-tests",
+      "binaryDir": "${sourceDir}/build-verify-client",
+      "cacheVariables": {
+        "BUILD_CLIENT": "ON",
+        "BUILD_SERVER": "OFF",
+        "BUILD_OPS": "OFF",
+        "BUILD_LOADTEST": "OFF",
+        "BUILD_TESTS": "OFF",
+        "MEMOCHAT_AUTO_DEPLOY_RUNTIME": "OFF"
       }
     }
   ],
@@ -179,6 +212,20 @@
       "name": "msvc2022-tests",
       "displayName": "Build Release: Unit tests only",
       "configurePreset": "msvc2022-tests",
+      "configuration": "Release",
+      "jobs": 12
+    },
+    {
+      "name": "msvc2022-server-verify",
+      "displayName": "Build Release: Server verification",
+      "configurePreset": "msvc2022-server-verify",
+      "configuration": "Release",
+      "jobs": 12
+    },
+    {
+      "name": "msvc2022-client-verify",
+      "displayName": "Build Release: Client verification",
+      "configurePreset": "msvc2022-client-verify",
       "configuration": "Release",
       "jobs": 12
     }
