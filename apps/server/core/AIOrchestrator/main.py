@@ -11,6 +11,7 @@ import uvicorn
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 
 from config import settings
 from api.chat_router import router as chat_router
@@ -20,6 +21,7 @@ from api.model_router import router as model_router
 from api.recommend_router import router as recommend_router
 from api.agent_router import router as agent_router
 from harness import HarnessContainer
+from observability.metrics import ai_metrics
 from observability.tracer import init_tracing
 from observability.langfuse_instrument import init_langfuse
 
@@ -112,6 +114,13 @@ def create_app() -> FastAPI:
                 except Exception as e:
                     available.append({"backend": backend, "ok": False, "error": str(e)})
         return {"status": "ready", "backends": available}
+
+    @app.get("/metrics", response_class=PlainTextResponse)
+    async def metrics():
+        return PlainTextResponse(
+            ai_metrics.render_text(),
+            media_type="text/plain; version=0.0.4; charset=utf-8",
+        )
 
     return app
 

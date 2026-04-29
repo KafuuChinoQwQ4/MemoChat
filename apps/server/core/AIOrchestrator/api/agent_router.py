@@ -4,7 +4,10 @@ AI Harness 管理 API
 from fastapi import APIRouter, HTTPException
 
 from harness import HarnessContainer
+from harness.layers import list_harness_layers
 from schemas.api import (
+    AgentLayerInfo,
+    AgentLayerListRsp,
     AgentRunReq,
     AgentRunRsp,
     AgentTraceRsp,
@@ -51,7 +54,7 @@ async def run_agent(req: AgentRunReq):
 @router.get("/runs/{trace_id}", response_model=AgentTraceRsp)
 async def get_trace(trace_id: str):
     container = HarnessContainer.get_instance()
-    trace = container.trace_store.get_trace(trace_id)
+    trace = await container.trace_store.get_trace_or_load(trace_id)
     if trace is None:
         raise HTTPException(status_code=404, detail="trace not found")
 
@@ -68,6 +71,14 @@ async def get_trace(trace_id: str):
         feedback_summary=trace.feedback_summary,
         observations=trace.observations,
         events=[TraceEventModel(**event.to_dict()) for event in trace.events],
+    )
+
+
+@router.get("/layers", response_model=AgentLayerListRsp)
+async def list_layers():
+    return AgentLayerListRsp(
+        code=0,
+        layers=[AgentLayerInfo(**layer) for layer in list_harness_layers()],
     )
 
 

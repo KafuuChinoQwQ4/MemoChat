@@ -123,11 +123,28 @@ services:
       - --storage.tsdb.retention.time=7d
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/rules:/etc/prometheus/rules:ro
       - D:/docker-data/memochat/observability/prometheus:/prometheus
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       - memochat-influxdb
+      - memochat-alertmanager
+
+  memochat-alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: memochat-alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - D:/docker-data/memochat/observability/alertmanager:/alertmanager
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   memochat-influxdb:
     image: influxdb:2.7-alpine

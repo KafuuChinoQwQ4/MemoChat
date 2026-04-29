@@ -63,6 +63,11 @@ void HttpMgr::PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod,
     postHttpReqInternal(url, QJsonDocument(json).toJson(QJsonDocument::Compact), req_id, mod, module, true);
 }
 
+void HttpMgr::GetHttpReq(QUrl url, ReqId req_id, Modules mod, const QString &module)
+{
+    getHttpReqInternal(url, req_id, mod, module, true);
+}
+
 void HttpMgr::postHttpReqInternal(const QUrl &url,
     const QByteArray &data,
     ReqId req_id,
@@ -151,6 +156,114 @@ void HttpMgr::postHttpReqInternal(const QUrl &url,
         const QByteArray responseRequest = reply->rawHeader("X-Request-Id");
         attrs.insert("http.status_code", reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt());
         exportZipkinSpan(QStringLiteral("HTTP POST %1").arg(reply->url().path()),
+            QStringLiteral("CLIENT"),
+            !responseTrace.isEmpty() ? QString::fromUtf8(responseTrace) : traceId,
+            spanId,
+            QString(),
+            startAtMs,
+            durationMs,
+            attrs);
+        QJsonParseError parseError;
+        const QJsonDocument responseDoc = QJsonDocument::fromJson(res.toUtf8(), &parseError);
+        if (parseError.error == QJsonParseError::NoError && responseDoc.isObject()) {
+            QJsonObject responseObj = responseDoc.object();
+            if (!responseTrace.isEmpty() && !responseObj.contains("trace_id")) {
+                responseObj.insert("trace_id", QString::fromUtf8(responseTrace));
+            }
+            if (!responseRequest.isEmpty() && !responseObj.contains("request_id")) {
+                responseObj.insert("request_id", QString::fromUtf8(responseRequest));
+            }
+            res = QString::fromUtf8(QJsonDocument(responseObj).toJson(QJsonDocument::Compact));
+        }
+
+        emit self->sig_http_finish(req_id, res, ErrorCodes::SUCCESS, mod);
+        reply->deleteLater();
+    });
+}
+
+void HttpMgr::getHttpReqInternal(const QUrl &url,
+    ReqId req_id,
+    Modules mod,
+    const QString &module,
+    bool allowPlaintextFallback)
+{
+    QNetworkRequest request(url);
+    request.setRawHeader(QByteArrayLiteral("Connection"), QByteArrayLiteral("close"));
+
+    if (url.scheme().toLower() == QLatin1String("https")) {
+        QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
+        sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
+        request.setSslConfiguration(sslConfig);
+    }
+
+    QString traceId;
+    QString requestId;
+    QString spanId;
+    applyTraceHeaders(request, &traceId, &requestId, &spanId);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    request.setTransferTimeout(kHttpTimeoutMs);
+#endif
+
+    auto self = shared_from_this();
+    const qint64 startAtMs = QDateTime::currentMSecsSinceEpoch();
+    QNetworkReply *reply = _manager.get(request);
+
+    QTimer *timeoutTimer = new QTimer(reply);
+    timeoutTimer->setSingleShot(true);
+    QObject::connect(timeoutTimer, &QTimer::timeout, reply, [reply]() {
+        if (reply->isRunning()) {
+            qWarning() << "HTTP request timeout, aborting:" << reply->url();
+            reply->abort();
+        }
+    });
+    timeoutTimer->start(kHttpTimeoutMs);
+
+    QObject::connect(reply, &QNetworkReply::finished, [reply, self, req_id, mod, timeoutTimer, traceId, requestId, spanId, startAtMs, module, url, allowPlaintextFallback]() {
+        timeoutTimer->stop();
+        const qint64 durationMs = qMax<qint64>(0, QDateTime::currentMSecsSinceEpoch() - startAtMs);
+        QVariantMap attrs;
+        attrs.insert("http.method", QStringLiteral("GET"));
+        attrs.insert("http.url", reply->url().toString());
+        attrs.insert("module", module);
+        attrs.insert("request.id", requestId);
+
+        if (reply->error() != QNetworkReply::NoError) {
+            qWarning() << "HTTP GET failed:" << reply->url() << reply->errorString();
+            attrs.insert("error", reply->errorString());
+            attrs.insert("error.type", QStringLiteral("network"));
+            exportZipkinSpan(QStringLiteral("HTTP GET %1").arg(reply->url().path()),
+                QStringLiteral("CLIENT"),
+                traceId,
+                spanId,
+                QString(),
+                startAtMs,
+                durationMs,
+                attrs);
+
+            const bool canFallback = allowPlaintextFallback && isGateHttpsPrimaryPort(url);
+            if (canFallback) {
+                const QUrl fb = gatePlaintextFallback(url);
+                qWarning() << "Retrying gate HTTP GET over plaintext:" << fb.toString();
+                reply->deleteLater();
+                self->getHttpReqInternal(fb, req_id, mod, module, false);
+                return;
+            }
+
+            emit self->sig_http_finish(req_id, "", ErrorCodes::ERR_NETWORK, mod);
+            reply->deleteLater();
+            return;
+        }
+
+        const QUrl replyBase = reply->url();
+        if (replyBase.isValid() && !replyBase.scheme().isEmpty() && !replyBase.authority().isEmpty()) {
+            gate_url_prefix = replyBase.scheme() + QStringLiteral("://") + replyBase.authority();
+        }
+
+        QString res = reply->readAll();
+        const QByteArray responseTrace = reply->rawHeader("X-Trace-Id");
+        const QByteArray responseRequest = reply->rawHeader("X-Request-Id");
+        attrs.insert("http.status_code", reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt());
+        exportZipkinSpan(QStringLiteral("HTTP GET %1").arg(reply->url().path()),
             QStringLiteral("CLIENT"),
             !responseTrace.isEmpty() ? QString::fromUtf8(responseTrace) : traceId,
             spanId,

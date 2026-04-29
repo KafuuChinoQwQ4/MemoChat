@@ -229,12 +229,13 @@ void RegisterHttp2MomentsRoutes() {
 
             int64_t last_moment_id = memochat::json::glaze_safe_get<int64_t>(root, "last_moment_id", 0LL);
             int limit = memochat::json::glaze_safe_get<int>(root, "limit", 20);
+            int author_uid = memochat::json::glaze_safe_get<int>(root, "author_uid", 0);
             if (limit <= 0) limit = 20;
             if (limit > 50) limit = 50;
 
             std::vector<MomentInfo> moments;
             bool has_more = false;
-            if (!PostgresMgr::GetInstance()->GetMomentsFeed(uid, last_moment_id, limit, moments, has_more)) {
+            if (!PostgresMgr::GetInstance()->GetMomentsFeed(uid, last_moment_id, limit, author_uid, moments, has_more)) {
                 resp.SetJsonBody(memochat::json::glaze_stringify(MakeMomentsError(ErrorCodes::RPCFailed, "get moments feed failed")));
                 return;
             }

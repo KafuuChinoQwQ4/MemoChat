@@ -1,5 +1,54 @@
 #include "AgentMessageModel.h"
 #include <algorithm>
+#include <QRegularExpression>
+
+namespace {
+struct AssistantParts {
+    QString thinking;
+    QString answer;
+};
+
+AssistantParts splitAssistantParts(const QString& raw)
+{
+    AssistantParts parts;
+    if (raw.isEmpty()) {
+        return parts;
+    }
+
+    QString answer = raw;
+    QRegularExpression closedBlock(QStringLiteral("<think>([\\s\\S]*?)</think>"),
+                                   QRegularExpression::CaseInsensitiveOption);
+    QRegularExpressionMatchIterator it = closedBlock.globalMatch(raw);
+    while (it.hasNext()) {
+        const QRegularExpressionMatch match = it.next();
+        const QString block = match.captured(1).trimmed();
+        if (!block.isEmpty()) {
+            if (!parts.thinking.isEmpty()) {
+                parts.thinking += QStringLiteral("\n\n");
+            }
+            parts.thinking += block;
+        }
+    }
+    answer.remove(closedBlock);
+
+    QRegularExpression openBlock(QStringLiteral("<think>([\\s\\S]*)$"),
+                                 QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch openMatch = openBlock.match(answer);
+    if (openMatch.hasMatch()) {
+        const QString block = openMatch.captured(1).trimmed();
+        if (!block.isEmpty()) {
+            if (!parts.thinking.isEmpty()) {
+                parts.thinking += QStringLiteral("\n\n");
+            }
+            parts.thinking += block;
+        }
+        answer = answer.left(openMatch.capturedStart()).trimmed();
+    }
+
+    parts.answer = answer.trimmed();
+    return parts;
+}
+}
 
 AgentMessageModel::AgentMessageModel(QObject* parent)
     : QAbstractListModel(parent)
@@ -28,6 +77,7 @@ QVariant AgentMessageModel::data(const QModelIndex& index, int role) const
     case IsAssistantRole:  return entry.role == "assistant";
     case IsStreamingRole:  return entry.isStreaming;
     case StreamingContentRole: return entry.streamingContent;
+    case ThinkingContentRole: return entry.thinkingContent;
     case TokensUsedRole:   return entry.tokensUsed;
     case ModelNameRole:    return entry.modelName;
     case ErrorMessageRole: return entry.errorMessage;
@@ -47,6 +97,7 @@ QHash<int, QByteArray> AgentMessageModel::roleNames() const
         {IsAssistantRole,  "isAssistant"},
         {IsStreamingRole,   "isStreaming"},
         {StreamingContentRole, "streamingContent"},
+        {ThinkingContentRole, "thinkingContent"},
         {TokensUsedRole,   "tokensUsed"},
         {ModelNameRole,     "modelName"},
         {ErrorMessageRole,  "errorMessage"},
@@ -99,42 +150,38 @@ void AgentMessageModel::appendAIMessage(const QString& msgId, const QString& mod
 
 void AgentMessageModel::updateStreamingContent(const QString& msgId, const QString& chunk)
 {
-    MessageEntry* entry = findEntry(msgId);
-    if (!entry) return;
-
-    int row = _items.indexOf(*entry);
+    const int row = indexOfMessage(msgId);
     if (row < 0) return;
 
-    entry->streamingContent += chunk;
+    MessageEntry* entry = &_items[row];
+    const AssistantParts parts = splitAssistantParts(chunk);
+    entry->thinkingContent = parts.thinking;
+    entry->streamingContent = parts.answer;
     entry->content = entry->streamingContent;
 
     QModelIndex idx = index(row, 0);
-    emit dataChanged(idx, idx, {ContentRole, StreamingContentRole, IsStreamingRole});
+    emit dataChanged(idx, idx, {ContentRole, StreamingContentRole, ThinkingContentRole, IsStreamingRole});
 }
 
 void AgentMessageModel::finalizeAIMessage(const QString& msgId)
 {
-    MessageEntry* entry = findEntry(msgId);
-    if (!entry) return;
-
-    int row = _items.indexOf(*entry);
+    const int row = indexOfMessage(msgId);
     if (row < 0) return;
 
+    MessageEntry* entry = &_items[row];
     entry->content = entry->streamingContent;
     entry->isStreaming = false;
 
     QModelIndex idx = index(row, 0);
-    emit dataChanged(idx, idx, {ContentRole, IsStreamingRole, StreamingContentRole});
+    emit dataChanged(idx, idx, {ContentRole, IsStreamingRole, StreamingContentRole, ThinkingContentRole});
 }
 
 void AgentMessageModel::setError(const QString& msgId, const QString& error)
 {
-    MessageEntry* entry = findEntry(msgId);
-    if (!entry) return;
-
-    int row = _items.indexOf(*entry);
+    const int row = indexOfMessage(msgId);
     if (row < 0) return;
 
+    MessageEntry* entry = &_items[row];
     entry->errorMessage = error;
     entry->isStreaming = false;
 
@@ -144,12 +191,10 @@ void AgentMessageModel::setError(const QString& msgId, const QString& error)
 
 void AgentMessageModel::setSources(const QString& msgId, const QString& sourcesJson)
 {
-    MessageEntry* entry = findEntry(msgId);
-    if (!entry) return;
-
-    int row = _items.indexOf(*entry);
+    const int row = indexOfMessage(msgId);
     if (row < 0) return;
 
+    MessageEntry* entry = &_items[row];
     entry->sourcesJson = sourcesJson;
 
     QModelIndex idx = index(row, 0);

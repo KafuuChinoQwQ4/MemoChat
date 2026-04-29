@@ -31,6 +31,7 @@ class ChatRsp(BaseModel):
     skill: str = ""
     feedback_summary: str = ""
     observations: list[str] = Field(default_factory=list)
+    events: list["TraceEventModel"] = Field(default_factory=list)
 
 
 class ChatChunk(BaseModel):
@@ -112,6 +113,7 @@ class ModelInfo(BaseModel):
     display_name: str
     is_enabled: bool
     context_window: int
+    supports_thinking: bool = False
     provider_id: str = ""
     adapter: str = ""
     deployment: str = ""
@@ -131,6 +133,20 @@ class ListModelsRsp(BaseModel):
     models: list[ModelInfo] = Field(default_factory=list)
     default_model: Optional[ModelInfo] = None
     providers: list[ProviderInfo] = Field(default_factory=list)
+
+
+class RegisterApiProviderReq(BaseModel):
+    provider_name: str = Field(default="custom-api")
+    base_url: str
+    api_key: str
+    adapter: str = Field(default="openai_compatible")
+
+
+class RegisterApiProviderRsp(BaseModel):
+    code: int = 0
+    message: str = "ok"
+    provider_id: str = ""
+    models: list[ModelInfo] = Field(default_factory=list)
 
 
 class TraceEventModel(BaseModel):
@@ -226,3 +242,16 @@ class ToolInfo(BaseModel):
 class ToolListRsp(BaseModel):
     code: int = 0
     tools: list[ToolInfo] = Field(default_factory=list)
+
+
+class AgentLayerInfo(BaseModel):
+    name: str
+    display_name: str
+    path: str
+    responsibilities: list[str] = Field(default_factory=list)
+    primary_files: list[str] = Field(default_factory=list)
+
+
+class AgentLayerListRsp(BaseModel):
+    code: int = 0
+    layers: list[AgentLayerInfo] = Field(default_factory=list)

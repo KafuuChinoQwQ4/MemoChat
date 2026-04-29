@@ -23,25 +23,30 @@ protected:
         }
     };
 
+    static std::mutex& InstanceMutex() {
+        static std::mutex s_mutex;
+        return s_mutex;
+    }
+
 public:
     static std::shared_ptr<T> GetInstance() {
-        static std::once_flag s_flag;
-        std::call_once(s_flag, []() {
+        std::lock_guard<std::mutex> lock(InstanceMutex());
+        if (!_instance) {
             T* raw = static_cast<T*>(::operator new(sizeof(T)));
             ::new (raw) T();
             _instance = std::shared_ptr<T>(raw, PrivateDeleter{});
-        });
+        }
         return _instance;
     }
 
     template<typename... Args>
     static std::shared_ptr<T> GetInstance(Args&&... args) {
-        static std::once_flag s_flag;
-        std::call_once(s_flag, [&]() {
+        std::lock_guard<std::mutex> lock(InstanceMutex());
+        if (!_instance) {
             T* raw = static_cast<T*>(::operator new(sizeof(T)));
             ::new (raw) T(std::forward<Args>(args)...);
             _instance = std::shared_ptr<T>(raw, PrivateDeleter{});
-        });
+        }
         return _instance;
     }
 

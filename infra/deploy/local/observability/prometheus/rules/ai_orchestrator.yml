@@ -1,0 +1,47 @@
+groups:
+  - name: memochat-ai-orchestrator
+    rules:
+      - alert: AIOrchestratorScrapeMissing
+        expr: absent(up{job="ai_orchestrator"})
+        for: 2m
+        labels:
+          severity: critical
+          service: ai_orchestrator
+        annotations:
+          summary: "AIOrchestrator scrape target is missing"
+          description: "Prometheus has no up{} series for job=ai_orchestrator. Check Prometheus config, host.docker.internal routing, and port 8096."
+
+      - alert: AIOrchestratorDown
+        expr: up{job="ai_orchestrator"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: ai_orchestrator
+        annotations:
+          summary: "AIOrchestrator is down"
+          description: "Prometheus cannot scrape AIOrchestrator /metrics on {{ $labels.instance }}."
+
+      - alert: AIOrchestratorHighErrorRate
+        expr: |
+          (
+            sum(rate(memochat_ai_http_requests_total{job="ai_orchestrator",status="error"}[5m]))
+            /
+            clamp_min(sum(rate(memochat_ai_http_requests_total{job="ai_orchestrator"}[5m])), 0.001)
+          ) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          service: ai_orchestrator
+        annotations:
+          summary: "AIOrchestrator error rate is high"
+          description: "More than 20% of AIOrchestrator requests have failed over the last 5 minutes."
+
+      - alert: AIOrchestratorOllamaRetrySpike
+        expr: sum(increase(memochat_ai_ollama_retries_total{job="ai_orchestrator"}[10m])) > 3
+        for: 2m
+        labels:
+          severity: warning
+          service: ai_orchestrator
+        annotations:
+          summary: "Ollama retry spike detected"
+          description: "AIOrchestrator retried Ollama more than 3 times in 10 minutes. Check Ollama health, model load time, and /api/chat errors."

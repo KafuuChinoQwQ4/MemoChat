@@ -80,7 +80,7 @@ public:
 		const int64_t& group_id, const int& pinned_rank);
 	bool UpsertDialogMuteState(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
 		const int64_t& group_id, const int& mute_state);
-	bool GetUndeliveredPrivateMessages(const int& to_uid, const int64_t& since_read_ts, int limit,
+	bool GetUndeliveredPrivateMessages(const int& to_uid, const int64_t& after_created_at, const std::string& after_msg_id, int limit,
 		std::vector<std::shared_ptr<PrivateMessageInfo>>& messages);
 private:
 	void WarmupRelationBootstrapQueries();

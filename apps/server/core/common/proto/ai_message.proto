@@ -13,6 +13,7 @@ message AIChatReq {
     string model_type = 4;        // 模型类型："ollama" / "openai" / "claude" / "kimi"
     string model_name = 5;        // 具体模型名："qwen2.5:7b" / "gpt-4o" 等
     bool stream = 6;               // 是否流式响应
+    string metadata_json = 7;      // 运行参数 JSON，例如 max_tokens / temperature
 }
 
 message AIChatRsp {
@@ -22,6 +23,11 @@ message AIChatRsp {
     string ai_content = 4;         // AI 回复（非流式时使用）
     int64 tokens_used = 5;        // 本次消耗 Token 数
     string model_name = 6;        // 实际使用的模型
+    string trace_id = 7;          // AI Agent 执行轨迹 ID
+    string skill = 8;             // 实际命中的技能
+    string feedback_summary = 9;  // 反馈层摘要
+    repeated string observations = 10; // 工具/记忆观察摘要
+    string events_json = 11;      // 编排/记忆/执行/反馈层事件 JSON
 }
 
 // 流式响应（server-side streaming）
@@ -34,6 +40,11 @@ message AIChatStreamChunk {
     bool is_final = 2;            // 是否为最后一块
     string msg_id = 3;            // 消息 ID
     int64 total_tokens = 4;      // 当前累计 Token 数
+    string trace_id = 5;          // AI Agent 执行轨迹 ID
+    string skill = 6;             // 实际命中的技能
+    string feedback_summary = 7;  // 反馈层摘要
+    string observations_json = 8; // 工具/记忆观察摘要 JSON
+    string events_json = 9;       // 编排/记忆/执行/反馈层事件 JSON
 }
 
 // =============================================================================
@@ -189,12 +200,27 @@ message ModelInfo {
     string display_name = 3;       // 显示名称
     bool is_enabled = 4;           // 是否启用
     int64 context_window = 5;      // 上下文窗口大小
+    bool supports_thinking = 6;    // 是否支持思考内容输出
 }
 
 message AIListModelsRsp {
     int32 code = 1;
     repeated ModelInfo models = 2;
     ModelInfo default_model = 3;   // 默认模型
+}
+
+message AIRegisterApiProviderReq {
+    string provider_name = 1;      // UI 显示/生成 provider_id 的名称
+    string base_url = 2;           // OpenAI-compatible API base URL
+    string api_key = 3;            // API Key，仅服务端使用
+    string adapter = 4;            // openai_compatible
+}
+
+message AIRegisterApiProviderRsp {
+    int32 code = 1;
+    string message = 2;
+    string provider_id = 3;
+    repeated ModelInfo models = 4;
 }
 
 // =============================================================================
@@ -236,6 +262,7 @@ service AIService {
 
     // 模型列表
     rpc ListModels(AIListModelsReq) returns (AIListModelsRsp) {}
+    rpc RegisterApiProvider(AIRegisterApiProviderReq) returns (AIRegisterApiProviderRsp) {}
 
     // 知识库
     rpc KbUpload(AIKbUploadReq) returns (AIKbUploadRsp) {}

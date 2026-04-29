@@ -35,11 +35,15 @@ Rectangle {
     property string agentCurrentSessionId: ""
     property string agentCurrentModel: ""
     property bool agentBusy: false
+    property int momentsSelectedUid: 0
+    property string momentsSelectedName: ""
     property int sessionFilter: 0
     property real _sessionLastContentY: 0
     property bool _chatLoadBottomArmed: true
     property real _chatLoadThresholdPx: 48
     property real _chatLoadRearmOffsetPx: 96
+    property string pendingAgentDeleteSessionId: ""
+    property string pendingAgentDeleteTitle: ""
 
     signal dialogUidSelected(int uid)
     signal chatIndexSelected(int index)
@@ -56,6 +60,7 @@ Rectangle {
     signal agentNewSessionRequested()
     signal agentSessionSelected(string sessionId)
     signal agentSessionDeleted(string sessionId)
+    signal momentFriendSelected(int uid, string displayName)
     signal dialogPinToggled(int uid)
     signal dialogMuteToggled(int uid)
     signal dialogMarkRead(int uid)
@@ -77,7 +82,9 @@ Rectangle {
     }
     function contextualSubtitle() {
         if (currentTab === AppController.MomentsTabPage) {
-            return "右侧主区查看动态、点赞评论和发布内容。"
+            return momentsSelectedUid > 0
+                   ? ((momentsSelectedName.length > 0 ? momentsSelectedName : "好友") + " 的朋友圈")
+                   : "按好友查看朋友圈动态。"
         }
         if (currentTab === AppController.AgentTabPage) {
             return agentCurrentModel.length > 0 ? agentCurrentModel : "选择会话后开始和 AI 对话。"
@@ -737,6 +744,192 @@ Rectangle {
     Component {
         id: momentsPaneComponent
         Item {
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 10
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 56
+                    radius: 10
+                    property bool selected: root.momentsSelectedUid <= 0
+                    color: selected ? Qt.rgba(0.54, 0.70, 0.93, 0.24)
+                                    : (allMomentsArea.containsMouse ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(1, 1, 1, 0.06))
+                    border.color: selected ? Qt.rgba(0.54, 0.70, 0.93, 0.50)
+                                           : Qt.rgba(1, 1, 1, 0.28)
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 10
+                        spacing: 8
+
+                        Rectangle {
+                            Layout.preferredWidth: 36
+                            Layout.preferredHeight: 36
+                            radius: 8
+                            color: Qt.rgba(0.54, 0.70, 0.93, 0.24)
+
+                            Image {
+                                anchors.centerIn: parent
+                                width: 20
+                                height: 20
+                                source: "qrc:/icons/moments.png"
+                                fillMode: Image.PreserveAspectFit
+                            }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: "全部动态"
+                                color: "#273449"
+                                font.pixelSize: 14
+                                font.bold: true
+                                elide: Text.ElideRight
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: "好友和自己的朋友圈"
+                                color: "#6a7b92"
+                                font.pixelSize: 11
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+
+                    MouseArea {
+                        id: allMomentsArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.momentFriendSelected(0, "")
+                    }
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: "好友"
+                    color: "#687991"
+                    font.pixelSize: 12
+                    elide: Text.ElideRight
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+
+                    ListView {
+                        id: momentsFriendList
+                        anchors.fill: parent
+                        clip: true
+                        spacing: 6
+                        model: root.contactModel
+                        ScrollBar.vertical: GlassScrollBar { }
+
+                        delegate: Rectangle {
+                            id: momentFriendDelegate
+                            width: ListView.view.width
+                            height: 58
+                            radius: 10
+                            property bool selected: uid === root.momentsSelectedUid
+                            color: selected ? Qt.rgba(0.54, 0.70, 0.93, 0.22)
+                                            : (friendArea.containsMouse ? Qt.rgba(1, 1, 1, 0.14) : Qt.rgba(1, 1, 1, 0.04))
+                            border.color: selected ? Qt.rgba(0.54, 0.70, 0.93, 0.50)
+                                                   : Qt.rgba(1, 1, 1, 0.22)
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 10
+                                anchors.rightMargin: 10
+                                spacing: 8
+
+                                Rectangle {
+                                    Layout.preferredWidth: 36
+                                    Layout.preferredHeight: 36
+                                    radius: 8
+                                    clip: true
+                                    color: Qt.rgba(0.74, 0.83, 0.93, 0.50)
+
+                                    Image {
+                                        anchors.fill: parent
+                                        fillMode: Image.PreserveAspectCrop
+                                        property string fallbackSource: "qrc:/res/head_1.jpg"
+                                        property string baseSource: (icon && icon.length > 0) ? icon : fallbackSource
+                                        property bool loadFailed: false
+                                        source: loadFailed ? fallbackSource : baseSource
+                                        cache: true
+                                        asynchronous: true
+                                        opacity: status === Image.Ready ? 1.0 : 0.0
+                                        Behavior on opacity { NumberAnimation { duration: 200 } }
+                                        onBaseSourceChanged: loadFailed = false
+                                        onStatusChanged: if (status === Image.Error) { loadFailed = true }
+                                    }
+                                }
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 2
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: (nick && nick.length > 0) ? nick : name
+                                        color: "#273449"
+                                        font.pixelSize: 13
+                                        font.bold: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: "ID: " + (userId && userId.length > 0 ? userId : uid)
+                                        color: "#6a7b92"
+                                        font.pixelSize: 11
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+
+                            MouseArea {
+                                id: friendArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    const displayName = (nick && nick.length > 0) ? nick : name
+                                    root.momentFriendSelected(uid, displayName)
+                                }
+                            }
+                        }
+                    }
+
+                    GlassSurface {
+                        anchors.centerIn: parent
+                        width: 180
+                        height: 64
+                        visible: momentsFriendList.count === 0
+                        backdrop: root.backdrop !== null ? root.backdrop : root
+                        cornerRadius: 10
+                        blurRadius: 16
+                        fillColor: Qt.rgba(1, 1, 1, 0.18)
+                        strokeColor: Qt.rgba(1, 1, 1, 0.38)
+
+                        Label {
+                            anchors.centerIn: parent
+                            text: "暂无好友"
+                            color: "#6a7b92"
+                            font.pixelSize: 13
+                        }
+                    }
+                }
+            }
+
+            Component.onCompleted: controller.ensureContactsInitialized()
         }
     }
 
@@ -805,7 +998,17 @@ Rectangle {
                                       ? Qt.rgba(0.54, 0.70, 0.93, 0.54)
                                       : Qt.rgba(1, 1, 1, 0.24)
 
+                        MouseArea {
+                            id: sessionHover
+                            z: 0
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.agentSessionSelected(modelData.session_id)
+                        }
+
                         RowLayout {
+                            z: 1
                             anchors.fill: parent
                             anchors.leftMargin: 12
                             anchors.rightMargin: 10
@@ -837,8 +1040,11 @@ Rectangle {
                                 Layout.preferredWidth: 24
                                 Layout.preferredHeight: 24
                                 radius: 12
-                                color: sessionDeleteArea.pressed ? Qt.rgba(0.89, 0.27, 0.27, 0.30) : Qt.rgba(0.89, 0.27, 0.27, 0.18)
-                                visible: sessionHover.containsMouse
+                                color: sessionDeleteArea.pressed ? Qt.rgba(0.89, 0.27, 0.27, 0.30)
+                                      : sessionDeleteArea.containsMouse ? Qt.rgba(0.89, 0.27, 0.27, 0.24)
+                                                                        : Qt.rgba(0.89, 0.27, 0.27, 0.16)
+                                visible: sessionHover.containsMouse || modelData.session_id === root.agentCurrentSessionId
+                                opacity: root.agentBusy ? 0.45 : 1.0
 
                                 Label {
                                     anchors.centerIn: parent
@@ -852,18 +1058,21 @@ Rectangle {
                                     id: sessionDeleteArea
                                     anchors.fill: parent
                                     hoverEnabled: true
+                                    enabled: !root.agentBusy
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.agentSessionDeleted(modelData.session_id)
+                                    ToolTip.visible: containsMouse
+                                    ToolTip.delay: 120
+                                    ToolTip.text: "删除会话"
+                                    onClicked: function(mouse) {
+                                        mouse.accepted = true
+                                        root.pendingAgentDeleteSessionId = modelData.session_id || ""
+                                        root.pendingAgentDeleteTitle = modelData.title || "新会话"
+                                        if (root.pendingAgentDeleteSessionId.length > 0) {
+                                            agentDeleteDialog.open()
+                                        }
+                                    }
                                 }
                             }
-                        }
-
-                        MouseArea {
-                            id: sessionHover
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.agentSessionSelected(modelData.session_id)
                         }
                     }
                 }
@@ -897,6 +1106,103 @@ Rectangle {
                         color: "#6a7b92"
                         font.pixelSize: 12
                         horizontalAlignment: Text.AlignHCenter
+                    }
+                }
+            }
+
+            Popup {
+                id: agentDeleteDialog
+                modal: true
+                focus: true
+                width: Math.min(320, parent.width - 32)
+                height: 184
+                x: Math.round((parent.width - width) / 2)
+                y: Math.round((parent.height - height) / 2)
+                padding: 0
+                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+                Overlay.modal: Rectangle {
+                    color: Qt.rgba(20, 28, 40, 0.26)
+                }
+
+                background: Rectangle {
+                    radius: 16
+                    color: "transparent"
+                }
+
+                onClosed: {
+                    root.pendingAgentDeleteSessionId = ""
+                    root.pendingAgentDeleteTitle = ""
+                }
+
+                contentItem: GlassSurface {
+                    backdrop: root.backdrop !== null ? root.backdrop : root
+                    cornerRadius: 16
+                    blurRadius: 20
+                    fillColor: Qt.rgba(0.98, 0.99, 1.0, 0.88)
+                    strokeColor: Qt.rgba(1, 1, 1, 0.58)
+                    glowTopColor: Qt.rgba(1, 1, 1, 0.30)
+                    glowBottomColor: Qt.rgba(1, 1, 1, 0.06)
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 18
+                        spacing: 14
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "删除 AI 会话"
+                            color: "#263448"
+                            font.pixelSize: 16
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            text: "确认删除「" + root.pendingAgentDeleteTitle + "」？"
+                            color: "#5f6f85"
+                            font.pixelSize: 14
+                            wrapMode: Text.Wrap
+                            verticalAlignment: Text.AlignVCenter
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+
+                            GlassButton {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 38
+                                text: "取消"
+                                textPixelSize: 13
+                                cornerRadius: 10
+                                normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.18)
+                                hoverColor: Qt.rgba(0.54, 0.60, 0.68, 0.26)
+                                pressedColor: Qt.rgba(0.54, 0.60, 0.68, 0.34)
+                                onClicked: agentDeleteDialog.close()
+                            }
+
+                            GlassButton {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 38
+                                text: "删除"
+                                textPixelSize: 13
+                                textColor: "#b83f4a"
+                                cornerRadius: 10
+                                normalColor: Qt.rgba(0.89, 0.27, 0.27, 0.16)
+                                hoverColor: Qt.rgba(0.89, 0.27, 0.27, 0.24)
+                                pressedColor: Qt.rgba(0.89, 0.27, 0.27, 0.32)
+                                onClicked: {
+                                    const sessionId = root.pendingAgentDeleteSessionId
+                                    if (sessionId.length > 0) {
+                                        root.agentSessionDeleted(sessionId)
+                                    }
+                                    agentDeleteDialog.close()
+                                }
+                            }
+                        }
                     }
                 }
             }

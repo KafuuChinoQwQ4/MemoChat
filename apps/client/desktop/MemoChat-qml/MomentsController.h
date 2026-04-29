@@ -21,6 +21,7 @@ class MomentsController : public QObject
     Q_PROPERTY(bool hasMore READ hasMore NOTIFY hasMoreChanged)
     Q_PROPERTY(QString errorText READ errorText NOTIFY errorTextChanged)
     Q_PROPERTY(QString progressText READ progressText NOTIFY progressTextChanged)
+    Q_PROPERTY(int authorFilterUid READ authorFilterUid NOTIFY authorFilterChanged)
 
 public:
     explicit MomentsController(QObject* parent = nullptr);
@@ -31,8 +32,10 @@ public:
     bool hasMore() const { return _has_more; }
     QString errorText() const { return _error_text; }
     QString progressText() const { return _progress_text; }
+    int authorFilterUid() const { return _author_filter_uid; }
 
     Q_INVOKABLE void loadFeed();
+    Q_INVOKABLE void loadFeedForAuthor(int authorUid);
     Q_INVOKABLE void loadMore();
     Q_INVOKABLE void publishMoment(const QString& location, int visibility,
                                    const QVariantList& items);
@@ -58,6 +61,7 @@ signals:
     void hasMoreChanged();
     void errorTextChanged();
     void progressTextChanged();
+    void authorFilterChanged();
     void publishSuccess(qint64 momentId);
     void publishError(const QString& msg);
     void likeToggled(qint64 momentId, bool liked, int likeCount);
@@ -81,6 +85,7 @@ private:
     void setHasMore(bool v);
     void setErrorText(const QString& text);
     void setProgressText(const QString& text);
+    void setAuthorFilterUid(int uid);
     void submitPublishRequest(const QString& location, int visibility,
                               const QVariantList& items, bool manageLoading);
     QJsonObject buildAuthJson() const;
@@ -104,6 +109,7 @@ private:
     QString _error_text;
     QString _progress_text;
     qint64 _last_moment_id = 0;
+    int _author_filter_uid = 0;
     qint64 _pending_published_moment_id = 0;
     static constexpr int kPageSize = 20;
 

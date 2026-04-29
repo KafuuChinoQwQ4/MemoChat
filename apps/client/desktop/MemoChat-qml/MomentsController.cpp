@@ -98,6 +98,14 @@ void MomentsController::setProgressText(const QString& text) {
     }
 }
 
+void MomentsController::setAuthorFilterUid(int uid) {
+    const int normalizedUid = qMax(0, uid);
+    if (_author_filter_uid != normalizedUid) {
+        _author_filter_uid = normalizedUid;
+        emit authorFilterChanged();
+    }
+}
+
 QJsonObject MomentsController::buildAuthJson() const {
     auto um = UserMgr::GetInstance();
     QJsonObject obj;
@@ -214,7 +222,13 @@ void MomentsController::applyAuthoritativeState(MomentEntry& entry) const {
 }
 
 void MomentsController::loadFeed() {
+    loadFeedForAuthor(_author_filter_uid);
+}
+
+void MomentsController::loadFeedForAuthor(int authorUid) {
     if (_loading) return;
+    setAuthorFilterUid(authorUid);
+    _last_moment_id = 0;
     setLoading(true);
     setErrorText(QString());
     setProgressText(QString());
@@ -222,6 +236,9 @@ void MomentsController::loadFeed() {
     QJsonObject payload = buildAuthJson();
     payload["last_moment_id"] = 0;
     payload["limit"] = kPageSize;
+    if (_author_filter_uid > 0) {
+        payload["author_uid"] = _author_filter_uid;
+    }
 
     HttpMgr::GetInstance()->PostHttpReq(
         QUrl(gate_url_prefix + "/api/moments/list"),
@@ -239,6 +256,9 @@ void MomentsController::loadMore() {
     QJsonObject payload = buildAuthJson();
     payload["last_moment_id"] = _last_moment_id;
     payload["limit"] = kPageSize;
+    if (_author_filter_uid > 0) {
+        payload["author_uid"] = _author_filter_uid;
+    }
 
     HttpMgr::GetInstance()->PostHttpReq(
         QUrl(gate_url_prefix + "/api/moments/list"),

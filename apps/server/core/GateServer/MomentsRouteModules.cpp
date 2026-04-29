@@ -342,12 +342,13 @@ void MomentsHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
 
                 int64_t last_moment_id = ReadInt64(src_root, "last_moment_id", 0);
                 int limit = ReadInt(src_root, "limit", 20);
+                int author_uid = ReadInt(src_root, "author_uid", 0);
                 if (limit <= 0) limit = 20;
                 if (limit > 50) limit = 50;
 
                 std::vector<MomentInfo> moments;
                 bool has_more = false;
-                if (!PostgresMgr::GetInstance()->GetMomentsFeed(uid, last_moment_id, limit, moments, has_more)) {
+                if (!PostgresMgr::GetInstance()->GetMomentsFeed(uid, last_moment_id, limit, author_uid, moments, has_more)) {
                     root["error"] = ErrorCodes::RPCFailed;
                     return true;
                 }

@@ -1,4 +1,4 @@
-name: memochat
+name: memochat-ai
 
 # MemoChat AI Agent 服务依赖：Neo4j 图数据库 + Qdrant 向量数据库
 # 启动命令：docker compose up -d
@@ -20,6 +20,7 @@ services:
       - "8096:8096"
     environment:
       - PYTHONUNBUFFERED=1
+      - MEMOCHAT_AI_CONFIG_PATH=/app/runtime-config/config.yaml
       - HF_HOME=/app/.cache/huggingface
       - SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence_transformers
       - MEMOCHAT_AI_LLM__OLLAMA__BASE_URL=http://memochat-ollama:11434
@@ -33,12 +34,22 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./.cache/huggingface:/app/.cache/huggingface
-      - ./.cache/sentence_transformers:/app/.cache/sentence_transformers
+      - ./config.yaml:/app/runtime-config/config.yaml:ro
+      - D:/docker-data/memochat/ai-orchestrator/huggingface:/app/.cache/huggingface
+      - D:/docker-data/memochat/ai-orchestrator/sentence_transformers:/app/.cache/sentence_transformers
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8096/health', timeout=5).read()"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
-      - memochat-ollama
-      - memochat-neo4j
-      - memochat-qdrant
+      memochat-ollama:
+        condition: service_healthy
+      memochat-neo4j:
+        condition: service_healthy
+      memochat-qdrant:
+        condition: service_healthy
 
   #######################
   # Local LLM API
@@ -51,7 +62,7 @@ services:
     ports:
       - "11434:11434"
     volumes:
-      - ./.data/ollama:/root/.ollama
+      - D:/docker-data/memochat/ollama:/root/.ollama
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 30s

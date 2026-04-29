@@ -101,6 +101,61 @@ class AgentTraceStore:
     def get_trace(self, trace_id: str) -> AgentTrace | None:
         return self._traces.get(trace_id)
 
+    async def get_trace_or_load(self, trace_id: str) -> AgentTrace | None:
+        trace = self.get_trace(trace_id)
+        if trace is not None:
+            return trace
+        if not settings.harness.trace_persist:
+            return None
+
+        try:
+            pg = PostgresClient()
+            row = await pg.fetchone(
+                """
+                SELECT trace_id, uid, session_id, skill_name, request_summary,
+                       response_content, plan_json, observations_json, model_name,
+                       status, feedback_summary, started_at, finished_at
+                FROM ai_agent_run_trace
+                WHERE trace_id = $1 AND deleted_at IS NULL
+                """,
+                trace_id,
+            )
+            if not row:
+                return None
+
+            step_rows = await pg.fetchall(
+                """
+                SELECT step_index, layer, step_name, status, summary, detail,
+                       metadata_json, duration_ms, created_at
+                FROM ai_agent_run_step
+                WHERE trace_id = $1
+                ORDER BY step_index ASC
+                """,
+                trace_id,
+            )
+        except Exception as exc:
+            logger.warning("harness.trace.load_failed", trace_id=trace_id, error=str(exc))
+            return None
+
+        trace = AgentTrace(
+            trace_id=row["trace_id"],
+            uid=row["uid"],
+            session_id=row["session_id"],
+            skill=row["skill_name"],
+            request_summary=row["request_summary"],
+            plan_steps=self._decode_plan_steps(row["plan_json"]),
+            events=[self._decode_event(step_row) for step_row in step_rows],
+            observations=self._decode_list(row["observations_json"]),
+            status=row["status"],
+            response_content=row["response_content"],
+            model=row["model_name"],
+            feedback_summary=row["feedback_summary"],
+            started_at=row["started_at"],
+            finished_at=row["finished_at"] or 0,
+        )
+        self._traces[trace.trace_id] = trace
+        return trace
+
     async def _persist_run_start(self, trace: AgentTrace) -> None:
         if not settings.harness.trace_persist:
             return
@@ -176,3 +231,59 @@ class AgentTraceStore:
             )
         except Exception as exc:
             logger.warning("harness.trace.finish_persist_failed", trace_id=trace.trace_id, error=str(exc))
+
+    def _decode_plan_steps(self, raw_value: Any) -> list[PlanStep]:
+        items = self._decode_list(raw_value)
+        steps: list[PlanStep] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            parameters = item.get("parameters", {})
+            steps.append(
+                PlanStep(
+                    action=str(item.get("action", "")),
+                    reason=str(item.get("reason", "")),
+                    parameters=parameters if isinstance(parameters, dict) else {},
+                )
+            )
+        return steps
+
+    def _decode_event(self, row: Any) -> TraceEvent:
+        created_at = int(row["created_at"] or _now_ms())
+        duration_ms = int(row["duration_ms"] or 0)
+        return TraceEvent(
+            layer=row["layer"],
+            name=row["step_name"],
+            status=row["status"],
+            summary=row["summary"],
+            detail=row["detail"],
+            started_at=max(created_at - duration_ms, 0),
+            finished_at=created_at,
+            metadata=self._decode_dict(row["metadata_json"]),
+        )
+
+    def _decode_list(self, raw_value: Any) -> list[Any]:
+        if raw_value is None:
+            return []
+        if isinstance(raw_value, list):
+            return raw_value
+        if isinstance(raw_value, str):
+            try:
+                decoded = json.loads(raw_value)
+                return decoded if isinstance(decoded, list) else []
+            except Exception:
+                return []
+        return []
+
+    def _decode_dict(self, raw_value: Any) -> dict[str, Any]:
+        if raw_value is None:
+            return {}
+        if isinstance(raw_value, dict):
+            return raw_value
+        if isinstance(raw_value, str):
+            try:
+                decoded = json.loads(raw_value)
+                return decoded if isinstance(decoded, dict) else {}
+            except Exception:
+                return {}
+        return {}

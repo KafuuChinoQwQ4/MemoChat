@@ -12,6 +12,8 @@ Rectangle {
     property var appController: null
     property var momentsModel: null
     property var momentsController: null
+    property int selectedFriendUid: 0
+    property string selectedFriendName: ""
     property bool showPublishPage: false
     property int pendingDeleteMomentId: 0
 
@@ -55,13 +57,15 @@ Rectangle {
                         anchors.rightMargin: 16
 
                         Label {
-                            text: "朋友圈"
+                            Layout.fillWidth: true
+                            text: root.selectedFriendUid > 0
+                                  ? ((root.selectedFriendName.length > 0 ? root.selectedFriendName : "好友") + " 的朋友圈")
+                                  : "朋友圈"
                             font.pixelSize: 17
                             font.weight: Font.Medium
                             color: "#1a1a1a"
+                            elide: Text.ElideRight
                         }
-
-                        Item { Layout.fillWidth: true }
 
                         ToolButton {
                             id: publishButton
@@ -162,7 +166,7 @@ Rectangle {
                     Label {
                         anchors.centerIn: parent
                         visible: feedView.count === 0 && !(root.momentsController && root.momentsController.loading)
-                        text: "暂无朋友圈内容"
+                        text: root.selectedFriendUid > 0 ? "暂无该好友朋友圈" : "暂无朋友圈内容"
                         font.pixelSize: 14
                         color: "#999999"
                     }

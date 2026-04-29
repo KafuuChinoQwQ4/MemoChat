@@ -3,12 +3,13 @@ RAG Chain — 检索增强生成链
 文档上传 → Qdrant 存储 → 检索 → 注入 LLM
 """
 from typing import Any
+import uuid
+
 import structlog
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qdrant_models
-from langchain_qdrant import QdrantVectorStore
-from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
+from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
@@ -47,7 +48,6 @@ class RAGChain:
 
     def __init__(self):
         self._qdrant_client: QdrantClient | None = None
-        self._stores: dict[str, QdrantVectorStore] = {}
 
     def _get_client(self) -> QdrantClient:
         if self._qdrant_client is None:
@@ -87,17 +87,29 @@ class RAGChain:
             except Exception as e:
                 logger.warning("qdrant.collection_exists", collection=collection, error=str(e))
 
-        qdrant_embeddings = QdrantEmbeddings(embedder)
-
         try:
-            store = QdrantVectorStore.from_documents(
-                documents=chunks,
-                embedding=qdrant_embeddings,
-                collection_name=collection,
-                client=client,
+            vectors = await embedder.embed([chunk.page_content for chunk in chunks])
+            points = []
+            for index, (chunk, vector) in enumerate(zip(chunks, vectors)):
+                points.append(
+                    qdrant_models.PointStruct(
+                        id=uuid.uuid4().hex,
+                        vector=vector,
+                        payload={
+                            "page_content": chunk.page_content,
+                            "metadata": dict(chunk.metadata),
+                            "kb_id": kb_id,
+                            "uid": uid,
+                            "chunk_index": index,
+                        },
+                    )
+                )
+            client.upsert(collection_name=collection, points=points)
+            logger.info(
+                "qdrant.documents_added",
+                collection=collection,
+                chunks=len(points),
             )
-            self._stores[collection] = store
-            logger.info("qdrant.documents_added", collection=collection, chunks=len(chunks))
         except Exception as e:
             logger.error("qdrant.add_failed", collection=collection, error=str(e))
             raise
@@ -118,16 +130,22 @@ class RAGChain:
             collections = []
 
         user_collections = [c for c in collections if c.startswith(prefix) and f"_{uid}_" in c]
+        query_vector = await embedder.embed_query(query) if user_collections else []
 
         for coll in user_collections:
             try:
-                query_vector = await embedder.embed_query(query)
                 search_results = client.search(
                     collection_name=coll,
                     query_vector=query_vector,
                     limit=top_k,
                     score_threshold=threshold,
                 )
+                if not search_results and threshold:
+                    search_results = client.search(
+                        collection_name=coll,
+                        query_vector=query_vector,
+                        limit=top_k,
+                    )
 
                 for hit in search_results:
                     all_results.append({
@@ -178,7 +196,6 @@ class RAGChain:
         client = self._get_client()
         try:
             client.delete_collection(collection_name=collection)
-            self._stores.pop(collection, None)
             logger.info("qdrant.collection_deleted", collection=collection)
         except Exception as e:
             logger.warning("qdrant.delete_failed", collection=collection, error=str(e))

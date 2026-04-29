@@ -15,17 +15,24 @@ public:
         const std::string& chunk,
         bool is_final,
         const std::string& msg_id,
-        int64_t total_tokens)>;
+        int64_t total_tokens,
+        const std::string& trace_id,
+        const std::string& skill,
+        const std::string& feedback_summary,
+        const std::string& observations_json,
+        const std::string& events_json)>;
 
     memochat::json::JsonValue Chat(int32_t uid, const std::string& session_id,
                      const std::string& content,
                      const std::string& model_type,
-                     const std::string& model_name);
+                     const std::string& model_name,
+                     const std::string& metadata_json = "{}");
 
     void ChatStream(int32_t uid, const std::string& session_id,
                     const std::string& content,
                     const std::string& model_type,
                     const std::string& model_name,
+                    const std::string& metadata_json,
                     ChunkCallback on_chunk,
                     memochat::json::JsonValue* out_result);
 
@@ -46,6 +53,11 @@ public:
     memochat::json::JsonValue DeleteSession(int32_t uid, const std::string& session_id);
 
     memochat::json::JsonValue ListModels();
+
+    memochat::json::JsonValue RegisterApiProvider(const std::string& provider_name,
+                                                  const std::string& base_url,
+                                                  const std::string& api_key,
+                                                  const std::string& adapter);
 
     memochat::json::JsonValue KbUpload(int32_t uid, const std::string& file_name,
                           const std::string& file_type,
