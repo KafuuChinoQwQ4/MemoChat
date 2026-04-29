@@ -64,6 +64,7 @@ REM 按启动顺序逆序停止
 call :kill_by_name "StatusServer.exe"       "StatusServer"
 call :kill_by_name "GateServerHttp1.1.exe"  "GateServerHttp1.1"
 call :kill_by_name "GateServer.exe"         "GateServer1/GateServer2"
+call :kill_by_name "AIServer.exe"           "AIServer"
 call :kill_by_name "ChatServer.exe"         "ChatServer all instances"
 powershell -NoProfile -Command "$self = $PID; Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $self -and $_.CommandLine -like '*run-service-console.ps1*MemoChat-Qml-Drogon*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Write-Host '  [OK] service runner windows closed'"
 
@@ -79,6 +80,7 @@ call :check "MemoChatQml.exe"       "MemoChatQml"
 call :check "MemoOpsQml.exe"         "MemoOpsQml"
 call :check "GateServerHttp1.1.exe" "GateServerHttp1.1"
 call :check "GateServer.exe"          "GateServer1/GateServer2"
+call :check "AIServer.exe"            "AIServer"
 call :check "ChatServer.exe"           "ChatServer"
 call :check "StatusServer.exe"         "StatusServer"
 

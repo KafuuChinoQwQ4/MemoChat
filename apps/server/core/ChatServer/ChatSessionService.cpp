@@ -327,33 +327,12 @@ void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& se
         {{"uid", std::to_string(uid)}, {"session_id", session->GetSessionId()}});
 
     int pushed_total = 0;
-    int64_t latest_read_ts = 0;
-
-    // 获取所有好友的已读时间戳，取最大值作为基准
-    // 这样只推送真正未读的消息
-    std::vector<std::shared_ptr<UserInfo>> friend_list;
-    if (chatusersupport::GetFriendList(uid, friend_list)) {
-        for (const auto& friend_info : friend_list) {
-            if (!friend_info) continue;
-            DialogRuntimeInfo runtime;
-            if (PostgresMgr::GetInstance()->GetPrivateDialogRuntime(uid, friend_info->uid, runtime)) {
-                if (runtime.unread_count > 0 && runtime.last_msg_ts > latest_read_ts) {
-                    latest_read_ts = runtime.last_msg_ts;
-                }
-            }
-        }
-    }
-
-    // 如果没有未读消息，直接返回
-    if (latest_read_ts <= 0) {
-        memolog::LogInfo("chat.login.offline_push_skipped", "no unread messages",
-            {{"uid", std::to_string(uid)}});
-        return;
-    }
+    int64_t pagination_cursor_ts = 0;
+    std::string pagination_cursor_msg_id;
 
     for (int batch = 0; batch < kMaxOfflineBatches; ++batch) {
         std::vector<std::shared_ptr<PrivateMessageInfo>> messages;
-        if (!PostgresMgr::GetInstance()->GetUndeliveredPrivateMessages(uid, latest_read_ts, kOfflineBatchSize, messages)
+        if (!PostgresMgr::GetInstance()->GetUndeliveredPrivateMessages(uid, pagination_cursor_ts, pagination_cursor_msg_id, kOfflineBatchSize, messages)
             || messages.empty()) {
             break;
         }
@@ -363,6 +342,8 @@ void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& se
         for (const auto& msg : messages) {
             if (msg && msg->from_uid != uid) {
                 msgs_by_sender[msg->from_uid].push_back(msg);
+                pagination_cursor_ts = msg->created_at;
+                pagination_cursor_msg_id = msg->msg_id;
             }
         }
 
@@ -413,6 +394,12 @@ void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& se
         if (static_cast<int>(messages.size()) < kOfflineBatchSize) {
             break;
         }
+    }
+
+    if (pushed_total <= 0) {
+        memolog::LogInfo("chat.login.offline_push_skipped", "no unread messages",
+            {{"uid", std::to_string(uid)}});
+        return;
     }
 
     memolog::LogInfo("chat.login.offline_push_done", "offline message push completed",

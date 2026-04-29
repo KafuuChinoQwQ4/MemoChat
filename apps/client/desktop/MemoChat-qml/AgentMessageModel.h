@@ -23,6 +23,7 @@ public:
         IsAssistantRole,
         IsStreamingRole,
         StreamingContentRole,
+        ThinkingContentRole,
         TokensUsedRole,
         ModelNameRole,
         ErrorMessageRole,
@@ -52,6 +53,7 @@ private:
         QString msgId;
         QString content;
         QString streamingContent;
+        QString thinkingContent;
         QString role;
         QString modelName;
         qint64 createdAt = 0;

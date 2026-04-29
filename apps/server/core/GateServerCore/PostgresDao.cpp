@@ -705,7 +705,7 @@ bool PostgresDao::AddMoment(const MomentInfo& moment, int64_t* moment_id) {
 	}
 }
 
-bool PostgresDao::GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int limit,
+bool PostgresDao::GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int limit, int author_uid,
 	std::vector<MomentInfo>& moments, bool& has_more) {
 	moments.clear();
 	has_more = false;
@@ -733,6 +733,7 @@ bool PostgresDao::GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int lim
 				       m.like_count, m.comment_count
 				FROM moments m
 				WHERE m.deleted_at = 0
+				  AND ($3 <= 0 OR m.uid = $3)
 				  AND (
 					m.visibility = 0
 					OR m.uid = $1
@@ -757,7 +758,7 @@ bool PostgresDao::GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int lim
 				  )
 				ORDER BY m.created_at DESC, m.moment_id DESC
 				LIMIT $2
-			)", viewer_uid, limit + 1);
+			)", viewer_uid, limit + 1, author_uid);
 		}
 		else {
 			rows = txn.exec_params(R"(
@@ -766,6 +767,7 @@ bool PostgresDao::GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int lim
 				FROM moments m
 				WHERE m.deleted_at = 0
 				  AND m.moment_id < $2
+				  AND ($4 <= 0 OR m.uid = $4)
 				  AND (
 					m.visibility = 0
 					OR m.uid = $1
@@ -790,7 +792,7 @@ bool PostgresDao::GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int lim
 				  )
 				ORDER BY m.created_at DESC, m.moment_id DESC
 				LIMIT $3
-			)", viewer_uid, last_moment_id, limit + 1);
+			)", viewer_uid, last_moment_id, limit + 1, author_uid);
 		}
 
 		if (static_cast<int>(rows.size()) > limit) {

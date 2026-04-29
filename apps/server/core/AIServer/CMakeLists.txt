@@ -3,6 +3,7 @@ add_executable(AIServer
     AIServiceImpl.cpp
     AIServiceCore.cpp
     AIServiceClient.cpp
+    AIServiceJsonMapper.cpp
     ConfigMgr.cpp
     ConversationContext.cpp
     db/AISessionRepo.cpp

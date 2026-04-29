@@ -7,6 +7,13 @@ from typing import AsyncIterator
 from .base import BaseLLM, LLMMessage, LLMResponse, LLMStreamChunk, LLMUsage
 
 
+def _wrap_thinking(reasoning: str, content: str) -> str:
+    reasoning = (reasoning or "").strip()
+    if not reasoning:
+        return content or ""
+    return f"<think>{reasoning}</think>{content or ''}"
+
+
 class OpenAILLM(BaseLLM):
     _instance: "OpenAILLM | None" = None
 
@@ -41,11 +48,14 @@ class OpenAILLM(BaseLLM):
             data = resp.json()
 
             choice = data["choices"][0]
-            content = choice.get("message", {}).get("content", "")
+            message = choice.get("message", {})
+            content = message.get("content", "")
+            reasoning = message.get("reasoning_content") or message.get("reasoning") or ""
             usage_data = data.get("usage", {})
 
             return LLMResponse(
-                content=content,
+                content=_wrap_thinking(reasoning, content) if kwargs.get("think", False) else content,
+                reasoning_content=reasoning if kwargs.get("think", False) else "",
                 usage=LLMUsage(
                     prompt_tokens=usage_data.get("prompt_tokens", 0),
                     completion_tokens=usage_data.get("completion_tokens", 0),
@@ -88,7 +98,9 @@ class OpenAILLM(BaseLLM):
                 except json.JSONDecodeError:
                     continue
 
-                delta = data.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                delta_obj = data.get("choices", [{}])[0].get("delta", {})
+                reasoning = delta_obj.get("reasoning_content") or delta_obj.get("reasoning") or ""
+                delta = delta_obj.get("content", "")
                 accumulated += delta
 
                 usage_data = data.get("usage", {})
@@ -99,7 +111,10 @@ class OpenAILLM(BaseLLM):
                         total_tokens=usage_data.get("total_tokens", 0),
                     )
 
-                yield LLMStreamChunk(content=delta, is_final=False, model=self.model_name)
+                if reasoning and kwargs.get("think", False):
+                    yield LLMStreamChunk(content=_wrap_thinking(reasoning, ""), reasoning_content=reasoning, is_final=False, model=self.model_name)
+                if delta:
+                    yield LLMStreamChunk(content=delta, is_final=False, model=self.model_name)
 
     async def list_models(self) -> list[str]:
         client = await self._get_client()

@@ -632,12 +632,13 @@ void RegisterRoutes(LogicSystem& logic) {
 
             int64_t last_moment_id = src_root.get("last_moment_id", 0).asInt64();
             int limit = src_root.get("limit", 20).asInt();
+            int author_uid = src_root.get("author_uid", 0).asInt();
             if (limit <= 0) limit = 20;
             if (limit > 50) limit = 50;
 
             std::vector<MomentInfo> moments;
             bool has_more = false;
-            PostgresMgr::GetInstance()->GetMomentsFeed(uid, last_moment_id, limit, moments, has_more);
+            PostgresMgr::GetInstance()->GetMomentsFeed(uid, last_moment_id, limit, author_uid, moments, has_more);
 
             root["error"] = ErrorCodes::Success;
             root["has_more"] = has_more;

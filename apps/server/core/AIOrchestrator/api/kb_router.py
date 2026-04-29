@@ -5,6 +5,7 @@ import structlog
 from fastapi import APIRouter, HTTPException
 
 from harness import HarnessContainer
+from observability.metrics import ai_metrics
 from schemas.api import (
     KbChunk,
     KbDeleteRsp,
@@ -24,10 +25,13 @@ async def upload(req: KbUploadReq):
     try:
         container = HarnessContainer.get_instance()
         result = await container.knowledge_service.upload(req.uid, req.file_name, req.file_type, req.content)
+        ai_metrics.http_requests.inc(route="/kb/upload", status="ok")
         return KbUploadRsp(code=0, message="ok", chunks=result["chunks"], kb_id=result["kb_id"])
     except ValueError as exc:
+        ai_metrics.http_requests.inc(route="/kb/upload", status="error")
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        ai_metrics.http_requests.inc(route="/kb/upload", status="error")
         logger.error("kb.upload.error", uid=req.uid, file_name=req.file_name, error=str(exc))
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -35,10 +39,12 @@ async def upload(req: KbUploadReq):
 @router.post("/search", response_model=KbSearchRsp)
 async def search(req: KbSearchReq):
     if not req.query.strip():
+        ai_metrics.http_requests.inc(route="/kb/search", status="error")
         raise HTTPException(status_code=400, detail="query cannot be empty")
     try:
         container = HarnessContainer.get_instance()
         results = await container.knowledge_service.search(req.uid, req.query, req.top_k)
+        ai_metrics.http_requests.inc(route="/kb/search", status="ok")
         return KbSearchRsp(
             code=0,
             chunks=[
@@ -52,6 +58,7 @@ async def search(req: KbSearchReq):
             ],
         )
     except Exception as exc:
+        ai_metrics.http_requests.inc(route="/kb/search", status="error")
         logger.error("kb.search.error", uid=req.uid, query=req.query, error=str(exc))
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -60,8 +67,11 @@ async def search(req: KbSearchReq):
 async def list_kb(uid: int):
     try:
         container = HarnessContainer.get_instance()
-        return KbListRsp(code=0, knowledge_bases=await container.knowledge_service.list(uid))
+        result = KbListRsp(code=0, knowledge_bases=await container.knowledge_service.list(uid))
+        ai_metrics.http_requests.inc(route="/kb/list", status="ok")
+        return result
     except Exception as exc:
+        ai_metrics.http_requests.inc(route="/kb/list", status="error")
         logger.error("kb.list.error", uid=uid, error=str(exc))
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -71,7 +81,9 @@ async def delete_kb(kb_id: str, uid: int):
     try:
         container = HarnessContainer.get_instance()
         await container.knowledge_service.delete(uid, kb_id)
+        ai_metrics.http_requests.inc(route="/kb/delete", status="ok")
         return KbDeleteRsp(code=0, message="ok")
     except Exception as exc:
+        ai_metrics.http_requests.inc(route="/kb/delete", status="error")
         logger.error("kb.delete.error", uid=uid, kb_id=kb_id, error=str(exc))
         raise HTTPException(status_code=500, detail=str(exc)) from exc

@@ -1,0 +1,6 @@
+asyncpg==0.30.0
+httpx==0.28.1
+pydantic==2.10.5
+pydantic-settings==2.7.1
+pyyaml==6.0.2
+structlog==24.4.0

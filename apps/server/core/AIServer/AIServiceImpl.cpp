@@ -65,6 +65,13 @@ grpc::Status AIServiceImpl::ListModels(ServerContext* context,
     return _core->ListModels(*request, reply);
 }
 
+grpc::Status AIServiceImpl::RegisterApiProvider(ServerContext* context,
+                                                const ai::AIRegisterApiProviderReq* request,
+                                                ai::AIRegisterApiProviderRsp* reply) {
+    memolog::SpanScope span("AIService.RegisterApiProvider", "gRPC");
+    return _core->RegisterApiProvider(*request, reply);
+}
+
 grpc::Status AIServiceImpl::KbUpload(ServerContext* context,
                                     const ai::AIKbUploadReq* request,
                                     ai::AIKbUploadRsp* reply) {

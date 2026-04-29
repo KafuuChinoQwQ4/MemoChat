@@ -32,4 +32,4 @@ pattern_ingester:
   enabled: true
 
 ruler:
-  alertmanager_url: http://localhost:9093
+  alertmanager_url: http://memochat-alertmanager:9093

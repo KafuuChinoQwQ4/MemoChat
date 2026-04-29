@@ -9,6 +9,18 @@ Item {
     property var backdrop: null
     property string keyword: ""
     property int viewMode: 0 // 0 search, 1 detail, 2 reader, 3 sources
+    readonly property color panelFillColor: Qt.rgba(1.0, 0.72, 0.84, 0.20)
+    readonly property color panelStrokeColor: Qt.rgba(1.0, 0.86, 0.94, 0.34)
+    readonly property color fieldFillColor: Qt.rgba(1.0, 0.90, 0.95, 0.14)
+    readonly property color fieldStrokeColor: Qt.rgba(1.0, 0.93, 0.97, 0.22)
+    readonly property color itemFillColor: Qt.rgba(1.0, 0.86, 0.93, 0.13)
+    readonly property color itemSelectedFillColor: Qt.rgba(1.0, 0.56, 0.76, 0.24)
+    readonly property color primaryButtonColor: Qt.rgba(1.0, 0.48, 0.70, 0.24)
+    readonly property color primaryButtonHoverColor: Qt.rgba(1.0, 0.48, 0.70, 0.34)
+    readonly property color primaryButtonPressedColor: Qt.rgba(1.0, 0.48, 0.70, 0.42)
+    readonly property color secondaryButtonColor: Qt.rgba(1.0, 0.68, 0.82, 0.18)
+    readonly property color secondaryButtonHoverColor: Qt.rgba(1.0, 0.68, 0.82, 0.28)
+    readonly property color secondaryButtonPressedColor: Qt.rgba(1.0, 0.68, 0.82, 0.36)
 
     function absoluteUrl(url) {
         if (!url) {
@@ -36,9 +48,9 @@ Item {
             Layout.fillHeight: true
             backdrop: root.backdrop
             cornerRadius: 12
-            blurRadius: 18
-            fillColor: Qt.rgba(1.0, 0.74, 0.86, 0.16)
-            strokeColor: Qt.rgba(1.0, 0.86, 0.94, 0.34)
+            blurEnabled: false
+            fillColor: root.panelFillColor
+            strokeColor: root.panelStrokeColor
 
             ColumnLayout {
                 anchors.fill: parent
@@ -56,8 +68,15 @@ Item {
                     id: searchField
                     Layout.fillWidth: true
                     placeholderText: "搜索漫画"
+                    placeholderTextColor: Qt.rgba(255, 242, 247, 0.56)
+                    color: "#fff4f8"
                     text: root.keyword
                     selectByMouse: true
+                    background: Rectangle {
+                        radius: 9
+                        color: root.fieldFillColor
+                        border.color: root.fieldStrokeColor
+                    }
                     onAccepted: {
                         root.keyword = text
                         root.viewMode = 0
@@ -65,9 +84,15 @@ Item {
                     }
                 }
 
-                Button {
+                GlassButton {
                     Layout.fillWidth: true
+                    Layout.preferredHeight: 34
                     text: "搜索"
+                    textColor: "#fff4f8"
+                    cornerRadius: 9
+                    normalColor: root.primaryButtonColor
+                    hoverColor: root.primaryButtonHoverColor
+                    pressedColor: root.primaryButtonPressedColor
                     onClicked: {
                         root.keyword = searchField.text
                         root.viewMode = 0
@@ -75,9 +100,15 @@ Item {
                     }
                 }
 
-                Button {
+                GlassButton {
                     Layout.fillWidth: true
+                    Layout.preferredHeight: 34
                     text: "源管理"
+                    textColor: "#fff4f8"
+                    cornerRadius: 9
+                    normalColor: root.secondaryButtonColor
+                    hoverColor: root.secondaryButtonHoverColor
+                    pressedColor: root.secondaryButtonPressedColor
                     onClicked: {
                         root.viewMode = 3
                         if (root.r18Controller) root.r18Controller.refreshSources()
@@ -106,8 +137,8 @@ Item {
                         width: ListView.view.width
                         height: 46
                         radius: 8
-                        color: model.sourceId === (root.r18Controller ? root.r18Controller.currentSourceId : "") ? Qt.rgba(1.0, 0.48, 0.70, 0.28) : Qt.rgba(255, 255, 255, 0.08)
-                        border.color: Qt.rgba(255, 255, 255, 0.18)
+                        color: model.sourceId === (root.r18Controller ? root.r18Controller.currentSourceId : "") ? root.itemSelectedFillColor : root.itemFillColor
+                        border.color: root.fieldStrokeColor
 
                         Column {
                             anchors.left: parent.left
@@ -151,9 +182,9 @@ Item {
             Layout.fillHeight: true
             backdrop: root.backdrop
             cornerRadius: 12
-            blurRadius: 18
-            fillColor: Qt.rgba(1.0, 0.70, 0.84, 0.13)
-            strokeColor: Qt.rgba(1.0, 0.88, 0.94, 0.35)
+            blurEnabled: false
+            fillColor: root.panelFillColor
+            strokeColor: root.panelStrokeColor
 
             Item {
                 anchors.fill: parent
@@ -189,9 +220,10 @@ Item {
                     delegate: Rectangle {
                         width: GridView.view.cellWidth - 10
                         height: 242
-                        radius: 8
-                        color: Qt.rgba(255, 255, 255, 0.09)
-                        border.color: Qt.rgba(255, 255, 255, 0.18)
+                        radius: 10
+                        clip: true
+                        color: root.itemFillColor
+                        border.color: root.fieldStrokeColor
 
                         Image {
                             anchors.left: parent.left
@@ -233,7 +265,17 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 10
-                        Button { text: "返回"; onClicked: root.viewMode = 0 }
+                        GlassButton {
+                            Layout.preferredWidth: 72
+                            Layout.preferredHeight: 32
+                            text: "返回"
+                            textColor: "#fff4f8"
+                            cornerRadius: 8
+                            normalColor: root.secondaryButtonColor
+                            hoverColor: root.secondaryButtonHoverColor
+                            pressedColor: root.secondaryButtonPressedColor
+                            onClicked: root.viewMode = 0
+                        }
                         Text {
                             Layout.fillWidth: true
                             text: root.r18Controller && root.r18Controller.currentComic ? root.r18Controller.currentComic.title || "" : ""
@@ -262,8 +304,8 @@ Item {
                             width: ListView.view.width
                             height: 48
                             radius: 8
-                            color: Qt.rgba(255, 255, 255, 0.09)
-                            border.color: Qt.rgba(255, 255, 255, 0.16)
+                            color: root.itemFillColor
+                            border.color: root.fieldStrokeColor
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
                                 anchors.left: parent.left
@@ -288,7 +330,17 @@ Item {
                     anchors.fill: parent
                     visible: root.viewMode === 2
                     spacing: 8
-                    Button { text: "返回章节"; onClicked: root.viewMode = 1 }
+                    GlassButton {
+                        Layout.preferredWidth: 92
+                        Layout.preferredHeight: 32
+                        text: "返回章节"
+                        textColor: "#fff4f8"
+                        cornerRadius: 8
+                        normalColor: root.secondaryButtonColor
+                        hoverColor: root.secondaryButtonHoverColor
+                        pressedColor: root.secondaryButtonPressedColor
+                        onClicked: root.viewMode = 1
+                    }
                     ListView {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
@@ -319,25 +371,53 @@ Item {
                         id: sourcePackagePath
                         Layout.fillWidth: true
                         placeholderText: "插件 zip 路径"
+                        placeholderTextColor: Qt.rgba(255, 242, 247, 0.56)
+                        color: "#fff4f8"
                         selectByMouse: true
+                        background: Rectangle {
+                            radius: 9
+                            color: root.fieldFillColor
+                            border.color: root.fieldStrokeColor
+                        }
                     }
                     TextArea {
                         id: manifestText
                         Layout.fillWidth: true
                         Layout.preferredHeight: 92
                         placeholderText: "可选 manifest.json"
+                        placeholderTextColor: Qt.rgba(255, 242, 247, 0.56)
+                        color: "#fff4f8"
                         wrapMode: TextEdit.Wrap
                         selectByMouse: true
+                        background: Rectangle {
+                            radius: 9
+                            color: root.fieldFillColor
+                            border.color: root.fieldStrokeColor
+                        }
                     }
                     RowLayout {
-                        Button {
+                        GlassButton {
+                            Layout.preferredWidth: 76
+                            Layout.preferredHeight: 32
                             text: "导入"
+                            textColor: "#fff4f8"
+                            cornerRadius: 8
+                            normalColor: root.primaryButtonColor
+                            hoverColor: root.primaryButtonHoverColor
+                            pressedColor: root.primaryButtonPressedColor
                             onClicked: {
                                 if (root.r18Controller) root.r18Controller.importSourcePackage(sourcePackagePath.text, manifestText.text)
                             }
                         }
-                        Button {
+                        GlassButton {
+                            Layout.preferredWidth: 76
+                            Layout.preferredHeight: 32
                             text: "刷新"
+                            textColor: "#fff4f8"
+                            cornerRadius: 8
+                            normalColor: root.secondaryButtonColor
+                            hoverColor: root.secondaryButtonHoverColor
+                            pressedColor: root.secondaryButtonPressedColor
                             onClicked: {
                                 if (root.r18Controller) root.r18Controller.refreshSources()
                             }
@@ -353,8 +433,8 @@ Item {
                             width: ListView.view.width
                             height: 54
                             radius: 8
-                            color: Qt.rgba(255, 255, 255, 0.08)
-                            border.color: Qt.rgba(255, 255, 255, 0.16)
+                            color: root.itemFillColor
+                            border.color: root.fieldStrokeColor
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.margins: 10

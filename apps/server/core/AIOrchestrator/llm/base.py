@@ -24,6 +24,7 @@ class LLMUsage:
 @dataclass
 class LLMResponse:
     content: str
+    reasoning_content: str = ""
     usage: LLMUsage = field(default_factory=LLMUsage)
     model: str = ""
     finish_reason: str = ""
@@ -33,6 +34,7 @@ class LLMResponse:
 @dataclass
 class LLMStreamChunk:
     content: str
+    reasoning_content: str = ""
     is_final: bool = False
     usage: Optional[LLMUsage] = None
     model: str = ""

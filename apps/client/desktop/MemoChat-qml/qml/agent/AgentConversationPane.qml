@@ -15,10 +15,40 @@ Rectangle {
     property var sessions: []
     property string currentSessionId: ""
     property string selfAvatar: "qrc:/res/head_1.jpg"
+    property bool stickToBottom: true
 
     signal reloadSessions()
     signal switchSession(string sessionId)
     signal deleteSession(string sessionId)
+
+    function isNearBottom() {
+        return messageListView.contentY + messageListView.height >= messageListView.contentHeight - 36
+    }
+
+    function scrollToEndSoon() {
+        Qt.callLater(function() {
+            if (messageListView.count > 0) {
+                messageListView.forceLayout()
+                messageListView.positionViewAtEnd()
+            }
+        })
+    }
+
+    Connections {
+        target: root.messageModel
+        ignoreUnknownSignals: true
+
+        function onDataChanged(topLeft, bottomRight, roles) {
+            if (root.stickToBottom || root.streaming) {
+                root.scrollToEndSoon()
+            }
+        }
+
+        function onModelReset() {
+            root.stickToBottom = true
+            root.scrollToEndSoon()
+        }
+    }
 
     ListView {
         id: messageListView
@@ -39,16 +69,29 @@ Rectangle {
             isAssistant: model.role === "assistant"
             isStreaming: model.isStreaming || false
             streamingContent: model.streamingContent || model.content || ""
+            thinkingContent: model.thinkingContent || ""
+            errorMessage: model.errorMessage || ""
             createdAt: model.createdAt || 0
             sourcesJson: model.sources || ""
             selfAvatar: root.selfAvatar
         }
 
         onCountChanged: {
-            if (count > 0 && root.currentSessionId.length > 0) {
-                Qt.callLater(function() {
-                    messageListView.positionViewAtEnd()
-                })
+            root.stickToBottom = true
+            root.scrollToEndSoon()
+        }
+
+        onContentHeightChanged: {
+            if (root.stickToBottom || root.loading || root.streaming) {
+                root.scrollToEndSoon()
+            }
+        }
+
+        onMovementEnded: root.stickToBottom = root.isNearBottom()
+        onFlickEnded: root.stickToBottom = root.isNearBottom()
+        onContentYChanged: {
+            if (!moving && !flicking) {
+                root.stickToBottom = root.isNearBottom()
             }
         }
     }
@@ -82,28 +125,6 @@ Rectangle {
                 font.pixelSize: 12
                 horizontalAlignment: Text.AlignHCenter
             }
-        }
-    }
-
-    Rectangle {
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.topMargin: 10
-        anchors.rightMargin: 12
-        width: statusLabel.implicitWidth + 18
-        height: 28
-        radius: 14
-        color: Qt.rgba(0.36, 0.62, 0.92, 0.14)
-        border.color: Qt.rgba(0.36, 0.62, 0.92, 0.28)
-        visible: root.loading || root.streaming
-
-        Label {
-            id: statusLabel
-            anchors.centerIn: parent
-            text: root.streaming ? "正在生成回复" : "处理中"
-            color: "#2d6fb4"
-            font.pixelSize: 12
-            font.bold: true
         }
     }
 

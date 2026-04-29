@@ -40,8 +40,11 @@ echo   [X] VarifyServer not found
 echo.
 
 REM ---- 检查 / 自动部署 C++ 服务 ----
-if exist "%RUNTIME_DIR%\GateServer1\GateServer.exe" goto deploy_done
-echo   [WARN] GateServer1 runtime missing, deploying services...
+if not exist "%RUNTIME_DIR%\GateServer1\GateServer.exe" goto deploy_missing
+if not exist "%RUNTIME_DIR%\AIServer\AIServer.exe" goto deploy_missing
+goto deploy_done
+:deploy_missing
+echo   [WARN] C++ runtime missing, deploying services...
 call "%~dp0deploy_services.bat"
 if !ERRORLEVEL! neq 0 goto deploy_failed
 echo.
@@ -65,6 +68,7 @@ call :launch_svc "%RUNTIME_DIR%\chatserver3"      "ChatServer.exe"   "ChatServer
 call :launch_svc "%RUNTIME_DIR%\chatserver4"      "ChatServer.exe"   "ChatServer-4"     "config.ini"  "8093"
 call :launch_svc "%RUNTIME_DIR%\chatserver5"      "ChatServer.exe"   "ChatServer-5"     "config.ini"  "8094"
 call :launch_svc "%RUNTIME_DIR%\chatserver6"      "ChatServer.exe"   "ChatServer-6"     "config.ini"  "8097"
+call :launch_svc "%RUNTIME_DIR%\AIServer"         "AIServer.exe"     "AIServer"         "config.ini"  "8095"
 call :launch_svc "%RUNTIME_DIR%\GateServer1"      "GateServer.exe"   "GateServer-1"     "config.ini"  "8080"
 call :launch_svc "%RUNTIME_DIR%\GateServer2"      "GateServer.exe"   "GateServer-2"     "config.ini"  "8084"
 echo.

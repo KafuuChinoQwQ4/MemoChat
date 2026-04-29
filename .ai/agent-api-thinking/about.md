@@ -1,0 +1,1 @@
+MemoChat AI supports optional thinking mode, displays reasoning in a lighter rounded section above the final answer, and can route chat requests through local Ollama or external OpenAI-compatible API providers such as DeepSeek, Qwen DashScope, GLM, Kimi, OpenAI GPT, Gemini, and Claude where configured.

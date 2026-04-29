@@ -125,6 +125,7 @@ enum ReqId{
     ID_AI_KB_SEARCH = 1208,
     ID_AI_KB_LIST = 1209,
     ID_AI_KB_DELETE = 1210,
+    ID_AI_MODEL_API_REGISTER = 1211,
 };
 
 enum ErrorCodes{

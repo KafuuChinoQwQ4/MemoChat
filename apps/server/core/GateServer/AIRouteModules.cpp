@@ -21,6 +21,18 @@ static void WriteJsonResponse(std::shared_ptr<HttpConnection> connection, const 
     beast::ostream(connection->GetResponse().body()) << out;
 }
 
+static std::string ExtractMetadataJson(const json::JsonValue& src_root) {
+    const std::string metadata_json = json::glaze_safe_get<std::string>(src_root, "metadata_json", "");
+    if (!metadata_json.empty()) {
+        return metadata_json;
+    }
+    if (json::glaze_has_key(src_root, "metadata")) {
+        const json::JsonValue metadata = src_root["metadata"];
+        return json::glaze_stringify(metadata);
+    }
+    return "{}";
+}
+
 void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
     g_ai_client = std::make_unique<AIServiceClient>();
 
@@ -34,21 +46,28 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
             WriteJsonResponse(connection, root);
             return true;
         }
-        int32_t uid = json::glaze_safe_get<int>(src_root["uid"], 0);
-        std::string session_id = json::glaze_safe_get<std::string>(src_root["session_id"], "");
-        std::string content = json::glaze_safe_get<std::string>(src_root["content"], "");
-        std::string model_type = json::glaze_safe_get<std::string>(src_root["model_type"], "ollama");
-        std::string model_name = json::glaze_safe_get<std::string>(src_root["model_name"], "");
+        int32_t uid = json::glaze_safe_get<int>(src_root, "uid", 0);
+        std::string session_id = json::glaze_safe_get<std::string>(src_root, "session_id", "");
+        std::string content = json::glaze_safe_get<std::string>(src_root, "content", "");
+        std::string model_type = json::glaze_safe_get<std::string>(src_root, "model_type", "ollama");
+        std::string model_name = json::glaze_safe_get<std::string>(src_root, "model_name", "");
+        std::string metadata_json = ExtractMetadataJson(src_root);
         if (content.empty()) {
             root["error"] = 1;
             root["message"] = "content is empty";
             WriteJsonResponse(connection, root);
             return true;
         }
-        auto result = g_ai_client->Chat(uid, session_id, content, model_type, model_name);
-        if (json::glaze_safe_get<int>(result["error"], 0) != 0) {
+        memolog::LogInfo("gate.ai.chat.call", "calling AIServer Chat", {{"uid", std::to_string(uid)}});
+        auto result = g_ai_client->Chat(uid, session_id, content, model_type, model_name, metadata_json);
+        memolog::LogInfo("gate.ai.chat.result", "AIServer Chat returned", {
+            {"uid", std::to_string(uid)},
+            {"code", std::to_string(json::glaze_safe_get<int>(result, "code", 0))}
+        });
+        const int error_code = json::glaze_safe_get<int>(result, "error", json::glaze_safe_get<int>(result, "code", 0));
+        if (error_code != 0) {
             memolog::LogError("gate.ai.chat.failed", "AIServer returned error",
-                {{"uid", std::to_string(uid)}, {"code", std::to_string(json::glaze_safe_get<int>(result["error"], 0))}});
+                {{"uid", std::to_string(uid)}, {"code", std::to_string(error_code)}});
         }
         WriteJsonResponse(connection, result);
         return true;
@@ -65,11 +84,12 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
             beast::ostream(connection->GetResponse().body()) << "data: {\"error\":1,\"message\":\"invalid json\"}\n\n";
             return true;
         }
-        int32_t uid = json::glaze_safe_get<int>(src_root["uid"], 0);
-        std::string session_id = json::glaze_safe_get<std::string>(src_root["session_id"], "");
-        std::string content = json::glaze_safe_get<std::string>(src_root["content"], "");
-        std::string model_type = json::glaze_safe_get<std::string>(src_root["model_type"], "ollama");
-        std::string model_name = json::glaze_safe_get<std::string>(src_root["model_name"], "");
+        int32_t uid = json::glaze_safe_get<int>(src_root, "uid", 0);
+        std::string session_id = json::glaze_safe_get<std::string>(src_root, "session_id", "");
+        std::string content = json::glaze_safe_get<std::string>(src_root, "content", "");
+        std::string model_type = json::glaze_safe_get<std::string>(src_root, "model_type", "ollama");
+        std::string model_name = json::glaze_safe_get<std::string>(src_root, "model_name", "");
+        std::string metadata_json = ExtractMetadataJson(src_root);
         if (content.empty()) {
             connection->GetResponse().set(http::field::content_type, "text/event-stream");
             connection->GetResponse().set(http::field::cache_control, "no-cache");
@@ -77,23 +97,61 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
             beast::ostream(connection->GetResponse().body()) << "data: {\"error\":1,\"message\":\"content is empty\"}\n\n";
             return true;
         }
-        connection->GetResponse().set(http::field::content_type, "text/event-stream");
-        connection->GetResponse().set(http::field::cache_control, "no-cache");
-        connection->GetResponse().set(http::field::connection, "keep-alive");
-        g_ai_client->ChatStream(
-            uid, session_id, content, model_type, model_name,
-            [&connection](const std::string& chunk, bool is_final,
-                         const std::string& msg_id, int64_t total_tokens) {
-                json::JsonValue event = json::JsonValue{};
-                event["chunk"] = chunk;
-                event["is_final"] = is_final;
-                event["msg_id"] = msg_id;
-                event["total_tokens"] = total_tokens;
-                std::string event_str = json::glaze_stringify(event);
-                event_str = "data: " + event_str + "\n\n";
-                beast::ostream(connection->GetResponse().body()) << event_str;
-            },
-            nullptr);
+        connection->StartSseStream();
+        memolog::LogInfo("gate.ai.chat_stream.call", "calling AIServer ChatStream", {{"uid", std::to_string(uid)}});
+        try {
+            g_ai_client->ChatStream(
+                uid, session_id, content, model_type, model_name, metadata_json,
+                [&connection](const std::string& chunk, bool is_final,
+                             const std::string& msg_id,
+                             int64_t total_tokens,
+                             const std::string& trace_id,
+                             const std::string& skill,
+                             const std::string& feedback_summary,
+                             const std::string& observations_json,
+                             const std::string& events_json) {
+                    json::JsonValue event = json::JsonValue{};
+                    event["chunk"] = chunk;
+                    event["is_final"] = is_final;
+                    event["msg_id"] = msg_id;
+                    event["total_tokens"] = total_tokens;
+                    event["trace_id"] = trace_id;
+                    event["skill"] = skill;
+                    event["feedback_summary"] = feedback_summary;
+                    json::JsonValue observations;
+                    if (!observations_json.empty() && json::reader_parse(observations_json, observations)) {
+                        event["observations"] = observations;
+                    } else {
+                        event["observations"] = json::array_t{};
+                    }
+                    json::JsonValue events;
+                    if (!events_json.empty() && json::reader_parse(events_json, events)) {
+                        event["events"] = events;
+                    } else {
+                        event["events"] = json::array_t{};
+                    }
+                    std::string event_str = json::glaze_stringify(event);
+                    event_str = "data: " + event_str + "\n\n";
+                    connection->WriteStreamChunk(std::move(event_str));
+                },
+                nullptr);
+        } catch (const std::exception& e) {
+            memolog::LogError("gate.ai.chat_stream.exception", "AIServer ChatStream threw",
+                              {{"uid", std::to_string(uid)}, {"error", e.what()}});
+            json::JsonValue event = json::JsonValue{};
+            event["chunk"] = std::string("AIServer unavailable: ") + e.what();
+            event["is_final"] = true;
+            event["msg_id"] = "";
+            event["total_tokens"] = 0;
+            event["trace_id"] = "";
+            event["skill"] = "";
+            event["feedback_summary"] = "";
+            event["observations"] = json::array_t{};
+            event["events"] = json::array_t{};
+            connection->WriteStreamChunk("data: " + json::glaze_stringify(event) + "\n\n");
+        }
+        connection->FinishStream();
+        memolog::LogInfo("gate.ai.chat_stream.result", "AIServer ChatStream returned", {{"uid", std::to_string(uid)}});
         return true;
     });
 
@@ -107,10 +165,10 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
             WriteJsonResponse(connection, root);
             return true;
         }
-        std::string feature_type = json::glaze_safe_get<std::string>(src_root["feature_type"], "");
-        std::string content = json::glaze_safe_get<std::string>(src_root["content"], "");
-        std::string target_lang = json::glaze_safe_get<std::string>(src_root["target_lang"], "");
-        std::string context_json = json::glaze_safe_get<std::string>(src_root["context_json"], "{}");
+        std::string feature_type = json::glaze_safe_get<std::string>(src_root, "feature_type", "");
+        std::string content = json::glaze_safe_get<std::string>(src_root, "content", "");
+        std::string target_lang = json::glaze_safe_get<std::string>(src_root, "target_lang", "");
+        std::string context_json = json::glaze_safe_get<std::string>(src_root, "context_json", "{}");
         if (content.empty()) {
             root["error"] = 1;
             root["message"] = "content is empty";
@@ -118,7 +176,7 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
             return true;
         }
         auto result = g_ai_client->Smart(feature_type, content, target_lang, context_json);
-        if (json::glaze_safe_get<int>(result["error"], 0) != 0) {
+        if (json::glaze_safe_get<int>(result, "error", json::glaze_safe_get<int>(result, "code", 0)) != 0) {
             memolog::LogError("gate.ai.smart.failed", "AIServer returned error", {{"feature_type", feature_type}});
         }
         WriteJsonResponse(connection, result);
@@ -152,10 +210,15 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
             WriteJsonResponse(connection, root);
             return true;
         }
-        int32_t uid = json::glaze_safe_get<int>(src_root["uid"], 0);
-        std::string model_type = json::glaze_safe_get<std::string>(src_root["model_type"], "ollama");
-        std::string model_name = json::glaze_safe_get<std::string>(src_root["model_name"], "");
+        int32_t uid = json::glaze_safe_get<int>(src_root, "uid", 0);
+        std::string model_type = json::glaze_safe_get<std::string>(src_root, "model_type", "ollama");
+        std::string model_name = json::glaze_safe_get<std::string>(src_root, "model_name", "");
+        memolog::LogInfo("gate.ai.session.create.call", "calling AIServer CreateSession", {{"uid", std::to_string(uid)}});
         auto result = g_ai_client->CreateSession(uid, model_type, model_name);
+        memolog::LogInfo("gate.ai.session.create.result", "AIServer CreateSession returned", {
+            {"uid", std::to_string(uid)},
+            {"code", std::to_string(json::glaze_safe_get<int>(result, "code", 0))}
+        });
         WriteJsonResponse(connection, result);
         return true;
     });
@@ -185,8 +248,8 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
             WriteJsonResponse(connection, root);
             return true;
         }
-        int32_t uid = json::glaze_safe_get<int>(src_root["uid"], 0);
-        std::string session_id = json::glaze_safe_get<std::string>(src_root["session_id"], "");
+        int32_t uid = json::glaze_safe_get<int>(src_root, "uid", 0);
+        std::string session_id = json::glaze_safe_get<std::string>(src_root, "session_id", "");
         auto result = g_ai_client->DeleteSession(uid, session_id);
         WriteJsonResponse(connection, result);
         return true;
@@ -195,6 +258,25 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
     logic.RegGet("/ai/model/list", [](std::shared_ptr<HttpConnection> connection) {
         memolog::SpanScope span("gate.ai.model.list", "http");
         auto result = g_ai_client->ListModels();
+        WriteJsonResponse(connection, result);
+        return true;
+    });
+
+    logic.RegPost("/ai/model/api/register", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::SpanScope span("gate.ai.model.api.register", "http");
+        json::JsonValue root = json::JsonValue{};
+        json::JsonValue src_root = json::JsonValue{};
+        if (!GateHttpJsonSupport::ParseJsonBody(connection, root, src_root)) {
+            root["error"] = 1;
+            root["message"] = "invalid json";
+            WriteJsonResponse(connection, root);
+            return true;
+        }
+        std::string provider_name = json::glaze_safe_get<std::string>(src_root, "provider_name", "custom-api");
+        std::string base_url = json::glaze_safe_get<std::string>(src_root, "base_url", "");
+        std::string api_key = json::glaze_safe_get<std::string>(src_root, "api_key", "");
+        std::string adapter = json::glaze_safe_get<std::string>(src_root, "adapter", "openai_compatible");
+        auto result = g_ai_client->RegisterApiProvider(provider_name, base_url, api_key, adapter);
         WriteJsonResponse(connection, result);
         return true;
     });
@@ -209,10 +291,10 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
             WriteJsonResponse(connection, root);
             return true;
         }
-        int32_t uid = json::glaze_safe_get<int>(src_root["uid"], 0);
-        std::string file_name = json::glaze_safe_get<std::string>(src_root["file_name"], "");
-        std::string file_type = json::glaze_safe_get<std::string>(src_root["file_type"], "");
-        std::string content = json::glaze_safe_get<std::string>(src_root["content"], "");
+        int32_t uid = json::glaze_safe_get<int>(src_root, "uid", 0);
+        std::string file_name = json::glaze_safe_get<std::string>(src_root, "file_name", "");
+        std::string file_type = json::glaze_safe_get<std::string>(src_root, "file_type", "");
+        std::string content = json::glaze_safe_get<std::string>(src_root, "content", "");
         auto result = g_ai_client->KbUpload(uid, file_name, file_type, content);
         WriteJsonResponse(connection, result);
         return true;
@@ -228,9 +310,9 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
             WriteJsonResponse(connection, root);
             return true;
         }
-        int32_t uid = json::glaze_safe_get<int>(src_root["uid"], 0);
-        std::string query = json::glaze_safe_get<std::string>(src_root["query"], "");
-        int top_k = json::glaze_safe_get<int>(src_root["top_k"], 5);
+        int32_t uid = json::glaze_safe_get<int>(src_root, "uid", 0);
+        std::string query = json::glaze_safe_get<std::string>(src_root, "query", "");
+        int top_k = json::glaze_safe_get<int>(src_root, "top_k", 5);
         auto result = g_ai_client->KbSearch(uid, query, top_k);
         WriteJsonResponse(connection, result);
         return true;
@@ -257,8 +339,8 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
             WriteJsonResponse(connection, root);
             return true;
         }
-        int32_t uid = json::glaze_safe_get<int>(src_root["uid"], 0);
-        std::string kb_id = json::glaze_safe_get<std::string>(src_root["kb_id"], "");
+        int32_t uid = json::glaze_safe_get<int>(src_root, "uid", 0);
+        std::string kb_id = json::glaze_safe_get<std::string>(src_root, "kb_id", "");
         auto result = g_ai_client->DeleteKb(uid, kb_id);
         WriteJsonResponse(connection, result);
         return true;

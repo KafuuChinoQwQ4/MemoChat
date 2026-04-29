@@ -20,6 +20,7 @@ class OllamaModelConfig(BaseModel):
     name: str
     display: str
     context_window: int = 8192
+    supports_thinking: bool = False
 
 
 class OllamaLLMConfig(BaseModel):
@@ -32,6 +33,7 @@ class OpenAIModelConfig(BaseModel):
     name: str
     display: str
     context_window: int = 128000
+    supports_thinking: bool = False
 
 
 class OpenAILLMConfig(BaseModel):
@@ -45,6 +47,7 @@ class AnthropicModelConfig(BaseModel):
     name: str
     display: str
     context_window: int = 200000
+    supports_thinking: bool = False
 
 
 class AnthropicLLMConfig(BaseModel):
@@ -58,6 +61,7 @@ class KimiModelConfig(BaseModel):
     name: str
     display: str
     context_window: int = 8192
+    supports_thinking: bool = False
 
 
 class KimiLLMConfig(BaseModel):
@@ -172,6 +176,7 @@ class HarnessModelConfig(BaseModel):
     name: str
     display: str
     context_window: int = 128000
+    supports_thinking: bool = False
 
 
 class HarnessEndpointConfig(BaseModel):
@@ -184,6 +189,7 @@ class HarnessEndpointConfig(BaseModel):
     default_model: str = ""
     enabled: bool = False
     timeout_sec: int = 120
+    thinking_parameter: str = ""
     models: list[HarnessModelConfig] = []
 
 
@@ -302,5 +308,5 @@ _cache_root = _base_dir / ".cache"
 os.environ.setdefault("HF_HOME", str(_cache_root / "huggingface"))
 os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", str(_cache_root / "sentence_transformers"))
 
-_config_path = _base_dir / "config.yaml"
+_config_path = Path(os.getenv("MEMOCHAT_AI_CONFIG_PATH", str(_base_dir / "config.yaml"))).expanduser().resolve()
 settings = Settings.from_yaml(_config_path)
