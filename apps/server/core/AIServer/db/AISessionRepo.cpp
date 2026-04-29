@@ -8,6 +8,7 @@
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <chrono>
+#include <mutex>
 #include <sstream>
 
 using namespace std::chrono;
@@ -16,14 +17,18 @@ namespace {
 
 pqxx::connection* GetPgConn() {
     auto& cfg = ConfigMgr::Inst();
+    const auto schema = cfg["Postgres"]["Schema"].empty() ? "public" : cfg["Postgres"]["Schema"];
     std::ostringstream conn_str;
     conn_str << "host=" << cfg["Postgres"]["Host"]
              << " port=" << cfg["Postgres"]["Port"]
              << " user=" << cfg["Postgres"]["User"]
              << " password=" << cfg["Postgres"]["Passwd"]
-             << " dbname=" << cfg["Postgres"]["Database"]
-             << " options=-c search_path=" << cfg["Postgres"]["Schema"];
-    return new pqxx::connection(conn_str.str());
+             << " dbname=" << cfg["Postgres"]["Database"];
+    auto conn = std::make_unique<pqxx::connection>(conn_str.str());
+    pqxx::work tx(*conn);
+    tx.exec0("SET search_path TO " + tx.quote_name(schema) + ",public");
+    tx.commit();
+    return conn.release();
 }
 
 std::string GenUuid() {
@@ -35,6 +40,7 @@ std::string GenUuid() {
 class AISessionRepo::Impl {
 public:
     std::unique_ptr<pqxx::connection> conn;
+    std::mutex mutex;
 
     Impl() {
         conn.reset(GetPgConn());
@@ -53,6 +59,7 @@ std::string AISessionRepo::Create(int32_t uid, const std::string& model_type,
         system_clock::now().time_since_epoch()).count();
 
     try {
+        std::lock_guard<std::mutex> lock(_impl->mutex);
         pqxx::work tx(*_impl->conn);
         tx.exec_params(
             R"(INSERT INTO ai_session (session_id, uid, title, model_type, model_name, created_at, updated_at)
@@ -72,6 +79,7 @@ bool AISessionRepo::SoftDelete(const std::string& session_id) {
     int64_t now = duration_cast<milliseconds>(
         system_clock::now().time_since_epoch()).count();
     try {
+        std::lock_guard<std::mutex> lock(_impl->mutex);
         pqxx::work tx(*_impl->conn);
         auto r = tx.exec_params(
             R"(UPDATE ai_session SET deleted_at = $1 WHERE session_id = $2 AND deleted_at IS NULL)",
@@ -88,6 +96,7 @@ bool AISessionRepo::SoftDelete(const std::string& session_id) {
 
 std::unique_ptr<ai::AISessionInfo> AISessionRepo::GetSession(const std::string& session_id) {
     try {
+        std::lock_guard<std::mutex> lock(_impl->mutex);
         pqxx::work tx(*_impl->conn);
         auto r = tx.exec_params(
             R"(SELECT session_id, title, model_type, model_name, created_at, updated_at
@@ -116,6 +125,7 @@ std::unique_ptr<ai::AISessionInfo> AISessionRepo::GetSession(const std::string& 
 std::vector<ai::AISessionInfo> AISessionRepo::ListByUid(int32_t uid) {
     std::vector<ai::AISessionInfo> result;
     try {
+        std::lock_guard<std::mutex> lock(_impl->mutex);
         pqxx::work tx(*_impl->conn);
         auto r = tx.exec_params(
             R"(SELECT session_id, title, model_type, model_name, created_at, updated_at
@@ -151,6 +161,7 @@ bool AISessionRepo::SaveMessage(const std::string& session_id, int32_t uid,
         system_clock::now().time_since_epoch()).count();
 
     try {
+        std::lock_guard<std::mutex> lock(_impl->mutex);
         pqxx::work tx(*_impl->conn);
         tx.exec_params(
             R"(INSERT INTO ai_message (msg_id, session_id, role, content, tokens_used, model_name, created_at)
@@ -174,6 +185,7 @@ std::vector<ai::AIMessage> AISessionRepo::GetMessages(const std::string& session
                                                       int limit, int offset) {
     std::vector<ai::AIMessage> result;
     try {
+        std::lock_guard<std::mutex> lock(_impl->mutex);
         pqxx::work tx(*_impl->conn);
         auto r = tx.exec_params(
             R"(SELECT msg_id, role, content, created_at

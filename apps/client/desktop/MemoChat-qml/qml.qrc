@@ -80,6 +80,7 @@
         <file>qml/agent/AgentComposerBar.qml</file>
         <file>qml/agent/SmartFeatureBar.qml</file>
         <file>qml/agent/KnowledgeBasePane.qml</file>
+        <file>qml/agent/AgentTracePane.qml</file>
         <file>qml/r18/R18ShellPane.qml</file>
     </qresource>
 </RCC>

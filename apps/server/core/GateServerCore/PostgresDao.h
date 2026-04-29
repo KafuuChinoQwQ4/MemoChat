@@ -261,7 +261,7 @@ public:
 
 	// Moments operations
 	bool AddMoment(const MomentInfo& moment, int64_t* moment_id = nullptr);
-	bool GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int limit,
+	bool GetMomentsFeed(int viewer_uid, int64_t last_moment_id, int limit, int author_uid,
 		std::vector<MomentInfo>& moments, bool& has_more);
 	bool CanViewMoment(int viewer_uid, const MomentInfo& moment);
 	bool GetMomentById(int64_t moment_id, MomentInfo& moment);

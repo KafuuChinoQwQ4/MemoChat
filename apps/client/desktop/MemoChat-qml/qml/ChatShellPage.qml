@@ -20,6 +20,8 @@ Rectangle {
     property int lastMainTab: controller.chatTab
     property bool createGroupDialogActivated: false
     property bool groupManagePopupActivated: false
+    property int momentsSelectedUid: 0
+    property string momentsSelectedName: ""
     property bool r18Mode: false
     property real flipAngle: 0
     readonly property real pinkProgress: Math.max(0, Math.min(1, root.flipAngle / 180))
@@ -57,6 +59,12 @@ Rectangle {
         r18Mode = !r18Mode
         flipAnimation.to = r18Mode ? 180 : 0
         flipAnimation.start()
+    }
+
+    function switchAccountToLogin() {
+        Qt.callLater(function() {
+            controller.switchToLogin()
+        })
     }
 
     NumberAnimation {
@@ -105,11 +113,11 @@ Rectangle {
                 Layout.fillHeight: true
                 backdrop: backdropLayer
                 cornerRadius: 14
-                blurRadius: 18
-                fillColor: root.mixColor(Qt.rgba(0.20, 0.28, 0.38, 0.34), Qt.rgba(1.0, 0.58, 0.76, 0.22))
-                strokeColor: root.mixColor(Qt.rgba(1, 1, 1, 0.36), Qt.rgba(1.0, 0.78, 0.88, 0.42))
-                glowTopColor: root.mixColor(Qt.rgba(1, 1, 1, 0.16), Qt.rgba(1.0, 0.88, 0.94, 0.28))
-                glowBottomColor: root.mixColor(Qt.rgba(1, 1, 1, 0.02), Qt.rgba(1.0, 0.56, 0.74, 0.08))
+                blurEnabled: false
+                fillColor: root.mixColor(Qt.rgba(0.20, 0.28, 0.38, 0.34), Qt.rgba(1.0, 0.68, 0.82, 0.26))
+                strokeColor: root.mixColor(Qt.rgba(1, 1, 1, 0.36), Qt.rgba(1.0, 0.84, 0.92, 0.42))
+                glowTopColor: root.mixColor(Qt.rgba(1, 1, 1, 0.16), Qt.rgba(1.0, 0.88, 0.94, 0.20))
+                glowBottomColor: root.mixColor(Qt.rgba(1, 1, 1, 0.02), Qt.rgba(1.0, 0.66, 0.82, 0.10))
                 opacity: root.stageValue(0.02, 0.20)
 
             ChatSideBar {
@@ -175,6 +183,8 @@ Rectangle {
                 agentCurrentSessionId: controller.agentController ? controller.agentController.currentSessionId : ""
                 agentCurrentModel: controller.agentController ? controller.agentController.currentModel : ""
                 agentBusy: controller.agentController ? (controller.agentController.loading || controller.agentController.streaming) : false
+                momentsSelectedUid: root.momentsSelectedUid
+                momentsSelectedName: root.momentsSelectedName
                 onDialogUidSelected: function(uid) { controller.selectDialogByUid(uid) }
                 onChatIndexSelected: function(index) { controller.selectChatIndex(index) }
                 onGroupIndexSelected: function(index) { controller.selectGroupIndex(index) }
@@ -210,6 +220,13 @@ Rectangle {
                 onAgentSessionDeleted: function(sessionId) {
                     if (controller.agentController) {
                         controller.agentController.deleteSession(sessionId)
+                    }
+                }
+                onMomentFriendSelected: function(uid, displayName) {
+                    root.momentsSelectedUid = uid
+                    root.momentsSelectedName = displayName || ""
+                    if (controller.momentsController) {
+                        controller.momentsController.loadFeedForAuthor(uid)
                     }
                 }
                 onDialogPinToggled: function(uid) { controller.toggleDialogPinnedByUid(uid) }
@@ -331,8 +348,8 @@ Rectangle {
                     sourceComponent: Component {
                         ChatMorePane {
                             backdrop: backdropLayer
-                            onSwitchAccountRequested: controller.switchToLogin()
-                            onLogoutRequested: controller.switchToLogin()
+                            onSwitchAccountRequested: root.switchAccountToLogin()
+                            onLogoutRequested: root.switchAccountToLogin()
                         }
                     }
                 }
@@ -345,12 +362,19 @@ Rectangle {
                         AgentPane {
                             agentController: controller.agentController
                             messageModel: controller.agentMessageModel
+                            sessions: controller.agentController ? controller.agentController.sessions : []
                             currentSessionId: controller.agentController ? controller.agentController.currentSessionId : ""
                             currentModel: controller.agentController ? controller.agentController.currentModel : ""
                             availableModels: controller.agentController ? controller.agentController.availableModels : []
+                            modelRefreshBusy: controller.agentController ? controller.agentController.modelRefreshBusy : false
+                            apiProviderBusy: controller.agentController ? controller.agentController.apiProviderBusy : false
+                            apiProviderStatus: controller.agentController ? controller.agentController.apiProviderStatus : ""
                             loading: controller.agentController ? controller.agentController.loading : false
                             streaming: controller.agentController ? controller.agentController.streaming : false
                             errorMsg: controller.agentController ? controller.agentController.error : ""
+                            knowledgeBusy: controller.agentController ? controller.agentController.knowledgeBusy : false
+                            knowledgeStatusText: controller.agentController ? controller.agentController.knowledgeStatusText : ""
+                            knowledgeError: controller.agentController ? controller.agentController.knowledgeError : ""
                             selfAvatar: controller.currentUserIcon
                         }
                     }
@@ -366,6 +390,8 @@ Rectangle {
                             appController: controller
                             momentsModel: controller.momentsModel
                             momentsController: controller.momentsController
+                            selectedFriendUid: root.momentsSelectedUid
+                            selectedFriendName: root.momentsSelectedName
                         }
                     }
                 }
@@ -420,11 +446,11 @@ Rectangle {
                 Layout.fillHeight: true
                 backdrop: backdropLayer
                 cornerRadius: 14
-                blurRadius: 18
-                fillColor: root.mixColor(Qt.rgba(0.20, 0.28, 0.38, 0.34), Qt.rgba(1.0, 0.58, 0.76, 0.22))
-                strokeColor: root.mixColor(Qt.rgba(1, 1, 1, 0.36), Qt.rgba(1.0, 0.78, 0.88, 0.42))
-                glowTopColor: root.mixColor(Qt.rgba(1, 1, 1, 0.16), Qt.rgba(1.0, 0.88, 0.94, 0.28))
-                glowBottomColor: root.mixColor(Qt.rgba(1, 1, 1, 0.02), Qt.rgba(1.0, 0.56, 0.74, 0.08))
+                blurEnabled: false
+                fillColor: root.mixColor(Qt.rgba(0.20, 0.28, 0.38, 0.34), Qt.rgba(1.0, 0.68, 0.82, 0.26))
+                strokeColor: root.mixColor(Qt.rgba(1, 1, 1, 0.36), Qt.rgba(1.0, 0.84, 0.92, 0.42))
+                glowTopColor: root.mixColor(Qt.rgba(1, 1, 1, 0.16), Qt.rgba(1.0, 0.88, 0.94, 0.20))
+                glowBottomColor: root.mixColor(Qt.rgba(1, 1, 1, 0.02), Qt.rgba(1.0, 0.66, 0.82, 0.10))
 
                 ChatSideBar {
                     anchors.fill: parent
@@ -450,11 +476,11 @@ Rectangle {
                 Layout.fillHeight: true
                 backdrop: backdropLayer
                 cornerRadius: 16
-                blurRadius: 22
-                fillColor: Qt.rgba(1.0, 0.68, 0.82, 0.14)
-                strokeColor: Qt.rgba(1.0, 0.84, 0.92, 0.42)
-                glowTopColor: Qt.rgba(1.0, 0.92, 0.96, 0.30)
-                glowBottomColor: Qt.rgba(1.0, 0.64, 0.80, 0.06)
+                blurEnabled: false
+                fillColor: Qt.rgba(1.0, 0.72, 0.84, 0.22)
+                strokeColor: Qt.rgba(1.0, 0.84, 0.92, 0.38)
+                glowTopColor: Qt.rgba(1.0, 0.88, 0.94, 0.16)
+                glowBottomColor: Qt.rgba(1.0, 0.66, 0.82, 0.08)
 
                 Loader {
                     anchors.fill: parent

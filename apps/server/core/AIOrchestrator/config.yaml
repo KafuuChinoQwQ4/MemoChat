@@ -12,12 +12,15 @@ llm:
       - name: "qwen3:4b"
         display: "Qwen 3 4B"
         context_window: 8192
+        supports_thinking: true
       - name: "qwen2.5:3b"
         display: "Qwen 2.5 3B"
         context_window: 8192
+        supports_thinking: false
       - name: "qwen2.5-coder:3b"
         display: "Qwen 2.5 Coder 3B"
         context_window: 8192
+        supports_thinking: false
     enabled: true
 
   openai:
@@ -27,9 +30,11 @@ llm:
       - name: "gpt-4o"
         display: "GPT-4o"
         context_window: 128000
+        supports_thinking: false
       - name: "gpt-4o-mini"
         display: "GPT-4o Mini"
         context_window: 128000
+        supports_thinking: false
     enabled: false
 
   anthropic:
@@ -39,6 +44,7 @@ llm:
       - name: "claude-3-5-sonnet-20241022"
         display: "Claude 3.5 Sonnet"
         context_window: 200000
+        supports_thinking: false
     enabled: false
 
   kimi:
@@ -48,6 +54,7 @@ llm:
       - name: "moonshot-v1-8k"
         display: "Kimi 8K"
         context_window: 8192
+        supports_thinking: false
     enabled: false
 
 embedding:
@@ -183,6 +190,124 @@ harness:
           - name: "Qwen/Qwen3-14B"
             display: "Qwen 3 14B (Local OpenAI-Compatible)"
             context_window: 32768
+            supports_thinking: true
+      - name: "deepseek"
+        adapter: "openai_compatible"
+        deployment: "external_api"
+        base_url: "https://api.deepseek.com"
+        api_key_env: "DEEPSEEK_API_KEY"
+        default_model: "deepseek-chat"
+        enabled: false
+        timeout_sec: 120
+        models:
+          - name: "deepseek-chat"
+            display: "DeepSeek Chat"
+            context_window: 64000
+            supports_thinking: false
+          - name: "deepseek-reasoner"
+            display: "DeepSeek Reasoner"
+            context_window: 64000
+            supports_thinking: true
+      - name: "qwen"
+        adapter: "openai_compatible"
+        deployment: "external_api"
+        base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        api_key_env: "DASHSCOPE_API_KEY"
+        default_model: "qwen-plus"
+        enabled: false
+        timeout_sec: 120
+        thinking_parameter: "enable_thinking"
+        models:
+          - name: "qwen-plus"
+            display: "Qwen Plus"
+            context_window: 131072
+            supports_thinking: true
+          - name: "qwen-max"
+            display: "Qwen Max"
+            context_window: 32768
+            supports_thinking: true
+      - name: "glm"
+        adapter: "openai_compatible"
+        deployment: "external_api"
+        base_url: "https://open.bigmodel.cn/api/paas/v4"
+        api_key_env: "ZHIPUAI_API_KEY"
+        default_model: "glm-4-plus"
+        enabled: false
+        timeout_sec: 120
+        models:
+          - name: "glm-4-plus"
+            display: "GLM-4 Plus"
+            context_window: 128000
+            supports_thinking: false
+          - name: "glm-4-flash"
+            display: "GLM-4 Flash"
+            context_window: 128000
+            supports_thinking: false
+      - name: "kimi-api"
+        adapter: "openai_compatible"
+        deployment: "external_api"
+        base_url: "https://api.moonshot.ai/v1"
+        api_key_env: "MOONSHOT_API_KEY"
+        default_model: "kimi-k2-0905-preview"
+        enabled: false
+        timeout_sec: 120
+        models:
+          - name: "kimi-k2-0905-preview"
+            display: "Kimi K2"
+            context_window: 128000
+            supports_thinking: false
+          - name: "moonshot-v1-8k"
+            display: "Kimi 8K"
+            context_window: 8192
+            supports_thinking: false
+      - name: "gpt"
+        adapter: "openai_compatible"
+        deployment: "external_api"
+        base_url: "https://api.openai.com/v1"
+        api_key_env: "OPENAI_API_KEY"
+        default_model: "gpt-4o-mini"
+        enabled: false
+        timeout_sec: 120
+        models:
+          - name: "gpt-4o-mini"
+            display: "GPT-4o Mini"
+            context_window: 128000
+            supports_thinking: false
+          - name: "gpt-4o"
+            display: "GPT-4o"
+            context_window: 128000
+            supports_thinking: false
+      - name: "gemini"
+        adapter: "openai_compatible"
+        deployment: "external_api"
+        base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
+        api_key_env: "GEMINI_API_KEY"
+        default_model: "gemini-2.5-flash"
+        enabled: false
+        timeout_sec: 120
+        thinking_parameter: "gemini_thinking"
+        models:
+          - name: "gemini-2.5-flash"
+            display: "Gemini 2.5 Flash"
+            context_window: 1048576
+            supports_thinking: true
+          - name: "gemini-2.5-pro"
+            display: "Gemini 2.5 Pro"
+            context_window: 1048576
+            supports_thinking: true
+      - name: "claude-api"
+        adapter: "anthropic"
+        deployment: "external_api"
+        base_url: "https://api.anthropic.com/v1"
+        api_key_env: "ANTHROPIC_API_KEY"
+        default_model: "claude-3-5-sonnet-20241022"
+        enabled: false
+        timeout_sec: 120
+        models:
+          - name: "claude-3-5-sonnet-20241022"
+            display: "Claude 3.5 Sonnet"
+            context_window: 200000
+            supports_thinking: false
 
 postgres:
   host: "127.0.0.1"

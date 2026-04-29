@@ -1586,7 +1586,7 @@ bool PostgresDao::SavePrivateMessage(const PrivateMessageInfo& msg) {
 	}
 }
 
-bool PostgresDao::GetUndeliveredPrivateMessages(const int& to_uid, const int64_t& since_read_ts, int limit,
+bool PostgresDao::GetUndeliveredPrivateMessages(const int& to_uid, const int64_t& after_created_at, const std::string& after_msg_id, int limit,
 	std::vector<std::shared_ptr<PrivateMessageInfo>>& messages) {
 	messages.clear();
 	if (to_uid <= 0 || limit <= 0) {
@@ -1601,11 +1601,16 @@ bool PostgresDao::GetUndeliveredPrivateMessages(const int& to_uid, const int64_t
 				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
 				"reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at "
 				"FROM chat_private_msg "
-				"WHERE to_uid = $1 AND created_at > $2 AND deleted_at_ms = 0 "
+				"WHERE to_uid = $1 AND (created_at > $2 OR (created_at = $2 AND msg_id > $3)) AND deleted_at_ms = 0 "
+				"AND created_at > COALESCE(( "
+				"    SELECT read_ts FROM chat_private_read_state "
+				"    WHERE uid = $1 AND peer_uid = chat_private_msg.from_uid "
+				"), 0) "
 				"ORDER BY created_at ASC, msg_id ASC "
-				"LIMIT $3",
+				"LIMIT $4",
 				to_uid,
-				since_read_ts,
+				after_created_at,
+				after_msg_id,
 				limit);
 			for (const auto& row : rows) {
 				auto msg = std::make_shared<PrivateMessageInfo>();
@@ -1644,12 +1649,19 @@ bool PostgresDao::GetUndeliveredPrivateMessages(const int& to_uid, const int64_t
 				"SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
 				"reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms, created_at "
 				"FROM chat_private_msg "
-				"WHERE to_uid = ? AND created_at > ? AND deleted_at_ms = 0 "
+				"WHERE to_uid = ? AND (created_at > ? OR (created_at = ? AND msg_id > ?)) AND deleted_at_ms = 0 "
+				"AND created_at > COALESCE(( "
+				"    SELECT read_ts FROM chat_private_read_state "
+				"    WHERE uid = ? AND peer_uid = chat_private_msg.from_uid "
+				"), 0) "
 				"ORDER BY created_at ASC, msg_id ASC "
 				"LIMIT ?"));
 		pstmt->setString(1, std::to_string(to_uid));
-		pstmt->setInt64(2, since_read_ts);
-		pstmt->setInt(3, limit);
+		pstmt->setInt64(2, after_created_at);
+		pstmt->setInt64(3, after_created_at);
+		pstmt->setString(4, after_msg_id);
+		pstmt->setInt(5, to_uid);
+		pstmt->setInt(6, limit);
 		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 		while (res->next()) {
 			auto msg = std::make_shared<PrivateMessageInfo>();

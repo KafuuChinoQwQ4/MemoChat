@@ -241,8 +241,15 @@ void AppController::switchToLogin()
     qInfo() << "Switching to login page, current page:" << _page
             << "pending uid:" << _pending_uid
             << "chat connected:" << _gateway.chatTransport()->isConnected();
+    const bool already_on_login_page = _page == LoginPage;
     _register_countdown_timer.stop();
     _heartbeat_timer.stop();
+    _chat_login_timeout_timer.stop();
+    _ignore_next_login_disconnect = true;
+    setPage(LoginPage);
+    if (already_on_login_page) {
+        emit pageChanged();
+    }
     _livekit_bridge.leaveRoom();
     _call_session_model.clear();
     _chat_server_host.clear();
@@ -253,9 +260,6 @@ void AppController::switchToLogin()
     _pending_login_ticket.clear();
     resetReconnectState();
     resetHeartbeatTracking();
-    _chat_login_timeout_timer.stop();
-    _ignore_next_login_disconnect = true;
-    setPage(LoginPage);
     _gateway.chatTransport()->CloseConnection();
     if (auto http = _gateway.httpMgr()) {
         http->clearConnectionCache();

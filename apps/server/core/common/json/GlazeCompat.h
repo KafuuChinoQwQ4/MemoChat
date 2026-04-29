@@ -969,11 +969,19 @@ inline T glaze_safe_get(JsonValue& val, const char* key, T default_val) {
 
 template<typename T>
 inline T glaze_safe_get(const JsonValue& val, T default_val) {
-    if constexpr (std::is_same_v<T, std::string>) { return val.asString(); }
-    else if constexpr (std::is_same_v<T, int>) { return val.asInt(); }
-    else if constexpr (std::is_same_v<T, int64_t>) { return val.asInt64(); }
-    else if constexpr (std::is_same_v<T, double>) { return val.asDouble(); }
-    else if constexpr (std::is_same_v<T, bool>) { return val.asBool(); }
+    try {
+        if constexpr (std::is_same_v<T, std::string>) { return val.asString(); }
+        else if constexpr (std::is_same_v<T, int>) { return val.isNull() ? default_val : val.asInt(); }
+        else if constexpr (std::is_same_v<T, int64_t>) { return val.isNull() ? default_val : val.asInt64(); }
+        else if constexpr (std::is_same_v<T, double>) { return val.isNull() ? default_val : val.asDouble(); }
+        else if constexpr (std::is_same_v<T, bool>) {
+            if (val.isNull()) return default_val;
+            if (val.impl().holds<bool>()) return val.impl().get<bool>();
+            return val.asBool();
+        }
+    } catch (...) {
+        return default_val;
+    }
     return default_val;
 }
 
@@ -994,17 +1002,26 @@ inline T glaze_safe_get(const JsonValue& val, const char* key, T default_val) {
 
 template<typename T>
 inline T glaze_safe_get(const glz::generic_json<>& val, T default_val) {
-    if constexpr (std::is_same_v<T, std::string>) {
-        if (val.holds<std::string>()) return val.get<std::string>();
-        return "";
-    } else if constexpr (std::is_same_v<T, int>) {
-        return val.as<int>();
-    } else if constexpr (std::is_same_v<T, int64_t>) {
-        return val.as<int64_t>();
-    } else if constexpr (std::is_same_v<T, double>) {
-        return val.as<double>();
-    } else if constexpr (std::is_same_v<T, bool>) {
-        return val.as<bool>();
+    try {
+        if constexpr (std::is_same_v<T, std::string>) {
+            if (val.holds<std::string>()) return val.get<std::string>();
+            return "";
+        } else if constexpr (std::is_same_v<T, int>) {
+            if (val.holds<std::nullptr_t>()) return default_val;
+            return val.as<int>();
+        } else if constexpr (std::is_same_v<T, int64_t>) {
+            if (val.holds<std::nullptr_t>()) return default_val;
+            return val.as<int64_t>();
+        } else if constexpr (std::is_same_v<T, double>) {
+            if (val.holds<std::nullptr_t>()) return default_val;
+            return val.as<double>();
+        } else if constexpr (std::is_same_v<T, bool>) {
+            if (val.holds<std::nullptr_t>()) return default_val;
+            if (val.holds<bool>()) return val.get<bool>();
+            return val.as<bool>();
+        }
+    } catch (...) {
+        return default_val;
     }
     return default_val;
 }

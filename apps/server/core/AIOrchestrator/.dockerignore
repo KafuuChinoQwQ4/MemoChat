@@ -4,8 +4,11 @@ __pycache__/
 *.pyd
 .pytest_cache/
 .mypy_cache/
+.cache/
+.data/
 .venv/
 venv/
 build/
 dist/
 *.log
+tests/__pycache__/

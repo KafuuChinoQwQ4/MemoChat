@@ -50,6 +50,10 @@ public:
                             const ai::AIListModelsReq* request,
                             ai::AIListModelsRsp* reply) override;
 
+    grpc::Status RegisterApiProvider(ServerContext* context,
+                                     const ai::AIRegisterApiProviderReq* request,
+                                     ai::AIRegisterApiProviderRsp* reply) override;
+
     grpc::Status KbUpload(ServerContext* context,
                            const ai::AIKbUploadReq* request,
                            ai::AIKbUploadRsp* reply) override;

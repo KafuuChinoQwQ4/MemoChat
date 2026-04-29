@@ -12,14 +12,18 @@ namespace {
 
 pqxx::connection* GetPgConn() {
     auto& cfg = ConfigMgr::Inst();
+    const auto schema = cfg["Postgres"]["Schema"].empty() ? "public" : cfg["Postgres"]["Schema"];
     std::ostringstream conn_str;
     conn_str << "host=" << cfg["Postgres"]["Host"]
              << " port=" << cfg["Postgres"]["Port"]
              << " user=" << cfg["Postgres"]["User"]
              << " password=" << cfg["Postgres"]["Passwd"]
-             << " dbname=" << cfg["Postgres"]["Database"]
-             << " options=-c search_path=" << cfg["Postgres"]["Schema"];
-    return new pqxx::connection(conn_str.str());
+             << " dbname=" << cfg["Postgres"]["Database"];
+    auto conn = std::make_unique<pqxx::connection>(conn_str.str());
+    pqxx::work tx(*conn);
+    tx.exec0("SET search_path TO " + tx.quote_name(schema) + ",public");
+    tx.commit();
+    return conn.release();
 }
 
 } // namespace

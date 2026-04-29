@@ -1,0 +1,1 @@
+AI session deletion uses a rounded glass confirmation popup, and the AI conversation view follows newly inserted and streaming messages immediately instead of requiring a page switch to repaint or scroll.

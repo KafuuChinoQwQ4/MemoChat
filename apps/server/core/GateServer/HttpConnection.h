@@ -2,7 +2,10 @@
 #include "const.h"
 #include "logging/Telemetry.h"
 
+#include <atomic>
+#include <deque>
 #include <memory>
+#include <string>
 
 class HttpConnection: public std::enable_shared_from_this<HttpConnection>
 {
@@ -25,8 +28,18 @@ public:
 		_response.set(f, value);
 	}
 	http::response<http::dynamic_body>& GetResponse() { return _response; }
+	void StartSseStream();
+	void WriteStreamChunk(std::string chunk);
+	void FinishStream();
+	bool HasStreamingResponse() const {
+		return _streaming_response.load(std::memory_order_acquire);
+	}
 private:
 	using FileResponse = http::response<http::file_body>;
+	struct StreamWrite {
+		std::string data;
+		bool closes = false;
+	};
 
 	void CheckDeadline();
 	void FinishRequest(beast::error_code ec);
@@ -34,6 +47,9 @@ private:
 	void WriteFileResponse();
 	void WriteResponse();
 	void HandleReq();
+	void EnsureSseStreamStarted();
+	void QueueStreamWrite(std::string data, bool closes);
+	void DoStreamWrite();
 	tcp::socket  _socket;
 	// The buffer for performing reads.
 	beast::flat_buffer  _buffer{ 8192 };
@@ -46,7 +62,7 @@ private:
 
 	// The timer for putting a deadline on connection processing.
 	net::steady_timer deadline_{
-		_socket.get_executor(), std::chrono::seconds(60) };
+		_socket.get_executor(), std::chrono::seconds(600) };
 
 	std::string _get_url;
 	std::unordered_map<std::string, std::string> _get_params;
@@ -57,4 +73,10 @@ private:
 	std::string _send_file_path;
 	std::string _send_file_content_type;
 	std::shared_ptr<FileResponse> _file_response;
+	std::atomic_bool _streaming_response{false};
+	bool _stream_header_started = false;
+	bool _stream_writing = false;
+	bool _stream_finish_requested = false;
+	bool _stream_closed = false;
+	std::deque<StreamWrite> _stream_write_queue;
 };

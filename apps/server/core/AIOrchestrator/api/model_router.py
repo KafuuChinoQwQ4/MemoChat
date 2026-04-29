@@ -5,7 +5,8 @@ from fastapi import APIRouter
 
 from config import settings
 from harness import HarnessContainer
-from schemas.api import ListModelsRsp, ModelInfo, ProviderInfo
+from observability.metrics import ai_metrics
+from schemas.api import ListModelsRsp, ModelInfo, ProviderInfo, RegisterApiProviderReq, RegisterApiProviderRsp
 
 router = APIRouter()
 
@@ -36,6 +37,7 @@ async def list_models():
                 display_name=model.get("display", model.get("name", "")),
                 is_enabled=endpoint.enabled,
                 context_window=model.get("context_window", 0),
+                supports_thinking=bool(model.get("supports_thinking", False)),
                 provider_id=endpoint.provider_id,
                 adapter=endpoint.adapter,
                 deployment=endpoint.deployment,
@@ -47,9 +49,47 @@ async def list_models():
     if default_model is None and model_items:
         default_model = model_items[0]
 
+    ai_metrics.http_requests.inc(route="/models", status="ok")
     return ListModelsRsp(
         code=0,
         models=model_items,
         default_model=default_model,
         providers=provider_items,
+    )
+
+
+@router.post("/api-provider", response_model=RegisterApiProviderRsp)
+async def register_api_provider(req: RegisterApiProviderReq):
+    container = HarnessContainer.get_instance()
+    try:
+        endpoint = await container.llm_registry.register_api_provider(
+            provider_name=req.provider_name,
+            base_url=req.base_url,
+            api_key=req.api_key,
+            adapter=req.adapter,
+        )
+    except Exception as exc:
+        ai_metrics.http_requests.inc(route="/models/api-provider", status="error")
+        return RegisterApiProviderRsp(code=400, message=str(exc))
+
+    models = [
+        ModelInfo(
+            model_type=endpoint.provider_id,
+            model_name=model.get("name", ""),
+            display_name=model.get("display", model.get("name", "")),
+            is_enabled=True,
+            context_window=model.get("context_window", 0),
+            supports_thinking=bool(model.get("supports_thinking", False)),
+            provider_id=endpoint.provider_id,
+            adapter=endpoint.adapter,
+            deployment=endpoint.deployment,
+        )
+        for model in endpoint.models
+    ]
+    ai_metrics.http_requests.inc(route="/models/api-provider", status="ok")
+    return RegisterApiProviderRsp(
+        code=0,
+        message="ok",
+        provider_id=endpoint.provider_id,
+        models=models,
     )

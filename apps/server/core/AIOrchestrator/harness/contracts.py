@@ -100,6 +100,7 @@ class ProviderEndpoint:
     base_url: str
     default_model: str
     enabled: bool
+    thinking_parameter: str = ""
     models: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:

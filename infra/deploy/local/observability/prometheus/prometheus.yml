@@ -2,6 +2,14 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["memochat-alertmanager:9093"]
+
 remote_write:
   - url: http://memochat-influxdb:8086/api/v1/write
     headers:
@@ -23,6 +31,11 @@ scrape_configs:
   - job_name: memo_ops_collector
     static_configs:
       - targets: ["host.docker.internal:19100"]
+
+  - job_name: ai_orchestrator
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8096"]
 
   - job_name: otel_collector
     static_configs:

@@ -1,0 +1,1 @@
+AI sessions can be deleted from the assistant session list, and the Moments tab left panel lists friends for quick feed filtering. Selecting a friend loads that person's visible Moments entries sorted by publish time while the all-feed entry keeps the original feed behavior.

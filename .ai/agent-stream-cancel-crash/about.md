@@ -1,0 +1,1 @@
+﻿MemoChat AI stream cancellation no longer crashes the desktop client. Cancelling a streaming reply safely detaches the QNetworkReply, aborts it without reentrant double access, finalizes the current assistant bubble, and leaves any partial content visible.

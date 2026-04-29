@@ -51,6 +51,40 @@ jobs:
             build/bin/Release/StatusServer.exe
             build/bin/Release/ChatServer.exe
 
+  ai-agent-regression:
+    name: AI Agent Offline Regression
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: apps/server/core/AIOrchestrator/requirements-ci.txt
+
+      - name: Install Python test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r apps/server/core/AIOrchestrator/requirements-ci.txt
+
+      - name: Run AIOrchestrator offline tests
+        working-directory: apps/server/core/AIOrchestrator
+        run: |
+          python -m unittest tests.test_ollama_recovery tests.test_harness_structure
+
+      - name: Validate AI smoke script syntax
+        shell: pwsh
+        run: |
+          $null = [scriptblock]::Create((Get-Content tools/scripts/ai_agent_smoke.ps1 -Raw))
+
+      - name: Validate AI observability config
+        shell: pwsh
+        run: |
+          python -c "import json, yaml; json.load(open('infra/deploy/local/observability/grafana/dashboards/ai-agent-overview.json', encoding='utf-8')); [yaml.safe_load(open(path, encoding='utf-8')) for path in ['infra/deploy/local/observability/alertmanager/alertmanager.yml', 'infra/deploy/local/observability/loki/config.yaml', 'infra/deploy/local/observability/prometheus/prometheus.yml', 'infra/deploy/local/observability/prometheus/rules/ai_orchestrator.yml']]"
+
   build-varifyserver:
     name: Build VarifyServer
     runs-on: ubuntu-latest

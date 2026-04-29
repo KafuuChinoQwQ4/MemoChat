@@ -8,6 +8,7 @@
 #include "logging/TraceContext.h"
 #include <fstream>
 #include <map>
+#include <sstream>
 
 HttpConnection::HttpConnection(boost::asio::io_context& ioc)
     : _socket(ioc) {}
@@ -16,6 +17,48 @@ void HttpConnection::SetFileResponse(const std::string& file_path, const std::st
     _send_file_response = true;
     _send_file_path = file_path;
     _send_file_content_type = content_type;
+}
+
+void HttpConnection::StartSseStream() {
+    _streaming_response.store(true, std::memory_order_release);
+    auto self = shared_from_this();
+    boost::asio::post(_socket.get_executor(), [self]() {
+        self->EnsureSseStreamStarted();
+    });
+}
+
+void HttpConnection::WriteStreamChunk(std::string chunk) {
+    if (!HasStreamingResponse()) {
+        return;
+    }
+    auto self = shared_from_this();
+    boost::asio::post(_socket.get_executor(), [self, chunk = std::move(chunk)]() mutable {
+        if (self->_stream_closed || self->_stream_finish_requested) {
+            return;
+        }
+        self->EnsureSseStreamStarted();
+        if (chunk.empty()) {
+            return;
+        }
+        std::ostringstream wire;
+        wire << std::hex << chunk.size() << "\r\n" << chunk << "\r\n";
+        self->QueueStreamWrite(wire.str(), false);
+    });
+}
+
+void HttpConnection::FinishStream() {
+    if (!HasStreamingResponse()) {
+        return;
+    }
+    auto self = shared_from_this();
+    boost::asio::post(_socket.get_executor(), [self]() {
+        if (self->_stream_closed || self->_stream_finish_requested) {
+            return;
+        }
+        self->EnsureSseStreamStarted();
+        self->_stream_finish_requested = true;
+        self->QueueStreamWrite("0\r\n\r\n", true);
+    });
 }
 
 void HttpConnection::Start() {
@@ -185,16 +228,28 @@ void HttpConnection::HandleReq() {
             try {
                 auto* ioc = gateglobals::g_main_ioc;
                 bool handled = LogicSystem::GetInstance()->HandlePost(self->_request.target(), self);
+                if (!ioc) {
+                    self->WriteErrorResponse(http::status::internal_server_error, "internal error\r\n");
+                    return;
+                }
                 boost::asio::post(*ioc, [self, handled]() {
-                    if (!handled) {
-                        self->_response.result(http::status::not_found);
-                        self->_response.set(http::field::content_type, "text/plain");
-                        beast::ostream(self->_response.body()) << "url not found\r\n";
-                    } else {
-                        self->_response.result(http::status::ok);
+                    try {
+                        if (self->HasStreamingResponse()) {
+                            return;
+                        }
+                        if (!handled) {
+                            self->_response.result(http::status::not_found);
+                            self->_response.set(http::field::content_type, "text/plain");
+                            beast::ostream(self->_response.body()) << "url not found\r\n";
+                        } else {
+                            self->_response.result(http::status::ok);
+                        }
+                        self->_response.set(http::field::server, "GateServer");
+                        self->WriteResponse();
+                    } catch (const std::exception& e) {
+                        memolog::LogError("http.response.exception", "http response exception", {{"error", e.what()}});
+                        self->WriteErrorResponse(http::status::internal_server_error, "internal error\r\n");
                     }
-                    self->_response.set(http::field::server, "GateServer");
-                    self->WriteResponse();
                 });
             } catch (const std::exception& e) {
                 memolog::LogError("gate.worker.exception", "worker pool exception", {{"error", e.what()}});
@@ -212,8 +267,10 @@ void HttpConnection::HandleReq() {
 void HttpConnection::CheckDeadline() {
     auto self = shared_from_this();
 
+    deadline_.expires_after(std::chrono::seconds(600));
     deadline_.async_wait([self](beast::error_code ec) {
         if (!ec) {
+            memolog::LogWarn("http.deadline.expired", "http connection deadline expired");
             self->_socket.close(ec);
             self->_request_span.reset();
             memolog::TraceContext::Clear();
@@ -221,8 +278,80 @@ void HttpConnection::CheckDeadline() {
     });
 }
 
+void HttpConnection::EnsureSseStreamStarted() {
+    if (_stream_closed || _stream_header_started) {
+        return;
+    }
+    _stream_header_started = true;
+
+    beast::error_code option_ec;
+    _socket.set_option(tcp::no_delay(true), option_ec);
+    if (option_ec) {
+        memolog::LogWarn("http.stream.nodelay_failed", "failed to enable TCP_NODELAY",
+                         {{"error", option_ec.message()}});
+    }
+
+    std::ostringstream header;
+    header << "HTTP/1.1 200 OK\r\n"
+           << "Server: GateServer\r\n"
+           << "Content-Type: text/event-stream\r\n"
+           << "Cache-Control: no-cache\r\n"
+           << "Connection: close\r\n"
+           << "Transfer-Encoding: chunked\r\n"
+           << "Access-Control-Allow-Origin: *\r\n"
+           << "X-Accel-Buffering: no\r\n";
+    if (!_trace_id.empty()) {
+        header << "X-Trace-Id: " << _trace_id << "\r\n";
+    }
+    if (!_request_id.empty()) {
+        header << "X-Request-Id: " << _request_id << "\r\n";
+    }
+    header << "\r\n";
+    QueueStreamWrite(header.str(), false);
+}
+
+void HttpConnection::QueueStreamWrite(std::string data, bool closes) {
+    if (_stream_closed) {
+        return;
+    }
+    _stream_write_queue.push_back(StreamWrite{std::move(data), closes});
+    DoStreamWrite();
+}
+
+void HttpConnection::DoStreamWrite() {
+    if (_stream_writing || _stream_write_queue.empty() || _stream_closed) {
+        return;
+    }
+
+    _stream_writing = true;
+    auto self = shared_from_this();
+    boost::asio::async_write(
+        _socket,
+        boost::asio::buffer(_stream_write_queue.front().data),
+        [self](beast::error_code ec, std::size_t) {
+            bool closes = false;
+            if (!self->_stream_write_queue.empty()) {
+                closes = self->_stream_write_queue.front().closes;
+                self->_stream_write_queue.pop_front();
+            }
+            self->_stream_writing = false;
+
+            if (ec || closes) {
+                self->_stream_closed = true;
+                self->_stream_write_queue.clear();
+                self->FinishRequest(ec);
+                return;
+            }
+
+            self->DoStreamWrite();
+        });
+}
+
 void HttpConnection::FinishRequest(beast::error_code ec) {
     boost::ignore_unused(ec);
+    if (ec) {
+        memolog::LogWarn("http.response.write.failed", "http response write failed", {{"error", ec.message()}});
+    }
     beast::error_code shutdown_ec;
     _socket.shutdown(tcp::socket::shutdown_both, shutdown_ec);
     beast::error_code close_ec;

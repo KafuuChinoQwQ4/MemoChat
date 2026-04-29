@@ -6,11 +6,15 @@ import "../components"
 Rectangle {
     id: root
     color: "transparent"
+    clip: true
 
     property var agentController: null
     property var kbList: []
+    property bool busy: false
+    property string statusText: ""
+    property string errorText: ""
     property string _searchQuery: ""
-    property string _searchResult: ""
+    property string searchResult: ""
 
     signal reloadRequested()
 
@@ -52,13 +56,13 @@ Rectangle {
                 GlassButton {
                     Layout.preferredWidth: 64
                     Layout.preferredHeight: 28
-                    text: "搜索"
+                    text: root.busy ? "处理中" : "搜索"
                     textPixelSize: 12
                     cornerRadius: 6
                     normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
                     hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
                     pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
-                    enabled: searchField.text.length > 0
+                    enabled: searchField.text.length > 0 && !root.busy
                     onClicked: {
                         if (root.agentController) {
                             root.agentController.searchKnowledgeBase(searchField.text)
@@ -71,23 +75,47 @@ Rectangle {
         // 搜索结果
         Rectangle {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.preferredHeight: root._searchResult.length > 0 ? 180 : 0
+            Layout.preferredHeight: root.searchResult.length > 0 ? Math.min(150, Math.max(92, root.height * 0.24)) : 0
             radius: 10
             color: Qt.rgba(1, 1, 1, 0.20)
             border.color: Qt.rgba(1, 1, 1, 0.42)
-            visible: root._searchResult.length > 0
+            visible: root.searchResult.length > 0
+
+            ScrollView {
+                anchors.fill: parent
+                ScrollBar.vertical: GlassScrollBar { }
+                anchors.margins: 8
+                clip: true
+
+                TextArea {
+                    readOnly: true
+                    wrapMode: TextEdit.Wrap
+                    text: root.searchResult
+                    font.pixelSize: 13
+                    color: "#253247"
+                    textFormat: Text.PlainText
+                    background: null
+                    selectByMouse: true
+                }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: visible ? statusLabel.implicitHeight + 18 : 0
+            radius: 10
+            color: root.errorText.length > 0 ? Qt.rgba(0.89, 0.27, 0.27, 0.12) : Qt.rgba(0.35, 0.61, 0.90, 0.14)
+            border.color: root.errorText.length > 0 ? Qt.rgba(0.89, 0.27, 0.27, 0.24) : Qt.rgba(0.35, 0.61, 0.90, 0.24)
+            visible: root.busy || root.errorText.length > 0 || root.statusText.length > 0
 
             Label {
+                id: statusLabel
                 anchors.fill: parent
-                anchors.margins: 12
-                text: root._searchResult
+                anchors.margins: 9
+                text: root.errorText.length > 0 ? root.errorText : root.statusText
+                color: root.errorText.length > 0 ? "#c14d4d" : "#4e5d74"
+                font.pixelSize: 12
                 wrapMode: Text.Wrap
-                font.pixelSize: 13
-                color: "#253247"
-                textFormat: Text.PlainText
-                ScrollBar.vertical: GlassScrollBar { }
-                elide: Text.ElideNone
             }
         }
 
@@ -117,15 +145,15 @@ Rectangle {
 
                 Rectangle {
                     anchors.centerIn: parent
-                    width: 220
+                    width: Math.min(220, parent.width - 24)
                     height: 64
                     radius: 10
                     color: Qt.rgba(1, 1, 1, 0.20)
-                    visible: root.kbList.length === 0
+                    visible: !root.busy && root.errorText.length === 0 && root.kbList.length === 0
 
                     Label {
                         anchors.centerIn: parent
-                        text: "暂无知识库\n点击上方「上传文档」添加"
+                                text: "暂无知识库\n点击下方上传文档添加"
                         color: "#6a7b92"
                         font.pixelSize: 12
                         horizontalAlignment: Text.AlignHCenter
@@ -175,13 +203,13 @@ Rectangle {
                             text: "删除"
                             textPixelSize: 11
                             cornerRadius: 6
+                            enabled: !root.busy
                             normalColor: Qt.rgba(0.89, 0.27, 0.27, 0.20)
                             hoverColor: Qt.rgba(0.89, 0.27, 0.27, 0.30)
                             pressedColor: Qt.rgba(0.89, 0.27, 0.27, 0.40)
                             onClicked: {
                                 if (root.agentController && modelData.kb_id) {
                                     root.agentController.deleteKnowledgeBase(modelData.kb_id)
-                                    root.reloadRequested()
                                 }
                             }
                         }
@@ -201,9 +229,10 @@ Rectangle {
         GlassButton {
             Layout.fillWidth: true
             Layout.preferredHeight: 40
-            text: "📤 上传文档"
+            text: root.busy ? "处理中..." : "上传文档"
             textPixelSize: 14
             cornerRadius: 10
+            enabled: !root.busy
             normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.28)
             hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.38)
             pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.48)
@@ -237,11 +266,11 @@ Rectangle {
 
                 Rectangle {
                     anchors.centerIn: parent
-                    width: 340
-                    height: 200
+                    width: Math.min(340, Math.max(0, root.width - 32))
+                    height: Math.min(220, Math.max(0, root.height - 32))
                     radius: 12
-                    color: Qt.rgba(1, 1, 1, 0.95)
-                    border.color: Qt.rgba(1, 1, 1, 0.6)
+                    color: Qt.rgba(0.96, 0.98, 1.0, 0.86)
+                    border.color: Qt.rgba(1, 1, 1, 0.48)
 
                     ColumnLayout {
                         anchors.fill: parent
@@ -285,11 +314,14 @@ Rectangle {
                                 Layout.preferredHeight: 32
                                 textPixelSize: 13
                                 cornerRadius: 8
+                                enabled: !root.busy
                                 normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
                                 hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
                                 pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
                                 onClicked: {
-                                    // TODO: 调用 QML FileDialog
+                                    if (root.agentController) {
+                                        root.agentController.chooseAndUploadDocument()
+                                    }
                                     uploadDialogLoader.active = false
                                 }
                             }
@@ -297,6 +329,12 @@ Rectangle {
                     }
                 }
             }
+        }
+    }
+
+    Component.onCompleted: {
+        if (root.agentController) {
+            root.agentController.listKnowledgeBases()
         }
     }
 }
