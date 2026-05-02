@@ -4,6 +4,7 @@ build-*
 /开发文档/
 
 # ---- Local environment / credentials ----
+.ai/
 .env
 .env.*
 !.env.example
