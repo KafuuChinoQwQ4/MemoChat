@@ -24,7 +24,14 @@ Rectangle {
     property string momentsSelectedName: ""
     property bool r18Mode: false
     property real flipAngle: 0
-    readonly property real pinkProgress: Math.max(0, Math.min(1, root.flipAngle / 180))
+    property int r18ViewMode: 0
+    readonly property real acrylicPinkProgress: 0
+    readonly property var r18NavigationItems: [
+        { "label": "主页", "icon": "qrc:/icons/r18_home.png", "mode": 0 },
+        { "label": "本地", "icon": "qrc:/icons/r18_local.png", "mode": 5 },
+        { "label": "导航", "icon": "qrc:/icons/r18_navigation.png", "mode": 1 },
+        { "label": "数据源", "icon": "qrc:/icons/r18_datasource.png", "mode": 4 }
+    ]
 
     Connections {
         target: controller
@@ -39,16 +46,9 @@ Rectangle {
         return Math.max(0, Math.min(1, (revealProgress - start) / span))
     }
 
-    function mixColor(fromColor, toColor) {
-        return Qt.rgba(fromColor.r + (toColor.r - fromColor.r) * root.pinkProgress,
-                       fromColor.g + (toColor.g - fromColor.g) * root.pinkProgress,
-                       fromColor.b + (toColor.b - fromColor.b) * root.pinkProgress,
-                       fromColor.a + (toColor.a - fromColor.a) * root.pinkProgress)
-    }
-
     function syncWindowAcrylicTint() {
         if (Window.window && Window.window.hasOwnProperty("acrylicPinkProgress")) {
-            Window.window.acrylicPinkProgress = root.pinkProgress
+            Window.window.acrylicPinkProgress = root.acrylicPinkProgress
         }
     }
 
@@ -78,11 +78,11 @@ Rectangle {
     GlassBackdrop {
         id: backdropLayer
         anchors.fill: parent
-        pinkProgress: root.pinkProgress
+        pinkProgress: root.acrylicPinkProgress
     }
 
     Component.onCompleted: syncWindowAcrylicTint()
-    onPinkProgressChanged: syncWindowAcrylicTint()
+    onAcrylicPinkProgressChanged: syncWindowAcrylicTint()
 
     Item {
         id: flipDeck
@@ -109,15 +109,15 @@ Rectangle {
             }
 
             GlassSurface {
-                Layout.preferredWidth: 56
+                Layout.preferredWidth: 72
                 Layout.fillHeight: true
                 backdrop: backdropLayer
                 cornerRadius: 14
-                blurEnabled: false
-                fillColor: root.mixColor(Qt.rgba(0.20, 0.28, 0.38, 0.34), Qt.rgba(1.0, 0.68, 0.82, 0.26))
-                strokeColor: root.mixColor(Qt.rgba(1, 1, 1, 0.36), Qt.rgba(1.0, 0.84, 0.92, 0.42))
-                glowTopColor: root.mixColor(Qt.rgba(1, 1, 1, 0.16), Qt.rgba(1.0, 0.88, 0.94, 0.20))
-                glowBottomColor: root.mixColor(Qt.rgba(1, 1, 1, 0.02), Qt.rgba(1.0, 0.66, 0.82, 0.10))
+                blurRadius: 18
+                fillColor: Qt.rgba(1, 1, 1, 0.18)
+                strokeColor: Qt.rgba(1, 1, 1, 0.56)
+                glowTopColor: Qt.rgba(1, 1, 1, 0.28)
+                glowBottomColor: Qt.rgba(1, 1, 1, 0.02)
                 opacity: root.stageValue(0.02, 0.20)
 
             ChatSideBar {
@@ -125,12 +125,6 @@ Rectangle {
                 currentTab: controller.chatTab
                 userIcon: controller.currentUserIcon
                 hasPendingApply: controller.hasPendingApply
-                backgroundColor: root.mixColor(Qt.rgba(0.16, 0.22, 0.31, 0.44), Qt.rgba(1.0, 0.62, 0.78, 0.18))
-                borderColor: root.mixColor(Qt.rgba(1, 1, 1, 0.16), Qt.rgba(1.0, 0.82, 0.90, 0.26))
-                buttonHoverColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.18), Qt.rgba(1.0, 0.46, 0.68, 0.16))
-                buttonPressedColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.26), Qt.rgba(1.0, 0.42, 0.66, 0.24))
-                buttonSelectedColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.30), Qt.rgba(1.0, 0.48, 0.70, 0.22))
-                buttonSelectedPressedColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.44), Qt.rgba(1.0, 0.42, 0.66, 0.32))
                 onR18Toggled: root.toggleR18Mode()
                 onTabSelected: function(tab) {
                     root.viewMode = 0
@@ -442,31 +436,129 @@ Rectangle {
             }
 
             GlassSurface {
-                Layout.preferredWidth: 56
+                Layout.preferredWidth: 72
                 Layout.fillHeight: true
                 backdrop: backdropLayer
                 cornerRadius: 14
-                blurEnabled: false
-                fillColor: root.mixColor(Qt.rgba(0.20, 0.28, 0.38, 0.34), Qt.rgba(1.0, 0.68, 0.82, 0.26))
-                strokeColor: root.mixColor(Qt.rgba(1, 1, 1, 0.36), Qt.rgba(1.0, 0.84, 0.92, 0.42))
-                glowTopColor: root.mixColor(Qt.rgba(1, 1, 1, 0.16), Qt.rgba(1.0, 0.88, 0.94, 0.20))
-                glowBottomColor: root.mixColor(Qt.rgba(1, 1, 1, 0.02), Qt.rgba(1.0, 0.66, 0.82, 0.10))
+                blurRadius: 18
+                fillColor: Qt.rgba(1, 1, 1, 0.18)
+                strokeColor: Qt.rgba(1, 1, 1, 0.56)
+                glowTopColor: Qt.rgba(1, 1, 1, 0.28)
+                glowBottomColor: Qt.rgba(1, 1, 1, 0.02)
 
-                ChatSideBar {
+                MouseArea {
                     anchors.fill: parent
-                    minimalMode: true
-                    currentTab: controller.chatTab
-                    userIcon: controller.currentUserIcon
-                    hasPendingApply: controller.hasPendingApply
-                    backgroundColor: root.mixColor(Qt.rgba(0.16, 0.22, 0.31, 0.44), Qt.rgba(1.0, 0.62, 0.78, 0.18))
-                    borderColor: root.mixColor(Qt.rgba(1, 1, 1, 0.16), Qt.rgba(1.0, 0.82, 0.90, 0.26))
-                    buttonHoverColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.18), Qt.rgba(1.0, 0.46, 0.68, 0.16))
-                    buttonPressedColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.26), Qt.rgba(1.0, 0.42, 0.66, 0.24))
-                    buttonSelectedColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.30), Qt.rgba(1.0, 0.48, 0.70, 0.22))
-                    buttonSelectedPressedColor: root.mixColor(Qt.rgba(0.75, 0.87, 1.0, 0.44), Qt.rgba(1.0, 0.42, 0.66, 0.32))
-                    onR18Toggled: root.toggleR18Mode()
-                    onTabSelected: function(tab) {
-                        controller.switchChatTab(tab)
+                    acceptedButtons: Qt.LeftButton
+                    cursorShape: Qt.SizeAllCursor
+                    onPressed: function(mouse) {
+                        mouse.accepted = false
+                        if (Window.window) {
+                            Window.window.startSystemMove()
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    z: 1
+                    anchors.fill: parent
+                    anchors.topMargin: 12
+                    anchors.bottomMargin: 12
+                    anchors.leftMargin: 8
+                    anchors.rightMargin: 8
+                    spacing: 14
+
+                    Repeater {
+                        model: root.r18NavigationItems
+                        delegate: Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 52
+                            radius: 13
+                            color: root.r18ViewMode === modelData.mode ? Qt.rgba(0.56, 0.70, 0.86, 0.26)
+                                                                       : navMouse.containsMouse ? Qt.rgba(0.56, 0.70, 0.86, 0.16)
+                                                                                                : "transparent"
+                            border.color: root.r18ViewMode === modelData.mode ? Qt.rgba(1, 1, 1, 0.54) : "transparent"
+
+                            Image {
+                                anchors.centerIn: parent
+                                width: 27
+                                height: 27
+                                source: modelData.icon
+                                fillMode: Image.PreserveAspectFit
+                                opacity: root.r18ViewMode === modelData.mode ? 0.98 : 0.62
+                                mipmap: true
+                            }
+
+                            MouseArea {
+                                id: navMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    root.r18ViewMode = modelData.mode
+                                    if (r18PaneLoader.item) {
+                                        r18PaneLoader.item.viewMode = modelData.mode
+                                    }
+                                }
+                            }
+
+                            ToolTip.visible: navMouse.containsMouse
+                            ToolTip.delay: 350
+                            ToolTip.text: modelData.label
+                        }
+                    }
+
+                    Item { Layout.fillHeight: true }
+
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 52
+                        property bool hovering: chatReturnMouse.containsMouse
+                        property bool pressed: chatReturnMouse.pressed
+                        scale: pressed ? 0.96 : (hovering ? 1.02 : 1.0)
+
+                        Behavior on scale {
+                            NumberAnimation {
+                                duration: 110
+                                easing.type: Easing.OutQuad
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 13
+                            color: chatReturnMouse.pressed ? Qt.rgba(0.56, 0.70, 0.86, 0.22)
+                                                           : chatReturnMouse.containsMouse ? Qt.rgba(0.56, 0.70, 0.86, 0.16)
+                                                                                           : "transparent"
+
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: 110
+                                    easing.type: Easing.OutQuad
+                                }
+                            }
+                        }
+
+                        Image {
+                            anchors.centerIn: parent
+                            width: 28
+                            height: 28
+                            source: "qrc:/icons/r18.png"
+                            fillMode: Image.PreserveAspectFit
+                            opacity: 0.72
+                            mipmap: true
+                        }
+
+                        MouseArea {
+                            id: chatReturnMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.toggleR18Mode()
+                        }
+
+                        ToolTip.visible: chatReturnMouse.containsMouse
+                        ToolTip.delay: 120
+                        ToolTip.text: "返回聊天"
                     }
                 }
             }
@@ -476,13 +568,14 @@ Rectangle {
                 Layout.fillHeight: true
                 backdrop: backdropLayer
                 cornerRadius: 16
-                blurEnabled: false
-                fillColor: Qt.rgba(1.0, 0.72, 0.84, 0.22)
-                strokeColor: Qt.rgba(1.0, 0.84, 0.92, 0.38)
-                glowTopColor: Qt.rgba(1.0, 0.88, 0.94, 0.16)
-                glowBottomColor: Qt.rgba(1.0, 0.66, 0.82, 0.08)
+                blurRadius: 20
+                fillColor: Qt.rgba(1, 1, 1, 0.14)
+                strokeColor: Qt.rgba(1, 1, 1, 0.54)
+                glowTopColor: Qt.rgba(1, 1, 1, 0.25)
+                glowBottomColor: Qt.rgba(1, 1, 1, 0.04)
 
                 Loader {
+                    id: r18PaneLoader
                     anchors.fill: parent
                     anchors.margins: 8
                     active: root.r18Mode
@@ -491,8 +584,11 @@ Rectangle {
                         R18ShellPane {
                             backdrop: backdropLayer
                             r18Controller: controller.r18Controller
+                            viewMode: root.r18ViewMode
+                            onViewModeChanged: root.r18ViewMode = viewMode
                         }
                     }
+                    onLoaded: if (item) { item.viewMode = root.r18ViewMode }
                 }
             }
         }

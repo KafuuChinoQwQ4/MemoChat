@@ -36,15 +36,8 @@ echo [INFO] BUILD_BIN=%BUILD_BIN%
 echo [INFO] WITH_CLIENT=%WITH_CLIENT%
 echo [INFO] Parameters: %*
 
-set "GATEDROGON_EXE=%BUILD_BIN%\GateServerDrogon.exe"
-
 call :print_running_process_stamp GateServer.exe
 
-goto :start_gatedrogon
-
-:after_gatedrogon
-
-echo [INFO] After gatedrogon, WITH_CLIENT=%WITH_CLIENT%
 if "%WITH_CLIENT%"=="1" (
   echo [INFO] Client check passed
 ) else (
@@ -64,19 +57,6 @@ if errorlevel 1 (
     echo [WARN] Unable to inspect running process image for %RUN_EXE%
 )
 exit /b 0
-
-:start_gatedrogon
-echo [INFO] In start_gatedrogon, BUILD_BIN=%BUILD_BIN%
-if not exist "%BUILD_BIN%\GateServerDrogon.exe" (
-    echo [INFO] GateServerDrogon.exe not found
-    goto :after_gatedrogon
-)
-if not exist "%ROOT%\server\GateServerDrogon\config.ini" (
-    echo [INFO] GateServerDrogon config not found
-    goto :after_gatedrogon
-)
-echo [INFO] Starting GateServerDrogon (HTTPS/HTTP2 on port 8443)...
-goto :after_gatedrogon
 
 :done
 echo [DONE] Script completed

@@ -34,6 +34,9 @@ struct R18SourceRecord {
     std::string name;
     std::string version;
     std::string path;
+    std::string format = "native";
+    std::string source_url;
+    std::string catalog_url;
     bool enabled = true;
     bool builtin = false;
     std::string status = "ok";
@@ -77,8 +80,10 @@ public:
                               std::string* error)
     {
         std::lock_guard<std::mutex> lock(mu_);
-        if (binary.size() < 4 || binary[0] != 'P' || binary[1] != 'K') {
-            if (error) *error = "plugin package must be a zip file";
+        const bool zip_payload = binary.size() >= 4 && binary[0] == 'P' && binary[1] == 'K';
+        const bool js_payload = LooksLikeJavaScript(file_name, manifest_json, binary);
+        if (!zip_payload && !js_payload) {
+            if (error) *error = "plugin package must be a zip file or a Venera javascript source";
             return {};
         }
 
@@ -93,10 +98,15 @@ public:
         rec.id = manifest_json.empty() ? fallback_id : memochat::json::glaze_safe_get<std::string>(manifest, "id", fallback_id);
         rec.name = manifest_json.empty() ? rec.id : memochat::json::glaze_safe_get<std::string>(manifest, "name", rec.id);
         rec.version = manifest_json.empty() ? "0.0.0" : memochat::json::glaze_safe_get<std::string>(manifest, "version", "0.0.0");
+        rec.format = js_payload ? "venera-js" : memochat::json::glaze_safe_get<std::string>(manifest, "format", "native-zip");
+        rec.source_url = manifest_json.empty() ? "" : memochat::json::glaze_safe_get<std::string>(manifest, "source_url", "");
+        rec.catalog_url = manifest_json.empty() ? "" : memochat::json::glaze_safe_get<std::string>(manifest, "catalog_url", "");
         rec.enabled = false;
         rec.builtin = false;
-        rec.status = "staged";
-        rec.message = "Package staged. Build/unpack validation is handled by the plugin host deployment step.";
+        rec.status = js_payload ? "staged-js" : "staged";
+        rec.message = js_payload
+            ? "Venera JS source staged. Search/detail/page execution requires the MemoChat Venera JS runtime adapter."
+            : "Package staged. Build/unpack validation is handled by the plugin host deployment step.";
 
         if (rec.id.empty()) {
             if (error) *error = "source id is empty";
@@ -110,10 +120,10 @@ public:
             if (error) *error = "failed to create source directory";
             return {};
         }
-        const auto zip_path = dir / "source.zip";
-        std::ofstream out(zip_path, std::ios::binary | std::ios::trunc);
+        const auto source_path = dir / (js_payload ? "source.js" : "source.zip");
+        std::ofstream out(source_path, std::ios::binary | std::ios::trunc);
         if (!out.is_open()) {
-            if (error) *error = "failed to persist plugin package";
+            if (error) *error = "failed to persist source package";
             return {};
         }
         out.write(binary.data(), static_cast<std::streamsize>(binary.size()));
@@ -123,7 +133,7 @@ public:
             manifest_out << manifest_json;
         }
 
-        rec.path = zip_path.string();
+        rec.path = source_path.string();
         sources_[rec.id] = rec;
         SaveLocked();
         return rec;
@@ -197,6 +207,7 @@ private:
         builtin.id = "mock";
         builtin.name = "Mock C++ Source";
         builtin.version = "1.0.0";
+        builtin.format = "native";
         builtin.enabled = true;
         builtin.builtin = true;
         builtin.status = "ok";
@@ -222,12 +233,44 @@ private:
         return value.empty() ? "imported-source" : value;
     }
 
+    static bool LooksLikeJavaScript(const std::string& file_name,
+                                    const std::string& manifest_json,
+                                    const std::string& binary)
+    {
+        if (EndsWithCaseInsensitive(file_name, ".js")) {
+            return true;
+        }
+        if (!manifest_json.empty()) {
+            JsonValue manifest;
+            if (memochat::json::glaze_parse(manifest, manifest_json) &&
+                memochat::json::glaze_safe_get<std::string>(manifest, "format", "") == "venera-js") {
+                return true;
+            }
+        }
+        const auto probe = binary.substr(0, std::min<std::size_t>(binary.size(), 4096));
+        return probe.find("class ") != std::string::npos &&
+               probe.find("ComicSource") != std::string::npos;
+    }
+
+    static bool EndsWithCaseInsensitive(const std::string& value, const std::string& suffix)
+    {
+        if (value.size() < suffix.size()) {
+            return false;
+        }
+        return std::equal(suffix.rbegin(), suffix.rend(), value.rbegin(), [](char a, char b) {
+            return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+        });
+    }
+
     static JsonValue ToJson(const R18SourceRecord& source)
     {
         JsonValue item;
         item["id"] = source.id;
         item["name"] = source.name;
         item["version"] = source.version;
+        item["format"] = source.format;
+        item["source_url"] = source.source_url;
+        item["catalog_url"] = source.catalog_url;
         item["enabled"] = source.enabled;
         item["builtin"] = source.builtin;
         item["status"] = source.status;
@@ -355,6 +398,9 @@ void H1R18ServiceRoutes::RegisterRoutes(H1LogicSystem& logic)
             source["id"] = rec.id;
             source["name"] = rec.name;
             source["version"] = rec.version;
+            source["format"] = rec.format;
+            source["source_url"] = rec.source_url;
+            source["catalog_url"] = rec.catalog_url;
             source["enabled"] = rec.enabled;
             source["status"] = rec.status;
             source["message"] = rec.message;

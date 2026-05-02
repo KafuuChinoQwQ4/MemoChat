@@ -1069,11 +1069,13 @@ Content-Type: application/json
 
 ```json
 {
-  "name": "example-source",
-  "version": "1.0",
-  "definition": {}
+  "file_name": "example-source.js",
+  "data_base64": "Ly8gc291cmNlIGJ5dGVz...",
+  "manifest_json": "{\"id\":\"example-source\",\"name\":\"Example Source\",\"version\":\"1.0.0\",\"format\":\"venera-js\",\"source_url\":\"https://example.com/source.js\"}"
 }
 ```
+
+`data_base64` 可以是原生 zip 插件包，也可以是 Venera JavaScript 源脚本。JavaScript 源会以 `format: "venera-js"` 暂存；真实搜索、详情、章节和图片解析需要兼容 Venera JS API 的运行时适配层。
 
 ### 10.5 R18 搜索
 

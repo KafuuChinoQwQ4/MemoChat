@@ -248,13 +248,13 @@ Rectangle {
         background: GlassSurface {
             anchors.fill: parent
             backdrop: backdropLayer
-            blurRadius: 18
+            blurRadius: 28
             cornerRadius: 18
-            fillColor: Qt.rgba(0.985, 0.992, 1.0, 0.84)
-            strokeColor: Qt.rgba(0.78, 0.86, 0.94, 0.96)
-            strokeWidth: 1.2
-            glowTopColor: Qt.rgba(1, 1, 1, 0.72)
-            glowBottomColor: Qt.rgba(0.70, 0.80, 0.92, 0.18)
+            fillColor: Qt.rgba(0.985, 0.992, 1.0, 0.48)
+            strokeColor: Qt.rgba(0.78, 0.86, 0.94, 0.66)
+            strokeWidth: 1
+            glowTopColor: Qt.rgba(1, 1, 1, 0.42)
+            glowBottomColor: Qt.rgba(0.70, 0.80, 0.92, 0.10)
         }
 
         contentItem: Item {
@@ -268,9 +268,9 @@ Rectangle {
                 anchors.margins: 10
                 height: 48
                 radius: 14
-                color: Qt.rgba(1, 1, 1, 0.56)
+                color: Qt.rgba(1, 1, 1, 0.30)
                 border.width: 1
-                border.color: Qt.rgba(0.80, 0.87, 0.95, 0.92)
+                border.color: Qt.rgba(0.80, 0.87, 0.95, 0.58)
 
                 Row {
                     anchors.left: parent.left
@@ -409,12 +409,12 @@ Rectangle {
                             anchors.fill: parent
                             radius: 14
                             color: credentialMouse.containsMouse
-                                   ? Qt.rgba(0.35, 0.61, 0.90, 0.22)
-                                   : Qt.rgba(1, 1, 1, 0.42)
+                                   ? Qt.rgba(0.35, 0.61, 0.90, 0.16)
+                                   : Qt.rgba(1, 1, 1, 0.24)
                             border.width: 1
                             border.color: credentialMouse.containsMouse
-                                          ? Qt.rgba(0.71, 0.86, 1.0, 0.62)
-                                          : Qt.rgba(0.83, 0.89, 0.95, 0.84)
+                                          ? Qt.rgba(0.71, 0.86, 1.0, 0.50)
+                                          : Qt.rgba(0.83, 0.89, 0.95, 0.56)
 
                             Behavior on color {
                                 ColorAnimation {
@@ -556,6 +556,12 @@ Rectangle {
                     backdrop: backdropLayer
                     blurRadius: 28
                     cornerRadius: 11
+                    fillColor: Qt.rgba(1, 1, 1, 0.10)
+                    strokeColor: Qt.rgba(1, 1, 1, 0.28)
+                    glowTopColor: Qt.rgba(1, 1, 1, 0.16)
+                    glowBottomColor: Qt.rgba(1, 1, 1, 0.03)
+                    focusFillColor: Qt.rgba(1, 1, 1, 0.16)
+                    focusStrokeColor: Qt.rgba(0.47, 0.71, 0.93, 0.64)
                     leftInset: 16
                     rightInset: 86
                     textPixelSize: 17
@@ -583,11 +589,11 @@ Rectangle {
                     color: credentialDropArea.pressed ? Qt.rgba(0.35, 0.61, 0.90, 0.24)
                                                       : credentialDropArea.containsMouse || credentialDropdownOpen
                                                         ? Qt.rgba(0.35, 0.61, 0.90, 0.16)
-                                                        : Qt.rgba(1, 1, 1, 0.08)
+                                                        : Qt.rgba(1, 1, 1, 0.04)
                     border.width: 1
                     border.color: credentialDropdownOpen
                                   ? Qt.rgba(0.65, 0.84, 1.0, 0.78)
-                                  : Qt.rgba(1, 1, 1, 0.18)
+                                  : Qt.rgba(1, 1, 1, 0.12)
 
                     Behavior on color {
                         ColorAnimation {
@@ -674,6 +680,12 @@ Rectangle {
                 backdrop: backdropLayer
                 blurRadius: 28
                 cornerRadius: 11
+                fillColor: Qt.rgba(1, 1, 1, 0.10)
+                strokeColor: Qt.rgba(1, 1, 1, 0.28)
+                glowTopColor: Qt.rgba(1, 1, 1, 0.16)
+                glowBottomColor: Qt.rgba(1, 1, 1, 0.03)
+                focusFillColor: Qt.rgba(1, 1, 1, 0.16)
+                focusStrokeColor: Qt.rgba(0.47, 0.71, 0.93, 0.64)
                 leftInset: 16
                 rightInset: 44
                 textPixelSize: 17

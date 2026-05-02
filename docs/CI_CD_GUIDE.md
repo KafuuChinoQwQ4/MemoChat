@@ -1,6 +1,6 @@
-# MemoChat CI/CD 自动部署指南
+﻿# MemoChat CI/CD 自动部署指南
 
-> 当前版本：2026-04-26  
+> 当前版本：2026-04-26
 > 当前目录基准：镜像和部署配置在 `infra/deploy`，Kubernetes Chart 在 `infra/deploy/kubernetes` 和 `infra/helm`。本地开发依赖 Docker-only；生产环境应使用 Secret/ConfigMap 覆盖本地固定密码和端口。
 
 ## 概述
@@ -31,7 +31,7 @@ MemoChat 使用 GitHub Actions 实现 CI/CD，代码 push 后自动构建 Docker
 建议 CI 至少做以下静态检查：
 
 ```powershell
-rg -n "localhost:5432|Port=5432|memochat-mysql|D:\\\\MemoChat-Qml-Drogon\\\\server" docs apps infra tools
+rg -n "localhost:5432|Port=5432|memochat-mysql|D:\\\\MemoChat\\\\server" docs apps infra tools
 ```
 
 允许 Kubernetes 内部端口 `5432` 出现在 chart values 中，但必须清楚标注它是集群内部端口。
