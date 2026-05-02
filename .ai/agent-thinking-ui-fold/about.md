@@ -1,1 +1,0 @@
-MemoChat AI conversation UI keeps the global generation status from overlapping chat messages and shows model thinking inside a collapsible rounded panel. Thinking expands while the model is streaming and collapses automatically when the final answer is complete, with a manual reopen control for the user.
