@@ -1,1 +1,0 @@
-MemoChat AI Agent can add external OpenAI-compatible model APIs from the model settings popup. Users enter a provider name, API base URL, and API key; the backend fetches the provider's `/models` list, stores the provider in AIOrchestrator runtime config, and exposes those models in the normal AI Agent model list.
