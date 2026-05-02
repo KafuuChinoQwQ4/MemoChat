@@ -1,7 +1,7 @@
-# MemoChat 消息架构文档
+﻿# MemoChat 消息架构文档
 
 > 文档版本：2026-04-26
-> 项目路径：D:\MemoChat-Qml-Drogon
+> 项目路径：<repo-root>
 > 当前本地依赖：Redpanda、RabbitMQ、Redis、PostgreSQL、MongoDB 均运行在 Docker 中；PostgreSQL 宿主机端口为 `15432`。
 
 ---
@@ -125,11 +125,11 @@ std::string MakeDialogSyncKey(int64_t uid) {
 
 ```
                     Partition 分配示意图
-                    
+
 Topic: chat.private.v1 (8 Partitions)
-                    
+
 Consumer Group: chatserver-cluster (4 ChatServer 节点)
-                    
+
 Partition 0 ──► ChatServer-1  (Assigned: P0, P4)
 Partition 1 ──► ChatServer-2  (Assigned: P1, P5)
 Partition 2 ──► ChatServer-3  (Assigned: P2, P6)
@@ -334,7 +334,7 @@ Rebalance（消费者组再平衡）会在以下情况触发：
 1. 新消费者加入组
    ChatServer-1 ──► ChatServer-1, ChatServer-2 ──► ChatServer-1, ChatServer-2, ChatServer-3
    (2 个 Partition 分配)    (3 个 Partition 分配)        (4 个 Partition 分配)
-   
+
 2. 消费者离开组
    ChatServer-3 宕机 ──► P2, P3 重新分配给 ChatServer-1, ChatServer-2
 
@@ -435,23 +435,23 @@ Kafka 的强项是**高吞吐的消息分发**，但不适合以下场景：
 void ConsumeMessage(const std::string& queue_name) {
     auto channel = GetChannel();
     auto delivery_tag = envelope.get_delivery_tag();
-    
+
     try {
         // 1. 处理消息业务逻辑
         ProcessMessage(envelope);
-        
+
         // 2. 处理成功，手动 ACK
         channel.basic_ack(delivery_tag, false);  // false=不批量确认
-        
+
     } catch (const RetryableException& e) {
         // 3. 可重试异常，NACK 并重新入队（等待重试）
         // 设置 x-delay 头控制重试延迟
         channel.basic_nack(delivery_tag, false, true);  // requeue=true
-        
+
     } catch (const NonRetryableException& e) {
         // 4. 不可重试异常，NACK 不重新入队（进入 DLQ）
         channel.basic_nack(delivery_tag, false, false);  // requeue=false
-        
+
     } catch (const std::exception& e) {
         // 5. 未知异常，NACK 不重新入队
         channel.basic_nack(delivery_tag, false, false);
@@ -469,14 +469,14 @@ void ConsumeMessage(const std::string& queue_name) {
 // 第三次失败：延迟 30 秒重试
 // 三次都失败：进入 DLQ
 
-void PublishWithRetry(const std::string& routing_key, 
+void PublishWithRetry(const std::string& routing_key,
                       const std::string& message_body,
                       int retry_count) {
     auto channel = GetChannel();
-    
+
     AMQP::Table headers;
     headers["x-retry-count"] = retry_count;
-    
+
     int delay_ms;
     if (retry_count == 0) {
         delay_ms = 1000;      // 1 秒
@@ -486,13 +486,13 @@ void PublishWithRetry(const std::string& routing_key,
         delay_ms = 30000;     // 30 秒
     } else {
         // 超过最大重试次数，进入 DLQ
-        channel->publish("memochat.dlx", routing_key, message_body, 
+        channel->publish("memochat.dlx", routing_key, message_body,
                         durable, priority, headers);
         return;
     }
-    
+
     headers["x-delay"] = delay_ms;
-    
+
     // 发布到延迟交换机
     channel->publish("memochat.delayed", routing_key, message_body,
                     durable, priority, headers);
@@ -603,7 +603,7 @@ Key: "online:{uid}"
 Example: SET online:12345 "1" EX 60
 
 // Key Pattern 2: 用户所在 ChatServer
-// Type: String  
+// Type: String
 // Value: JSON: {"server":"chatserver1","tcp_port":8090,"quic_port":8190,"login_time":1711180800}
 // TTL: 60 秒
 Key: "chatserver:{uid}"
@@ -636,15 +636,15 @@ SCARD chatservers:chatserver1:online_users  // 返回在线人数
 
 void OnHeartbeat(int64_t uid, const std::string& device_id) {
     auto redis = RedisMgr::Instance();
-    
+
     // 1. 更新在线状态 TTL
     redis->Expire("online:" + std::to_string(uid), 60);
-    
+
     // 2. 更新 ChatServer TTL
     redis->Expire("chatserver:" + std::to_string(uid), 60);
-    
+
     // 3. 更新设备最后活跃时间
-    redis->HSet("devices:" + std::to_string(uid), 
+    redis->HSet("devices:" + std::to_string(uid),
                 device_id,
                 "{\"last_seen\":" + std::to_string(GetCurrentTimestamp()) + "}");
 }
@@ -667,14 +667,14 @@ void ScheduleHeartbeatRefresh(int64_t uid) {
 
 ```cpp
 // 用户上线流程
-void OnUserLogin(int64_t uid, const std::string& server_name, 
+void OnUserLogin(int64_t uid, const std::string& server_name,
                  int tcp_port, int quic_port) {
     auto redis = RedisMgr::Instance();
-    
+
     // 1. SET NX（仅当 Key 不存在时设置）
     // 如果用户已在其他节点登录（Key 已存在），返回 false
     bool success = redis->SetNX("online:" + uid, "1", 60);
-    
+
     if (!success) {
         // 用户已在其他节点登录，需要踢下线
         // 先获取当前所在节点
@@ -682,7 +682,7 @@ void OnUserLogin(int64_t uid, const std::string& server_name,
         // 通过 gRPC 通知该节点踢用户下线
         NotifyKickUser(uid, "Duplicate login");
     }
-    
+
     // 2. 设置用户所在 ChatServer
     Json::Value server_info;
     server_info["server"] = server_name;
@@ -690,26 +690,26 @@ void OnUserLogin(int64_t uid, const std::string& server_name,
     server_info["quic_port"] = quic_port;
     server_info["login_time"] = GetCurrentTimestamp();
     redis->Set("chatserver:" + uid, server_info.toStyledString(), 60);
-    
+
     // 3. 加入节点在线用户集合
     redis->SAdd("chatservers:" + server_name + ":online_users", uid);
-    
+
     // 4. 发布用户上线事件（Pub/Sub）
-    redis->Publish("presence:" + uid, 
+    redis->Publish("presence:" + uid,
                   R"({"event":"online","uid":12345,"server":"chatserver1"})");
 }
 
 // 用户下线流程
 void OnUserLogout(int64_t uid, const std::string& server_name) {
     auto redis = RedisMgr::Instance();
-    
+
     // 1. 删除在线状态
     redis->Del("online:" + uid);
     redis->Del("chatserver:" + uid);
-    
+
     // 2. 从节点在线用户集合移除
     redis->SRem("chatservers:" + server_name + ":online_users", uid);
-    
+
     // 3. 发布用户下线事件
     redis->Publish("presence:" + uid,
                   R"({"event":"offline","uid":12345})");
@@ -727,7 +727,7 @@ void OnUserLogout(int64_t uid, const std::string& server_name) {
 void SubscribeFriendOnlineNotifications(const std::vector<int64_t>& friend_uids) {
     auto redis = RedisMgr::Instance();
     auto subscriber = redis->GetSubscriber();
-    
+
     for (int64_t friend_uid : friend_uids) {
         std::string channel = "presence:" + std::to_string(friend_uid);
         subscriber->subscribe(channel, [this, friend_uid](const std::string& msg) {
@@ -736,9 +736,9 @@ void SubscribeFriendOnlineNotifications(const std::vector<int64_t>& friend_uids)
             Json::CharReaderBuilder builder;
             std::istringstream stream(msg);
             Json::parseFromStream(builder, stream, &event, nullptr);
-            
+
             std::string event_type = event["event"].asString();
-            
+
             if (event_type == "online") {
                 // 好友上线，通知当前用户
                 NotifyFriendOnline(friend_uid, event["server"].asString());
@@ -793,38 +793,38 @@ void NotifyFriendOnline(int64_t friend_uid, const std::string& server_name) {
 // Score: 最后消息时间戳
 // Member: JSON { dialog_type, peer_uid, group_id }
 Key: "dialogs:{uid}"
-Example: 
+Example:
   ZADD dialogs:12345 1711180800000 '{"type":"private","peer_uid":67890}'
   ZADD dialogs:12345 1711180700000 '{"type":"group","group_id":10001}'
 
 // 获取对话列表（按时间倒序）
 std::vector<DialogInfo> GetDialogList(int64_t uid, int offset, int limit) {
     auto redis = RedisMgr::Instance();
-    
+
     // 获取最近 limit 条对话
     auto results = redis->ZRevRange("dialogs:" + uid, offset, offset + limit - 1);
-    
+
     // 获取每个对话的详情
     std::vector<DialogInfo> dialogs;
     for (const auto& item : results) {
         auto info = GetDialogDetailFromCache(uid, item);
         if (info) dialogs.push_back(*info);
     }
-    
+
     return dialogs;
 }
 
 // 更新对话列表（写入 Redis + PostgreSQL 双写）
 void UpdateDialogList(int64_t uid, const DialogInfo& dialog) {
     auto redis = RedisMgr::Instance();
-    
+
     // 1. 写入 Redis Sorted Set
     std::string member = BuildDialogMember(dialog);
     redis->ZAdd("dialogs:" + uid, dialog.last_msg_ts, member);
-    
+
     // 2. 设置过期时间（24 小时）
     redis->Expire("dialogs:" + uid, 86400);
-    
+
     // 3. 异步写入 PostgreSQL（通过 Kafka 解耦）
     PublishDialogSyncEvent(uid, dialog);
 }
@@ -843,13 +843,13 @@ Value: '{"from_uid":12345,"to_uid":67890,"content":"Hello!","server_time":171118
 // 热点消息预加载（消息发送后主动缓存）
 void CacheHotMessage(const Message& msg) {
     auto redis = RedisMgr::Instance();
-    
+
     // 1. 缓存消息详情
     redis->Set("msg:" + msg.msg_id, SerializeMessage(msg), 300);  // 5 分钟
-    
+
     // 2. 加入热点消息集合（用于热点探测）
     redis->ZIncrBy("hot_messages", 1, msg.msg_id);
-    
+
     // 3. 定时清理：移除冷数据
     // 移除 score < threshold 的消息
     redis->ZRemRangeByScore("hot_messages", "-inf", GetCurrentTimestamp() - 3600);
@@ -865,11 +865,11 @@ void CacheHotMessage(const Message& msg) {
 
 // 场景 1: Snowflake ID 生成（保证多节点 ID 不冲突）
 bool AcquireSnowflakeLock(int64_t datacenter_id, int64_t worker_id) {
-    std::string lock_key = "lock:snowflake:" + 
-                          std::to_string(datacenter_id) + ":" + 
+    std::string lock_key = "lock:snowflake:" +
+                          std::to_string(datacenter_id) + ":" +
                           std::to_string(worker_id);
     std::string lock_value = GenerateUUID();
-    
+
     return redis->SetNX(lock_key, lock_value, 10);  // 10 秒超时
 }
 
@@ -889,15 +889,15 @@ bool AcquireUserStateLock(int64_t uid) {
 bool ElectLeader(const std::string& node_name) {
     std::string lock_key = "lock:leader:chatserver_cluster";
     std::string value = node_name + ":" + std::to_string(GetCurrentTimestamp());
-    
+
     // SET NX EX 保证原子性
     bool acquired = redis->SetNX(lock_key, value, 30);
-    
+
     if (acquired) {
         // 注册成功，设置 TTL 续期定时器
         ScheduleLockRefresh(lock_key, value, 30);
     }
-    
+
     return acquired;
 }
 ```
@@ -940,7 +940,7 @@ void RefreshLock(const std::string& lock_key, const std::string& lock_value) {
             return 0
         end
     )";
-    
+
     auto result = redis->Eval(REFRESH_LOCK_SCRIPT, 1, lock_key, lock_value, "30");
     return result == 1;
 }
@@ -1202,9 +1202,9 @@ Step 4: 发送私聊消息
 排查路径：
 
 1. 检查 Kafka Consumer Lag
-   > kafka-consumer-groups.sh --bootstrap-server 127.0.0.1:9092 
+   > kafka-consumer-groups.sh --bootstrap-server 127.0.0.1:9092
      --group chatserver-cluster --describe
-   
+
    // 如果 LAG > 10000，说明消费者处理速度跟不上
 
 2. 检查消费者处理时间
@@ -1319,15 +1319,15 @@ $topics = @(
 )
 
 foreach ($topic in $topics) {
-    $configStr = $topic.Config.GetEnumerator() | 
-                 ForEach-Object { "$($_.Key)=$($_.Value)" } | 
+    $configStr = $topic.Config.GetEnumerator() |
+                 ForEach-Object { "$($_.Key)=$($_.Value)" } |
                  Join-String -Separator ","
-    
+
     $cmd = "kafka-topics.sh --create --bootstrap-server $kafkaBrokers " +
            "--topic $($topic.Name) --partitions $($topic.Partitions) " +
            "--replication-factor $($topic.ReplicationFactor) " +
            "--config $configStr"
-    
+
     Write-Host "Creating topic: $($topic.Name)"
     Invoke-Expression $cmd
 }
@@ -1398,11 +1398,11 @@ $topology = @{
 
 foreach ($exchange in $topology.Keys) {
     $config = $topology[$exchange]
-    
+
     # 创建交换机
     Write-Host "Creating exchange: $exchange"
     # rabbitmqadmin 命令或 HTTP API 调用
-    
+
     foreach ($queue in $config.Queues) {
         Write-Host "Creating queue: $($queue.Name)"
         # 绑定队列到交换机

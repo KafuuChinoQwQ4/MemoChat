@@ -12,7 +12,6 @@ $ErrorActionPreference = 'Stop'
 
 $targets = @(
     @{ Env = 'GATE_EXE'; File = 'GateServer.exe'; SubDirs = @('GateServer', 'gate') },
-    @{ Env = 'GATEDROGON_EXE'; File = 'GateServerDrogon.exe'; SubDirs = @('GateServerDrogon', 'gatedrogon') },
     @{ Env = 'STATUS_EXE'; File = 'StatusServer.exe'; SubDirs = @('StatusServer', 'status') },
     @{ Env = 'CHAT_EXE'; File = 'ChatServer.exe'; SubDirs = @('chatserver1', 'chatserver2', 'chatserver3', 'chatserver4') }
 )

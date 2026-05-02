@@ -35,8 +35,6 @@
         "mongo-cxx-driver",
         "libpq",
         "libpqxx",
-        "drogon",
-        "trantor",
         {
           "name": "ngtcp2",
           "features": []

@@ -1,4 +1,4 @@
-# QUIC 本地开发指南
+﻿# QUIC 本地开发指南
 
 > 当前版本：2026-04-26
 
@@ -64,10 +64,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\scripts\windows\new_de
 ```ini
 [Quic]
 Alpn=memochat-chat
-PfxFile=D:\MemoChat-Qml-Drogon\artifacts\certs\quic-dev\server-schannel3.pfx
+PfxFile=<repo-root>\artifacts\certs\quic-dev\server-schannel3.pfx
 PfxPassword=memo
-CertFile=D:\MemoChat-Qml-Drogon\artifacts\certs\quic-dev\server-cert.pem
-PrivateKeyFile=D:\MemoChat-Qml-Drogon\artifacts\certs\quic-dev\server-key.pem
+CertFile=<repo-root>\artifacts\certs\quic-dev\server-cert.pem
+PrivateKeyFile=<repo-root>\artifacts\certs\quic-dev\server-key.pem
 ```
 
 Windows SChannel 优先使用 PFX；OpenSSL/ngtcp2 场景使用 PEM。

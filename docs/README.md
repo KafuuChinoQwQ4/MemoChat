@@ -1,7 +1,7 @@
-# MemoChat 文档索引
+﻿# MemoChat 文档索引
 
-> 当前文档基准日期：2026-04-26  
-> 当前仓库根目录：`D:\MemoChat-Qml-Drogon`
+> 当前文档基准日期：2026-04-26
+> 当前仓库根目录：`<repo-root>`
 
 本文档目录用于说明 MemoChat 当前可运行架构。旧文档中如果仍出现 `server/`、`client/`、`deploy/`、`scripts/` 等根目录路径，应按当前目录映射理解：
 
@@ -67,4 +67,4 @@
 - 新本地运行说明必须默认 Docker-only 依赖，不写“本机安装 Postgres/Mongo/Redis/MySQL”。
 - 新数据库说明禁止把 MySQL 写入当前架构。历史迁移脚本可以提到，但必须标注为历史兼容或归档用途。
 - 本地 Postgres 连接端口统一写 `15432`；Kubernetes 或容器内部通信才写 `5432`。
-- 下载、备份和持久化目录优先写到 `D:`，例如 `D:\docker-data\memochat` 和 `D:\MemoChat-Qml-Drogon\backups`。
+- 下载、备份和持久化目录优先写到 `D:`，例如 `D:\docker-data\memochat` 和 `<repo-root>\backups`。

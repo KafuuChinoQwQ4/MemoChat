@@ -5,18 +5,18 @@ import QtQuick.Window 2.15
 Rectangle {
     id: root
     color: "transparent"
-    width: 56
+    width: 72
 
     property int currentTab: 0
     property string userIcon: "qrc:/res/head_1.jpg"
     property bool hasPendingApply: false
     property bool minimalMode: false
-    property color backgroundColor: Qt.rgba(0.16, 0.22, 0.31, 0.44)
-    property color borderColor: Qt.rgba(1, 1, 1, 0.16)
-    property color buttonHoverColor: Qt.rgba(0.75, 0.87, 1.0, 0.18)
-    property color buttonPressedColor: Qt.rgba(0.75, 0.87, 1.0, 0.26)
-    property color buttonSelectedColor: Qt.rgba(0.75, 0.87, 1.0, 0.30)
-    property color buttonSelectedPressedColor: Qt.rgba(0.75, 0.87, 1.0, 0.44)
+    property color backgroundColor: "transparent"
+    property color borderColor: "transparent"
+    property color buttonHoverColor: Qt.rgba(0.56, 0.70, 0.86, 0.16)
+    property color buttonPressedColor: Qt.rgba(0.56, 0.70, 0.86, 0.22)
+    property color buttonSelectedColor: Qt.rgba(0.56, 0.70, 0.86, 0.26)
+    property color buttonSelectedPressedColor: Qt.rgba(0.56, 0.70, 0.86, 0.34)
     signal avatarClicked()
     signal tabSelected(int tab)
     signal r18Toggled()
@@ -55,7 +55,7 @@ Rectangle {
 
     Rectangle {
         anchors.fill: parent
-        radius: 12
+        radius: 14
         color: root.backgroundColor
         border.color: root.borderColor
     }
@@ -77,21 +77,23 @@ Rectangle {
     Column {
         z: 1
         visible: !root.minimalMode
-        anchors.left: parent.left
         anchors.top: parent.top
-        anchors.leftMargin: 10
-        anchors.topMargin: 24
-        spacing: 28
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.topMargin: 12
+        width: 52
+        spacing: 14
 
         Rectangle {
             id: avatarButton
-            width: 35
-            height: 35
-            radius: 17
+            width: 52
+            height: 52
+            radius: 13
             clip: true
             property bool hovering: avatarHover.containsMouse
             property bool pressed: avatarHover.pressed
-            color: Qt.rgba(0.47, 0.63, 0.83, 0.36)
+            color: avatarButton.pressed ? root.buttonPressedColor
+                                         : avatarButton.hovering ? root.buttonHoverColor
+                                                                 : "transparent"
             border.width: avatarButton.hovering ? 1 : 0
             border.color: Qt.rgba(1, 1, 1, 0.6)
             scale: avatarButton.pressed ? 0.96 : (avatarButton.hovering ? 1.02 : 1.0)
@@ -109,7 +111,9 @@ Rectangle {
                 }
             }
             Image {
-                anchors.fill: parent
+                anchors.centerIn: parent
+                width: 34
+                height: 34
                 fillMode: Image.PreserveAspectCrop
                 source: root.userIcon
                 cache: true
@@ -134,8 +138,8 @@ Rectangle {
         Repeater {
             model: [0, 1, 3, 4]
             delegate: Item {
-                width: 32
-                height: 32
+                width: 52
+                height: 52
                 property bool hovering: tabArea.containsMouse
                 property bool pressed: tabArea.pressed
                 scale: pressed ? 0.96 : (hovering ? 1.02 : 1.0)
@@ -149,7 +153,7 @@ Rectangle {
 
                 Rectangle {
                     anchors.fill: parent
-                    radius: 8
+                    radius: 13
                     color: {
                         if (root.currentTab === modelData) {
                             return tabArea.pressed ? root.buttonSelectedPressedColor : root.buttonSelectedColor
@@ -177,6 +181,8 @@ Rectangle {
                     height: 24
                     source: root.iconForTab(modelData, root.currentTab === modelData)
                     fillMode: Image.PreserveAspectFit
+                    opacity: root.currentTab === modelData ? 0.98 : 0.62
+                    mipmap: true
                 }
 
                 Rectangle {
@@ -210,13 +216,13 @@ Rectangle {
         z: 1
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 16
-        spacing: 10
+        anchors.bottomMargin: 12
+        spacing: 14
 
         Item {
             id: r18Button
-            width: 32
-            height: 32
+            width: 52
+            height: 52
             property bool hovering: r18Hover.containsMouse
             property bool pressed: r18Hover.pressed
             scale: pressed ? 0.96 : (hovering ? 1.02 : 1.0)
@@ -230,7 +236,7 @@ Rectangle {
 
             Rectangle {
                 anchors.fill: parent
-                radius: 8
+                radius: 13
                 color: r18Hover.pressed ? root.buttonPressedColor
                                         : r18Hover.containsMouse ? root.buttonHoverColor
                                                                  : "transparent"
@@ -249,6 +255,8 @@ Rectangle {
                 height: 28
                 source: "qrc:/icons/r18.png"
                 fillMode: Image.PreserveAspectFit
+                opacity: 0.72
+                mipmap: true
             }
 
             MouseArea {
@@ -266,8 +274,8 @@ Rectangle {
 
         Item {
             id: settingsButton
-            width: 32
-            height: 32
+            width: 52
+            height: 52
             property bool hovering: settingsArea.containsMouse
             property bool pressed: settingsArea.pressed
             scale: pressed ? 0.96 : (hovering ? 1.02 : 1.0)
@@ -281,7 +289,7 @@ Rectangle {
 
             Rectangle {
                 anchors.fill: parent
-                radius: 8
+                radius: 13
                 color: {
                     if (root.currentTab === 2) {
                         return settingsArea.pressed ? root.buttonSelectedPressedColor : root.buttonSelectedColor
@@ -309,6 +317,8 @@ Rectangle {
                 height: 24
                 source: root.iconForTab(2, root.currentTab === 2)
                 fillMode: Image.PreserveAspectFit
+                opacity: root.currentTab === 2 ? 0.98 : 0.62
+                mipmap: true
             }
 
             MouseArea {

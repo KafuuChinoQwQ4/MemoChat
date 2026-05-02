@@ -1,7 +1,7 @@
-# MemoChat 本地开发环境启动指南
+﻿# MemoChat 本地开发环境启动指南
 
-> 当前版本：2026-04-26  
-> 根目录：`D:\MemoChat-Qml-Drogon`
+> 当前版本：2026-04-26
+> 根目录：`<repo-root>`
 
 本地开发采用“Windows 原生业务进程 + Docker 基础设施”模式。也就是说：GateServer、ChatServer、StatusServer、VarifyServer、MemoChatQml 等进程在 Windows 上运行；PostgreSQL、MongoDB、Redis、MinIO、Redpanda、RabbitMQ、Ollama、Qdrant、Neo4j 和可观测性组件都在 Docker 里运行。
 
@@ -43,7 +43,7 @@
 从仓库根目录运行：
 
 ```powershell
-cd D:\MemoChat-Qml-Drogon
+cd <repo-root>
 docker compose -f infra\deploy\local\docker-compose.yml up -d
 ```
 
@@ -205,7 +205,7 @@ infra/Memo_ops/runtime/services/MemoChatQml/MemoChatQml.exe
 PowerShell 运行绝对路径时要写完整盘符和反斜杠：
 
 ```powershell
-& "D:\MemoChat-Qml-Drogon\build\bin\Release\MemoChatQml.exe"
+& "<repo-root>\build\bin\Release\MemoChatQml.exe"
 ```
 
 不要写成 `D:MemoChat...`，那是当前 D 盘工作目录下的相对路径。
@@ -310,13 +310,13 @@ D:\docker-data\memochat
 手动备份建议放：
 
 ```text
-D:\MemoChat-Qml-Drogon\backups
+<repo-root>\backups
 ```
 
 备份命令示例：
 
 ```powershell
-docker exec memochat-postgres pg_dump -U memochat -d memo_pg -Fc > D:\MemoChat-Qml-Drogon\backups\memo_pg.dump
-docker exec memochat-mongo mongodump --archive --gzip --uri "mongodb://memochat_app:123456@127.0.0.1:27017/memochat" > D:\MemoChat-Qml-Drogon\backups\memochat_mongo.archive.gz
+docker exec memochat-postgres pg_dump -U memochat -d memo_pg -Fc > <repo-root>\backups\memo_pg.dump
+docker exec memochat-mongo mongodump --archive --gzip --uri "mongodb://memochat_app:123456@127.0.0.1:27017/memochat" > <repo-root>\backups\memochat_mongo.archive.gz
 docker exec memochat-redis redis-cli -a 123456 SAVE
 ```
