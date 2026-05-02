@@ -68,6 +68,10 @@
         <file alias="icons/like.png">src/爱心.png</file>
         <file alias="icons/like_active.png">src/爱心-2.png</file>
         <file alias="icons/comment.png">src/评论.png</file>
+        <file alias="icons/r18_home.png">src/主页.png</file>
+        <file alias="icons/r18_local.png">src/本地素材备份.png</file>
+        <file alias="icons/r18_navigation.png">src/导航.png</file>
+        <file alias="icons/r18_datasource.png">src/源数据分析.png</file>
         <file>res/ai_icon.png</file>
         <file>qml/moments/MomentsFeedPane.qml</file>
         <file>qml/moments/MomentsPublishPage.qml</file>
@@ -80,6 +84,8 @@
         <file>qml/agent/AgentComposerBar.qml</file>
         <file>qml/agent/SmartFeatureBar.qml</file>
         <file>qml/agent/KnowledgeBasePane.qml</file>
+        <file>qml/agent/AgentMemoryPane.qml</file>
+        <file>qml/agent/AgentTaskPane.qml</file>
         <file>qml/agent/AgentTracePane.qml</file>
         <file>qml/r18/R18ShellPane.qml</file>
     </qresource>

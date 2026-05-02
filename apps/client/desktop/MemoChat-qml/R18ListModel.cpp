@@ -21,14 +21,14 @@ QVariant R18ListModel::data(const QModelIndex& index, int role) const
     const auto& item = _items.at(index.row());
     switch (role) {
     case DataRole: return item;
-    case SourceIdRole: return item.value(QStringLiteral("source_id"), item.value(QStringLiteral("id")));
-    case IdRole: return item.value(QStringLiteral("comic_id"), item.value(QStringLiteral("chapter_id"), item.value(QStringLiteral("id"))));
+    case SourceIdRole: return item.value(QStringLiteral("source_id"), item.value(QStringLiteral("id"), item.value(QStringLiteral("key"))));
+    case IdRole: return item.value(QStringLiteral("comic_id"), item.value(QStringLiteral("chapter_id"), item.value(QStringLiteral("id"), item.value(QStringLiteral("key")))));
     case TitleRole: return item.value(QStringLiteral("title"), item.value(QStringLiteral("name")));
-    case SubtitleRole: return item.value(QStringLiteral("subtitle"), item.value(QStringLiteral("message")));
+    case SubtitleRole: return item.value(QStringLiteral("subtitle"), item.value(QStringLiteral("message"), item.value(QStringLiteral("description"))));
     case CoverRole: return item.value(QStringLiteral("cover"));
     case UrlRole: return item.value(QStringLiteral("url"));
     case EnabledRole: return item.value(QStringLiteral("enabled"));
-    case StatusRole: return item.value(QStringLiteral("status"));
+    case StatusRole: return item.value(QStringLiteral("status"), item.value(QStringLiteral("version")));
     case OrderRole: return item.value(QStringLiteral("order"), item.value(QStringLiteral("index")));
     default: return {};
     }
@@ -67,6 +67,7 @@ void R18ListModel::setItems(const QVariantList& items)
         _items.push_back(item.toMap());
     }
     endResetModel();
+    emit countChanged();
 }
 
 void R18ListModel::clear()
@@ -74,4 +75,5 @@ void R18ListModel::clear()
     beginResetModel();
     _items.clear();
     endResetModel();
+    emit countChanged();
 }
