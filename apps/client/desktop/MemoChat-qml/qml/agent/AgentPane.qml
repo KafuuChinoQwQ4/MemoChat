@@ -23,19 +23,36 @@ Rectangle {
     property bool knowledgeBusy: false
     property string knowledgeStatusText: ""
     property string knowledgeError: ""
+    property var memories: root.agentController ? root.agentController.memories : []
+    property bool memoryBusy: root.agentController ? root.agentController.memoryBusy : false
+    property string memoryStatusText: root.agentController ? root.agentController.memoryStatusText : ""
+    property string memoryError: root.agentController ? root.agentController.memoryError : ""
+    property var agentTasks: root.agentController ? root.agentController.agentTasks : []
+    property bool agentTaskBusy: root.agentController ? root.agentController.agentTaskBusy : false
+    property string agentTaskStatusText: root.agentController ? root.agentController.agentTaskStatusText : ""
+    property string agentTaskError: root.agentController ? root.agentController.agentTaskError : ""
     property string currentTraceId: root.agentController ? root.agentController.currentTraceId : ""
     property string currentSkill: root.agentController ? root.agentController.currentSkill : ""
     property string currentFeedbackSummary: root.agentController ? root.agentController.currentFeedbackSummary : ""
     property var traceEvents: root.agentController ? root.agentController.traceEvents : []
     property var traceObservations: root.agentController ? root.agentController.traceObservations : []
+    property string agentSkillMode: root.agentController ? root.agentController.agentSkillMode : "auto"
+    property string agentSkillDisplay: root.agentController ? root.agentController.agentSkillDisplay : "自动"
     property bool loading: false
     property bool streaming: false
     property string errorMsg: ""
     property string selfAvatar: "qrc:/res/head_1.jpg"
-    readonly property int headerActionWidth: 64
+    readonly property int headerActionWidth: 58
     readonly property int headerActionHeight: 26
     readonly property int headerActionTextSize: 12
     readonly property int headerActionRadius: 7
+    readonly property var skillModes: [
+        { "key": "auto", "label": "自动" },
+        { "key": "knowledge", "label": "知识库" },
+        { "key": "research", "label": "联网" },
+        { "key": "graph", "label": "图谱" },
+        { "key": "calculate", "label": "计算" }
+    ]
 
     signal backRequested()
 
@@ -63,6 +80,22 @@ Rectangle {
             return "AI 正在处理你的问题。"
         }
         return "当前会话已就绪，可以继续追问。"
+    }
+
+    function skillModeHint() {
+        if (agentSkillMode === "knowledge") {
+            return "优先检索已上传文档后回答。"
+        }
+        if (agentSkillMode === "research") {
+            return "先联网搜索，再基于观察回答。"
+        }
+        if (agentSkillMode === "graph") {
+            return "调用图谱记忆和关系推荐。"
+        }
+        if (agentSkillMode === "calculate") {
+            return "显式调用计算器工具。"
+        }
+        return "根据问题自动选择技能和工具。"
     }
 
     ColumnLayout {
@@ -153,10 +186,10 @@ Rectangle {
 
                 GridLayout {
                     id: headerActionsGrid
-                    Layout.preferredWidth: root.headerActionWidth * 2 + headerActionsGrid.columnSpacing
+                    Layout.preferredWidth: root.headerActionWidth * 3 + headerActionsGrid.columnSpacing * 2
                     Layout.preferredHeight: root.headerActionHeight * 2 + headerActionsGrid.rowSpacing
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                    columns: 2
+                    columns: 3
                     rowSpacing: 5
                     columnSpacing: 6
 
@@ -230,6 +263,109 @@ Rectangle {
                         hoverColor: Qt.rgba(0.42, 0.56, 0.74, 0.32)
                         pressedColor: Qt.rgba(0.42, 0.56, 0.74, 0.40)
                         onClicked: traceLoader.active = true
+                    }
+
+                    GlassButton {
+                        Layout.preferredWidth: root.headerActionWidth
+                        Layout.preferredHeight: root.headerActionHeight
+                        text: "记忆"
+                        textPixelSize: root.headerActionTextSize
+                        cornerRadius: root.headerActionRadius
+                        enableScaleFeedback: false
+                        normalColor: Qt.rgba(0.42, 0.56, 0.74, 0.22)
+                        hoverColor: Qt.rgba(0.42, 0.56, 0.74, 0.32)
+                        pressedColor: Qt.rgba(0.42, 0.56, 0.74, 0.40)
+                        onClicked: {
+                            if (root.agentController) {
+                                root.agentController.listMemories()
+                            }
+                            memoryLoader.active = true
+                        }
+                    }
+
+                    GlassButton {
+                        Layout.preferredWidth: root.headerActionWidth
+                        Layout.preferredHeight: root.headerActionHeight
+                        text: "任务"
+                        textPixelSize: root.headerActionTextSize
+                        cornerRadius: root.headerActionRadius
+                        enableScaleFeedback: false
+                        normalColor: Qt.rgba(0.42, 0.56, 0.74, 0.22)
+                        hoverColor: Qt.rgba(0.42, 0.56, 0.74, 0.32)
+                        pressedColor: Qt.rgba(0.42, 0.56, 0.74, 0.40)
+                        onClicked: {
+                            if (root.agentController) {
+                                root.agentController.listAgentTasks()
+                            }
+                            taskLoader.active = true
+                        }
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 48
+            radius: 12
+            color: Qt.rgba(1, 1, 1, 0.18)
+            border.color: Qt.rgba(1, 1, 1, 0.40)
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 14
+                anchors.rightMargin: 14
+                spacing: 8
+
+                ColumnLayout {
+                    Layout.preferredWidth: 150
+                    Layout.minimumWidth: 120
+                    spacing: 2
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: "Agent 模式"
+                        color: "#2a3649"
+                        font.pixelSize: 13
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: root.skillModeHint()
+                        color: "#6a7b92"
+                        font.pixelSize: 11
+                        elide: Text.ElideRight
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Repeater {
+                        model: root.skillModes
+
+                        delegate: GlassButton {
+                            Layout.preferredWidth: 72
+                            Layout.preferredHeight: 28
+                            text: modelData.label
+                            textPixelSize: 12
+                            cornerRadius: 8
+                            enableScaleFeedback: false
+                            normalColor: root.agentSkillMode === modelData.key
+                                         ? Qt.rgba(0.35, 0.61, 0.90, 0.30)
+                                         : Qt.rgba(0.42, 0.56, 0.74, 0.16)
+                            hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
+                            pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
+                            enabled: !root.loading && !root.streaming
+                            onClicked: {
+                                if (root.agentController) {
+                                    root.agentController.switchAgentSkillMode(modelData.key)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -686,6 +822,148 @@ Rectangle {
                             feedbackSummary: root.currentFeedbackSummary
                             observations: root.traceObservations
                             events: root.traceEvents
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Loader {
+        id: memoryLoader
+        anchors.fill: parent
+        active: false
+        sourceComponent: Component {
+            Rectangle {
+                anchors.fill: parent
+                color: Qt.rgba(20, 28, 40, 0.22)
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: memoryLoader.active = false
+                }
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: Math.min(620, Math.max(0, root.width - 32))
+                    height: Math.min(640, Math.max(0, root.height - 32))
+                    radius: 14
+                    clip: true
+                    color: Qt.rgba(0.96, 0.98, 1.0, 0.84)
+                    border.color: Qt.rgba(1, 1, 1, 0.48)
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 16
+                        spacing: 12
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: "AI 记忆"
+                                font.pixelSize: 16
+                                font.bold: true
+                                color: "#2a3649"
+                            }
+
+                            GlassButton {
+                                Layout.preferredWidth: 72
+                                Layout.preferredHeight: 30
+                                text: "关闭"
+                                textPixelSize: 12
+                                cornerRadius: 8
+                                normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.24)
+                                onClicked: memoryLoader.active = false
+                            }
+                        }
+
+                        AgentMemoryPane {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            agentController: root.agentController
+                            memories: root.memories
+                            busy: root.memoryBusy
+                            statusText: root.memoryStatusText
+                            errorText: root.memoryError
+                            onReloadRequested: {
+                                if (root.agentController) {
+                                    root.agentController.listMemories()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Loader {
+        id: taskLoader
+        anchors.fill: parent
+        active: false
+        sourceComponent: Component {
+            Rectangle {
+                anchors.fill: parent
+                color: Qt.rgba(20, 28, 40, 0.22)
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: taskLoader.active = false
+                }
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: Math.min(660, Math.max(0, root.width - 32))
+                    height: Math.min(640, Math.max(0, root.height - 32))
+                    radius: 14
+                    clip: true
+                    color: Qt.rgba(0.96, 0.98, 1.0, 0.84)
+                    border.color: Qt.rgba(1, 1, 1, 0.48)
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 16
+                        spacing: 12
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: "AI 任务"
+                                font.pixelSize: 16
+                                font.bold: true
+                                color: "#2a3649"
+                            }
+
+                            GlassButton {
+                                Layout.preferredWidth: 72
+                                Layout.preferredHeight: 30
+                                text: "关闭"
+                                textPixelSize: 12
+                                cornerRadius: 8
+                                normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.24)
+                                onClicked: taskLoader.active = false
+                            }
+                        }
+
+                        AgentTaskPane {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            agentController: root.agentController
+                            tasks: root.agentTasks
+                            busy: root.agentTaskBusy
+                            statusText: root.agentTaskStatusText
+                            errorText: root.agentTaskError
+                            onReloadRequested: {
+                                if (root.agentController) {
+                                    root.agentController.listAgentTasks()
+                                }
+                            }
                         }
                     }
                 }

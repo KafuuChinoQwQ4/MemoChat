@@ -288,6 +288,7 @@ public:
     Q_INVOKABLE void muteGroupMember(const QString &userId, int muteSeconds);
     Q_INVOKABLE void kickGroupMember(const QString &userId);
     Q_INVOKABLE void quitCurrentGroup();
+    Q_INVOKABLE void dissolveCurrentGroup();
     Q_INVOKABLE void clearGroupStatus();
     Q_INVOKABLE void updateCurrentDraft(const QString &text);
     Q_INVOKABLE void toggleCurrentDialogPinned();
@@ -343,6 +344,7 @@ signals:
     void currentDialogMutedChanged();
     void pendingReplyChanged();
     void lazyBootstrapStateChanged();
+    void groupCreated(qint64 groupId);
 
 private slots:
     void onLoginHttpFinished(ReqId id, QString res, ErrorCodes err);
@@ -433,7 +435,10 @@ private:
     void refreshChatLoadMoreState();
     void refreshContactLoadMoreState();
     void loadCurrentChatMessages();
+    void selectGroupByDialogUid(int dialogUid, qint64 groupId);
     void requestPrivateHistory(int peerUid, qint64 beforeTs, const QString &beforeMsgId = QString());
+    void requestPrivateHistoryForBootstrap(int peerUid);
+    void requestGroupHistoryForBootstrap(qint64 groupId);
     void setContactPane(ContactPane pane);
     void setCurrentContact(int uid, const QString &name, const QString &nick, const QString &icon,
                            const QString &back, int sex, const QString &userId = QString());
@@ -465,6 +470,7 @@ private:
     qint64 latestGroupCreatedAt(qint64 groupId) const;
     qint64 latestPrivatePeerCreatedAt(int peerUid) const;
     void syncCurrentDialogDraft();
+    void clearCurrentGroupConversation(qint64 groupId);
     void loadDraftStore(int ownerUid);
     void saveDraftStore(int ownerUid) const;
     void applyDraftToDialogModel(int dialogUid, const QString &draftText);
@@ -534,6 +540,7 @@ private:
     bool _chat_loading_more;
     bool _can_load_more_chats;
     bool _private_history_loading;
+    bool _group_history_loading;
     bool _can_load_more_private_history;
     bool _contact_loading_more;
     bool _can_load_more_contacts;

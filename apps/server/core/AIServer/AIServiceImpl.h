@@ -70,6 +70,38 @@ public:
                            const ai::AIKbDeleteReq* request,
                            ai::AIKbDeleteRsp* reply) override;
 
+    grpc::Status MemoryList(ServerContext* context,
+                            const ai::AIMemoryReq* request,
+                            ai::AIMemoryListRsp* reply) override;
+
+    grpc::Status MemoryCreate(ServerContext* context,
+                              const ai::AIMemoryReq* request,
+                              ai::AIMemoryRsp* reply) override;
+
+    grpc::Status MemoryDelete(ServerContext* context,
+                              const ai::AIMemoryReq* request,
+                              ai::AIMemoryRsp* reply) override;
+
+    grpc::Status AgentTaskCreate(ServerContext* context,
+                                 const ai::AIAgentTaskReq* request,
+                                 ai::AIAgentTaskRsp* reply) override;
+
+    grpc::Status AgentTaskList(ServerContext* context,
+                               const ai::AIAgentTaskReq* request,
+                               ai::AIAgentTaskRsp* reply) override;
+
+    grpc::Status AgentTaskGet(ServerContext* context,
+                              const ai::AIAgentTaskReq* request,
+                              ai::AIAgentTaskRsp* reply) override;
+
+    grpc::Status AgentTaskCancel(ServerContext* context,
+                                 const ai::AIAgentTaskReq* request,
+                                 ai::AIAgentTaskRsp* reply) override;
+
+    grpc::Status AgentTaskResume(ServerContext* context,
+                                 const ai::AIAgentTaskReq* request,
+                                 ai::AIAgentTaskRsp* reply) override;
+
     grpc::Status Confirm(ServerContext* context,
                          const ai::AIConfirmReq* request,
                          ai::AIConfirmRsp* reply) override;

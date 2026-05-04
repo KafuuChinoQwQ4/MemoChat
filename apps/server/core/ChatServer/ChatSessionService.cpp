@@ -15,6 +15,7 @@
 #include "logging/TraceContext.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include "json/GlazeCompat.h"
 #include <thread>
@@ -35,6 +36,16 @@ std::string GetChatAuthSecretLocal() {
         return value;
     }();
     return secret;
+}
+
+bool FeatureFlagDefaultTrueLocal(const std::string& name) {
+    auto raw = ConfigMgr::Inst().GetValue("FeatureFlags", name);
+    if (raw.empty()) {
+        return true;
+    }
+    std::transform(raw.begin(), raw.end(), raw.begin(),
+        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    return raw == "1" || raw == "true" || raw == "yes" || raw == "on";
 }
 
 void RepairOnlineRouteStateLocal(int uid, const std::shared_ptr<CSession>& session, const std::string& server_name) {
@@ -82,8 +93,11 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, s
     memolog::TraceContext::SetUid(std::to_string(uid));
     memolog::TraceContext::SetSessionId(session->GetSessionId());
     Defer clear_trace([]() { memolog::TraceContext::Clear(); });
-    memolog::LogInfo("chat.login.received", "chat login request received",
-        {{"uid", std::to_string(uid)}, {"session_id", session->GetSessionId()}, {"tcp_msg_id", std::to_string(msg_id)}});
+    const bool verbose_login_logs = FeatureFlagDefaultTrueLocal("chat_login_verbose_logs");
+    if (verbose_login_logs) {
+        memolog::LogInfo("chat.login.received", "chat login request received",
+            {{"uid", std::to_string(uid)}, {"session_id", session->GetSessionId()}, {"tcp_msg_id", std::to_string(msg_id)}});
+    }
 
     memochat::json::JsonValue rtvalue;
     Defer defer([&rtvalue, session]() {
@@ -180,56 +194,59 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, s
     const auto ticket_verify_ms = NowMsLocal() - verify_start_ms;
     const auto attach_start_ms = NowMsLocal();
     const auto server_name = self_server_name;
-    {
-        auto lock_key = LOCK_PREFIX + uid_str;
-        auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, ACQUIRE_TIME_OUT);
-        Defer defer2([identifier, lock_key]() {
-            RedisMgr::GetInstance()->releaseLock(lock_key, identifier);
-        });
-
-        std::string uid_ip_value;
-        bool b_ip = RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, uid_ip_value);
-        if (b_ip) {
-            auto self_name = ConfigMgr::Inst()["SelfServer"]["Name"];
-            if (uid_ip_value == self_name) {
-                auto old_session = UserMgr::GetInstance()->GetSession(uid);
-                if (old_session) {
-                    old_session->NotifyOffline(uid);
-                    _logic._p_server->ClearSession(old_session->GetSessionId());
-                }
-            } else {
-                KickUserReq kick_req;
-                kick_req.set_uid(uid);
-                ChatGrpcClient::GetInstance()->NotifyKickUser(uid_ip_value, kick_req);
-            }
-        }
-
+    auto attach_session = [&]() {
         session->SetUserId(uid);
-        RedisMgr::GetInstance()->Set(USERIPPREFIX + uid_str, server_name);
         UserMgr::GetInstance()->SetUserSession(uid, session);
         RepairOnlineRouteStateLocal(uid, session, server_name);
+    };
+    {
+        if (FeatureFlagDefaultTrueLocal("chat_login_duplicate_session_check")) {
+            auto lock_key = LOCK_PREFIX + uid_str;
+            auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, ACQUIRE_TIME_OUT);
+            Defer defer2([identifier, lock_key]() {
+                RedisMgr::GetInstance()->releaseLock(lock_key, identifier);
+            });
 
-        // 验证 Redis 状态是否正确设置
-        std::string verify_server;
-        RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, verify_server);
-        memolog::LogInfo("chat.login.redis_verify", "verified redis online status",
-            {{"uid", uid_str}, {"expected_server", server_name}, {"actual_server", verify_server}});
+            std::string uid_ip_value;
+            bool b_ip = RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, uid_ip_value);
+            if (b_ip) {
+                auto self_name = ConfigMgr::Inst()["SelfServer"]["Name"];
+                if (uid_ip_value == self_name) {
+                    auto old_session = UserMgr::GetInstance()->GetSession(uid);
+                    if (old_session) {
+                        old_session->NotifyOffline(uid);
+                        _logic._p_server->ClearSession(old_session->GetSessionId());
+                    }
+                } else {
+                    KickUserReq kick_req;
+                    kick_req.set_uid(uid);
+                    ChatGrpcClient::GetInstance()->NotifyKickUser(uid_ip_value, kick_req);
+                }
+            }
+            attach_session();
+        } else {
+            attach_session();
+        }
     }
 
     const auto session_attach_ms = NowMsLocal() - attach_start_ms;
-    memolog::LogInfo("chat.login.succeeded", "chat login success",
-        {{"uid", std::to_string(uid)}, {"session_id", session->GetSessionId()},
-         {"login_protocol_version", std::to_string(protocol_version >= 3 ? 3 : 2)},
-         {"ticket_verify_ms", std::to_string(ticket_verify_ms)}, {"session_attach_ms", std::to_string(session_attach_ms)},
-         {"relation_bootstrap_ms", "0"}, {"relation_bootstrap_mode", relation_bootstrap_mode},
-         {"chat_login_total_ms", std::to_string(NowMsLocal() - login_start_ms)}});
-    memolog::LogInfo("login.stage.summary", "chat login stage summary",
-        {{"uid", std::to_string(uid)}, {"login_protocol_version", std::to_string(protocol_version >= 3 ? 3 : 2)},
-         {"ticket_verify_ms", std::to_string(ticket_verify_ms)}, {"session_attach_ms", std::to_string(session_attach_ms)},
-         {"relation_bootstrap_ms", "0"}, {"relation_bootstrap_mode", relation_bootstrap_mode},
-         {"chat_login_total_ms", std::to_string(NowMsLocal() - login_start_ms)}});
+    if (verbose_login_logs) {
+        memolog::LogInfo("chat.login.succeeded", "chat login success",
+            {{"uid", std::to_string(uid)}, {"session_id", session->GetSessionId()},
+             {"login_protocol_version", std::to_string(protocol_version >= 3 ? 3 : 2)},
+             {"ticket_verify_ms", std::to_string(ticket_verify_ms)}, {"session_attach_ms", std::to_string(session_attach_ms)},
+             {"relation_bootstrap_ms", "0"}, {"relation_bootstrap_mode", relation_bootstrap_mode},
+             {"chat_login_total_ms", std::to_string(NowMsLocal() - login_start_ms)}});
+        memolog::LogInfo("login.stage.summary", "chat login stage summary",
+            {{"uid", std::to_string(uid)}, {"login_protocol_version", std::to_string(protocol_version >= 3 ? 3 : 2)},
+             {"ticket_verify_ms", std::to_string(ticket_verify_ms)}, {"session_attach_ms", std::to_string(session_attach_ms)},
+             {"relation_bootstrap_ms", "0"}, {"relation_bootstrap_mode", relation_bootstrap_mode},
+             {"chat_login_total_ms", std::to_string(NowMsLocal() - login_start_ms)}});
+    }
 
-    std::thread(&ChatSessionService::PushOfflineMessages, this, session, uid).detach();
+    if (FeatureFlagDefaultTrueLocal("chat_login_offline_push")) {
+        std::thread(&ChatSessionService::PushOfflineMessages, this, session, uid).detach();
+    }
 }
 
 void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data)

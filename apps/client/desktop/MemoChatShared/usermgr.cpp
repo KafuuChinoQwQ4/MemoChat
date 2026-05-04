@@ -141,6 +141,7 @@ void UserMgr::AppendFriendList(QJsonArray array) {
 
 void UserMgr::SetGroupList(const QJsonArray &array)
 {
+    const auto previousGroups = _group_map;
     _group_list.clear();
     _group_map.clear();
     _group_loaded = 0;
@@ -159,6 +160,16 @@ void UserMgr::SetGroupList(const QJsonArray &array)
         info->_permission_bits = value["permission_bits"].toVariant().toLongLong();
         if (info->_group_id <= 0) {
             continue;
+        }
+        auto previous = previousGroups.find(info->_group_id);
+        if (previous != previousGroups.end()) {
+            const auto &existing = previous.value();
+            if (existing) {
+                info->_chat_msgs = existing->_chat_msgs;
+                if (info->_last_msg.isEmpty()) {
+                    info->_last_msg = existing->_last_msg;
+                }
+            }
         }
         _group_list.push_back(info);
         _group_map.insert(info->_group_id, info);
@@ -547,6 +558,25 @@ void UserMgr::UpsertGroup(const std::shared_ptr<GroupInfoData> &groupInfo)
     stored->_role = groupInfo->_role;
     stored->_is_all_muted = groupInfo->_is_all_muted;
     stored->_permission_bits = groupInfo->_permission_bits;
+    if (!groupInfo->_group_code.isEmpty()) {
+        stored->_group_code = groupInfo->_group_code;
+    }
+    if (!groupInfo->_last_msg.isEmpty()) {
+        stored->_last_msg = groupInfo->_last_msg;
+    }
+}
+
+void UserMgr::RemoveGroup(qint64 groupId)
+{
+    _group_map.remove(groupId);
+    _group_list.erase(std::remove_if(_group_list.begin(), _group_list.end(),
+                                     [groupId](const std::shared_ptr<GroupInfoData>& info) {
+                                         return info && info->_group_id == groupId;
+                                     }),
+                      _group_list.end());
+    if (_group_loaded > static_cast<int>(_group_list.size())) {
+        _group_loaded = static_cast<int>(_group_list.size());
+    }
 }
 
 void UserMgr::AppendGroupChatMsg(qint64 group_id, const std::shared_ptr<TextChatData> &msg)

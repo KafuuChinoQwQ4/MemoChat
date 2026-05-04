@@ -8,7 +8,7 @@ from typing import Any
 import structlog
 
 from db.postgres_client import PostgresClient
-from harness.contracts import AgentTrace, PlanStep, TraceEvent
+from harness.contracts import AgentTrace, PlanStep, RunEdge, RunGraph, RunNode, TraceEvent
 from config import settings
 
 logger = structlog.get_logger()
@@ -40,6 +40,7 @@ class AgentTraceStore:
             started_at=_now_ms(),
         )
         self._traces[trace.trace_id] = trace
+        trace.run_graph = self.build_run_graph(trace)
         await self._persist_run_start(trace)
         return trace
 
@@ -48,6 +49,7 @@ class AgentTraceStore:
         if trace is None:
             return
         trace.events.append(event)
+        trace.run_graph = self.build_run_graph(trace)
         await self._persist_event(trace_id, len(trace.events) - 1, event)
 
     async def finish_run(
@@ -68,6 +70,7 @@ class AgentTraceStore:
         trace.feedback_summary = feedback_summary
         trace.observations = observations
         trace.finished_at = _now_ms()
+        trace.run_graph = self.build_run_graph(trace)
         await self._persist_run_finish(trace)
 
     async def submit_feedback(
@@ -153,8 +156,78 @@ class AgentTraceStore:
             started_at=row["started_at"],
             finished_at=row["finished_at"] or 0,
         )
+        trace.run_graph = self.build_run_graph(trace)
         self._traces[trace.trace_id] = trace
         return trace
+
+    async def get_run_graph_or_load(self, trace_id: str) -> RunGraph | None:
+        trace = await self.get_trace_or_load(trace_id)
+        if trace is None:
+            return None
+        if trace.run_graph is None:
+            trace.run_graph = self.build_run_graph(trace)
+        return trace.run_graph
+
+    def build_run_graph(self, trace: AgentTrace) -> RunGraph:
+        nodes: list[RunNode] = []
+        edges: list[RunEdge] = []
+        started_at = trace.started_at or _now_ms()
+        previous_id = ""
+
+        plan_node_id = f"{trace.trace_id}:plan"
+        plan_finished_at = trace.events[0].started_at if trace.events else trace.finished_at or started_at
+        nodes.append(
+            RunNode(
+                node_id=plan_node_id,
+                name="plan",
+                layer="orchestration",
+                status="ok",
+                summary=f"steps={len(trace.plan_steps)}",
+                detail=json.dumps([step.to_dict() for step in trace.plan_steps], ensure_ascii=False),
+                started_at=started_at,
+                finished_at=max(plan_finished_at, started_at),
+                metadata={"step_count": len(trace.plan_steps)},
+            )
+        )
+        previous_id = plan_node_id
+
+        for index, event in enumerate(trace.events):
+            node_id = f"{trace.trace_id}:event:{index}"
+            nodes.append(
+                RunNode(
+                    node_id=node_id,
+                    name=event.name,
+                    layer=event.layer,
+                    status=event.status,
+                    summary=event.summary,
+                    detail=event.detail,
+                    parent_id=previous_id,
+                    started_at=event.started_at,
+                    finished_at=event.finished_at,
+                    metadata=dict(event.metadata),
+                )
+            )
+            edges.append(
+                RunEdge(
+                    source_id=previous_id,
+                    target_id=node_id,
+                    relation="next",
+                )
+            )
+            previous_id = node_id
+
+        return RunGraph(
+            trace_id=trace.trace_id,
+            nodes=nodes,
+            edges=edges,
+            status=trace.status,
+            started_at=trace.started_at or started_at,
+            finished_at=trace.finished_at or 0,
+            metadata={
+                "skill": trace.skill,
+                "event_count": len(trace.events),
+            },
+        )
 
     async def _persist_run_start(self, trace: AgentTrace) -> None:
         if not settings.harness.trace_persist:

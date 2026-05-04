@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Seed 600 fresh load-test accounts directly into PostgreSQL.
-Works for the C++ load test tool (xor_encode client-side) and the tcp_quic_latency_test.py script.
+Works for the Python load test tool and the MemoChat XOR-encoded login flow.
 
 Passwords are stored as-is in the DB (the GateServer /user_login reads pwd from the DB and
 compares with the XOR-encoded value the client sends — no double encoding).
@@ -9,6 +9,7 @@ compares with the XOR-encoded value the client sends — no double encoding).
 import psycopg2
 import random
 import string
+from pathlib import Path
 import sys
 
 DB = dict(
@@ -31,7 +32,8 @@ def random_pwd(length=12):
 def random_user_id():
     return "u" + str(random.randint(100_000_000, 999_999_999))
 
-BATCH = 600
+BATCH = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def main():
     print("[seed] Connecting to PostgreSQL...")
@@ -81,7 +83,8 @@ def main():
     print(f"[seed] Inserted {inserted} accounts (duplicates skipped)")
 
     # Write CSV
-    csv_path = "D:/MemoChat-Qml-Drogon/Memo_ops/artifacts/loadtest/runtime/accounts/accounts.local.csv"
+    csv_path = REPO_ROOT / "infra" / "Memo_ops" / "artifacts" / "loadtest" / "runtime" / "accounts" / "accounts.local.csv"
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
     with open(csv_path, "w", encoding="utf-8") as f:
         f.write("\n".join(csv_lines))
     print(f"[seed] CSV written to {csv_path} ({BATCH} entries)")

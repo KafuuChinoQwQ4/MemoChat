@@ -47,21 +47,17 @@ Do not change compose ports as part of release cleanup.
 
 ## Build/Test Matrix
 
-Choose by release scope:
+Use the full local build before release/runtime deployment. The deployment script copies from `build\bin\Release`, so release validation must not depend on `build-verify-server` or `build-verify-client`.
 
 ```powershell
-cmake --preset msvc2022-server-verify
-cmake --build --preset msvc2022-server-verify
-
-cmake --preset msvc2022-client-verify
-cmake --build --preset msvc2022-client-verify
-
-cmake --preset msvc2022-tests
-cmake --build --preset msvc2022-tests
-ctest --preset msvc2022-tests
-
 cmake --preset msvc2022-full
 cmake --build --preset msvc2022-full
+```
+
+Run test presets when release scope needs automated tests:
+
+```powershell
+ctest --preset msvc2022-full
 ```
 
 For runtime release confidence, use the existing service scripts and smoke tests:

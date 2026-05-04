@@ -31,11 +31,21 @@ class AgentController : public QObject
     Q_PROPERTY(bool knowledgeBusy READ knowledgeBusy NOTIFY knowledgeStateChanged)
     Q_PROPERTY(QString knowledgeStatusText READ knowledgeStatusText NOTIFY knowledgeStateChanged)
     Q_PROPERTY(QString knowledgeError READ knowledgeError NOTIFY knowledgeStateChanged)
+    Q_PROPERTY(QVariantList memories READ memories NOTIFY memoriesChanged)
+    Q_PROPERTY(bool memoryBusy READ memoryBusy NOTIFY memoryStateChanged)
+    Q_PROPERTY(QString memoryStatusText READ memoryStatusText NOTIFY memoryStateChanged)
+    Q_PROPERTY(QString memoryError READ memoryError NOTIFY memoryStateChanged)
+    Q_PROPERTY(QVariantList agentTasks READ agentTasks NOTIFY agentTasksChanged)
+    Q_PROPERTY(bool agentTaskBusy READ agentTaskBusy NOTIFY agentTaskStateChanged)
+    Q_PROPERTY(QString agentTaskStatusText READ agentTaskStatusText NOTIFY agentTaskStateChanged)
+    Q_PROPERTY(QString agentTaskError READ agentTaskError NOTIFY agentTaskStateChanged)
     Q_PROPERTY(QString currentTraceId READ currentTraceId NOTIFY traceChanged)
     Q_PROPERTY(QString currentSkill READ currentSkill NOTIFY traceChanged)
     Q_PROPERTY(QString currentFeedbackSummary READ currentFeedbackSummary NOTIFY traceChanged)
     Q_PROPERTY(QVariantList traceEvents READ traceEvents NOTIFY traceChanged)
     Q_PROPERTY(QVariantList traceObservations READ traceObservations NOTIFY traceChanged)
+    Q_PROPERTY(QString agentSkillMode READ agentSkillMode NOTIFY agentSkillModeChanged)
+    Q_PROPERTY(QString agentSkillDisplay READ agentSkillDisplay NOTIFY agentSkillModeChanged)
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
     Q_PROPERTY(QString error READ error NOTIFY errorOccurred)
     Q_PROPERTY(bool streaming READ streaming NOTIFY streamingChanged)
@@ -60,11 +70,21 @@ public:
     bool knowledgeBusy() const;
     QString knowledgeStatusText() const;
     QString knowledgeError() const;
+    QVariantList memories() const;
+    bool memoryBusy() const;
+    QString memoryStatusText() const;
+    QString memoryError() const;
+    QVariantList agentTasks() const;
+    bool agentTaskBusy() const;
+    QString agentTaskStatusText() const;
+    QString agentTaskError() const;
     QString currentTraceId() const;
     QString currentSkill() const;
     QString currentFeedbackSummary() const;
     QVariantList traceEvents() const;
     QVariantList traceObservations() const;
+    QString agentSkillMode() const;
+    QString agentSkillDisplay() const;
     bool loading() const;
     QString error() const;
     bool streaming() const;
@@ -77,18 +97,29 @@ public:
     Q_INVOKABLE void loadHistory(const QString& sessionId);
     Q_INVOKABLE void loadSessions();
     Q_INVOKABLE void switchModel(const QString& backend, const QString& model);
+    Q_INVOKABLE void switchAgentSkillMode(const QString& mode);
     Q_INVOKABLE void refreshModelList();
     Q_INVOKABLE void registerApiProvider(const QString& providerName, const QString& baseUrl, const QString& apiKey);
 
     Q_INVOKABLE void summarizeChat(const QString& dialogUid, const QString& chatHistoryJson);
     Q_INVOKABLE void suggestReply(const QString& dialogUid, const QString& chatHistoryJson);
     Q_INVOKABLE void translateMessage(const QString& msgContent, const QString& targetLang);
+    Q_INVOKABLE void translateMessageWithSource(const QString& msgContent,
+                                                const QString& sourceLang,
+                                                const QString& targetLang);
 
     Q_INVOKABLE void uploadDocument(const QString& filePath);
     Q_INVOKABLE void chooseAndUploadDocument();
     Q_INVOKABLE void searchKnowledgeBase(const QString& query);
     Q_INVOKABLE void listKnowledgeBases();
     Q_INVOKABLE void deleteKnowledgeBase(const QString& kbId);
+    Q_INVOKABLE void listMemories();
+    Q_INVOKABLE void createMemory(const QString& content);
+    Q_INVOKABLE void deleteMemory(const QString& memoryId);
+    Q_INVOKABLE void listAgentTasks();
+    Q_INVOKABLE void createAgentTask(const QString& content, const QString& title);
+    Q_INVOKABLE void cancelAgentTask(const QString& taskId);
+    Q_INVOKABLE void resumeAgentTask(const QString& taskId);
 
     // 中止正在进行的流式请求
     Q_INVOKABLE void cancelStream();
@@ -109,9 +140,14 @@ signals:
     void knowledgeBasesChanged();
     void knowledgeSearchResultChanged();
     void knowledgeStateChanged();
+    void memoriesChanged();
+    void memoryStateChanged();
+    void agentTasksChanged();
+    void agentTaskStateChanged();
     void modelStateChanged();
     void traceChanged();
     void thinkingChanged();
+    void agentSkillModeChanged();
 
 private slots:
     void onHttpFinish(ReqId id, const QString& res, ErrorCodes err, Modules mod);
@@ -125,6 +161,8 @@ private:
     void handleHistoryRsp(ReqId id, const QString& res, ErrorCodes err);
     void handleModelListRsp(ReqId id, const QString& res, ErrorCodes err);
     void handleKbRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType);
+    void handleMemoryRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType);
+    void handleAgentTaskRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType);
     void clearTrace();
     void updateTraceFromResponse(const QJsonObject& root);
     void setErrorState(const QString& error);
@@ -132,11 +170,21 @@ private:
     void setKnowledgeBusy(bool busy, const QString& statusText = QString());
     void setKnowledgeError(const QString& error);
     void clearKnowledgeError();
+    void setMemoryBusy(bool busy, const QString& statusText = QString());
+    void setMemoryError(const QString& error);
+    void clearMemoryError();
+    void setAgentTaskBusy(bool busy, const QString& statusText = QString());
+    void setAgentTaskError(const QString& error);
+    void clearAgentTaskError();
     void setModelRefreshBusy(bool busy);
     void setApiProviderBusy(bool busy, const QString& statusText = QString());
     void clearCurrentSession();
+    void loadPersistedModelSelection();
+    void saveCurrentModelSelection() const;
     bool modelSupportsThinking(const QString& backend, const QString& modelName) const;
     QJsonObject buildChatMetadata() const;
+    QString resolvedSkillName() const;
+    QJsonArray requestedToolsForSkillMode() const;
 
     // SSE 流式处理辅助
     void parseSSEChunk(const QString& line);
@@ -161,9 +209,18 @@ private:
     bool _knowledge_busy = false;
     QString _knowledge_status_text;
     QString _knowledge_error;
+    QVariantList _memories;
+    bool _memory_busy = false;
+    QString _memory_status_text;
+    QString _memory_error;
+    QVariantList _agent_tasks;
+    bool _agent_task_busy = false;
+    QString _agent_task_status_text;
+    QString _agent_task_error;
     QString _current_trace_id;
     QString _current_skill;
     QString _current_feedback_summary;
+    QString _agent_skill_mode = QStringLiteral("auto");
     QVariantList _trace_events;
     QVariantList _trace_observations;
     QMap<ReqId, QString> _pending_requests;

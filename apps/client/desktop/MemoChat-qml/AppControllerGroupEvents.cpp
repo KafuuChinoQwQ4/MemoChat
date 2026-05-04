@@ -102,6 +102,18 @@ void AppController::onGroupMemberChanged(QJsonObject payload)
         return;
     }
 
+    if (event == "group_dissolved") {
+        const qint64 groupId = payload.value("groupid").toVariant().toLongLong();
+        if (groupId > 0) {
+            _gateway.userMgr()->RemoveGroup(groupId);
+            clearCurrentGroupConversation(groupId);
+            refreshGroupModel();
+            refreshDialogModel();
+        }
+        refreshGroupList();
+        return;
+    }
+
     if (event == "group_msg_edited" || event == "group_msg_revoked") {
         const qint64 groupId = payload.value("groupid").toVariant().toLongLong();
         const MessageUpdateFields updateFields = MessagePayloadService::parseMessageUpdateFields(payload, event);
@@ -210,6 +222,7 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
         case ID_SET_GROUP_ADMIN_RSP: return "设置管理员";
         case ID_KICK_GROUP_MEMBER_RSP: return "踢出成员";
         case ID_QUIT_GROUP_RSP: return "退出群聊";
+        case ID_DISSOLVE_GROUP_RSP: return "解散群聊";
         case ID_SYNC_DRAFT_RSP: return "同步草稿";
         case ID_PIN_DIALOG_RSP: return "置顶会话";
         case ID_EDIT_PRIVATE_MSG_RSP: return "编辑私聊消息";
@@ -221,7 +234,11 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
 
     if (error != ErrorCodes::SUCCESS) {
         if (reqId == ID_GROUP_HISTORY_RSP) {
-            setPrivateHistoryLoading(false);
+            const qint64 groupId = payload.value("groupid").toVariant().toLongLong();
+            if (groupId <= 0 || groupId == _current_group_id) {
+                _group_history_loading = false;
+                setPrivateHistoryLoading(false);
+            }
         }
         if (reqId == ID_GROUP_CHAT_MSG_RSP) {
             QString clientMsgId = payload.value("client_msg_id").toString();
@@ -257,7 +274,17 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
     switch (reqId) {
     case ID_CREATE_GROUP_RSP: {
         const QString groupName = payload.value("name").toString();
+        const qint64 groupId = payload.value("groupid").toVariant().toLongLong();
         setGroupStatus(groupName.isEmpty() ? "群聊创建成功" : QString("群聊创建成功：%1").arg(groupName), false);
+        if (groupId > 0) {
+            refreshGroupModel();
+            refreshDialogModel();
+            const int dialogUid = ConversationSyncService::resolveGroupDialogUid(_group_uid_map, groupId);
+            if (dialogUid != 0) {
+                selectDialogByUid(dialogUid);
+            }
+            emit groupCreated(groupId);
+        }
         refreshGroupList();
         break;
     }
@@ -273,39 +300,49 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
         refreshGroupList();
         break;
     case ID_GROUP_HISTORY_RSP: {
-        setPrivateHistoryLoading(false);
-        _group_history_has_more = payload.value("has_more").toBool(false);
-        setCanLoadMorePrivateHistory(_group_history_has_more);
-        _group_history_before_seq = payload.value("next_before_seq").toVariant().toLongLong();
-        if (_current_group_id > 0) {
-            auto groupInfo = _gateway.userMgr()->GetGroupById(_current_group_id);
-            if (groupInfo) {
-                _message_model.setMessages(groupInfo->_chat_msgs, _gateway.userMgr()->GetUid());
-                if (_group_history_before_seq <= 0) {
-                    for (const auto &one : groupInfo->_chat_msgs) {
-                        if (!one || one->_group_seq <= 0) {
-                            continue;
-                        }
-                        if (_group_history_before_seq <= 0 || one->_group_seq < _group_history_before_seq) {
-                            _group_history_before_seq = one->_group_seq;
-                        }
+        const qint64 groupId = payload.value("groupid").toVariant().toLongLong();
+        auto groupInfo = _gateway.userMgr()->GetGroupById(groupId);
+        auto selfInfo = _gateway.userMgr()->GetUserInfo();
+        if (groupInfo && selfInfo && _group_cache_store.isReady()) {
+            _group_cache_store.upsertMessages(selfInfo->_uid, groupId, groupInfo->_chat_msgs);
+        }
+        const bool isCurrentGroupHistory = groupId == _current_group_id;
+        if (isCurrentGroupHistory) {
+            _group_history_loading = false;
+            setPrivateHistoryLoading(false);
+        }
+        qInfo() << "Group history response, group id:" << groupId
+                << "current group id:" << _current_group_id
+                << "message count:" << payload.value("messages").toArray().size()
+                << "cached group msg count:" << (groupInfo ? static_cast<qlonglong>(groupInfo->_chat_msgs.size()) : 0LL)
+                << "has more:" << payload.value("has_more").toBool(false);
+        if (isCurrentGroupHistory && groupInfo) {
+            _group_history_has_more = payload.value("has_more").toBool(false);
+            setCanLoadMorePrivateHistory(_group_history_has_more);
+            _group_history_before_seq = payload.value("next_before_seq").toVariant().toLongLong();
+            _message_model.setMessages(groupInfo->_chat_msgs, _gateway.userMgr()->GetUid());
+            if (_group_history_before_seq <= 0) {
+                for (const auto &one : groupInfo->_chat_msgs) {
+                    if (!one || one->_group_seq <= 0) {
+                        continue;
+                    }
+                    if (_group_history_before_seq <= 0 || one->_group_seq < _group_history_before_seq) {
+                        _group_history_before_seq = one->_group_seq;
                     }
                 }
-                qint64 readTs = 0;
-                if (!groupInfo->_chat_msgs.empty() && groupInfo->_chat_msgs.back()) {
-                    readTs = groupInfo->_chat_msgs.back()->_created_at;
-                }
-                sendGroupReadAck(_current_group_id, readTs);
-                const int dialogUid = -static_cast<int>(_current_group_id);
-                ConversationSyncService::clearGroupUnreadAndMention(
-                    _dialog_list_model, _dialog_mention_map, dialogUid);
-                auto selfInfo = _gateway.userMgr()->GetUserInfo();
-                if (selfInfo && _group_cache_store.isReady()) {
-                    _group_cache_store.upsertMessages(selfInfo->_uid, _current_group_id, groupInfo->_chat_msgs);
-                }
             }
+            qint64 readTs = 0;
+            if (!groupInfo->_chat_msgs.empty() && groupInfo->_chat_msgs.back()) {
+                readTs = groupInfo->_chat_msgs.back()->_created_at;
+            }
+            sendGroupReadAck(groupId, readTs);
+            const int dialogUid = ConversationSyncService::resolveGroupDialogUid(_group_uid_map, groupId);
+            ConversationSyncService::clearGroupUnreadAndMention(
+                _dialog_list_model, _dialog_mention_map, dialogUid);
+            setGroupStatus("历史消息已加载", false);
+        } else {
+            qInfo() << "Group history response cached for non-current group, group id:" << groupId;
         }
-        setGroupStatus("历史消息已加载", false);
         break;
     }
     case ID_EDIT_GROUP_MSG_RSP:
@@ -429,45 +466,24 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
         break;
     case ID_QUIT_GROUP_RSP:
         setGroupStatus("已退出当前群聊", false);
-        if (_current_group_id > 0) {
-            const int dialogUid = -static_cast<int>(_current_group_id);
-            _dialog_mention_map.remove(dialogUid);
-            _dialog_list_model.clearMention(dialogUid);
-        }
+        _gateway.userMgr()->RemoveGroup(payload.value("groupid").toVariant().toLongLong());
         refreshGroupList();
-        setCurrentGroup(0, "");
-        _group_history_before_seq = 0;
-        _group_history_has_more = true;
-        setPendingReplyContext(QString(), QString(), QString());
-        if (_current_chat_uid > 0) {
-            loadCurrentChatMessages();
-        } else {
-            _message_model.clear();
-            setCurrentChatPeerName("");
-            setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
-            setCurrentDialogMuted(false);
-        }
+        clearCurrentGroupConversation(payload.value("groupid").toVariant().toLongLong());
         break;
+    case ID_DISSOLVE_GROUP_RSP: {
+        const qint64 groupId = payload.value("groupid").toVariant().toLongLong();
+        setGroupStatus("群聊已解散", false);
+        _gateway.userMgr()->RemoveGroup(groupId);
+        refreshGroupList();
+        clearCurrentGroupConversation(groupId);
+        break;
+    }
     case ID_GROUP_CHAT_MSG_RSP:
     case ID_FORWARD_GROUP_MSG_RSP: {
         const qint64 groupId = payload.value("groupid").toVariant().toLongLong();
         const QJsonObject msgObj = payload.value("msg").toObject();
         const QString ackMsgId = payload.value("client_msg_id").toString(msgObj.value("msgid").toString());
         auto selfInfo = _gateway.userMgr()->GetUserInfo();
-        const QString ackStatus = payload.value("status").toString();
-        if (ackStatus == QStringLiteral("accepted") && groupId > 0 && !ackMsgId.isEmpty()) {
-            if (_gateway.userMgr()->UpdateGroupChatMsgState(groupId, ackMsgId, QStringLiteral("accepted"))
-                && groupId == _current_group_id) {
-                _message_model.updateMessageState(ackMsgId, QStringLiteral("accepted"));
-            }
-            if (selfInfo && _group_cache_store.isReady()) {
-                auto groupInfo = _gateway.userMgr()->GetGroupById(groupId);
-                if (groupInfo) {
-                    _group_cache_store.upsertMessages(selfInfo->_uid, groupId, groupInfo->_chat_msgs);
-                }
-            }
-            break;
-        }
         if (groupId > 0 && !ackMsgId.isEmpty()) {
             const int selfUid = selfInfo ? selfInfo->_uid : _gateway.userMgr()->GetUid();
             const QString senderName = payload.value("from_nick").toString(
@@ -479,7 +495,19 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
                                                                             selfUid,
                                                                             senderName,
                                                                             senderIcon);
-            if (!correctedMsg || correctedMsg->_msg_id.isEmpty()) {
+            if (!correctedMsg || correctedMsg->_msg_id.isEmpty() || correctedMsg->_msg_content.isEmpty()) {
+                if (payload.value("status").toString() == QStringLiteral("accepted")) {
+                    if (_gateway.userMgr()->UpdateGroupChatMsgState(groupId, ackMsgId, QStringLiteral("accepted"))
+                        && groupId == _current_group_id) {
+                        _message_model.updateMessageState(ackMsgId, QStringLiteral("accepted"));
+                    }
+                    if (selfInfo && _group_cache_store.isReady()) {
+                        auto groupInfo = _gateway.userMgr()->GetGroupById(groupId);
+                        if (groupInfo) {
+                            _group_cache_store.upsertMessages(selfInfo->_uid, groupId, groupInfo->_chat_msgs);
+                        }
+                    }
+                }
                 break;
             }
             const QString msgId = correctedMsg->_msg_id;
@@ -516,7 +544,7 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
         if (dialogType == "group") {
             const qint64 groupId = payload.value("group_id").toVariant().toLongLong();
             if (groupId > 0) {
-                dialogUid = -static_cast<int>(groupId);
+                dialogUid = ConversationSyncService::resolveGroupDialogUid(_group_uid_map, groupId);
             }
         } else if (dialogType == "private") {
             dialogUid = payload.value("peer_uid").toInt();
@@ -561,7 +589,7 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
         if (dialogType == "group") {
             const qint64 groupId = payload.value("group_id").toVariant().toLongLong();
             if (groupId > 0) {
-                dialogUid = -static_cast<int>(groupId);
+                dialogUid = ConversationSyncService::resolveGroupDialogUid(_group_uid_map, groupId);
             }
         } else if (dialogType == "private") {
             dialogUid = payload.value("peer_uid").toInt();

@@ -44,11 +44,12 @@ Check whether the UI depends on server endpoints or runtime configs. If yes, inc
 
 ## Verification
 
-Build client when QML/resources/C++ client glue changed:
+Build the full stack when QML/resources/C++ client glue changed and the result will be launched or deployed. `deploy_services.bat` copies `MemoChatQml.exe` from `build\bin\Release`, so use `msvc2022-full` rather than `msvc2022-client-verify`.
 
 ```powershell
-cmake --preset msvc2022-client-verify
-cmake --build --preset msvc2022-client-verify
+cmake --preset msvc2022-full
+cmake --build --preset msvc2022-full
+tools\scripts\status\deploy_services.bat
 ```
 
 For runtime UI checks, start the required local services first if the screen needs backend data. Use screenshots when possible. If no automated UI runner exists, record the exact manual visual check needed.

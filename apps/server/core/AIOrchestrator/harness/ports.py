@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from typing import Any, AsyncIterator, Protocol
 
-from harness.contracts import AgentSkill, AgentTrace, HarnessRunResult, MemorySnapshot, PlanStep, ToolObservation, TraceEvent
+from harness.contracts import (
+    AgentSkill,
+    AgentTrace,
+    GuardrailResult,
+    HarnessRunResult,
+    MemorySnapshot,
+    PlanStep,
+    ToolObservation,
+    ToolSpec,
+    TraceEvent,
+)
 from llm.base import LLMMessage, LLMResponse, LLMStreamChunk
 
 
@@ -40,6 +50,7 @@ class LLMCompletionPort(Protocol):
 
 class ToolExecutionPort(Protocol):
     def list_tools(self) -> list[dict[str, Any]]: ...
+    def list_tool_specs(self) -> list[ToolSpec]: ...
 
     async def execute(
         self,
@@ -90,8 +101,21 @@ class FeedbackPort(Protocol):
     ) -> str: ...
 
 
+class GuardrailPort(Protocol):
+    def check_input(self, request: Any, skill: AgentSkill, plan_steps: list[PlanStep]) -> list[GuardrailResult]: ...
+    def check_tool_plan(
+        self,
+        request: Any,
+        plan_steps: list[PlanStep],
+        tool_specs: list[ToolSpec],
+    ) -> list[GuardrailResult]: ...
+    def check_output(self, response_text: str, observations: list[ToolObservation]) -> list[GuardrailResult]: ...
+    def has_blocking(self, results: list[GuardrailResult]) -> bool: ...
+
+
 __all__ = [
     "FeedbackPort",
+    "GuardrailPort",
     "LLMCompletionPort",
     "MemoryPort",
     "SkillPlanningPort",

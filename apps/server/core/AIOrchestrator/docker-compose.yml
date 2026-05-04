@@ -31,6 +31,7 @@ services:
       - MEMOCHAT_AI_POSTGRES__USER=memochat
       - MEMOCHAT_AI_POSTGRES__PASSWORD=123456
       - MEMOCHAT_AI_POSTGRES__DATABASE=memo_pg
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

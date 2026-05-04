@@ -1,67 +1,47 @@
 @echo off
 setlocal enabledelayedexpansion
 
-set "REPORT_DIR=D:\MemoChat-Qml\Memo_ops\artifacts\reports\loadtest"
-set "LOG_DIR=D:\MemoChat-Qml\Memo_ops\artifacts\logs\loadtest"
-set "LOADTEST_EXE=D:\MemoChat-Qml\local-loadtest-cpp\build-vcpkg-loadtest\Release\memochat_loadtest.exe"
-set "CONFIG=D:\MemoChat-Qml\local-loadtest-cpp\config.json"
-set "GATE_URL=http://127.0.0.1:8080"
+set "REPO_ROOT=%~dp0..\.."
+for %%I in ("%REPO_ROOT%") do set "REPO_ROOT=%%~fI"
+set "PY_LOADTEST=%REPO_ROOT%\tools\loadtest\python-loadtest\py_loadtest.py"
+set "CONFIG=%REPO_ROOT%\tools\loadtest\python-loadtest\config.json"
+set "REPORT_DIR=%REPO_ROOT%\infra\Memo_ops\artifacts\reports\loadtest"
 
 echo ================================================
-echo MemoChat 协议性能对比压测
+echo MemoChat Python protocol benchmark
 echo ================================================
 echo.
 
-:: 创建报告目录
 if not exist "%REPORT_DIR%" mkdir "%REPORT_DIR%"
-if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
-
-:: 清理旧报告
 del /q "%REPORT_DIR%\*.json" 2>nul
-del /q "%LOG_DIR%\*.log" 2>nul
 
-echo [1/3] 测试 HTTP/1.1 登录 (100并发, 500总请求)
-echo.
-
-:: HTTP/1.1 登录测试
-"%LOADTEST_EXE%" ^
+echo [1/3] HTTP login (100 concurrency, 500 requests)
+python "%PY_LOADTEST%" ^
     --scenario http ^
     --config "%CONFIG%" ^
-    --gate-url "%GATE_URL%" ^
     --total 500 ^
     --concurrency 100 ^
-    --timeout 5 ^
-    --output "%REPORT_DIR%\http_login.json" 2>&1
+    --report-dir "%REPORT_DIR%"
 
 echo.
-echo [2/3] 测试 TCP 长连接登录 (50并发, 500总请求)
-echo.
-
-:: TCP 长连接测试
-"%LOADTEST_EXE%" ^
+echo [2/3] TCP login (50 concurrency, 500 requests)
+python "%PY_LOADTEST%" ^
     --scenario tcp ^
     --config "%CONFIG%" ^
-    --gate-url "%GATE_URL%" ^
     --total 500 ^
     --concurrency 50 ^
-    --timeout 5 ^
-    --output "%REPORT_DIR%\tcp_login.json" 2>&1
+    --report-dir "%REPORT_DIR%"
 
 echo.
-echo [3/3] 测试 QUIC 长连接登录 (50并发, 500总请求)
-echo.
-
-:: QUIC 测试
-"%LOADTEST_EXE%" ^
-    --scenario quic ^
+echo [3/3] AI/RAG smoke benchmark (10 concurrency, 50 requests)
+python "%PY_LOADTEST%" ^
+    --scenario ai-health ^
     --config "%CONFIG%" ^
-    --gate-url "%GATE_URL%" ^
-    --total 500 ^
-    --concurrency 50 ^
-    --timeout 5 ^
-    --output "%REPORT_DIR%\quic_login.json" 2>&1
+    --total 50 ^
+    --concurrency 10 ^
+    --report-dir "%REPORT_DIR%"
 
 echo.
 echo ================================================
-echo 压测完成，报告在: %REPORT_DIR%
+echo Benchmark reports: %REPORT_DIR%
 echo ================================================

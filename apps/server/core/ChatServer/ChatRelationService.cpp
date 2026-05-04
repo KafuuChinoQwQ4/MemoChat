@@ -471,7 +471,6 @@ void ChatRelationService::HandleSyncDraft(const std::shared_ptr<CSession>& sessi
     const int uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
     const std::string dialog_type = root.get("dialog_type", "").asString();
     const int peer_uid = root.get("peer_uid", 0).asInt();
-    const int64_t group_id = root.isMember("groupid") ? root["groupid"].asInt64() : root["group_id"].asInt64();
     const bool has_mute_state = root.isMember("mute_state");
     const int mute_state = root.get("mute_state", 0).asInt();
     std::string draft_text = root.get("draft_text", "").asString();
@@ -484,7 +483,6 @@ void ChatRelationService::HandleSyncDraft(const std::shared_ptr<CSession>& sessi
     rtvalue["uid"] = uid;
     rtvalue["dialog_type"] = dialog_type;
     rtvalue["peer_uid"] = peer_uid;
-    rtvalue["group_id"] = static_cast<Json::Int64>(group_id);
     rtvalue["draft_text"] = draft_text;
     if (has_mute_state) {
         rtvalue["mute_state"] = mute_state > 0 ? 1 : 0;
@@ -507,7 +505,8 @@ void ChatRelationService::HandleSyncDraft(const std::shared_ptr<CSession>& sessi
             return;
         }
     } else {
-        normalized_group_id = group_id;
+        normalized_group_id = root.isMember("groupid") ? root["groupid"].asInt64() : root.get("group_id", 0).asInt64();
+        rtvalue["group_id"] = static_cast<Json::Int64>(normalized_group_id);
         if (normalized_group_id <= 0 || !PostgresMgr::GetInstance()->IsUserInGroup(normalized_group_id, uid)) {
             rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
             return;
@@ -532,7 +531,6 @@ void ChatRelationService::HandlePinDialog(const std::shared_ptr<CSession>& sessi
     const int uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
     const std::string dialog_type = root.get("dialog_type", "").asString();
     const int peer_uid = root.get("peer_uid", 0).asInt();
-    const int64_t group_id = root.isMember("groupid") ? root["groupid"].asInt64() : root["group_id"].asInt64();
     int pinned_rank = root.get("pinned_rank", 0).asInt();
     if (pinned_rank < 0) {
         pinned_rank = 0;
@@ -546,7 +544,6 @@ void ChatRelationService::HandlePinDialog(const std::shared_ptr<CSession>& sessi
     rtvalue["uid"] = uid;
     rtvalue["dialog_type"] = dialog_type;
     rtvalue["peer_uid"] = peer_uid;
-    rtvalue["group_id"] = static_cast<Json::Int64>(group_id);
     rtvalue["pinned_rank"] = pinned_rank;
     Defer defer([&rtvalue, session]() {
         session->Send(JsonToWireString(rtvalue), ID_PIN_DIALOG_RSP);
@@ -566,7 +563,8 @@ void ChatRelationService::HandlePinDialog(const std::shared_ptr<CSession>& sessi
             return;
         }
     } else {
-        normalized_group_id = group_id;
+        normalized_group_id = root.isMember("groupid") ? root["groupid"].asInt64() : root.get("group_id", 0).asInt64();
+        rtvalue["group_id"] = static_cast<Json::Int64>(normalized_group_id);
         if (normalized_group_id <= 0 || !PostgresMgr::GetInstance()->IsUserInGroup(normalized_group_id, uid)) {
             rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
             return;

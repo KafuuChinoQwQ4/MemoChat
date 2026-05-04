@@ -3,6 +3,7 @@
 
 #include <QAbstractListModel>
 #include <QTimer>
+#include <QVariantMap>
 #include <QVector>
 #include <QtGlobal>
 #include <memory>
@@ -64,6 +65,9 @@ public:
     bool containsMessage(const QString &msgId) const;
     QString rawContentByMsgId(const QString &msgId) const;
     QString previewTextByMsgId(const QString &msgId) const;
+    Q_INVOKABLE QString exportRecentText(int maxMessages = 80) const;
+    Q_INVOKABLE QString latestTextMessage(bool preferIncoming = true) const;
+    Q_INVOKABLE QVariantMap latestTextMessageInfo(bool preferIncoming = true) const;
     void setDownloadAuthContext(int uid, const QString &token);
 
 signals:
@@ -104,6 +108,7 @@ private:
     void restartTimeDividerRefreshTimer();
     void stopTimeDividerRefreshTimer();
     QString withDownloadAuth(const QString &urlText) const;
+    QString normalizeSenderIcon(const QString &icon) const;
     MessageEntry toEntry(const std::shared_ptr<TextChatData> &message, int selfUid) const;
     void recomputeAvatarFlags();
     void refreshAvatarFlags();

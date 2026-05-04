@@ -6,8 +6,16 @@ from typing import AsyncIterator
 
 import structlog
 
-from harness.contracts import HarnessRunResult, TraceEvent
-from harness.ports import FeedbackPort, LLMCompletionPort, MemoryPort, SkillPlanningPort, ToolExecutionPort, TraceStorePort
+from harness.contracts import GuardrailResult, HarnessRunResult, TraceEvent
+from harness.ports import (
+    FeedbackPort,
+    GuardrailPort,
+    LLMCompletionPort,
+    MemoryPort,
+    SkillPlanningPort,
+    ToolExecutionPort,
+    TraceStorePort,
+)
 from llm.base import LLMMessage
 
 logger = structlog.get_logger()
@@ -22,9 +30,11 @@ def _request_metadata(request) -> dict:
     return metadata if isinstance(metadata, dict) else {}
 
 
-def _request_max_tokens(request, default_value: int = 2048) -> int:
+def _request_max_tokens(request, default_value: int = 2048, skill=None) -> int:
     metadata = _request_metadata(request)
     raw_value = metadata.get("max_tokens", metadata.get("num_predict", default_value))
+    if raw_value == default_value and skill is not None:
+        raw_value = _skill_model_policy(skill).get("max_tokens", default_value)
     try:
         value = int(raw_value)
     except (TypeError, ValueError):
@@ -32,9 +42,11 @@ def _request_max_tokens(request, default_value: int = 2048) -> int:
     return min(max(value, 1), 4096)
 
 
-def _request_temperature(request, default_value: float) -> float:
+def _request_temperature(request, default_value: float, skill=None) -> float:
     metadata = _request_metadata(request)
     raw_value = metadata.get("temperature", default_value)
+    if raw_value == default_value and skill is not None:
+        raw_value = _skill_model_policy(skill).get("temperature", default_value)
     try:
         value = float(raw_value)
     except (TypeError, ValueError):
@@ -42,9 +54,11 @@ def _request_temperature(request, default_value: float) -> float:
     return min(max(value, 0.0), 2.0)
 
 
-def _request_think_enabled(request) -> bool:
+def _request_think_enabled(request, skill=None) -> bool:
     metadata = _request_metadata(request)
     raw_value = metadata.get("think", metadata.get("enable_thinking", False))
+    if not raw_value and skill is not None:
+        raw_value = _skill_model_policy(skill).get("think", False)
     if isinstance(raw_value, bool):
         return raw_value
     if isinstance(raw_value, str):
@@ -59,6 +73,94 @@ def _trace_events_payload(trace_store: TraceStorePort, trace_id: str) -> list[di
     return [event.to_dict() for event in trace.events]
 
 
+def _guardrail_event_status(results: list[GuardrailResult]) -> str:
+    if any(result.blocking or result.status == "block" for result in results):
+        return "blocked"
+    if any(result.status == "warn" for result in results):
+        return "warn"
+    return "ok"
+
+
+def _guardrail_summary(results: list[GuardrailResult]) -> str:
+    if not results:
+        return "results=0"
+    counts: dict[str, int] = {}
+    for result in results:
+        counts[result.status] = counts.get(result.status, 0) + 1
+    return ", ".join(f"{status}={count}" for status, count in sorted(counts.items()))
+
+
+def _guardrail_block_message(stage: str, results: list[GuardrailResult]) -> str:
+    messages = [result.message for result in results if result.blocking or result.status == "block"]
+    reason = "; ".join(message for message in messages if message) or "Guardrail blocked the request."
+    return f"Guardrail blocked {stage}: {reason}"
+
+
+def _context_pack_metadata(memory_snapshot) -> dict:
+    context_pack = getattr(memory_snapshot, "context_pack", None)
+    if context_pack is None:
+        return {}
+    return {
+        "token_budget": context_pack.token_budget,
+        "sections": [
+            {
+                "name": section.name,
+                "source": section.source,
+                "token_count": section.token_count,
+                "metadata": dict(section.metadata),
+            }
+            for section in context_pack.sections
+        ],
+    }
+
+
+def _skill_metadata(skill) -> dict:
+    metadata = getattr(skill, "metadata", {})
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _skill_model_policy(skill) -> dict:
+    metadata = _skill_metadata(skill)
+    policy = metadata.get("model_policy", {})
+    return policy if isinstance(policy, dict) else {}
+
+
+def _skill_number_policy(skill, key: str, default_value: int) -> int:
+    policy = _skill_model_policy(skill)
+    raw_value = policy.get(key, default_value)
+    try:
+        return int(raw_value)
+    except (TypeError, ValueError):
+        return default_value
+
+
+def _skill_float_policy(skill, key: str, default_value: float) -> float:
+    policy = _skill_model_policy(skill)
+    raw_value = policy.get(key, default_value)
+    try:
+        return float(raw_value)
+    except (TypeError, ValueError):
+        return default_value
+
+
+def _skill_bool_policy(skill, key: str, default_value: bool) -> bool:
+    policy = _skill_model_policy(skill)
+    raw_value = policy.get(key, default_value)
+    if isinstance(raw_value, bool):
+        return raw_value
+    if isinstance(raw_value, str):
+        return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(raw_value)
+
+
+def _skill_model_target(skill, request) -> tuple[str, str, str]:
+    policy = _skill_model_policy(skill)
+    prefer_backend = getattr(request, "model_type", "") or str(policy.get("provider", "") or "")
+    model_name = getattr(request, "model_name", "") or str(policy.get("model", "") or "")
+    deployment_preference = getattr(request, "deployment_preference", "") or str(policy.get("deployment_preference", "any") or "any")
+    return prefer_backend, model_name, deployment_preference
+
+
 class AgentHarnessService:
     def __init__(
         self,
@@ -68,6 +170,7 @@ class AgentHarnessService:
         memory_service: MemoryPort,
         trace_store: TraceStorePort,
         feedback_evaluator: FeedbackPort,
+        guardrail_service: GuardrailPort,
     ):
         self._planner = planner
         self._llm_registry = llm_registry
@@ -75,6 +178,63 @@ class AgentHarnessService:
         self._memory_service = memory_service
         self._trace_store = trace_store
         self._feedback_evaluator = feedback_evaluator
+        self._guardrail_service = guardrail_service
+
+    async def _add_guardrail_event(self, trace_id: str, name: str, results: list[GuardrailResult]) -> None:
+        started_at = _now_ms()
+        await self._trace_store.add_event(
+            trace_id,
+            TraceEvent(
+                layer="guardrails",
+                name=name,
+                status=_guardrail_event_status(results),
+                summary=_guardrail_summary(results),
+                detail=str([result.to_dict() for result in results]),
+                started_at=started_at,
+                finished_at=_now_ms(),
+                metadata={"results": [result.to_dict() for result in results]},
+            ),
+        )
+
+    async def _finish_blocked_run(
+        self,
+        trace_id: str,
+        session_id: str,
+        skill_name: str,
+        stage: str,
+        results: list[GuardrailResult],
+        observations: list[str] | None = None,
+        tokens: int = 0,
+        model: str = "",
+    ) -> HarnessRunResult:
+        response_content = _guardrail_block_message(stage, results)
+        await self._trace_store.finish_run(
+            trace_id,
+            status="blocked",
+            response_content=response_content,
+            model=model,
+            feedback_summary=f"guardrail_blocked={stage}",
+            observations=observations or [],
+        )
+        trace_ref = self._trace_store.get_trace(trace_id)
+        events = trace_ref.events if trace_ref else []
+        return HarnessRunResult(
+            session_id=session_id,
+            content=response_content,
+            tokens=tokens,
+            model=model,
+            trace_id=trace_id,
+            skill=skill_name,
+            feedback_summary=f"guardrail_blocked={stage}",
+            observations=observations or [],
+            events=events,
+        )
+
+    def _tool_specs(self):
+        try:
+            return self._tool_executor.list_tool_specs()
+        except AttributeError:
+            return []
 
     async def run_turn(self, request) -> HarnessRunResult:
         session_id = getattr(request, "session_id", "") or uuid.uuid4().hex
@@ -102,6 +262,17 @@ class AgentHarnessService:
             ),
         )
 
+        input_guardrails = self._guardrail_service.check_input(request, skill, plan_steps)
+        await self._add_guardrail_event(trace.trace_id, "input", input_guardrails)
+        if self._guardrail_service.has_blocking(input_guardrails):
+            return await self._finish_blocked_run(
+                trace.trace_id,
+                session_id,
+                skill.name,
+                "input",
+                input_guardrails,
+            )
+
         memory_started = _now_ms()
         memory_snapshot = await self._memory_service.load(
             uid=request.uid,
@@ -117,8 +288,20 @@ class AgentHarnessService:
                 summary=f"history={len(memory_snapshot.chat_history)}, episodic={len(memory_snapshot.episodic_summaries)}",
                 started_at=memory_started,
                 finished_at=_now_ms(),
+                metadata=_context_pack_metadata(memory_snapshot),
             ),
         )
+
+        tool_guardrails = self._guardrail_service.check_tool_plan(request, plan_steps, self._tool_specs())
+        await self._add_guardrail_event(trace.trace_id, "tool_plan", tool_guardrails)
+        if self._guardrail_service.has_blocking(tool_guardrails):
+            return await self._finish_blocked_run(
+                trace.trace_id,
+                session_id,
+                skill.name,
+                "tool_plan",
+                tool_guardrails,
+            )
 
         execution_started = _now_ms()
         observations = await self._tool_executor.execute(
@@ -150,17 +333,19 @@ class AgentHarnessService:
 
         model_started = _now_ms()
         try:
+            prefer_backend, model_name, deployment_preference = _skill_model_target(skill, request)
             response = await self._llm_registry.complete(
                 messages,
-                prefer_backend=request.model_type,
-                model_name=request.model_name,
-                deployment_preference=getattr(request, "deployment_preference", "any"),
-                max_tokens=_request_max_tokens(request),
+                prefer_backend=prefer_backend,
+                model_name=model_name,
+                deployment_preference=deployment_preference,
+                max_tokens=_request_max_tokens(request, skill=skill),
                 temperature=_request_temperature(
                     request,
                     0.4 if skill.name in {"summarize_thread", "translate_text"} else 0.7,
+                    skill=skill,
                 ),
-                think=_request_think_enabled(request),
+                think=_request_think_enabled(request, skill=skill),
             )
         except Exception as exc:
             logger.error("harness.model_completion.failed", trace_id=trace.trace_id, error=str(exc))
@@ -198,6 +383,20 @@ class AgentHarnessService:
                 metadata={"tokens": response.usage.total_tokens},
             ),
         )
+
+        output_guardrails = self._guardrail_service.check_output(response.content, observations)
+        await self._add_guardrail_event(trace.trace_id, "output", output_guardrails)
+        if self._guardrail_service.has_blocking(output_guardrails):
+            return await self._finish_blocked_run(
+                trace.trace_id,
+                session_id,
+                skill.name,
+                "output",
+                output_guardrails,
+                observations=[observation.to_summary() for observation in observations],
+                tokens=response.usage.total_tokens or max(len(response.content) // 4, 0),
+                model=response.model,
+            )
 
         memory_save_started = _now_ms()
         await self._memory_service.save_after_response(request.uid, session_id, request.content, response.content)
@@ -253,6 +452,7 @@ class AgentHarnessService:
         session_id = getattr(request, "session_id", "") or uuid.uuid4().hex
         skill = self._planner.resolve_skill(request)
         plan_steps = self._planner.build_plan(request, skill)
+        msg_id = uuid.uuid4().hex
 
         trace = await self._trace_store.start_run(
             uid=request.uid,
@@ -274,6 +474,29 @@ class AgentHarnessService:
             ),
         )
 
+        input_guardrails = self._guardrail_service.check_input(request, skill, plan_steps)
+        await self._add_guardrail_event(trace.trace_id, "input", input_guardrails)
+        if self._guardrail_service.has_blocking(input_guardrails):
+            result = await self._finish_blocked_run(
+                trace.trace_id,
+                session_id,
+                skill.name,
+                "input",
+                input_guardrails,
+            )
+            yield {
+                "chunk": result.content,
+                "is_final": True,
+                "msg_id": msg_id,
+                "total_tokens": 0,
+                "trace_id": trace.trace_id,
+                "skill": skill.name,
+                "feedback_summary": result.feedback_summary,
+                "observations": [],
+                "events": _trace_events_payload(self._trace_store, trace.trace_id),
+            }
+            return
+
         memory_started = _now_ms()
         memory_snapshot = await self._memory_service.load(
             uid=request.uid,
@@ -289,8 +512,32 @@ class AgentHarnessService:
                 summary=f"history={len(memory_snapshot.chat_history)}, episodic={len(memory_snapshot.episodic_summaries)}",
                 started_at=memory_started,
                 finished_at=_now_ms(),
+                metadata=_context_pack_metadata(memory_snapshot),
             ),
         )
+
+        tool_guardrails = self._guardrail_service.check_tool_plan(request, plan_steps, self._tool_specs())
+        await self._add_guardrail_event(trace.trace_id, "tool_plan", tool_guardrails)
+        if self._guardrail_service.has_blocking(tool_guardrails):
+            result = await self._finish_blocked_run(
+                trace.trace_id,
+                session_id,
+                skill.name,
+                "tool_plan",
+                tool_guardrails,
+            )
+            yield {
+                "chunk": result.content,
+                "is_final": True,
+                "msg_id": msg_id,
+                "total_tokens": 0,
+                "trace_id": trace.trace_id,
+                "skill": skill.name,
+                "feedback_summary": result.feedback_summary,
+                "observations": [],
+                "events": _trace_events_payload(self._trace_store, trace.trace_id),
+            }
+            return
 
         execution_started = _now_ms()
         observations = await self._tool_executor.execute(
@@ -320,23 +567,24 @@ class AgentHarnessService:
             LLMMessage(role="user", content=user_prompt)
         ]
 
-        msg_id = uuid.uuid4().hex
         accumulated = ""
         model_name = ""
         model_started = _now_ms()
 
         try:
+            prefer_backend, selected_model_name, deployment_preference = _skill_model_target(skill, request)
             async for chunk in self._llm_registry.stream(
                 messages,
-                prefer_backend=request.model_type,
-                model_name=request.model_name,
-                deployment_preference=getattr(request, "deployment_preference", "any"),
-                max_tokens=_request_max_tokens(request),
+                prefer_backend=prefer_backend,
+                model_name=selected_model_name,
+                deployment_preference=deployment_preference,
+                max_tokens=_request_max_tokens(request, skill=skill),
                 temperature=_request_temperature(
                     request,
                     0.4 if skill.name in {"summarize_thread", "translate_text"} else 0.7,
+                    skill=skill,
                 ),
-                think=_request_think_enabled(request),
+                think=_request_think_enabled(request, skill=skill),
             ):
                 if chunk.content:
                     accumulated += chunk.content
@@ -363,6 +611,32 @@ class AgentHarnessService:
                     metadata={"tokens": max(len(accumulated) // 4, 0)},
                 ),
             )
+
+            output_guardrails = self._guardrail_service.check_output(accumulated, observations)
+            await self._add_guardrail_event(trace.trace_id, "output", output_guardrails)
+            if self._guardrail_service.has_blocking(output_guardrails):
+                result = await self._finish_blocked_run(
+                    trace.trace_id,
+                    session_id,
+                    skill.name,
+                    "output",
+                    output_guardrails,
+                    observations=[observation.to_summary() for observation in observations],
+                    tokens=max(len(accumulated) // 4, 0),
+                    model=model_name,
+                )
+                yield {
+                    "chunk": result.content,
+                    "is_final": True,
+                    "msg_id": msg_id,
+                    "total_tokens": result.tokens,
+                    "trace_id": trace.trace_id,
+                    "skill": skill.name,
+                    "feedback_summary": result.feedback_summary,
+                    "observations": [observation.to_summary() for observation in observations],
+                    "events": _trace_events_payload(self._trace_store, trace.trace_id),
+                }
+                return
 
             memory_save_started = _now_ms()
             await self._memory_service.save_after_response(request.uid, session_id, request.content, accumulated)

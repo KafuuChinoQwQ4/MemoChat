@@ -45,8 +45,9 @@ tests/                 单元测试与集成测试
 
 ```powershell
 docker compose -f infra\deploy\local\docker-compose.yml up -d
-cmake --preset msvc2022-client-verify
-cmake --build --preset msvc2022-client-verify
+cmake --preset msvc2022-full
+cmake --build --preset msvc2022-full
+tools\scripts\status\deploy_services.bat
 ```
 
 更完整的架构、端口、服务启动顺序和验证方式请参考 [docs/当前架构基准.md](docs/当前架构基准.md)。

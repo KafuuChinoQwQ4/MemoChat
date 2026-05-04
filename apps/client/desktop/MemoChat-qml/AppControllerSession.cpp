@@ -431,6 +431,7 @@ void AppController::onSwitchToChat()
     _private_history_pending_peer_uid = 0;
     _group_history_before_seq = 0;
     _group_history_has_more = true;
+    _group_history_loading = false;
     _dialog_bootstrap_loading = false;
     _chat_list_initialized = false;
     setDialogsReady(false);

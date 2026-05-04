@@ -86,8 +86,8 @@ docker logs --tail 100 memochat-ai-orchestrator
 For C++ AIServer changes:
 
 ```powershell
-cmake --preset msvc2022-server-verify
-cmake --build --preset msvc2022-server-verify
+cmake --preset msvc2022-full
+cmake --build --preset msvc2022-full
 ```
 
 ## Report

@@ -33,7 +33,7 @@
 | 本地服务日志 | `infra/Memo_ops/artifacts/logs/services` |
 | 启停脚本 | `tools/scripts/status` |
 | 初始化脚本 | `tools/scripts` |
-| 压测工具 | `tools/loadtest/local-loadtest-cpp` |
+| 压测工具 | `tools/loadtest/python-loadtest` |
 | PostgreSQL 迁移 | `apps/server/migrations/postgresql` |
 
 旧文档或旧命令里的 `server/`、`client/`、`deploy/`、`scripts/` 分别对应当前的 `apps/server/core/`、`apps/client/desktop/`、`infra/deploy/`、`tools/scripts/`。
@@ -144,11 +144,13 @@ infra/deploy/local/init/mongo
 常用构建方式：
 
 ```powershell
-cmake --preset msvc2022-all
-cmake --build --preset msvc2022-all-release
+cmake --preset msvc2022-full
+cmake --build --preset msvc2022-full
 ```
 
-通用 Ninja 方式：
+本地部署脚本固定从 `build\bin\Release` 复制可执行文件；这个目录由 `msvc2022-full` 生成。不要用 `build-verify-server` 或 `build-verify-client` 的产物做运行时部署。
+
+通用 Ninja 方式仅用于临时实验，不作为本地部署入口：
 
 ```powershell
 cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -158,7 +160,7 @@ cmake --build build --config Release
 可按需关闭部分目标：
 
 ```powershell
-cmake -B build -S . -G Ninja -DBUILD_TESTS=OFF -DBUILD_LOADTEST=OFF
+cmake -B build -S . -G Ninja -DBUILD_TESTS=OFF
 cmake --build build --config Release --target GateServer ChatServer StatusServer VarifyServer
 ```
 

@@ -161,7 +161,7 @@ class _OpenAICompatibleClient:
 
 
 class _OllamaCompatibleClient:
-    def __init__(self, base_url: str, model_name: str, timeout_sec: int = 120):
+    def __init__(self, base_url: str, model_name: str, timeout_sec: int = 300):
         self.base_url = base_url.rstrip("/")
         self.model_name = model_name
         self.timeout_sec = timeout_sec
@@ -315,6 +315,11 @@ class LLMEndpointRegistry:
         for endpoint_cfg in settings.harness.providers.endpoints:
             if not endpoint_cfg.enabled:
                 continue
+            api_key = endpoint_cfg.api_key
+            if endpoint_cfg.api_key_env:
+                api_key = os.getenv(endpoint_cfg.api_key_env, api_key)
+            if endpoint_cfg.api_key_env and not api_key:
+                continue
             endpoints.append(
                 ProviderEndpoint(
                     provider_id=endpoint_cfg.name,
@@ -330,6 +335,8 @@ class LLMEndpointRegistry:
 
         for endpoint_cfg in self._load_runtime_providers():
             if not endpoint_cfg.get("enabled", True):
+                continue
+            if not endpoint_cfg.get("api_key", ""):
                 continue
             endpoints.append(
                 ProviderEndpoint(

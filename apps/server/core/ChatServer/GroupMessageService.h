@@ -28,6 +28,7 @@ public:
     void HandleMuteGroupMember(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
     void HandleKickGroupMember(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
     void HandleQuitGroup(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
+    void HandleDissolveGroup(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
 
 private:
     LogicSystem& _logic;

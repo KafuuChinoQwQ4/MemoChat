@@ -55,7 +55,7 @@ Use short kebab-case names. Check `.ai/` first to avoid collisions.
 - Queues: Redpanda `19092/18082`, RabbitMQ `5672/15672`.
 - AI/RAG: AI Orchestrator `8096`, Ollama `11434`, Neo4j `7474/7687`, Qdrant `6333/6334`.
 - Observability: Grafana `3000`, Prometheus `9090`, InfluxDB `8086`, Loki `3100`, Tempo `3200`, OTel `4317/4318/9411/9464`, cAdvisor `8088`.
-- Build presets: `msvc2022-server-verify`, `msvc2022-client-verify`, `msvc2022-tests`, `msvc2022-full`.
+- Build/test preset: `msvc2022-full`, which writes to `build\bin\Release` for `deploy_services.bat`.
 
 ## Validation
 

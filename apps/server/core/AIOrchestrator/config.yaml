@@ -3,24 +3,17 @@ service:
   port: 8096
 
 llm:
-  default_backend: "ollama"
-  default_model: "qwen3:4b"
+  default_backend: "deepseek"
+  default_model: "deepseek-chat"
 
   ollama:
     base_url: "http://127.0.0.1:11434"
+    timeout_sec: 300
     models:
       - name: "qwen3:4b"
         display: "Qwen 3 4B"
         context_window: 8192
         supports_thinking: true
-      - name: "qwen2.5:3b"
-        display: "Qwen 2.5 3B"
-        context_window: 8192
-        supports_thinking: false
-      - name: "qwen2.5-coder:3b"
-        display: "Qwen 2.5 Coder 3B"
-        context_window: 8192
-        supports_thinking: false
     enabled: true
 
   openai:
@@ -197,8 +190,8 @@ harness:
         base_url: "https://api.deepseek.com"
         api_key_env: "DEEPSEEK_API_KEY"
         default_model: "deepseek-chat"
-        enabled: false
-        timeout_sec: 120
+        enabled: true
+        timeout_sec: 300
         models:
           - name: "deepseek-chat"
             display: "DeepSeek Chat"
