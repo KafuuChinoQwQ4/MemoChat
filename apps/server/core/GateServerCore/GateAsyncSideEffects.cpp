@@ -226,7 +226,8 @@ bool GateAsyncSideEffects::PublishKafka(const std::string& topic,
                 { "metadata.broker.list", _kafka_brokers },
                 { "client.id", _kafka_client_id.empty() ? "memochat-gate" : _kafka_client_id },
                 { "socket.timeout.ms", "3000" },
-                { "message.timeout.ms", "5000" }
+                { "message.timeout.ms", "5000" },
+                { "queue.buffering.max.ms", "10" }
             };
             _kafka_producer = std::make_shared<cppkafka::Producer>(config);
         }
@@ -235,7 +236,6 @@ bool GateAsyncSideEffects::PublishKafka(const std::string& topic,
         builder.key(partition_key);
         builder.payload(serialized);
         producer->produce(builder);
-        producer->flush(std::chrono::milliseconds(3000));
         return true;
     }
     catch (const std::exception& ex) {
@@ -476,4 +476,3 @@ void GateAsyncSideEffects::CloseKafka()
     }
 #endif
 }
-

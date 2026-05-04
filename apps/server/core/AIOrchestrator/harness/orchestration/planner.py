@@ -24,7 +24,12 @@ class PlanningPolicy:
         plan_steps: list[PlanStep] = []
 
         if requested_tools:
-            plan_steps.append(PlanStep(action="mcp_tool", reason="请求中显式指定了工具调用"))
+            normalized_tools = {str(tool).strip() for tool in requested_tools if str(tool).strip()}
+            if "calculator" in normalized_tools:
+                plan_steps.append(PlanStep(action="calculate", reason="请求中显式选择了计算器工具"))
+                normalized_tools.remove("calculator")
+            if normalized_tools:
+                plan_steps.append(PlanStep(action="mcp_tool", reason="请求中显式指定了工具调用"))
 
         for action in skill.default_actions:
             plan_steps.append(PlanStep(action=action, reason=f"技能 {skill.name} 的默认执行动作"))
@@ -88,14 +93,27 @@ class PlanningPolicy:
         content = getattr(request, "content", "")
         feature_type = getattr(request, "feature_type", "").lower()
         target_lang = getattr(request, "target_lang", "") or "中文"
+        metadata = getattr(request, "metadata", {}) or {}
+        source_lang = metadata.get("source_lang", "自动检测") if isinstance(metadata, dict) else "自动检测"
         observation_context = "\n\n".join(observation.output for observation in observations)
 
         if feature_type == "summary" or getattr(request, "skill_name", "") == "summarize_thread":
-            prompt = f"请对以下内容做 50 字以内摘要：\n{content}"
+            prompt = (
+                "/no_think\n"
+                "只根据【聊天内容】输出最终摘要，不要写推理过程，不要复述任务，不要解释。"
+                "固定格式：结论：...；待办：...；分歧：...；需回复：...。"
+                "没有的信息写“无”，总字数不超过 120 字。\n\n"
+                f"【聊天内容】\n{content}"
+            )
         elif feature_type == "suggest" or getattr(request, "skill_name", "") == "reply_suggester":
-            prompt = f"请基于以下对话生成 3 条不超过 20 字的回复建议，优先返回 JSON 数组：\n{content}"
+            prompt = (
+                "/no_think\n"
+                "请基于以下对话生成 3 条可直接发送的回复建议。"
+                "只返回 JSON 数组，数组里每项是纯文本字符串，不要 Markdown，不要解释，每条不超过 30 字：\n"
+                f"{content}"
+            )
         elif feature_type == "translate" or getattr(request, "skill_name", "") == "translate_text":
-            prompt = f"请把以下内容翻译成 {target_lang}，只返回翻译结果：\n{content}"
+            prompt = f"/no_think\n请把以下内容从 {source_lang or '自动检测'} 翻译成 {target_lang}，只返回翻译结果，不要解释：\n{content}"
         else:
             prompt = content
 

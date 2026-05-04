@@ -84,6 +84,8 @@ void GroupMessageServiceRegistrar::Register(LogicSystem& logic, std::map<short, 
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
     callbacks[ID_QUIT_GROUP_REQ] = std::bind(&GroupMessageService::HandleQuitGroup, logic._group_message_service.get(),
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+    callbacks[ID_DISSOLVE_GROUP_REQ] = std::bind(&GroupMessageService::HandleDissolveGroup, logic._group_message_service.get(),
+        std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 }
 
 void AsyncEventDispatcherRegistrar::Register(LogicSystem&, std::map<short, FunCallBack>&) const

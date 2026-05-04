@@ -10,6 +10,13 @@
 
 namespace {
 constexpr int kHttpTimeoutMs = 10000;
+constexpr int kAiHttpTimeoutMs = 300000;
+
+int timeoutForModule(const QString &module)
+{
+    const QString normalized = module.trimmed().toLower();
+    return normalized.startsWith(QStringLiteral("ai")) ? kAiHttpTimeoutMs : kHttpTimeoutMs;
+}
 
 bool isGateHttpsPrimaryPort(const QUrl &url)
 {
@@ -93,7 +100,7 @@ void HttpMgr::postHttpReqInternal(const QUrl &url,
     QString spanId;
     applyTraceHeaders(request, &traceId, &requestId, &spanId);
 #if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
-    request.setTransferTimeout(kHttpTimeoutMs);
+    request.setTransferTimeout(timeoutForModule(module));
 #endif
 
     auto self = shared_from_this();
@@ -108,7 +115,7 @@ void HttpMgr::postHttpReqInternal(const QUrl &url,
             reply->abort();
         }
     });
-    timeoutTimer->start(kHttpTimeoutMs);
+    timeoutTimer->start(timeoutForModule(module));
 
     QObject::connect(reply, &QNetworkReply::finished, [reply, self, req_id, mod, timeoutTimer, traceId, requestId, spanId, startAtMs, module, url, data, allowPlaintextFallback]() {
         timeoutTimer->stop();
@@ -201,7 +208,7 @@ void HttpMgr::getHttpReqInternal(const QUrl &url,
     QString spanId;
     applyTraceHeaders(request, &traceId, &requestId, &spanId);
 #if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
-    request.setTransferTimeout(kHttpTimeoutMs);
+    request.setTransferTimeout(timeoutForModule(module));
 #endif
 
     auto self = shared_from_this();
@@ -216,7 +223,7 @@ void HttpMgr::getHttpReqInternal(const QUrl &url,
             reply->abort();
         }
     });
-    timeoutTimer->start(kHttpTimeoutMs);
+    timeoutTimer->start(timeoutForModule(module));
 
     QObject::connect(reply, &QNetworkReply::finished, [reply, self, req_id, mod, timeoutTimer, traceId, requestId, spanId, startAtMs, module, url, allowPlaintextFallback]() {
         timeoutTimer->stop();

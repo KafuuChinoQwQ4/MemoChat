@@ -63,6 +63,6 @@ platform:
   log_query_limit: 200
 
 loadtest:
-  binary_path: ../local-loadtest-cpp/build/Release/memochat_loadtest.exe
-  config_path: ../local-loadtest-cpp/config.json
+  runner_path: ../../tools/loadtest/python-loadtest/py_loadtest.py
+  config_path: ../../tools/loadtest/python-loadtest/config.json
   report_dir: artifacts/reports/loadtest

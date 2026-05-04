@@ -423,6 +423,24 @@ void GroupCoordinator::quitCurrentGroup()
     _app._gateway.chatTransport()->slot_send_data(ReqId::ID_QUIT_GROUP_REQ, QJsonDocument(obj).toJson(QJsonDocument::Compact));
 }
 
+void GroupCoordinator::dissolveCurrentGroup()
+{
+    auto selfInfo = _app._gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || _app._current_group_id <= 0) {
+        _app.setGroupStatus("请选择群聊", true);
+        return;
+    }
+    if (_app.currentGroupRole() < 3) {
+        _app.setGroupStatus("只有群主可以解散群聊", true);
+        return;
+    }
+    QJsonObject obj;
+    obj["fromuid"] = selfInfo->_uid;
+    obj["groupid"] = static_cast<qint64>(_app._current_group_id);
+    _app._gateway.chatTransport()->slot_send_data(ReqId::ID_DISSOLVE_GROUP_REQ, QJsonDocument(obj).toJson(QJsonDocument::Compact));
+    _app.setGroupStatus("正在解散群聊...", false);
+}
+
 MediaCoordinator::MediaCoordinator(AppController& controller)
     : _app(controller) {
 }

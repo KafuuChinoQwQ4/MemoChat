@@ -24,7 +24,7 @@ public:
         auto& cfg = ConfigMgr::Inst();
         _host = cfg["AIOrchestrator"]["Host"];
         _port = cfg["AIOrchestrator"]["Port"];
-        _timeout_sec = std::stoi(cfg["AIOrchestrator"]["TimeoutSec"].empty() ? "120" : cfg["AIOrchestrator"]["TimeoutSec"]);
+        _timeout_sec = std::stoi(cfg["AIOrchestrator"]["TimeoutSec"].empty() ? "300" : cfg["AIOrchestrator"]["TimeoutSec"]);
     }
 
     static std::string UrlEncode(const std::string& input) {
@@ -319,16 +319,24 @@ grpc::Status AIServiceClient::ChatStream(int32_t uid,
     return _impl->PostJsonSSE("/chat/stream", body, on_chunk, out_result);
 }
 
-grpc::Status AIServiceClient::Smart(const std::string& feature_type,
+grpc::Status AIServiceClient::Smart(int32_t uid,
+                                     const std::string& feature_type,
                                      const std::string& content,
                                      const std::string& target_lang,
                                      const std::string& context_json,
+                                     const std::string& model_type,
+                                     const std::string& model_name,
+                                     const std::string& deployment_preference,
                                      json::JsonValue* out_result) {
     json::JsonValue body = json::JsonValue{};
+    body["uid"] = uid;
     body["feature_type"] = feature_type;
     body["content"] = content;
     body["target_lang"] = target_lang;
     body["context_json"] = context_json;
+    body["model_type"] = model_type;
+    body["model_name"] = model_name;
+    body["deployment_preference"] = deployment_preference.empty() ? "any" : deployment_preference;
 
     return _impl->PostJson("/smart", body, out_result);
 }
@@ -384,4 +392,75 @@ grpc::Status AIServiceClient::KbDelete(int32_t uid,
                                         const std::string& kb_id,
                                         json::JsonValue* out_result) {
     return _impl->DeleteJson("/kb/" + AIServiceClient::Impl::UrlEncode(kb_id) + "?uid=" + std::to_string(uid), out_result);
+}
+
+grpc::Status AIServiceClient::MemoryList(int32_t uid, json::JsonValue* out_result) {
+    return _impl->GetJson("/agent/memory?uid=" + std::to_string(uid), out_result);
+}
+
+grpc::Status AIServiceClient::MemoryCreate(int32_t uid,
+                                           const std::string& content,
+                                           json::JsonValue* out_result) {
+    json::JsonValue body = json::JsonValue{};
+    body["uid"] = uid;
+    body["content"] = content;
+    return _impl->PostJson("/agent/memory", body, out_result);
+}
+
+grpc::Status AIServiceClient::MemoryDelete(int32_t uid,
+                                           const std::string& memory_id,
+                                           json::JsonValue* out_result) {
+    return _impl->DeleteJson(
+        "/agent/memory/" + AIServiceClient::Impl::UrlEncode(memory_id) + "?uid=" + std::to_string(uid),
+        out_result);
+}
+
+grpc::Status AIServiceClient::AgentTaskCreate(int32_t uid,
+                                              const std::string& title,
+                                              const std::string& content,
+                                              const std::string& session_id,
+                                              const std::string& model_type,
+                                              const std::string& model_name,
+                                              const std::string& skill_name,
+                                              const std::string& metadata_json,
+                                              json::JsonValue* out_result) {
+    json::JsonValue body = json::JsonValue{};
+    body["uid"] = uid;
+    body["title"] = title;
+    body["content"] = content;
+    body["session_id"] = session_id;
+    body["model_type"] = model_type;
+    body["model_name"] = model_name;
+    body["skill_name"] = skill_name;
+    AIServiceClient::Impl::AttachMetadataJson(body, metadata_json);
+    return _impl->PostJson("/agent/tasks", body, out_result);
+}
+
+grpc::Status AIServiceClient::AgentTaskList(int32_t uid,
+                                            int limit,
+                                            json::JsonValue* out_result) {
+    return _impl->GetJson(
+        "/agent/tasks?uid=" + std::to_string(uid) + "&limit=" + std::to_string(limit > 0 ? limit : 50),
+        out_result);
+}
+
+grpc::Status AIServiceClient::AgentTaskGet(const std::string& task_id,
+                                           json::JsonValue* out_result) {
+    return _impl->GetJson("/agent/tasks/" + AIServiceClient::Impl::UrlEncode(task_id), out_result);
+}
+
+grpc::Status AIServiceClient::AgentTaskCancel(const std::string& task_id,
+                                              json::JsonValue* out_result) {
+    return _impl->PostJson(
+        "/agent/tasks/" + AIServiceClient::Impl::UrlEncode(task_id) + "/cancel",
+        json::JsonValue{},
+        out_result);
+}
+
+grpc::Status AIServiceClient::AgentTaskResume(const std::string& task_id,
+                                              json::JsonValue* out_result) {
+    return _impl->PostJson(
+        "/agent/tasks/" + AIServiceClient::Impl::UrlEncode(task_id) + "/resume",
+        json::JsonValue{},
+        out_result);
 }

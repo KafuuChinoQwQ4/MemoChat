@@ -19,9 +19,15 @@ class OllamaLLM(BaseLLM):
     _instance: "OllamaLLM | None" = None
     _RECOVERABLE_STATUS_CODES = {404, 502, 503, 504}
 
-    def __init__(self, base_url: str = "http://127.0.0.1:11434", model_name: str = "qwen3:4b"):
+    def __init__(
+        self,
+        base_url: str = "http://127.0.0.1:11434",
+        model_name: str = "qwen3:4b",
+        timeout_sec: int = 300,
+    ):
         super().__init__(model_name)
         self.base_url = base_url.rstrip("/")
+        self.timeout_sec = timeout_sec
         self._client: httpx.AsyncClient | None = None
         OllamaLLM._instance = self
 
@@ -36,7 +42,7 @@ class OllamaLLM(BaseLLM):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=httpx.Timeout(120.0))
+            self._client = httpx.AsyncClient(timeout=httpx.Timeout(float(self.timeout_sec)))
         return self._client
 
     async def _reset_client(self) -> None:

@@ -35,10 +35,14 @@ public:
                            ChunkCallback on_chunk,
                            memochat::json::JsonValue* out_result);
 
-    grpc::Status Smart(const std::string& feature_type,
+    grpc::Status Smart(int32_t uid,
+                       const std::string& feature_type,
                        const std::string& content,
                        const std::string& target_lang,
                        const std::string& context_json,
+                       const std::string& model_type,
+                       const std::string& model_name,
+                       const std::string& deployment_preference,
                        memochat::json::JsonValue* out_result);
 
     grpc::Status KbUpload(int32_t uid, const std::string& file_name,
@@ -62,6 +66,39 @@ public:
 
     grpc::Status KbDelete(int32_t uid, const std::string& kb_id,
                           memochat::json::JsonValue* out_result);
+
+    grpc::Status MemoryList(int32_t uid, memochat::json::JsonValue* out_result);
+
+    grpc::Status MemoryCreate(int32_t uid,
+                              const std::string& content,
+                              memochat::json::JsonValue* out_result);
+
+    grpc::Status MemoryDelete(int32_t uid,
+                              const std::string& memory_id,
+                              memochat::json::JsonValue* out_result);
+
+    grpc::Status AgentTaskCreate(int32_t uid,
+                                 const std::string& title,
+                                 const std::string& content,
+                                 const std::string& session_id,
+                                 const std::string& model_type,
+                                 const std::string& model_name,
+                                 const std::string& skill_name,
+                                 const std::string& metadata_json,
+                                 memochat::json::JsonValue* out_result);
+
+    grpc::Status AgentTaskList(int32_t uid,
+                               int limit,
+                               memochat::json::JsonValue* out_result);
+
+    grpc::Status AgentTaskGet(const std::string& task_id,
+                              memochat::json::JsonValue* out_result);
+
+    grpc::Status AgentTaskCancel(const std::string& task_id,
+                                 memochat::json::JsonValue* out_result);
+
+    grpc::Status AgentTaskResume(const std::string& task_id,
+                                 memochat::json::JsonValue* out_result);
 
 private:
     class Impl;

@@ -2492,6 +2492,7 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 	rtvalue["groupid"] = static_cast<int64_t>(group_id);
 	rtvalue["has_more"] = false;
 	rtvalue["next_before_seq"] = static_cast<int64_t>(0);
+	rtvalue["messages"] = memochat::json::arrayValue;
 	Defer defer([&rtvalue, session]() {
 		session->Send(JsonValueToWireString(rtvalue), ID_GROUP_HISTORY_RSP);
 		});
@@ -2503,10 +2504,15 @@ void LogicSystem::GroupHistoryHandler(std::shared_ptr<CSession> session, const s
 
 	std::vector<std::shared_ptr<GroupMessageInfo>> msgs;
 	bool has_more = false;
-	if (!(
-		(MongoMgr::GetInstance()->Enabled() &&
-			MongoMgr::GetInstance()->GetGroupHistory(group_id, before_ts, before_seq, limit, msgs, has_more)) ||
-		PostgresMgr::GetInstance()->GetGroupHistory(group_id, before_ts, before_seq, limit, msgs, has_more))) {
+	bool mongo_success = false;
+	bool pg_success = false;
+	if (MongoMgr::GetInstance()->Enabled()) {
+		mongo_success = MongoMgr::GetInstance()->GetGroupHistory(group_id, before_ts, before_seq, limit, msgs, has_more);
+	}
+	if (!mongo_success || msgs.empty()) {
+		pg_success = PostgresMgr::GetInstance()->GetGroupHistory(group_id, before_ts, before_seq, limit, msgs, has_more);
+	}
+	if (!mongo_success && !pg_success) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		return;
 	}
@@ -3277,4 +3283,17 @@ void LogicSystem::QuitGroupHandler(std::shared_ptr<CSession> session, const shor
 	notify["group_code"] = group_info ? group_info->group_code : "";
 	notify["target_uid"] = uid;
 	PushGroupPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
+}
+
+void LogicSystem::DissolveGroupHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data)
+{
+	if (_group_message_service) {
+		_group_message_service->HandleDissolveGroup(session, msg_id, msg_data);
+		return;
+	}
+	memochat::json::JsonValue rtvalue;
+	rtvalue["error"] = ErrorCodes::RPCFailed;
+	Defer defer([&rtvalue, session]() {
+		session->Send(JsonValueToWireString(rtvalue), ID_DISSOLVE_GROUP_RSP);
+		});
 }

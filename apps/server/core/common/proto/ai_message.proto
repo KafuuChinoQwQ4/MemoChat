@@ -94,6 +94,9 @@ message AISmartReq {
     string content = 3;            // 待处理内容
     string target_lang = 4;       // 翻译目标语言
     string context_json = 5;       // 额外上下文（JSON）
+    string model_type = 6;        // 当前选中的模型类型 / provider
+    string model_name = 7;        // 当前选中的模型名
+    string deployment_preference = 8; // local_api / external_api / any
 }
 
 message AISmartRsp {
@@ -189,6 +192,80 @@ message AIKbDeleteRsp {
 }
 
 // =============================================================================
+// 可见记忆
+// =============================================================================
+
+message AIMemoryReq {
+    int32 uid = 1;
+    string memory_id = 2;
+    string content = 3;
+}
+
+message AIMemoryItem {
+    string memory_id = 1;
+    string type = 2;
+    string source = 3;
+    string content = 4;
+    int64 created_at = 5;
+    int64 updated_at = 6;
+    string metadata_json = 7;
+}
+
+message AIMemoryListRsp {
+    int32 code = 1;
+    string message = 2;
+    repeated AIMemoryItem memories = 3;
+}
+
+message AIMemoryRsp {
+    int32 code = 1;
+    string message = 2;
+    AIMemoryItem memory = 3;
+}
+
+// =============================================================================
+// Agent 后台任务
+// =============================================================================
+
+message AIAgentTaskReq {
+    int32 uid = 1;
+    string task_id = 2;
+    string title = 3;
+    string content = 4;
+    string session_id = 5;
+    string model_type = 6;
+    string model_name = 7;
+    string skill_name = 8;
+    string metadata_json = 9;
+    int32 limit = 10;
+}
+
+message AIAgentTaskItem {
+    string task_id = 1;
+    string title = 2;
+    string status = 3;
+    string trace_id = 4;
+    string description = 5;
+    int32 priority = 6;
+    string payload_json = 7;
+    string result_json = 8;
+    string checkpoints_json = 9;
+    string error = 10;
+    int64 created_at = 11;
+    int64 updated_at = 12;
+    int64 completed_at = 13;
+    int64 cancelled_at = 14;
+    string metadata_json = 15;
+}
+
+message AIAgentTaskRsp {
+    int32 code = 1;
+    string message = 2;
+    AIAgentTaskItem task = 3;
+    repeated AIAgentTaskItem tasks = 4;
+}
+
+// =============================================================================
 // 模型列表
 // =============================================================================
 
@@ -269,6 +346,18 @@ service AIService {
     rpc KbSearch(AIKbSearchReq) returns (AIKbSearchRsp) {}
     rpc KbList(AIKbListReq) returns (AIKbListRsp) {}
     rpc KbDelete(AIKbDeleteReq) returns (AIKbDeleteRsp) {}
+
+    // 可见记忆
+    rpc MemoryList(AIMemoryReq) returns (AIMemoryListRsp) {}
+    rpc MemoryCreate(AIMemoryReq) returns (AIMemoryRsp) {}
+    rpc MemoryDelete(AIMemoryReq) returns (AIMemoryRsp) {}
+
+    // Agent 后台任务
+    rpc AgentTaskCreate(AIAgentTaskReq) returns (AIAgentTaskRsp) {}
+    rpc AgentTaskList(AIAgentTaskReq) returns (AIAgentTaskRsp) {}
+    rpc AgentTaskGet(AIAgentTaskReq) returns (AIAgentTaskRsp) {}
+    rpc AgentTaskCancel(AIAgentTaskReq) returns (AIAgentTaskRsp) {}
+    rpc AgentTaskResume(AIAgentTaskReq) returns (AIAgentTaskRsp) {}
 
     // 人类确认
     rpc Confirm(AIConfirmReq) returns (AIConfirmRsp) {}

@@ -19,7 +19,7 @@ Rectangle {
     property int viewMode: 0 // 0 = main tabs, 1 = profile center
     property int lastMainTab: controller.chatTab
     property bool createGroupDialogActivated: false
-    property bool groupManagePopupActivated: false
+    property bool groupManagementPanelActive: false
     property int momentsSelectedUid: 0
     property string momentsSelectedName: ""
     property bool r18Mode: false
@@ -35,10 +35,15 @@ Rectangle {
 
     Connections {
         target: controller
-        function onHasCurrentGroupChanged() {
-            if (!controller.hasCurrentGroup && groupManagePopup.opened) {
-                groupManagePopup.close()
+        function onCurrentGroupChanged() {
+            if (!controller.hasCurrentGroup) {
+                groupManagementPanelActive = false
             }
+        }
+
+        function onGroupCreated(groupId) {
+            root.viewMode = 0
+            controller.switchChatTab(AppController.ChatTabPage)
         }
     }
 
@@ -151,6 +156,7 @@ Rectangle {
             opacity: root.stageValue(0.11, 0.20)
 
             ChatLeftPanel {
+                id: chatLeftPanel
                 anchors.fill: parent
                 backdrop: backdropLayer
                 currentTab: controller.chatTab
@@ -159,8 +165,6 @@ Rectangle {
                 contactsReady: controller.contactsReady
                 groupsReady: controller.groupsReady
                 dialogModel: controller.dialogListModel
-                chatModel: controller.chatListModel
-                groupModel: controller.groupListModel
                 contactModel: controller.contactListModel
                 searchModel: controller.searchResultModel
                 searchPending: controller.searchPending
@@ -189,6 +193,7 @@ Rectangle {
                 onSearchRequested: function(uidText) { controller.searchUser(uidText) }
                 onSearchCleared: controller.clearSearchState()
                 onAddFriendRequested: function(uid, bakName, tags) { controller.requestAddFriend(uid, bakName, tags) }
+                onApplyJoinGroupRequested: function(groupCode, reason) { controller.applyJoinGroup(groupCode, reason) }
                 onCreateGroupRequested: {
                     createGroupDialogActivated = true
                     if (createGroupDialogLoader.item) {
@@ -227,6 +232,7 @@ Rectangle {
                 onDialogMuteToggled: function(uid) { controller.toggleDialogMutedByUid(uid) }
                 onDialogMarkRead: function(uid) { controller.markDialogReadByUid(uid) }
                 onDialogDraftCleared: function(uid) { controller.clearDialogDraftByUid(uid) }
+                Component.onCompleted: controller.ensureGroupsInitialized()
             }
         }
 
@@ -261,6 +267,7 @@ Rectangle {
                             isGroupChat: controller.hasCurrentGroup
                             currentGroupRole: controller.currentGroupRole
                             messageModel: controller.messageModel
+                            agentController: controller.agentController
                             currentDraftText: controller.currentDraftText
                             currentPendingAttachments: controller.currentPendingAttachments
                             currentDialogPinned: controller.currentDialogPinned
@@ -297,10 +304,8 @@ Rectangle {
                             onCancelReplyMessage: controller.cancelReplyMessage()
                             onOpenGroupManageRequested: {
                                 if (controller.hasCurrentGroup) {
-                                    groupManagePopupActivated = true
-                                    if (groupManagePopupLoader.item) {
-                                        groupManagePopupLoader.item.open()
-                                    }
+                                    groupManagementPanelActive = true
+                                    controller.ensureGroupsInitialized()
                                 }
                             }
                         }
@@ -386,6 +391,56 @@ Rectangle {
                             momentsController: controller.momentsController
                             selectedFriendUid: root.momentsSelectedUid
                             selectedFriendName: root.momentsSelectedName
+                        }
+                    }
+                }
+
+                Loader {
+                    anchors.fill: parent
+                    active: root.viewMode === 0
+                            && controller.chatTab === AppController.ChatTabPage
+                            && root.groupManagementPanelActive
+                            && controller.hasCurrentGroup
+                    visible: active
+                    z: 10
+                    asynchronous: true
+                    sourceComponent: Component {
+                            GroupManagementPanel {
+                                backdrop: backdropLayer
+                                groupName: controller.currentGroupName
+                                groupCode: controller.currentGroupCode
+                                groupIcon: controller.currentChatPeerIcon
+                                currentGroupRole: controller.currentGroupRole
+                                currentDialogPinned: controller.currentDialogPinned
+                                currentDialogMuted: controller.currentDialogMuted
+                                canUpdateIcon: controller.currentGroupCanChangeInfo
+                                canUpdateAnnouncement: controller.currentGroupCanChangeInfo
+                                canInviteUsers: controller.currentGroupCanInviteUsers
+                                canManageAdmins: controller.currentGroupCanManageAdmins
+                                canBanUsers: controller.currentGroupCanBanUsers
+                                friendModel: controller.contactListModel
+                                statusText: controller.groupStatusText
+                                statusError: controller.groupStatusError
+                                onBackRequested: root.groupManagementPanelActive = false
+                                onRefreshRequested: controller.refreshGroupList()
+                                onLoadHistoryRequested: controller.loadGroupHistory()
+                                onUpdateAnnouncementRequested: function(announcement) { controller.updateGroupAnnouncement(announcement) }
+                                onUpdateGroupIconRequested: function(source) { controller.updateGroupIcon(source) }
+                                onToggleDialogPinned: controller.toggleCurrentDialogPinned()
+                                onToggleDialogMuted: controller.toggleCurrentDialogMuted()
+                                onQuitRequested: {
+                                    controller.quitCurrentGroup()
+                                    root.groupManagementPanelActive = false
+                                }
+                            onDissolveRequested: {
+                                controller.dissolveCurrentGroup()
+                                root.groupManagementPanelActive = false
+                            }
+                            onInviteRequested: function(userId, reason) { controller.inviteGroupMember(userId, reason) }
+                            onSetAdminRequested: function(userId, isAdmin, permissionBits) { controller.setGroupAdmin(userId, isAdmin, permissionBits) }
+                            onMuteRequested: function(userId, muteSeconds) { controller.muteGroupMember(userId, muteSeconds) }
+                            onKickRequested: function(userId) { controller.kickGroupMember(userId) }
+                            onReviewRequested: function(applyId, agree) { controller.reviewGroupApply(applyId, agree) }
                         }
                     }
                 }
@@ -602,98 +657,8 @@ Rectangle {
             CreateGroupDialog {
                 anchors.centerIn: Overlay.overlay
                 backdrop: backdropLayer
+                friendModel: controller.contactListModel
                 onSubmitted: function(name, memberUserIds) { controller.createGroup(name, memberUserIds) }
-            }
-        }
-        onLoaded: if (item) { item.open() }
-    }
-
-    Loader {
-        id: groupManagePopupLoader
-        active: root.groupManagePopupActivated
-        asynchronous: true
-        sourceComponent: Component {
-            Popup {
-                id: groupManagePopup
-                modal: true
-                focus: true
-                width: 360
-                height: Math.min(root.height - 48, 740)
-                anchors.centerIn: Overlay.overlay
-                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-                enabled: controller.hasCurrentGroup
-                onOpened: {
-                    if (!controller.hasCurrentGroup) {
-                        close()
-                    } else {
-                        controller.ensureGroupsInitialized()
-                    }
-                }
-
-                background: GlassSurface {
-                    anchors.fill: parent
-                    backdrop: backdropLayer
-                    cornerRadius: 12
-                    blurRadius: 18
-                    fillColor: Qt.rgba(1, 1, 1, 0.24)
-                    strokeColor: Qt.rgba(1, 1, 1, 0.46)
-                }
-
-                Flickable {
-                    anchors.fill: parent
-                    anchors.margins: 12
-                    clip: true
-                    contentWidth: width
-                    contentHeight: toolsColumn.implicitHeight
-
-                    Column {
-                        id: toolsColumn
-                        width: parent.width
-                        spacing: 8
-
-                        GroupInfoPane {
-                            width: parent.width
-                            height: 210
-                            backdrop: backdropLayer
-                            groupName: controller.currentGroupName
-                            groupCode: controller.currentGroupCode
-                            groupIcon: controller.currentChatPeerIcon
-                            canUpdateIcon: controller.currentGroupCanChangeInfo
-                            canUpdateAnnouncement: controller.currentGroupCanChangeInfo
-                            statusText: controller.groupStatusText
-                            statusError: controller.groupStatusError
-                            onRefreshRequested: controller.refreshGroupList()
-                            onLoadHistoryRequested: controller.loadGroupHistory()
-                            onUpdateAnnouncementRequested: function(announcement) { controller.updateGroupAnnouncement(announcement) }
-                            onUpdateGroupIconRequested: function(source) { controller.updateGroupIcon(source) }
-                            onQuitRequested: {
-                                controller.quitCurrentGroup()
-                                groupManagePopup.close()
-                            }
-                        }
-
-                        GroupManagePane {
-                            width: parent.width
-                            height: 340
-                            backdrop: backdropLayer
-                            canInviteUsers: controller.currentGroupCanInviteUsers
-                            canManageAdmins: controller.currentGroupCanManageAdmins
-                            canBanUsers: controller.currentGroupCanBanUsers
-                            onInviteRequested: function(userId, reason) { controller.inviteGroupMember(userId, reason) }
-                            onSetAdminRequested: function(userId, isAdmin, permissionBits) { controller.setGroupAdmin(userId, isAdmin, permissionBits) }
-                            onMuteRequested: function(userId, muteSeconds) { controller.muteGroupMember(userId, muteSeconds) }
-                            onKickRequested: function(userId) { controller.kickGroupMember(userId) }
-                        }
-
-                        GroupApplyReviewPane {
-                            width: parent.width
-                            height: 250
-                            backdrop: backdropLayer
-                            onApplyJoinRequested: function(groupCode, reason) { controller.applyJoinGroup(groupCode, reason) }
-                            onReviewRequested: function(applyId, agree) { controller.reviewGroupApply(applyId, agree) }
-                        }
-                    }
-                }
             }
         }
         onLoaded: if (item) { item.open() }

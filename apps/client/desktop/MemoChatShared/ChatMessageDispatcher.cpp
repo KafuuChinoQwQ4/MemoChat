@@ -252,40 +252,48 @@ void ChatMessageDispatcher::initHandlers()
         emit sig_text_chat_msg(msg_ptr);
     });
 
-    auto parse_group_rsp = [this](ReqId reqId, const QByteArray &data, QJsonObject &jsonObj) -> bool {
+    auto parse_group_rsp = [this](ReqId reqId, const QByteArray &data, QJsonObject &jsonObj, bool emitResponse = true) -> bool {
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
         if (jsonDoc.isNull() || !jsonDoc.isObject()) {
-            emit sig_group_rsp(reqId, ErrorCodes::ERR_JSON, QJsonObject());
+            if (emitResponse) {
+                emit sig_group_rsp(reqId, ErrorCodes::ERR_JSON, QJsonObject());
+            }
             return false;
         }
 
         jsonObj = jsonDoc.object();
         const int err = jsonObj.value("error").toInt(ErrorCodes::ERR_JSON);
-        emit sig_group_rsp(reqId, err, jsonObj);
+        if (emitResponse) {
+            emit sig_group_rsp(reqId, err, jsonObj);
+        }
         return err == ErrorCodes::SUCCESS;
     };
 
     _handlers.insert(ID_CREATE_GROUP_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
         QJsonObject jsonObj;
-        if (!parse_group_rsp(id, data, jsonObj)) {
+        if (!parse_group_rsp(id, data, jsonObj, false)) {
+            Q_EMIT sig_group_rsp(id, jsonObj.value("error").toInt(ErrorCodes::ERR_JSON), jsonObj);
             return;
         }
         if (jsonObj.contains("group_list")) {
             UserMgr::GetInstance()->SetGroupList(jsonObj.value("group_list").toArray());
         }
+        emit sig_group_rsp(id, jsonObj.value("error").toInt(ErrorCodes::ERR_JSON), jsonObj);
         emit sig_group_list_updated();
     });
 
     _handlers.insert(ID_GET_GROUP_LIST_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
         QJsonObject jsonObj;
-        if (!parse_group_rsp(id, data, jsonObj)) {
+        if (!parse_group_rsp(id, data, jsonObj, false)) {
+            Q_EMIT sig_group_rsp(id, jsonObj.value("error").toInt(ErrorCodes::ERR_JSON), jsonObj);
             return;
         }
         if (jsonObj.contains("group_list")) {
             UserMgr::GetInstance()->SetGroupList(jsonObj.value("group_list").toArray());
         }
+        emit sig_group_rsp(id, jsonObj.value("error").toInt(ErrorCodes::ERR_JSON), jsonObj);
         emit sig_group_list_updated();
     });
 
@@ -460,6 +468,11 @@ void ChatMessageDispatcher::initHandlers()
         parse_group_rsp(id, data, jsonObj);
     });
     _handlers.insert(ID_QUIT_GROUP_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
+        Q_UNUSED(len);
+        QJsonObject jsonObj;
+        parse_group_rsp(id, data, jsonObj);
+    });
+    _handlers.insert(ID_DISSOLVE_GROUP_RSP, [this, parse_group_rsp](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
         QJsonObject jsonObj;
         parse_group_rsp(id, data, jsonObj);

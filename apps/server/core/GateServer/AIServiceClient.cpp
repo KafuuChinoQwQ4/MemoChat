@@ -29,17 +29,25 @@ public:
         return _stub->Chat(&ctx, req, reply);
     }
 
-    grpc::Status makeSmartCall(const std::string& feature_type,
+    grpc::Status makeSmartCall(int32_t uid,
+                              const std::string& feature_type,
                               const std::string& content,
                               const std::string& target_lang,
                               const std::string& context_json,
+                              const std::string& model_type,
+                              const std::string& model_name,
+                              const std::string& deployment_preference,
                               ai::AISmartRsp* reply) {
         grpc::ClientContext ctx;
         ai::AISmartReq req;
+        req.set_from_uid(uid);
         req.set_feature_type(feature_type);
         req.set_content(content);
         req.set_target_lang(target_lang);
         req.set_context_json(context_json);
+        req.set_model_type(model_type);
+        req.set_model_name(model_name);
+        req.set_deployment_preference(deployment_preference);
         return _stub->Smart(&ctx, req, reply);
     }
 
@@ -143,6 +151,80 @@ public:
         req.set_uid(uid);
         req.set_kb_id(kb_id);
         return _stub->KbDelete(&ctx, req, reply);
+    }
+
+    grpc::Status makeMemoryListCall(int32_t uid, ai::AIMemoryListRsp* reply) {
+        grpc::ClientContext ctx;
+        ai::AIMemoryReq req;
+        req.set_uid(uid);
+        return _stub->MemoryList(&ctx, req, reply);
+    }
+
+    grpc::Status makeMemoryCreateCall(int32_t uid, const std::string& content, ai::AIMemoryRsp* reply) {
+        grpc::ClientContext ctx;
+        ai::AIMemoryReq req;
+        req.set_uid(uid);
+        req.set_content(content);
+        return _stub->MemoryCreate(&ctx, req, reply);
+    }
+
+    grpc::Status makeMemoryDeleteCall(int32_t uid, const std::string& memory_id, ai::AIMemoryRsp* reply) {
+        grpc::ClientContext ctx;
+        ai::AIMemoryReq req;
+        req.set_uid(uid);
+        req.set_memory_id(memory_id);
+        return _stub->MemoryDelete(&ctx, req, reply);
+    }
+
+    grpc::Status makeAgentTaskCreateCall(int32_t uid,
+                                         const std::string& title,
+                                         const std::string& content,
+                                         const std::string& session_id,
+                                         const std::string& model_type,
+                                         const std::string& model_name,
+                                         const std::string& skill_name,
+                                         const std::string& metadata_json,
+                                         ai::AIAgentTaskRsp* reply) {
+        grpc::ClientContext ctx;
+        ai::AIAgentTaskReq req;
+        req.set_uid(uid);
+        req.set_title(title);
+        req.set_content(content);
+        req.set_session_id(session_id);
+        req.set_model_type(model_type);
+        req.set_model_name(model_name);
+        req.set_skill_name(skill_name);
+        req.set_metadata_json(metadata_json);
+        return _stub->AgentTaskCreate(&ctx, req, reply);
+    }
+
+    grpc::Status makeAgentTaskListCall(int32_t uid, int limit, ai::AIAgentTaskRsp* reply) {
+        grpc::ClientContext ctx;
+        ai::AIAgentTaskReq req;
+        req.set_uid(uid);
+        req.set_limit(limit);
+        return _stub->AgentTaskList(&ctx, req, reply);
+    }
+
+    grpc::Status makeAgentTaskGetCall(const std::string& task_id, ai::AIAgentTaskRsp* reply) {
+        grpc::ClientContext ctx;
+        ai::AIAgentTaskReq req;
+        req.set_task_id(task_id);
+        return _stub->AgentTaskGet(&ctx, req, reply);
+    }
+
+    grpc::Status makeAgentTaskCancelCall(const std::string& task_id, ai::AIAgentTaskRsp* reply) {
+        grpc::ClientContext ctx;
+        ai::AIAgentTaskReq req;
+        req.set_task_id(task_id);
+        return _stub->AgentTaskCancel(&ctx, req, reply);
+    }
+
+    grpc::Status makeAgentTaskResumeCall(const std::string& task_id, ai::AIAgentTaskRsp* reply) {
+        grpc::ClientContext ctx;
+        ai::AIAgentTaskReq req;
+        req.set_task_id(task_id);
+        return _stub->AgentTaskResume(&ctx, req, reply);
     }
 
     std::shared_ptr<grpc::Channel> _channel;
@@ -254,12 +336,18 @@ void AIServiceClient::ChatStream(int32_t uid,
     }
 }
 
-memochat::json::JsonValue AIServiceClient::Smart(const std::string& feature_type,
+memochat::json::JsonValue AIServiceClient::Smart(int32_t uid,
+                                  const std::string& feature_type,
                                   const std::string& content,
                                   const std::string& target_lang,
-                                  const std::string& context_json) {
+                                  const std::string& context_json,
+                                  const std::string& model_type,
+                                  const std::string& model_name,
+                                  const std::string& deployment_preference) {
     ai::AISmartRsp reply;
-    auto status = _impl->makeSmartCall(feature_type, content, target_lang, context_json, &reply);
+    auto status = _impl->makeSmartCall(
+        uid, feature_type, content, target_lang, context_json,
+        model_type, model_name, deployment_preference, &reply);
 
     memochat::json::JsonValue root;
     if (!status.ok()) {
@@ -527,4 +615,193 @@ memochat::json::JsonValue AIServiceClient::DeleteKb(int32_t uid, const std::stri
     root["code"] = reply.code();
     root["message"] = reply.message();
     return root;
+}
+
+static memochat::json::JsonValue MemoryItemToJson(const ai::AIMemoryItem& item) {
+    memochat::json::JsonValue value;
+    value["memory_id"] = item.memory_id();
+    value["type"] = item.type();
+    value["source"] = item.source();
+    value["content"] = item.content();
+    value["created_at"] = static_cast<double>(item.created_at());
+    value["updated_at"] = static_cast<double>(item.updated_at());
+    memochat::json::JsonValue metadata;
+    if (!item.metadata_json().empty() && memochat::json::reader_parse(item.metadata_json(), metadata)) {
+        value["metadata"] = metadata;
+    } else {
+        value["metadata"] = memochat::json::JsonValue{};
+    }
+    return value;
+}
+
+memochat::json::JsonValue AIServiceClient::MemoryList(int32_t uid) {
+    ai::AIMemoryListRsp reply;
+    auto status = _impl->makeMemoryListCall(uid, &reply);
+
+    memochat::json::JsonValue root;
+    if (!status.ok()) {
+        root["code"] = 500;
+        root["message"] = "memory list failed";
+        return root;
+    }
+
+    root["code"] = reply.code();
+    root["message"] = reply.message();
+    array_t memories;
+    for (const auto& memory : reply.memories()) {
+        memories.push_back(MemoryItemToJson(memory).impl());
+    }
+    root["memories"] = std::move(memories);
+    return root;
+}
+
+memochat::json::JsonValue AIServiceClient::MemoryCreate(int32_t uid, const std::string& content) {
+    ai::AIMemoryRsp reply;
+    auto status = _impl->makeMemoryCreateCall(uid, content, &reply);
+
+    memochat::json::JsonValue root;
+    if (!status.ok()) {
+        root["code"] = 500;
+        root["message"] = "memory create failed";
+        return root;
+    }
+
+    root["code"] = reply.code();
+    root["message"] = reply.message();
+    if (reply.has_memory()) {
+        root["memory"] = MemoryItemToJson(reply.memory());
+    }
+    return root;
+}
+
+memochat::json::JsonValue AIServiceClient::MemoryDelete(int32_t uid, const std::string& memory_id) {
+    ai::AIMemoryRsp reply;
+    auto status = _impl->makeMemoryDeleteCall(uid, memory_id, &reply);
+
+    memochat::json::JsonValue root;
+    if (!status.ok()) {
+        root["code"] = 500;
+        root["message"] = "memory delete failed";
+        return root;
+    }
+
+    root["code"] = reply.code();
+    root["message"] = reply.message();
+    return root;
+}
+
+static memochat::json::JsonValue AgentTaskItemToJson(const ai::AIAgentTaskItem& item) {
+    memochat::json::JsonValue value;
+    value["task_id"] = item.task_id();
+    value["title"] = item.title();
+    value["status"] = item.status();
+    value["trace_id"] = item.trace_id();
+    value["description"] = item.description();
+    value["priority"] = item.priority();
+    value["error"] = item.error();
+    value["created_at"] = static_cast<double>(item.created_at());
+    value["updated_at"] = static_cast<double>(item.updated_at());
+    value["completed_at"] = static_cast<double>(item.completed_at());
+    value["cancelled_at"] = static_cast<double>(item.cancelled_at());
+
+    memochat::json::JsonValue payload;
+    value["payload"] = (!item.payload_json().empty() && memochat::json::reader_parse(item.payload_json(), payload))
+        ? payload
+        : memochat::json::JsonValue{};
+    memochat::json::JsonValue result;
+    value["result"] = (!item.result_json().empty() && memochat::json::reader_parse(item.result_json(), result))
+        ? result
+        : memochat::json::JsonValue{};
+    memochat::json::JsonValue checkpoints;
+    value["checkpoints"] = (!item.checkpoints_json().empty() && memochat::json::reader_parse(item.checkpoints_json(), checkpoints))
+        ? checkpoints
+        : memochat::json::JsonValue(memochat::json::array_t{});
+    memochat::json::JsonValue metadata;
+    value["metadata"] = (!item.metadata_json().empty() && memochat::json::reader_parse(item.metadata_json(), metadata))
+        ? metadata
+        : memochat::json::JsonValue{};
+    return value;
+}
+
+static memochat::json::JsonValue AgentTaskRspToJson(const ai::AIAgentTaskRsp& reply) {
+    memochat::json::JsonValue root;
+    root["code"] = reply.code();
+    root["message"] = reply.message();
+    if (reply.has_task()) {
+        root["task"] = AgentTaskItemToJson(reply.task());
+    }
+    array_t tasks;
+    for (const auto& task : reply.tasks()) {
+        tasks.push_back(AgentTaskItemToJson(task).impl());
+    }
+    root["tasks"] = std::move(tasks);
+    return root;
+}
+
+memochat::json::JsonValue AIServiceClient::AgentTaskCreate(int32_t uid,
+                                                           const std::string& title,
+                                                           const std::string& content,
+                                                           const std::string& session_id,
+                                                           const std::string& model_type,
+                                                           const std::string& model_name,
+                                                           const std::string& skill_name,
+                                                           const std::string& metadata_json) {
+    ai::AIAgentTaskRsp reply;
+    auto status = _impl->makeAgentTaskCreateCall(
+        uid, title, content, session_id, model_type, model_name, skill_name, metadata_json, &reply);
+    if (!status.ok()) {
+        memochat::json::JsonValue root;
+        root["code"] = 500;
+        root["message"] = "task create failed";
+        return root;
+    }
+    return AgentTaskRspToJson(reply);
+}
+
+memochat::json::JsonValue AIServiceClient::AgentTaskList(int32_t uid, int limit) {
+    ai::AIAgentTaskRsp reply;
+    auto status = _impl->makeAgentTaskListCall(uid, limit, &reply);
+    if (!status.ok()) {
+        memochat::json::JsonValue root;
+        root["code"] = 500;
+        root["message"] = "task list failed";
+        return root;
+    }
+    return AgentTaskRspToJson(reply);
+}
+
+memochat::json::JsonValue AIServiceClient::AgentTaskGet(const std::string& task_id) {
+    ai::AIAgentTaskRsp reply;
+    auto status = _impl->makeAgentTaskGetCall(task_id, &reply);
+    if (!status.ok()) {
+        memochat::json::JsonValue root;
+        root["code"] = 500;
+        root["message"] = "task get failed";
+        return root;
+    }
+    return AgentTaskRspToJson(reply);
+}
+
+memochat::json::JsonValue AIServiceClient::AgentTaskCancel(const std::string& task_id) {
+    ai::AIAgentTaskRsp reply;
+    auto status = _impl->makeAgentTaskCancelCall(task_id, &reply);
+    if (!status.ok()) {
+        memochat::json::JsonValue root;
+        root["code"] = 500;
+        root["message"] = "task cancel failed";
+        return root;
+    }
+    return AgentTaskRspToJson(reply);
+}
+
+memochat::json::JsonValue AIServiceClient::AgentTaskResume(const std::string& task_id) {
+    ai::AIAgentTaskRsp reply;
+    auto status = _impl->makeAgentTaskResumeCall(task_id, &reply);
+    if (!status.ok()) {
+        memochat::json::JsonValue root;
+        root["code"] = 500;
+        root["message"] = "task resume failed";
+        return root;
+    }
+    return AgentTaskRspToJson(reply);
 }

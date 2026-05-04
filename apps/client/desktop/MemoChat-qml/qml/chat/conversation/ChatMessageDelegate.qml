@@ -12,6 +12,7 @@ Item {
     property string msgType: "text"
     property string content: ""
     property string rawContent: ""
+    property string translationText: ""
     property string fileName: ""
     property string senderName: ""
     property int senderUid: 0
@@ -37,6 +38,7 @@ Item {
     signal forwardRequested(string msgId)
     signal editRequested(string msgId, string text)
     signal revokeRequested(string msgId)
+    signal translateRequested(string msgId, string text)
     signal avatarClicked(int uid, string name, string icon)
 
     property int avatarSize: 34
@@ -66,12 +68,13 @@ Item {
     readonly property real imageContentMaxWidth: Math.min(bubbleContentMaxWidth, 280)
     readonly property real imageContentMaxHeight: 240
     readonly property real messageHeight: Math.max(bubble.implicitHeight, showAvatar ? avatarSize : 0)
+    readonly property int translationHeight: translationText.length > 0 ? (translationBubble.implicitHeight + 6) : 0
     readonly property bool showStateLabel: (root.outgoing && root.messageState !== "sent")
                                            || (!root.outgoing && (root.messageState === "edited" || root.messageState === "deleted"))
     readonly property int timeDividerHeight: root.showTimeDivider ? 32 : 0
     readonly property int stateLabelHeight: showStateLabel ? 16 : 0
 
-    height: timeDividerHeight + topSpacing + messageHeight + stateLabelHeight + bottomSpacing
+    height: timeDividerHeight + topSpacing + messageHeight + translationHeight + stateLabelHeight + bottomSpacing
 
     Rectangle {
         visible: root.showTimeDivider
@@ -284,10 +287,49 @@ Item {
         font.pixelSize: 11
     }
 
+    Rectangle {
+        id: translationBubble
+        visible: root.translationText.length > 0
+        width: Math.min(root.bubbleMaxWidth, Math.max(120, translationTextItem.implicitWidth + 22))
+        implicitHeight: translationColumn.implicitHeight + 14
+        radius: 9
+        color: Qt.rgba(0.89, 0.94, 1.0, 0.54)
+        border.color: Qt.rgba(0.42, 0.62, 0.86, 0.38)
+        anchors.top: bubble.bottom
+        anchors.topMargin: 6
+        anchors.right: root.outgoing ? parent.right : undefined
+        anchors.rightMargin: root.outgoing ? root.avatarSlotWidth : 0
+        anchors.left: root.outgoing ? undefined : parent.left
+        anchors.leftMargin: root.outgoing ? 0 : root.avatarSlotWidth
+
+        Column {
+            id: translationColumn
+            anchors.fill: parent
+            anchors.margins: 7
+            spacing: 3
+
+            Text {
+                text: "翻译"
+                color: "#4f6788"
+                font.pixelSize: 10
+                font.bold: true
+            }
+
+            Text {
+                id: translationTextItem
+                text: root.translationText
+                width: Math.min(root.bubbleContentMaxWidth, implicitWidth)
+                wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                color: "#253247"
+                font.pixelSize: 13
+            }
+        }
+    }
+
     Text {
         visible: root.showStateLabel
         anchors.right: bubble.right
-        anchors.top: bubble.bottom
+        anchors.top: root.translationText.length > 0 ? translationBubble.bottom : bubble.bottom
         anchors.topMargin: 3
         text: {
             if (root.messageState === "sending") {
@@ -512,6 +554,11 @@ Item {
             visible: root.canEdit
             text: "编辑"
             onTriggered: root.editRequested(root.msgId, root.content)
+        }
+        MenuItem {
+            visible: root.msgType === "text" && root.content.length > 0
+            text: "翻译"
+            onTriggered: root.translateRequested(root.msgId, root.content)
         }
         MenuItem {
             visible: root.canRevoke

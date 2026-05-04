@@ -36,10 +36,14 @@ public:
                     ChunkCallback on_chunk,
                     memochat::json::JsonValue* out_result);
 
-    memochat::json::JsonValue Smart(const std::string& feature_type,
+    memochat::json::JsonValue Smart(int32_t uid,
+                       const std::string& feature_type,
                        const std::string& content,
                        const std::string& target_lang,
-                       const std::string& context_json);
+                       const std::string& context_json,
+                       const std::string& model_type,
+                       const std::string& model_name,
+                       const std::string& deployment_preference);
 
     memochat::json::JsonValue GetHistory(int32_t uid, const std::string& session_id,
                            int limit, int offset);
@@ -68,6 +72,29 @@ public:
     memochat::json::JsonValue ListKb(int32_t uid);
 
     memochat::json::JsonValue DeleteKb(int32_t uid, const std::string& kb_id);
+
+    memochat::json::JsonValue MemoryList(int32_t uid);
+
+    memochat::json::JsonValue MemoryCreate(int32_t uid, const std::string& content);
+
+    memochat::json::JsonValue MemoryDelete(int32_t uid, const std::string& memory_id);
+
+    memochat::json::JsonValue AgentTaskCreate(int32_t uid,
+                                              const std::string& title,
+                                              const std::string& content,
+                                              const std::string& session_id,
+                                              const std::string& model_type,
+                                              const std::string& model_name,
+                                              const std::string& skill_name,
+                                              const std::string& metadata_json);
+
+    memochat::json::JsonValue AgentTaskList(int32_t uid, int limit);
+
+    memochat::json::JsonValue AgentTaskGet(const std::string& task_id);
+
+    memochat::json::JsonValue AgentTaskCancel(const std::string& task_id);
+
+    memochat::json::JsonValue AgentTaskResume(const std::string& task_id);
 
 private:
     class Impl;

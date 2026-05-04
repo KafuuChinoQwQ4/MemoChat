@@ -100,6 +100,62 @@ grpc::Status AIServiceImpl::KbDelete(ServerContext* context,
     return _core->DeleteKb(*request, reply);
 }
 
+grpc::Status AIServiceImpl::MemoryList(ServerContext* context,
+                                       const ai::AIMemoryReq* request,
+                                       ai::AIMemoryListRsp* reply) {
+    memolog::SpanScope span("AIService.MemoryList", "gRPC");
+    return _core->MemoryList(*request, reply);
+}
+
+grpc::Status AIServiceImpl::MemoryCreate(ServerContext* context,
+                                         const ai::AIMemoryReq* request,
+                                         ai::AIMemoryRsp* reply) {
+    memolog::SpanScope span("AIService.MemoryCreate", "gRPC");
+    return _core->MemoryCreate(*request, reply);
+}
+
+grpc::Status AIServiceImpl::MemoryDelete(ServerContext* context,
+                                         const ai::AIMemoryReq* request,
+                                         ai::AIMemoryRsp* reply) {
+    memolog::SpanScope span("AIService.MemoryDelete", "gRPC");
+    return _core->MemoryDelete(*request, reply);
+}
+
+grpc::Status AIServiceImpl::AgentTaskCreate(ServerContext* context,
+                                            const ai::AIAgentTaskReq* request,
+                                            ai::AIAgentTaskRsp* reply) {
+    memolog::SpanScope span("AIService.AgentTaskCreate", "gRPC");
+    return _core->AgentTaskCreate(*request, reply);
+}
+
+grpc::Status AIServiceImpl::AgentTaskList(ServerContext* context,
+                                          const ai::AIAgentTaskReq* request,
+                                          ai::AIAgentTaskRsp* reply) {
+    memolog::SpanScope span("AIService.AgentTaskList", "gRPC");
+    return _core->AgentTaskList(*request, reply);
+}
+
+grpc::Status AIServiceImpl::AgentTaskGet(ServerContext* context,
+                                         const ai::AIAgentTaskReq* request,
+                                         ai::AIAgentTaskRsp* reply) {
+    memolog::SpanScope span("AIService.AgentTaskGet", "gRPC");
+    return _core->AgentTaskGet(*request, reply);
+}
+
+grpc::Status AIServiceImpl::AgentTaskCancel(ServerContext* context,
+                                            const ai::AIAgentTaskReq* request,
+                                            ai::AIAgentTaskRsp* reply) {
+    memolog::SpanScope span("AIService.AgentTaskCancel", "gRPC");
+    return _core->AgentTaskCancel(*request, reply);
+}
+
+grpc::Status AIServiceImpl::AgentTaskResume(ServerContext* context,
+                                            const ai::AIAgentTaskReq* request,
+                                            ai::AIAgentTaskRsp* reply) {
+    memolog::SpanScope span("AIService.AgentTaskResume", "gRPC");
+    return _core->AgentTaskResume(*request, reply);
+}
+
 grpc::Status AIServiceImpl::Confirm(ServerContext* context,
                                    const ai::AIConfirmReq* request,
                                    ai::AIConfirmRsp* reply) {

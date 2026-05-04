@@ -6,52 +6,25 @@ import "../../components"
 GlassSurface {
     id: root
 
-    signal applyJoinRequested(string groupCode, string reason)
     signal reviewRequested(var applyId, bool agree)
 
     cornerRadius: 10
     blurRadius: 26
-    fillColor: Qt.rgba(1, 1, 1, 0.20)
+    implicitHeight: reviewColumn.implicitHeight + 20
+    fillColor: Qt.rgba(1, 1, 1, 0.18)
     strokeColor: Qt.rgba(1, 1, 1, 0.42)
 
     ColumnLayout {
+        id: reviewColumn
         anchors.fill: parent
         anchors.margins: 10
         spacing: 8
 
         Label {
-            text: "入群申请"
+            text: "入群审核"
             color: "#2a3649"
             font.bold: true
             font.pixelSize: 14
-        }
-
-        GlassTextField {
-            id: groupIdInput
-            Layout.fillWidth: true
-            Layout.preferredHeight: 32
-            backdrop: root.backdrop
-            placeholderText: "申请入群 群ID（g#########）"
-        }
-
-        GlassTextField {
-            id: reasonInput
-            Layout.fillWidth: true
-            Layout.preferredHeight: 32
-            backdrop: root.backdrop
-            placeholderText: "申请理由（可选）"
-        }
-
-        GlassButton {
-            Layout.fillWidth: true
-            text: "提交入群申请"
-            implicitHeight: 30
-            cornerRadius: 8
-            normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
-            hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
-            pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
-            disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-            onClicked: root.applyJoinRequested(groupIdInput.text.trim(), reasonInput.text)
         }
 
         Rectangle {

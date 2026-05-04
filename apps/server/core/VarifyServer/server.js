@@ -248,6 +248,7 @@ async function GetVarifyCode(call, callback) {
 }
 
 function main() {
+  return new Promise((resolve, reject) => {
   grpcServer = new grpc.Server();
   const bindAddress = `${config_module.grpc_host}:${config_module.grpc_port}`;
   grpcServer.addService(message_proto.VarifyService.service, { GetVarifyCode });
@@ -255,21 +256,24 @@ function main() {
   grpcServer.bindAsync(bindAddress, grpc.ServerCredentials.createInsecure(), (err, port) => {
     if (err) {
       logger.error({ event: 'service.bind.failed', address: bindAddress, error: err.message || String(err), module: 'grpc', error_type: 'bind' }, 'failed to bind gRPC server');
-      process.exit(1);
+      reject(err);
       return;
     }
 
     if (!port) {
       logger.error({ event: 'service.bind.failed', address: bindAddress, module: 'grpc', error_type: 'bind' }, 'gRPC server did not bind any port');
-      process.exit(1);
+      reject(new Error(`gRPC server did not bind ${bindAddress}`));
       return;
     }
 
     logger.info({ event: 'service.start', address: bindAddress, module: 'grpc' }, 'VarifyServer started');
+    resolve();
+  });
   });
 }
 
 function startHealthServer() {
+  return new Promise((resolve, reject) => {
   healthServer = http.createServer((req, res) => {
     if (req.url !== '/healthz' && req.url !== '/readyz') {
       res.statusCode = 404;
@@ -289,6 +293,21 @@ function startHealthServer() {
       { event: 'service.health.start', address: `0.0.0.0:${config_module.health_port}`, module: 'http' },
       'VarifyServer health endpoint started'
     );
+    resolve();
+  });
+  healthServer.on('error', (err) => {
+    logger.error(
+      {
+        event: 'service.health.bind.failed',
+        address: `0.0.0.0:${config_module.health_port}`,
+        error: err && err.message ? err.message : String(err),
+        module: 'http',
+        error_type: 'bind',
+      },
+      'failed to bind VarifyServer health endpoint'
+    );
+    reject(err);
+  });
   });
 }
 
@@ -349,8 +368,8 @@ async function bootstrap() {
       config_module.verify_async_outbox = false;
     }
   }
-  startHealthServer();
-  main();
+  await main();
+  await startHealthServer();
 }
 
 bootstrap().catch((err) => {

@@ -263,6 +263,11 @@ bool PostgresMgr::QuitGroup(const int64_t& group_id, const int& uid) {
 	return _dao->QuitGroup(group_id, uid);
 }
 
+bool PostgresMgr::DissolveGroup(const int64_t& group_id, const int& operator_uid) {
+	EnsurePostgresDaoInitialized(this);
+	return _dao->DissolveGroup(group_id, operator_uid);
+}
+
 bool PostgresMgr::GetGroupById(const int64_t& group_id, std::shared_ptr<GroupInfo>& group_info) {
 	EnsurePostgresDaoInitialized(this);
 	return _dao->GetGroupById(group_id, group_info);

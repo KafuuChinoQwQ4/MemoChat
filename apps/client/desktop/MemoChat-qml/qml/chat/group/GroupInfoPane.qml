@@ -10,6 +10,9 @@ GlassSurface {
     property string groupIcon: "qrc:/res/chat_icon.png"
     property bool canUpdateIcon: false
     property bool canUpdateAnnouncement: false
+    property int currentGroupRole: 1
+    property bool currentDialogPinned: false
+    property bool currentDialogMuted: false
     property string statusText: ""
     property bool statusError: false
 
@@ -17,14 +20,21 @@ GlassSurface {
     signal loadHistoryRequested()
     signal updateAnnouncementRequested(string announcement)
     signal updateGroupIconRequested(int source)
+    signal toggleDialogPinned()
+    signal toggleDialogMuted()
     signal quitRequested()
+    signal dissolveRequested()
 
     cornerRadius: 10
     blurRadius: 26
-    fillColor: Qt.rgba(1, 1, 1, 0.20)
-    strokeColor: Qt.rgba(1, 1, 1, 0.42)
+    implicitHeight: infoColumn.implicitHeight + 20
+    fillColor: Qt.rgba(0.98, 0.99, 1.0, 0.90)
+    strokeColor: Qt.rgba(1, 1, 1, 0.58)
+    glowTopColor: Qt.rgba(1, 1, 1, 0.24)
+    glowBottomColor: Qt.rgba(1, 1, 1, 0.06)
 
     ColumnLayout {
+        id: infoColumn
         anchors.fill: parent
         anchors.margins: 10
         spacing: 8
@@ -121,6 +131,14 @@ GlassSurface {
             font.pixelSize: 12
         }
 
+        Label {
+            Layout.fillWidth: true
+            text: root.currentGroupRole >= 3 ? "群主可解散群聊" : "仅群主可解散群聊"
+            color: "#60738a"
+            font.pixelSize: 11
+            wrapMode: Text.Wrap
+        }
+
         GlassTextField {
             id: announcementInput
             Layout.fillWidth: true
@@ -159,6 +177,35 @@ GlassSurface {
         RowLayout {
             Layout.fillWidth: true
             spacing: 6
+
+            GlassButton {
+                Layout.fillWidth: true
+                text: root.currentDialogPinned ? "取消置顶" : "置顶会话"
+                implicitHeight: 30
+                cornerRadius: 8
+                normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
+                hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
+                pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
+                disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                onClicked: root.toggleDialogPinned()
+            }
+
+            GlassButton {
+                Layout.fillWidth: true
+                text: root.currentDialogMuted ? "取消静音" : "静音会话"
+                implicitHeight: 30
+                cornerRadius: 8
+                normalColor: Qt.rgba(0.42, 0.56, 0.74, 0.22)
+                hoverColor: Qt.rgba(0.42, 0.56, 0.74, 0.32)
+                pressedColor: Qt.rgba(0.42, 0.56, 0.74, 0.40)
+                disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                onClicked: root.toggleDialogMuted()
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 6
             GlassButton {
                 Layout.fillWidth: true
                 text: "更新公告"
@@ -174,7 +221,8 @@ GlassSurface {
             GlassButton {
                 Layout.fillWidth: true
                 text: "退群"
-                implicitHeight: 30
+                implicitHeight: 32
+                enabled: root.currentGroupRole < 3
                 cornerRadius: 8
                 normalColor: Qt.rgba(0.82, 0.38, 0.38, 0.22)
                 hoverColor: Qt.rgba(0.82, 0.38, 0.38, 0.32)
@@ -182,6 +230,20 @@ GlassSurface {
                 disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
                 onClicked: root.quitRequested()
             }
+        }
+
+        GlassButton {
+            Layout.fillWidth: true
+            text: "解散群聊"
+            implicitHeight: 34
+            visible: root.currentGroupRole >= 3
+            enabled: root.currentGroupRole >= 3
+            cornerRadius: 9
+            normalColor: Qt.rgba(0.82, 0.28, 0.34, 0.22)
+            hoverColor: Qt.rgba(0.82, 0.28, 0.34, 0.32)
+            pressedColor: Qt.rgba(0.82, 0.28, 0.34, 0.42)
+            disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+            onClicked: root.dissolveRequested()
         }
     }
 }

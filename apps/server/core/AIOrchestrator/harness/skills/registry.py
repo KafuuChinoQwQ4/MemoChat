@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from harness.contracts import AgentSkill
+from harness.skills.specs import AgentSpecRegistry
 
 
 class SkillRegistry:
     def __init__(self):
+        self._spec_registry = AgentSpecRegistry()
         self._skills = {
             skill.name: skill
             for skill in [
@@ -66,6 +68,8 @@ class SkillRegistry:
                 ),
             ]
         }
+        for spec_skill in self._spec_registry.as_skills():
+            self._skills[spec_skill.name] = spec_skill
 
     def list_skills(self) -> list[AgentSkill]:
         return list(self._skills.values())
@@ -97,3 +101,14 @@ class SkillRegistry:
         if any(keyword in content for keyword in ("总结", "摘要", "概括", "summary")):
             return self._skills["summarize_thread"]
         return self._skills["general_chat"]
+
+    def list_specs(self):
+        return self._spec_registry.list_specs()
+
+    def get_spec(self, spec_name: str):
+        return self._spec_registry.get(spec_name)
+
+    def reload_specs(self) -> None:
+        self._spec_registry.reload()
+        for spec_skill in self._spec_registry.as_skills():
+            self._skills[spec_skill.name] = spec_skill

@@ -395,7 +395,10 @@ void AppController::onDialogListRsp(QJsonObject payload)
             if (groupId <= 0) {
                 continue;
             }
-            const int pseudoUid = -static_cast<int>(groupId);
+            const int pseudoUid = ConversationSyncService::resolveGroupDialogUid(_group_uid_map, groupId);
+            if (pseudoUid == 0) {
+                continue;
+            }
             const QString groupIcon = avatar.trimmed().isEmpty() ? QStringLiteral("qrc:/res/chat_icon.png") : avatar;
             DialogEntrySeed seed;
             seed.dialogUid = pseudoUid;
@@ -413,10 +416,17 @@ void AppController::onDialogListRsp(QJsonObject payload)
             }
             seed.lastMsgTs = lastMsgTs;
             seed.muteState = obj.value("mute_state").toInt(0);
+            auto groupInfo = std::make_shared<GroupInfoData>();
+            groupInfo->_group_id = groupId;
+            groupInfo->_name = title;
+            groupInfo->_icon = groupIcon;
+            groupInfo->_last_msg = preview;
+            _gateway.userMgr()->UpsertGroup(groupInfo);
             _dialog_server_pinned_map.insert(pseudoUid, seed.pinnedRank);
             _dialog_server_mute_map.insert(pseudoUid, seed.muteState);
             auto item = DialogListService::buildDialogEntry(seed, decorationState);
             merged.push_back(item);
+            _group_list_model.upsertFriend(item);
             _group_uid_map.insert(pseudoUid, groupId);
         }
     }
@@ -444,7 +454,7 @@ void AppController::onDialogListRsp(QJsonObject payload)
     DialogListService::sortDialogs(merged);
     _dialog_list_model.upsertBatch(merged, true);
     if (_current_group_id > 0) {
-        const int selectedGroupDialogUid = -static_cast<int>(_current_group_id);
+        const int selectedGroupDialogUid = ConversationSyncService::resolveGroupDialogUid(_group_uid_map, _current_group_id);
         _dialog_list_model.clearUnread(selectedGroupDialogUid);
         _dialog_list_model.clearMention(selectedGroupDialogUid);
         _dialog_mention_map.remove(selectedGroupDialogUid);
@@ -475,16 +485,21 @@ void AppController::onDialogListRsp(QJsonObject payload)
         }
     }
 
-    // 登录后首次拉取对话列表时，自动拉取有未读消息的对话
+    // 登录后首次拉取对话列表时，自动拉取有未读消息的对话。
     if (bootstrappingDialog) {
         for (const auto &dialog : merged) {
             if (!dialog) {
                 continue;
             }
-            // 私聊且有未读消息
             if (dialog->_uid > 0 && dialog->_unread_count > 0) {
-                // 拉取最新消息，before_ts = 0 表示拉取最新消息
-                requestPrivateHistory(dialog->_uid, 0, QString());
+                if (dialog->_uid == _current_chat_uid) {
+                    requestPrivateHistory(dialog->_uid, 0, QString());
+                } else {
+                    requestPrivateHistoryForBootstrap(dialog->_uid);
+                }
+            } else if (dialog->_uid < 0 && dialog->_unread_count > 0) {
+                const qint64 groupId = ConversationSyncService::groupIdForDialogUid(_group_uid_map, dialog->_uid);
+                requestGroupHistoryForBootstrap(groupId);
             }
         }
     }
@@ -492,26 +507,33 @@ void AppController::onDialogListRsp(QJsonObject payload)
 
 void AppController::onPrivateHistoryRsp(QJsonObject payload)
 {
-    setPrivateHistoryLoading(false);
+    const int peerUid = payload.value("peer_uid").toInt();
+    const bool isPendingRequest = peerUid == _private_history_pending_peer_uid;
+    if (isPendingRequest) {
+        setPrivateHistoryLoading(false);
+    }
     const int error = payload.value("error").toInt(ErrorCodes::ERR_JSON);
     if (error != ErrorCodes::SUCCESS) {
-        _private_history_pending_before_ts = 0;
-        _private_history_pending_before_msg_id.clear();
-        _private_history_pending_peer_uid = 0;
-        setCanLoadMorePrivateHistory(false);
+        if (isPendingRequest) {
+            _private_history_pending_before_ts = 0;
+            _private_history_pending_before_msg_id.clear();
+            _private_history_pending_peer_uid = 0;
+            setCanLoadMorePrivateHistory(false);
+        }
         return;
     }
 
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
     if (!selfInfo) {
-        _private_history_pending_before_ts = 0;
-        _private_history_pending_before_msg_id.clear();
-        _private_history_pending_peer_uid = 0;
-        setCanLoadMorePrivateHistory(false);
+        if (isPendingRequest) {
+            _private_history_pending_before_ts = 0;
+            _private_history_pending_before_msg_id.clear();
+            _private_history_pending_peer_uid = 0;
+            setCanLoadMorePrivateHistory(false);
+        }
         return;
     }
 
-    const int peerUid = payload.value("peer_uid").toInt();
     const bool hasMore = payload.value("has_more").toBool(false);
     const QJsonArray messages = payload.value("messages").toArray();
     qInfo() << "Private history response, peer uid:" << peerUid
@@ -553,7 +575,9 @@ void AppController::onPrivateHistoryRsp(QJsonObject payload)
     }
 
     if (peerUid == _current_chat_uid) {
-        if (_private_history_pending_before_ts > 0 || !_private_history_pending_before_msg_id.isEmpty()) {
+        const bool isPaginationRequest = isPendingRequest
+            && (_private_history_pending_before_ts > 0 || !_private_history_pending_before_msg_id.isEmpty());
+        if (isPaginationRequest) {
             _message_model.prependMessages(parsed, selfInfo->_uid);
         } else if (friendInfo) {
             _message_model.setMessages(friendInfo->_chat_msgs, selfInfo->_uid);
@@ -575,17 +599,18 @@ void AppController::onPrivateHistoryRsp(QJsonObject payload)
         }
         qInfo() << "Private chat view refreshed from history, peer uid:" << peerUid
                 << "history append mode:"
-                << (_private_history_pending_before_ts > 0 || !_private_history_pending_before_msg_id.isEmpty()
-                        ? "prepend" : "reset")
+                << (isPaginationRequest ? "prepend" : "reset")
                 << "friend msg count:" << (friendInfo ? static_cast<qlonglong>(friendInfo->_chat_msgs.size()) : 0LL)
                 << "message model count:" << _message_model.rowCount();
     } else {
         qInfo() << "Private history response cached for non-current dialog, peer uid:" << peerUid;
     }
 
-    _private_history_pending_before_ts = 0;
-    _private_history_pending_before_msg_id.clear();
-    _private_history_pending_peer_uid = 0;
+    if (isPendingRequest) {
+        _private_history_pending_before_ts = 0;
+        _private_history_pending_before_msg_id.clear();
+        _private_history_pending_peer_uid = 0;
+    }
 }
 
 void AppController::onPrivateMsgChanged(QJsonObject payload)

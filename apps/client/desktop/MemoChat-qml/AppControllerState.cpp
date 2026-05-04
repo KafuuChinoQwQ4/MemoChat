@@ -1,4 +1,5 @@
 #include "AppController.h"
+#include "ConversationSyncService.h"
 #include "IconPathUtils.h"
 #include "usermgr.h"
 #include <QDateTime>
@@ -630,10 +631,38 @@ void AppController::setPendingReplyContext(const QString &msgId, const QString &
     emit pendingReplyChanged();
 }
 
+void AppController::clearCurrentGroupConversation(qint64 groupId)
+{
+    const qint64 targetGroupId = groupId > 0 ? groupId : _current_group_id;
+    if (targetGroupId > 0) {
+        const int dialogUid = ConversationSyncService::resolveGroupDialogUid(_group_uid_map, targetGroupId);
+        _dialog_mention_map.remove(dialogUid);
+        _dialog_list_model.clearMention(dialogUid);
+        _dialog_list_model.removeByUid(dialogUid);
+        _group_list_model.removeByUid(dialogUid);
+        _group_uid_map.remove(dialogUid);
+    }
+    if (targetGroupId <= 0 || _current_group_id == targetGroupId) {
+        setCurrentGroup(0, "");
+        _group_history_before_seq = 0;
+        _group_history_has_more = true;
+        _group_history_loading = false;
+        setPendingReplyContext(QString(), QString(), QString());
+        _message_model.clear();
+        setCurrentChatPeerName("");
+        setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
+        setCurrentDraftText("");
+        setCurrentDialogPinned(false);
+        setCurrentDialogMuted(false);
+        setCanLoadMorePrivateHistory(false);
+        emitCurrentDialogUidChangedIfNeeded();
+    }
+}
+
 int AppController::currentDialogUid() const
 {
     if (_current_group_id > 0) {
-        return -static_cast<int>(_current_group_id);
+        return ConversationSyncService::makeGroupDialogUid(_current_group_id);
     }
     if (_current_chat_uid > 0) {
         return _current_chat_uid;
@@ -665,7 +694,7 @@ bool AppController::resolveDialogTarget(int dialogUid, QString &dialogType, int 
         return true;
     }
 
-    const qint64 candidateGroupId = -static_cast<qint64>(dialogUid);
+    const qint64 candidateGroupId = ConversationSyncService::groupIdForDialogUid(_group_uid_map, dialogUid);
     if (candidateGroupId <= 0) {
         return false;
     }

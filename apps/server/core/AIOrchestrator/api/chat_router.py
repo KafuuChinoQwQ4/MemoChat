@@ -19,7 +19,24 @@ logger = structlog.get_logger()
 router = APIRouter()
 
 
+def _metadata(req: ChatReq) -> dict:
+    return req.metadata if isinstance(req.metadata, dict) else {}
+
+
+def _metadata_list(req: ChatReq, key: str) -> list[str]:
+    value = _metadata(req).get(key, [])
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item).strip()]
+
+
+def _metadata_dict(req: ChatReq, key: str) -> dict:
+    value = _metadata(req).get(key, {})
+    return value if isinstance(value, dict) else {}
+
+
 def _to_agent_request(req: ChatReq, session_id: str) -> AgentRunReq:
+    metadata = _metadata(req)
     return AgentRunReq(
         uid=req.uid,
         session_id=session_id,
@@ -27,9 +44,9 @@ def _to_agent_request(req: ChatReq, session_id: str) -> AgentRunReq:
         model_type=req.model_type,
         model_name=req.model_name,
         deployment_preference=req.deployment_preference,
-        skill_name=req.skill_name,
-        requested_tools=req.requested_tools,
-        tool_arguments=req.tool_arguments,
+        skill_name=req.skill_name or str(metadata.get("skill_name", "") or ""),
+        requested_tools=req.requested_tools or _metadata_list(req, "requested_tools"),
+        tool_arguments=req.tool_arguments or _metadata_dict(req, "tool_arguments"),
         metadata=req.metadata,
     )
 

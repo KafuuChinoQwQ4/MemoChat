@@ -1,9 +1,11 @@
 #include "ChatMessageModel.h"
+#include "IconPathUtils.h"
 #include "MessageContentCodec.h"
 #include <algorithm>
 #include <limits>
 #include <unordered_set>
 #include <QDateTime>
+#include <QStringList>
 #include <QUrlQuery>
 
 namespace {
@@ -499,6 +501,83 @@ QString ChatMessageModel::previewTextByMsgId(const QString &msgId) const
     return {};
 }
 
+QString ChatMessageModel::exportRecentText(int maxMessages) const
+{
+    if (_items.empty() || maxMessages <= 0) {
+        return {};
+    }
+
+    const int start = qMax(0, rowCount() - maxMessages);
+    QStringList lines;
+    for (int i = start; i < rowCount(); ++i) {
+        const auto &entry = _items[static_cast<size_t>(i)];
+        if (entry.deletedAtMs > 0 || entry.msgType != QStringLiteral("text") || entry.content.trimmed().isEmpty()) {
+            continue;
+        }
+        QString speaker = entry.outgoing ? QStringLiteral("我") : entry.senderName.trimmed();
+        if (speaker.isEmpty()) {
+            speaker = QStringLiteral("对方");
+        }
+        lines.append(QStringLiteral("%1：%2").arg(speaker, entry.content.trimmed()));
+    }
+    return lines.join(QStringLiteral("\n"));
+}
+
+QString ChatMessageModel::latestTextMessage(bool preferIncoming) const
+{
+    auto findLatest = [this](bool incomingOnly) -> QString {
+        for (int i = rowCount() - 1; i >= 0; --i) {
+            const auto &entry = _items[static_cast<size_t>(i)];
+            if (entry.deletedAtMs > 0 || entry.msgType != QStringLiteral("text") || entry.content.trimmed().isEmpty()) {
+                continue;
+            }
+            if (incomingOnly && entry.outgoing) {
+                continue;
+            }
+            return entry.content.trimmed();
+        }
+        return {};
+    };
+
+    if (preferIncoming) {
+        const QString incoming = findLatest(true);
+        if (!incoming.isEmpty()) {
+            return incoming;
+        }
+    }
+    return findLatest(false);
+}
+
+QVariantMap ChatMessageModel::latestTextMessageInfo(bool preferIncoming) const
+{
+    auto findLatest = [this](bool incomingOnly) -> QVariantMap {
+        for (int i = rowCount() - 1; i >= 0; --i) {
+            const auto &entry = _items[static_cast<size_t>(i)];
+            if (entry.deletedAtMs > 0 || entry.msgType != QStringLiteral("text") || entry.content.trimmed().isEmpty()) {
+                continue;
+            }
+            if (incomingOnly && entry.outgoing) {
+                continue;
+            }
+            return QVariantMap{
+                {QStringLiteral("msgId"), entry.msgId},
+                {QStringLiteral("content"), entry.content.trimmed()},
+                {QStringLiteral("senderName"), entry.senderName},
+                {QStringLiteral("outgoing"), entry.outgoing},
+            };
+        }
+        return {};
+    };
+
+    if (preferIncoming) {
+        const QVariantMap incoming = findLatest(true);
+        if (!incoming.isEmpty()) {
+            return incoming;
+        }
+    }
+    return findLatest(false);
+}
+
 void ChatMessageModel::setDownloadAuthContext(int uid, const QString &token)
 {
     if (_download_uid == uid && _download_token == token) {
@@ -515,6 +594,7 @@ void ChatMessageModel::setDownloadAuthContext(int uid, const QString &token)
             && !entry.content.isEmpty()) {
             entry.content = withDownloadAuth(entry.content);
         }
+        entry.senderIcon = normalizeSenderIcon(entry.senderIcon);
     }
     endResetModel();
 }
@@ -616,6 +696,15 @@ QString ChatMessageModel::withDownloadAuth(const QString &urlText) const
     return url.toString();
 }
 
+QString ChatMessageModel::normalizeSenderIcon(const QString &icon) const
+{
+    const QString trimmed = icon.trimmed();
+    if (trimmed.isEmpty()) {
+        return QString();
+    }
+    return withDownloadAuth(normalizeIconForQml(trimmed));
+}
+
 ChatMessageModel::MessageEntry ChatMessageModel::toEntry(const std::shared_ptr<TextChatData> &message, int selfUid) const
 {
     MessageEntry entry;
@@ -634,7 +723,7 @@ ChatMessageModel::MessageEntry ChatMessageModel::toEntry(const std::shared_ptr<T
     entry.replySender = decoded.replySender;
     entry.replyPreview = decoded.replyPreview;
     entry.senderName = message->_from_name;
-    entry.senderIcon = message->_from_icon;
+    entry.senderIcon = normalizeSenderIcon(message->_from_icon);
     entry.fromUid = message->_from_uid;
     entry.toUid = message->_to_uid;
     entry.outgoing = (message->_from_uid == selfUid);

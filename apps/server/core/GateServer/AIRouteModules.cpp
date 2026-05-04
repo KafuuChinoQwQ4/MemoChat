@@ -165,17 +165,23 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
             WriteJsonResponse(connection, root);
             return true;
         }
+        int32_t uid = json::glaze_safe_get<int>(src_root, "uid", 0);
         std::string feature_type = json::glaze_safe_get<std::string>(src_root, "feature_type", "");
         std::string content = json::glaze_safe_get<std::string>(src_root, "content", "");
         std::string target_lang = json::glaze_safe_get<std::string>(src_root, "target_lang", "");
         std::string context_json = json::glaze_safe_get<std::string>(src_root, "context_json", "{}");
+        std::string model_type = json::glaze_safe_get<std::string>(src_root, "model_type", "");
+        std::string model_name = json::glaze_safe_get<std::string>(src_root, "model_name", "");
+        std::string deployment_preference = json::glaze_safe_get<std::string>(src_root, "deployment_preference", "any");
         if (content.empty()) {
             root["error"] = 1;
             root["message"] = "content is empty";
             WriteJsonResponse(connection, root);
             return true;
         }
-        auto result = g_ai_client->Smart(feature_type, content, target_lang, context_json);
+        auto result = g_ai_client->Smart(
+            uid, feature_type, content, target_lang, context_json,
+            model_type, model_name, deployment_preference);
         if (json::glaze_safe_get<int>(result, "error", json::glaze_safe_get<int>(result, "code", 0)) != 0) {
             memolog::LogError("gate.ai.smart.failed", "AIServer returned error", {{"feature_type", feature_type}});
         }
@@ -346,5 +352,130 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
         return true;
     });
 
-    memolog::LogInfo("gate.routes.registered", "AI HTTP routes registered", {{"count", "11"}});
+    logic.RegGet("/ai/memory/list", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::SpanScope span("gate.ai.memory.list", "http");
+        int32_t uid = 0;
+        for (const auto& param : connection->_get_params) {
+            if (param.first == "uid") uid = std::stoi(param.second);
+        }
+        auto result = g_ai_client->MemoryList(uid);
+        WriteJsonResponse(connection, result);
+        return true;
+    });
+
+    logic.RegPost("/ai/memory", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::SpanScope span("gate.ai.memory.create", "http");
+        json::JsonValue root = json::JsonValue{};
+        json::JsonValue src_root = json::JsonValue{};
+        if (!GateHttpJsonSupport::ParseJsonBody(connection, root, src_root)) {
+            root["error"] = 1;
+            root["message"] = "invalid json";
+            WriteJsonResponse(connection, root);
+            return true;
+        }
+        int32_t uid = json::glaze_safe_get<int>(src_root, "uid", 0);
+        std::string content = json::glaze_safe_get<std::string>(src_root, "content", "");
+        auto result = g_ai_client->MemoryCreate(uid, content);
+        WriteJsonResponse(connection, result);
+        return true;
+    });
+
+    logic.RegPost("/ai/memory/delete", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::SpanScope span("gate.ai.memory.delete", "http");
+        json::JsonValue root = json::JsonValue{};
+        json::JsonValue src_root = json::JsonValue{};
+        if (!GateHttpJsonSupport::ParseJsonBody(connection, root, src_root)) {
+            root["error"] = 1;
+            root["message"] = "invalid json";
+            WriteJsonResponse(connection, root);
+            return true;
+        }
+        int32_t uid = json::glaze_safe_get<int>(src_root, "uid", 0);
+        std::string memory_id = json::glaze_safe_get<std::string>(src_root, "memory_id", "");
+        auto result = g_ai_client->MemoryDelete(uid, memory_id);
+        WriteJsonResponse(connection, result);
+        return true;
+    });
+
+    logic.RegPost("/ai/tasks", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::SpanScope span("gate.ai.tasks.create", "http");
+        json::JsonValue root = json::JsonValue{};
+        json::JsonValue src_root = json::JsonValue{};
+        if (!GateHttpJsonSupport::ParseJsonBody(connection, root, src_root)) {
+            root["error"] = 1;
+            root["message"] = "invalid json";
+            WriteJsonResponse(connection, root);
+            return true;
+        }
+        int32_t uid = json::glaze_safe_get<int>(src_root, "uid", 0);
+        std::string title = json::glaze_safe_get<std::string>(src_root, "title", "");
+        std::string content = json::glaze_safe_get<std::string>(src_root, "content", "");
+        std::string session_id = json::glaze_safe_get<std::string>(src_root, "session_id", "");
+        std::string model_type = json::glaze_safe_get<std::string>(src_root, "model_type", "");
+        std::string model_name = json::glaze_safe_get<std::string>(src_root, "model_name", "");
+        std::string skill_name = json::glaze_safe_get<std::string>(src_root, "skill_name", "");
+        std::string metadata_json = ExtractMetadataJson(src_root);
+        auto result = g_ai_client->AgentTaskCreate(
+            uid, title, content, session_id, model_type, model_name, skill_name, metadata_json);
+        WriteJsonResponse(connection, result);
+        return true;
+    });
+
+    logic.RegGet("/ai/tasks", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::SpanScope span("gate.ai.tasks.list", "http");
+        int32_t uid = 0;
+        int limit = 50;
+        for (const auto& param : connection->_get_params) {
+            if (param.first == "uid") uid = std::stoi(param.second);
+            else if (param.first == "limit") limit = std::stoi(param.second);
+        }
+        auto result = g_ai_client->AgentTaskList(uid, limit);
+        WriteJsonResponse(connection, result);
+        return true;
+    });
+
+    logic.RegGet("/ai/tasks/detail", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::SpanScope span("gate.ai.tasks.detail", "http");
+        std::string task_id;
+        for (const auto& param : connection->_get_params) {
+            if (param.first == "task_id") task_id = param.second;
+        }
+        auto result = g_ai_client->AgentTaskGet(task_id);
+        WriteJsonResponse(connection, result);
+        return true;
+    });
+
+    logic.RegPost("/ai/tasks/cancel", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::SpanScope span("gate.ai.tasks.cancel", "http");
+        json::JsonValue root = json::JsonValue{};
+        json::JsonValue src_root = json::JsonValue{};
+        if (!GateHttpJsonSupport::ParseJsonBody(connection, root, src_root)) {
+            root["error"] = 1;
+            root["message"] = "invalid json";
+            WriteJsonResponse(connection, root);
+            return true;
+        }
+        std::string task_id = json::glaze_safe_get<std::string>(src_root, "task_id", "");
+        auto result = g_ai_client->AgentTaskCancel(task_id);
+        WriteJsonResponse(connection, result);
+        return true;
+    });
+
+    logic.RegPost("/ai/tasks/resume", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::SpanScope span("gate.ai.tasks.resume", "http");
+        json::JsonValue root = json::JsonValue{};
+        json::JsonValue src_root = json::JsonValue{};
+        if (!GateHttpJsonSupport::ParseJsonBody(connection, root, src_root)) {
+            root["error"] = 1;
+            root["message"] = "invalid json";
+            WriteJsonResponse(connection, root);
+            return true;
+        }
+        std::string task_id = json::glaze_safe_get<std::string>(src_root, "task_id", "");
+        auto result = g_ai_client->AgentTaskResume(task_id);
+        WriteJsonResponse(connection, result);
+        return true;
+    });
+
+    memolog::LogInfo("gate.routes.registered", "AI HTTP routes registered", {{"count", "19"}});
 }

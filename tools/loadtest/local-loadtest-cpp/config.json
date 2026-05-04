@@ -1,5 +1,0 @@
-{
-  "_comment": "This config is deprecated — use local-loadtest-cpp/config.json instead.",
-  "_redirect": "local-loadtest-cpp/config.json",
-  "_keep_for_compatibility": "Python scripts in this directory will still read this file if local-loadtest-cpp/config.json is absent."
-}

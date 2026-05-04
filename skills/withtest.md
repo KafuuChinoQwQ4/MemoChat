@@ -76,7 +76,7 @@ Prefer existing probes:
 - `tools\scripts\test_login2.ps1`
 - `tools\scripts\test_login3.ps1`
 - `tools\scripts\full_flow_test.ps1`
-- `tools\loadtest\local-loadtest-cpp\run_suite.ps1`
+- `python tools\loadtest\python-loadtest\py_loadtest.py --config tools\loadtest\python-loadtest\config.json --scenario all --total 20 --concurrency 5`
 - service logs under `logs`, `artifacts`, and runtime service output files.
 
 ### Step D: Run Test

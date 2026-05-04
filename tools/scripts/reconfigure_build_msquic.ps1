@@ -42,7 +42,6 @@ $cmakeArgs = @(
     "-DBUILD_OPS=ON",
     "-DBUILD_SERVER=OFF",
     "-DBUILD_TESTS=OFF",
-    "-DBUILD_LOADTEST=OFF",
     "-DCMAKE_MAKE_PROGRAM=D:/ninja-win/ninja.exe",
     "-DVCPKG_ROOT=D:/vcpkg",
     "-DVCPKG_DOWNLOADS=D:/vcpkg/downloads",

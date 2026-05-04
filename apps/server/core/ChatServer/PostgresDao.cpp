@@ -3960,6 +3960,84 @@ bool PostgresDao::QuitGroup(const int64_t& group_id, const int& uid) {
 	}
 }
 
+bool PostgresDao::DissolveGroup(const int64_t& group_id, const int& operator_uid) {
+	int role = 0;
+	if (!GetUserRoleInGroup(group_id, operator_uid, role) || role != 3) {
+		return false;
+	}
+	if (use_postgres_) {
+		try {
+			pqxx::connection conn(postgres_connection_string_);
+			pqxx::work txn(conn);
+			const auto updated = txn.exec_params(
+				"UPDATE chat_group SET status = 2, updated_at = CURRENT_TIMESTAMP "
+				"WHERE group_id = $1 AND owner_uid = $2 AND status = 1",
+				group_id,
+				operator_uid);
+			if (updated.affected_rows() <= 0) {
+				txn.abort();
+				return false;
+			}
+			txn.exec_params(
+				"UPDATE chat_group_member SET status = 4, updated_at = CURRENT_TIMESTAMP "
+				"WHERE group_id = $1 AND status = 1",
+				group_id);
+			txn.exec_params(
+				"DELETE FROM chat_group_admin_permission WHERE group_id = $1",
+				group_id);
+			txn.commit();
+			return true;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+			return false;
+		}
+	}
+	auto con = pool_->getConnection();
+	if (con == nullptr) {
+		return false;
+	}
+	Defer defer([this, &con]() {
+		pool_->returnConnection(std::move(con));
+		});
+	try {
+		con->_con->setAutoCommit(false);
+		std::unique_ptr<sql::PreparedStatement> update_group(
+			con->_con->prepareStatement("UPDATE chat_group SET status = 2, updated_at = CURRENT_TIMESTAMP "
+				"WHERE group_id = ? AND owner_uid = ? AND status = 1"));
+		update_group->setInt64(1, group_id);
+		update_group->setInt(2, operator_uid);
+		if (update_group->executeUpdate() <= 0) {
+			con->_con->rollback();
+			return false;
+		}
+		std::unique_ptr<sql::PreparedStatement> update_members(
+			con->_con->prepareStatement("UPDATE chat_group_member SET status = 4, updated_at = CURRENT_TIMESTAMP "
+				"WHERE group_id = ? AND status = 1"));
+		update_members->setInt64(1, group_id);
+		update_members->executeUpdate();
+		std::unique_ptr<sql::PreparedStatement> del_perm(
+			con->_con->prepareStatement("DELETE FROM chat_group_admin_permission WHERE group_id = ?"));
+		del_perm->setInt64(1, group_id);
+		del_perm->executeUpdate();
+		con->_con->commit();
+		return true;
+	}
+	catch (sql::SQLException& e) {
+		if (con && con->_con) {
+			try {
+				con->_con->rollback();
+			}
+			catch (...) {
+			}
+		}
+		std::cerr << "SQLException: " << e.what();
+		std::cerr << " (legacy SQL error code: " << e.getErrorCode();
+		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		return false;
+	}
+}
+
 bool PostgresDao::GetGroupById(const int64_t& group_id, std::shared_ptr<GroupInfo>& group_info) {
 	if (use_postgres_) {
 		try {

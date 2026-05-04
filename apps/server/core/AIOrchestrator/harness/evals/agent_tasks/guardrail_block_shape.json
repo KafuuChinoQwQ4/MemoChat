@@ -1,0 +1,27 @@
+{
+  "case_id": "guardrail_block_shape",
+  "name": "Guardrail block shape",
+  "description": "Checks that blocked traces expose guardrail status and stop before model completion.",
+  "expectations": {
+    "expected_status": "blocked",
+    "required_layers": [
+      "orchestration",
+      "guardrails"
+    ],
+    "required_events": [
+      "plan",
+      "input"
+    ],
+    "forbidden_events": [
+      "model_completion"
+    ],
+    "required_guardrail_statuses": {
+      "input_not_empty": "block"
+    },
+    "max_latency_ms": 30000
+  },
+  "metadata": {
+    "mode": "replay",
+    "stage": "stage-7-replay-evals"
+  }
+}

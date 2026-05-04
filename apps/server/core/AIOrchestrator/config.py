@@ -27,6 +27,7 @@ class OllamaLLMConfig(BaseModel):
     base_url: str = "http://127.0.0.1:11434"
     models: list[OllamaModelConfig] = []
     enabled: bool = True
+    timeout_sec: int = 300
 
 
 class OpenAIModelConfig(BaseModel):

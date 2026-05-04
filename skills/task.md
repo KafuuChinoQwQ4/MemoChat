@@ -30,7 +30,7 @@ Always account for the relevant layers:
 - Database migrations: `apps/server/migrations/postgresql`.
 - Local Docker: `infra/deploy/local/docker-compose.yml` and compose fragments under `infra/deploy/local/compose`.
 - Scripts: `tools/scripts` and `tools/scripts/status`.
-- Tests/load tools: `tests`, `apps/server/core/common/*/tests`, `tools/loadtest/local-loadtest-cpp`.
+- Tests/load tools: `tests`, `apps/server/core/common/*/tests`, `tools/loadtest/python-loadtest`.
 
 ## Docker And MCP Rules
 
@@ -52,21 +52,20 @@ Record any query that affected your reasoning in `context.md` or verification lo
 
 ## Build Selection
 
-Use the smallest command that covers the touched code:
+Use the full local build for code changes that will be deployed or runtime-tested. `deploy_services.bat` copies only from `build\bin\Release`, which is produced by `msvc2022-full`; do not rely on `build-verify-server` or `build-verify-client` for runtime validation.
 
 ```powershell
-cmake --preset msvc2022-server-verify
-cmake --build --preset msvc2022-server-verify
-
-cmake --preset msvc2022-client-verify
-cmake --build --preset msvc2022-client-verify
-
-cmake --preset msvc2022-tests
-cmake --build --preset msvc2022-tests
-ctest --preset msvc2022-tests
+cmake --preset msvc2022-full
+cmake --build --preset msvc2022-full
 ```
 
-Use `msvc2022-full` only for broad cross-cutting changes.
+For test-only checks, run tests from the full build tree:
+
+```powershell
+ctest --preset msvc2022-full
+```
+
+If a task needs runtime smoke, run the full build first, then deploy from `build\bin\Release`.
 
 ## Runtime Scripts
 

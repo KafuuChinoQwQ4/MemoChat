@@ -12,7 +12,7 @@ MemoChat 使用 GitHub Actions 实现 CI/CD，代码 push 后自动构建 Docker
 - C++ 服务端：`apps/server/core`
 - Qt/QML 客户端：`apps/client/desktop`
 - 运营平台：`infra/Memo_ops`
-- 压测工具：`tools/loadtest/local-loadtest-cpp`
+- 压测工具：`tools/loadtest/python-loadtest`
 - 部署资产：`infra/deploy`
 - 测试：`tests`
 

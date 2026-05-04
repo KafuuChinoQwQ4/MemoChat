@@ -16,8 +16,14 @@
 #include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
+#include <QSettings>
 
 namespace {
+constexpr auto kSettingsOrg = "MemoChat";
+constexpr auto kSettingsApp = "MemoChatQml";
+constexpr auto kModelBackendKey = "AI/CurrentModelBackend";
+constexpr auto kModelNameKey = "AI/CurrentModelName";
+
 QString makeUuid() {
     return QUuid::createUuid().toString(QUuid::WithoutBraces);
 }
@@ -31,6 +37,8 @@ AgentController::AgentController(ClientGateway* gateway, QObject* parent)
     , _current_model_name("qwen3:4b")
     , _streamManager(new QNetworkAccessManager(this))
 {
+    loadPersistedModelSelection();
+
     connect(HttpMgr::GetInstance().get(), &HttpMgr::sig_http_finish,
             this, &AgentController::onHttpFinish);
 
@@ -73,11 +81,27 @@ QString AgentController::knowledgeSearchResult() const { return _knowledge_searc
 bool AgentController::knowledgeBusy() const { return _knowledge_busy; }
 QString AgentController::knowledgeStatusText() const { return _knowledge_status_text; }
 QString AgentController::knowledgeError() const { return _knowledge_error; }
+QVariantList AgentController::memories() const { return _memories; }
+bool AgentController::memoryBusy() const { return _memory_busy; }
+QString AgentController::memoryStatusText() const { return _memory_status_text; }
+QString AgentController::memoryError() const { return _memory_error; }
+QVariantList AgentController::agentTasks() const { return _agent_tasks; }
+bool AgentController::agentTaskBusy() const { return _agent_task_busy; }
+QString AgentController::agentTaskStatusText() const { return _agent_task_status_text; }
+QString AgentController::agentTaskError() const { return _agent_task_error; }
 QString AgentController::currentTraceId() const { return _current_trace_id; }
 QString AgentController::currentSkill() const { return _current_skill; }
 QString AgentController::currentFeedbackSummary() const { return _current_feedback_summary; }
 QVariantList AgentController::traceEvents() const { return _trace_events; }
 QVariantList AgentController::traceObservations() const { return _trace_observations; }
+QString AgentController::agentSkillMode() const { return _agent_skill_mode; }
+QString AgentController::agentSkillDisplay() const {
+    if (_agent_skill_mode == QStringLiteral("knowledge")) return QStringLiteral("知识库");
+    if (_agent_skill_mode == QStringLiteral("research")) return QStringLiteral("联网搜索");
+    if (_agent_skill_mode == QStringLiteral("graph")) return QStringLiteral("图谱关系");
+    if (_agent_skill_mode == QStringLiteral("calculate")) return QStringLiteral("计算器");
+    return QStringLiteral("自动");
+}
 
 void AgentController::setErrorState(const QString& error) {
     _error = error;
@@ -115,6 +139,56 @@ void AgentController::clearKnowledgeError() {
     }
     _knowledge_error.clear();
     emit knowledgeStateChanged();
+}
+
+void AgentController::setMemoryBusy(bool busy, const QString& statusText) {
+    bool changed = _memory_busy != busy || _memory_status_text != statusText;
+    _memory_busy = busy;
+    _memory_status_text = statusText;
+    if (changed) {
+        emit memoryStateChanged();
+    }
+}
+
+void AgentController::setMemoryError(const QString& error) {
+    if (_memory_error == error) {
+        return;
+    }
+    _memory_error = error;
+    emit memoryStateChanged();
+}
+
+void AgentController::clearMemoryError() {
+    if (_memory_error.isEmpty()) {
+        return;
+    }
+    _memory_error.clear();
+    emit memoryStateChanged();
+}
+
+void AgentController::setAgentTaskBusy(bool busy, const QString& statusText) {
+    bool changed = _agent_task_busy != busy || _agent_task_status_text != statusText;
+    _agent_task_busy = busy;
+    _agent_task_status_text = statusText;
+    if (changed) {
+        emit agentTaskStateChanged();
+    }
+}
+
+void AgentController::setAgentTaskError(const QString& error) {
+    if (_agent_task_error == error) {
+        return;
+    }
+    _agent_task_error = error;
+    emit agentTaskStateChanged();
+}
+
+void AgentController::clearAgentTaskError() {
+    if (_agent_task_error.isEmpty()) {
+        return;
+    }
+    _agent_task_error.clear();
+    emit agentTaskStateChanged();
 }
 
 void AgentController::setModelRefreshBusy(bool busy) {
@@ -159,7 +233,30 @@ bool AgentController::modelSupportsThinking(const QString& backend, const QStrin
 QJsonObject AgentController::buildChatMetadata() const {
     QJsonObject metadata;
     metadata[QStringLiteral("think")] = _thinking_enabled && currentModelSupportsThinking();
+    const QString skillName = resolvedSkillName();
+    if (!skillName.isEmpty()) {
+        metadata[QStringLiteral("skill_name")] = skillName;
+    }
+    const QJsonArray requestedTools = requestedToolsForSkillMode();
+    if (!requestedTools.isEmpty()) {
+        metadata[QStringLiteral("requested_tools")] = requestedTools;
+    }
     return metadata;
+}
+
+QString AgentController::resolvedSkillName() const {
+    if (_agent_skill_mode == QStringLiteral("knowledge")) return QStringLiteral("knowledge_copilot");
+    if (_agent_skill_mode == QStringLiteral("research")) return QStringLiteral("research_assistant");
+    if (_agent_skill_mode == QStringLiteral("graph")) return QStringLiteral("graph_recommender");
+    return QString();
+}
+
+QJsonArray AgentController::requestedToolsForSkillMode() const {
+    QJsonArray tools;
+    if (_agent_skill_mode == QStringLiteral("calculate")) {
+        tools.append(QStringLiteral("calculator"));
+    }
+    return tools;
 }
 
 void AgentController::loadSessions() {
@@ -247,6 +344,14 @@ void AgentController::sendMessage(const QString& content) {
     payload["model_type"] = _current_model_backend;
     payload["model_name"] = _current_model_name;
     payload["metadata"] = buildChatMetadata();
+    const QString skillName = resolvedSkillName();
+    if (!skillName.isEmpty()) {
+        payload["skill_name"] = skillName;
+    }
+    const QJsonArray requestedTools = requestedToolsForSkillMode();
+    if (!requestedTools.isEmpty()) {
+        payload["requested_tools"] = requestedTools;
+    }
 
     QString msgId = makeUuid();
     ReqId reqId = ID_AI_CHAT;
@@ -283,6 +388,14 @@ void AgentController::sendStreamMessage(const QString& content) {
     payload["model_type"] = _current_model_backend;
     payload["model_name"] = _current_model_name;
     payload["metadata"] = buildChatMetadata();
+    const QString skillName = resolvedSkillName();
+    if (!skillName.isEmpty()) {
+        payload["skill_name"] = skillName;
+    }
+    const QJsonArray requestedTools = requestedToolsForSkillMode();
+    if (!requestedTools.isEmpty()) {
+        payload["requested_tools"] = requestedTools;
+    }
 
     QUrl url(gate_url_prefix + "/ai/chat/stream");
     QNetworkRequest request(url);
@@ -303,13 +416,38 @@ void AgentController::sendStreamMessage(const QString& content) {
 }
 
 void AgentController::switchModel(const QString& backend, const QString& model) {
-    _current_model_backend = backend;
-    _current_model_name = model;
+    const QString nextBackend = backend.trimmed();
+    const QString nextModel = model.trimmed();
+    if (nextBackend.isEmpty() || nextModel.isEmpty()) {
+        return;
+    }
+    if (_current_model_backend == nextBackend && _current_model_name == nextModel) {
+        saveCurrentModelSelection();
+        return;
+    }
+    _current_model_backend = nextBackend;
+    _current_model_name = nextModel;
+    saveCurrentModelSelection();
     if (_thinking_enabled && !currentModelSupportsThinking()) {
         _thinking_enabled = false;
     }
     emit modelChanged();
     emit thinkingChanged();
+}
+
+void AgentController::switchAgentSkillMode(const QString& mode) {
+    const QString normalized = mode.trimmed().toLower();
+    const QString next = (normalized == QStringLiteral("knowledge")
+                          || normalized == QStringLiteral("research")
+                          || normalized == QStringLiteral("graph")
+                          || normalized == QStringLiteral("calculate"))
+        ? normalized
+        : QStringLiteral("auto");
+    if (_agent_skill_mode == next) {
+        return;
+    }
+    _agent_skill_mode = next;
+    emit agentSkillModeChanged();
 }
 
 void AgentController::refreshModelList() {
@@ -347,45 +485,71 @@ void AgentController::registerApiProvider(const QString& providerName, const QSt
 
 void AgentController::summarizeChat(const QString& dialogUid, const QString& chatHistoryJson) {
     auto uid = _gateway->userMgr()->GetUid();
+    clearErrorState();
 
     QJsonObject payload;
     payload["uid"] = uid;
     payload["feature_type"] = "summary";
     payload["content"] = chatHistoryJson;
+    payload["model_type"] = _current_model_backend;
+    payload["model_name"] = _current_model_name;
+    QJsonObject context;
+    context["dialog"] = dialogUid;
+    context["max_messages"] = 100;
+    payload["context_json"] = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
 
     ReqId reqId = ID_AI_SMART;
     _pending_requests[reqId] = "summary";
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/smart"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/smart"), payload, reqId, Modules::LOGINMOD, QStringLiteral("ai-smart"));
 }
 
 void AgentController::suggestReply(const QString& dialogUid, const QString& chatHistoryJson) {
     auto uid = _gateway->userMgr()->GetUid();
+    clearErrorState();
 
     QJsonObject payload;
     payload["uid"] = uid;
     payload["feature_type"] = "suggest";
     payload["content"] = chatHistoryJson;
+    payload["model_type"] = _current_model_backend;
+    payload["model_name"] = _current_model_name;
+    QJsonObject context;
+    context["dialog"] = dialogUid;
+    context["format"] = "three_options";
+    payload["context_json"] = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
 
     ReqId reqId = ID_AI_SMART;
     _pending_requests[reqId] = "suggest";
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/smart"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/smart"), payload, reqId, Modules::LOGINMOD, QStringLiteral("ai-smart"));
 }
 
 void AgentController::translateMessage(const QString& msgContent, const QString& targetLang) {
+    translateMessageWithSource(msgContent, QStringLiteral("自动检测"), targetLang);
+}
+
+void AgentController::translateMessageWithSource(const QString& msgContent,
+                                                 const QString& sourceLang,
+                                                 const QString& targetLang) {
     auto uid = _gateway->userMgr()->GetUid();
+    clearErrorState();
 
     QJsonObject payload;
     payload["uid"] = uid;
     payload["feature_type"] = "translate";
     payload["content"] = msgContent;
-    payload["target_lang"] = targetLang;
+    payload["target_lang"] = targetLang.trimmed().isEmpty() ? QStringLiteral("中文") : targetLang.trimmed();
+    payload["model_type"] = _current_model_backend;
+    payload["model_name"] = _current_model_name;
+    QJsonObject context;
+    context["source_lang"] = sourceLang.trimmed().isEmpty() ? QStringLiteral("自动检测") : sourceLang.trimmed();
+    payload["context_json"] = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
 
     ReqId reqId = ID_AI_SMART;
     _pending_requests[reqId] = "translate";
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/smart"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/smart"), payload, reqId, Modules::LOGINMOD, QStringLiteral("ai-smart"));
 }
 
 void AgentController::uploadDocument(const QString& filePath) {
@@ -509,6 +673,142 @@ void AgentController::deleteKnowledgeBase(const QString& kbId) {
         QUrl(gate_url_prefix + "/ai/kb/delete"), payload, reqId, Modules::LOGINMOD);
 }
 
+void AgentController::listMemories() {
+    auto uid = _gateway->userMgr()->GetUid();
+    clearErrorState();
+    clearMemoryError();
+    setMemoryBusy(true, "正在加载记忆...");
+    QUrl url(gate_url_prefix + "/ai/memory/list");
+    QUrlQuery query;
+    query.addQueryItem("uid", QString::number(uid));
+    url.setQuery(query);
+
+    ReqId reqId = ID_AI_MEMORY_LIST;
+    _pending_requests[reqId] = "memory_list";
+    HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD);
+}
+
+void AgentController::createMemory(const QString& content) {
+    const QString trimmed = content.trimmed();
+    if (trimmed.isEmpty()) {
+        return;
+    }
+    auto uid = _gateway->userMgr()->GetUid();
+    clearErrorState();
+    clearMemoryError();
+    setMemoryBusy(true, "正在保存记忆...");
+
+    QJsonObject payload;
+    payload["uid"] = uid;
+    payload["content"] = trimmed;
+
+    ReqId reqId = ID_AI_MEMORY_CREATE;
+    _pending_requests[reqId] = "memory_create";
+    HttpMgr::GetInstance()->PostHttpReq(
+        QUrl(gate_url_prefix + "/ai/memory"), payload, reqId, Modules::LOGINMOD);
+}
+
+void AgentController::deleteMemory(const QString& memoryId) {
+    const QString trimmed = memoryId.trimmed();
+    if (trimmed.isEmpty()) {
+        return;
+    }
+    auto uid = _gateway->userMgr()->GetUid();
+    clearErrorState();
+    clearMemoryError();
+    setMemoryBusy(true, "正在删除记忆...");
+
+    QJsonObject payload;
+    payload["uid"] = uid;
+    payload["memory_id"] = trimmed;
+
+    ReqId reqId = ID_AI_MEMORY_DELETE;
+    _pending_requests[reqId] = "memory_delete";
+    HttpMgr::GetInstance()->PostHttpReq(
+        QUrl(gate_url_prefix + "/ai/memory/delete"), payload, reqId, Modules::LOGINMOD);
+}
+
+void AgentController::listAgentTasks() {
+    auto uid = _gateway->userMgr()->GetUid();
+    clearErrorState();
+    clearAgentTaskError();
+    setAgentTaskBusy(true, "正在加载后台任务...");
+    QUrl url(gate_url_prefix + "/ai/tasks");
+    QUrlQuery query;
+    query.addQueryItem("uid", QString::number(uid));
+    query.addQueryItem("limit", "50");
+    url.setQuery(query);
+
+    ReqId reqId = ID_AI_TASK_LIST;
+    _pending_requests[reqId] = "task_list";
+    HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD);
+}
+
+void AgentController::createAgentTask(const QString& content, const QString& title) {
+    const QString trimmed = content.trimmed();
+    if (trimmed.isEmpty()) {
+        return;
+    }
+    auto uid = _gateway->userMgr()->GetUid();
+    clearErrorState();
+    clearAgentTaskError();
+    setAgentTaskBusy(true, "正在创建后台任务...");
+
+    QJsonObject payload;
+    payload["uid"] = uid;
+    payload["title"] = title.trimmed().isEmpty() ? trimmed.left(32) : title.trimmed();
+    payload["content"] = trimmed;
+    payload["session_id"] = _current_session_id;
+    payload["model_type"] = _current_model_backend;
+    payload["model_name"] = _current_model_name;
+    const QString skillName = resolvedSkillName();
+    if (!skillName.isEmpty()) {
+        payload["skill_name"] = skillName;
+    }
+    payload["metadata"] = buildChatMetadata();
+
+    ReqId reqId = ID_AI_TASK_CREATE;
+    _pending_requests[reqId] = "task_create";
+    HttpMgr::GetInstance()->PostHttpReq(
+        QUrl(gate_url_prefix + "/ai/tasks"), payload, reqId, Modules::LOGINMOD);
+}
+
+void AgentController::cancelAgentTask(const QString& taskId) {
+    const QString trimmed = taskId.trimmed();
+    if (trimmed.isEmpty()) {
+        return;
+    }
+    clearErrorState();
+    clearAgentTaskError();
+    setAgentTaskBusy(true, "正在取消后台任务...");
+
+    QJsonObject payload;
+    payload["task_id"] = trimmed;
+
+    ReqId reqId = ID_AI_TASK_CANCEL;
+    _pending_requests[reqId] = "task_cancel";
+    HttpMgr::GetInstance()->PostHttpReq(
+        QUrl(gate_url_prefix + "/ai/tasks/cancel"), payload, reqId, Modules::LOGINMOD);
+}
+
+void AgentController::resumeAgentTask(const QString& taskId) {
+    const QString trimmed = taskId.trimmed();
+    if (trimmed.isEmpty()) {
+        return;
+    }
+    clearErrorState();
+    clearAgentTaskError();
+    setAgentTaskBusy(true, "正在恢复后台任务...");
+
+    QJsonObject payload;
+    payload["task_id"] = trimmed;
+
+    ReqId reqId = ID_AI_TASK_RESUME;
+    _pending_requests[reqId] = "task_resume";
+    HttpMgr::GetInstance()->PostHttpReq(
+        QUrl(gate_url_prefix + "/ai/tasks/resume"), payload, reqId, Modules::LOGINMOD);
+}
+
 void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err, Modules mod) {
     auto it = _pending_requests.find(id);
     if (it == _pending_requests.end()) return;
@@ -525,6 +825,13 @@ void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err,
                    reqType == "kb_list" || reqType == "kb_delete") {
             setKnowledgeBusy(false);
             setKnowledgeError(errorText);
+        } else if (reqType == "memory_list" || reqType == "memory_create" || reqType == "memory_delete") {
+            setMemoryBusy(false);
+            setMemoryError(errorText);
+        } else if (reqType == "task_list" || reqType == "task_create" ||
+                   reqType == "task_cancel" || reqType == "task_resume") {
+            setAgentTaskBusy(false);
+            setAgentTaskError(errorText);
         }
         setErrorState(errorText);
         _loading = false;
@@ -544,6 +851,13 @@ void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err,
                    reqType == "kb_list" || reqType == "kb_delete") {
             setKnowledgeBusy(false);
             setKnowledgeError("响应格式错误");
+        } else if (reqType == "memory_list" || reqType == "memory_create" || reqType == "memory_delete") {
+            setMemoryBusy(false);
+            setMemoryError("响应格式错误");
+        } else if (reqType == "task_list" || reqType == "task_create" ||
+                   reqType == "task_cancel" || reqType == "task_resume") {
+            setAgentTaskBusy(false);
+            setAgentTaskError("响应格式错误");
         }
         setErrorState("响应格式错误");
         _loading = false;
@@ -566,6 +880,13 @@ void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err,
                    reqType == "kb_list" || reqType == "kb_delete") {
             setKnowledgeBusy(false);
             setKnowledgeError(errorText);
+        } else if (reqType == "memory_list" || reqType == "memory_create" || reqType == "memory_delete") {
+            setMemoryBusy(false);
+            setMemoryError(errorText);
+        } else if (reqType == "task_list" || reqType == "task_create" ||
+                   reqType == "task_cancel" || reqType == "task_resume") {
+            setAgentTaskBusy(false);
+            setAgentTaskError(errorText);
         }
         setErrorState(errorText);
         _loading = false;
@@ -592,6 +913,11 @@ void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err,
     } else if (reqType == "kb_upload" || reqType == "kb_search" ||
                reqType == "kb_list" || reqType == "kb_delete") {
         handleKbRsp(id, res, err, reqType);
+    } else if (reqType == "memory_list" || reqType == "memory_create" || reqType == "memory_delete") {
+        handleMemoryRsp(id, res, err, reqType);
+    } else if (reqType == "task_list" || reqType == "task_create" ||
+               reqType == "task_cancel" || reqType == "task_resume") {
+        handleAgentTaskRsp(id, res, err, reqType);
     } else {
         handleChatRsp(id, res, err, reqType);
     }
@@ -777,6 +1103,7 @@ void AgentController::handleModelListRsp(ReqId id, const QString& res, ErrorCode
         if (!backend.isEmpty() && !modelName.isEmpty()) {
             _current_model_backend = backend;
             _current_model_name = modelName;
+            saveCurrentModelSelection();
             emit modelChanged();
         }
     }
@@ -830,6 +1157,73 @@ void AgentController::handleKbRsp(ReqId id, const QString& res, ErrorCodes err, 
         clearKnowledgeError();
         emit knowledgeBasesChanged();
         listKnowledgeBases();
+    }
+}
+
+void AgentController::handleMemoryRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType) {
+    Q_UNUSED(id);
+    Q_UNUSED(err);
+    QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8());
+    QJsonObject root = doc.object();
+
+    if (reqType == "memory_list") {
+        QJsonArray memories = root["memories"].toArray();
+        _memories.clear();
+        for (const auto& memory : memories) {
+            if (memory.isObject()) {
+                _memories.append(memory.toObject());
+            }
+        }
+        clearErrorState();
+        clearMemoryError();
+        setMemoryBusy(false, _memories.isEmpty() ? "当前还没有可见记忆。" : QString("已加载 %1 条记忆。").arg(_memories.size()));
+        emit memoriesChanged();
+    } else if (reqType == "memory_create") {
+        clearErrorState();
+        clearMemoryError();
+        setMemoryBusy(false, "记忆已保存，正在刷新...");
+        listMemories();
+    } else if (reqType == "memory_delete") {
+        clearErrorState();
+        clearMemoryError();
+        setMemoryBusy(false, "记忆已删除，正在刷新...");
+        listMemories();
+    }
+}
+
+void AgentController::handleAgentTaskRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType) {
+    Q_UNUSED(id);
+    Q_UNUSED(err);
+    QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8());
+    QJsonObject root = doc.object();
+
+    if (reqType == "task_list") {
+        QJsonArray tasks = root["tasks"].toArray();
+        _agent_tasks.clear();
+        for (const auto& task : tasks) {
+            if (task.isObject()) {
+                _agent_tasks.append(task.toObject());
+            }
+        }
+        clearErrorState();
+        clearAgentTaskError();
+        setAgentTaskBusy(false, _agent_tasks.isEmpty() ? "当前还没有后台任务。" : QString("已加载 %1 个后台任务。").arg(_agent_tasks.size()));
+        emit agentTasksChanged();
+    } else if (reqType == "task_create") {
+        clearErrorState();
+        clearAgentTaskError();
+        setAgentTaskBusy(false, "任务已创建，正在刷新...");
+        listAgentTasks();
+    } else if (reqType == "task_cancel") {
+        clearErrorState();
+        clearAgentTaskError();
+        setAgentTaskBusy(false, "任务已取消，正在刷新...");
+        listAgentTasks();
+    } else if (reqType == "task_resume") {
+        clearErrorState();
+        clearAgentTaskError();
+        setAgentTaskBusy(false, "任务已恢复，正在刷新...");
+        listAgentTasks();
     }
 }
 
@@ -989,4 +1383,23 @@ void AgentController::clearCurrentSession() {
     if (_model) {
         _model->clear();
     }
+}
+
+void AgentController::loadPersistedModelSelection() {
+    QSettings settings(QString::fromLatin1(kSettingsOrg), QString::fromLatin1(kSettingsApp));
+    const QString backend = settings.value(QString::fromLatin1(kModelBackendKey)).toString().trimmed();
+    const QString modelName = settings.value(QString::fromLatin1(kModelNameKey)).toString().trimmed();
+    if (!backend.isEmpty() && !modelName.isEmpty()) {
+        _current_model_backend = backend;
+        _current_model_name = modelName;
+    }
+}
+
+void AgentController::saveCurrentModelSelection() const {
+    if (_current_model_backend.trimmed().isEmpty() || _current_model_name.trimmed().isEmpty()) {
+        return;
+    }
+    QSettings settings(QString::fromLatin1(kSettingsOrg), QString::fromLatin1(kSettingsApp));
+    settings.setValue(QString::fromLatin1(kModelBackendKey), _current_model_backend);
+    settings.setValue(QString::fromLatin1(kModelNameKey), _current_model_name);
 }

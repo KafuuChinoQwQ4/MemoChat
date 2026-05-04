@@ -13,6 +13,58 @@
 
 using namespace std::chrono;
 
+namespace {
+void PopulateMemoryItem(const memochat::json::JsonValue& item, ai::AIMemoryItem* out) {
+    out->set_memory_id(memochat::json::glaze_safe_get<std::string>(item["memory_id"], ""));
+    out->set_type(memochat::json::glaze_safe_get<std::string>(item["type"], ""));
+    out->set_source(memochat::json::glaze_safe_get<std::string>(item["source"], ""));
+    out->set_content(memochat::json::glaze_safe_get<std::string>(item["content"], ""));
+    out->set_created_at(memochat::json::glaze_safe_get<int64_t>(item["created_at"], 0));
+    out->set_updated_at(memochat::json::glaze_safe_get<int64_t>(item["updated_at"], 0));
+    if (memochat::json::glaze_has_key(item, "metadata")) {
+        out->set_metadata_json(memochat::json::glaze_stringify(memochat::json::JsonValue(item["metadata"])));
+    } else {
+        out->set_metadata_json("{}");
+    }
+}
+
+void PopulateAgentTaskItem(const memochat::json::JsonValue& item, ai::AIAgentTaskItem* out) {
+    out->set_task_id(memochat::json::glaze_safe_get<std::string>(item["task_id"], ""));
+    out->set_title(memochat::json::glaze_safe_get<std::string>(item["title"], ""));
+    out->set_status(memochat::json::glaze_safe_get<std::string>(item["status"], ""));
+    out->set_trace_id(memochat::json::glaze_safe_get<std::string>(item["trace_id"], ""));
+    out->set_description(memochat::json::glaze_safe_get<std::string>(item["description"], ""));
+    out->set_priority(memochat::json::glaze_safe_get<int>(item["priority"], 0));
+    out->set_error(memochat::json::glaze_safe_get<std::string>(item["error"], ""));
+    out->set_created_at(memochat::json::glaze_safe_get<int64_t>(item["created_at"], 0));
+    out->set_updated_at(memochat::json::glaze_safe_get<int64_t>(item["updated_at"], 0));
+    out->set_completed_at(memochat::json::glaze_safe_get<int64_t>(item["completed_at"], 0));
+    out->set_cancelled_at(memochat::json::glaze_safe_get<int64_t>(item["cancelled_at"], 0));
+    out->set_payload_json(
+        memochat::json::glaze_has_key(item, "payload") ? memochat::json::glaze_stringify(item["payload"]) : "{}");
+    out->set_result_json(
+        memochat::json::glaze_has_key(item, "result") ? memochat::json::glaze_stringify(item["result"]) : "{}");
+    out->set_checkpoints_json(
+        memochat::json::glaze_has_key(item, "checkpoints") ? memochat::json::glaze_stringify(item["checkpoints"]) : "[]");
+    out->set_metadata_json(
+        memochat::json::glaze_has_key(item, "metadata") ? memochat::json::glaze_stringify(item["metadata"]) : "{}");
+}
+
+void PopulateAgentTaskRsp(const memochat::json::JsonValue& result, ai::AIAgentTaskRsp* reply) {
+    reply->set_code(memochat::json::glaze_safe_get<int>(result["code"], 0));
+    reply->set_message(memochat::json::glaze_safe_get<std::string>(result["message"], "ok"));
+    if (memochat::json::glaze_has_key(result, "task")) {
+        PopulateAgentTaskItem(result["task"], reply->mutable_task());
+    }
+    if (auto tasks = memochat::json::glaze_get_array(result["tasks"])) {
+        for (const auto& task_item : *tasks) {
+            memochat::json::JsonValue task(task_item);
+            PopulateAgentTaskItem(task, reply->add_tasks());
+        }
+    }
+}
+}
+
 AIServiceCore::AIServiceCore()
     : _ai_client(std::make_unique<AIServiceClient>()),
       _session_repo(std::make_unique<AISessionRepo>()) {}
@@ -133,7 +185,9 @@ grpc::Status AIServiceCore::HandleSmart(const ai::AISmartReq& req, ai::AISmartRs
     reply->set_code(0);
     reply->set_message("ok");
     memochat::json::JsonValue result;
-    auto status = _ai_client->Smart(req.feature_type(), req.content(), req.target_lang(), req.context_json(), &result);
+    auto status = _ai_client->Smart(
+        req.from_uid(), req.feature_type(), req.content(), req.target_lang(), req.context_json(),
+        req.model_type(), req.model_name(), req.deployment_preference(), &result);
     if (!status.ok()) {
         reply->set_code(500);
         reply->set_message("AI orchestrator unavailable");
@@ -315,6 +369,123 @@ grpc::Status AIServiceCore::DeleteKb(const ai::AIKbDeleteReq& req, ai::AIKbDelet
         return grpc::Status::OK;
     }
     ai_service_json_mapper::PopulateKbDeleteFromJson(result, reply);
+    return grpc::Status::OK;
+}
+
+grpc::Status AIServiceCore::MemoryList(const ai::AIMemoryReq& req, ai::AIMemoryListRsp* reply) {
+    reply->set_code(0);
+    reply->set_message("ok");
+    memochat::json::JsonValue result;
+    auto status = _ai_client->MemoryList(req.uid(), &result);
+    if (!status.ok()) {
+        reply->set_code(500);
+        reply->set_message("memory list failed");
+        return grpc::Status::OK;
+    }
+    if (auto memories = memochat::json::glaze_get_array(result["memories"])) {
+        for (const auto& memory_item : *memories) {
+            memochat::json::JsonValue item(memory_item);
+            PopulateMemoryItem(item, reply->add_memories());
+        }
+    }
+    return grpc::Status::OK;
+}
+
+grpc::Status AIServiceCore::MemoryCreate(const ai::AIMemoryReq& req, ai::AIMemoryRsp* reply) {
+    reply->set_code(0);
+    reply->set_message("ok");
+    memochat::json::JsonValue result;
+    auto status = _ai_client->MemoryCreate(req.uid(), req.content(), &result);
+    if (!status.ok()) {
+        reply->set_code(500);
+        reply->set_message("memory create failed");
+        return grpc::Status::OK;
+    }
+    if (memochat::json::glaze_has_key(result, "memory")) {
+        PopulateMemoryItem(result["memory"].get<memochat::json::JsonValue>(), reply->mutable_memory());
+    }
+    return grpc::Status::OK;
+}
+
+grpc::Status AIServiceCore::MemoryDelete(const ai::AIMemoryReq& req, ai::AIMemoryRsp* reply) {
+    reply->set_code(0);
+    reply->set_message("ok");
+    memochat::json::JsonValue result;
+    auto status = _ai_client->MemoryDelete(req.uid(), req.memory_id(), &result);
+    if (!status.ok()) {
+        reply->set_code(500);
+        reply->set_message("memory delete failed");
+        return grpc::Status::OK;
+    }
+    return grpc::Status::OK;
+}
+
+grpc::Status AIServiceCore::AgentTaskCreate(const ai::AIAgentTaskReq& req, ai::AIAgentTaskRsp* reply) {
+    memochat::json::JsonValue result;
+    auto status = _ai_client->AgentTaskCreate(
+        req.uid(),
+        req.title(),
+        req.content(),
+        req.session_id(),
+        req.model_type(),
+        req.model_name(),
+        req.skill_name(),
+        req.metadata_json(),
+        &result);
+    if (!status.ok()) {
+        reply->set_code(500);
+        reply->set_message("task create failed");
+        return grpc::Status::OK;
+    }
+    PopulateAgentTaskRsp(result, reply);
+    return grpc::Status::OK;
+}
+
+grpc::Status AIServiceCore::AgentTaskList(const ai::AIAgentTaskReq& req, ai::AIAgentTaskRsp* reply) {
+    memochat::json::JsonValue result;
+    auto status = _ai_client->AgentTaskList(req.uid(), req.limit(), &result);
+    if (!status.ok()) {
+        reply->set_code(500);
+        reply->set_message("task list failed");
+        return grpc::Status::OK;
+    }
+    PopulateAgentTaskRsp(result, reply);
+    return grpc::Status::OK;
+}
+
+grpc::Status AIServiceCore::AgentTaskGet(const ai::AIAgentTaskReq& req, ai::AIAgentTaskRsp* reply) {
+    memochat::json::JsonValue result;
+    auto status = _ai_client->AgentTaskGet(req.task_id(), &result);
+    if (!status.ok()) {
+        reply->set_code(500);
+        reply->set_message("task get failed");
+        return grpc::Status::OK;
+    }
+    PopulateAgentTaskRsp(result, reply);
+    return grpc::Status::OK;
+}
+
+grpc::Status AIServiceCore::AgentTaskCancel(const ai::AIAgentTaskReq& req, ai::AIAgentTaskRsp* reply) {
+    memochat::json::JsonValue result;
+    auto status = _ai_client->AgentTaskCancel(req.task_id(), &result);
+    if (!status.ok()) {
+        reply->set_code(500);
+        reply->set_message("task cancel failed");
+        return grpc::Status::OK;
+    }
+    PopulateAgentTaskRsp(result, reply);
+    return grpc::Status::OK;
+}
+
+grpc::Status AIServiceCore::AgentTaskResume(const ai::AIAgentTaskReq& req, ai::AIAgentTaskRsp* reply) {
+    memochat::json::JsonValue result;
+    auto status = _ai_client->AgentTaskResume(req.task_id(), &result);
+    if (!status.ok()) {
+        reply->set_code(500);
+        reply->set_message("task resume failed");
+        return grpc::Status::OK;
+    }
+    PopulateAgentTaskRsp(result, reply);
     return grpc::Status::OK;
 }
 

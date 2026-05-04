@@ -17,8 +17,6 @@ Rectangle {
     property bool contactsReady: false
     property bool groupsReady: false
     property var dialogModel
-    property var chatModel
-    property var groupModel
     property var contactModel
     property var searchModel
     property bool searchPending: false
@@ -37,7 +35,6 @@ Rectangle {
     property bool agentBusy: false
     property int momentsSelectedUid: 0
     property string momentsSelectedName: ""
-    property int sessionFilter: 0
     property real _sessionLastContentY: 0
     property bool _chatLoadBottomArmed: true
     property real _chatLoadThresholdPx: 48
@@ -56,6 +53,7 @@ Rectangle {
     signal contactIndexSelected(int index)
     signal requestContactLoadMore()
     signal createGroupRequested()
+    signal applyJoinGroupRequested(string groupCode, string reason)
     signal agentRefreshRequested()
     signal agentNewSessionRequested()
     signal agentSessionSelected(string sessionId)
@@ -67,10 +65,8 @@ Rectangle {
     signal dialogDraftCleared(int uid)
 
     function currentSessionListView() { return sessionPaneLoader.item ? sessionPaneLoader.item.sessionListView : null }
-    function currentSessionModel() { return sessionFilter === 0 ? dialogModel : (sessionFilter === 1 ? chatModel : groupModel) }
-    function usesSearchHeader() {
-        return currentTab === AppController.ChatTabPage || currentTab === AppController.ContactTabPage
-    }
+    function currentSessionModel() { return dialogModel }
+    function usesSearchHeader() { return false }
     function contextualTitle() {
         if (currentTab === AppController.MomentsTabPage) {
             return "朋友圈"
@@ -95,24 +91,15 @@ Rectangle {
         if (currentTab !== AppController.ChatTabPage) {
             return
         }
-        if (sessionFilter === 1) {
-            controller.ensureChatListInitialized()
-        } else if (sessionFilter === 2) {
-            controller.ensureGroupsInitialized()
-        }
+        controller.ensureChatListInitialized()
+        controller.ensureGroupsInitialized()
     }
     function activateSession(uidValue, indexValue) {
         const sessionView = currentSessionListView()
         if (sessionView) {
             sessionView.currentIndex = indexValue
         }
-        if (sessionFilter === 2) {
-            groupIndexSelected(indexValue)
-        } else if (sessionFilter === 1) {
-            chatIndexSelected(indexValue)
-        } else {
-            dialogUidSelected(uidValue)
-        }
+        dialogUidSelected(uidValue)
     }
     function syncCurrentSelection() {
         const modelRef = currentSessionModel()
@@ -124,11 +111,7 @@ Rectangle {
             }
             return
         }
-        const targetUid = sessionFilter === 0
-                        ? currentDialogUid
-                        : (sessionFilter === 1
-                           ? (currentDialogUid > 0 ? currentDialogUid : 0)
-                           : (currentDialogUid < 0 ? currentDialogUid : 0))
+        const targetUid = currentDialogUid
         const targetIndex = targetUid === 0 ? -1 : (modelRef.indexOfUid ? modelRef.indexOfUid(targetUid) : -1)
         if (sessionView) {
             sessionView.currentIndex = targetIndex
@@ -136,29 +119,16 @@ Rectangle {
     }
 
     onCurrentTabChanged: {
-        if (currentTab !== AppController.ChatTabPage) {
-            sessionFilter = 0
-        } else {
-            ensureCurrentSessionSource()
-        }
-
-        if (!usesSearchHeader() && searchField.text.length > 0) {
-            searchField.text = ""
-            searchCleared()
+        if (currentTab === AppController.ChatTabPage) {
+            root.ensureCurrentSessionSource()
         }
 
         if (currentTab === AppController.AgentTabPage) {
             agentRefreshRequested()
         }
     }
-    onSessionFilterChanged: {
-        const sessionView = currentSessionListView()
-        _sessionLastContentY = sessionView ? sessionView.contentY : 0
-        _chatLoadBottomArmed = true
-        ensureCurrentSessionSource()
-        syncCurrentSelection()
-    }
     onCurrentDialogUidChanged: syncCurrentSelection()
+    Component.onCompleted: root.ensureCurrentSessionSource()
 
     ColumnLayout {
         anchors.fill: parent
@@ -166,43 +136,127 @@ Rectangle {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: root.usesSearchHeader() ? 60 : 84
+            Layout.preferredHeight: root.currentTab === AppController.ChatTabPage ? 42 : 84
             color: Qt.rgba(1, 1, 1, 0.10)
             border.color: Qt.rgba(1, 1, 1, 0.30)
 
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: 9
-                spacing: 6
-                visible: root.usesSearchHeader()
-
-                GlassTextField {
-                    id: searchField
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 34
-                    backdrop: root.backdrop !== null ? root.backdrop : root
-                    blurRadius: 18
-                    cornerRadius: 9
-                    leftInset: 12
-                    rightInset: 12
-                    textPixelSize: 14
-                    textHorizontalAlignment: TextInput.AlignLeft
-                    placeholderText: "搜索用户ID（u#########）"
-                    onTextChanged: root.searchCleared()
-                    onAccepted: root.searchRequested(searchField.text)
-                }
+                anchors.margins: 6
+                spacing: 8
+                visible: root.currentTab === AppController.ChatTabPage
 
                 GlassButton {
-                    Layout.preferredWidth: 54
-                    Layout.preferredHeight: 34
-                    text: "查找"
-                    textPixelSize: 13
-                    cornerRadius: 9
+                    id: addMenuButton
+                    Layout.preferredWidth: 30
+                    Layout.preferredHeight: 30
+                    text: "+"
+                    textPixelSize: 21
+                    cornerRadius: 15
                     normalColor: Qt.rgba(0.55, 0.70, 0.92, 0.24)
                     hoverColor: Qt.rgba(0.55, 0.70, 0.92, 0.34)
                     pressedColor: Qt.rgba(0.55, 0.70, 0.92, 0.42)
                     disabledColor: Qt.rgba(0.52, 0.56, 0.62, 0.18)
-                    onClicked: root.searchRequested(searchField.text)
+                    onClicked: addMenuPopup.open()
+
+                    ToolTip.visible: hovering
+                    ToolTip.delay: 180
+                    ToolTip.text: "添加"
+                }
+
+                Item { Layout.fillWidth: true }
+
+                Popup {
+                    id: addMenuPopup
+                    width: 152
+                    height: addMenuColumn.implicitHeight + 16
+                    x: addMenuButton.x
+                    y: addMenuButton.y + addMenuButton.height + 6
+                    padding: 0
+                    modal: false
+                    focus: true
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+                    background: Rectangle {
+                        color: "transparent"
+                    }
+
+                    contentItem: GlassSurface {
+                        backdrop: root.backdrop !== null ? root.backdrop : root
+                        cornerRadius: 12
+                        blurRadius: 20
+                        fillColor: Qt.rgba(0.98, 0.99, 1.0, 0.86)
+                        strokeColor: Qt.rgba(1, 1, 1, 0.58)
+                        glowTopColor: Qt.rgba(1, 1, 1, 0.28)
+                        glowBottomColor: Qt.rgba(1, 1, 1, 0.06)
+
+                        ColumnLayout {
+                            id: addMenuColumn
+                            anchors.fill: parent
+                            anchors.margins: 8
+                            spacing: 6
+
+                            GlassButton {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 32
+                                text: "创建群聊"
+                                textPixelSize: 13
+                                cornerRadius: 8
+                                normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.18)
+                                hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.28)
+                                pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.36)
+                                onClicked: {
+                                    addMenuPopup.close()
+                                    root.createGroupRequested()
+                                }
+                            }
+
+                            GlassButton {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 32
+                                text: "添加好友"
+                                textPixelSize: 13
+                                cornerRadius: 8
+                                normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.14)
+                                hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
+                                pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.32)
+                                onClicked: {
+                                    addMenuPopup.close()
+                                    findFriendDialog.openFresh()
+                                }
+                            }
+
+                            GlassButton {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 32
+                                text: "加入群聊"
+                                textPixelSize: 13
+                                cornerRadius: 8
+                                normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.14)
+                                hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
+                                pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.32)
+                                onClicked: {
+                                    addMenuPopup.close()
+                                    joinGroupDialog.openFresh()
+                                }
+                            }
+
+                            GlassButton {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 32
+                                text: "好友申请"
+                                textPixelSize: 13
+                                cornerRadius: 8
+                                normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.16)
+                                hoverColor: Qt.rgba(0.54, 0.60, 0.68, 0.24)
+                                pressedColor: Qt.rgba(0.54, 0.60, 0.68, 0.32)
+                                onClicked: {
+                                    addMenuPopup.close()
+                                    root.openApplyRequested()
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -210,7 +264,7 @@ Rectangle {
                 anchors.fill: parent
                 anchors.margins: 12
                 spacing: 4
-                visible: !root.usesSearchHeader()
+                visible: root.currentTab !== AppController.ChatTabPage
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -260,23 +314,16 @@ Rectangle {
             border.color: Qt.rgba(1, 1, 1, 0.28)
 
             Loader {
-                anchors.fill: parent
-                active: root.usesSearchHeader() && searchField.text.length > 0
-                asynchronous: true
-                sourceComponent: searchPaneComponent
-            }
-
-            Loader {
                 id: sessionPaneLoader
                 anchors.fill: parent
-                active: root.usesSearchHeader() && searchField.text.length === 0 && currentTab === AppController.ChatTabPage
+                active: currentTab === AppController.ChatTabPage
                 asynchronous: true
                 sourceComponent: sessionPaneComponent
             }
 
             Loader {
                 anchors.fill: parent
-                active: root.usesSearchHeader() && searchField.text.length === 0 && currentTab === AppController.ContactTabPage
+                active: currentTab === AppController.ContactTabPage
                 asynchronous: true
                 sourceComponent: contactPaneComponent
             }
@@ -294,155 +341,6 @@ Rectangle {
                 asynchronous: true
                 sourceComponent: agentPaneComponent
             }
-
-            Loader {
-                anchors.fill: parent
-                active: currentTab === AppController.SettingsTabPage
-                asynchronous: true
-                sourceComponent: placeholderPaneComponent
-            }
-        }
-    }
-
-    Component {
-        id: searchPaneComponent
-        Item {
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 10
-                spacing: 8
-
-                RowLayout {
-                    Layout.fillWidth: true
-
-                    Label {
-                        text: searchPending ? "搜索中..." : "搜索用户ID"
-                        color: "#415066"
-                        Layout.fillWidth: true
-                    }
-
-                    GlassButton {
-                        text: "查找"
-                        enabled: !searchPending
-                        implicitWidth: 62
-                        implicitHeight: 30
-                        cornerRadius: 8
-                        normalColor: Qt.rgba(0.54, 0.70, 0.93, 0.22)
-                        hoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.32)
-                        pressedColor: Qt.rgba(0.54, 0.70, 0.93, 0.40)
-                        disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                        onClicked: root.searchRequested(searchField.text)
-                    }
-                }
-
-                Label {
-                    Layout.fillWidth: true
-                    text: root.searchStatusText
-                    visible: text.length > 0
-                    color: root.searchStatusError ? "#cc4a4a" : "#2a7f62"
-                    wrapMode: Text.Wrap
-                }
-
-                ListView {
-                    id: searchResultList
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    model: root.searchModel
-                    ScrollBar.vertical: GlassScrollBar { }
-
-                    delegate: Rectangle {
-                        width: ListView.view.width
-                        height: 86
-                        radius: 8
-                        color: Qt.rgba(1, 1, 1, 0.30)
-                        border.color: Qt.rgba(1, 1, 1, 0.48)
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: 10
-                            spacing: 10
-
-                            Rectangle {
-                                Layout.preferredWidth: 50
-                                Layout.preferredHeight: 50
-                                radius: 6
-                                clip: true
-                                color: Qt.rgba(0.74, 0.82, 0.92, 0.50)
-
-                                Image {
-                                    anchors.fill: parent
-                                    fillMode: Image.PreserveAspectCrop
-                                    property string fallbackSource: "qrc:/res/head_1.jpg"
-                                    property string baseSource: (icon && icon.length > 0) ? icon : fallbackSource
-                                    property bool loadFailed: false
-                                    source: loadFailed ? fallbackSource : baseSource
-                                    cache: true
-                                    asynchronous: true
-                                    opacity: status === Image.Ready ? 1.0 : 0.0
-                                    Behavior on opacity { NumberAnimation { duration: 200 } }
-                                    onBaseSourceChanged: loadFailed = false
-                                    onStatusChanged: if (status === Image.Error) { loadFailed = true }
-                                }
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 2
-
-                                Label {
-                                    text: name
-                                    font.bold: true
-                                    color: "#273449"
-                                }
-
-                                Label {
-                                    text: "ID: " + (userId && userId.length > 0 ? userId : uid)
-                                    color: "#5f6f85"
-                                }
-
-                                Label {
-                                    text: desc
-                                    color: "#5f6f85"
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-                            }
-
-                            GlassButton {
-                                text: "加好友"
-                                implicitWidth: 70
-                                implicitHeight: 30
-                                cornerRadius: 8
-                                normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
-                                hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
-                                pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
-                                disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                                onClicked: addFriendDialog.openFor(uid, name, desc, icon)
-                            }
-                        }
-                    }
-                }
-            }
-
-            GlassSurface {
-                anchors.centerIn: parent
-                width: 190
-                height: 64
-                visible: !searchPending && searchResultList.count === 0
-                backdrop: root.backdrop !== null ? root.backdrop : root
-                cornerRadius: 10
-                blurRadius: 16
-                fillColor: Qt.rgba(1, 1, 1, 0.20)
-                strokeColor: Qt.rgba(1, 1, 1, 0.42)
-
-                Label {
-                    anchors.centerIn: parent
-                    text: "未找到匹配用户"
-                    color: "#6a7b92"
-                    font.pixelSize: 13
-                }
-            }
         }
     }
 
@@ -455,104 +353,13 @@ Rectangle {
                 anchors.fill: parent
                 spacing: 0
 
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 76
-                    color: Qt.rgba(1, 1, 1, 0.08)
-                    border.color: Qt.rgba(1, 1, 1, 0.22)
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 8
-                        spacing: 6
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 6
-
-                            GlassButton {
-                                Layout.fillWidth: true
-                                implicitHeight: 30
-                                text: "全部"
-                                cornerRadius: 8
-                                normalColor: root.sessionFilter === 0 ? Qt.rgba(0.36, 0.62, 0.92, 0.28) : Qt.rgba(0.48, 0.56, 0.66, 0.20)
-                                hoverColor: root.sessionFilter === 0 ? Qt.rgba(0.36, 0.62, 0.92, 0.38) : Qt.rgba(0.48, 0.56, 0.66, 0.28)
-                                pressedColor: root.sessionFilter === 0 ? Qt.rgba(0.36, 0.62, 0.92, 0.45) : Qt.rgba(0.48, 0.56, 0.66, 0.34)
-                                disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                                onClicked: root.sessionFilter = 0
-                            }
-
-                            GlassButton {
-                                Layout.fillWidth: true
-                                implicitHeight: 30
-                                text: ""
-                                cornerRadius: 8
-                                normalColor: root.sessionFilter === 1 ? Qt.rgba(0.36, 0.62, 0.92, 0.28) : Qt.rgba(0.48, 0.56, 0.66, 0.20)
-                                hoverColor: root.sessionFilter === 1 ? Qt.rgba(0.36, 0.62, 0.92, 0.38) : Qt.rgba(0.48, 0.56, 0.66, 0.28)
-                                pressedColor: root.sessionFilter === 1 ? Qt.rgba(0.36, 0.62, 0.92, 0.45) : Qt.rgba(0.48, 0.56, 0.66, 0.34)
-                                disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                                onClicked: root.sessionFilter = 1
-
-                                Image {
-                                    anchors.centerIn: parent
-                                    width: 16
-                                    height: 16
-                                    source: "qrc:/icons/user.png"
-                                    fillMode: Image.PreserveAspectFit
-                                }
-                            }
-
-                            GlassButton {
-                                Layout.fillWidth: true
-                                implicitHeight: 30
-                                text: ""
-                                cornerRadius: 8
-                                normalColor: root.sessionFilter === 2 ? Qt.rgba(0.36, 0.62, 0.92, 0.28) : Qt.rgba(0.48, 0.56, 0.66, 0.20)
-                                hoverColor: root.sessionFilter === 2 ? Qt.rgba(0.36, 0.62, 0.92, 0.38) : Qt.rgba(0.48, 0.56, 0.66, 0.28)
-                                pressedColor: root.sessionFilter === 2 ? Qt.rgba(0.36, 0.62, 0.92, 0.45) : Qt.rgba(0.48, 0.56, 0.66, 0.34)
-                                disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                                onClicked: root.sessionFilter = 2
-
-                                Image {
-                                    anchors.centerIn: parent
-                                    width: 16
-                                    height: 16
-                                    source: "qrc:/icons/team.png"
-                                    fillMode: Image.PreserveAspectFit
-                                }
-                            }
-
-                            GlassButton {
-                                implicitWidth: 42
-                                implicitHeight: 30
-                                text: "+"
-                                visible: root.sessionFilter === 2
-                                cornerRadius: 8
-                                normalColor: Qt.rgba(0.28, 0.70, 0.58, 0.24)
-                                hoverColor: Qt.rgba(0.28, 0.70, 0.58, 0.34)
-                                pressedColor: Qt.rgba(0.28, 0.70, 0.58, 0.42)
-                                disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                                onClicked: root.createGroupRequested()
-                            }
-                        }
-
-                        Label {
-                            Layout.fillWidth: true
-                            text: root.groupStatusText
-                            visible: root.sessionFilter === 2 && text.length > 0
-                            color: root.groupStatusError ? "#cc4a4a" : "#2a7f62"
-                            elide: Text.ElideRight
-                        }
-                    }
-                }
-
                 ListView {
                     id: sessionList
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
                     interactive: false
-                    visible: root.sessionFilter === 0 ? root.dialogsReady : (root.sessionFilter === 1 || root.groupsReady)
+                    visible: root.dialogsReady
                     model: root.currentSessionModel()
                     ScrollBar.vertical: GlassScrollBar { }
                     cacheBuffer: 200
@@ -581,7 +388,7 @@ Rectangle {
                         if ((contentY + height) < (contentHeight - root._chatLoadRearmOffsetPx)) {
                             root._chatLoadBottomArmed = true
                         }
-                        if (root.sessionFilter !== 1 || !root.canLoadMoreChats || root.chatLoadingMore || contentHeight <= height + 1) {
+                        if (!root.canLoadMoreChats || root.chatLoadingMore || contentHeight <= height + 1) {
                             return
                         }
                         if (movingDown && nearBottom && root._chatLoadBottomArmed) {
@@ -594,7 +401,7 @@ Rectangle {
 
                     footer: Item {
                         width: sessionList.width
-                        height: (root.sessionFilter === 1 && (root.chatLoadingMore || root.canLoadMoreChats)) ? 40 : 0
+                        height: (root.chatLoadingMore || root.canLoadMoreChats) ? 40 : 0
 
                         Label {
                             anchors.centerIn: parent
@@ -625,7 +432,7 @@ Rectangle {
                                 Image {
                                     anchors.fill: parent
                                     fillMode: Image.PreserveAspectCrop
-                                    property bool isGroupDialog: root.sessionFilter === 2 || (root.sessionFilter === 0 && uid < 0)
+                                    property bool isGroupDialog: uid < 0
                                     property string fallbackSource: isGroupDialog ? "qrc:/res/chat_icon.png" : "qrc:/res/head_1.jpg"
                                     property string baseSource: (icon && icon.length > 0) ? icon : fallbackSource
                                     property bool loadFailed: false
@@ -715,9 +522,7 @@ Rectangle {
 
                 Label {
                     anchors.centerIn: parent
-                    text: !root.dialogsReady && root.sessionFilter === 0 ? "正在加载最近会话"
-                          : (!root.groupsReady && root.sessionFilter === 2 ? "正在加载群组列表"
-                                                                             : (root.sessionFilter === 2 ? "暂无群聊" : (root.sessionFilter === 1 ? "暂无私聊" : "暂无会话")))
+                        text: !root.dialogsReady ? "正在加载最近会话" : "暂无会话"
                     color: "#6a7b92"
                     font.pixelSize: 13
                 }
@@ -1209,45 +1014,321 @@ Rectangle {
         }
     }
 
-    Component {
-        id: placeholderPaneComponent
-        Item {
-            GlassSurface {
-                anchors.fill: parent
-                anchors.margins: 12
-                backdrop: root.backdrop !== null ? root.backdrop : root
-                cornerRadius: 12
-                blurRadius: 18
-                fillColor: Qt.rgba(1, 1, 1, 0.16)
-                strokeColor: Qt.rgba(1, 1, 1, 0.38)
+    AddFriendDialog {
+        id: addFriendDialog
+        anchors.centerIn: Overlay.overlay
+        backdrop: root.backdrop !== null ? root.backdrop : root
+        onSubmitted: function(uid, backName, tags) { root.addFriendRequested(uid, backName, tags) }
+    }
 
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    spacing: 6
+    Popup {
+        id: findFriendDialog
+        modal: true
+        focus: true
+        width: 380
+        height: 420
+        anchors.centerIn: Overlay.overlay
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-                    Label {
-                        text: "更多设置"
-                        color: "#2a3649"
-                        font.pixelSize: 15
-                        font.bold: true
-                        horizontalAlignment: Text.AlignHCenter
+        function openFresh() {
+            friendSearchInput.text = ""
+            root.searchCleared()
+            open()
+            friendSearchInput.forceActiveFocus()
+        }
+
+        Overlay.modal: Rectangle {
+            color: Qt.rgba(24, 32, 44, 0.28)
+        }
+
+        background: GlassSurface {
+            anchors.fill: parent
+            backdrop: root.backdrop !== null ? root.backdrop : root
+            blurRadius: 30
+            cornerRadius: 12
+            fillColor: Qt.rgba(0.98, 0.99, 1.0, 0.90)
+            strokeColor: Qt.rgba(1, 1, 1, 0.62)
+            glowTopColor: Qt.rgba(1, 1, 1, 0.30)
+            glowBottomColor: Qt.rgba(1, 1, 1, 0.06)
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 18
+            spacing: 12
+
+            Label {
+                Layout.fillWidth: true
+                text: "添加好友"
+                color: "#263448"
+                font.pixelSize: 18
+                font.bold: true
+                elide: Text.ElideRight
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                GlassTextField {
+                    id: friendSearchInput
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 38
+                    backdrop: root.backdrop !== null ? root.backdrop : root
+                    blurRadius: 30
+                    cornerRadius: 9
+                    leftInset: 12
+                    rightInset: 12
+                    textPixelSize: 14
+                    textHorizontalAlignment: TextInput.AlignLeft
+                    placeholderText: "用户ID（u#########）"
+                    onTextChanged: root.searchCleared()
+                    onAccepted: root.searchRequested(friendSearchInput.text)
+                }
+
+                GlassButton {
+                    Layout.preferredWidth: 64
+                    Layout.preferredHeight: 38
+                    text: "查找"
+                    textPixelSize: 13
+                    enabled: !root.searchPending
+                    cornerRadius: 9
+                    normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.26)
+                    hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.36)
+                    pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.44)
+                    disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                    onClicked: root.searchRequested(friendSearchInput.text)
+                }
+            }
+
+            Label {
+                Layout.fillWidth: true
+                text: root.searchStatusText
+                visible: text.length > 0
+                color: root.searchStatusError ? "#cc4a4a" : "#2a7f62"
+                wrapMode: Text.Wrap
+            }
+
+            Item {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+
+                ListView {
+                    id: friendSearchResultList
+                    anchors.fill: parent
+                    clip: true
+                    model: root.searchModel
+                    ScrollBar.vertical: GlassScrollBar { }
+
+                    delegate: Rectangle {
+                        width: ListView.view.width
+                        height: 86
+                        radius: 8
+                        color: Qt.rgba(1, 1, 1, 0.30)
+                        border.color: Qt.rgba(1, 1, 1, 0.48)
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 10
+                            spacing: 10
+
+                            Rectangle {
+                                Layout.preferredWidth: 50
+                                Layout.preferredHeight: 50
+                                radius: 6
+                                clip: true
+                                color: Qt.rgba(0.74, 0.82, 0.92, 0.50)
+
+                                Image {
+                                    anchors.fill: parent
+                                    fillMode: Image.PreserveAspectCrop
+                                    property string fallbackSource: "qrc:/res/head_1.jpg"
+                                    property string baseSource: (icon && icon.length > 0) ? icon : fallbackSource
+                                    property bool loadFailed: false
+                                    source: loadFailed ? fallbackSource : baseSource
+                                    cache: true
+                                    asynchronous: true
+                                    opacity: status === Image.Ready ? 1.0 : 0.0
+                                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                                    onBaseSourceChanged: loadFailed = false
+                                    onStatusChanged: if (status === Image.Error) { loadFailed = true }
+                                }
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 2
+
+                                Label {
+                                    text: name
+                                    font.bold: true
+                                    color: "#273449"
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+
+                                Label {
+                                    text: "ID: " + (userId && userId.length > 0 ? userId : uid)
+                                    color: "#5f6f85"
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+
+                                Label {
+                                    text: desc
+                                    color: "#5f6f85"
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                            }
+
+                            GlassButton {
+                                text: "申请"
+                                implicitWidth: 58
+                                implicitHeight: 30
+                                cornerRadius: 8
+                                normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
+                                hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
+                                pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
+                                disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                                onClicked: {
+                                    findFriendDialog.close()
+                                    addFriendDialog.openFor(uid, name, desc, icon)
+                                }
+                            }
+                        }
                     }
+                }
+
+                GlassSurface {
+                    anchors.centerIn: parent
+                    width: 190
+                    height: 64
+                    visible: !root.searchPending && friendSearchResultList.count === 0
+                    backdrop: root.backdrop !== null ? root.backdrop : root
+                    cornerRadius: 10
+                    blurRadius: 16
+                    fillColor: Qt.rgba(1, 1, 1, 0.20)
+                    strokeColor: Qt.rgba(1, 1, 1, 0.42)
 
                     Label {
-                        text: "设置项已放在右侧主区，左栏保持简洁。"
+                        anchors.centerIn: parent
+                        text: friendSearchInput.text.length > 0 ? "未找到匹配用户" : "输入用户ID后查找"
                         color: "#6a7b92"
-                        font.pixelSize: 12
-                        horizontalAlignment: Text.AlignHCenter
+                        font.pixelSize: 13
                     }
                 }
             }
         }
     }
 
-    AddFriendDialog {
-        id: addFriendDialog
+    Popup {
+        id: joinGroupDialog
+        modal: true
+        focus: true
+        width: 360
+        height: 236
         anchors.centerIn: Overlay.overlay
-        backdrop: root.backdrop !== null ? root.backdrop : root
-        onSubmitted: function(uid, backName, tags) { root.addFriendRequested(uid, backName, tags) }
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        function openFresh() {
+            joinGroupCodeInput.text = ""
+            joinGroupReasonInput.text = ""
+            open()
+            joinGroupCodeInput.forceActiveFocus()
+        }
+
+        Overlay.modal: Rectangle {
+            color: Qt.rgba(24, 32, 44, 0.28)
+        }
+
+        background: GlassSurface {
+            anchors.fill: parent
+            backdrop: root.backdrop !== null ? root.backdrop : root
+            blurRadius: 30
+            cornerRadius: 12
+            fillColor: Qt.rgba(0.98, 0.99, 1.0, 0.90)
+            strokeColor: Qt.rgba(1, 1, 1, 0.62)
+            glowTopColor: Qt.rgba(1, 1, 1, 0.30)
+            glowBottomColor: Qt.rgba(1, 1, 1, 0.06)
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 18
+            spacing: 12
+
+            Label {
+                Layout.fillWidth: true
+                text: "申请加群"
+                color: "#263448"
+                font.pixelSize: 18
+                font.bold: true
+                elide: Text.ElideRight
+            }
+
+            GlassTextField {
+                id: joinGroupCodeInput
+                Layout.fillWidth: true
+                Layout.preferredHeight: 38
+                backdrop: root.backdrop !== null ? root.backdrop : root
+                blurRadius: 30
+                cornerRadius: 9
+                leftInset: 12
+                rightInset: 12
+                textPixelSize: 14
+                textHorizontalAlignment: TextInput.AlignLeft
+                placeholderText: "群ID（g#########）"
+            }
+
+            GlassTextField {
+                id: joinGroupReasonInput
+                Layout.fillWidth: true
+                Layout.preferredHeight: 38
+                backdrop: root.backdrop !== null ? root.backdrop : root
+                blurRadius: 30
+                cornerRadius: 9
+                leftInset: 12
+                rightInset: 12
+                textPixelSize: 14
+                textHorizontalAlignment: TextInput.AlignLeft
+                placeholderText: "验证信息（可选）"
+                onAccepted: submitJoinGroupButton.clicked()
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                GlassButton {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 36
+                    text: "取消"
+                    textPixelSize: 13
+                    cornerRadius: 9
+                    normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.18)
+                    hoverColor: Qt.rgba(0.54, 0.60, 0.68, 0.26)
+                    pressedColor: Qt.rgba(0.54, 0.60, 0.68, 0.34)
+                    onClicked: joinGroupDialog.close()
+                }
+
+                GlassButton {
+                    id: submitJoinGroupButton
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 36
+                    text: "发送申请"
+                    textPixelSize: 13
+                    cornerRadius: 9
+                    normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.26)
+                    hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.36)
+                    pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.44)
+                    disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                    onClicked: {
+                        root.applyJoinGroupRequested(joinGroupCodeInput.text.trim(), joinGroupReasonInput.text)
+                        joinGroupDialog.close()
+                    }
+                }
+            }
+        }
     }
 }

@@ -101,6 +101,7 @@ private:
 	void MuteGroupMemberHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void KickGroupMemberHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void QuitGroupHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
+	void DissolveGroupHandler(std::shared_ptr<CSession> session, const short& msg_id, const string& msg_data);
 	void PushGroupPayload(const std::vector<int>& recipients, short msgid, const memochat::json::JsonValue& payload, int exclude_uid = 0);
 	void BuildGroupListJson(int uid, memochat::json::JsonValue& out);
 	void BuildDialogListJson(int uid, memochat::json::JsonValue& out);

@@ -80,6 +80,7 @@ public:
     void muteGroupMember(const QString& userId, int muteSeconds);
     void kickGroupMember(const QString& userId);
     void quitCurrentGroup();
+    void dissolveCurrentGroup();
 
 private:
     AppController& _app;
