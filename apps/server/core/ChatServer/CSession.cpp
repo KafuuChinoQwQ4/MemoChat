@@ -170,8 +170,6 @@ void CSession::AsyncReadBody(int total_len)
 			memcpy(_recv_msg_node->_data , _data , bytes_transfered);
 			_recv_msg_node->_cur_len += bytes_transfered;
 			_recv_msg_node->_data[_recv_msg_node->_total_len] = '\0';
-			cout << "receive data is " << _recv_msg_node->_data << endl;
-
 			UpdateHeartbeat();
 
 			LogicSystem::GetInstance()->PostMsgToQue(make_shared<LogicNode>(shared_from_this(), _recv_msg_node));
@@ -220,8 +218,6 @@ void CSession::AsyncReadHead(int total_len)
 			memcpy(&msg_id, _recv_head_node->_data, HEAD_ID_LEN);
 
 			msg_id = boost::asio::detail::socket_ops::network_to_host_short(msg_id);
-			std::cout << "msg_id is " << msg_id << endl;
-
 			if (msg_id > MAX_LENGTH) {
 				std::cout << "invalid msg_id is " << msg_id << endl;
 				if (_server != nullptr) {
@@ -233,9 +229,6 @@ void CSession::AsyncReadHead(int total_len)
 			memcpy(&msg_len, _recv_head_node->_data + HEAD_ID_LEN, HEAD_DATA_LEN);
 
 			msg_len = boost::asio::detail::socket_ops::network_to_host_short(msg_len);
-			std::cout << "msg_len is " << msg_len << endl;
-
-
 			if (msg_len > MAX_LENGTH) {
 				std::cout << "invalid data length is " << msg_len << endl;
 				if (_server != nullptr) {

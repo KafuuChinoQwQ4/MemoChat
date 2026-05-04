@@ -32,7 +32,7 @@ echo   [*] Installing Node.js dependencies...
 cd /d "%VARIFY_DIR%" && npm install
 :varify_start
 call :launch_varify "VarifyServer-1" "50051" "8083" "VarifyServer1"
-call :launch_varify "VarifyServer-2" "50383" "8087" "VarifyServer2"
+call :launch_varify "VarifyServer-2" "48083" "8087" "VarifyServer2"
 goto varify_done
 :varify_missing
 echo   [X] VarifyServer not found
@@ -61,7 +61,7 @@ exit /b !ERRORLEVEL!
 REM ---- C++ 服务 ----
 echo [STEP] Start C++ backend services
 call :launch_svc "%RUNTIME_DIR%\StatusServer1"    "StatusServer.exe" "StatusServer-1"   "config.ini"  "50052"
-call :launch_svc "%RUNTIME_DIR%\StatusServer2"    "StatusServer.exe" "StatusServer-2"   "config.ini"  "50382"
+call :launch_svc "%RUNTIME_DIR%\StatusServer2"    "StatusServer.exe" "StatusServer-2"   "config.ini"  "50582"
 call :launch_svc "%RUNTIME_DIR%\chatserver1"      "ChatServer.exe"   "ChatServer-1"     "config.ini"  "8090"
 call :launch_svc "%RUNTIME_DIR%\chatserver2"      "ChatServer.exe"   "ChatServer-2"     "config.ini"  "8091"
 call :launch_svc "%RUNTIME_DIR%\chatserver3"      "ChatServer.exe"   "ChatServer-3"     "config.ini"  "8092"
@@ -87,10 +87,31 @@ if !ERRORLEVEL! equ 0 (
     endlocal
     exit /b 0
 )
+powershell -NoProfile -Command "if (Get-NetTCPConnection -LocalPort %VARIFY_HEALTH_PORT% -State Listen -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }"
+if !ERRORLEVEL! equ 0 (
+    echo   [WARN] %VARIFY_NAME%: health port %VARIFY_HEALTH_PORT% is already in use
+    endlocal
+    exit /b 0
+)
 set "VARIFY_LOG_DIR=%PROJECT_ROOT%\infra\Memo_ops\artifacts\logs\services\%VARIFY_SERVICE%"
 echo   [*] Starting %VARIFY_NAME%...
 start "%VARIFY_NAME%" /D "%VARIFY_DIR%" cmd /c "set MEMOCHAT_ENABLE_KAFKA=1&& set MEMOCHAT_ENABLE_RABBITMQ=1&& set MEMOCHAT_VARIFYSERVER_PORT=%VARIFY_GRPC_PORT%&& set MEMOCHAT_HEALTH_PORT=%VARIFY_HEALTH_PORT%&& set MEMOCHAT_TELEMETRY_SERVICENAME=%VARIFY_SERVICE%&& set MEMOCHAT_LOG_DIR=%VARIFY_LOG_DIR%&& node server.js"
-echo   [OK] %VARIFY_NAME% started
+set "VARIFY_WAIT=0"
+:wait_varify_port
+powershell -NoProfile -Command "if (Get-NetTCPConnection -LocalPort %VARIFY_GRPC_PORT% -State Listen -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }"
+if !ERRORLEVEL! equ 0 (
+    echo   [OK] %VARIFY_NAME% started
+    endlocal
+    exit /b 0
+)
+set /a VARIFY_WAIT+=1
+if !VARIFY_WAIT! geq 16 (
+    echo   [WARN] %VARIFY_NAME% did not bind port %VARIFY_GRPC_PORT% yet; check VarifyServer logs
+    endlocal
+    exit /b 0
+)
+timeout /t 1 /nobreak >nul
+goto wait_varify_port
 endlocal
 exit /b 0
 

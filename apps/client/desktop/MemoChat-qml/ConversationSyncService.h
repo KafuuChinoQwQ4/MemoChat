@@ -25,6 +25,8 @@ public:
                                    int peerUid);
     static void incrementPrivateUnread(FriendListModel &dialogListModel, int peerUid);
 
+    static int makeGroupDialogUid(qint64 groupId);
+    static qint64 groupIdForDialogUid(const QMap<int, qint64> &groupUidMap, int dialogUid);
     static int resolveGroupDialogUid(QMap<int, qint64> &groupUidMap, qint64 groupId);
     static void updateGroupPreview(FriendListModel &groupListModel,
                                    FriendListModel &dialogListModel,

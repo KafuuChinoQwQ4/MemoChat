@@ -55,8 +55,8 @@ Use the narrowest relevant check:
 - run a client build when resource registration or QML references changed:
 
 ```powershell
-cmake --preset msvc2022-client-verify
-cmake --build --preset msvc2022-client-verify
+cmake --preset msvc2022-full
+cmake --build --preset msvc2022-full
 ```
 
 For visual work, run or screenshot the relevant QML surface if a local path/script exists. Do not invent a new renderer unless needed.

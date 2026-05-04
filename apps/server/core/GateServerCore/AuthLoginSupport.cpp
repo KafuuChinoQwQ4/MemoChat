@@ -266,17 +266,14 @@ std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load
 
         if (!nodes.empty()) {
             const auto next_index = static_cast<size_t>(g_gate_route_rr_counter.fetch_add(1, std::memory_order_relaxed));
-            std::stable_sort(nodes.begin(), nodes.end(), [next_index, min_online](const ChatRouteNode& lhs, const ChatRouteNode& rhs) {
-                const bool lhs_least = lhs.online_count == min_online;
-                const bool rhs_least = rhs.online_count == min_online;
-                if (lhs_least != rhs_least) {
-                    return lhs_least > rhs_least;
-                }
-                if (lhs_least && rhs_least) {
-                    return ((lhs.priority + static_cast<int>(next_index)) % 1024) < ((rhs.priority + static_cast<int>(next_index)) % 1024);
-                }
-                return lhs.priority < rhs.priority;
+            const auto least_end = std::find_if(nodes.begin(), nodes.end(), [min_online](const ChatRouteNode& node) {
+                return node.online_count != min_online;
             });
+            const auto least_count = static_cast<size_t>(std::distance(nodes.begin(), least_end));
+            if (least_count > 1) {
+                const auto offset = static_cast<std::vector<ChatRouteNode>::difference_type>(next_index % least_count);
+                std::rotate(nodes.begin(), nodes.begin() + offset, least_end);
+            }
         }
         return nodes;
     } catch (const std::exception& ex) {

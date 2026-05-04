@@ -8,7 +8,8 @@ Use when verifying that the local MemoChat stack works after code/config changes
 
 ## Preconditions
 
-- Build artifacts exist for the services being tested.
+- Build artifacts exist in `build\bin\Release` for the services being tested.
+- For any fresh code change, first run `cmake --preset msvc2022-full` and `cmake --build --preset msvc2022-full`; the deploy script does not read `build-verify-*`.
 - Docker dependencies are running.
 - No runtime service executable is locked by an old process.
 
@@ -31,6 +32,8 @@ For media or AI flows, also check MinIO, Qdrant, Neo4j, Ollama, and AI Orchestra
 Use:
 
 ```powershell
+cmake --preset msvc2022-full
+cmake --build --preset msvc2022-full
 tools\scripts\status\deploy_services.bat
 tools\scripts\status\start-all-services.bat
 ```
@@ -47,7 +50,7 @@ tools\scripts\test_login.ps1
 tools\scripts\test_login2.ps1
 tools\scripts\test_login3.ps1
 tools\scripts\full_flow_test.ps1
-tools\loadtest\local-loadtest-cpp\run_suite.ps1
+python tools\loadtest\python-loadtest\py_loadtest.py --config tools\loadtest\python-loadtest\config.json --scenario all --total 20 --concurrency 5
 ```
 
 For targeted API checks, use existing JSON payloads in `tools/scripts` before creating new ones.

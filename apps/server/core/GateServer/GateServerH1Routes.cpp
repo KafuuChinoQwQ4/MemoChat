@@ -6,6 +6,7 @@
 #include "GateAsyncSideEffects.h"
 #include "GateHttpJsonSupport.h"
 #include "GateRouteModules.h"
+#include "GateWorkerPool.h"
 #include "HttpConnection.h"
 #include "LogicSystem.h"
 #include "PostgresMgr.h"
@@ -381,13 +382,27 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic) {
                 {"ticket_issue_ms", std::to_string(ticket_issue_ms)},
                 {"user_login_total_ms", std::to_string(gateauthsupport::NowMs() - login_start_ms)}
             });
-        GateAsyncSideEffects::Instance().PublishAuditLogin(userInfo.uid,
-            userInfo.user_id,
-            email,
-            route_nodes.front().name,
-            route_nodes.front().host,
-            route_nodes.front().port,
-            login_cache_hit);
+        const auto audit_uid = userInfo.uid;
+        const auto audit_user_id = userInfo.user_id;
+        const auto audit_email = email;
+        const auto audit_chat_server = route_nodes.front().name;
+        const auto audit_chat_host = route_nodes.front().host;
+        const auto audit_chat_port = route_nodes.front().port;
+        GateWorkerPool::GetInstance()->post([audit_uid,
+            audit_user_id,
+            audit_email,
+            audit_chat_server,
+            audit_chat_host,
+            audit_chat_port,
+            login_cache_hit]() {
+            GateAsyncSideEffects::Instance().PublishAuditLogin(audit_uid,
+                audit_user_id,
+                audit_email,
+                audit_chat_server,
+                audit_chat_host,
+                audit_chat_port,
+                login_cache_hit);
+        });
         beast::ostream(connection->_response.body()) << root.toStyledString();
         return true;
     });

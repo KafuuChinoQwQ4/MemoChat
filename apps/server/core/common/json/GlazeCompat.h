@@ -777,6 +777,24 @@ inline void append(const JsonValue& arr, int64_t item) { const_cast<JsonValue&>(
 inline void append(const JsonValue& arr, double item) { const_cast<JsonValue&>(arr).append(item); }
 inline void append(const JsonValue& arr, const std::string& item) { const_cast<JsonValue&>(arr).append(item); }
 inline void append(const JsonValue& arr, const char* item) { const_cast<JsonValue&>(arr).append(item); }
+inline void append(JsonValueProxy& arr, const JsonValue& item) { arr.append(item); }
+inline void append(JsonValueProxy& arr, int item) { arr.append(item); }
+inline void append(JsonValueProxy& arr, int64_t item) { arr.append(item); }
+inline void append(JsonValueProxy& arr, double item) { arr.append(item); }
+inline void append(JsonValueProxy& arr, const std::string& item) { arr.append(item); }
+inline void append(JsonValueProxy& arr, const char* item) { arr.append(item); }
+inline void append(const JsonValueProxy& arr, const JsonValue& item) { arr.append(item); }
+inline void append(const JsonValueProxy& arr, int item) { arr.append(item); }
+inline void append(const JsonValueProxy& arr, int64_t item) { arr.append(item); }
+inline void append(const JsonValueProxy& arr, double item) { arr.append(item); }
+inline void append(const JsonValueProxy& arr, const std::string& item) { arr.append(item); }
+inline void append(const JsonValueProxy& arr, const char* item) { arr.append(item); }
+inline void append(JsonValueProxy&& arr, const JsonValue& item) { arr.append(item); }
+inline void append(JsonValueProxy&& arr, int item) { arr.append(item); }
+inline void append(JsonValueProxy&& arr, int64_t item) { arr.append(item); }
+inline void append(JsonValueProxy&& arr, double item) { arr.append(item); }
+inline void append(JsonValueProxy&& arr, const std::string& item) { arr.append(item); }
+inline void append(JsonValueProxy&& arr, const char* item) { arr.append(item); }
 
 inline void glaze_array_append(JsonValue& arr, const JsonValue& item) { append(arr, item); }
 inline void glaze_array_append(JsonValue& arr, int item) { append(arr, item); }
@@ -938,11 +956,12 @@ inline bool isMember(const JsonMemberRef& val, const char* key) {
 }
 
 inline bool isMember(const JsonValueProxy& val, const std::string& key) {
-    return val.isObject();
+    auto* p = val.impl_ptr();
+    return p != nullptr && glaze_has_key(*p, key);
 }
 
 inline bool isMember(const JsonValueProxy& val, const char* key) {
-    return val.isObject();
+    return isMember(val, std::string(key));
 }
 
 inline JsonValue arrayValue{array_t{}};

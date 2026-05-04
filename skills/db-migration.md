@@ -70,11 +70,11 @@ For each data change, document:
 
 ## Verification
 
-Use the narrowest checks:
+Use the full local build before any runtime or deploy verification:
 
 ```powershell
-cmake --preset msvc2022-server-verify
-cmake --build --preset msvc2022-server-verify
+cmake --preset msvc2022-full
+cmake --build --preset msvc2022-full
 ```
 
 Then run targeted database queries through Docker/MCP. For runtime paths, use:

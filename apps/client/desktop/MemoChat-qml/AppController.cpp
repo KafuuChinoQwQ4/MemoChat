@@ -1,6 +1,7 @@
 #include "AppController.h"
 #include "AppCoordinators.h"
 #include "ChatMessageDispatcher.h"
+#include "ConversationSyncService.h"
 #include "DialogListService.h"
 #include "LocalFilePickerService.h"
 #include "MediaUploadService.h"
@@ -88,6 +89,7 @@ AppController::AppController(QObject *parent)
       _chat_loading_more(false),
       _can_load_more_chats(false),
       _private_history_loading(false),
+      _group_history_loading(false),
       _can_load_more_private_history(false),
       _contact_loading_more(false),
       _can_load_more_contacts(false),
@@ -291,6 +293,7 @@ void AppController::switchToLogin()
     _private_history_pending_peer_uid = 0;
     _group_history_before_seq = 0;
     _group_history_has_more = true;
+    _group_history_loading = false;
     _dialog_bootstrap_loading = false;
     _chat_list_initialized = false;
     setDialogsReady(false);
@@ -459,6 +462,7 @@ void AppController::selectChatIndex(int index)
         _private_history_pending_peer_uid = 0;
         _group_history_before_seq = 0;
         _group_history_has_more = true;
+        _group_history_loading = false;
         setPrivateHistoryLoading(false);
         setCanLoadMorePrivateHistory(false);
         setCurrentDraftText("");
@@ -475,6 +479,7 @@ void AppController::selectChatIndex(int index)
     setCurrentGroup(0, "");
     _group_history_before_seq = 0;
     _group_history_has_more = true;
+    _group_history_loading = false;
     qInfo() << "Selecting private chat by index:" << index
             << "uid:" << _current_chat_uid
             << "name:" << item.value("name").toString();
@@ -555,6 +560,7 @@ void AppController::selectGroupIndex(int index)
         _message_model.clear();
         _group_history_before_seq = 0;
         _group_history_has_more = true;
+        _group_history_loading = false;
         setCanLoadMorePrivateHistory(false);
         setCurrentDraftText("");
         setCurrentDialogPinned(false);
@@ -564,13 +570,14 @@ void AppController::selectGroupIndex(int index)
     }
 
     const int pseudoUid = item.value("uid").toInt();
-    const qint64 groupId = _group_uid_map.value(pseudoUid, 0);
+    const qint64 groupId = ConversationSyncService::groupIdForDialogUid(_group_uid_map, pseudoUid);
     if (groupId <= 0) {
         setPendingReplyContext(QString(), QString(), QString());
         setCurrentGroup(0, "");
         _message_model.clear();
         _group_history_before_seq = 0;
         _group_history_has_more = true;
+        _group_history_loading = false;
         setCanLoadMorePrivateHistory(false);
         setCurrentDraftText("");
         setCurrentDialogPinned(false);
@@ -624,19 +631,92 @@ void AppController::selectGroupIndex(int index)
     _message_model.setMessages(groupInfo->_chat_msgs, _gateway.userMgr()->GetUid());
     _group_history_before_seq = 0;
     _group_history_has_more = true;
-    for (const auto &one : groupInfo->_chat_msgs) {
-        if (!one || one->_group_seq <= 0) {
-            continue;
-        }
-        if (_group_history_before_seq <= 0 || one->_group_seq < _group_history_before_seq) {
-            _group_history_before_seq = one->_group_seq;
-        }
-    }
     qint64 readTs = 0;
     if (!groupInfo->_chat_msgs.empty() && groupInfo->_chat_msgs.back()) {
         readTs = groupInfo->_chat_msgs.back()->_created_at;
     }
     sendGroupReadAck(groupId, readTs);
+    loadGroupHistory();
+    syncCurrentDialogDraft();
+}
+
+void AppController::selectGroupByDialogUid(int dialogUid, qint64 groupId)
+{
+    if (dialogUid >= 0 || groupId <= 0) {
+        return;
+    }
+
+    QVariantMap item;
+    const int groupIndex = _group_list_model.indexOfUid(dialogUid);
+    if (groupIndex >= 0) {
+        item = _group_list_model.get(groupIndex);
+    }
+    if (item.isEmpty()) {
+        const int dialogIndex = _dialog_list_model.indexOfUid(dialogUid);
+        if (dialogIndex >= 0) {
+            item = _dialog_list_model.get(dialogIndex);
+        }
+    }
+
+    auto groupInfo = _gateway.userMgr()->GetGroupById(groupId);
+    QString groupName = item.value("name").toString();
+    QString groupIcon = item.value("icon").toString();
+    QString groupCode;
+    if (groupInfo) {
+        if (groupName.trimmed().isEmpty()) {
+            groupName = groupInfo->_name;
+        }
+        if (groupIcon.trimmed().isEmpty()) {
+            groupIcon = groupInfo->_icon;
+        }
+        groupCode = groupInfo->_group_code;
+    }
+    if (groupName.trimmed().isEmpty()) {
+        groupName = QString("群聊%1").arg(groupId);
+    }
+    if (!groupInfo) {
+        groupInfo = std::make_shared<GroupInfoData>();
+        groupInfo->_group_id = groupId;
+        groupInfo->_name = groupName;
+        groupInfo->_icon = groupIcon;
+        _gateway.userMgr()->UpsertGroup(groupInfo);
+    }
+
+    setPendingReplyContext(QString(), QString(), QString());
+    setCurrentGroup(groupId, groupName, groupCode);
+    _dialog_list_model.clearUnread(dialogUid);
+    _dialog_list_model.clearMention(dialogUid);
+    _group_list_model.clearUnread(dialogUid);
+    _dialog_mention_map.remove(dialogUid);
+    _current_chat_uid = 0;
+    _group_history_before_seq = 0;
+    _group_history_has_more = true;
+    _group_history_loading = false;
+    setPrivateHistoryLoading(false);
+    setCanLoadMorePrivateHistory(true);
+    setCurrentChatPeerName(_current_group_name);
+    setCurrentChatPeerIcon(groupIcon.trimmed().isEmpty() ? QStringLiteral("qrc:/res/chat_icon.png") : groupIcon);
+    emitCurrentDialogUidChangedIfNeeded();
+
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (groupInfo && selfInfo && _group_cache_store.isReady()) {
+        const auto localMessages = _group_cache_store.loadRecentMessages(selfInfo->_uid, groupId, 50);
+        for (const auto &one : localMessages) {
+            _gateway.userMgr()->UpsertGroupChatMsg(groupId, one);
+        }
+        groupInfo = _gateway.userMgr()->GetGroupById(groupId);
+    }
+
+    if (groupInfo) {
+        _message_model.setMessages(groupInfo->_chat_msgs, _gateway.userMgr()->GetUid());
+        qint64 readTs = 0;
+        if (!groupInfo->_chat_msgs.empty() && groupInfo->_chat_msgs.back()) {
+            readTs = groupInfo->_chat_msgs.back()->_created_at;
+        }
+        sendGroupReadAck(groupId, readTs);
+    } else {
+        _message_model.clear();
+    }
     loadGroupHistory();
     syncCurrentDialogDraft();
 }
@@ -659,6 +739,12 @@ void AppController::selectDialogByUid(int uid)
     const int groupIndex = _group_list_model.indexOfUid(uid);
     if (groupIndex >= 0) {
         selectGroupIndex(groupIndex);
+        return;
+    }
+
+    const qint64 groupId = ConversationSyncService::groupIdForDialogUid(_group_uid_map, uid);
+    if (groupId > 0) {
+        selectGroupByDialogUid(uid, groupId);
     }
 }
 
@@ -1117,7 +1203,8 @@ void AppController::loadGroupHistory()
     if (!selfInfo || _current_group_id <= 0) {
         return;
     }
-    if (_private_history_loading) {
+    if (_group_history_loading) {
+        qInfo() << "Skip group history request because one is already loading, group id:" << _current_group_id;
         return;
     }
     if (!_group_history_has_more && _group_history_before_seq > 0) {
@@ -1130,7 +1217,39 @@ void AppController::loadGroupHistory()
     obj["before_seq"] = static_cast<qint64>(_group_history_before_seq);
     obj["limit"] = 50;
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    _group_history_loading = true;
+    qInfo() << "Requesting group history, group id:" << _current_group_id
+            << "before seq:" << _group_history_before_seq
+            << "private history loading:" << _private_history_loading;
     setPrivateHistoryLoading(true);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_GROUP_HISTORY_REQ, payload);
+}
+
+void AppController::requestGroupHistoryForBootstrap(qint64 groupId)
+{
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo || groupId <= 0) {
+        return;
+    }
+    if (groupId == _current_group_id && _group_history_loading) {
+        qInfo() << "Skip bootstrap group history because current group is already loading, group id:" << groupId;
+        return;
+    }
+
+    QJsonObject obj;
+    obj["fromuid"] = selfInfo->_uid;
+    obj["groupid"] = static_cast<qint64>(groupId);
+    obj["before_ts"] = 0;
+    obj["before_seq"] = static_cast<qint64>(0);
+    obj["limit"] = 50;
+    const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    if (groupId == _current_group_id) {
+        _group_history_loading = true;
+        setPrivateHistoryLoading(true);
+    }
+    qInfo() << "Requesting bootstrap group history, group id:" << groupId
+            << "current group id:" << _current_group_id
+            << "private history loading:" << _private_history_loading;
     _gateway.chatTransport()->slot_send_data(ReqId::ID_GROUP_HISTORY_REQ, payload);
 }
 
@@ -1322,6 +1441,11 @@ void AppController::quitCurrentGroup()
     _group_coordinator->quitCurrentGroup();
 }
 
+void AppController::dissolveCurrentGroup()
+{
+    _group_coordinator->dissolveCurrentGroup();
+}
+
 void AppController::clearGroupStatus()
 {
     setGroupStatus("", false);
@@ -1498,7 +1622,10 @@ void AppController::markDialogReadByUid(int dialogUid)
     }
 
     _group_list_model.clearUnread(dialogUid);
-    const qint64 groupId = -static_cast<qint64>(dialogUid);
+    const qint64 groupId = ConversationSyncService::groupIdForDialogUid(_group_uid_map, dialogUid);
+    if (groupId <= 0) {
+        return;
+    }
     const qint64 latestGroupTs = latestGroupCreatedAt(groupId);
     if (latestGroupTs > 0) {
         sendGroupReadAck(groupId, latestGroupTs);
@@ -1711,7 +1838,10 @@ void AppController::refreshGroupModel()
         if (!group || group->_group_id <= 0) {
             continue;
         }
-        const int pseudoUid = -static_cast<int>(group->_group_id);
+        const int pseudoUid = ConversationSyncService::resolveGroupDialogUid(_group_uid_map, group->_group_id);
+        if (pseudoUid == 0) {
+            continue;
+        }
         const QString groupIcon = group->_icon.trimmed().isEmpty()
             ? QStringLiteral("qrc:/res/chat_icon.png")
             : group->_icon;
@@ -1724,7 +1854,6 @@ void AppController::refreshGroupModel()
                                                  group->_announcement,
                                                  group->_last_msg);
         converted.push_back(info);
-        _group_uid_map.insert(pseudoUid, group->_group_id);
     }
 
     _group_list_model.setFriends(converted);
@@ -1772,8 +1901,13 @@ void AppController::refreshDialogModel()
             continue;
         }
 
+        const int pseudoUid = ConversationSyncService::resolveGroupDialogUid(_group_uid_map, group->_group_id);
+        if (pseudoUid == 0) {
+            continue;
+        }
+
         DialogEntrySeed seed;
-        seed.dialogUid = -static_cast<int>(group->_group_id);
+        seed.dialogUid = pseudoUid;
         seed.dialogType = QStringLiteral("group");
         seed.name = group->_name;
         seed.nick = group->_name;
@@ -1837,8 +1971,13 @@ void AppController::refreshDialogModelIncremental()
             continue;
         }
 
+        const int pseudoUid = ConversationSyncService::resolveGroupDialogUid(_group_uid_map, group->_group_id);
+        if (pseudoUid == 0) {
+            continue;
+        }
+
         DialogEntrySeed seed;
-        seed.dialogUid = -static_cast<int>(group->_group_id);
+        seed.dialogUid = pseudoUid;
         seed.dialogType = QStringLiteral("group");
         seed.name = group->_name;
         seed.nick = group->_name;
@@ -1875,6 +2014,7 @@ void AppController::loadCurrentChatMessages()
         _private_history_pending_peer_uid = 0;
         _group_history_before_seq = 0;
         _group_history_has_more = true;
+        _group_history_loading = false;
         setPrivateHistoryLoading(false);
         setCanLoadMorePrivateHistory(false);
         return;
@@ -1935,7 +2075,7 @@ void AppController::loadCurrentChatMessages()
             << "message model count:" << _message_model.rowCount()
             << "earliest created at:" << _private_history_before_ts
             << "earliest msg id:" << _private_history_before_msg_id;
-    requestPrivateHistory(_current_chat_uid, _private_history_before_ts, _private_history_before_msg_id);
+    requestPrivateHistory(_current_chat_uid, 0, QString());
 }
 
 void AppController::requestPrivateHistory(int peerUid, qint64 beforeTs, const QString &beforeMsgId)
@@ -1963,6 +2103,26 @@ void AppController::requestPrivateHistory(int peerUid, qint64 beforeTs, const QS
     _private_history_pending_before_ts = beforeTs;
     _private_history_pending_before_msg_id = beforeMsgId.trimmed();
     setPrivateHistoryLoading(true);
+    _gateway.chatTransport()->slot_send_data(ReqId::ID_PRIVATE_HISTORY_REQ, payload);
+}
+
+void AppController::requestPrivateHistoryForBootstrap(int peerUid)
+{
+    if (peerUid <= 0) {
+        return;
+    }
+
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (!selfInfo) {
+        return;
+    }
+
+    QJsonObject payloadObj;
+    payloadObj["fromuid"] = selfInfo->_uid;
+    payloadObj["peer_uid"] = peerUid;
+    payloadObj["before_ts"] = static_cast<qint64>(0);
+    payloadObj["limit"] = 20;
+    const QByteArray payload = QJsonDocument(payloadObj).toJson(QJsonDocument::Compact);
     _gateway.chatTransport()->slot_send_data(ReqId::ID_PRIVATE_HISTORY_REQ, payload);
 }
 

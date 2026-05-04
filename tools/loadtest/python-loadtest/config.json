@@ -1,0 +1,27 @@
+{
+  "gate_url": "http://127.0.0.1:8080",
+  "login_path": "/user_login",
+  "client_ver": "3.0.0",
+  "use_xor_passwd": true,
+  "accounts_csv": "../../../infra/Memo_ops/artifacts/loadtest/runtime/accounts/accounts.local.csv",
+  "report_dir": "../../../infra/Memo_ops/artifacts/loadtest/runtime/reports",
+  "http_timeout_sec": 8.0,
+  "tcp_timeout_sec": 8.0,
+  "ai_base_url": "http://127.0.0.1:8096",
+  "ai_timeout_sec": 60.0,
+  "ai_uid": 10001,
+  "rag_top_k": 3,
+  "agent_prompts": [
+    "请用一句话介绍 MemoChat。",
+    "请总结分布式 IM 登录链路的关键步骤。"
+  ],
+  "rag_docs": [
+    {
+      "file_name": "memochat-loadtest.md",
+      "file_type": "md",
+      "content": "MemoChat 的 GateServer 默认端口是 8080。ChatServer 使用 TCP 长连接承载聊天登录。AIOrchestrator 默认端口是 8096。",
+      "query": "MemoChat 的 GateServer 默认端口是什么？",
+      "expected_terms": ["GateServer", "8080"]
+    }
+  ]
+}

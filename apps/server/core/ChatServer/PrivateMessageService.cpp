@@ -667,8 +667,9 @@ void PrivateMessageService::HandlePrivateHistory(const std::shared_ptr<CSession>
     rtvalue["error"] = ErrorCodes::Success;
     rtvalue["peer_uid"] = peer_uid;
     rtvalue["has_more"] = false;
+    rtvalue["messages"] = memochat::json::arrayValue;
     Defer defer([&rtvalue, session]() {
-        session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}"), ID_PRIVATE_HISTORY_RSP);
+        session->Send(JsonToWireString(rtvalue), ID_PRIVATE_HISTORY_RSP);
     });
 
     if (uid <= 0 || peer_uid <= 0 || limit <= 0) {

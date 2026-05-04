@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "../../components"
+import "../../agent"
 
 Item {
     id: root
@@ -18,6 +19,10 @@ Item {
     property bool hasReplyContext: false
     property string replyTargetName: ""
     property string replyPreviewText: ""
+    property var smartResult: null
+    property bool smartBusy: false
+    property string smartStatusText: ""
+    property string smartResultTitle: "智能结果"
     readonly property bool hasPendingAttachmentItems: pendingAttachments && pendingAttachments.length > 0
     signal sendComposer(string text)
     signal sendImage()
@@ -27,6 +32,10 @@ Item {
     signal sendVideoCall()
     signal draftEdited(string text)
     signal clearReplyRequested()
+    signal summaryRequested()
+    signal suggestRequested()
+    signal translateRequested()
+    signal clearSmartResultRequested()
 
     function insertMention(text) {
         if (!root.enabledComposer || !text || text.length === 0) {
@@ -54,6 +63,16 @@ Item {
         root.draftEdited(messageInput.text)
     }
 
+    function applySuggestedText(text) {
+        if (!root.enabledComposer || !text || text.length === 0) {
+            return
+        }
+        messageInput.text = text
+        messageInput.cursorPosition = messageInput.text.length
+        messageInput.forceActiveFocus()
+        root.draftEdited(messageInput.text)
+    }
+
     function showTransientTip(message) {
         root.transientTipText = message
         transientTipTimer.restart()
@@ -71,8 +90,8 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 10
-        spacing: 8
+        anchors.margins: 8
+        spacing: 6
 
         RowLayout {
             Layout.fillWidth: true
@@ -311,6 +330,20 @@ Item {
             }
 
             Item { Layout.fillWidth: true }
+
+            SmartFeatureBar {
+                Layout.preferredWidth: 256
+                Layout.preferredHeight: 30
+                compactMode: true
+                smartResult: root.smartResult
+                busy: root.smartBusy
+                statusText: root.smartStatusText
+                resultTitle: root.smartResultTitle
+                onSummaryRequested: root.summaryRequested()
+                onSuggestRequested: root.suggestRequested()
+                onTranslateRequested: root.translateRequested()
+                onClearResultRequested: root.clearSmartResultRequested()
+            }
         }
 
         Label {
@@ -418,19 +451,19 @@ Item {
         GlassSurface {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.minimumHeight: 106
+            Layout.minimumHeight: 86
             backdrop: root.backdrop !== null ? root.backdrop : root
             cornerRadius: 10
             blurRadius: 18
-            fillColor: Qt.rgba(1, 1, 1, 0.24)
-            strokeColor: Qt.rgba(1, 1, 1, 0.46)
-            glowTopColor: Qt.rgba(1, 1, 1, 0.20)
-            glowBottomColor: Qt.rgba(1, 1, 1, 0.02)
+            fillColor: Qt.rgba(1, 1, 1, 0.16)
+            strokeColor: Qt.rgba(1, 1, 1, 0.34)
+            glowTopColor: Qt.rgba(1, 1, 1, 0.12)
+            glowBottomColor: Qt.rgba(1, 1, 1, 0.01)
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 10
-                spacing: 8
+                anchors.margins: 8
+                spacing: 6
 
                 Rectangle {
                     Layout.fillWidth: true
@@ -548,7 +581,7 @@ Item {
                         selectionColor: "#7baee899"
                         selectedTextColor: "#ffffff"
                         wrapMode: Text.Wrap
-                        font.pixelSize: 17
+                        font.pixelSize: 15
                         background: Item { }
                         onTextChanged: {
                             if (!root.syncingDraftText) {
@@ -560,9 +593,9 @@ Item {
                     GlassButton {
                         id: sendButton
                         Layout.alignment: Qt.AlignBottom
-                        implicitWidth: 88
-                        implicitHeight: 34
-                        textPixelSize: 14
+                        implicitWidth: 80
+                        implicitHeight: 32
+                        textPixelSize: 13
                         cornerRadius: 9
                         text: "发送"
                         normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.26)

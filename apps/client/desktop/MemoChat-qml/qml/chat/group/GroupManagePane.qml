@@ -9,11 +9,25 @@ GlassSurface {
     property bool canInviteUsers: false
     property bool canManageAdmins: false
     property bool canBanUsers: false
+    property var friendModel: null
+    property string selectedFriendUserId: ""
 
     signal inviteRequested(string userId, string reason)
     signal setAdminRequested(string userId, bool isAdmin, int permissionBits)
     signal muteRequested(string userId, int muteSeconds)
     signal kickRequested(string userId)
+
+    function syncTargetFromFriend(indexValue) {
+        if (!friendModel || indexValue < 0 || !friendModel.get) {
+            return
+        }
+        const item = friendModel.get(indexValue)
+        if (!item || !item.userId || item.userId.length === 0) {
+            return
+        }
+        selectedFriendUserId = item.userId
+        uidInput.text = item.userId
+    }
 
     function composePermissionBits() {
         let bits = 0
@@ -101,10 +115,12 @@ GlassSurface {
 
     cornerRadius: 10
     blurRadius: 26
+    implicitHeight: manageColumn.implicitHeight + 20
     fillColor: Qt.rgba(1, 1, 1, 0.20)
     strokeColor: Qt.rgba(1, 1, 1, 0.42)
 
     ColumnLayout {
+        id: manageColumn
         anchors.fill: parent
         anchors.margins: 10
         spacing: 8
@@ -116,12 +132,40 @@ GlassSurface {
             font.pixelSize: 14
         }
 
+        ComboBox {
+            id: friendCombo
+            Layout.fillWidth: true
+            Layout.preferredHeight: 34
+            model: root.friendModel
+            textRole: "nick"
+            valueRole: "userId"
+            enabled: root.friendModel && root.friendModel.count > 0
+            currentIndex: -1
+            displayText: currentIndex >= 0 ? currentText : "选择好友"
+            onActivated: root.syncTargetFromFriend(index)
+
+            background: Rectangle {
+                radius: 9
+                color: friendCombo.enabled ? Qt.rgba(1, 1, 1, 0.18) : Qt.rgba(0.52, 0.57, 0.64, 0.12)
+                border.color: friendCombo.hovered ? Qt.rgba(0.35, 0.61, 0.90, 0.48) : Qt.rgba(1, 1, 1, 0.34)
+            }
+            contentItem: Text {
+                leftPadding: 10
+                rightPadding: 28
+                text: friendCombo.displayText
+                color: friendCombo.enabled ? "#2a3649" : "#8b96a5"
+                font.pixelSize: 13
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+            }
+        }
+
         GlassTextField {
             id: uidInput
             Layout.fillWidth: true
             Layout.preferredHeight: 32
             backdrop: root.backdrop
-            placeholderText: "目标用户ID（u#########）"
+            placeholderText: "目标用户ID（可手动补充）"
         }
 
         GlassTextField {

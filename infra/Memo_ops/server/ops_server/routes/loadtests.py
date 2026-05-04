@@ -1,12 +1,14 @@
+from __future__ import annotations
+
 import json
 import os
 import subprocess
+import sys
 import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from __future__ import annotations
+from typing import Any, Dict
 
 from fastapi import APIRouter, Query, BackgroundTasks
 
@@ -68,28 +70,32 @@ def create_loadtests_router(runtime: OpsServerRuntime) -> APIRouter:
         candidates = [
             repo_root / "Memo_ops" / "artifacts" / "loadtest" / "runtime" / "reports",
             repo_root / "artifacts" / "loadtest" / "runtime" / "reports",
-            repo_root / "local-loadtest-cpp" / "reports",
+            repo_root / "tools" / "loadtest" / "python-loadtest" / "reports",
+            repo_root / "python-loadtest" / "reports",
         ]
         for c in candidates:
             if c.exists():
                 return c
         return repo_root / "reports"
 
-    def _find_binary(runtime: OpsServerRuntime) -> Path:
-        binary_path = runtime.config.get("loadtest", {}).get("binary_path", "")
-        if binary_path:
-            p = Path(binary_path).resolve()
+    def _find_runner(runtime: OpsServerRuntime) -> Path:
+        runner_path = runtime.config.get("loadtest", {}).get("runner_path", "")
+        if runner_path:
+            p = Path(runner_path).resolve()
             if p.exists():
                 return p
         repo_root = Path(runtime.config.get("_package_root", "."))
         candidates = [
-            repo_root / "local-loadtest-cpp" / "build" / "Release" / "memochat_loadtest.exe",
-            repo_root / "local-loadtest-cpp" / "build" / "Release" / "memochat_loadtest.exe",
+            repo_root / "tools" / "loadtest" / "python-loadtest" / "py_loadtest.py",
+            repo_root / "python-loadtest" / "py_loadtest.py",
         ]
         for c in candidates:
             if c.exists():
                 return c
-        return Path("memochat_loadtest.exe")
+        return Path("py_loadtest.py")
+
+    def _find_python() -> str:
+        return runtime.config.get("loadtest", {}).get("python", "") or sys.executable
 
     def _scan_reports(report_dir: Path, since_mtime: float) -> list[dict]:
         reports = []
@@ -104,18 +110,20 @@ def create_loadtests_router(runtime: OpsServerRuntime) -> APIRouter:
                 pass
         return reports
 
-    def _run_loadtest_bg(run_id: str, scenario: str, warmup: int, pool_size: int,
-                          binary: Path, config_path: Path, report_dir: Path) -> None:
+    def _run_loadtest_bg(run_id: str, scenario: str, total: int, concurrency: int,
+                          runner: Path, config_path: Path, report_dir: Path) -> None:
         started_at = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
         suite_dir = report_dir / f"suite_{started_at}"
         suite_dir.mkdir(parents=True, exist_ok=True)
 
         cmd = [
-            str(binary),
+            _find_python(),
+            str(runner),
             "--scenario", scenario,
             "--config", str(config_path),
-            "--warmup", str(warmup),
-            "--pool-size", str(pool_size),
+            "--total", str(total),
+            "--concurrency", str(concurrency),
+            "--report-dir", str(suite_dir),
         ]
         try:
             env = {**os.environ}
@@ -145,16 +153,17 @@ def create_loadtests_router(runtime: OpsServerRuntime) -> APIRouter:
     def api_start_loadtest(
         background_tasks: BackgroundTasks,
         scenario: str = "all",
-        warmup: int = Query(10, ge=0, le=100),
-        pool_size: int = Query(200, ge=1, le=2000),
+        total: int = Query(20, ge=1, le=100000),
+        concurrency: int = Query(5, ge=1, le=5000),
     ) -> dict:
         report_dir = _find_report_dir(runtime)
-        binary = _find_binary(runtime)
+        runner = _find_runner(runtime)
         repo_root = Path(runtime.config.get("_package_root", "."))
-        config_path = repo_root / "local-loadtest-cpp" / "config.json"
+        configured_config = runtime.config.get("loadtest", {}).get("config_path", "")
+        config_path = Path(configured_config).resolve() if configured_config else repo_root / "tools" / "loadtest" / "python-loadtest" / "config.json"
 
-        if not binary.exists():
-            return {"error": f"Loadtest binary not found: {binary}"}
+        if not runner.exists():
+            return {"error": f"Python loadtest runner not found: {runner}"}
         if not config_path.exists():
             return {"error": f"Config not found: {config_path}"}
 
@@ -167,8 +176,8 @@ def create_loadtests_router(runtime: OpsServerRuntime) -> APIRouter:
                 "run_id": run_id,
                 "status": "running",
                 "scenario": scenario,
-                "warmup": warmup,
-                "pool_size": pool_size,
+                "total": total,
+                "concurrency": concurrency,
                 "started_at": started_at,
                 "started_at_mtime": started_at_mtime,
                 "finished_at": "",
@@ -184,9 +193,9 @@ def create_loadtests_router(runtime: OpsServerRuntime) -> APIRouter:
             _run_loadtest_bg,
             run_id,
             scenario,
-            warmup,
-            pool_size,
-            binary,
+            total,
+            concurrency,
+            runner,
             config_path,
             report_dir,
         )

@@ -64,6 +64,7 @@ public:
 	bool MuteGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid, const int64_t& mute_until);
 	bool KickGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid);
 	bool QuitGroup(const int64_t& group_id, const int& uid);
+	bool DissolveGroup(const int64_t& group_id, const int& operator_uid);
 	bool GetGroupById(const int64_t& group_id, std::shared_ptr<GroupInfo>& group_info);
 	bool GetUserRoleInGroup(const int64_t& group_id, const int& uid, int& role);
 	bool IsUserInGroup(const int64_t& group_id, const int& uid);

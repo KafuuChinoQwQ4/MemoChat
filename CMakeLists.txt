@@ -26,7 +26,6 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 option(BUILD_CLIENT "Build MemoChat QML client" ON)
 option(BUILD_SERVER "Build all backend servers (GateServer, GateServerHttp2, StatusServer, ChatServer, VarifyServer)" ON)
 option(BUILD_OPS "Build MemoOps monitoring platform" ON)
-option(BUILD_LOADTEST "Build load test tool" ON)
 option(BUILD_TESTS "Build unit tests with Google Test" ON)
 
 # Determine what was already configured via preset (used by start_all_services.bat)
@@ -51,10 +50,6 @@ endif()
 
 if(BUILD_OPS)
     add_subdirectory(infra/Memo_ops)
-endif()
-
-if(BUILD_LOADTEST)
-    add_subdirectory(tools/loadtest/local-loadtest-cpp)
 endif()
 
 if(BUILD_TESTS)
@@ -92,10 +87,6 @@ endif()
 
 if(BUILD_OPS)
     add_dependencies(build-all MemoOpsQml)
-endif()
-
-if(BUILD_LOADTEST)
-    add_dependencies(build-all memochat_loadtest)
 endif()
 
 if(BUILD_TESTS)

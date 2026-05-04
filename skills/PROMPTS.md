@@ -144,20 +144,14 @@ Read:
 - .ai/<PROJECT>/<LETTER>/context.md
 - .ai/<PROJECT>/<LETTER>/plan.md
 
-Run the narrowest relevant verification:
+Run deployable verification from the full build output. `deploy_services.bat` copies only from `build\bin\Release`.
 
-Server:
-cmake --preset msvc2022-server-verify
-cmake --build --preset msvc2022-server-verify
-
-Client:
-cmake --preset msvc2022-client-verify
-cmake --build --preset msvc2022-client-verify
+Full build:
+cmake --preset msvc2022-full
+cmake --build --preset msvc2022-full
 
 Tests:
-cmake --preset msvc2022-tests
-cmake --build --preset msvc2022-tests
-ctest --preset msvc2022-tests
+ctest --preset msvc2022-full
 
 Runtime smoke, when needed:
 tools\scripts\status\deploy_services.bat

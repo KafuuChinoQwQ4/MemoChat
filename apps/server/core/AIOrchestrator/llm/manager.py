@@ -55,6 +55,7 @@ class LLMManager:
                 self._backends["ollama"] = OllamaLLM(
                     base_url=llm_cfg.ollama.base_url,
                     model_name=llm_cfg.default_model if llm_cfg.default_backend == "ollama" else llm_cfg.ollama.models[0].name if llm_cfg.ollama.models else "qwen3:4b",
+                    timeout_sec=llm_cfg.ollama.timeout_sec or settings.agent.timeout_total_sec,
                 )
                 logger.info("llm.backend_loaded", backend="ollama", url=llm_cfg.ollama.base_url)
             except Exception as e:

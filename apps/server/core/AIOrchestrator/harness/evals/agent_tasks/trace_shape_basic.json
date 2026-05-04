@@ -1,0 +1,28 @@
+{
+  "case_id": "trace_shape_basic",
+  "name": "Basic trace shape",
+  "description": "Checks a completed agent trace by structure, layers, events, tools, guardrails, and latency without comparing exact model text.",
+  "expectations": {
+    "expected_status": "completed",
+    "required_layers": [
+      "orchestration",
+      "guardrails",
+      "memory",
+      "execution",
+      "feedback"
+    ],
+    "required_events": [
+      "plan",
+      "load_context",
+      "tool_execution",
+      "model_completion",
+      "save_context",
+      "evaluate_response"
+    ],
+    "max_latency_ms": 120000
+  },
+  "metadata": {
+    "mode": "replay",
+    "stage": "stage-7-replay-evals"
+  }
+}

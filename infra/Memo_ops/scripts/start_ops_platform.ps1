@@ -2,8 +2,8 @@ param(
     [switch]$NoClient,
     [switch]$Background,
     [switch]$SkipBuild,
-    [string]$ConfigurePreset = "msvc2022-ops",
-    [string]$BuildPreset = "msvc2022-ops",
+    [string]$ConfigurePreset = "msvc2022-full",
+    [string]$BuildPreset = "msvc2022-full",
     [string]$RepoRoot = ""
 )
 
@@ -194,7 +194,7 @@ if (-not $NoClient) {
         Set-Content -Path (Join-Path $pidRoot "MemoOpsQml.pid") -Value $clientProc.Id -Encoding ascii
     } else {
         Write-Warning "MemoOpsQml.exe not found at $clientExe. Build may have failed."
-        Write-Warning "Try: cmake --preset msvc2022-ops && cmake --build --preset msvc2022-ops --target MemoOpsQml"
+        Write-Warning "Try: cmake --preset msvc2022-full && cmake --build --preset msvc2022-full --target MemoOpsQml"
     }
 }
 

@@ -55,6 +55,7 @@ public:
     std::shared_ptr<GroupInfoData> GetGroupById(qint64 groupId);
     bool CheckGroupById(qint64 groupId);
     void UpsertGroup(const std::shared_ptr<GroupInfoData>& groupInfo);
+    void RemoveGroup(qint64 groupId);
     void AppendGroupChatMsg(qint64 group_id, const std::shared_ptr<TextChatData>& msg);
     void UpsertGroupChatMsg(qint64 group_id, const std::shared_ptr<TextChatData>& msg);
     bool UpdateGroupChatMsgState(qint64 group_id, const QString &msgId, const QString &state);

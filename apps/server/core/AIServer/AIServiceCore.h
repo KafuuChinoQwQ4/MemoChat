@@ -41,6 +41,18 @@ public:
     grpc::Status ListKb(const ai::AIKbListReq& req, ai::AIKbListRsp* reply);
     grpc::Status DeleteKb(const ai::AIKbDeleteReq& req, ai::AIKbDeleteRsp* reply);
 
+    // 可见记忆
+    grpc::Status MemoryList(const ai::AIMemoryReq& req, ai::AIMemoryListRsp* reply);
+    grpc::Status MemoryCreate(const ai::AIMemoryReq& req, ai::AIMemoryRsp* reply);
+    grpc::Status MemoryDelete(const ai::AIMemoryReq& req, ai::AIMemoryRsp* reply);
+
+    // Agent 后台任务
+    grpc::Status AgentTaskCreate(const ai::AIAgentTaskReq& req, ai::AIAgentTaskRsp* reply);
+    grpc::Status AgentTaskList(const ai::AIAgentTaskReq& req, ai::AIAgentTaskRsp* reply);
+    grpc::Status AgentTaskGet(const ai::AIAgentTaskReq& req, ai::AIAgentTaskRsp* reply);
+    grpc::Status AgentTaskCancel(const ai::AIAgentTaskReq& req, ai::AIAgentTaskRsp* reply);
+    grpc::Status AgentTaskResume(const ai::AIAgentTaskReq& req, ai::AIAgentTaskRsp* reply);
+
     // 人类确认
     grpc::Status HandleConfirm(const ai::AIConfirmReq& req, ai::AIConfirmRsp* reply);
 

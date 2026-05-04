@@ -35,21 +35,14 @@ apps/server/core/ChatServer/chatserver4.ini
 
 ## 2. 构建
 
-需要 msquic 支持时，使用带 msquic 的预设：
+本地构建统一使用 full 预设：
 
 ```powershell
-cmake --preset msvc2022-all-msquic
-cmake --build --preset msvc2022-msquic-release
+cmake --preset msvc2022-full
+cmake --build --preset msvc2022-full
 ```
 
-只构建服务端：
-
-```powershell
-cmake --preset msvc2022-vcpkg-server-msquic
-cmake --build --preset msvc2022-vcpkg-server-msquic-release
-```
-
-如果使用普通预设，QUIC 相关目标可能被禁用或只能走 TCP。
+msquic 依赖通过当前 full 构建配置和 vcpkg 环境提供。旧的 msquic 专用 preset 已不再作为本地入口。
 
 ## 3. 开发证书
 

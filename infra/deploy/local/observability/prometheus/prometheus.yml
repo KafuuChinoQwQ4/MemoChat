@@ -18,19 +18,11 @@ remote_write:
 scrape_configs:
   - job_name: prometheus
     static_configs:
-      - targets: ["prometheus:9090"]
-
-  - job_name: windows_exporter
-    static_configs:
-      - targets: ["host.docker.internal:9182"]
+      - targets: ["memochat-prometheus:9090"]
 
   - job_name: cadvisor
     static_configs:
-      - targets: ["cadvisor:8080"]
-
-  - job_name: memo_ops_collector
-    static_configs:
-      - targets: ["host.docker.internal:19100"]
+      - targets: ["memochat-cadvisor:8080"]
 
   - job_name: ai_orchestrator
     metrics_path: /metrics
@@ -39,8 +31,19 @@ scrape_configs:
 
   - job_name: otel_collector
     static_configs:
-      - targets: ["otel-collector:9464"]
+      - targets: ["memochat-otel-collector:9464"]
 
-  - job_name: dcgm_exporter
-    static_configs:
-      - targets: ["dcgm-exporter:9400"]
+  # Optional local exporters. Enable these only when the matching process or
+  # profile is running, otherwise Prometheus target health becomes noisy.
+  #
+  # - job_name: windows_exporter
+  #   static_configs:
+  #     - targets: ["host.docker.internal:9182"]
+  #
+  # - job_name: memo_ops_collector
+  #   static_configs:
+  #     - targets: ["host.docker.internal:19100"]
+  #
+  # - job_name: dcgm_exporter
+  #   static_configs:
+  #     - targets: ["memochat-dcgm-exporter:9400"]

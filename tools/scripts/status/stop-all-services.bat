@@ -52,7 +52,7 @@ REM Tier 3: VarifyServer (Node.js)
 REM ============================================================
 echo.
 echo [STEP] Stop VarifyServer (Node.js)
-powershell -NoProfile -Command "$ports = @(50051,50383,8083,8087); $pids = @(); foreach ($port in $ports) { $pids += Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess }; $pids = $pids | Where-Object { $_ } | Sort-Object -Unique; if ($pids) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Write-Host '  [OK] VarifyServer Node instances stopped' } else { Write-Host '  [-] VarifyServer Node instances not running' }" 2>nul
+powershell -NoProfile -Command "$ports = @(50051,48083,8083,8087); $pids = @(); foreach ($port in $ports) { $pids += Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess }; $pids = $pids | Where-Object { $_ } | Sort-Object -Unique; if ($pids) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Write-Host '  [OK] VarifyServer Node instances stopped' } else { Write-Host '  [-] VarifyServer Node instances not running' }" 2>nul
 
 REM ============================================================
 REM Tier 2: C++ 后端服务

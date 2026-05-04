@@ -12,7 +12,7 @@
 | `Memo_ops/` | `infra/Memo_ops/` | 运营平台与本地运行时目录 |
 | `deploy/` | `infra/deploy/` | Docker Compose、Kubernetes、镜像配置 |
 | `scripts/` | `tools/scripts/` | Windows/运维/初始化脚本 |
-| `local-loadtest-cpp/` | `tools/loadtest/local-loadtest-cpp/` | C++ 压测工具 |
+| `python-loadtest/` | `tools/loadtest/python-loadtest/` | Python 压测工具 |
 
 ## 当前原则
 

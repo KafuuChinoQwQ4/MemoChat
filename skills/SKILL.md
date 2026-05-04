@@ -111,21 +111,20 @@ Implement phase by phase.
 
 ## Phase 5: Verification
 
-Pick the narrowest verification that proves the change:
+Use the full local build for any code change that may be deployed or runtime-tested. `deploy_services.bat` copies only from `build\bin\Release`, which is produced by `msvc2022-full`; do not use `build-verify-server` or `build-verify-client` for deployable verification.
 
-- Server/config-only check:
-  `cmake --preset msvc2022-server-verify`
-  `cmake --build --preset msvc2022-server-verify`
-- Client-only check:
-  `cmake --preset msvc2022-client-verify`
-  `cmake --build --preset msvc2022-client-verify`
-- Unit tests:
-  `cmake --preset msvc2022-tests`
-  `cmake --build --preset msvc2022-tests`
-  `ctest --preset msvc2022-tests`
-- Full build only when the task crosses server, client, ops, and tests:
-  `cmake --preset msvc2022-full`
-  `cmake --build --preset msvc2022-full`
+Required build before deploy/runtime smoke:
+
+```powershell
+cmake --preset msvc2022-full
+cmake --build --preset msvc2022-full
+```
+
+For unit tests, run them from the full build tree:
+
+```powershell
+ctest --preset msvc2022-full
+```
 
 For runtime verification, prefer existing scripts:
 
@@ -136,7 +135,7 @@ For runtime verification, prefer existing scripts:
 - `tools\scripts\test_register_login.ps1`
 - `tools\scripts\test_login.ps1`
 - `tools\scripts\full_flow_test.ps1`
-- load tests under `tools\loadtest\local-loadtest-cpp`
+- Python load tests under `tools\loadtest\python-loadtest`
 
 If build fails with file locks or access denied, stop and tell the user which process/file is locking output.
 
