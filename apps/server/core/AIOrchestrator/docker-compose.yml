@@ -23,7 +23,7 @@ services:
       - MEMOCHAT_AI_CONFIG_PATH=/app/runtime-config/config.yaml
       - HF_HOME=/app/.cache/huggingface
       - SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence_transformers
-      - MEMOCHAT_AI_LLM__OLLAMA__BASE_URL=http://memochat-ollama:11434
+      - MEMOCHAT_AI_LLM__OLLAMA__ENABLED=false
       - MEMOCHAT_AI_RAG__QDRANT__HOST=memochat-qdrant
       - MEMOCHAT_AI_NEO4J__HOST=memochat-neo4j
       - MEMOCHAT_AI_POSTGRES__HOST=host.docker.internal
@@ -31,11 +31,19 @@ services:
       - MEMOCHAT_AI_POSTGRES__USER=memochat
       - MEMOCHAT_AI_POSTGRES__PASSWORD=123456
       - MEMOCHAT_AI_POSTGRES__DATABASE=memo_pg
+      - MEMOCHAT_API_PROVIDERS_FILE=/app/.data/api_providers.json
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - MEMOCHAT_AI_OBSERVABILITY__ENABLED=${MEMOCHAT_AI_OBSERVABILITY__ENABLED:-false}
+      - MEMOCHAT_AI_OBSERVABILITY__BACKEND=${MEMOCHAT_AI_OBSERVABILITY__BACKEND:-langsmith}
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-memochat-ai-local}
+      - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./config.yaml:/app/runtime-config/config.yaml:ro
+      - D:/docker-data/memochat/ai-orchestrator/data:/app/.data
       - D:/docker-data/memochat/ai-orchestrator/huggingface:/app/.cache/huggingface
       - D:/docker-data/memochat/ai-orchestrator/sentence_transformers:/app/.cache/sentence_transformers
     healthcheck:
@@ -45,31 +53,10 @@ services:
       retries: 5
       start_period: 20s
     depends_on:
-      memochat-ollama:
-        condition: service_healthy
       memochat-neo4j:
         condition: service_healthy
       memochat-qdrant:
         condition: service_healthy
-
-  #######################
-  # Local LLM API
-  # local_api: Ollama
-  #######################
-  memochat-ollama:
-    image: ollama/ollama:latest
-    container_name: memochat-ollama
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - D:/docker-data/memochat/ollama:/root/.ollama
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
 
   #######################
   # Neo4j 图数据库
@@ -128,25 +115,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
-
-  #######################
-  # 可选：Langfuse 追踪平台（LLM 可观测性）
-  #######################
-  memochat-langfuse:
-    image: langfuse/langfuse:latest
-    container_name: memochat-langfuse
-    restart: unless-stopped
-    ports:
-      - "3000:3000"   # Web UI
-      - "3030:3030"   # API
-    environment:
-      - DATABASE_URL=postgresql://memochat:123456@host.docker.internal:15432/langfuse
-      - NEXTAUTH_SECRET=your-secret-key-change-in-production
-      - NEXTAUTH_URL=http://localhost:3000
-      - SALT=your-salt-change-in-production
-    depends_on: []   # Langfuse 需要 PostgreSQL，请确保 docker-compose.local.yml 已启动
-    profiles:
-      - observability  # 仅在 `docker compose --profile observability up -d` 时启动
 
 volumes:
   neo4j_data:

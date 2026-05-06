@@ -135,6 +135,7 @@ enum ReqId{
     ID_AI_TASK_CREATE = 1216,
     ID_AI_TASK_CANCEL = 1217,
     ID_AI_TASK_RESUME = 1218,
+    ID_AI_MODEL_API_DELETE = 1219,
 };
 
 enum ErrorCodes{
@@ -255,11 +256,7 @@ const std::vector<QString>  strs ={"hello world !",
                             "My love is written in the wind ever since the whole world is you"};
 
 const std::vector<QString> heads = {
-    ":/res/head_1.jpg",
-    ":/res/head_2.jpg",
-    ":/res/head_3.jpg",
-    ":/res/head_4.jpg",
-    ":/res/head_5.jpg"
+    ":/res/head_1.jpg"
 };
 
 const std::vector<QString> names = {

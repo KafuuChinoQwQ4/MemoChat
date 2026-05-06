@@ -19,6 +19,15 @@ void HttpConnection::SetFileResponse(const std::string& file_path, const std::st
     _send_file_content_type = content_type;
 }
 
+std::string HttpConnection::RequestTargetString() const {
+    const auto target = _request.target();
+    return std::string(target.data(), target.size());
+}
+
+std::string HttpConnection::RequestBodyString() const {
+    return beast::buffers_to_string(_request.body().data());
+}
+
 void HttpConnection::StartSseStream() {
     _streaming_response.store(true, std::memory_order_release);
     auto self = shared_from_this();
@@ -216,18 +225,22 @@ void HttpConnection::HandleReq() {
             return;
         }
 
-        _response.result(http::status::ok);
+        if (_response.result() == http::status::unknown) {
+            _response.result(http::status::ok);
+        }
         _response.set(http::field::server, "GateServer");
         WriteResponse();
         return;
     }
 
-    if (_request.method() == http::verb::post) {
+    if (_request.method() == http::verb::post || _request.method() == http::verb::delete_) {
         auto self = shared_from_this();
         GateWorkerPool::GetInstance()->post([self]() {
             try {
                 auto* ioc = gateglobals::g_main_ioc;
-                bool handled = LogicSystem::GetInstance()->HandlePost(self->_request.target(), self);
+                bool handled = self->_request.method() == http::verb::delete_
+                    ? LogicSystem::GetInstance()->HandleDelete(self->_request.target(), self)
+                    : LogicSystem::GetInstance()->HandlePost(self->_request.target(), self);
                 if (!ioc) {
                     self->WriteErrorResponse(http::status::internal_server_error, "internal error\r\n");
                     return;
@@ -242,7 +255,9 @@ void HttpConnection::HandleReq() {
                             self->_response.set(http::field::content_type, "text/plain");
                             beast::ostream(self->_response.body()) << "url not found\r\n";
                         } else {
-                            self->_response.result(http::status::ok);
+                            if (self->_response.result() == http::status::unknown) {
+                                self->_response.result(http::status::ok);
+                            }
                         }
                         self->_response.set(http::field::server, "GateServer");
                         self->WriteResponse();

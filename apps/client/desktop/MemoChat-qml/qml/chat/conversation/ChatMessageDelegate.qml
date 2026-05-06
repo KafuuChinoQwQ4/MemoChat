@@ -16,6 +16,7 @@ Item {
     property string fileName: ""
     property string senderName: ""
     property int senderUid: 0
+    property bool showOutgoingSenderName: false
     property bool showAvatar: true
     property bool showTimeDivider: false
     property string timeDividerText: ""
@@ -43,7 +44,7 @@ Item {
 
     property int avatarSize: 34
     property int avatarSlotWidth: 42
-    readonly property bool showSenderName: (!outgoing && senderName.length > 0 && showAvatar)
+    readonly property bool showSenderName: (((!outgoing) || showOutgoingSenderName) && senderName.length > 0 && showAvatar)
     readonly property string previewForReply: {
         if (msgType === "image") {
             return "[图片]"
@@ -279,7 +280,8 @@ Item {
 
     Text {
         visible: root.showSenderName
-        anchors.left: bubble.left
+        anchors.left: root.outgoing ? undefined : bubble.left
+        anchors.right: root.outgoing ? bubble.right : undefined
         anchors.bottom: bubble.top
         anchors.bottomMargin: 2
         text: root.senderName

@@ -62,6 +62,9 @@ public:
                                      const std::string& adapter,
                                      memochat::json::JsonValue* out_result);
 
+    grpc::Status DeleteApiProvider(const std::string& provider_id,
+                                   memochat::json::JsonValue* out_result);
+
     grpc::Status KbList(int32_t uid, memochat::json::JsonValue* out_result);
 
     grpc::Status KbDelete(int32_t uid, const std::string& kb_id,

@@ -114,6 +114,14 @@ public:
         return _stub->RegisterApiProvider(&ctx, req, reply);
     }
 
+    grpc::Status makeDeleteApiProviderCall(const std::string& provider_id,
+                                           ai::AIDeleteApiProviderRsp* reply) {
+        grpc::ClientContext ctx;
+        ai::AIDeleteApiProviderReq req;
+        req.set_provider_id(provider_id);
+        return _stub->DeleteApiProvider(&ctx, req, reply);
+    }
+
     grpc::Status makeKbUploadCall(int32_t uid, const std::string& file_name,
                                  const std::string& file_type,
                                  const std::string& base64_content,
@@ -528,6 +536,24 @@ memochat::json::JsonValue AIServiceClient::RegisterApiProvider(const std::string
         models.push_back(model.impl());
     }
     root["models"] = std::move(models);
+    return root;
+}
+
+memochat::json::JsonValue AIServiceClient::DeleteApiProvider(const std::string& provider_id) {
+    ai::AIDeleteApiProviderRsp reply;
+    auto status = _impl->makeDeleteApiProviderCall(provider_id, &reply);
+
+    memochat::json::JsonValue root;
+    if (!status.ok()) {
+        root["code"] = 500;
+        root["message"] = "AIServer unavailable";
+        root["provider_id"] = provider_id;
+        return root;
+    }
+
+    root["code"] = reply.code();
+    root["message"] = reply.message();
+    root["provider_id"] = reply.provider_id();
     return root;
 }
 

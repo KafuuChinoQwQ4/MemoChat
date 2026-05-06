@@ -384,6 +384,13 @@ grpc::Status AIServiceClient::RegisterApiProvider(const std::string& provider_na
     return _impl->PostJson("/models/api-provider", body, out_result);
 }
 
+grpc::Status AIServiceClient::DeleteApiProvider(const std::string& provider_id,
+                                                json::JsonValue* out_result) {
+    json::JsonValue body = json::JsonValue{};
+    body["provider_id"] = provider_id;
+    return _impl->PostJson("/models/api-provider/delete", body, out_result);
+}
+
 grpc::Status AIServiceClient::KbList(int32_t uid, json::JsonValue* out_result) {
     return _impl->GetJson("/kb/list?uid=" + std::to_string(uid), out_result);
 }

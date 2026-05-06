@@ -10,6 +10,7 @@ Rectangle {
 
     property Item backdrop: null
     property string peerName: ""
+    property string selfName: ""
     property string selfAvatar: "qrc:/res/head_1.jpg"
     property string peerAvatar: "qrc:/res/head_1.jpg"
     property bool hasCurrentChat: false
@@ -449,7 +450,8 @@ Rectangle {
                     rawContent: model.rawContent
                     translationText: root.translationForMessage(model.msgId)
                     fileName: model.fileName
-                    senderName: model.senderName
+                    senderName: (model.outgoing && root.isGroupChat) ? root.selfName : model.senderName
+                    showOutgoingSenderName: root.isGroupChat
                     showAvatar: model.showAvatar
                     showTimeDivider: model.showTimeDivider
                     timeDividerText: model.timeDividerText

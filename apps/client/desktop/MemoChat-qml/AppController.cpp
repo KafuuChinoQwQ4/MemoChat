@@ -1346,7 +1346,7 @@ void AppController::updateGroupIcon(int source)
         QString uploadErr;
         result.ok = MediaUploadService::uploadLocalFile(
             avatarUrl,
-            QStringLiteral("group_avatar"),
+            QStringLiteral("avatar"),
             selfUid,
             uploadToken,
             &result.uploaded,

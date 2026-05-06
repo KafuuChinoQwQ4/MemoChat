@@ -46,6 +46,10 @@ Rectangle {
     readonly property int headerActionHeight: 26
     readonly property int headerActionTextSize: 12
     readonly property int headerActionRadius: 7
+    readonly property color glassPanelColor: Qt.rgba(0.96, 0.98, 1.0, 0.62)
+    readonly property color glassPanelHoverColor: Qt.rgba(1, 1, 1, 0.76)
+    readonly property color glassPanelPressedColor: Qt.rgba(0.86, 0.92, 1.0, 0.70)
+    readonly property color glassBorderColor: Qt.rgba(1, 1, 1, 0.58)
     readonly property var skillModes: [
         { "key": "auto", "label": "自动" },
         { "key": "knowledge", "label": "知识库" },
@@ -55,6 +59,7 @@ Rectangle {
     ]
 
     signal backRequested()
+    signal gameModeRequested()
 
     function currentSessionTitle() {
         if (!sessions || currentSessionId.length === 0) {
@@ -63,7 +68,7 @@ Rectangle {
         for (var i = 0; i < sessions.length; ++i) {
             var session = sessions[i]
             if (session.session_id === currentSessionId) {
-                return session.title && session.title.length > 0 ? session.title : "新会话"
+                return session.title && session.title.length > 0 ? session.title : "当前会话"
             }
         }
         return "当前会话"
@@ -184,190 +189,255 @@ Rectangle {
                     }
                 }
 
-                GridLayout {
-                    id: headerActionsGrid
-                    Layout.preferredWidth: root.headerActionWidth * 3 + headerActionsGrid.columnSpacing * 2
-                    Layout.preferredHeight: root.headerActionHeight * 2 + headerActionsGrid.rowSpacing
-                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                    columns: 3
-                    rowSpacing: 5
-                    columnSpacing: 6
+                RowLayout {
+                    Layout.preferredWidth: 94
+                    Layout.preferredHeight: 32
+                    Layout.alignment: Qt.AlignRight | Qt.AlignTop
+                    spacing: 8
 
-                    GlassButton {
-                        Layout.preferredWidth: root.headerActionWidth
-                        Layout.preferredHeight: root.headerActionHeight
-                        text: root.streaming ? "停止" : "新会话"
-                        textPixelSize: root.headerActionTextSize
-                        cornerRadius: root.headerActionRadius
-                        enableScaleFeedback: false
-                        normalColor: root.streaming ? Qt.rgba(0.89, 0.27, 0.27, 0.22) : Qt.rgba(0.35, 0.61, 0.90, 0.22)
-                        hoverColor: root.streaming ? Qt.rgba(0.89, 0.27, 0.27, 0.32) : Qt.rgba(0.35, 0.61, 0.90, 0.32)
-                        pressedColor: root.streaming ? Qt.rgba(0.89, 0.27, 0.27, 0.42) : Qt.rgba(0.35, 0.61, 0.90, 0.40)
-                        onClicked: {
-                            if (!root.agentController) {
-                                return
-                            }
-                            if (root.streaming) {
-                                root.agentController.cancelStream()
-                            } else {
-                                root.agentController.createSession()
-                            }
+                    Rectangle {
+                        id: modeMenuAnchor
+                        Layout.preferredWidth: 48
+                        Layout.preferredHeight: 32
+                        radius: 10
+                        color: modeMouseArea.pressed ? root.glassPanelPressedColor
+                              : modeMouseArea.containsMouse ? root.glassPanelHoverColor
+                                                            : root.glassPanelColor
+                        border.width: 1
+                        border.color: root.glassBorderColor
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "模式"
+                            color: "#4e5d74"
+                            font.pixelSize: 12
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            id: modeMouseArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: modeMenu.open()
                         }
                     }
 
-                    GlassButton {
-                        Layout.preferredWidth: root.headerActionWidth
-                        Layout.preferredHeight: root.headerActionHeight
-                        text: "模型"
-                        textPixelSize: root.headerActionTextSize
-                        cornerRadius: root.headerActionRadius
-                        enableScaleFeedback: false
-                        normalColor: Qt.rgba(0.42, 0.56, 0.74, 0.22)
-                        hoverColor: Qt.rgba(0.42, 0.56, 0.74, 0.32)
-                        pressedColor: Qt.rgba(0.42, 0.56, 0.74, 0.40)
-                        onClicked: {
-                            const nextActive = !modelSettingsLoader.active
-                            modelSettingsLoader.active = nextActive
-                            if (nextActive && root.agentController) {
-                                root.agentController.refreshModelList()
-                            }
+                    Rectangle {
+                        id: moreMenuAnchor
+                        Layout.preferredWidth: 38
+                        Layout.preferredHeight: 32
+                        radius: 10
+                        color: moreMouseArea.pressed ? root.glassPanelPressedColor
+                              : moreMouseArea.containsMouse ? root.glassPanelHoverColor
+                                                            : root.glassPanelColor
+                        border.width: 1
+                        border.color: root.glassBorderColor
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "..."
+                            color: "#4e5d74"
+                            font.pixelSize: 18
+                            font.bold: true
                         }
-                    }
 
-                    GlassButton {
-                        Layout.preferredWidth: root.headerActionWidth
-                        Layout.preferredHeight: root.headerActionHeight
-                        text: "知识库"
-                        textPixelSize: root.headerActionTextSize
-                        cornerRadius: root.headerActionRadius
-                        enableScaleFeedback: false
-                        normalColor: Qt.rgba(0.42, 0.56, 0.74, 0.22)
-                        hoverColor: Qt.rgba(0.42, 0.56, 0.74, 0.32)
-                        pressedColor: Qt.rgba(0.42, 0.56, 0.74, 0.40)
-                        onClicked: {
-                            if (root.agentController) {
-                                root.agentController.listKnowledgeBases()
-                            }
-                            knowledgeBaseLoader.active = true
-                        }
-                    }
-
-                    GlassButton {
-                        Layout.preferredWidth: root.headerActionWidth
-                        Layout.preferredHeight: root.headerActionHeight
-                        text: "轨迹"
-                        textPixelSize: root.headerActionTextSize
-                        cornerRadius: root.headerActionRadius
-                        enableScaleFeedback: false
-                        normalColor: Qt.rgba(0.42, 0.56, 0.74, 0.22)
-                        hoverColor: Qt.rgba(0.42, 0.56, 0.74, 0.32)
-                        pressedColor: Qt.rgba(0.42, 0.56, 0.74, 0.40)
-                        onClicked: traceLoader.active = true
-                    }
-
-                    GlassButton {
-                        Layout.preferredWidth: root.headerActionWidth
-                        Layout.preferredHeight: root.headerActionHeight
-                        text: "记忆"
-                        textPixelSize: root.headerActionTextSize
-                        cornerRadius: root.headerActionRadius
-                        enableScaleFeedback: false
-                        normalColor: Qt.rgba(0.42, 0.56, 0.74, 0.22)
-                        hoverColor: Qt.rgba(0.42, 0.56, 0.74, 0.32)
-                        pressedColor: Qt.rgba(0.42, 0.56, 0.74, 0.40)
-                        onClicked: {
-                            if (root.agentController) {
-                                root.agentController.listMemories()
-                            }
-                            memoryLoader.active = true
-                        }
-                    }
-
-                    GlassButton {
-                        Layout.preferredWidth: root.headerActionWidth
-                        Layout.preferredHeight: root.headerActionHeight
-                        text: "任务"
-                        textPixelSize: root.headerActionTextSize
-                        cornerRadius: root.headerActionRadius
-                        enableScaleFeedback: false
-                        normalColor: Qt.rgba(0.42, 0.56, 0.74, 0.22)
-                        hoverColor: Qt.rgba(0.42, 0.56, 0.74, 0.32)
-                        pressedColor: Qt.rgba(0.42, 0.56, 0.74, 0.40)
-                        onClicked: {
-                            if (root.agentController) {
-                                root.agentController.listAgentTasks()
-                            }
-                            taskLoader.active = true
+                        MouseArea {
+                            id: moreMouseArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: moreMenu.open()
                         }
                     }
                 }
             }
         }
 
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 48
-            radius: 12
-            color: Qt.rgba(1, 1, 1, 0.18)
-            border.color: Qt.rgba(1, 1, 1, 0.40)
+        Menu {
+            id: moreMenu
+            y: 48
+            x: Math.max(0, root.width - width - 18)
+            implicitWidth: 174
+            padding: 8
+            background: Rectangle {
+                radius: 14
+                color: root.glassPanelColor
+                border.width: 1
+                border.color: root.glassBorderColor
+            }
 
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 14
-                anchors.rightMargin: 14
-                spacing: 8
+            delegate: Rectangle {
+                implicitWidth: 158
+                implicitHeight: 36
+                radius: 10
+                color: hovered ? Qt.rgba(0.35, 0.61, 0.90, 0.14)
+                               : pressed ? Qt.rgba(0.35, 0.61, 0.90, 0.20)
+                                         : "transparent"
+                border.width: 0
 
-                ColumnLayout {
-                    Layout.preferredWidth: 150
-                    Layout.minimumWidth: 120
-                    spacing: 2
+                required property string text
+                required property bool highlighted
+                required property bool hovered
+                required property bool pressed
+                required property var action
+
+                Text {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+                    horizontalAlignment: Text.AlignLeft
+                    verticalAlignment: Text.AlignVCenter
+                    text: parent.text
+                    color: "#2a3649"
+                    font.pixelSize: 13
+                    font.bold: parent.hovered
+                    elide: Text.ElideRight
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: parent.action.trigger()
+                }
+            }
+
+            MenuItem {
+                text: root.streaming ? "停止生成" : "停止"
+                enabled: root.streaming
+                onTriggered: {
+                    if (root.agentController) {
+                        root.agentController.cancelStream()
+                    }
+                }
+            }
+
+            MenuItem {
+                text: "模型"
+                onTriggered: {
+                    const nextActive = !modelSettingsLoader.active
+                    modelSettingsLoader.active = nextActive
+                    if (nextActive && root.agentController) {
+                        root.agentController.refreshModelList()
+                    }
+                }
+            }
+
+            MenuItem {
+                text: "知识库"
+                onTriggered: {
+                    if (root.agentController) {
+                        root.agentController.listKnowledgeBases()
+                    }
+                    knowledgeBaseLoader.active = true
+                }
+            }
+
+            MenuItem {
+                text: "轨迹"
+                onTriggered: traceLoader.active = true
+            }
+
+            MenuItem {
+                text: "记忆"
+                onTriggered: {
+                    if (root.agentController) {
+                        root.agentController.listMemories()
+                    }
+                    memoryLoader.active = true
+                }
+            }
+
+            MenuItem {
+                text: "任务"
+                onTriggered: {
+                    if (root.agentController) {
+                        root.agentController.listAgentTasks()
+                    }
+                    taskLoader.active = true
+                }
+            }
+        }
+
+        Menu {
+            id: modeMenu
+            y: 48
+            x: Math.max(0, root.width - width - 64)
+            implicitWidth: 180
+            padding: 8
+            background: Rectangle {
+                radius: 14
+                color: root.glassPanelColor
+                border.width: 1
+                border.color: root.glassBorderColor
+            }
+
+            delegate: Rectangle {
+                id: modeMenuDelegate
+                implicitWidth: 164
+                implicitHeight: 36
+                radius: 10
+                color: hovered ? Qt.rgba(0.35, 0.61, 0.90, 0.14)
+                               : pressed ? Qt.rgba(0.35, 0.61, 0.90, 0.20)
+                                         : "transparent"
+                border.width: 0
+
+                required property string text
+                required property bool highlighted
+                required property bool hovered
+                required property bool pressed
+                required property var action
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+                    spacing: 8
 
                     Label {
                         Layout.fillWidth: true
-                        text: "Agent 模式"
+                        text: modeMenuDelegate.text
                         color: "#2a3649"
                         font.pixelSize: 13
-                        font.bold: true
+                        font.bold: modeMenuDelegate.hovered
                         elide: Text.ElideRight
                     }
 
-                    Label {
-                        Layout.fillWidth: true
-                        text: root.skillModeHint()
-                        color: "#6a7b92"
-                        font.pixelSize: 11
-                        elide: Text.ElideRight
+                    Rectangle {
+                        Layout.preferredWidth: 7
+                        Layout.preferredHeight: 7
+                        radius: 4
+                        color: modeMenuDelegate.text === root.agentSkillDisplay ? "#3f8fe5" : "transparent"
                     }
                 }
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 6
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    enabled: parent.action ? parent.action.enabled : true
+                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: parent.action.trigger()
+                }
+            }
 
-                    Repeater {
-                        model: root.skillModes
+            Repeater {
+                model: root.skillModes
 
-                        delegate: GlassButton {
-                            Layout.preferredWidth: 72
-                            Layout.preferredHeight: 28
-                            text: modelData.label
-                            textPixelSize: 12
-                            cornerRadius: 8
-                            enableScaleFeedback: false
-                            normalColor: root.agentSkillMode === modelData.key
-                                         ? Qt.rgba(0.35, 0.61, 0.90, 0.30)
-                                         : Qt.rgba(0.42, 0.56, 0.74, 0.16)
-                            hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
-                            pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
-                            enabled: !root.loading && !root.streaming
-                            onClicked: {
-                                if (root.agentController) {
-                                    root.agentController.switchAgentSkillMode(modelData.key)
-                                }
-                            }
+                delegate: MenuItem {
+                    text: modelData.label
+                    enabled: !root.loading && !root.streaming
+                    onTriggered: {
+                        if (root.agentController) {
+                            root.agentController.switchAgentSkillMode(modelData.key)
                         }
                     }
                 }
+            }
+
+            MenuItem {
+                text: "Game 模式"
+                enabled: !root.loading && !root.streaming
+                onTriggered: root.gameModeRequested()
             }
         }
 
@@ -600,6 +670,19 @@ Rectangle {
                                 }
                                 border.color: Qt.rgba(1, 1, 1, 0.32)
 
+                                MouseArea {
+                                    id: modelMouseArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (root.agentController && modelData.model_type && modelData.model_name) {
+                                            root.agentController.switchModel(modelData.model_type, modelData.model_name)
+                                        }
+                                        modelSettingsLoader.active = false
+                                    }
+                                }
+
                                 RowLayout {
                                     anchors.fill: parent
                                     anchors.leftMargin: 12
@@ -627,18 +710,22 @@ Rectangle {
                                             elide: Text.ElideRight
                                         }
                                     }
-                                }
 
-                                MouseArea {
-                                    id: modelMouseArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (root.agentController && modelData.model_type && modelData.model_name) {
-                                            root.agentController.switchModel(modelData.model_type, modelData.model_name)
+                                    GlassButton {
+                                        Layout.preferredWidth: 54
+                                        Layout.preferredHeight: 28
+                                        visible: (modelData.model_type || "").indexOf("api-") === 0
+                                        text: "删除"
+                                        textPixelSize: 12
+                                        cornerRadius: 7
+                                        normalColor: Qt.rgba(0.82, 0.38, 0.38, 0.16)
+                                        hoverColor: Qt.rgba(0.82, 0.38, 0.38, 0.26)
+                                        pressedColor: Qt.rgba(0.82, 0.38, 0.38, 0.34)
+                                        onClicked: {
+                                            if (root.agentController && modelData.model_type) {
+                                                root.agentController.deleteApiProvider(modelData.model_type)
+                                            }
                                         }
-                                        modelSettingsLoader.active = false
                                     }
                                 }
                             }

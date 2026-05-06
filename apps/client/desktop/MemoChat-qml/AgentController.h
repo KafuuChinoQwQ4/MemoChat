@@ -46,6 +46,16 @@ class AgentController : public QObject
     Q_PROPERTY(QVariantList traceObservations READ traceObservations NOTIFY traceChanged)
     Q_PROPERTY(QString agentSkillMode READ agentSkillMode NOTIFY agentSkillModeChanged)
     Q_PROPERTY(QString agentSkillDisplay READ agentSkillDisplay NOTIFY agentSkillModeChanged)
+    Q_PROPERTY(QVariantList gameRooms READ gameRooms NOTIFY gameRoomsChanged)
+    Q_PROPERTY(QVariantList gameTemplates READ gameTemplates NOTIFY gameTemplatesChanged)
+    Q_PROPERTY(QVariantList gameTemplatePresets READ gameTemplatePresets NOTIFY gameTemplatePresetsChanged)
+    Q_PROPERTY(QVariantMap gameState READ gameState NOTIFY gameStateChanged)
+    Q_PROPERTY(QString currentGameRoomId READ currentGameRoomId NOTIFY gameStateChanged)
+    Q_PROPERTY(QVariantList gameRulesets READ gameRulesets NOTIFY gameRulesetsChanged)
+    Q_PROPERTY(QVariantList gameRolePresets READ gameRolePresets NOTIFY gameRolePresetsChanged)
+    Q_PROPERTY(bool gameBusy READ gameBusy NOTIFY gameStateChanged)
+    Q_PROPERTY(QString gameStatusText READ gameStatusText NOTIFY gameStateChanged)
+    Q_PROPERTY(QString gameError READ gameError NOTIFY gameStateChanged)
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
     Q_PROPERTY(QString error READ error NOTIFY errorOccurred)
     Q_PROPERTY(bool streaming READ streaming NOTIFY streamingChanged)
@@ -85,6 +95,16 @@ public:
     QVariantList traceObservations() const;
     QString agentSkillMode() const;
     QString agentSkillDisplay() const;
+    QVariantList gameRooms() const;
+    QVariantList gameTemplates() const;
+    QVariantList gameTemplatePresets() const;
+    QVariantMap gameState() const;
+    QString currentGameRoomId() const;
+    QVariantList gameRulesets() const;
+    QVariantList gameRolePresets() const;
+    bool gameBusy() const;
+    QString gameStatusText() const;
+    QString gameError() const;
     bool loading() const;
     QString error() const;
     bool streaming() const;
@@ -100,6 +120,7 @@ public:
     Q_INVOKABLE void switchAgentSkillMode(const QString& mode);
     Q_INVOKABLE void refreshModelList();
     Q_INVOKABLE void registerApiProvider(const QString& providerName, const QString& baseUrl, const QString& apiKey);
+    Q_INVOKABLE void deleteApiProvider(const QString& providerId);
 
     Q_INVOKABLE void summarizeChat(const QString& dialogUid, const QString& chatHistoryJson);
     Q_INVOKABLE void suggestReply(const QString& dialogUid, const QString& chatHistoryJson);
@@ -120,6 +141,32 @@ public:
     Q_INVOKABLE void createAgentTask(const QString& content, const QString& title);
     Q_INVOKABLE void cancelAgentTask(const QString& taskId);
     Q_INVOKABLE void resumeAgentTask(const QString& taskId);
+    Q_INVOKABLE void listGameRulesets();
+    Q_INVOKABLE void loadGameRolePresets(const QString& rulesetId);
+    Q_INVOKABLE void listGameRooms();
+    Q_INVOKABLE void listGameTemplates();
+    Q_INVOKABLE void listGameTemplatePresets(const QString& rulesetId);
+    Q_INVOKABLE void loadGameRoom(const QString& roomId);
+    Q_INVOKABLE void createGameRoom(const QString& title, const QString& rulesetId, const QVariantList& agents, const QVariantMap& host = QVariantMap());
+    Q_INVOKABLE void saveGameTemplate(const QString& title,
+                                      const QString& description,
+                                      const QString& rulesetId,
+                                      const QVariantList& agents,
+                                      const QVariantMap& host = QVariantMap());
+    Q_INVOKABLE void deleteGameTemplate(const QString& templateId);
+    Q_INVOKABLE void cloneGameTemplatePreset(const QString& presetId, const QString& title);
+    Q_INVOKABLE QString exportGameTemplate(const QString& templateId);
+    Q_INVOKABLE bool importGameTemplate(const QString& templateJson);
+    Q_INVOKABLE void createGameRoomFromTemplate(const QString& templateId, const QString& title);
+    Q_INVOKABLE void startGameRoom(const QString& roomId);
+    Q_INVOKABLE void restartGameRoom(const QString& roomId);
+    Q_INVOKABLE void tickGameRoom(const QString& roomId);
+    Q_INVOKABLE void autoTickGameRoom(const QString& roomId, int maxSteps = 8);
+    Q_INVOKABLE void submitGameAction(const QString& roomId,
+                                      const QString& actorId,
+                                      const QString& actionType,
+                                      const QString& targetId,
+                                      const QString& content);
 
     // 中止正在进行的流式请求
     Q_INVOKABLE void cancelStream();
@@ -148,6 +195,12 @@ signals:
     void traceChanged();
     void thinkingChanged();
     void agentSkillModeChanged();
+    void gameRoomsChanged();
+    void gameTemplatesChanged();
+    void gameTemplatePresetsChanged();
+    void gameRulesetsChanged();
+    void gameRolePresetsChanged();
+    void gameStateChanged();
 
 private slots:
     void onHttpFinish(ReqId id, const QString& res, ErrorCodes err, Modules mod);
@@ -181,10 +234,19 @@ private:
     void clearCurrentSession();
     void loadPersistedModelSelection();
     void saveCurrentModelSelection() const;
+    void clearPersistedModelSelection() const;
     bool modelSupportsThinking(const QString& backend, const QString& modelName) const;
     QJsonObject buildChatMetadata() const;
     QString resolvedSkillName() const;
     QJsonArray requestedToolsForSkillMode() const;
+    void setGameBusy(bool busy, const QString& statusText = QString());
+    void setGameError(const QString& error);
+    void clearGameError();
+    void sendGameGet(const QUrl& url, const QString& op, const QString& statusText);
+    void sendGamePost(const QUrl& url, const QJsonObject& payload, const QString& op, const QString& statusText);
+    void sendGameDelete(const QUrl& url, const QString& op, const QString& statusText);
+    void handleGameResponse(const QString& op, const QJsonObject& root);
+    int currentUid() const;
 
     // SSE 流式处理辅助
     void parseSSEChunk(const QString& line);
@@ -227,6 +289,7 @@ private:
 
     // SSE 流式相关
     QNetworkAccessManager* _streamManager = nullptr;
+    QNetworkAccessManager* _gameNetwork = nullptr;
     QNetworkReply* _currentStreamReply = nullptr;
     QString _streamBuffer;
     QString _currentStreamMsgId;
@@ -234,6 +297,16 @@ private:
     bool _streamFinalReceived = false;
     QString _pendingDeleteSessionId;
     bool _selectNewestSessionAfterList = false;
+    QVariantList _game_rooms;
+    QVariantList _game_templates;
+    QVariantList _game_template_presets;
+    QVariantMap _game_state;
+    QVariantList _game_rulesets;
+    QVariantList _game_role_presets;
+    bool _game_busy = false;
+    QString _game_status_text;
+    QString _game_error;
+    QString _current_game_room_id;
 };
 
 #endif  // AGENTCONTROLLER_H

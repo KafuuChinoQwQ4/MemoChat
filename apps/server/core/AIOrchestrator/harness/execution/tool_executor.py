@@ -8,6 +8,7 @@ import structlog
 from graph.recommendation import RecommendationEngine
 from harness.contracts import PlanStep, ToolObservation, ToolSpec
 from harness.knowledge.service import KnowledgeService
+from observability.langsmith_instrument import set_run_error, set_run_output, trace_context
 from tools.registry import ToolRegistry
 
 logger = structlog.get_logger()
@@ -42,7 +43,19 @@ class ToolExecutor:
         for step in plan_steps:
             try:
                 if step.action == "knowledge_search":
-                    hits = await self._knowledge_service.search(uid, content, top_k=step.parameters.get("top_k"))
+                    with trace_context(
+                        "tool_knowledge_search",
+                        run_type="retriever",
+                        inputs={"uid": uid, "content": content, "top_k": step.parameters.get("top_k")},
+                        metadata={"tool": "knowledge_search", "source": "knowledge_base"},
+                        tags=["tool", "rag"],
+                    ) as run:
+                        try:
+                            hits = await self._knowledge_service.search(uid, content, top_k=step.parameters.get("top_k"))
+                            set_run_output(run, {"hit_count": len(hits), "scores": [hit.get("score", 0.0) for hit in hits]})
+                        except Exception as exc:
+                            set_run_error(run, exc)
+                            raise
                     observations.append(
                         ToolObservation(
                             name="knowledge_search",
@@ -52,8 +65,21 @@ class ToolExecutor:
                         )
                     )
                 elif step.action == "web_search":
-                    result = await self._invoke_tool("duckduckgo_search", {"query": content})
-                    observations.append(ToolObservation(name="duckduckgo_search", source="builtin", output=result))
+                    queries = self._web_queries(content, step.parameters)
+                    max_results = self._coerce_int(step.parameters.get("max_results"), default=5, minimum=1, maximum=10)
+                    result = await self._run_web_searches(queries, max_results=max_results)
+                    observations.append(
+                        ToolObservation(
+                            name="duckduckgo_search",
+                            source="builtin",
+                            output=result,
+                            metadata={
+                                "query_count": len(queries),
+                                "queries": queries,
+                                "strategy": step.parameters.get("strategy", ""),
+                            },
+                        )
+                    )
                 elif step.action == "calculate":
                     expression = self._extract_expression(content)
                     result = await self._invoke_tool("calculator", {"expression": expression})
@@ -94,10 +120,27 @@ class ToolExecutor:
             spec = self._tool_to_spec(tool)
             clean_payload = self._validate_tool_payload(spec, payload or {})
             self._require_confirmation_if_needed(spec, payload or {})
-            result = await asyncio.wait_for(tool.ainvoke(clean_payload), timeout=spec.timeout_seconds)
-            if isinstance(result, str):
-                return result
-            return str(result)
+            with trace_context(
+                f"tool_{tool_name}",
+                run_type="tool",
+                inputs={"tool": tool_name, "payload": clean_payload},
+                metadata={
+                    "tool": tool_name,
+                    "source": spec.source,
+                    "category": spec.category,
+                    "permission": spec.permission,
+                    "timeout_seconds": spec.timeout_seconds,
+                },
+                tags=["tool", spec.source],
+            ) as run:
+                try:
+                    result = await asyncio.wait_for(tool.ainvoke(clean_payload), timeout=spec.timeout_seconds)
+                    output = result if isinstance(result, str) else str(result)
+                    set_run_output(run, {"output": output[:2000]})
+                    return output
+                except Exception as exc:
+                    set_run_error(run, exc)
+                    raise
         raise ValueError(f"Tool not found: {tool_name}")
 
     def _tool_to_spec(self, tool) -> ToolSpec:
@@ -130,7 +173,10 @@ class ToolExecutor:
                 parameters_schema={
                     "type": "object",
                     "required": ["query"],
-                    "properties": {"query": {"type": "string"}},
+                    "properties": {
+                        "query": {"type": "string"},
+                        "max_results": {"type": "integer"},
+                    },
                 },
                 timeout_seconds=30,
                 permission="read",
@@ -270,3 +316,40 @@ class ToolExecutor:
         if not matches:
             return text
         return max(matches, key=len).strip() or text
+
+    async def _run_web_searches(self, queries: list[str], max_results: int) -> str:
+        outputs: list[str] = []
+        per_query = max(1, min(max_results, 5))
+        for query in queries:
+            result = await self._invoke_tool("duckduckgo_search", {"query": query, "max_results": per_query})
+            outputs.append(f"### 查询: {query}\n{result}")
+        return "\n\n".join(outputs)
+
+    def _web_queries(self, content: str, parameters: dict) -> list[str]:
+        raw_queries = parameters.get("queries") if isinstance(parameters, dict) else None
+        if isinstance(raw_queries, str):
+            candidates = [raw_queries]
+        elif isinstance(raw_queries, list):
+            candidates = [str(query) for query in raw_queries]
+        else:
+            candidates = [content]
+
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for query in candidates:
+            cleaned = re.sub(r"\s+", " ", str(query or "")).strip()
+            key = cleaned.lower()
+            if not cleaned or key in seen:
+                continue
+            seen.add(key)
+            deduped.append(cleaned[:180])
+            if len(deduped) >= 3:
+                break
+        return deduped or [content.strip() or "MemoChat"]
+
+    def _coerce_int(self, value, default: int, minimum: int, maximum: int) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            parsed = default
+        return min(max(parsed, minimum), maximum)
