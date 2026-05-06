@@ -61,7 +61,12 @@ async def search(req: KbSearchReq):
     ) as run:
         try:
             container = HarnessContainer.get_instance()
-            results = await container.knowledge_service.search(req.uid, req.query, req.top_k)
+            results = await container.knowledge_service.search(
+                req.uid,
+                req.query,
+                req.top_k,
+                req.metadata_filters,
+            )
             ai_metrics.http_requests.inc(route="/kb/search", status="ok")
             set_run_output(run, {"chunk_count": len(results), "scores": [result.get("score", 0.0) for result in results]})
             return KbSearchRsp(

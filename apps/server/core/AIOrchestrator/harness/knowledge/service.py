@@ -45,9 +45,15 @@ class KnowledgeService:
 
         return {"kb_id": kb_id, "chunks": len(chunks)}
 
-    async def search(self, uid: int, query: str, top_k: int | None = None) -> list[dict]:
+    async def search(
+        self,
+        uid: int,
+        query: str,
+        top_k: int | None = None,
+        metadata_filters: dict[str, object] | None = None,
+    ) -> list[dict]:
         effective_top_k = top_k or settings.harness.knowledge_top_k or settings.rag.top_k
-        return await self._rag.retrieve(uid, query, effective_top_k, self._embedder)
+        return await self._rag.retrieve(uid, query, effective_top_k, self._embedder, metadata_filters or {})
 
     async def list(self, uid: int) -> list[dict]:
         try:
