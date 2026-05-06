@@ -130,10 +130,16 @@ class Neo4jConfig(BaseModel):
     enabled: bool = False
 
 
-class LangfuseConfig(BaseModel):
-    public_key: str = ""
-    secret_key: str = ""
-    host: str = "http://127.0.0.1:3000"
+class LangSmithConfig(BaseModel):
+    tracing: bool = True
+    endpoint: str = "https://api.smith.langchain.com"
+    api_key_env: str = "LANGSMITH_API_KEY"
+    project: str = "memochat-ai-local"
+    sampling_rate: float = 1.0
+    redact_inputs: bool = True
+    redact_outputs: bool = False
+    upload_user_content: bool = False
+    tags: list[str] = ["memochat", "ai-agent", "local"]
 
 
 class OtelConfig(BaseModel):
@@ -143,9 +149,10 @@ class OtelConfig(BaseModel):
 
 class ObservabilityConfig(BaseModel):
     enabled: bool = False
-    backend: str = "langfuse"
-    langfuse: LangfuseConfig = LangfuseConfig()
+    backend: str = "langsmith"
+    langsmith: LangSmithConfig = LangSmithConfig()
     otel: OtelConfig = OtelConfig()
+    prometheus_enabled: bool = True
     trace_llm_calls: bool = True
     trace_tool_calls: bool = True
     track_ttft: bool = True
@@ -221,6 +228,9 @@ class HarnessConfig(BaseModel):
     trace_persist: bool = True
     auto_reflection: bool = True
     short_term_limit: int = 24
+    short_term_fetch_limit: int = 96
+    short_term_token_budget: int = 1600
+    short_term_summary_token_budget: int = 320
     episodic_limit: int = 6
     knowledge_top_k: int = 5
     providers: HarnessProvidersConfig = HarnessProvidersConfig()

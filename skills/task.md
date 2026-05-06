@@ -6,6 +6,8 @@ description: Implement a MemoChat feature or fix through context, plan, implemen
 
 Use for normal implementation work in `D:\MemoChat-Qml-Drogon`.
 
+Default to the Controller-led parallel workflow from `parallel-agents.md` for implementation tasks. The Controller owns architecture, plan, contracts, worker dispatch, integration, and final acceptance. After context and first contracts are clear, dispatch safe worker lanes by default. Use local-only execution only when the active tool/policy environment forbids workers, the user explicitly asks for single-agent work, the task is genuinely tiny or sequential, or no safe split exists; record the exact reason in `plan.md`.
+
 ## Invocation
 
 Treat `$ARGUMENTS` as the task. If it starts with an existing `.ai/<name>/about.md`, treat the first token as a follow-up project name and use the remaining text as the new task.
@@ -15,10 +17,14 @@ Treat `$ARGUMENTS` as the task. If it starts with an existing `.ai/<name>/about.
 1. Create `.ai/<project>/<letter>/`.
 2. Gather context into `context.md`.
 3. Write and assess `plan.md`.
-4. Implement one plan phase at a time.
-5. Verify with the narrowest relevant build/test/runtime command.
-6. Review the diff and fix important issues.
-7. Finish with a concise status summary.
+4. Open concurrency by default:
+   - spawn workers for disjoint useful lanes when permitted
+   - keep Controller in charge of contracts and final acceptance
+   - record a local-only reason when worker dispatch is blocked, unsafe, or not useful
+5. Implement one plan phase at a time.
+6. Verify with the narrowest relevant build/test/runtime command.
+7. Review the diff and fix important issues.
+8. Finish with a concise status summary.
 
 ## MemoChat Context Checklist
 
@@ -97,6 +103,7 @@ If deploy/start scripts hit access denied, identify the running service process 
 Report:
 
 - files changed
+- concurrency lanes used by default, or the exact local-only/blocker reason
 - verification commands and outcomes
 - Docker/MCP checks performed
 - known blockers or residual risk

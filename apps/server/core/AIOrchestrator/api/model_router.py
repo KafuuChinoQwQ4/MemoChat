@@ -6,7 +6,15 @@ from fastapi import APIRouter
 from config import settings
 from harness import HarnessContainer
 from observability.metrics import ai_metrics
-from schemas.api import ListModelsRsp, ModelInfo, ProviderInfo, RegisterApiProviderReq, RegisterApiProviderRsp
+from schemas.api import (
+    DeleteApiProviderReq,
+    DeleteApiProviderRsp,
+    ListModelsRsp,
+    ModelInfo,
+    ProviderInfo,
+    RegisterApiProviderReq,
+    RegisterApiProviderRsp,
+)
 
 router = APIRouter()
 
@@ -93,3 +101,20 @@ async def register_api_provider(req: RegisterApiProviderReq):
         provider_id=endpoint.provider_id,
         models=models,
     )
+
+
+@router.post("/api-provider/delete", response_model=DeleteApiProviderRsp)
+async def delete_api_provider(req: DeleteApiProviderReq):
+    container = HarnessContainer.get_instance()
+    try:
+        deleted = container.llm_registry.delete_api_provider(req.provider_id)
+    except Exception as exc:
+        ai_metrics.http_requests.inc(route="/models/api-provider/delete", status="error")
+        return DeleteApiProviderRsp(code=400, message=str(exc), provider_id=req.provider_id)
+
+    if not deleted:
+        ai_metrics.http_requests.inc(route="/models/api-provider/delete", status="missing")
+        return DeleteApiProviderRsp(code=404, message="provider not found", provider_id=req.provider_id)
+
+    ai_metrics.http_requests.inc(route="/models/api-provider/delete", status="ok")
+    return DeleteApiProviderRsp(code=0, message="ok", provider_id=req.provider_id)

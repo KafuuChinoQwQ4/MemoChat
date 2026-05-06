@@ -54,6 +54,10 @@ public:
                                      const ai::AIRegisterApiProviderReq* request,
                                      ai::AIRegisterApiProviderRsp* reply) override;
 
+    grpc::Status DeleteApiProvider(ServerContext* context,
+                                   const ai::AIDeleteApiProviderReq* request,
+                                   ai::AIDeleteApiProviderRsp* reply) override;
+
     grpc::Status KbUpload(ServerContext* context,
                            const ai::AIKbUploadReq* request,
                            ai::AIKbUploadRsp* reply) override;

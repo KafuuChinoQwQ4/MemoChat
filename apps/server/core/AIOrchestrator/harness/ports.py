@@ -19,6 +19,20 @@ from llm.base import LLMMessage, LLMResponse, LLMStreamChunk
 class SkillPlanningPort(Protocol):
     def resolve_skill(self, request: Any) -> AgentSkill: ...
     def build_plan(self, request: Any, skill: AgentSkill) -> list[PlanStep]: ...
+    def build_react_followup_plan(
+        self,
+        request: Any,
+        skill: AgentSkill,
+        plan_steps: list[PlanStep],
+        observations: list[ToolObservation],
+    ) -> list[PlanStep]: ...
+    def assess_react_observations(
+        self,
+        request: Any,
+        skill: AgentSkill,
+        plan_steps: list[PlanStep],
+        observations: list[ToolObservation],
+    ) -> dict[str, Any]: ...
     def build_system_prompt(
         self,
         skill: AgentSkill,

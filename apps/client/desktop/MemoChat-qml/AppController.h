@@ -73,9 +73,12 @@ class AppController : public QObject
     Q_PROPERTY(QString currentGroupName READ currentGroupName NOTIFY currentGroupChanged)
     Q_PROPERTY(QString currentGroupCode READ currentGroupCode NOTIFY currentGroupChanged)
     Q_PROPERTY(bool currentGroupCanChangeInfo READ currentGroupCanChangeInfo NOTIFY currentGroupChanged)
+    Q_PROPERTY(bool currentGroupCanDeleteMessages READ currentGroupCanDeleteMessages NOTIFY currentGroupChanged)
     Q_PROPERTY(bool currentGroupCanInviteUsers READ currentGroupCanInviteUsers NOTIFY currentGroupChanged)
     Q_PROPERTY(bool currentGroupCanManageAdmins READ currentGroupCanManageAdmins NOTIFY currentGroupChanged)
+    Q_PROPERTY(bool currentGroupCanPinMessages READ currentGroupCanPinMessages NOTIFY currentGroupChanged)
     Q_PROPERTY(bool currentGroupCanBanUsers READ currentGroupCanBanUsers NOTIFY currentGroupChanged)
+    Q_PROPERTY(bool currentGroupCanManageTopics READ currentGroupCanManageTopics NOTIFY currentGroupChanged)
     Q_PROPERTY(FriendListModel* dialogListModel READ dialogListModel CONSTANT)
     Q_PROPERTY(FriendListModel* chatListModel READ chatListModel CONSTANT)
     Q_PROPERTY(FriendListModel* groupListModel READ groupListModel CONSTANT)
@@ -179,9 +182,12 @@ public:
     QString currentGroupName() const;
     QString currentGroupCode() const;
     bool currentGroupCanChangeInfo() const;
+    bool currentGroupCanDeleteMessages() const;
     bool currentGroupCanInviteUsers() const;
     bool currentGroupCanManageAdmins() const;
+    bool currentGroupCanPinMessages() const;
     bool currentGroupCanBanUsers() const;
+    bool currentGroupCanManageTopics() const;
     FriendListModel *dialogListModel();
     FriendListModel *chatListModel();
     FriendListModel *groupListModel();

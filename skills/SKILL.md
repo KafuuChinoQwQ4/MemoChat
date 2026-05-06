@@ -7,6 +7,8 @@ description: Orchestrate a multi-phase implementation workflow for MemoChat-Qml-
 
 Use this skill to drive non-trivial changes in `D:\MemoChat-Qml-Drogon` while keeping the main thread thin and preserving useful artifacts.
 
+For implementation work, use `skills/parallel-agents.md` as the default execution mode. The main thread acts as the Controller: it owns architecture, plan, shared contracts, worker dispatch, integration, review, and final acceptance. After the Controller has enough context and freezes the first shared contract, it should dispatch safe disjoint worker lanes immediately to accelerate delivery. Use local-only execution only when the active tool/policy environment forbids spawning workers, the user explicitly asks for single-agent work, the task is genuinely tiny or sequential, or no safe split exists; record the exact reason in `plan.md`.
+
 ## Project Rules
 
 - Treat Windows PowerShell as the default shell.
@@ -50,6 +52,7 @@ Create or reuse:
    - Otherwise create a short kebab-case project name.
 3. Pick the next task letter (`a`, `b`, ...), create directories, and write the task request to `logs/phase-setup.result.md`.
 4. Capture any screenshot or attachment summary into `context.md` or a log file before delegation.
+5. For code changes, read `skills/parallel-agents.md`, default to Controller-led worker dispatch, and record any blocked or intentionally local-only concurrency decision.
 
 ## Phase 1: Context
 
@@ -82,8 +85,15 @@ Write `.ai/<project>/<letter>/plan.md` with:
 - Docker/MCP checks required
 - build/test commands
 - status checklist
+- concurrency decision:
+  - Controller duties
+  - worker lanes to spawn by default
+  - lane write ownership
+  - exact reason if worker dispatch is blocked, unsafe, or intentionally skipped
 
 Keep phases small enough that one agent or one focused pass can complete each phase.
+
+When parallel lanes are useful, the Controller freezes the first shared contract before workers edit files.
 
 ## Phase 3: Plan Assessment
 
@@ -102,6 +112,7 @@ Update `plan.md` and add `Assessed: yes`.
 Implement phase by phase.
 
 - Use `apply_patch` for manual edits.
+- For parallel work, keep the Controller focused on orchestration, contract updates, integration, and acceptance while workers own disjoint file scopes.
 - Follow existing code style and local helper APIs.
 - Keep database, queue, object storage, and observability checks inside Docker/MCP.
 - For Postgres, remember the Docker port is host `15432` to container `5432`; in-container commands use `5432`.
@@ -152,11 +163,14 @@ Review the actual diff. Prioritize:
 
 Write `.ai/<project>/<letter>/review1.md`. Fix required issues and repeat up to three rounds.
 
+For parallel work, the Controller must read every used `logs/parallel-*.result.md`, inspect the actual diff, confirm contracts match final code, and only then accept the task.
+
 ## Phase 7: Completion
 
 Before final response:
 
 - Record verification results in `logs/phase-verify.result.md`.
+- Record the concurrency outcome: worker lanes used, local-only reason, or any blocked/deferred lane.
 - Confirm no unexpected Docker port/config drift.
 - Summarize changed files, commands run, blockers, and remaining risk.
 - Report elapsed time and the project name for follow-up work.

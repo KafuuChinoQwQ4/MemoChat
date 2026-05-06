@@ -11,6 +11,7 @@ from .openai_llm import OpenAILLM
 from .claude_llm import ClaudeLLM
 from .kimi_llm import KimiLLM
 from config import settings
+from observability.langsmith_instrument import set_run_error, set_run_output, trace_context
 
 logger = structlog.get_logger()
 
@@ -133,29 +134,53 @@ class LLMManager:
             tried.append(backend_type)
 
             for attempt in range(self._fallback_config.retry_count + 1):
-                try:
-                    llm = self._backends[backend_type]
-                    if model_name:
-                        llm.model_name = model_name
+                with trace_context(
+                    "llm_completion_attempt",
+                    run_type="llm",
+                    inputs={
+                        "backend": backend_type,
+                        "attempt": attempt,
+                        "message_count": len(messages),
+                        "model_name": model_name,
+                    },
+                    metadata={"fallback_candidates": candidates, "prefer_backend": prefer_backend},
+                    tags=["llm", backend_type],
+                ) as run:
+                    try:
+                        llm = self._backends[backend_type]
+                        if model_name:
+                            llm.model_name = model_name
 
-                    result = await llm.chat(messages, **kwargs)
-                    if len(tried) > 1:
-                        logger.warning("llm.fallbacked", from_backend=tried[0], to_backend=backend_type)
-                    return result
+                        result = await llm.chat(messages, **kwargs)
+                        if len(tried) > 1:
+                            logger.warning("llm.fallbacked", from_backend=tried[0], to_backend=backend_type)
+                        set_run_output(
+                            run,
+                            {
+                                "model": result.model,
+                                "tokens": result.usage.total_tokens,
+                                "finish_reason": result.finish_reason,
+                                "fallbacked": len(tried) > 1,
+                            },
+                        )
+                        return result
 
-                except asyncio.TimeoutError:
-                    logger.warning("llm.timeout", backend=backend_type, attempt=attempt)
-                    if attempt < self._fallback_config.retry_count:
-                        await asyncio.sleep(self._fallback_config.retry_delay_sec * (2 ** attempt))
-                    continue
-                except RateLimitError:
-                    logger.warning("llm.rate_limited", backend=backend_type, attempt=attempt)
-                    if attempt < self._fallback_config.retry_count:
-                        await asyncio.sleep(self._fallback_config.retry_delay_sec * (2 ** attempt))
-                    continue
-                except Exception as e:
-                    logger.warning("llm.backend_error", backend=backend_type, error=str(e), attempt=attempt)
-                    break
+                    except asyncio.TimeoutError as exc:
+                        set_run_error(run, exc)
+                        logger.warning("llm.timeout", backend=backend_type, attempt=attempt)
+                        if attempt < self._fallback_config.retry_count:
+                            await asyncio.sleep(self._fallback_config.retry_delay_sec * (2 ** attempt))
+                        continue
+                    except RateLimitError as exc:
+                        set_run_error(run, exc)
+                        logger.warning("llm.rate_limited", backend=backend_type, attempt=attempt)
+                        if attempt < self._fallback_config.retry_count:
+                            await asyncio.sleep(self._fallback_config.retry_delay_sec * (2 ** attempt))
+                        continue
+                    except Exception as e:
+                        set_run_error(run, e)
+                        logger.warning("llm.backend_error", backend=backend_type, error=str(e), attempt=attempt)
+                        break
 
         raise AllBackendsFailedError(f"All LLM backends failed. Tried: {tried}")
 

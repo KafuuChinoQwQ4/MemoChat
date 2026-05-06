@@ -3,6 +3,9 @@
   "login_path": "/user_login",
   "client_ver": "3.0.0",
   "use_xor_passwd": true,
+  "use_k6_http": true,
+  "sweep_concurrency": [1, 5, 10, 20, 50, 100],
+  "sweep_iterations_per_vu": 10,
   "accounts_csv": "../../../infra/Memo_ops/artifacts/loadtest/runtime/accounts/accounts.local.csv",
   "report_dir": "../../../infra/Memo_ops/artifacts/loadtest/runtime/reports",
   "http_timeout_sec": 8.0,
@@ -10,18 +13,72 @@
   "ai_base_url": "http://127.0.0.1:8096",
   "ai_timeout_sec": 60.0,
   "ai_uid": 10001,
-  "rag_top_k": 3,
+  "rag_top_k": 5,
+  "rag_eval_cutoffs": [1, 3, 5, 10],
+  "rag_cleanup_uploads": true,
+  "rag_isolate_uid": true,
+  "rag_synthetic_distractor_docs": 47,
   "agent_prompts": [
     "请用一句话介绍 MemoChat。",
     "请总结分布式 IM 登录链路的关键步骤。"
   ],
   "rag_docs": [
     {
-      "file_name": "memochat-loadtest.md",
+      "file_name": "memochat-architecture-loadtest.md",
       "file_type": "md",
-      "content": "MemoChat 的 GateServer 默认端口是 8080。ChatServer 使用 TCP 长连接承载聊天登录。AIOrchestrator 默认端口是 8096。",
-      "query": "MemoChat 的 GateServer 默认端口是什么？",
-      "expected_terms": ["GateServer", "8080"]
+      "content": "MemoChat architecture note. GateServer exposes the public HTTP entrypoint on port 8080 and forwards AI requests to AIServer. ChatServer keeps TCP long connections for chat login and realtime messages.\n\nAIServer bridges the C++ services to AIOrchestrator. AIOrchestrator listens on port 8096 and coordinates LLM calls, tools, knowledge search, graph memory, and observability traces.\n\nQdrant is the vector database for knowledge-base chunks. The local Docker deployment publishes Qdrant HTTP on 6333 and gRPC on 6334, while Neo4j publishes Browser on 7474 and Bolt on 7687.\n\nA distractor service called MemoArchive uses port 18080 in old notes. That value must not be confused with the GateServer public port for MemoChat.",
+      "queries": [
+        {
+          "query": "MemoChat 对外 HTTP 入口 GateServer 监听哪个端口？",
+          "expected_terms": ["GateServer", "8080"]
+        },
+        {
+          "query": "AIOrchestrator 默认服务端口是多少，负责哪些 AI 编排能力？",
+          "expected_terms": ["AIOrchestrator", "8096", "knowledge search"]
+        },
+        {
+          "query": "Qdrant 在本地 Docker 里发布了哪些端口？",
+          "expected_terms": ["Qdrant", "6333", "6334"]
+        }
+      ]
+    },
+    {
+      "file_name": "memochat-loadtest-observability.md",
+      "file_type": "md",
+      "content": "MemoChat layered load tests separate app endpoints from dependency capacity. The Python runner covers TCP login, AI health, agent runs, and RAG retrieval. k6 is used for HTTP-only health and login baselines.\n\nRuntime reports should compare health, HTTP login, TCP login, sweep curves, dependency checks, and deep AI paths separately. Mixing these layers into one headline QPS hides the bottleneck.\n\nObservability containers keep stable ports: Prometheus 9090, Grafana 3000, Loki 3100, Tempo 3200, cAdvisor 8088, and InfluxDB 8086. AI traces can be correlated by trace_id.\n\nA distractor benchmark named legacy-latency once reported port 9099 for an unrelated metrics daemon. Current MemoChat Prometheus remains on 9090.",
+      "queries": [
+        {
+          "query": "MemoChat 分层压测为什么不能只看一个总 QPS？",
+          "expected_terms": ["separate app endpoints", "dependency capacity", "bottleneck"]
+        },
+        {
+          "query": "Prometheus、Grafana、Loki、Tempo 的本地端口分别是什么？",
+          "expected_terms": ["Prometheus 9090", "Grafana 3000", "Loki 3100", "Tempo 3200"]
+        },
+        {
+          "query": "哪个工具用于 HTTP-only health 和 login baseline？",
+          "expected_terms": ["k6", "HTTP-only"]
+        }
+      ]
+    },
+    {
+      "file_name": "memochat-agent-rag-quality.md",
+      "file_type": "md",
+      "content": "RAG quality should report recall at multiple cutoffs, such as recall@1, recall@3, recall@5, and recall@10. A tiny single-document test can produce 100 percent recall without proving ranking quality.\n\nA stronger retrieval corpus contains multiple documents, repeated product terms, near-miss port numbers, paraphrased questions, and unrelated distractor paragraphs. The top5 set should be inspected because agent context usually receives several chunks.\n\nFor load tests, each uploaded knowledge base should be deleted after the scenario so old collections do not inflate recall. The scenario should include per-query misses for debugging.\n\nA distractor sentence says top2 is enough for every system. MemoChat does not treat that as a quality target; top5 and top10 remain important for recall analysis.",
+      "queries": [
+        {
+          "query": "为什么单文档 RAG 测试出现 100% recall 不能说明排序质量？",
+          "expected_terms": ["single-document", "100 percent recall", "ranking quality"]
+        },
+        {
+          "query": "更暴力的检索测试语料应该包含什么干扰因素？",
+          "expected_terms": ["multiple documents", "near-miss port numbers", "paraphrased questions", "distractor"]
+        },
+        {
+          "query": "RAG 压测结束后为什么要删除上传的知识库？",
+          "expected_terms": ["deleted after the scenario", "old collections", "inflate recall"]
+        }
+      ]
     }
   ]
 }

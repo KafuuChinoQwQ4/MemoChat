@@ -13,6 +13,7 @@ import subprocess
 import time
 import urllib.request
 import uuid
+import queue
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
@@ -66,6 +67,8 @@ def summarize(result: BenchResult) -> dict[str, Any]:
                 "min_ms": round(min(lat), 3) if lat else 0.0,
                 "avg_ms": round(sum(lat) / len(lat), 3) if lat else 0.0,
                 "p50_ms": percentile(lat, 50),
+                "p75_ms": percentile(lat, 75),
+                "p90_ms": percentile(lat, 90),
                 "p95_ms": percentile(lat, 95),
                 "p99_ms": percentile(lat, 99),
                 "max_ms": round(max(lat), 3) if lat else 0.0,
@@ -168,8 +171,51 @@ def bench_postgres(total: int, concurrency: int) -> list[dict[str, Any]]:
         except Exception as exc:
             return False, {"elapsed_ms": (time.perf_counter() - started) * 1000.0, "error": str(exc)}
 
-    return [summarize(run_parallel("postgres_upsert_256b", total, concurrency, write_one)),
-            summarize(run_parallel("postgres_pk_read_256b", total, concurrency, read_one))]
+    reports = [
+        summarize(run_parallel("postgres_upsert_256b_new_connection", total, concurrency, write_one)),
+        summarize(run_parallel("postgres_pk_read_256b_new_connection", total, concurrency, read_one)),
+    ]
+
+    pool: queue.Queue[psycopg.Connection] = queue.Queue(maxsize=max(1, concurrency))
+    for _ in range(max(1, concurrency)):
+        pool.put(psycopg.connect(conninfo, autocommit=True))
+
+    def pooled_write_one(i: int) -> tuple[bool, dict[str, Any]]:
+        key = f"pool_{uuid.uuid4().hex}"
+        started = time.perf_counter()
+        conn = pool.get()
+        try:
+            conn.execute(
+                "INSERT INTO bench.resume_kv(id,value) VALUES (%s,%s) ON CONFLICT (id) DO UPDATE SET value=EXCLUDED.value, updated_at=now();",
+                (key, payload),
+            )
+            return True, {"elapsed_ms": (time.perf_counter() - started) * 1000.0}
+        except Exception as exc:
+            return False, {"elapsed_ms": (time.perf_counter() - started) * 1000.0, "error": str(exc)}
+        finally:
+            pool.put(conn)
+
+    def pooled_read_one(i: int) -> tuple[bool, dict[str, Any]]:
+        started = time.perf_counter()
+        conn = pool.get()
+        try:
+            raw = conn.execute("SELECT length(value) FROM bench.resume_kv WHERE id=%s;", (f"seed_{i % 200}",)).fetchone()
+            return raw and raw[0] == 256, {"elapsed_ms": (time.perf_counter() - started) * 1000.0}
+        except Exception as exc:
+            return False, {"elapsed_ms": (time.perf_counter() - started) * 1000.0, "error": str(exc)}
+        finally:
+            pool.put(conn)
+
+    try:
+        reports.extend([
+            summarize(run_parallel("postgres_upsert_256b_pooled", total, concurrency, pooled_write_one)),
+            summarize(run_parallel("postgres_pk_read_256b_pooled", total, concurrency, pooled_read_one)),
+        ])
+    finally:
+        while not pool.empty():
+            conn = pool.get_nowait()
+            conn.close()
+    return reports
 
 
 def bench_mongo(total: int, concurrency: int) -> list[dict[str, Any]]:

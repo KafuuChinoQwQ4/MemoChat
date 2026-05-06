@@ -102,7 +102,9 @@ server/AIOrchestrator/
 - `memochat-ollama`: 本地 `local_api`
 - `memochat-qdrant`: 向量库
 - `memochat-neo4j`: 图谱库
-- `memochat-langfuse`: 可观测性（可选）
+
+AI 原生观测使用官方 LangSmith 云端服务，通过 `LANGSMITH_API_KEY`、`LANGSMITH_PROJECT` 和
+`LANGSMITH_ENDPOINT` 环境变量接入；Prometheus/Grafana 与 OpenTelemetry 继续承担服务级指标和链路辅助。
 
 远端 `external_api` 通过 `config.yaml` 中的 OpenAI/Kimi/Claude 或自定义 `harness.providers.endpoints` 接入。
 

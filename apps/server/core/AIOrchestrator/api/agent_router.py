@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 
 from harness import HarnessContainer
 from harness.layers import list_harness_layers
+from observability.langsmith_instrument import set_run_error, set_run_output, trace_context
 from schemas.api import (
     AgentCardModel,
     AgentCardRsp,
@@ -19,6 +20,15 @@ from schemas.api import (
     AgentFlowRunReq,
     AgentFlowRunRsp,
     AgentMessageModel,
+    GameActionReq,
+    GameAgentAddReq,
+    GameRoomAutoTickReq,
+    GameRoomFromTemplateReq,
+    GameRoomCreateReq,
+    GameRoomJoinReq,
+    GameRoomRsp,
+    GameTemplatePresetCloneReq,
+    GameTemplateSaveReq,
     AgentLayerInfo,
     AgentLayerListRsp,
     AgentSpecListRsp,
@@ -63,13 +73,38 @@ async def run_agent(req: AgentRunReq):
         raise HTTPException(status_code=400, detail="content cannot be empty")
 
     container = HarnessContainer.get_instance()
-    try:
-        result = await container.agent_service.run_turn(req)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=f"agent run failed: {type(exc).__name__}: {str(exc)[:300]}",
-        ) from exc
+    with trace_context(
+        "agent_run",
+        run_type="chain",
+        inputs=req.model_dump(),
+        metadata={
+            "route": "/agent/run",
+            "session_id": req.session_id,
+            "model_type": req.model_type,
+            "model_name": req.model_name,
+            "deployment_preference": req.deployment_preference,
+        },
+        tags=["agent"],
+    ) as run:
+        try:
+            result = await container.agent_service.run_turn(req)
+            set_run_output(
+                run,
+                {
+                    "trace_id": result.trace_id,
+                    "session_id": result.session_id,
+                    "skill": result.skill,
+                    "model": result.model,
+                    "tokens": result.tokens,
+                    "feedback_summary": result.feedback_summary,
+                },
+            )
+        except Exception as exc:
+            set_run_error(run, exc)
+            raise HTTPException(
+                status_code=503,
+                detail=f"agent run failed: {type(exc).__name__}: {str(exc)[:300]}",
+            ) from exc
     return AgentRunRsp(
         code=0,
         message="ok",
@@ -312,6 +347,249 @@ async def get_agent_flow(flow_name: str):
     if flow is None:
         raise HTTPException(status_code=404, detail="agent flow not found")
     return AgentFlowRsp(code=0, message="ok", flow=AgentFlowModel(**flow.to_dict()))
+
+
+@router.get("/games/rulesets", response_model=GameRoomRsp)
+async def list_game_rulesets():
+    container = HarnessContainer.get_instance()
+    return GameRoomRsp(code=0, message="ok", rulesets=container.game_service.list_rulesets())
+
+
+@router.get("/games/role-presets", response_model=GameRoomRsp)
+async def list_game_role_presets(ruleset_id: str = "werewolf.basic"):
+    container = HarnessContainer.get_instance()
+    try:
+        role_presets = container.game_service.list_role_presets(ruleset_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return GameRoomRsp(code=0, message="ok", role_presets=role_presets)
+
+
+@router.post("/games/rooms", response_model=GameRoomRsp)
+async def create_game_room(req: GameRoomCreateReq):
+    container = HarnessContainer.get_instance()
+    try:
+        state = container.game_service.create_room(
+            uid=req.uid,
+            title=req.title,
+            ruleset_id=req.ruleset_id,
+            max_players=req.max_players,
+            agent_count=req.agent_count,
+            agents=[agent.model_dump() for agent in req.agents],
+            config=req.config,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return GameRoomRsp(
+        code=0,
+        message="ok",
+        room=state.room.to_dict(),
+        state=state.to_dict(viewer_uid=req.uid),
+    )
+
+
+@router.get("/games/templates", response_model=GameRoomRsp)
+async def list_game_templates(uid: int):
+    container = HarnessContainer.get_instance()
+    templates = await container.game_service.list_templates(uid)
+    return GameRoomRsp(
+        code=0,
+        message="ok",
+        templates=[template.to_dict() for template in templates],
+    )
+
+
+@router.get("/games/template-presets", response_model=GameRoomRsp)
+async def list_game_template_presets(ruleset_id: str = ""):
+    container = HarnessContainer.get_instance()
+    try:
+        template_presets = container.game_service.list_template_presets(ruleset_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return GameRoomRsp(
+        code=0,
+        message="ok",
+        template_presets=[template.to_dict() for template in template_presets],
+    )
+
+
+@router.post("/games/template-presets/{preset_id}/clone", response_model=GameRoomRsp)
+async def clone_game_template_preset(preset_id: str, req: GameTemplatePresetCloneReq):
+    container = HarnessContainer.get_instance()
+    try:
+        template = await container.game_service.clone_template_preset(preset_id, req.uid, req.title)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return GameRoomRsp(code=0, message="ok", template=template.to_dict())
+
+
+@router.post("/games/templates", response_model=GameRoomRsp)
+async def save_game_template(req: GameTemplateSaveReq):
+    container = HarnessContainer.get_instance()
+    try:
+        template = await container.game_service.save_template(
+            template_id=req.template_id,
+            uid=req.uid,
+            title=req.title,
+            description=req.description,
+            ruleset_id=req.ruleset_id,
+            max_players=req.max_players,
+            agents=[agent.model_dump() for agent in req.agents],
+            config=req.config,
+            metadata=req.metadata,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return GameRoomRsp(code=0, message="ok", template=template.to_dict())
+
+
+@router.delete("/games/templates/{template_id}", response_model=GameRoomRsp)
+async def delete_game_template(template_id: str, uid: int):
+    container = HarnessContainer.get_instance()
+    deleted = await container.game_service.delete_template(template_id, uid)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="game template not found")
+    return GameRoomRsp(code=0, message="ok")
+
+
+@router.post("/games/templates/{template_id}/rooms", response_model=GameRoomRsp)
+async def create_game_room_from_template(template_id: str, req: GameRoomFromTemplateReq):
+    container = HarnessContainer.get_instance()
+    try:
+        state = await container.game_service.create_room_from_template(template_id, req.uid, req.title)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return GameRoomRsp(
+        code=0,
+        message="ok",
+        room=state.room.to_dict(),
+        state=state.to_dict(viewer_uid=req.uid),
+    )
+
+
+@router.get("/games/rooms", response_model=GameRoomRsp)
+async def list_game_rooms(uid: int = 0):
+    container = HarnessContainer.get_instance()
+    rooms = await container.game_service.list_rooms(uid)
+    return GameRoomRsp(
+        code=0,
+        message="ok",
+        rooms=[room.to_dict() for room in rooms],
+    )
+
+
+@router.get("/games/rooms/{room_id}", response_model=GameRoomRsp)
+async def get_game_room(room_id: str, uid: int = 0):
+    container = HarnessContainer.get_instance()
+    try:
+        await container.game_service.ensure_room_loaded(room_id)
+        state = container.game_service.get_state(room_id, uid)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return GameRoomRsp(code=0, message="ok", room=state.room.to_dict(), state=state.to_dict(viewer_uid=uid))
+
+
+@router.post("/games/rooms/{room_id}/join", response_model=GameRoomRsp)
+async def join_game_room(room_id: str, req: GameRoomJoinReq):
+    container = HarnessContainer.get_instance()
+    try:
+        await container.game_service.ensure_room_loaded(room_id)
+        state = container.game_service.join_room(room_id, req.uid, req.display_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return GameRoomRsp(code=0, message="ok", room=state.room.to_dict(), state=state.to_dict(viewer_uid=req.uid))
+
+
+@router.post("/games/rooms/{room_id}/agents", response_model=GameRoomRsp)
+async def add_game_agents(room_id: str, req: GameAgentAddReq):
+    container = HarnessContainer.get_instance()
+    try:
+        await container.game_service.ensure_room_loaded(room_id)
+        state = container.game_service.add_agents(
+            room_id,
+            agent_count=req.agent_count,
+            agents=[agent.model_dump() for agent in req.agents],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return GameRoomRsp(code=0, message="ok", room=state.room.to_dict(), state=state.to_dict())
+
+
+@router.post("/games/rooms/{room_id}/start", response_model=GameRoomRsp)
+async def start_game_room(room_id: str, req: GameRoomJoinReq):
+    container = HarnessContainer.get_instance()
+    try:
+        await container.game_service.ensure_room_loaded(room_id)
+        state = container.game_service.start_room(room_id, req.uid)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return GameRoomRsp(code=0, message="ok", room=state.room.to_dict(), state=state.to_dict(viewer_uid=req.uid))
+
+
+@router.post("/games/rooms/{room_id}/restart", response_model=GameRoomRsp)
+async def restart_game_room(room_id: str, req: GameRoomJoinReq):
+    container = HarnessContainer.get_instance()
+    try:
+        await container.game_service.ensure_room_loaded(room_id)
+        state = container.game_service.restart_room(room_id, req.uid)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return GameRoomRsp(code=0, message="ok", room=state.room.to_dict(), state=state.to_dict(viewer_uid=req.uid))
+
+
+@router.post("/games/rooms/{room_id}/actions", response_model=GameRoomRsp)
+async def submit_game_action(room_id: str, req: GameActionReq):
+    container = HarnessContainer.get_instance()
+    try:
+        await container.game_service.ensure_room_loaded(room_id)
+        state = container.game_service.submit_action(
+            room_id=room_id,
+            participant_id=req.participant_id,
+            action_type=req.action_type,
+            content=req.content,
+            target_participant_id=req.target_participant_id,
+            payload=req.payload,
+            uid=req.uid,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return GameRoomRsp(code=0, message="ok", room=state.room.to_dict(), state=state.to_dict(viewer_uid=req.uid))
+
+
+@router.post("/games/rooms/{room_id}/tick", response_model=GameRoomRsp)
+async def tick_game_room(room_id: str, req: GameRoomJoinReq):
+    container = HarnessContainer.get_instance()
+    try:
+        await container.game_service.ensure_room_loaded(room_id)
+        tick = await container.game_service.tick_room(room_id, req.uid)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    state = tick.pop("state")
+    return GameRoomRsp(
+        code=0,
+        message=tick.get("message", "ok"),
+        room=state.room.to_dict(),
+        state=state.to_dict(viewer_uid=req.uid),
+        tick=tick,
+    )
+
+
+@router.post("/games/rooms/{room_id}/auto-tick", response_model=GameRoomRsp)
+async def auto_tick_game_room(room_id: str, req: GameRoomAutoTickReq):
+    container = HarnessContainer.get_instance()
+    try:
+        await container.game_service.ensure_room_loaded(room_id)
+        tick = await container.game_service.auto_tick_room(room_id, req.uid, req.max_steps)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    state = tick.pop("state")
+    return GameRoomRsp(
+        code=0,
+        message=tick.get("message", "ok"),
+        room=state.room.to_dict(),
+        state=state.to_dict(viewer_uid=req.uid),
+        tick=tick,
+    )
 
 
 @router.get("/tools", response_model=ToolListRsp)

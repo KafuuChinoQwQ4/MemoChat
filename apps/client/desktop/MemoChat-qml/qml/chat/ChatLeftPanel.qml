@@ -31,8 +31,11 @@ Rectangle {
     property bool groupStatusError: false
     property var agentSessions: []
     property string agentCurrentSessionId: ""
+    property var agentGameRooms: []
+    property string agentCurrentGameRoomId: ""
     property string agentCurrentModel: ""
     property bool agentBusy: false
+    readonly property var agentEntryModel: agentEntries(agentSessions, agentGameRooms, agentCurrentSessionId, agentCurrentGameRoomId, agentCurrentModel)
     property int momentsSelectedUid: 0
     property string momentsSelectedName: ""
     property real _sessionLastContentY: 0
@@ -55,9 +58,11 @@ Rectangle {
     signal createGroupRequested()
     signal applyJoinGroupRequested(string groupCode, string reason)
     signal agentRefreshRequested()
+    signal agentNewChatRequested()
     signal agentNewSessionRequested()
     signal agentSessionSelected(string sessionId)
     signal agentSessionDeleted(string sessionId)
+    signal agentGameRoomSelected(string roomId)
     signal momentFriendSelected(int uid, string displayName)
     signal dialogPinToggled(int uid)
     signal dialogMuteToggled(int uid)
@@ -83,9 +88,47 @@ Rectangle {
                    : "按好友查看朋友圈动态。"
         }
         if (currentTab === AppController.AgentTabPage) {
-            return agentCurrentModel.length > 0 ? agentCurrentModel : "选择会话后开始和 AI 对话。"
+            var sessionCount = agentSessions ? agentSessions.length : 0
+            var roomCount = agentGameRooms ? agentGameRooms.length : 0
+            if (agentCurrentGameRoomId.length > 0) {
+                return "已选择房间"
+            }
+            if (agentCurrentSessionId.length > 0) {
+                return "已选择会话"
+            }
+            return "会话 " + sessionCount + " · 房间 " + roomCount
         }
         return "在这里管理账户信息和应用设置。"
+    }
+    function agentEntries(sessions, rooms, currentSessionId, currentGameRoomId, currentModel) {
+        var rows = []
+        for (var i = 0; i < (sessions ? sessions.length : 0); ++i) {
+            var session = sessions[i] || {}
+            rows.push({
+                "kind": "session",
+                "entry_id": session.session_id || "",
+                "title": session.title || "新会话",
+                "subtitle": session.model_name || currentModel || "AI 会话",
+                "status": i,
+                "session_id": session.session_id || "",
+                "room_id": "",
+                "model_name": session.model_name || ""
+            })
+        }
+        for (var j = 0; j < (rooms ? rooms.length : 0); ++j) {
+            var room = rooms[j] || {}
+            rows.push({
+                "kind": "room",
+                "entry_id": room.room_id || room.id || "",
+                "title": room.title || room.name || "游戏房间",
+                "subtitle": (room.status || "draft") + " · " + (room.ruleset_id || "ruleset"),
+                "status": (sessions ? sessions.length : 0) + j,
+                "session_id": "",
+                "room_id": room.room_id || room.id || "",
+                "model_name": ""
+            })
+        }
+        return rows
     }
     function ensureCurrentSessionSource() {
         if (currentTab !== AppController.ChatTabPage) {
@@ -287,7 +330,7 @@ Rectangle {
                         Label {
                             id: busyLabel
                             anchors.centerIn: parent
-                            text: "生成中"
+                            text: "处理中"
                             color: "#2d6fb4"
                             font.pixelSize: 11
                             font.bold: true
@@ -751,7 +794,7 @@ Rectangle {
                     spacing: 8
 
                     Label {
-                        text: "会话"
+                        text: "房间"
                         color: "#2a3649"
                         font.pixelSize: 15
                         font.bold: true
@@ -760,6 +803,7 @@ Rectangle {
                     Item { Layout.fillWidth: true }
 
                     GlassButton {
+                        id: agentNewButton
                         Layout.preferredWidth: 64
                         Layout.preferredHeight: 30
                         text: "新建"
@@ -768,13 +812,76 @@ Rectangle {
                         normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.22)
                         hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.32)
                         pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.40)
-                        onClicked: root.agentNewSessionRequested()
+                        onClicked: agentNewMenuPopup.open()
+                    }
+
+                    Popup {
+                        id: agentNewMenuPopup
+                        width: 176
+                        height: agentNewMenuColumn.implicitHeight + 16
+                        x: Math.max(0, agentNewButton.x)
+                        y: agentNewButton.y + agentNewButton.height + 6
+                        padding: 0
+                        modal: false
+                        focus: true
+                        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+                        background: Rectangle {
+                            color: "transparent"
+                        }
+
+                        contentItem: GlassSurface {
+                            backdrop: root.backdrop !== null ? root.backdrop : root
+                            cornerRadius: 12
+                            blurRadius: 18
+                            fillColor: Qt.rgba(0.98, 0.99, 1.0, 0.90)
+                            strokeColor: Qt.rgba(1, 1, 1, 0.58)
+                            glowTopColor: Qt.rgba(1, 1, 1, 0.28)
+                            glowBottomColor: Qt.rgba(1, 1, 1, 0.06)
+
+                            ColumnLayout {
+                                id: agentNewMenuColumn
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                spacing: 6
+
+                                GlassButton {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 32
+                                    text: "新建 AI 会话"
+                                    textPixelSize: 13
+                                    cornerRadius: 8
+                                    normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.18)
+                                    hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.28)
+                                    pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.36)
+                                    onClicked: {
+                                        agentNewMenuPopup.close()
+                                        root.agentNewChatRequested()
+                                    }
+                                }
+
+                                GlassButton {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 32
+                                    text: "创建游戏房间"
+                                    textPixelSize: 13
+                                    cornerRadius: 8
+                                    normalColor: Qt.rgba(0.30, 0.58, 0.36, 0.18)
+                                    hoverColor: Qt.rgba(0.30, 0.58, 0.36, 0.28)
+                                    pressedColor: Qt.rgba(0.30, 0.58, 0.36, 0.36)
+                                    onClicked: {
+                                        agentNewMenuPopup.close()
+                                        root.agentNewSessionRequested()
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
                 Label {
                     Layout.fillWidth: true
-                    text: root.agentCurrentModel.length > 0 ? ("当前模型: " + root.agentCurrentModel) : "当前模型: 正在加载"
+                    text: root.agentEntryModel.length > 0 ? ("共 " + root.agentEntryModel.length + " 项") : "创建会话或房间后会显示在这里"
                     color: "#6a7b92"
                     font.pixelSize: 12
                     elide: Text.ElideRight
@@ -785,7 +892,7 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    model: root.agentSessions
+                    model: root.agentEntryModel
                     spacing: 6
                     ScrollBar.vertical: GlassScrollBar { }
 
@@ -794,12 +901,16 @@ Rectangle {
                         implicitHeight: 62
                         radius: 10
                         color: {
-                            if (modelData.session_id === root.agentCurrentSessionId) {
+                            if (modelData.kind === "room" && (modelData.room_id || "") === root.agentCurrentGameRoomId) {
+                                return Qt.rgba(0.54, 0.70, 0.93, 0.22)
+                            }
+                            if (modelData.kind === "session" && (modelData.session_id || "") === root.agentCurrentSessionId) {
                                 return Qt.rgba(0.54, 0.70, 0.93, 0.22)
                             }
                             return sessionHover.containsMouse ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(1, 1, 1, 0.04)
                         }
-                        border.color: modelData.session_id === root.agentCurrentSessionId
+                        border.color: (modelData.kind === "room" && (modelData.room_id || "") === root.agentCurrentGameRoomId)
+                                      || (modelData.kind === "session" && (modelData.session_id || "") === root.agentCurrentSessionId)
                                       ? Qt.rgba(0.54, 0.70, 0.93, 0.54)
                                       : Qt.rgba(1, 1, 1, 0.24)
 
@@ -809,7 +920,19 @@ Rectangle {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: root.agentSessionSelected(modelData.session_id)
+                            onClicked: {
+                                if (modelData.kind === "room") {
+                                    const roomId = modelData.room_id || modelData.id || ""
+                                    if (roomId.length > 0) {
+                                        root.agentGameRoomSelected(roomId)
+                                    }
+                                } else {
+                                    const sessionId = modelData.session_id || modelData.entry_id || ""
+                                    if (sessionId.length > 0) {
+                                        root.agentSessionSelected(sessionId)
+                                    }
+                                }
+                            }
                         }
 
                         RowLayout {
@@ -825,7 +948,16 @@ Rectangle {
 
                                 Label {
                                     Layout.fillWidth: true
-                                    text: modelData.title || "新会话"
+                                    text: modelData.kind === "room" ? "房间" : "会话"
+                                    color: "#6a7b92"
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: modelData.title || modelData.name || "未命名"
                                     color: "#273449"
                                     font.pixelSize: 13
                                     font.bold: true
@@ -834,7 +966,7 @@ Rectangle {
 
                                 Label {
                                     Layout.fillWidth: true
-                                    text: modelData.model_name || root.agentCurrentModel
+                                    text: modelData.subtitle || ""
                                     color: "#6a7b92"
                                     font.pixelSize: 11
                                     elide: Text.ElideRight
@@ -848,7 +980,7 @@ Rectangle {
                                 color: sessionDeleteArea.pressed ? Qt.rgba(0.89, 0.27, 0.27, 0.30)
                                       : sessionDeleteArea.containsMouse ? Qt.rgba(0.89, 0.27, 0.27, 0.24)
                                                                         : Qt.rgba(0.89, 0.27, 0.27, 0.16)
-                                visible: sessionHover.containsMouse || modelData.session_id === root.agentCurrentSessionId
+                                visible: modelData.kind === "session"
                                 opacity: root.agentBusy ? 0.45 : 1.0
 
                                 Label {
@@ -863,7 +995,7 @@ Rectangle {
                                     id: sessionDeleteArea
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    enabled: !root.agentBusy
+                                    enabled: modelData.kind === "session" && !root.agentBusy
                                     cursorShape: Qt.PointingHandCursor
                                     ToolTip.visible: containsMouse
                                     ToolTip.delay: 120
@@ -899,7 +1031,7 @@ Rectangle {
                     spacing: 4
 
                     Label {
-                        text: "暂无会话"
+                        text: "暂无会话或房间"
                         color: "#2a3649"
                         font.pixelSize: 13
                         font.bold: true
@@ -907,7 +1039,7 @@ Rectangle {
                     }
 
                     Label {
-                        text: "点击右上角「新建」开始对话"
+                        text: "点击右上角「新建」创建会话或房间"
                         color: "#6a7b92"
                         font.pixelSize: 12
                         horizontalAlignment: Text.AlignHCenter

@@ -108,14 +108,24 @@ neo4j:
 
 observability:
   enabled: false
-  backend: "langfuse"
-  langfuse:
-    public_key: ""
-    secret_key: ""
-    host: "http://127.0.0.1:3000"
+  backend: "langsmith"
+  langsmith:
+    tracing: true
+    endpoint: "https://api.smith.langchain.com"
+    api_key_env: "LANGSMITH_API_KEY"
+    project: "memochat-ai-local"
+    sampling_rate: 1.0
+    redact_inputs: true
+    redact_outputs: false
+    upload_user_content: false
+    tags:
+      - "memochat"
+      - "ai-agent"
+      - "local"
   otel:
     endpoint: "http://127.0.0.1:4317"
     service_name: "ai-orchestrator"
+  prometheus_enabled: true
   trace_llm_calls: true
   trace_tool_calls: true
   track_ttft: true
@@ -157,6 +167,9 @@ harness:
   trace_persist: true
   auto_reflection: true
   short_term_limit: 24
+  short_term_fetch_limit: 96
+  short_term_token_budget: 1600
+  short_term_summary_token_budget: 320
   episodic_limit: 6
   knowledge_top_k: 5
   skills:

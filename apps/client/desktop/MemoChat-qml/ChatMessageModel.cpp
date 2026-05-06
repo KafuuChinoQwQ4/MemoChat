@@ -56,7 +56,10 @@ ChatMessageModel::ChatMessageModel(QObject *parent)
         if (_items.empty()) {
             return;
         }
-        refreshTimeDividerRange(0, rowCount() - 1);
+        recomputeAvatarFlags();
+        const QModelIndex top = index(0, 0);
+        const QModelIndex bottom = index(rowCount() - 1, 0);
+        emit dataChanged(top, bottom, {ShowTimeDividerRole, TimeDividerTextRole, ShowAvatarRole});
         restartTimeDividerRefreshTimer();
     });
 }
@@ -761,8 +764,9 @@ void ChatMessageModel::refreshAvatarFlags()
 void ChatMessageModel::recomputeAvatarFlags()
 {
     const MessageEntry *previous = nullptr;
-    for (auto &entry : _items) {
-        entry.showAvatar = shouldShowAvatarForEntry(previous, entry);
+    for (int row = 0; row < rowCount(); ++row) {
+        auto &entry = _items[static_cast<size_t>(row)];
+        entry.showAvatar = shouldShowTimeDivider(row) || shouldShowAvatarForEntry(previous, entry);
         previous = &entry;
     }
 }

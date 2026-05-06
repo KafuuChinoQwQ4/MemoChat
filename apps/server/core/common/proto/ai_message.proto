@@ -300,6 +300,16 @@ message AIRegisterApiProviderRsp {
     repeated ModelInfo models = 4;
 }
 
+message AIDeleteApiProviderReq {
+    string provider_id = 1;
+}
+
+message AIDeleteApiProviderRsp {
+    int32 code = 1;
+    string message = 2;
+    string provider_id = 3;
+}
+
 // =============================================================================
 // Human-in-the-Loop 确认
 // =============================================================================
@@ -340,6 +350,7 @@ service AIService {
     // 模型列表
     rpc ListModels(AIListModelsReq) returns (AIListModelsRsp) {}
     rpc RegisterApiProvider(AIRegisterApiProviderReq) returns (AIRegisterApiProviderRsp) {}
+    rpc DeleteApiProvider(AIDeleteApiProviderReq) returns (AIDeleteApiProviderRsp) {}
 
     // 知识库
     rpc KbUpload(AIKbUploadReq) returns (AIKbUploadRsp) {}

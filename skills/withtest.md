@@ -13,9 +13,12 @@ Follow `task.md`:
 1. create `.ai/<project>/<letter>/`
 2. gather context
 3. plan
-4. implement
-5. build
-6. review
+4. open Controller-led parallel lanes by default from `parallel-agents.md`
+5. implement
+6. build
+7. review
+
+For runtime-heavy work, dispatch a Tests Worker or Integration Worker by default to prepare smoke probes while Backend/Frontend/Data workers implement, when worker spawning is permitted and safe disjoint scopes exist. The Controller remains responsible for final runtime acceptance.
 
 ## Stage 2: Runtime Test Loop
 

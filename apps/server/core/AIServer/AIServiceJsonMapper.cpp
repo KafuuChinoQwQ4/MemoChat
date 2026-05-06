@@ -39,7 +39,7 @@ bool PopulateModelListFromJson(const memochat::json::JsonValue& result, ai::AILi
         }
     }
 
-    return reply->models_size() > 0;
+    return result.isObject() && reply->code() == 0;
 }
 
 void PopulateRegisterApiProviderFromJson(const memochat::json::JsonValue& result, ai::AIRegisterApiProviderRsp* reply) {

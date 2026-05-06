@@ -266,7 +266,11 @@ void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
             || reqId == ID_FORWARD_PRIVATE_MSG_RSP) {
             setTip(QString("%1失败（错误码:%2）").arg(actionText(reqId)).arg(error), true);
         } else {
-            setGroupStatus(QString("%1失败（错误码:%2）").arg(actionText(reqId)).arg(error), true);
+            const QString serverMessage = payload.value("message").toString().trimmed();
+            setGroupStatus(serverMessage.isEmpty()
+                               ? QString("%1失败（错误码:%2）").arg(actionText(reqId)).arg(error)
+                               : QString("%1失败：%2（错误码:%3）").arg(actionText(reqId), serverMessage).arg(error),
+                           true);
         }
         return;
     }

@@ -28,6 +28,10 @@ public:
 		_response.set(f, value);
 	}
 	http::response<http::dynamic_body>& GetResponse() { return _response; }
+	std::string RequestTargetString() const;
+	std::string RequestBodyString() const;
+	const std::string& GetTraceId() const { return _trace_id; }
+	const std::string& GetRequestId() const { return _request_id; }
 	void StartSseStream();
 	void WriteStreamChunk(std::string chunk);
 	void FinishStream();

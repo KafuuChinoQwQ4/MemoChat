@@ -244,37 +244,6 @@ grpc::Status AIServiceCore::DeleteSession(const ai::AIDeleteSessionReq& req, ai:
 grpc::Status AIServiceCore::ListModels(const ai::AIListModelsReq& req, ai::AIListModelsRsp* reply) {
     (void)req;
     reply->set_code(0);
-    auto& cfg = ConfigMgr::Inst();
-    std::string default_model = cfg["AI"]["DefaultModel"];
-    auto add_model = [&](const std::string& type, const std::string& name, const std::string& display, bool enabled, int64_t ctx_window, bool supports_thinking, bool is_default) {
-        auto* m = reply->add_models();
-        m->set_model_type(type);
-        m->set_model_name(name);
-        m->set_display_name(display);
-        m->set_is_enabled(enabled);
-        m->set_context_window(ctx_window);
-        m->set_supports_thinking(supports_thinking);
-        if (is_default) {
-            reply->mutable_default_model()->CopyFrom(*m);
-        }
-    };
-
-    auto add_configured_models = [&]() {
-        if (cfg["Ollama"]["Enabled"] == "true") {
-            add_model("ollama", "qwen3:4b", "Qwen 3 4B", true, 8192, true, default_model == "qwen3:4b");
-        }
-        if (cfg["OpenAI"]["Enabled"] == "true") {
-            add_model("openai", "gpt-4o", "GPT-4o", true, 128000, false, default_model == "gpt-4o");
-            add_model("openai", "gpt-4o-mini", "GPT-4o Mini", true, 128000, false, default_model == "gpt-4o-mini");
-        }
-        if (cfg["Claude"]["Enabled"] == "true") {
-            add_model("claude", "claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet", true, 200000, false, default_model == "claude-3-5-sonnet-20241022");
-        }
-        if (cfg["Kimi"]["Enabled"] == "true") {
-            add_model("kimi", "moonshot-v1-8k", "Kimi 8K", true, 8192, false, default_model == "moonshot-v1-8k");
-        }
-    };
-
     memochat::json::JsonValue result;
     auto status = _ai_client->ListModels(&result);
     if (status.ok() && ai_service_json_mapper::PopulateModelListFromJson(result, reply)) {
@@ -283,7 +252,7 @@ grpc::Status AIServiceCore::ListModels(const ai::AIListModelsReq& req, ai::AILis
 
     reply->clear_models();
     reply->clear_default_model();
-    add_configured_models();
+    reply->set_code(503);
     return grpc::Status::OK;
 }
 
@@ -305,6 +274,25 @@ grpc::Status AIServiceCore::RegisterApiProvider(const ai::AIRegisterApiProviderR
     }
 
     ai_service_json_mapper::PopulateRegisterApiProviderFromJson(result, reply);
+    return grpc::Status::OK;
+}
+
+grpc::Status AIServiceCore::DeleteApiProvider(const ai::AIDeleteApiProviderReq& req, ai::AIDeleteApiProviderRsp* reply) {
+    reply->set_code(0);
+    reply->set_message("ok");
+    reply->set_provider_id(req.provider_id());
+
+    memochat::json::JsonValue result;
+    auto status = _ai_client->DeleteApiProvider(req.provider_id(), &result);
+    if (!status.ok()) {
+        reply->set_code(500);
+        reply->set_message("AI orchestrator unavailable: " + status.error_message());
+        return grpc::Status::OK;
+    }
+
+    reply->set_code(memochat::json::glaze_safe_get<int>(result["code"], 0));
+    reply->set_message(memochat::json::glaze_safe_get<std::string>(result["message"], "ok"));
+    reply->set_provider_id(memochat::json::glaze_safe_get<std::string>(result["provider_id"], req.provider_id()));
     return grpc::Status::OK;
 }
 

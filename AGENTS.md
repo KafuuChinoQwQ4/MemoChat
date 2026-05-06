@@ -23,9 +23,10 @@ Before working on this project, read the project skills first:
    - `skills/task.md` for normal implementation workflow.
    - `skills/withtest.md` for implementation plus iterative runtime testing.
    - `skills/planner.md` for reusable `.ai/<name>/prompt.md` and `tasks.json` automation plans.
+   - `skills/parallel-agents.md` for the default Controller-led concurrency workflow used on every implementation task where safe parallel work can accelerate delivery. The Controller agent must own architecture, plan, contracts, dispatch, integration, and final acceptance; worker agents take disjoint implementation, feedback, and runtime lanes.
    - `skills/reflect.md` for learning from user corrections.
    - `skills/release.md` for release preparation and verification.
    - `skills/icon.md` for SVG/icon asset work.
 3. Use `skills/PROMPTS.md` only when constructing phase prompts for delegated or artifact-based work.
 
-Keep skill usage selective: do not load every skill file unless the task genuinely spans all of them.
+Keep skill usage selective: do not load every skill file unless the task genuinely spans all of them. For implementation work, always consider the parallel workflow and record why a task stayed local-only when no worker lanes are useful.

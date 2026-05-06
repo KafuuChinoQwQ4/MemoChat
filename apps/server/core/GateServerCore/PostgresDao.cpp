@@ -54,9 +54,9 @@ int PostgresPoolSize() {
 	auto& cfg = ConfigMgr::Inst();
 	const auto configured = cfg["Postgres"]["PoolSize"];
 	if (configured.empty()) {
-		return 5;
+		return 12;
 	}
-	return std::clamp(std::atoi(configured.c_str()), 1, 20);
+	return std::clamp(std::atoi(configured.c_str()), 1, 64);
 }
 
 std::string DecodeLegacyXorPwd(const std::string& input) {
