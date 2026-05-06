@@ -65,6 +65,17 @@ rag:
     port: 6333
     grpc_port: 6334     # gRPC API
     collection_prefix: "user_"
+  retrieval:
+    dense_top_k: 12
+    lexical_top_k: 12
+    candidate_pool_size: 24
+    rrf_k: 60
+    dense_weight: 1.0
+    lexical_weight: 1.0
+    rerank_enabled: true
+    rerank_model: "BAAI/bge-reranker-base"
+    rerank_batch_size: 8
+    rerank_candidate_limit: 16
   chunk_size: 500
   chunk_overlap: 50
   top_k: 5

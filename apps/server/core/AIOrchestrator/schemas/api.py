@@ -81,6 +81,7 @@ class KbSearchReq(BaseModel):
     uid: int
     query: str
     top_k: int = 5
+    metadata_filters: dict[str, Any] = Field(default_factory=dict)
 
 
 class KbChunk(BaseModel):

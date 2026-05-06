@@ -96,8 +96,22 @@ class QdrantConfig(BaseModel):
     collection_prefix: str = "user_"
 
 
+class RAGRetrievalConfig(BaseModel):
+    dense_top_k: int = 12
+    lexical_top_k: int = 12
+    candidate_pool_size: int = 24
+    rrf_k: int = 60
+    dense_weight: float = 1.0
+    lexical_weight: float = 1.0
+    rerank_enabled: bool = True
+    rerank_model: str = "BAAI/bge-reranker-base"
+    rerank_batch_size: int = 8
+    rerank_candidate_limit: int = 16
+
+
 class RAGConfig(BaseModel):
     qdrant: QdrantConfig = QdrantConfig()
+    retrieval: RAGRetrievalConfig = RAGRetrievalConfig()
     chunk_size: int = 500
     chunk_overlap: int = 50
     top_k: int = 5
