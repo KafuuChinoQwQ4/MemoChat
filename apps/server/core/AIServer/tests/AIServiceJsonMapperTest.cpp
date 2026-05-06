@@ -86,6 +86,23 @@ TEST(AIServiceJsonMapperTest, FallsBackToFirstModelWhenDefaultModelMissing) {
     EXPECT_EQ(reply.default_model().display_name(), "Qwen 3 4B");
 }
 
+TEST(AIServiceJsonMapperTest, AcceptsEmptyModelList) {
+    auto payload = ParseJson(R"json(
+        {
+          "code": 0,
+          "models": [],
+          "default_model": null
+        }
+    )json");
+
+    ai::AIListModelsRsp reply;
+    EXPECT_TRUE(ai_service_json_mapper::PopulateModelListFromJson(payload, &reply));
+
+    EXPECT_EQ(reply.code(), 0);
+    EXPECT_EQ(reply.models_size(), 0);
+    EXPECT_FALSE(reply.has_default_model());
+}
+
 TEST(AIServiceJsonMapperTest, PopulatesRegisteredApiProviderModels) {
     auto payload = ParseJson(R"json(
         {

@@ -15,6 +15,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 
 from config import settings
+from observability.langsmith_instrument import set_run_error, set_run_output, trace_context
 
 logger = structlog.get_logger()
 
@@ -68,6 +69,21 @@ class RAGChain:
         collection = self._collection_name(uid, kb_id)
         client = self._get_client()
         dim = embedder.get_dimension()
+        with trace_context(
+            "rag_add_documents",
+            run_type="retriever",
+            inputs={"uid": uid, "kb_id": kb_id, "chunk_count": len(chunks), "dimension": dim},
+            metadata={"collection": collection, "operation": "qdrant_upsert"},
+            tags=["rag", "qdrant"],
+        ) as run:
+            try:
+                await self._add_documents_inner(uid, kb_id, chunks, embedder, collection, client, dim)
+                set_run_output(run, {"collection": collection, "chunks": len(chunks)})
+            except Exception as exc:
+                set_run_error(run, exc)
+                raise
+
+    async def _add_documents_inner(self, uid: int, kb_id: str, chunks: list[Document], embedder, collection: str, client: QdrantClient, dim: int) -> None:
 
         try:
             collections = [c.name for c in client.get_collections().collections]
@@ -118,6 +134,29 @@ class RAGChain:
         """
         检索与查询最相关的文档片段。
         """
+        with trace_context(
+            "rag_retrieve",
+            run_type="retriever",
+            inputs={"uid": uid, "query": query, "top_k": top_k},
+            metadata={"operation": "qdrant_search", "score_threshold": settings.rag.score_threshold},
+            tags=["rag", "qdrant"],
+        ) as run:
+            try:
+                results = await self._retrieve_inner(uid, query, top_k, embedder)
+                set_run_output(
+                    run,
+                    {
+                        "hit_count": len(results),
+                        "scores": [round(float(item.get("score", 0.0)), 4) for item in results],
+                        "kb_ids": [item.get("kb_id", "") for item in results],
+                    },
+                )
+                return results
+            except Exception as exc:
+                set_run_error(run, exc)
+                raise
+
+    async def _retrieve_inner(self, uid: int, query: str, top_k: int, embedder) -> list[dict]:
         client = self._get_client()
         prefix = settings.rag.qdrant.collection_prefix
 

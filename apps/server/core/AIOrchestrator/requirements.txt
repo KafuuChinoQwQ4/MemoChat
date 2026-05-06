@@ -8,6 +8,7 @@ langchain==0.3.14
 langgraph==0.2.62
 langchain-openai==0.2.14
 langchain-ollama==0.2.0
+langsmith>=0.2.0
 # Optional when Anthropic backend is enabled.
 langchain-qdrant==0.1.4
 qdrant-client==1.12.2
@@ -22,7 +23,7 @@ pydantic-settings==2.7.1
 pyyaml==6.0.2
 structlog==24.4.0
 python-multipart==0.0.18
-# Optional when observability.backend enables langfuse.
+# OpenTelemetry remains available for infra/service traces alongside LangSmith.
 opentelemetry-api==1.28.2
 opentelemetry-sdk==1.28.2
 opentelemetry-instrumentation-fastapi==0.49b2

@@ -80,6 +80,9 @@
         <file>qml/moments/MomentsPostComposer.qml</file>
         <file>qml/moments/MomentsDetailPopup.qml</file>
         <file>qml/agent/AgentPane.qml</file>
+        <file>qml/agent/AgentGamePane.qml</file>
+        <file>qml/agent/AgentGameAgentCard.qml</file>
+        <file>qml/agent/AgentGamePlayPane.qml</file>
         <file>qml/agent/AgentConversationPane.qml</file>
         <file>qml/agent/AgentMessageDelegate.qml</file>
         <file>qml/agent/AgentComposerBar.qml</file>

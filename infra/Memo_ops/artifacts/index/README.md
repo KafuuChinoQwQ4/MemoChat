@@ -17,6 +17,7 @@ Memo_ops/artifacts/
       VarifyServer/
     manual-start/
   loadtest/
+    k6/
     runtime/
       accounts/
       logs/
@@ -38,6 +39,7 @@ Memo_ops/artifacts/
 - `logs/services`: current and historical service runtime logs
 - `logs/manual-start`: console captures and manual-start helper logs
 - `loadtest/runtime`: current script outputs and runtime account material
+- `loadtest/k6`: k6 scripts and wrappers for HTTP baselines
 - `loadtest/history`: historical loadtest samples and archived runs
 - `reports/perf`: formal Markdown performance reports intended to remain readable and trackable
 
@@ -49,6 +51,7 @@ Memo_ops/artifacts/
 | `Memo_ops/runtime/varify/logs/` | `Memo_ops/artifacts/logs/services/VarifyServer/` |
 | `logs/manual-start/` | `Memo_ops/artifacts/logs/manual-start/` |
 | `Memo_ops/runtime/loadtest/` | `Memo_ops/artifacts/loadtest/runtime/` |
+| `tools/loadtest/k6/` | `Memo_ops/artifacts/loadtest/k6/` |
 | `local-loadtest/logs/` | `Memo_ops/artifacts/loadtest/history/ad-hoc/logs/` |
 | `local-loadtest/reports/e2e_*` | `Memo_ops/artifacts/loadtest/history/e2e/<same-dir>/` |
 | `local-loadtest/reports/suite_*` | `Memo_ops/artifacts/loadtest/history/suite/<same-dir>/` |

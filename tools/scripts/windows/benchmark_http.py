@@ -1,6 +1,8 @@
 """
-MemoChat HTTP 压测脚本
-测试 HTTP/1.1 登录性能和延迟
+Legacy asyncio HTTP benchmark.
+
+Prefer:
+  tools/loadtest/k6/run-http-bench.ps1 -Scenario login -ConfigPath tools/loadtest/python-loadtest/config.benchmark.json
 """
 import asyncio
 import aiohttp

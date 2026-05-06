@@ -5,12 +5,20 @@
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
 #include "AIServiceClient.h"
+#include "ConfigMgr.h"
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <boost/asio.hpp>
+#include <boost/beast.hpp>
+#include <boost/beast/http.hpp>
+#include <algorithm>
+#include <chrono>
 #include "json/GlazeCompat.h"
 
 namespace beast = boost::beast;
 namespace http = beast::http;
+namespace net = boost::asio;
+using tcp = net::ip::tcp;
 namespace json = memochat::json;
 
 static std::unique_ptr<AIServiceClient> g_ai_client;
@@ -33,8 +41,117 @@ static std::string ExtractMetadataJson(const json::JsonValue& src_root) {
     return "{}";
 }
 
+static std::string AiOrchestratorHost() {
+    auto& cfg = ConfigMgr::Inst();
+    std::string host = cfg["AIOrchestrator"]["Host"];
+    return host.empty() ? "127.0.0.1" : host;
+}
+
+static std::string AiOrchestratorPort() {
+    auto& cfg = ConfigMgr::Inst();
+    std::string port = cfg["AIOrchestrator"]["Port"];
+    return port.empty() ? "8096" : port;
+}
+
+static int AiOrchestratorTimeoutSec() {
+    auto& cfg = ConfigMgr::Inst();
+    std::string raw = cfg["AIOrchestrator"]["TimeoutSec"];
+    if (raw.empty()) {
+        return 300;
+    }
+    try {
+        return std::max(1, std::stoi(raw));
+    } catch (...) {
+        return 300;
+    }
+}
+
+static std::string IncomingBodyString(std::shared_ptr<HttpConnection> connection) {
+    return connection ? connection->RequestBodyString() : std::string();
+}
+
+static std::string BuildGameProxyTarget(std::shared_ptr<HttpConnection> connection) {
+    const std::string target = connection ? connection->RequestTargetString() : std::string();
+    const std::string gate_prefix = "/ai/games";
+    const std::string orchestrator_prefix = "/agent/games";
+    if (target.rfind(gate_prefix, 0) != 0) {
+        return orchestrator_prefix;
+    }
+    return orchestrator_prefix + target.substr(gate_prefix.size());
+}
+
+static void ProxyAiOrchestratorGame(std::shared_ptr<HttpConnection> connection, http::verb verb) {
+    const std::string host = AiOrchestratorHost();
+    const std::string port = AiOrchestratorPort();
+    const int timeout_sec = AiOrchestratorTimeoutSec();
+    const std::string target = BuildGameProxyTarget(connection);
+
+    try {
+        net::io_context ioc;
+        tcp::resolver resolver(ioc);
+        beast::tcp_stream stream(ioc);
+        stream.expires_after(std::chrono::seconds(timeout_sec));
+        stream.connect(resolver.resolve(host, port));
+
+        http::request<http::string_body> req{verb, target, 11};
+        req.set(http::field::host, host);
+        req.set(http::field::accept, "application/json");
+        req.set("X-Trace-Id", connection ? connection->GetTraceId() : "");
+        req.set("X-Request-Id", connection ? connection->GetRequestId() : "");
+        if (verb == http::verb::post) {
+            req.set(http::field::content_type, "application/json");
+            req.body() = IncomingBodyString(connection);
+        }
+        req.prepare_payload();
+
+        http::write(stream, req);
+        beast::flat_buffer buffer;
+        http::response<http::string_body> res;
+        stream.expires_after(std::chrono::seconds(timeout_sec));
+        http::read(stream, buffer, res);
+        beast::error_code shutdown_ec;
+        stream.socket().shutdown(tcp::socket::shutdown_both, shutdown_ec);
+
+        connection->GetResponse().result(res.result());
+        connection->GetResponse().set(http::field::content_type, "application/json; charset=utf-8");
+        beast::ostream(connection->GetResponse().body()) << res.body();
+        memolog::LogInfo("gate.ai.games.proxy.ok", "AI game proxy returned", {
+            {"target", target},
+            {"status", std::to_string(res.result_int())},
+        });
+    } catch (const std::exception& exc) {
+        json::JsonValue root = json::JsonValue{};
+        root["code"] = 503;
+        root["message"] = std::string("AIOrchestrator game proxy failed: ") + exc.what();
+        connection->GetResponse().result(http::status::service_unavailable);
+        WriteJsonResponse(connection, root);
+        memolog::LogError("gate.ai.games.proxy.failed", "AI game proxy failed", {
+            {"target", target},
+            {"error", exc.what()},
+        });
+    }
+}
+
 void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
     g_ai_client = std::make_unique<AIServiceClient>();
+
+    logic.RegGetPrefix("/ai/games", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::SpanScope span("gate.ai.games.get", "http");
+        ProxyAiOrchestratorGame(connection, http::verb::get);
+        return true;
+    });
+
+    logic.RegPostPrefix("/ai/games", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::SpanScope span("gate.ai.games.post", "http");
+        ProxyAiOrchestratorGame(connection, http::verb::post);
+        return true;
+    });
+
+    logic.RegDeletePrefix("/ai/games", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::SpanScope span("gate.ai.games.delete", "http");
+        ProxyAiOrchestratorGame(connection, http::verb::delete_);
+        return true;
+    });
 
     logic.RegPost("/ai/chat", [](std::shared_ptr<HttpConnection> connection) {
         memolog::SpanScope span("gate.ai.chat", "http");
@@ -283,6 +400,22 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
         std::string api_key = json::glaze_safe_get<std::string>(src_root, "api_key", "");
         std::string adapter = json::glaze_safe_get<std::string>(src_root, "adapter", "openai_compatible");
         auto result = g_ai_client->RegisterApiProvider(provider_name, base_url, api_key, adapter);
+        WriteJsonResponse(connection, result);
+        return true;
+    });
+
+    logic.RegPost("/ai/model/api/delete", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::SpanScope span("gate.ai.model.api.delete", "http");
+        json::JsonValue root = json::JsonValue{};
+        json::JsonValue src_root = json::JsonValue{};
+        if (!GateHttpJsonSupport::ParseJsonBody(connection, root, src_root)) {
+            root["error"] = 1;
+            root["message"] = "invalid json";
+            WriteJsonResponse(connection, root);
+            return true;
+        }
+        std::string provider_id = json::glaze_safe_get<std::string>(src_root, "provider_id", "");
+        auto result = g_ai_client->DeleteApiProvider(provider_id);
         WriteJsonResponse(connection, result);
         return true;
     });

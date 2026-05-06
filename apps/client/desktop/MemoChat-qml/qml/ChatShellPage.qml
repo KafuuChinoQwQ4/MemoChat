@@ -25,6 +25,8 @@ Rectangle {
     property bool r18Mode: false
     property real flipAngle: 0
     property int r18ViewMode: 0
+    property bool agentGameActive: false
+    property int agentGameSetupToken: 0
     readonly property real acrylicPinkProgress: 0
     readonly property var r18NavigationItems: [
         { "label": "主页", "icon": "qrc:/icons/r18_home.png", "mode": 0 },
@@ -70,6 +72,24 @@ Rectangle {
         Qt.callLater(function() {
             controller.switchToLogin()
         })
+    }
+
+    function openAgentGameSetup() {
+        root.agentGameSetupToken += 1
+        root.agentGameActive = true
+        if (controller.agentController) {
+            controller.agentController.refreshModelList()
+            controller.agentController.listGameRulesets()
+            controller.agentController.listGameTemplates()
+            controller.agentController.listGameRooms()
+        }
+    }
+
+    function createAgentChatSession() {
+        root.agentGameActive = false
+        if (controller.agentController) {
+            controller.agentController.createSession()
+        }
     }
 
     NumberAnimation {
@@ -179,8 +199,12 @@ Rectangle {
                 groupStatusError: controller.groupStatusError
                 agentSessions: controller.agentController ? controller.agentController.sessions : []
                 agentCurrentSessionId: controller.agentController ? controller.agentController.currentSessionId : ""
+                agentGameRooms: controller.agentController ? controller.agentController.gameRooms : []
+                agentCurrentGameRoomId: controller.agentController ? controller.agentController.currentGameRoomId : ""
                 agentCurrentModel: controller.agentController ? controller.agentController.currentModel : ""
-                agentBusy: controller.agentController ? (controller.agentController.loading || controller.agentController.streaming) : false
+                agentBusy: controller.agentController ? (controller.agentController.loading
+                                                         || controller.agentController.streaming
+                                                         || controller.agentController.gameBusy) : false
                 momentsSelectedUid: root.momentsSelectedUid
                 momentsSelectedName: root.momentsSelectedName
                 onDialogUidSelected: function(uid) { controller.selectDialogByUid(uid) }
@@ -203,17 +227,24 @@ Rectangle {
                 onAgentRefreshRequested: {
                     if (controller.agentController) {
                         controller.agentController.loadSessions()
+                        controller.agentController.listGameRooms()
+                        controller.agentController.listGameRulesets()
+                        controller.agentController.listGameTemplates()
                         controller.agentController.refreshModelList()
                     }
                 }
-                onAgentNewSessionRequested: {
-                    if (controller.agentController) {
-                        controller.agentController.createSession()
-                    }
-                }
+                onAgentNewChatRequested: root.createAgentChatSession()
+                onAgentNewSessionRequested: root.openAgentGameSetup()
                 onAgentSessionSelected: function(sessionId) {
                     if (controller.agentController) {
+                        root.agentGameActive = false
                         controller.agentController.switchSession(sessionId)
+                    }
+                }
+                onAgentGameRoomSelected: function(roomId) {
+                    if (controller.agentController) {
+                        root.agentGameActive = true
+                        controller.agentController.loadGameRoom(roomId)
                     }
                 }
                 onAgentSessionDeleted: function(sessionId) {
@@ -261,6 +292,9 @@ Rectangle {
                         ChatConversationPane {
                             backdrop: backdropLayer
                             peerName: controller.currentChatPeerName
+                            selfName: controller.currentUserNick && controller.currentUserNick.length > 0
+                                      ? controller.currentUserNick
+                                      : controller.currentUserName
                             selfAvatar: controller.currentUserIcon
                             peerAvatar: controller.currentChatPeerIcon
                             hasCurrentChat: controller.hasCurrentChat
@@ -375,6 +409,7 @@ Rectangle {
                             knowledgeStatusText: controller.agentController ? controller.agentController.knowledgeStatusText : ""
                             knowledgeError: controller.agentController ? controller.agentController.knowledgeError : ""
                             selfAvatar: controller.currentUserIcon
+                            onGameModeRequested: root.openAgentGameSetup()
                         }
                     }
                 }
@@ -415,9 +450,12 @@ Rectangle {
                                 currentDialogMuted: controller.currentDialogMuted
                                 canUpdateIcon: controller.currentGroupCanChangeInfo
                                 canUpdateAnnouncement: controller.currentGroupCanChangeInfo
+                                canDeleteMessages: controller.currentGroupCanDeleteMessages
                                 canInviteUsers: controller.currentGroupCanInviteUsers
                                 canManageAdmins: controller.currentGroupCanManageAdmins
+                                canPinMessages: controller.currentGroupCanPinMessages
                                 canBanUsers: controller.currentGroupCanBanUsers
+                                canManageTopics: controller.currentGroupCanManageTopics
                                 friendModel: controller.contactListModel
                                 statusText: controller.groupStatusText
                                 statusError: controller.groupStatusError
@@ -471,6 +509,37 @@ Rectangle {
                     }
                 }
             }
+            }
+        }
+
+        Loader {
+            anchors.fill: normalFace
+            active: root.viewMode === 0
+                    && controller.chatTab === AppController.AgentTabPage
+                    && root.agentGameActive
+            visible: active
+            z: 50
+            asynchronous: true
+            sourceComponent: Component {
+                AgentGamePane {
+                    agentController: controller.agentController
+                    availableModels: controller.agentController ? controller.agentController.availableModels : []
+                    currentModel: controller.agentController ? controller.agentController.currentModel : ""
+                    apiProviderBusy: controller.agentController ? controller.agentController.apiProviderBusy : false
+                    apiProviderStatus: controller.agentController ? controller.agentController.apiProviderStatus : ""
+                    gameRooms: controller.agentController ? controller.agentController.gameRooms : []
+                    gameTemplates: controller.agentController ? controller.agentController.gameTemplates : []
+                    gameTemplatePresets: controller.agentController ? controller.agentController.gameTemplatePresets : []
+                    gameState: controller.agentController ? controller.agentController.gameState : ({})
+                    currentGameRoomId: controller.agentController ? controller.agentController.currentGameRoomId : ""
+                    setupModeToken: root.agentGameSetupToken
+                    gameRulesets: controller.agentController ? controller.agentController.gameRulesets : []
+                    gameRolePresets: controller.agentController ? controller.agentController.gameRolePresets : []
+                    gameBusy: controller.agentController ? controller.agentController.gameBusy : false
+                    gameStatusText: controller.agentController ? controller.agentController.gameStatusText : ""
+                    gameError: controller.agentController ? controller.agentController.gameError : ""
+                    onCloseRequested: root.agentGameActive = false
+                }
             }
         }
 

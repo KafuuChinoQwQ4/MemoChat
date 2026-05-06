@@ -6,7 +6,8 @@ from typing import AsyncIterator
 
 import structlog
 
-from harness.contracts import GuardrailResult, HarnessRunResult, TraceEvent
+from config import settings
+from harness.contracts import GuardrailResult, HarnessRunResult, ToolObservation, TraceEvent
 from harness.ports import (
     FeedbackPort,
     GuardrailPort,
@@ -17,6 +18,7 @@ from harness.ports import (
     TraceStorePort,
 )
 from llm.base import LLMMessage
+from observability.langsmith_instrument import set_run_error, set_run_output, trace_context
 
 logger = structlog.get_logger()
 
@@ -236,6 +238,133 @@ class AgentHarnessService:
         except AttributeError:
             return []
 
+    async def _run_react_followup(
+        self,
+        trace_id: str,
+        request,
+        skill,
+        plan_steps,
+        observations: list[ToolObservation],
+        langsmith_metadata: dict | None = None,
+    ) -> list[ToolObservation]:
+        build_followup = getattr(self._planner, "build_react_followup_plan", None)
+        if build_followup is None:
+            return observations
+
+        all_steps = list(plan_steps)
+        all_observations = list(observations)
+        max_rounds = max(settings.harness.max_tool_rounds - len(all_steps), 0)
+        assess = getattr(self._planner, "assess_react_observations", None)
+
+        for round_index in range(1, max_rounds + 1):
+            assessment = assess(request, skill, all_steps, all_observations) if assess is not None else {}
+            if assessment:
+                observe_started = _now_ms()
+                await self._trace_store.add_event(
+                    trace_id,
+                    TraceEvent(
+                        layer="orchestration",
+                        name="react_observe",
+                        status="ok",
+                        summary=(
+                            f"round={round_index}, confidence={assessment.get('confidence', '')}, "
+                            f"needs_followup={assessment.get('needs_followup', False)}"
+                        ),
+                        detail=str(assessment),
+                        started_at=observe_started,
+                        finished_at=_now_ms(),
+                        metadata={"round": round_index, **assessment},
+                    ),
+                )
+
+            followup_steps = build_followup(request, skill, all_steps, all_observations)
+            remaining_steps = max(settings.harness.max_tool_rounds - len(all_steps), 0)
+            followup_steps = followup_steps[:remaining_steps]
+            if not followup_steps:
+                break
+
+            plan_started = _now_ms()
+            await self._trace_store.add_event(
+                trace_id,
+                TraceEvent(
+                    layer="orchestration",
+                    name="react_plan",
+                    status="ok",
+                    summary=f"round={round_index}, followup_steps={len(followup_steps)}",
+                    detail=str([step.to_dict() for step in followup_steps]),
+                    started_at=plan_started,
+                    finished_at=_now_ms(),
+                    metadata={
+                        "round": round_index,
+                        "base_steps": len(all_steps),
+                        "observation_count": len(all_observations),
+                        "method": "plan_execute_plus_react",
+                        "assessment": assessment,
+                    },
+                ),
+            )
+
+            followup_guardrails = self._guardrail_service.check_tool_plan(request, followup_steps, self._tool_specs())
+            await self._add_guardrail_event(trace_id, f"react_tool_plan_round_{round_index}", followup_guardrails)
+            if self._guardrail_service.has_blocking(followup_guardrails):
+                break
+
+            execution_started = _now_ms()
+            with trace_context(
+                "agent_react_tool_followup",
+                run_type="tool",
+                inputs={
+                    "uid": request.uid,
+                    "content": request.content,
+                    "round": round_index,
+                    "followup_steps": [step.to_dict() for step in followup_steps],
+                },
+                metadata={**(langsmith_metadata or {}), "react_round": round_index},
+                tags=["agent", "tools", "react"],
+            ) as tool_run:
+                try:
+                    followup_observations = await self._tool_executor.execute(
+                        uid=request.uid,
+                        content=request.content,
+                        plan_steps=followup_steps,
+                        target_lang=getattr(request, "target_lang", ""),
+                        requested_tools=getattr(request, "requested_tools", []),
+                        tool_arguments=getattr(request, "tool_arguments", {}),
+                    )
+                    set_run_output(
+                        tool_run,
+                        {
+                            "round": round_index,
+                            "observation_count": len(followup_observations),
+                            "tools": [obs.name for obs in followup_observations],
+                        },
+                    )
+                except Exception as exc:
+                    set_run_error(tool_run, exc)
+                    raise
+
+            all_steps.extend(followup_steps)
+            all_observations.extend(followup_observations)
+            await self._trace_store.add_event(
+                trace_id,
+                TraceEvent(
+                    layer="execution",
+                    name="react_tool_execution",
+                    status="ok",
+                    summary=f"round={round_index}, observations={len(followup_observations)}",
+                    detail="\n".join(observation.to_summary() for observation in followup_observations),
+                    started_at=execution_started,
+                    finished_at=_now_ms(),
+                    metadata={
+                        "round": round_index,
+                        "method": "react_followup",
+                        "step_count": len(followup_steps),
+                    },
+                ),
+            )
+
+        return all_observations
+
     async def run_turn(self, request) -> HarnessRunResult:
         session_id = getattr(request, "session_id", "") or uuid.uuid4().hex
         skill = self._planner.resolve_skill(request)
@@ -248,6 +377,13 @@ class AgentHarnessService:
             request_summary=request.content[:1000],
             plan_steps=plan_steps,
         )
+        langsmith_metadata = {
+            "local_trace_id": trace.trace_id,
+            "session_id": session_id,
+            "skill": skill.name,
+            "plan_steps": len(plan_steps),
+            "route": "/agent/run",
+        }
 
         await self._trace_store.add_event(
             trace.trace_id,
@@ -262,8 +398,16 @@ class AgentHarnessService:
             ),
         )
 
-        input_guardrails = self._guardrail_service.check_input(request, skill, plan_steps)
-        await self._add_guardrail_event(trace.trace_id, "input", input_guardrails)
+        with trace_context(
+            "agent_input_guardrails",
+            run_type="chain",
+            inputs={"uid": request.uid, "content": request.content, "skill": skill.name},
+            metadata=langsmith_metadata,
+            tags=["agent", "guardrails"],
+        ) as guardrail_run:
+            input_guardrails = self._guardrail_service.check_input(request, skill, plan_steps)
+            set_run_output(guardrail_run, {"status": _guardrail_event_status(input_guardrails), "count": len(input_guardrails)})
+            await self._add_guardrail_event(trace.trace_id, "input", input_guardrails)
         if self._guardrail_service.has_blocking(input_guardrails):
             return await self._finish_blocked_run(
                 trace.trace_id,
@@ -274,11 +418,29 @@ class AgentHarnessService:
             )
 
         memory_started = _now_ms()
-        memory_snapshot = await self._memory_service.load(
-            uid=request.uid,
-            session_id=session_id,
-            include_graph=skill.allow_graph,
-        )
+        with trace_context(
+            "agent_memory_load",
+            run_type="chain",
+            inputs={"uid": request.uid, "session_id": session_id, "include_graph": skill.allow_graph},
+            metadata=langsmith_metadata,
+            tags=["agent", "memory"],
+        ) as memory_run:
+            try:
+                memory_snapshot = await self._memory_service.load(
+                    uid=request.uid,
+                    session_id=session_id,
+                    include_graph=skill.allow_graph,
+                )
+                set_run_output(
+                    memory_run,
+                    {
+                        "chat_history": len(memory_snapshot.chat_history),
+                        "episodic": len(memory_snapshot.episodic_summaries),
+                    },
+                )
+            except Exception as exc:
+                set_run_error(memory_run, exc)
+                raise
         await self._trace_store.add_event(
             trace.trace_id,
             TraceEvent(
@@ -292,8 +454,16 @@ class AgentHarnessService:
             ),
         )
 
-        tool_guardrails = self._guardrail_service.check_tool_plan(request, plan_steps, self._tool_specs())
-        await self._add_guardrail_event(trace.trace_id, "tool_plan", tool_guardrails)
+        with trace_context(
+            "agent_tool_plan_guardrails",
+            run_type="chain",
+            inputs={"uid": request.uid, "skill": skill.name, "plan_steps": [step.to_dict() for step in plan_steps]},
+            metadata=langsmith_metadata,
+            tags=["agent", "guardrails", "tools"],
+        ) as tool_guardrail_run:
+            tool_guardrails = self._guardrail_service.check_tool_plan(request, plan_steps, self._tool_specs())
+            set_run_output(tool_guardrail_run, {"status": _guardrail_event_status(tool_guardrails), "count": len(tool_guardrails)})
+            await self._add_guardrail_event(trace.trace_id, "tool_plan", tool_guardrails)
         if self._guardrail_service.has_blocking(tool_guardrails):
             return await self._finish_blocked_run(
                 trace.trace_id,
@@ -304,14 +474,31 @@ class AgentHarnessService:
             )
 
         execution_started = _now_ms()
-        observations = await self._tool_executor.execute(
-            uid=request.uid,
-            content=request.content,
-            plan_steps=plan_steps,
-            target_lang=getattr(request, "target_lang", ""),
-            requested_tools=getattr(request, "requested_tools", []),
-            tool_arguments=getattr(request, "tool_arguments", {}),
-        )
+        with trace_context(
+            "agent_tool_execution",
+            run_type="tool",
+            inputs={
+                "uid": request.uid,
+                "content": request.content,
+                "plan_steps": [step.to_dict() for step in plan_steps],
+                "requested_tools": getattr(request, "requested_tools", []),
+            },
+            metadata=langsmith_metadata,
+            tags=["agent", "tools"],
+        ) as tool_run:
+            try:
+                observations = await self._tool_executor.execute(
+                    uid=request.uid,
+                    content=request.content,
+                    plan_steps=plan_steps,
+                    target_lang=getattr(request, "target_lang", ""),
+                    requested_tools=getattr(request, "requested_tools", []),
+                    tool_arguments=getattr(request, "tool_arguments", {}),
+                )
+                set_run_output(tool_run, {"observation_count": len(observations), "tools": [obs.name for obs in observations]})
+            except Exception as exc:
+                set_run_error(tool_run, exc)
+                raise
         await self._trace_store.add_event(
             trace.trace_id,
             TraceEvent(
@@ -324,6 +511,14 @@ class AgentHarnessService:
                 finished_at=_now_ms(),
             ),
         )
+        observations = await self._run_react_followup(
+            trace.trace_id,
+            request,
+            skill,
+            plan_steps,
+            observations,
+            langsmith_metadata,
+        )
 
         system_prompt = self._planner.build_system_prompt(skill, memory_snapshot, observations)
         user_prompt = self._planner.build_user_prompt(request, observations)
@@ -334,19 +529,43 @@ class AgentHarnessService:
         model_started = _now_ms()
         try:
             prefer_backend, model_name, deployment_preference = _skill_model_target(skill, request)
-            response = await self._llm_registry.complete(
-                messages,
-                prefer_backend=prefer_backend,
-                model_name=model_name,
-                deployment_preference=deployment_preference,
-                max_tokens=_request_max_tokens(request, skill=skill),
-                temperature=_request_temperature(
-                    request,
-                    0.4 if skill.name in {"summarize_thread", "translate_text"} else 0.7,
-                    skill=skill,
-                ),
-                think=_request_think_enabled(request, skill=skill),
-            )
+            with trace_context(
+                "agent_model_completion",
+                run_type="llm",
+                inputs={
+                    "message_count": len(messages),
+                    "prefer_backend": prefer_backend,
+                    "model_name": model_name,
+                    "deployment_preference": deployment_preference,
+                },
+                metadata=langsmith_metadata,
+                tags=["agent", "llm"],
+            ) as model_run:
+                try:
+                    response = await self._llm_registry.complete(
+                        messages,
+                        prefer_backend=prefer_backend,
+                        model_name=model_name,
+                        deployment_preference=deployment_preference,
+                        max_tokens=_request_max_tokens(request, skill=skill),
+                        temperature=_request_temperature(
+                            request,
+                            0.4 if skill.name in {"summarize_thread", "translate_text"} else 0.7,
+                            skill=skill,
+                        ),
+                        think=_request_think_enabled(request, skill=skill),
+                    )
+                    set_run_output(
+                        model_run,
+                        {
+                            "model": response.model,
+                            "tokens": response.usage.total_tokens,
+                            "finish_reason": response.finish_reason,
+                        },
+                    )
+                except Exception as exc:
+                    set_run_error(model_run, exc)
+                    raise
         except Exception as exc:
             logger.error("harness.model_completion.failed", trace_id=trace.trace_id, error=str(exc))
             await self._trace_store.add_event(
@@ -384,8 +603,16 @@ class AgentHarnessService:
             ),
         )
 
-        output_guardrails = self._guardrail_service.check_output(response.content, observations)
-        await self._add_guardrail_event(trace.trace_id, "output", output_guardrails)
+        with trace_context(
+            "agent_output_guardrails",
+            run_type="chain",
+            inputs={"uid": request.uid, "skill": skill.name, "observation_count": len(observations)},
+            metadata=langsmith_metadata,
+            tags=["agent", "guardrails"],
+        ) as output_guardrail_run:
+            output_guardrails = self._guardrail_service.check_output(response.content, observations)
+            set_run_output(output_guardrail_run, {"status": _guardrail_event_status(output_guardrails), "count": len(output_guardrails)})
+            await self._add_guardrail_event(trace.trace_id, "output", output_guardrails)
         if self._guardrail_service.has_blocking(output_guardrails):
             return await self._finish_blocked_run(
                 trace.trace_id,
@@ -399,7 +626,19 @@ class AgentHarnessService:
             )
 
         memory_save_started = _now_ms()
-        await self._memory_service.save_after_response(request.uid, session_id, request.content, response.content)
+        with trace_context(
+            "agent_memory_writeback",
+            run_type="chain",
+            inputs={"uid": request.uid, "session_id": session_id},
+            metadata=langsmith_metadata,
+            tags=["agent", "memory"],
+        ) as memory_save_run:
+            try:
+                await self._memory_service.save_after_response(request.uid, session_id, request.content, response.content)
+                set_run_output(memory_save_run, {"status": "ok"})
+            except Exception as exc:
+                set_run_error(memory_save_run, exc)
+                raise
         await self._trace_store.add_event(
             trace.trace_id,
             TraceEvent(
@@ -559,6 +798,21 @@ class AgentHarnessService:
                 started_at=execution_started,
                 finished_at=_now_ms(),
             ),
+        )
+        stream_langsmith_metadata = {
+            "local_trace_id": trace.trace_id,
+            "session_id": session_id,
+            "skill": skill.name,
+            "plan_steps": len(plan_steps),
+            "route": "/agent/run/stream",
+        }
+        observations = await self._run_react_followup(
+            trace.trace_id,
+            request,
+            skill,
+            plan_steps,
+            observations,
+            stream_langsmith_metadata,
         )
 
         system_prompt = self._planner.build_system_prompt(skill, memory_snapshot, observations)

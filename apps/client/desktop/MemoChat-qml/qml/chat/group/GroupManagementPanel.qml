@@ -16,9 +16,12 @@ Rectangle {
     property bool currentDialogMuted: false
     property bool canUpdateIcon: false
     property bool canUpdateAnnouncement: false
+    property bool canDeleteMessages: false
     property bool canInviteUsers: false
     property bool canManageAdmins: false
+    property bool canPinMessages: false
     property bool canBanUsers: false
+    property bool canManageTopics: false
     property var friendModel: null
     property string statusText: ""
     property bool statusError: false
@@ -145,9 +148,13 @@ Rectangle {
                     height: implicitHeight
                     backdrop: root.backdrop
                     friendModel: root.friendModel
+                    canUpdateAnnouncement: root.canUpdateAnnouncement
+                    canDeleteMessages: root.canDeleteMessages
                     canInviteUsers: root.canInviteUsers
                     canManageAdmins: root.canManageAdmins
+                    canPinMessages: root.canPinMessages
                     canBanUsers: root.canBanUsers
+                    canManageTopics: root.canManageTopics
                     onInviteRequested: function(userId, reason) { root.inviteRequested(userId, reason) }
                     onSetAdminRequested: function(userId, isAdmin, permissionBits) { root.setAdminRequested(userId, isAdmin, permissionBits) }
                     onMuteRequested: function(userId, muteSeconds) { root.muteRequested(userId, muteSeconds) }

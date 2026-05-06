@@ -10,6 +10,7 @@ from typing import AsyncIterator
 import structlog
 
 from .base import BaseLLM, LLMMessage, LLMResponse, LLMStreamChunk, LLMUsage
+from observability.langsmith_instrument import set_run_error, set_run_output, trace_context
 from observability.metrics import ai_metrics
 
 logger = structlog.get_logger()
@@ -106,58 +107,78 @@ class OllamaLLM(BaseLLM):
 
         for attempt in range(2):
             client = await self._get_client()
-            try:
-                resp = await client.post(f"{self.base_url}/api/chat", json=payload)
-                resp.raise_for_status()
-                data = resp.json()
+            with trace_context(
+                "ollama_chat",
+                run_type="llm",
+                inputs={"model": self.model_name, "message_count": len(messages), "attempt": attempt},
+                metadata={"base_url": self.base_url, "think": bool(kwargs.get("think", False))},
+                tags=["llm", "ollama"],
+            ) as run:
+                try:
+                    resp = await client.post(f"{self.base_url}/api/chat", json=payload)
+                    resp.raise_for_status()
+                    data = resp.json()
 
-                raw_content = data.get("message", {}).get("content", "")
-                content = raw_content if kwargs.get("think", False) else self._strip_think_blocks(raw_content)
-                usage_data = data.get("eval_count", 0)
-                prompt_eval_count = data.get("prompt_eval_count", 0)
-
-                return LLMResponse(
-                    content=content,
-                    usage=LLMUsage(
-                        prompt_tokens=prompt_eval_count,
-                        completion_tokens=usage_data,
-                        total_tokens=prompt_eval_count + usage_data,
-                    ),
-                    model=self.model_name,
-                    finish_reason=data.get("done_reason", ""),
-                )
-            except httpx.HTTPStatusError as exc:
-                if attempt == 0 and self._is_recoverable_status(exc.response):
-                    ai_metrics.ollama_retries.inc(
-                        operation="chat",
-                        reason=f"http_{exc.response.status_code}",
+                    raw_content = data.get("message", {}).get("content", "")
+                    content = raw_content if kwargs.get("think", False) else self._strip_think_blocks(raw_content)
+                    usage_data = data.get("eval_count", 0)
+                    prompt_eval_count = data.get("prompt_eval_count", 0)
+                    result = LLMResponse(
+                        content=content,
+                        usage=LLMUsage(
+                            prompt_tokens=prompt_eval_count,
+                            completion_tokens=usage_data,
+                            total_tokens=prompt_eval_count + usage_data,
+                        ),
+                        model=self.model_name,
+                        finish_reason=data.get("done_reason", ""),
                     )
-                    logger.warning(
-                        "ollama.chat_retry",
-                        attempt=attempt + 1,
-                        status_code=exc.response.status_code,
-                        body=self._response_excerpt(exc.response),
-                        base_url=self.base_url,
+                    set_run_output(
+                        run,
+                        {
+                            "model": result.model,
+                            "prompt_tokens": result.usage.prompt_tokens,
+                            "completion_tokens": result.usage.completion_tokens,
+                            "total_tokens": result.usage.total_tokens,
+                            "finish_reason": result.finish_reason,
+                        },
                     )
-                    await self._reset_client()
-                    await self._wait_until_ready()
-                    continue
-                raise RuntimeError(f"Ollama HTTP error: {exc.response.status_code} — {exc.response.text}") from exc
-            except httpx.RequestError as exc:
-                if attempt == 0:
-                    ai_metrics.ollama_retries.inc(operation="chat", reason="request_error")
-                    logger.warning(
-                        "ollama.chat_retry",
-                        attempt=attempt + 1,
-                        error=str(exc),
-                        base_url=self.base_url,
-                    )
-                    await self._reset_client()
-                    await self._wait_until_ready()
-                    continue
-                raise RuntimeError(f"Ollama request failed: {exc}") from exc
-            except Exception as exc:
-                raise RuntimeError(f"Ollama request failed: {exc}") from exc
+                    return result
+                except httpx.HTTPStatusError as exc:
+                    set_run_error(run, exc)
+                    if attempt == 0 and self._is_recoverable_status(exc.response):
+                        ai_metrics.ollama_retries.inc(
+                            operation="chat",
+                            reason=f"http_{exc.response.status_code}",
+                        )
+                        logger.warning(
+                            "ollama.chat_retry",
+                            attempt=attempt + 1,
+                            status_code=exc.response.status_code,
+                            body=self._response_excerpt(exc.response),
+                            base_url=self.base_url,
+                        )
+                        await self._reset_client()
+                        await self._wait_until_ready()
+                        continue
+                    raise RuntimeError(f"Ollama HTTP error: {exc.response.status_code} — {exc.response.text}") from exc
+                except httpx.RequestError as exc:
+                    set_run_error(run, exc)
+                    if attempt == 0:
+                        ai_metrics.ollama_retries.inc(operation="chat", reason="request_error")
+                        logger.warning(
+                            "ollama.chat_retry",
+                            attempt=attempt + 1,
+                            error=str(exc),
+                            base_url=self.base_url,
+                        )
+                        await self._reset_client()
+                        await self._wait_until_ready()
+                        continue
+                    raise RuntimeError(f"Ollama request failed: {exc}") from exc
+                except Exception as exc:
+                    set_run_error(run, exc)
+                    raise RuntimeError(f"Ollama request failed: {exc}") from exc
 
         raise RuntimeError("Ollama request failed after recovery attempt")
 

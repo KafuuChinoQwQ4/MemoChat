@@ -63,6 +63,8 @@ public:
                                                   const std::string& api_key,
                                                   const std::string& adapter);
 
+    memochat::json::JsonValue DeleteApiProvider(const std::string& provider_id);
+
     memochat::json::JsonValue KbUpload(int32_t uid, const std::string& file_name,
                           const std::string& file_type,
                           const std::string& base64_content);

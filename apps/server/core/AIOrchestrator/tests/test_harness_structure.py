@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
+import harness.memory.service as memory_service_module
 from harness.contracts import (
     AgentCapabilities,
     AgentCard,
@@ -76,6 +78,40 @@ class FakeMemory:
         return None
 
 
+class FakeMemoryLLM:
+    def __init__(self, content: str):
+        self.content = content
+        self.calls = []
+
+    async def complete(self, messages, **kwargs):
+        self.calls.append({"messages": messages, "kwargs": kwargs})
+        return LLMResponse(content=self.content, usage=LLMUsage(total_tokens=10), model="fake-memory-llm")
+
+
+class FakeMemoryPostgres:
+    def __init__(self, rows=None, semantic_row=None, episodic_rows=None):
+        self.rows = rows or []
+        self.semantic_row = semantic_row
+        self.episodic_rows = episodic_rows or []
+        self.executes = []
+
+    async def fetchall(self, query: str, *args):
+        if "FROM ai_message" in query:
+            return list(self.rows)
+        if "FROM ai_episodic_memory" in query:
+            return list(self.episodic_rows)
+        return []
+
+    async def fetchone(self, query: str, *args):
+        if "FROM ai_semantic_memory" in query:
+            return self.semantic_row
+        return None
+
+    async def execute(self, query: str, *args):
+        self.executes.append({"query": query, "args": args})
+        return "INSERT 0 1"
+
+
 class FakeToolExecutor:
     def list_tools(self):
         return []
@@ -93,6 +129,84 @@ class FakeToolExecutor:
         tool_arguments: dict[str, dict] | None = None,
     ):
         return [ToolObservation(name="knowledge_search", source="builtin", output="doc")]
+
+
+class ReactPlanner(FakePlanner):
+    def build_plan(self, request, skill):
+        return [PlanStep(action="web_search", reason="initial")]
+
+    def build_react_followup_plan(self, request, skill, plan_steps, observations):
+        if any(step.action == "knowledge_search" for step in plan_steps):
+            return []
+        if any("未找到" in observation.output for observation in observations):
+            return [PlanStep(action="knowledge_search", reason="followup", parameters={"strategy": "react_followup"})]
+        return []
+
+
+class ReactToolExecutor:
+    def __init__(self):
+        self.calls: list[list[PlanStep]] = []
+
+    def list_tools(self):
+        return []
+
+    def list_tool_specs(self):
+        return []
+
+    async def execute(
+        self,
+        uid: int,
+        content: str,
+        plan_steps: list[PlanStep],
+        target_lang: str = "",
+        requested_tools: list[str] | None = None,
+        tool_arguments: dict[str, dict] | None = None,
+    ):
+        self.calls.append(plan_steps)
+        if plan_steps and plan_steps[0].action == "web_search":
+            return [ToolObservation(name="duckduckgo_search", source="builtin", output="未找到相关结果。")]
+        return [ToolObservation(name="knowledge_search", source="builtin", output="补充知识证据")]
+
+
+class MultiRoundReactToolExecutor:
+    def __init__(self):
+        self.calls: list[list[str]] = []
+        self.knowledge_calls = 0
+
+    def list_tools(self):
+        return []
+
+    def list_tool_specs(self):
+        return []
+
+    async def execute(
+        self,
+        uid: int,
+        content: str,
+        plan_steps: list[PlanStep],
+        target_lang: str = "",
+        requested_tools: list[str] | None = None,
+        tool_arguments: dict[str, dict] | None = None,
+    ):
+        self.calls.append([step.action for step in plan_steps])
+        observations: list[ToolObservation] = []
+        for step in plan_steps:
+            if step.action == "web_search":
+                observations.append(ToolObservation(name="duckduckgo_search", source="builtin", output="未找到相关结果。"))
+            elif step.action == "knowledge_search":
+                self.knowledge_calls += 1
+                if self.knowledge_calls == 1:
+                    observations.append(ToolObservation(name="knowledge_search", source="knowledge_base", output="知识库中没有找到相关内容。"))
+                else:
+                    observations.append(
+                        ToolObservation(
+                            name="knowledge_search",
+                            source="knowledge_base",
+                            output="[1] 来源: doc 相关度: 0.91\n补充知识证据",
+                            metadata={"hit_count": 1},
+                        )
+                    )
+        return observations
 
 
 class FakeLLM:
@@ -366,6 +480,7 @@ class HarnessStructureTests(unittest.TestCase):
             uid=1,
             session_id="session-1",
             chat_history=[],
+            short_term_summary="",
             episodic=["用户喜欢简洁回答"],
             semantic={"likes": "简洁"},
             graph_context=[{"friend": "alice"}],
@@ -378,6 +493,61 @@ class HarnessStructureTests(unittest.TestCase):
         self.assertIn("graph_context", section_names)
         self.assertEqual(pack.source_metadata["uid"], 1)
         self.assertGreater(sum(section.token_count for section in pack.sections), 0)
+
+    def test_memory_service_loads_dynamic_short_term_window_with_summary(self):
+        rows = [
+            {
+                "role": "user" if index % 2 == 0 else "assistant",
+                "content": f"消息{index} " + ("x" * 120),
+                "created_at": index,
+            }
+            for index in range(6)
+        ]
+        fake_pg = FakeMemoryPostgres(rows=list(reversed(rows)))
+        original_pg = memory_service_module.PostgresClient
+        memory_service_module.PostgresClient = lambda: fake_pg
+        try:
+            service = MemoryService(llm_registry=FakeMemoryLLM("旧消息摘要"))
+            service._short_term_limit = 10
+            service._short_term_fetch_limit = 10
+            service._short_term_token_budget = 70
+
+            history, summary = asyncio.run(service._load_short_term("session-1"))
+        finally:
+            memory_service_module.PostgresClient = original_pg
+
+        self.assertEqual(summary, "旧消息摘要")
+        self.assertEqual([message.content.split()[0] for message in history], ["消息4", "消息5"])
+
+    def test_memory_service_writes_llm_extracted_long_term_memory(self):
+        extracted = {
+            "semantic": {"likes": "简洁回答"},
+            "episodic": [
+                {
+                    "summary": "用户希望长期记住回答要简洁。",
+                    "importance": 0.9,
+                    "entities": {"topic": "response_style"},
+                }
+            ],
+        }
+        fake_pg = FakeMemoryPostgres(semantic_row={"preferences": {"existing": "value"}})
+        original_pg = memory_service_module.PostgresClient
+        memory_service_module.PostgresClient = lambda: fake_pg
+        try:
+            service = MemoryService(llm_registry=FakeMemoryLLM(json.dumps(extracted, ensure_ascii=False)))
+            asyncio.run(service.save_after_response(7, "session-1", "请记住我喜欢简洁回答", "好的，我会记住。"))
+        finally:
+            memory_service_module.PostgresClient = original_pg
+
+        episodic_write = next(item for item in fake_pg.executes if "INSERT INTO ai_episodic_memory" in item["query"])
+        semantic_write = next(item for item in fake_pg.executes if "INSERT INTO ai_semantic_memory" in item["query"])
+
+        self.assertEqual(episodic_write["args"][0], 7)
+        self.assertIn("用户希望长期记住", episodic_write["args"][2])
+        self.assertIn("llm_extraction", episodic_write["args"][3])
+        semantic_payload = json.loads(semantic_write["args"][1])
+        self.assertEqual(semantic_payload["existing"], "value")
+        self.assertEqual(semantic_payload["likes"], "简洁回答")
 
     def test_layer_catalog_contains_expected_boundaries(self):
         layers = list_harness_layers()
@@ -441,6 +611,62 @@ class HarnessStructureTests(unittest.TestCase):
         self.assertEqual(skill.name, "knowledge_curator")
         self.assertIn("knowledge_search", actions)
         self.assertIn("graph_recall", actions)
+
+    def test_planner_adds_planexecute_search_parameters(self):
+        registry = SkillRegistry()
+        planner = PlanningPolicy(registry)
+        request = SimpleNamespace(
+            skill_name="",
+            content="搜索 MemoChat 最新动态",
+            requested_tools=[],
+        )
+        skill = planner.resolve_skill(request)
+        steps = planner.build_plan(request, skill)
+        web_step = next(step for step in steps if step.action == "web_search")
+
+        self.assertEqual(web_step.parameters["strategy"], "plan_execute")
+        self.assertEqual(web_step.parameters["max_results"], 5)
+        self.assertGreaterEqual(len(web_step.parameters["queries"]), 2)
+
+    def test_planner_adds_react_followup_for_weak_search(self):
+        registry = SkillRegistry()
+        planner = PlanningPolicy(registry)
+        request = SimpleNamespace(
+            skill_name="research_assistant",
+            content="搜索 MemoChat 最新动态",
+            requested_tools=[],
+        )
+        skill = planner.resolve_skill(request)
+        followups = planner.build_react_followup_plan(
+            request,
+            skill,
+            [PlanStep(action="web_search", reason="initial")],
+            [ToolObservation(name="duckduckgo_search", source="builtin", output="未找到相关结果。")],
+        )
+
+        self.assertEqual(len(followups), 1)
+        self.assertEqual(followups[0].action, "web_search")
+        self.assertEqual(followups[0].parameters["strategy"], "react_followup")
+
+    def test_planner_assesses_react_observations_and_selects_next_action(self):
+        planner = PlanningPolicy(SkillRegistry())
+        skill = AgentSkill(
+            name="general_chat",
+            display_name="General",
+            description="",
+            system_prompt="",
+        )
+        request = SimpleNamespace(
+            skill_name="",
+            content="帮我计算 2 + 2 等于多少",
+            requested_tools=[],
+        )
+
+        assessment = planner.assess_react_observations(request, skill, [], [])
+
+        self.assertEqual(assessment["confidence"], "low")
+        self.assertTrue(assessment["needs_followup"])
+        self.assertEqual(assessment["next_actions"], ["calculate"])
 
     def test_trace_store_decodes_persisted_trace_payloads(self):
         store = AgentTraceStore()
@@ -726,6 +952,71 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("feedback", layers)
         self.assertEqual(guardrail_names, ["input", "tool_plan", "output"])
 
+    async def test_run_turn_executes_react_followup_after_weak_observation(self):
+        tool_executor = ReactToolExecutor()
+        service = AgentHarnessService(
+            planner=ReactPlanner(),
+            llm_registry=FakeLLM(),
+            tool_executor=tool_executor,
+            memory_service=FakeMemory(),
+            trace_store=FakeTraceStore(),
+            feedback_evaluator=FakeFeedback(),
+            guardrail_service=GuardrailService(),
+        )
+        request = SimpleNamespace(
+            uid=1,
+            session_id="",
+            content="搜索 MemoChat 最新动态",
+            model_type="",
+            model_name="",
+            deployment_preference="any",
+            target_lang="",
+            requested_tools=[],
+            tool_arguments={},
+        )
+
+        result = await service.run_turn(request)
+        event_names = [event.name for event in result.events]
+
+        self.assertEqual(len(tool_executor.calls), 2)
+        self.assertIn("react_plan", event_names)
+        self.assertIn("react_tool_execution", event_names)
+        self.assertEqual(len(result.observations), 2)
+
+    async def test_run_turn_executes_multi_round_react_until_bounded(self):
+        tool_executor = MultiRoundReactToolExecutor()
+        service = AgentHarnessService(
+            planner=PlanningPolicy(SkillRegistry()),
+            llm_registry=FakeLLM(),
+            tool_executor=tool_executor,
+            memory_service=FakeMemory(),
+            trace_store=FakeTraceStore(),
+            feedback_evaluator=FakeFeedback(),
+            guardrail_service=GuardrailService(),
+        )
+        request = SimpleNamespace(
+            uid=1,
+            session_id="",
+            content="搜索 MemoChat 最新动态，并根据知识库文档补充",
+            model_type="",
+            model_name="",
+            deployment_preference="any",
+            target_lang="",
+            skill_name="researcher",
+            requested_tools=[],
+            tool_arguments={},
+            metadata={},
+        )
+
+        result = await service.run_turn(request)
+        event_names = [event.name for event in result.events]
+
+        self.assertEqual(tool_executor.calls, [["web_search", "knowledge_search"], ["web_search"], ["knowledge_search"]])
+        self.assertEqual(event_names.count("react_observe"), 2)
+        self.assertEqual(event_names.count("react_plan"), 2)
+        self.assertEqual(event_names.count("react_tool_execution"), 2)
+        self.assertEqual(len(result.observations), 4)
+
     async def test_agent_spec_model_policy_supplies_default_model_call(self):
         llm = RecordingLLM()
         service = AgentHarnessService(
@@ -851,6 +1142,41 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
             resumed = await restored.resume_task(task.task_id)
             self.assertIsNotNone(resumed)
             self.assertEqual(resumed.status, "queued")
+
+
+class ToolExecutorSearchTests(unittest.IsolatedAsyncioTestCase):
+    async def test_web_search_runs_deduped_multi_query_plan(self):
+        class FakeSearchTool:
+            name = "duckduckgo_search"
+            description = "search"
+
+            def __init__(self):
+                self.calls: list[dict] = []
+
+            async def ainvoke(self, payload):
+                self.calls.append(dict(payload))
+                return f"result:{payload['query']}:{payload.get('max_results')}"
+
+        search_tool = FakeSearchTool()
+        executor = ToolExecutor.__new__(ToolExecutor)
+        executor._tool_registry = SimpleNamespace(get_tools=lambda: [search_tool])
+
+        observations = await executor.execute(
+            uid=1,
+            content="fallback",
+            plan_steps=[
+                PlanStep(
+                    action="web_search",
+                    reason="test",
+                    parameters={"queries": ["MemoChat", "MemoChat", "MemoChat agent"], "max_results": 3},
+                )
+            ],
+        )
+
+        self.assertEqual([call["query"] for call in search_tool.calls], ["MemoChat", "MemoChat agent"])
+        self.assertTrue(all(call["max_results"] == 3 for call in search_tool.calls))
+        self.assertIn("### 查询: MemoChat", observations[0].output)
+        self.assertEqual(observations[0].metadata["query_count"], 2)
 
 
 if __name__ == "__main__":

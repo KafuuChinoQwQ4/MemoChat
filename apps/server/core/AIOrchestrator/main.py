@@ -23,7 +23,7 @@ from api.agent_router import router as agent_router
 from harness import HarnessContainer
 from observability.metrics import ai_metrics
 from observability.tracer import init_tracing
-from observability.langfuse_instrument import init_langfuse
+from observability.langsmith_instrument import init_langsmith
 
 logger = structlog.get_logger()
 
@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
 
     if settings.observability.enabled:
         init_tracing()
-        init_langfuse()
+        init_langsmith()
 
     # MCP 桥接初始化
     from tools.registry import ToolRegistry

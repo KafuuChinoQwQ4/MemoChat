@@ -260,16 +260,17 @@ class LLMEndpointRegistry:
         llm_cfg = settings.llm
 
         if llm_cfg.ollama.enabled:
+            ollama_models = self._list_ollama_configured_models(llm_cfg.ollama.base_url, llm_cfg.ollama.models)
             endpoints.append(
                 ProviderEndpoint(
                     provider_id="ollama",
                     adapter="ollama",
                     deployment="local_api",
                     base_url=llm_cfg.ollama.base_url,
-                    default_model=llm_cfg.default_model if llm_cfg.default_backend == "ollama" else (llm_cfg.ollama.models[0].name if llm_cfg.ollama.models else ""),
+                    default_model=llm_cfg.default_model if llm_cfg.default_backend == "ollama" and any(model.get("name") == llm_cfg.default_model for model in ollama_models) else (ollama_models[0].get("name", "") if ollama_models else ""),
                     enabled=True,
                     thinking_parameter="think",
-                    models=[model.model_dump() for model in llm_cfg.ollama.models],
+                    models=ollama_models,
                 )
             )
         if llm_cfg.openai.enabled:
@@ -378,6 +379,9 @@ class LLMEndpointRegistry:
             raise RuntimeError("no models returned from provider")
 
         providers = [provider for provider in self._load_runtime_providers() if provider.get("name") != provider_id]
+        existing_provider = self._find_runtime_provider(provider_id)
+        if existing_provider:
+            models = _merge_model_lists(existing_provider.get("models", []), models)
         provider_config = {
             "name": provider_id,
             "adapter": adapter,
@@ -405,6 +409,22 @@ class LLMEndpointRegistry:
             thinking_parameter=provider_config["thinking_parameter"],
             models=models,
         )
+
+    def delete_api_provider(self, provider_id: str) -> bool:
+        normalized_provider_id = _normalize_provider_id(provider_id or "")
+        providers = self._load_runtime_providers()
+        next_providers = [
+            provider
+            for provider in providers
+            if provider.get("name") not in {provider_id, normalized_provider_id}
+        ]
+        if len(next_providers) == len(providers):
+            return False
+        self._save_runtime_providers(next_providers)
+        for cache_key in list(self._custom_clients.keys()):
+            if cache_key.startswith(f"{provider_id}:") or cache_key.startswith(f"{normalized_provider_id}:"):
+                self._custom_clients.pop(cache_key, None)
+        return True
 
     def resolve(
         self,
@@ -542,6 +562,34 @@ class LLMEndpointRegistry:
     def _find_runtime_provider(self, provider_id: str) -> dict | None:
         return next((provider for provider in self._load_runtime_providers() if provider.get("name") == provider_id), None)
 
+    def _list_ollama_configured_models(self, base_url: str, configured_models: list) -> list[dict]:
+        configured_by_name = {model.name: model.model_dump() for model in configured_models}
+        try:
+            response = httpx.get(f"{base_url.rstrip('/')}/api/tags", timeout=3.0)
+            response.raise_for_status()
+            data = response.json()
+        except Exception:
+            return []
+
+        result: list[dict] = []
+        for item in data.get("models", []):
+            if not isinstance(item, dict):
+                continue
+            model_name = str(item.get("name") or item.get("model") or "").strip()
+            if not model_name:
+                continue
+            model_info = configured_by_name.get(
+                model_name,
+                {
+                    "name": model_name,
+                    "display": model_name,
+                    "context_window": 0,
+                    "supports_thinking": _guess_supports_thinking(model_name),
+                },
+            )
+            result.append(model_info)
+        return result
+
 
 def _normalize_provider_id(name: str) -> str:
     cleaned = re.sub(r"[^a-zA-Z0-9_-]+", "-", name.strip().lower()).strip("-")
@@ -550,6 +598,25 @@ def _normalize_provider_id(name: str) -> str:
     if not cleaned.startswith("api-"):
         cleaned = f"api-{cleaned}"
     return cleaned[:48]
+
+
+def _merge_model_lists(existing_models: list[dict], discovered_models: list[dict]) -> list[dict]:
+    merged: dict[str, dict] = {}
+    for model in existing_models:
+        if not isinstance(model, dict):
+            continue
+        name = str(model.get("name") or "").strip()
+        if name:
+            merged[name] = dict(model)
+    for model in discovered_models:
+        if not isinstance(model, dict):
+            continue
+        name = str(model.get("name") or "").strip()
+        if name:
+            current = merged.get(name, {})
+            current.update(model)
+            merged[name] = current
+    return list(merged.values())
 
 
 def _normalize_base_url(base_url: str) -> str:

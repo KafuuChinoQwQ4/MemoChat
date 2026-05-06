@@ -72,6 +72,13 @@ grpc::Status AIServiceImpl::RegisterApiProvider(ServerContext* context,
     return _core->RegisterApiProvider(*request, reply);
 }
 
+grpc::Status AIServiceImpl::DeleteApiProvider(ServerContext* context,
+                                              const ai::AIDeleteApiProviderReq* request,
+                                              ai::AIDeleteApiProviderRsp* reply) {
+    memolog::SpanScope span("AIService.DeleteApiProvider", "gRPC");
+    return _core->DeleteApiProvider(*request, reply);
+}
+
 grpc::Status AIServiceImpl::KbUpload(ServerContext* context,
                                     const ai::AIKbUploadReq* request,
                                     ai::AIKbUploadRsp* reply) {

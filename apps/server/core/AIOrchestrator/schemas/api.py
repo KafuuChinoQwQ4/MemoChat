@@ -152,6 +152,16 @@ class RegisterApiProviderRsp(BaseModel):
     models: list[ModelInfo] = Field(default_factory=list)
 
 
+class DeleteApiProviderReq(BaseModel):
+    provider_id: str
+
+
+class DeleteApiProviderRsp(BaseModel):
+    code: int = 0
+    message: str = "ok"
+    provider_id: str = ""
+
+
 class TraceEventModel(BaseModel):
     layer: str
     name: str
@@ -487,6 +497,87 @@ class AgentFlowRunRsp(BaseModel):
     flow: Optional[AgentFlowModel] = None
     messages: list[AgentMessageModel] = Field(default_factory=list)
     graph: Optional[RunGraphModel] = None
+
+
+class GameAgentConfigModel(BaseModel):
+    display_name: str = ""
+    model_type: str = ""
+    model_name: str = ""
+    persona: str = ""
+    skill_name: str = ""
+    strategy: str = "balanced"
+    role_key: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class GameRoomCreateReq(BaseModel):
+    uid: int
+    title: str = ""
+    ruleset_id: str = "werewolf.basic"
+    max_players: int = Field(default=12, ge=1, le=64)
+    agent_count: int = Field(default=0, ge=0, le=63)
+    agents: list[GameAgentConfigModel] = Field(default_factory=list)
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class GameRoomJoinReq(BaseModel):
+    uid: int
+    display_name: str = ""
+
+
+class GameRoomAutoTickReq(BaseModel):
+    uid: int
+    max_steps: int = Field(default=8, ge=1, le=32)
+
+
+class GameAgentAddReq(BaseModel):
+    agent_count: int = Field(default=1, ge=0, le=64)
+    agents: list[GameAgentConfigModel] = Field(default_factory=list)
+
+
+class GameTemplateSaveReq(BaseModel):
+    template_id: str = ""
+    uid: int
+    title: str
+    description: str = ""
+    ruleset_id: str = "werewolf.basic"
+    max_players: int = Field(default=12, ge=1, le=64)
+    agents: list[GameAgentConfigModel] = Field(default_factory=list)
+    config: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class GameRoomFromTemplateReq(BaseModel):
+    uid: int
+    title: str = ""
+
+
+class GameTemplatePresetCloneReq(BaseModel):
+    uid: int
+    title: str = ""
+
+
+class GameActionReq(BaseModel):
+    uid: int = 0
+    participant_id: str
+    action_type: str
+    content: str = ""
+    target_participant_id: str = ""
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class GameRoomRsp(BaseModel):
+    code: int = 0
+    message: str = "ok"
+    room: Optional[dict[str, Any]] = None
+    rooms: list[dict[str, Any]] = Field(default_factory=list)
+    template: Optional[dict[str, Any]] = None
+    templates: list[dict[str, Any]] = Field(default_factory=list)
+    template_presets: list[dict[str, Any]] = Field(default_factory=list)
+    state: Optional[dict[str, Any]] = None
+    rulesets: list[dict[str, Any]] = Field(default_factory=list)
+    role_presets: list[dict[str, Any]] = Field(default_factory=list)
+    tick: Optional[dict[str, Any]] = None
 
 
 class AgentCapabilitiesModel(BaseModel):

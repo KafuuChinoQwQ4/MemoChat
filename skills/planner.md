@@ -6,6 +6,8 @@ description: Create a reusable MemoChat automation plan with prompt.md and tasks
 
 Use this to create a reusable automation package for repeated project work.
 
+Reusable plans should default to the Controller-led parallel model from `parallel-agents.md` unless the automation is intentionally single-step. Include a Controller task for architecture, planning, contracts, dispatch, integration, and acceptance before worker tasks.
+
 ## Output
 
 Create:
@@ -27,6 +29,7 @@ Use short kebab-case names. Check `.ai/` first to avoid collisions.
 - exact build/test/runtime commands
 - data setup and cleanup rules
 - failure handling, especially Windows file locks and Docker health
+- Controller-led concurrency model, lane ownership, and local-only fallback rule
 - commit guidance if the automation will commit
 
 ## tasks.json Format
@@ -65,4 +68,5 @@ After writing the files, read them once and verify:
 - dependencies are acyclic
 - commands match actual repo paths
 - Docker/MCP assumptions are explicit
+- Controller and worker dependencies make parallelism clear
 - `.ai/` files are not included in any commit instructions

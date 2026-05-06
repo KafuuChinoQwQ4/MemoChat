@@ -1,5 +1,5 @@
-# MemoChat HTTP Benchmark Script
-# 测试 HTTP 登录性能
+# Legacy wrapper. Prefer the k6 HTTP benchmark:
+# tools\loadtest\k6\run-http-bench.ps1 -Scenario login -ConfigPath tools\loadtest\python-loadtest\config.benchmark.json
 
 param(
     [int]$Total = 500,

@@ -34,6 +34,7 @@ public:
     // 模型
     grpc::Status ListModels(const ai::AIListModelsReq& req, ai::AIListModelsRsp* reply);
     grpc::Status RegisterApiProvider(const ai::AIRegisterApiProviderReq& req, ai::AIRegisterApiProviderRsp* reply);
+    grpc::Status DeleteApiProvider(const ai::AIDeleteApiProviderReq& req, ai::AIDeleteApiProviderRsp* reply);
 
     // 知识库
     grpc::Status HandleKbUpload(const ai::AIKbUploadReq& req, ai::AIKbUploadRsp* reply);
