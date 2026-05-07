@@ -8,6 +8,8 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
 import harness.memory.service as memory_service_module
+from config import RedpandaQueueConfig
+from harness.cache.semantic_cache import SemanticCacheHit, SemanticCacheLookup, SemanticCacheService
 from harness.contracts import (
     AgentCapabilities,
     AgentCard,
@@ -34,6 +36,7 @@ from harness.contracts import (
     ToolSpec,
 )
 from harness.evals.service import AgentEvalCase, AgentEvalService
+from harness.evals.rag_service import RagEvalCase, RagEvalService
 from harness.execution.tool_executor import ToolExecutor
 from harness.feedback.trace_store import AgentTraceStore
 from harness.guardrails.service import GuardrailService
@@ -43,6 +46,7 @@ from harness.layers import list_harness_layers
 from harness.memory.service import MemoryService
 from harness.orchestration.agent_service import AgentHarnessService
 from harness.orchestration.planner import PlanningPolicy
+from harness.runtime.message_bus import RedpandaTaskEventPublisher
 from harness.runtime.task_service import AgentTaskService
 from harness.skills.registry import SkillRegistry
 from harness.skills.specs import AgentSpecRegistry
@@ -76,6 +80,95 @@ class FakeMemory:
 
     async def save_after_response(self, uid: int, session_id: str, user_message: str, ai_message: str):
         return None
+
+
+class CacheHitMemory:
+    def __init__(self):
+        self.load_calls = 0
+        self.save_after_response_calls = 0
+        self.cache_hit_calls = 0
+        self.cache_hit_saved = asyncio.Event()
+
+    async def load(self, uid: int, session_id: str, include_graph: bool = False):
+        self.load_calls += 1
+        raise AssertionError("semantic cache hit should not load memory")
+
+    async def save_after_response(self, uid: int, session_id: str, user_message: str, ai_message: str):
+        self.save_after_response_calls += 1
+        raise AssertionError("semantic cache hit should not run LLM memory extraction")
+
+    async def save_semantic_cache_hit(self, uid: int, session_id: str, user_message: str, ai_message: str):
+        self.cache_hit_calls += 1
+        self.cache_hit_saved.set()
+
+
+class FakeSemanticCache:
+    persist_hits_to_memory = True
+
+    async def lookup(self, request, skill, plan_steps):
+        return SemanticCacheLookup(
+            hit=SemanticCacheHit(
+                key="cache-key",
+                answer="cached answer",
+                similarity=0.991,
+                distance=0.009,
+                model="fake-model",
+                tokens=123,
+                trace_id="source-trace",
+                skill=skill.name,
+                question=request.content,
+                cached_at=123456,
+                metadata={"feedback_summary": "semantic_cache_hit similarity=0.9910"},
+            ),
+            status="hit",
+            reason="ok",
+        )
+
+    async def store(self, *args, **kwargs):
+        raise AssertionError("cache hit should not store another cache item")
+
+
+class RecordingEmbedder:
+    def __init__(self, dimension: int = 384):
+        self.dimension = dimension
+        self.calls: list[str] = []
+
+    async def embed_query(self, content: str):
+        self.calls.append(content)
+        return [0.01] * self.dimension
+
+
+class FakeSemanticCacheRedis:
+    def __init__(self):
+        self.hashes: dict[str, dict] = {}
+        self.expirations: dict[str, int] = {}
+        self.commands: list[tuple] = []
+        self.hit_recorded = asyncio.Event()
+
+    async def hset(self, key: str, mapping=None, **kwargs):
+        stored = self.hashes.setdefault(key, {})
+        values = dict(mapping or {})
+        values.update(kwargs)
+        stored.update(values)
+        return len(values)
+
+    async def hgetall(self, key: str):
+        return dict(self.hashes.get(key, {}))
+
+    async def hincrby(self, key: str, field: str, amount: int):
+        stored = self.hashes.setdefault(key, {})
+        current = int(stored.get(field, "0") or 0)
+        stored[field] = str(current + int(amount))
+        self.hit_recorded.set()
+        return stored[field]
+
+    async def expire(self, key: str, ttl: int):
+        self.expirations[key] = ttl
+        return True
+
+    async def execute_command(self, *args):
+        self.commands.append(args)
+        raise AssertionError(f"unexpected Redis command on exact cache hit: {args[0] if args else ''}")
 
 
 class FakeMemoryLLM:
@@ -248,6 +341,90 @@ class FakeFlowAgentService:
         )
 
 
+class SlowFakeFlowAgentService(FakeFlowAgentService):
+    def __init__(self, delay_sec: float = 0.05):
+        super().__init__()
+        self.delay_sec = delay_sec
+        self.started = asyncio.Event()
+
+    async def run_turn(self, request):
+        self.started.set()
+        await asyncio.sleep(self.delay_sec)
+        return await super().run_turn(request)
+
+
+class FakeTaskBus:
+    def __init__(self, fail_enqueue: bool = False, start_result: bool = True):
+        self.fail_enqueue = fail_enqueue
+        self.start_result = start_result
+        self.handler = None
+        self.enqueued: list[str] = []
+        self.enqueue_attempts: list[str] = []
+        self.events: list[tuple[str, str]] = []
+        self.started = False
+        self.stopped = False
+
+    @property
+    def backend_name(self) -> str:
+        return "fake-rabbitmq+fake-redpanda" if self.started else "local"
+
+    async def start(self, handler):
+        self.handler = handler
+        self.started = self.start_result
+        return self.start_result
+
+    async def stop(self):
+        self.stopped = True
+        self.started = False
+
+    async def enqueue_task(self, task):
+        self.enqueue_attempts.append(task.task_id)
+        if self.fail_enqueue:
+            raise RuntimeError("queue unavailable")
+        self.enqueued.append(task.task_id)
+
+    async def publish_event(self, event_type, task, extra=None):
+        self.events.append((event_type, task.task_id))
+
+
+class FakeHttpResponse:
+    def __init__(self, payload=None):
+        self.payload = payload or {}
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self.payload
+
+
+class FakeRedpandaProxyClient:
+    def __init__(self):
+        self.posts: list[dict] = []
+        self.closed = False
+
+    async def get(self, path):
+        return FakeHttpResponse({"brokers": [{"node_id": 0}]})
+
+    async def post(self, path, headers=None, json=None):
+        self.posts.append({"path": path, "headers": headers or {}, "json": json or {}})
+        return FakeHttpResponse()
+
+    async def aclose(self):
+        self.closed = True
+
+
+class FailingKafkaProducer:
+    def __init__(self):
+        self.stopped = False
+
+    async def send_and_wait(self, *args, **kwargs):
+        raise RuntimeError("kafka send failed")
+
+    async def stop(self):
+        self.stopped = True
+
+
 class FakeTraceStore:
     def __init__(self):
         self.traces: dict[str, AgentTrace] = {}
@@ -280,6 +457,26 @@ class FakeTraceStore:
 
     async def get_trace_or_load(self, trace_id):
         return self.get_trace(trace_id)
+
+
+class FakeKnowledgeService:
+    def __init__(self, chunks=None, error: Exception | None = None):
+        self.chunks = chunks or []
+        self.error = error
+        self.calls: list[dict] = []
+
+    async def search(self, uid: int, query: str, top_k: int | None = None, metadata_filters: dict | None = None):
+        self.calls.append(
+            {
+                "uid": uid,
+                "query": query,
+                "top_k": top_k,
+                "metadata_filters": metadata_filters or {},
+            }
+        )
+        if self.error is not None:
+            raise self.error
+        return list(self.chunks)
 
 
 class FakeFeedback:
@@ -548,6 +745,78 @@ class HarnessStructureTests(unittest.TestCase):
         semantic_payload = json.loads(semantic_write["args"][1])
         self.assertEqual(semantic_payload["existing"], "value")
         self.assertEqual(semantic_payload["likes"], "简洁回答")
+
+    def test_memory_service_merges_user_profile_signals(self):
+        extracted = {
+            "semantic": {"likes": "高并发架构"},
+            "user_profile": {
+                "communication_style": ["简洁直接"],
+                "preferred_language": [{"value": "中文", "confidence": 0.9}],
+                "domain_interests": ["大模型高并发底座"],
+            },
+            "episodic": [],
+        }
+        existing_preferences = {
+            "existing": "value",
+            "user_profile": {
+                "communication_style": [
+                    {
+                        "value": "简洁直接",
+                        "confidence": 0.7,
+                        "evidence_count": 1,
+                        "updated_at": 1,
+                    }
+                ]
+            },
+        }
+        fake_pg = FakeMemoryPostgres(semantic_row={"preferences": existing_preferences})
+        original_pg = memory_service_module.PostgresClient
+        memory_service_module.PostgresClient = lambda: fake_pg
+        try:
+            service = MemoryService(llm_registry=FakeMemoryLLM(json.dumps(extracted, ensure_ascii=False)))
+            asyncio.run(service.save_after_response(9, "session-1", "以后都用中文，回答简洁一点", "好的。"))
+        finally:
+            memory_service_module.PostgresClient = original_pg
+
+        semantic_write = next(item for item in fake_pg.executes if "INSERT INTO ai_semantic_memory" in item["query"])
+        semantic_payload = json.loads(semantic_write["args"][1])
+        profile = semantic_payload["user_profile"]
+
+        self.assertEqual(semantic_payload["existing"], "value")
+        self.assertEqual(semantic_payload["likes"], "高并发架构")
+        self.assertEqual(profile["communication_style"][0]["value"], "简洁直接")
+        self.assertEqual(profile["communication_style"][0]["evidence_count"], 2)
+        self.assertEqual(profile["preferred_language"][0]["value"], "中文")
+        self.assertEqual(profile["domain_interests"][0]["value"], "大模型高并发底座")
+
+    def test_memory_service_fallback_extracts_profile_habits(self):
+        service = MemoryService()
+        extracted = service._fallback_memory_extraction(
+            "请记住以后都用中文，回答要简洁，最好用步骤。我是后端架构师。",
+            "好的，我会按这个习惯回答。",
+        )
+        profile = extracted["user_profile"]
+
+        self.assertEqual(profile["preferred_language"][0]["value"], "中文")
+        self.assertEqual(profile["communication_style"][0]["value"], "简洁直接")
+        self.assertIn("后端架构师", profile["work_context"][0]["value"])
+
+    def test_memory_service_formats_user_profile_for_prompt(self):
+        service = MemoryService()
+        profile_text = service._format_semantic_profile(
+            {
+                "likes": "示例清楚",
+                "user_profile": {
+                    "communication_style": [{"value": "简洁直接", "confidence": 0.8}],
+                    "preferred_response_format": ["步骤化"],
+                },
+            }
+        )
+
+        self.assertIn("长期画像", profile_text)
+        self.assertIn("沟通风格: 简洁直接", profile_text)
+        self.assertIn("回答格式: 步骤化", profile_text)
+        self.assertIn("likes=示例清楚", profile_text)
 
     def test_layer_catalog_contains_expected_boundaries(self):
         layers = list_harness_layers()
@@ -838,6 +1107,68 @@ class HarnessStructureTests(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertIn("missing required layer: feedback", result["failures"])
 
+    def test_rag_eval_service_passes_expected_recall_and_terms(self):
+        service = RagEvalService(
+            FakeKnowledgeService(
+                chunks=[
+                    {
+                        "content": "MemoChat stores RAG vectors in Qdrant with hybrid retrieval.",
+                        "score": 0.91,
+                        "source": "architecture.md",
+                        "kb_id": "kb_arch",
+                        "routes": ["dense", "bm25"],
+                    }
+                ]
+            )
+        )
+        case = RagEvalCase(
+            case_id="rag-basic",
+            name="RAG Basic",
+            request={"uid": 7, "query": "where are vectors stored?", "top_k": 5},
+            expectations={
+                "expected_kb_ids": ["kb_arch"],
+                "expected_sources": ["architecture.md"],
+                "expected_terms": ["qdrant", "hybrid retrieval"],
+                "required_terms": ["qdrant"],
+                "min_recall_at_k": 1.0,
+                "min_expected_term_coverage": 1.0,
+                "min_hit_count": 1,
+                "max_latency_ms": 1000,
+            },
+        )
+
+        result = service.evaluate_results(case, case.request, service._knowledge_service.chunks, latency_ms=12)
+
+        self.assertTrue(result["passed"], result["failures"])
+        self.assertEqual(result["metrics"]["recall_at_k"], 1.0)
+        self.assertEqual(result["metrics"]["expected_term_coverage"], 1.0)
+        self.assertEqual(result["metrics"]["matched_kb_ids"], ["kb_arch"])
+
+    def test_rag_eval_service_reports_missing_terms_and_low_recall(self):
+        service = RagEvalService(FakeKnowledgeService())
+        case = RagEvalCase(
+            case_id="rag-fail",
+            name="RAG Fail",
+            request={"uid": 7, "query": "where are vectors stored?", "top_k": 5},
+            expectations={
+                "expected_kb_ids": ["kb_arch"],
+                "required_terms": ["qdrant"],
+                "min_recall_at_k": 1.0,
+                "min_hit_count": 1,
+            },
+        )
+
+        result = service.evaluate_results(
+            case,
+            case.request,
+            [{"content": "unrelated", "score": 0.1, "source": "other.md", "kb_id": "kb_other"}],
+            latency_ms=10,
+        )
+
+        self.assertFalse(result["passed"])
+        self.assertIn("recall_at_k 0.0000 below 1.0000", result["failures"])
+        self.assertIn("missing required term: qdrant", result["failures"])
+
     def test_handoff_service_exposes_builtin_flow_templates(self):
         service = AgentHandoffService(agent_service=FakeFlowAgentService())
         flows = {flow.name: flow for flow in service.list_flows()}
@@ -951,6 +1282,96 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("execution", layers)
         self.assertIn("feedback", layers)
         self.assertEqual(guardrail_names, ["input", "tool_plan", "output"])
+
+    async def test_semantic_cache_hit_returns_without_sync_memory_extraction(self):
+        memory = CacheHitMemory()
+        service = AgentHarnessService(
+            planner=FakePlanner(),
+            llm_registry=FakeLLM(),
+            tool_executor=FakeToolExecutor(),
+            memory_service=memory,
+            trace_store=FakeTraceStore(),
+            feedback_evaluator=FakeFeedback(),
+            guardrail_service=GuardrailService(),
+            semantic_cache=FakeSemanticCache(),
+        )
+        request = SimpleNamespace(
+            uid=1,
+            session_id="session-1",
+            content="怎么重置密码",
+            model_type="",
+            model_name="",
+            deployment_preference="any",
+            target_lang="",
+            requested_tools=[],
+            tool_arguments={},
+            metadata={},
+        )
+
+        result = await service.run_turn(request)
+
+        self.assertEqual(result.content, "cached answer")
+        self.assertEqual(result.tokens, 0)
+        self.assertEqual(result.model, "semantic-cache:fake-model")
+        self.assertEqual(memory.load_calls, 0)
+        self.assertEqual(memory.save_after_response_calls, 0)
+        await asyncio.wait_for(memory.cache_hit_saved.wait(), timeout=1.0)
+        self.assertEqual(memory.cache_hit_calls, 1)
+        self.assertTrue(
+            any(event.layer == "memory" and event.name == "save_context" and event.status == "queued" for event in result.events)
+        )
+
+    async def test_semantic_cache_exact_layer_bypasses_embedding_after_store(self):
+        redis_client = FakeSemanticCacheRedis()
+        embedder = RecordingEmbedder()
+        service = SemanticCacheService(embedder)
+        service._redis = redis_client
+        service._ready = True
+        skill = SimpleNamespace(name="support_faq")
+        plan_steps: list[PlanStep] = []
+        base_request = SimpleNamespace(
+            uid=7,
+            session_id="session-exact",
+            content="怎么   重置   密码",
+            model_type="",
+            model_name="",
+            deployment_preference="any",
+            target_lang="",
+            requested_tools=[],
+            tool_arguments={},
+            metadata={"semantic_cache_namespace": "unit-exact"},
+        )
+        lookup_request = SimpleNamespace(**{**base_request.__dict__, "content": "  怎么重置密码？  "})
+        vector = [0.01] * int(service._config.dimension)
+
+        await service.store(
+            base_request,
+            skill,
+            plan_steps,
+            answer="打开设置里的账号安全来重置密码。",
+            model="fake-model",
+            tokens=17,
+            trace_id="trace-exact",
+            feedback_summary="faq",
+            vector=vector,
+        )
+
+        decision = service._decision(lookup_request, skill, plan_steps)
+        exact_key = service._exact_cache_key(decision)
+        self.assertIn(exact_key, redis_client.hashes)
+        self.assertEqual(redis_client.hashes[exact_key]["match_kind"], "exact")
+
+        lookup = await service.lookup(lookup_request, skill, plan_steps)
+
+        self.assertEqual(embedder.calls, [])
+        self.assertEqual(redis_client.commands, [])
+        self.assertEqual(lookup.status, "hit")
+        self.assertEqual(lookup.match_kind, "exact")
+        self.assertIsNotNone(lookup.hit)
+        self.assertEqual(lookup.hit.answer, "打开设置里的账号安全来重置密码。")
+        self.assertEqual(lookup.hit.match_kind, "exact")
+        self.assertIsNone(lookup.vector)
+        await asyncio.wait_for(redis_client.hit_recorded.wait(), timeout=1.0)
 
     async def test_run_turn_executes_react_followup_after_weak_observation(self):
         tool_executor = ReactToolExecutor()
@@ -1111,6 +1532,45 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["passed"], result["failures"])
         self.assertEqual(result["trace_id"], "trace-1")
 
+    async def test_rag_eval_service_runs_file_case_with_uid_and_filter_overrides(self):
+        knowledge = FakeKnowledgeService(
+            chunks=[
+                {
+                    "content": "Qdrant vector evidence",
+                    "score": 0.8,
+                    "source": "architecture.md",
+                    "kb_id": "kb_arch",
+                }
+            ]
+        )
+        with TemporaryDirectory() as storage:
+            Path(storage, "rag.json").write_text(
+                json.dumps(
+                    {
+                        "case_id": "rag-live",
+                        "name": "RAG Live",
+                        "request": {"uid": 1, "query": "vectors", "top_k": 3},
+                        "expectations": {
+                            "expected_kb_ids": ["kb_arch"],
+                            "expected_terms": ["qdrant"],
+                            "min_recall_at_k": 1.0,
+                            "min_expected_term_coverage": 1.0,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            service = RagEvalService(knowledge, case_dir=storage)
+            result = await service.run_eval(
+                case_id="rag-live",
+                uid=9,
+                metadata_filters={"source": "architecture.md"},
+            )
+
+        self.assertTrue(result["passed"], result["failures"])
+        self.assertEqual(knowledge.calls[0]["uid"], 9)
+        self.assertEqual(knowledge.calls[0]["metadata_filters"], {"source": "architecture.md"})
+
     async def test_agent_task_service_persists_and_resumes_lifecycle(self):
         with TemporaryDirectory() as storage:
             service = AgentTaskService(
@@ -1142,6 +1602,259 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
             resumed = await restored.resume_task(task.task_id)
             self.assertIsNotNone(resumed)
             self.assertEqual(resumed.status, "queued")
+
+    async def test_agent_task_service_dispatches_to_queue_and_consumes_task(self):
+        with TemporaryDirectory() as storage:
+            bus = FakeTaskBus()
+            service = AgentTaskService(
+                agent_service=FakeFlowAgentService(),
+                storage_dir=storage,
+                auto_run=True,
+                task_bus=bus,
+                worker_concurrency=2,
+            )
+            await service.startup()
+            task = await service.create_task(uid=7, title="Research", content="Do durable work", skill_name="researcher")
+            await asyncio.sleep(0.05)
+
+            self.assertEqual(bus.enqueued, [task.task_id])
+            self.assertIsNotNone(bus.handler)
+
+            await bus.handler(task.task_id)
+            completed = await service.get_task(task.task_id)
+            self.assertIsNotNone(completed)
+            self.assertEqual(completed.status, "completed")
+            self.assertEqual(completed.trace_id, "trace-1")
+            self.assertIn(("queued", task.task_id), bus.events)
+            self.assertIn(("running", task.task_id), bus.events)
+            self.assertIn(("completed", task.task_id), bus.events)
+            await service.shutdown()
+            self.assertTrue(bus.stopped)
+
+    async def test_agent_task_service_falls_back_to_local_execution_when_queue_publish_fails(self):
+        with TemporaryDirectory() as storage:
+            bus = FakeTaskBus(fail_enqueue=True)
+            service = AgentTaskService(
+                agent_service=FakeFlowAgentService(),
+                storage_dir=storage,
+                auto_run=True,
+                task_bus=bus,
+                worker_concurrency=1,
+            )
+            await service.startup()
+            task = await service.create_task(uid=7, title="Research", content="Fallback work", skill_name="researcher")
+
+            completed = None
+            for _ in range(20):
+                await asyncio.sleep(0.02)
+                completed = await service.get_task(task.task_id)
+                if completed is not None and completed.status == "completed":
+                    break
+
+            self.assertEqual(bus.enqueue_attempts, [task.task_id])
+            self.assertIsNotNone(completed)
+            self.assertEqual(completed.status, "completed")
+            self.assertTrue(
+                any("local fallback" in checkpoint["message"] for checkpoint in completed.checkpoints)
+            )
+            await service.shutdown()
+
+    async def test_agent_task_service_runs_locally_when_queue_backend_is_not_ready(self):
+        with TemporaryDirectory() as storage:
+            bus = FakeTaskBus(start_result=False)
+            agent = FakeFlowAgentService()
+            service = AgentTaskService(
+                agent_service=agent,
+                storage_dir=storage,
+                auto_run=True,
+                task_bus=bus,
+                worker_concurrency=1,
+            )
+            await service.startup()
+            task = await service.create_task(uid=7, title="Local", content="Local fallback", skill_name="researcher")
+
+            completed = None
+            for _ in range(20):
+                await asyncio.sleep(0.02)
+                completed = await service.get_task(task.task_id)
+                if completed is not None and completed.status == "completed":
+                    break
+
+            self.assertEqual(bus.enqueued, [])
+            self.assertEqual(len(agent.calls), 1)
+            self.assertIsNotNone(completed)
+            self.assertEqual(completed.status, "completed")
+            await service.shutdown()
+
+    async def test_agent_task_service_dedupes_concurrent_duplicate_queue_delivery(self):
+        with TemporaryDirectory() as storage:
+            bus = FakeTaskBus()
+            agent = SlowFakeFlowAgentService(delay_sec=0.05)
+            service = AgentTaskService(
+                agent_service=agent,
+                storage_dir=storage,
+                auto_run=True,
+                task_bus=bus,
+                worker_concurrency=4,
+            )
+            await service.startup()
+            task = await service.create_task(uid=7, title="Duplicate", content="Run once", skill_name="researcher")
+            for _ in range(20):
+                if bus.enqueued:
+                    break
+                await asyncio.sleep(0.01)
+
+            await asyncio.gather(bus.handler(task.task_id), bus.handler(task.task_id))
+            completed = await service.get_task(task.task_id)
+
+            self.assertEqual(len(agent.calls), 1)
+            self.assertIsNotNone(completed)
+            self.assertEqual(completed.status, "completed")
+            self.assertEqual(
+                [checkpoint["status"] for checkpoint in completed.checkpoints].count("running"),
+                1,
+            )
+            await service.shutdown()
+
+    async def test_agent_task_service_skips_canceled_task_when_queue_message_arrives_late(self):
+        with TemporaryDirectory() as storage:
+            bus = FakeTaskBus()
+            agent = FakeFlowAgentService()
+            service = AgentTaskService(
+                agent_service=agent,
+                storage_dir=storage,
+                auto_run=True,
+                task_bus=bus,
+                worker_concurrency=2,
+            )
+            await service.startup()
+            task = await service.create_task(uid=7, title="Cancel", content="Cancel before consume", skill_name="researcher")
+            for _ in range(20):
+                if bus.enqueued:
+                    break
+                await asyncio.sleep(0.01)
+
+            canceled = await service.cancel_task(task.task_id)
+            await bus.handler(task.task_id)
+            loaded = await service.get_task(task.task_id)
+
+            self.assertIsNotNone(canceled)
+            self.assertEqual(len(agent.calls), 0)
+            self.assertIsNotNone(loaded)
+            self.assertEqual(loaded.status, "canceled")
+            self.assertIn(("canceled", task.task_id), bus.events)
+            await service.shutdown()
+
+    async def test_agent_task_service_requeues_stale_running_tasks_on_startup(self):
+        with TemporaryDirectory() as storage:
+            seed = AgentTaskService(
+                agent_service=SimpleNamespace(run_turn=None),
+                storage_dir=storage,
+                auto_run=False,
+            )
+            await seed.startup()
+            task = await seed.create_task(uid=7, title="Restore", content="Restore stale task", skill_name="researcher")
+            task.status = "running"
+            task.updated_at = 1
+            await seed._persist(task)
+
+            bus = FakeTaskBus()
+            restored = AgentTaskService(
+                agent_service=FakeFlowAgentService(),
+                storage_dir=storage,
+                auto_run=True,
+                task_bus=bus,
+                worker_concurrency=1,
+            )
+            await restored.startup()
+            for _ in range(20):
+                if bus.enqueued:
+                    break
+                await asyncio.sleep(0.01)
+            loaded = await restored.get_task(task.task_id)
+
+            self.assertEqual(bus.enqueued, [task.task_id])
+            self.assertIsNotNone(loaded)
+            self.assertEqual(loaded.status, "queued")
+            self.assertTrue(
+                any(checkpoint["message"] == "Task requeued after service restart." for checkpoint in loaded.checkpoints)
+            )
+            await restored.shutdown()
+
+    async def test_agent_task_service_does_not_cancel_completed_task(self):
+        with TemporaryDirectory() as storage:
+            bus = FakeTaskBus()
+            service = AgentTaskService(
+                agent_service=FakeFlowAgentService(),
+                storage_dir=storage,
+                auto_run=True,
+                task_bus=bus,
+                worker_concurrency=1,
+            )
+            await service.startup()
+            task = await service.create_task(uid=7, title="Complete", content="Complete once", skill_name="researcher")
+            for _ in range(20):
+                if bus.enqueued:
+                    break
+                await asyncio.sleep(0.01)
+            await bus.handler(task.task_id)
+            completed = await service.get_task(task.task_id)
+            canceled = await service.cancel_task(task.task_id)
+
+            self.assertIsNotNone(completed)
+            self.assertEqual(completed.status, "completed")
+            self.assertIsNotNone(canceled)
+            self.assertEqual(canceled.status, "completed")
+            await service.shutdown()
+
+    async def test_redpanda_task_event_publisher_uses_proxy_when_configured(self):
+        publisher = RedpandaTaskEventPublisher(
+            RedpandaQueueConfig(
+                enabled=True,
+                bootstrap_servers="127.0.0.1:19092",
+                proxy_url="http://127.0.0.1:18082",
+                task_events_topic="ai.agent.task.events.v1",
+            )
+        )
+        proxy = FakeRedpandaProxyClient()
+        publisher._proxy_client = proxy
+        publisher._started = True
+        task = AgentTask(task_id="task-proxy", title="Proxy", status="queued", payload={"uid": 7})
+
+        published = await publisher.publish("queued", task)
+
+        self.assertTrue(published)
+        self.assertEqual(proxy.posts[0]["path"], "/topics/ai.agent.task.events.v1")
+        self.assertEqual(proxy.posts[0]["json"]["records"][0]["key"], "task-proxy")
+        self.assertEqual(proxy.posts[0]["json"]["records"][0]["value"]["event"], "queued")
+
+    async def test_redpanda_task_event_publisher_falls_back_to_proxy_after_kafka_publish_failure(self):
+        publisher = RedpandaTaskEventPublisher(
+            RedpandaQueueConfig(
+                enabled=True,
+                bootstrap_servers="127.0.0.1:19092",
+                proxy_url="http://127.0.0.1:18082",
+                task_events_topic="ai.agent.task.events.v1",
+            )
+        )
+        producer = FailingKafkaProducer()
+        proxy = FakeRedpandaProxyClient()
+
+        async def start_proxy():
+            publisher._proxy_client = proxy
+            publisher._started = True
+            return True
+
+        publisher._producer = producer
+        publisher._started = True
+        publisher._start_proxy = start_proxy
+        task = AgentTask(task_id="task-kafka-fallback", title="Fallback", status="queued", payload={"uid": 7})
+
+        published = await publisher.publish("queued", task)
+
+        self.assertTrue(published)
+        self.assertTrue(producer.stopped)
+        self.assertEqual(proxy.posts[0]["json"]["records"][0]["key"], "task-kafka-fallback")
 
 
 class ToolExecutorSearchTests(unittest.IsolatedAsyncioTestCase):

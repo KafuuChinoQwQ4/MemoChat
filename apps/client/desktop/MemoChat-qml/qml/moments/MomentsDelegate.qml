@@ -60,8 +60,8 @@ Rectangle {
             spacing: 10
 
             Rectangle {
-                width: 42
-                height: 42
+                Layout.preferredWidth: 42
+                Layout.preferredHeight: 42
                 radius: 8
                 clip: true
                 color: Qt.rgba(0.8, 0.85, 0.95, 0.5)
@@ -89,7 +89,7 @@ Rectangle {
                     color: "#1a1a1a"
                 }
                 Label {
-                    text: root.location ? root.location : timeAgoText(root.createdAt)
+                    text: root.location ? root.location : root.timeAgoText(root.createdAt)
                     font.pixelSize: 12
                     color: "#888888"
                 }
@@ -179,6 +179,7 @@ Rectangle {
             model: root.items
             delegate: Item {
                 id: blockRoot
+                required property var modelData
                 Layout.fillWidth: true
                 Layout.preferredHeight: blockColumn.implicitHeight
 
@@ -189,9 +190,9 @@ Rectangle {
 
                     Rectangle {
                         id: imageBlock
-                        visible: itemType(modelData) === "image" && itemMediaKey(modelData).length > 0
-                        width: Math.min(blockRoot.width, imageMaxDim(modelData))
-                        height: visible ? imageHeight(modelData) : 0
+                        visible: root.itemType(blockRoot.modelData) === "image" && root.itemMediaKey(blockRoot.modelData).length > 0
+                        width: Math.min(blockRoot.width, root.imageMaxDim(blockRoot.modelData))
+                        height: visible ? root.imageHeight(blockRoot.modelData) : 0
                         color: Qt.rgba(0.92, 0.94, 0.97, 1.0)
                         radius: 8
                         clip: true
@@ -199,7 +200,7 @@ Rectangle {
                         Image {
                             anchors.fill: parent
                             fillMode: Image.PreserveAspectCrop
-                            source: mediaUrl(itemMediaKey(modelData))
+                            source: root.mediaUrl(root.itemMediaKey(blockRoot.modelData))
                             cache: true
                             asynchronous: true
                         }
@@ -208,17 +209,14 @@ Rectangle {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                imageViewerLoader.active = true
-                                if (imageViewerLoader.item) {
-                                    imageViewerLoader.item.open(itemMediaKey(modelData))
-                                }
+                                imageViewerPopup.showImage(root.itemMediaKey(blockRoot.modelData))
                             }
                         }
                     }
 
                     Rectangle {
                         id: videoBlock
-                        visible: itemType(modelData) === "video" && itemMediaKey(modelData).length > 0
+                        visible: root.itemType(blockRoot.modelData) === "video" && root.itemMediaKey(blockRoot.modelData).length > 0
                         width: Math.min(blockRoot.width, 320)
                         height: visible ? 188 : 0
                         radius: 10
@@ -247,7 +245,7 @@ Rectangle {
                             }
 
                             Label {
-                                text: videoDurationText(modelData.duration_ms)
+                                text: root.videoDurationText(blockRoot.modelData.duration_ms)
                                 font.pixelSize: 12
                                 color: "#dbe7f6"
                                 horizontalAlignment: Text.AlignHCenter
@@ -267,7 +265,7 @@ Rectangle {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: Qt.openUrlExternally(mediaUrl(itemMediaKey(modelData)))
+                            onClicked: Qt.openUrlExternally(root.mediaUrl(root.itemMediaKey(blockRoot.modelData)))
                         }
                     }
                 }
@@ -343,6 +341,7 @@ Rectangle {
 
         // Comment preview (up to 2 comments)
         Column {
+            id: commentPreview
             Layout.fillWidth: true
             Layout.topMargin: 4
             spacing: 2
@@ -351,8 +350,10 @@ Rectangle {
             property var commentPreviewItems: root.momentData && root.momentData.comments ? root.momentData.comments : []
 
             Repeater {
-                model: Math.min(2, commentPreviewItems.length)
+                model: Math.min(2, commentPreview.commentPreviewItems.length)
                 delegate: Item {
+                    id: commentPreviewDelegate
+                    required property int index
                     Layout.fillWidth: true
                     Layout.preferredHeight: commentRow.implicitHeight + 2
 
@@ -361,20 +362,20 @@ Rectangle {
                         anchors.fill: parent
                         spacing: 4
                         Label {
-                            text: (commentPreviewItems[index].user_nick || "用户") + "："
+                            text: (commentPreview.commentPreviewItems[commentPreviewDelegate.index].user_nick || "用户") + "："
                             font.pixelSize: 12
                             font.weight: Font.Medium
                             color: "#2a7ae2"
                         }
                         Label {
-                            text: commentPreviewItems[index].reply_uid && commentPreviewItems[index].reply_uid !== 0
-                                  ? ("回复 " + (commentPreviewItems[index].reply_nick || "用户") + "：") : ""
+                            text: commentPreview.commentPreviewItems[commentPreviewDelegate.index].reply_uid && commentPreview.commentPreviewItems[commentPreviewDelegate.index].reply_uid !== 0
+                                  ? ("回复 " + (commentPreview.commentPreviewItems[commentPreviewDelegate.index].reply_nick || "用户") + "：") : ""
                             font.pixelSize: 12
                             color: "#2a7ae2"
-                            visible: commentPreviewItems[index].reply_uid && commentPreviewItems[index].reply_uid !== 0
+                            visible: commentPreview.commentPreviewItems[commentPreviewDelegate.index].reply_uid && commentPreview.commentPreviewItems[commentPreviewDelegate.index].reply_uid !== 0
                         }
                         Label {
-                            text: commentPreviewItems[index].content || ""
+                            text: commentPreview.commentPreviewItems[commentPreviewDelegate.index].content || ""
                             font.pixelSize: 12
                             color: "#555555"
                             elide: Text.ElideRight
@@ -476,39 +477,32 @@ Rectangle {
         return minutes + ":" + (seconds < 10 ? "0" + seconds : seconds)
     }
 
-    // Image viewer popup
-    Loader {
-        id: imageViewerLoader
-        active: false
-        sourceComponent: Component {
-            Popup {
-                id: imgPopup
-                modal: true
-                focus: true
-                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-                width: Math.min(root.Window ? root.Window.width : 800, 720)
-                height: Math.min(root.Window ? root.Window.height : 600, 540)
-                anchors.centerIn: Overlay.overlay
+    Popup {
+        id: imageViewerPopup
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        width: Math.min(root.Window ? root.Window.width : 800, 720)
+        height: Math.min(root.Window ? root.Window.height : 600, 540)
+        anchors.centerIn: Overlay.overlay
 
-                property string currentKey: ""
+        property string currentKey: ""
 
-                function open(key) {
-                    currentKey = key
-                    open()
-                }
+        function showImage(key) {
+            currentKey = key
+            open()
+        }
 
-                background: Rectangle { color: "#111111"; anchors.fill: parent }
-                Image {
-                    anchors.fill: parent
-                    fillMode: Image.PreserveAspectFit
-                    source: gate_url_prefix + "/media/download?asset=" + imgPopup.currentKey
-                    cache: false
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: imgPopup.close()
-                }
-            }
+        background: Rectangle { color: "#111111"; anchors.fill: parent }
+        Image {
+            anchors.fill: parent
+            fillMode: Image.PreserveAspectFit
+            source: root.mediaUrl(imageViewerPopup.currentKey)
+            cache: false
+        }
+        MouseArea {
+            anchors.fill: parent
+            onClicked: imageViewerPopup.close()
         }
     }
 }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from typing import AsyncIterator
@@ -7,6 +8,7 @@ from typing import AsyncIterator
 import structlog
 
 from config import settings
+from harness.cache.semantic_cache import SemanticCacheHit, SemanticCacheService
 from harness.contracts import GuardrailResult, HarnessRunResult, ToolObservation, TraceEvent
 from harness.ports import (
     FeedbackPort,
@@ -173,6 +175,7 @@ class AgentHarnessService:
         trace_store: TraceStorePort,
         feedback_evaluator: FeedbackPort,
         guardrail_service: GuardrailPort,
+        semantic_cache: SemanticCacheService | None = None,
     ):
         self._planner = planner
         self._llm_registry = llm_registry
@@ -181,6 +184,7 @@ class AgentHarnessService:
         self._trace_store = trace_store
         self._feedback_evaluator = feedback_evaluator
         self._guardrail_service = guardrail_service
+        self._semantic_cache = semantic_cache
 
     async def _add_guardrail_event(self, trace_id: str, name: str, results: list[GuardrailResult]) -> None:
         started_at = _now_ms()
@@ -231,6 +235,102 @@ class AgentHarnessService:
             observations=observations or [],
             events=events,
         )
+
+    async def _finish_semantic_cache_hit(
+        self,
+        trace_id: str,
+        session_id: str,
+        skill_name: str,
+        request,
+        hit: SemanticCacheHit,
+        observations: list[str] | None = None,
+    ) -> HarnessRunResult:
+        response_content = hit.answer
+        feedback_summary = str(hit.metadata.get("feedback_summary") or "").strip() if isinstance(hit.metadata, dict) else ""
+        match_kind = getattr(hit, "match_kind", "") or "semantic"
+        if not feedback_summary:
+            feedback_summary = f"semantic_cache_hit {match_kind} similarity={hit.similarity:.4f}"
+
+        cache_started = _now_ms()
+        await self._trace_store.add_event(
+            trace_id,
+            TraceEvent(
+                layer="cache",
+                name="semantic_lookup",
+                status="ok",
+                summary=f"match={match_kind}, similarity={hit.similarity:.4f}, model={hit.model or 'cached'}",
+                detail=hit.question[:1000] or response_content[:1000],
+                started_at=cache_started,
+                finished_at=_now_ms(),
+                metadata={
+                    "match_kind": match_kind,
+                    "similarity": hit.similarity,
+                    "distance": hit.distance,
+                    "source_trace_id": hit.trace_id,
+                    "cached_at": hit.cached_at,
+                    "source_model": hit.model,
+                },
+            ),
+        )
+
+        if self._semantic_cache is not None and self._semantic_cache.persist_hits_to_memory:
+            memory_save_started = _now_ms()
+            self._schedule_semantic_cache_memory_save(request, session_id, response_content, trace_id)
+            await self._trace_store.add_event(
+                trace_id,
+                TraceEvent(
+                    layer="memory",
+                    name="save_context",
+                    status="queued",
+                    summary="semantic cache hit memory persistence queued",
+                    started_at=memory_save_started,
+                    finished_at=_now_ms(),
+                ),
+            )
+
+        model = f"semantic-cache:{hit.model or 'cached'}"
+        await self._trace_store.finish_run(
+            trace_id,
+            status="completed",
+            response_content=response_content,
+            model=model,
+            feedback_summary=feedback_summary,
+            observations=observations or [],
+        )
+        trace_ref = self._trace_store.get_trace(trace_id)
+        events = trace_ref.events if trace_ref else []
+        return HarnessRunResult(
+            session_id=session_id,
+            content=response_content,
+            tokens=0,
+            model=model,
+            trace_id=trace_id,
+            skill=skill_name,
+            feedback_summary=feedback_summary,
+            observations=observations or [],
+            events=events,
+        )
+
+    def _schedule_semantic_cache_memory_save(self, request, session_id: str, response_content: str, trace_id: str) -> None:
+        save_cache_hit = getattr(self._memory_service, "save_semantic_cache_hit", None)
+        if save_cache_hit is None:
+            logger.debug("harness.semantic_cache.memory_save_skipped", trace_id=trace_id, reason="unsupported_memory_port")
+            return
+
+        async def _save() -> None:
+            try:
+                await save_cache_hit(request.uid, session_id, request.content, response_content)
+            except Exception as exc:
+                logger.warning("harness.semantic_cache.memory_save_failed", trace_id=trace_id, error=str(exc))
+
+        def _consume_background_result(done: asyncio.Task) -> None:
+            try:
+                done.result()
+            except asyncio.CancelledError:
+                logger.debug("harness.semantic_cache.memory_save_cancelled", trace_id=trace_id)
+
+        task = asyncio.create_task(_save())
+        task.add_done_callback(_consume_background_result)
 
     def _tool_specs(self):
         try:
@@ -416,6 +516,18 @@ class AgentHarnessService:
                 "input",
                 input_guardrails,
             )
+
+        semantic_lookup = None
+        if self._semantic_cache is not None:
+            semantic_lookup = await self._semantic_cache.lookup(request, skill, plan_steps)
+            if semantic_lookup.hit is not None:
+                return await self._finish_semantic_cache_hit(
+                    trace.trace_id,
+                    session_id,
+                    skill.name,
+                    request,
+                    semantic_lookup.hit,
+                )
 
         memory_started = _now_ms()
         with trace_context(
@@ -664,6 +776,7 @@ class AgentHarnessService:
                 finished_at=_now_ms(),
             ),
         )
+        response_tokens = response.usage.total_tokens or max(len(response.content) // 4, 0)
         await self._trace_store.finish_run(
             trace.trace_id,
             status="completed",
@@ -672,13 +785,25 @@ class AgentHarnessService:
             feedback_summary=feedback_summary,
             observations=[observation.to_summary() for observation in observations],
         )
+        if self._semantic_cache is not None:
+            await self._semantic_cache.store(
+                request,
+                skill,
+                plan_steps,
+                answer=response.content,
+                model=response.model,
+                tokens=response_tokens,
+                trace_id=trace.trace_id,
+                feedback_summary=feedback_summary,
+                vector=semantic_lookup.vector if semantic_lookup is not None else None,
+            )
 
         trace_ref = self._trace_store.get_trace(trace.trace_id)
         events = trace_ref.events if trace_ref else []
         return HarnessRunResult(
             session_id=session_id,
             content=response.content,
-            tokens=response.usage.total_tokens or max(len(response.content) // 4, 0),
+            tokens=response_tokens,
             model=response.model,
             trace_id=trace.trace_id,
             skill=skill.name,
@@ -735,6 +860,30 @@ class AgentHarnessService:
                 "events": _trace_events_payload(self._trace_store, trace.trace_id),
             }
             return
+
+        semantic_lookup = None
+        if self._semantic_cache is not None:
+            semantic_lookup = await self._semantic_cache.lookup(request, skill, plan_steps)
+            if semantic_lookup.hit is not None:
+                result = await self._finish_semantic_cache_hit(
+                    trace.trace_id,
+                    session_id,
+                    skill.name,
+                    request,
+                    semantic_lookup.hit,
+                )
+                yield {
+                    "chunk": result.content,
+                    "is_final": True,
+                    "msg_id": msg_id,
+                    "total_tokens": 0,
+                    "trace_id": trace.trace_id,
+                    "skill": skill.name,
+                    "feedback_summary": result.feedback_summary,
+                    "observations": result.observations,
+                    "events": _trace_events_payload(self._trace_store, trace.trace_id),
+                }
+                return
 
         memory_started = _now_ms()
         memory_snapshot = await self._memory_service.load(
@@ -919,6 +1068,7 @@ class AgentHarnessService:
                     finished_at=_now_ms(),
                 ),
             )
+            response_tokens = max(len(accumulated) // 4, 0)
             await self._trace_store.finish_run(
                 trace.trace_id,
                 status="completed",
@@ -927,11 +1077,23 @@ class AgentHarnessService:
                 feedback_summary=feedback_summary,
                 observations=[observation.to_summary() for observation in observations],
             )
+            if self._semantic_cache is not None:
+                await self._semantic_cache.store(
+                    request,
+                    skill,
+                    plan_steps,
+                    answer=accumulated,
+                    model=model_name,
+                    tokens=response_tokens,
+                    trace_id=trace.trace_id,
+                    feedback_summary=feedback_summary,
+                    vector=semantic_lookup.vector if semantic_lookup is not None else None,
+                )
             yield {
                 "chunk": "",
                 "is_final": True,
                 "msg_id": msg_id,
-                "total_tokens": max(len(accumulated) // 4, 0),
+                "total_tokens": response_tokens,
                 "trace_id": trace.trace_id,
                 "skill": skill.name,
                 "feedback_summary": feedback_summary,

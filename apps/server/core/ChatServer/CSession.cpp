@@ -31,6 +31,7 @@ CSession::CSession(boost::asio::io_context& io_context, CServer* server):
 	_session_id = boost::uuids::to_string(a_uuid);
 	_recv_head_node = make_shared<MsgNode>(HEAD_TOTAL_LEN);
 	_last_heartbeat = std::time(nullptr);
+	_last_online_route_refresh = 0;
 }
 CSession::~CSession() {
 	std::cout << "~CSession destruct" << endl;
@@ -326,6 +327,28 @@ void CSession::UpdateHeartbeat()
 {
 	time_t now = std::time(nullptr);
 	_last_heartbeat = now;
+}
+
+bool CSession::TryMarkOnlineRouteRefreshDue(std::time_t now, int interval_seconds)
+{
+	if (interval_seconds <= 0) {
+		_last_online_route_refresh.store(now, std::memory_order_relaxed);
+		return true;
+	}
+
+	auto last = _last_online_route_refresh.load(std::memory_order_relaxed);
+	while (last <= 0 || std::difftime(now, last) >= interval_seconds) {
+		if (_last_online_route_refresh.compare_exchange_weak(
+			last, now, std::memory_order_relaxed, std::memory_order_relaxed)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void CSession::MarkOnlineRouteRefreshed(std::time_t now)
+{
+	_last_online_route_refresh.store(now, std::memory_order_relaxed);
 }
 
 void CSession::DealExceptionSession()

@@ -67,6 +67,20 @@ std::string RelationBootstrapCacheKey(int uid) {
 	return std::string("relation_bootstrap_") + std::to_string(uid);
 }
 
+size_t ConfigSizeLocal(const std::string& section, const std::string& key, size_t default_value, size_t min_value, size_t max_value) {
+	const auto raw = ConfigMgr::Inst().GetValue(section, key);
+	if (raw.empty()) {
+		return default_value;
+	}
+	try {
+		const auto value = static_cast<size_t>(std::stoul(raw));
+		return std::clamp(value, min_value, max_value);
+	}
+	catch (...) {
+		return default_value;
+	}
+}
+
 int RelationBootstrapCacheTtlSec() {
 	auto& cfg = ConfigMgr::Inst();
 	const auto raw = cfg.GetValue("RelationBootstrapCache", "TtlSec");
@@ -433,7 +447,7 @@ LogicSystem::LogicSystem():_b_stop(false), _event_stop(false), _p_server(nullptr
 			return ExpediteOutboxRepair(outbox_id);
 		});
 	RegisterCallBacks();
-	_num_workers = kDefaultWorkerCount;
+	_num_workers = ConfigSizeLocal("LogicSystem", "WorkerCount", kDefaultWorkerCount, 1, kMaxWorkerCount);
 	_worker_conds = std::make_unique<std::condition_variable[]>(_num_workers);
 	for (size_t i = 0; i < _num_workers; ++i) {
 		_worker_threads[i] = std::thread(&LogicSystem::workerLoop, this, i);

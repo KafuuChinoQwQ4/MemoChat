@@ -2,18 +2,61 @@ name: memochat
 
 services:
   #######################
+  # Local HTTP Gateway
+  #######################
+  memochat-nginx-lb:
+    image: nginx:1.26.2-alpine
+    container_name: memochat-nginx-lb
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./compose/nginx-local.conf:/etc/nginx/nginx.conf:ro
+    expose:
+      - "8081"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        host_gateway_ipv4="$$(awk '$$2 == "host-gateway" && $$1 ~ /^[0-9.]+$$/ { print $$1; exit }' /etc/hosts)"
+        if [ -z "$$host_gateway_ipv4" ]; then
+          echo "Unable to resolve an IPv4 host-gateway address" >&2
+          exit 1
+        fi
+        printf '%s\tmemochat-host-gateway-ipv4\n' "$$host_gateway_ipv4" >> /etc/hosts
+        exec nginx -g 'daemon off;'
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "host-gateway:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/health | grep -q OK"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  memochat-nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.5.1
+    container_name: memochat-nginx-exporter
+    restart: unless-stopped
+    command:
+      - --nginx.scrape-uri=http://memochat-nginx-lb:8081/stub_status
+    depends_on:
+      memochat-nginx-lb:
+        condition: service_healthy
+    expose:
+      - "9113"
+
+  #######################
   # Data Stores
   #######################
   memochat-redis:
-    image: redis:7.2.5
+    image: redis/redis-stack-server:7.2.0-v15
     container_name: memochat-redis
     restart: unless-stopped
-    command:
-      - redis-server
-      - --appendonly
-      - "yes"
-      - --requirepass
-      - "123456"
+    environment:
+      REDIS_ARGS: "--appendonly yes --requirepass 123456"
     ports:
       - "6379:6379"
     volumes:
@@ -130,6 +173,7 @@ services:
     depends_on:
       - memochat-influxdb
       - memochat-alertmanager
+      - memochat-nginx-exporter
 
   memochat-alertmanager:
     image: prom/alertmanager:v0.27.0

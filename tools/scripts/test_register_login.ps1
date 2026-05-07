@@ -1,35 +1,98 @@
-# Test full registration + login flow
-$ErrorActionPreference = "Continue"
+param(
+    [string]$BaseUrl = "http://127.0.0.1",
+    [string]$Email = "",
+    [string]$User = "fullstack_smoke",
+    [string]$Password = "FullStack123!",
+    [string]$ClientVersion = "3.0.0",
+    [int]$TimeoutSec = 10
+)
 
-# Step 1: Get verify code
+$ErrorActionPreference = "Stop"
+
+if (-not $Email) {
+    $stamp = Get-Date -Format "yyyyMMddHHmmssfff"
+    $suffix = ([guid]::NewGuid().ToString("N")).Substring(0, 8)
+    $Email = "fullstack_${stamp}_${suffix}@loadtest.local"
+    if ($User -eq "fullstack_smoke") {
+        $User = "fullstack_$suffix"
+    }
+}
+
+function ConvertTo-MemoChatXorPassword {
+    param([Parameter(Mandatory = $true)][string]$Raw)
+
+    $xorCode = $Raw.Length % 255
+    $chars = foreach ($ch in $Raw.ToCharArray()) {
+        [char](([int][char]$ch) -bxor $xorCode)
+    }
+    return -join $chars
+}
+
+function Invoke-JsonPost {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [Parameter(Mandatory = $true)][hashtable]$Body
+    )
+
+    $jsonBody = $Body | ConvertTo-Json -Compress
+    $response = Invoke-WebRequest -Uri $Uri -Method POST -ContentType "application/json" -Body $jsonBody -TimeoutSec $TimeoutSec -UseBasicParsing
+    Write-Host "Status: $($response.StatusCode)"
+    Write-Host "Body: $($response.Content)"
+    return ($response.Content | ConvertFrom-Json)
+}
+
+Write-Host "=== MemoChat register + login smoke ==="
+Write-Host "BaseUrl: $BaseUrl"
+Write-Host "Email: $Email"
+
 Write-Host "=== Step 1: Get verify code ==="
-try {
-    $body = '{"email":"test@test.com"}'
-    $r = Invoke-WebRequest -Uri "http://127.0.0.1:8080/get_varifycode" -Method POST -ContentType "application/json" -Body $body -TimeoutSec 5
-    Write-Host "Status: $($r.StatusCode)"
-    Write-Host "Response: $($r.Content)"
-} catch {
-    Write-Host "Error: $($_.Exception.Message)"
+$getCode = Invoke-JsonPost -Uri "$($BaseUrl.TrimEnd('/'))/get_varifycode" -Body @{ email = $Email }
+if ([int]$getCode.error -ne 0) {
+    Write-Host "Get verify code failed."
+    exit 1
 }
 
-# Step 2: Register user
-Write-Host "`n=== Step 2: Register user ==="
-try {
-    $body = '{"email":"test@test.com","user":"testuser","passwd":"123456","confirm":"123456","icon":"","varifycode":"123456","sex":0}'
-    $r = Invoke-WebRequest -Uri "http://127.0.0.1:8080/user_register" -Method POST -ContentType "application/json" -Body $body -TimeoutSec 5
-    Write-Host "Status: $($r.StatusCode)"
-    Write-Host "Response: $($r.Content)"
-} catch {
-    Write-Host "Error: $($_.Exception.Message)"
+Write-Host "=== Step 2: Poll Redis for code ==="
+$code = $null
+for ($i = 0; $i -lt 20; $i++) {
+    Start-Sleep -Milliseconds 300
+    $value = docker exec -e REDISCLI_AUTH=123456 memochat-redis redis-cli GET "code_$Email" 2>$null
+    if ($LASTEXITCODE -eq 0 -and $value -and $value -ne "(nil)") {
+        $code = [string]$value
+        break
+    }
+}
+if (-not $code) {
+    Write-Host "Verify code not found in Redis for $Email."
+    exit 1
+}
+Write-Host "Verify code: $code"
+
+$encodedPassword = ConvertTo-MemoChatXorPassword -Raw $Password
+
+Write-Host "=== Step 3: Register user ==="
+$register = Invoke-JsonPost -Uri "$($BaseUrl.TrimEnd('/'))/user_register" -Body @{
+    email      = $Email
+    user       = $User
+    passwd     = $encodedPassword
+    confirm    = $encodedPassword
+    icon       = ""
+    varifycode = $code
+    sex        = 0
+}
+if ([int]$register.error -ne 0) {
+    Write-Host "Register failed."
+    exit 1
 }
 
-# Step 3: Login
-Write-Host "`n=== Step 3: Login ==="
-try {
-    $body = '{"email":"test@test.com","passwd":"123456","client_ver":"3.0.0"}'
-    $r = Invoke-WebRequest -Uri "http://127.0.0.1:8080/user_login" -Method POST -ContentType "application/json" -Body $body -TimeoutSec 5
-    Write-Host "Status: $($r.StatusCode)"
-    Write-Host "Response: $($r.Content)"
-} catch {
-    Write-Host "Error: $($_.Exception.Message)"
+Write-Host "=== Step 4: Login ==="
+$login = Invoke-JsonPost -Uri "$($BaseUrl.TrimEnd('/'))/user_login" -Body @{
+    email      = $Email
+    passwd     = $encodedPassword
+    client_ver = $ClientVersion
+}
+$ok = ([int]$login.error -eq 0) -and $login.uid -and $login.login_ticket -and $login.host -and $login.port
+if (-not $ok) {
+    Write-Host "Login after register failed."
+    exit 1
 }
