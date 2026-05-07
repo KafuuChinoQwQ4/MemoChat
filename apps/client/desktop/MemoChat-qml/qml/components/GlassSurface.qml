@@ -16,7 +16,7 @@ Item {
 
     property color glowTopColor: Qt.rgba(1, 1, 1, 0.24)
     property color glowBottomColor: Qt.rgba(1, 1, 1, 0.06)
-    readonly property bool effectActive: blurEnabled && visible && opacity > 0.01 && width > 1 && height > 1
+    readonly property bool effectActive: blurEnabled && backdrop !== null && visible && opacity > 0.01 && width > 1 && height > 1
 
     implicitWidth: 100
     implicitHeight: 38
@@ -25,10 +25,10 @@ Item {
     ShaderEffectSource {
         id: blurSource
         anchors.fill: parent
-        readonly property Item sourceBackdrop: root.backdrop !== null ? root.backdrop : root
+        readonly property Item sourceBackdrop: root.backdrop
         sourceItem: root.effectActive && sourceBackdrop !== null ? sourceBackdrop : null
         sourceRect: {
-            if (!sourceBackdrop || sourceBackdrop === root) {
+            if (!sourceBackdrop) {
                 return Qt.rect(0, 0, root.width, root.height)
             }
             var p = root.mapToItem(sourceBackdrop, 0, 0)

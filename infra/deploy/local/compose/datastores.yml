@@ -1,14 +1,10 @@
 services:
   memochat-redis:
-    image: redis:7.2.5
+    image: redis/redis-stack-server:7.2.0-v15
     container_name: memochat-redis
     restart: unless-stopped
-    command:
-      - redis-server
-      - --appendonly
-      - "yes"
-      - --requirepass
-      - "123456"
+    environment:
+      REDIS_ARGS: "--appendonly yes --requirepass 123456"
     ports:
       - "6379:6379"
     volumes:

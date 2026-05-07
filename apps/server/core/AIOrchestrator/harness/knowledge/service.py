@@ -25,6 +25,10 @@ class KnowledgeService:
         self._processor = DocProcessor(settings.rag)
         self._embedder = EmbeddingManager(settings.embedding)
 
+    @property
+    def embedder(self) -> EmbeddingManager:
+        return self._embedder
+
     async def upload(self, uid: int, file_name: str, file_type: str, content_b64: str) -> dict:
         file_type = file_type.lower().strip()
         if file_type not in {"pdf", "txt", "md", "docx"}:

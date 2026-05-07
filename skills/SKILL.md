@@ -7,7 +7,7 @@ description: Orchestrate a multi-phase implementation workflow for MemoChat-Qml-
 
 Use this skill to drive non-trivial changes in `D:\MemoChat-Qml-Drogon` while keeping the main thread thin and preserving useful artifacts.
 
-For implementation work, use `skills/parallel-agents.md` as the default execution mode. The main thread acts as the Controller: it owns architecture, plan, shared contracts, worker dispatch, integration, review, and final acceptance. After the Controller has enough context and freezes the first shared contract, it should dispatch safe disjoint worker lanes immediately to accelerate delivery. Use local-only execution only when the active tool/policy environment forbids spawning workers, the user explicitly asks for single-agent work, the task is genuinely tiny or sequential, or no safe split exists; record the exact reason in `plan.md`.
+For implementation work, `skills/parallel-agents.md` is the mandatory default execution mode. The main thread acts as the Controller: it owns architecture, plan, shared contracts, worker dispatch, integration, review, and final acceptance. After the Controller has enough context and freezes the first shared contract, it must dispatch safe disjoint worker lanes immediately to accelerate delivery. Local-only execution is an exception, allowed only when the active tool/policy environment forbids spawning workers, the user explicitly asks for single-agent work, the task is genuinely tiny and has no useful test/review lane, the task is strictly sequential, or no safe split exists. Record the exact exception reason in `plan.md` before continuing local-only.
 
 ## Project Rules
 
@@ -52,7 +52,7 @@ Create or reuse:
    - Otherwise create a short kebab-case project name.
 3. Pick the next task letter (`a`, `b`, ...), create directories, and write the task request to `logs/phase-setup.result.md`.
 4. Capture any screenshot or attachment summary into `context.md` or a log file before delegation.
-5. For code changes, read `skills/parallel-agents.md`, default to Controller-led worker dispatch, and record any blocked or intentionally local-only concurrency decision.
+5. For code changes, read `skills/parallel-agents.md` and open Controller-led concurrency by default. Dispatch workers as soon as a safe contract and ownership split exist. If workers are not dispatched, record the blocker or exception reason in `plan.md` before implementation.
 
 ## Phase 1: Context
 

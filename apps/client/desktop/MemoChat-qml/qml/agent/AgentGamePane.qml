@@ -470,22 +470,14 @@ Rectangle {
                 }
             }
 
-            GridLayout {
+            Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                columns: root.compactLayout ? 1 : 2
-                columnSpacing: 12
-                rowSpacing: 12
 
                 Rectangle {
                     visible: !root.hasCurrentRoom
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.minimumWidth: 0
-                    Layout.preferredWidth: root.compactLayout || !root.hasCurrentRoom ? parent.width : 430
-                    Layout.maximumWidth: root.compactLayout || !root.hasCurrentRoom ? parent.width : 500
-                    Layout.minimumHeight: root.compactLayout || !root.hasCurrentRoom ? 540 : 0
-                    Layout.preferredHeight: root.compactLayout || !root.hasCurrentRoom ? 620 : 0
+                    anchors.fill: parent
+                    implicitHeight: root.compactLayout ? 620 : 540
                     radius: 10
                     color: Qt.rgba(1, 1, 1, 0.34)
                     border.color: Qt.rgba(1, 1, 1, 0.42)
@@ -840,9 +832,8 @@ Rectangle {
 
                 AgentGamePlayPane {
                     visible: root.hasCurrentRoom
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.preferredHeight: root.compactLayout ? 620 : 0
+                    anchors.fill: parent
+                    implicitHeight: root.compactLayout ? 620 : 540
                     participants: root.participants()
                     events: root.events()
                     availableActions: root.availableActions()

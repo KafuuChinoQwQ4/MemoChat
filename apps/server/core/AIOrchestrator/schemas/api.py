@@ -111,6 +111,44 @@ class KbDeleteRsp(BaseModel):
     message: str = "ok"
 
 
+class RagEvalCaseModel(BaseModel):
+    case_id: str
+    name: str
+    description: str = ""
+    request: dict[str, Any] = Field(default_factory=dict)
+    expectations: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class RagEvalListRsp(BaseModel):
+    code: int = 0
+    message: str = "ok"
+    evals: list[RagEvalCaseModel] = Field(default_factory=list)
+
+
+class RagEvalRunReq(BaseModel):
+    case_id: str = ""
+    uid: int = 0
+    run_all: bool = False
+    metadata_filters: dict[str, Any] = Field(default_factory=dict)
+
+
+class RagEvalResultModel(BaseModel):
+    case_id: str
+    passed: bool = False
+    failures: list[str] = Field(default_factory=list)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    expected: dict[str, Any] = Field(default_factory=dict)
+    observed: dict[str, Any] = Field(default_factory=dict)
+
+
+class RagEvalRunRsp(BaseModel):
+    code: int = 0
+    message: str = "ok"
+    passed: bool = False
+    results: list[RagEvalResultModel] = Field(default_factory=list)
+
+
 class ModelInfo(BaseModel):
     model_type: str
     model_name: str

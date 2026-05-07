@@ -61,6 +61,20 @@ class AIMetricsRegistry:
             documentation="Total Ollama readiness probes by status",
             label_names=("status",),
         )
+        self.agent_tasks = _CounterFamily(
+            name="memochat_ai_agent_tasks_total",
+            documentation="Total AI agent task lifecycle events by backend and status",
+            label_names=("backend", "status"),
+        )
+        self.semantic_cache = _CounterFamily(
+            name="memochat_ai_semantic_cache_total",
+            documentation="Total semantic cache outcomes by status and reason",
+            label_names=("status", "reason"),
+        )
+        self.semantic_cache_saved_tokens = _CounterFamily(
+            name="memochat_ai_semantic_cache_saved_tokens_total",
+            documentation="Estimated total tokens avoided by semantic cache hits",
+        )
 
     def render_text(self) -> str:
         return "\n".join(
@@ -68,6 +82,9 @@ class AIMetricsRegistry:
                 self.http_requests.render(),
                 self.ollama_retries.render(),
                 self.ollama_ready_probes.render(),
+                self.agent_tasks.render(),
+                self.semantic_cache.render(),
+                self.semantic_cache_saved_tokens.render(),
                 "",
             ]
         )

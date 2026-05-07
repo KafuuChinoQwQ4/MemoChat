@@ -15,6 +15,11 @@ from schemas.api import (
     KbSearchRsp,
     KbUploadReq,
     KbUploadRsp,
+    RagEvalCaseModel,
+    RagEvalListRsp,
+    RagEvalResultModel,
+    RagEvalRunReq,
+    RagEvalRunRsp,
 )
 
 logger = structlog.get_logger()
@@ -99,6 +104,42 @@ async def list_kb(uid: int):
         ai_metrics.http_requests.inc(route="/kb/list", status="error")
         logger.error("kb.list.error", uid=uid, error=str(exc))
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/evals", response_model=RagEvalListRsp)
+async def list_rag_evals():
+    container = HarnessContainer.get_instance()
+    return RagEvalListRsp(
+        code=0,
+        message="ok",
+        evals=[RagEvalCaseModel(**case.to_dict()) for case in container.rag_eval_service.list_cases()],
+    )
+
+
+@router.post("/evals/run", response_model=RagEvalRunRsp)
+async def run_rag_evals(req: RagEvalRunReq):
+    container = HarnessContainer.get_instance()
+    if req.run_all:
+        results = await container.rag_eval_service.run_suite(
+            uid=req.uid,
+            metadata_filters=req.metadata_filters,
+        )
+    else:
+        results = [
+            await container.rag_eval_service.run_eval(
+                case_id=req.case_id,
+                uid=req.uid,
+                metadata_filters=req.metadata_filters,
+            )
+        ]
+    if not results:
+        raise HTTPException(status_code=404, detail="no rag eval cases found")
+    return RagEvalRunRsp(
+        code=0,
+        message="ok",
+        passed=all(result.get("passed", False) for result in results),
+        results=[RagEvalResultModel(**result) for result in results],
+    )
 
 
 @router.delete("/{kb_id}", response_model=KbDeleteRsp)

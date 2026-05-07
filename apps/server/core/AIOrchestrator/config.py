@@ -172,6 +172,73 @@ class ObservabilityConfig(BaseModel):
     track_ttft: bool = True
 
 
+class RedpandaQueueConfig(BaseModel):
+    enabled: bool = True
+    bootstrap_servers: str = "127.0.0.1:19092"
+    proxy_url: str = "http://127.0.0.1:18082"
+    proxy_fallback_enabled: bool = True
+    client_id: str = "memochat-ai-orchestrator"
+    task_events_topic: str = "ai.agent.task.events.v1"
+    publish_timeout_sec: float = 2.0
+
+
+class RabbitMQQueueConfig(BaseModel):
+    enabled: bool = True
+    host: str = "127.0.0.1"
+    port: int = 5672
+    username: str = "memochat"
+    password: str = "123456"
+    vhost: str = "/"
+    exchange: str = "memochat.direct"
+    dlx_exchange: str = "memochat.dlx"
+    task_queue: str = "ai.agent.tasks.q"
+    task_routing_key: str = "ai.agent.task.run"
+    prefetch_count: int = 16
+    publish_timeout_sec: float = 2.0
+
+
+class AgentQueueConfig(BaseModel):
+    enabled: bool = False
+    backend: str = "hybrid"
+    worker_concurrency: int = 8
+    fallback_to_local: bool = True
+    resume_stale_on_start: bool = True
+    rabbitmq: RabbitMQQueueConfig = RabbitMQQueueConfig()
+    redpanda: RedpandaQueueConfig = RedpandaQueueConfig()
+
+
+class SemanticCacheRedisConfig(BaseModel):
+    host: str = "127.0.0.1"
+    port: int = 6379
+    username: str = ""
+    password: str = "123456"
+    db: int = 0
+    ssl: bool = False
+    socket_timeout_sec: float = 2.0
+    connect_timeout_sec: float = 1.0
+
+
+class SemanticCacheConfig(BaseModel):
+    enabled: bool = True
+    exact_match_enabled: bool = True
+    redis: SemanticCacheRedisConfig = SemanticCacheRedisConfig()
+    index_name: str = "memochat_ai_semantic_cache_v1"
+    key_prefix: str = "memochat:ai:semantic_cache:"
+    scope: str = "user"
+    similarity_threshold: float = 0.98
+    top_k: int = 1
+    ttl_sec: int = 7 * 24 * 60 * 60
+    min_question_chars: int = 4
+    max_question_chars: int = 2000
+    max_answer_chars: int = 12000
+    dimension: int = 384
+    include_model_in_cache_key: bool = True
+    cache_tool_results: bool = False
+    persist_hits_to_memory: bool = True
+    skip_volatile_inputs: bool = True
+    non_cacheable_actions: list[str] = ["web_search", "mcp_tool", "graph_recall"]
+
+
 class LLMFallbackConfig(BaseModel):
     ollama: list[str] = ["openai", "kimi"]
     openai: list[str] = ["kimi"]
@@ -276,6 +343,8 @@ class Settings(BaseSettings):
     agent: AgentConfig = AgentConfig()
     neo4j: Neo4jConfig = Neo4jConfig()
     observability: ObservabilityConfig = ObservabilityConfig()
+    agent_queue: AgentQueueConfig = AgentQueueConfig()
+    semantic_cache: SemanticCacheConfig = SemanticCacheConfig()
     llm_fallback: LLMFallbackConfig = LLMFallbackConfig()
     mcp: MCPConfig = MCPConfig()
     harness: HarnessConfig = HarnessConfig()

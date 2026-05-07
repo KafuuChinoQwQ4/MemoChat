@@ -5,9 +5,9 @@ description: Default MemoChat concurrency workflow. Use for every implementation
 
 # MemoChat Parallel Agents
 
-Use this skill for every MemoChat implementation task after reading `skills/SKILL.md` and the relevant focused skill. The default posture is **parallel by default**: after the Controller gathers enough context and freezes the first shared contract, dispatch safe disjoint workers immediately when the active tool/policy environment permits it.
+Use this skill for every MemoChat implementation task after reading `skills/SKILL.md` and the relevant focused skill. The default posture is **parallel unless impossible**: after the Controller gathers enough context and freezes the first shared contract, dispatch safe disjoint workers immediately when the active tool/policy environment permits it.
 
-Tiny one-line fixes may stay single-agent, but the decision must be explicit in `plan.md`. Any task with more than one of context gathering, architecture, backend, frontend, database, tests, runtime verification, docs, or review should use the Controller-led parallel model. If worker dispatch is blocked by active tool or platform policy, record `Concurrency decision: parallel blocked by active tool/policy; Controller continued local-only` and keep the rest of the workflow intact.
+Single-agent execution is an exception, not a convenience. Tiny one-line fixes may stay single-agent only when no useful test, review, runtime, or documentation lane exists, and the decision must be explicit in `plan.md` before implementation. Any task with more than one of context gathering, architecture, backend, frontend, database, tests, runtime verification, docs, or review must use the Controller-led parallel model. If worker dispatch is blocked by active tool or platform policy, record `Concurrency decision: parallel blocked by active tool/policy; Controller continued local-only` and keep the rest of the workflow intact.
 
 ## Non-Negotiable Shape
 
@@ -29,7 +29,7 @@ The Controller may implement small glue changes only when that unblocks integrat
 
 ## Default Agent Topology
 
-Use one Controller plus up to five worker lanes. Fewer lanes are fine, but Controller must always exist for concurrent work. For normal implementation tasks, the minimum default topology is Controller + Tests Worker + at least one implementation or investigation lane when a safe disjoint write/read scope exists.
+Use one Controller plus up to five worker lanes. Fewer lanes are fine, but Controller must always exist for concurrent work. For normal implementation tasks, the minimum default topology is Controller + Tests Worker + at least one implementation or investigation lane when a safe disjoint write/read scope exists. If no worker is spawned, `plan.md` must explain why both an implementation/investigation lane and a Tests Worker were impossible or useless.
 
 For any non-trivial implementation task, include a dedicated **Tests Worker** by default. This lane keeps testing alive while implementation proceeds and continues after integration: it expands unit, smoke, regression, and boundary coverage for the actual behavior, including invalid inputs, empty states, repeated operations, lifecycle transitions, concurrency/retry cases, persistence round trips, and UI/API contract mismatches. Skip it only when the task is truly tiny or no test surface exists, and record the reason in `plan.md`.
 
@@ -64,7 +64,7 @@ Do not spawn workers for the immediate blocking task. If the next local step dep
 
 ## Parallelization Heuristics
 
-Dispatch parallel workers by default when:
+Dispatch parallel workers by default when any of these are true:
 
 - backend and frontend can be defined through a stable API/QML contract
 - tests can be written against an agreed behavior while implementation proceeds
@@ -73,7 +73,7 @@ Dispatch parallel workers by default when:
 - documentation or `.ai` artifact updates can happen while product code is being implemented
 - review/runtime smoke can start from partial lane output without inventing new scope
 
-Keep work local only when:
+Keep work local only when one of these exceptions is true and recorded in `plan.md` before implementation:
 
 - the task is a one-line or single-symbol edit
 - the active tool/policy environment forbids spawning workers for the current request

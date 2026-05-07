@@ -106,6 +106,65 @@ agent:
     如果操作可能影响用户隐私或财产安全（如发送消息给陌生人），请先询问用户确认。
     请用简洁清晰的语言回答。
 
+agent_queue:
+  enabled: true
+  backend: "hybrid"
+  worker_concurrency: 8
+  fallback_to_local: true
+  resume_stale_on_start: true
+  rabbitmq:
+    enabled: true
+    host: "127.0.0.1"
+    port: 5672
+    username: "memochat"
+    password: "123456"
+    vhost: "/"
+    exchange: "memochat.direct"
+    dlx_exchange: "memochat.dlx"
+    task_queue: "ai.agent.tasks.q"
+    task_routing_key: "ai.agent.task.run"
+    prefetch_count: 16
+    publish_timeout_sec: 2.0
+  redpanda:
+    enabled: true
+    bootstrap_servers: "127.0.0.1:19092"
+    proxy_url: "http://127.0.0.1:18082"
+    proxy_fallback_enabled: true
+    client_id: "memochat-ai-orchestrator"
+    task_events_topic: "ai.agent.task.events.v1"
+    publish_timeout_sec: 2.0
+
+semantic_cache:
+  enabled: true
+  exact_match_enabled: true
+  redis:
+    host: "127.0.0.1"
+    port: 6379
+    username: ""
+    password: "123456"
+    db: 0
+    ssl: false
+    socket_timeout_sec: 2.0
+    connect_timeout_sec: 1.0
+  index_name: "memochat_ai_semantic_cache_v1"
+  key_prefix: "memochat:ai:semantic_cache:"
+  scope: "user"
+  similarity_threshold: 0.98
+  top_k: 1
+  ttl_sec: 604800
+  min_question_chars: 4
+  max_question_chars: 2000
+  max_answer_chars: 12000
+  dimension: 384
+  include_model_in_cache_key: true
+  cache_tool_results: false
+  persist_hits_to_memory: true
+  skip_volatile_inputs: true
+  non_cacheable_actions:
+    - "web_search"
+    - "mcp_tool"
+    - "graph_recall"
+
 neo4j:
   # 宿主机访问：127.0.0.1（Docker 端口映射 7687:7687）
   # Docker 网络内访问：memochat-neo4j（需在 docker-compose.yml 中加入 AI Orchestrator）

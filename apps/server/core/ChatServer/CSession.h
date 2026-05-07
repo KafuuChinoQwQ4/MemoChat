@@ -8,6 +8,8 @@
 #include <queue>
 #include <mutex>
 #include <memory>
+#include <atomic>
+#include <ctime>
 #include "const.h"
 #include "MsgNode.h"
 
@@ -42,6 +44,8 @@ public:
 	bool IsHeartbeatExpired(std::time_t& now);
 
 	void UpdateHeartbeat();
+	bool TryMarkOnlineRouteRefreshDue(std::time_t now, int interval_seconds);
+	void MarkOnlineRouteRefreshed(std::time_t now);
 
 	void DealExceptionSession();
 private:
@@ -66,6 +70,7 @@ private:
 	int _user_uid;
 
 	std::atomic<std::time_t> _last_heartbeat;
+	std::atomic<std::time_t> _last_online_route_refresh;
 
 	std::mutex _session_mtx;
 };

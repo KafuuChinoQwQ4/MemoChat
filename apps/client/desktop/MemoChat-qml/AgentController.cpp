@@ -91,6 +91,10 @@ QJsonObject hostConfigFromVariant(const QVariantMap& host) {
         : host.value(QStringLiteral("skill_name")).toString().trimmed();
     return config;
 }
+
+QString aiHttpModule() {
+    return QStringLiteral("ai");
+}
 }
 
 AgentController::AgentController(ClientGateway* gateway, QObject* parent)
@@ -377,7 +381,7 @@ void AgentController::loadSessions() {
     query.addQueryItem("model_type", _current_model_backend);
     query.addQueryItem("model_name", _current_model_name);
     url.setQuery(query);
-    HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD);
+    HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::createSession() {
@@ -390,7 +394,7 @@ void AgentController::createSession() {
     ReqId reqId = ID_AI_SESSION_CREATE;
     _pending_requests[reqId] = "create_session";
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/session"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/session"), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::switchSession(const QString& sessionId) {
@@ -413,7 +417,7 @@ void AgentController::deleteSession(const QString& sessionId) {
     _pending_requests[reqId] = "delete_session";
     _pendingDeleteSessionId = sessionId;
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/session/delete"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/session/delete"), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::loadHistory(const QString& sessionId) {
@@ -430,7 +434,7 @@ void AgentController::loadHistory(const QString& sessionId) {
     _pending_requests[reqId] = "history";
     _model->clear();
 
-    HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD);
+    HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::sendMessage(const QString& content) {
@@ -467,7 +471,7 @@ void AgentController::sendMessage(const QString& content) {
     _model->appendAIMessage(msgId, _current_model_name);
 
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/chat"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/chat"), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::sendStreamMessage(const QString& content) {
@@ -565,7 +569,7 @@ void AgentController::refreshModelList() {
     _pending_requests[reqId] = "model_list";
 
     HttpMgr::GetInstance()->GetHttpReq(
-        QUrl(gate_url_prefix + "/ai/model/list"), reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/model/list"), reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::registerApiProvider(const QString& providerName, const QString& baseUrl, const QString& apiKey) {
@@ -588,7 +592,7 @@ void AgentController::registerApiProvider(const QString& providerName, const QSt
     ReqId reqId = ID_AI_MODEL_API_REGISTER;
     _pending_requests[reqId] = "api_provider_register";
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/model/api/register"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/model/api/register"), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::deleteApiProvider(const QString& providerId) {
@@ -606,7 +610,7 @@ void AgentController::deleteApiProvider(const QString& providerId) {
     ReqId reqId = ID_AI_MODEL_API_DELETE;
     _pending_requests[reqId] = "api_provider_delete";
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/model/api/delete"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/model/api/delete"), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::summarizeChat(const QString& dialogUid, const QString& chatHistoryJson) {
@@ -730,7 +734,7 @@ void AgentController::uploadDocument(const QString& filePath) {
     ReqId reqId = ID_AI_KB_UPLOAD;
     _pending_requests[reqId] = "kb_upload";
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/kb/upload"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/kb/upload"), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::chooseAndUploadDocument() {
@@ -764,7 +768,7 @@ void AgentController::searchKnowledgeBase(const QString& query) {
     ReqId reqId = ID_AI_KB_SEARCH;
     _pending_requests[reqId] = "kb_search";
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/kb/search"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/kb/search"), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::listKnowledgeBases() {
@@ -780,7 +784,7 @@ void AgentController::listKnowledgeBases() {
     ReqId reqId = ID_AI_KB_LIST;
     _pending_requests[reqId] = "kb_list";
 
-    HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD);
+    HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::deleteKnowledgeBase(const QString& kbId) {
@@ -796,7 +800,7 @@ void AgentController::deleteKnowledgeBase(const QString& kbId) {
     ReqId reqId = ID_AI_KB_DELETE;
     _pending_requests[reqId] = "kb_delete";
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/kb/delete"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/kb/delete"), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::listMemories() {
@@ -811,7 +815,7 @@ void AgentController::listMemories() {
 
     ReqId reqId = ID_AI_MEMORY_LIST;
     _pending_requests[reqId] = "memory_list";
-    HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD);
+    HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::createMemory(const QString& content) {
@@ -831,7 +835,7 @@ void AgentController::createMemory(const QString& content) {
     ReqId reqId = ID_AI_MEMORY_CREATE;
     _pending_requests[reqId] = "memory_create";
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/memory"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/memory"), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::deleteMemory(const QString& memoryId) {
@@ -851,7 +855,7 @@ void AgentController::deleteMemory(const QString& memoryId) {
     ReqId reqId = ID_AI_MEMORY_DELETE;
     _pending_requests[reqId] = "memory_delete";
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/memory/delete"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/memory/delete"), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::listAgentTasks() {
@@ -867,7 +871,7 @@ void AgentController::listAgentTasks() {
 
     ReqId reqId = ID_AI_TASK_LIST;
     _pending_requests[reqId] = "task_list";
-    HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD);
+    HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::createAgentTask(const QString& content, const QString& title) {
@@ -896,7 +900,7 @@ void AgentController::createAgentTask(const QString& content, const QString& tit
     ReqId reqId = ID_AI_TASK_CREATE;
     _pending_requests[reqId] = "task_create";
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/tasks"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/tasks"), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::cancelAgentTask(const QString& taskId) {
@@ -914,7 +918,7 @@ void AgentController::cancelAgentTask(const QString& taskId) {
     ReqId reqId = ID_AI_TASK_CANCEL;
     _pending_requests[reqId] = "task_cancel";
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/tasks/cancel"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/tasks/cancel"), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::resumeAgentTask(const QString& taskId) {
@@ -932,7 +936,7 @@ void AgentController::resumeAgentTask(const QString& taskId) {
     ReqId reqId = ID_AI_TASK_RESUME;
     _pending_requests[reqId] = "task_resume";
     HttpMgr::GetInstance()->PostHttpReq(
-        QUrl(gate_url_prefix + "/ai/tasks/resume"), payload, reqId, Modules::LOGINMOD);
+        QUrl(gate_url_prefix + "/ai/tasks/resume"), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::sendGameGet(const QUrl& url, const QString& op, const QString& statusText) {

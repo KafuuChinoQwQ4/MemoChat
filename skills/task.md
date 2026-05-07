@@ -6,7 +6,7 @@ description: Implement a MemoChat feature or fix through context, plan, implemen
 
 Use for normal implementation work in `D:\MemoChat-Qml-Drogon`.
 
-Default to the Controller-led parallel workflow from `parallel-agents.md` for implementation tasks. The Controller owns architecture, plan, contracts, worker dispatch, integration, and final acceptance. After context and first contracts are clear, dispatch safe worker lanes by default. Use local-only execution only when the active tool/policy environment forbids workers, the user explicitly asks for single-agent work, the task is genuinely tiny or sequential, or no safe split exists; record the exact reason in `plan.md`.
+Default to the Controller-led parallel workflow from `parallel-agents.md` for implementation tasks. The Controller owns architecture, plan, contracts, worker dispatch, integration, and final acceptance. After context and first contracts are clear, dispatch safe worker lanes by default. Local-only execution is an exception, allowed only when the active tool/policy environment forbids workers, the user explicitly asks for single-agent work, the task is genuinely tiny and has no useful test/review lane, the task is strictly sequential, or no safe split exists; record the exact reason in `plan.md` before implementation.
 
 ## Invocation
 
@@ -20,7 +20,7 @@ Treat `$ARGUMENTS` as the task. If it starts with an existing `.ai/<name>/about.
 4. Open concurrency by default:
    - spawn workers for disjoint useful lanes when permitted
    - keep Controller in charge of contracts and final acceptance
-   - record a local-only reason when worker dispatch is blocked, unsafe, or not useful
+   - record a local-only reason before implementation when worker dispatch is blocked, unsafe, or not useful
 5. Implement one plan phase at a time.
 6. Verify with the narrowest relevant build/test/runtime command.
 7. Review the diff and fix important issues.

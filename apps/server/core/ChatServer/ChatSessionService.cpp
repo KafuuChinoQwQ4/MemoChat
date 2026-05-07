@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <ctime>
 #include "json/GlazeCompat.h"
 #include <thread>
 
@@ -46,6 +47,28 @@ bool FeatureFlagDefaultTrueLocal(const std::string& name) {
     std::transform(raw.begin(), raw.end(), raw.begin(),
         [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
     return raw == "1" || raw == "true" || raw == "yes" || raw == "on";
+}
+
+int ConfigIntLocal(const std::string& section, const std::string& key, int default_value, int min_value, int max_value) {
+    const auto raw = ConfigMgr::Inst().GetValue(section, key);
+    if (raw.empty()) {
+        return default_value;
+    }
+    try {
+        return std::clamp(std::stoi(raw), min_value, max_value);
+    } catch (...) {
+        return default_value;
+    }
+}
+
+int HeartbeatRouteRefreshSecLocal() {
+    static const int value = ConfigIntLocal("LogicSystem", "HeartbeatRouteRefreshSec", 15, 1, 300);
+    return value;
+}
+
+int LoginOfflinePushDelayMsLocal() {
+    static const int value = ConfigIntLocal("LogicSystem", "LoginOfflinePushDelayMs", 1000, 0, 60000);
+    return value;
 }
 
 void RepairOnlineRouteStateLocal(int uid, const std::shared_ptr<CSession>& session, const std::string& server_name) {
@@ -198,6 +221,7 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, s
         session->SetUserId(uid);
         UserMgr::GetInstance()->SetUserSession(uid, session);
         RepairOnlineRouteStateLocal(uid, session, server_name);
+        session->MarkOnlineRouteRefreshed(std::time(nullptr));
     };
     {
         if (FeatureFlagDefaultTrueLocal("chat_login_duplicate_session_check")) {
@@ -245,7 +269,13 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, s
     }
 
     if (FeatureFlagDefaultTrueLocal("chat_login_offline_push")) {
-        std::thread(&ChatSessionService::PushOfflineMessages, this, session, uid).detach();
+        std::thread([this, session, uid]() {
+            const int delay_ms = LoginOfflinePushDelayMsLocal();
+            if (delay_ms > 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+            }
+            PushOfflineMessages(session, uid);
+        }).detach();
     }
 }
 
@@ -293,33 +323,27 @@ void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>
 
 void ChatSessionService::HandleHeartbeat(const std::shared_ptr<CSession>& session, short, const std::string&)
 {
-    // 更新会话的心跳时间戳
+    if (!session) {
+        return;
+    }
+
     session->UpdateHeartbeat();
 
-    // 获取当前登录的用户 ID
     const auto uid = session->GetUserId();
     if (uid > 0) {
         const auto uid_str = std::to_string(uid);
         const auto self_name = ConfigMgr::Inst()["SelfServer"]["Name"];
+        const auto now = std::time(nullptr);
 
-        // 检查 UserMgr 中是否已经有正确的会话映射
         auto existing_session = UserMgr::GetInstance()->GetSession(uid);
         if (!existing_session || existing_session.get() != session.get()) {
-            // 修复 Redis 在线状态，确保跨服务器查询时能找到用户
-            RedisMgr::GetInstance()->Set(USERIPPREFIX + uid_str, self_name);
-            RedisMgr::GetInstance()->Set(USER_SESSION_PREFIX + uid_str, session->GetSessionId());
-            RedisMgr::GetInstance()->SAdd(std::string(SERVER_ONLINE_USERS_PREFIX) + self_name, uid_str);
-
-            // 修复本地 UserMgr 会话映射
+            RepairOnlineRouteStateLocal(uid, session, self_name);
+            session->MarkOnlineRouteRefreshed(now);
             UserMgr::GetInstance()->SetUserSession(uid, session);
-
             memolog::LogInfo("chat.heartbeat.session_repair", "repaired session mapping",
                 {{"uid", uid_str}, {"session_id", session->GetSessionId()}});
-        } else {
-            // 仅刷新 Redis 在线状态
-            RedisMgr::GetInstance()->Set(USERIPPREFIX + uid_str, self_name);
-            RedisMgr::GetInstance()->Set(USER_SESSION_PREFIX + uid_str, session->GetSessionId());
-            RedisMgr::GetInstance()->SAdd(std::string(SERVER_ONLINE_USERS_PREFIX) + self_name, uid_str);
+        } else if (session->TryMarkOnlineRouteRefreshDue(now, HeartbeatRouteRefreshSecLocal())) {
+            RepairOnlineRouteStateLocal(uid, session, self_name);
         }
     }
 

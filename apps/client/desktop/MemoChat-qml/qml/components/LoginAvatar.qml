@@ -8,6 +8,7 @@ Item {
     readonly property string logoText: "Memo"
     readonly property int logoPixelSize: 52
     readonly property real logoSpacing: 0.85
+    readonly property bool hasBackdrop: backdrop !== null
 
     width: 176
     height: 72
@@ -26,8 +27,8 @@ Item {
     ShaderEffectSource {
         id: blurSource
         anchors.fill: parent
-        readonly property Item sourceBackdrop: root.backdrop !== null ? root.backdrop : root.parent
-        sourceItem: sourceBackdrop !== null ? sourceBackdrop : null
+        readonly property Item sourceBackdrop: root.backdrop
+        sourceItem: root.hasBackdrop && sourceBackdrop !== null ? sourceBackdrop : null
         sourceRect: {
             if (!sourceBackdrop) {
                 return Qt.rect(0, 0, root.width, root.height)
@@ -35,7 +36,7 @@ Item {
             var p = root.mapToItem(sourceBackdrop, 0, 0)
             return Qt.rect(p.x, p.y, root.width, root.height)
         }
-        live: true
+        live: root.hasBackdrop
         hideSource: true
         visible: false
     }
@@ -59,7 +60,7 @@ Item {
         FastBlur {
             id: blurredBackdrop
             anchors.fill: parent
-            source: blurSource
+            source: root.hasBackdrop ? blurSource : null
             radius: 24
             transparentBorder: true
             visible: false
@@ -68,7 +69,7 @@ Item {
         OpacityMask {
             id: glassText
             anchors.fill: parent
-            source: blurredBackdrop
+            source: root.hasBackdrop ? blurredBackdrop : tintSource
             maskSource: memoMask
             opacity: 0.93
         }
