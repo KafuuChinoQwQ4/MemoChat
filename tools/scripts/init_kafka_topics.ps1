@@ -8,6 +8,7 @@ $topics = @(
     "relation.state.v1",
     "user.profile.changed.v1",
     "audit.login.v1",
+    "ai.agent.task.events.v1",
     "chat.private.dlq.v1",
     "chat.group.dlq.v1"
 )

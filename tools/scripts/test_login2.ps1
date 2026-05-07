@@ -1,9 +1,9 @@
-$body = '{"email":"testuser123@loadtest.local","passwd":"123456","client_ver":"3.0.0"}'
-try {
-    $r = Invoke-WebRequest -Uri "http://127.0.0.1:8080/user_login" -Method POST -ContentType "application/json" -Body $body -TimeoutSec 5
-    Write-Host "Status: $($r.StatusCode)"
-    Write-Host "Body: $($r.Content)"
-} catch {
-    Write-Host "Error: $($_.Exception.Message)"
-    Write-Host "Status Code: $($_.Exception.Response.StatusCode)"
-}
+param(
+    [string]$BaseUrl = "http://127.0.0.1",
+    [string]$Email = "testuser123@loadtest.local",
+    [string]$Password = "123456",
+    [string]$ClientVersion = "3.0.0"
+)
+
+& (Join-Path $PSScriptRoot "test_login.ps1") -BaseUrl $BaseUrl -Email $Email -Password $Password -ClientVersion $ClientVersion
+exit $LASTEXITCODE

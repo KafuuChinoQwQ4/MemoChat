@@ -1,0 +1,22 @@
+{
+  "case_id": "memochat_rag_metadata_filter",
+  "name": "MemoChat RAG Metadata Filter",
+  "description": "Checks that metadata-filtered retrieval can return content from the expected knowledge base or source.",
+  "request": {
+    "uid": 1,
+    "query": "What component stores MemoChat knowledge base vectors?",
+    "top_k": 5,
+    "metadata_filters": {}
+  },
+  "expectations": {
+    "expected_terms": ["qdrant", "vector"],
+    "min_expected_term_coverage": 0.5,
+    "min_hit_count": 1,
+    "max_latency_ms": 15000
+  },
+  "metadata": {
+    "dataset": "memochat-rag-regression",
+    "seed_required": true,
+    "notes": "Override metadata_filters in POST /kb/evals/run when targeting a specific kb_id or source."
+  }
+}

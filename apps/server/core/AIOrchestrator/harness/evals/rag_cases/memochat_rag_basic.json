@@ -1,0 +1,23 @@
+{
+  "case_id": "memochat_rag_basic",
+  "name": "MemoChat RAG Basic Retrieval",
+  "description": "Checks that a seeded MemoChat knowledge base can retrieve Qdrant/RAG architecture evidence.",
+  "request": {
+    "uid": 1,
+    "query": "MemoChat RAG uses which vector database for knowledge retrieval?",
+    "top_k": 5,
+    "metadata_filters": {}
+  },
+  "expectations": {
+    "expected_terms": ["qdrant"],
+    "required_terms": ["qdrant"],
+    "min_expected_term_coverage": 1.0,
+    "min_hit_count": 1,
+    "max_latency_ms": 15000
+  },
+  "metadata": {
+    "dataset": "memochat-rag-regression",
+    "seed_required": true,
+    "notes": "Upload or seed a KB document for uid=1 that mentions Qdrant before expecting this live case to pass."
+  }
+}

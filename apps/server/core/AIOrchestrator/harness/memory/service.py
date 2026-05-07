@@ -14,6 +14,41 @@ from llm.base import LLMMessage
 
 logger = structlog.get_logger()
 
+USER_PROFILE_KEY = "user_profile"
+_PROFILE_FIELDS: dict[str, str] = {
+    "communication_style": "沟通风格",
+    "preferred_language": "语言偏好",
+    "preferred_response_format": "回答格式",
+    "tone": "语气偏好",
+    "domain_interests": "关注领域",
+    "expertise_level": "专业水平",
+    "long_term_goals": "长期目标",
+    "constraints": "常用约束",
+    "likes": "喜欢",
+    "dislikes": "不喜欢",
+    "work_context": "工作上下文",
+}
+_PROFILE_ALIASES: dict[str, str] = {
+    "style": "communication_style",
+    "response_style": "communication_style",
+    "language": "preferred_language",
+    "lang": "preferred_language",
+    "format": "preferred_response_format",
+    "response_format": "preferred_response_format",
+    "interests": "domain_interests",
+    "topics": "domain_interests",
+    "goals": "long_term_goals",
+    "goal": "long_term_goals",
+    "preference": "likes",
+    "preferences": "likes",
+    "like": "likes",
+    "dislike": "dislikes",
+    "avoid": "dislikes",
+    "background": "work_context",
+    "role": "work_context",
+}
+_PROFILE_FIELD_LIMIT = 6
+
 
 def _now_ms() -> int:
     return int(time.time() * 1000)
@@ -21,6 +56,13 @@ def _now_ms() -> int:
 
 def _estimate_tokens(text: str) -> int:
     return max(len(text) // 4, 1) if text else 0
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 class MemoryService:
@@ -53,9 +95,10 @@ class MemoryService:
             system_messages.append(
                 LLMMessage(role="system", content=f"【短期摘要】{short_term_summary}")
             )
-        if semantic:
+        semantic_context = self._format_semantic_profile(semantic)
+        if semantic_context:
             system_messages.append(
-                LLMMessage(role="system", content=f"【用户偏好】{json.dumps(semantic, ensure_ascii=False)}")
+                LLMMessage(role="system", content=f"【用户画像】\n{semantic_context}")
             )
         if episodic:
             system_messages.append(
@@ -93,6 +136,12 @@ class MemoryService:
         if self._graph_memory_service is not None:
             await self._graph_memory_service.project_interaction(uid, session_id, user_message, ai_message)
 
+    async def save_semantic_cache_hit(self, uid: int, session_id: str, user_message: str, ai_message: str) -> None:
+        extracted = self._fallback_memory_extraction(user_message, ai_message)
+        extracted["source"] = "semantic_cache_hit"
+        await self._save_episodic(uid, session_id, extracted)
+        await self._upsert_semantic(uid, extracted)
+
     async def list_visible_memories(self, uid: int) -> list[dict]:
         memories: list[dict] = []
         try:
@@ -104,7 +153,27 @@ class MemoryService:
             if semantic_row:
                 raw_preferences = semantic_row["preferences"]
                 preferences = raw_preferences if isinstance(raw_preferences, dict) else json.loads(raw_preferences)
+                profile = preferences.get(USER_PROFILE_KEY)
+                if isinstance(profile, dict):
+                    for field, label in _PROFILE_FIELDS.items():
+                        values = self._profile_values(profile.get(field))
+                        if not values:
+                            continue
+                        memories.append(
+                            {
+                                "memory_id": f"semantic_profile:{field}",
+                                "type": "profile",
+                                "source": "ai_user_profile",
+                                "content": f"{label}: {'; '.join(values)}",
+                                "created_at": 0,
+                                "updated_at": int(semantic_row["updated_at"] or 0),
+                                "metadata": {"key": field, "label": label},
+                            }
+                        )
+
                 for key, value in sorted(preferences.items()):
+                    if key == USER_PROFILE_KEY:
+                        continue
                     memories.append(
                         {
                             "memory_id": f"semantic:{key}",
@@ -218,6 +287,35 @@ class MemoryService:
                 logger.warning("memory.semantic.delete_failed", uid=uid, memory_id=memory_id, error=str(exc))
                 return False
 
+        if memory_id.startswith("semantic_profile:"):
+            field = self._canonical_profile_field(memory_id.split(":", 1)[1])
+            existing = await self._load_semantic(uid)
+            profile = existing.get(USER_PROFILE_KEY)
+            if not isinstance(profile, dict) or field not in profile:
+                return False
+            profile.pop(field, None)
+            if profile:
+                existing[USER_PROFILE_KEY] = profile
+            else:
+                existing.pop(USER_PROFILE_KEY, None)
+            try:
+                pg = PostgresClient()
+                await pg.execute(
+                    """
+                    INSERT INTO ai_semantic_memory (uid, preferences, updated_at)
+                    VALUES ($1, $2::jsonb, $3)
+                    ON CONFLICT (uid) DO UPDATE
+                    SET preferences = $2::jsonb, updated_at = $3
+                    """,
+                    uid,
+                    json.dumps(existing, ensure_ascii=False),
+                    _now_ms(),
+                )
+                return True
+            except Exception as exc:
+                logger.warning("memory.profile.delete_failed", uid=uid, memory_id=memory_id, error=str(exc))
+                return False
+
         return False
 
     def _build_context_pack(
@@ -254,7 +352,7 @@ class MemoryService:
                 )
             )
         if semantic:
-            content = json.dumps(semantic, ensure_ascii=False)
+            content = self._format_semantic_profile(semantic) or json.dumps(semantic, ensure_ascii=False)
             sections.append(
                 ContextSection(
                     name="semantic_profile",
@@ -408,6 +506,41 @@ class MemoryService:
             logger.warning("memory.semantic.load_failed", uid=uid, error=str(exc))
             return {}
 
+    def _format_semantic_profile(self, semantic: dict[str, Any]) -> str:
+        if not isinstance(semantic, dict) or not semantic:
+            return ""
+
+        lines: list[str] = []
+        profile = semantic.get(USER_PROFILE_KEY)
+        if isinstance(profile, dict):
+            for field, label in _PROFILE_FIELDS.items():
+                values = self._profile_values(profile.get(field))
+                if not values:
+                    continue
+                lines.append(f"- {label}: {'; '.join(values[:_PROFILE_FIELD_LIMIT])}")
+
+        legacy_items: list[str] = []
+        for key, value in sorted(semantic.items()):
+            if key == USER_PROFILE_KEY:
+                continue
+            if isinstance(value, (dict, list)):
+                value_text = json.dumps(value, ensure_ascii=False)
+            else:
+                value_text = str(value)
+            value_text = value_text.strip()
+            if value_text:
+                legacy_items.append(f"{key}={value_text[:160]}")
+        if legacy_items:
+            lines.append(f"- 其他稳定偏好: {'; '.join(legacy_items[:8])}")
+
+        if not lines:
+            return ""
+        return (
+            "以下是按当前用户 uid 隔离的长期画像。用于匹配回答风格、语言、格式、示例和深浅；"
+            "当前用户明确指令、事实准确性和安全规则始终优先，不要主动暴露画像内容。\n"
+            + "\n".join(lines)
+        )
+
     async def _load_graph_context(self, uid: int) -> list[dict]:
         if not settings.neo4j.enabled or self._graph_memory_service is None:
             return []
@@ -471,15 +604,27 @@ class MemoryService:
         preferences = {
             str(key).strip()[:64]: str(value).strip()[:500]
             for key, value in preferences.items()
-            if str(key).strip() and str(value).strip()
+            if str(key).strip() and str(key).strip() != USER_PROFILE_KEY and str(value).strip()
         }
-        if not preferences:
+        user_profile = extracted.get(USER_PROFILE_KEY, {})
+        if not isinstance(user_profile, dict):
+            user_profile = {}
+        if not preferences and not user_profile:
             return
 
         try:
             pg = PostgresClient()
             existing = await self._load_semantic(uid)
+            now = _now_ms()
             existing.update(preferences)
+            merged_profile = self._merge_user_profile(
+                existing.get(USER_PROFILE_KEY),
+                user_profile,
+                source=str(extracted.get("source") or "unknown"),
+                now=now,
+            )
+            if merged_profile:
+                existing[USER_PROFILE_KEY] = merged_profile
             await pg.execute(
                 """
                 INSERT INTO ai_semantic_memory (uid, preferences, updated_at)
@@ -489,7 +634,7 @@ class MemoryService:
                 """,
                 uid,
                 json.dumps(existing, ensure_ascii=False),
-                _now_ms(),
+                now,
             )
         except Exception as exc:
             logger.warning("memory.semantic.save_failed", uid=uid, error=str(exc))
@@ -504,9 +649,16 @@ class MemoryService:
                             content=(
                                 "你是 MemoChat 的长期记忆抽取器。只返回 JSON 对象，不要 Markdown。"
                                 "JSON 格式：{\"semantic\":{\"key\":\"value\"},"
+                                "\"user_profile\":{\"communication_style\":[],\"preferred_language\":[],"
+                                "\"preferred_response_format\":[],\"tone\":[],\"domain_interests\":[],"
+                                "\"expertise_level\":[],\"long_term_goals\":[],\"constraints\":[],"
+                                "\"likes\":[],\"dislikes\":[],\"work_context\":[]},"
                                 "\"episodic\":[{\"summary\":\"...\",\"importance\":0.0,\"entities\":{}}]}。"
                                 "semantic 只记录稳定偏好、身份、长期目标、常用约束；"
+                                "user_profile 只记录可用于个性化的稳定习惯，例如沟通风格、语言、格式、"
+                                "专业背景、关注领域和长期目标；"
                                 "episodic 只记录日后有复用价值的事实、决定、承诺或重要事件。"
+                                "不要记录密码、密钥、证件号、支付信息，敏感健康/财务/身份信息只有用户明确要求记住时才记录。"
                                 "没有可记忆信息时返回空对象和空数组。"
                             ),
                         ),
@@ -525,7 +677,7 @@ class MemoryService:
                 )
                 parsed = self._parse_json_object(response.content)
                 normalized = self._normalize_memory_extraction(parsed)
-                if normalized["semantic"] or normalized["episodic"]:
+                if normalized["semantic"] or normalized[USER_PROFILE_KEY] or normalized["episodic"]:
                     normalized["source"] = "llm"
                     return normalized
             except Exception as exc:
@@ -551,6 +703,7 @@ class MemoryService:
 
     def _fallback_memory_extraction(self, user_message: str, ai_message: str) -> dict[str, Any]:
         preferences = self._extract_preferences(user_message)
+        user_profile = self._extract_user_profile_signals(user_message)
         importance = self._judge_importance(user_message, ai_message)
         episodes: list[dict[str, Any]] = []
         if importance > 0.5:
@@ -561,16 +714,19 @@ class MemoryService:
                     "entities": {"source": "heuristic"},
                 }
             )
-        return {"semantic": preferences, "episodic": episodes, "source": "heuristic"}
+        return {"semantic": preferences, USER_PROFILE_KEY: user_profile, "episodic": episodes, "source": "heuristic"}
 
     def _normalize_memory_extraction(self, value: dict[str, Any]) -> dict[str, Any]:
         semantic = value.get("semantic", {})
         if not isinstance(semantic, dict):
             semantic = {}
+        raw_profile = value.get(USER_PROFILE_KEY, value.get("profile", {}))
+        if not isinstance(raw_profile, dict):
+            raw_profile = {}
         normalized_semantic = {
             str(key).strip()[:64]: str(item).strip()[:500]
             for key, item in semantic.items()
-            if str(key).strip() and str(item).strip()
+            if str(key).strip() and str(key).strip() != USER_PROFILE_KEY and str(item).strip()
         }
 
         raw_episodes = value.get("episodic", [])
@@ -595,7 +751,198 @@ class MemoryService:
                     "entities": entities,
                 }
             )
-        return {"semantic": normalized_semantic, "episodic": episodes[:5]}
+        return {
+            "semantic": normalized_semantic,
+            USER_PROFILE_KEY: self._normalize_user_profile(raw_profile),
+            "episodic": episodes[:5],
+        }
+
+    def _extract_user_profile_signals(self, user_message: str) -> dict[str, Any]:
+        text = (user_message or "").strip()
+        lowered = text.lower()
+        profile: dict[str, list[dict[str, Any]]] = {}
+
+        def add(field: str, value: str, confidence: float = 0.68) -> None:
+            value = value.strip()
+            if not value:
+                return
+            field = self._canonical_profile_field(field)
+            profile.setdefault(field, []).append({"value": value[:160], "confidence": confidence})
+
+        if any(keyword in text for keyword in ("简洁", "短一点", "直接", "少废话")) or any(
+            keyword in lowered for keyword in ("concise", "brief", "short answer")
+        ):
+            add("communication_style", "简洁直接", 0.78)
+            add("preferred_response_format", "短答案优先", 0.72)
+        if any(keyword in text for keyword in ("详细", "展开", "一步一步", "解释清楚", "完整说明")) or any(
+            keyword in lowered for keyword in ("detailed", "step by step", "explain")
+        ):
+            add("communication_style", "详细解释", 0.72)
+        if any(keyword in text for keyword in ("表格", "列表", "要点", "步骤")):
+            add("preferred_response_format", "结构化要点/步骤", 0.68)
+
+        language_match = re.search(r"(?:以后|默认|请|帮我|回答时|回复时)?(?:都)?(?:用|使用|以)\s*(中文|英文|英语|日文|日语|粤语)\s*(?:回答|回复)?", text)
+        if language_match:
+            language = language_match.group(1)
+            if language == "英语":
+                language = "英文"
+            if language == "日语":
+                language = "日文"
+            add("preferred_language", language, 0.82)
+
+        context_match = re.search(
+            r"我是([^，。,.；;\n]{1,20}(?:工程师|开发|程序员|学生|产品经理|设计师|运营|老师|架构师|负责人))",
+            text,
+        )
+        if context_match:
+            add("work_context", context_match.group(1), 0.74)
+
+        stack_match = re.search(r"(?:我常用|我主要用|技术栈是|正在用)\s*([^，。,.；;\n]{2,60})", text)
+        if stack_match:
+            add("domain_interests", stack_match.group(1), 0.7)
+
+        goal_match = re.search(r"(?:我的目标是|我想要|我希望)\s*([^。；;\n]{4,80})", text)
+        if goal_match and any(keyword in text for keyword in ("长期", "以后", "目标", "希望", "默认")):
+            add("long_term_goals", goal_match.group(1), 0.66)
+
+        constraint_match = re.search(r"(?:以后|默认|每次|记住|请记住)\s*([^。；;\n]{4,120})", text)
+        if constraint_match:
+            add("constraints", constraint_match.group(1), 0.74)
+
+        avoid_match = re.search(r"(?:不要|不喜欢|讨厌)\s*([^。；;\n]{2,80})", text)
+        if avoid_match:
+            add("dislikes", avoid_match.group(1), 0.72)
+
+        return profile
+
+    def _canonical_profile_field(self, field: str) -> str:
+        raw = str(field or "").strip()
+        lowered = raw.lower()
+        if lowered in _PROFILE_FIELDS:
+            return lowered
+        if lowered in _PROFILE_ALIASES:
+            return _PROFILE_ALIASES[lowered]
+        for canonical, label in _PROFILE_FIELDS.items():
+            if raw == label:
+                return canonical
+        return lowered if lowered in _PROFILE_FIELDS else raw[:64]
+
+    def _normalize_user_profile(self, raw_profile: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+        if not isinstance(raw_profile, dict):
+            return {}
+        normalized: dict[str, list[dict[str, Any]]] = {}
+        for raw_field, raw_value in raw_profile.items():
+            field = self._canonical_profile_field(str(raw_field))
+            if field not in _PROFILE_FIELDS:
+                continue
+            items = self._coerce_profile_items(raw_value)
+            if items:
+                normalized[field] = items[:_PROFILE_FIELD_LIMIT]
+        return normalized
+
+    def _merge_user_profile(
+        self,
+        existing_profile: Any,
+        new_profile: dict[str, Any],
+        *,
+        source: str,
+        now: int,
+    ) -> dict[str, list[dict[str, Any]]]:
+        merged = self._normalize_user_profile(existing_profile if isinstance(existing_profile, dict) else {})
+        incoming = self._normalize_user_profile(new_profile)
+        if not incoming:
+            return merged
+
+        for field, new_items in incoming.items():
+            current_items = list(merged.get(field, []))
+            by_key = {self._profile_item_key(item.get("value", "")): item for item in current_items}
+            for new_item in new_items:
+                value_key = self._profile_item_key(new_item.get("value", ""))
+                if not value_key:
+                    continue
+                if value_key in by_key:
+                    item = by_key[value_key]
+                    item["confidence"] = min(
+                        1.0,
+                        max(float(item.get("confidence", 0.6)), float(new_item.get("confidence", 0.65))) + 0.05,
+                    )
+                    item["evidence_count"] = int(item.get("evidence_count", 1)) + int(new_item.get("evidence_count", 1))
+                    item["updated_at"] = now
+                    item["source"] = source or item.get("source", "unknown")
+                    continue
+
+                item = dict(new_item)
+                item.setdefault("confidence", 0.65)
+                item.setdefault("evidence_count", 1)
+                item["updated_at"] = now
+                item["source"] = source or item.get("source", "unknown")
+                current_items.append(item)
+                by_key[value_key] = item
+
+            current_items.sort(
+                key=lambda item: (
+                    float(item.get("confidence", 0.0)),
+                    int(item.get("evidence_count", 0)),
+                    int(item.get("updated_at", 0)),
+                ),
+                reverse=True,
+            )
+            merged[field] = current_items[:_PROFILE_FIELD_LIMIT]
+        return merged
+
+    def _coerce_profile_items(self, raw_value: Any) -> list[dict[str, Any]]:
+        if raw_value is None:
+            return []
+        raw_items: list[Any]
+        if isinstance(raw_value, dict):
+            if "values" in raw_value and isinstance(raw_value["values"], list):
+                raw_items = raw_value["values"]
+            elif "value" in raw_value:
+                raw_items = [raw_value]
+            else:
+                raw_items = [value for value in raw_value.values()]
+        elif isinstance(raw_value, list):
+            raw_items = raw_value
+        else:
+            raw_items = [raw_value]
+
+        items: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for raw_item in raw_items:
+            if isinstance(raw_item, dict):
+                value = str(raw_item.get("value") or raw_item.get("text") or raw_item.get("name") or "").strip()
+                confidence = self._safe_importance(raw_item.get("confidence", 0.65))
+                evidence_count = max(_safe_int(raw_item.get("evidence_count", raw_item.get("count", 1)), 1), 1)
+                updated_at = _safe_int(raw_item.get("updated_at", 0))
+                source = str(raw_item.get("source", "") or "")
+            else:
+                value = str(raw_item).strip()
+                confidence = 0.65
+                evidence_count = 1
+                updated_at = 0
+                source = ""
+            value = value[:160]
+            key = self._profile_item_key(value)
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            item = {
+                "value": value,
+                "confidence": confidence,
+                "evidence_count": evidence_count,
+            }
+            if updated_at:
+                item["updated_at"] = updated_at
+            if source:
+                item["source"] = source
+            items.append(item)
+        return items
+
+    def _profile_values(self, raw_value: Any) -> list[str]:
+        return [item["value"] for item in self._coerce_profile_items(raw_value) if item.get("value")]
+
+    def _profile_item_key(self, value: str) -> str:
+        return re.sub(r"\s+", " ", str(value or "")).strip().lower()
 
     def _parse_json_object(self, content: str) -> dict[str, Any]:
         text = (content or "").strip()

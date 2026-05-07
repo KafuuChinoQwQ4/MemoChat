@@ -26,6 +26,27 @@ function Invoke-JsonGet {
     return Invoke-RestMethod -Uri $Url -Method GET -TimeoutSec $Timeout
 }
 
+function Invoke-JsonStreamPostText {
+    param(
+        [string]$Url,
+        [string]$Body,
+        [int]$Timeout = 120
+    )
+    Add-Type -AssemblyName System.Net.Http
+    $client = [System.Net.Http.HttpClient]::new()
+    try {
+        $client.Timeout = [TimeSpan]::FromSeconds($Timeout)
+        $request = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Post, $Url)
+        $request.Headers.Accept.ParseAdd("text/event-stream")
+        $request.Content = [System.Net.Http.StringContent]::new($Body, [Text.Encoding]::UTF8, "application/json")
+        $response = $client.SendAsync($request).GetAwaiter().GetResult()
+        [void]$response.EnsureSuccessStatusCode()
+        return $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+    } finally {
+        $client.Dispose()
+    }
+}
+
 function Assert-True {
     param(
         [bool]$Condition,
@@ -82,19 +103,31 @@ function Resolve-Uid {
 }
 
 function Parse-SseEvents {
-    param([string]$RawText)
+    param([object]$RawContent)
+    if ($RawContent -is [byte[]]) {
+        $RawText = [Text.Encoding]::UTF8.GetString($RawContent)
+    } elseif ($RawContent -is [array]) {
+        $RawText = ($RawContent -join "`n")
+    } else {
+        $RawText = [string]$RawContent
+    }
     $events = @()
-    foreach ($line in ($RawText -split "`r?`n")) {
-        if (-not $line.StartsWith("data:")) {
-            continue
-        }
-        $payload = $line.Substring(5).Trim()
+    foreach ($match in [regex]::Matches($RawText, "(?m)^data:\s*(.+)$")) {
+        $payload = $match.Groups[1].Value.Trim()
         if ([string]::IsNullOrWhiteSpace($payload) -or $payload -eq "[DONE]") {
             continue
         }
-        $events += ($payload | ConvertFrom-Json)
+        $events += ($payload | ConvertFrom-Json -ErrorAction Stop)
     }
-    return $events
+    if ($events.Count -eq 0) {
+        foreach ($match in [regex]::Matches($RawText, "data:\s*(\{.*?\})(?:\s*(?:`r?`n){2}|$)", [Text.RegularExpressions.RegexOptions]::Singleline)) {
+            $payload = $match.Groups[1].Value.Trim()
+            if (-not [string]::IsNullOrWhiteSpace($payload)) {
+                $events += ($payload | ConvertFrom-Json -ErrorAction Stop)
+            }
+        }
+    }
+    return ,$events
 }
 
 $resolvedUid = Resolve-Uid -Email $LoginEmail -Password $LoginPassword -FallbackUid $Uid
@@ -113,12 +146,13 @@ $chat = Invoke-WithRetry -Label "chat" -Attempts 3 -DelaySec 12 -Action {
     Invoke-JsonPost -Url "$GateUrl/ai/chat" -Body @{
         uid = $resolvedUid
         session_id = ""
-        content = "Reply exactly: smoke-ok /no_think"
+        content = "Say OK in English."
         model_type = $modelType
         model_name = $modelName
         metadata = @{
             max_tokens = 8
             temperature = 0
+            enable_thinking = $false
         }
     } -Timeout $TimeoutSec
 }
@@ -131,18 +165,19 @@ Write-Host "[INFO] Chat session: $sessionId"
 $streamBody = @{
     uid = $resolvedUid
     session_id = $sessionId
-    content = "Reply exactly: stream-ok /no_think"
+    content = "Say OK in English."
     model_type = $modelType
     model_name = $modelName
     metadata = @{
         max_tokens = 8
         temperature = 0
+        enable_thinking = $false
     }
 } | ConvertTo-Json -Depth 10 -Compress
-$streamResponse = Invoke-WithRetry -Label "chat-stream" -Attempts 2 -DelaySec 8 -Action {
-    Invoke-WebRequest -Uri "$GateUrl/ai/chat/stream" -Method POST -ContentType "application/json" -Body $streamBody -TimeoutSec $TimeoutSec -UseBasicParsing
+$streamRawContent = Invoke-WithRetry -Label "chat-stream" -Attempts 2 -DelaySec 8 -Action {
+    Invoke-JsonStreamPostText -Url "$GateUrl/ai/chat/stream" -Body $streamBody -Timeout $TimeoutSec
 }
-$streamEvents = Parse-SseEvents -RawText $streamResponse.Content
+$streamEvents = Parse-SseEvents -RawContent $streamRawContent
 Assert-True ($streamEvents.Count -gt 0) "Stream returned no SSE events"
 $finalStreamEvent = $streamEvents[-1]
 Assert-True ([bool]$finalStreamEvent.is_final) "Final SSE event missing is_final=true"

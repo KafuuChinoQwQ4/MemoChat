@@ -19,6 +19,8 @@ Item {
 
     readonly property bool incomingState: sessionModel && sessionModel.incoming
     readonly property bool mediaState: sessionModel && sessionModel.active && sessionModel.tokenReady
+    readonly property int loadSucceededStatus: 2
+    readonly property int loadFailedStatus: 3
 
     function runBridgeScript(source) {
         if (!mediaView || !source || !root.mediaState) {
@@ -86,9 +88,9 @@ Item {
         settings.playbackRequiresUserGesture: false
 
         onLoadingChanged: function(loadRequest) {
-            if (loadRequest.status === WebEngineLoadRequest.LoadSucceededStatus) {
+            if (loadRequest.status === root.loadSucceededStatus) {
                 root.launchMediaIfReady()
-            } else if (loadRequest.status === WebEngineLoadRequest.LoadFailedStatus) {
+            } else if (loadRequest.status === root.loadFailedStatus) {
                 livekitBridge.reportMediaError("LiveKit 页面加载失败")
             }
         }
@@ -180,8 +182,8 @@ Item {
                 spacing: 16
 
                 Rectangle {
-                    width: root.mediaState ? 64 : 92
-                    height: root.mediaState ? 64 : 92
+                    Layout.preferredWidth: root.mediaState ? 64 : 92
+                    Layout.preferredHeight: root.mediaState ? 64 : 92
                     radius: width / 2
                     color: Qt.rgba(1, 1, 1, 0.08)
                     border.color: Qt.rgba(1, 1, 1, 0.18)

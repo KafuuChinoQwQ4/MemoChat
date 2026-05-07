@@ -50,8 +50,6 @@ cmake --build --preset msvc2022-full
 tools\scripts\status\deploy_services.bat
 ```
 
-更完整的架构、端口、服务启动顺序和验证方式请参考 [docs/当前架构基准.md](docs/当前架构基准.md)。
-
 ## 当前状态
 
 MemoChat 仍处于持续开发阶段，仓库中同时包含主业务代码、实验性 HTTP/2/HTTP/3 目标、AI/RAG 能力、R18 源插件适配界面和本地运营工具。部分功能用于验证架构和交互流程，接口与实现仍可能继续调整。

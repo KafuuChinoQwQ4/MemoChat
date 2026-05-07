@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from harness.execution.tool_executor import ToolExecutor
+from harness.cache.semantic_cache import SemanticCacheService
 from harness.evals.service import AgentEvalService
+from harness.evals.rag_service import RagEvalService
 from harness.feedback.evaluator import FeedbackEvaluator
 from harness.feedback.trace_store import AgentTraceStore
 from harness.games.service import A2AGameService
@@ -29,6 +31,7 @@ class HarnessContainer:
         self.feedback_evaluator = FeedbackEvaluator()
         self.guardrail_service = GuardrailService()
         self.knowledge_service = KnowledgeService()
+        self.semantic_cache_service = SemanticCacheService(self.knowledge_service.embedder)
         self.graph_memory_service = GraphMemoryService()
         self.llm_registry = LLMEndpointRegistry()
         self.memory_service = MemoryService(self.graph_memory_service, self.llm_registry)
@@ -43,9 +46,11 @@ class HarnessContainer:
             trace_store=self.trace_store,
             feedback_evaluator=self.feedback_evaluator,
             guardrail_service=self.guardrail_service,
+            semantic_cache=self.semantic_cache_service,
         )
         self.task_service = AgentTaskService(self.agent_service)
         self.eval_service = AgentEvalService(self.agent_service, self.trace_store)
+        self.rag_eval_service = RagEvalService(self.knowledge_service)
         self.handoff_service = AgentHandoffService(self.agent_service)
         self.interop_service = AgentInteropService(self.skill_registry, self.handoff_service)
         self.game_service = A2AGameService(self.agent_service, store=PostgresGameStateStore())
@@ -57,10 +62,12 @@ class HarnessContainer:
         return cls._instance
 
     async def startup(self) -> None:
+        await self.semantic_cache_service.startup()
         await self.task_service.startup()
         await self.game_service.startup()
 
     async def shutdown(self) -> None:
         await self.game_service.shutdown()
         await self.task_service.shutdown()
+        await self.semantic_cache_service.shutdown()
         await self.llm_registry.close()
