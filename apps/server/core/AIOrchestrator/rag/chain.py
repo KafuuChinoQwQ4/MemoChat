@@ -285,7 +285,7 @@ class RAGChain:
         query_filter = build_metadata_filter(uid, metadata_filters)
 
         dense_candidates: list[RetrievalCandidate] = []
-        lexical_candidates: list[RetrievalCandidate] = []
+        lexical_scan_candidates: list[RetrievalCandidate] = []
         dense_limit = max(top_k * 4, hybrid_config.dense_top_k, hybrid_config.candidate_pool_size)
         lexical_scan_limit = max(top_k * 8, hybrid_config.lexical_top_k, hybrid_config.candidate_pool_size * 2)
 
@@ -325,7 +325,6 @@ class RAGChain:
                 if not scroll_results and query_filter is not None:
                     scroll_results = self._scroll_points(client, collection, None, lexical_scan_limit)
 
-                coll_lexical_candidates: list[RetrievalCandidate] = []
                 for record in scroll_results:
                     payload = getattr(record, "payload", {}) or {}
                     candidate = candidate_from_payload(
@@ -336,11 +335,15 @@ class RAGChain:
                         route="bm25",
                     )
                     if metadata_matches_payload(candidate.metadata, metadata_filters):
-                        coll_lexical_candidates.append(candidate)
-
-                lexical_candidates.extend(rank_lexical_candidates(coll_lexical_candidates, query))
+                        lexical_scan_candidates.append(candidate)
             except Exception as exc:
                 logger.warning("qdrant.scroll_failed", collection=collection, error=str(exc))
+
+        dense_candidates.sort(key=lambda item: item.dense_score, reverse=True)
+        for rank, candidate in enumerate(dense_candidates, start=1):
+            candidate.route_ranks["dense"] = rank
+
+        lexical_candidates = rank_lexical_candidates(lexical_scan_candidates, query)
 
         fused_candidates = fuse_candidates(
             {"dense": dense_candidates, "bm25": lexical_candidates},
