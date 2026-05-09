@@ -16,6 +16,7 @@ class HttpConnection: public std::enable_shared_from_this<HttpConnection>
 	friend class CallHttpServiceRoutes;
 	friend class GateHttpJsonSupport;
 	friend class AIHttpServiceRoutes;
+	friend class R18HttpServiceRoutes;
 public:
 	HttpConnection(boost::asio::io_context& ioc);
 	void Start();
@@ -28,6 +29,7 @@ public:
 		_response.set(f, value);
 	}
 	http::response<http::dynamic_body>& GetResponse() { return _response; }
+	const std::unordered_map<std::string, std::string>& GetParams() const { return _get_params; }
 	std::string RequestTargetString() const;
 	std::string RequestBodyString() const;
 	const std::string& GetTraceId() const { return _trace_id; }

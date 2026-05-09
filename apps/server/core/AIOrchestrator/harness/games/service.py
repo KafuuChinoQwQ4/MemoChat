@@ -44,6 +44,7 @@ ROLE_PRESETS: dict[str, list[dict[str, Any]]] = {
             "role_key": "werewolf",
             "display_name": "狼人",
             "description": "夜晚选择目标，白天隐藏身份并带偏投票。",
+            "rule": "夜晚可选择一名目标出局；白天伪装好人并影响投票。狼人阵营胜利条件是狼人数量不少于其他存活玩家。",
             "persona": "你是狼人。发言克制，保护自己，制造合理怀疑。",
             "strategy": "deceptive",
             "min_count": 1,
@@ -52,9 +53,55 @@ ROLE_PRESETS: dict[str, list[dict[str, Any]]] = {
             "role_key": "villager",
             "display_name": "村民",
             "description": "通过发言和投票找出狼人。",
+            "rule": "没有夜晚技能；白天通过发言、票型和逻辑找出狼人。",
             "persona": "你是村民。基于时间线和发言矛盾做判断。",
             "strategy": "deductive",
             "min_count": 1,
+        },
+        {
+            "role_key": "seer",
+            "display_name": "预言家",
+            "description": "每晚查验一名玩家阵营，白天带队找狼。",
+            "rule": "每晚可查验一名玩家的阵营；白天需要在保护身份和公布信息之间取舍。",
+            "persona": "你是预言家。谨慎利用查验信息带队。",
+            "strategy": "deductive",
+            "min_count": 0,
+        },
+        {
+            "role_key": "witch",
+            "display_name": "女巫",
+            "description": "拥有解药和毒药，夜晚决定救人或毒人。",
+            "rule": "拥有解药和毒药；夜晚可救人或毒杀一名玩家，通常每种药只能使用一次。",
+            "persona": "你是女巫。谨慎管理药水并观察狼人刀口。",
+            "strategy": "observant",
+            "min_count": 0,
+        },
+        {
+            "role_key": "hunter",
+            "display_name": "猎人",
+            "description": "出局时可带走一名玩家，用发言保持威慑。",
+            "rule": "出局时可开枪带走一名玩家；需要用发言压制狼人并保护好人信息。",
+            "persona": "你是猎人。保持威慑，避免被狼人轻易带偏。",
+            "strategy": "assertive",
+            "min_count": 0,
+        },
+        {
+            "role_key": "guard",
+            "display_name": "守卫",
+            "description": "夜晚守护玩家，尽量挡住狼人击杀。",
+            "rule": "每晚可守护一名玩家免于出局；通常不能连续守护同一目标。",
+            "persona": "你是守卫。根据局势选择保护目标。",
+            "strategy": "observant",
+            "min_count": 0,
+        },
+        {
+            "role_key": "idiot",
+            "display_name": "白痴",
+            "description": "被投票出局时可翻牌免死，继续参与发言。",
+            "rule": "被投票出局时可翻牌免死，但之后通常失去投票权，只能继续发言。",
+            "persona": "你是白痴。用稳定发言吸收压力并提供判断。",
+            "strategy": "roleplay",
+            "min_count": 0,
         },
     ],
     "script_murder.basic": [
@@ -290,6 +337,9 @@ class A2AGameService:
         logger.info("game.persistence.rooms_loaded", count=loaded)
 
     async def shutdown(self) -> None:
+        await self._flush_save_tasks()
+
+    async def _flush_save_tasks(self) -> None:
         if not self._save_tasks:
             return
         await asyncio.gather(*list(self._save_tasks), return_exceptions=True)
@@ -323,15 +373,25 @@ class A2AGameService:
         return cached
 
     def list_rulesets(self) -> list[dict[str, Any]]:
+        labels = {
+            "multi_ai_chat.test": (
+                "多 AI 对话测试",
+                "Temporary user + multiple AI group chat for basic runtime testing.",
+            ),
+            "werewolf.basic": (
+                "狼人杀",
+                "Deterministic Werewolf social deduction MVP.",
+            ),
+            "script_murder.basic": (
+                "剧本杀",
+                "Script murder roleplay MVP with clues and accusations.",
+            ),
+        }
         return [
             {
                 "ruleset_id": ruleset_id,
-                "display_name": "狼人杀" if ruleset_id == "werewolf.basic" else "剧本杀",
-                "description": (
-                    "Deterministic Werewolf social deduction MVP."
-                    if ruleset_id == "werewolf.basic"
-                    else "Script murder roleplay MVP with clues and accusations."
-                ),
+                "display_name": labels.get(ruleset_id, (ruleset_id, ""))[0],
+                "description": labels.get(ruleset_id, (ruleset_id, ""))[1],
             }
             for ruleset_id in sorted(self._rulesets)
         ]
@@ -435,7 +495,7 @@ class A2AGameService:
         self._templates.pop(template_id, None)
         return True
 
-    async def create_room_from_template(self, template_id: str, uid: int, title: str = "") -> GameState:
+    async def create_room_from_template(self, template_id: str, uid: int, title: str = "", display_name: str = "") -> GameState:
         template = await self._get_template(template_id, uid)
         if template is None:
             raise ValueError(f"game template not found: {template_id}")
@@ -447,6 +507,7 @@ class A2AGameService:
             agent_count=0,
             agents=[dict(agent) for agent in template.agents],
             config=dict(template.config),
+            display_name=display_name,
         )
         state.room.metadata = {
             **state.room.metadata,
@@ -467,6 +528,7 @@ class A2AGameService:
         agent_count: int = 0,
         agents: list[dict[str, Any]] | None = None,
         config: dict[str, Any] | None = None,
+        display_name: str = "",
     ) -> GameState:
         engine = self._engine(ruleset_id)
         now = now_ms()
@@ -489,11 +551,17 @@ class A2AGameService:
             updated_at=now,
             metadata={"shuffle_marker": shuffle_marker},
         )
+        human = self._participants.create_human(
+            room.room_id,
+            uid=uid,
+            display_name=display_name,
+        )
+        human_role_key = str(room_config.get("human_role_key") or "").strip()
+        if human_role_key:
+            human.role_key = human_role_key
+            human.private_state["role_key"] = human_role_key
         participants = [
-            self._participants.create_human(
-                room.room_id,
-                uid=uid,
-            )
+            human
         ]
         for config_item in agent_configs:
             if len(participants) >= room.max_players:
@@ -508,7 +576,12 @@ class A2AGameService:
             self._event(state, "participant_joined", f"{participant.display_name} 加入房间。", participant.participant_id)
             for participant in participants
         )
-        self._append_host_event(state, "房间已创建。请确认角色与模型配置，准备好后开始游戏。", reason="create_room")
+        create_line = (
+            "测试对话房间已创建。可以直接在右侧对话区发送消息。"
+            if ruleset_id == "multi_ai_chat.test"
+            else "房间已创建。请确认角色与模型配置，准备好后开始游戏。"
+        )
+        self._append_host_event(state, create_line, reason="create_room")
         self._refresh_view(state, uid)
         self._rooms[room.room_id] = state
         self._schedule_save(state)
@@ -524,6 +597,22 @@ class A2AGameService:
                 if room.owner_uid == uid or any(p.uid == uid for p in self._rooms[room.room_id].participants)
             ]
         return sorted(rooms, key=lambda room: room.updated_at, reverse=True)
+
+    async def delete_room(self, room_id: str, uid: int = 0) -> bool:
+        room_id = (room_id or "").strip()
+        if not room_id:
+            raise ValueError("room_id is required")
+        try:
+            state = await self.ensure_room_loaded(room_id)
+        except ValueError:
+            return False
+        if uid > 0 and state.room.owner_uid != uid and not any(p.uid == uid for p in state.participants):
+            return False
+        await self._flush_save_tasks()
+        deleted_at = max(now_ms(), int(state.room.updated_at or 0) + 1)
+        await self._store.delete_room(room_id, deleted_at)
+        self._rooms.pop(room_id, None)
+        return True
 
     def get_state(self, room_id: str, uid: int = 0) -> GameState:
         state = self._state(room_id)
@@ -561,8 +650,52 @@ class A2AGameService:
         self._schedule_save(state)
         return state
 
+    def update_participant(
+        self,
+        room_id: str,
+        participant_id: str,
+        uid: int = 0,
+        display_name: str = "",
+        persona: str = "",
+        strategy: str = "",
+        skill_name: str = "",
+    ) -> GameState:
+        state = self._state(room_id)
+        participant = self._participant(state, participant_id)
+        if participant is None:
+            raise ValueError("participant not found")
+        if participant.kind != "agent":
+            raise ValueError("only agent participants can be edited")
+        if uid > 0 and state.room.owner_uid != uid and not any(p.uid == uid for p in state.participants):
+            raise ValueError("uid cannot edit this room")
+
+        next_display_name = (display_name or "").strip()
+        if next_display_name:
+            participant.display_name = next_display_name
+        participant.persona = str(persona or "")
+        if skill_name.strip():
+            participant.skill_name = skill_name.strip()
+        metadata = dict(participant.metadata or {})
+        if strategy.strip():
+            metadata["strategy"] = strategy.strip()
+        participant.metadata = metadata
+        self._sync_locked_agent_preset(state, participant)
+        self._touch(state)
+        self._refresh_view(state, uid)
+        self._schedule_save(state)
+        return state
+
     def start_room(self, room_id: str, uid: int = 0) -> GameState:
         state = self._state(room_id)
+        if state.room.ruleset_id == "multi_ai_chat.test":
+            state.room.status = "running"
+            state.room.phase = "chat"
+            state.state["phase"] = "chat"
+            self._append_host_event(state, "测试对话已就绪。", reason="start")
+            self._touch(state)
+            self._refresh_view(state, uid)
+            self._schedule_save(state)
+            return state
         self._ensure_game_markers(state)
         starter = self._participant_for_uid_or_first(state, uid)
         events = self._engine(state.room.ruleset_id).apply_action(
@@ -704,7 +837,7 @@ class A2AGameService:
                 self._event(
                     state,
                     "agent_error",
-                    f"{actor.display_name} 返回了不可用行动，已降级为 {fallback or 'idle'}。",
+                    self._agent_action_error_message(actor, raw_content, fallback),
                     actor.participant_id,
                     payload={
                         "raw": raw_content[:1000],
@@ -832,23 +965,50 @@ class A2AGameService:
 
     async def _ask_agent_for_action(self, state: GameState, actor: GameParticipant, allowed: list[str]) -> tuple[GameAction, str, str, bool]:
         target_hint = self._first_alive_target(state, actor.participant_id)
-        prompt = {
-            "task": "You are an AI participant in a social deduction game. Return only JSON.",
-            "json_schema": {
-                "action_type": allowed,
-                "content": "short in-character public message",
-                "target_participant_id": "optional participant id",
-                "payload": "object",
-            },
-            "ruleset_id": state.room.ruleset_id,
-            "room": state.room.to_dict(),
-            "self": actor.to_dict(),
-            "allowed_actions": allowed,
-            "suggested_target_participant_id": target_hint,
-            "public_participants": [p.to_dict(include_private=False) for p in state.participants],
-            "public_timeline": [event.to_dict() for event in state.events if event.visibility == "public"][-12:],
-            "persona": actor.persona,
-        }
+        if state.room.ruleset_id == "multi_ai_chat.test":
+            private_inbox = self._private_a2a_timeline(state, actor.participant_id)
+            prompt = {
+                "task": "You are one AI speaker in a temporary group chat with a human and other AI speakers. Return only JSON.",
+                "json_schema": {
+                    "action_type": allowed,
+                    "content": "natural short reply in Chinese unless the user clearly uses another language",
+                    "target_participant_id": "required only when action_type is a2a_message; choose an alive agent participant other than yourself",
+                    "payload": "object",
+                },
+                "ruleset_id": state.room.ruleset_id,
+                "room_title": state.room.title,
+                "self": actor.to_dict(include_private=False),
+                "allowed_actions": allowed,
+                "public_participants": [p.to_dict(include_private=False) for p in state.participants],
+                "public_timeline": [event.to_dict() for event in state.events if event.visibility == "public"][-16:],
+                "private_a2a_inbox": private_inbox[-12:],
+                "persona": actor.persona,
+                "strategy": str((actor.metadata or {}).get("strategy") or "balanced"),
+                "instruction": (
+                    "Reply as this AI only. Use speak for public chat. Use a2a_message only for a private agent-to-agent note "
+                    "that should not be shown to the human or other agents. Do not mention game phases, hidden roles, winning, "
+                    "voting, murder, or werewolf rules."
+                ),
+            }
+        else:
+            prompt = {
+                "task": "You are an AI participant in a social deduction game. Return only JSON.",
+                "json_schema": {
+                    "action_type": allowed,
+                    "content": "short in-character public message",
+                    "target_participant_id": "optional participant id",
+                    "payload": "object",
+                },
+                "ruleset_id": state.room.ruleset_id,
+                "room": state.room.to_dict(),
+                "self": actor.to_dict(),
+                "allowed_actions": allowed,
+                "suggested_target_participant_id": target_hint,
+                "public_participants": [p.to_dict(include_private=False) for p in state.participants],
+                "public_timeline": [event.to_dict() for event in state.events if event.visibility == "public"][-12:],
+                "persona": actor.persona,
+                "strategy": str((actor.metadata or {}).get("strategy") or "balanced"),
+            }
         request = SimpleNamespace(
             uid=actor.uid,
             session_id=f"game-{state.room.room_id}-{actor.participant_id}",
@@ -863,15 +1023,38 @@ class A2AGameService:
             tool_arguments={},
             metadata={"source": "a2a_game", "room_id": state.room.room_id, "participant_id": actor.participant_id, "max_tokens": 512, "temperature": 0.6},
         )
+        run_failed = False
         try:
             result = await self._agent_service.run_turn(request)
             raw = result.content or ""
             trace_id = result.trace_id
             payload = self._extract_json(raw)
         except Exception as exc:
+            run_failed = True
             raw = f"{type(exc).__name__}: {exc}"
             trace_id = ""
             payload = {}
+
+        if not run_failed and state.room.ruleset_id == "multi_ai_chat.test" and "speak" in allowed and not self._is_guardrail_block_output(raw):
+            content = str(payload.get("content") or raw or "").strip()
+            action_type = str(payload.get("action_type") or "").strip()
+            if not action_type and content:
+                action_type = "speak"
+            if action_type not in allowed and content:
+                action_type = "speak"
+            if action_type == "speak":
+                return (
+                    GameAction(
+                        participant_id=actor.participant_id,
+                        action_type="speak",
+                        content=content,
+                        target_participant_id="",
+                        payload=payload.get("payload") if isinstance(payload.get("payload"), dict) else {},
+                    ),
+                    trace_id,
+                    raw,
+                    True,
+                )
 
         return (
             GameAction(
@@ -885,6 +1068,37 @@ class A2AGameService:
             raw,
             bool(payload),
         )
+
+    def _is_guardrail_block_output(self, raw: str) -> bool:
+        return (raw or "").strip().lower().startswith("guardrail blocked")
+
+    def _agent_action_error_message(self, actor: GameParticipant, raw: str, fallback: str) -> str:
+        suffix = f"已降级为 {fallback}。" if fallback else "已停止本次行动。"
+        if self._is_guardrail_block_output(raw):
+            return f"{actor.display_name} 本次没有生成有效内容，{suffix} 请检查模型/API Key、额度或模型服务状态。"
+        return f"{actor.display_name} 返回了不可用行动，{suffix}"
+
+    def _private_a2a_timeline(self, state: GameState, participant_id: str) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for event in state.events:
+            if event.event_type != "a2a_message" or event.visibility != "private":
+                continue
+            if event.actor_participant_id != participant_id and event.target_participant_id != participant_id:
+                continue
+            direction = "outbound" if event.actor_participant_id == participant_id else "inbound"
+            rows.append(
+                {
+                    **event.to_dict(),
+                    "direction": direction,
+                    "from_participant": self._participant_public_name(state, event.actor_participant_id),
+                    "to_participant": self._participant_public_name(state, event.target_participant_id),
+                }
+            )
+        return rows
+
+    def _participant_public_name(self, state: GameState, participant_id: str) -> str:
+        participant = self._participant(state, participant_id)
+        return participant.display_name if participant is not None else participant_id
 
     def _extract_json(self, content: str) -> dict[str, Any]:
         text = (content or "").strip()
@@ -912,11 +1126,13 @@ class A2AGameService:
     ) -> dict[str, Any]:
         room_config = copy.deepcopy(config or {})
         agent_preset_pool = [config_item.to_dict() for config_item in agent_configs]
+        human_role_key = str(room_config.get("human_role_key") or "").strip()
         room_config["locked"] = True
         room_config["locked_config"] = {
             "locked": True,
             "ruleset_id": ruleset_id,
             "max_players": max(1, int(max_players or 12)),
+            "human_role_key": human_role_key,
             "agent_count": len(agent_preset_pool),
             "agent_preset_pool": agent_preset_pool,
         }
@@ -937,13 +1153,53 @@ class A2AGameService:
             for participant in state.participants
             if participant.kind == "agent"
         ]
+        human = next((participant for participant in state.participants if participant.kind == "human"), None)
         return {
             "locked": False,
             "ruleset_id": state.room.ruleset_id,
             "max_players": state.room.max_players,
+            "human_role_key": human.role_key if human is not None else "",
             "agent_count": len(agent_preset_pool),
             "agent_preset_pool": agent_preset_pool,
         }
+
+    def _sync_locked_agent_preset(self, state: GameState, participant: GameParticipant) -> None:
+        if not isinstance(state.room.config, dict):
+            return
+        locked_config = state.room.config.get("locked_config")
+        if not isinstance(locked_config, dict):
+            return
+        pool = locked_config.get("agent_preset_pool")
+        if not isinstance(pool, list):
+            return
+
+        metadata = dict(participant.metadata or {})
+        strategy = str(metadata.get("strategy") or "balanced")
+        match = next(
+            (
+                item
+                for item in pool
+                if isinstance(item, dict)
+                and (
+                    item.get("display_name") == participant.display_name
+                    or item.get("name") == participant.display_name
+                    or item.get("persona") == participant.persona
+                )
+            ),
+            None,
+        )
+        if match is None:
+            agents = [p for p in state.participants if p.kind == "agent"]
+            try:
+                match = pool[agents.index(participant)]
+            except (ValueError, IndexError):
+                match = None
+        if not isinstance(match, dict):
+            return
+        match["display_name"] = participant.display_name
+        match["persona"] = participant.persona
+        match["skill_name"] = participant.skill_name
+        match["strategy"] = strategy
 
     def _agent_preset_from_participant(self, participant: GameParticipant) -> dict[str, Any]:
         metadata = dict(participant.metadata or {})
@@ -979,11 +1235,15 @@ class A2AGameService:
         rng = random.Random(shuffle_marker)
         shuffled_presets = copy.deepcopy(agent_preset_pool)
         rng.shuffle(shuffled_presets)
+        human_role_key = str(locked_config.get("human_role_key") or "").strip()
 
         for participant in participants:
             participant.status = "alive"
             participant.role_key = ""
             participant.private_state = {}
+            if participant.kind == "human" and human_role_key:
+                participant.role_key = human_role_key
+                participant.private_state["role_key"] = human_role_key
             if participant.kind != "agent":
                 continue
             preset = shuffled_presets.pop(0)
@@ -1039,6 +1299,8 @@ class A2AGameService:
             return "讨论结束，进入投票。请给出你的怀疑对象。"
         if phase == "free_talk":
             return "自由讨论开始。请围绕线索、动机和时间线发言。"
+        if phase == "chat":
+            return "测试对话进行中。"
         if phase == "reveal":
             return "进入揭晓阶段。请整理关键证据并给出最终判断。"
         if phase == "ended":

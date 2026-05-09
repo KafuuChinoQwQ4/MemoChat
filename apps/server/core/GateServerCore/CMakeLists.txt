@@ -43,6 +43,8 @@ add_library(GateServerCore STATIC
     StatusGrpcClient.h
     VerifyGrpcClient.cpp
     VerifyGrpcClient.h
+    ../common/r18/R18SourceService.cpp
+    ../common/r18/R18SourceService.h
     Http2MediaSupport.cpp
     Http2MediaSupport.h
     Http2ProfileSupport.cpp
@@ -70,6 +72,7 @@ target_link_libraries(GateServerCore PUBLIC
 # Additional libs needed by GateServerCore
 target_link_libraries(GateServerCore PRIVATE ${MEMOCHAT_PQXX_TARGET})
 target_link_libraries(GateServerCore PRIVATE ${MEMOCHAT_MONGOCXX_TARGET} ${MEMOCHAT_BSONCXX_TARGET})
+target_link_libraries(GateServerCore PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 if(MEMOCHAT_ENABLE_KAFKA)
     target_link_libraries(GateServerCore PRIVATE ${MEMOCHAT_CPPKAFKA_TARGET})
 endif()

@@ -339,59 +339,6 @@ Rectangle {
             }
         }
 
-        // Comment preview (up to 2 comments)
-        Column {
-            id: commentPreview
-            Layout.fillWidth: true
-            Layout.topMargin: 4
-            spacing: 2
-            visible: root.commentCount > 0 && commentPreviewItems.length > 0
-
-            property var commentPreviewItems: root.momentData && root.momentData.comments ? root.momentData.comments : []
-
-            Repeater {
-                model: Math.min(2, commentPreview.commentPreviewItems.length)
-                delegate: Item {
-                    id: commentPreviewDelegate
-                    required property int index
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: commentRow.implicitHeight + 2
-
-                    RowLayout {
-                        id: commentRow
-                        anchors.fill: parent
-                        spacing: 4
-                        Label {
-                            text: (commentPreview.commentPreviewItems[commentPreviewDelegate.index].user_nick || "用户") + "："
-                            font.pixelSize: 12
-                            font.weight: Font.Medium
-                            color: "#2a7ae2"
-                        }
-                        Label {
-                            text: commentPreview.commentPreviewItems[commentPreviewDelegate.index].reply_uid && commentPreview.commentPreviewItems[commentPreviewDelegate.index].reply_uid !== 0
-                                  ? ("回复 " + (commentPreview.commentPreviewItems[commentPreviewDelegate.index].reply_nick || "用户") + "：") : ""
-                            font.pixelSize: 12
-                            color: "#2a7ae2"
-                            visible: commentPreview.commentPreviewItems[commentPreviewDelegate.index].reply_uid && commentPreview.commentPreviewItems[commentPreviewDelegate.index].reply_uid !== 0
-                        }
-                        Label {
-                            text: commentPreview.commentPreviewItems[commentPreviewDelegate.index].content || ""
-                            font.pixelSize: 12
-                            color: "#555555"
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                    }
-                }
-            }
-
-            Label {
-                visible: root.commentCount > 2
-                text: "共 " + root.commentCount + " 条评论"
-                font.pixelSize: 11
-                color: "#888888"
-            }
-        }
     }
 
     // Helper functions

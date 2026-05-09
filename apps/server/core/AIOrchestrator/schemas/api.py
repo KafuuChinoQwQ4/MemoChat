@@ -551,6 +551,7 @@ class GameAgentConfigModel(BaseModel):
 
 class GameRoomCreateReq(BaseModel):
     uid: int
+    display_name: str = ""
     title: str = ""
     ruleset_id: str = "werewolf.basic"
     max_players: int = Field(default=12, ge=1, le=64)
@@ -574,6 +575,14 @@ class GameAgentAddReq(BaseModel):
     agents: list[GameAgentConfigModel] = Field(default_factory=list)
 
 
+class GameParticipantUpdateReq(BaseModel):
+    uid: int = 0
+    display_name: str = ""
+    persona: str = ""
+    strategy: str = ""
+    skill_name: str = ""
+
+
 class GameTemplateSaveReq(BaseModel):
     template_id: str = ""
     uid: int
@@ -588,6 +597,7 @@ class GameTemplateSaveReq(BaseModel):
 
 class GameRoomFromTemplateReq(BaseModel):
     uid: int
+    display_name: str = ""
     title: str = ""
 
 

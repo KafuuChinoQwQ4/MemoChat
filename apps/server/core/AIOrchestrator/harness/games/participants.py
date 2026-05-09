@@ -42,7 +42,7 @@ class GameParticipantFactory:
             room_id,
             kind="human",
             uid=uid,
-            display_name=(display_name or "").strip() or f"玩家{uid}",
+            display_name=(display_name or "").strip() or "用户",
         )
 
     def create_participant(self, room_id: str, kind: str, display_name: str, uid: int = 0) -> GameParticipant:

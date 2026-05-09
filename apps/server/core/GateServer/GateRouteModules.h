@@ -18,3 +18,8 @@ class CallHttpServiceRoutes {
 public:
     static void RegisterRoutes(LogicSystem& logic);
 };
+
+class R18HttpServiceRoutes {
+public:
+    static void RegisterRoutes(LogicSystem& logic);
+};

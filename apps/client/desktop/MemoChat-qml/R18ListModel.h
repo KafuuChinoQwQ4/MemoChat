@@ -21,7 +21,9 @@ public:
         UrlRole,
         EnabledRole,
         StatusRole,
-        OrderRole
+        OrderRole,
+        FormatRole,
+        MessageRole
     };
 
     explicit R18ListModel(QObject* parent = nullptr);
