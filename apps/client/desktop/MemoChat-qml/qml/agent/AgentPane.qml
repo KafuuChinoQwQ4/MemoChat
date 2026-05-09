@@ -41,7 +41,14 @@ Rectangle {
     property bool loading: false
     property bool streaming: false
     property string errorMsg: ""
+    property string selfName: ""
     property string selfAvatar: "qrc:/res/head_1.jpg"
+    property var gameState: root.agentController ? root.agentController.gameState : ({})
+    property string currentGameRoomId: root.agentController ? root.agentController.currentGameRoomId : ""
+    property bool gameBusy: root.agentController ? root.agentController.gameBusy : false
+    property string gameStatusText: root.agentController ? root.agentController.gameStatusText : ""
+    property string gameError: root.agentController ? root.agentController.gameError : ""
+    property bool multiAiDetailsExpanded: false
     readonly property int headerActionWidth: 58
     readonly property int headerActionHeight: 26
     readonly property int headerActionTextSize: 12
@@ -57,11 +64,20 @@ Rectangle {
         { "key": "graph", "label": "图谱" },
         { "key": "calculate", "label": "计算" }
     ]
+    readonly property bool gameRoomActive: currentGameRoomId.length > 0
+    readonly property bool multiAiRoomActive: gameRoomActive && currentRulesetId() === "multi_ai_chat.test"
+    readonly property bool formalGameRoomActive: gameRoomActive && currentRulesetId().length > 0 && !multiAiRoomActive
 
     signal backRequested()
     signal gameModeRequested()
 
+    onCurrentGameRoomIdChanged: multiAiDetailsExpanded = false
+
     function currentSessionTitle() {
+        if (gameRoomActive) {
+            var room = gameState && gameState.room ? gameState.room : ({})
+            return room.title || (multiAiRoomActive ? "多 AI 聊天" : "Game 房间")
+        }
         if (!sessions || currentSessionId.length === 0) {
             return "未选择会话"
         }
@@ -75,6 +91,18 @@ Rectangle {
     }
 
     function sessionSummary() {
+        if (gameRoomActive) {
+            if (gameBusy) {
+                return multiAiRoomActive ? "多 AI 正在回复。" : "Game 正在推进。"
+            }
+            if (gameError.length > 0) {
+                return gameError
+            }
+            if (gameStatusText.length > 0) {
+                return gameStatusText
+            }
+            return multiAiRoomActive ? "当前是多 AI 聊天房间。" : "当前是 Game 房间，可在时间线里提交行动。"
+        }
         if (currentSessionId.length === 0) {
             return "从左侧选择或新建会话开始。"
         }
@@ -85,6 +113,42 @@ Rectangle {
             return "AI 正在处理你的问题。"
         }
         return "当前会话已就绪，可以继续追问。"
+    }
+
+    function roomObject() {
+        var room = gameState && gameState.room ? gameState.room : ({})
+        var roomId = room.room_id || room.id || ""
+        if (currentGameRoomId.length > 0 && roomId.length > 0 && roomId !== currentGameRoomId) {
+            return ({})
+        }
+        return room
+    }
+
+    function currentRulesetId() {
+        var room = roomObject()
+        return room.ruleset_id || room.ruleset || ""
+    }
+
+    function participants() {
+        return gameState && gameState.participants ? gameState.participants : []
+    }
+
+    function events() {
+        return gameState && gameState.events ? gameState.events : []
+    }
+
+    function availableActions() {
+        return gameState && gameState.available_actions ? gameState.available_actions : []
+    }
+
+    function roomStatusValue() {
+        var room = roomObject()
+        return (room.status || gameState.status || gameState.phase || "").toString().toLowerCase()
+    }
+
+    function isGameEnded() {
+        var value = roomStatusValue()
+        return value === "ended" || value === "finished" || value === "complete" || value === "completed"
     }
 
     function skillModeHint() {
@@ -131,7 +195,7 @@ Rectangle {
                         spacing: 8
 
                         Label {
-                            text: "AI 助手"
+                            text: root.gameRoomActive ? (root.multiAiRoomActive ? "多 AI 聊天" : "Game 模式") : "AI 助手"
                             color: "#2a3649"
                             font.pixelSize: 18
                             font.bold: true
@@ -164,7 +228,7 @@ Rectangle {
                             Layout.maximumWidth: 132
                             radius: 12
                             color: Qt.rgba(0.36, 0.62, 0.92, 0.16)
-                            visible: root.currentModel.length > 0
+                            visible: root.currentModel.length > 0 && !root.gameRoomActive
 
                             Label {
                                 id: modelChipLabel
@@ -190,10 +254,42 @@ Rectangle {
                 }
 
                 RowLayout {
-                    Layout.preferredWidth: 94
+                    Layout.preferredWidth: root.multiAiRoomActive ? 134 : 94
                     Layout.preferredHeight: 32
-                    Layout.alignment: Qt.AlignRight | Qt.AlignTop
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                     spacing: 8
+
+                    Rectangle {
+                        id: multiAiDetailsToggle
+                        Layout.preferredWidth: 32
+                        Layout.preferredHeight: 32
+                        radius: 10
+                        visible: root.multiAiRoomActive
+                        color: multiAiDetailsMouseArea.pressed ? root.glassPanelPressedColor
+                              : multiAiDetailsMouseArea.containsMouse ? root.glassPanelHoverColor
+                                                                    : root.glassPanelColor
+                        border.width: 1
+                        border.color: root.glassBorderColor
+
+                        Image {
+                            anchors.centerIn: parent
+                            width: 14
+                            height: 14
+                            source: "qrc:/icons/dropdown.png"
+                            fillMode: Image.PreserveAspectFit
+                            rotation: root.multiAiDetailsExpanded ? 180 : 0
+                            opacity: 0.78
+                            smooth: true
+                        }
+
+                        MouseArea {
+                            id: multiAiDetailsMouseArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.multiAiDetailsExpanded = !root.multiAiDetailsExpanded
+                        }
+                    }
 
                     Rectangle {
                         id: modeMenuAnchor
@@ -310,6 +406,24 @@ Rectangle {
                         root.agentController.cancelStream()
                     }
                 }
+            }
+
+            MenuItem {
+                text: "刷新房间"
+                visible: root.gameRoomActive
+                enabled: root.currentGameRoomId.length > 0 && !root.gameBusy
+                onTriggered: {
+                    if (root.agentController) {
+                        root.agentController.loadGameRoom(root.currentGameRoomId)
+                    }
+                }
+            }
+
+            MenuItem {
+                text: root.formalGameRoomActive ? "新建 Game 房间" : "新建多 AI 房间"
+                visible: root.gameRoomActive
+                enabled: !root.loading && !root.streaming && !root.gameBusy
+                onTriggered: root.gameModeRequested()
             }
 
             MenuItem {
@@ -451,6 +565,7 @@ Rectangle {
             AgentConversationPane {
                 anchors.fill: parent
                 anchors.margins: 12
+                visible: !root.gameRoomActive
                 agentController: root.agentController
                 messageModel: root.messageModel
                 loading: root.loading
@@ -460,11 +575,69 @@ Rectangle {
                 currentSessionId: root.currentSessionId
                 selfAvatar: root.selfAvatar
             }
+
+            AgentMultiAiChatPane {
+                anchors.fill: parent
+                anchors.margins: 12
+                visible: root.multiAiRoomActive
+                agentController: root.agentController
+                gameState: root.gameState
+                currentGameRoomId: root.currentGameRoomId
+                gameBusy: root.gameBusy
+                selfName: root.selfName
+                selfAvatar: root.selfAvatar
+                detailsExpanded: root.multiAiDetailsExpanded
+            }
+
+            AgentGamePlayPane {
+                anchors.fill: parent
+                anchors.margins: 12
+                visible: root.formalGameRoomActive
+                agentController: root.agentController
+                participants: root.participants()
+                events: root.events()
+                availableActions: root.availableActions()
+                gameBusy: root.gameBusy
+                roomId: root.currentGameRoomId
+                roomLabel: root.currentSessionTitle()
+                roomEnded: root.isGameEnded()
+                onRefreshRequested: {
+                    if (root.agentController && root.currentGameRoomId.length > 0) {
+                        root.agentController.loadGameRoom(root.currentGameRoomId)
+                    }
+                }
+                onStartRequested: {
+                    if (root.agentController) {
+                        root.agentController.startGameRoom(root.currentGameRoomId)
+                    }
+                }
+                onRestartRequested: {
+                    if (root.agentController) {
+                        root.agentController.restartGameRoom(root.currentGameRoomId)
+                    }
+                }
+                onTickRequested: {
+                    if (root.agentController) {
+                        root.agentController.tickGameRoom(root.currentGameRoomId)
+                    }
+                }
+                onAutoTickRequested: {
+                    if (root.agentController) {
+                        root.agentController.autoTickGameRoom(root.currentGameRoomId, 8)
+                    }
+                }
+                onSubmitActionRequested: function(actorId, actionType, targetId, content) {
+                    if (root.agentController) {
+                        root.agentController.submitGameAction(root.currentGameRoomId, actorId, actionType, targetId, content)
+                    }
+                }
+            }
         }
 
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 148
+            visible: !root.gameRoomActive
             radius: 12
             color: Qt.rgba(1, 1, 1, 0.20)
             border.color: Qt.rgba(1, 1, 1, 0.44)

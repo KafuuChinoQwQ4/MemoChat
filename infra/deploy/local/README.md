@@ -95,7 +95,9 @@ Invoke-WebRequest http://127.0.0.1:8088/metrics -UseBasicParsing | Select-Object
 
 ## Nginx Gateway Check
 
-The default local architecture includes Nginx as the client-facing HTTP entrypoint on host port `80`. It proxies to local Windows GateServer instances on `8080` and `8084` through a container-startup alias named `memochat-host-gateway-ipv4`. That alias is derived from Docker's `host-gateway` entry but keeps Nginx upstream resolution on IPv4 only, avoiding Docker Desktop host IPv6 retries. Existing direct GateServer smoke scripts still target `http://127.0.0.1:8080`; use the narrow gateway script when you specifically want to verify the Nginx route without changing the full runtime flow.
+The default local architecture includes Nginx as the client-facing HTTP entrypoint on stable host port `80`. It proxies to local Windows GateServer instances on `8080` and `8084` through a container-startup alias named `memochat-host-gateway-ipv4`. That alias is derived from Docker's `host-gateway` entry but keeps Nginx upstream resolution on IPv4 only, avoiding Docker Desktop host IPv6 retries. Existing direct GateServer smoke scripts still target `http://127.0.0.1:8080`; use the narrow gateway script when you specifically want to verify the Nginx route without changing the full runtime flow.
+
+The local gateway only proxies recognized hostnames: `localhost`, `127.0.0.1`, and `host.docker.internal`. Unknown `Host` traffic is handled by the default Nginx server and is not proxied to GateServer. Host-facing traffic stays on port `80`; Nginx status `8081` and exporter `9113` remain internal Docker-network ports.
 
 ```powershell
 tools\scripts\test_nginx_gateway.ps1
@@ -133,7 +135,15 @@ tools\scripts\test_nginx_gateway.ps1 -ProbePolicyRoutes
 tools\scripts\test_nginx_gateway.ps1 -ProbeResponseHeaders -ShowHeaders
 ```
 
-`-ProbePolicyRoutes` exercises the auth, AI stream, media upload, and media download Nginx locations. It accepts normal upstream/business failures such as `400`, `401`, `404`, `405`, `502`, `503`, and `504`, so the probe remains useful even when GateServer is not running. `-ProbeResponseHeaders` checks the AI stream response header policy, including `X-Accel-Buffering: no`.
+`-ProbePolicyRoutes` exercises the auth, AI stream, media upload, and media download Nginx locations. It accepts normal upstream/business failures such as `400`, `401`, `404`, `405`, `429`, `500`, `502`, `503`, and `504`, so the probe remains useful even when GateServer is not running. It also checks Nginx-owned method restrictions that should return `405`: `GET /user_login`, `GET /ai/chat/stream`, and `POST /media/download`.
+
+`-ProbeResponseHeaders` checks common gateway response headers from `/health`: `X-Request-Id`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: no-referrer`, and `Permissions-Policy: geolocation=(), microphone=(), camera=()`. It also keeps the AI stream response header check for `X-Accel-Buffering: no` on `/ai/chat/stream`.
+
+To confirm unknown host traffic is rejected at the Nginx edge instead of proxied, use a manual probe and expect Nginx to close the request rather than return a GateServer response:
+
+```powershell
+curl.exe -i -H "Host: unknown.local" http://127.0.0.1/health
+```
 
 Auth-sensitive routes use the local Nginx baseline `limit_req_zone $binary_remote_addr zone=auth_per_ip:10m rate=30r/m` with `burst=10 nodelay` and `limit_req_status 429`. The protected exact routes are `/get_varifycode`, `/user_login`, `/user_register`, and `/reset_pwd`.
 
@@ -163,6 +173,8 @@ Invoke-WebRequest "http://127.0.0.1:9090/api/v1/query?query=nginx_up" -UseBasicP
 
 When updating local architecture docs or verification notes for any Nginx step, keep this metrics path in sync with the compose service name, exporter image tag, internal-only ports, Prometheus job name, and smoke script command.
 
+The local Grafana instance at `http://127.0.0.1:3000` provisions a `MemoChat` folder with the `Nginx Gateway` dashboard from `infra/deploy/local/observability/grafana/dashboards/nginx-gateway.json`. It uses the existing Prometheus datasource uid `prometheus` and Loki datasource uid `loki`; no Docker published ports change for the dashboard. The panels cover exporter health, request throughput, connection state, route/status counts, 5xx log events, and recent access logs.
+
 ### Nginx Upstream Failover Check
 
 The default local Nginx upstream sends client HTTP traffic on port `80` to two Windows GateServer instances, `memochat-host-gateway-ipv4:8080` and `memochat-host-gateway-ipv4:8084`. The upstream policy uses `least_conn`; each backend has `max_fails=3` and `fail_timeout=10s`.
@@ -185,22 +197,42 @@ Confirm failover from `docker logs memochat-nginx-lb` by checking the JSON acces
 
 ### Nginx Structured Log Correlation
 
-Nginx writes JSON access logs to the container log stream, so the local source of truth is `docker logs memochat-nginx-lb`. Use explicit IDs when you want to compare Nginx with GateServer logs, or ask the smoke script to generate them:
+Nginx writes JSON access logs to the container log stream, so `docker logs memochat-nginx-lb` remains available for quick local inspection. The same JSON access log stream is also written to `D:\docker-data\memochat\nginx\logs\access.json`; Docker mounts that file path into the OTel Collector, which tails it and exports Nginx gateway logs to Loki with low-cardinality labels such as `service="memochat-nginx-lb"` and `component="nginx_gateway"`.
+
+Host-facing ports stay stable: Nginx HTTP is `80` and Loki is `3100`. Nginx status `8081` and exporter `9113` stay internal to the Docker network.
+
+Use explicit IDs when you want to compare Nginx with GateServer logs, the mounted access log file, and Loki, or ask the smoke scripts to generate them:
 
 ```powershell
 $requestId = "manual-request-$([guid]::NewGuid().ToString('N'))"
 $traceId = "manual-trace-$([guid]::NewGuid().ToString('N'))"
 tools\scripts\test_nginx_gateway.ps1 -RequestId $requestId -TraceId $traceId -CheckDockerLogs
 docker logs memochat-nginx-lb --tail 50 | Select-String $requestId,$traceId
+Get-Content D:\docker-data\memochat\nginx\logs\access.json -Tail 50 | Select-String $requestId
 ```
 
 For a one-command generated trace:
 
 ```powershell
 tools\scripts\test_nginx_gateway.ps1 -GenerateIds -CheckDockerLogs
+tools\scripts\test_nginx_loki.ps1
 ```
 
 `-CheckDockerLogs` only searches recent Nginx Docker logs for the request/trace IDs. Docker log access failures are reported as unavailable and do not make ordinary gateway health checks depend on Docker log collection.
+
+The Nginx JSON body stores the normalized request path as `uri_path`; it does not log the raw request URI or query string. Query strings are represented only by `query_present=true|false`. The body also includes low-cardinality `route_family` and `status_class` fields for Loki filtering and dashboards. `request_id` and `trace_id` remain searchable in the JSON body for correlation, but they are intentionally not Loki labels.
+
+`tools\scripts\test_nginx_loki.ps1` sends a Nginx-owned `GET /__nginx_loki_probe` probe through `http://127.0.0.1` with generated `X-Request-Id` and `X-Trace-Id` headers, checks the mounted access log file by default, then retries Loki until the request ID appears or the bounded wait expires. It also verifies `route_family` and `status_class` classification and sends a media-style probe with a query token to confirm raw query material is redacted. It does not require GateServer to be running. If you only want the Loki query path, add `-SkipAccessLogFileCheck`.
+
+For manual Loki checks, use LogQL with the stable service label and a text filter for the request ID:
+
+```powershell
+$requestId = "manual-request-$([guid]::NewGuid().ToString('N'))"
+$traceId = "manual-trace-$([guid]::NewGuid().ToString('N'))"
+tools\scripts\test_nginx_loki.ps1 -RequestId $requestId -TraceId $traceId
+$query = '{service="memochat-nginx-lb"} |= "' + $requestId + '"'
+Invoke-RestMethod "http://127.0.0.1:3100/loki/api/v1/query_range?query=$([uri]::EscapeDataString($query))&limit=20" -UseBasicParsing
+```
 
 For manual one-off checks:
 

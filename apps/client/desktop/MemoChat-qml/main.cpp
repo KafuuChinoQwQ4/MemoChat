@@ -424,6 +424,7 @@ int main(int argc, char *argv[])
         }
     });
     engine.rootContext()->setContextProperty("controller", &controller);
+    engine.rootContext()->setContextProperty("gateUrlPrefix", gate_url_prefix);
     engine.rootContext()->setContextProperty("livekitBridge", controller.livekitBridge());
 
     const QUrl main_url(QStringLiteral("qrc:/qml/Main.qml"));

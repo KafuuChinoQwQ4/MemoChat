@@ -1,8 +1,8 @@
-#include "H1R18Routes.h"
+#include "GateRouteModules.h"
 
-#include "H1Connection.h"
-#include "H1JsonSupport.h"
-#include "H1LogicSystem.h"
+#include "GateHttpJsonSupport.h"
+#include "HttpConnection.h"
+#include "LogicSystem.h"
 #include "RedisMgr.h"
 #include "const.h"
 #include "json/GlazeCompat.h"
@@ -32,7 +32,7 @@ bool ValidateUserToken(int uid, const std::string& token)
            token_value == token;
 }
 
-std::string QueryParam(const std::shared_ptr<H1Connection>& connection,
+std::string QueryParam(const std::shared_ptr<HttpConnection>& connection,
                        const std::string& key,
                        const std::string& fallback = {})
 {
@@ -77,7 +77,7 @@ JsonValue ToSourceJson(const memochat::r18::R18SourceRecord& rec)
     return source;
 }
 
-void WriteJson(std::shared_ptr<H1Connection> connection, const JsonValue& root)
+void WriteJson(std::shared_ptr<HttpConnection> connection, const JsonValue& root)
 {
     auto& response = connection->GetResponse();
     response.set(http::field::content_type, "text/json");
@@ -86,9 +86,9 @@ void WriteJson(std::shared_ptr<H1Connection> connection, const JsonValue& root)
 
 } // namespace
 
-void H1R18ServiceRoutes::RegisterRoutes(H1LogicSystem& logic)
+void R18HttpServiceRoutes::RegisterRoutes(LogicSystem& logic)
 {
-    logic.RegGet("/api/r18/sources", [](std::shared_ptr<H1Connection> connection) {
+    logic.RegGet("/api/r18/sources", [](std::shared_ptr<HttpConnection> connection) {
         JsonValue root;
         const int uid = std::atoi(QueryParam(connection, "uid").c_str());
         const std::string token = QueryParam(connection, "token");
@@ -104,8 +104,8 @@ void H1R18ServiceRoutes::RegisterRoutes(H1LogicSystem& logic)
         return true;
     });
 
-    logic.RegPost("/api/r18/source/import", [](std::shared_ptr<H1Connection> connection) {
-        return H1JsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
+    logic.RegPost("/api/r18/source/import", [](std::shared_ptr<HttpConnection> connection) {
+        return GateHttpJsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
             int uid = 0;
             std::string token;
             if (!RequireAuth(src, root, uid, token)) return true;
@@ -135,8 +135,8 @@ void H1R18ServiceRoutes::RegisterRoutes(H1LogicSystem& logic)
         });
     });
 
-    logic.RegPost("/api/r18/source/enable", [](std::shared_ptr<H1Connection> connection) {
-        return H1JsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
+    logic.RegPost("/api/r18/source/enable", [](std::shared_ptr<HttpConnection> connection) {
+        return GateHttpJsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
             int uid = 0;
             std::string token;
             if (!RequireAuth(src, root, uid, token)) return true;
@@ -157,8 +157,8 @@ void H1R18ServiceRoutes::RegisterRoutes(H1LogicSystem& logic)
         });
     });
 
-    logic.RegPost("/api/r18/source/disable", [](std::shared_ptr<H1Connection> connection) {
-        return H1JsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
+    logic.RegPost("/api/r18/source/disable", [](std::shared_ptr<HttpConnection> connection) {
+        return GateHttpJsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
             int uid = 0;
             std::string token;
             if (!RequireAuth(src, root, uid, token)) return true;
@@ -179,8 +179,8 @@ void H1R18ServiceRoutes::RegisterRoutes(H1LogicSystem& logic)
         });
     });
 
-    logic.RegPost("/api/r18/search", [](std::shared_ptr<H1Connection> connection) {
-        return H1JsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
+    logic.RegPost("/api/r18/search", [](std::shared_ptr<HttpConnection> connection) {
+        return GateHttpJsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
             int uid = 0;
             std::string token;
             if (!RequireAuth(src, root, uid, token)) return true;
@@ -193,8 +193,8 @@ void H1R18ServiceRoutes::RegisterRoutes(H1LogicSystem& logic)
         });
     });
 
-    logic.RegPost("/api/r18/comic/detail", [](std::shared_ptr<H1Connection> connection) {
-        return H1JsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
+    logic.RegPost("/api/r18/comic/detail", [](std::shared_ptr<HttpConnection> connection) {
+        return GateHttpJsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
             int uid = 0;
             std::string token;
             if (!RequireAuth(src, root, uid, token)) return true;
@@ -206,8 +206,8 @@ void H1R18ServiceRoutes::RegisterRoutes(H1LogicSystem& logic)
         });
     });
 
-    logic.RegPost("/api/r18/chapter/pages", [](std::shared_ptr<H1Connection> connection) {
-        return H1JsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
+    logic.RegPost("/api/r18/chapter/pages", [](std::shared_ptr<HttpConnection> connection) {
+        return GateHttpJsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
             int uid = 0;
             std::string token;
             if (!RequireAuth(src, root, uid, token)) return true;
@@ -219,8 +219,8 @@ void H1R18ServiceRoutes::RegisterRoutes(H1LogicSystem& logic)
         });
     });
 
-    logic.RegPost("/api/r18/favorite/toggle", [](std::shared_ptr<H1Connection> connection) {
-        return H1JsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
+    logic.RegPost("/api/r18/favorite/toggle", [](std::shared_ptr<HttpConnection> connection) {
+        return GateHttpJsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
             int uid = 0;
             std::string token;
             if (!RequireAuth(src, root, uid, token)) return true;
@@ -234,8 +234,8 @@ void H1R18ServiceRoutes::RegisterRoutes(H1LogicSystem& logic)
         });
     });
 
-    logic.RegPost("/api/r18/history/update", [](std::shared_ptr<H1Connection> connection) {
-        return H1JsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
+    logic.RegPost("/api/r18/history/update", [](std::shared_ptr<HttpConnection> connection) {
+        return GateHttpJsonSupport::HandleJsonPost(connection, [](const JsonValue& src, JsonValue& root, const std::string&) {
             int uid = 0;
             std::string token;
             if (!RequireAuth(src, root, uid, token)) return true;
@@ -250,7 +250,7 @@ void H1R18ServiceRoutes::RegisterRoutes(H1LogicSystem& logic)
         });
     });
 
-    logic.RegGet("/api/r18/history", [](std::shared_ptr<H1Connection> connection) {
+    logic.RegGet("/api/r18/history", [](std::shared_ptr<HttpConnection> connection) {
         JsonValue root;
         const int uid = std::atoi(QueryParam(connection, "uid").c_str());
         const std::string token = QueryParam(connection, "token");
@@ -266,7 +266,7 @@ void H1R18ServiceRoutes::RegisterRoutes(H1LogicSystem& logic)
         return true;
     });
 
-    logic.RegGet("/api/r18/image", [](std::shared_ptr<H1Connection> connection) {
+    logic.RegGet("/api/r18/image", [](std::shared_ptr<HttpConnection> connection) {
         const int uid = std::atoi(QueryParam(connection, "uid").c_str());
         const std::string token = QueryParam(connection, "token");
         auto& response = connection->GetResponse();

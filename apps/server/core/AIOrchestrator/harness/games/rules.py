@@ -8,7 +8,15 @@ from typing import Any
 from harness.games.contracts import GameAction, GameEvent, GameParticipant, GameRoom, GameState
 
 
-def _event(room: GameRoom, event_type: str, content: str = "", actor: str = "", target: str = "", payload: dict[str, Any] | None = None) -> GameEvent:
+def _event(
+    room: GameRoom,
+    event_type: str,
+    content: str = "",
+    actor: str = "",
+    target: str = "",
+    payload: dict[str, Any] | None = None,
+    visibility: str = "public",
+) -> GameEvent:
     return GameEvent(
         event_id=uuid.uuid4().hex,
         room_id=room.room_id,
@@ -18,6 +26,7 @@ def _event(room: GameRoom, event_type: str, content: str = "", actor: str = "", 
         target_participant_id=target,
         phase=room.phase,
         round_index=room.round_index,
+        visibility=visibility,
         payload=dict(payload or {}),
     )
 
@@ -42,6 +51,130 @@ class GameRuleEngine(ABC):
     @abstractmethod
     def next_pending_actor(self, state: GameState) -> str:
         raise NotImplementedError
+
+
+class MultiAiChatRuleEngine(GameRuleEngine):
+    def ruleset_id(self) -> str:
+        return "multi_ai_chat.test"
+
+    def create_initial_state(self, room: GameRoom, participants: list[GameParticipant]) -> GameState:
+        room.phase = "chat"
+        room.status = "running"
+        room.round_index = 1
+        for participant in participants:
+            participant.role_key = ""
+            participant.private_state.pop("role_key", None)
+        return GameState(
+            room=room,
+            participants=participants,
+            state={
+                "ruleset": self.ruleset_id(),
+                "phase": "chat",
+                "round": 1,
+                "pending_agent_ids": [],
+                "turn_index": 0,
+                "moderator_note": "Temporary multi-AI chat test mode. No formal game rules.",
+            },
+        )
+
+    def available_actions(self, state: GameState, participant_id: str) -> list[str]:
+        participant = _participant(state, participant_id)
+        if participant is None or participant.status != "alive":
+            return []
+        if participant.kind == "agent":
+            return ["speak", "a2a_message", "skip"]
+        return ["speak"]
+
+    def apply_action(self, state: GameState, action: GameAction) -> list[GameEvent]:
+        allowed = self.available_actions(state, action.participant_id)
+        if action.action_type not in allowed:
+            raise ValueError(f"action {action.action_type} is not available")
+
+        room = state.room
+        actor = _participant(state, action.participant_id)
+        if actor is None:
+            raise ValueError("participant not found")
+
+        room.phase = "chat"
+        room.status = "running"
+        state.state["phase"] = "chat"
+        pending = list(state.state.get("pending_agent_ids", []))
+
+        if action.action_type == "skip":
+            state.state["pending_agent_ids"] = [participant_id for participant_id in pending if participant_id != actor.participant_id]
+            return [_event(room, "skip", f"{actor.display_name} 暂不回复。", actor.participant_id, payload={"chat": True})]
+
+        content = (action.content or "").strip()
+        if not content:
+            content = "我在。"
+
+        if action.action_type == "a2a_message":
+            target = _participant(state, action.target_participant_id)
+            if target is None or target.kind != "agent" or target.status != "alive":
+                raise ValueError("private A2A target must be an alive agent participant")
+            if target.participant_id == actor.participant_id:
+                raise ValueError("private A2A target cannot be self")
+            next_pending = [participant_id for participant_id in pending if participant_id != actor.participant_id]
+            if target.participant_id not in next_pending:
+                next_pending.append(target.participant_id)
+            state.state["pending_agent_ids"] = next_pending
+            return [
+                _event(
+                    room,
+                    "a2a_message",
+                    content,
+                    actor.participant_id,
+                    target.participant_id,
+                    payload={
+                        "chat": True,
+                        "a2a": True,
+                        "message": {
+                            "kind": "message",
+                            "messageId": uuid.uuid4().hex,
+                            "contextId": room.room_id,
+                            "role": "agent",
+                            "parts": [{"kind": "text", "text": content}],
+                            "metadata": {
+                                "from_participant_id": actor.participant_id,
+                                "to_participant_id": target.participant_id,
+                                "transport": "memochat.private_event",
+                            },
+                        },
+                    },
+                    visibility="private",
+                )
+            ]
+
+        if actor.kind == "agent":
+            state.state["pending_agent_ids"] = [participant_id for participant_id in pending if participant_id != actor.participant_id]
+        else:
+            room.round_index += 1
+            state.state["round"] = room.round_index
+            state.state["turn_index"] = int(state.state.get("turn_index") or 0) + 1
+            state.state["pending_agent_ids"] = [
+                participant.participant_id
+                for participant in state.participants
+                if participant.kind == "agent" and participant.status == "alive"
+            ]
+
+        return [
+            _event(
+                room,
+                "speak",
+                content,
+                actor.participant_id,
+                payload={"chat": True, "speaker_kind": actor.kind},
+            )
+        ]
+
+    def next_pending_actor(self, state: GameState) -> str:
+        pending = list(state.state.get("pending_agent_ids", []))
+        for participant_id in pending:
+            participant = _participant(state, participant_id)
+            if participant is not None and participant.kind == "agent" and participant.status == "alive":
+                return participant.participant_id
+        human = next((p for p in state.participants if p.kind == "human" and p.status == "alive"), None)
+        return human.participant_id if human else ""
 
 
 class WerewolfRuleEngine(GameRuleEngine):
@@ -166,13 +299,21 @@ class WerewolfRuleEngine(GameRuleEngine):
         participants = list(state.participants)
         if not participants:
             return
-        requested_wolf_count = len([participant for participant in participants if participant.role_key == "werewolf"])
-        wolf_count = int(state.room.config.get("wolf_count", requested_wolf_count or 1) or 1)
+        assigned = [participant for participant in participants if participant.role_key]
+        unassigned = [participant for participant in participants if not participant.role_key]
+        assigned_wolf_count = len([participant for participant in assigned if participant.role_key == "werewolf"])
+        configured_wolf_count = int(state.room.config.get("wolf_count", assigned_wolf_count or 1) or 1)
+        wolf_count = max(assigned_wolf_count, configured_wolf_count)
         wolf_count = max(1, min(wolf_count, len(participants)))
-        role_pool = ["werewolf"] * wolf_count + ["villager"] * (len(participants) - wolf_count)
+        wolf_slots = max(0, min(len(unassigned), wolf_count - assigned_wolf_count))
+        villager_side_roles = ["villager", "seer", "witch", "hunter", "guard", "idiot"]
+        role_pool = ["werewolf"] * wolf_slots
+        for index in range(len(unassigned) - wolf_slots):
+            role_pool.append(villager_side_roles[index % len(villager_side_roles)])
         _role_rng(state, "werewolf").shuffle(role_pool)
-        for participant, role_key in zip(participants, role_pool):
+        for participant, role_key in zip(unassigned, role_pool):
             participant.role_key = role_key
+        for participant in participants:
             participant.private_state["role_key"] = participant.role_key
         state.state["role_shuffle_marker"] = _shuffle_marker(state)
 
@@ -271,7 +412,7 @@ class ScriptMurderRuleEngine(GameRuleEngine):
 
 
 def builtin_rulesets() -> dict[str, GameRuleEngine]:
-    engines: list[GameRuleEngine] = [WerewolfRuleEngine(), ScriptMurderRuleEngine()]
+    engines: list[GameRuleEngine] = [MultiAiChatRuleEngine(), WerewolfRuleEngine(), ScriptMurderRuleEngine()]
     return {engine.ruleset_id(): engine for engine in engines}
 
 

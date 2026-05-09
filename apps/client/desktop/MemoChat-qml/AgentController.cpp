@@ -386,6 +386,11 @@ void AgentController::loadSessions() {
 
 void AgentController::createSession() {
     auto uid = _gateway->userMgr()->GetUid();
+    if (!_current_game_room_id.isEmpty()) {
+        _current_game_room_id.clear();
+        _game_state.clear();
+        emit gameStateChanged();
+    }
     QJsonObject payload;
     payload["uid"] = uid;
     payload["model_type"] = _current_model_backend;
@@ -399,6 +404,11 @@ void AgentController::createSession() {
 
 void AgentController::switchSession(const QString& sessionId) {
     if (_current_session_id == sessionId) return;
+    if (!_current_game_room_id.isEmpty()) {
+        _current_game_room_id.clear();
+        _game_state.clear();
+        emit gameStateChanged();
+    }
     _current_session_id = sessionId;
     emit sessionChanged();
     loadHistory(sessionId);
@@ -984,6 +994,9 @@ void AgentController::sendGamePost(const QUrl& url, const QJsonObject& payload, 
         reply->deleteLater();
 
         if (!networkError.isEmpty()) {
+            if (op == QStringLiteral("delete_room")) {
+                _pendingDeleteGameRoomId.clear();
+            }
             setGameBusy(false, QStringLiteral("请求失败"));
             setGameError(QStringLiteral("Game 服务请求失败: %1").arg(networkError));
             return;
@@ -991,6 +1004,9 @@ void AgentController::sendGamePost(const QUrl& url, const QJsonObject& payload, 
 
         const QJsonDocument doc = QJsonDocument::fromJson(body);
         if (!doc.isObject()) {
+            if (op == QStringLiteral("delete_room")) {
+                _pendingDeleteGameRoomId.clear();
+            }
             setGameBusy(false, QStringLiteral("响应格式错误"));
             setGameError(QStringLiteral("Game 服务响应格式错误"));
             return;
@@ -1084,15 +1100,33 @@ void AgentController::loadGameRoom(const QString& roomId) {
     url.setQuery(query);
     if (_current_game_room_id != trimmedRoomId) {
         _current_game_room_id = trimmedRoomId;
+        clearCurrentSession();
         emit gameStateChanged();
     }
     sendGameGet(url, QStringLiteral("room"), QStringLiteral("正在加载房间状态..."));
 }
 
-void AgentController::createGameRoom(const QString& title, const QString& rulesetId, const QVariantList& agents, const QVariantMap& host) {
+void AgentController::deleteGameRoom(const QString& roomId) {
+    const QString trimmedRoomId = roomId.trimmed();
+    if (trimmedRoomId.isEmpty()) {
+        return;
+    }
+    QUrl url(gameBaseUrl() + QStringLiteral("/rooms/") + trimmedRoomId);
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("uid"), QString::number(currentUid()));
+    url.setQuery(query);
+    _pendingDeleteGameRoomId = trimmedRoomId;
+    sendGameDelete(url, QStringLiteral("delete_room"), QStringLiteral("正在清除游戏房间..."));
+}
+
+void AgentController::createGameRoom(const QString& title, const QString& rulesetId, const QVariantList& agents, const QVariantMap& host, const QString& displayName) {
     const QString trimmedRuleset = rulesetId.trimmed().isEmpty() ? QStringLiteral("werewolf.basic") : rulesetId.trimmed();
+    const QString trimmedDisplayName = displayName.trimmed();
     QJsonObject payload;
     payload[QStringLiteral("uid")] = currentUid();
+    if (!trimmedDisplayName.isEmpty()) {
+        payload[QStringLiteral("display_name")] = trimmedDisplayName;
+    }
     payload[QStringLiteral("title")] = title.trimmed().isEmpty() ? QStringLiteral("MemoChat Game Room") : title.trimmed();
     payload[QStringLiteral("ruleset_id")] = trimmedRuleset;
 
@@ -1121,6 +1155,10 @@ void AgentController::createGameRoom(const QString& title, const QString& rulese
     payload[QStringLiteral("agents")] = agentArray;
     QJsonObject config;
     config[QStringLiteral("host")] = hostConfigFromVariant(host);
+    const QString humanRoleKey = host.value(QStringLiteral("human_role_key")).toString().trimmed();
+    if (!humanRoleKey.isEmpty()) {
+        config[QStringLiteral("human_role_key")] = humanRoleKey;
+    }
     payload[QStringLiteral("config")] = config;
 
     sendGamePost(QUrl(gameBaseUrl() + QStringLiteral("/rooms")),
@@ -1295,13 +1333,17 @@ bool AgentController::importGameTemplate(const QString& templateJson) {
     return true;
 }
 
-void AgentController::createGameRoomFromTemplate(const QString& templateId, const QString& title) {
+void AgentController::createGameRoomFromTemplate(const QString& templateId, const QString& title, const QString& displayName) {
     const QString trimmedTemplateId = templateId.trimmed();
     if (trimmedTemplateId.isEmpty()) {
         return;
     }
     QJsonObject payload;
     payload[QStringLiteral("uid")] = currentUid();
+    const QString trimmedDisplayName = displayName.trimmed();
+    if (!trimmedDisplayName.isEmpty()) {
+        payload[QStringLiteral("display_name")] = trimmedDisplayName;
+    }
     payload[QStringLiteral("title")] = title.trimmed();
 
     sendGamePost(QUrl(gameBaseUrl() + QStringLiteral("/templates/") + trimmedTemplateId + QStringLiteral("/rooms")),
@@ -1385,12 +1427,42 @@ void AgentController::submitGameAction(const QString& roomId,
                  QStringLiteral("正在提交玩家行动..."));
 }
 
+void AgentController::updateGameParticipant(const QString& roomId,
+                                            const QString& participantId,
+                                            const QString& displayName,
+                                            const QString& persona,
+                                            const QString& strategy,
+                                            const QString& skillName) {
+    const QString trimmedRoomId = roomId.trimmed();
+    const QString trimmedParticipantId = participantId.trimmed();
+    if (trimmedRoomId.isEmpty() || trimmedParticipantId.isEmpty()) {
+        return;
+    }
+
+    QJsonObject payload;
+    payload[QStringLiteral("uid")] = currentUid();
+    payload[QStringLiteral("display_name")] = displayName.trimmed();
+    payload[QStringLiteral("persona")] = persona;
+    payload[QStringLiteral("strategy")] = strategy.trimmed();
+    payload[QStringLiteral("skill_name")] = skillName.trimmed();
+
+    sendGamePost(QUrl(gameBaseUrl() + QStringLiteral("/rooms/") + trimmedRoomId
+                      + QStringLiteral("/participants/") + trimmedParticipantId
+                      + QStringLiteral("/update")),
+                 payload,
+                 QStringLiteral("update_participant"),
+                 QStringLiteral("正在保存 Agent 设置..."));
+}
+
 void AgentController::handleGameResponse(const QString& op, const QJsonObject& root) {
     const int code = root.contains(QStringLiteral("error"))
         ? root.value(QStringLiteral("error")).toInt()
         : root.value(QStringLiteral("code")).toInt();
     if (code != 0) {
         const QString message = root.value(QStringLiteral("message")).toString(QStringLiteral("未知错误"));
+        if (op == QStringLiteral("delete_room")) {
+            _pendingDeleteGameRoomId.clear();
+        }
         setGameBusy(false, QStringLiteral("Game 服务错误"));
         setGameError(QStringLiteral("Game 服务错误: %1").arg(message));
         return;
@@ -1480,6 +1552,29 @@ void AgentController::handleGameResponse(const QString& op, const QJsonObject& r
     } else if (op == QStringLiteral("delete_template")) {
         statusText = QStringLiteral("模板已删除，正在刷新列表...");
         refreshTemplates = true;
+    } else if (op == QStringLiteral("delete_room")) {
+        const QString deletedRoomId = _pendingDeleteGameRoomId;
+        _pendingDeleteGameRoomId.clear();
+        if (!deletedRoomId.isEmpty()) {
+            QVariantList remainingRooms;
+            for (const QVariant& roomVar : _game_rooms) {
+                const QJsonObject room = jsonObjectFromVariant(roomVar);
+                const QString roomId = room.value(QStringLiteral("room_id")).toString(
+                    room.value(QStringLiteral("id")).toString());
+                if (roomId != deletedRoomId) {
+                    remainingRooms.append(roomVar);
+                }
+            }
+            _game_rooms = remainingRooms;
+            emit gameRoomsChanged();
+            if (_current_game_room_id == deletedRoomId) {
+                _current_game_room_id.clear();
+                _game_state.clear();
+                emit gameStateChanged();
+            }
+        }
+        statusText = QStringLiteral("房间已清除，正在刷新列表...");
+        refreshRooms = true;
     }
 
     QJsonObject stateObject = root.value(QStringLiteral("state")).toObject();
@@ -1492,6 +1587,7 @@ void AgentController::handleGameResponse(const QString& op, const QJsonObject& r
         const QString roomId = room.value(QStringLiteral("room_id")).toString(room.value(QStringLiteral("id")).toString());
         if (!roomId.isEmpty()) {
             _current_game_room_id = roomId;
+            clearCurrentSession();
         }
         emit gameStateChanged();
         if (op == QStringLiteral("create_room")) {
@@ -1514,6 +1610,13 @@ void AgentController::handleGameResponse(const QString& op, const QJsonObject& r
             statusText = QStringLiteral("自动推进 %1 步，停止于 %2。").arg(steps).arg(stopReason.isEmpty() ? QStringLiteral("idle") : stopReason);
         } else if (op == QStringLiteral("action")) {
             statusText = QStringLiteral("玩家行动已提交。");
+            const QString rulesetId = room.value(QStringLiteral("ruleset_id")).toString();
+            if (rulesetId == QStringLiteral("multi_ai_chat.test") && !roomId.isEmpty()) {
+                autoTickGameRoom(roomId, 8);
+                return;
+            }
+        } else if (op == QStringLiteral("update_participant")) {
+            statusText = QStringLiteral("Agent 设置已更新。");
         }
     }
 
@@ -1762,6 +1865,11 @@ void AgentController::handleSessionRsp(ReqId id, const QString& res, ErrorCodes 
         QJsonObject sess = root["session"].toObject();
         QString newId = sess["session_id"].toString();
         if (!newId.isEmpty()) {
+            if (!_current_game_room_id.isEmpty()) {
+                _current_game_room_id.clear();
+                _game_state.clear();
+                emit gameStateChanged();
+            }
             _current_session_id = newId;
             emit sessionChanged();
         }

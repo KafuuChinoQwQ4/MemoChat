@@ -29,6 +29,9 @@ Item {
     }
     readonly property bool hasThinking: root.thinkingContent.length > 0 && !root.isUser
     readonly property bool showThinkingBody: root.hasThinking && (root.isStreaming || root.manualThinkingExpanded)
+    readonly property string answerText: root.displayText.length > 0 ? root.displayText : (root.isStreaming ? "正在生成" : "")
+    readonly property bool answerVisible: root.answerText.length > 0 || root.thinkingContent.length === 0
+    readonly property bool answerHasCodeBlock: root.answerText.indexOf("```") >= 0 || root.answerText.indexOf("~~~") >= 0
     readonly property real bubbleMaxWidth: Math.max(120, width - avatarSlotWidth - 28)
     readonly property real bubbleContentMaxWidth: Math.max(80, Math.min(520, bubbleMaxWidth - 18))
     readonly property real bubbleInnerWidth: Math.max(40, bubbleWidth - 14)
@@ -37,7 +40,9 @@ Item {
         ? Math.min(root.bubbleContentMaxWidth,
                    Math.max(220, thinkingHeaderTitle.implicitWidth + thinkingStateLabel.implicitWidth + 58))
         : 0
-    readonly property real answerPreferredWidth: contentText.visible ? contentText.implicitWidth + 18 : 0
+    readonly property real answerPreferredWidth: root.answerVisible
+        ? (root.answerHasCodeBlock ? root.bubbleContentMaxWidth + 18 : contentMeasure.implicitWidth + 18)
+        : 0
     readonly property real bubbleWidth: Math.min(bubbleMaxWidth, Math.max(bubbleMinWidth, thinkingPreferredWidth, answerPreferredWidth))
     readonly property real bubbleHeight: bubbleColumn.implicitHeight + 14
 
@@ -101,6 +106,16 @@ Item {
                 asynchronous: true
                 cache: true
             }
+        }
+
+        TextEdit {
+            id: contentMeasure
+            visible: false
+            text: root.answerText
+            font.pixelSize: 14
+            textFormat: Text.PlainText
+            wrapMode: TextEdit.NoWrap
+            readOnly: true
         }
 
         Rectangle {
@@ -219,22 +234,15 @@ Item {
                     }
                 }
 
-                TextEdit {
-                    id: contentText
+                AgentMarkdownText {
+                    id: contentBody
                     width: root.bubbleInnerWidth
-                    visible: root.displayText.length > 0 || root.thinkingContent.length === 0
-                    text: root.displayText.length > 0 ? root.displayText : (root.isStreaming ? "正在生成" : "")
-                    wrapMode: TextEdit.Wrap
-                    color: root.errorMessage.length > 0 ? "#c14d4d" : (root.isUser ? "#20334f" : "#253247")
-                    font.pixelSize: 14
-                    textFormat: Text.PlainText
-                    readOnly: true
-                    selectByMouse: true
-                    cursorVisible: false
-                    leftPadding: 0
-                    rightPadding: 0
-                    topPadding: 0
-                    bottomPadding: 0
+                    visible: root.answerVisible
+                    text: root.answerText
+                    textColor: root.errorMessage.length > 0 ? "#c14d4d" : (root.isUser ? "#20334f" : "#253247")
+                    textPixelSize: 14
+                    codePixelSize: 12
+                    maxCodeBlockHeight: 360
                 }
 
                 Rectangle {

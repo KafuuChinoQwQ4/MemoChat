@@ -40,6 +40,59 @@ ColumnLayout {
         return actor + " · " + type
     }
 
+    function normalizeEscapedMarkdown(value) {
+        var text = value || ""
+        if (text.indexOf("\\n```") >= 0 || text.indexOf("\\n~~~") >= 0) {
+            return text.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\t/g, "\t")
+        }
+        return text
+    }
+
+    function textFromParsedPayload(payload) {
+        if (!payload || typeof payload !== "object") {
+            return ""
+        }
+        var keys = ["content", "message", "text", "reply"]
+        for (var i = 0; i < keys.length; ++i) {
+            var value = payload[keys[i]]
+            if (typeof value === "string" && value.length > 0) {
+                return root.normalizeEscapedMarkdown(value)
+            }
+        }
+        if (payload.payload && typeof payload.payload === "object") {
+            return root.textFromParsedPayload(payload.payload)
+        }
+        return ""
+    }
+
+    function readableEventText(value) {
+        if (value === undefined || value === null) {
+            return ""
+        }
+        if (typeof value !== "string") {
+            var parsedText = root.textFromParsedPayload(value)
+            return parsedText.length > 0 ? parsedText : JSON.stringify(value)
+        }
+        var text = value
+        var trimmed = text.trim()
+        if (trimmed.length > 0 && (trimmed.charAt(0) === "{" || trimmed.charAt(0) === "[")) {
+            try {
+                var parsed = JSON.parse(trimmed)
+                var extracted = root.textFromParsedPayload(parsed)
+                if (extracted.length > 0) {
+                    return extracted
+                }
+            } catch (error) {
+                // Keep the original text when it is not a complete JSON payload.
+            }
+        }
+        return root.normalizeEscapedMarkdown(text)
+    }
+
+    function eventBody(event) {
+        return root.readableEventText(event.content || event.message || event)
+    }
+
     function actorIdAt(index) {
         if (index < 0 || index >= root.participants.length) {
             return ""
@@ -191,8 +244,25 @@ ColumnLayout {
                 id: eventDelegate
                 required property var modelData
 
+                readonly property string bodyText: root.eventBody(modelData)
+                readonly property bool bodyHasCodeBlock: bodyText.indexOf("```") >= 0 || bodyText.indexOf("~~~") >= 0
+                readonly property real bodyContentMaxWidth: Math.max(160, width - 48)
+                readonly property real bodyContentWidth: bodyHasCodeBlock
+                    ? bodyContentMaxWidth
+                    : Math.min(bodyContentMaxWidth, Math.max(220, bodyMeasure.implicitWidth))
+
                 width: ListView.view.width
                 height: Math.max(58, bubbleColumn.implicitHeight + 16)
+
+                TextEdit {
+                    id: bodyMeasure
+                    visible: false
+                    text: eventDelegate.bodyText
+                    font.pixelSize: 12
+                    textFormat: Text.PlainText
+                    wrapMode: TextEdit.NoWrap
+                    readOnly: true
+                }
 
                 Rectangle {
                     width: Math.min(parent.width - 20, Math.max(260, bubbleColumn.implicitWidth + 28))
@@ -218,13 +288,13 @@ ColumnLayout {
                             elide: Text.ElideRight
                         }
 
-                        Label {
-                            Layout.fillWidth: true
-                            text: eventDelegate.modelData.content || eventDelegate.modelData.message || JSON.stringify(eventDelegate.modelData)
-                            color: "#53637a"
-                            font.pixelSize: 12
-                            wrapMode: Text.Wrap
-                            maximumLineCount: 8
+                        AgentMarkdownText {
+                            Layout.preferredWidth: eventDelegate.bodyContentWidth
+                            text: eventDelegate.bodyText
+                            textColor: "#53637a"
+                            textPixelSize: 12
+                            codePixelSize: 12
+                            maxCodeBlockHeight: 360
                         }
                     }
                 }

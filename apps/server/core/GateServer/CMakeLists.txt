@@ -3,6 +3,7 @@ add_executable(GateServer
     CServer.cpp
     GateHttpJsonSupport.cpp
     GateServerH1Routes.cpp
+    GateR18Routes.cpp
     GateWorkerPool.cpp
     HttpConnection.cpp
     LogicSystem.cpp

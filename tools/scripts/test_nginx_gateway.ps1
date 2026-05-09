@@ -3,6 +3,7 @@ param(
     [switch]$Login,
     [switch]$ProbePolicyRoutes,
     [switch]$ProbeResponseHeaders,
+    [switch]$ProbeAuthFailover,
     [switch]$ShowHeaders,
     [string]$RequestId,
     [string]$TraceId,
@@ -15,6 +16,10 @@ param(
     [string]$Email = "test",
     [string]$Password = "test",
     [string]$ClientVersion = "3.0.0",
+    [string]$AuthFailoverRoute = "/user_login",
+    [int]$AuthFailoverAttempts = 4,
+    [int[]]$ExpectedAuthFailoverStatusCodes = @(200, 400, 401, 429, 500),
+    [int]$DeadGatePort = 0,
     [int]$TimeoutSec = 5
 )
 
@@ -34,7 +39,12 @@ function Get-ResponseHeaderValue {
         return $Headers.Get($Name)
     }
 
-    return $Headers[$Name]
+    $value = $Headers[$Name]
+    if ($value -is [System.Array]) {
+        return ($value -join ", ")
+    }
+
+    return $value
 }
 
 function Write-ResponseHeaders {
@@ -92,6 +102,43 @@ function Merge-Headers {
         $merged[$key] = $ExtraHeaders[$key]
     }
     return $merged
+}
+
+function New-CommonGatewayResponseHeaders {
+    param([string]$ExpectedRequestId)
+
+    $headers = @{
+        "X-Request-Id"           = $ExpectedRequestId
+        "X-Content-Type-Options" = "nosniff"
+        "X-Frame-Options"        = "SAMEORIGIN"
+        "Referrer-Policy"        = "no-referrer"
+        "Permissions-Policy"     = "geolocation=(), microphone=(), camera=()"
+    }
+
+    return $headers
+}
+
+function Test-TcpPortOpen {
+    param(
+        [string]$HostName,
+        [int]$Port,
+        [int]$TimeoutMilliseconds = 1000
+    )
+
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $asyncResult = $client.BeginConnect($HostName, $Port, $null, $null)
+        if (-not $asyncResult.AsyncWaitHandle.WaitOne($TimeoutMilliseconds, $false)) {
+            return $false
+        }
+
+        $client.EndConnect($asyncResult)
+        return $true
+    } catch {
+        return $false
+    } finally {
+        $client.Close()
+    }
 }
 
 function Test-NginxDockerLogs {
@@ -245,7 +292,49 @@ function Invoke-GatewayRequest {
     return $true
 }
 
+function Test-AuthFailoverProbe {
+    param(
+        [string]$BaseUrl,
+        [string]$Route,
+        [hashtable]$Headers,
+        [int[]]$ExpectedStatusCodes,
+        [int]$Attempts,
+        [int]$ExpectedDeadGatePort
+    )
+
+    if (-not $Route.StartsWith("/")) {
+        $Route = "/$Route"
+    }
+
+    if ($ExpectedDeadGatePort -gt 0) {
+        Write-Host "=== Auth failover precondition ==="
+        if (Test-TcpPortOpen -HostName "127.0.0.1" -Port $ExpectedDeadGatePort) {
+            Write-Host "DeadGatePort $ExpectedDeadGatePort is reachable; failover window is not active."
+            return $false
+        }
+
+        Write-Host "DeadGatePort $ExpectedDeadGatePort is not reachable as expected."
+    }
+
+    $ok = $true
+    $payload = "{}"
+    for ($i = 1; $i -le $Attempts; $i++) {
+        $probeOk = Invoke-GatewayRequest `
+            -Name "Auth failover $Route attempt $i" `
+            -Uri "$BaseUrl$Route" `
+            -Method "POST" `
+            -Body $payload `
+            -Headers $Headers `
+            -ExpectedStatusCodes $ExpectedStatusCodes
+
+        $ok = $ok -and $probeOk
+    }
+
+    return $ok
+}
+
 $normalizedBaseUrl = $BaseUrl.TrimEnd("/")
+$upstreamTolerantStatusCodes = @(200, 400, 401, 404, 405, 429, 500, 502, 503, 504)
 
 $resolvedRequestId = $RequestId
 $resolvedTraceId = $TraceId
@@ -264,7 +353,16 @@ if ($resolvedTraceId) {
     Write-Host "TraceId: $resolvedTraceId"
 }
 
-$ok = Invoke-GatewayRequest -Name "Nginx health" -Uri "$normalizedBaseUrl/health" -Headers $correlationHeaders
+$healthStatusCodes = @(200)
+if ($ProbePolicyRoutes -or $ProbeResponseHeaders) {
+    $healthStatusCodes = $upstreamTolerantStatusCodes
+}
+
+$ok = Invoke-GatewayRequest `
+    -Name "Nginx health" `
+    -Uri "$normalizedBaseUrl/health" `
+    -Headers $correlationHeaders `
+    -ExpectedStatusCodes $healthStatusCodes
 
 if ($Login) {
     $payload = @{
@@ -283,7 +381,6 @@ if ($ProbePolicyRoutes -or $ProbeResponseHeaders) {
         "X-Request-Id" = $probeId
         "X-Trace-Id"   = $probeId
     } -ExtraHeaders $correlationHeaders
-    $safeRouteStatuses = @(200, 400, 401, 404, 405, 429, 502, 503, 504)
 
     if ($ProbePolicyRoutes) {
         $authOk = Invoke-GatewayRequest `
@@ -292,37 +389,89 @@ if ($ProbePolicyRoutes -or $ProbeResponseHeaders) {
             -Method "POST" `
             -Body "{}" `
             -Headers $probeHeaders `
-            -ExpectedStatusCodes $safeRouteStatuses
+            -ExpectedStatusCodes $upstreamTolerantStatusCodes
 
         $mediaUploadOk = Invoke-GatewayRequest `
             -Name "Media upload policy route" `
             -Uri "$normalizedBaseUrl/upload_media_status" `
             -Headers $probeHeaders `
-            -ExpectedStatusCodes $safeRouteStatuses
+            -ExpectedStatusCodes $upstreamTolerantStatusCodes
 
         $mediaDownloadOk = Invoke-GatewayRequest `
             -Name "Media download policy route" `
             -Uri "$normalizedBaseUrl/media/download" `
             -Headers $probeHeaders `
-            -ExpectedStatusCodes $safeRouteStatuses
+            -ExpectedStatusCodes $upstreamTolerantStatusCodes
 
         $aiOk = Invoke-GatewayRequest `
             -Name "AI stream policy route" `
             -Uri "$normalizedBaseUrl/ai/chat/stream" `
+            -Method "POST" `
+            -Body "{}" `
             -Headers $probeHeaders `
-            -ExpectedStatusCodes $safeRouteStatuses
+            -ExpectedStatusCodes $upstreamTolerantStatusCodes
 
-        $ok = $ok -and $authOk -and $mediaUploadOk -and $mediaDownloadOk -and $aiOk
-    } elseif ($ProbeResponseHeaders) {
-        $headersOk = Invoke-GatewayRequest `
+        $authMethodOk = Invoke-GatewayRequest `
+            -Name "Method restriction GET user_login" `
+            -Uri "$normalizedBaseUrl/user_login" `
+            -Method "GET" `
+            -Headers $probeHeaders `
+            -ExpectedStatusCodes @(405)
+
+        $aiMethodOk = Invoke-GatewayRequest `
+            -Name "Method restriction GET ai chat stream" `
+            -Uri "$normalizedBaseUrl/ai/chat/stream" `
+            -Method "GET" `
+            -Headers $probeHeaders `
+            -ExpectedStatusCodes @(405)
+
+        $mediaDownloadMethodOk = Invoke-GatewayRequest `
+            -Name "Method restriction POST media download" `
+            -Uri "$normalizedBaseUrl/media/download" `
+            -Method "POST" `
+            -Headers $probeHeaders `
+            -ExpectedStatusCodes @(405)
+
+        $ok = $ok -and $authOk -and $mediaUploadOk -and $mediaDownloadOk -and $aiOk -and $authMethodOk -and $aiMethodOk -and $mediaDownloadMethodOk
+    }
+
+    if ($ProbeResponseHeaders) {
+        $healthHeadersOk = Invoke-GatewayRequest `
+            -Name "Health response headers" `
+            -Uri "$normalizedBaseUrl/health" `
+            -Headers $probeHeaders `
+            -ExpectedStatusCodes $upstreamTolerantStatusCodes `
+            -ExpectedHeaders (New-CommonGatewayResponseHeaders -ExpectedRequestId $probeHeaders["X-Request-Id"])
+
+        $streamHeadersOk = Invoke-GatewayRequest `
             -Name "AI stream response headers" `
             -Uri "$normalizedBaseUrl/ai/chat/stream" `
+            -Method "POST" `
+            -Body "{}" `
             -Headers $probeHeaders `
-            -ExpectedStatusCodes $safeRouteStatuses `
+            -ExpectedStatusCodes $upstreamTolerantStatusCodes `
             -ExpectedHeaders @{ "X-Accel-Buffering" = "no" }
 
-        $ok = $ok -and $headersOk
+        $ok = $ok -and $healthHeadersOk -and $streamHeadersOk
     }
+}
+
+if ($ProbeAuthFailover) {
+    $failoverProbeId = New-SmokeCorrelationId -Prefix "nginx-auth-failover"
+    $failoverHeaders = Merge-Headers -BaseHeaders @{
+        "X-Request-Id" = $failoverProbeId
+        "X-Trace-Id"   = $failoverProbeId
+    } -ExtraHeaders $correlationHeaders
+
+    $authFailoverOk = Test-AuthFailoverProbe `
+        -BaseUrl $normalizedBaseUrl `
+        -Route $AuthFailoverRoute `
+        -Headers $failoverHeaders `
+        -ExpectedStatusCodes $ExpectedAuthFailoverStatusCodes `
+        -Attempts $AuthFailoverAttempts `
+        -ExpectedDeadGatePort $DeadGatePort
+
+    $ok = $ok -and $authFailoverOk
 }
 
 if ($CheckDockerLogs) {

@@ -104,6 +104,7 @@ LogicSystem::LogicSystem() {
 	ProfileHttpService::RegisterRoutes(*this);
 	CallHttpServiceRoutes::RegisterRoutes(*this);
 	MomentsHttpServiceRoutes::RegisterRoutes(*this);
+	R18HttpServiceRoutes::RegisterRoutes(*this);
 
 	// Register AI routes
 	AIHttpServiceRoutes::RegisterRoutes(*this);

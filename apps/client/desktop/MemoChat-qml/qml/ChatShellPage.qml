@@ -27,6 +27,7 @@ Rectangle {
     property int r18ViewMode: 0
     property bool agentGameActive: false
     property int agentGameSetupToken: 0
+    property string agentGameSetupKind: "multi"
     readonly property real acrylicPinkProgress: 0
     readonly property var r18NavigationItems: [
         { "label": "主页", "icon": "qrc:/icons/r18_home.png", "mode": 0 },
@@ -74,14 +75,15 @@ Rectangle {
         })
     }
 
-    function openAgentGameSetup() {
+    function openAgentGameSetup(kind) {
+        root.agentGameSetupKind = kind && kind.length > 0 ? kind : "multi"
         root.agentGameSetupToken += 1
         root.agentGameActive = true
         if (controller.agentController) {
             controller.agentController.refreshModelList()
+            controller.agentController.listGameRooms()
             controller.agentController.listGameRulesets()
             controller.agentController.listGameTemplates()
-            controller.agentController.listGameRooms()
         }
     }
 
@@ -234,7 +236,8 @@ Rectangle {
                     }
                 }
                 onAgentNewChatRequested: root.createAgentChatSession()
-                onAgentNewSessionRequested: root.openAgentGameSetup()
+                onAgentNewSessionRequested: root.openAgentGameSetup("multi")
+                onAgentNewGameRequested: root.openAgentGameSetup("game")
                 onAgentSessionSelected: function(sessionId) {
                     if (controller.agentController) {
                         root.agentGameActive = false
@@ -243,13 +246,21 @@ Rectangle {
                 }
                 onAgentGameRoomSelected: function(roomId) {
                     if (controller.agentController) {
-                        root.agentGameActive = true
+                        root.agentGameActive = false
                         controller.agentController.loadGameRoom(roomId)
                     }
                 }
                 onAgentSessionDeleted: function(sessionId) {
                     if (controller.agentController) {
                         controller.agentController.deleteSession(sessionId)
+                    }
+                }
+                onAgentGameRoomDeleted: function(roomId) {
+                    if (controller.agentController) {
+                        if (roomId === controller.agentController.currentGameRoomId) {
+                            root.agentGameActive = false
+                        }
+                        controller.agentController.deleteGameRoom(roomId)
                     }
                 }
                 onMomentFriendSelected: function(uid, displayName) {
@@ -408,8 +419,16 @@ Rectangle {
                             knowledgeBusy: controller.agentController ? controller.agentController.knowledgeBusy : false
                             knowledgeStatusText: controller.agentController ? controller.agentController.knowledgeStatusText : ""
                             knowledgeError: controller.agentController ? controller.agentController.knowledgeError : ""
+                            gameState: controller.agentController ? controller.agentController.gameState : ({})
+                            currentGameRoomId: controller.agentController ? controller.agentController.currentGameRoomId : ""
+                            gameBusy: controller.agentController ? controller.agentController.gameBusy : false
+                            gameStatusText: controller.agentController ? controller.agentController.gameStatusText : ""
+                            gameError: controller.agentController ? controller.agentController.gameError : ""
+                            selfName: controller.currentUserNick && controller.currentUserNick.length > 0
+                                      ? controller.currentUserNick
+                                      : controller.currentUserName
                             selfAvatar: controller.currentUserIcon
-                            onGameModeRequested: root.openAgentGameSetup()
+                            onGameModeRequested: root.openAgentGameSetup("game")
                         }
                     }
                 }
@@ -533,11 +552,15 @@ Rectangle {
                     gameState: controller.agentController ? controller.agentController.gameState : ({})
                     currentGameRoomId: controller.agentController ? controller.agentController.currentGameRoomId : ""
                     setupModeToken: root.agentGameSetupToken
+                    setupKind: root.agentGameSetupKind
                     gameRulesets: controller.agentController ? controller.agentController.gameRulesets : []
                     gameRolePresets: controller.agentController ? controller.agentController.gameRolePresets : []
                     gameBusy: controller.agentController ? controller.agentController.gameBusy : false
                     gameStatusText: controller.agentController ? controller.agentController.gameStatusText : ""
                     gameError: controller.agentController ? controller.agentController.gameError : ""
+                    humanDisplayName: controller.currentUserNick && controller.currentUserNick.length > 0
+                                      ? controller.currentUserNick
+                                      : controller.currentUserName
                     onCloseRequested: root.agentGameActive = false
                 }
             }

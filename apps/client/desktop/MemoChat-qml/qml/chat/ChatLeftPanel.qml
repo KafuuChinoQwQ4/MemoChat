@@ -43,7 +43,9 @@ Rectangle {
     property real _chatLoadThresholdPx: 48
     property real _chatLoadRearmOffsetPx: 96
     property string pendingAgentDeleteSessionId: ""
+    property string pendingAgentDeleteRoomId: ""
     property string pendingAgentDeleteTitle: ""
+    readonly property bool pendingAgentDeleteIsRoom: pendingAgentDeleteRoomId.length > 0
 
     signal dialogUidSelected(int uid)
     signal chatIndexSelected(int index)
@@ -60,9 +62,11 @@ Rectangle {
     signal agentRefreshRequested()
     signal agentNewChatRequested()
     signal agentNewSessionRequested()
+    signal agentNewGameRequested()
     signal agentSessionSelected(string sessionId)
     signal agentSessionDeleted(string sessionId)
     signal agentGameRoomSelected(string roomId)
+    signal agentGameRoomDeleted(string roomId)
     signal momentFriendSelected(int uid, string displayName)
     signal dialogPinToggled(int uid)
     signal dialogMuteToggled(int uid)
@@ -91,12 +95,12 @@ Rectangle {
             var sessionCount = agentSessions ? agentSessions.length : 0
             var roomCount = agentGameRooms ? agentGameRooms.length : 0
             if (agentCurrentGameRoomId.length > 0) {
-                return "已选择房间"
+                return "已选择对话房间"
             }
             if (agentCurrentSessionId.length > 0) {
                 return "已选择会话"
             }
-            return "会话 " + sessionCount + " · 房间 " + roomCount
+            return "会话 " + sessionCount + " · 对话房间 " + roomCount
         }
         return "在这里管理账户信息和应用设置。"
     }
@@ -120,8 +124,8 @@ Rectangle {
             rows.push({
                 "kind": "room",
                 "entry_id": room.room_id || room.id || "",
-                "title": room.title || room.name || "游戏房间",
-                "subtitle": (room.status || "draft") + " · " + (room.ruleset_id || "ruleset"),
+                "title": room.title || room.name || "对话房间",
+                "subtitle": (room.status || "ready") + " · " + root.roomModeLabel(room),
                 "status": (sessions ? sessions.length : 0) + j,
                 "session_id": "",
                 "room_id": room.room_id || room.id || "",
@@ -129,6 +133,10 @@ Rectangle {
             })
         }
         return rows
+    }
+    function roomModeLabel(room) {
+        var rulesetId = (room && (room.ruleset_id || room.ruleset)) || ""
+        return rulesetId === "multi_ai_chat.test" ? "多 AI 聊天" : "Game 模式"
     }
     function ensureCurrentSessionSource() {
         if (currentTab !== AppController.ChatTabPage) {
@@ -817,7 +825,7 @@ Rectangle {
 
                     Popup {
                         id: agentNewMenuPopup
-                        width: 176
+                        width: 180
                         height: agentNewMenuColumn.implicitHeight + 16
                         x: Math.max(0, agentNewButton.x)
                         y: agentNewButton.y + agentNewButton.height + 6
@@ -848,7 +856,7 @@ Rectangle {
                                 GlassButton {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 32
-                                    text: "新建 AI 会话"
+                                    text: "单 AI 私聊"
                                     textPixelSize: 13
                                     cornerRadius: 8
                                     normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.18)
@@ -863,7 +871,7 @@ Rectangle {
                                 GlassButton {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 32
-                                    text: "创建游戏房间"
+                                    text: "多 AI 聊天"
                                     textPixelSize: 13
                                     cornerRadius: 8
                                     normalColor: Qt.rgba(0.30, 0.58, 0.36, 0.18)
@@ -872,6 +880,21 @@ Rectangle {
                                     onClicked: {
                                         agentNewMenuPopup.close()
                                         root.agentNewSessionRequested()
+                                    }
+                                }
+
+                                GlassButton {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 32
+                                    text: "Game 模式"
+                                    textPixelSize: 13
+                                    cornerRadius: 8
+                                    normalColor: Qt.rgba(0.48, 0.42, 0.72, 0.18)
+                                    hoverColor: Qt.rgba(0.48, 0.42, 0.72, 0.28)
+                                    pressedColor: Qt.rgba(0.48, 0.42, 0.72, 0.36)
+                                    onClicked: {
+                                        agentNewMenuPopup.close()
+                                        root.agentNewGameRequested()
                                     }
                                 }
                             }
@@ -948,7 +971,7 @@ Rectangle {
 
                                 Label {
                                     Layout.fillWidth: true
-                                    text: modelData.kind === "room" ? "房间" : "会话"
+                                    text: modelData.kind === "room" ? "对话房间" : "会话"
                                     color: "#6a7b92"
                                     font.pixelSize: 10
                                     font.bold: true
@@ -980,7 +1003,7 @@ Rectangle {
                                 color: sessionDeleteArea.pressed ? Qt.rgba(0.89, 0.27, 0.27, 0.30)
                                       : sessionDeleteArea.containsMouse ? Qt.rgba(0.89, 0.27, 0.27, 0.24)
                                                                         : Qt.rgba(0.89, 0.27, 0.27, 0.16)
-                                visible: modelData.kind === "session"
+                                visible: modelData.kind === "session" || modelData.kind === "room"
                                 opacity: root.agentBusy ? 0.45 : 1.0
 
                                 Label {
@@ -995,16 +1018,22 @@ Rectangle {
                                     id: sessionDeleteArea
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    enabled: modelData.kind === "session" && !root.agentBusy
+                                    enabled: (modelData.kind === "session" || modelData.kind === "room") && !root.agentBusy
                                     cursorShape: Qt.PointingHandCursor
                                     ToolTip.visible: containsMouse
                                     ToolTip.delay: 120
-                                    ToolTip.text: "删除会话"
+                                    ToolTip.text: modelData.kind === "room" ? "清除对话房间" : "删除会话"
                                     onClicked: function(mouse) {
                                         mouse.accepted = true
-                                        root.pendingAgentDeleteSessionId = modelData.session_id || ""
-                                        root.pendingAgentDeleteTitle = modelData.title || "新会话"
-                                        if (root.pendingAgentDeleteSessionId.length > 0) {
+                                        if (modelData.kind === "room") {
+                                            root.pendingAgentDeleteRoomId = modelData.room_id || modelData.entry_id || ""
+                                            root.pendingAgentDeleteSessionId = ""
+                                        } else {
+                                            root.pendingAgentDeleteSessionId = modelData.session_id || modelData.entry_id || ""
+                                            root.pendingAgentDeleteRoomId = ""
+                                        }
+                                        root.pendingAgentDeleteTitle = modelData.title || (modelData.kind === "room" ? "对话房间" : "新会话")
+                                        if (root.pendingAgentDeleteSessionId.length > 0 || root.pendingAgentDeleteRoomId.length > 0) {
                                             agentDeleteDialog.open()
                                         }
                                     }
@@ -1069,6 +1098,7 @@ Rectangle {
 
                 onClosed: {
                     root.pendingAgentDeleteSessionId = ""
+                    root.pendingAgentDeleteRoomId = ""
                     root.pendingAgentDeleteTitle = ""
                 }
 
@@ -1088,7 +1118,7 @@ Rectangle {
 
                         Label {
                             Layout.fillWidth: true
-                            text: "删除 AI 会话"
+                            text: root.pendingAgentDeleteIsRoom ? "清除对话房间" : "删除 AI 会话"
                             color: "#263448"
                             font.pixelSize: 16
                             font.bold: true
@@ -1098,7 +1128,9 @@ Rectangle {
                         Label {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            text: "确认删除「" + root.pendingAgentDeleteTitle + "」？"
+                            text: root.pendingAgentDeleteIsRoom
+                                  ? ("确认清除「" + root.pendingAgentDeleteTitle + "」？")
+                                  : ("确认删除「" + root.pendingAgentDeleteTitle + "」？")
                             color: "#5f6f85"
                             font.pixelSize: 14
                             wrapMode: Text.Wrap
@@ -1124,7 +1156,7 @@ Rectangle {
                             GlassButton {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 38
-                                text: "删除"
+                                text: root.pendingAgentDeleteIsRoom ? "清除" : "删除"
                                 textPixelSize: 13
                                 textColor: "#b83f4a"
                                 cornerRadius: 10
@@ -1132,8 +1164,11 @@ Rectangle {
                                 hoverColor: Qt.rgba(0.89, 0.27, 0.27, 0.24)
                                 pressedColor: Qt.rgba(0.89, 0.27, 0.27, 0.32)
                                 onClicked: {
+                                    const roomId = root.pendingAgentDeleteRoomId
                                     const sessionId = root.pendingAgentDeleteSessionId
-                                    if (sessionId.length > 0) {
+                                    if (roomId.length > 0) {
+                                        root.agentGameRoomDeleted(roomId)
+                                    } else if (sessionId.length > 0) {
                                         root.agentSessionDeleted(sessionId)
                                     }
                                     agentDeleteDialog.close()

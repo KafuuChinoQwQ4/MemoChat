@@ -31,6 +31,8 @@ public:
 	tcp::socket& GetSocket() {
 		return _socket;
 	}
+	http::response<http::dynamic_body>& GetResponse() { return _response; }
+	const std::unordered_map<std::string, std::string>& GetParams() const { return _get_params; }
 private:
 	using FileResponse = http::response<http::file_body>;
 
