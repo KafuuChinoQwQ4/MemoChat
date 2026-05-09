@@ -12,6 +12,7 @@ Item {
     property string activeChapterId: ""
     property int viewMode: 0 // 0 shelf, 1 search, 2 detail, 3 reader, 4 sources, 5 history
     property bool readerChromeVisible: true
+    readonly property string gatewayBaseUrl: typeof gateUrlPrefix === "string" ? gateUrlPrefix : ""
 
     readonly property color pageBackgroundColor: "transparent"
     readonly property color panelFillColor: Qt.rgba(1, 1, 1, 0.16)
@@ -41,7 +42,40 @@ Item {
         if (url.indexOf("http://") === 0 || url.indexOf("https://") === 0 || url.indexOf("qrc:/") === 0) {
             return url
         }
-        return gate_url_prefix + url
+        if (url.indexOf("/") === 0 && root.gatewayBaseUrl.length > 0) {
+            return root.gatewayBaseUrl + url
+        }
+        return url
+    }
+
+    function sourceStatusText(status, format) {
+        var statusText = status || "ok"
+        var formatText = format || "native"
+        if (statusText === "staged-js") {
+            return formatText + " · 已导入，等待 MemoChat JS 源运行适配"
+        }
+        if (statusText === "staged") {
+            return formatText + " · 已暂存"
+        }
+        return formatText + " · " + statusText
+    }
+
+    function chooseLocalSourcePackage() {
+        if (!root.r18Controller) {
+            return
+        }
+        var path = root.r18Controller.pickSourcePackage()
+        if (path && path.length > 0) {
+            sourcePackagePath.text = path
+        }
+    }
+
+    function selectSourceAndSearch(sourceId) {
+        if (!root.r18Controller || !sourceId) {
+            return
+        }
+        root.r18Controller.selectSource(sourceId)
+        root.r18Controller.search(root.keyword, 1)
     }
 
     function modelCount(model) {
@@ -83,7 +117,8 @@ Item {
             root.r18Controller.refreshHistory()
         } else if (mode === 4) {
             root.r18Controller.refreshSources()
-            if (root.modelCount(root.r18Controller.officialSourceModel) === 0) {
+            if (root.modelCount(root.r18Controller.officialSourceModel) === 0 &&
+                    root.r18Controller.officialSourceCatalogUrl.length > 0) {
                 root.r18Controller.refreshOfficialSources("")
             }
         }
@@ -674,7 +709,7 @@ Item {
                     Item {
                         ColumnLayout {
                             anchors.fill: parent
-                            spacing: 20
+                            spacing: 12
 
                             RowLayout {
                                 Layout.fillWidth: true
@@ -684,6 +719,14 @@ Item {
                                     color: root.textPrimaryColor
                                     font.pixelSize: 24
                                     font.bold: true
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    text: root.r18Controller && root.r18Controller.currentSourceId.length > 0
+                                          ? "当前: " + root.r18Controller.currentSourceId
+                                          : ""
+                                    color: root.textMutedColor
+                                    font.pixelSize: 12
                                     elide: Text.ElideRight
                                 }
                                 GlassButton {
@@ -699,86 +742,108 @@ Item {
                                 }
                             }
 
-                            Rectangle {
+                            RowLayout {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 72
-                                radius: 9
-                                color: root.itemFillColor
-                                border.color: root.fieldStrokeColor
+                                Layout.preferredHeight: 176
+                                spacing: 12
 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 20
-                                    anchors.rightMargin: 20
-                                    spacing: 12
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    radius: 9
+                                    color: root.itemFillColor
+                                    border.color: root.fieldStrokeColor
 
-                                    Text {
-                                        Layout.preferredWidth: 92
-                                        text: "直接拉源"
-                                        color: root.textPrimaryColor
-                                        font.pixelSize: 19
-                                        elide: Text.ElideRight
-                                    }
-                                    TextField {
-                                        id: directSourceUrl
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: 40
-                                        placeholderText: "漫画源 JS URL"
-                                        placeholderTextColor: root.placeholderColor
-                                        color: root.textPrimaryColor
-                                        text: "https://cdn.jsdelivr.net/gh/venera-app/venera-configs@main/jm.js"
-                                        selectByMouse: true
-                                        background: Rectangle {
-                                            radius: 20
-                                            color: root.fieldFillColor
-                                            border.color: "transparent"
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 16
+                                        spacing: 10
+
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: "添加自定义 JS 源"
+                                            color: root.textPrimaryColor
+                                            font.pixelSize: 18
+                                            font.bold: true
+                                            elide: Text.ElideRight
                                         }
-                                    }
-                                    GlassButton {
-                                        Layout.preferredWidth: 108
-                                        Layout.preferredHeight: 40
-                                        text: "拉取JM源"
-                                        textColor: root.primaryButtonTextColor
-                                        cornerRadius: 20
-                                        normalColor: root.primaryButtonColor
-                                        hoverColor: root.primaryButtonHoverColor
-                                        pressedColor: root.primaryButtonPressedColor
-                                        onClicked: {
-                                            if (root.r18Controller) root.r18Controller.importSourceUrl(directSourceUrl.text)
+                                        TextField {
+                                            id: directSourceUrl
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 40
+                                            placeholderText: "https://.../source.js"
+                                            placeholderTextColor: root.placeholderColor
+                                            color: root.textPrimaryColor
+                                            text: ""
+                                            selectByMouse: true
+                                            background: Rectangle {
+                                                radius: 20
+                                                color: root.fieldFillColor
+                                                border.color: "transparent"
+                                            }
+                                        }
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 8
+                                            GlassButton {
+                                                Layout.preferredWidth: 102
+                                                Layout.preferredHeight: 36
+                                                text: "拉取 URL"
+                                                textColor: root.primaryButtonTextColor
+                                                cornerRadius: 18
+                                                normalColor: root.primaryButtonColor
+                                                hoverColor: root.primaryButtonHoverColor
+                                                pressedColor: root.primaryButtonPressedColor
+                                                onClicked: if (root.r18Controller) root.r18Controller.importSourceUrl(directSourceUrl.text)
+                                            }
+                                            GlassButton {
+                                                Layout.preferredWidth: 102
+                                                Layout.preferredHeight: 36
+                                                text: "选择文件"
+                                                textColor: root.textSecondaryColor
+                                                cornerRadius: 18
+                                                normalColor: root.secondaryButtonColor
+                                                hoverColor: root.secondaryButtonHoverColor
+                                                pressedColor: root.secondaryButtonPressedColor
+                                                onClicked: root.chooseLocalSourcePackage()
+                                            }
+                                            Item { Layout.fillWidth: true }
+                                        }
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: "自定义 JS 源会先保存到服务端；搜索执行需要后续 MemoChat JS 源运行适配。"
+                                            color: root.textMutedColor
+                                            font.pixelSize: 12
+                                            wrapMode: Text.WordWrap
                                         }
                                     }
                                 }
-                            }
 
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 120
-                                radius: 9
-                                color: root.itemFillColor
-                                border.color: root.fieldStrokeColor
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    radius: 9
+                                    color: root.itemFillColor
+                                    border.color: root.fieldStrokeColor
 
-                                ColumnLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 20
-                                    anchors.rightMargin: 20
-                                    anchors.topMargin: 12
-                                    anchors.bottomMargin: 12
-                                    spacing: 10
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 16
+                                        spacing: 10
 
-                                    RowLayout {
-                                        Layout.fillWidth: true
                                         Text {
-                                            Layout.preferredWidth: 92
-                                            text: "从目录选"
+                                            Layout.fillWidth: true
+                                            text: "自定义源目录"
                                             color: root.textPrimaryColor
-                                            font.pixelSize: 19
+                                            font.pixelSize: 18
+                                            font.bold: true
                                             elide: Text.ElideRight
                                         }
                                         TextField {
                                             id: officialCatalogUrl
                                             Layout.fillWidth: true
                                             Layout.preferredHeight: 38
-                                            placeholderText: "可选: 源目录 index.json"
+                                            placeholderText: "可选: 自定义目录 index.json"
                                             placeholderTextColor: root.placeholderColor
                                             color: root.textPrimaryColor
                                             text: root.r18Controller ? root.r18Controller.officialSourceCatalogUrl : ""
@@ -789,45 +854,27 @@ Item {
                                                 border.color: "transparent"
                                             }
                                         }
-                                        GlassButton {
-                                            Layout.preferredWidth: 82
-                                            Layout.preferredHeight: 38
-                                            text: "查看"
-                                            textColor: root.textSecondaryColor
-                                            textPixelSize: 13
-                                            cornerRadius: 19
-                                            normalColor: root.secondaryButtonColor
-                                            hoverColor: root.secondaryButtonHoverColor
-                                            pressedColor: root.secondaryButtonPressedColor
-                                            onClicked: {
-                                                if (root.r18Controller) root.r18Controller.refreshOfficialSources(officialCatalogUrl.text)
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 8
+                                            GlassButton {
+                                                Layout.preferredWidth: 82
+                                                Layout.preferredHeight: 34
+                                                text: "刷新"
+                                                textColor: root.textSecondaryColor
+                                                textPixelSize: 13
+                                                cornerRadius: 17
+                                                normalColor: root.secondaryButtonColor
+                                                hoverColor: root.secondaryButtonHoverColor
+                                                pressedColor: root.secondaryButtonPressedColor
+                                                onClicked: if (root.r18Controller) root.r18Controller.refreshOfficialSources(officialCatalogUrl.text)
                                             }
-                                        }
-                                    }
-
-                                    ListView {
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        clip: true
-                                        orientation: ListView.Horizontal
-                                        spacing: 8
-                                        model: root.r18Controller ? root.r18Controller.officialSourceModel : null
-                                        delegate: GlassButton {
-                                            width: Math.max(84, Math.min(160, titleMetrics.width + 34))
-                                            height: 30
-                                            text: model.title
-                                            textColor: root.textSecondaryColor
-                                            textPixelSize: 13
-                                            cornerRadius: 10
-                                            normalColor: root.secondaryButtonColor
-                                            hoverColor: root.secondaryButtonHoverColor
-                                            pressedColor: root.secondaryButtonPressedColor
-                                            onClicked: if (root.r18Controller) root.r18Controller.importOfficialSource(index)
-
-                                            TextMetrics {
-                                                id: titleMetrics
-                                                text: model.title
-                                                font.pixelSize: 13
+                                            Text {
+                                                Layout.fillWidth: true
+                                            text: root.modelCount(root.r18Controller ? root.r18Controller.officialSourceModel : null) + " 个自定义条目"
+                                                color: root.textMutedColor
+                                                font.pixelSize: 12
+                                                elide: Text.ElideRight
                                             }
                                         }
                                     }
@@ -836,7 +883,7 @@ Item {
 
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 132
+                                Layout.preferredHeight: 118
                                 radius: 9
                                 color: root.itemFillColor
                                 border.color: root.fieldStrokeColor
@@ -861,7 +908,7 @@ Item {
                                             id: sourcePackagePath
                                             Layout.fillWidth: true
                                             Layout.preferredHeight: 38
-                                            placeholderText: "本地插件 zip/js 路径"
+                                            placeholderText: "本地 zip/js 路径"
                                             placeholderTextColor: root.placeholderColor
                                             color: root.textPrimaryColor
                                             selectByMouse: true
@@ -870,6 +917,17 @@ Item {
                                                 color: root.fieldFillColor
                                                 border.color: "transparent"
                                             }
+                                        }
+                                        GlassButton {
+                                            Layout.preferredWidth: 76
+                                            Layout.preferredHeight: 38
+                                            text: "选择"
+                                            textColor: root.textSecondaryColor
+                                            cornerRadius: 19
+                                            normalColor: root.secondaryButtonColor
+                                            hoverColor: root.secondaryButtonHoverColor
+                                            pressedColor: root.secondaryButtonPressedColor
+                                            onClicked: root.chooseLocalSourcePackage()
                                         }
                                         GlassButton {
                                             Layout.preferredWidth: 76
@@ -890,7 +948,7 @@ Item {
                                         id: manifestText
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true
-                                        placeholderText: "可选 manifest.json"
+                                        placeholderText: "可选 manifest.json；JS 文件通常可留空"
                                         placeholderTextColor: root.placeholderColor
                                         color: root.textPrimaryColor
                                         wrapMode: TextEdit.Wrap
@@ -904,51 +962,200 @@ Item {
                                 }
                             }
 
-                            ListView {
+                            RowLayout {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                clip: true
-                                spacing: 0
-                                model: root.r18Controller ? root.r18Controller.sourceModel : null
-                                ScrollBar.vertical: GlassScrollBar {}
-                                delegate: Rectangle {
-                                    width: ListView.view.width
-                                    height: 56
-                                    color: sourceRowMouse.containsMouse ? root.itemHoverFillColor : root.itemFillColor
-                                    border.color: root.panelStrokeColor
-                                    RowLayout {
+                                spacing: 12
+
+                                Rectangle {
+                                    Layout.preferredWidth: Math.min(330, parent.width * 0.38)
+                                    Layout.fillHeight: true
+                                    radius: 9
+                                    color: root.itemFillColor
+                                    border.color: root.fieldStrokeColor
+                                    clip: true
+
+                                    ColumnLayout {
                                         anchors.fill: parent
-                                        anchors.leftMargin: 20
-                                        anchors.rightMargin: 14
-                                        spacing: 12
-                                        ColumnLayout {
+                                        anchors.margins: 12
+                                        spacing: 8
+                                        Text {
                                             Layout.fillWidth: true
-                                            spacing: 2
-                                            Text {
-                                                Layout.fillWidth: true
-                                                text: model.title
-                                                color: root.textPrimaryColor
-                                                font.pixelSize: 14
-                                                elide: Text.ElideRight
-                                            }
-                                            Text {
-                                                Layout.fillWidth: true
-                                                text: model.status
-                                                color: root.textMutedColor
-                                                font.pixelSize: 11
-                                                elide: Text.ElideRight
-                                            }
+                                            text: "自定义目录"
+                                            color: root.textPrimaryColor
+                                            font.pixelSize: 16
+                                            font.bold: true
+                                            elide: Text.ElideRight
                                         }
-                                        Switch {
-                                            checked: model.enabled
-                                            onToggled: if (root.r18Controller) root.r18Controller.enableSource(model.sourceId, checked)
+                                        ListView {
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            clip: true
+                                            spacing: 6
+                                            model: root.r18Controller ? root.r18Controller.officialSourceModel : null
+                                            ScrollBar.vertical: GlassScrollBar {}
+                                            delegate: Rectangle {
+                                                width: ListView.view.width
+                                                height: 58
+                                                radius: 8
+                                                color: officialMouse.containsMouse ? root.itemHoverFillColor : Qt.rgba(1, 1, 1, 0.08)
+                                                border.color: root.fieldStrokeColor
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: 10
+                                                    anchors.rightMargin: 8
+                                                    spacing: 8
+                                                    ColumnLayout {
+                                                        Layout.fillWidth: true
+                                                        spacing: 2
+                                                        Text {
+                                                            Layout.fillWidth: true
+                                                            text: model.title || model.itemId
+                                                            color: root.textPrimaryColor
+                                                            font.pixelSize: 13
+                                                            font.bold: true
+                                                            elide: Text.ElideRight
+                                                        }
+                                                        Text {
+                                                            Layout.fillWidth: true
+                                                            text: model.status || model.message || model.url
+                                                            color: root.textMutedColor
+                                                            font.pixelSize: 11
+                                                            elide: Text.ElideRight
+                                                        }
+                                                    }
+                                                    GlassButton {
+                                                        Layout.preferredWidth: 58
+                                                        Layout.preferredHeight: 30
+                                                        text: "导入"
+                                                        textPixelSize: 12
+                                                        textColor: root.primaryButtonTextColor
+                                                        cornerRadius: 15
+                                                        normalColor: root.primaryButtonColor
+                                                        hoverColor: root.primaryButtonHoverColor
+                                                        pressedColor: root.primaryButtonPressedColor
+                                                        onClicked: if (root.r18Controller) root.r18Controller.importOfficialSource(index)
+                                                    }
+                                                }
+                                                MouseArea {
+                                                    id: officialMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    acceptedButtons: Qt.NoButton
+                                                }
+                                            }
                                         }
                                     }
-                                    MouseArea {
-                                        id: sourceRowMouse
+                                }
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    radius: 9
+                                    color: root.itemFillColor
+                                    border.color: root.fieldStrokeColor
+                                    clip: true
+
+                                    ColumnLayout {
                                         anchors.fill: parent
-                                        hoverEnabled: true
-                                        acceptedButtons: Qt.NoButton
+                                        anchors.margins: 12
+                                        spacing: 8
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: "已安装源"
+                                            color: root.textPrimaryColor
+                                            font.pixelSize: 16
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+                                        ListView {
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            clip: true
+                                            spacing: 6
+                                            model: root.r18Controller ? root.r18Controller.sourceModel : null
+                                            ScrollBar.vertical: GlassScrollBar {}
+                                            delegate: Rectangle {
+                                                width: ListView.view.width
+                                                height: 70
+                                                radius: 8
+                                                color: root.r18Controller && root.r18Controller.currentSourceId === model.sourceId
+                                                       ? root.itemSelectedFillColor
+                                                       : sourceRowMouse.containsMouse ? root.itemHoverFillColor : Qt.rgba(1, 1, 1, 0.08)
+                                                border.color: root.r18Controller && root.r18Controller.currentSourceId === model.sourceId
+                                                              ? Qt.rgba(0.42, 0.64, 0.88, 0.55)
+                                                              : root.fieldStrokeColor
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: 12
+                                                    anchors.rightMargin: 10
+                                                    spacing: 10
+                                                    Rectangle {
+                                                        Layout.preferredWidth: 38
+                                                        Layout.preferredHeight: 38
+                                                        radius: 8
+                                                        color: model.enabled ? root.primaryButtonColor : Qt.rgba(0.6, 0.6, 0.6, 0.18)
+                                                        border.color: root.fieldStrokeColor
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: (model.title || model.sourceId || "?").substring(0, 1)
+                                                            color: root.textPrimaryColor
+                                                            font.pixelSize: 16
+                                                            font.bold: true
+                                                        }
+                                                    }
+                                                    ColumnLayout {
+                                                        Layout.fillWidth: true
+                                                        spacing: 2
+                                                        Text {
+                                                            Layout.fillWidth: true
+                                                            text: model.title || model.sourceId
+                                                            color: root.textPrimaryColor
+                                                            font.pixelSize: 14
+                                                            font.bold: true
+                                                            elide: Text.ElideRight
+                                                        }
+                                                        Text {
+                                                            Layout.fillWidth: true
+                                                            text: root.sourceStatusText(model.status, model.format)
+                                                            color: root.textMutedColor
+                                                            font.pixelSize: 11
+                                                            elide: Text.ElideRight
+                                                        }
+                                                        Text {
+                                                            Layout.fillWidth: true
+                                                            visible: model.message && model.message.length > 0
+                                                            text: model.message
+                                                            color: root.textMutedColor
+                                                            font.pixelSize: 10
+                                                            elide: Text.ElideRight
+                                                        }
+                                                    }
+                                                    GlassButton {
+                                                        Layout.preferredWidth: 58
+                                                        Layout.preferredHeight: 30
+                                                        text: "使用"
+                                                        textPixelSize: 12
+                                                        textColor: root.textSecondaryColor
+                                                        cornerRadius: 15
+                                                        normalColor: root.secondaryButtonColor
+                                                        hoverColor: root.secondaryButtonHoverColor
+                                                        pressedColor: root.secondaryButtonPressedColor
+                                                        onClicked: root.selectSourceAndSearch(model.sourceId)
+                                                    }
+                                                    Switch {
+                                                        checked: model.enabled
+                                                        onToggled: if (root.r18Controller) root.r18Controller.enableSource(model.sourceId, checked)
+                                                    }
+                                                }
+                                                MouseArea {
+                                                    id: sourceRowMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    acceptedButtons: Qt.NoButton
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1057,6 +1264,38 @@ Item {
                 }
 
                 Rectangle {
+                    id: statusBanner
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    height: statusText.visible ? statusText.implicitHeight + 18 : 0
+                    radius: 8
+                    color: Qt.rgba(0.54, 0.70, 0.93, 0.24)
+                    border.color: Qt.rgba(0.28, 0.45, 0.67, 0.28)
+                    visible: root.r18Controller
+                             && root.r18Controller.error.length === 0
+                             && root.r18Controller.statusText.length > 0
+                    z: 20
+
+                    Text {
+                        id: statusText
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 10
+                        visible: root.r18Controller
+                                 && root.r18Controller.error.length === 0
+                                 && root.r18Controller.statusText.length > 0
+                        text: root.r18Controller ? root.r18Controller.statusText : ""
+                        color: root.textSecondaryColor
+                        font.pixelSize: 13
+                        wrapMode: Text.WordWrap
+                    }
+                }
+
+                Rectangle {
+                    id: errorBanner
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.top: parent.top

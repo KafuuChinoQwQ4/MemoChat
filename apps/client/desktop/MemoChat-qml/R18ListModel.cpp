@@ -26,10 +26,14 @@ QVariant R18ListModel::data(const QModelIndex& index, int role) const
     case TitleRole: return item.value(QStringLiteral("title"), item.value(QStringLiteral("name")));
     case SubtitleRole: return item.value(QStringLiteral("subtitle"), item.value(QStringLiteral("message"), item.value(QStringLiteral("description"))));
     case CoverRole: return item.value(QStringLiteral("cover"));
-    case UrlRole: return item.value(QStringLiteral("url"));
+    case UrlRole: return item.value(QStringLiteral("url"),
+                                     item.value(QStringLiteral("source_url"),
+                                                item.value(QStringLiteral("fileName"), item.value(QStringLiteral("filename")))));
     case EnabledRole: return item.value(QStringLiteral("enabled"));
     case StatusRole: return item.value(QStringLiteral("status"), item.value(QStringLiteral("version")));
     case OrderRole: return item.value(QStringLiteral("order"), item.value(QStringLiteral("index")));
+    case FormatRole: return item.value(QStringLiteral("format"));
+    case MessageRole: return item.value(QStringLiteral("message"), item.value(QStringLiteral("description")));
     default: return {};
     }
 }
@@ -47,6 +51,8 @@ QHash<int, QByteArray> R18ListModel::roleNames() const
         {EnabledRole, "enabled"},
         {StatusRole, "status"},
         {OrderRole, "order"},
+        {FormatRole, "format"},
+        {MessageRole, "message"},
     };
 }
 

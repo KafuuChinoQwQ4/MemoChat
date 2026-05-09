@@ -11,23 +11,42 @@ receivers:
     include:
       - /workspace/Memo_ops/runtime/**/*.json
       - /workspace/build/bin/**/*.json
-    start_at: beginning
+    start_at: end
     operators:
       - type: json_parser
         parse_from: body
+  filelog/nginx:
+    include:
+      - /workspace/nginx/logs/access.json
+    start_at: end
+    operators:
+      - type: json_parser
+        parse_from: body
+        parse_to: attributes
 
 processors:
+  attributes/nginx_loki:
+    actions:
+      - key: service
+        value: memochat-nginx-lb
+        action: upsert
+      - key: component
+        value: nginx_gateway
+        action: upsert
+      - key: loki.attribute.labels
+        value: service,component
+        action: insert
   batch:
 
 exporters:
   debug:
     verbosity: normal
   otlp/tempo:
-    endpoint: tempo:4317
+    endpoint: memochat-tempo:4317
     tls:
       insecure: true
   loki:
-    endpoint: http://loki:3100/loki/api/v1/push
+    endpoint: http://memochat-loki:3100/loki/api/v1/push
 
 service:
   telemetry:
@@ -42,3 +61,7 @@ service:
       receivers: [filelog]
       processors: [batch]
       exporters: [loki, debug]
+    logs/nginx:
+      receivers: [filelog/nginx]
+      processors: [attributes/nginx_loki, batch]
+      exporters: [loki]

@@ -145,6 +145,22 @@ class A2AGameServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len([p for p in state.participants if p.kind == "agent"]), 5)
         self.assertEqual(state.available_actions, ["start"])
 
+    async def test_create_room_uses_human_display_name(self):
+        service = A2AGameService(FakeAgentService())
+
+        state = service.create_room(
+            uid=1059,
+            display_name="可视昵称",
+            title="测试昵称",
+            ruleset_id="multi_ai_chat.test",
+            max_players=1,
+            agent_count=0,
+        )
+        human = next(p for p in state.participants if p.uid == 1059)
+
+        self.assertEqual(human.display_name, "可视昵称")
+        self.assertTrue(any(event.content == "可视昵称 加入房间。" for event in state.events))
+
     async def test_create_room_locks_ruleset_agent_count_and_preset_pool(self):
         service = A2AGameService(FakeAgentService())
         agent_presets = [
@@ -197,10 +213,26 @@ class A2AGameServiceTests(unittest.IsolatedAsyncioTestCase):
 
         werewolf = service.list_role_presets("werewolf.basic")
         script = service.list_role_presets("script_murder.basic")
+        chat = service.list_role_presets("multi_ai_chat.test")
 
-        self.assertIn("werewolf", {item["role_key"] for item in werewolf})
-        self.assertIn("villager", {item["role_key"] for item in werewolf})
+        werewolf_roles = {item["role_key"] for item in werewolf}
+        self.assertIn("werewolf", werewolf_roles)
+        self.assertIn("villager", werewolf_roles)
+        self.assertIn("seer", werewolf_roles)
+        self.assertIn("witch", werewolf_roles)
+        self.assertIn("hunter", werewolf_roles)
+        self.assertTrue(all(item.get("rule") for item in werewolf))
         self.assertIn("detective", {item["role_key"] for item in script})
+        self.assertEqual(chat, [])
+
+    async def test_multi_ai_chat_ruleset_is_exposed_as_test_mode(self):
+        service = A2AGameService(FakeAgentService())
+
+        rulesets = service.list_rulesets()
+        chat = next(item for item in rulesets if item["ruleset_id"] == "multi_ai_chat.test")
+
+        self.assertIn("多 AI 对话", chat["display_name"])
+        self.assertIn("Temporary", chat["description"])
 
     async def test_template_presets_are_exposed_and_filter_by_ruleset(self):
         service = A2AGameService(FakeAgentService())
@@ -287,6 +319,31 @@ class A2AGameServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(agent.private_state["role_key"], agent.role_key)
         self.assertEqual(human.private_state["role_key"], human.role_key)
         self.assertEqual(agent.persona, "潜伏")
+
+    async def test_werewolf_start_preserves_explicit_roles_and_randomizes_blank_roles(self):
+        service = A2AGameService(FakeAgentService())
+        state = service.create_room(
+            uid=1,
+            title="explicit and random identities",
+            agent_count=0,
+            agents=[
+                {"display_name": "查验者", "role_key": "seer", "persona": "验人"},
+                {"display_name": "随机位", "role_key": "", "persona": "补位"},
+            ],
+            config={"human_role_key": "witch"},
+        )
+
+        state = service.start_room(state.room.room_id, uid=1)
+        human = next(p for p in state.participants if p.kind == "human")
+        seer = next(p for p in state.participants if p.display_name == "查验者")
+        random_slot = next(p for p in state.participants if p.display_name == "随机位")
+
+        self.assertEqual(human.role_key, "witch")
+        self.assertEqual(seer.role_key, "seer")
+        self.assertEqual(random_slot.role_key, "werewolf")
+        self.assertEqual(human.private_state["role_key"], "witch")
+        self.assertEqual(seer.private_state["role_key"], "seer")
+        self.assertEqual(random_slot.private_state["role_key"], "werewolf")
 
     async def test_host_events_are_added_for_create_and_start(self):
         service = A2AGameService(FakeAgentService())
@@ -470,6 +527,50 @@ class A2AGameServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn(room_id, {room.room_id for room in rooms})
 
+    async def test_delete_room_clears_werewolf_and_script_murder_rooms(self):
+        store = FakeGameStateStore()
+        service = A2AGameService(FakeAgentService(), store=store)
+        werewolf = service.create_room(
+            uid=11,
+            title="狼人杀清理",
+            ruleset_id="werewolf.basic",
+            agent_count=1,
+        )
+        script = service.create_room(
+            uid=11,
+            title="剧本杀清理",
+            ruleset_id="script_murder.basic",
+            max_players=3,
+            agents=[{"display_name": "侦探A", "role_key": "detective"}],
+        )
+        await service.shutdown()
+
+        self.assertTrue(await service.delete_room(werewolf.room.room_id, uid=11))
+        self.assertTrue(await service.delete_room(script.room.room_id, uid=11))
+
+        rooms = await service.list_rooms(uid=11)
+        room_ids = {room.room_id for room in rooms}
+        self.assertNotIn(werewolf.room.room_id, room_ids)
+        self.assertNotIn(script.room.room_id, room_ids)
+        self.assertNotIn(werewolf.room.room_id, store.snapshots)
+        self.assertNotIn(script.room.room_id, store.snapshots)
+        with self.assertRaises(ValueError):
+            service.get_state(werewolf.room.room_id, uid=11)
+        with self.assertRaises(ValueError):
+            service.get_state(script.room.room_id, uid=11)
+
+    async def test_delete_room_rejects_room_not_visible_to_uid(self):
+        store = FakeGameStateStore()
+        service = A2AGameService(FakeAgentService(), store=store)
+        state = service.create_room(uid=11, title="owner only", agent_count=1)
+        await service.shutdown()
+
+        self.assertFalse(await service.delete_room(state.room.room_id, uid=22))
+
+        rooms = await service.list_rooms(uid=11)
+        self.assertIn(state.room.room_id, {room.room_id for room in rooms})
+        self.assertIn(state.room.room_id, store.snapshots)
+
     async def test_agent_tick_falls_back_to_skip_for_invalid_output(self):
         fake = FakeAgentService(["not json"])
         service = A2AGameService(fake)
@@ -488,6 +589,271 @@ class A2AGameServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("agent_error", event_types)
         self.assertIn("skip", event_types)
         self.assertEqual(tick["graph"]["name"], "a2a_game_tick")
+
+    async def test_multi_ai_chat_user_message_auto_ticks_all_agents(self):
+        fake = FakeAgentService(
+            [
+                '{"action_type":"speak","content":"我从产品角度看，先验证发送和回复闭环。"}',
+                '{"action_type":"speak","content":"我补一个技术检查点：看事件是否稳定入库。"}',
+            ]
+        )
+        service = A2AGameService(fake)
+        state = service.create_room(
+            uid=1,
+            title="测试多 AI 对话",
+            ruleset_id="multi_ai_chat.test",
+            max_players=3,
+            agents=[
+                {"display_name": "产品 AI", "persona": "关注用户体验"},
+                {"display_name": "技术 AI", "persona": "关注工程验证"},
+            ],
+        )
+        room_id = state.room.room_id
+        human = next(p for p in state.participants if p.kind == "human")
+
+        self.assertEqual(state.room.status, "running")
+        self.assertEqual(state.room.phase, "chat")
+        self.assertEqual(state.available_actions, ["speak"])
+        self.assertTrue(all(not p.role_key for p in state.participants))
+
+        state = service.submit_action(
+            room_id=room_id,
+            participant_id=human.participant_id,
+            action_type="speak",
+            content="先测试一下多 AI 对话。",
+            uid=1,
+        )
+
+        self.assertEqual(len(state.state["pending_agent_ids"]), 2)
+        self.assertEqual(state.pending_actor_id, state.state["pending_agent_ids"][0])
+
+        result = await service.auto_tick_room(room_id, uid=1, max_steps=4)
+        final_state = result["state"]
+        speak_events = [event for event in final_state.events if event.event_type == "speak"]
+
+        self.assertTrue(result["auto"])
+        self.assertEqual(result["steps"], 3)
+        self.assertEqual(result["stop_reason"], "waiting_human")
+        self.assertEqual([event.content for event in speak_events[-3:]], [
+            "先测试一下多 AI 对话。",
+            "我从产品角度看，先验证发送和回复闭环。",
+            "我补一个技术检查点：看事件是否稳定入库。",
+        ])
+        self.assertEqual(final_state.state["pending_agent_ids"], [])
+        self.assertEqual(final_state.pending_actor_id, human.participant_id)
+        self.assertEqual(len(fake.calls), 2)
+        prompt = json.loads(fake.calls[0].content)
+        self.assertEqual(prompt["ruleset_id"], "multi_ai_chat.test")
+        self.assertIn("temporary group chat", prompt["task"])
+        self.assertNotIn("social deduction", prompt["task"])
+        self.assertEqual(prompt["private_a2a_inbox"], [])
+
+    async def test_multi_ai_chat_plain_text_output_becomes_speak(self):
+        fake = FakeAgentService(["我直接用自然语言回复，不包 JSON。"])
+        service = A2AGameService(fake)
+        state = service.create_room(
+            uid=1,
+            display_name="测试用户",
+            title="测试自然语言回复",
+            ruleset_id="multi_ai_chat.test",
+            max_players=2,
+            agents=[{"display_name": "产品 AI", "persona": "自然回复"}],
+        )
+        room_id = state.room.room_id
+        human = next(p for p in state.participants if p.kind == "human")
+
+        service.submit_action(
+            room_id=room_id,
+            participant_id=human.participant_id,
+            action_type="speak",
+            content="不用 JSON 也应该能显示。",
+            uid=1,
+        )
+        result = await service.auto_tick_room(room_id, uid=1, max_steps=3)
+        final_state = result["state"]
+        speak_events = [event.content for event in final_state.events if event.event_type == "speak"]
+        error_events = [event for event in final_state.events if event.event_type == "agent_error"]
+
+        self.assertEqual(result["stop_reason"], "waiting_human")
+        self.assertEqual(result["step_results"][0]["action"]["action_type"], "speak")
+        self.assertIn("我直接用自然语言回复，不包 JSON。", speak_events)
+        self.assertEqual(error_events, [])
+
+    async def test_update_agent_participant_changes_prompt_persona_and_strategy(self):
+        fake = FakeAgentService(['{"action_type":"speak","content":"我会用新的风格回复。"}'])
+        service = A2AGameService(fake)
+        state = service.create_room(
+            uid=1,
+            title="编辑 AI",
+            ruleset_id="multi_ai_chat.test",
+            max_players=2,
+            agents=[{"display_name": "AI 1", "persona": "旧性格", "strategy": "balanced", "skill_name": "writer"}],
+        )
+        room_id = state.room.room_id
+        agent = next(p for p in state.participants if p.kind == "agent")
+
+        state = service.update_participant(
+            room_id=room_id,
+            participant_id=agent.participant_id,
+            uid=1,
+            display_name="代码教练",
+            persona="耐心、直接，优先给可运行示例。",
+            strategy="deductive",
+            skill_name="reviewer",
+        )
+        edited = next(p for p in state.participants if p.kind == "agent")
+
+        self.assertEqual(edited.display_name, "代码教练")
+        self.assertEqual(edited.persona, "耐心、直接，优先给可运行示例。")
+        self.assertEqual(edited.metadata["strategy"], "deductive")
+        self.assertEqual(edited.skill_name, "reviewer")
+        self.assertEqual(state.room.config["locked_config"]["agent_preset_pool"][0]["display_name"], "代码教练")
+        self.assertEqual(state.room.config["locked_config"]["agent_preset_pool"][0]["strategy"], "deductive")
+        self.assertEqual(state.room.config["locked_config"]["agent_preset_pool"][0]["skill_name"], "reviewer")
+
+        human = next(p for p in state.participants if p.kind == "human")
+        service.submit_action(
+            room_id=room_id,
+            participant_id=human.participant_id,
+            action_type="speak",
+            content="给我一个例子。",
+            uid=1,
+        )
+        await service.auto_tick_room(room_id, uid=1, max_steps=2)
+        prompt = json.loads(fake.calls[0].content)
+
+        self.assertEqual(prompt["self"]["display_name"], "代码教练")
+        self.assertEqual(prompt["persona"], "耐心、直接，优先给可运行示例。")
+        self.assertEqual(prompt["strategy"], "deductive")
+        self.assertEqual(fake.calls[0].skill_name, "reviewer")
+
+    async def test_multi_ai_chat_guardrail_empty_output_is_not_shown_as_speech(self):
+        fake = FakeAgentService(["Guardrail blocked output: Model output is empty."])
+        service = A2AGameService(fake)
+        state = service.create_room(
+            uid=1,
+            title="测试空输出",
+            ruleset_id="multi_ai_chat.test",
+            max_players=2,
+            agents=[{"display_name": "空回复 AI", "persona": "正常回复"}],
+        )
+        room_id = state.room.room_id
+        human = next(p for p in state.participants if p.kind == "human")
+
+        service.submit_action(
+            room_id=room_id,
+            participant_id=human.participant_id,
+            action_type="speak",
+            content="重新生成一个 python 的二分代码",
+            uid=1,
+        )
+        result = await service.auto_tick_room(room_id, uid=1, max_steps=3)
+        final_state = result["state"]
+        speak_events = [event.content for event in final_state.events if event.event_type == "speak"]
+        error_events = [event for event in final_state.events if event.event_type == "agent_error"]
+
+        self.assertEqual(result["stop_reason"], "waiting_human")
+        self.assertNotIn("Guardrail blocked output: Model output is empty.", speak_events)
+        self.assertEqual(len(error_events), 1)
+        self.assertIn("没有生成有效内容", error_events[0].content)
+        self.assertIn("Guardrail blocked output", error_events[0].payload["raw"])
+
+    async def test_multi_ai_chat_supports_private_agent_to_agent_messages(self):
+        fake = FakeAgentService()
+        service = A2AGameService(fake)
+        state = service.create_room(
+            uid=1,
+            title="测试私信",
+            ruleset_id="multi_ai_chat.test",
+            max_players=3,
+            agents=[
+                {"display_name": "产品 AI", "persona": "关注用户体验"},
+                {"display_name": "技术 AI", "persona": "关注工程验证"},
+            ],
+        )
+        room_id = state.room.room_id
+        human = next(p for p in state.participants if p.kind == "human")
+        product_agent = next(p for p in state.participants if p.display_name == "产品 AI")
+        tech_agent = next(p for p in state.participants if p.display_name == "技术 AI")
+        fake.outputs = [
+            json.dumps(
+                {
+                    "action_type": "a2a_message",
+                    "target_participant_id": tech_agent.participant_id,
+                    "content": "我私下把技术风险点同步给你。",
+                },
+                ensure_ascii=False,
+            ),
+            '{"action_type":"speak","content":"收到私信，我补充一下技术风险。"}',
+        ]
+
+        state = service.submit_action(
+            room_id=room_id,
+            participant_id=human.participant_id,
+            action_type="speak",
+            content="先讨论方案。",
+            uid=1,
+        )
+        result = await service.auto_tick_room(room_id, uid=1, max_steps=4)
+        final_state = result["state"]
+        private_events = [event for event in final_state.events if event.event_type == "a2a_message"]
+        public_speak = [event.content for event in final_state.events if event.event_type == "speak"]
+
+        self.assertEqual(result["stop_reason"], "waiting_human")
+        self.assertEqual(len(private_events), 1)
+        self.assertEqual(private_events[0].visibility, "private")
+        self.assertEqual(private_events[0].actor_participant_id, product_agent.participant_id)
+        self.assertEqual(private_events[0].target_participant_id, tech_agent.participant_id)
+        self.assertTrue(private_events[0].payload["a2a"])
+        self.assertEqual(private_events[0].payload["message"]["parts"][0]["text"], "我私下把技术风险点同步给你。")
+        self.assertNotIn("我私下把技术风险点同步给你。", public_speak)
+
+        human_view = final_state.to_dict(viewer_uid=1)
+        self.assertFalse(any(event["event_type"] == "a2a_message" for event in human_view["events"]))
+        self.assertEqual(len(fake.calls), 2)
+        target_prompt = json.loads(fake.calls[1].content)
+        self.assertEqual(target_prompt["self"]["participant_id"], tech_agent.participant_id)
+        self.assertEqual(len(target_prompt["private_a2a_inbox"]), 1)
+        self.assertEqual(target_prompt["private_a2a_inbox"][0]["direction"], "inbound")
+        self.assertEqual(target_prompt["private_a2a_inbox"][0]["content"], "我私下把技术风险点同步给你。")
+
+    async def test_multi_ai_chat_rejects_private_message_to_non_agent_target(self):
+        service = A2AGameService(FakeAgentService())
+        state = service.create_room(
+            uid=1,
+            title="私信目标检查",
+            ruleset_id="multi_ai_chat.test",
+            max_players=3,
+            agents=[{"display_name": "产品 AI"}, {"display_name": "技术 AI"}],
+        )
+        human = next(p for p in state.participants if p.kind == "human")
+        agent = next(p for p in state.participants if p.kind == "agent")
+
+        with self.assertRaises(ValueError):
+            service.submit_action(
+                room_id=state.room.room_id,
+                participant_id=agent.participant_id,
+                action_type="a2a_message",
+                target_participant_id=human.participant_id,
+                content="不能发给真人私信。",
+                uid=1,
+            )
+
+    async def test_game_rulesets_do_not_accept_private_a2a_message_action(self):
+        service = A2AGameService(FakeAgentService())
+        state = service.create_room(uid=1, title="狼人杀仍走共享时间线", agent_count=1)
+        state = service.start_room(state.room.room_id, uid=1)
+        agent = next(p for p in state.participants if p.kind == "agent")
+
+        with self.assertRaises(ValueError):
+            service.submit_action(
+                room_id=state.room.room_id,
+                participant_id=agent.participant_id,
+                action_type="a2a_message",
+                target_participant_id="someone",
+                content="game mode should not use private A2A",
+                uid=1,
+            )
 
     async def test_auto_tick_stops_when_waiting_for_human(self):
         service = A2AGameService(FakeAgentService())

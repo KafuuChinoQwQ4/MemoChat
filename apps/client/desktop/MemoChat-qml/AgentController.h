@@ -147,7 +147,12 @@ public:
     Q_INVOKABLE void listGameTemplates();
     Q_INVOKABLE void listGameTemplatePresets(const QString& rulesetId);
     Q_INVOKABLE void loadGameRoom(const QString& roomId);
-    Q_INVOKABLE void createGameRoom(const QString& title, const QString& rulesetId, const QVariantList& agents, const QVariantMap& host = QVariantMap());
+    Q_INVOKABLE void deleteGameRoom(const QString& roomId);
+    Q_INVOKABLE void createGameRoom(const QString& title,
+                                    const QString& rulesetId,
+                                    const QVariantList& agents,
+                                    const QVariantMap& host = QVariantMap(),
+                                    const QString& displayName = QString());
     Q_INVOKABLE void saveGameTemplate(const QString& title,
                                       const QString& description,
                                       const QString& rulesetId,
@@ -157,7 +162,7 @@ public:
     Q_INVOKABLE void cloneGameTemplatePreset(const QString& presetId, const QString& title);
     Q_INVOKABLE QString exportGameTemplate(const QString& templateId);
     Q_INVOKABLE bool importGameTemplate(const QString& templateJson);
-    Q_INVOKABLE void createGameRoomFromTemplate(const QString& templateId, const QString& title);
+    Q_INVOKABLE void createGameRoomFromTemplate(const QString& templateId, const QString& title, const QString& displayName = QString());
     Q_INVOKABLE void startGameRoom(const QString& roomId);
     Q_INVOKABLE void restartGameRoom(const QString& roomId);
     Q_INVOKABLE void tickGameRoom(const QString& roomId);
@@ -167,6 +172,12 @@ public:
                                       const QString& actionType,
                                       const QString& targetId,
                                       const QString& content);
+    Q_INVOKABLE void updateGameParticipant(const QString& roomId,
+                                           const QString& participantId,
+                                           const QString& displayName,
+                                           const QString& persona,
+                                           const QString& strategy,
+                                           const QString& skillName);
 
     // 中止正在进行的流式请求
     Q_INVOKABLE void cancelStream();
@@ -296,6 +307,7 @@ private:
     QString _accumulatedContent;
     bool _streamFinalReceived = false;
     QString _pendingDeleteSessionId;
+    QString _pendingDeleteGameRoomId;
     bool _selectNewestSessionAfterList = false;
     QVariantList _game_rooms;
     QVariantList _game_templates;

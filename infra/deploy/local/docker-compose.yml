@@ -12,6 +12,7 @@ services:
       - "80:80"
     volumes:
       - ./compose/nginx-local.conf:/etc/nginx/nginx.conf:ro
+      - D:/docker-data/memochat/nginx/logs:/var/log/memochat/nginx
     expose:
       - "8081"
     command:
@@ -267,6 +268,7 @@ services:
       - ./observability/otel/config.yaml:/etc/otelcol-contrib/config.yaml:ro
       - ../../Memo_ops/runtime:/workspace/Memo_ops/runtime:ro
       - ../../../build/bin:/workspace/build/bin:ro
+      - D:/docker-data/memochat/nginx/logs:/workspace/nginx/logs:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
