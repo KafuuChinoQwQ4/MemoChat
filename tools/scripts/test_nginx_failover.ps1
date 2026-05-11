@@ -25,6 +25,7 @@ Add-Type -AssemblyName System.Net.Http
 
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent (Split-Path -Parent $ScriptRoot)
+$DockerCli = Join-Path $ScriptRoot "docker\arch-docker.ps1"
 
 function Join-Url {
     param(
@@ -193,7 +194,7 @@ function Show-NginxUpstreamLogSummary {
             $dockerArgs += @("--since", $Since.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))
         }
         $dockerArgs += $ContainerName
-        $logs = @(& docker @dockerArgs 2>&1 | ForEach-Object { $_.ToString() })
+        $logs = @(& $DockerCli @dockerArgs 2>&1 | ForEach-Object { $_.ToString() })
         $dockerExitCode = $LASTEXITCODE
     } catch {
         Write-Host "Docker log check unavailable: $($_.Exception.Message)"

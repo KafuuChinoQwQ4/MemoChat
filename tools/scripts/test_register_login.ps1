@@ -8,6 +8,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$DockerCli = Join-Path $PSScriptRoot "docker\arch-docker.ps1"
 
 if (-not $Email) {
     $stamp = Get-Date -Format "yyyyMMddHHmmssfff"
@@ -56,7 +57,7 @@ Write-Host "=== Step 2: Poll Redis for code ==="
 $code = $null
 for ($i = 0; $i -lt 20; $i++) {
     Start-Sleep -Milliseconds 300
-    $value = docker exec -e REDISCLI_AUTH=123456 memochat-redis redis-cli GET "code_$Email" 2>$null
+    $value = & $DockerCli exec -e REDISCLI_AUTH=123456 memochat-redis redis-cli GET "code_$Email" 2>$null
     if ($LASTEXITCODE -eq 0 -and $value -and $value -ne "(nil)") {
         $code = [string]$value
         break

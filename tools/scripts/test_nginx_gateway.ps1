@@ -24,6 +24,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$DockerCli = Join-Path $PSScriptRoot "docker\arch-docker.ps1"
 
 function Get-ResponseHeaderValue {
     param(
@@ -160,7 +161,7 @@ function Test-NginxDockerLogs {
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        $logs = & docker logs --tail $Tail $ContainerName 2>&1
+        $logs = & $DockerCli logs --tail $Tail $ContainerName 2>&1
         $dockerExitCode = $LASTEXITCODE
     } catch {
         Write-Host "Docker log check unavailable: $($_.Exception.Message)"

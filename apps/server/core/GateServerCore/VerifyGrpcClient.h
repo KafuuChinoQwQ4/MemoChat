@@ -1,7 +1,11 @@
 #pragma once
+#include <atomic>
+#include <condition_variable>
 #include <string>
 #include <iostream>
 #include <memory>
+#include <mutex>
+#include <queue>
 #include <grpcpp/grpcpp.h>
 #include "common/proto/message.grpc.pb.h"
 #include "const.h"
@@ -116,5 +120,4 @@ private:
 
 	std::unique_ptr<RPConPool> pool_;
 };
-
 

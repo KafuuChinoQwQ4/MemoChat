@@ -18,6 +18,7 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $K8sDir = "$ProjectRoot\Memo_ops\k8s"
 $Overlay = "dev-single"
+$DockerCli = Join-Path $PSScriptRoot "docker\arch-docker.ps1"
 
 # 颜色输出函数
 function Write-Step { param($msg) Write-Host "[步骤] $msg" -ForegroundColor Cyan }
@@ -68,8 +69,8 @@ if ($CleanAll) {
 # ============================================================
 if ($CleanAll) {
     Write-Step "清理宿主机 etcd 容器..."
-    docker stop memochat-etcd 2>&1 | Out-Null
-    docker rm memochat-etcd 2>&1 | Out-Null
+    & $DockerCli stop memochat-etcd 2>&1 | Out-Null
+    & $DockerCli rm memochat-etcd 2>&1 | Out-Null
     Write-Success "宿主机 etcd 容器已删除"
 }
 
@@ -88,7 +89,7 @@ Write-Host "  K8s Pods:" -ForegroundColor Gray
 kubectl get pods -A 2>&1 | Where-Object { $_ -match "memochat" } | ForEach-Object { Write-Host "    $_" -ForegroundColor Gray }
 
 Write-Host "  Docker 容器:" -ForegroundColor Gray
-docker ps -a --filter "name=memochat" --format "{{.Names}}: {{.Status}}" 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor Gray }
+& $DockerCli ps -a --filter "name=memochat" --format "{{.Names}}: {{.Status}}" 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor Gray }
 
 Write-Host @"
 

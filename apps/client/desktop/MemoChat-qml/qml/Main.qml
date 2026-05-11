@@ -4,6 +4,7 @@ import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
 import MemoChat 1.0
 import "components"
+import "pet"
 
 ApplicationWindow {
     id: root
@@ -17,6 +18,7 @@ ApplicationWindow {
     property size loginWindowSize: Qt.size(300, 500)
     property size chatWindowSize: Qt.size(900, 640)
     property var chatWindowRef: null
+    property var petWindowRef: null
 
     function centerWindow(win) {
         if (!win || win.visibility !== Window.Windowed) {
@@ -91,6 +93,29 @@ ApplicationWindow {
         chatWindowRef.hide()
     }
 
+    function ensurePetWindow() {
+        if (petWindowRef) {
+            return petWindowRef
+        }
+        petWindowRef = petWindowComponent.createObject(null, {
+            "petController": controller.petController
+        })
+        return petWindowRef
+    }
+
+    function togglePetWindow() {
+        const win = ensurePetWindow()
+        if (!win) {
+            console.warn("Failed to create pet window")
+            return
+        }
+        if (win.visible) {
+            win.hide()
+        } else {
+            win.openPet()
+        }
+    }
+
     function syncWindowsByPage() {
         if (controller.page === AppController.ChatPage) {
             root.hide()
@@ -147,6 +172,10 @@ ApplicationWindow {
         if (chatWindowRef) {
             chatWindowRef.destroy()
             chatWindowRef = null
+        }
+        if (petWindowRef) {
+            petWindowRef.destroy()
+            petWindowRef = null
         }
     }
 
@@ -311,6 +340,11 @@ ApplicationWindow {
                     spacing: 20
 
                     LoginIconButton {
+                        iconSource: "qrc:/icons/ai.png"
+                        onClicked: root.togglePetWindow()
+                    }
+
+                    LoginIconButton {
                         iconSource: "qrc:/icons/minimize.png"
                         onClicked: chatWindow.showMinimized()
                     }
@@ -333,5 +367,10 @@ ApplicationWindow {
                 }
             }
         }
+    }
+
+    Component {
+        id: petWindowComponent
+        PetWindow { }
     }
 }

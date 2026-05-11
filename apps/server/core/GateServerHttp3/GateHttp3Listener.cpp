@@ -9,7 +9,7 @@
 #include <filesystem>
 #include <map>
 
-#ifdef MEMOCHAT_ENABLE_HTTP3
+#if MEMOCHAT_ENABLE_HTTP3
 
 #include "../common/WinSdkCompat.h"
 
@@ -615,7 +615,7 @@ static bool LoadSelfSignedCertFromPfx(HQUIC Configuration,
 GateHttp3Listener::GateHttp3Listener(boost::asio::io_context& ioc,
                                    LogicSystem& logic, int port)
     : ioc_(ioc), logic_(logic), port_(port)
-#ifdef MEMOCHAT_ENABLE_HTTP3
+#if MEMOCHAT_ENABLE_HTTP3
       , pImpl_(std::make_unique<Impl>(ioc, logic, port, running_))
 #endif
 {}
@@ -623,7 +623,7 @@ GateHttp3Listener::GateHttp3Listener(boost::asio::io_context& ioc,
 GateHttp3Listener::~GateHttp3Listener() { Stop(); }
 
 bool GateHttp3Listener::Start(std::string& error) {
-#ifdef MEMOCHAT_ENABLE_HTTP3
+#if MEMOCHAT_ENABLE_HTTP3
     if (!pImpl_) {
         pImpl_ = std::make_unique<Impl>(ioc_, logic_, port_, running_);
     }
@@ -759,7 +759,7 @@ bool GateHttp3Listener::Start(std::string& error) {
 
 void GateHttp3Listener::Stop() {
     if (!running_.exchange(false)) return;
-#ifdef MEMOCHAT_ENABLE_HTTP3
+#if MEMOCHAT_ENABLE_HTTP3
     if (pImpl_) {
         if (pImpl_->Listener) {
             g_QuicApi->ListenerStop(pImpl_->Listener);

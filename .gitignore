@@ -240,3 +240,4 @@ ui_*.h
 !client/**/config.json
 !server/**/config.ini
 !server/**/config.json
+*:Zone.Identifier

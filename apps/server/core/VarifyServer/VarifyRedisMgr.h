@@ -1,9 +1,10 @@
 #pragma once
 
 #include <hiredis/hiredis.h>
-#include <queue>
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
+#include <queue>
 #include <string>
 #include <memory>
 

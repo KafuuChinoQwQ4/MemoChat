@@ -8,7 +8,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - D:/docker-data/memochat/redis:/data
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/redis:/data
 
   memochat-postgres:
     image: postgres:16
@@ -21,7 +21,7 @@ services:
     ports:
       - "15432:5432"
     volumes:
-      - D:/docker-data/memochat/postgres:/var/lib/postgresql/data
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/postgres:/var/lib/postgresql/data
       - ../init/postgresql:/docker-entrypoint-initdb.d:ro
 
   memochat-mongo:
@@ -35,5 +35,5 @@ services:
     ports:
       - "27017:27017"
     volumes:
-      - D:/docker-data/memochat/mongo:/data/db
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/mongo:/data/db
       - ../init/mongo:/docker-entrypoint-initdb.d:ro

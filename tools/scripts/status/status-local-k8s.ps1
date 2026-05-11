@@ -6,6 +6,8 @@
 #>
 
 $ErrorActionPreference = "Continue"
+$ProjectRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
+$DockerCli = Join-Path $ProjectRoot "tools\scripts\docker\arch-docker.ps1"
 
 # 颜色输出函数
 function Write-Section { param($msg) Write-Host "`n=== $msg ===" -ForegroundColor Yellow }
@@ -20,7 +22,7 @@ Write-Host @"
 # Docker 状态
 # ============================================================
 Write-Section "Docker 容器"
-docker ps -a --filter "name=memochat" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+& $DockerCli ps -a --filter "name=memochat" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 # ============================================================
 # Kubernetes 状态

@@ -13,6 +13,9 @@
 #include <rabbitmq-c/amqp.h>
 #include <rabbitmq-c/framing.h>
 #include <rabbitmq-c/tcp_socket.h>
+
+#include <cctype>
+#include <cstring>
 #endif
 
 namespace {
@@ -88,8 +91,18 @@ EmailTaskBus::EmailTaskBus()
     config_password_ = cfg["RabbitMQ"]["Password"];
     config_vhost_ = cfg["RabbitMQ"]["VHost"];
     if (config_vhost_.empty()) config_vhost_ = "/";
+    config_exchange_direct_ = cfg["RabbitMQ"]["ExchangeDirect"];
+    if (config_exchange_direct_.empty()) config_exchange_direct_ = "memochat.direct";
+    config_exchange_dlx_ = cfg["RabbitMQ"]["ExchangeDlx"];
+    if (config_exchange_dlx_.empty()) config_exchange_dlx_ = "memochat.dlx";
+    config_verify_delivery_routing_key_ = cfg["RabbitMQ"]["VerifyDeliveryRoutingKey"];
+    if (config_verify_delivery_routing_key_.empty()) config_verify_delivery_routing_key_ = "verify.email.delivery";
     config_queue_ = cfg["RabbitMQ"]["VerifyDeliveryQueue"];
     if (config_queue_.empty()) config_queue_ = "verify.email.delivery.q";
+    config_retry_queue_ = cfg["RabbitMQ"]["VerifyDeliveryRetryQueue"];
+    if (config_retry_queue_.empty()) config_retry_queue_ = "verify.email.delivery.retry.q";
+    config_dlq_queue_ = cfg["RabbitMQ"]["VerifyDeliveryDlqQueue"];
+    if (config_dlq_queue_.empty()) config_dlq_queue_ = "verify.email.delivery.dlq.q";
     config_retry_routing_key_ = cfg["RabbitMQ"]["RetryRoutingKey"];
     if (config_retry_routing_key_.empty()) config_retry_routing_key_ = "verify.email.delivery.retry";
     config_dlq_routing_key_ = cfg["RabbitMQ"]["DlqRoutingKey"];
@@ -154,11 +167,11 @@ bool EmailTaskBus::Connect() {
         amqp_destroy_connection(conn);
         return false;
     }
+    connection_ = conn;
     if (!EnsureTopology()) {
-        amqp_destroy_connection(conn);
+        Close();
         return false;
     }
-    connection_ = conn;
     return true;
 #endif
 }
@@ -180,6 +193,18 @@ bool EmailTaskBus::EnsureTopology() {
     return false;
 #else
     auto* conn = static_cast<amqp_connection_state_t>(connection_);
+    amqp_exchange_declare(conn, 1,
+        amqp_cstring_bytes(config_exchange_direct_.c_str()),
+        amqp_cstring_bytes("direct"),
+        0, 1, 0, 0, amqp_empty_table);
+    if (!RpcReplyOk(amqp_get_rpc_reply(conn))) return false;
+
+    amqp_exchange_declare(conn, 1,
+        amqp_cstring_bytes(config_exchange_dlx_.c_str()),
+        amqp_cstring_bytes("direct"),
+        0, 1, 0, 0, amqp_empty_table);
+    if (!RpcReplyOk(amqp_get_rpc_reply(conn))) return false;
+
     amqp_queue_declare(conn, 1,
         amqp_cstring_bytes(config_queue_.c_str()),
         0, 1, 0, 0, amqp_empty_table);
@@ -187,19 +212,18 @@ bool EmailTaskBus::EnsureTopology() {
 
     amqp_queue_bind(conn, 1,
         amqp_cstring_bytes(config_queue_.c_str()),
-        amqp_cstring_bytes(config_queue_.c_str()),
-        amqp_cstring_bytes(""),
+        amqp_cstring_bytes(config_exchange_direct_.c_str()),
+        amqp_cstring_bytes(config_verify_delivery_routing_key_.c_str()),
         amqp_empty_table);
     if (!RpcReplyOk(amqp_get_rpc_reply(conn))) return false;
 
-    const std::string retry_queue = config_queue_ + ".retry";
     amqp_table_entry_t entries[3];
     entries[0].key = amqp_cstring_bytes(const_cast<char*>("x-dead-letter-exchange"));
     entries[0].value.kind = AMQP_FIELD_KIND_UTF8;
-    entries[0].value.value.bytes = amqp_cstring_bytes(config_queue_.c_str());
+    entries[0].value.value.bytes = amqp_cstring_bytes(config_exchange_direct_.c_str());
     entries[1].key = amqp_cstring_bytes(const_cast<char*>("x-dead-letter-routing-key"));
     entries[1].value.kind = AMQP_FIELD_KIND_UTF8;
-    entries[1].value.value.bytes = amqp_cstring_bytes(config_queue_.c_str());
+    entries[1].value.value.bytes = amqp_cstring_bytes(config_verify_delivery_routing_key_.c_str());
     entries[2].key = amqp_cstring_bytes(const_cast<char*>("x-message-ttl"));
     entries[2].value.kind = AMQP_FIELD_KIND_I32;
     entries[2].value.value.i32 = config_retry_delay_ms_;
@@ -207,26 +231,25 @@ bool EmailTaskBus::EnsureTopology() {
     args.num_entries = 3;
     args.entries = entries;
     amqp_queue_declare(conn, 1,
-        amqp_cstring_bytes(retry_queue.c_str()),
+        amqp_cstring_bytes(config_retry_queue_.c_str()),
         0, 1, 0, 0, args);
     if (!RpcReplyOk(amqp_get_rpc_reply(conn))) return false;
 
     amqp_queue_bind(conn, 1,
-        amqp_cstring_bytes(retry_queue.c_str()),
-        amqp_cstring_bytes(config_queue_.c_str()),
+        amqp_cstring_bytes(config_retry_queue_.c_str()),
+        amqp_cstring_bytes(config_exchange_direct_.c_str()),
         amqp_cstring_bytes(config_retry_routing_key_.c_str()),
         amqp_empty_table);
     if (!RpcReplyOk(amqp_get_rpc_reply(conn))) return false;
 
-    const std::string dlq_queue = config_queue_ + ".dlq";
     amqp_queue_declare(conn, 1,
-        amqp_cstring_bytes(dlq_queue.c_str()),
+        amqp_cstring_bytes(config_dlq_queue_.c_str()),
         0, 1, 0, 0, amqp_empty_table);
     if (!RpcReplyOk(amqp_get_rpc_reply(conn))) return false;
 
     amqp_queue_bind(conn, 1,
-        amqp_cstring_bytes(dlq_queue.c_str()),
-        amqp_cstring_bytes(config_queue_.c_str()),
+        amqp_cstring_bytes(config_dlq_queue_.c_str()),
+        amqp_cstring_bytes(config_exchange_dlx_.c_str()),
         amqp_cstring_bytes(config_dlq_routing_key_.c_str()),
         amqp_empty_table);
     if (!RpcReplyOk(amqp_get_rpc_reply(conn))) return false;
@@ -239,7 +262,7 @@ bool EmailTaskBus::PublishVerifyDeliveryTask(const std::string& email,
                                             const std::string& code,
                                             const std::string& trace_id) {
     std::string body = SerializeEmailTask(email, code, trace_id, 0);
-    bool ok = PublishToQueue(config_queue_, body);
+    bool ok = PublishToQueue(config_exchange_direct_, config_verify_delivery_routing_key_, body);
 
     if (!ok) {
         rabbitmq_healthy_.store(false, std::memory_order_release);
@@ -252,8 +275,11 @@ bool EmailTaskBus::PublishVerifyDeliveryTask(const std::string& email,
     return ok;
 }
 
-bool EmailTaskBus::PublishToQueue(const std::string& routing_key, const std::string& body) {
+bool EmailTaskBus::PublishToQueue(const std::string& exchange, const std::string& routing_key, const std::string& body) {
 #if !MEMOCHAT_ENABLE_RABBITMQ
+    (void)exchange;
+    (void)routing_key;
+    (void)body;
     return false;
 #else
     std::lock_guard<std::mutex> lock(mutex_);
@@ -268,7 +294,7 @@ bool EmailTaskBus::PublishToQueue(const std::string& routing_key, const std::str
     props.delivery_mode = 2;
 
     int status = amqp_basic_publish(conn, 1,
-        amqp_cstring_bytes(routing_key.c_str()),
+        amqp_cstring_bytes(exchange.c_str()),
         amqp_cstring_bytes(routing_key.c_str()),
         0, 0, &props,
         amqp_cstring_bytes(body.c_str()));
@@ -416,12 +442,12 @@ void EmailTaskBus::WorkerLoop(EmailSender* /*sender*/) {
                                  {"max_retries", std::to_string(config_max_retries_)}});
                 if (task.retry_count < config_max_retries_) {
                     std::string body = SerializeEmailTask(task.email, task.code, task.trace_id, task.retry_count + 1);
-                    PublishToQueue(config_retry_routing_key_, body);
+                    PublishToQueue(config_exchange_direct_, config_retry_routing_key_, body);
                     memolog::LogInfo("varify.emailtaskbus.requeued", "task requeued for retry",
                                     {{"email", task.email}, {"retry", std::to_string(task.retry_count + 1)}});
                 } else {
                     std::string dlq_body = SerializeEmailTask(task.email, task.code, task.trace_id, task.retry_count);
-                    PublishToQueue(config_dlq_routing_key_, dlq_body);
+                    PublishToQueue(config_exchange_dlx_, config_dlq_routing_key_, dlq_body);
                     memolog::LogError("varify.emailtaskbus.dlq", "task moved to DLQ after max retries",
                                     {{"email", task.email}, {"retry", std::to_string(task.retry_count)}});
                 }

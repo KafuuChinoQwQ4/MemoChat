@@ -1,5 +1,5 @@
 import QtQuick 2.15
-import Qt5Compat.GraphicalEffects
+import QtQuick.Effects
 
 Item {
     id: root
@@ -22,6 +22,15 @@ Item {
     implicitHeight: 38
     clip: true
 
+    Rectangle {
+        id: maskShape
+        anchors.fill: parent
+        radius: root.cornerRadius
+        color: "white"
+        antialiasing: true
+        visible: false
+    }
+
     ShaderEffectSource {
         id: blurSource
         anchors.fill: parent
@@ -39,30 +48,28 @@ Item {
         visible: false
     }
 
-    Item {
-        id: blurLayer
+    ShaderEffectSource {
+        id: maskSource
         anchors.fill: parent
+        sourceItem: root.effectActive ? maskShape : null
+        sourceRect: Qt.rect(0, 0, root.width, root.height)
+        live: false
+        hideSource: true
+        visible: false
+    }
+
+    MultiEffect {
+        anchors.fill: parent
+        source: root.effectActive ? blurSource : null
         visible: root.effectActive
-
-        FastBlur {
-            id: blurEffect
-            anchors.fill: parent
-            source: root.effectActive ? blurSource : null
-            radius: root.blurRadius
-            transparentBorder: false
-            visible: false
-        }
-
-        OpacityMask {
-            anchors.fill: parent
-            source: blurEffect
-            maskSource: Rectangle {
-                width: blurLayer.width
-                height: blurLayer.height
-                radius: root.cornerRadius
-                color: "black"
-            }
-        }
+        blurEnabled: root.effectActive
+        blur: Math.max(0.0, Math.min(1.0, root.blurRadius / 48.0))
+        blurMax: 48
+        maskEnabled: true
+        maskSource: maskSource
+        maskSpreadAtMin: 0.08
+        maskSpreadAtMax: 0.14
+        autoPaddingEnabled: false
     }
 
     Rectangle {
@@ -71,6 +78,7 @@ Item {
         color: root.fillColor
         border.color: root.strokeColor
         border.width: root.strokeWidth
+        antialiasing: true
 
         Behavior on color {
             ColorAnimation {
@@ -90,6 +98,31 @@ Item {
                 easing.type: Easing.InOutQuad
             }
         }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        radius: root.cornerRadius
+        antialiasing: true
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: root.glowTopColor }
+            GradientStop { position: 0.46; color: Qt.rgba(1, 1, 1, 0) }
+            GradientStop { position: 1.0; color: root.glowBottomColor }
+        }
+    }
+
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: Math.max(1, parent.height * 0.42)
+        radius: root.cornerRadius
+        antialiasing: true
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.18) }
+            GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0) }
+        }
+        opacity: root.blurEnabled ? 0.72 : 0.42
     }
 
     Behavior on blurRadius {

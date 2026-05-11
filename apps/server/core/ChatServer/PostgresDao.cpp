@@ -1,5 +1,6 @@
 #include "PostgresDao.h"
 #include "ConfigMgr.h"
+#include "db/PqxxCompat.h"
 #include "PostgresPool.h"
 #include "SnowflakeUtil.h"
 #include <pqxx/pqxx>

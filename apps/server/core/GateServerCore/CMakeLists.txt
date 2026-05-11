@@ -58,7 +58,9 @@ target_compile_features(GateServerCore PUBLIC cxx_std_23)
 # GateServerCore pulls in GlazeCompat.h (glaze library) which requires C++23.
 # The parent CMAKE_CXX_STANDARD may not propagate correctly to static libraries
 # in subdirectory builds — enforce it here to override any inherited value.
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD ${MEMOCHAT_CXX_STANDARD})
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 target_include_directories(GateServerCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../common
@@ -73,6 +75,9 @@ target_link_libraries(GateServerCore PUBLIC
 target_link_libraries(GateServerCore PRIVATE ${MEMOCHAT_PQXX_TARGET})
 target_link_libraries(GateServerCore PRIVATE ${MEMOCHAT_MONGOCXX_TARGET} ${MEMOCHAT_BSONCXX_TARGET})
 target_link_libraries(GateServerCore PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+if(AWSSDK_FOUND)
+    target_link_libraries(GateServerCore PUBLIC aws-cpp-sdk-s3)
+endif()
 if(MEMOCHAT_ENABLE_KAFKA)
     target_link_libraries(GateServerCore PRIVATE ${MEMOCHAT_CPPKAFKA_TARGET})
 endif()

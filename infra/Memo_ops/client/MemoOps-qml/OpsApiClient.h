@@ -7,6 +7,8 @@
 #include <QUrlQuery>
 #include <functional>
 
+class QTimer;
+
 class OpsApiClient : public QObject
 {
     Q_OBJECT

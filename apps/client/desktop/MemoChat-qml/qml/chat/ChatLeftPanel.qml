@@ -83,6 +83,9 @@ Rectangle {
         if (currentTab === AppController.AgentTabPage) {
             return "AI 助手"
         }
+        if (currentTab === AppController.Live2DTabPage) {
+            return "Live2D 角色"
+        }
         return "更多"
     }
     function contextualSubtitle() {
@@ -101,6 +104,9 @@ Rectangle {
                 return "已选择会话"
             }
             return "会话 " + sessionCount + " · 对话房间 " + roomCount
+        }
+        if (currentTab === AppController.Live2DTabPage) {
+            return "模型、语音、人设和说话风格配置。"
         }
         return "在这里管理账户信息和应用设置。"
     }
@@ -391,6 +397,13 @@ Rectangle {
                 active: currentTab === AppController.AgentTabPage
                 asynchronous: true
                 sourceComponent: agentPaneComponent
+            }
+
+            Loader {
+                anchors.fill: parent
+                active: currentTab === AppController.Live2DTabPage
+                asynchronous: true
+                sourceComponent: live2dPaneComponent
             }
         }
     }
@@ -1174,6 +1187,165 @@ Rectangle {
                                     agentDeleteDialog.close()
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: live2dPaneComponent
+        Item {
+            readonly property var setupRows: [
+                { "title": "资源包", "subtitle": "model3.json、贴图、动作和表情", "status": "本地" },
+                { "title": "语音资源", "subtitle": "音色、短音效、口型同步", "status": "草稿" },
+                { "title": "人物人设", "subtitle": "身份、背景、关系和边界", "status": "可编辑" },
+                { "title": "说话风格", "subtitle": "语气、长度、语言和口头禅", "status": "可调" },
+                { "title": "行为记忆", "subtitle": "待机动作、视线、记忆和权限", "status": "配置" }
+            ]
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 10
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 128
+                    radius: 10
+                    color: Qt.rgba(0.82, 0.90, 0.98, 0.25)
+                    border.color: Qt.rgba(1, 1, 1, 0.42)
+                    clip: true
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 8
+
+                        Rectangle {
+                            Layout.preferredWidth: 54
+                            Layout.preferredHeight: 54
+                            radius: 8
+                            color: Qt.rgba(1, 1, 1, 0.34)
+                            border.color: Qt.rgba(1, 1, 1, 0.54)
+                            clip: true
+
+                            Image {
+                                anchors.centerIn: parent
+                                width: 40
+                                height: 40
+                                source: "qrc:/icons/modelive2d.png"
+                                fillMode: Image.PreserveAspectFit
+                                mipmap: true
+                            }
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "Kafuu Chino"
+                            color: "#273449"
+                            font.pixelSize: 15
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "src/KafuuChino/香风智乃live2D"
+                            color: "#6a7b92"
+                            font.pixelSize: 11
+                            elide: Text.ElideMiddle
+                        }
+                    }
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: "配置目录"
+                    color: "#687991"
+                    font.pixelSize: 12
+                    font.bold: true
+                    elide: Text.ElideRight
+                }
+
+                ListView {
+                    id: live2dSetupList
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    spacing: 6
+                    model: setupRows
+                    interactive: contentHeight > height
+                    ScrollBar.vertical: GlassScrollBar { }
+
+                    delegate: Rectangle {
+                        width: ListView.view.width
+                        implicitHeight: 64
+                        radius: 10
+                        color: rowMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(1, 1, 1, 0.06)
+                        border.color: Qt.rgba(1, 1, 1, 0.26)
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 10
+                            spacing: 8
+
+                            Rectangle {
+                                Layout.preferredWidth: 8
+                                Layout.fillHeight: true
+                                radius: 4
+                                color: modelData.status === "本地" ? "#4f82c4"
+                                      : modelData.status === "草稿" ? "#5f9a78"
+                                      : modelData.status === "配置" ? "#b46d63"
+                                      : "#8a7ac3"
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 3
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: modelData.title
+                                    color: "#273449"
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: modelData.subtitle
+                                    color: "#6a7b92"
+                                    font.pixelSize: 11
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.preferredWidth: Math.max(44, statusText.implicitWidth + 14)
+                                Layout.preferredHeight: 24
+                                radius: 8
+                                color: Qt.rgba(0.35, 0.61, 0.90, 0.14)
+
+                                Label {
+                                    id: statusText
+                                    anchors.centerIn: parent
+                                    text: modelData.status
+                                    color: "#4d6280"
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                }
+                            }
+                        }
+
+                        MouseArea {
+                            id: rowMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.NoButton
                         }
                     }
                 }

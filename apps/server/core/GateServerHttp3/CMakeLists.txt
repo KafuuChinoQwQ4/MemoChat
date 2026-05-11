@@ -28,9 +28,9 @@ target_include_directories(GateServerHttp3 PUBLIC
 # MongoDB include paths (transitively needed by GateHttp3ServiceRoutes.cpp via MongoMgr.h)
 # Environment variables: VCPKG_INSTALLED_DIR (defined via CMake cache)
 target_include_directories(GateServerHttp3 PRIVATE
-    "${VCPKG_INSTALLED_DIR}/x64-windows/include"
-    "${VCPKG_INSTALLED_DIR}/x64-windows/include/mongocxx/v_noabi"
-    "${VCPKG_INSTALLED_DIR}/x64-windows/include/bsoncxx/v_noabi"
+    "${MEMOCHAT_VCPKG_TRIPLET_DIR}/include"
+    "${MEMOCHAT_VCPKG_TRIPLET_DIR}/include/mongocxx/v_noabi"
+    "${MEMOCHAT_VCPKG_TRIPLET_DIR}/include/bsoncxx/v_noabi"
 )
 
 target_link_libraries(GateServerHttp3 PUBLIC
@@ -56,20 +56,22 @@ if(MEMOCHAT_ENABLE_HTTP3)
         target_link_libraries(GateServerHttp3 PRIVATE OpenSSL::SSL OpenSSL::Crypto)
     endif()
 
-    # msquic.dll is in vcpkg_installed/x64-windows/bin, copy to output
-    find_path(MSQUIC_BIN_DIR NAMES msquic.dll PATHS
-        "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-windows/bin"
-        NO_DEFAULT_PATH)
-    if(MSQUIC_BIN_DIR)
-        message(STATUS "GateServerHttp3: msquic.dll found at ${MSQUIC_BIN_DIR}")
-        add_custom_command(TARGET GateServerHttp3 POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${MSQUIC_BIN_DIR}/msquic.dll"
-            "$<TARGET_FILE_DIR:GateServerHttp3>/../../bin"
-            COMMAND_EXPAND_LISTS
-        )
-    else()
-        message(WARNING "GateServerHttp3: msquic.dll not found in vcpkg_installed")
+    if(WIN32)
+        # msquic.dll is in vcpkg_installed/x64-windows/bin, copy to output.
+        find_path(MSQUIC_BIN_DIR NAMES msquic.dll PATHS
+            "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-windows/bin"
+            NO_DEFAULT_PATH)
+        if(MSQUIC_BIN_DIR)
+            message(STATUS "GateServerHttp3: msquic.dll found at ${MSQUIC_BIN_DIR}")
+            add_custom_command(TARGET GateServerHttp3 POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${MSQUIC_BIN_DIR}/msquic.dll"
+                "$<TARGET_FILE_DIR:GateServerHttp3>/../../bin"
+                COMMAND_EXPAND_LISTS
+            )
+        else()
+            message(WARNING "GateServerHttp3: msquic.dll not found in vcpkg_installed")
+        endif()
     endif()
 endif()
 

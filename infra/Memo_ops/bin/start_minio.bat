@@ -2,7 +2,7 @@
 REM ============================================================
 REM 启动 MinIO 对象存储服务
 REM
-REM 方式: 通过 Docker Desktop 容器方式运行 memochat-minio
+REM 方式: 通过 Arch Linux native Docker 容器方式运行 memochat-minio
 REM
 REM MinIO 凭证 (与 docker-compose.yml 保持一致):
 REM   MINIO_ROOT_USER=memochat_admin
@@ -13,35 +13,37 @@ REM Console:  http://127.0.0.1:9001
 REM ============================================================
 setlocal enabledelayedexpansion
 
-set "PROJECT_ROOT=D:\MemoChat-Qml-Drogon"
-set "COMPOSE_FILE=%PROJECT_ROOT%\deploy\local\docker-compose.yml"
+cd /d "%~dp0..\..\.."
+set "PROJECT_ROOT=%CD%"
+set "COMPOSE_FILE=%PROJECT_ROOT%\infra\deploy\local\docker-compose.yml"
 set "CONTAINER_NAME=memochat-minio"
+set "DOCKER=%PROJECT_ROOT%\tools\scripts\docker\arch-docker.cmd"
 
 echo [INFO] 启动 MinIO 对象存储...
 echo.
 
-REM ---- 检查 Docker 是否运行 ----
-docker info >nul 2>&1
+REM ---- 检查 Arch Docker 是否运行 ----
+"%DOCKER%" info >nul 2>&1
 if !ERRORLEVEL! neq 0 (
-    echo [ERROR] Docker 未运行，请启动 Docker Desktop 后重试。
+    echo [ERROR] Arch Docker 不可用，请在 archlinux 中启动 docker.service 后重试。
     exit /b 1
 )
 
 REM ---- 检查容器是否已在运行 ----
-powershell -NoProfile -Command "docker ps --filter 'name=%CONTAINER_NAME%' --format '{{.Names}}' | Out-Null; if ($?) { exit 0 } else { exit 1 }"
+"%DOCKER%" ps --filter "name=%CONTAINER_NAME%" --format "{{.Names}}" | findstr /x "%CONTAINER_NAME%" >nul 2>&1
 if !ERRORLEVEL! neq 0 goto :try_start
 echo [OK] !CONTAINER_NAME! 已在运行
 goto :check_health
 
 REM ---- 检查容器是否存在 (已停止) ----
 :try_start
-powershell -NoProfile -Command "docker ps -a --filter 'name=%CONTAINER_NAME%' --format '{{.Names}}' | Out-Null; if ($?) { exit 0 } else { exit 1 }"
+"%DOCKER%" ps -a --filter "name=%CONTAINER_NAME%" --format "{{.Names}}" | findstr /x "%CONTAINER_NAME%" >nul 2>&1
 if !ERRORLEVEL! equ 0 (
     echo [INFO] 容器 !CONTAINER_NAME! 存在，正在启动...
-    docker start %CONTAINER_NAME%
+    "%DOCKER%" start %CONTAINER_NAME%
 ) else (
     echo [INFO] 容器 !CONTAINER_NAME! 不存在，正在创建...
-    docker compose -f "!COMPOSE_FILE!" up -d %CONTAINER_NAME%
+    "%DOCKER%" compose -f "!COMPOSE_FILE!" up -d %CONTAINER_NAME%
 )
 
 if !ERRORLEVEL! neq 0 (

@@ -4,7 +4,7 @@ param(
     [string]$ProbePath = "/__nginx_loki_probe",
     [string]$RequestId,
     [string]$TraceId,
-    [string]$AccessLogPath = "D:/docker-data/memochat/nginx/logs/access.json",
+    [string]$AccessLogPath = "\\wsl.localhost\archlinux\data\docker-data\memochat\nginx\logs\access.json",
     [switch]$SkipAccessLogFileCheck,
     [int]$TimeoutSec = 5,
     [int]$FileWaitSec = 10,

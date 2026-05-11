@@ -3,7 +3,7 @@
     MemoChat Windows 原生方案一键启动脚本
 .DESCRIPTION
     启动所有基础设施 + 后端服务 + QML 客户端
-    依赖: Docker Desktop, CMake, Qt6, Node.js
+    依赖: Arch Linux native Docker, CMake, Qt6, Node.js
 .PARAMETER SkipBuild
     跳过 C++ 编译 (使用已有的 exe)
 .PARAMETER SkipClient
@@ -21,6 +21,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $ServicesDir = "$ProjectRoot\Memo_ops\runtime\services"
+$DockerCli = Join-Path $PSScriptRoot "docker\arch-docker.ps1"
 $env:MEMOCHAT_ENABLE_KAFKA = "1"
 $env:MEMOCHAT_ENABLE_RABBITMQ = "1"
 
@@ -58,7 +59,7 @@ Start-Sleep -Seconds 30
 Write-Step "验证 Docker 容器..."
 $runningContainers = @("memochat-postgres", "memochat-redis", "memochat-mongodb", "memochat-kafka", "memochat-rabbitmq")
 foreach ($name in $runningContainers) {
-    $status = docker ps --filter "name=$name" --format "{{.Names}}"
+    $status = & $DockerCli ps --filter "name=$name" --format "{{.Names}}"
     if ($status) {
         Write-Host "  ✓ $name 运行中" -ForegroundColor Green
     } else {
