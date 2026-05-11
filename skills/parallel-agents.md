@@ -140,7 +140,7 @@ Controller cannot mark the task done until it has:
 3. Confirmed worker write scopes did not collide unexpectedly.
 4. Confirmed shared contracts match final code.
 5. Confirmed the Tests Worker either ran and expanded meaningful coverage, or `plan.md` records why a separate testing lane was not useful.
-6. Run the narrowest meaningful verification, plus `msvc2022-full` when deploy/runtime behavior is touched.
+6. Run the narrowest meaningful verification, plus `linux-server-gcc16` or `linux-full-gcc16` when Linux deploy/runtime behavior is touched. Use `msvc2022-full` only for explicit legacy Windows validation.
 7. Written `.ai/<project>/<letter>/review1.md`.
 8. Recorded verification in `.ai/<project>/<letter>/logs/phase-verify.result.md`.
 9. Updated `plan.md` statuses and the concurrency decision.

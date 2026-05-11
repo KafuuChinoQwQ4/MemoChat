@@ -76,7 +76,7 @@ target_include_directories(GateServer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../GateServerHttp3
 )
 
-if(MEMOCHAT_ENABLE_HTTP3)
+if(WIN32 AND MEMOCHAT_ENABLE_HTTP3)
     find_path(MSQUIC_BIN_DIR NAMES msquic.dll PATHS
         "${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg_installed/x64-windows/bin"
         NO_DEFAULT_PATH)

@@ -1,9 +1,13 @@
 #pragma once
 #include "const.h"
 #include <hiredis/hiredis.h>
-#include <queue>
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <iostream>
 #include <mutex>
+#include <queue>
+#include <thread>
 #include "Singleton.h"
 class RedisConPool {
 public:
@@ -296,5 +300,4 @@ private:
 	RedisMgr();
 	unique_ptr<RedisConPool>  _con_pool;
 };
-
 

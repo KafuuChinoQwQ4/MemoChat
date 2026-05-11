@@ -4,7 +4,7 @@ param(
     [string]$MemoOpsSql = "migrations/postgresql/memo_ops/001_baseline.sql",
     [string]$AppSchema = "memo",
     [string]$OpsSchema = "memo_ops",
-    [string]$WslDistro = "Ubuntu-24.04"
+    [string]$WslDistro = "archlinux"
 )
 
 $ErrorActionPreference = "Stop"

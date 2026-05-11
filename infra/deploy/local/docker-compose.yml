@@ -12,7 +12,7 @@ services:
       - "80:80"
     volumes:
       - ./compose/nginx-local.conf:/etc/nginx/nginx.conf:ro
-      - D:/docker-data/memochat/nginx/logs:/var/log/memochat/nginx
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/nginx/logs:/var/log/memochat/nginx
     expose:
       - "8081"
     command:
@@ -61,7 +61,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - D:/docker-data/memochat/redis:/data
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/redis:/data
 
   memochat-postgres:
     image: postgres:16
@@ -80,7 +80,7 @@ services:
     ports:
       - "15432:5432"
     volumes:
-      - D:/docker-data/memochat/postgres:/var/lib/postgresql/data
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/postgres:/var/lib/postgresql/data
 
   memochat-mongo:
     image: mongo:7.0
@@ -93,7 +93,7 @@ services:
     ports:
       - "27017:27017"
     volumes:
-      - D:/docker-data/memochat/mongo:/data/db
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/mongo:/data/db
 
   memochat-minio:
     image: minio/minio:latest
@@ -111,7 +111,7 @@ services:
       - --console-address
       - ":9001"
     volumes:
-      - D:/docker-data/memochat/minio:/data
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/minio:/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
@@ -136,7 +136,7 @@ services:
       - --pandaproxy-addr=0.0.0.0:18082
       - --advertise-pandaproxy-addr=127.0.0.1:18082
     volumes:
-      - D:/docker-data/memochat/redpanda:/var/lib/redpanda
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/redpanda:/var/lib/redpanda
 
   memochat-rabbitmq:
     image: rabbitmq:3.12-management-alpine
@@ -149,7 +149,7 @@ services:
       - "5672:5672"
       - "15672:15672"
     volumes:
-      - D:/docker-data/memochat/rabbitmq:/var/lib/rabbitmq
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/rabbitmq:/var/lib/rabbitmq
 
   #######################
   # Observability
@@ -168,7 +168,7 @@ services:
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./observability/prometheus/rules:/etc/prometheus/rules:ro
-      - D:/docker-data/memochat/observability/prometheus:/prometheus
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/prometheus:/prometheus
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -187,7 +187,7 @@ services:
       - --storage.path=/alertmanager
     volumes:
       - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - D:/docker-data/memochat/observability/alertmanager:/alertmanager
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/alertmanager:/alertmanager
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -205,8 +205,8 @@ services:
       DOCKER_INFLUXDB_INIT_BUCKET: metrics
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: my-super-secret-admin-token
     volumes:
-      - D:/docker-data/memochat/observability/influxdb:/var/lib/influxdb2
-      - D:/docker-data/memochat/observability/influxdb/config:/etc/influxdb2
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/influxdb:/var/lib/influxdb2
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/influxdb/config:/etc/influxdb2
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -224,7 +224,7 @@ services:
       - ./observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./observability/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - D:/docker-data/memochat/observability/grafana:/var/lib/grafana
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/grafana:/var/lib/grafana
 
   memochat-loki:
     image: grafana/loki:3.1.1
@@ -236,7 +236,7 @@ services:
       - -config.file=/etc/loki/config.yaml
     volumes:
       - ./observability/loki/config.yaml:/etc/loki/config.yaml:ro
-      - D:/docker-data/memochat/observability/loki:/loki
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/loki:/loki
 
   memochat-tempo:
     image: grafana/tempo:2.5.0
@@ -248,7 +248,7 @@ services:
       - -config.file=/etc/tempo/config.yaml
     volumes:
       - ./observability/tempo/config.yaml:/etc/tempo/config.yaml:ro
-      - D:/docker-data/memochat/observability/tempo:/var/tempo
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/tempo:/var/tempo
 
   memochat-otel-collector:
     image: otel/opentelemetry-collector-contrib:0.107.0
@@ -268,7 +268,7 @@ services:
       - ./observability/otel/config.yaml:/etc/otelcol-contrib/config.yaml:ro
       - ../../Memo_ops/runtime:/workspace/Memo_ops/runtime:ro
       - ../../../build/bin:/workspace/build/bin:ro
-      - D:/docker-data/memochat/nginx/logs:/workspace/nginx/logs:ro
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/nginx/logs:/workspace/nginx/logs:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

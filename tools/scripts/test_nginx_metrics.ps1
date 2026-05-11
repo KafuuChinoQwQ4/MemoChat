@@ -12,6 +12,7 @@ $ErrorActionPreference = "Stop"
 
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent (Split-Path -Parent $ScriptRoot)
+$DockerCli = Join-Path $ScriptRoot "docker\arch-docker.ps1"
 
 function Resolve-ProjectPath {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -32,7 +33,7 @@ function Invoke-DockerExecText {
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        $output = @(& docker exec $ContainerName @Arguments 2>&1 | ForEach-Object { $_.ToString() })
+        $output = @(& $DockerCli exec $ContainerName @Arguments 2>&1 | ForEach-Object { $_.ToString() })
         $exitCode = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previousErrorActionPreference
@@ -55,7 +56,7 @@ function Invoke-ContainerNetworkHttpText {
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        $output = @(& docker run --rm --network "container:$ContainerName" $Image -fsS --max-time $RequestTimeoutSec $Uri 2>&1 | ForEach-Object { $_.ToString() })
+        $output = @(& $DockerCli run --rm --network "container:$ContainerName" $Image -fsS --max-time $RequestTimeoutSec $Uri 2>&1 | ForEach-Object { $_.ToString() })
         $exitCode = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previousErrorActionPreference
@@ -157,7 +158,7 @@ Write-Host "=== Compose config ==="
 $previousErrorActionPreference = $ErrorActionPreference
 try {
     $ErrorActionPreference = "Continue"
-    & docker compose -f $composePath config --quiet
+    & $DockerCli compose -f $composePath config --quiet
     $composeExitCode = $LASTEXITCODE
 } finally {
     $ErrorActionPreference = $previousErrorActionPreference

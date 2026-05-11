@@ -1,5 +1,5 @@
 import QtQuick 2.15
-import Qt5Compat.GraphicalEffects
+import QtQuick.Effects
 
 Item {
     id: root
@@ -41,86 +41,82 @@ Item {
         visible: false
     }
 
-    Item {
-        id: logoVisual
+    ShaderEffectSource {
+        id: maskSource
         anchors.fill: parent
+        sourceItem: memoMask
+        sourceRect: Qt.rect(0, 0, root.width, root.height)
+        live: false
+        hideSource: true
+        visible: false
+    }
 
-        Text {
-            id: memoShadow
-            anchors.centerIn: parent
-            anchors.verticalCenterOffset: 1
-            text: root.logoText
-            color: Qt.rgba(0.35, 0.46, 0.62, 0.14)
-            font.pixelSize: root.logoPixelSize
-            font.weight: Font.DemiBold
-            font.letterSpacing: root.logoSpacing
-            renderType: Text.NativeRendering
-        }
+    Item {
+        id: tintSource
+        anchors.fill: parent
+        visible: false
 
-        FastBlur {
-            id: blurredBackdrop
+        Rectangle {
             anchors.fill: parent
-            source: root.hasBackdrop ? blurSource : null
-            radius: 24
-            transparentBorder: true
-            visible: false
-        }
-
-        OpacityMask {
-            id: glassText
-            anchors.fill: parent
-            source: root.hasBackdrop ? blurredBackdrop : tintSource
-            maskSource: memoMask
-            opacity: 0.93
-        }
-
-        Item {
-            id: tintSource
-            anchors.fill: parent
-            visible: false
-
-            LinearGradient {
-                anchors.fill: parent
-                start: Qt.point(0, 0)
-                end: Qt.point(width, height)
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: Qt.rgba(0.90, 0.95, 0.99, 0.44) }
-                    GradientStop { position: 0.5; color: Qt.rgba(0.80, 0.88, 0.97, 0.36) }
-                    GradientStop { position: 1.0; color: Qt.rgba(0.73, 0.82, 0.93, 0.40) }
-                }
+            radius: 18
+            antialiasing: true
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: Qt.rgba(0.90, 0.95, 0.99, 0.44) }
+                GradientStop { position: 0.5; color: Qt.rgba(0.80, 0.88, 0.97, 0.36) }
+                GradientStop { position: 1.0; color: Qt.rgba(0.73, 0.82, 0.93, 0.40) }
             }
         }
+    }
 
-        OpacityMask {
-            anchors.fill: parent
-            source: tintSource
-            maskSource: memoMask
-            opacity: 0.52
-        }
+    MultiEffect {
+        anchors.fill: parent
+        source: root.hasBackdrop ? blurSource : tintSource
+        visible: true
+        blurEnabled: root.hasBackdrop
+        blur: root.hasBackdrop ? 0.58 : 0.0
+        blurMax: 48
+        maskEnabled: true
+        maskSource: maskSource
+        maskSpreadAtMin: 0.05
+        maskSpreadAtMax: 0.12
+        autoPaddingEnabled: false
+        opacity: 0.98
+    }
 
-        Text {
-            id: memoEdge
-            anchors.centerIn: parent
-            text: root.logoText
-            color: Qt.rgba(1, 1, 1, 0.07)
-            font.pixelSize: root.logoPixelSize
-            font.weight: Font.DemiBold
-            font.letterSpacing: root.logoSpacing
-            renderType: Text.NativeRendering
-            style: Text.Outline
-            styleColor: Qt.rgba(1, 1, 1, 0.54)
-        }
+    Text {
+        id: memoShadow
+        anchors.centerIn: parent
+        anchors.verticalCenterOffset: 1
+        text: root.logoText
+        color: Qt.rgba(0.35, 0.46, 0.62, 0.14)
+        font.pixelSize: root.logoPixelSize
+        font.weight: Font.DemiBold
+        font.letterSpacing: root.logoSpacing
+        renderType: Text.NativeRendering
+    }
 
-        Text {
-            id: memoHighlight
-            anchors.centerIn: parent
-            text: root.logoText
-            color: Qt.rgba(1, 1, 1, 0.13)
-            font.pixelSize: root.logoPixelSize
-            font.weight: Font.DemiBold
-            font.letterSpacing: root.logoSpacing
-            renderType: Text.NativeRendering
-            scale: 1.002
-        }
+    Text {
+        id: memoEdge
+        anchors.centerIn: parent
+        text: root.logoText
+        color: Qt.rgba(1, 1, 1, 0.07)
+        font.pixelSize: root.logoPixelSize
+        font.weight: Font.DemiBold
+        font.letterSpacing: root.logoSpacing
+        renderType: Text.NativeRendering
+        style: Text.Outline
+        styleColor: Qt.rgba(1, 1, 1, 0.54)
+    }
+
+    Text {
+        id: memoHighlight
+        anchors.centerIn: parent
+        text: root.logoText
+        color: Qt.rgba(1, 1, 1, 0.13)
+        font.pixelSize: root.logoPixelSize
+        font.weight: Font.DemiBold
+        font.letterSpacing: root.logoSpacing
+        renderType: Text.NativeRendering
+        scale: 1.002
     }
 }

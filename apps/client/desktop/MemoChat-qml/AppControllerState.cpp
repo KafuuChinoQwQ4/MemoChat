@@ -259,6 +259,11 @@ AgentMessageModel *AppController::agentMessageModel() const
     return _agent_controller.model();
 }
 
+PetController *AppController::petController() const
+{
+    return const_cast<PetController*>(&_pet_controller);
+}
+
 R18Controller *AppController::r18Controller() const
 {
     return const_cast<R18Controller*>(&_r18_controller);

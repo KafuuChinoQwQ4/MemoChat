@@ -7,8 +7,12 @@ option(MEMOCHAT_AUTO_DEPLOY_RUNTIME "Copy built server executables into infra/Me
 
 # Require C++23 for std::expected, std::unreachable, std::byteswap (glaze library requires C++23).
 # Must be set BEFORE any add_subdirectory() calls so it takes effect for all targets.
-set(CMAKE_CXX_STANDARD 23)
+if(NOT DEFINED MEMOCHAT_CXX_STANDARD)
+    set(MEMOCHAT_CXX_STANDARD "23" CACHE STRING "C++ standard used by MemoChat targets")
+endif()
+set(CMAKE_CXX_STANDARD ${MEMOCHAT_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(MSVC)
     if(DEFINED VCPKG_TARGET_TRIPLET AND VCPKG_TARGET_TRIPLET MATCHES "static")
@@ -267,12 +271,29 @@ target_link_libraries(memochat_proto PUBLIC
     protobuf::libprotobuf
 )
 
+if(DEFINED VCPKG_TARGET_TRIPLET AND NOT "${VCPKG_TARGET_TRIPLET}" STREQUAL "")
+    set(MEMOCHAT_VCPKG_TARGET_TRIPLET "${VCPKG_TARGET_TRIPLET}")
+elseif(WIN32)
+    set(MEMOCHAT_VCPKG_TARGET_TRIPLET "x64-windows")
+else()
+    set(MEMOCHAT_VCPKG_TARGET_TRIPLET "x64-linux")
+endif()
+
+if(DEFINED VCPKG_INSTALLED_DIR AND NOT "${VCPKG_INSTALLED_DIR}" STREQUAL "")
+    set(MEMOCHAT_VCPKG_INSTALLED_DIR "${VCPKG_INSTALLED_DIR}")
+elseif(DEFINED ENV{VCPKG_INSTALLED_DIR} AND NOT "$ENV{VCPKG_INSTALLED_DIR}" STREQUAL "")
+    set(MEMOCHAT_VCPKG_INSTALLED_DIR "$ENV{VCPKG_INSTALLED_DIR}")
+else()
+    set(MEMOCHAT_VCPKG_INSTALLED_DIR "${CMAKE_SOURCE_DIR}/vcpkg_installed")
+endif()
+set(MEMOCHAT_VCPKG_TRIPLET_DIR "${MEMOCHAT_VCPKG_INSTALLED_DIR}/${MEMOCHAT_VCPKG_TARGET_TRIPLET}")
+
 add_library(memochat_server_deps INTERFACE)
 target_compile_features(memochat_server_deps INTERFACE cxx_std_23)
 target_include_directories(memochat_server_deps INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/common
-    "${VCPKG_INSTALLED_DIR}/x64-windows/include/mongocxx/v_noabi"
-    "${VCPKG_INSTALLED_DIR}/x64-windows/include/bsoncxx/v_noabi"
+    "${MEMOCHAT_VCPKG_TRIPLET_DIR}/include/mongocxx/v_noabi"
+    "${MEMOCHAT_VCPKG_TRIPLET_DIR}/include/bsoncxx/v_noabi"
 )
 target_link_libraries(memochat_server_deps INTERFACE
     memochat_logging
@@ -426,4 +447,3 @@ if(BUILD_SERVER_SERVICES)
     add_subdirectory(VarifyServer)
     add_subdirectory(AIServer)
 endif()
-

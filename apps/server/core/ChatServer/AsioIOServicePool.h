@@ -1,6 +1,7 @@
 #pragma once
 #include <boost/asio.hpp>
 #include <memory>
+#include <thread>
 #include "Singleton.h"
 #include "runtime/IoContextPool.h"
 

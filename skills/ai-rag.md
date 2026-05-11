@@ -16,6 +16,8 @@ Use for AI Orchestrator, LLM routing, tools, RAG, knowledge base, graph memory, 
 - `apps/server/core/AIOrchestrator/docker-compose.yml`
 - `apps/server/core/AIOrchestrator/config.yaml`
 
+AI bind data defaults to `/data/docker-data/memochat/ai-orchestrator` under Arch native Docker. Use Docker Desktop paths only for legacy migration/backup checks.
+
 ## Docker Services
 
 Expected services and ports:
@@ -27,12 +29,12 @@ Expected services and ports:
 
 Check:
 
-```powershell
+```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-Invoke-WebRequest http://127.0.0.1:8096/health -UseBasicParsing
-Invoke-WebRequest http://127.0.0.1:11434/api/tags -UseBasicParsing
-Invoke-WebRequest http://127.0.0.1:6333/ -UseBasicParsing
-Invoke-WebRequest http://127.0.0.1:7474/ -UseBasicParsing
+curl -fsS http://127.0.0.1:8096/health
+curl -fsS http://127.0.0.1:11434/api/tags
+curl -fsS http://127.0.0.1:6333/
+curl -fsS http://127.0.0.1:7474/
 ```
 
 Use MCP for Qdrant/Neo4j when possible:
@@ -78,16 +80,17 @@ For MCP bridge:
 
 Run Python-level checks where available, then runtime probes:
 
-```powershell
-python -m compileall apps\server\core\AIOrchestrator
+```bash
+python -m compileall apps/server/core/AIOrchestrator
 docker logs --tail 100 memochat-ai-orchestrator
 ```
 
 For C++ AIServer changes:
 
-```powershell
-cmake --preset msvc2022-full
-cmake --build --preset msvc2022-full
+```bash
+source /root/.memochat-linux-env
+cmake --preset linux-server-gcc16
+cmake --build --preset linux-server-gcc16 --parallel 12
 ```
 
 ## Report

@@ -17,6 +17,7 @@
 #include <vector>
 #include <sstream>
 #include <chrono>
+#include <cstring>
 #include <thread>
 #include <random>
 #include <openssl/bio.h>
@@ -32,7 +33,7 @@ const decltype(&closesocket) CLOSE_SOCKET = closesocket;
 #else
 using SocketType = int;
 const SocketType INVALID_SOCKET_VALUE = -1;
-const int CLOSE_SOCKET = ::close;
+const decltype(&::close) CLOSE_SOCKET = ::close;
 #endif
 
 int sock_errno() {

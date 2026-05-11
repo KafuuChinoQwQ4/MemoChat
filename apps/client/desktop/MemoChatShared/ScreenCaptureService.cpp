@@ -9,8 +9,10 @@
 #include <QGuiApplication>
 #include <QPainter>
 
+#ifdef Q_OS_WIN
 #include "WinSdkCompat.h"
 #include <vector>
+#endif
 
 static QPixmap grabScreenRect(const QRect &rect)
 {
@@ -19,6 +21,7 @@ static QPixmap grabScreenRect(const QRect &rect)
     if (w <= 0 || h <= 0)
         return QPixmap();
 
+#ifdef Q_OS_WIN
     HDC hdcScreen = GetDC(nullptr);
     HDC hdcMem = CreateCompatibleDC(hdcScreen);
     HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, w, h);
@@ -47,6 +50,25 @@ static QPixmap grabScreenRect(const QRect &rect)
     DeleteDC(hdcMem);
     ReleaseDC(nullptr, hdcScreen);
     return pm;
+#else
+    QScreen *targetScreen = nullptr;
+    for (QScreen *screen : qApp->screens()) {
+        if (screen->geometry().intersects(rect)) {
+            targetScreen = screen;
+            break;
+        }
+    }
+    if (!targetScreen) {
+        targetScreen = qApp->primaryScreen();
+    }
+    if (!targetScreen) {
+        return QPixmap();
+    }
+
+    const QRect screenRect = targetScreen->geometry();
+    const QRect localRect = rect.translated(-screenRect.topLeft());
+    return targetScreen->grabWindow(0, localRect.x(), localRect.y(), w, h);
+#endif
 }
 
 ScreenCaptureService::ScreenCaptureService(QObject *parent)

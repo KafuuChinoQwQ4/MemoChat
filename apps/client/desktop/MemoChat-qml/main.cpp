@@ -28,6 +28,9 @@
 #include <cstdio>
 #include "AppController.h"
 #include "CallSessionModel.h"
+#include "Live2DRenderItem.h"
+#include "PetController.h"
+#include "PetModel.h"
 #include "TelemetryUtils.h"
 #include "global.h"
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
@@ -370,6 +373,9 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationName(QStringLiteral("MemoChatQml"));
     QSurfaceFormat format;
     format.setSamples(8);
+#ifdef Q_OS_LINUX
+    format.setAlphaBufferSize(8);
+#endif
     QSurfaceFormat::setDefaultFormat(format);
 
     // Avoid stale QML cache after frequent qrc/page changes.
@@ -383,10 +389,10 @@ int main(int argc, char *argv[])
     loadRuntimeLogConfig(config_path, app_path);
     qInstallMessageHandler(fileMessageHandler);
     QQuickStyle::setStyle("Basic");
+    QtWebEngineQuick::initialize();
 
     QApplication app(argc, argv);
     app.setWindowIcon(QIcon(QStringLiteral(":/app/icon.ico")));
-    QtWebEngineQuick::initialize();
 
     const QString runtime_app_path = QCoreApplication::applicationDirPath();
     const QString runtime_config_path = QDir::toNativeSeparators(
@@ -415,6 +421,12 @@ int main(int argc, char *argv[])
         "MemoChat", 1, 0, "AppController", "Enum only");
     qmlRegisterUncreatableType<CallSessionModel>(
         "MemoChat", 1, 0, "CallSessionModel", "Exposed via AppController");
+    qmlRegisterUncreatableType<PetController>(
+        "MemoChat", 1, 0, "PetController", "Exposed via AppController");
+    qmlRegisterUncreatableType<PetModel>(
+        "MemoChat", 1, 0, "PetModel", "Exposed via PetController");
+    qmlRegisterType<Live2DRenderItem>(
+        "MemoChat", 1, 0, "Live2DRenderItem");
 
     AppController controller;
     QQmlApplicationEngine engine;
@@ -427,7 +439,11 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("gateUrlPrefix", gate_url_prefix);
     engine.rootContext()->setContextProperty("livekitBridge", controller.livekitBridge());
 
+#ifdef Q_OS_LINUX
+    const QUrl main_url(QStringLiteral("qrc:/qml/linux/Main.qml"));
+#else
     const QUrl main_url(QStringLiteral("qrc:/qml/Main.qml"));
+#endif
     QObject::connect(
         &engine,
         &QQmlApplicationEngine::objectCreated,

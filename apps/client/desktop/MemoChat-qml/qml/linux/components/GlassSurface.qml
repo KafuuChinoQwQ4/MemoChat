@@ -1,0 +1,81 @@
+import QtQuick 2.15
+
+Item {
+    id: root
+
+    property Item backdrop: null
+    property bool blurEnabled: true
+    property bool liveBlur: false
+    property int blurRadius: 18
+    property real cornerRadius: 10
+
+    property color fillColor: Qt.rgba(1, 1, 1, 0.15)
+    property color strokeColor: Qt.rgba(1, 1, 1, 0.50)
+    property real strokeWidth: 1
+
+    property color glowTopColor: Qt.rgba(1, 1, 1, 0.24)
+    property color glowBottomColor: Qt.rgba(1, 1, 1, 0.06)
+    implicitWidth: 100
+    implicitHeight: 38
+    clip: true
+
+    Rectangle {
+        anchors.fill: parent
+        radius: root.cornerRadius
+        color: root.fillColor
+        border.color: root.strokeColor
+        border.width: root.strokeWidth
+        antialiasing: true
+
+        Behavior on color {
+            ColorAnimation {
+                duration: 180
+                easing.type: Easing.InOutQuad
+            }
+        }
+        Behavior on border.color {
+            ColorAnimation {
+                duration: 180
+                easing.type: Easing.InOutQuad
+            }
+        }
+        Behavior on border.width {
+            NumberAnimation {
+                duration: 160
+                easing.type: Easing.InOutQuad
+            }
+        }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        radius: root.cornerRadius
+        antialiasing: true
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: root.glowTopColor }
+            GradientStop { position: 0.46; color: Qt.rgba(1, 1, 1, 0) }
+            GradientStop { position: 1.0; color: root.glowBottomColor }
+        }
+    }
+
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: Math.max(1, parent.height * 0.42)
+        radius: root.cornerRadius
+        antialiasing: true
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.18) }
+            GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0) }
+        }
+        opacity: root.blurEnabled ? 0.72 : 0.42
+    }
+
+    Behavior on blurRadius {
+        NumberAnimation {
+            duration: 120
+            easing.type: Easing.InOutQuad
+        }
+    }
+}

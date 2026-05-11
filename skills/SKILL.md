@@ -5,16 +5,19 @@ description: Orchestrate a multi-phase implementation workflow for MemoChat-Qml-
 
 # MemoChat Task Pipeline
 
-Use this skill to drive non-trivial changes in `D:\MemoChat-Qml-Drogon` while keeping the main thread thin and preserving useful artifacts.
+Use this skill to drive non-trivial changes in `/root/code/MemoChat-Qml-Drogon-linux` while keeping the main thread thin and preserving useful artifacts. Treat `D:\MemoChat-Qml-Drogon` as the legacy Windows checkout unless the user explicitly asks for Windows-side work.
 
 For implementation work, `skills/parallel-agents.md` is the mandatory default execution mode. The main thread acts as the Controller: it owns architecture, plan, shared contracts, worker dispatch, integration, review, and final acceptance. After the Controller has enough context and freezes the first shared contract, it must dispatch safe disjoint worker lanes immediately to accelerate delivery. Local-only execution is an exception, allowed only when the active tool/policy environment forbids spawning workers, the user explicitly asks for single-agent work, the task is genuinely tiny and has no useful test/review lane, the task is strictly sequential, or no safe split exists. Record the exact exception reason in `plan.md` before continuing local-only.
 
 ## Project Rules
 
-- Treat Windows PowerShell as the default shell.
+- Treat Arch Linux in WSL bash as the default shell for build, deploy, runtime, and verification work.
+- Use Windows PowerShell only for legacy Windows client checks, Docker Desktop migration/backup operations, or explicit Windows checkout work.
 - Keep all infrastructure dependencies in Docker. Check containers with `docker ps`; inspect databases and queues through Docker or the configured MCP tools, not local host installs.
+- Arch native Docker is the default Docker runtime. Source `/root/.memochat-linux-env`, which unsets `DOCKER_HOST` and uses `/var/run/docker.sock`.
 - Keep container ports stable. Do not change compose port mappings unless the task explicitly asks for it.
-- Prefer downloading caches, models, packages, and generated large artifacts to `D:` paths.
+- Prefer downloading Linux caches, models, packages, vcpkg artifacts, Qt artifacts, and generated large files under `/data`.
+- Use `/data/docker-data/memochat` for local Docker bind data. Use `D:` only for legacy Docker Desktop backups, Windows artifacts, or explicit Windows-side checks.
 - Use MCP tools when available:
   - Docker services: Prometheus, Loki, Tempo, Grafana, MinIO, RabbitMQ, InfluxDB, cAdvisor.
   - Datastores: MongoDB, Neo4j, Qdrant, Redpanda, Postgres, Redis as configured.
@@ -46,7 +49,7 @@ Create or reuse:
 
 ## Phase 0: Setup
 
-1. Record start time with `Get-Date`.
+1. Record start time with `date`.
 2. Detect follow-up work:
    - If the first token of the request matches `.ai/<token>/about.md`, use that project.
    - Otherwise create a short kebab-case project name.
@@ -122,33 +125,31 @@ Implement phase by phase.
 
 ## Phase 5: Verification
 
-Use the full local build for any code change that may be deployed or runtime-tested. `deploy_services.bat` copies only from `build\bin\Release`, which is produced by `msvc2022-full`; do not use `build-verify-server` or `build-verify-client` for deployable verification.
+Use the Linux GCC16 presets for deployable Arch/WSL runtime verification. `deploy_services.sh` copies from `build-linux-server-gcc16/bin` by default. For client-only Linux work use `linux-client-gcc16`; for cross-stack Linux checks use `linux-full-gcc16`.
 
 Required build before deploy/runtime smoke:
 
-```powershell
-cmake --preset msvc2022-full
-cmake --build --preset msvc2022-full
+```bash
+source /root/.memochat-linux-env
+cmake --preset linux-server-gcc16
+cmake --build --preset linux-server-gcc16 --parallel 12
 ```
 
 For unit tests, run them from the full build tree:
 
-```powershell
-ctest --preset msvc2022-full
+```bash
+ctest --preset linux-server-gcc16 --output-on-failure
 ```
 
 For runtime verification, prefer existing scripts:
 
-- `tools\scripts\preflight.ps1`
-- `tools\scripts\status\deploy_services.bat`
-- `tools\scripts\status\start-all-services.bat`
-- `tools\scripts\status\stop-all-services.bat`
-- `tools\scripts\test_register_login.ps1`
-- `tools\scripts\test_login.ps1`
-- `tools\scripts\full_flow_test.ps1`
-- Python load tests under `tools\loadtest\python-loadtest`
+- `tools/scripts/status/deploy_services.sh`
+- `tools/scripts/status/start-all-services.sh`
+- `tools/scripts/status/stop-all-services.sh`
+- Legacy Windows probes, when running from Windows: `tools/scripts/test_register_login.ps1`, `tools/scripts/test_login.ps1`, `tools/scripts/full_flow_test.ps1`
+- Python load tests under `tools/loadtest/python-loadtest`
 
-If build fails with file locks or access denied, stop and tell the user which process/file is locking output.
+The `.bat`/`.ps1` scripts remain legacy Windows equivalents. If Docker is unavailable in Arch, start or repair the Arch Docker daemon before runtime smoke.
 
 ## Phase 6: Review
 

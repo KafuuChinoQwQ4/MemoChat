@@ -1,11 +1,12 @@
 $ErrorActionPreference = "Stop"
+$DockerCli = Join-Path $PSScriptRoot "docker\arch-docker.ps1"
 
 $container = "memochat-rabbitmq"
 $rabbitUser = if ($env:MEMOCHAT_RABBITMQ_USER) { $env:MEMOCHAT_RABBITMQ_USER } else { "memochat" }
 $rabbitPassword = if ($env:MEMOCHAT_RABBITMQ_PASSWORD) { $env:MEMOCHAT_RABBITMQ_PASSWORD } else { "123456" }
 
-docker exec $container rabbitmqadmin --username=$rabbitUser --password=$rabbitPassword declare exchange name=memochat.direct type=direct durable=true | Out-Host
-docker exec $container rabbitmqadmin --username=$rabbitUser --password=$rabbitPassword declare exchange name=memochat.dlx type=direct durable=true | Out-Host
+& $DockerCli exec $container rabbitmqadmin --username=$rabbitUser --password=$rabbitPassword declare exchange name=memochat.direct type=direct durable=true | Out-Host
+& $DockerCli exec $container rabbitmqadmin --username=$rabbitUser --password=$rabbitPassword declare exchange name=memochat.dlx type=direct durable=true | Out-Host
 
 $queues = @(
     @{ Name = "chat.delivery.retry.q"; RoutingKey = "chat.delivery.retry" },
@@ -19,6 +20,6 @@ $queues = @(
 )
 
 foreach ($queue in $queues) {
-    docker exec $container rabbitmqadmin --username=$rabbitUser --password=$rabbitPassword declare queue name=$($queue.Name) durable=true | Out-Host
-    docker exec $container rabbitmqadmin --username=$rabbitUser --password=$rabbitPassword declare binding source=memochat.direct destination_type=queue destination=$($queue.Name) routing_key=$($queue.RoutingKey) | Out-Host
+    & $DockerCli exec $container rabbitmqadmin --username=$rabbitUser --password=$rabbitPassword declare queue name=$($queue.Name) durable=true | Out-Host
+    & $DockerCli exec $container rabbitmqadmin --username=$rabbitUser --password=$rabbitPassword declare binding source=memochat.direct destination_type=queue destination=$($queue.Name) routing_key=$($queue.RoutingKey) | Out-Host
 }

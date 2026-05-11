@@ -4,13 +4,14 @@ Use these templates for delegated agents or as same-session checklists. Replace 
 
 ## Shared Rules
 
-- Work in `D:\MemoChat-Qml-Drogon`.
+- Work in `/root/code/MemoChat-Qml-Drogon-linux`.
 - Infrastructure dependencies must run in Docker. Use Docker or MCP tools for Redis, Postgres, MongoDB, Neo4j, Qdrant, Redpanda, RabbitMQ, MinIO, Prometheus, Loki, Tempo, Grafana, InfluxDB, and cAdvisor.
 - Do not change stable Docker ports unless the task explicitly asks for it.
-- Prefer D: for downloads, caches, large generated files, and Docker data.
+- Prefer `/data` for Linux downloads, caches, large generated files, vcpkg artifacts, and Qt artifacts.
+- Use `/data/docker-data/memochat` for Arch Docker bind data. Use `D:` only for Docker Desktop migration backups or explicit legacy Windows work.
 - Do not revert user changes.
 - Keep `.ai/` artifacts out of commits unless explicitly requested.
-- Use PowerShell commands in examples.
+- Use bash commands in Linux examples. Use PowerShell only for explicit Windows-side smoke probes or legacy scripts.
 
 ## Standard Progress Contract
 
@@ -144,23 +145,26 @@ Read:
 - .ai/<PROJECT>/<LETTER>/context.md
 - .ai/<PROJECT>/<LETTER>/plan.md
 
-Run deployable verification from the full build output. `deploy_services.bat` copies only from `build\bin\Release`.
+Run deployable Linux verification from the Linux server build output. `deploy_services.sh` copies from `build-linux-server-gcc16/bin`.
 
 Full build:
-cmake --preset msvc2022-full
-cmake --build --preset msvc2022-full
+source /root/.memochat-linux-env
+cmake --preset linux-server-gcc16
+cmake --build --preset linux-server-gcc16 --parallel 12
 
 Tests:
-ctest --preset msvc2022-full
+ctest --preset linux-server-gcc16 --output-on-failure
 
 Runtime smoke, when needed:
-tools\scripts\status\deploy_services.bat
-tools\scripts\status\start-all-services.bat
-tools\scripts\test_register_login.ps1
-tools\scripts\test_login.ps1
-tools\scripts\full_flow_test.ps1
+tools/scripts/status/deploy_services.sh
+tools/scripts/status/start-all-services.sh
 
-If a file-lock or access-denied build/deploy error appears, stop and report the locked file/process.
+Legacy Windows probes, when needed from Windows:
+tools/scripts/test_register_login.ps1
+tools/scripts/test_login.ps1
+tools/scripts/full_flow_test.ps1
+
+If a port conflict or Docker dependency failure appears, stop and report the owning process/container.
 Write the result to .ai/<PROJECT>/<LETTER>/logs/phase-verify.result.md.
 ```
 

@@ -21,14 +21,14 @@ Use when preparing a release or release candidate for this repository.
 
 Use:
 
-```powershell
+```bash
 git log --oneline --decorate -n 50
 git diff --stat
 ```
 
 If a previous tag exists, compare from that tag:
 
-```powershell
+```bash
 git tag --sort=-v:refname
 git log <tag>..HEAD --oneline
 ```
@@ -39,7 +39,7 @@ Write user-facing bullets. Skip noisy intermediate work, generated caches, local
 
 Check fixed ports and container health:
 
-```powershell
+```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 ```
 
@@ -47,30 +47,36 @@ Do not change compose ports as part of release cleanup.
 
 ## Build/Test Matrix
 
-Use the full local build before release/runtime deployment. The deployment script copies from `build\bin\Release`, so release validation must not depend on `build-verify-server` or `build-verify-client`.
+Use the Linux GCC16 build before Arch/WSL release/runtime deployment. The deployment script copies from `build-linux-server-gcc16/bin`.
 
-```powershell
-cmake --preset msvc2022-full
-cmake --build --preset msvc2022-full
+```bash
+source /root/.memochat-linux-env
+cmake --preset linux-server-gcc16
+cmake --build --preset linux-server-gcc16 --parallel 12
 ```
 
 Run test presets when release scope needs automated tests:
 
-```powershell
-ctest --preset msvc2022-full
+```bash
+ctest --preset linux-server-gcc16 --output-on-failure
 ```
 
 For runtime release confidence, use the existing service scripts and smoke tests:
 
-```powershell
-tools\scripts\status\deploy_services.bat
-tools\scripts\status\start-all-services.bat
-tools\scripts\test_register_login.ps1
-tools\scripts\test_login.ps1
-tools\scripts\full_flow_test.ps1
+```bash
+tools/scripts/status/deploy_services.sh
+tools/scripts/status/start-all-services.sh
 ```
 
-Stop on file-lock build/deploy errors and ask the user to close the locking process.
+Legacy Windows smoke probes may still be run from Windows when needed:
+
+```powershell
+tools/scripts/test_register_login.ps1
+tools/scripts/test_login.ps1
+tools/scripts/full_flow_test.ps1
+```
+
+Stop on port conflicts or Docker dependency failures and report the owning process/container.
 
 ## Release Note Shape
 

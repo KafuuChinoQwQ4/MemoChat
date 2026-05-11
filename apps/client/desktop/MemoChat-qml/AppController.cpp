@@ -111,6 +111,7 @@ AppController::AppController(QObject *parent)
       _contact_controller(&_gateway),
       _profile_controller(&_gateway),
       _agent_controller(&_gateway),
+      _pet_controller(&_gateway),
       _r18_controller(&_gateway),
       _session_coordinator(std::make_unique<AppSessionCoordinator>(*this)),
       _contact_coordinator_shell(std::make_unique<ContactCoordinatorShell>(*this)),
@@ -253,6 +254,7 @@ void AppController::switchToLogin()
         emit pageChanged();
     }
     _livekit_bridge.leaveRoom();
+    _pet_controller.stopStream();
     _call_session_model.clear();
     _chat_server_host.clear();
     _chat_server_port.clear();
@@ -379,7 +381,7 @@ void AppController::switchToReset()
 
 void AppController::switchChatTab(int tab)
 {
-    const int normalized = qBound(0, tab, static_cast<int>(AgentTabPage));
+    const int normalized = qBound(0, tab, static_cast<int>(Live2DTabPage));
     const ChatTab target = static_cast<ChatTab>(normalized);
     if (_chat_tab == target) {
         return;
@@ -2247,5 +2249,3 @@ bool AppController::checkVerifyCodeValid(const QString &code)
     }
     return true;
 }
-
-

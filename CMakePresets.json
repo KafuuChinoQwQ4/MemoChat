@@ -45,6 +45,83 @@
         "CMAKE_CXX_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe",
         "CMAKE_CXX_FLAGS": "/I\"D:/VS2026stable/VC/Tools/MSVC/14.50.35717/include\" /I\"C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.0/ucrt\" /I\"C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.0/um\" /I\"C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.0/shared\""
       }
+    },
+    {
+      "name": "linux-gcc16-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "environment": {
+        "PATH": "/data/Qt/6.8.3/gcc_64/bin:$penv{PATH}",
+        "VCPKG_ROOT": "/data/vcpkg/vcpkg",
+        "VCPKG_DOWNLOADS": "/data/vcpkg/downloads",
+        "VCPKG_DEFAULT_BINARY_CACHE": "/data/vcpkg/bincache-gcc16",
+        "VCPKG_BINARY_SOURCES": "clear;files,/data/vcpkg/bincache-gcc16,readwrite",
+        "VCPKG_MAX_CONCURRENCY": "12",
+        "CMAKE_BUILD_PARALLEL_LEVEL": "12",
+        "QTWEBENGINE_DISABLE_SANDBOX": "1"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_MAKE_PROGRAM": "/usr/bin/ninja",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_C_COMPILER": "/usr/bin/gcc-16",
+        "CMAKE_CXX_COMPILER": "/usr/bin/g++-16",
+        "CMAKE_CXX_STANDARD": "26",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+        "CMAKE_CXX_EXTENSIONS": "OFF",
+        "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
+        "CMAKE_PREFIX_PATH": "/data/Qt/6.8.3/gcc_64",
+        "MEMOCHAT_CXX_STANDARD": "26",
+        "MEMOCHAT_AUTO_DEPLOY_RUNTIME": "OFF",
+        "VCPKG_TARGET_TRIPLET": "x64-linux-release",
+        "VCPKG_HOST_TRIPLET": "x64-linux-release",
+        "VCPKG_INSTALLED_DIR": "/data/vcpkg/installed-memochat-gcc16",
+        "VCPKG_INSTALL_OPTIONS": "--no-print-usage",
+        "VCPKG_BUILD_TYPE": "release"
+      }
+    },
+    {
+      "name": "linux-server-gcc16",
+      "displayName": "Linux GCC16: Server + Tests",
+      "inherits": "linux-gcc16-base",
+      "binaryDir": "${sourceDir}/build-linux-server-gcc16",
+      "cacheVariables": {
+        "BUILD_CLIENT": "OFF",
+        "BUILD_SERVER": "ON",
+        "BUILD_OPS": "OFF",
+        "BUILD_TESTS": "ON",
+        "VCPKG_MANIFEST_FEATURES": "server",
+        "VCPKG_MANIFEST_NO_DEFAULT_FEATURES": "OFF"
+      }
+    },
+    {
+      "name": "linux-client-gcc16",
+      "displayName": "Linux GCC16: MemoChat Client",
+      "inherits": "linux-gcc16-base",
+      "binaryDir": "${sourceDir}/build-linux-client-gcc16",
+      "cacheVariables": {
+        "BUILD_CLIENT": "ON",
+        "BUILD_SERVER": "OFF",
+        "BUILD_OPS": "OFF",
+        "BUILD_TESTS": "OFF",
+        "VCPKG_MANIFEST_FEATURES": "",
+        "VCPKG_MANIFEST_NO_DEFAULT_FEATURES": "ON"
+      }
+    },
+    {
+      "name": "linux-full-gcc16",
+      "displayName": "Linux GCC16: Full",
+      "inherits": "linux-gcc16-base",
+      "binaryDir": "${sourceDir}/build-linux-full-gcc16",
+      "cacheVariables": {
+        "BUILD_CLIENT": "ON",
+        "BUILD_SERVER": "ON",
+        "BUILD_OPS": "ON",
+        "BUILD_TESTS": "ON",
+        "VCPKG_MANIFEST_FEATURES": "server",
+        "VCPKG_MANIFEST_NO_DEFAULT_FEATURES": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -54,6 +131,24 @@
       "configurePreset": "msvc2022-full",
       "configuration": "Release",
       "jobs": 12
+    },
+    {
+      "name": "linux-server-gcc16",
+      "displayName": "Build Linux Server + Tests",
+      "configurePreset": "linux-server-gcc16",
+      "jobs": 12
+    },
+    {
+      "name": "linux-client-gcc16",
+      "displayName": "Build Linux MemoChat Client",
+      "configurePreset": "linux-client-gcc16",
+      "jobs": 12
+    },
+    {
+      "name": "linux-full-gcc16",
+      "displayName": "Build Linux Full",
+      "configurePreset": "linux-full-gcc16",
+      "jobs": 12
     }
   ],
   "testPresets": [
@@ -62,6 +157,17 @@
       "displayName": "Run Full Build Tests (Release)",
       "configurePreset": "msvc2022-full",
       "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "linux-server-gcc16",
+      "displayName": "Run Linux Server Tests",
+      "configurePreset": "linux-server-gcc16",
       "output": {
         "outputOnFailure": true
       },

@@ -2,9 +2,13 @@
 #include "const.h"
 #include "Singleton.h"
 #include "ConfigMgr.h"
+#include <atomic>
+#include <condition_variable>
 #include <grpcpp/grpcpp.h> 
 #include "common/proto/message.grpc.pb.h"
 #include "common/proto/message.pb.h"
+#include <mutex>
+#include <queue>
 
 using grpc::Channel;
 using grpc::Status;
@@ -94,6 +98,5 @@ private:
 	ChatGrpcClient();
 	unordered_map<std::string, std::unique_ptr<ChatConPool>> _pools;	
 };
-
 
 

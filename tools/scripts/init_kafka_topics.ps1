@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+$DockerCli = Join-Path $PSScriptRoot "docker\arch-docker.ps1"
 
 $container = "memochat-redpanda"
 $topics = @(
@@ -14,5 +15,5 @@ $topics = @(
 )
 
 foreach ($topic in $topics) {
-    docker exec $container rpk topic create $topic --partitions 8 --replicas 1 | Out-Host
+    & $DockerCli exec $container rpk topic create $topic --partitions 8 --replicas 1 | Out-Host
 }

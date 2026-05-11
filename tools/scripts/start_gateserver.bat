@@ -1,8 +1,8 @@
 @echo off
 REM ============================================================
-REM Start GateServer with MinIO from Docker Desktop
+REM Start GateServer with MinIO from Arch Linux native Docker
 REM MinIO must be running as memochat-minio container.
-REM Prerequisites: Docker Desktop running with memochat-minio up.
+REM Prerequisites: Arch Docker running with memochat-minio up.
 REM ============================================================
 setlocal enabledelayedexpansion
 
@@ -26,8 +26,8 @@ if !ERRORLEVEL!==0 (
 )
 
 echo [ERROR] MinIO not found on port 9000.
-echo [HINT] Ensure Docker Desktop is running with memochat-minio container up.
-echo [HINT] Run: docker compose -f deploy\local\docker-compose.yml up -d memochat-minio
+echo [HINT] Ensure Arch Docker is running with memochat-minio container up.
+echo [HINT] Run: tools\scripts\docker\arch-docker.cmd compose -f infra\deploy\local\docker-compose.yml up -d memochat-minio
 exit /b 1
 
 :minio_ok

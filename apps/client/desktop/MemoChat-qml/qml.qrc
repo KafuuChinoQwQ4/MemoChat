@@ -1,7 +1,9 @@
 <RCC>
     <qresource prefix="/">
         <file>qml/Main.qml</file>
+        <file>qml/linux/Main.qml</file>
         <file>qml/LoginPage.qml</file>
+        <file>qml/linux/LoginPage.qml</file>
         <file>qml/RegisterPage.qml</file>
         <file>qml/ResetPage.qml</file>
         <file>qml/ChatShellPage.qml</file>
@@ -17,6 +19,13 @@
         <file>qml/components/LoginSubmitButton.qml</file>
         <file>qml/components/LoginFooterLinks.qml</file>
         <file>qml/components/LoginMoreOptionsPopup.qml</file>
+        <file>qml/linux/components/GlassSurface.qml</file>
+        <file>qml/linux/components/GlassButton.qml</file>
+        <file>qml/linux/components/GlassTextField.qml</file>
+        <file>qml/linux/components/LoginAvatar.qml</file>
+        <file>qml/linux/components/LoginMoreOptionsPopup.qml</file>
+        <file>qml/linux/components/LoginSubmitButton.qml</file>
+        <file>qml/linux/components/WindowGlassShell.qml</file>
         <file>qml/components/ContactProfilePopup.qml</file>
         <file>qml/chat/ChatSideBar.qml</file>
         <file>qml/chat/ChatLeftPanel.qml</file>
@@ -66,6 +75,7 @@
         <file alias="icons/add.png">src/team.png</file>
         <file alias="icons/moments.png">src/朋友圈.png</file>
         <file alias="icons/ai.png">src/ai.png</file>
+        <file alias="icons/modelive2d.png">src/modelive2d.png</file>
         <file alias="icons/like.png">src/爱心.png</file>
         <file alias="icons/like_active.png">src/爱心-2.png</file>
         <file alias="icons/comment.png">src/评论.png</file>
@@ -93,6 +103,9 @@
         <file>qml/agent/AgentMemoryPane.qml</file>
         <file>qml/agent/AgentTaskPane.qml</file>
         <file>qml/agent/AgentTracePane.qml</file>
+        <file>qml/pet/PetWindow.qml</file>
+        <file>qml/pet/PetScene.qml</file>
+        <file>qml/pet/Live2DCharacterPane.qml</file>
         <file>qml/r18/R18ShellPane.qml</file>
     </qresource>
 </RCC>

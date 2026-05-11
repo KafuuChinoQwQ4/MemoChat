@@ -11,6 +11,7 @@
 
 #include <iostream>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <boost/asio.hpp>
@@ -100,6 +101,9 @@ void RunGrpcServer(const std::string& address) {
     builder.RegisterService(&service);
 
     std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+    if (!server) {
+        throw std::runtime_error("failed to start VarifyServer gRPC server at " + address);
+    }
     memolog::LogInfo("service.start", "VarifyServer listening",
                     {{"address", address}, {"module", "grpc"}});
 

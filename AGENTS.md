@@ -1,12 +1,23 @@
 # MemoChat-Qml-Drogon Agent Instructions
 
+## UI Authoring Rules
+
+- Cross-platform UI work is compatibility-first. When fixing Linux/WSLg, macOS, Windows, Wayland/X11, DPI, font, compositor, or graphics-backend differences, preserve platforms that already work and add compatibility through platform-specific QML folders, platform-guarded C++/QML branches, resource aliases, or narrow wrapper components.
+- Do not rewrite a shared QML component or replace a working platform visual path for a single-platform issue unless the bug is proven to affect that shared path. Windows Acrylic/DWM behavior, macOS behavior, and other established platform paths must remain intact unless the task explicitly targets them.
+- If shared QML/C++ must be touched, keep existing defaults visually and behaviorally compatible, then add opt-in properties or platform-specific wrappers for the new platform behavior. Record the platform boundary in the plan/review and verify the changed platform plus any platform whose shared path was touched.
+- Prefer additive structure for platform UI compatibility: `qml/linux`, `qml/windows`, `qml/macos`, `Qt.platform.os` checks, or `#ifdef Q_OS_*` glue. Register platform resources explicitly in `qml.qrc`; do not delete or replace older platform files while adding a new compatibility path.
+- For WSLg/Linux glass and transparent rounded windows, avoid unmasked `ShaderEffectSource`/`MultiEffect`, whole-window `layer.*`, `QRegion` masks, and relying on `Rectangle.clip` for rounded child clipping. Use Linux-only antialiased QML/Shape shells with transparent insets and no square backing plates.
+
 ## Project Rules
 
 - All infrastructure containers are in Docker.
 - Docker containers must keep stable published ports.
 - Project work must use the Docker containers for databases, queues, object storage, observability, and AI/RAG dependencies.
 - When changing code, checking MCP, or inspecting databases, first look for the relevant Docker container or configured MCP tool.
-- Prefer downloading dependencies, caches, models, and large generated artifacts to `D:`.
+- Default project work now targets WSL/Linux at `/root/code/MemoChat-Qml-Drogon-linux`.
+- Prefer downloading Linux dependencies, caches, models, and large generated artifacts to `/data`.
+- Arch native Docker is the default runtime. Use `/data/docker-data/memochat` for Docker bind data.
+- Use `D:` only for Docker Desktop migration backups, legacy Windows scripts, or explicit Windows client checks.
 
 ## Skill-First Workflow
 

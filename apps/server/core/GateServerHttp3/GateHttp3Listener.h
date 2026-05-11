@@ -12,7 +12,7 @@
 #include <string>
 #include <unordered_map>
 
-#ifdef MEMOCHAT_ENABLE_HTTP3
+#if MEMOCHAT_ENABLE_HTTP3
 #include <msquic.h>
 #include <nghttp3/nghttp3.h>
 #endif
@@ -32,9 +32,6 @@ public:
     int Port() const { return port_; }
 
     LogicSystem& GetLogicSystem() { return logic_; }
-
-public:
-    struct Impl;
 
 private:
     struct Impl;

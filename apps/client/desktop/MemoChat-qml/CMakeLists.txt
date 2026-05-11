@@ -14,8 +14,12 @@ if(WIN32 AND MSVC)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /LIBPATH:\"$ENV{VC_TOOLS_LIB}\" /LIBPATH:\"$ENV{WINSDK_LIB_UM}\"")
 endif()
 
-set(CMAKE_CXX_STANDARD 23)
+if(NOT DEFINED MEMOCHAT_CXX_STANDARD)
+    set(MEMOCHAT_CXX_STANDARD "23" CACHE STRING "C++ standard used by MemoChat targets")
+endif()
+set(CMAKE_CXX_STANDARD ${MEMOCHAT_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(MSVC)
     add_compile_options(/wd4819 /utf-8)
@@ -69,6 +73,9 @@ set(SOURCES
     MomentsModel.cpp
     AgentController.cpp
     AgentMessageModel.cpp
+    PetController.cpp
+    PetModel.cpp
+    Live2DRenderItem.cpp
     R18Controller.cpp
     R18ListModel.cpp
 )
@@ -105,6 +112,9 @@ set(HEADERS
     MomentsModel.h
     AgentController.h
     AgentMessageModel.h
+    PetController.h
+    PetModel.h
+    Live2DRenderItem.h
     R18Controller.h
     R18ListModel.h
     ${SHARED_CLIENT_DIR}/imagecropperdialog.h
@@ -121,6 +131,11 @@ set(RESOURCES
 )
 
 add_executable(MemoChatQml WIN32 MACOSX_BUNDLE ${SOURCES} ${HEADERS} ${RESOURCES})
+set_target_properties(MemoChatQml PROPERTIES
+    CXX_STANDARD 23
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
 
 target_include_directories(MemoChatQml PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}

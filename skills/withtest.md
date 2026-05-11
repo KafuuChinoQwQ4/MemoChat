@@ -39,7 +39,7 @@ Repeat up to five iterations.
 
 Check Docker first:
 
-```powershell
+```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 docker exec memochat-redis redis-cli -a 123456 ping
 docker exec memochat-postgres psql -U memochat -d memo_pg -c "select 1;"
@@ -53,12 +53,15 @@ Start missing dependencies with the compose files under `infra/deploy/local` or 
 
 Use existing scripts:
 
-```powershell
-tools\scripts\status\deploy_services.bat
-tools\scripts\status\start-all-services.bat
+```bash
+source /root/.memochat-linux-env
+cmake --preset linux-server-gcc16
+cmake --build --preset linux-server-gcc16 --parallel 12
+tools/scripts/status/deploy_services.sh
+tools/scripts/status/start-all-services.sh
 ```
 
-If files are locked, stop and report the locked process or executable. Do not fight Windows file locks by deleting build/runtime outputs repeatedly.
+If ports are already bound, use `tools/scripts/status/stop-all-services.sh` or report the owning process. Do not stop Docker dependencies unless the test needs a dependency restart and the user agrees.
 
 ### Step C: Write Test Plan
 
@@ -74,12 +77,12 @@ Write `.ai/<project>/<letter>/test<N>.md` with:
 
 Prefer existing probes:
 
-- `tools\scripts\test_register_login.ps1`
-- `tools\scripts\test_login.ps1`
-- `tools\scripts\test_login2.ps1`
-- `tools\scripts\test_login3.ps1`
-- `tools\scripts\full_flow_test.ps1`
-- `python tools\loadtest\python-loadtest\py_loadtest.py --config tools\loadtest\python-loadtest\config.json --scenario all --total 20 --concurrency 5`
+- `tools/scripts/test_register_login.ps1` from Windows
+- `tools/scripts/test_login.ps1` from Windows
+- `tools/scripts/test_login2.ps1` from Windows
+- `tools/scripts/test_login3.ps1` from Windows
+- `tools/scripts/full_flow_test.ps1` from Windows
+- `python tools/loadtest/python-loadtest/py_loadtest.py --config tools/loadtest/python-loadtest/config.json --scenario all --total 20 --concurrency 5`
 - service logs under `logs`, `artifacts`, and runtime service output files.
 
 ### Step D: Run Test

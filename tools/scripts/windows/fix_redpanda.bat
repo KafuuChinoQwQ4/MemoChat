@@ -1,12 +1,15 @@
 @echo off
 REM Fix Redpanda advertised address from host.docker.internal to 127.0.0.1
-REM Run this ONCE after starting Docker Desktop
+REM Current project Docker runs in Arch Linux native Docker.
+cd /d "%~dp0..\.."
+set "PROJECT_ROOT=%CD%"
+set "DOCKER=%PROJECT_ROOT%\tools\scripts\docker\arch-docker.cmd"
 
-docker stop memochat-redpanda 2>nul
+"%DOCKER%" stop memochat-redpanda 2>nul
 
 REM Write the fixed config to the data directory
 echo Creating fixed redpanda.yaml in data directory...
-mkdir D:\docker-data\memochat\redpanda\config 2>nul
+if not exist "\\wsl.localhost\archlinux\data\docker-data\memochat\redpanda\config" mkdir "\\wsl.localhost\archlinux\data\docker-data\memochat\redpanda\config" 2>nul
 
 (
 echo redpanda:
@@ -47,11 +50,11 @@ echo     advertised_pandaproxy_api:
 echo         - address: 127.0.0.1
 echo           port: 18082
 echo schema_registry: {}
-) > D:\docker-data\memochat\redpanda\redpanda.yaml
+) > "\\wsl.localhost\archlinux\data\docker-data\memochat\redpanda\redpanda.yaml"
 
 echo Starting Redpanda with fixed config...
-docker run --rm -v D:\docker-data\memochat\redpanda\redpanda.yaml:/etc/redpanda/redpanda.yaml:ro ^
-    -v D:\docker-data\memochat\redpanda\data:/var/lib/redpanda/data ^
+"%DOCKER%" run --rm -v /data/docker-data/memochat/redpanda/redpanda.yaml:/etc/redpanda/redpanda.yaml:ro ^
+    -v /data/docker-data/memochat/redpanda/data:/var/lib/redpanda/data ^
     --network=container:memochat-redpanda ^
     --name memochat-redpanda-temp redpandadata/redpanda:v24.2.6 redpanda start ^
     --rpc-server 0.0.0.0:33145 ^

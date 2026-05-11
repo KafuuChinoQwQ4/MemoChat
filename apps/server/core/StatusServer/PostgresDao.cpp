@@ -1,5 +1,6 @@
 #include "PostgresDao.h"
 #include "ConfigMgr.h"
+#include "db/PqxxCompat.h"
 
 namespace {
 std::string BuildConnectionString() {
@@ -144,5 +145,4 @@ bool PostgresDao::CheckPwd(const std::string& name, const std::string& pwd, User
 		return false;
 	}
 }
-
 

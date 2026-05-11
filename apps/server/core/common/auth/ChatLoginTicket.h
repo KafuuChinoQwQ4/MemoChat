@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstddef>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,9 @@
 #include <bcrypt.h>
 #include <mutex>
 #pragma comment(lib, "bcrypt.lib")
+#else
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
 #endif
 
 namespace memochat::auth {
@@ -167,10 +171,27 @@ inline bool HmacSha256(const std::string& key, const std::string& data, std::str
     cleanup();
     return status >= 0;
 #else
-    (void)key;
-    (void)data;
     output.clear();
-    return false;
+    if (key.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+        return false;
+    }
+
+    unsigned char digest[EVP_MAX_MD_SIZE] = {};
+    unsigned int digest_len = 0;
+    const unsigned char* data_ptr = reinterpret_cast<const unsigned char*>(data.data());
+    unsigned char* result = HMAC(EVP_sha256(),
+                                 key.data(),
+                                 static_cast<int>(key.size()),
+                                 data_ptr,
+                                 data.size(),
+                                 digest,
+                                 &digest_len);
+    if (result == nullptr || digest_len == 0) {
+        return false;
+    }
+
+    output.assign(reinterpret_cast<const char*>(digest), digest_len);
+    return true;
 #endif
 }
 

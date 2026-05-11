@@ -8,16 +8,16 @@ Use when verifying that the local MemoChat stack works after code/config changes
 
 ## Preconditions
 
-- Build artifacts exist in `build\bin\Release` for the services being tested.
-- For any fresh code change, first run `cmake --preset msvc2022-full` and `cmake --build --preset msvc2022-full`; the deploy script does not read `build-verify-*`.
-- Docker dependencies are running.
-- No runtime service executable is locked by an old process.
+- Arch/WSL Linux server artifacts exist in `build-linux-server-gcc16/bin` for the services being tested.
+- For any fresh Linux server code change, first run `cmake --preset linux-server-gcc16` and `cmake --build --preset linux-server-gcc16 --parallel 12`; `deploy_services.sh` copies from that build output by default.
+- Docker dependencies are running under Arch native Docker. Source `/root/.memochat-linux-env` before compose commands so `DOCKER_HOST` is unset.
+- No old Linux runtime service process is still bound to the target ports.
 
 ## Docker Dependency Check
 
 Run:
 
-```powershell
+```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 docker exec memochat-redis redis-cli -a 123456 ping
 docker exec memochat-postgres psql -U memochat -d memo_pg -c "select 1;"
@@ -31,35 +31,37 @@ For media or AI flows, also check MinIO, Qdrant, Neo4j, Ollama, and AI Orchestra
 
 Use:
 
-```powershell
-cmake --preset msvc2022-full
-cmake --build --preset msvc2022-full
-tools\scripts\status\deploy_services.bat
-tools\scripts\status\start-all-services.bat
+```bash
+source /root/.memochat-linux-env
+cmake --preset linux-server-gcc16
+cmake --build --preset linux-server-gcc16 --parallel 12
+tools/scripts/status/deploy_services.sh
+tools/scripts/status/start-all-services.sh
 ```
 
-If deploy reports access denied, stop. Identify the locking process before retrying. Do not delete locked runtime directories repeatedly.
+If start reports ports already listening, run `tools/scripts/status/stop-all-services.sh` or identify the owning process before retrying. Do not stop Docker dependencies unless the user asks.
 
 ## Smoke Scripts
 
 Pick relevant tests:
 
 ```powershell
-tools\scripts\test_register_login.ps1
-tools\scripts\test_login.ps1
-tools\scripts\test_login2.ps1
-tools\scripts\test_login3.ps1
-tools\scripts\full_flow_test.ps1
-python tools\loadtest\python-loadtest\py_loadtest.py --config tools\loadtest\python-loadtest\config.json --scenario all --total 20 --concurrency 5
+tools/scripts/test_register_login.ps1
+tools/scripts/test_login.ps1
+tools/scripts/test_login2.ps1
+tools/scripts/test_login3.ps1
+tools/scripts/full_flow_test.ps1
+python tools/loadtest/python-loadtest/py_loadtest.py --config tools/loadtest/python-loadtest/config.json --scenario all --total 20 --concurrency 5
 ```
 
-For targeted API checks, use existing JSON payloads in `tools/scripts` before creating new ones.
+These probes are still PowerShell-first; run them from Windows when needed. For targeted API checks, use existing JSON payloads in `tools/scripts` before creating new ones.
 
 ## Logs
 
 Collect only relevant logs:
 
-- service stdout files under `infra/Memo_ops/runtime`
+- service stdout/stderr files under `infra/Memo_ops/artifacts/logs/services`
+- pid files under `infra/Memo_ops/runtime/pids`
 - service logs under `infra/Memo_ops/runtime/artifacts/logs`
 - repository `logs/` and `artifacts/` if the running config points there
 - Docker logs for dependency containers
@@ -78,8 +80,8 @@ Mark outcome:
 
 Use:
 
-```powershell
-tools\scripts\status\stop-all-services.bat
+```bash
+tools/scripts/status/stop-all-services.sh
 ```
 
 Leave Docker dependencies running unless the user asks to stop them.

@@ -20,6 +20,7 @@ from api.kb_router import router as kb_router
 from api.model_router import router as model_router
 from api.recommend_router import router as recommend_router
 from api.agent_router import router as agent_router
+from api.pet_router import router as pet_router
 from harness import HarnessContainer
 from observability.metrics import ai_metrics
 from observability.tracer import init_tracing
@@ -95,6 +96,7 @@ def create_app() -> FastAPI:
     app.include_router(model_router, prefix="/models", tags=["models"])
     app.include_router(recommend_router, prefix="/recommend", tags=["recommendation"])
     app.include_router(agent_router, prefix="/agent", tags=["agent-harness"])
+    app.include_router(pet_router, prefix="/pet", tags=["desktop-pet"])
 
     @app.get("/health")
     async def health():

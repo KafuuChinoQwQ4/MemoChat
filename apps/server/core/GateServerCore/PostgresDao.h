@@ -139,7 +139,7 @@ private:
 			long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
 			auto connection = std::make_unique<pqxx::connection>(connection_string_);
 			pqxx::work txn(*connection);
-			txn.exec0("SET search_path TO " + schema_ + ",public");
+			txn.exec("SET search_path TO " + schema_ + ",public").no_rows();
 			txn.commit();
 			return std::make_unique<PooledSqlConnection>(std::move(connection), timestamp);
 		}

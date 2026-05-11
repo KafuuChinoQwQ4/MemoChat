@@ -10,6 +10,7 @@ import "call"
 import "moments"
 import "agent"
 import "r18"
+import "pet"
 
 Rectangle {
     id: root
@@ -429,6 +430,17 @@ Rectangle {
                                       : controller.currentUserName
                             selfAvatar: controller.currentUserIcon
                             onGameModeRequested: root.openAgentGameSetup("game")
+                        }
+                    }
+                }
+
+                Loader {
+                    anchors.fill: parent
+                    active: root.viewMode === 0 && controller.chatTab === AppController.Live2DTabPage
+                    asynchronous: true
+                    sourceComponent: Component {
+                        Live2DCharacterPane {
+                            backdrop: backdropLayer
                         }
                     }
                 }

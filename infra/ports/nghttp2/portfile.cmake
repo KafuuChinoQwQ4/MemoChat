@@ -3,7 +3,11 @@
 
 set(VCPKG_DOWNLOADS_DIR "$ENV{VCPKG_DOWNLOADS}")
 if(NOT VCPKG_DOWNLOADS_DIR)
-    set(VCPKG_DOWNLOADS_DIR "D:/vcpkg/downloads")
+    if(DEFINED DOWNLOADS)
+        set(VCPKG_DOWNLOADS_DIR "${DOWNLOADS}")
+    else()
+        set(VCPKG_DOWNLOADS_DIR "${CURRENT_BUILDTREES_DIR}/downloads")
+    endif()
 endif()
 set(TARBALL "${VCPKG_DOWNLOADS_DIR}/nghttp2-nghttp2-v1.68.0.tar.gz")
 
@@ -20,16 +24,18 @@ file(REMOVE "${CURRENT_BUILDTREES_DIR}/src/nghttp2-nghttp2-v1.68.0.tar.gz.extrac
 vcpkg_extract_source_archive(OUT_SOURCE_PATH ARCHIVE "${TARBALL}")
 message(STATUS "nghttp2 source extracted to: ${OUT_SOURCE_PATH}")
 
-# Configure — build only the static library (no DLL).
-# nghttp2 v1.68 uses BUILD_SHARED_LIBS and BUILD_STATIC_LIBS (not ENABLE_*).
-# Must override vcpkg's default BUILD_SHARED_LIBS=ON via MAYBE_UNUSED_VARIABLES
-# to suppress the warning about unused options.
+# Configure the C library only. The GitHub release tarball does not include
+# all third-party sources needed by nghttp2's tools targets.
 vcpkg_configure_cmake(
     SOURCE_PATH "${OUT_SOURCE_PATH}"
     GENERATOR Ninja
     OPTIONS
+        -DENABLE_LIB_ONLY=ON
         -DENABLE_EXAMPLES=OFF
         -DENABLE_FAILMALLOC=OFF
+        -DENABLE_HPACK_TOOLS=OFF
+        -DENABLE_APP=OFF
+        -DBUILD_TESTING=OFF
         -DBUILD_SHARED_LIBS=OFF
         -DBUILD_STATIC_LIBS=ON
     MAYBE_UNUSED_VARIABLES

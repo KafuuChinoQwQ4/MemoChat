@@ -11,7 +11,7 @@ Use when changing schemas, migrations, indexes, seed data, persistence logic, ca
 Relevant locations:
 
 - `apps/server/migrations/postgresql`
-- `tools/scripts/init_postgresql_schema.ps1`
+- `tools/scripts/init_postgresql_schema.ps1` for legacy Windows initialization helpers
 - `tools/scripts/fix_postgresql_sequences.sql`
 - `tools/scripts/pg_*.sql`
 - `apps/server/core/*`
@@ -26,13 +26,13 @@ Relevant locations:
 - Do not use local host-installed databases.
 - Keep Postgres host access on `127.0.0.1:15432`; in-container Postgres uses `5432`.
 - Keep changes backward-aware: config, init scripts, migrations, runtime code, and tests must agree.
-- Never reset Docker volumes unless the user explicitly approves the exact `D:\docker-data\memochat\...` path.
+- Never reset Docker volumes unless the user explicitly approves the exact volume or host data path. Current Arch bind data lives under `/data/docker-data/memochat`; old Docker Desktop data under `D:\docker-data\memochat` is legacy backup/source data only.
 
 ## Discovery
 
 Check current state:
 
-```powershell
+```bash
 docker exec memochat-postgres psql -U memochat -d memo_pg -c "\dn"
 docker exec memochat-postgres psql -U memochat -d memo_pg -c "\dt memo.*"
 docker exec memochat-postgres psql -U memochat -d memo_pg -c "select version();"
@@ -70,20 +70,26 @@ For each data change, document:
 
 ## Verification
 
-Use the full local build before any runtime or deploy verification:
+Use the Linux server build before any Arch/WSL runtime or deploy verification:
 
-```powershell
-cmake --preset msvc2022-full
-cmake --build --preset msvc2022-full
+```bash
+source /root/.memochat-linux-env
+cmake --preset linux-server-gcc16
+cmake --build --preset linux-server-gcc16 --parallel 12
 ```
 
 Then run targeted database queries through Docker/MCP. For runtime paths, use:
 
+```bash
+tools/scripts/status/deploy_services.sh
+tools/scripts/status/start-all-services.sh
+```
+
+Legacy Windows probes may still be run from Windows when useful:
+
 ```powershell
-tools\scripts\status\deploy_services.bat
-tools\scripts\status\start-all-services.bat
-tools\scripts\test_register_login.ps1
-tools\scripts\test_login.ps1
+tools/scripts/test_register_login.ps1
+tools/scripts/test_login.ps1
 ```
 
 ## Report

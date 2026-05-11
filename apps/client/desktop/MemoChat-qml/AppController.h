@@ -25,6 +25,7 @@
 #include "MomentsModel.h"
 #include "AgentController.h"
 #include "AgentMessageModel.h"
+#include "PetController.h"
 #include "R18Controller.h"
 #include "PrivateChatCacheStore.h"
 #include "GroupChatCacheStore.h"
@@ -90,6 +91,7 @@ class AppController : public QObject
     Q_PROPERTY(MomentsController* momentsController READ momentsController CONSTANT)
     Q_PROPERTY(AgentController* agentController READ agentController CONSTANT)
     Q_PROPERTY(AgentMessageModel* agentMessageModel READ agentMessageModel CONSTANT)
+    Q_PROPERTY(PetController* petController READ petController CONSTANT)
     Q_PROPERTY(R18Controller* r18Controller READ r18Controller CONSTANT)
     Q_PROPERTY(bool searchPending READ searchPending NOTIFY searchPendingChanged)
     Q_PROPERTY(QString searchStatusText READ searchStatusText NOTIFY searchStatusChanged)
@@ -139,7 +141,8 @@ public:
         ContactTabPage = 1,
         SettingsTabPage = 2,
         MomentsTabPage = 3,
-        AgentTabPage = 4
+        AgentTabPage = 4,
+        Live2DTabPage = 5
     };
     Q_ENUM(ChatTab)
 
@@ -199,6 +202,7 @@ public:
     MomentsController *momentsController() const;
     AgentController *agentController() const;
     AgentMessageModel *agentMessageModel() const;
+    PetController *petController() const;
     R18Controller *r18Controller() const;
     bool searchPending() const;
     QString searchStatusText() const;
@@ -599,6 +603,7 @@ private:
     ProfileController _profile_controller;
     MomentsController _moments_controller;
     AgentController _agent_controller;
+    PetController _pet_controller;
     R18Controller _r18_controller;
     PrivateChatCacheStore _private_cache_store;
     GroupChatCacheStore _group_cache_store;
