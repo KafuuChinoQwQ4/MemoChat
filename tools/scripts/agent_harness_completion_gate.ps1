@@ -82,7 +82,14 @@ function Invoke-JsonGet {
 function Invoke-DockerLines {
     param([string[]]$Arguments)
 
-    $output = & docker @Arguments 2>&1
+    $dockerCli = Join-Path $script:root "tools/scripts/docker/arch-docker.ps1"
+    if (-not (Test-Path $dockerCli)) {
+        return [ordered]@{
+            exit_code = 127
+            output = @("Arch Docker wrapper not found: $dockerCli")
+        }
+    }
+    $output = & $dockerCli @Arguments 2>&1
     $exitCode = $LASTEXITCODE
     return [ordered]@{
         exit_code = $exitCode
@@ -112,6 +119,7 @@ function Test-FileContains {
 
 $root = Resolve-RepoRoot -InputRoot $RepoRoot
 Set-Location $root
+$script:root = $root
 
 if (-not $OutputJson) {
     $OutputJson = Join-Path $root ".ai/harness-completion-gate/latest-gate.json"
@@ -139,10 +147,10 @@ try {
     Add-GateCheck -Name "git_status" -Category "workspace" -Status "warn" -Summary "Git status check raised an exception" -Detail $_.Exception.Message
 }
 
-if (-not (Test-CommandAvailable -Name "docker")) {
-    Add-GateCheck -Name "docker_command" -Category "docker" -Status "block" -Summary "docker command is not available"
+if (-not (Test-Path (Join-Path $root "tools/scripts/docker/arch-docker.ps1"))) {
+    Add-GateCheck -Name "docker_command" -Category "docker" -Status "block" -Summary "Arch Docker wrapper is not available"
 } else {
-    Add-GateCheck -Name "docker_command" -Category "docker" -Status "pass" -Summary "docker command is available"
+    Add-GateCheck -Name "docker_command" -Category "docker" -Status "pass" -Summary "Arch Docker wrapper is available"
 
     $ps = Invoke-DockerLines -Arguments @("ps", "--format", "{{.Names}}|{{.Status}}|{{.Ports}}")
     if ($ps.exit_code -ne 0) {
@@ -278,7 +286,7 @@ try {
     Add-GateCheck -Name "prometheus_all_targets" -Category "observability" -Status "warn" -Summary "Could not inspect Prometheus target health" -Detail $_.Exception.Message
 }
 
-if (Test-CommandAvailable -Name "docker") {
+if (Test-Path (Join-Path $root "tools/scripts/docker/arch-docker.ps1")) {
     $tableCheck = Invoke-DockerLines -Arguments @(
         "exec", "memochat-postgres", "psql", "-U", "memochat", "-d", "memo_pg",
         "-t", "-A", "-F", ",",

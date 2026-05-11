@@ -2,7 +2,7 @@
 REM ============================================================
 REM  MemoChat 一键停止所有可执行进程
 REM  注意: 此脚本只停止 exe 进程，不关闭 Docker 容器
-REM  Docker 容器需要手动停止或使用 docker compose down
+REM  Docker 容器在 Arch Linux native Docker 中，需用 tools\scripts\docker\arch-docker.cmd 停止
 REM
 REM  停止顺序 (大致逆序):
 REM    Tier 5: QML 客户端
@@ -18,6 +18,7 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0..\..\.."
 set "PROJECT_ROOT=%CD%"
 set "MEMO_OPS_ROOT=%PROJECT_ROOT%\infra\Memo_ops"
+set "DOCKER=%PROJECT_ROOT%\tools\scripts\docker\arch-docker.cmd"
 
 echo.
 echo ============================================================
@@ -86,14 +87,14 @@ call :check "StatusServer.exe"         "StatusServer"
 
 echo.
 echo  Docker 容器 (保持运行):
-powershell -NoProfile -Command "docker ps --filter 'name=memochat' --format 'table {{.Names}}\t{{.Status}}' 2>&1; if ($LASTEXITCODE -ne 0) { Write-Host '  无 memochat 相关容器运行' }"
+"%DOCKER%" ps --filter "name=memochat" --format "table {{.Names}}\t{{.Status}}"
 
 echo.
 echo  重新启动 exe 进程:
 echo   .\scripts\status\start-all-services.bat
 echo.
 echo  停止 Docker 容器 (如需):
-echo   docker compose -f deploy\local\docker-compose.yml down
+echo   tools\scripts\docker\arch-docker.cmd compose -f infra\deploy\local\docker-compose.yml down
 echo.
 exit /b 0
 

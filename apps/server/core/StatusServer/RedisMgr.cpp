@@ -2,6 +2,8 @@
 #include "const.h"
 #include "ConfigMgr.h"
 #include "DistLock.h"
+
+#include <cstring>
 RedisMgr::RedisMgr() {
 	auto& gCfgMgr = ConfigMgr::Inst();
 	auto host = gCfgMgr["Redis"]["Host"];
@@ -418,6 +420,5 @@ bool RedisMgr::releaseLock(const std::string& lockName,
 
 	return DistLock::Inst().releaseLock(connect, lockName, identifier);
 }
-
 
 

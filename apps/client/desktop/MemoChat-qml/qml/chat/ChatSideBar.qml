@@ -34,6 +34,9 @@ Rectangle {
         if (tab === 4) {
             return selected ? "qrc:/icons/ai.png" : "qrc:/icons/ai.png"
         }
+        if (tab === 5) {
+            return selected ? "qrc:/icons/modelive2d.png" : "qrc:/icons/modelive2d.png"
+        }
         return selected ? "qrc:/res/settings_select_press.png" : "qrc:/res/settings.png"
     }
 
@@ -49,6 +52,9 @@ Rectangle {
         }
         if (tab === 4) {
             return "AI助手"
+        }
+        if (tab === 5) {
+            return "Live2D角色"
         }
         return "更多"
     }
@@ -136,7 +142,7 @@ Rectangle {
         }
 
         Repeater {
-            model: [0, 1, 3, 4]
+            model: [0, 1, 3, 4, 5]
             delegate: Item {
                 width: 52
                 height: 52

@@ -1,5 +1,6 @@
 #include "PostgresDao.h"
 #include "ConfigMgr.h"
+#include "db/PqxxCompat.h"
 #include "SnowflakeUtil.h"
 #include <algorithm>
 #include <cctype>
@@ -1338,4 +1339,3 @@ bool PostgresDao::GetMomentCommentLikes(int64_t comment_id, int limit,
 		return false;
 	}
 }
-

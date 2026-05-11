@@ -55,6 +55,7 @@ function Convert-ToWorkPath {
 }
 
 $repoRoot = Resolve-RepoRoot
+$DockerCli = Join-Path $repoRoot "tools\scripts\docker\arch-docker.ps1"
 if (-not $ConfigPath) {
     $ConfigPath = Join-Path $repoRoot "tools\loadtest\python-loadtest\config.benchmark.json"
 }
@@ -124,15 +125,13 @@ if ($localK6 -and -not $UseDocker) {
     exit $LASTEXITCODE
 }
 
-$dockerRepoRoot = Convert-ToDockerPath $repoRoot
+$dockerRepoRoot = "/root/code/MemoChat-Qml-Drogon-linux"
 $dockerSummary = Convert-ToWorkPath -Path $SummaryPath -Root $repoRoot
 $dockerAccounts = Convert-ToWorkPath -Path $accountsCsv -Root $repoRoot
 $dockerScript = "/work/tools/loadtest/k6/http-login.js"
-$dockerGateUrls = ($gateUrls | ForEach-Object {
-    $_ -replace "127\.0\.0\.1", "host.docker.internal" -replace "localhost", "host.docker.internal"
-}) -join ","
+$dockerGateUrls = ($gateUrls -join ",")
 
-docker run --rm `
+& $DockerCli run --rm `
     -v "${dockerRepoRoot}:/work" `
     -e "GATE_URLS=$dockerGateUrls" `
     -e "LOGIN_PATH=$env:LOGIN_PATH" `

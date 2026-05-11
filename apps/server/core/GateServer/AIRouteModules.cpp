@@ -2,6 +2,7 @@
 #include "LogicSystem.h"
 #include "HttpConnection.h"
 #include "GateHttpJsonSupport.h"
+#include "GateWorkerPool.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
 #include "AIServiceClient.h"
@@ -13,6 +14,7 @@
 #include <boost/beast/http.hpp>
 #include <algorithm>
 #include <chrono>
+#include <limits>
 #include "json/GlazeCompat.h"
 
 namespace beast = boost::beast;
@@ -70,21 +72,27 @@ static std::string IncomingBodyString(std::shared_ptr<HttpConnection> connection
     return connection ? connection->RequestBodyString() : std::string();
 }
 
-static std::string BuildGameProxyTarget(std::shared_ptr<HttpConnection> connection) {
+static std::string BuildPrefixProxyTarget(
+    std::shared_ptr<HttpConnection> connection,
+    const std::string& gate_prefix,
+    const std::string& orchestrator_prefix) {
     const std::string target = connection ? connection->RequestTargetString() : std::string();
-    const std::string gate_prefix = "/ai/games";
-    const std::string orchestrator_prefix = "/agent/games";
     if (target.rfind(gate_prefix, 0) != 0) {
         return orchestrator_prefix;
     }
     return orchestrator_prefix + target.substr(gate_prefix.size());
 }
 
-static void ProxyAiOrchestratorGame(std::shared_ptr<HttpConnection> connection, http::verb verb) {
+static void ProxyAiOrchestratorPrefix(
+    std::shared_ptr<HttpConnection> connection,
+    http::verb verb,
+    const std::string& gate_prefix,
+    const std::string& orchestrator_prefix,
+    const std::string& log_name) {
     const std::string host = AiOrchestratorHost();
     const std::string port = AiOrchestratorPort();
     const int timeout_sec = AiOrchestratorTimeoutSec();
-    const std::string target = BuildGameProxyTarget(connection);
+    const std::string target = BuildPrefixProxyTarget(connection, gate_prefix, orchestrator_prefix);
 
     try {
         net::io_context ioc;
@@ -115,20 +123,138 @@ static void ProxyAiOrchestratorGame(std::shared_ptr<HttpConnection> connection, 
         connection->GetResponse().result(res.result());
         connection->GetResponse().set(http::field::content_type, "application/json; charset=utf-8");
         beast::ostream(connection->GetResponse().body()) << res.body();
-        memolog::LogInfo("gate.ai.games.proxy.ok", "AI game proxy returned", {
+        memolog::LogInfo(log_name + ".ok", "AI prefix proxy returned", {
             {"target", target},
             {"status", std::to_string(res.result_int())},
         });
     } catch (const std::exception& exc) {
         json::JsonValue root = json::JsonValue{};
         root["code"] = 503;
-        root["message"] = std::string("AIOrchestrator game proxy failed: ") + exc.what();
+        root["message"] = std::string("AIOrchestrator proxy failed: ") + exc.what();
         connection->GetResponse().result(http::status::service_unavailable);
         WriteJsonResponse(connection, root);
-        memolog::LogError("gate.ai.games.proxy.failed", "AI game proxy failed", {
+        memolog::LogError(log_name + ".failed", "AI prefix proxy failed", {
             {"target", target},
             {"error", exc.what()},
         });
+    }
+}
+
+static void ProxyAiOrchestratorGame(std::shared_ptr<HttpConnection> connection, http::verb verb) {
+    ProxyAiOrchestratorPrefix(
+        connection,
+        verb,
+        "/ai/games",
+        "/agent/games",
+        "gate.ai.games.proxy");
+}
+
+static void ProxyAiOrchestratorPet(std::shared_ptr<HttpConnection> connection, http::verb verb) {
+    ProxyAiOrchestratorPrefix(
+        connection,
+        verb,
+        "/ai/pet",
+        "/pet",
+        "gate.ai.pet.proxy");
+}
+
+static void ProxyAiOrchestratorPetStream(std::shared_ptr<HttpConnection> connection) {
+    const std::string host = AiOrchestratorHost();
+    const std::string port = AiOrchestratorPort();
+    const int timeout_sec = AiOrchestratorTimeoutSec();
+    const std::string target = BuildPrefixProxyTarget(connection, "/ai/pet", "/pet");
+
+    if (connection) {
+        connection->StartSseStream();
+    }
+
+    try {
+        net::io_context ioc;
+        tcp::resolver resolver(ioc);
+        beast::tcp_stream stream(ioc);
+        stream.expires_after(std::chrono::seconds(timeout_sec));
+        stream.connect(resolver.resolve(host, port));
+
+        http::request<http::string_body> req{http::verb::get, target, 11};
+        req.set(http::field::host, host);
+        req.set(http::field::accept, "text/event-stream");
+        req.set(http::field::cache_control, "no-cache");
+        req.set("X-Trace-Id", connection ? connection->GetTraceId() : "");
+        req.set("X-Request-Id", connection ? connection->GetRequestId() : "");
+        req.prepare_payload();
+
+        http::write(stream, req);
+
+        beast::flat_buffer buffer;
+        http::response_parser<http::dynamic_body> parser;
+        parser.body_limit((std::numeric_limits<std::uint64_t>::max)());
+        stream.expires_after(std::chrono::seconds(timeout_sec));
+        http::read_header(stream, buffer, parser);
+
+        auto forward_body = [&]() {
+            auto& body = parser.get().body();
+            if (!connection || body.size() == 0) {
+                return;
+            }
+            std::string chunk = beast::buffers_to_string(body.data());
+            body.consume(body.size());
+            if (!chunk.empty()) {
+                connection->WriteStreamChunk(std::move(chunk));
+            }
+        };
+
+        if (parser.get().result() != http::status::ok) {
+            json::JsonValue event = json::JsonValue{};
+            event["type"] = "pet.error";
+            event["message"] = "AIOrchestrator returned " + std::to_string(parser.get().result_int());
+            if (connection) {
+                connection->WriteStreamChunk("data: " + json::glaze_stringify(event) + "\n\n");
+            }
+            forward_body();
+        } else {
+            forward_body();
+            while (!parser.is_done()) {
+                beast::error_code ec;
+                stream.expires_after(std::chrono::seconds(timeout_sec));
+                http::read_some(stream, buffer, parser, ec);
+                forward_body();
+                if (!ec) {
+                    continue;
+                }
+                if (ec == http::error::need_buffer) {
+                    continue;
+                }
+                if (ec == net::error::eof) {
+                    break;
+                }
+                memolog::LogWarn("gate.ai.pet.proxy.stream.read_failed", "AI pet stream read failed", {
+                    {"target", target},
+                    {"error", ec.message()},
+                });
+                break;
+            }
+        }
+
+        beast::error_code shutdown_ec;
+        stream.socket().shutdown(tcp::socket::shutdown_both, shutdown_ec);
+        memolog::LogInfo("gate.ai.pet.proxy.stream.ok", "AI pet stream proxy finished", {
+            {"target", target},
+        });
+    } catch (const std::exception& exc) {
+        json::JsonValue event = json::JsonValue{};
+        event["type"] = "pet.error";
+        event["message"] = std::string("AIOrchestrator pet stream failed: ") + exc.what();
+        if (connection) {
+            connection->WriteStreamChunk("data: " + json::glaze_stringify(event) + "\n\n");
+        }
+        memolog::LogError("gate.ai.pet.proxy.stream.failed", "AI pet stream proxy failed", {
+            {"target", target},
+            {"error", exc.what()},
+        });
+    }
+
+    if (connection) {
+        connection->FinishStream();
     }
 }
 
@@ -150,6 +276,28 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic) {
     logic.RegDeletePrefix("/ai/games", [](std::shared_ptr<HttpConnection> connection) {
         memolog::SpanScope span("gate.ai.games.delete", "http");
         ProxyAiOrchestratorGame(connection, http::verb::delete_);
+        return true;
+    });
+
+    logic.RegGetPrefix("/ai/pet", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::SpanScope span("gate.ai.pet.get", "http");
+        const std::string target = connection ? connection->RequestTargetString() : std::string();
+        if (target.find("/stream") != std::string::npos) {
+            if (connection) {
+                connection->StartSseStream();
+            }
+            GateWorkerPool::GetInstance()->post([connection]() {
+                ProxyAiOrchestratorPetStream(connection);
+            });
+            return true;
+        }
+        ProxyAiOrchestratorPet(connection, http::verb::get);
+        return true;
+    });
+
+    logic.RegPostPrefix("/ai/pet", [](std::shared_ptr<HttpConnection> connection) {
+        memolog::SpanScope span("gate.ai.pet.post", "http");
+        ProxyAiOrchestratorPet(connection, http::verb::post);
         return true;
     });
 

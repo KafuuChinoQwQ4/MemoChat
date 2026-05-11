@@ -224,6 +224,9 @@ void HttpConnection::HandleReq() {
             WriteResponse();
             return;
         }
+        if (HasStreamingResponse()) {
+            return;
+        }
 
         if (_response.result() == http::status::unknown) {
             _response.result(http::status::ok);

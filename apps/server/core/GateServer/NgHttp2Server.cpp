@@ -1,4 +1,4 @@
-#ifdef MEMOCHAT_HAVE_NGHTTP2
+#if MEMOCHAT_HAVE_NGHTTP2
 
 #include "WinCompat.h"
 #include "NgHttp2Server.h"

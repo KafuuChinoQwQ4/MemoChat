@@ -4,7 +4,7 @@
 #include <thread>
 #include <memory>
 
-#ifdef MEMOCHAT_HAVE_NGHTTP2
+#if MEMOCHAT_HAVE_NGHTTP2
 
 class NgHttp2Server {
 public:

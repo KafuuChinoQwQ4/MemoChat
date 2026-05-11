@@ -2,12 +2,16 @@ cmake_minimum_required(VERSION 3.16)
 
 project(MemoOpsQml LANGUAGES CXX)
 
-if(NOT MSVC OR NOT CMAKE_CXX_COMPILER MATCHES [[(^|[\\/])cl(\.exe)?$]])
+if(WIN32 AND (NOT MSVC OR NOT CMAKE_CXX_COMPILER MATCHES [[(^|[\\/])cl(\.exe)?$]]))
     message(FATAL_ERROR "MemoOpsQml supports only the MSVC toolchain. MinGW/g++ is not supported with the current Qt msvc2022_64 kit.")
 endif()
 
-set(CMAKE_CXX_STANDARD 23)
+if(NOT DEFINED MEMOCHAT_CXX_STANDARD)
+    set(MEMOCHAT_CXX_STANDARD "23" CACHE STRING "C++ standard used by MemoChat targets")
+endif()
+set(CMAKE_CXX_STANDARD ${MEMOCHAT_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -33,6 +37,11 @@ set(RESOURCES
 )
 
 add_executable(MemoOpsQml WIN32 ${SOURCES} ${HEADERS} ${RESOURCES})
+set_target_properties(MemoOpsQml PROPERTIES
+    CXX_STANDARD 23
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
 
 target_link_libraries(MemoOpsQml PRIVATE
     Qt${QT_VERSION_MAJOR}::Core

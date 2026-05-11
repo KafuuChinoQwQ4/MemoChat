@@ -3,7 +3,7 @@
     MemoChat 本地 K8s 一键启动脚本
 .DESCRIPTION
     在 Windows 本地启动 etcd + K8s + MemoChat 服务集群
-    依赖: Docker Desktop (已启用 Kubernetes)
+    依赖: Arch Linux native Docker plus a Kubernetes cluster configured for kubectl
 .PARAMETER Mode
     部署模式: full (完整) 或 minimal (最小化，仅 etcd + 基础服务)
 .PARAMETER SkipEtcd
@@ -22,7 +22,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$ProjectRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 $K8sDir = "$ProjectRoot\Memo_ops\k8s"
 $Overlay = "dev-single"
 
@@ -39,22 +39,24 @@ Write-Host @"
 "@ -ForegroundColor Magenta
 
 # ============================================================
-# 步骤 1: 检查 Docker Desktop
+# 步骤 1: 检查 Arch Docker
 # ============================================================
-Write-Step "检查 Docker Desktop 状态..."
+Write-Step "检查 Arch Docker 状态..."
 
-$dockerInfo = docker info 2>&1
+$DockerCli = Join-Path $ProjectRoot "tools\scripts\docker\arch-docker.ps1"
+$dockerInfo = & $DockerCli info 2>&1
 if ($LASTEXITCODE -ne 0) {
-    Write-Fail "Docker 未运行，请先启动 Docker Desktop"
+    Write-Fail "Arch Docker 未运行，请先在 archlinux 中启动 docker.service"
     exit 1
 }
 
-if ($dockerInfo -match "Kubernetes.*Running") {
-    Write-Success "Docker Kubernetes 已启用"
+kubectl cluster-info 2>&1 | Out-Null
+if ($LASTEXITCODE -eq 0) {
+    Write-Success "kubectl Kubernetes 集群正常"
     $k8sEnabled = $true
 } else {
-    Write-Warn "Docker Kubernetes 未启用"
-    Write-Host "请在 Docker Desktop 设置中启用 Kubernetes，然后重启 Docker" -ForegroundColor Yellow
+    Write-Warn "kubectl Kubernetes 集群未就绪"
+    Write-Host "当前默认使用 Arch/WSL 可访问的 Kubernetes 集群；请先配置 kubectl 上下文。" -ForegroundColor Yellow
     $k8sEnabled = $false
 }
 
@@ -102,7 +104,7 @@ if ($RebuildImage) {
 
         # 构建 Docker 镜像
         Write-Host "  构建 $imageFull ..." -ForegroundColor Gray
-        docker build `
+        & $DockerCli build `
             -f "$ProjectRoot\docker\Dockerfile.server" `
             --build-arg SERVICE=$svc `
             --build-arg SOURCE_DIR=Memo_ops/runtime/services/$svc `
@@ -129,13 +131,13 @@ if (-not $SkipEtcd) {
     Write-Step "启动本地 etcd..."
 
     # 检查是否已有 etcd 容器运行
-    $etcdContainer = docker ps -a --filter "name=memochat-etcd" --format "{{.Names}}"
+    $etcdContainer = & $DockerCli ps -a --filter "name=memochat-etcd" --format "{{.Names}}"
     if ($etcdContainer) {
         Write-Warn "已有 etcd 容器: $etcdContainer"
-        docker start memochat-etcd 2>&1 | Out-Null
+        & $DockerCli start memochat-etcd 2>&1 | Out-Null
     } else {
         # 启动新的 etcd 容器
-        docker run -d `
+        & $DockerCli run -d `
             --name memochat-etcd `
             -p 2379:2379 `
             -p 2380:2380 `
@@ -158,7 +160,7 @@ if (-not $SkipEtcd) {
     Write-Step "等待 etcd 就绪..."
     $retry = 0
     while ($retry -lt 30) {
-        $result = docker exec memochat-etcd etcdctl endpoint health 2>&1
+        $result = & $DockerCli exec memochat-etcd etcdctl endpoint health 2>&1
         if ($LASTEXITCODE -eq 0) {
             Write-Success "etcd 已就绪"
             break

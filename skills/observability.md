@@ -19,12 +19,12 @@ Prefer MCP tools when available:
 
 Fallback HTTP endpoints:
 
-```powershell
-Invoke-WebRequest http://127.0.0.1:9090/-/ready -UseBasicParsing
-Invoke-WebRequest http://127.0.0.1:3100/ready -UseBasicParsing
-Invoke-WebRequest http://127.0.0.1:3200/ready -UseBasicParsing
-Invoke-WebRequest http://127.0.0.1:3000/api/health -UseBasicParsing
-Invoke-WebRequest http://127.0.0.1:8088/metrics -UseBasicParsing
+```bash
+curl -fsS http://127.0.0.1:9090/-/ready
+curl -fsS http://127.0.0.1:3100/ready
+curl -fsS http://127.0.0.1:3200/ready
+curl -fsS http://127.0.0.1:3000/api/health
+curl -fsS http://127.0.0.1:8088/metrics
 ```
 
 ## Investigation Flow

@@ -40,7 +40,7 @@ private:
     bool Connect();
     void Close();
     bool EnsureTopology();
-    bool PublishToQueue(const std::string& routing_key, const std::string& body);
+    bool PublishToQueue(const std::string& exchange, const std::string& routing_key, const std::string& body);
 
     bool ConsumeOnce(EmailDeliveryTask& task);
     void WorkerLoop(EmailSender* sender);
@@ -52,7 +52,12 @@ private:
     std::string config_username_;
     std::string config_password_;
     std::string config_vhost_;
+    std::string config_exchange_direct_;
+    std::string config_exchange_dlx_;
+    std::string config_verify_delivery_routing_key_;
     std::string config_queue_;
+    std::string config_retry_queue_;
+    std::string config_dlq_queue_;
     std::string config_retry_routing_key_;
     std::string config_dlq_routing_key_;
     int config_retry_delay_ms_ = 5000;

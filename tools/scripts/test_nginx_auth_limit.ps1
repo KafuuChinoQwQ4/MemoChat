@@ -13,6 +13,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$DockerCli = Join-Path $PSScriptRoot "docker\arch-docker.ps1"
 
 Add-Type -AssemblyName System.Net.Http
 
@@ -82,7 +83,7 @@ function Test-NginxDocker429 {
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        $logs = & docker logs --tail $Tail $ContainerName 2>&1
+        $logs = & $DockerCli logs --tail $Tail $ContainerName 2>&1
         $dockerExitCode = $LASTEXITCODE
     } catch {
         Write-Host "Docker log 429 check unavailable: $($_.Exception.Message)"

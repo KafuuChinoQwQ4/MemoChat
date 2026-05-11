@@ -1,5 +1,6 @@
 #include "db/AISmartLogRepo.h"
 #include "ConfigMgr.h"
+#include "db/PqxxCompat.h"
 #include "logging/Logger.h"
 #include <pqxx/pqxx>
 #include <pqxx/transaction.hxx>

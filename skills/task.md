@@ -4,7 +4,7 @@ description: Implement a MemoChat feature or fix through context, plan, implemen
 
 # MemoChat Task
 
-Use for normal implementation work in `D:\MemoChat-Qml-Drogon`.
+Use for normal implementation work in `/root/code/MemoChat-Qml-Drogon-linux`. Treat `D:\MemoChat-Qml-Drogon` as the legacy Windows checkout unless the user explicitly asks for Windows work.
 
 Default to the Controller-led parallel workflow from `parallel-agents.md` for implementation tasks. The Controller owns architecture, plan, contracts, worker dispatch, integration, and final acceptance. After context and first contracts are clear, dispatch safe worker lanes by default. Local-only execution is an exception, allowed only when the active tool/policy environment forbids workers, the user explicitly asks for single-agent work, the task is genuinely tiny and has no useful test/review lane, the task is strictly sequential, or no safe split exists; record the exact reason in `plan.md` before implementation.
 
@@ -46,7 +46,7 @@ Always account for the relevant layers:
 - Use `docker ps` and MCP tools to inspect state.
 - Prefer Docker commands for direct checks:
 
-```powershell
+```bash
 docker exec memochat-redis redis-cli -a 123456 ping
 docker exec memochat-postgres psql -U memochat -d memo_pg -c "select 1;"
 docker exec memochat-mongo mongosh -u root -p 123456 --authenticationDatabase admin --quiet --eval "db.adminCommand({ ping: 1 })"
@@ -58,43 +58,40 @@ Record any query that affected your reasoning in `context.md` or verification lo
 
 ## Build Selection
 
-Use the full local build for code changes that will be deployed or runtime-tested. `deploy_services.bat` copies only from `build\bin\Release`, which is produced by `msvc2022-full`; do not rely on `build-verify-server` or `build-verify-client` for runtime validation.
+Use the Linux GCC16 presets for code changes that will be deployed or runtime-tested in Arch Linux WSL. `deploy_services.sh` copies server artifacts from `build-linux-server-gcc16/bin` by default.
 
-```powershell
-cmake --preset msvc2022-full
-cmake --build --preset msvc2022-full
+```bash
+source /root/.memochat-linux-env
+cmake --preset linux-server-gcc16
+cmake --build --preset linux-server-gcc16 --parallel 12
 ```
 
 For test-only checks, run tests from the full build tree:
 
-```powershell
-ctest --preset msvc2022-full
+```bash
+ctest --preset linux-server-gcc16 --output-on-failure
 ```
 
-If a task needs runtime smoke, run the full build first, then deploy from `build\bin\Release`.
+For Linux client checks use `linux-client-gcc16`; for cross-stack Linux checks use `linux-full-gcc16`.
 
 ## Runtime Scripts
 
 Use existing scripts instead of inventing new orchestration:
 
-```powershell
-tools\scripts\preflight.ps1
-tools\scripts\status\deploy_services.bat
-tools\scripts\status\start-all-services.bat
-tools\scripts\status\stop-all-services.bat
-tools\scripts\test_register_login.ps1
-tools\scripts\test_login.ps1
-tools\scripts\full_flow_test.ps1
+```bash
+tools/scripts/status/deploy_services.sh
+tools/scripts/status/start-all-services.sh
+tools/scripts/status/stop-all-services.sh
 ```
 
-If deploy/start scripts hit access denied, identify the running service process and ask the user to close or stop it before retrying.
+Use the `.bat`/`.ps1` scripts only for legacy Windows runtime/client checks. Existing PowerShell smoke probes may still be useful from Windows after Linux services are running.
 
 ## Implementation Rules
 
 - Prefer existing helpers and module boundaries.
 - Keep server/client protocol and config changes synchronized.
 - Add migrations or init changes when persistent schema changes are required.
-- Keep generated/downloaded heavy files on `D:`.
+- Keep Linux generated/downloaded heavy files under `/data`; keep Arch Docker bind data under `/data/docker-data/memochat`; use `D:` only when operating on legacy Windows/Docker Desktop data.
 - Do not revert user work.
 - Avoid broad formatting churn.
 

@@ -16,7 +16,7 @@ services:
       - --remote.write.header=X-Organization-Id:memochat
     volumes:
       - ../observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - D:/docker-data/memochat/observability/prometheus:/prometheus
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/prometheus:/prometheus
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -36,8 +36,8 @@ services:
       DOCKER_INFLUXDB_INIT_BUCKET: metrics
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: my-super-secret-admin-token
     volumes:
-      - D:/docker-data/memochat/observability/influxdb:/var/lib/influxdb2
-      - D:/docker-data/memochat/observability/influxdb/config:/etc/influxdb2
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/influxdb:/var/lib/influxdb2
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/influxdb/config:/etc/influxdb2
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -55,7 +55,7 @@ services:
       - ../observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ../observability/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - D:/docker-data/memochat/observability/grafana:/var/lib/grafana
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/grafana:/var/lib/grafana
 
   loki:
     image: grafana/loki:3.1.1
@@ -67,7 +67,7 @@ services:
       - -config.file=/etc/loki/config.yaml
     volumes:
       - ../observability/loki/config.yaml:/etc/loki/config.yaml:ro
-      - D:/docker-data/memochat/observability/loki:/loki
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/loki:/loki
 
   tempo:
     image: grafana/tempo:2.5.0
@@ -79,7 +79,7 @@ services:
       - -config.file=/etc/tempo/config.yaml
     volumes:
       - ../observability/tempo/config.yaml:/etc/tempo/config.yaml:ro
-      - D:/docker-data/memochat/observability/tempo:/var/tempo
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/tempo:/var/tempo
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.107.0

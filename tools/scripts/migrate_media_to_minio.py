@@ -7,7 +7,7 @@
 #   Live:     python migrate_media_to_minio.py
 #
 # Prerequisites:
-#   - Docker Desktop running with memochat-minio container
+#   - Arch Linux native Docker running with memochat-minio container
 #   - PostgreSQL accessible (host/port/user/pass from Memo_ops/config/opsserver.yaml)
 #   - Python 3 with: pip install psycopg2-binary python-dotenv minio
 

@@ -10,7 +10,7 @@
 #include "../common/WinsockCompat.h"
 
 #include "GateHttp3Listener.h"
-#if defined(MEMOCHAT_HAVE_NGHTTP2)
+#if MEMOCHAT_HAVE_NGHTTP2
 #include "NgHttp2Server.h"
 #endif
 #include "LogicSystem.h"
@@ -101,7 +101,7 @@ int main(int argc, char* argv[]) {
     });
 
     // ── Start HTTP/3 listener on port gate_port + 1 (QUIC) ────────────────────
-#if defined(MEMOCHAT_ENABLE_HTTP3)
+#if MEMOCHAT_ENABLE_HTTP3
     int http3_port = gate_port + 1;
     std::string http3_error;
     auto http3_listener = std::make_shared<GateHttp3Listener>(ioc, *LogicSystem::GetInstance(), http3_port);
@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) {
 #endif
 
     // ── Start HTTP/2 server (Boost.Asio + nghttp2) on port gate_port + 2 ──────
-#if defined(MEMOCHAT_HAVE_NGHTTP2)
+#if MEMOCHAT_HAVE_NGHTTP2
     std::thread h2_thread;
     auto h2_port_str = cfgMgr.GetValue("GateServer", "Http2Port");
     int h2_port = h2_port_str.empty() ? static_cast<int>(gate_port) + 2 : std::atoi(h2_port_str.c_str());
@@ -140,7 +140,7 @@ int main(int argc, char* argv[]) {
     ioc.run();
 
     memolog::LogInfo("service.stop", "GateServer stopped");
-#if defined(MEMOCHAT_HAVE_NGHTTP2)
+#if MEMOCHAT_HAVE_NGHTTP2
     NgHttp2Server::GetInstance().Stop();
     if (h2_thread.joinable()) {
         h2_thread.join();

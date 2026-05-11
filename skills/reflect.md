@@ -14,7 +14,7 @@ Use after an agent's changes were staged and the user made additional unstaged c
 
 Run:
 
-```powershell
+```bash
 git status --short
 git diff --cached
 git diff
@@ -36,7 +36,7 @@ Ask:
 - Did the user fix a task-specific mistake, or a reusable project convention?
 - Is the issue already covered by a local rule, README, script, or pattern?
 - Would documenting this prevent future mistakes in unrelated MemoChat work?
-- Does it involve Docker-only infrastructure, stable ports, D: storage, CMake presets, runtime scripts, service boundaries, migrations, or QML/server contract patterns?
+- Does it involve Docker-only infrastructure, stable ports, `/data` or Windows `D:` storage, CMake presets, runtime scripts, service boundaries, migrations, or QML/server contract patterns?
 
 Pick at most one strongest insight.
 

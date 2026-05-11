@@ -54,9 +54,10 @@ Use the narrowest relevant check:
 - inspect the SVG directly
 - run a client build when resource registration or QML references changed:
 
-```powershell
-cmake --preset msvc2022-full
-cmake --build --preset msvc2022-full
+```bash
+source /root/.memochat-linux-env
+cmake --preset linux-client-gcc16
+cmake --build --preset linux-client-gcc16 --parallel 12
 ```
 
 For visual work, run or screenshot the relevant QML surface if a local path/script exists. Do not invent a new renderer unless needed.

@@ -7,8 +7,6 @@
 #include <openssl/x509v3.h>
 #include <openssl/err.h>
 #include <openssl/bio.h>
-#include <openssl/rsa.h>
-#include <openssl/bn.h>
 #include <openssl/evp.h>
 
 #ifdef _WIN32
@@ -16,31 +14,36 @@
 #endif
 
 #include <cstring>
+#include <cstdio>
 #include <ctime>
 
 namespace {
 
+bool OpenFile(FILE** file, const char* path, const char* mode) {
+#ifdef _WIN32
+    return fopen_s(file, path, mode) == 0 && *file;
+#else
+    *file = std::fopen(path, mode);
+    return *file != nullptr;
+#endif
+}
+
 bool GenerateRSAKey(EVP_PKEY** out_pkey) {
     *out_pkey = nullptr;
-    EVP_PKEY* pkey = EVP_PKEY_new();
-    if (!pkey) return false;
 
-    RSA* rsa = RSA_new();
-    if (!rsa) { EVP_PKEY_free(pkey); return false; }
+    EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
+    if (!ctx) return false;
 
-    BIGNUM* bn = BN_new();
-    if (!bn) { RSA_free(rsa); EVP_PKEY_free(pkey); return false; }
-
-    BN_set_word(bn, RSA_F4);
-    if (RSA_generate_key_ex(rsa, 2048, bn, nullptr) != 1) {
-        BN_free(bn); RSA_free(rsa); EVP_PKEY_free(pkey); return false;
+    EVP_PKEY* pkey = nullptr;
+    if (EVP_PKEY_keygen_init(ctx) != 1 ||
+        EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048) != 1 ||
+        EVP_PKEY_keygen(ctx, &pkey) != 1) {
+        EVP_PKEY_free(pkey);
+        EVP_PKEY_CTX_free(ctx);
+        return false;
     }
-    BN_free(bn);
 
-    if (EVP_PKEY_set1_RSA(pkey, rsa) != 1) {
-        RSA_free(rsa); EVP_PKEY_free(pkey); return false;
-    }
-    RSA_free(rsa);
+    EVP_PKEY_CTX_free(ctx);
     *out_pkey = pkey;
     return true;
 }
@@ -119,7 +122,7 @@ bool GenerateSelfSignedCertPem(const std::string& crt_path, const std::string& k
     }
 
     FILE* key_fp = nullptr;
-    if (fopen_s(&key_fp, key_path.c_str(), "w") != 0 || !key_fp) {
+    if (!OpenFile(&key_fp, key_path.c_str(), "w")) {
         memolog::LogError("certutil.key_file.fail", "failed to open key file", {{"path", key_path}});
         X509_free(x509); EVP_PKEY_free(pkey); return false;
     }
@@ -131,7 +134,7 @@ bool GenerateSelfSignedCertPem(const std::string& crt_path, const std::string& k
     fclose(key_fp);
 
     FILE* crt_fp = nullptr;
-    if (fopen_s(&crt_fp, crt_path.c_str(), "w") != 0 || !crt_fp) {
+    if (!OpenFile(&crt_fp, crt_path.c_str(), "w")) {
         memolog::LogError("certutil.crt_file.fail", "failed to open certificate file", {{"path", crt_path}});
         X509_free(x509); EVP_PKEY_free(pkey); return false;
     }

@@ -1,6 +1,6 @@
 # Local Runtime Assets
 
-This folder holds the local Docker dependencies and init payloads used by MemoChat on Windows.
+This folder holds the local Docker dependencies and init payloads used by MemoChat on Arch Linux. Docker Desktop/Windows usage is legacy fallback only.
 
 ## Compose Files
 
@@ -36,66 +36,67 @@ This folder holds the local Docker dependencies and init payloads used by MemoCh
 
 From the repository root:
 
-```powershell
-scripts\windows\start_windows_exporter.ps1
+```bash
+source /root/.memochat-linux-env
 docker compose -f infra/deploy/local/docker-compose.yml up -d
 ```
 
 If you need local call/invite or media-call debugging, also start:
 
-```powershell
+```bash
 docker compose -f infra/deploy/local/compose/livekit.yml up -d
 ```
 
 If the machine has an NVIDIA GPU and Docker GPU passthrough is configured, add:
 
-```powershell
+```bash
 docker compose -f infra/deploy/local/compose/observability.yml --profile nvidia up -d
 ```
 
 ## Fresh Data Reset
 
-All local Docker data is stored on `D:`:
+All local Docker data is stored under `${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}`:
 
-- `D:\docker-data\memochat\redis`
-- `D:\docker-data\memochat\postgres`
-- `D:\docker-data\memochat\mongo`
-- `D:\docker-data\memochat\observability\prometheus`
-- `D:\docker-data\memochat\observability\grafana`
-- `D:\docker-data\memochat\observability\loki`
-- `D:\docker-data\memochat\observability\tempo`
+- `/data/docker-data/memochat/redis`
+- `/data/docker-data/memochat/postgres`
+- `/data/docker-data/memochat/mongo`
+- `/data/docker-data/memochat/minio`
+- `/data/docker-data/memochat/redpanda`
+- `/data/docker-data/memochat/rabbitmq`
+- `/data/docker-data/memochat/observability/prometheus`
+- `/data/docker-data/memochat/observability/grafana`
+- `/data/docker-data/memochat/observability/loki`
+- `/data/docker-data/memochat/observability/tempo`
 
 To rebuild from a clean state:
 
 1. Stop MemoChat services.
 2. Stop the compose stacks.
-3. Delete the matching `D:\docker-data\memochat\...` folder.
+3. Delete the matching `/data/docker-data/memochat/...` folder.
 4. Start the compose stacks again.
 
 The init scripts under `init/` will recreate the required schemas and seed objects.
 
 ## Connectivity Checks
 
-```powershell
+```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 docker exec memochat-redis redis-cli -a 123456 ping
 docker exec memochat-postgres psql -U memochat -d memo_pg -c "select 1;"
 docker exec memochat-mongo mongosh -u root -p 123456 --authenticationDatabase admin --quiet --eval "db.adminCommand({ ping: 1 })"
 docker exec memochat-rabbitmq rabbitmq-diagnostics -q ping
 docker exec memochat-redpanda rpk cluster info --brokers 127.0.0.1:19092
-Invoke-WebRequest http://127.0.0.1/health -UseBasicParsing | Select-Object -ExpandProperty StatusCode
-Invoke-WebRequest http://127.0.0.1:9182/metrics -UseBasicParsing | Select-Object -ExpandProperty StatusCode
-Invoke-WebRequest http://127.0.0.1:9090/-/ready -UseBasicParsing | Select-Object -ExpandProperty StatusCode
-Invoke-WebRequest http://127.0.0.1:3000/api/health -UseBasicParsing | Select-Object -ExpandProperty StatusCode
-Invoke-WebRequest http://127.0.0.1:3100/ready -UseBasicParsing | Select-Object -ExpandProperty StatusCode
-Invoke-WebRequest http://127.0.0.1:3200/ready -UseBasicParsing | Select-Object -ExpandProperty StatusCode
-Invoke-WebRequest http://127.0.0.1:19100/metrics -UseBasicParsing | Select-Object -ExpandProperty StatusCode
-Invoke-WebRequest http://127.0.0.1:8088/metrics -UseBasicParsing | Select-Object -ExpandProperty StatusCode
+curl -fsS http://127.0.0.1/health
+curl -fsS http://127.0.0.1:9090/-/ready
+curl -fsS http://127.0.0.1:3000/api/health
+curl -fsS http://127.0.0.1:3100/ready
+curl -fsS http://127.0.0.1:3200/ready
+curl -fsS http://127.0.0.1:8088/metrics
 ```
 
 ## Nginx Gateway Check
 
-The default local architecture includes Nginx as the client-facing HTTP entrypoint on stable host port `80`. It proxies to local Windows GateServer instances on `8080` and `8084` through a container-startup alias named `memochat-host-gateway-ipv4`. That alias is derived from Docker's `host-gateway` entry but keeps Nginx upstream resolution on IPv4 only, avoiding Docker Desktop host IPv6 retries. Existing direct GateServer smoke scripts still target `http://127.0.0.1:8080`; use the narrow gateway script when you specifically want to verify the Nginx route without changing the full runtime flow.
+The default local architecture includes Nginx as the client-facing HTTP entrypoint on stable host port `80`. It proxies to host GateServer instances on `8080` and `8084` through a container-startup alias named `memochat-host-gateway-ipv4`. That alias is derived from Docker's `host-gateway` entry but keeps Nginx upstream resolution on IPv4 only. Existing direct GateServer smoke scripts still target `http://127.0.0.1:8080`; use the narrow gateway script when you specifically want to verify the Nginx route without changing the full runtime flow.
 
 The local gateway only proxies recognized hostnames: `localhost`, `127.0.0.1`, and `host.docker.internal`. Unknown `Host` traffic is handled by the default Nginx server and is not proxied to GateServer. Host-facing traffic stays on port `80`; Nginx status `8081` and exporter `9113` remain internal Docker-network ports.
 
@@ -177,7 +178,7 @@ The local Grafana instance at `http://127.0.0.1:3000` provisions a `MemoChat` fo
 
 ### Nginx Upstream Failover Check
 
-The default local Nginx upstream sends client HTTP traffic on port `80` to two Windows GateServer instances, `memochat-host-gateway-ipv4:8080` and `memochat-host-gateway-ipv4:8084`. The upstream policy uses `least_conn`; each backend has `max_fails=3` and `fail_timeout=10s`.
+The default local Nginx upstream sends client HTTP traffic on port `80` to two host GateServer instances, `memochat-host-gateway-ipv4:8080` and `memochat-host-gateway-ipv4:8084`. The upstream policy uses `least_conn`; each backend has `max_fails=3` and `fail_timeout=10s`.
 
 Use the failover smoke script in its default diagnostic mode first. This mode is non-destructive: it checks the two GateServer ports, sends bounded probes through Nginx port `80`, and prints recent upstream evidence from the Nginx JSON logs. By default, the script treats gateway errors `502`, `503`, and `504` as failures; add `-AllowGatewayErrors` only when collecting diagnostic evidence while GateServer is intentionally unavailable.
 
@@ -193,11 +194,11 @@ tools\scripts\test_nginx_failover.ps1 -StopBackend -StopBackendPort 8080
 
 `-StopBackend` temporarily stops one local GateServer process so Nginx can route through the remaining backend. By default, the script restores only the stopped GateServer instance from `infra\Memo_ops\runtime\services\GateServer1` or `GateServer2`; pass `-RestoreScript tools/scripts/status/start-all-services.bat` only when you intentionally want the broader runtime startup script. If restore is disabled or fails, run that start script manually before continuing other smoke tests.
 
-Confirm failover from `docker logs memochat-nginx-lb` by checking the JSON access log fields `upstream_addr`, `upstream_status`, and `upstream_response_time`. During a successful failover check, recent proxied requests should show the healthy backend address and acceptable upstream status/latency values after Nginx marks the stopped backend unavailable.
+Confirm failover from `tools\scripts\docker\arch-docker.cmd logs memochat-nginx-lb` by checking the JSON access log fields `upstream_addr`, `upstream_status`, and `upstream_response_time`. During a successful failover check, recent proxied requests should show the healthy backend address and acceptable upstream status/latency values after Nginx marks the stopped backend unavailable.
 
 ### Nginx Structured Log Correlation
 
-Nginx writes JSON access logs to the container log stream, so `docker logs memochat-nginx-lb` remains available for quick local inspection. The same JSON access log stream is also written to `D:\docker-data\memochat\nginx\logs\access.json`; Docker mounts that file path into the OTel Collector, which tails it and exports Nginx gateway logs to Loki with low-cardinality labels such as `service="memochat-nginx-lb"` and `component="nginx_gateway"`.
+Nginx writes JSON access logs to the container log stream, so `tools\scripts\docker\arch-docker.cmd logs memochat-nginx-lb` remains available for quick local inspection. The same JSON access log stream is also written to `/data/docker-data/memochat/nginx/logs/access.json`; Docker mounts that file path into the OTel Collector, which tails it and exports Nginx gateway logs to Loki with low-cardinality labels such as `service="memochat-nginx-lb"` and `component="nginx_gateway"`.
 
 Host-facing ports stay stable: Nginx HTTP is `80` and Loki is `3100`. Nginx status `8081` and exporter `9113` stay internal to the Docker network.
 
@@ -207,8 +208,8 @@ Use explicit IDs when you want to compare Nginx with GateServer logs, the mounte
 $requestId = "manual-request-$([guid]::NewGuid().ToString('N'))"
 $traceId = "manual-trace-$([guid]::NewGuid().ToString('N'))"
 tools\scripts\test_nginx_gateway.ps1 -RequestId $requestId -TraceId $traceId -CheckDockerLogs
-docker logs memochat-nginx-lb --tail 50 | Select-String $requestId,$traceId
-Get-Content D:\docker-data\memochat\nginx\logs\access.json -Tail 50 | Select-String $requestId
+tools\scripts\docker\arch-docker.cmd logs memochat-nginx-lb --tail 50 | Select-String $requestId,$traceId
+Get-Content \\wsl.localhost\archlinux\data\docker-data\memochat\nginx\logs\access.json -Tail 50 | Select-String $requestId
 ```
 
 For a one-command generated trace:

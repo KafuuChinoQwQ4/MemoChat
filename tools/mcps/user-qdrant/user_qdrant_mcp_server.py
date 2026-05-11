@@ -103,15 +103,23 @@ def _init_handlers():
 
     def list_collections(_):
         collections = client.get_collections().collections
-        return {
-            "collections": [
+        result = []
+        for collection in collections:
+            info = client.get_collection(collection.name)
+            points_count = getattr(info, "points_count", None)
+            indexed_vectors_count = getattr(info, "indexed_vectors_count", None)
+            status = getattr(info, "status", None)
+            result.append(
                 {
-                    "name": c.name,
-                    "vectors_count": client.get_collection(c.name).vectors_count,
-                    "status": client.get_collection(c.name).status,
+                    "name": collection.name,
+                    "vectors_count": getattr(info, "vectors_count", None) or points_count,
+                    "points_count": points_count,
+                    "indexed_vectors_count": indexed_vectors_count,
+                    "status": getattr(status, "value", status),
                 }
-                for c in collections
-            ]
+            )
+        return {
+            "collections": result
         }
 
     def search(args):

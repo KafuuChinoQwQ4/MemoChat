@@ -1,9 +1,20 @@
 cmake_minimum_required(VERSION 3.29)
 
+if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 NEW)
+endif()
+
+set(unofficial-utf8proc_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake/package-redirects" CACHE PATH
+    "Redirect deprecated vcpkg unofficial-utf8proc package to utf8proc."
+    FORCE)
+
 project(MemoChat LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 23)
+set(MEMOCHAT_CXX_STANDARD "23" CACHE STRING "C++ standard used by MemoChat targets")
+set_property(CACHE MEMOCHAT_CXX_STANDARD PROPERTY STRINGS 23 26)
+set(CMAKE_CXX_STANDARD ${MEMOCHAT_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_program(CMAKE_RC_COMPILER NAMES rc.exe
     HINTS "$ENV{WINSDK_BIN}"

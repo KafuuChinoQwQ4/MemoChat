@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 3.14)
 project(MemoChatShared LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 23)
+if(NOT DEFINED MEMOCHAT_CXX_STANDARD)
+    set(MEMOCHAT_CXX_STANDARD "23" CACHE STRING "C++ standard used by MemoChat targets")
+endif()
+set(CMAKE_CXX_STANDARD ${MEMOCHAT_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(MSVC)
     add_compile_options(/wd4819 /utf-8 /wd4038)
@@ -57,6 +61,11 @@ set(CORE_HEADERS
 )
 
 add_library(MemoChatCore STATIC ${CORE_SOURCES} ${CORE_HEADERS})
+set_target_properties(MemoChatCore PROPERTIES
+    CXX_STANDARD 23
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
 target_include_directories(MemoChatCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/apps/server/core/common

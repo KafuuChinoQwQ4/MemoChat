@@ -1,12 +1,16 @@
 #pragma once
 #include "const.h"
 #include <hiredis/hiredis.h>
-#include <queue>
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <cstring>
+#include <iostream>
 #include <mutex>
+#include <queue>
+#include <thread>
 #include <vector>
 #include "Singleton.h"
-#include <cstring>
 class RedisConPool {
 public:
 	RedisConPool(size_t poolSize, const char* host, int port, const char* pwd)
@@ -308,4 +312,3 @@ private:
 	RedisMgr();
 	unique_ptr<RedisConPool>  _con_pool;
 };
-
