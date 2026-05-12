@@ -2,6 +2,8 @@
 #define LIVE2DRENDERITEM_H
 
 #include <QQuickPaintedItem>
+#include <QElapsedTimer>
+#include <QTimer>
 #include <QVariantMap>
 
 class Live2DRenderItem : public QQuickPaintedItem
@@ -45,6 +47,7 @@ signals:
 private:
     static qreal boundedUnit(qreal value, qreal fallback = 0.0);
     void updateVisual();
+    void updateFrameTimer();
 
     QString _expression = QStringLiteral("neutral");
     QString _motion = QStringLiteral("idle");
@@ -53,6 +56,9 @@ private:
     qreal _gaze_x = 0.5;
     qreal _gaze_y = 0.5;
     qreal _lip_sync_value = 0.0;
+    QTimer _frame_timer;
+    QElapsedTimer _animation_clock;
+    qreal _idle_phase = 0.0;
 };
 
 #endif // LIVE2DRENDERITEM_H

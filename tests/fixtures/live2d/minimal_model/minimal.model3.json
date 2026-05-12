@@ -1,0 +1,25 @@
+{
+  "Version": 3,
+  "FileReferences": {
+    "Moc": "minimal.moc3",
+    "Textures": [
+      "textures/minimal_texture_00.png"
+    ],
+    "Physics": "minimal.physics3.json",
+    "Pose": "minimal.pose3.json",
+    "UserData": "minimal.userdata3.json",
+    "Motions": {
+      "Idle": [
+        {
+          "File": "motions/minimal_idle.motion3.json"
+        }
+      ]
+    },
+    "Expressions": [
+      {
+        "Name": "smile",
+        "File": "expressions/minimal_smile.exp3.json"
+      }
+    ]
+  }
+}

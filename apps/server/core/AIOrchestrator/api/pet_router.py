@@ -9,11 +9,12 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from config import settings
 from harness.pet import PetObservation, PetRuntime
 
 logger = structlog.get_logger()
 router = APIRouter()
-_runtime = PetRuntime()
+_runtime = PetRuntime(settings.pet)
 
 
 class PetSessionCreateReq(BaseModel):
@@ -41,12 +42,17 @@ class PetObservationReq(BaseModel):
 
 @router.post("/sessions")
 async def create_session(req: PetSessionCreateReq):
-    session = await _runtime.create_session(
-        uid=req.uid,
-        profile_id=req.profile_id,
-        persona=req.persona,
-        provider=req.provider,
-    )
+    if not settings.pet.enabled:
+        raise HTTPException(status_code=404, detail="desktop pet is disabled by configuration")
+    try:
+        session = await _runtime.create_session(
+            uid=req.uid,
+            profile_id=req.profile_id,
+            persona=req.persona,
+            provider=req.provider,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"code": 0, "message": "ok", "session": session.to_dict()}
 
 

@@ -10,6 +10,8 @@ set(unofficial-utf8proc_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake/package-redirects
 
 project(MemoChat LANGUAGES CXX)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
 set(MEMOCHAT_CXX_STANDARD "23" CACHE STRING "C++ standard used by MemoChat targets")
 set_property(CACHE MEMOCHAT_CXX_STANDARD PROPERTY STRINGS 23 26)
 set(CMAKE_CXX_STANDARD ${MEMOCHAT_CXX_STANDARD})

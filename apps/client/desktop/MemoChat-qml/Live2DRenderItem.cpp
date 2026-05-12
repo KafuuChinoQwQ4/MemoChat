@@ -2,9 +2,11 @@
 
 #include <QBrush>
 #include <QColor>
+#include <QEvent>
 #include <QLinearGradient>
 #include <QPainter>
 #include <QPen>
+#include <QQuickWindow>
 #include <QtMath>
 
 Live2DRenderItem::Live2DRenderItem(QQuickItem *parent)
@@ -12,6 +14,26 @@ Live2DRenderItem::Live2DRenderItem(QQuickItem *parent)
 {
     setAntialiasing(true);
     setFillColor(Qt::transparent);
+    setRenderTarget(QQuickPaintedItem::FramebufferObject);
+    setPerformanceHint(QQuickPaintedItem::FastFBOResizing, true);
+    _animation_clock.start();
+    _frame_timer.setTimerType(Qt::PreciseTimer);
+    _frame_timer.setInterval(16);
+    connect(&_frame_timer, &QTimer::timeout, this, [this]() {
+        const qreal elapsed = _animation_clock.elapsed() / 1000.0;
+        _idle_phase = elapsed;
+        update();
+    });
+    connect(this, &QQuickItem::visibleChanged, this, &Live2DRenderItem::updateFrameTimer);
+    connect(this, &QQuickItem::windowChanged, this, [this](QQuickWindow *window) {
+        if (window) {
+            connect(window, &QWindow::visibleChanged, this, [this](bool) {
+                updateFrameTimer();
+            }, Qt::UniqueConnection);
+        }
+        updateFrameTimer();
+    });
+    updateFrameTimer();
 }
 
 void Live2DRenderItem::paint(QPainter *painter)
@@ -36,10 +58,12 @@ void Live2DRenderItem::paint(QPainter *painter)
 
     const qreal headSize = qMin(bounds.width() * 0.62, bounds.height() * 0.55);
     const QPointF headCenter(bounds.center().x(), bounds.top() + headSize * 0.58);
-    const QRectF head(headCenter.x() - headSize / 2.0,
-                      headCenter.y() - headSize / 2.0,
-                      headSize,
-                      headSize);
+    const qreal bob = qSin(_idle_phase * 2.4) * qBound(1.0, _intensity * 5.0, 5.0);
+    const qreal breathe = 1.0 + qSin(_idle_phase * 1.8) * 0.018;
+    const QRectF head(headCenter.x() - (headSize * breathe) / 2.0,
+                      headCenter.y() - (headSize * breathe) / 2.0 + bob,
+                      headSize * breathe,
+                      headSize * breathe);
 
     QColor faceColor(255, 244, 230, 235);
     if (_emotion == QStringLiteral("cheerful") || _expression.contains(QStringLiteral("smile"))) {
@@ -54,16 +78,20 @@ void Live2DRenderItem::paint(QPainter *painter)
 
     const qreal eyeOffsetX = head.width() * 0.19;
     const qreal eyeY = head.center().y() - head.height() * 0.08;
+    const qreal blink = (qSin(_idle_phase * 3.1) > 0.985) ? 0.22 : 1.0;
     const qreal gazeDx = (_gaze_x - 0.5) * head.width() * 0.07;
     const qreal gazeDy = (_gaze_y - 0.5) * head.height() * 0.07;
     painter->setBrush(QColor(42, 52, 64, 235));
     painter->setPen(Qt::NoPen);
-    painter->drawEllipse(QPointF(head.center().x() - eyeOffsetX + gazeDx, eyeY + gazeDy), 5.0, 6.5);
-    painter->drawEllipse(QPointF(head.center().x() + eyeOffsetX + gazeDx, eyeY + gazeDy), 5.0, 6.5);
+    painter->drawEllipse(QPointF(head.center().x() - eyeOffsetX + gazeDx, eyeY + gazeDy), 5.0, 6.5 * blink);
+    painter->drawEllipse(QPointF(head.center().x() + eyeOffsetX + gazeDx, eyeY + gazeDy), 5.0, 6.5 * blink);
 
     painter->setPen(QPen(QColor(88, 56, 66, 220), 3, Qt::SolidLine, Qt::RoundCap));
     const qreal mouthWidth = head.width() * (0.16 + _intensity * 0.10);
-    const qreal mouthOpen = 3.0 + _lip_sync_value * head.height() * 0.11;
+    const qreal speakingPulse = _motion == QStringLiteral("talk") || _motion == QStringLiteral("speak")
+                                    ? (0.5 + 0.5 * qSin(_idle_phase * 15.0)) * 0.16
+                                    : 0.0;
+    const qreal mouthOpen = 3.0 + qBound(0.0, _lip_sync_value + speakingPulse, 1.0) * head.height() * 0.11;
     const QPointF mouthCenter(head.center().x(), head.center().y() + head.height() * 0.18);
     painter->drawArc(QRectF(mouthCenter.x() - mouthWidth / 2.0,
                             mouthCenter.y() - mouthOpen / 2.0,
@@ -175,4 +203,15 @@ void Live2DRenderItem::updateVisual()
 {
     update();
     emit visualStateChanged();
+}
+
+void Live2DRenderItem::updateFrameTimer()
+{
+    const bool should_run = isVisible() && window() && window()->isVisible();
+    if (should_run && !_frame_timer.isActive()) {
+        _animation_clock.restart();
+        _frame_timer.start();
+    } else if (!should_run && _frame_timer.isActive()) {
+        _frame_timer.stop();
+    }
 }

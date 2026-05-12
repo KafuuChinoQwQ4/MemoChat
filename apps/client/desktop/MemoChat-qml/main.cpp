@@ -13,6 +13,7 @@
 #include <QStandardPaths>
 #include <QSurfaceFormat>
 #include <QGuiApplication>
+#include <QScreen>
 #include <QWindow>
 #include <QQuickWindow>
 #include <QTimer>
@@ -29,8 +30,10 @@
 #include "AppController.h"
 #include "CallSessionModel.h"
 #include "Live2DRenderItem.h"
+#include "PetAssetSettings.h"
 #include "PetController.h"
 #include "PetModel.h"
+#include "Live2DAsset.h"
 #include "TelemetryUtils.h"
 #include "global.h"
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
@@ -228,6 +231,9 @@ void applyAcrylicToTopLevelQuickWindows()
 #endif
 
 namespace {
+constexpr int kInitialCenterRetryCount = 6;
+constexpr int kInitialCenterRetryIntervalMs = 80;
+
 struct RuntimeLogConfig {
     QString level = "info";
     QString dir = "./logs";
@@ -366,11 +372,106 @@ void fileMessageHandler(QtMsgType type, const QMessageLogContext &, const QStrin
         abort();
     }
 }
+
+void setDefaultEnv(const char *name, const char *value)
+{
+    if (qEnvironmentVariableIsEmpty(name)) {
+        qputenv(name, value);
+    }
+}
+
+void centerTopLevelWindow(QWindow *window)
+{
+    if (!window || !window->isVisible() || window->visibility() != QWindow::Windowed) {
+        return;
+    }
+
+    QScreen *screen = window->screen();
+    if (!screen) {
+        screen = QGuiApplication::primaryScreen();
+    }
+    if (!screen) {
+        return;
+    }
+
+    const QRect area = screen->availableGeometry();
+    const QSize size = window->size();
+    if (!area.isValid() || size.width() <= 0 || size.height() <= 0) {
+        return;
+    }
+
+    const int x = area.x() + qMax(0, (area.width() - size.width()) / 2);
+    const int y = area.y() + qMax(0, (area.height() - size.height()) / 2);
+    window->setPosition(x, y);
+}
+
+void scheduleInitialWindowCentering(QWindow *window, int remaining = kInitialCenterRetryCount)
+{
+    if (!window || window->property("_memochat_initial_centering").toBool()) {
+        return;
+    }
+    window->setProperty("_memochat_initial_centering", true);
+
+    auto center_again = [window, remaining]() {
+        centerTopLevelWindow(window);
+        if (remaining <= 0 || !window->isVisible()) {
+            window->setProperty("_memochat_initial_centering", false);
+            return;
+        }
+        window->setProperty("_memochat_initial_centering", false);
+        QTimer::singleShot(kInitialCenterRetryIntervalMs, window, [window, remaining]() {
+            scheduleInitialWindowCentering(window, remaining - 1);
+        });
+    };
+
+    QTimer::singleShot(0, window, center_again);
+}
+
+void ensureInitialCenteringHook(QQuickWindow *window)
+{
+    if (!window
+        || !window->property("memochatStartupCenter").toBool()
+        || window->property("_memochat_center_hooked").toBool()) {
+        return;
+    }
+    window->setProperty("_memochat_center_hooked", true);
+    QObject::connect(window,
+                     &QWindow::visibleChanged,
+                     window,
+                     [window](bool visible) {
+                         if (visible) {
+                             scheduleInitialWindowCentering(window);
+                         }
+                     });
+    if (window->isVisible()) {
+        scheduleInitialWindowCentering(window);
+    }
+}
+
+void ensureTopLevelQuickWindowHooks()
+{
+    const auto windows = QGuiApplication::topLevelWindows();
+    for (QWindow *win : windows) {
+        auto *quick_window = qobject_cast<QQuickWindow *>(win);
+        if (!quick_window) {
+            continue;
+        }
+        ensureInitialCenteringHook(quick_window);
+#ifdef Q_OS_WIN
+        ensureAcrylicVisibleHook(quick_window);
+#endif
+    }
+}
 }
 
 int main(int argc, char *argv[])
 {
     QCoreApplication::setApplicationName(QStringLiteral("MemoChatQml"));
+#ifdef Q_OS_LINUX
+    setDefaultEnv("QSG_RENDER_LOOP", "threaded");
+    setDefaultEnv("QSG_RHI_BACKEND", "opengl");
+    setDefaultEnv("QT_OPENGL", "desktop");
+#endif
     QSurfaceFormat format;
     format.setSamples(8);
 #ifdef Q_OS_LINUX
@@ -425,6 +526,10 @@ int main(int argc, char *argv[])
         "MemoChat", 1, 0, "PetController", "Exposed via AppController");
     qmlRegisterUncreatableType<PetModel>(
         "MemoChat", 1, 0, "PetModel", "Exposed via PetController");
+    qmlRegisterType<PetAssetSettings>(
+        "MemoChat", 1, 0, "PetAssetSettings");
+    qmlRegisterType<Live2DAsset>(
+        "MemoChat", 1, 0, "Live2DAsset");
     qmlRegisterType<Live2DRenderItem>(
         "MemoChat", 1, 0, "Live2DRenderItem");
 
@@ -460,8 +565,16 @@ int main(int argc, char *argv[])
         QObject *root_object = engine.rootObjects().constFirst();
         if (auto *window = qobject_cast<QQuickWindow *>(root_object)) {
             window->setColor(Qt::transparent);
+            ensureInitialCenteringHook(window);
         }
     }
+    ensureTopLevelQuickWindowHooks();
+    QObject::connect(&app,
+                     &QGuiApplication::focusWindowChanged,
+                     &app,
+                     [](QWindow *) {
+                         ensureTopLevelQuickWindowHooks();
+                     });
 #ifdef Q_OS_WIN
     QTimer::singleShot(0, &app, []() {
         applyAcrylicToTopLevelQuickWindows();
