@@ -328,6 +328,16 @@ class PostgresRuntimeConfig(BaseModel):
     max_pool_size: int = 10
 
 
+class PetFeatureConfig(BaseModel):
+    enabled: bool = True
+    deterministic: bool = True
+    live2d_native_enabled: bool = False
+    live2d_sdk_root: str = ""
+    asset_root: str = ""
+    cloud_vision_enabled: bool = False
+    voice_clone_enabled: bool = False
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="MEMOCHAT_AI_",
@@ -349,6 +359,7 @@ class Settings(BaseSettings):
     mcp: MCPConfig = MCPConfig()
     harness: HarnessConfig = HarnessConfig()
     postgres: PostgresRuntimeConfig = PostgresRuntimeConfig()
+    pet: PetFeatureConfig = PetFeatureConfig()
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "Settings":
@@ -376,6 +387,8 @@ def _merge_env_overrides(raw: dict[str, Any]) -> dict[str, Any]:
     prefix = "MEMOCHAT_AI_"
     delimiter = "__"
 
+    _merge_pet_alias_env(merged)
+
     for env_key, env_value in os.environ.items():
         if not env_key.startswith(prefix):
             continue
@@ -394,6 +407,28 @@ def _merge_env_overrides(raw: dict[str, Any]) -> dict[str, Any]:
         cursor[path[-1]] = _parse_env_value(env_value)
 
     return merged
+
+
+_PET_ENV_ALIASES = {
+    "MEMOCHAT_ENABLE_PET": "enabled",
+    "MEMOCHAT_PET_DETERMINISTIC": "deterministic",
+    "MEMOCHAT_ENABLE_LIVE2D_NATIVE": "live2d_native_enabled",
+    "MEMOCHAT_LIVE2D_SDK_ROOT": "live2d_sdk_root",
+    "MEMOCHAT_PET_ASSET_ROOT": "asset_root",
+    "MEMOCHAT_PET_CLOUD_VISION": "cloud_vision_enabled",
+    "MEMOCHAT_PET_VOICE_CLONE": "voice_clone_enabled",
+}
+
+
+def _merge_pet_alias_env(merged: dict[str, Any]) -> None:
+    pet_config = merged.get("pet")
+    if not isinstance(pet_config, dict):
+        pet_config = {}
+        merged["pet"] = pet_config
+
+    for env_key, field_name in _PET_ENV_ALIASES.items():
+        if env_key in os.environ:
+            pet_config[field_name] = _parse_env_value(os.environ[env_key])
 
 
 _base_dir = Path(__file__).parent.resolve()

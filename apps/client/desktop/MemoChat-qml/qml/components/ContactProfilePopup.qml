@@ -58,7 +58,16 @@ Popup {
             Layout.alignment: Qt.AlignHCenter
             width: 82; height: 82; radius: 20; clip: true
             color: Qt.rgba(0.85, 0.88, 0.97, 1.0)
-            Image { anchors.fill: parent; fillMode: Image.PreserveAspectCrop; source: root.profileIcon }
+            Image {
+                anchors.fill: parent
+                fillMode: Image.PreserveAspectCrop
+                property string fallbackSource: "qrc:/res/head_1.jpg"
+                property string baseSource: (root.profileIcon && root.profileIcon.length > 0) ? root.profileIcon : fallbackSource
+                property bool loadFailed: false
+                source: loadFailed ? fallbackSource : baseSource
+                onBaseSourceChanged: loadFailed = false
+                onStatusChanged: if (status === Image.Error) { loadFailed = true }
+            }
         }
 
         Label {

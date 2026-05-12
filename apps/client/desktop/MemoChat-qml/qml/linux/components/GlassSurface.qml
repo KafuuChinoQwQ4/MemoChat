@@ -9,12 +9,12 @@ Item {
     property int blurRadius: 18
     property real cornerRadius: 10
 
-    property color fillColor: Qt.rgba(1, 1, 1, 0.15)
-    property color strokeColor: Qt.rgba(1, 1, 1, 0.50)
+    property color fillColor: Qt.rgba(1, 1, 1, 0.26)
+    property color strokeColor: Qt.rgba(1, 1, 1, 0.58)
     property real strokeWidth: 1
 
-    property color glowTopColor: Qt.rgba(1, 1, 1, 0.24)
-    property color glowBottomColor: Qt.rgba(1, 1, 1, 0.06)
+    property color glowTopColor: Qt.rgba(1, 1, 1, 0.28)
+    property color glowBottomColor: Qt.rgba(1, 1, 1, 0.08)
     implicitWidth: 100
     implicitHeight: 38
     clip: true
@@ -66,10 +66,10 @@ Item {
         radius: root.cornerRadius
         antialiasing: true
         gradient: Gradient {
-            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.18) }
+            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.24) }
             GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0) }
         }
-        opacity: root.blurEnabled ? 0.72 : 0.42
+        opacity: root.blurEnabled ? 0.78 : 0.48
     }
 
     Behavior on blurRadius {

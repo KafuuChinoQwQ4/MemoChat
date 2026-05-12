@@ -7,6 +7,8 @@
 #include <QUrl>
 #include <QUrlQuery>
 
+extern QString gate_url_prefix;
+
 inline int &iconDownloadAuthUid()
 {
     static int uid = 0;
@@ -52,6 +54,39 @@ inline QString attachMediaDownloadAuth(QString icon)
     return url.toString();
 }
 
+inline bool isMediaDownloadPath(const QString &path)
+{
+    return path.endsWith(QStringLiteral("/media/download")) || path.contains(QStringLiteral("/media/download"));
+}
+
+inline QString normalizeRelativeMediaDownloadUrl(QString icon)
+{
+    if (icon.startsWith(QStringLiteral("media/download"))) {
+        icon.prepend('/');
+    }
+
+    if (!icon.startsWith(QStringLiteral("/"))) {
+        return icon;
+    }
+
+    const QUrl relativeUrl(icon);
+    if (!isMediaDownloadPath(relativeUrl.path())) {
+        return icon;
+    }
+
+    const QString baseUrl = gate_url_prefix.trimmed();
+    if (baseUrl.isEmpty()) {
+        return attachMediaDownloadAuth(icon);
+    }
+
+    QString absoluteUrl = baseUrl;
+    if (absoluteUrl.endsWith('/') && icon.startsWith('/')) {
+        absoluteUrl.chop(1);
+    }
+    absoluteUrl += icon;
+    return attachMediaDownloadAuth(absoluteUrl);
+}
+
 inline QString normalizeIconForQml(QString icon)
 {
     static const QString kDefaultIcon = QStringLiteral("qrc:/res/head_1.jpg");
@@ -75,6 +110,11 @@ inline QString normalizeIconForQml(QString icon)
 
     if (icon.startsWith(QStringLiteral("/res/"))) {
         return QStringLiteral("qrc:") + icon;
+    }
+
+    const QString mediaDownloadUrl = normalizeRelativeMediaDownloadUrl(icon);
+    if (mediaDownloadUrl != icon) {
+        return mediaDownloadUrl;
     }
 
     if (!icon.contains('/') && !icon.contains('\\')

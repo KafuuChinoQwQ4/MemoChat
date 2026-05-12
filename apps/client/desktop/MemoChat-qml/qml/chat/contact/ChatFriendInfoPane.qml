@@ -62,10 +62,15 @@ Rectangle {
 
                     Image {
                         anchors.fill: parent
-                        source: root.contactIcon
+                        property string fallbackSource: "qrc:/res/head_1.jpg"
+                        property string baseSource: (root.contactIcon && root.contactIcon.length > 0) ? root.contactIcon : fallbackSource
+                        property bool loadFailed: false
+                        source: loadFailed ? fallbackSource : baseSource
                         fillMode: Image.PreserveAspectCrop
                         smooth: true
                         mipmap: true
+                        onBaseSourceChanged: loadFailed = false
+                        onStatusChanged: if (status === Image.Error) { loadFailed = true }
                     }
                 }
 

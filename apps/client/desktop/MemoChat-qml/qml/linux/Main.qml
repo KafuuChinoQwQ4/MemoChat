@@ -18,11 +18,13 @@ ApplicationWindow {
     property int windowRadius: isMaximized ? 0 : 24
     readonly property int glassInset: isMaximized ? 0 : 4
     readonly property int shellContentInset: isMaximized ? 0 : 8
+    readonly property int controlHoverPadding: 7
     property string appTitle: "MemoChat QML"
     property size loginWindowSize: Qt.size(300, 500)
     property size chatWindowSize: Qt.size(900, 640)
     property var chatWindowRef: null
     property var petWindowRef: null
+    property bool memochatStartupCenter: true
 
     function centerWindow(win) {
         if (!win || win.visibility !== Window.Windowed) {
@@ -43,6 +45,16 @@ ApplicationWindow {
         win.y = Math.max(area.y, centeredY)
     }
 
+    function centerWindowWithRetry(win, attempts) {
+        if (!win || attempts <= 0) {
+            return
+        }
+        centerWindow(win)
+        retryCenterTimer.targetWindow = win
+        retryCenterTimer.remainingAttempts = attempts - 1
+        retryCenterTimer.restart()
+    }
+
     function showLoginWindow() {
         if (root.visibility === Window.Maximized) {
             root.showNormal()
@@ -50,12 +62,9 @@ ApplicationWindow {
         root.width = loginWindowSize.width
         root.height = loginWindowSize.height
         root.show()
-        centerWindow(root)
+        centerWindowWithRetry(root, 6)
         root.raise()
         root.requestActivate()
-        Qt.callLater(function() {
-            centerWindow(root)
-        })
     }
 
     function showChatWindow() {
@@ -70,12 +79,9 @@ ApplicationWindow {
         win.width = chatWindowSize.width
         win.height = chatWindowSize.height
         win.show()
-        centerWindow(win)
+        centerWindowWithRetry(win, 6)
         win.raise()
         win.requestActivate()
-        Qt.callLater(function() {
-            centerWindow(win)
-        })
         return true
     }
 
@@ -190,6 +196,19 @@ ApplicationWindow {
         }
     }
 
+    Timer {
+        id: retryCenterTimer
+        interval: 80
+        repeat: false
+        property var targetWindow: null
+        property int remainingAttempts: 0
+        onTriggered: {
+            if (targetWindow && targetWindow.visible && remainingAttempts > 0) {
+                centerWindowWithRetry(targetWindow, remainingAttempts)
+            }
+        }
+    }
+
     Item {
         id: shell
         anchors.fill: parent
@@ -198,11 +217,11 @@ ApplicationWindow {
         LinuxComponents.WindowGlassShell {
             anchors.fill: parent
             cornerRadius: root.windowRadius
-            fillTopColor: Qt.rgba(0.90, 0.96, 1.0, 0.34)
-            fillBottomColor: Qt.rgba(0.83, 0.91, 1.0, 0.32)
-            glowTopColor: Qt.rgba(1, 1, 1, 0.18)
-            glowMiddleColor: Qt.rgba(0.92, 0.97, 1.0, 0.06)
-            glowBottomColor: Qt.rgba(0.74, 0.84, 0.96, 0.08)
+            fillTopColor: Qt.rgba(0.93, 0.97, 1.0, 0.56)
+            fillBottomColor: Qt.rgba(0.86, 0.93, 1.0, 0.52)
+            glowTopColor: Qt.rgba(1, 1, 1, 0.22)
+            glowMiddleColor: Qt.rgba(0.92, 0.97, 1.0, 0.08)
+            glowBottomColor: Qt.rgba(0.74, 0.84, 0.96, 0.10)
             strokeColor: root.isMaximized ? "transparent" : Qt.rgba(1, 1, 1, 0.42)
             strokeWidth: root.isMaximized ? 0 : 0.9
         }
@@ -258,13 +277,14 @@ ApplicationWindow {
         z: 200
         anchors.top: parent.top
         anchors.right: parent.right
-        anchors.topMargin: 20
-        anchors.rightMargin: 14
-        width: controlsRow.implicitWidth
-        height: controlsRow.implicitHeight
+        anchors.topMargin: root.glassInset + root.shellContentInset + 10
+        anchors.rightMargin: root.glassInset + root.shellContentInset + 10
+        width: controlsRow.implicitWidth + root.controlHoverPadding * 2
+        height: controlsRow.implicitHeight + root.controlHoverPadding * 2
 
         Row {
             id: controlsRow
+            anchors.centerIn: parent
             spacing: 20
 
             SharedComponents.LoginIconButton {
@@ -306,6 +326,7 @@ ApplicationWindow {
             maximumHeight: 100000
             width: root.chatWindowSize.width
             height: root.chatWindowSize.height
+            property bool memochatStartupCenter: true
             property bool isMaximized: visibility === Window.Maximized
             property int windowRadius: isMaximized ? 0 : 24
             readonly property int glassInset: isMaximized ? 0 : 4
@@ -324,11 +345,11 @@ ApplicationWindow {
                 LinuxComponents.WindowGlassShell {
                     anchors.fill: parent
                     cornerRadius: chatWindow.windowRadius
-                    fillTopColor: Qt.rgba(0.90, 0.96, 1.0, 0.38)
-                    fillBottomColor: Qt.rgba(0.83, 0.91, 1.0, 0.34)
-                    glowTopColor: Qt.rgba(1, 1, 1, 0.16)
-                    glowMiddleColor: Qt.rgba(0.92, 0.97, 1.0, 0.06)
-                    glowBottomColor: Qt.rgba(0.74, 0.84, 0.96, 0.08)
+                    fillTopColor: Qt.rgba(0.93, 0.97, 1.0, 0.58)
+                    fillBottomColor: Qt.rgba(0.86, 0.93, 1.0, 0.54)
+                    glowTopColor: Qt.rgba(1, 1, 1, 0.20)
+                    glowMiddleColor: Qt.rgba(0.92, 0.97, 1.0, 0.08)
+                    glowBottomColor: Qt.rgba(0.74, 0.84, 0.96, 0.10)
                     strokeColor: chatWindow.isMaximized ? "transparent" : Qt.rgba(1, 1, 1, 0.40)
                     strokeWidth: chatWindow.isMaximized ? 0 : 0.9
                 }
@@ -347,22 +368,26 @@ ApplicationWindow {
                 z: 200
                 anchors.top: parent.top
                 anchors.right: parent.right
-                anchors.topMargin: 10
-                anchors.rightMargin: 10
-                width: chatControlsRow.implicitWidth
-                height: chatControlsRow.implicitHeight
+                anchors.topMargin: chatWindow.isMaximized
+                                   ? 10
+                                   : chatWindow.glassInset + chatWindow.shellContentInset + 4
+                anchors.rightMargin: chatWindow.isMaximized
+                                     ? 10
+                                     : chatWindow.glassInset + chatWindow.shellContentInset + 18
+                width: chatControlsRow.implicitWidth + root.controlHoverPadding * 4
+                height: chatControlsRow.implicitHeight + root.controlHoverPadding * 2 + 2
 
                 Rectangle {
-                    anchors.centerIn: parent
-                    width: chatControlsRow.implicitWidth + 20
-                    height: chatControlsRow.implicitHeight + 12
-                    radius: 12
-                    color: Qt.rgba(1, 1, 1, 0.18)
-                    border.color: Qt.rgba(1, 1, 1, 0.40)
+                    anchors.fill: parent
+                    radius: height / 2
+                    antialiasing: true
+                    color: Qt.rgba(1, 1, 1, 0.32)
+                    border.color: Qt.rgba(1, 1, 1, 0.54)
                 }
 
                 Row {
                     id: chatControlsRow
+                    anchors.centerIn: parent
                     spacing: 20
 
                     SharedComponents.LoginIconButton {

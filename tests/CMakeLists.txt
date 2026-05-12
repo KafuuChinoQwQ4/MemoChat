@@ -14,6 +14,7 @@ add_subdirectory(../apps/server/core/common/proto/tests   ${CMAKE_CURRENT_BINARY
 add_subdirectory(../apps/server/core/common/logging/tests ${CMAKE_CURRENT_BINARY_DIR}/logging)
 add_subdirectory(../apps/server/core/common/json/tests    ${CMAKE_CURRENT_BINARY_DIR}/json)
 add_subdirectory(../apps/server/core/AIServer/tests       ${CMAKE_CURRENT_BINARY_DIR}/aiserver)
+add_subdirectory(client/live2d                         ${CMAKE_CURRENT_BINARY_DIR}/client_live2d)
 
 # Hook into CTest so "ctest" / "RUN_TESTS" discovers everything.
 # Discovery is handled in each subdirectory's CMakeLists.txt via
