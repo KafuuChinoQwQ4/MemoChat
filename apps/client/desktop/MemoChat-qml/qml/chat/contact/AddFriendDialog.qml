@@ -64,12 +64,17 @@ Popup {
 
                 Image {
                     anchors.fill: parent
-                    source: root.targetIcon
+                    property string fallbackSource: "qrc:/res/head_1.jpg"
+                    property string baseSource: (root.targetIcon && root.targetIcon.length > 0) ? root.targetIcon : fallbackSource
+                    property bool loadFailed: false
+                    source: loadFailed ? fallbackSource : baseSource
                     fillMode: Image.PreserveAspectCrop
                     cache: true
                     asynchronous: true
                     opacity: (status === Image.Ready) ? 1.0 : 0.0
                     Behavior on opacity { NumberAnimation { duration: 200 } }
+                    onBaseSourceChanged: loadFailed = false
+                    onStatusChanged: if (status === Image.Error) { loadFailed = true }
                 }
             }
 

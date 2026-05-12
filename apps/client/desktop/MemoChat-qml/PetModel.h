@@ -9,6 +9,10 @@ class PetModel : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(int sequence READ sequence NOTIFY changed)
+    Q_PROPERTY(int schemaVersion READ schemaVersion NOTIFY changed)
+    Q_PROPERTY(QString eventId READ eventId NOTIFY changed)
+    Q_PROPERTY(QString turnId READ turnId NOTIFY changed)
+    Q_PROPERTY(QString phase READ phase NOTIFY changed)
     Q_PROPERTY(QString speechText READ speechText NOTIFY changed)
     Q_PROPERTY(QString emotion READ emotion NOTIFY changed)
     Q_PROPERTY(QString expression READ expression NOTIFY changed)
@@ -22,6 +26,10 @@ public:
     explicit PetModel(QObject *parent = nullptr);
 
     int sequence() const { return _sequence; }
+    int schemaVersion() const { return _schema_version; }
+    QString eventId() const { return _event_id; }
+    QString turnId() const { return _turn_id; }
+    QString phase() const { return _phase; }
     QString speechText() const { return _speech_text; }
     QString emotion() const { return _emotion; }
     QString expression() const { return _expression; }
@@ -42,7 +50,12 @@ private:
     void emitChangedIf(bool changed);
 
     int _sequence = 0;
+    int _schema_version = 0;
+    QString _event_id;
+    QString _turn_id;
+    QString _phase = QStringLiteral("idle");
     QString _speech_text;
+    QString _speech_turn_id;
     QString _emotion = QStringLiteral("neutral");
     QString _expression = QStringLiteral("neutral");
     QString _motion = QStringLiteral("idle");

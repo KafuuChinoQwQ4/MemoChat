@@ -393,3 +393,12 @@ postgres:
   database: "memo_pg"
   min_pool_size: 2
   max_pool_size: 10
+
+pet:
+  enabled: true
+  deterministic: true
+  live2d_native_enabled: false
+  live2d_sdk_root: ""
+  asset_root: ""
+  cloud_vision_enabled: false
+  voice_clone_enabled: false

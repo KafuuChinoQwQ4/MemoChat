@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import MemoChat 1.0
 import "../components"
 
 Rectangle {
@@ -11,14 +12,17 @@ Rectangle {
     clip: true
 
     property var backdrop: null
-    property string characterName: "Kafuu Chino"
+    property string characterName: "Memo Pet"
     property string roleIdentity: "聊天陪伴角色"
-    property string modelRoot: "src/KafuuChino/香风智乃live2D"
-    property string modelJson: "src/KafuuChino/香风智乃live2D/香风智乃.model3.json"
-    property string motionDirectory: "src/KafuuChino/香风智乃live2D"
-    property string expressionDirectory: "src/KafuuChino/香风智乃live2D"
-    property string voiceDirectory: "src/KafuuChino/香风智乃live2D/voice"
+    property string modelRoot: ""
+    property string modelJson: ""
+    property string motionDirectory: ""
+    property string expressionDirectory: ""
+    property string voiceDirectory: ""
     property string defaultVoice: "normal"
+    property string idleMotion: "Idle"
+    property string speakingMotion: "TapBody"
+    property string fallbackExpression: "neutral"
     property string personalityTags: "认真, 轻声, 可靠, 适度吐槽"
     property string relationshipStyle: "熟悉但不过界的同伴"
     property string worldSetting: "住在 MemoChat 旁边的小小工作台，会在用户聊天、学习和整理资料时陪伴。"
@@ -30,6 +34,14 @@ Rectangle {
     property real creativityLevel: 0.48
     property real voiceSpeed: 1.0
     property real lipSyncSensitivity: 0.55
+    property bool voiceLipSyncEnabled: true
+    property bool emotionSoundEnabled: true
+    property bool idleMotionEnabled: true
+    property bool gazeFollowEnabled: true
+    property bool memoryEnabled: true
+    property bool interruptEnabled: true
+    property bool cameraEnabled: false
+    property bool cloudVisionEnabled: false
 
     readonly property color textPrimaryColor: "#253247"
     readonly property color textSecondaryColor: "#4e5d74"
@@ -38,37 +50,172 @@ Rectangle {
     readonly property color accentGreen: Qt.rgba(0.32, 0.60, 0.44, 1.0)
     readonly property color accentRose: Qt.rgba(0.78, 0.36, 0.45, 1.0)
 
+    PetAssetSettings {
+        id: petAssetSettings
+    }
+
+    Live2DAsset {
+        id: assetValidator
+        modelRoot: root.modelRoot
+        modelJson: root.modelJson
+        motionDirectory: root.motionDirectory
+        expressionDirectory: root.expressionDirectory
+        voiceDirectory: root.voiceDirectory
+        onAssetInputsChanged: assetValidationTimer.restart()
+    }
+
+    Timer {
+        id: assetValidationTimer
+        interval: 180
+        repeat: false
+        onTriggered: assetValidator.validate()
+    }
+
+    Component.onCompleted: {
+        petAssetSettings.load()
+        root.applySettingsToDraft()
+        assetValidationTimer.start()
+    }
+
     function choosePlaceholder(kind) {
         draftStatus = "准备选择" + kind
     }
 
+    function assetStatusLabel() {
+        if (assetValidator.status === "ready") {
+            return "资源可用"
+        }
+        if (assetValidator.status === "missing") {
+            return "资源缺失"
+        }
+        if (assetValidator.status === "invalid") {
+            return "格式异常"
+        }
+        return "待补充资源"
+    }
+
+    function assetStatusColor() {
+        if (assetValidator.status === "ready") {
+            return root.accentGreen
+        }
+        if (assetValidator.status === "empty") {
+            return root.accentBlue
+        }
+        return root.accentRose
+    }
+
+    function firstAssetIssue() {
+        if (assetValidator.errors.length > 0) {
+            return assetValidator.errors[0]
+        }
+        if (assetValidator.warnings.length > 0) {
+            return assetValidator.warnings[0]
+        }
+        return ""
+    }
+
+    function shortChecksum() {
+        return assetValidator.packageChecksum.length > 0
+                ? assetValidator.packageChecksum.slice(0, 12)
+                : "未生成"
+    }
+
+    function optionalFileLabel(label, value) {
+        return label + " " + (value.length > 0 ? "已识别" : "未声明")
+    }
+
+    function runAssetValidation() {
+        assetValidator.validate()
+        return assetValidator.statusText
+    }
+
+    function applySettingsToDraft() {
+        characterName = petAssetSettings.characterName
+        roleIdentity = petAssetSettings.roleIdentity
+        modelRoot = petAssetSettings.modelRoot
+        modelJson = petAssetSettings.modelJson
+        motionDirectory = petAssetSettings.motionDirectory
+        expressionDirectory = petAssetSettings.expressionDirectory
+        voiceDirectory = petAssetSettings.voiceDirectory
+        defaultVoice = petAssetSettings.defaultVoice
+        idleMotion = petAssetSettings.idleMotion
+        speakingMotion = petAssetSettings.speakingMotion
+        fallbackExpression = petAssetSettings.fallbackExpression
+        personalityTags = petAssetSettings.personalityTags
+        relationshipStyle = petAssetSettings.relationshipStyle
+        worldSetting = petAssetSettings.worldSetting
+        speechRules = petAssetSettings.speechRules
+        catchphrases = petAssetSettings.catchphrases
+        forbiddenRules = petAssetSettings.forbiddenRules
+        emotionLevel = petAssetSettings.emotionLevel
+        creativityLevel = petAssetSettings.creativityLevel
+        voiceSpeed = petAssetSettings.voiceSpeed
+        lipSyncSensitivity = petAssetSettings.lipSyncSensitivity
+        voiceLipSyncEnabled = petAssetSettings.voiceLipSyncEnabled
+        emotionSoundEnabled = petAssetSettings.emotionSoundEnabled
+        idleMotionEnabled = petAssetSettings.idleMotionEnabled
+        gazeFollowEnabled = petAssetSettings.gazeFollowEnabled
+        memoryEnabled = petAssetSettings.memoryEnabled
+        interruptEnabled = petAssetSettings.interruptEnabled
+        cameraEnabled = petAssetSettings.cameraEnabled
+        cloudVisionEnabled = petAssetSettings.cloudVisionEnabled
+        toneCombo.currentIndex = petAssetSettings.toneIndex
+        responseLengthCombo.currentIndex = petAssetSettings.responseLengthIndex
+        languageCombo.currentIndex = petAssetSettings.languageIndex
+        draftStatus = petAssetSettings.statusText
+    }
+
+    function storeDraftToSettings() {
+        petAssetSettings.characterName = characterName
+        petAssetSettings.roleIdentity = roleIdentity
+        petAssetSettings.modelRoot = modelRoot
+        petAssetSettings.modelJson = modelJson
+        petAssetSettings.motionDirectory = motionDirectory
+        petAssetSettings.expressionDirectory = expressionDirectory
+        petAssetSettings.voiceDirectory = voiceDirectory
+        petAssetSettings.defaultVoice = defaultVoice
+        petAssetSettings.idleMotion = idleMotion
+        petAssetSettings.speakingMotion = speakingMotion
+        petAssetSettings.fallbackExpression = fallbackExpression
+        petAssetSettings.personalityTags = personalityTags
+        petAssetSettings.relationshipStyle = relationshipStyle
+        petAssetSettings.worldSetting = worldSetting
+        petAssetSettings.speechRules = speechRules
+        petAssetSettings.catchphrases = catchphrases
+        petAssetSettings.forbiddenRules = forbiddenRules
+        petAssetSettings.emotionLevel = emotionLevel
+        petAssetSettings.creativityLevel = creativityLevel
+        petAssetSettings.voiceSpeed = voiceSpeed
+        petAssetSettings.lipSyncSensitivity = lipSyncSensitivity
+        petAssetSettings.voiceLipSyncEnabled = voiceLipSyncEnabled
+        petAssetSettings.emotionSoundEnabled = emotionSoundEnabled
+        petAssetSettings.idleMotionEnabled = idleMotionEnabled
+        petAssetSettings.gazeFollowEnabled = gazeFollowEnabled
+        petAssetSettings.memoryEnabled = memoryEnabled
+        petAssetSettings.interruptEnabled = interruptEnabled
+        petAssetSettings.cameraEnabled = cameraEnabled
+        petAssetSettings.cloudVisionEnabled = cloudVisionEnabled
+        petAssetSettings.toneIndex = toneCombo.currentIndex
+        petAssetSettings.responseLengthIndex = responseLengthCombo.currentIndex
+        petAssetSettings.languageIndex = languageCombo.currentIndex
+    }
+
     function saveDraft() {
-        draftStatus = "界面草稿已更新"
+        var status = runAssetValidation()
+        root.storeDraftToSettings()
+        if (petAssetSettings.save()) {
+            draftStatus = assetValidator.valid ? "本地草稿已保存，资源可用"
+                                               : "本地草稿已保存，" + status
+        } else {
+            draftStatus = petAssetSettings.statusText
+        }
     }
 
     function resetDraft() {
-        characterName = "Kafuu Chino"
-        roleIdentity = "聊天陪伴角色"
-        modelRoot = "src/KafuuChino/香风智乃live2D"
-        modelJson = "src/KafuuChino/香风智乃live2D/香风智乃.model3.json"
-        motionDirectory = "src/KafuuChino/香风智乃live2D"
-        expressionDirectory = "src/KafuuChino/香风智乃live2D"
-        voiceDirectory = "src/KafuuChino/香风智乃live2D/voice"
-        defaultVoice = "normal"
-        personalityTags = "认真, 轻声, 可靠, 适度吐槽"
-        relationshipStyle = "熟悉但不过界的同伴"
-        worldSetting = "住在 MemoChat 旁边的小小工作台，会在用户聊天、学习和整理资料时陪伴。"
-        speechRules = "用自然中文回复。少说套话，先回应情绪，再给明确建议。"
-        catchphrases = "收到，我会记住。\n先别急，我们一步一步来。"
-        forbiddenRules = "不要伪装成真人；不要主动索要隐私；不替用户做高风险决定。"
-        emotionLevel = 0.62
-        creativityLevel = 0.48
-        voiceSpeed = 1.0
-        lipSyncSensitivity = 0.55
-        toneCombo.currentIndex = 0
-        responseLengthCombo.currentIndex = 1
-        languageCombo.currentIndex = 0
-        draftStatus = "已恢复默认草稿"
+        petAssetSettings.resetToDefaults()
+        root.applySettingsToDraft()
+        assetValidationTimer.restart()
+        draftStatus = petAssetSettings.statusText
     }
 
     function promptPreview() {
@@ -77,6 +224,9 @@ Rectangle {
                 + "\n关系：" + relationshipStyle
                 + "\n性格标签：" + personalityTags
                 + "\n世界观：" + worldSetting
+                + "\n待机动作：" + idleMotion
+                + "\n说话动作：" + speakingMotion
+                + "\n兜底表情：" + fallbackExpression
                 + "\n说话规则：" + speechRules
                 + "\n常用口头禅：" + catchphrases
                 + "\n禁忌：" + forbiddenRules
@@ -144,7 +294,10 @@ Rectangle {
                         Layout.fillWidth: true
                         spacing: 6
 
-                        StatusChip { text: "资源包" }
+                        StatusChip {
+                            text: root.assetStatusLabel()
+                            colorBase: root.assetStatusColor()
+                        }
                         StatusChip { text: "语音" ; colorBase: root.accentGreen }
                         StatusChip { text: "人设" ; colorBase: root.accentRose }
 
@@ -287,7 +440,7 @@ Rectangle {
                             FieldBlock {
                                 title: "模型根目录"
                                 text: root.modelRoot
-                                placeholderText: "src/KafuuChino/香风智乃live2D"
+                                placeholderText: "/data/memochat/pet-assets/example-model"
                                 onTextChanged: root.modelRoot = text
                             }
 
@@ -343,6 +496,81 @@ Rectangle {
                     subtitle: "拆分模型、动作、表情和音色资源，方便后续替换运行时"
                     accentColor: root.accentGreen
 
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            StatusChip {
+                                text: root.assetStatusLabel()
+                                colorBase: root.assetStatusColor()
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: assetValidator.statusText
+                                color: root.textSecondaryColor
+                                font.pixelSize: 12
+                                wrapMode: Text.Wrap
+                                maximumLineCount: 2
+                                elide: Text.ElideRight
+                            }
+
+                            GlassButton {
+                                Layout.preferredWidth: 74
+                                Layout.preferredHeight: 30
+                                text: "校验"
+                                textPixelSize: 12
+                                cornerRadius: 8
+                                normalColor: Qt.rgba(0.32, 0.60, 0.44, 0.18)
+                                hoverColor: Qt.rgba(0.32, 0.60, 0.44, 0.28)
+                                pressedColor: Qt.rgba(0.32, 0.60, 0.44, 0.36)
+                                onClicked: root.runAssetValidation()
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+
+                            StatusChip { text: "动作 " + assetValidator.motionCount }
+                            StatusChip { text: "表情 " + assetValidator.expressionCount; colorBase: root.accentRose }
+                            StatusChip { text: "贴图 " + assetValidator.textureCount; colorBase: root.accentGreen }
+                            StatusChip { text: "语音 " + assetValidator.voiceCount }
+                            StatusChip { text: "文件 " + assetValidator.referencedFileCount; colorBase: root.accentGreen }
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: root.firstAssetIssue()
+                                visible: text.length > 0
+                                color: root.textMutedColor
+                                font.pixelSize: 11
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+
+                            StatusChip { text: root.optionalFileLabel("物理", assetValidator.physicsFile) }
+                            StatusChip { text: root.optionalFileLabel("姿势", assetValidator.poseFile); colorBase: root.accentRose }
+                            StatusChip { text: root.optionalFileLabel("标注", assetValidator.userDataFile); colorBase: root.accentGreen }
+                            StatusChip { text: root.optionalFileLabel("映射", assetValidator.vtubeMappingFile) }
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: "校验码 " + root.shortChecksum()
+                                color: root.textMutedColor
+                                font.pixelSize: 11
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 10
@@ -385,6 +613,32 @@ Rectangle {
                         Layout.fillWidth: true
                         spacing: 10
 
+                        FieldBlock {
+                            title: "待机动作"
+                            text: root.idleMotion
+                            placeholderText: "Idle"
+                            onTextChanged: root.idleMotion = text
+                        }
+
+                        FieldBlock {
+                            title: "说话动作"
+                            text: root.speakingMotion
+                            placeholderText: "TapBody / Talk"
+                            onTextChanged: root.speakingMotion = text
+                        }
+
+                        FieldBlock {
+                            title: "兜底表情"
+                            text: root.fallbackExpression
+                            placeholderText: "neutral / smile"
+                            onTextChanged: root.fallbackExpression = text
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
                         SliderBlock {
                             title: "语速"
                             value: root.voiceSpeed
@@ -412,14 +666,16 @@ Rectangle {
                             Layout.fillWidth: true
                             title: "语音驱动口型"
                             subtitle: "播放语音时同步 lip sync 值"
-                            checked: true
+                            checked: root.voiceLipSyncEnabled
+                            onCheckedChanged: root.voiceLipSyncEnabled = checked
                         }
 
                         ToggleRow {
                             Layout.fillWidth: true
                             title: "情绪音效"
                             subtitle: "按情绪选择问候、惊讶、确认等短音频"
-                            checked: true
+                            checked: root.emotionSoundEnabled
+                            onCheckedChanged: root.emotionSoundEnabled = checked
                         }
                     }
                 }
@@ -546,14 +802,16 @@ Rectangle {
                             Layout.fillWidth: true
                             title: "待机动作"
                             subtitle: "无对话时循环 idle motion"
-                            checked: true
+                            checked: root.idleMotionEnabled
+                            onCheckedChanged: root.idleMotionEnabled = checked
                         }
 
                         ToggleRow {
                             Layout.fillWidth: true
                             title: "视线跟随"
                             subtitle: "根据鼠标位置更新 gaze"
-                            checked: true
+                            checked: root.gazeFollowEnabled
+                            onCheckedChanged: root.gazeFollowEnabled = checked
                         }
                     }
 
@@ -565,14 +823,16 @@ Rectangle {
                             Layout.fillWidth: true
                             title: "角色记忆"
                             subtitle: "允许保存偏好、称呼和长期约束"
-                            checked: true
+                            checked: root.memoryEnabled
+                            onCheckedChanged: root.memoryEnabled = checked
                         }
 
                         ToggleRow {
                             Layout.fillWidth: true
                             title: "打断响应"
                             subtitle: "用户输入时停止当前语音并切换动作"
-                            checked: true
+                            checked: root.interruptEnabled
+                            onCheckedChanged: root.interruptEnabled = checked
                         }
                     }
 
@@ -584,14 +844,16 @@ Rectangle {
                             Layout.fillWidth: true
                             title: "摄像头权限"
                             subtitle: "默认关闭，后续需用户主动开启"
-                            checked: false
+                            checked: root.cameraEnabled
+                            onCheckedChanged: root.cameraEnabled = checked
                         }
 
                         ToggleRow {
                             Layout.fillWidth: true
                             title: "云端多模态"
                             subtitle: "默认仅发送文本，图像另行确认"
-                            checked: false
+                            checked: root.cloudVisionEnabled
+                            onCheckedChanged: root.cloudVisionEnabled = checked
                         }
                     }
                 }

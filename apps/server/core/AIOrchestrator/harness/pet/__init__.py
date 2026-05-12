@@ -1,21 +1,66 @@
 from __future__ import annotations
 
 from .contracts import (
+    PetAnimation,
+    PetAudio,
     PetControlEvent,
     PetGaze,
     PetLipSync,
     PetObservation,
+    PetPrivacy,
     PetSafety,
     PetSpeech,
+    PetText,
+    PetVision,
 )
-from .runtime import PetRuntime
+from .event_bus import PetEventBus
+from .policy import PetPolicy
+from .providers import (
+    DeterministicPetProvider,
+    PetProviderError,
+    PetProviderRouter,
+    PetProviderUnavailable,
+    ProviderChunk,
+)
+from .runtime import PetRuntime, PetRuntimeConfig
+from .session_store import PetSessionStore
+from .voice import (
+    DeterministicVoiceProvider,
+    VoiceInterruptRequest,
+    VoiceProviderError,
+    VoiceProviderRouter,
+    VoiceProviderUnavailable,
+    VoiceSynthesisRequest,
+    VoiceSynthesisResult,
+)
 
 __all__ = [
+    "DeterministicPetProvider",
+    "DeterministicVoiceProvider",
+    "PetAnimation",
+    "PetAudio",
     "PetControlEvent",
+    "PetEventBus",
     "PetGaze",
     "PetLipSync",
     "PetObservation",
+    "PetPolicy",
+    "PetPrivacy",
+    "PetProviderError",
+    "PetProviderRouter",
+    "PetProviderUnavailable",
     "PetRuntime",
+    "PetRuntimeConfig",
     "PetSafety",
+    "PetSessionStore",
     "PetSpeech",
+    "PetText",
+    "PetVision",
+    "ProviderChunk",
+    "VoiceProviderError",
+    "VoiceProviderRouter",
+    "VoiceProviderUnavailable",
+    "VoiceInterruptRequest",
+    "VoiceSynthesisRequest",
+    "VoiceSynthesisResult",
 ]

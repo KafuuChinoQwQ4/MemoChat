@@ -529,7 +529,7 @@ QVariantMap AppController::contactProfileByUid(int uid) const
         {"userId", friendInfo->_user_id},
         {"name", friendInfo->_name},
         {"nick", friendInfo->_nick},
-        {"icon", friendInfo->_icon.trimmed().isEmpty() ? QStringLiteral("qrc:/res/head_1.jpg") : friendInfo->_icon},
+        {"icon", normalizeIconPath(friendInfo->_icon)},
         {"desc", friendInfo->_desc},
         {"back", friendInfo->_back},
         {"sex", friendInfo->_sex}

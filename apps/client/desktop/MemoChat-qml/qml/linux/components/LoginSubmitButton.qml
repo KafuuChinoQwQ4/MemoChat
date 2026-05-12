@@ -29,10 +29,10 @@ Item {
         backdrop: root.backdrop
         blurRadius: root.hovering && root.ready ? 38 : 32
         cornerRadius: 10
-        fillColor: !root.ready ? Qt.rgba(0.60, 0.67, 0.74, 0.16)
-                               : root.pressed ? Qt.rgba(0.18, 0.48, 0.78, 0.42)
-                                              : root.hovering ? Qt.rgba(0.24, 0.58, 0.90, 0.36)
-                                                              : Qt.rgba(0.30, 0.64, 0.94, 0.32)
+        fillColor: !root.ready ? Qt.rgba(0.60, 0.67, 0.74, 0.26)
+                               : root.pressed ? Qt.rgba(0.18, 0.48, 0.78, 0.58)
+                                              : root.hovering ? Qt.rgba(0.24, 0.58, 0.90, 0.50)
+                                                              : Qt.rgba(0.30, 0.64, 0.94, 0.46)
         strokeColor: !root.ready ? Qt.rgba(1, 1, 1, 0.42)
                                  : Qt.rgba(1, 1, 1, 0.68)
         strokeWidth: 1

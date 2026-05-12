@@ -19,6 +19,7 @@ ApplicationWindow {
     property size chatWindowSize: Qt.size(900, 640)
     property var chatWindowRef: null
     property var petWindowRef: null
+    property bool memochatStartupCenter: true
 
     function centerWindow(win) {
         if (!win || win.visibility !== Window.Windowed) {
@@ -39,6 +40,16 @@ ApplicationWindow {
         win.y = Math.max(area.y, centeredY)
     }
 
+    function centerWindowWithRetry(win, attempts) {
+        if (!win || attempts <= 0) {
+            return
+        }
+        centerWindow(win)
+        retryCenterTimer.targetWindow = win
+        retryCenterTimer.remainingAttempts = attempts - 1
+        retryCenterTimer.restart()
+    }
+
     function showLoginWindow() {
         if (root.visibility === Window.Maximized) {
             root.showNormal()
@@ -46,12 +57,9 @@ ApplicationWindow {
         root.width = loginWindowSize.width
         root.height = loginWindowSize.height
         root.show()
-        centerWindow(root)
+        centerWindowWithRetry(root, 6)
         root.raise()
         root.requestActivate()
-        Qt.callLater(function() {
-            centerWindow(root)
-        })
     }
 
     function showChatWindow() {
@@ -66,12 +74,9 @@ ApplicationWindow {
         win.width = chatWindowSize.width
         win.height = chatWindowSize.height
         win.show()
-        centerWindow(win)
+        centerWindowWithRetry(win, 6)
         win.raise()
         win.requestActivate()
-        Qt.callLater(function() {
-            centerWindow(win)
-        })
         return true
     }
 
@@ -186,6 +191,19 @@ ApplicationWindow {
         }
     }
 
+    Timer {
+        id: retryCenterTimer
+        interval: 80
+        repeat: false
+        property var targetWindow: null
+        property int remainingAttempts: 0
+        onTriggered: {
+            if (targetWindow && targetWindow.visible && remainingAttempts > 0) {
+                centerWindowWithRetry(targetWindow, remainingAttempts)
+            }
+        }
+    }
+
     Rectangle {
         id: shell
         anchors.fill: parent
@@ -292,6 +310,7 @@ ApplicationWindow {
             maximumHeight: 100000
             width: root.chatWindowSize.width
             height: root.chatWindowSize.height
+            property bool memochatStartupCenter: true
             property bool isMaximized: visibility === Window.Maximized
             property int windowRadius: isMaximized ? 0 : 20
 

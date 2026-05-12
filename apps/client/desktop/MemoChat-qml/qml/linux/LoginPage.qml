@@ -251,8 +251,8 @@ Rectangle {
             backdrop: backdropLayer
             blurRadius: 28
             cornerRadius: 18
-            fillColor: Qt.rgba(0.985, 0.992, 1.0, 0.28)
-            strokeColor: Qt.rgba(0.86, 0.93, 1.0, 0.72)
+            fillColor: Qt.rgba(0.985, 0.992, 1.0, 0.46)
+            strokeColor: Qt.rgba(0.86, 0.93, 1.0, 0.78)
             strokeWidth: 1
             glowTopColor: Qt.rgba(1, 1, 1, 0.42)
             glowBottomColor: Qt.rgba(0.70, 0.80, 0.92, 0.10)
@@ -411,7 +411,7 @@ Rectangle {
                             radius: 14
                             color: credentialMouse.containsMouse
                                    ? Qt.rgba(0.35, 0.61, 0.90, 0.16)
-                                   : Qt.rgba(1, 1, 1, 0.24)
+                                   : Qt.rgba(1, 1, 1, 0.34)
                             border.width: 1
                             border.color: credentialMouse.containsMouse
                                           ? Qt.rgba(0.71, 0.86, 1.0, 0.50)
@@ -557,11 +557,11 @@ Rectangle {
                     backdrop: backdropLayer
                     blurRadius: 28
                     cornerRadius: 11
-                    fillColor: Qt.rgba(1, 1, 1, 0.07)
-                    strokeColor: Qt.rgba(1, 1, 1, 0.38)
+                    fillColor: Qt.rgba(1, 1, 1, 0.22)
+                    strokeColor: Qt.rgba(1, 1, 1, 0.50)
                     glowTopColor: Qt.rgba(1, 1, 1, 0.22)
                     glowBottomColor: Qt.rgba(1, 1, 1, 0.03)
-                    focusFillColor: Qt.rgba(1, 1, 1, 0.12)
+                    focusFillColor: Qt.rgba(1, 1, 1, 0.32)
                     focusStrokeColor: Qt.rgba(0.50, 0.76, 1.0, 0.78)
                     leftInset: 16
                     rightInset: 86
@@ -590,7 +590,7 @@ Rectangle {
                     color: credentialDropArea.pressed ? Qt.rgba(0.35, 0.61, 0.90, 0.24)
                                                       : credentialDropArea.containsMouse || credentialDropdownOpen
                                                         ? Qt.rgba(0.35, 0.61, 0.90, 0.16)
-                                                        : Qt.rgba(1, 1, 1, 0.04)
+                                                        : Qt.rgba(1, 1, 1, 0.16)
                     border.width: 1
                     border.color: credentialDropdownOpen
                                   ? Qt.rgba(0.65, 0.84, 1.0, 0.78)
@@ -681,11 +681,11 @@ Rectangle {
                 backdrop: backdropLayer
                 blurRadius: 28
                 cornerRadius: 11
-                fillColor: Qt.rgba(1, 1, 1, 0.07)
-                strokeColor: Qt.rgba(1, 1, 1, 0.38)
+                fillColor: Qt.rgba(1, 1, 1, 0.22)
+                strokeColor: Qt.rgba(1, 1, 1, 0.50)
                 glowTopColor: Qt.rgba(1, 1, 1, 0.22)
                 glowBottomColor: Qt.rgba(1, 1, 1, 0.03)
-                focusFillColor: Qt.rgba(1, 1, 1, 0.12)
+                focusFillColor: Qt.rgba(1, 1, 1, 0.32)
                 focusStrokeColor: Qt.rgba(0.50, 0.76, 1.0, 0.78)
                 leftInset: 16
                 rightInset: 44

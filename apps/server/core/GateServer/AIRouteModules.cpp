@@ -164,10 +164,6 @@ static void ProxyAiOrchestratorPetStream(std::shared_ptr<HttpConnection> connect
     const int timeout_sec = AiOrchestratorTimeoutSec();
     const std::string target = BuildPrefixProxyTarget(connection, "/ai/pet", "/pet");
 
-    if (connection) {
-        connection->StartSseStream();
-    }
-
     try {
         net::io_context ioc;
         tcp::resolver resolver(ioc);

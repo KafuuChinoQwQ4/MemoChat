@@ -22,13 +22,13 @@ Item {
 
     property int blurRadius: 16
     property real cornerRadius: 10
-    property color fillColor: Qt.rgba(1, 1, 1, 0.15)
-    property color strokeColor: Qt.rgba(1, 1, 1, 0.50)
+    property color fillColor: Qt.rgba(1, 1, 1, 0.26)
+    property color strokeColor: Qt.rgba(1, 1, 1, 0.58)
     property real strokeWidth: 1
-    property color glowTopColor: Qt.rgba(1, 1, 1, 0.24)
-    property color glowBottomColor: Qt.rgba(1, 1, 1, 0.06)
+    property color glowTopColor: Qt.rgba(1, 1, 1, 0.28)
+    property color glowBottomColor: Qt.rgba(1, 1, 1, 0.08)
     property bool focusAccentEnabled: true
-    property color focusFillColor: Qt.rgba(1, 1, 1, 0.20)
+    property color focusFillColor: Qt.rgba(1, 1, 1, 0.34)
     property color focusStrokeColor: Qt.rgba(0.47, 0.71, 0.93, 0.84)
     property real focusStrokeWidth: 1.2
     property int focusBlurRadius: 20

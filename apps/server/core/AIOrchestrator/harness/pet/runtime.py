@@ -1,22 +1,37 @@
 from __future__ import annotations
 
-import asyncio
-import time
 import uuid
-from collections import defaultdict
+from dataclasses import dataclass
 from typing import AsyncIterator
 
-from .contracts import PetControlEvent, PetGaze, PetLipSync, PetObservation, PetSafety, PetSession, PetSpeech
+from .contracts import PetControlEvent, PetObservation, PetSession
+from .event_bus import PetEventBus
+from .policy import PetPolicy
+from .providers import PetProviderError, PetProviderRouter
+from .session_store import PetSessionStore
+
+
+@dataclass(frozen=True)
+class PetRuntimeConfig:
+    enabled: bool = True
+    deterministic: bool = True
+    live2d_native_enabled: bool = False
+    live2d_sdk_root: str = ""
+    asset_root: str = ""
+    cloud_vision_enabled: bool = False
+    voice_clone_enabled: bool = False
 
 
 class PetRuntime:
-    """Deterministic pet runtime used until provider-backed voice/LLM adapters arrive."""
+    """Provider-neutral in-memory pet runtime facade used by the API router."""
 
-    def __init__(self) -> None:
-        self._sessions: dict[str, PetSession] = {}
+    def __init__(self, config: PetRuntimeConfig | object | None = None) -> None:
+        self._config = _runtime_config_from(config)
+        self._sessions = PetSessionStore()
         self._observations: dict[str, PetObservation] = {}
-        self._queues: dict[str, asyncio.Queue[PetControlEvent]] = defaultdict(asyncio.Queue)
-        self._seq: dict[str, int] = defaultdict(int)
+        self._events = PetEventBus()
+        self._policy = PetPolicy()
+        self._providers = PetProviderRouter(deterministic=self._config.deterministic)
 
     async def create_session(
         self,
@@ -25,26 +40,18 @@ class PetRuntime:
         persona: str = "memo-pet",
         provider: str = "scripted",
     ) -> PetSession:
-        now = _now_ms()
-        session = PetSession(
-            session_id=f"pet-{uuid.uuid4().hex}",
+        if not self._config.enabled:
+            raise RuntimeError("desktop pet is disabled by configuration")
+        if not self._config.deterministic:
+            raise RuntimeError("desktop pet deterministic runtime is disabled and no provider adapter is configured")
+
+        session = self._sessions.create(
             uid=uid,
-            profile_id=profile_id or "default",
-            persona=persona or "memo-pet",
-            provider=provider or "scripted",
-            created_at_ms=now,
-            updated_at_ms=now,
+            profile_id=profile_id,
+            persona=persona,
+            provider=provider,
         )
-        self._sessions[session.session_id] = session
-        await self._emit(
-            session.session_id,
-            emotion="curious",
-            intensity=0.48,
-            motion="appear",
-            expression="smile_soft",
-            speech_text="我在。Live2D 控制通道已连接。",
-            action_name="appear",
-        )
+        await self._emit(session.session_id, turn_id=_turn_id(), **self._policy.appear())
         return session
 
     async def submit_input(
@@ -54,191 +61,117 @@ class PetRuntime:
         model_type: str = "",
         model_name: str = "",
     ) -> list[PetControlEvent]:
-        session = self._require_session(session_id)
-        session.updated_at_ms = _now_ms()
+        session = self._sessions.touch(session_id, status="active")
         text = content.strip()
         if not text:
             raise ValueError("content cannot be empty")
 
-        style_hint = f"{model_type}:{model_name}".strip(":")
-        reply = f"收到：{text}"
-        if style_hint:
-            reply = f"{reply}（{style_hint} scripted）"
-
-        events = [
-            await self._emit(
-                session_id,
-                emotion="attentive",
-                intensity=0.52,
-                motion="listen",
-                expression="focus",
-                speech_text="",
-                lip_sync=0.0,
-                action_name="listen",
-            )
-        ]
-
-        chunks = _chunk_text(reply, 8)
-        for index, chunk in enumerate(chunks):
-            events.append(
-                await self._emit(
-                    session_id,
-                    emotion="cheerful" if index == len(chunks) - 1 else "speaking",
-                    intensity=0.66,
-                    motion="talk",
-                    expression="smile_soft",
-                    speech_text=chunk,
-                    lip_sync=min(1.0, 0.25 + 0.08 * len(chunk)),
-                    action_name="speak",
-                )
-            )
-
-        events.append(
-            await self._emit(
-                session_id,
-                emotion="neutral",
-                intensity=0.35,
-                motion="idle",
-                expression="neutral",
-                speech_text="",
-                lip_sync=0.0,
-                action_name="idle",
-            )
+        turn_id = _turn_id()
+        events = [await self._emit(session_id, turn_id=turn_id, **self._policy.input_started())]
+        prompt = self._policy.build_prompt(
+            session,
+            text,
+            model_type=model_type,
+            model_name=model_name,
+            observation=self._observations.get(session_id),
         )
+
+        try:
+            chunks = await self._providers.generate(session, prompt)
+        except PetProviderError as exc:
+            events.append(await self._emit(session_id, turn_id=turn_id, **self._policy.provider_error(exc)))
+            return events
+
+        for chunk in chunks:
+            events.append(await self._emit(session_id, turn_id=turn_id, **self._policy.provider_chunk(chunk)))
+
+        events.append(await self._emit(session_id, turn_id=turn_id, **self._policy.input_finished()))
         return events
 
     async def update_observation(self, observation: PetObservation) -> PetControlEvent:
-        session = self._require_session(observation.session_id)
-        session.updated_at_ms = _now_ms()
+        self._sessions.touch(observation.session_id, status="active")
         self._observations[observation.session_id] = observation
-
-        vision = observation.vision
-        audio = observation.audio
-        expression = str(vision.get("expression") or "neutral")
-        face_present = bool(vision.get("face_present", False))
-        rms = _clamp_float(audio.get("rms"), 0.0, 1.0, 0.0)
         return await self._emit(
             observation.session_id,
-            emotion=expression if face_present else "neutral",
-            intensity=max(0.25, rms),
-            motion="observe" if face_present else "idle",
-            expression=_expression_for_observation(expression, face_present),
-            lip_sync=rms,
-            speech_text="",
-            gaze=PetGaze(target="user_face" if face_present else "screen", x=0.5, y=0.5),
-            safety=PetSafety(
-                camera_used=bool(vision.get("enabled", False)),
-                vision_detail=str(vision.get("mode") or "landmarks_only"),
-            ),
-            action_name="observe",
+            turn_id=f"petturn-observe-{uuid.uuid4().hex}",
+            **self._policy.observation(observation),
         )
 
     async def interrupt(self, session_id: str) -> PetControlEvent:
-        session = self._require_session(session_id)
-        session.updated_at_ms = _now_ms()
+        session = self._sessions.touch(session_id, status="interrupted")
+        voice_payload: dict = {}
+        try:
+            voice_result = await self._providers.interrupt_voice(session)
+            voice_payload = voice_result.to_dict()
+        except PetProviderError as exc:
+            voice_payload = {
+                "state": "error",
+                "provider": exc.provider,
+                "recoverable": exc.recoverable,
+                "message": str(exc),
+                "retention": "none",
+            }
+
+        self._events.clear_pending(session_id)
+        event_args = self._policy.interrupted()
+        event_args["audio_state"] = str(voice_payload.get("state") or "interrupted")
+        event_args["audio_sample_rate"] = int(voice_payload.get("sample_rate") or 0)
+        event_args["audio_duration_ms"] = int(voice_payload.get("duration_ms") or 0)
+        event_args["audio_chunk_ref"] = voice_payload.get("chunk_ref")
+        event_args["audio_url"] = voice_payload.get("url")
+        event_args["audio_phoneme"] = voice_payload.get("phoneme")
+        event_args["audio_viseme"] = voice_payload.get("viseme")
+        event_args["privacy_retention"] = str(voice_payload.get("retention") or "none")
+        event_args["debug"] = {
+            "voice": {
+                "provider": voice_payload.get("provider") or "",
+                "voice": voice_payload.get("voice") or "",
+                "state": voice_payload.get("state") or "interrupted",
+                "duration_ms": voice_payload.get("duration_ms") or 0,
+                "retention": voice_payload.get("retention") or "none",
+                "metadata": voice_payload.get("metadata") or {},
+            }
+        }
         return await self._emit(
             session_id,
-            emotion="neutral",
-            intensity=0.2,
-            motion="stop",
-            expression="neutral",
-            lip_sync=0.0,
-            speech_text="",
-            action_name="interrupt",
+            turn_id=f"petturn-interrupt-{uuid.uuid4().hex}",
+            **event_args,
         )
 
     async def stream(self, session_id: str, heartbeat_sec: float = 15.0) -> AsyncIterator[PetControlEvent]:
-        self._require_session(session_id)
-        queue = self._queues[session_id]
-        while True:
-            try:
-                yield await asyncio.wait_for(queue.get(), timeout=heartbeat_sec)
-            except asyncio.TimeoutError:
-                yield await self._make_event(
-                    session_id,
-                    emotion="neutral",
-                    intensity=0.28,
-                    motion="idle",
-                    expression="neutral",
-                    lip_sync=0.0,
-                    speech_text="",
-                    action_name="heartbeat",
-                )
+        self._sessions.require(session_id)
+        async for event in self._events.stream(session_id, heartbeat_sec=heartbeat_sec):
+            yield event
 
     def get_session(self, session_id: str) -> PetSession | None:
         return self._sessions.get(session_id)
 
     def list_sessions(self, uid: int = 0) -> list[PetSession]:
-        sessions = list(self._sessions.values())
-        if uid > 0:
-            sessions = [session for session in sessions if session.uid == uid]
-        return sorted(sessions, key=lambda item: item.updated_at_ms, reverse=True)
+        return self._sessions.list(uid)
+
+    @property
+    def config(self) -> PetRuntimeConfig:
+        return self._config
 
     async def _emit(self, session_id: str, **kwargs) -> PetControlEvent:
-        event = await self._make_event(session_id, **kwargs)
-        await self._queues[session_id].put(event)
-        return event
-
-    async def _make_event(
-        self,
-        session_id: str,
-        emotion: str,
-        intensity: float,
-        motion: str,
-        expression: str,
-        lip_sync: float = 0.0,
-        speech_text: str = "",
-        gaze: PetGaze | None = None,
-        safety: PetSafety | None = None,
-        action_name: str = "",
-    ) -> PetControlEvent:
-        self._seq[session_id] += 1
-        return PetControlEvent(
-            session_id=session_id,
-            seq=self._seq[session_id],
-            timestamp_ms=_now_ms(),
-            emotion=emotion,
-            intensity=_clamp_float(intensity, 0.0, 1.0, 0.0),
-            motion=motion,
-            expression=expression,
-            gaze=gaze or PetGaze(),
-            lip_sync=PetLipSync(value=_clamp_float(lip_sync, 0.0, 1.0, 0.0)),
-            speech=PetSpeech(text_delta=speech_text),
-            action={"name": action_name, "args": {}},
-            safety=safety or PetSafety(),
-        )
-
-    def _require_session(self, session_id: str) -> PetSession:
-        session = self._sessions.get(session_id)
-        if session is None:
-            raise KeyError(f"pet session not found: {session_id}")
-        return session
+        return await self._events.publish(session_id, **kwargs)
 
 
-def _now_ms() -> int:
-    return int(time.time() * 1000)
+def _turn_id() -> str:
+    return f"petturn-{uuid.uuid4().hex}"
 
 
-def _chunk_text(text: str, size: int) -> list[str]:
-    return [text[index:index + size] for index in range(0, len(text), size)] or [""]
-
-
-def _clamp_float(value, minimum: float, maximum: float, fallback: float) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return fallback
-    return max(minimum, min(maximum, number))
-
-
-def _expression_for_observation(expression: str, face_present: bool) -> str:
-    if not face_present:
-        return "neutral"
-    normalized = expression.strip().lower()
-    if normalized in {"smile", "happy", "cheerful"}:
-        return "smile_soft"
-    if normalized in {"surprised", "surprise"}:
-        return "surprised"
-    if normalized in {"sad", "tired"}:
-        return "concerned"
-    return "focus"
+def _runtime_config_from(config: PetRuntimeConfig | object | None) -> PetRuntimeConfig:
+    if config is None:
+        return PetRuntimeConfig()
+    if isinstance(config, PetRuntimeConfig):
+        return config
+    return PetRuntimeConfig(
+        enabled=bool(getattr(config, "enabled", True)),
+        deterministic=bool(getattr(config, "deterministic", True)),
+        live2d_native_enabled=bool(getattr(config, "live2d_native_enabled", False)),
+        live2d_sdk_root=str(getattr(config, "live2d_sdk_root", "") or ""),
+        asset_root=str(getattr(config, "asset_root", "") or ""),
+        cloud_vision_enabled=bool(getattr(config, "cloud_vision_enabled", False)),
+        voice_clone_enabled=bool(getattr(config, "voice_clone_enabled", False)),
+    )

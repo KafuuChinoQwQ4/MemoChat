@@ -21,6 +21,10 @@ class PetController : public QObject
     Q_PROPERTY(bool busy READ busy NOTIFY stateChanged)
     Q_PROPERTY(QString error READ error NOTIFY stateChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY stateChanged)
+    Q_PROPERTY(int schemaVersion READ schemaVersion NOTIFY petStateChanged)
+    Q_PROPERTY(QString eventId READ eventId NOTIFY petStateChanged)
+    Q_PROPERTY(QString turnId READ turnId NOTIFY petStateChanged)
+    Q_PROPERTY(QString phase READ phase NOTIFY petStateChanged)
     Q_PROPERTY(QString speechText READ speechText NOTIFY petStateChanged)
     Q_PROPERTY(QString emotion READ emotion NOTIFY petStateChanged)
     Q_PROPERTY(QString expression READ expression NOTIFY petStateChanged)
@@ -40,6 +44,10 @@ public:
     bool busy() const { return _busy; }
     QString error() const { return _error; }
     QString statusText() const { return _status_text; }
+    int schemaVersion() const { return _model.schemaVersion(); }
+    QString eventId() const { return _model.eventId(); }
+    QString turnId() const { return _model.turnId(); }
+    QString phase() const { return _model.phase(); }
     QString speechText() const { return _model.speechText(); }
     QString emotion() const { return _model.emotion(); }
     QString expression() const { return _model.expression(); }

@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.16)
 
 project(MemoChatQml LANGUAGES CXX)
 
+get_filename_component(MEMOCHAT_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
+list(APPEND CMAKE_MODULE_PATH "${MEMOCHAT_REPO_ROOT}/cmake")
+
 # Restore Windows SDK library paths that the vcpkg toolchain stripped
 # Environment variables: VC_TOOLS_LIB, WINSDK_LIB_UM, WINSDK_LIB_UCRT
 if(WIN32 AND MSVC)
@@ -20,6 +23,28 @@ endif()
 set(CMAKE_CXX_STANDARD ${MEMOCHAT_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+option(MEMOCHAT_ENABLE_LIVE2D_NATIVE "Enable opt-in Live2D Cubism Native integration for MemoChatQml" OFF)
+set(MEMOCHAT_LIVE2D_SDK_ROOT "" CACHE PATH "Local Live2D Cubism SDK root used when MEMOCHAT_ENABLE_LIVE2D_NATIVE is ON")
+file(TO_CMAKE_PATH "${MEMOCHAT_LIVE2D_SDK_ROOT}" MEMOCHAT_LIVE2D_SDK_ROOT_NORMALIZED)
+set(MEMOCHAT_LIVE2D_NATIVE_AVAILABLE OFF)
+
+if(MEMOCHAT_ENABLE_LIVE2D_NATIVE)
+    if(NOT MEMOCHAT_LIVE2D_SDK_ROOT_NORMALIZED)
+        message(FATAL_ERROR
+            "MEMOCHAT_ENABLE_LIVE2D_NATIVE is ON, but MEMOCHAT_LIVE2D_SDK_ROOT is empty. "
+            "Install/extract the Live2D Cubism SDK for Native outside the repo, for example "
+            "/data/third_party/live2d/CubismSdkForNative-current, then configure with "
+            "-DMEMOCHAT_LIVE2D_SDK_ROOT=/path/to/CubismSdkForNative.")
+    endif()
+    set(Live2DCubism_ROOT "${MEMOCHAT_LIVE2D_SDK_ROOT_NORMALIZED}" CACHE PATH
+        "Local Live2D Cubism SDK for Native root" FORCE)
+    find_package(Live2DCubism REQUIRED)
+    set(MEMOCHAT_LIVE2D_NATIVE_AVAILABLE ON)
+    message(STATUS "Live2D Cubism Native enabled from ${Live2DCubism_ROOT_DIR}")
+else()
+    message(STATUS "Live2D Cubism Native disabled; using MemoChat placeholder pet renderer")
+endif()
 
 if(MSVC)
     add_compile_options(/wd4819 /utf-8)
@@ -73,8 +98,10 @@ set(SOURCES
     MomentsModel.cpp
     AgentController.cpp
     AgentMessageModel.cpp
+    PetAssetSettings.cpp
     PetController.cpp
     PetModel.cpp
+    Live2DAsset.cpp
     Live2DRenderItem.cpp
     R18Controller.cpp
     R18ListModel.cpp
@@ -112,8 +139,10 @@ set(HEADERS
     MomentsModel.h
     AgentController.h
     AgentMessageModel.h
+    PetAssetSettings.h
     PetController.h
     PetModel.h
+    Live2DAsset.h
     Live2DRenderItem.h
     R18Controller.h
     R18ListModel.h
@@ -141,6 +170,19 @@ target_include_directories(MemoChatQml PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${SHARED_CLIENT_DIR}
 )
+
+target_compile_definitions(MemoChatQml PRIVATE
+    MEMOCHAT_ENABLE_LIVE2D_NATIVE=$<BOOL:${MEMOCHAT_ENABLE_LIVE2D_NATIVE}>
+    MEMOCHAT_LIVE2D_SDK_ROOT="${MEMOCHAT_LIVE2D_SDK_ROOT_NORMALIZED}"
+    MEMOCHAT_LIVE2D_CUBISM_FOUND=$<BOOL:${MEMOCHAT_LIVE2D_NATIVE_AVAILABLE}>
+    MEMOCHAT_LIVE2D_CORE_INCLUDE_DIR="${Live2DCubism_CORE_INCLUDE_DIR}"
+    MEMOCHAT_LIVE2D_FRAMEWORK_INCLUDE_DIR="${Live2DCubism_FRAMEWORK_INCLUDE_DIR}"
+)
+
+if(MEMOCHAT_ENABLE_LIVE2D_NATIVE AND Live2DCubism_FOUND)
+    target_include_directories(MemoChatQml PRIVATE ${Live2DCubism_INCLUDE_DIRS})
+    target_link_libraries(MemoChatQml PRIVATE Live2DCubism::Native)
+endif()
 
 target_link_libraries(MemoChatQml PRIVATE
     MemoChatCore

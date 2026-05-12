@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "parameters": {
+    "ParamAngleX": "gaze.x",
+    "ParamMouthOpenY": "lip_sync.value"
+  }
+}
