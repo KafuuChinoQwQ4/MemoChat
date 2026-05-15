@@ -33,7 +33,17 @@ class PetFeatureFlagTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(settings.pet.live2d_sdk_root, "")
         self.assertEqual(settings.pet.asset_root, "")
         self.assertFalse(settings.pet.cloud_vision_enabled)
+        self.assertFalse(settings.pet.local_vision_enabled)
+        self.assertEqual(settings.pet.vision_camera_index, 0)
+        self.assertEqual(settings.pet.vision_analyzer, "opencv")
+        self.assertFalse(settings.pet.vision_retain_raw_frames)
         self.assertFalse(settings.pet.voice_clone_enabled)
+        self.assertEqual(settings.pet.voice_provider, "scripted")
+        self.assertEqual(settings.pet.voice_sovits_base_url, "")
+        self.assertEqual(settings.pet.voice_sovits_reference_audio, "")
+        self.assertEqual(settings.pet.voice_sovits_output_dir, "/app/.data/pet-voice-cache")
+        self.assertTrue(settings.pet.voice_training_enabled)
+        self.assertEqual(settings.pet.voice_training_artifact_root, "/app/.data/pet-voice-training")
 
     def test_global_pet_env_aliases_merge_into_pet_config(self):
         with patched_env(
@@ -43,7 +53,17 @@ class PetFeatureFlagTests(unittest.IsolatedAsyncioTestCase):
             MEMOCHAT_LIVE2D_SDK_ROOT="/data/third_party/live2d/CubismSdkForNative-current",
             MEMOCHAT_PET_ASSET_ROOT="/data/memochat/pet-assets",
             MEMOCHAT_PET_CLOUD_VISION="true",
+            MEMOCHAT_PET_LOCAL_VISION="true",
+            MEMOCHAT_PET_VISION_CAMERA_INDEX="2",
+            MEMOCHAT_PET_VISION_ANALYZER="opencv",
+            MEMOCHAT_PET_VISION_RETAIN_RAW_FRAMES="true",
             MEMOCHAT_PET_VOICE_CLONE="true",
+            MEMOCHAT_PET_VOICE_PROVIDER="gpt-sovits",
+            MEMOCHAT_PET_SOVITS_BASE_URL="http://127.0.0.1:9880",
+            MEMOCHAT_PET_SOVITS_REFERENCE_AUDIO="/data/memochat/voice/ref.wav",
+            MEMOCHAT_PET_SOVITS_OUTPUT_DIR="/data/docker-data/memochat/pet-voice-cache",
+            MEMOCHAT_PET_VOICE_TRAINING="false",
+            MEMOCHAT_PET_VOICE_TRAINING_ARTIFACT_ROOT="/data/docker-data/memochat/pet-voice-training",
         ):
             settings = Settings.from_yaml("config.yaml")
 
@@ -53,7 +73,17 @@ class PetFeatureFlagTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(settings.pet.live2d_sdk_root, "/data/third_party/live2d/CubismSdkForNative-current")
         self.assertEqual(settings.pet.asset_root, "/data/memochat/pet-assets")
         self.assertTrue(settings.pet.cloud_vision_enabled)
+        self.assertTrue(settings.pet.local_vision_enabled)
+        self.assertEqual(settings.pet.vision_camera_index, 2)
+        self.assertEqual(settings.pet.vision_analyzer, "opencv")
+        self.assertTrue(settings.pet.vision_retain_raw_frames)
         self.assertTrue(settings.pet.voice_clone_enabled)
+        self.assertEqual(settings.pet.voice_provider, "gpt-sovits")
+        self.assertEqual(settings.pet.voice_sovits_base_url, "http://127.0.0.1:9880")
+        self.assertEqual(settings.pet.voice_sovits_reference_audio, "/data/memochat/voice/ref.wav")
+        self.assertEqual(settings.pet.voice_sovits_output_dir, "/data/docker-data/memochat/pet-voice-cache")
+        self.assertFalse(settings.pet.voice_training_enabled)
+        self.assertEqual(settings.pet.voice_training_artifact_root, "/data/docker-data/memochat/pet-voice-training")
 
     async def test_runtime_rejects_new_sessions_when_pet_is_disabled(self):
         runtime = PetRuntime(PetRuntimeConfig(enabled=False))

@@ -6,11 +6,11 @@ from typing import Any, AsyncIterator
 
 import structlog
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from config import settings
-from harness.pet import PetObservation, PetRuntime
+from harness.pet import PetObservation, PetRuntime, VisionAnalyzerError, VisionCaptureRequest, VoiceTrainingRequest
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -40,6 +40,62 @@ class PetObservationReq(BaseModel):
     privacy: dict[str, Any] = Field(default_factory=dict)
 
 
+class PetVisionCaptureReq(BaseModel):
+    camera_index: int | None = None
+    analyzer: str = "opencv"
+    include_frame: bool = False
+    frame_base64: str = ""
+    frame_mime: str = ""
+    frame_width: int = 0
+    frame_height: int = 0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class PetVoiceTrainingReq(BaseModel):
+    uid: int = 0
+    profile_id: str = "default"
+    voice_name: str = "Kafuuchino-voice"
+    language: str = "zh-CN"
+    reference_audio_path: str
+    reference_audio_directory: str = ""
+    reference_audio_file: str = ""
+    consent_confirmed: bool = False
+    consent_scope: str = "local_default_reference"
+    source: str = "src-default"
+    provider: str = "gpt-sovits"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.get("/diagnostics")
+async def diagnostics(probe_voice_endpoint: bool = False, open_camera: bool = False):
+    return {
+        "code": 0,
+        "message": "ok",
+        "diagnostics": await _runtime.diagnostics(
+            probe_voice_endpoint=probe_voice_endpoint,
+            open_camera=open_camera,
+        ),
+    }
+
+
+@router.get("/diagnostics/voice")
+async def voice_diagnostics(probe_endpoint: bool = False):
+    return {
+        "code": 0,
+        "message": "ok",
+        "diagnostics": await _runtime.voice_diagnostics(probe_endpoint=probe_endpoint),
+    }
+
+
+@router.get("/diagnostics/vision")
+async def vision_diagnostics(camera_index: int | None = None, open_camera: bool = False):
+    return {
+        "code": 0,
+        "message": "ok",
+        "diagnostics": _runtime.vision_diagnostics(camera_index=camera_index, open_camera=open_camera),
+    }
+
+
 @router.post("/sessions")
 async def create_session(req: PetSessionCreateReq):
     if not settings.pet.enabled:
@@ -65,6 +121,44 @@ async def list_sessions(uid: int = 0):
     }
 
 
+@router.post("/voice-training/jobs")
+async def create_voice_training_job(req: PetVoiceTrainingReq):
+    try:
+        job = _runtime.create_voice_training_job(VoiceTrainingRequest.from_dict(req.model_dump()))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"code": 0, "message": "ok", "job": job.to_dict()}
+
+
+@router.get("/voice-training/jobs")
+async def list_voice_training_jobs(uid: int = 0):
+    return {
+        "code": 0,
+        "message": "ok",
+        "jobs": [job.to_dict() for job in _runtime.list_voice_training_jobs(uid)],
+    }
+
+
+@router.get("/voice-training/jobs/{job_id}")
+async def get_voice_training_job(job_id: str):
+    try:
+        job = _runtime.get_voice_training_job(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"code": 0, "message": "ok", "job": job.to_dict()}
+
+
+@router.get("/audio/{file_name}")
+async def get_voice_audio(file_name: str):
+    try:
+        path = _runtime.audio_file_path(file_name)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(path)
+
+
 @router.post("/sessions/{session_id}/input")
 async def submit_input(session_id: str, req: PetInputReq):
     if not req.content.strip():
@@ -75,6 +169,7 @@ async def submit_input(session_id: str, req: PetInputReq):
             content=req.content,
             model_type=req.model_type,
             model_name=req.model_name,
+            metadata=req.metadata,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -90,6 +185,24 @@ async def submit_observation(session_id: str, req: PetObservationReq):
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"code": 0, "message": "ok", "event": event.to_dict()}
+
+
+@router.post("/sessions/{session_id}/capture")
+async def capture_observation(session_id: str, req: PetVisionCaptureReq):
+    payload = req.model_dump()
+    payload["session_id"] = session_id
+    try:
+        observation, event = await _runtime.capture_observation(VisionCaptureRequest.from_dict(payload))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except VisionAnalyzerError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {
+        "code": 0,
+        "message": "ok",
+        "observation": observation.to_dict(),
+        "event": event.to_dict(),
+    }
 
 
 @router.post("/sessions/{session_id}/interrupt")

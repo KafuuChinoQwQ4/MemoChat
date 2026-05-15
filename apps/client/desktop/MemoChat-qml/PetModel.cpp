@@ -75,6 +75,29 @@ bool updateString(QString &target, const QString &value)
     return true;
 }
 
+bool isChineseLanguage(const QString &language)
+{
+    const QString normalized = language.trimmed().toLower();
+    return normalized.isEmpty()
+           || normalized == QStringLiteral("zh")
+           || normalized.startsWith(QStringLiteral("zh-"))
+           || normalized.contains(QStringLiteral("chinese"))
+           || normalized.contains(QStringLiteral("中文"));
+}
+
+QString displayTextForSpeech(const QString &speechText, const QString &translation, const QString &language)
+{
+    const QString original = speechText.trimmed();
+    const QString translated = translation.trimmed();
+    if (original.isEmpty()) {
+        return translated;
+    }
+    if (!isChineseLanguage(language) && !translated.isEmpty() && translated != original) {
+        return original + QStringLiteral("\n") + translated;
+    }
+    return original;
+}
+
 }
 
 PetModel::PetModel(QObject *parent)
@@ -115,6 +138,8 @@ void PetModel::applyControlEvent(const QJsonObject &event)
     if (updateString(_phase, next_phase)) {
         changed = true;
     }
+    const bool reset_speech_for_waiting_phase =
+        next_phase == QStringLiteral("listening") || next_phase == QStringLiteral("thinking");
 
     const QString next_emotion = jsonString(event, QStringLiteral("emotion"), _emotion);
     if (updateString(_emotion, next_emotion)) {
@@ -163,6 +188,17 @@ void PetModel::applyControlEvent(const QJsonObject &event)
         _lip_sync_value = next_lip;
         changed = true;
     }
+    const QString next_audio_url = jsonString(audio, QStringLiteral("url"), QString());
+    const QString next_audio_state = jsonString(audio, QStringLiteral("state"), _audio_state);
+    if (reset_speech_for_waiting_phase && !_audio_url.isEmpty()) {
+        _audio_url.clear();
+        changed = true;
+    } else if (!next_audio_url.isEmpty() && updateString(_audio_url, next_audio_url)) {
+        changed = true;
+    }
+    if (updateString(_audio_state, next_audio_state)) {
+        changed = true;
+    }
 
     const QJsonObject speech = event.value(QStringLiteral("speech")).toObject();
     const QJsonObject text = event.value(QStringLiteral("text")).toObject();
@@ -170,24 +206,58 @@ void PetModel::applyControlEvent(const QJsonObject &event)
         text, QStringLiteral("delta"), jsonString(speech, QStringLiteral("text_delta"), QString()));
     const bool text_final = jsonBool(text, QStringLiteral("final"), false);
     const QString display_text = jsonString(text, QStringLiteral("display"), QString());
-    const bool has_text_update = !delta.isEmpty() || text_final || !display_text.isEmpty();
+    const QString text_language = jsonString(text, QStringLiteral("language"), _speech_language);
+    const QString translated_text = jsonString(
+        text,
+        QStringLiteral("translation"),
+        jsonString(speech,
+                   QStringLiteral("translation"),
+                   jsonString(text, QStringLiteral("display_translation"), QString())));
+    const bool has_text_update = !delta.isEmpty()
+                                 || text_final
+                                 || !display_text.isEmpty()
+                                 || !translated_text.isEmpty();
 
     if (has_text_update && !next_turn_id.isEmpty() && _speech_turn_id != next_turn_id) {
         _speech_turn_id = next_turn_id;
-        if (!_speech_text.isEmpty()) {
+        if (!_speech_text.isEmpty() || !_speech_translation.isEmpty() || !_speech_display_text.isEmpty() || _speech_final) {
             _speech_text.clear();
+            _speech_translation.clear();
+            _speech_display_text.clear();
+            _speech_final = false;
             changed = true;
         }
+    }
+    if (reset_speech_for_waiting_phase
+        && (!_speech_text.isEmpty() || !_speech_translation.isEmpty() || !_speech_display_text.isEmpty() || _speech_final)) {
+        _speech_text.clear();
+        _speech_translation.clear();
+        _speech_display_text.clear();
+        _speech_final = false;
+        changed = true;
+    }
+    if (updateString(_speech_language, text_language)) {
+        changed = true;
+    }
+    if (has_text_update && _speech_final != text_final) {
+        _speech_final = text_final;
+        changed = true;
     }
     if (!delta.isEmpty()) {
         _speech_text += delta;
         changed = true;
     }
-    if (text_final && !display_text.isEmpty() && _speech_text != display_text) {
-        _speech_text = display_text;
+    if (text_final) {
+        if (!display_text.isEmpty() && _speech_text != display_text) {
+            _speech_text = display_text;
+            changed = true;
+        }
+    }
+    if (text_final && !translated_text.isEmpty() && updateString(_speech_translation, translated_text)) {
         changed = true;
-    } else if (delta.isEmpty() && !display_text.isEmpty() && _speech_text != display_text) {
-        _speech_text = display_text;
+    }
+    const QString next_display_text = displayTextForSpeech(_speech_text, _speech_translation, _speech_language);
+    if (updateString(_speech_display_text, next_display_text)) {
         changed = true;
     }
 
@@ -196,11 +266,18 @@ void PetModel::applyControlEvent(const QJsonObject &event)
 
 void PetModel::clearSpeech()
 {
-    if (_speech_text.isEmpty()) {
+    if (_speech_text.isEmpty() && _speech_translation.isEmpty() && _speech_display_text.isEmpty()
+        && !_speech_final && _audio_url.isEmpty() && _audio_state == QStringLiteral("idle")) {
         return;
     }
     _speech_text.clear();
+    _speech_translation.clear();
+    _speech_display_text.clear();
+    _speech_language = QStringLiteral("zh-CN");
     _speech_turn_id.clear();
+    _speech_final = false;
+    _audio_url.clear();
+    _audio_state = QStringLiteral("idle");
     emit changed();
 }
 

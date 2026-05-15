@@ -1,36 +1,36 @@
-# MemoChat Phase Prompts
+# MemoChat 阶段提示词
 
-Use these templates for delegated agents or as same-session checklists. Replace `<TASK>`, `<PROJECT>`, `<LETTER>`, and `<REPO_ROOT>`.
+这些模板用于委派代理，或作为同一会话内的检查清单。替换 `<TASK>`、`<PROJECT>`、`<LETTER>` 和 `<REPO_ROOT>`。
 
-## Shared Rules
+## 共享规则
 
-- Work in `/root/code/MemoChat-Qml-Drogon-linux`.
-- Infrastructure dependencies must run in Docker. Use Docker or MCP tools for Redis, Postgres, MongoDB, Neo4j, Qdrant, Redpanda, RabbitMQ, MinIO, Prometheus, Loki, Tempo, Grafana, InfluxDB, and cAdvisor.
-- Do not change stable Docker ports unless the task explicitly asks for it.
-- Prefer `/data` for Linux downloads, caches, large generated files, vcpkg artifacts, and Qt artifacts.
-- Use `/data/docker-data/memochat` for Arch Docker bind data. Use `D:` only for Docker Desktop migration backups or explicit legacy Windows work.
-- Do not revert user changes.
-- Keep `.ai/` artifacts out of commits unless explicitly requested.
-- Use bash commands in Linux examples. Use PowerShell only for explicit Windows-side smoke probes or legacy scripts.
+- 在 `/root/code/MemoChat-Qml-Drogon-linux` 中工作。
+- 基础设施依赖必须运行在 Docker 中。Redis、Postgres、MongoDB、Neo4j、Qdrant、Redpanda、RabbitMQ、MinIO、Prometheus、Loki、Tempo、Grafana、InfluxDB 和 cAdvisor 都通过 Docker 或 MCP 工具检查。
+- 除非任务明确要求，否则不要修改稳定的 Docker 端口。
+- Linux 下载、缓存、大型生成文件、vcpkg 产物和 Qt 产物优先使用 `/data`。
+- Arch Docker 绑定数据使用 `/data/docker-data/memochat`。`D:` 仅用于 Docker Desktop 迁移备份或明确的旧版 Windows 工作。
+- 不要回退用户改动。
+- 除非明确要求，否则不要把 `.ai/` 产物纳入提交。
+- Linux 示例使用 bash 命令。只有明确的 Windows 侧 smoke 探针或旧版脚本才使用 PowerShell。
 
-## Standard Progress Contract
+## 标准进度契约
 
-For delegated phases, create `.ai/<PROJECT>/<LETTER>/logs/phase-<name>.progress.md` early:
+对于委派阶段，尽早创建 `.ai/<PROJECT>/<LETTER>/logs/phase-<name>.progress.md`：
 
 ```text
-Heartbeat: <N>
-Current step:
-Files read/edited:
-Findings:
-Next checkpoint:
-Blocker: none
+心跳: <N>
+当前步骤:
+已读/已改文件:
+发现:
+下一检查点:
+阻塞: 无
 ```
 
-Keep it small. Update it at natural milestones.
+保持简短。在自然里程碑处更新。
 
-## Standard Reply
+## 标准回复
 
-Reply in 8 lines or fewer:
+回复不超过 8 行：
 
 ```text
 STATUS: DONE|BLOCKED|APPROVED|NEEDS_CHANGES
@@ -39,175 +39,175 @@ TOUCHED: <repo paths or none>
 BLOCKER: <none or one short line>
 ```
 
-## Phase 1: Context
+## 阶段 1：上下文
 
 ```text
-You are gathering context for MemoChat-Qml-Drogon.
+你正在为 MemoChat-Qml-Drogon 收集上下文。
 
 TASK:
 <TASK>
 
-Write:
+写入：
 - .ai/<PROJECT>/about.md
 - .ai/<PROJECT>/<LETTER>/context.md
 
-Steps:
-1. Read the repository structure and relevant README/config files.
-2. Inspect source files related to the task.
-3. Inspect Docker compose/config/migrations/scripts when runtime state is relevant.
-4. Query Docker or MCP only when it helps verify real database, queue, object-store, or observability state.
-5. Identify similar implementations and existing helper APIs.
+步骤：
+1. 阅读仓库结构和相关 README/config 文件。
+2. 检查与任务相关的源文件。
+3. 当运行时状态相关时，检查 Docker compose/config/migrations/scripts。
+4. 只有在有助于验证真实数据库、队列、对象存储或观测状态时，才查询 Docker 或 MCP。
+5. 识别相似实现和现有 helper API。
 
-context.md must include:
-- task restatement
-- relevant files and why they matter
-- functions/classes/config keys/schemas involved
-- Docker containers and fixed ports involved
-- MCP/Docker checks performed
-- build/test/runtime commands recommended
-- risks and unknowns
+context.md 必须包含：
+- 任务重述
+- 相关文件以及它们为什么重要
+- 涉及的函数/类/config key/schema
+- 涉及的 Docker 容器和固定端口
+- 执行过的 MCP/Docker 检查
+- 推荐的构建/测试/运行时命令
+- 风险和未知项
 
-about.md must describe the project as a completed design, not as a TODO list.
+about.md 必须把项目描述成一个已完成的设计，而不是 TODO 列表。
 ```
 
-## Phase 2: Plan
+## 阶段 2：计划
 
 ```text
-You are planning a MemoChat implementation.
+你正在规划一个 MemoChat 实现任务。
 
-Read:
+读取：
 - .ai/<PROJECT>/<LETTER>/context.md
-- source/config files referenced by context.md
+- context.md 引用的源文件/config 文件
 
-Write .ai/<PROJECT>/<LETTER>/plan.md with:
+写入 .ai/<PROJECT>/<LETTER>/plan.md，包含：
 
-## Task
-## Approach
-## Files to Modify
-## Files to Create
-## Docker / Data Impact
-## Implementation Phases
-## Verification
-## Status
+## 任务
+## 方法
+## 要修改的文件
+## 要创建的文件
+## Docker / 数据影响
+## 实现阶段
+## 验证
+## 状态
 
-Make every phase concrete: exact files, functions, configs, scripts, migrations, and verification commands.
-Choose the narrowest build/test target that proves the change.
+让每个阶段都具体：准确文件、函数、配置、脚本、迁移和验证命令。
+选择能证明变更的最窄构建/测试目标。
 ```
 
-## Phase 3: Assess Plan
+## 阶段 3：评估计划
 
 ```text
-You are assessing a MemoChat implementation plan.
+你正在评估一个 MemoChat 实现计划。
 
-Read:
-- .ai/<PROJECT>/<LETTER>/context.md
-- .ai/<PROJECT>/<LETTER>/plan.md
-- referenced source/config files
-
-Check:
-1. paths and symbols exist
-2. module boundaries are right
-3. client/server contracts are synchronized
-4. database migrations/init scripts are covered
-5. Docker ports and container assumptions are correct
-6. verification is sufficient and not excessive
-
-Update plan.md in place.
-Add `Phases: <N>` under Status and `Assessed: yes` at the end.
-```
-
-## Phase 4: Implement
-
-```text
-You are implementing Phase <N> for MemoChat.
-
-Read:
+读取：
 - .ai/<PROJECT>/<LETTER>/context.md
 - .ai/<PROJECT>/<LETTER>/plan.md
+- 引用的源文件/config 文件
 
-Implement only this phase:
+检查：
+1. 路径和符号存在
+2. 模块边界正确
+3. 客户端/服务端契约同步
+4. 数据库迁移/初始化脚本已覆盖
+5. Docker 端口和容器假设正确
+6. 验证足够且不过度
+
+原地更新 plan.md。
+在“状态”下添加 `Phases: <N>`，并在末尾添加 `Assessed: yes`。
+```
+
+## 阶段 4：实现
+
+```text
+你正在为 MemoChat 实现 Phase <N>。
+
+读取：
+- .ai/<PROJECT>/<LETTER>/context.md
+- .ai/<PROJECT>/<LETTER>/plan.md
+
+只实现这个阶段：
 <PHASE_STEPS>
 
-Rules:
-- Use existing patterns and helpers.
-- Keep Docker/MCP assumptions consistent with the plan.
-- Do not edit unrelated files.
-- Do not modify .ai files except plan status.
-- Mark this phase done in plan.md when complete.
+规则：
+- 使用现有模式和 helper。
+- 保持 Docker/MCP 假设与计划一致。
+- 不要编辑无关文件。
+- 除计划状态外，不要修改 .ai 文件。
+- 完成后在 plan.md 中标记该阶段。
 ```
 
-## Phase 5: Verify
+## 阶段 5：验证
 
 ```text
-You are verifying a MemoChat change.
+你正在验证一个 MemoChat 变更。
 
-Read:
+读取：
 - .ai/<PROJECT>/<LETTER>/context.md
 - .ai/<PROJECT>/<LETTER>/plan.md
 
-Run deployable Linux verification from the Linux server build output. `deploy_services.sh` copies from `build-linux-server-gcc16/bin`.
+从 Linux full 构建输出执行可部署验证。`deploy_services.sh` 从 `build-linux-full-gcc16/bin` 复制产物。
 
-Full build:
+完整构建：
 source /root/.memochat-linux-env
-cmake --preset linux-server-gcc16
-cmake --build --preset linux-server-gcc16 --parallel 12
+cmake --preset linux-full-gcc16
+cmake --build --preset linux-full-gcc16 --parallel 12
 
-Tests:
-ctest --preset linux-server-gcc16 --output-on-failure
+测试：
+ctest --preset linux-full-gcc16 --output-on-failure
 
-Runtime smoke, when needed:
+需要时运行 runtime smoke：
 tools/scripts/status/deploy_services.sh
 tools/scripts/status/start-all-services.sh
 
-Legacy Windows probes, when needed from Windows:
+需要从 Windows 运行旧版探针时：
 tools/scripts/test_register_login.ps1
 tools/scripts/test_login.ps1
 tools/scripts/full_flow_test.ps1
 
-If a port conflict or Docker dependency failure appears, stop and report the owning process/container.
-Write the result to .ai/<PROJECT>/<LETTER>/logs/phase-verify.result.md.
+如果出现端口冲突或 Docker 依赖失败，停止并报告占用进程/容器。
+将结果写入 .ai/<PROJECT>/<LETTER>/logs/phase-verify.result.md。
 ```
 
-## Phase 6: Review
+## 阶段 6：复审
 
 ```text
-You are reviewing the MemoChat diff.
+你正在复审 MemoChat diff。
 
-Read:
+读取：
 - .ai/<PROJECT>/<LETTER>/context.md
 - .ai/<PROJECT>/<LETTER>/plan.md
 - git diff
 
-Write .ai/<PROJECT>/<LETTER>/review<R>.md.
+写入 .ai/<PROJECT>/<LETTER>/review<R>.md。
 
-Prioritize:
-1. correctness and persistence consistency
-2. race/lifetime/thread safety
-3. schema/config/API compatibility
-4. Docker/runtime impact
-5. missing verification
-6. unnecessary churn
+优先关注：
+1. 正确性和持久化一致性
+2. 竞态/生命周期/线程安全
+3. schema/config/API 兼容性
+4. Docker/运行时影响
+5. 缺失的验证
+6. 不必要的改动噪音
 
-Verdict must be `APPROVED` or `NEEDS_CHANGES`.
-For NEEDS_CHANGES, include concrete file-level fixes.
+结论必须是 `APPROVED` 或 `NEEDS_CHANGES`。
+对于 NEEDS_CHANGES，包含具体到文件级的修复项。
 ```
 
-## Phase 7: Finalize
+## 阶段 7：收尾
 
 ```text
-Finalize in the main session.
+在主会话中完成收尾。
 
-Check:
-- plan status
-- verification log
-- review verdict
+检查：
+- 计划状态
+- 验证日志
+- 复审结论
 - git status
-- no unexpected Docker port/config drift
+- 没有意外的 Docker 端口/配置漂移
 
-Report:
-- files changed
-- verification commands and results
-- Docker/MCP checks
-- blockers or residual risk
-- .ai project name for follow-up
+报告：
+- 修改的文件
+- 验证命令和结果
+- Docker/MCP 检查
+- 阻塞点或剩余风险
+- 后续任务可用的 .ai 项目名
 ```

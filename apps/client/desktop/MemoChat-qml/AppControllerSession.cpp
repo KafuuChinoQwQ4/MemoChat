@@ -51,6 +51,7 @@ constexpr int kChatReconnectDelayMs = 300;
 constexpr int kDefaultChatConnectTimeoutMs = 1200;
 constexpr int kDefaultBackupDialDelayMs = 250;
 constexpr int kDefaultChatLoginTimeoutMs = 5000;
+constexpr int kPostLoginBootstrapDelayMs = 100;
 
 ChatTransportKind parseTransportKind(const QString &value)
 {
@@ -495,7 +496,7 @@ void AppController::onSwitchToChat()
         setCurrentDialogMuted(false);
     }
 
-    QTimer::singleShot(0, this, [this]() {
+    QTimer::singleShot(kPostLoginBootstrapDelayMs, this, [this]() {
         if (_page != ChatPage) {
             return;
         }
@@ -508,7 +509,7 @@ void AppController::onSwitchToChat()
         onHeartbeatTimeout();
     });
 
-    QTimer::singleShot(120, this, [this]() {
+    QTimer::singleShot(kPostLoginBootstrapDelayMs, this, [this]() {
         if (_page != ChatPage || _dialogs_ready) {
             return;
         }

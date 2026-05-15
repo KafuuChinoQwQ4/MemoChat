@@ -47,9 +47,10 @@
       }
     },
     {
-      "name": "linux-gcc16-base",
-      "hidden": true,
+      "name": "linux-full-gcc16",
+      "displayName": "Linux GCC16: Full",
       "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-linux-full-gcc16",
       "environment": {
         "PATH": "/data/Qt/6.8.3/gcc_64/bin:$penv{PATH}",
         "VCPKG_ROOT": "/data/vcpkg/vcpkg",
@@ -72,55 +73,21 @@
         "CMAKE_CXX_EXTENSIONS": "OFF",
         "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
         "CMAKE_PREFIX_PATH": "/data/Qt/6.8.3/gcc_64",
-        "MEMOCHAT_CXX_STANDARD": "26",
-        "MEMOCHAT_AUTO_DEPLOY_RUNTIME": "OFF",
-        "VCPKG_TARGET_TRIPLET": "x64-linux-release",
-        "VCPKG_HOST_TRIPLET": "x64-linux-release",
-        "VCPKG_INSTALLED_DIR": "/data/vcpkg/installed-memochat-gcc16",
-        "VCPKG_INSTALL_OPTIONS": "--no-print-usage",
-        "VCPKG_BUILD_TYPE": "release"
-      }
-    },
-    {
-      "name": "linux-server-gcc16",
-      "displayName": "Linux GCC16: Server + Tests",
-      "inherits": "linux-gcc16-base",
-      "binaryDir": "${sourceDir}/build-linux-server-gcc16",
-      "cacheVariables": {
-        "BUILD_CLIENT": "OFF",
-        "BUILD_SERVER": "ON",
-        "BUILD_OPS": "OFF",
-        "BUILD_TESTS": "ON",
-        "VCPKG_MANIFEST_FEATURES": "server",
-        "VCPKG_MANIFEST_NO_DEFAULT_FEATURES": "OFF"
-      }
-    },
-    {
-      "name": "linux-client-gcc16",
-      "displayName": "Linux GCC16: MemoChat Client",
-      "inherits": "linux-gcc16-base",
-      "binaryDir": "${sourceDir}/build-linux-client-gcc16",
-      "cacheVariables": {
-        "BUILD_CLIENT": "ON",
-        "BUILD_SERVER": "OFF",
-        "BUILD_OPS": "OFF",
-        "BUILD_TESTS": "OFF",
-        "VCPKG_MANIFEST_FEATURES": "",
-        "VCPKG_MANIFEST_NO_DEFAULT_FEATURES": "ON"
-      }
-    },
-    {
-      "name": "linux-full-gcc16",
-      "displayName": "Linux GCC16: Full",
-      "inherits": "linux-gcc16-base",
-      "binaryDir": "${sourceDir}/build-linux-full-gcc16",
-      "cacheVariables": {
         "BUILD_CLIENT": "ON",
         "BUILD_SERVER": "ON",
         "BUILD_OPS": "ON",
         "BUILD_TESTS": "ON",
+        "MEMOCHAT_CXX_STANDARD": "26",
+        "MEMOCHAT_AUTO_DEPLOY_RUNTIME": "OFF",
+        "MEMOCHAT_ENABLE_LIVE2D_NATIVE": "ON",
+        "MEMOCHAT_LIVE2D_SDK_ROOT": "/data/third_party/live2d/CubismSdkForNative-current",
+        "VCPKG_TARGET_TRIPLET": "x64-linux-release",
+        "VCPKG_HOST_TRIPLET": "x64-linux-release",
+        "VCPKG_INSTALLED_DIR": "/data/vcpkg/installed-memochat-gcc16",
+        "VCPKG_INSTALL_OPTIONS": "--no-print-usage",
         "VCPKG_MANIFEST_FEATURES": "server",
-        "VCPKG_MANIFEST_NO_DEFAULT_FEATURES": "OFF"
+        "VCPKG_MANIFEST_NO_DEFAULT_FEATURES": "OFF",
+        "VCPKG_BUILD_TYPE": "release"
       }
     }
   ],
@@ -130,18 +97,6 @@
       "displayName": "Build Release: Client + Server + Ops + Tests",
       "configurePreset": "msvc2022-full",
       "configuration": "Release",
-      "jobs": 12
-    },
-    {
-      "name": "linux-server-gcc16",
-      "displayName": "Build Linux Server + Tests",
-      "configurePreset": "linux-server-gcc16",
-      "jobs": 12
-    },
-    {
-      "name": "linux-client-gcc16",
-      "displayName": "Build Linux MemoChat Client",
-      "configurePreset": "linux-client-gcc16",
       "jobs": 12
     },
     {
@@ -165,9 +120,9 @@
       }
     },
     {
-      "name": "linux-server-gcc16",
-      "displayName": "Run Linux Server Tests",
-      "configurePreset": "linux-server-gcc16",
+      "name": "linux-full-gcc16",
+      "displayName": "Run Linux Full Tests",
+      "configurePreset": "linux-full-gcc16",
       "output": {
         "outputOnFailure": true
       },

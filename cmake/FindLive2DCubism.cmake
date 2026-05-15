@@ -41,10 +41,11 @@ foreach(_Live2DCubism_ROOT_HINT IN LISTS _Live2DCubism_ROOT_HINTS)
 endforeach()
 
 find_path(Live2DCubism_CORE_INCLUDE_DIR
-    NAMES Live2DCubismCore.hpp
+    NAMES Live2DCubismCore.h Live2DCubismCore.hpp
     HINTS ${_Live2DCubism_NORMALIZED_ROOT_HINTS}
     PATH_SUFFIXES
         Core/include
+        Framework/src
         include
     NO_DEFAULT_PATH
 )
@@ -63,6 +64,8 @@ find_library(Live2DCubism_CORE_LIBRARY
     NAMES Live2DCubismCore libLive2DCubismCore
     HINTS ${_Live2DCubism_NORMALIZED_ROOT_HINTS}
     PATH_SUFFIXES
+        Core/dll/linux/x86_64
+        Core/dll/linux
         Core/lib/linux/x86_64
         Core/lib/linux
         Core/lib/macos/arm64

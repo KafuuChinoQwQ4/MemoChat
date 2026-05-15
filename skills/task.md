@@ -1,50 +1,50 @@
 ---
-description: Implement a MemoChat feature or fix through context, plan, implementation, Docker-backed verification, and review.
+description: 通过上下文、计划、实现、Docker 支撑的验证和复审来完成 MemoChat 功能或修复。
 ---
 
-# MemoChat Task
+# MemoChat 任务
 
-Use for normal implementation work in `/root/code/MemoChat-Qml-Drogon-linux`. Treat `D:\MemoChat-Qml-Drogon` as the legacy Windows checkout unless the user explicitly asks for Windows work.
+用于 `/root/code/MemoChat-Qml-Drogon-linux` 中的常规实现工作。除非用户明确要求 Windows 工作，否则将 `D:\MemoChat-Qml-Drogon` 视为旧版 Windows 检出目录。
 
-Default to the Controller-led parallel workflow from `parallel-agents.md` for implementation tasks. The Controller owns architecture, plan, contracts, worker dispatch, integration, and final acceptance. After context and first contracts are clear, dispatch safe worker lanes by default. Local-only execution is an exception, allowed only when the active tool/policy environment forbids workers, the user explicitly asks for single-agent work, the task is genuinely tiny and has no useful test/review lane, the task is strictly sequential, or no safe split exists; record the exact reason in `plan.md` before implementation.
+实现类任务默认使用 `parallel-agents.md` 中的 Controller 主导并行工作流。Controller 负责架构、计划、契约、worker 派发、集成和最终验收。上下文和第一版契约清楚后，默认派发安全的 worker 工作线。本地单人执行是例外，仅当当前工具/策略环境禁止 worker、用户明确要求单代理、任务确实很小且没有有用的测试/复审工作线、任务严格顺序执行，或不存在安全拆分方式时才允许；实现前必须在 `plan.md` 中记录准确原因。
 
-## Invocation
+## 调用方式
 
-Treat `$ARGUMENTS` as the task. If it starts with an existing `.ai/<name>/about.md`, treat the first token as a follow-up project name and use the remaining text as the new task.
+将 `$ARGUMENTS` 视为任务。如果它以现有 `.ai/<name>/about.md` 开头，将第一个 token 视为后续项目名，剩余文本作为新任务。
 
-## Required Workflow
+## 必需工作流
 
-1. Create `.ai/<project>/<letter>/`.
-2. Gather context into `context.md`.
-3. Write and assess `plan.md`.
-4. Open concurrency by default:
-   - spawn workers for disjoint useful lanes when permitted
-   - keep Controller in charge of contracts and final acceptance
-   - record a local-only reason before implementation when worker dispatch is blocked, unsafe, or not useful
-5. Implement one plan phase at a time.
-6. Verify with the narrowest relevant build/test/runtime command.
-7. Review the diff and fix important issues.
-8. Finish with a concise status summary.
+1. 创建 `.ai/<project>/<letter>/`。
+2. 将上下文收集到 `context.md`。
+3. 编写并评估 `plan.md`。
+4. 默认开启并发：
+   - 在允许时为互不重叠且有用的工作线启动 worker
+   - 保持 Controller 负责契约和最终验收
+   - 当 worker 派发被阻塞、不安全或没有价值时，实现前记录本地单人原因
+5. 一次实现一个计划阶段。
+6. 用最窄的相关构建/测试/运行时命令验证。
+7. 复审 diff 并修复重要问题。
+8. 以简洁状态摘要收尾。
 
-## MemoChat Context Checklist
+## MemoChat 上下文清单
 
-Always account for the relevant layers:
+始终考虑相关层：
 
-- C++ server: `apps/server/core`.
-- QML clients: `apps/client/desktop` and `infra/Memo_ops/client`.
-- Runtime config: `apps/server/config`, `infra/Memo_ops/config`, deployed configs under runtime service folders.
-- Database migrations: `apps/server/migrations/postgresql`.
-- Local Docker: `infra/deploy/local/docker-compose.yml` and compose fragments under `infra/deploy/local/compose`.
-- Scripts: `tools/scripts` and `tools/scripts/status`.
-- Tests/load tools: `tests`, `apps/server/core/common/*/tests`, `tools/loadtest/python-loadtest`.
+- C++ 服务：`apps/server/core`。
+- QML 客户端：`apps/client/desktop` 和 `infra/Memo_ops/client`。
+- 运行时配置：`apps/server/config`、`infra/Memo_ops/config`、运行时服务目录下的已部署配置。
+- 数据库迁移：`apps/server/migrations/postgresql`。
+- 本地 Docker：`infra/deploy/local/docker-compose.yml` 以及 `infra/deploy/local/compose` 下的 compose 片段。
+- 脚本：`tools/scripts` 和 `tools/scripts/status`。
+- 测试/负载工具：`tests`、`apps/server/core/common/*/tests`、`tools/loadtest/python-loadtest`。
 
-## Docker And MCP Rules
+## Docker 和 MCP 规则
 
-- Containers are the source of truth for infrastructure.
-- Do not install or start local Redis/Postgres/Mongo/RabbitMQ/Redpanda/etc. outside Docker.
-- Do not change stable port mappings unless explicitly requested.
-- Use `docker ps` and MCP tools to inspect state.
-- Prefer Docker commands for direct checks:
+- 容器是基础设施的事实来源。
+- 不要在 Docker 外安装或启动本地 Redis/Postgres/Mongo/RabbitMQ/Redpanda 等服务。
+- 除非明确要求，否则不要改变稳定端口映射。
+- 使用 `docker ps` 和 MCP 工具检查状态。
+- 直接检查时优先使用 Docker 命令：
 
 ```bash
 docker exec memochat-redis redis-cli -a 123456 ping
@@ -54,29 +54,29 @@ docker exec memochat-rabbitmq rabbitmq-diagnostics -q ping
 docker exec memochat-redpanda rpk cluster info --brokers 127.0.0.1:19092
 ```
 
-Record any query that affected your reasoning in `context.md` or verification logs.
+将任何影响推理的查询记录到 `context.md` 或验证日志。
 
-## Build Selection
+## 构建选择
 
-Use the Linux GCC16 presets for code changes that will be deployed or runtime-tested in Arch Linux WSL. `deploy_services.sh` copies server artifacts from `build-linux-server-gcc16/bin` by default.
+将要在 Arch Linux WSL 中部署或运行时测试的代码变更，统一使用 Linux full preset。`deploy_services.sh` 默认从 `build-linux-full-gcc16/bin` 复制服务和客户端产物。
 
 ```bash
 source /root/.memochat-linux-env
-cmake --preset linux-server-gcc16
-cmake --build --preset linux-server-gcc16 --parallel 12
+cmake --preset linux-full-gcc16
+cmake --build --preset linux-full-gcc16 --parallel 12
 ```
 
-For test-only checks, run tests from the full build tree:
+仅测试检查时，从完整构建树运行测试：
 
 ```bash
-ctest --preset linux-server-gcc16 --output-on-failure
+ctest --preset linux-full-gcc16 --output-on-failure
 ```
 
-For Linux client checks use `linux-client-gcc16`; for cross-stack Linux checks use `linux-full-gcc16`.
+Windows 全量检查使用 `msvc2022-full`；Linux 全量检查使用 `linux-full-gcc16`。
 
-## Runtime Scripts
+## 运行时脚本
 
-Use existing scripts instead of inventing new orchestration:
+使用现有脚本，不要发明新的编排：
 
 ```bash
 tools/scripts/status/deploy_services.sh
@@ -84,24 +84,24 @@ tools/scripts/status/start-all-services.sh
 tools/scripts/status/stop-all-services.sh
 ```
 
-Use the `.bat`/`.ps1` scripts only for legacy Windows runtime/client checks. Existing PowerShell smoke probes may still be useful from Windows after Linux services are running.
+`.bat`/`.ps1` 脚本仅用于旧版 Windows 运行时/客户端检查。Linux 服务运行后，现有 PowerShell smoke 探针仍可从 Windows 使用。
 
-## Implementation Rules
+## 实现规则
 
-- Prefer existing helpers and module boundaries.
-- Keep server/client protocol and config changes synchronized.
-- Add migrations or init changes when persistent schema changes are required.
-- Keep Linux generated/downloaded heavy files under `/data`; keep Arch Docker bind data under `/data/docker-data/memochat`; use `D:` only when operating on legacy Windows/Docker Desktop data.
-- Do not revert user work.
-- Avoid broad formatting churn.
+- 优先使用现有 helper 和模块边界。
+- 保持服务端/客户端协议和配置变更同步。
+- 当持久化 schema 变更必需时，添加迁移或初始化变更。
+- Linux 生成/下载的大文件放在 `/data`；Arch Docker 绑定数据放在 `/data/docker-data/memochat`；只有操作旧版 Windows/Docker Desktop 数据时才使用 `D:`。
+- 不要回退用户工作。
+- 避免大范围格式化噪音。
 
-## Completion
+## 完成
 
-Report:
+报告：
 
-- files changed
-- concurrency lanes used by default, or the exact local-only/blocker reason
-- verification commands and outcomes
-- Docker/MCP checks performed
-- known blockers or residual risk
-- `.ai` project name for follow-up
+- 修改的文件
+- 默认使用的并发工作线，或准确的本地单人/阻塞原因
+- 验证命令和结果
+- 执行过的 Docker/MCP 检查
+- 已知阻塞点或剩余风险
+- 后续任务可用的 `.ai` 项目名

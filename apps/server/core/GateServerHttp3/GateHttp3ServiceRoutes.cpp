@@ -211,16 +211,19 @@ void RegisterRoutes(LogicSystem& logic) {
                 root["error"] = ErrorCodes::PasswdInvalid;
                 return false;
             }
-            auto route_nodes = gateauthsupport::LoadGateChatRouteNodes();
+            std::string route_source;
+            std::string status_route_detail;
+            std::string http_token;
+            auto route_nodes = gateauthsupport::SelectChatRouteForLogin(userInfo.uid,
+                nullptr, nullptr, &route_source, &status_route_detail, &http_token);
             if (route_nodes.empty()) {
                 memolog::LogWarn("gate.http3.user_login.no_server", "no chat server available",
                     {{"uid", std::to_string(userInfo.uid)}});
                 root["error"] = ErrorCodes::RPCFailed;
                 return false;
             }
-            std::string http_token;
             const std::string token_key = USERTOKENPREFIX + std::to_string(userInfo.uid);
-            if (!RedisMgr::GetInstance()->Get(token_key, http_token) || http_token.empty()) {
+            if (http_token.empty() && (!RedisMgr::GetInstance()->Get(token_key, http_token) || http_token.empty())) {
                 http_token = boost::uuids::to_string(boost::uuids::random_generator()());
                 RedisMgr::GetInstance()->Set(token_key, http_token);
             }
@@ -254,14 +257,23 @@ void RegisterRoutes(LogicSystem& logic) {
             root["port"] = route_nodes.front().port;
             root["login_ticket"] = login_ticket;
             root["ticket_expire_ms"] = static_cast<int64_t>(claims.expire_at_ms);
-            root["user_profile"]["uid"] = userInfo.uid;
-            root["user_profile"]["user_id"] = userInfo.user_id;
-            root["user_profile"]["name"] = userInfo.name;
-            root["user_profile"]["nick"] = userInfo.nick;
-            root["user_profile"]["icon"] = userInfo.icon;
-            root["user_profile"]["desc"] = userInfo.desc;
-            root["user_profile"]["email"] = userInfo.email;
-            root["user_profile"]["sex"] = userInfo.sex;
+            memochat::json::JsonValue stage_metrics(memochat::json::object_t{});
+            stage_metrics["route_source"] = route_source;
+            stage_metrics["status_route_detail"] = status_route_detail;
+            root["stage_metrics"] = stage_metrics;
+
+            memochat::json::JsonValue user_profile(memochat::json::object_t{});
+            user_profile["uid"] = userInfo.uid;
+            user_profile["user_id"] = userInfo.user_id;
+            user_profile["name"] = userInfo.name;
+            user_profile["nick"] = userInfo.nick;
+            user_profile["icon"] = userInfo.icon;
+            user_profile["desc"] = userInfo.desc;
+            user_profile["email"] = userInfo.email;
+            user_profile["sex"] = userInfo.sex;
+            root["user_profile"] = user_profile;
+
+            memochat::json::JsonValue chat_endpoints(memochat::json::array_t{});
             for (const auto& route_node : route_nodes) {
                 if (!route_node.quic_host.empty() && !route_node.quic_port.empty()) {
                     memochat::json::JsonValue quic_ep;
@@ -270,7 +282,7 @@ void RegisterRoutes(LogicSystem& logic) {
                     quic_ep["port"] = route_node.quic_port;
                     quic_ep["server_name"] = route_node.name;
                     quic_ep["priority"] = route_node.priority;
-                    root["chat_endpoints"].append(quic_ep);
+                    chat_endpoints.append(quic_ep);
                 }
                 memochat::json::JsonValue tcp_ep;
                 tcp_ep["transport"] = "tcp";
@@ -278,8 +290,9 @@ void RegisterRoutes(LogicSystem& logic) {
                 tcp_ep["port"] = route_node.port;
                 tcp_ep["server_name"] = route_node.name;
                 tcp_ep["priority"] = route_node.priority;
-                root["chat_endpoints"].append(tcp_ep);
+                chat_endpoints.append(tcp_ep);
             }
+            root["chat_endpoints"] = chat_endpoints;
             memolog::LogInfo("gate.http3.user_login", "HTTP/3 user login succeeded",
                 {{"uid", std::to_string(userInfo.uid)}, {"email", email},
                  {"route", "/user_login"}, {"trace_id", trace_id}});
@@ -943,6 +956,3 @@ void RegisterRoutes(LogicSystem& logic) {
 void GateHttp3Service::RegisterRoutes(LogicSystem& logic) {
     GateHttp3ServiceImpl::RegisterRoutes(logic);
 }
-
-
-

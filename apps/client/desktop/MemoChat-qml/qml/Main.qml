@@ -21,6 +21,10 @@ ApplicationWindow {
     property var petWindowRef: null
     property bool memochatStartupCenter: true
 
+    PetAssetSettings {
+        id: startupPetSettings
+    }
+
     function centerWindow(win) {
         if (!win || win.visibility !== Window.Windowed) {
             return
@@ -62,6 +66,33 @@ ApplicationWindow {
         root.requestActivate()
     }
 
+    function logWindowState(label, win) {
+        if (!win) {
+            console.info(label + " window=null")
+            return
+        }
+        console.info(label
+                     + " visible=" + win.visible
+                     + " visibility=" + win.visibility
+                     + " x=" + win.x
+                     + " y=" + win.y
+                     + " w=" + win.width
+                     + " h=" + win.height
+                     + " page=" + controller.page)
+    }
+
+    function ensureLoginWindowVisible(reason) {
+        if (controller.page === AppController.ChatPage) {
+            startupShowRetryTimer.stop()
+            return
+        }
+        showLoginWindow()
+        logWindowState("login-window " + reason, root)
+        if (startupShowRetryTimer.remainingAttempts > 0) {
+            startupShowRetryTimer.restart()
+        }
+    }
+
     function showChatWindow() {
         const win = ensureChatWindow()
         if (!win) {
@@ -98,14 +129,33 @@ ApplicationWindow {
         chatWindowRef.hide()
     }
 
-    function ensurePetWindow() {
+    function ensurePetWindow(petAssetSettings) {
+        const settings = petAssetSettings || startupPetSettings
         if (petWindowRef) {
+            petWindowRef.petAssetSettings = settings
+            petWindowRef.selfAvatar = controller.currentUserIcon
             return petWindowRef
         }
         petWindowRef = petWindowComponent.createObject(null, {
-            "petController": controller.petController
+            "petController": controller.petController,
+            "agentController": controller.agentController,
+            "petAssetSettings": settings,
+            "selfAvatar": controller.currentUserIcon
         })
         return petWindowRef
+    }
+
+    function openPetWindow(petAssetSettings) {
+        if (!petAssetSettings) {
+            startupPetSettings.load()
+        }
+        const win = ensurePetWindow(petAssetSettings)
+        if (!win) {
+            console.warn("Failed to create pet window")
+            return null
+        }
+        win.openPet()
+        return win
     }
 
     function togglePetWindow() {
@@ -116,20 +166,22 @@ ApplicationWindow {
         }
         if (win.visible) {
             win.hide()
-        } else {
-            win.openPet()
+            return
         }
+        win.openPet()
     }
 
     function syncWindowsByPage() {
         if (controller.page === AppController.ChatPage) {
+            startupShowRetryTimer.stop()
             root.hide()
             if (!showChatWindow()) {
                 showLoginWindow()
             }
         } else {
             hideChatWindow()
-            showLoginWindow()
+            startupShowRetryTimer.remainingAttempts = 5
+            ensureLoginWindowVisible("sync")
         }
     }
 
@@ -169,10 +221,21 @@ ApplicationWindow {
         id: chatShellPageComponent
         ChatShellPage {
             topInset: 24
+            onPetPreviewRequested: function(petAssetSettings) {
+                root.openPetWindow(petAssetSettings)
+            }
         }
     }
 
-    Component.onCompleted: syncWindowsByPage()
+    Component.onCompleted: {
+        startupPetSettings.load()
+        syncWindowsByPage()
+        startupShowRetryTimer.remainingAttempts = 5
+        startupShowRetryTimer.start()
+        if (startupPetSettings.autoStartPetOnClientStart) {
+            startupPetTimer.start()
+        }
+    }
     Component.onDestruction: {
         if (chatWindowRef) {
             chatWindowRef.destroy()
@@ -189,6 +252,11 @@ ApplicationWindow {
         function onPageChanged() {
             syncWindowsByPage()
         }
+        function onCurrentUserChanged() {
+            if (petWindowRef) {
+                petWindowRef.selfAvatar = controller.currentUserIcon
+            }
+        }
     }
 
     Timer {
@@ -202,6 +270,28 @@ ApplicationWindow {
                 centerWindowWithRetry(targetWindow, remainingAttempts)
             }
         }
+    }
+
+    Timer {
+        id: startupShowRetryTimer
+        interval: 120
+        repeat: false
+        property int remainingAttempts: 0
+        onTriggered: {
+            if (remainingAttempts <= 0 || controller.page === AppController.ChatPage) {
+                remainingAttempts = 0
+                return
+            }
+            remainingAttempts -= 1
+            root.ensureLoginWindowVisible("retry")
+        }
+    }
+
+    Timer {
+        id: startupPetTimer
+        interval: 160
+        repeat: false
+        onTriggered: root.openPetWindow()
     }
 
     Rectangle {

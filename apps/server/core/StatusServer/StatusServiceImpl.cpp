@@ -44,12 +44,22 @@ Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatSer
     std::vector<std::string> least_loaded_servers;
     const auto& server = getChatServer(&server_load_snapshot, &least_loaded_servers);
     const int uid = request->uid();
+    if (server.name.empty() || server.host.empty() || server.port.empty()) {
+        reply->set_error(ErrorCodes::RPCFailed);
+        memolog::LogWarn("status.get_chat_server.failed", "no chat server available",
+                         {{"uid", std::to_string(uid)}, {"module", "grpc"}});
+        return Status::OK;
+    }
+
     const std::string token_key = USERTOKENPREFIX + std::to_string(uid);
     std::string token_value;
     bool has_token = RedisMgr::GetInstance()->Get(token_key, token_value);
 
     reply->set_host(server.host);
     reply->set_port(server.port);
+    reply->set_server_name(server.name);
+    reply->set_quic_host(server.quic_host);
+    reply->set_quic_port(server.quic_port);
     reply->set_error(ErrorCodes::Success);
     if (has_token && !token_value.empty()) {
         // Reuse existing token to avoid invalidating in-flight chat login handshakes.
@@ -87,6 +97,8 @@ StatusServiceImpl::StatusServiceImpl() {
         server.port = node.tcp_port;
         server.host = node.tcp_host;
         server.name = node.name;
+        server.quic_host = node.quic_host;
+        server.quic_port = node.quic_port;
         _servers[server.name] = server;
         _known_server_names.insert(server.name);
     }

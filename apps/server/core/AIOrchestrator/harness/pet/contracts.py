@@ -81,6 +81,7 @@ class PetText:
     final: bool = False
     language: str = "zh-CN"
     display: str = ""
+    translation: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -164,6 +165,7 @@ class PetControlEvent:
 
         text["delta"] = _preferred_text(speech.get("text_delta"), text.get("delta"), "")
         text["display"] = _preferred_text(text.get("display"), text.get("delta"), text["delta"])
+        text["translation"] = str(text.get("translation") or speech.get("translation") or "")
         speech["text_delta"] = text["delta"]
         speech["audio_chunk_ref"] = audio.get("chunk_ref")
         speech["audio_url"] = audio.get("url")

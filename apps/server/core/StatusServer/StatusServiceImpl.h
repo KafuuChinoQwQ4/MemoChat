@@ -22,8 +22,8 @@ using message::StatusService;
 
 class  ChatServer {
 public:
-	ChatServer():host(""),port(""),name(""),con_count(0){}
-	ChatServer(const ChatServer& cs):host(cs.host), port(cs.port), name(cs.name), con_count(cs.con_count){}
+	ChatServer():host(""),port(""),name(""),quic_host(""),quic_port(""),con_count(0){}
+	ChatServer(const ChatServer& cs):host(cs.host), port(cs.port), name(cs.name), quic_host(cs.quic_host), quic_port(cs.quic_port), con_count(cs.con_count){}
 	ChatServer& operator=(const ChatServer& cs) {
 		if (&cs == this) {
 			return *this;
@@ -32,12 +32,16 @@ public:
 		host = cs.host;
 		name = cs.name;
 		port = cs.port;
+		quic_host = cs.quic_host;
+		quic_port = cs.quic_port;
 		con_count = cs.con_count;
 		return *this;
 	}
 	std::string host;
 	std::string port;
 	std::string name;
+	std::string quic_host;
+	std::string quic_port;
 	int con_count;
 };
 class StatusServiceImpl final : public StatusService::Service

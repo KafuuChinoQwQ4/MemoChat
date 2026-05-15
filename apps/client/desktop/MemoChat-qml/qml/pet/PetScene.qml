@@ -1,98 +1,48 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
 import MemoChat 1.0
 
 Item {
     id: root
     property var petController: null
-    property bool alwaysOnTop: true
     property bool clickThrough: false
     property bool decorativeMode: false
-    property bool debugPanelVisible: false
     property real scaleFactor: 1.0
-    property bool micMuted: true
     property bool cameraEnabled: false
     property bool cloudVisionEnabled: false
+    property bool voiceReplyEnabled: true
+    property var petAssetSettings: null
     property bool localOnlyMode: true
     property bool debugRetentionEnabled: false
+    property bool debugPanelVisible: false
     property bool providerAvailable: false
-    signal closeRequested()
-    signal resetPositionRequested()
-    signal alwaysOnTopToggled(bool value)
-    signal clickThroughToggled(bool value)
-    signal debugToggled(bool value)
-    signal scaleRequested(real value)
-    signal micMuteToggled(bool value)
-    signal cameraToggled(bool value)
-    signal cloudVisionToggled(bool value)
-    signal localOnlyModeToggled(bool value)
-    signal debugRetentionToggled(bool value)
+    property string cameraCaptureStatus: cameraEnabled ? "摄像头本地捕捉" : "摄像头关闭"
 
-    function phaseText(phase) {
-        switch (phase) {
-        case "listening":
-            return "倾听"
-        case "thinking":
-            return "思考"
-        case "speaking":
-            return "回应"
-        case "interrupted":
-            return "已打断"
-        case "error":
-            return "异常"
-        case "idle":
-            return "空闲"
-        default:
-            return phase || ""
-        }
-    }
+    signal dragRequested()
+    signal controlsRequested(real sceneX, real sceneY)
+    signal localOnlyModeToggled(bool checked)
+    signal debugRetentionToggled(bool checked)
 
-    function phaseColor(phase) {
-        switch (phase) {
-        case "listening":
-            return "#67d5c1"
-        case "thinking":
-            return "#f1c76f"
-        case "speaking":
-            return "#7db5ff"
-        case "interrupted":
-            return "#d8a46f"
-        case "error":
-            return "#e35b5b"
-        default:
-            return root.petController && root.petController.streaming ? "#42b883" : "#d4a23f"
-        }
-    }
+    readonly property color sceneTintColor: Qt.rgba(1.0, 0.96, 0.98, 0.96)
 
-    function displayStatus() {
+    function speechPlaybackText() {
         if (!root.petController) {
-            return "桌宠"
+            return ""
         }
-        var phase = phaseText(root.petController.phase)
-        var status = root.petController.statusText || ""
-        if (root.petController.error.length > 0) {
-            status = root.petController.error
+        if (!root.petController.speechFinal) {
+            return ""
         }
-        if (status.length > 0 && phase.length > 0) {
-            return status + " · " + phase
-        }
-        return status.length > 0 ? status : (phase.length > 0 ? phase : "桌宠")
-    }
-
-    function privacyColor(active, warning) {
-        if (warning) {
-            return "#f1c76f"
-        }
-        return active ? "#67d5c1" : "#9aa7b8"
+        return root.petController.speechDisplayText.length > 0
+                ? root.petController.speechDisplayText
+                : root.petController.speechText
     }
 
     function micPrivacyText() {
-        return root.micMuted ? "麦克风 静音" : "麦克风 本地输入"
+        return root.voiceReplyEnabled ? "麦克风 开启" : "麦克风 关闭"
     }
 
     function cameraPrivacyText() {
-        return root.cameraEnabled ? "摄像头 本地结构信号" : "摄像头 关闭"
+        return root.cameraEnabled ? "摄像头 开启" : "摄像头 关闭"
     }
 
     function cloudPrivacyText() {
@@ -110,10 +60,18 @@ Item {
         return root.debugRetentionEnabled ? "调试保留 开启" : "调试保留 关闭"
     }
 
+    function privacyColor() {
+        if (!root.cloudVisionEnabled) {
+            return "#b7a6b0"
+        }
+        return root.providerAvailable ? "#74b2ba" : "#d28ca6"
+    }
+
     Live2DRenderItem {
         id: live2d
         anchors.fill: parent
-        anchors.margins: root.decorativeMode ? 4 : 8
+        modelRoot: root.petAssetSettings ? root.petAssetSettings.modelRoot : ""
+        modelJson: root.petAssetSettings ? root.petAssetSettings.modelJson : ""
         expression: root.petController ? root.petController.expression : "neutral"
         motion: root.petController ? root.petController.motion : "idle"
         emotion: root.petController ? root.petController.emotion : "neutral"
@@ -123,370 +81,167 @@ Item {
         lipSyncValue: root.petController ? root.petController.lipSyncValue : 0
     }
 
+    Loader {
+        id: petAudioLoader
+        active: root.voiceReplyEnabled && root.petController
+        source: "PetAudioPlayer.qml"
+        onLoaded: {
+            item.speechKey = root.petController ? root.petController.turnId : ""
+            item.sourceUrl = root.petController ? root.petController.audioUrl : ""
+            item.playbackState = root.petController ? root.petController.audioState : "idle"
+            item.speechText = root.speechPlaybackText()
+            item.speechFinal = root.petController ? root.petController.speechFinal : false
+        }
+    }
+
+    Loader {
+        id: petCameraLoader
+        active: root.cameraEnabled && root.petController
+        source: "PetCameraCapture.qml"
+        onLoaded: {
+            item.petController = root.petController
+            item.cameraEnabled = root.cameraEnabled
+            item.cloudVisionEnabled = root.cloudVisionEnabled
+            item.statusChanged.connect(function(text) {
+                root.cameraCaptureStatus = text
+            })
+        }
+    }
+
     Connections {
         target: root.petController
+        function onPetStateChanged() {
+            if (root.voiceReplyEnabled && petAudioLoader.item) {
+                petAudioLoader.item.speechKey = root.petController ? root.petController.turnId : ""
+                petAudioLoader.item.sourceUrl = root.petController ? root.petController.audioUrl : ""
+                petAudioLoader.item.playbackState = root.petController ? root.petController.audioState : "idle"
+                petAudioLoader.item.speechText = root.speechPlaybackText()
+                petAudioLoader.item.speechFinal = root.petController ? root.petController.speechFinal : false
+            }
+            if (petCameraLoader.item) {
+                petCameraLoader.item.petController = root.petController
+            }
+        }
+
         function onControlEventReceived(event) {
             live2d.applyControlEvent(event)
         }
     }
 
     Rectangle {
+        visible: root.debugPanelVisible
         anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: composer.top
-        anchors.leftMargin: 18
-        anchors.rightMargin: 18
-        anchors.bottomMargin: 8
-        height: Math.min(58, speechLabel.implicitHeight + 18)
-        radius: 8
-        color: Qt.rgba(1, 1, 1, 0.68)
-        border.color: Qt.rgba(1, 1, 1, 0.75)
-        visible: !root.decorativeMode && root.petController && root.petController.speechText.length > 0
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: 10
+        anchors.bottomMargin: 10
+        width: 182
+        height: 96
+        radius: 10
+        antialiasing: true
+        color: root.sceneTintColor
+        border.color: root.privacyColor()
 
-        Label {
-            id: speechLabel
+        Column {
             anchors.fill: parent
-            anchors.margins: 9
-            text: root.petController ? root.petController.speechText : ""
-            color: "#253142"
-            font.pixelSize: 12
-            wrapMode: Text.WordWrap
-            elide: Text.ElideRight
-            maximumLineCount: 2
-        }
-    }
-
-    RowLayout {
-        id: topControls
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.margins: 10
-        height: 28
-        spacing: 6
-
-        Rectangle {
-            Layout.preferredWidth: 9
-            Layout.preferredHeight: 9
-            radius: 5
-            color: root.petController && root.petController.error.length > 0
-                   ? "#e35b5b"
-                   : root.phaseColor(root.petController ? root.petController.phase : "")
-        }
-
-        Label {
-            Layout.fillWidth: true
-            text: root.displayStatus()
-            color: "#f7fbff"
-            font.pixelSize: 12
-            elide: Text.ElideRight
-        }
-
-        ToolButton {
-            Layout.preferredWidth: 28
-            Layout.preferredHeight: 28
-            text: root.alwaysOnTop ? "P" : "p"
-            ToolTip.visible: hovered
-            ToolTip.text: "置顶"
-            onClicked: root.alwaysOnTopToggled(!root.alwaysOnTop)
-        }
-
-        ToolButton {
-            Layout.preferredWidth: 28
-            Layout.preferredHeight: 28
-            text: root.clickThrough ? "I" : "i"
-            ToolTip.visible: hovered
-            ToolTip.text: "点击穿透"
-            onClicked: root.clickThroughToggled(!root.clickThrough)
-        }
-
-        ToolButton {
-            Layout.preferredWidth: 28
-            Layout.preferredHeight: 28
-            text: root.debugPanelVisible ? "D" : "d"
-            ToolTip.visible: hovered
-            ToolTip.text: "调试"
-            onClicked: root.debugToggled(!root.debugPanelVisible)
-        }
-
-        ToolButton {
-            Layout.preferredWidth: 28
-            Layout.preferredHeight: 28
-            text: "R"
-            ToolTip.visible: hovered
-            ToolTip.text: "复位"
-            onClicked: root.resetPositionRequested()
-        }
-
-        ToolButton {
-            Layout.preferredWidth: 28
-            Layout.preferredHeight: 28
-            text: "x"
-            onClicked: root.closeRequested()
-        }
-    }
-
-    GridLayout {
-        id: privacyChips
-        anchors.top: topControls.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.leftMargin: 14
-        anchors.rightMargin: 14
-        anchors.topMargin: 4
-        columns: 2
-        rowSpacing: 4
-        columnSpacing: 6
-        visible: !root.decorativeMode
-
-        StatusChip {
-            Layout.fillWidth: true
-            text: root.micPrivacyText()
-            colorBase: root.privacyColor(!root.micMuted, false)
-        }
-
-        StatusChip {
-            Layout.fillWidth: true
-            text: root.cameraPrivacyText()
-            colorBase: root.privacyColor(root.cameraEnabled, false)
-        }
-
-        StatusChip {
-            Layout.fillWidth: true
-            text: root.cloudPrivacyText()
-            colorBase: root.privacyColor(root.cloudVisionEnabled && root.providerAvailable,
-                                         root.cloudVisionEnabled && !root.providerAvailable)
-        }
-
-        StatusChip {
-            Layout.fillWidth: true
-            text: root.localModeText()
-            colorBase: root.privacyColor(root.localOnlyMode, false)
-        }
-    }
-
-    Rectangle {
-        id: debugPanel
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: privacyChips.bottom
-        anchors.leftMargin: 14
-        anchors.rightMargin: 14
-        anchors.topMargin: 6
-        height: debugColumn.implicitHeight + 14
-        radius: 8
-        color: Qt.rgba(0.08, 0.10, 0.14, 0.70)
-        border.color: Qt.rgba(1, 1, 1, 0.18)
-        visible: root.debugPanelVisible && !root.decorativeMode
-
-        ColumnLayout {
-            id: debugColumn
-            anchors.fill: parent
-            anchors.margins: 7
+            anchors.margins: 8
             spacing: 4
 
             Label {
-                Layout.fillWidth: true
-                text: "seq " + (root.petController ? root.petController.model.sequence : 0)
-                      + " · phase " + (root.petController ? root.petController.phase : "none")
-                      + " · scale " + root.scaleFactor.toFixed(2)
-                color: "#edf5ff"
-                font.pixelSize: 10
-                elide: Text.ElideRight
-            }
-
-            Label {
-                Layout.fillWidth: true
-                text: "event " + (root.petController ? root.petController.eventId : "")
-                      + " · turn " + (root.petController ? root.petController.turnId : "")
-                color: "#b7c7dc"
-                font.pixelSize: 10
-                elide: Text.ElideRight
-            }
-
-            Label {
-                Layout.fillWidth: true
-                text: root.debugRetentionText()
-                      + " · provider " + (root.providerAvailable ? "ready" : "unavailable")
-                color: root.debugRetentionEnabled ? "#f1c76f" : "#b7c7dc"
-                font.pixelSize: 10
-                elide: Text.ElideRight
-            }
-        }
-    }
-
-    RowLayout {
-        id: composer
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.leftMargin: 14
-        anchors.rightMargin: 14
-        anchors.bottomMargin: 14
-        height: 34
-        spacing: 8
-        visible: !root.decorativeMode && !root.clickThrough
-        enabled: !root.decorativeMode && !root.clickThrough
-
-        TextField {
-            id: input
-            Layout.fillWidth: true
-            Layout.preferredHeight: 34
-            placeholderText: "对桌宠说点什么"
-            font.pixelSize: 12
-            selectByMouse: true
-            background: Rectangle {
-                radius: 8
-                color: Qt.rgba(255, 255, 255, 0.74)
-                border.color: input.activeFocus ? "#74b2ba" : Qt.rgba(255, 255, 255, 0.76)
-            }
-            onAccepted: sendButton.clicked()
-        }
-
-        Button {
-            id: sendButton
-            Layout.preferredWidth: 54
-            Layout.preferredHeight: 34
-            text: "发送"
-            enabled: root.petController && input.text.trim().length > 0
-            onClicked: {
-                if (!root.petController) {
-                    return
-                }
-                root.petController.sendText(input.text)
-                input.text = ""
-            }
-        }
-    }
-
-    Rectangle {
-        id: dockControls
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: composer.visible ? composer.top : parent.bottom
-        anchors.leftMargin: 14
-        anchors.rightMargin: 14
-        anchors.bottomMargin: composer.visible ? 8 : 14
-        height: controlsRow.implicitHeight + 12
-        radius: 8
-        color: Qt.rgba(0.06, 0.08, 0.11, 0.46)
-        border.color: Qt.rgba(1, 1, 1, 0.16)
-        visible: !root.decorativeMode
-
-        RowLayout {
-            id: controlsRow
-            anchors.fill: parent
-            anchors.leftMargin: 8
-            anchors.rightMargin: 8
-            spacing: 7
-
-            ToolButton {
-                Layout.preferredWidth: 30
-                Layout.preferredHeight: 28
-                text: root.micMuted ? "M" : "m"
-                ToolTip.visible: hovered
-                ToolTip.text: "麦克风"
-                onClicked: root.micMuteToggled(!root.micMuted)
-            }
-
-            ToolButton {
-                Layout.preferredWidth: 30
-                Layout.preferredHeight: 28
-                text: root.cameraEnabled ? "C" : "c"
-                ToolTip.visible: hovered
-                ToolTip.text: "摄像头"
-                onClicked: root.cameraToggled(!root.cameraEnabled)
-            }
-
-            ToolButton {
-                Layout.preferredWidth: 30
-                Layout.preferredHeight: 28
-                text: root.cloudVisionEnabled ? "V" : "v"
-                ToolTip.visible: hovered
-                ToolTip.text: "云视觉"
-                onClicked: root.cloudVisionToggled(!root.cloudVisionEnabled)
-            }
-
-            ToolButton {
-                Layout.preferredWidth: 30
-                Layout.preferredHeight: 28
-                text: root.localOnlyMode ? "L" : "l"
-                ToolTip.visible: hovered
-                ToolTip.text: "本地模式"
-                onClicked: root.localOnlyModeToggled(!root.localOnlyMode)
-            }
-
-            ToolButton {
-                Layout.preferredWidth: 30
-                Layout.preferredHeight: 28
-                visible: root.debugPanelVisible && !root.decorativeMode
-                text: root.debugRetentionEnabled ? "T" : "t"
-                ToolTip.visible: hovered
-                ToolTip.text: "调试保留"
-                onClicked: root.debugRetentionToggled(!root.debugRetentionEnabled)
-            }
-
-            Label {
-                text: Math.round(root.scaleFactor * 100) + "%"
-                color: "#edf5ff"
+                width: parent.width
+                text: root.cloudPrivacyText()
+                color: "#4b3042"
                 font.pixelSize: 11
+                font.bold: true
+                elide: Text.ElideRight
             }
 
-            Slider {
-                id: scaleSlider
-                Layout.fillWidth: true
-                from: 0.65
-                to: 1.45
-                value: root.scaleFactor
-                onMoved: root.scaleRequested(value)
+            Label {
+                width: parent.width
+                text: root.localModeText()
+                color: "#4b3042"
+                font.pixelSize: 11
+                elide: Text.ElideRight
+            }
+
+            Row {
+                width: parent.width
+                spacing: 6
+
+                Label {
+                    text: "调试保留"
+                    color: "#4b3042"
+                    font.pixelSize: 11
+                }
+
+                Switch {
+                    checked: root.debugRetentionEnabled
+                    onToggled: root.debugRetentionToggled(checked)
+                }
+            }
+
+            Label {
+                width: parent.width
+                text: root.debugRetentionText()
+                color: "#7a6b78"
+                font.pixelSize: 10
+                elide: Text.ElideRight
             }
         }
     }
 
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: topControls.bottom
-        anchors.leftMargin: 14
-        anchors.rightMargin: 14
-        anchors.topMargin: 2
-        height: errorLabel.implicitHeight + 12
-        radius: 8
-        color: Qt.rgba(0.88, 0.22, 0.22, 0.72)
-        visible: root.petController && root.petController.error.length > 0
-
-        Label {
-            id: errorLabel
-            anchors.fill: parent
-            anchors.margins: 6
-            text: root.petController ? root.petController.error : ""
-            color: "white"
-            font.pixelSize: 11
-            elide: Text.ElideRight
+    onVoiceReplyEnabledChanged: {
+        if (!root.voiceReplyEnabled && petAudioLoader.item) {
+            petAudioLoader.item.sourceUrl = ""
+            petAudioLoader.item.playbackState = "stopped"
+            petAudioLoader.item.speechFinal = false
         }
     }
 
-    component StatusChip: Rectangle {
-        property string text: ""
-        property color colorBase: "#7db5ff"
-        implicitWidth: chipText.implicitWidth + 14
-        implicitHeight: 22
-        radius: 8
-        color: Qt.rgba(colorBase.r, colorBase.g, colorBase.b, 0.22)
-        border.color: Qt.rgba(colorBase.r, colorBase.g, colorBase.b, 0.34)
+    onCameraEnabledChanged: {
+        if (petCameraLoader.item) {
+            petCameraLoader.item.cameraEnabled = root.cameraEnabled
+        }
+        cameraCaptureStatus = root.cameraEnabled ? "摄像头本地捕捉" : "摄像头关闭"
+    }
 
-        Label {
-            id: chipText
-            anchors.fill: parent
-            anchors.leftMargin: 7
-            anchors.rightMargin: 7
-            verticalAlignment: Text.AlignVCenter
-            horizontalAlignment: Text.AlignHCenter
-            text: parent.text
-            color: "#f7fbff"
-            font.pixelSize: 10
-            font.bold: true
-            elide: Text.ElideRight
+    onCloudVisionEnabledChanged: {
+        if (petCameraLoader.item) {
+            petCameraLoader.item.cloudVisionEnabled = root.cloudVisionEnabled
         }
     }
+
+    DragHandler {
+        id: petDragHandler
+        target: null
+        enabled: !root.clickThrough
+        acceptedButtons: Qt.LeftButton
+        onActiveChanged: {
+            if (active) {
+                root.dragRequested()
+            }
+        }
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        enabled: !root.clickThrough
+        acceptedButtons: Qt.RightButton
+        hoverEnabled: true
+        cursorShape: petDragHandler.active ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+        propagateComposedEvents: true
+        onPressed: function(mouse) {
+            if (mouse.button !== Qt.RightButton) {
+                mouse.accepted = false
+            }
+        }
+        onClicked: function(mouse) {
+            if (mouse.button === Qt.RightButton) {
+                root.controlsRequested(mouse.x, mouse.y)
+                mouse.accepted = true
+            } else {
+                mouse.accepted = false
+            }
+        }
+    }
+
 }
