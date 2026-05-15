@@ -43,7 +43,7 @@ if(MEMOCHAT_ENABLE_LIVE2D_NATIVE)
     set(MEMOCHAT_LIVE2D_NATIVE_AVAILABLE ON)
     message(STATUS "Live2D Cubism Native enabled from ${Live2DCubism_ROOT_DIR}")
 else()
-    message(STATUS "Live2D Cubism Native disabled; using MemoChat placeholder pet renderer")
+    message(STATUS "Live2D Cubism Native disabled; Live2DRenderItem will show model error diagnostics")
 endif()
 
 if(MSVC)
@@ -58,6 +58,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets Network Sql Qml Quick QuickControls2 Concurrent WebEngineQuick)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets Network Sql Qml Quick QuickControls2 Concurrent WebEngineQuick)
+find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS Multimedia)
+find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS TextToSpeech)
+find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS VirtualKeyboard)
 
 set(SHARED_CLIENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../MemoChatShared)
 
@@ -101,7 +104,11 @@ set(SOURCES
     PetAssetSettings.cpp
     PetController.cpp
     PetModel.cpp
+    PetSpeechSynthesizer.cpp
     Live2DAsset.cpp
+    Live2DCoreRenderer.cpp
+    Live2DOfficialOpenGLRenderer.cpp
+    Live2DPlaceholderRenderer.cpp
     Live2DRenderItem.cpp
     R18Controller.cpp
     R18ListModel.cpp
@@ -142,7 +149,12 @@ set(HEADERS
     PetAssetSettings.h
     PetController.h
     PetModel.h
+    PetSpeechSynthesizer.h
     Live2DAsset.h
+    Live2DRenderer.h
+    Live2DCoreRenderer.h
+    Live2DOfficialOpenGLRenderer.h
+    Live2DPlaceholderRenderer.h
     Live2DRenderItem.h
     R18Controller.h
     R18ListModel.h
@@ -177,11 +189,36 @@ target_compile_definitions(MemoChatQml PRIVATE
     MEMOCHAT_LIVE2D_CUBISM_FOUND=$<BOOL:${MEMOCHAT_LIVE2D_NATIVE_AVAILABLE}>
     MEMOCHAT_LIVE2D_CORE_INCLUDE_DIR="${Live2DCubism_CORE_INCLUDE_DIR}"
     MEMOCHAT_LIVE2D_FRAMEWORK_INCLUDE_DIR="${Live2DCubism_FRAMEWORK_INCLUDE_DIR}"
+    MEMOCHAT_QML_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
 if(MEMOCHAT_ENABLE_LIVE2D_NATIVE AND Live2DCubism_FOUND)
+    set(MEMOCHAT_LIVE2D_FRAMEWORK_ROOT "${Live2DCubism_ROOT_DIR}/Framework")
+    set(MEMOCHAT_LIVE2D_FRAMEWORK_SOURCE OpenGL)
+    set(FRAMEWORK_SOURCE "${MEMOCHAT_LIVE2D_FRAMEWORK_SOURCE}")
+    set(LIB_NAME MemoChatLive2DCubismFramework)
+    add_library(${LIB_NAME} STATIC)
+    add_subdirectory("${MEMOCHAT_LIVE2D_FRAMEWORK_ROOT}/src" "${CMAKE_CURRENT_BINARY_DIR}/live2d-framework")
+    unset(LIB_NAME)
+    unset(FRAMEWORK_SOURCE)
+
+    target_include_directories(MemoChatLive2DCubismFramework
+        PUBLIC
+            "${Live2DCubism_FRAMEWORK_INCLUDE_DIR}"
+            "${Live2DCubism_CORE_INCLUDE_DIR}"
+    )
+    target_link_libraries(MemoChatLive2DCubismFramework PUBLIC Live2DCubism::Core)
+
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        find_package(OpenGL REQUIRED)
+        find_package(GLEW REQUIRED)
+        target_compile_definitions(MemoChatLive2DCubismFramework PUBLIC CSM_TARGET_LINUX_GL)
+        target_link_libraries(MemoChatLive2DCubismFramework PUBLIC OpenGL::GL GLEW::GLEW)
+        target_link_libraries(MemoChatQml PRIVATE OpenGL::GL GLEW::GLEW)
+    endif()
+
     target_include_directories(MemoChatQml PRIVATE ${Live2DCubism_INCLUDE_DIRS})
-    target_link_libraries(MemoChatQml PRIVATE Live2DCubism::Native)
+    target_link_libraries(MemoChatQml PRIVATE Live2DCubism::Native MemoChatLive2DCubismFramework)
 endif()
 
 target_link_libraries(MemoChatQml PRIVATE
@@ -197,6 +234,27 @@ target_link_libraries(MemoChatQml PRIVATE
     Qt${QT_VERSION_MAJOR}::Concurrent
     Qt${QT_VERSION_MAJOR}::WebEngineQuick
 )
+
+if(TARGET Qt${QT_VERSION_MAJOR}::Multimedia)
+    target_link_libraries(MemoChatQml PRIVATE Qt${QT_VERSION_MAJOR}::Multimedia)
+    message(STATUS "Qt Multimedia found; desktop pet generated speech playback is available")
+else()
+    message(STATUS "Qt Multimedia not found; desktop pet generated speech playback stays disabled until the QML module is available")
+endif()
+
+if(TARGET Qt${QT_VERSION_MAJOR}::TextToSpeech)
+    target_link_libraries(MemoChatQml PRIVATE Qt${QT_VERSION_MAJOR}::TextToSpeech)
+    message(STATUS "Qt TextToSpeech found; desktop pet text-to-speech fallback is available")
+else()
+    message(STATUS "Qt TextToSpeech not found; desktop pet text-to-speech fallback stays disabled")
+endif()
+
+if(TARGET Qt${QT_VERSION_MAJOR}::VirtualKeyboard)
+    target_link_libraries(MemoChatQml PRIVATE Qt${QT_VERSION_MAJOR}::VirtualKeyboard)
+    message(STATUS "Qt VirtualKeyboard found; desktop pet pinyin input fallback is available")
+else()
+    message(STATUS "Qt VirtualKeyboard not found; desktop pet uses the platform IME fallback")
+endif()
 
 if(WIN32)
     find_library(DWMAPI_LIB dwmapi)

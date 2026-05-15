@@ -1,23 +1,23 @@
 ---
-description: Investigate MemoChat metrics, logs, traces, dashboards, and container resource usage through Prometheus, Loki, Tempo, Grafana, InfluxDB, cAdvisor, and Docker.
+description: 通过 Prometheus、Loki、Tempo、Grafana、InfluxDB、cAdvisor 和 Docker 调查 MemoChat 指标、日志、链路、仪表盘和容器资源使用情况。
 ---
 
-# MemoChat Observability
+# MemoChat 可观测性
 
-Use when diagnosing latency, errors, missing telemetry, service health, dashboards, logs, traces, or resource usage.
+用于诊断延迟、错误、缺失遥测、服务健康、仪表盘、日志、链路或资源使用问题。
 
-## Data Sources
+## 数据源
 
-Prefer MCP tools when available:
+可用时优先使用 MCP 工具：
 
-- Prometheus: `prometheus_query`, `prometheus_targets`
-- Loki: `loki_query`
-- Tempo: `tempo_services`, `tempo_search_traces`
-- Grafana: `grafana_datasources`, `grafana_search_dashboards`
-- InfluxDB: `influx_query`
-- cAdvisor: `cadvisor_metrics`
+- Prometheus：`prometheus_query`、`prometheus_targets`
+- Loki：`loki_query`
+- Tempo：`tempo_services`、`tempo_search_traces`
+- Grafana：`grafana_datasources`、`grafana_search_dashboards`
+- InfluxDB：`influx_query`
+- cAdvisor：`cadvisor_metrics`
 
-Fallback HTTP endpoints:
+备用 HTTP 端点：
 
 ```bash
 curl -fsS http://127.0.0.1:9090/-/ready
@@ -27,19 +27,19 @@ curl -fsS http://127.0.0.1:3000/api/health
 curl -fsS http://127.0.0.1:8088/metrics
 ```
 
-## Investigation Flow
+## 调查流程
 
-1. Identify the service and time window.
-2. Check Docker status and restart history.
-3. Check Prometheus targets for scrape failures.
-4. Query Loki for service errors.
-5. Search Tempo for traces by service or endpoint.
-6. Inspect cAdvisor/container CPU/memory when latency or crashes are involved.
-7. Check Grafana datasource/dashboard provisioning only if dashboards are wrong.
+1. 确定服务和时间窗口。
+2. 检查 Docker 状态和重启历史。
+3. 检查 Prometheus targets 是否有 scrape 失败。
+4. 查询 Loki 中的服务错误。
+5. 按服务或端点在 Tempo 中搜索 trace。
+6. 延迟或崩溃相关时，检查 cAdvisor/container CPU/内存。
+7. 只有仪表盘错误时，才检查 Grafana datasource/dashboard provisioning。
 
-## Useful Query Patterns
+## 常用查询模式
 
-Prometheus:
+Prometheus：
 
 ```text
 up
@@ -48,7 +48,7 @@ process_resident_memory_bytes
 container_cpu_usage_seconds_total
 ```
 
-Loki:
+Loki：
 
 ```text
 {service="GateServer"} |= "error"
@@ -56,29 +56,29 @@ Loki:
 {service=~"GateServer|ChatServer|StatusServer|VarifyServer"}
 ```
 
-Tempo:
+Tempo：
 
-- search by service name first
-- then narrow by route, status, or trace id from logs
+- 先按服务名搜索
+- 再按 route、status 或日志中的 trace id 收窄
 
-## Code/Config Areas
+## 代码/配置区域
 
-Check:
+检查：
 
-- service `config.ini` telemetry sections
+- 服务 `config.ini` 的 telemetry sections
 - `apps/server/core/common/logging`
-- `apps/server/core/common/observability` if present
+- 若存在，检查 `apps/server/core/common/observability`
 - `infra/deploy/local/observability`
 - `infra/deploy/local/docker-compose.yml`
 - `infra/Memo_ops/runtime/services/*/config.ini`
 
-## Report
+## 报告
 
-Include:
+包含：
 
-- exact time window
-- datasource queried
-- query strings
-- key log/metric/trace findings
-- likely root cause
-- recommended code/config/runtime fix
+- 准确时间窗口
+- 查询过的数据源
+- 查询字符串
+- 关键日志/指标/trace 发现
+- 可能根因
+- 推荐的代码/配置/运行时修复

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 from typing import AsyncIterator
 
 from .contracts import PetControlEvent, PetObservation, PetSession
@@ -9,6 +10,9 @@ from .event_bus import PetEventBus
 from .policy import PetPolicy
 from .providers import PetProviderError, PetProviderRouter
 from .session_store import PetSessionStore
+from .vision import LocalVisionAnalyzer, VisionCaptureRequest
+from .voice import GPTSoVITSVoiceProvider, VoiceProviderRouter
+from .voice_training import VoiceTrainingJob, VoiceTrainingRequest, VoiceTrainingService, diagnose_reference_audio
 
 
 @dataclass(frozen=True)
@@ -19,7 +23,21 @@ class PetRuntimeConfig:
     live2d_sdk_root: str = ""
     asset_root: str = ""
     cloud_vision_enabled: bool = False
+    local_vision_enabled: bool = False
+    vision_camera_index: int = 0
+    vision_analyzer: str = "opencv"
+    vision_retain_raw_frames: bool = False
     voice_clone_enabled: bool = False
+    voice_provider: str = "scripted"
+    voice_sovits_base_url: str = ""
+    voice_sovits_reference_audio: str = ""
+    voice_sovits_prompt_text: str = ""
+    voice_sovits_prompt_language: str = "zh"
+    voice_sovits_text_language: str = "zh"
+    voice_sovits_output_dir: str = "/app/.data/pet-voice-cache"
+    voice_sovits_timeout_sec: float = 60.0
+    voice_training_enabled: bool = True
+    voice_training_artifact_root: str = "/app/.data/pet-voice-training"
 
 
 class PetRuntime:
@@ -31,7 +49,26 @@ class PetRuntime:
         self._observations: dict[str, PetObservation] = {}
         self._events = PetEventBus()
         self._policy = PetPolicy()
-        self._providers = PetProviderRouter(deterministic=self._config.deterministic)
+        self._voice_router = VoiceProviderRouter(
+            deterministic=self._config.deterministic,
+            deterministic_output_dir=self._config.voice_sovits_output_dir,
+        )
+        self._gpt_sovits_provider: GPTSoVITSVoiceProvider | None = None
+        self._register_configured_voice_providers()
+        self._providers = PetProviderRouter(
+            deterministic=self._config.deterministic,
+            voice_router=self._voice_router,
+        )
+        self._vision = LocalVisionAnalyzer(
+            enabled=self._config.local_vision_enabled,
+            default_camera_index=self._config.vision_camera_index,
+            analyzer=self._config.vision_analyzer,
+            retain_raw_frames=self._config.vision_retain_raw_frames,
+        )
+        self._voice_training = VoiceTrainingService(
+            voice_clone_enabled=self._config.voice_clone_enabled,
+            artifact_root=self._config.voice_training_artifact_root,
+        )
 
     async def create_session(
         self,
@@ -60,6 +97,7 @@ class PetRuntime:
         content: str,
         model_type: str = "",
         model_name: str = "",
+        metadata: dict | None = None,
     ) -> list[PetControlEvent]:
         session = self._sessions.touch(session_id, status="active")
         text = content.strip()
@@ -76,8 +114,15 @@ class PetRuntime:
             observation=self._observations.get(session_id),
         )
 
+        runtime_metadata = self._voice_runtime_metadata()
+        runtime_metadata.update(_request_runtime_metadata(metadata))
+
         try:
-            chunks = await self._providers.generate(session, prompt)
+            chunks = await self._providers.generate(
+                session,
+                prompt,
+                runtime_metadata=runtime_metadata,
+            )
         except PetProviderError as exc:
             events.append(await self._emit(session_id, turn_id=turn_id, **self._policy.provider_error(exc)))
             return events
@@ -96,6 +141,15 @@ class PetRuntime:
             turn_id=f"petturn-observe-{uuid.uuid4().hex}",
             **self._policy.observation(observation),
         )
+
+    async def capture_observation(
+        self,
+        request: VisionCaptureRequest,
+    ) -> tuple[PetObservation, PetControlEvent]:
+        self._sessions.touch(request.session_id, status="active")
+        observation = self._vision.capture(request)
+        event = await self.update_observation(observation)
+        return observation, event
 
     async def interrupt(self, session_id: str) -> PetControlEvent:
         session = self._sessions.touch(session_id, status="interrupted")
@@ -149,12 +203,137 @@ class PetRuntime:
     def list_sessions(self, uid: int = 0) -> list[PetSession]:
         return self._sessions.list(uid)
 
+    def create_voice_training_job(self, request: VoiceTrainingRequest) -> VoiceTrainingJob:
+        if not self._config.enabled:
+            raise RuntimeError("desktop pet is disabled by configuration")
+        if not self._config.voice_training_enabled:
+            raise RuntimeError("desktop pet voice training is disabled by configuration")
+        return self._voice_training.create_job(request)
+
+    def get_voice_training_job(self, job_id: str) -> VoiceTrainingJob:
+        return self._voice_training.get_job(job_id)
+
+    def list_voice_training_jobs(self, uid: int = 0) -> list[VoiceTrainingJob]:
+        return self._voice_training.list_jobs(uid)
+
+    async def diagnostics(
+        self,
+        probe_voice_endpoint: bool = False,
+        open_camera: bool = False,
+    ) -> dict:
+        voice = await self.voice_diagnostics(probe_endpoint=probe_voice_endpoint)
+        vision = self.vision_diagnostics(open_camera=open_camera)
+        ready = bool(voice.get("ready")) and bool(vision.get("ready"))
+        return {
+            "ready": ready,
+            "voice": voice,
+            "vision": vision,
+            "needs_user_voice_material": bool(voice.get("needs_user_material")),
+            "needs_camera_runtime": not bool(vision.get("ready")),
+        }
+
+    async def voice_diagnostics(self, probe_endpoint: bool = False) -> dict:
+        reference_audio = self._configured_or_trained_reference_audio()
+        prompt_text = self._configured_or_trained_prompt_text(reference_audio)
+        audio = diagnose_reference_audio(reference_audio) if reference_audio else diagnose_reference_audio("")
+        provider = GPTSoVITSVoiceProvider(
+            base_url=self._config.voice_sovits_base_url,
+            reference_audio=reference_audio,
+            prompt_text=prompt_text,
+            prompt_language=self._config.voice_sovits_prompt_language,
+            text_language=self._config.voice_sovits_text_language,
+            output_dir=self._config.voice_sovits_output_dir,
+            timeout_sec=self._config.voice_sovits_timeout_sec,
+        )
+        provider_diagnostics = await provider.diagnostics(probe_endpoint=probe_endpoint)
+        needs_material = bool(audio.get("needs_more_audio_for_inference")) or not bool(reference_audio)
+        return {
+            "ready": bool(provider_diagnostics.get("ready")) and bool(audio.get("zero_shot_ready")),
+            "provider": provider_diagnostics,
+            "reference_audio": audio,
+            "needs_user_material": needs_material,
+            "needs_reference_clip": bool(audio.get("needs_reference_clip")),
+            "needs_prompt_text": bool(reference_audio) and bool(audio.get("zero_shot_ready")) and not bool(prompt_text.strip()),
+            "needs_training_material": bool(audio.get("needs_more_audio_for_training")),
+            "message": _voice_diagnostics_message(provider_diagnostics, audio, bool(reference_audio)),
+        }
+
+    def vision_diagnostics(
+        self,
+        camera_index: int | None = None,
+        open_camera: bool = False,
+    ) -> dict:
+        return self._vision.diagnostics(camera_index=camera_index, open_camera=open_camera)
+
     @property
     def config(self) -> PetRuntimeConfig:
         return self._config
 
     async def _emit(self, session_id: str, **kwargs) -> PetControlEvent:
         return await self._events.publish(session_id, **kwargs)
+
+    def audio_file_path(self, file_name: str):
+        safe_name = Path(str(file_name or "")).name
+        if not safe_name:
+            raise KeyError("audio file name is empty")
+        path = Path(self._config.voice_sovits_output_dir).joinpath(safe_name)
+        root = Path(self._config.voice_sovits_output_dir).resolve()
+        resolved = path.resolve()
+        if root not in (resolved, *resolved.parents):
+            raise KeyError("audio file path escapes voice cache")
+        if not resolved.exists() or not resolved.is_file():
+            raise KeyError(f"audio file not found: {safe_name}")
+        return resolved
+
+    def _register_configured_voice_providers(self) -> None:
+        if _normalize_provider(self._config.voice_provider) == "gpt-sovits" or self._config.voice_sovits_base_url:
+            provider = GPTSoVITSVoiceProvider(
+                base_url=self._config.voice_sovits_base_url,
+                reference_audio=self._config.voice_sovits_reference_audio,
+                prompt_text=self._config.voice_sovits_prompt_text,
+                prompt_language=self._config.voice_sovits_prompt_language,
+                text_language=self._config.voice_sovits_text_language,
+                output_dir=self._config.voice_sovits_output_dir,
+                timeout_sec=self._config.voice_sovits_timeout_sec,
+            )
+            self._gpt_sovits_provider = provider
+            self._voice_router.register("gpt-sovits", provider)
+            self._voice_router.register("sovits", provider)
+            self._voice_router.register("SoVITS", provider)
+
+    def _voice_runtime_metadata(self) -> dict:
+        provider = _normalize_provider(self._config.voice_provider)
+        reference_audio = self._configured_or_trained_reference_audio()
+        prompt_text = self._configured_or_trained_prompt_text(reference_audio)
+        if provider in {"", "scripted", "deterministic"}:
+            if not self._config.voice_sovits_base_url or not reference_audio:
+                return {}
+            provider = "gpt-sovits"
+        if provider == "gpt-sovits" and not reference_audio:
+            return {}
+        return {
+            "voice_provider": provider,
+            "voice_name": provider,
+            "voice_language": self._config.voice_sovits_text_language or "zh",
+            "ref_audio_path": reference_audio,
+            "prompt_text": prompt_text,
+            "prompt_lang": self._config.voice_sovits_prompt_language,
+            "text_lang": self._config.voice_sovits_text_language,
+        }
+
+    def _configured_or_trained_reference_audio(self) -> str:
+        configured = self._config.voice_sovits_reference_audio.strip()
+        if configured:
+            return configured
+        return self._voice_training.latest_ready_reference_audio()
+
+    def _configured_or_trained_prompt_text(self, reference_audio: str) -> str:
+        configured = self._config.voice_sovits_prompt_text.strip()
+        if configured:
+            return configured
+        if not reference_audio:
+            return ""
+        return _prompt_text_from_reference_audio(reference_audio)
 
 
 def _turn_id() -> str:
@@ -173,5 +352,98 @@ def _runtime_config_from(config: PetRuntimeConfig | object | None) -> PetRuntime
         live2d_sdk_root=str(getattr(config, "live2d_sdk_root", "") or ""),
         asset_root=str(getattr(config, "asset_root", "") or ""),
         cloud_vision_enabled=bool(getattr(config, "cloud_vision_enabled", False)),
+        local_vision_enabled=bool(getattr(config, "local_vision_enabled", False)),
+        vision_camera_index=_non_negative_int(getattr(config, "vision_camera_index", 0)),
+        vision_analyzer=str(getattr(config, "vision_analyzer", "opencv") or "opencv"),
+        vision_retain_raw_frames=bool(getattr(config, "vision_retain_raw_frames", False)),
         voice_clone_enabled=bool(getattr(config, "voice_clone_enabled", False)),
+        voice_provider=str(getattr(config, "voice_provider", "scripted") or "scripted"),
+        voice_sovits_base_url=str(getattr(config, "voice_sovits_base_url", "") or ""),
+        voice_sovits_reference_audio=str(getattr(config, "voice_sovits_reference_audio", "") or ""),
+        voice_sovits_prompt_text=str(getattr(config, "voice_sovits_prompt_text", "") or ""),
+        voice_sovits_prompt_language=str(getattr(config, "voice_sovits_prompt_language", "zh") or "zh"),
+        voice_sovits_text_language=str(getattr(config, "voice_sovits_text_language", "zh") or "zh"),
+        voice_sovits_output_dir=str(
+            getattr(config, "voice_sovits_output_dir", "/app/.data/pet-voice-cache")
+            or "/app/.data/pet-voice-cache"
+        ),
+        voice_sovits_timeout_sec=_positive_float(getattr(config, "voice_sovits_timeout_sec", 60.0), 60.0),
+        voice_training_enabled=bool(getattr(config, "voice_training_enabled", True)),
+        voice_training_artifact_root=str(
+            getattr(config, "voice_training_artifact_root", "/app/.data/pet-voice-training")
+            or "/app/.data/pet-voice-training"
+        ),
     )
+
+
+def _normalize_provider(value: str) -> str:
+    return str(value or "").strip().lower()
+
+
+def _non_negative_int(value) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, number)
+
+
+def _positive_float(value, fallback: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    return max(1.0, number)
+
+
+def _voice_diagnostics_message(provider: dict, audio: dict, reference_configured: bool) -> str:
+    if not reference_configured:
+        return "No GPT-SoVITS reference audio is configured; ask the user for a clean voice sample."
+    if audio.get("needs_more_audio_for_inference"):
+        return str(audio.get("recommended_next_step") or "Provide at least 5 seconds of clean reference audio.")
+    if audio.get("needs_reference_clip"):
+        return "Voice material is long enough, but GPT-SoVITS synthesis still needs a clean 5-15 second reference clip plus matching prompt text."
+    if not provider.get("configured"):
+        return "Reference audio is usable, but GPT-SoVITS base URL is not configured."
+    if provider.get("status") == "endpoint_unreachable":
+        return str(provider.get("message") or "GPT-SoVITS endpoint is unreachable.")
+    if audio.get("needs_more_audio_for_training"):
+        return str(audio.get("recommended_next_step") or "Provide more audio for better few-shot training.")
+    return "Voice material and GPT-SoVITS configuration look ready for the next integration step."
+
+
+def _prompt_text_from_reference_audio(reference_audio: str) -> str:
+    if not reference_audio:
+        return ""
+    path = Path(reference_audio)
+    for candidate in (path.with_suffix(".ja.txt"), path.with_suffix(".zh.txt"), path.with_suffix(".txt")):
+        try:
+            if candidate.is_file():
+                return " ".join(candidate.read_text(encoding="utf-8").split())
+        except OSError:
+            continue
+    return ""
+
+
+def _request_runtime_metadata(metadata: dict | None) -> dict:
+    if not isinstance(metadata, dict):
+        return {}
+    result: dict = {}
+    reply_language = str(
+        metadata.get("reply_language")
+        or metadata.get("language")
+        or metadata.get("target_language")
+        or ""
+    ).strip()
+    if reply_language:
+        result["reply_language"] = reply_language
+        result["language"] = reply_language
+        result["voice_language"] = reply_language
+        if reply_language.lower().startswith("ja"):
+            result["text_lang"] = "ja"
+        elif reply_language.lower().startswith("zh"):
+            result["text_lang"] = "zh"
+    speech_rules = str(metadata.get("speech_rules") or "").strip()
+    if speech_rules:
+        result["speech_rules"] = speech_rules
+    return result

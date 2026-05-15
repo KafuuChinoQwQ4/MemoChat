@@ -16,6 +16,7 @@ class PetPromptContext:
     model_type: str = ""
     model_name: str = ""
     observation_summary: dict = field(default_factory=dict)
+    runtime_metadata: dict = field(default_factory=dict)
     memory_snippets: list[str] = field(default_factory=list)
     safety_notes: list[str] = field(default_factory=list)
 
@@ -41,6 +42,7 @@ class PetPromptBuilder:
             model_type=model_type,
             model_name=model_name,
             observation_summary=_observation_summary(observation),
+            runtime_metadata={},
             safety_notes=["no raw media persistence by default"],
         )
 

@@ -401,4 +401,18 @@ pet:
   live2d_sdk_root: ""
   asset_root: ""
   cloud_vision_enabled: false
+  local_vision_enabled: false
+  vision_camera_index: 0
+  vision_analyzer: "opencv"
+  vision_retain_raw_frames: false
   voice_clone_enabled: false
+  voice_provider: "scripted"
+  voice_sovits_base_url: ""
+  voice_sovits_reference_audio: ""
+  voice_sovits_prompt_text: ""
+  voice_sovits_prompt_language: "zh"
+  voice_sovits_text_language: "zh"
+  voice_sovits_output_dir: "/app/.data/pet-voice-cache"
+  voice_sovits_timeout_sec: 60
+  voice_training_enabled: true
+  voice_training_artifact_root: "/app/.data/pet-voice-training"

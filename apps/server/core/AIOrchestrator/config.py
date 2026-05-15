@@ -335,7 +335,21 @@ class PetFeatureConfig(BaseModel):
     live2d_sdk_root: str = ""
     asset_root: str = ""
     cloud_vision_enabled: bool = False
+    local_vision_enabled: bool = False
+    vision_camera_index: int = 0
+    vision_analyzer: str = "opencv"
+    vision_retain_raw_frames: bool = False
     voice_clone_enabled: bool = False
+    voice_provider: str = "scripted"
+    voice_sovits_base_url: str = ""
+    voice_sovits_reference_audio: str = ""
+    voice_sovits_prompt_text: str = ""
+    voice_sovits_prompt_language: str = "zh"
+    voice_sovits_text_language: str = "zh"
+    voice_sovits_output_dir: str = "/app/.data/pet-voice-cache"
+    voice_sovits_timeout_sec: float = 60.0
+    voice_training_enabled: bool = True
+    voice_training_artifact_root: str = "/app/.data/pet-voice-training"
 
 
 class Settings(BaseSettings):
@@ -416,7 +430,21 @@ _PET_ENV_ALIASES = {
     "MEMOCHAT_LIVE2D_SDK_ROOT": "live2d_sdk_root",
     "MEMOCHAT_PET_ASSET_ROOT": "asset_root",
     "MEMOCHAT_PET_CLOUD_VISION": "cloud_vision_enabled",
+    "MEMOCHAT_PET_LOCAL_VISION": "local_vision_enabled",
+    "MEMOCHAT_PET_VISION_CAMERA_INDEX": "vision_camera_index",
+    "MEMOCHAT_PET_VISION_ANALYZER": "vision_analyzer",
+    "MEMOCHAT_PET_VISION_RETAIN_RAW_FRAMES": "vision_retain_raw_frames",
     "MEMOCHAT_PET_VOICE_CLONE": "voice_clone_enabled",
+    "MEMOCHAT_PET_VOICE_PROVIDER": "voice_provider",
+    "MEMOCHAT_PET_SOVITS_BASE_URL": "voice_sovits_base_url",
+    "MEMOCHAT_PET_SOVITS_REFERENCE_AUDIO": "voice_sovits_reference_audio",
+    "MEMOCHAT_PET_SOVITS_PROMPT_TEXT": "voice_sovits_prompt_text",
+    "MEMOCHAT_PET_SOVITS_PROMPT_LANGUAGE": "voice_sovits_prompt_language",
+    "MEMOCHAT_PET_SOVITS_TEXT_LANGUAGE": "voice_sovits_text_language",
+    "MEMOCHAT_PET_SOVITS_OUTPUT_DIR": "voice_sovits_output_dir",
+    "MEMOCHAT_PET_SOVITS_TIMEOUT_SEC": "voice_sovits_timeout_sec",
+    "MEMOCHAT_PET_VOICE_TRAINING": "voice_training_enabled",
+    "MEMOCHAT_PET_VOICE_TRAINING_ARTIFACT_ROOT": "voice_training_artifact_root",
 }
 
 

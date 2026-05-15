@@ -1,23 +1,23 @@
 ---
-description: Diagnose MemoChat Docker services, fixed ports, container health, and MCP connectivity without changing runtime mappings.
+description: 诊断 MemoChat Docker 服务、固定端口、容器健康状态和 MCP 连通性，同时不改变运行时映射。
 ---
 
-# MemoChat Docker Diagnose
+# MemoChat Docker 诊断
 
-Use when containers fail to start, MCP cannot connect, ports conflict, health checks fail, or a service cannot reach Redis/Postgres/Mongo/Redpanda/RabbitMQ/MinIO/observability/AI dependencies.
+当容器启动失败、MCP 无法连接、端口冲突、健康检查失败，或某个服务无法连接 Redis/Postgres/Mongo/Redpanda/RabbitMQ/MinIO/观测/AI 依赖时使用。
 
-## Rules
+## 规则
 
-- Docker is the source of truth for infrastructure.
-- Do not install local database or queue services outside Docker.
-- Do not change published ports unless the user explicitly asks.
-- Arch native Docker is the default runtime. Source `/root/.memochat-linux-env` so `DOCKER_HOST` is unset and Docker uses `/var/run/docker.sock`.
-- Prefer `/data` for Linux caches/downloads and `/data/docker-data/memochat` for Docker bind data. Windows Docker Desktop data under `D:\docker-data` is legacy migration/backup data only.
-- Use MCP tools when available; otherwise use `docker exec` and container logs.
+- Docker 是基础设施的事实来源。
+- 不要在 Docker 外安装本地数据库或队列服务。
+- 除非用户明确要求，否则不要修改发布端口。
+- Arch 原生 Docker 是默认运行时。加载 `/root/.memochat-linux-env`，让 `DOCKER_HOST` 取消设置，并使 Docker 使用 `/var/run/docker.sock`。
+- Linux 缓存/下载优先使用 `/data`，Docker 绑定数据使用 `/data/docker-data/memochat`。`D:\docker-data` 下的 Windows Docker Desktop 数据只作为旧版迁移/备份数据。
+- 可用时使用 MCP 工具；否则使用 `docker exec` 和容器日志。
 
-## Baseline Inventory
+## 基线清点
 
-Run:
+运行：
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
@@ -25,9 +25,9 @@ docker network ls
 docker compose -f infra/deploy/local/docker-compose.yml ps
 ```
 
-If Docker is unavailable in Arch, check `systemctl is-active docker`, then start it with `systemctl enable --now docker`. Do not switch to Docker Desktop unless the task is explicitly a legacy migration or backup check.
+如果 Arch 中 Docker 不可用，检查 `systemctl is-active docker`，然后用 `systemctl enable --now docker` 启动。除非任务明确是旧版迁移或备份检查，否则不要切换到 Docker Desktop。
 
-Expected fixed host ports:
+预期固定主机端口：
 
 - Redis `6379`
 - Postgres `15432`
@@ -47,9 +47,9 @@ Expected fixed host ports:
 - OTel `4317/4318/9411/9464`
 - cAdvisor `8088`
 
-## Health Checks
+## 健康检查
 
-Use targeted checks:
+使用定向检查：
 
 ```bash
 docker exec memochat-redis redis-cli -a 123456 ping
@@ -60,7 +60,7 @@ docker exec memochat-rabbitmq rabbitmq-diagnostics -q ping
 docker exec memochat-redpanda rpk cluster info --brokers 127.0.0.1:19092
 ```
 
-For HTTP services:
+对于 HTTP 服务：
 
 ```bash
 curl -fsS http://127.0.0.1:3000/api/health
@@ -72,41 +72,41 @@ curl -fsS http://127.0.0.1:7474/
 curl -fsS http://127.0.0.1:11434/api/tags
 ```
 
-## Logs And Root Cause
+## 日志和根因
 
-Use:
+使用：
 
 ```bash
 docker logs --tail 200 <container>
 docker inspect <container>
 ```
 
-Classify the failure:
+分类故障：
 
-- container not running
-- unhealthy healthcheck
-- port conflict
-- bad credentials
-- volume/data corruption
-- missing Docker network
-- service config points to host port from inside Docker
-- MCP startup timeout or wrong host/port
+- 容器未运行
+- healthcheck 不健康
+- 端口冲突
+- 凭据错误
+- volume/数据损坏
+- 缺少 Docker network
+- Docker 内部服务配置指向了主机端口
+- MCP 启动超时或 host/port 错误
 
-## Safe Fixes
+## 安全修复
 
-- Restart one container when logs show transient startup failure:
+- 日志显示瞬时启动失败时，只重启单个容器：
   `docker restart <container>`
-- Recreate only the relevant compose service when config changed:
+- 配置改变时，只重建相关 compose 服务：
   `docker compose -f <compose-file> up -d <service>`
-- For data reset, stop first and only delete the specific approved Docker volume or host data path.
+- 数据重置必须先停止，并且只删除已批准的具体 Docker volume 或主机数据路径。
 
-## Report
+## 报告
 
-Return:
+返回：
 
-- affected containers
-- exact failing check
-- root cause
-- commands run
-- safe next action
-- whether any port/config drift was found
+- 受影响容器
+- 准确失败检查
+- 根因
+- 执行的命令
+- 安全下一步
+- 是否发现任何端口/配置漂移

@@ -30,6 +30,8 @@ class PetGateBoundaryContractTests(unittest.TestCase):
         self.assertGreaterEqual(source.count('req.set("X-Request-Id"'), 2)
         self.assertIn("connection ? connection->GetTraceId() : \"\"", source)
         self.assertIn("connection ? connection->GetRequestId() : \"\"", source)
+        self.assertIn("res.base().find(http::field::content_type)", source)
+        self.assertIn("upstream_content_type.empty()", source)
 
     def test_gate_pet_stream_uses_single_stream_start_path(self):
         source = read(AI_ROUTE_MODULES)

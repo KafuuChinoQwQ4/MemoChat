@@ -46,6 +46,15 @@ REQUIRED_PROPERTIES = (
     "interruptEnabled",
     "cameraEnabled",
     "cloudVisionEnabled",
+    "autoStartPetOnClientStart",
+    "voiceTrainingConsent",
+    "voiceTrainingConsentScope",
+    "voiceTrainingJobId",
+    "voiceTrainingStatus",
+    "voiceTrainingStage",
+    "voiceTrainingProgress",
+    "voiceTrainingArtifactPath",
+    "voiceTrainingMessage",
     "storagePath",
     "dirty",
     "statusText",
@@ -62,6 +71,8 @@ REQUIRED_INVOKABLES = (
     "save",
     "resetToDefaults",
     "toVariantMap",
+    "pickLocalFilePath",
+    "pickLocalDirectoryPath",
 )
 
 QML_EDITABLE_FIELDS = (
@@ -86,13 +97,20 @@ QML_EDITABLE_FIELDS = (
     "creativityLevel",
     "voiceSpeed",
     "lipSyncSensitivity",
+    "voiceTrainingConsent",
+    "voiceTrainingConsentScope",
+    "voiceTrainingJobId",
+    "voiceTrainingStatus",
+    "voiceTrainingStage",
+    "voiceTrainingProgress",
+    "voiceTrainingArtifactPath",
+    "voiceTrainingMessage",
+    "autoStartPetOnClientStart",
 )
 
 FORBIDDEN_LICENSED_ASSET_TOKENS = (
-    "src/KafuuChino",
-    "KafuuChino",
-    "香风智乃live2D",
-    "香风智乃.model3.json",
+    "qrc:/src/KafuuChino",
+    "<file>src/KafuuChino",
 )
 
 
@@ -199,6 +217,27 @@ class PetAssetSettingsContractTests(unittest.TestCase):
         self.assertContains(source, "toVariantMap")
         self.assertContains(source, "schema_version")
 
+    def test_pet_asset_settings_defaults_client_pet_autostart_off_and_exposes_pickers(self):
+        header = read(PET_ASSET_SETTINGS_H)
+        source = read(PET_ASSET_SETTINGS_CPP)
+
+        self.assertRegex(source, r"_auto_start_pet_on_client_start\s*=\s*false")
+        self.assertRegex(source, r"boolValue\s*\(\s*values\s*,\s*QStringLiteral\(\"autoStartPetOnClientStart\"\)")
+        self.assertIn('values[QStringLiteral("autoStartPetOnClientStart")]', source)
+
+        for token in (
+            "QFileDialog",
+            "QFileInfo",
+            "pickLocalFilePath",
+            "pickLocalDirectoryPath",
+            "QFileDialog::getOpenFileName",
+            "QFileDialog::getExistingDirectory",
+        ):
+            self.assertContains(source, token)
+
+        self.assertRegex(header, r"Q_INVOKABLE\s+QString\s+pickLocalFilePath\s*\(")
+        self.assertRegex(header, r"Q_INVOKABLE\s+QString\s+pickLocalDirectoryPath\s*\(")
+
     def test_pet_asset_settings_clamps_invalid_json_to_safe_defaults(self):
         self.assertFileExists(PET_ASSET_SETTINGS_CPP)
         source = read(PET_ASSET_SETTINGS_CPP)
@@ -220,17 +259,47 @@ class PetAssetSettingsContractTests(unittest.TestCase):
         ):
             self.assertContains(source, token)
 
-    def test_pet_asset_settings_does_not_embed_licensed_live2d_resources(self):
+    def test_pet_asset_settings_defaults_to_user_requested_src_character_assets(self):
+        source = read(PET_ASSET_SETTINGS_CPP)
+        qml = read(CHARACTER_PANE_QML)
+        cmake = read(CLIENT_CMAKE)
+
+        for token in (
+            "MEMOCHAT_QML_SOURCE_DIR",
+            "src/KafuuChino/香风智乃live2D",
+            "src/KafuuChino/香风智乃live2D/香风智乃.model3.json",
+            "src/KafuuChino/香风智乃voice",
+            "Kafuuchino-voice.mp3",
+        ):
+            self.assertContains(source, token)
+
+        for token in (
+            "src/KafuuChino/香风智乃live2D",
+            "src/KafuuChino/香风智乃voice",
+            "Kafuuchino-voice.mp3",
+        ):
+            self.assertContains(qml, token)
+
+        self.assertContains(cmake, "MEMOCHAT_QML_SOURCE_DIR")
+
+    def test_pet_asset_settings_does_not_bundle_licensed_live2d_resources(self):
         checked_sources = {
-            "PetAssetSettings.h": read(PET_ASSET_SETTINGS_H) if PET_ASSET_SETTINGS_H.exists() else "",
-            "PetAssetSettings.cpp": read(PET_ASSET_SETTINGS_CPP) if PET_ASSET_SETTINGS_CPP.exists() else "",
-            "Live2DCharacterPane.qml": read(CHARACTER_PANE_QML),
             "qml.qrc": read(QML_QRC),
+            "CMakeLists.txt": read(CLIENT_CMAKE),
         }
 
         for label, text in checked_sources.items():
             for token in FORBIDDEN_LICENSED_ASSET_TOKENS:
                 self.assertNotIn(token, text, f"{label} should not embed {token!r}")
+
+    def test_character_pane_language_options_are_single_language_only(self):
+        qml = read(CHARACTER_PANE_QML)
+        source = read(PET_ASSET_SETTINGS_CPP)
+
+        self.assertIn('model: ["中文", "日语", "英语", "韩语", "法语", "西班牙语"]', qml)
+        self.assertIn("kLanguageOptionCount - 1", source)
+        for mixed in ("中文优先", "中日混合", "中英双语"):
+            self.assertNotIn(mixed, qml)
 
     def test_character_pane_owns_settings_store_and_loads_on_startup(self):
         qml = read(CHARACTER_PANE_QML)
@@ -273,6 +342,37 @@ class PetAssetSettingsContractTests(unittest.TestCase):
             r"(apply|root\.characterName\s*=)",
             "resetDraft() should re-apply PetAssetSettings defaults to editable UI fields",
         )
+
+    def test_character_pane_exposes_safe_voice_training_controls(self):
+        qml = read(CHARACTER_PANE_QML)
+
+        for token in (
+            "voiceTrainingConsent",
+            "voiceTrainingConsentScope",
+            "voiceTrainingJobId",
+            "voiceTrainingStatus",
+            "voiceTrainingMessage",
+            "function defaultVoicePath",
+            "function startVoiceTraining",
+            "consent_confirmed",
+            "reference_audio_path",
+            "reference_audio_directory",
+            "reference_audio_file",
+            "startVoiceTraining({",
+            "refreshVoiceTraining",
+            "voiceTrainingProgress",
+            "voiceTrainingArtifactPath",
+            "开始声音训练",
+            "允许使用参考音频",
+            "准备包 ",
+            "src-default",
+            "gpt-sovits",
+        ):
+            self.assertContains(qml, token)
+
+        self.assertContains(qml, "src/KafuuChino/香风智乃voice")
+        self.assertContains(qml, "Kafuuchino-voice.mp3")
+        self.assertNotIn("?.", qml, "QML should avoid optional chaining for Qt 6.8 compatibility")
 
 
 if __name__ == "__main__":

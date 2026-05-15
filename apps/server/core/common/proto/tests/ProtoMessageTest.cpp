@@ -80,6 +80,9 @@ TEST(ProtoMessageTest, GetChatServerRsp_WithToken)
     rsp.set_host("192.168.1.100");
     rsp.set_port("8888");
     rsp.set_token("abc-token-xyz");
+    rsp.set_server_name("ChatServer1");
+    rsp.set_quic_host("192.168.1.100");
+    rsp.set_quic_port("9888");
 
     std::string bytes = rsp.SerializeAsString();
 
@@ -89,6 +92,9 @@ TEST(ProtoMessageTest, GetChatServerRsp_WithToken)
     EXPECT_EQ(parsed.host(), "192.168.1.100");
     EXPECT_EQ(parsed.port(), "8888");
     EXPECT_EQ(parsed.token(), "abc-token-xyz");
+    EXPECT_EQ(parsed.server_name(), "ChatServer1");
+    EXPECT_EQ(parsed.quic_host(), "192.168.1.100");
+    EXPECT_EQ(parsed.quic_port(), "9888");
 }
 
 // ---------------------------------------------------------------------------

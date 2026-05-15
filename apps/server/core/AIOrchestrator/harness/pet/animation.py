@@ -12,7 +12,14 @@ class AnimationMapper:
             return {"expression": "surprised", "motion": "idle", "phase": phase}
         return {"expression": "focus" if phase == "speaking" else "neutral", "motion": "talk" if phase == "speaking" else "idle", "phase": phase}
 
-    def for_provider_chunk(self, text: str, emotion: str, final: bool) -> dict:
+    def for_provider_chunk(
+        self,
+        text: str,
+        emotion: str,
+        final: bool,
+        language: str = "zh-CN",
+        translation: str = "",
+    ) -> dict:
         return {
             "phase": "speaking",
             "emotion": emotion or ("cheerful" if final else "speaking"),
@@ -20,16 +27,24 @@ class AnimationMapper:
             "motion": "talk",
             "expression": "smile_soft",
             "speech_text": text,
+            "speech_language": language or "zh-CN",
+            "speech_translation": translation or "",
+            "text_final": final,
             "lip_sync": min(1.0, 0.25 + 0.08 * len(text)),
             "action_name": "speak",
         }
 
     def for_voice_chunk(self, text: str, emotion: str, final: bool, voice) -> dict:
-        event = self.for_provider_chunk(text, emotion, final)
+        metadata = {}
+        if voice is not None:
+            voice_payload = voice.to_dict() if hasattr(voice, "to_dict") else dict(voice)
+            metadata = voice_payload.get("metadata") or {}
+        language = str(metadata.get("language") or metadata.get("text_language") or "zh-CN")
+        translation = str(metadata.get("translation") or metadata.get("zh_translation") or "")
+        event = self.for_provider_chunk(text, emotion, final, language=language, translation=translation)
         if voice is None:
             return event
 
-        voice_payload = voice.to_dict() if hasattr(voice, "to_dict") else dict(voice)
         rms = voice_payload.get("rms", event["lip_sync"])
         event["lip_sync"] = rms
         event["audio_state"] = voice_payload.get("state") or "text-only"

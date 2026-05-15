@@ -97,9 +97,10 @@ class PetPrivacyUiContractTests(unittest.TestCase):
         self.assertIn("debugRetentionEnabled", scene)
         self.assertRegex(
             scene,
-            r"\bvisible\s*:\s*root\.debugPanelVisible\s*&&\s*!root\.decorativeMode",
+            r"\bvisible\s*:\s*root\.debugPanelVisible\b",
         )
-        self.assertIn("debugRetentionToggled(!root.debugRetentionEnabled)", scene)
+        self.assertIn('text: "调试保留"', scene)
+        self.assertIn("root.debugRetentionToggled(checked)", scene)
 
     def test_custom_signals_do_not_collide_with_property_notifiers(self):
         scene = read_qml(PET_SCENE_QML)

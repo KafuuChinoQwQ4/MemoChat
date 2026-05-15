@@ -1,21 +1,334 @@
 #include "Live2DRenderItem.h"
 
-#include <QBrush>
+#include "Live2DOfficialOpenGLRenderer.h"
+
 #include <QColor>
+#include <QDir>
 #include <QEvent>
-#include <QLinearGradient>
+#include <QFileInfo>
+#include <QFont>
+#include <QMetaObject>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPen>
+#include <QOpenGLContext>
+#include <QOpenGLFramebufferObject>
+#include <QOpenGLFunctions>
+#include <QOpenGLPaintDevice>
+#include <QPointer>
+#include <QQuickOpenGLUtils>
 #include <QQuickWindow>
+#include <QRadialGradient>
+#include <QStringList>
+#include <QUrl>
+#include <QVariant>
 #include <QtMath>
+#include <memory>
+
+namespace {
+QString loadingStatus()
+{
+    return QStringLiteral("loading");
+}
+
+QString readyStatus()
+{
+    return QStringLiteral("ready");
+}
+
+QString errorStatus()
+{
+    return QStringLiteral("error");
+}
+
+QString compactErrorText(QString error)
+{
+    error = error.simplified();
+    constexpr qsizetype kMaximumLength = 220;
+    if (error.size() > kMaximumLength) {
+        error = error.left(kMaximumLength - 3) + QStringLiteral("...");
+    }
+    return error;
+}
+
+QRectF centeredRect(const QPointF &center, qreal width, qreal height)
+{
+    return QRectF(center.x() - width / 2.0,
+                  center.y() - height / 2.0,
+                  width,
+                  height);
+}
+
+void drawModelErrorMarker(QPainter *painter,
+                          const QRectF &itemBounds,
+                          const QString &modelPath,
+                          const QString &error)
+{
+    if (!painter) {
+        return;
+    }
+
+    painter->setRenderHint(QPainter::Antialiasing, true);
+    painter->setRenderHint(QPainter::TextAntialiasing, true);
+    const QRectF bounds = itemBounds.adjusted(10, 10, -10, -10);
+    if (bounds.width() <= 0 || bounds.height() <= 0) {
+        return;
+    }
+
+    const qreal unit = qMin(bounds.width(), bounds.height());
+    const QPointF center = bounds.center();
+
+    QRadialGradient glow(center, unit * 0.50);
+    glow.setColorAt(0.0, QColor(255, 76, 96, 70));
+    glow.setColorAt(0.62, QColor(255, 76, 96, 26));
+    glow.setColorAt(1.0, QColor(255, 76, 96, 0));
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(glow);
+    painter->drawEllipse(center, unit * 0.50, unit * 0.50);
+
+    const QRectF badge = centeredRect(center, unit * 0.62, unit * 0.62);
+    painter->setPen(QPen(QColor(255, 110, 126, 230), qMax<qreal>(2.0, unit * 0.018)));
+    painter->setBrush(QColor(24, 28, 36, 210));
+    painter->drawRoundedRect(badge, unit * 0.08, unit * 0.08);
+
+    QPainterPath warning;
+    warning.moveTo(center.x(), badge.top() + badge.height() * 0.20);
+    warning.lineTo(badge.right() - badge.width() * 0.18, badge.bottom() - badge.height() * 0.18);
+    warning.lineTo(badge.left() + badge.width() * 0.18, badge.bottom() - badge.height() * 0.18);
+    warning.closeSubpath();
+    painter->setPen(QPen(QColor(255, 214, 116, 240), qMax<qreal>(2.0, unit * 0.012)));
+    painter->setBrush(QColor(255, 89, 112, 224));
+    painter->drawPath(warning);
+
+    QFont iconFont = painter->font();
+    iconFont.setBold(true);
+    iconFont.setPixelSize(qMax(22, qRound(unit * 0.17)));
+    painter->setFont(iconFont);
+    painter->setPen(QColor(255, 255, 255, 245));
+    painter->drawText(warning.boundingRect(), Qt::AlignCenter, QStringLiteral("!"));
+
+    const QString pathName = QFileInfo(modelPath).fileName();
+    const QString title = QStringLiteral("模型显示错误");
+    const QString details = pathName.isEmpty()
+                                ? QStringLiteral("未收到 model3.json")
+                                : QStringLiteral("加载失败：%1").arg(pathName);
+    const QString reason = compactErrorText(error);
+    const QString message = reason.isEmpty() ? details : details + QStringLiteral("\n") + reason;
+
+    QRectF textRect(bounds.left(),
+                    qMin(bounds.bottom() - unit * 0.22, badge.bottom() + unit * 0.06),
+                    bounds.width(),
+                    qMax<qreal>(unit * 0.20, bounds.bottom() - badge.bottom() - unit * 0.04));
+    painter->setPen(QColor(255, 246, 249, 245));
+    QFont titleFont = painter->font();
+    titleFont.setBold(true);
+    titleFont.setPixelSize(qMax(13, qRound(unit * 0.052)));
+    painter->setFont(titleFont);
+    painter->drawText(textRect, Qt::AlignHCenter | Qt::AlignTop, title);
+
+    textRect.adjust(6, qMax<qreal>(18, unit * 0.075), -6, 0);
+    QFont detailFont = painter->font();
+    detailFont.setBold(false);
+    detailFont.setPixelSize(qMax(10, qRound(unit * 0.032)));
+    painter->setFont(detailFont);
+    painter->setPen(QColor(255, 226, 232, 220));
+    painter->drawText(textRect, Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap, message);
+}
+
+class Live2DFboRenderer final : public QQuickFramebufferObject::Renderer
+{
+public:
+    QOpenGLFramebufferObject *createFramebufferObject(const QSize &size) override
+    {
+        QOpenGLFramebufferObjectFormat format;
+        format.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
+        format.setSamples(4);
+        return new QOpenGLFramebufferObject(size, format);
+    }
+
+    void synchronize(QQuickFramebufferObject *item) override
+    {
+        auto *live2dItem = qobject_cast<Live2DRenderItem *>(item);
+        if (!live2dItem) {
+            return;
+        }
+
+        const QString nextModelPath = live2dItem->resolvedModelPath();
+        if (_model_path != nextModelPath) {
+            _model_path = nextModelPath;
+            _render_error.clear();
+            _official_renderer.reset();
+            _native_attempted = false;
+            _last_render_status.clear();
+            _last_render_error.clear();
+            _last_reported_model_path.clear();
+            qInfo().noquote() << "Live2D model source changed:" << _model_path;
+            reportStatus(live2dItem,
+                         loadingStatus(),
+                         QString(),
+                         _model_path);
+        }
+
+        _item = live2dItem;
+        _visual_state = live2dItem->visualState();
+        _item_size = QSize(qMax(1, qCeil(live2dItem->width())),
+                           qMax(1, qCeil(live2dItem->height())));
+    }
+
+    void render() override
+    {
+        if (_item_size.width() <= 0 || _item_size.height() <= 0) {
+            return;
+        }
+
+        QOpenGLFunctions *functions = QOpenGLContext::currentContext()
+                                          ? QOpenGLContext::currentContext()->functions()
+                                          : nullptr;
+        if (!functions) {
+            return;
+        }
+
+        if (!_native_attempted) {
+            _native_attempted = true;
+            _official_renderer = std::make_unique<Live2DOfficialOpenGLRenderer>(_model_path);
+            if (!_official_renderer->isReady()) {
+                _render_error = _official_renderer->errorString();
+                qWarning().noquote() << "Live2D official OpenGL renderer unavailable for"
+                                     << _model_path << ":" << _render_error;
+                _official_renderer.reset();
+                reportStatus(errorStatus(), _render_error);
+            } else {
+                _render_error.clear();
+                qInfo().noquote() << "Live2D official OpenGL renderer ready for" << _model_path;
+                reportStatus(readyStatus(), QString());
+            }
+        }
+
+        if (_official_renderer && _official_renderer->render(_item_size, _visual_state)) {
+            QQuickOpenGLUtils::resetOpenGLState();
+            reportStatus(readyStatus(), QString());
+            update();
+            return;
+        }
+
+        if (_official_renderer) {
+            _render_error = QStringLiteral("official renderer returned false while drawing");
+            qWarning().noquote() << "Live2D official OpenGL renderer draw failed for"
+                                 << _model_path << ":" << _render_error;
+            _official_renderer.reset();
+            reportStatus(errorStatus(), _render_error);
+        } else if (_render_error.isEmpty()) {
+            _render_error = QStringLiteral("official renderer is unavailable");
+            reportStatus(errorStatus(), _render_error);
+        }
+
+        QImage fallback(_item_size, QImage::Format_ARGB32_Premultiplied);
+        fallback.fill(Qt::transparent);
+        QPainter painter(&fallback);
+        drawModelErrorMarker(&painter,
+                             QRectF(QPointF(0, 0), QSizeF(_item_size)),
+                             _model_path,
+                             _render_error);
+        painter.end();
+
+        functions->glViewport(0, 0, _item_size.width(), _item_size.height());
+        functions->glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        functions->glClear(GL_COLOR_BUFFER_BIT);
+        QOpenGLPaintDevice paintDevice(_item_size);
+        QPainter fboPainter(&paintDevice);
+        fboPainter.drawImage(QPoint(0, 0), fallback);
+        fboPainter.end();
+        QQuickOpenGLUtils::resetOpenGLState();
+        update();
+    }
+
+private:
+    void reportStatus(const QString &status, const QString &error)
+    {
+        reportStatus(_item, status, error, _model_path);
+    }
+
+    void reportStatus(Live2DRenderItem *item,
+                      const QString &status,
+                      const QString &error,
+                      const QString &modelPath)
+    {
+        if (!item) {
+            return;
+        }
+        if (_last_render_status == status
+            && _last_render_error == error
+            && _last_reported_model_path == modelPath) {
+            return;
+        }
+        _last_render_status = status;
+        _last_render_error = error;
+        _last_reported_model_path = modelPath;
+        QPointer<Live2DRenderItem> itemPointer(item);
+        QMetaObject::invokeMethod(item,
+                                  [itemPointer, status, error, modelPath]() {
+                                      if (itemPointer) {
+                                          itemPointer->setRenderStatusFromRenderer(status,
+                                                                                   error,
+                                                                                   modelPath);
+                                      }
+                                  },
+                                  Qt::QueuedConnection);
+    }
+
+    QPointer<Live2DRenderItem> _item;
+    QString _model_path;
+    QString _render_error;
+    QString _last_render_status;
+    QString _last_render_error;
+    QString _last_reported_model_path;
+    QSize _item_size;
+    Live2DVisualState _visual_state;
+    bool _native_attempted = false;
+    std::unique_ptr<Live2DOfficialOpenGLRenderer> _official_renderer;
+};
+
+QString resolveModelPath(const QString &modelRoot, const QString &modelJson)
+{
+    const QString cleaned = modelJson.trimmed();
+    if (cleaned.isEmpty()) {
+        return Live2DOfficialOpenGLRenderer::defaultModelPath();
+    }
+    if (cleaned.startsWith(QStringLiteral("qrc:/"))) {
+        return QStringLiteral(":") + QUrl(cleaned).path();
+    }
+    if (cleaned.startsWith(QStringLiteral(":/"))) {
+        return QDir::cleanPath(cleaned);
+    }
+
+    const QUrl url(cleaned);
+    if (url.isLocalFile()) {
+        return QDir::cleanPath(url.toLocalFile());
+    }
+    if (QDir::isAbsolutePath(cleaned)) {
+        return QDir::cleanPath(cleaned);
+    }
+
+    QStringList candidates;
+    const QString root = modelRoot.trimmed();
+    if (!root.isEmpty()) {
+        candidates << QDir(root).absoluteFilePath(cleaned);
+    }
+    candidates << QDir::current().absoluteFilePath(cleaned);
+    for (const QString &candidate : candidates) {
+        if (QFileInfo::exists(candidate)) {
+            return QDir::cleanPath(candidate);
+        }
+    }
+    return QDir::cleanPath(candidates.value(0, QDir::current().absoluteFilePath(cleaned)));
+}
+} // namespace
 
 Live2DRenderItem::Live2DRenderItem(QQuickItem *parent)
-    : QQuickPaintedItem(parent)
+    : QQuickFramebufferObject(parent)
 {
     setAntialiasing(true);
-    setFillColor(Qt::transparent);
-    setRenderTarget(QQuickPaintedItem::FramebufferObject);
-    setPerformanceHint(QQuickPaintedItem::FastFBOResizing, true);
+    setMirrorVertically(true);
     _animation_clock.start();
     _frame_timer.setTimerType(Qt::PreciseTimer);
     _frame_timer.setInterval(16);
@@ -26,86 +339,23 @@ Live2DRenderItem::Live2DRenderItem(QQuickItem *parent)
     });
     connect(this, &QQuickItem::visibleChanged, this, &Live2DRenderItem::updateFrameTimer);
     connect(this, &QQuickItem::windowChanged, this, [this](QQuickWindow *window) {
+        if (_window_visible_connection) {
+            disconnect(_window_visible_connection);
+            _window_visible_connection = {};
+        }
         if (window) {
-            connect(window, &QWindow::visibleChanged, this, [this](bool) {
+            _window_visible_connection = connect(window, &QWindow::visibleChanged, this, [this](bool) {
                 updateFrameTimer();
-            }, Qt::UniqueConnection);
+            });
         }
         updateFrameTimer();
     });
     updateFrameTimer();
 }
 
-void Live2DRenderItem::paint(QPainter *painter)
+QQuickFramebufferObject::Renderer *Live2DRenderItem::createRenderer() const
 {
-    if (!painter) {
-        return;
-    }
-
-    painter->setRenderHint(QPainter::Antialiasing, true);
-    const QRectF bounds = boundingRect().adjusted(8, 8, -8, -8);
-    if (bounds.width() <= 0 || bounds.height() <= 0) {
-        return;
-    }
-
-    QLinearGradient bodyGradient(bounds.topLeft(), bounds.bottomRight());
-    bodyGradient.setColorAt(0.0, QColor(116, 178, 186, 220));
-    bodyGradient.setColorAt(1.0, QColor(244, 165, 132, 220));
-
-    painter->setPen(QPen(QColor(255, 255, 255, 180), 2));
-    painter->setBrush(bodyGradient);
-    painter->drawRoundedRect(bounds, 22, 22);
-
-    const qreal headSize = qMin(bounds.width() * 0.62, bounds.height() * 0.55);
-    const QPointF headCenter(bounds.center().x(), bounds.top() + headSize * 0.58);
-    const qreal bob = qSin(_idle_phase * 2.4) * qBound(1.0, _intensity * 5.0, 5.0);
-    const qreal breathe = 1.0 + qSin(_idle_phase * 1.8) * 0.018;
-    const QRectF head(headCenter.x() - (headSize * breathe) / 2.0,
-                      headCenter.y() - (headSize * breathe) / 2.0 + bob,
-                      headSize * breathe,
-                      headSize * breathe);
-
-    QColor faceColor(255, 244, 230, 235);
-    if (_emotion == QStringLiteral("cheerful") || _expression.contains(QStringLiteral("smile"))) {
-        faceColor = QColor(255, 238, 214, 240);
-    } else if (_expression == QStringLiteral("concerned")) {
-        faceColor = QColor(231, 240, 246, 235);
-    }
-
-    painter->setPen(QPen(QColor(116, 122, 132, 120), 2));
-    painter->setBrush(faceColor);
-    painter->drawEllipse(head);
-
-    const qreal eyeOffsetX = head.width() * 0.19;
-    const qreal eyeY = head.center().y() - head.height() * 0.08;
-    const qreal blink = (qSin(_idle_phase * 3.1) > 0.985) ? 0.22 : 1.0;
-    const qreal gazeDx = (_gaze_x - 0.5) * head.width() * 0.07;
-    const qreal gazeDy = (_gaze_y - 0.5) * head.height() * 0.07;
-    painter->setBrush(QColor(42, 52, 64, 235));
-    painter->setPen(Qt::NoPen);
-    painter->drawEllipse(QPointF(head.center().x() - eyeOffsetX + gazeDx, eyeY + gazeDy), 5.0, 6.5 * blink);
-    painter->drawEllipse(QPointF(head.center().x() + eyeOffsetX + gazeDx, eyeY + gazeDy), 5.0, 6.5 * blink);
-
-    painter->setPen(QPen(QColor(88, 56, 66, 220), 3, Qt::SolidLine, Qt::RoundCap));
-    const qreal mouthWidth = head.width() * (0.16 + _intensity * 0.10);
-    const qreal speakingPulse = _motion == QStringLiteral("talk") || _motion == QStringLiteral("speak")
-                                    ? (0.5 + 0.5 * qSin(_idle_phase * 15.0)) * 0.16
-                                    : 0.0;
-    const qreal mouthOpen = 3.0 + qBound(0.0, _lip_sync_value + speakingPulse, 1.0) * head.height() * 0.11;
-    const QPointF mouthCenter(head.center().x(), head.center().y() + head.height() * 0.18);
-    painter->drawArc(QRectF(mouthCenter.x() - mouthWidth / 2.0,
-                            mouthCenter.y() - mouthOpen / 2.0,
-                            mouthWidth,
-                            mouthOpen),
-                     0,
-                     -180 * 16);
-
-    painter->setPen(QPen(QColor(255, 255, 255, 210), 1));
-    painter->setBrush(QColor(255, 255, 255, 38));
-    const QRectF badge(bounds.left() + 12, bounds.bottom() - 34, bounds.width() - 24, 22);
-    painter->drawRoundedRect(badge, 7, 7);
-    painter->setPen(QColor(54, 65, 78, 210));
-    painter->drawText(badge, Qt::AlignCenter, QStringLiteral("Live2D adapter: %1 / %2").arg(_expression, _motion));
+    return new Live2DFboRenderer();
 }
 
 void Live2DRenderItem::applyControlEvent(const QVariantMap &event)
@@ -122,6 +372,26 @@ void Live2DRenderItem::applyControlEvent(const QVariantMap &event)
     setGazeY(gaze.value(QStringLiteral("y"), _gaze_y).toDouble());
     const QVariantMap lipSync = event.value(QStringLiteral("lip_sync")).toMap();
     setLipSyncValue(lipSync.value(QStringLiteral("value"), _lip_sync_value).toDouble());
+}
+
+void Live2DRenderItem::setModelRoot(const QString &value)
+{
+    if (_model_root == value) {
+        return;
+    }
+    _model_root = value;
+    update();
+    emit modelSourceChanged();
+}
+
+void Live2DRenderItem::setModelJson(const QString &value)
+{
+    if (_model_json == value) {
+        return;
+    }
+    _model_json = value;
+    update();
+    emit modelSourceChanged();
 }
 
 void Live2DRenderItem::setExpression(const QString &value)
@@ -197,6 +467,45 @@ qreal Live2DRenderItem::boundedUnit(qreal value, qreal fallback)
         return fallback;
     }
     return qBound(0.0, value, 1.0);
+}
+
+QString Live2DRenderItem::resolveModelPath(const QString &modelRoot, const QString &modelJson)
+{
+    return ::resolveModelPath(modelRoot, modelJson);
+}
+
+QString Live2DRenderItem::resolvedModelPath() const
+{
+    return resolveModelPath(_model_root, _model_json);
+}
+
+Live2DVisualState Live2DRenderItem::visualState() const
+{
+    Live2DVisualState state;
+    state.expression = _expression;
+    state.motion = _motion;
+    state.emotion = _emotion;
+    state.intensity = _intensity;
+    state.gazeX = _gaze_x;
+    state.gazeY = _gaze_y;
+    state.lipSyncValue = _lip_sync_value;
+    state.idlePhase = _idle_phase;
+    return state;
+}
+
+void Live2DRenderItem::setRenderStatusFromRenderer(const QString &status,
+                                                   const QString &error,
+                                                   const QString &modelPath)
+{
+    if (_render_status == status
+        && _render_error == error
+        && _render_model_path == modelPath) {
+        return;
+    }
+    _render_status = status;
+    _render_error = error;
+    _render_model_path = modelPath;
+    emit renderStatusChanged();
 }
 
 void Live2DRenderItem::updateVisual()

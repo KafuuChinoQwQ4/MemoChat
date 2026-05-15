@@ -16,6 +16,11 @@ GetChatServerRsp StatusGrpcClient::GetChatServer(int uid)
 	memolog::LogInfo("grpc.call", "calling StatusService.GetChatServer",
 		{ {"rpc", "StatusService.GetChatServer"}, {"uid", std::to_string(uid)}, {"peer_service", "StatusServer"}, {"module", "grpc"} });
 	auto stub = pool_->getConnection();
+	if (stub == nullptr) {
+		span.SetStatusError("grpc", "connection pool closed");
+		reply.set_error(ErrorCodes::RPCFailed);
+		return reply;
+	}
 	Status status = stub->GetChatServer(&context, request, &reply);
 	Defer defer([&stub, this]() {
 		pool_->returnConnection(std::move(stub));
@@ -46,6 +51,11 @@ LoginRsp StatusGrpcClient::Login(int uid, std::string token)
 	memolog::InjectGrpcTraceMetadata(context);
 
 	auto stub = pool_->getConnection();
+	if (stub == nullptr) {
+		span.SetStatusError("grpc", "connection pool closed");
+		reply.set_error(ErrorCodes::RPCFailed);
+		return reply;
+	}
 	Status status = stub->Login(&context, request, &reply);
 	Defer defer([&stub, this]() {
 		pool_->returnConnection(std::move(stub));
