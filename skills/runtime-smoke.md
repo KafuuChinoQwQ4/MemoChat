@@ -1,21 +1,21 @@
 ---
-description: Run MemoChat local runtime smoke tests by deploying services, checking Docker dependencies, starting services, probing APIs, and collecting logs.
+description: 通过部署服务、检查 Docker 依赖、启动服务、探测 API 和收集日志来运行 MemoChat 本地运行时 smoke 测试。
 ---
 
-# MemoChat Runtime Smoke
+# MemoChat 运行时 Smoke
 
-Use when verifying that the local MemoChat stack works after code/config changes.
+用于在代码/配置变更后验证本地 MemoChat 栈是否正常工作。
 
-## Preconditions
+## 前置条件
 
-- Arch/WSL Linux server artifacts exist in `build-linux-server-gcc16/bin` for the services being tested.
-- For any fresh Linux server code change, first run `cmake --preset linux-server-gcc16` and `cmake --build --preset linux-server-gcc16 --parallel 12`; `deploy_services.sh` copies from that build output by default.
-- Docker dependencies are running under Arch native Docker. Source `/root/.memochat-linux-env` before compose commands so `DOCKER_HOST` is unset.
-- No old Linux runtime service process is still bound to the target ports.
+- 被测试服务的 Arch/WSL Linux 服务产物存在于 `build-linux-full-gcc16/bin`。
+- 任何新的 Linux 服务端或客户端代码变更，都先运行 `cmake --preset linux-full-gcc16` 和 `cmake --build --preset linux-full-gcc16 --parallel 12`；`deploy_services.sh` 默认从该构建输出复制。
+- Docker 依赖运行在 Arch 原生 Docker 下。compose 命令前加载 `/root/.memochat-linux-env`，使 `DOCKER_HOST` 取消设置。
+- 没有旧的 Linux 运行时服务进程仍绑定目标端口。
 
-## Docker Dependency Check
+## Docker 依赖检查
 
-Run:
+运行：
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
@@ -25,25 +25,25 @@ docker exec memochat-rabbitmq rabbitmq-diagnostics -q ping
 docker exec memochat-redpanda rpk cluster info --brokers 127.0.0.1:19092
 ```
 
-For media or AI flows, also check MinIO, Qdrant, Neo4j, Ollama, and AI Orchestrator.
+对于媒体或 AI 流程，也检查 MinIO、Qdrant、Neo4j、Ollama 和 AI Orchestrator。
 
-## Deploy And Start
+## 部署和启动
 
-Use:
+使用：
 
 ```bash
 source /root/.memochat-linux-env
-cmake --preset linux-server-gcc16
-cmake --build --preset linux-server-gcc16 --parallel 12
+cmake --preset linux-full-gcc16
+cmake --build --preset linux-full-gcc16 --parallel 12
 tools/scripts/status/deploy_services.sh
 tools/scripts/status/start-all-services.sh
 ```
 
-If start reports ports already listening, run `tools/scripts/status/stop-all-services.sh` or identify the owning process before retrying. Do not stop Docker dependencies unless the user asks.
+如果启动报告端口已在监听，运行 `tools/scripts/status/stop-all-services.sh` 或先识别占用进程再重试。除非用户要求，否则不要停止 Docker 依赖。
 
-## Smoke Scripts
+## Smoke 脚本
 
-Pick relevant tests:
+选择相关测试：
 
 ```powershell
 tools/scripts/test_register_login.ps1
@@ -54,34 +54,34 @@ tools/scripts/full_flow_test.ps1
 python tools/loadtest/python-loadtest/py_loadtest.py --config tools/loadtest/python-loadtest/config.json --scenario all --total 20 --concurrency 5
 ```
 
-These probes are still PowerShell-first; run them from Windows when needed. For targeted API checks, use existing JSON payloads in `tools/scripts` before creating new ones.
+这些探针仍以 PowerShell 优先；需要时从 Windows 运行。对于定向 API 检查，在创建新 payload 前优先使用 `tools/scripts` 中现有 JSON payload。
 
-## Logs
+## 日志
 
-Collect only relevant logs:
+只收集相关日志：
 
-- service stdout/stderr files under `infra/Memo_ops/artifacts/logs/services`
-- pid files under `infra/Memo_ops/runtime/pids`
-- service logs under `infra/Memo_ops/runtime/artifacts/logs`
-- repository `logs/` and `artifacts/` if the running config points there
-- Docker logs for dependency containers
-- Loki queries through MCP when useful
+- `infra/Memo_ops/artifacts/logs/services` 下的服务 stdout/stderr 文件
+- `infra/Memo_ops/runtime/pids` 下的 pid 文件
+- `infra/Memo_ops/runtime/artifacts/logs` 下的服务日志
+- 如果运行配置指向仓库 `logs/` 和 `artifacts/`，也检查这些目录
+- 依赖容器的 Docker logs
+- 有用时通过 MCP 查询 Loki
 
-## Assessment
+## 评估
 
-Mark outcome:
+标记结果：
 
-- `PASS`: required API/runtime behavior works.
-- `ENVIRONMENT_FAIL`: Docker dependency, port, credential, or file lock issue.
-- `IMPLEMENTATION_FAIL`: built service starts but behavior is wrong.
-- `INCONCLUSIVE`: logs or tests are insufficient.
+- `PASS`：必需的 API/运行时行为正常。
+- `ENVIRONMENT_FAIL`：Docker 依赖、端口、凭据或文件锁问题。
+- `IMPLEMENTATION_FAIL`：构建后的服务启动了，但行为错误。
+- `INCONCLUSIVE`：日志或测试不足以判断。
 
-## Cleanup
+## 清理
 
-Use:
+使用：
 
 ```bash
 tools/scripts/status/stop-all-services.sh
 ```
 
-Leave Docker dependencies running unless the user asks to stop them.
+除非用户要求停止 Docker 依赖，否则让它们保持运行。

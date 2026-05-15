@@ -103,7 +103,7 @@ static void ProxyAiOrchestratorPrefix(
 
         http::request<http::string_body> req{verb, target, 11};
         req.set(http::field::host, host);
-        req.set(http::field::accept, "application/json");
+        req.set(http::field::accept, "*/*");
         req.set("X-Trace-Id", connection ? connection->GetTraceId() : "");
         req.set("X-Request-Id", connection ? connection->GetRequestId() : "");
         if (verb == http::verb::post) {
@@ -121,7 +121,15 @@ static void ProxyAiOrchestratorPrefix(
         stream.socket().shutdown(tcp::socket::shutdown_both, shutdown_ec);
 
         connection->GetResponse().result(res.result());
-        connection->GetResponse().set(http::field::content_type, "application/json; charset=utf-8");
+        const auto content_type_it = res.base().find(http::field::content_type);
+        const std::string upstream_content_type = content_type_it != res.base().end()
+                                                      ? std::string(content_type_it->value().data(),
+                                                                    content_type_it->value().size())
+                                                      : std::string();
+        connection->GetResponse().set(http::field::content_type,
+                                      upstream_content_type.empty()
+                                          ? "application/json; charset=utf-8"
+                                          : upstream_content_type);
         beast::ostream(connection->GetResponse().body()) << res.body();
         memolog::LogInfo(log_name + ".ok", "AI prefix proxy returned", {
             {"target", target},

@@ -3,6 +3,7 @@
 #include "ConfigMgr.h"
 #include "PostgresDao.h"
 #include "RedisMgr.h"
+#include "StatusGrpcClient.h"
 #include "auth/ChatLoginTicket.h"
 #include "cluster/ChatClusterDiscovery.h"
 #include "logging/Logger.h"
@@ -286,5 +287,99 @@ std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load
     }
 }
 
-} // namespace gateauthsupport
+std::vector<ChatRouteNode> SelectChatRouteViaStatus(int uid,
+                                                    std::string* status_detail,
+                                                    std::string* http_token) {
+    if (status_detail) {
+        status_detail->clear();
+    }
+    if (http_token) {
+        http_token->clear();
+    }
+    if (uid <= 0) {
+        if (status_detail) {
+            *status_detail = "invalid_uid";
+        }
+        return {};
+    }
 
+    try {
+        const auto rsp = StatusGrpcClient::GetInstance()->GetChatServer(uid);
+        if (rsp.error() != ErrorCodes::Success) {
+            if (status_detail) {
+                *status_detail = "status_error:" + std::to_string(rsp.error());
+            }
+            return {};
+        }
+        if (rsp.server_name().empty() || rsp.host().empty() || rsp.port().empty()) {
+            if (status_detail) {
+                *status_detail = "incomplete_response";
+            }
+            return {};
+        }
+
+        ChatRouteNode node;
+        node.name = rsp.server_name();
+        node.host = rsp.host();
+        node.port = rsp.port();
+        if (IsQuicRolloutEnabled()) {
+            node.quic_host = rsp.quic_host();
+            node.quic_port = rsp.quic_port();
+        }
+        node.online_count = 0;
+        node.priority = 0;
+        if (http_token) {
+            *http_token = rsp.token();
+        }
+        if (status_detail) {
+            *status_detail = "ok";
+        }
+        return {node};
+    } catch (const std::exception& ex) {
+        if (status_detail) {
+            *status_detail = std::string("exception:") + ex.what();
+        }
+        memolog::LogWarn("gate.route_select.status_exception", "StatusServer route selection threw exception",
+            {{"uid", std::to_string(uid)}, {"error", ex.what()}});
+        return {};
+    }
+}
+
+std::vector<ChatRouteNode> SelectChatRouteForLogin(int uid,
+                                                   std::vector<std::string>* load_snapshot,
+                                                   std::vector<std::string>* least_loaded_snapshot,
+                                                   std::string* route_source,
+                                                   std::string* status_detail,
+                                                   std::string* http_token) {
+    if (route_source) {
+        route_source->clear();
+    }
+    auto status_nodes = SelectChatRouteViaStatus(uid, status_detail, http_token);
+    if (!status_nodes.empty()) {
+        if (route_source) {
+            *route_source = "status";
+        }
+        if (load_snapshot) {
+            load_snapshot->clear();
+            load_snapshot->push_back(status_nodes.front().name + "=selected_by_status");
+        }
+        if (least_loaded_snapshot) {
+            least_loaded_snapshot->clear();
+            least_loaded_snapshot->push_back(status_nodes.front().name);
+        }
+        return status_nodes;
+    }
+
+    memolog::LogWarn("gate.route_select.status_fallback", "falling back to local chat route selection",
+        {{"uid", std::to_string(uid)}, {"status_detail", status_detail ? *status_detail : ""}});
+    if (route_source) {
+        *route_source = "local_fallback";
+    }
+    auto local_nodes = LoadGateChatRouteNodes(load_snapshot, least_loaded_snapshot);
+    if (local_nodes.empty()) {
+        return {};
+    }
+    return {local_nodes.front()};
+}
+
+} // namespace gateauthsupport

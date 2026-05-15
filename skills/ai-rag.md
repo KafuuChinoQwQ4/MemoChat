@@ -1,12 +1,12 @@
 ---
-description: Work on MemoChat AIOrchestrator, Ollama, Qdrant RAG, Neo4j graph memory, MCP bridge, and knowledge-base flows.
+description: 处理 MemoChat AIOrchestrator、Ollama、Qdrant RAG、Neo4j 图记忆、MCP bridge 和知识库流程。
 ---
 
 # MemoChat AI RAG
 
-Use for AI Orchestrator, LLM routing, tools, RAG, knowledge base, graph memory, Qdrant, Neo4j, Ollama, and MCP bridge work.
+用于 AI Orchestrator、LLM 路由、工具、RAG、知识库、图记忆、Qdrant、Neo4j、Ollama 和 MCP bridge 工作。
 
-## Relevant Areas
+## 相关区域
 
 - `apps/server/core/AIOrchestrator`
 - `apps/server/core/AIServer`
@@ -16,18 +16,18 @@ Use for AI Orchestrator, LLM routing, tools, RAG, knowledge base, graph memory, 
 - `apps/server/core/AIOrchestrator/docker-compose.yml`
 - `apps/server/core/AIOrchestrator/config.yaml`
 
-AI bind data defaults to `/data/docker-data/memochat/ai-orchestrator` under Arch native Docker. Use Docker Desktop paths only for legacy migration/backup checks.
+AI 绑定数据在 Arch 原生 Docker 下默认位于 `/data/docker-data/memochat/ai-orchestrator`。Docker Desktop 路径仅用于旧版迁移/备份检查。
 
-## Docker Services
+## Docker 服务
 
-Expected services and ports:
+预期服务和端口：
 
 - AI Orchestrator `8096`
 - Ollama `11434`
 - Qdrant `6333/6334`
 - Neo4j `7474/7687`
 
-Check:
+检查：
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
@@ -37,7 +37,7 @@ curl -fsS http://127.0.0.1:6333/
 curl -fsS http://127.0.0.1:7474/
 ```
 
-Use MCP for Qdrant/Neo4j when possible:
+可用时使用 MCP 检查 Qdrant/Neo4j：
 
 - `qdrant_list_collections`
 - `qdrant_scroll`
@@ -45,60 +45,60 @@ Use MCP for Qdrant/Neo4j when possible:
 - `get_neo4j_schema`
 - `read_neo4j_cypher`
 
-## Change Checklist
+## 变更清单
 
-For LLM routing:
+LLM 路由：
 
-- config defaults
+- config 默认值
 - provider enable flags
-- timeout/retry behavior
-- error logging without leaking secrets
+- timeout/retry 行为
+- 错误日志不泄露 secrets
 
-For RAG:
+RAG：
 
-- document chunking
-- embedding backend and vector size
-- Qdrant collection naming
+- 文档切分
+- embedding backend 和向量维度
+- Qdrant collection 命名
 - payload schema
-- deletion/cleanup path
+- 删除/清理路径
 
-For Neo4j memory:
+Neo4j memory：
 
-- labels and relationships
+- labels 和 relationships
 - constraints/indexes
-- write path and read path
-- idempotency
+- 写路径和读路径
+- 幂等性
 
-For MCP bridge:
+MCP bridge：
 
-- subprocess lifecycle
-- timeout handling
-- tool schema validation
-- stderr/log capture
+- subprocess 生命周期
+- timeout 处理
+- tool schema 校验
+- stderr/log 捕获
 
-## Verification
+## 验证
 
-Run Python-level checks where available, then runtime probes:
+先运行可用的 Python 层检查，再做运行时探针：
 
 ```bash
 python -m compileall apps/server/core/AIOrchestrator
 docker logs --tail 100 memochat-ai-orchestrator
 ```
 
-For C++ AIServer changes:
+对于 C++ AIServer 变更：
 
 ```bash
 source /root/.memochat-linux-env
-cmake --preset linux-server-gcc16
-cmake --build --preset linux-server-gcc16 --parallel 12
+cmake --preset linux-full-gcc16
+cmake --build --preset linux-full-gcc16 --parallel 12
 ```
 
-## Report
+## 报告
 
-Include:
+包含：
 
-- AI service/component touched
-- config changes
-- Qdrant/Neo4j schema or collection impact
-- MCP tools used
-- runtime probe results
+- 触及的 AI 服务/组件
+- 配置变更
+- Qdrant/Neo4j schema 或 collection 影响
+- 使用过的 MCP 工具
+- 运行时探针结果

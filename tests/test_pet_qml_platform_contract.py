@@ -77,9 +77,11 @@ class PetQmlPlatformContractTests(unittest.TestCase):
         for path in (SHARED_MAIN_QML, LINUX_MAIN_QML):
             source = read(path)
             self.assertRegex(source, r'import\s+"(?:\.\./)?pet"')
-            self.assertIn("function ensurePetWindow()", source)
+            self.assertIn("function ensurePetWindow(petAssetSettings)", source)
+            self.assertIn("function openPetWindow(petAssetSettings)", source)
             self.assertIn("petWindowComponent.createObject", source)
             self.assertIn('"petController": controller.petController', source)
+            self.assertIn('"petAssetSettings": settings', source)
             self.assertIn("PetWindow { }", source)
 
     def test_linux_glass_compatibility_path_stays_additive(self):

@@ -43,13 +43,13 @@ class PetTextProvider(Protocol):
 
 
 class PetProviderRouter:
-    def __init__(self, deterministic: bool = True) -> None:
+    def __init__(self, deterministic: bool = True, voice_router: VoiceProviderRouter | None = None) -> None:
         self._providers: dict[str, PetTextProvider] = {}
-        self._voice = VoiceProviderRouter(deterministic=deterministic)
+        self._voice = voice_router or VoiceProviderRouter(deterministic=deterministic)
         if deterministic:
             from .deterministic import DeterministicPetProvider
 
-            deterministic_provider = DeterministicPetProvider()
+            deterministic_provider = DeterministicPetProvider(self._voice)
             self.register("scripted", deterministic_provider)
             self.register("deterministic", deterministic_provider)
 
@@ -58,7 +58,12 @@ class PetProviderRouter:
         if normalized:
             self._providers[normalized] = provider
 
-    async def generate(self, session: PetSession, prompt: PetPromptContext) -> list[ProviderChunk]:
+    async def generate(
+        self,
+        session: PetSession,
+        prompt: PetPromptContext,
+        runtime_metadata: dict | None = None,
+    ) -> list[ProviderChunk]:
         provider_name = _normalize_provider_name(session.provider or "scripted")
         provider = self._providers.get(provider_name)
         if provider is None:
@@ -67,6 +72,21 @@ class PetProviderRouter:
                 provider=provider_name,
             )
         try:
+            if runtime_metadata:
+                prompt = PetPromptContext(
+                    session_id=prompt.session_id,
+                    uid=prompt.uid,
+                    profile_id=prompt.profile_id,
+                    persona=prompt.persona,
+                    provider=prompt.provider,
+                    user_text=prompt.user_text,
+                    model_type=prompt.model_type,
+                    model_name=prompt.model_name,
+                    observation_summary=prompt.observation_summary,
+                    runtime_metadata=dict(runtime_metadata),
+                    memory_snippets=prompt.memory_snippets,
+                    safety_notes=prompt.safety_notes,
+                )
             return await provider.generate(prompt)
         except PetProviderError:
             raise

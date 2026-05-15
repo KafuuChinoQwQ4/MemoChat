@@ -62,6 +62,9 @@ class PetEventBus:
         expression: str = "neutral",
         lip_sync: float = 0.0,
         speech_text: str = "",
+        speech_translation: str = "",
+        speech_language: str = "zh-CN",
+        text_final: bool | None = None,
         audio_state: str | None = None,
         audio_sample_rate: int = 0,
         audio_duration_ms: int = 0,
@@ -102,7 +105,12 @@ class PetEventBus:
                 phoneme=audio_phoneme,
                 viseme=audio_viseme,
             ),
-            text=PetText(delta=speech_text, final=phase in {"idle", "interrupted", "error"}),
+            text=PetText(
+                delta=speech_text,
+                final=bool(text_final) if text_final is not None else phase in {"idle", "interrupted", "error"},
+                language=speech_language or "zh-CN",
+                translation=speech_translation,
+            ),
             vision=vision or PetVision(),
             privacy=privacy or PetPrivacy(
                 camera_used=bool(safety and safety.camera_used),

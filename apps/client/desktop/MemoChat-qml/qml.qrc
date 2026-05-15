@@ -105,6 +105,10 @@
         <file>qml/agent/AgentTracePane.qml</file>
         <file>qml/pet/PetWindow.qml</file>
         <file>qml/pet/PetScene.qml</file>
+        <file>qml/pet/PetControlWindow.qml</file>
+        <file>qml/pet/PetChatWindow.qml</file>
+        <file>qml/pet/PetAudioPlayer.qml</file>
+        <file>qml/pet/PetCameraCapture.qml</file>
         <file>qml/pet/Live2DCharacterPane.qml</file>
         <file>qml/r18/R18ShellPane.qml</file>
     </qresource>

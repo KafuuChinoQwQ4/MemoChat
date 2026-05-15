@@ -16,13 +16,17 @@
 #include <QScreen>
 #include <QWindow>
 #include <QQuickWindow>
+#include <QSGRendererInterface>
 #include <QTimer>
 #include <QQuickStyle>
 #include <QIcon>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLibraryInfo>
 #include <QMetaMethod>
 #include <QMetaProperty>
+#include <QProcess>
+#include <QThread>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QSysInfo>
@@ -33,6 +37,7 @@
 #include "PetAssetSettings.h"
 #include "PetController.h"
 #include "PetModel.h"
+#include "PetSpeechSynthesizer.h"
 #include "Live2DAsset.h"
 #include "TelemetryUtils.h"
 #include "global.h"
@@ -380,6 +385,135 @@ void setDefaultEnv(const char *name, const char *value)
     }
 }
 
+#ifdef Q_OS_LINUX
+void startIbusDaemon(bool replace)
+{
+    QStringList args{QStringLiteral("-drx")};
+    if (replace) {
+        args << QStringLiteral("--replace");
+    }
+    QProcess process;
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.remove(QStringLiteral("WAYLAND_DISPLAY"));
+    env.insert(QStringLiteral("GDK_BACKEND"), QStringLiteral("x11"));
+    env.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("xcb"));
+    process.setProcessEnvironment(env);
+    process.setProgram(QStringLiteral("ibus-daemon"));
+    process.setArguments(args);
+    process.startDetached();
+}
+
+bool selectIbusLibpinyinEngine()
+{
+    if (QStandardPaths::findExecutable(QStringLiteral("ibus")).isEmpty()) {
+        return false;
+    }
+    for (int attempt = 0; attempt < 10; ++attempt) {
+        QProcess process;
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.remove(QStringLiteral("WAYLAND_DISPLAY"));
+        process.setProcessEnvironment(env);
+        process.setProgram(QStringLiteral("ibus"));
+        process.setArguments({QStringLiteral("engine"), QStringLiteral("libpinyin")});
+        process.start();
+        if (process.waitForFinished(3000) && process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0) {
+            return true;
+        }
+        QThread::msleep(100);
+    }
+    return false;
+}
+
+bool shouldRestartIbusDaemon()
+{
+    const QByteArray value = qgetenv("MEMOCHAT_RESTART_IBUS").trimmed().toLower();
+    return value.isEmpty() || value == "1" || value == "true" || value == "yes";
+}
+
+void stopIbusDaemons()
+{
+    if (!QStandardPaths::findExecutable(QStringLiteral("ibus")).isEmpty()) {
+        QProcess process;
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.remove(QStringLiteral("WAYLAND_DISPLAY"));
+        process.setProcessEnvironment(env);
+        process.setProgram(QStringLiteral("ibus"));
+        process.setArguments({QStringLiteral("exit")});
+        process.start();
+        process.waitForFinished(3000);
+    }
+    if (!QStandardPaths::findExecutable(QStringLiteral("pkill")).isEmpty()) {
+        QProcess::execute(QStringLiteral("pkill"), {QStringLiteral("-x"), QStringLiteral("ibus-daemon")});
+    }
+    QThread::msleep(200);
+}
+
+void configureLinuxInputMethod()
+{
+    const bool keep_existing = qEnvironmentVariableIntValue("MEMOCHAT_KEEP_QT_IM_MODULE") == 1;
+    if (keep_existing && !qEnvironmentVariableIsEmpty("QT_IM_MODULE")) {
+        return;
+    }
+
+    const QString plugin_path = QLibraryInfo::path(QLibraryInfo::PluginsPath);
+    const auto hasPlatformInputContext = [&plugin_path](const QString &pluginName) {
+        return !plugin_path.isEmpty()
+               && QFile::exists(QDir(plugin_path).filePath(
+                   QStringLiteral("platforminputcontexts/%1").arg(pluginName)));
+    };
+    const bool has_fcitx_plugin = hasPlatformInputContext(QStringLiteral("libfcitx5platforminputcontextplugin.so"));
+    const bool has_ibus_plugin = hasPlatformInputContext(QStringLiteral("libibusplatforminputcontextplugin.so"));
+    const bool has_pgrep = !QStandardPaths::findExecutable(QStringLiteral("pgrep")).isEmpty();
+    const bool has_fcitx = !QStandardPaths::findExecutable(QStringLiteral("fcitx5")).isEmpty();
+    const bool has_ibus = !QStandardPaths::findExecutable(QStringLiteral("ibus-daemon")).isEmpty();
+
+    if (has_fcitx && has_fcitx_plugin) {
+        if (!has_pgrep || QProcess::execute(QStringLiteral("pgrep"), {QStringLiteral("-x"), QStringLiteral("fcitx5")}) != 0) {
+            QProcess process;
+            QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+            env.insert(QStringLiteral("WAYLAND_DISPLAY"), QString());
+            process.setProcessEnvironment(env);
+            process.setProgram(QStringLiteral("fcitx5"));
+            process.setArguments({QStringLiteral("-d")});
+            process.startDetached();
+        }
+        qputenv("QT_IM_MODULE", "fcitx");
+        qputenv("GTK_IM_MODULE", "fcitx");
+        qputenv("XMODIFIERS", "@im=fcitx");
+        return;
+    }
+
+    if (has_ibus && has_ibus_plugin) {
+        setDefaultEnv("IBUS_ENABLE_SYNC_MODE", "1");
+        qunsetenv("WAYLAND_DISPLAY");
+        if (shouldRestartIbusDaemon()) {
+            stopIbusDaemons();
+            startIbusDaemon(false);
+        } else {
+            const bool ibus_running = has_pgrep
+                && QProcess::execute(QStringLiteral("pgrep"), {QStringLiteral("-x"), QStringLiteral("ibus-daemon")}) == 0;
+            startIbusDaemon(ibus_running);
+        }
+        QThread::msleep(150);
+        if (!selectIbusLibpinyinEngine()) {
+            startIbusDaemon(true);
+            QThread::msleep(150);
+            selectIbusLibpinyinEngine();
+        }
+        qputenv("QT_IM_MODULE", "ibus");
+        qputenv("GTK_IM_MODULE", "ibus");
+        qputenv("XMODIFIERS", "@im=ibus");
+        return;
+    }
+
+    if (!plugin_path.isEmpty()
+        && QFile::exists(QDir(plugin_path).filePath(QStringLiteral("platforminputcontexts/libqtvirtualkeyboardplugin.so")))) {
+        qputenv("QT_IM_MODULE", "qtvirtualkeyboard");
+        qputenv("QT_VIRTUALKEYBOARD_DESKTOP_DISABLE", "0");
+    }
+}
+#endif
+
 void centerTopLevelWindow(QWindow *window)
 {
     if (!window || !window->isVisible() || window->visibility() != QWindow::Windowed) {
@@ -471,6 +605,8 @@ int main(int argc, char *argv[])
     setDefaultEnv("QSG_RENDER_LOOP", "threaded");
     setDefaultEnv("QSG_RHI_BACKEND", "opengl");
     setDefaultEnv("QT_OPENGL", "desktop");
+    configureLinuxInputMethod();
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
 #endif
     QSurfaceFormat format;
     format.setSamples(8);
@@ -526,6 +662,8 @@ int main(int argc, char *argv[])
         "MemoChat", 1, 0, "PetController", "Exposed via AppController");
     qmlRegisterUncreatableType<PetModel>(
         "MemoChat", 1, 0, "PetModel", "Exposed via PetController");
+    qmlRegisterType<PetSpeechSynthesizer>(
+        "MemoChat", 1, 0, "PetSpeechSynthesizer");
     qmlRegisterType<PetAssetSettings>(
         "MemoChat", 1, 0, "PetAssetSettings");
     qmlRegisterType<Live2DAsset>(

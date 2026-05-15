@@ -23,6 +23,11 @@ Item {
     property bool smartBusy: false
     property string smartStatusText: ""
     property string smartResultTitle: "智能结果"
+    property var imeBridgeController: null
+    property bool pendingDraftSync: false
+    property string pendingDraftText: ""
+    property string pendingDraftBaseText: ""
+    property bool inputMethodUpdatePending: false
     readonly property bool hasPendingAttachmentItems: pendingAttachments && pendingAttachments.length > 0
     signal sendComposer(string text)
     signal sendImage()
@@ -73,20 +78,53 @@ Item {
         root.draftEdited(messageInput.text)
     }
 
+    function focusMessageInput() {
+        messageInput.forceActiveFocus()
+        scheduleInputMethodUpdate()
+    }
+
+    function applyDraftText(text) {
+        if (messageInput.text === text) {
+            return
+        }
+        syncingDraftText = true
+        messageInput.text = text
+        messageInput.cursorPosition = messageInput.length
+        syncingDraftText = false
+        scheduleInputMethodUpdate()
+    }
+
+    function syncDraftTextFromBinding() {
+        if (messageInput.activeFocus && messageInput.preeditText.length > 0) {
+            pendingDraftBaseText = messageInput.text
+            pendingDraftText = draftText
+            pendingDraftSync = true
+            return
+        }
+        pendingDraftSync = false
+        pendingDraftBaseText = ""
+        applyDraftText(draftText)
+    }
+
+    function scheduleInputMethodUpdate() {
+        if (!messageInput.activeFocus || inputMethodUpdatePending) {
+            return
+        }
+        inputMethodUpdatePending = true
+        Qt.callLater(function() {
+            root.inputMethodUpdatePending = false
+            if (messageInput.activeFocus) {
+                Qt.inputMethod.update(Qt.ImQueryAll)
+            }
+        })
+    }
+
     function showTransientTip(message) {
         root.transientTipText = message
         transientTipTimer.restart()
     }
 
-    onDraftTextChanged: {
-        if (messageInput.text === draftText) {
-            return
-        }
-        syncingDraftText = true
-        messageInput.text = draftText
-        messageInput.cursorPosition = messageInput.length
-        syncingDraftText = false
-    }
+    onDraftTextChanged: syncDraftTextFromBinding()
 
     ColumnLayout {
         anchors.fill: parent
@@ -329,7 +367,9 @@ Item {
                 }
             }
 
-            Item { Layout.fillWidth: true }
+            Item {
+                Layout.fillWidth: true
+            }
 
             SmartFeatureBar {
                 Layout.preferredWidth: 256
@@ -582,9 +622,35 @@ Item {
                         selectedTextColor: "#ffffff"
                         wrapMode: Text.Wrap
                         font.pixelSize: 15
+                        inputMethodHints: Qt.ImhMultiLine
                         background: Item { }
+                        onActiveFocusChanged: {
+                            if (activeFocus) {
+                                root.scheduleInputMethodUpdate()
+                            }
+                        }
+                        onCursorPositionChanged: root.scheduleInputMethodUpdate()
+                        onCursorRectangleChanged: root.scheduleInputMethodUpdate()
+                        onPreeditTextChanged: {
+                            root.scheduleInputMethodUpdate()
+                            if (preeditText.length > 0) {
+                                return
+                            }
+                            if (root.pendingDraftSync) {
+                                const shouldApplyPendingDraft = text === root.pendingDraftBaseText
+                                if (shouldApplyPendingDraft) {
+                                    root.applyDraftText(root.pendingDraftText)
+                                }
+                                root.pendingDraftSync = false
+                                root.pendingDraftBaseText = ""
+                            }
+                            if (!root.syncingDraftText && root.draftText !== text) {
+                                root.draftEdited(text)
+                            }
+                        }
                         onTextChanged: {
-                            if (!root.syncingDraftText) {
+                            root.scheduleInputMethodUpdate()
+                            if (!root.syncingDraftText && preeditText.length === 0) {
                                 root.draftEdited(text)
                             }
                         }
@@ -625,4 +691,5 @@ Item {
         repeat: false
         onTriggered: root.transientTipText = ""
     }
+
 }

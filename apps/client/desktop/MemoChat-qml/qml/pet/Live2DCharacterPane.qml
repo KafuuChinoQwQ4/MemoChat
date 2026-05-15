@@ -12,21 +12,22 @@ Rectangle {
     clip: true
 
     property var backdrop: null
-    property string characterName: "Memo Pet"
-    property string roleIdentity: "聊天陪伴角色"
-    property string modelRoot: ""
-    property string modelJson: ""
-    property string motionDirectory: ""
-    property string expressionDirectory: ""
-    property string voiceDirectory: ""
-    property string defaultVoice: "normal"
+    property var petController: null
+    property string characterName: "香风智乃"
+    property string roleIdentity: "Live2D 桌宠助手"
+    property string modelRoot: "src/KafuuChino/香风智乃live2D"
+    property string modelJson: "src/KafuuChino/香风智乃live2D/香风智乃.model3.json"
+    property string motionDirectory: "src/KafuuChino/香风智乃live2D"
+    property string expressionDirectory: "src/KafuuChino/香风智乃live2D"
+    property string voiceDirectory: "src/KafuuChino/香风智乃voice"
+    property string defaultVoice: "Kafuuchino-voice.mp3"
     property string idleMotion: "Idle"
-    property string speakingMotion: "TapBody"
-    property string fallbackExpression: "neutral"
-    property string personalityTags: "认真, 轻声, 可靠, 适度吐槽"
-    property string relationshipStyle: "熟悉但不过界的同伴"
-    property string worldSetting: "住在 MemoChat 旁边的小小工作台，会在用户聊天、学习和整理资料时陪伴。"
-    property string speechRules: "用自然中文回复。少说套话，先回应情绪，再给明确建议。"
+    property string speakingMotion: "Talk"
+    property string fallbackExpression: "脸红"
+    property string personalityTags: "认真, 安静, 可靠, 轻声提醒"
+    property string relationshipStyle: "熟悉但不过界的桌面同伴"
+    property string worldSetting: "以香风智乃素材作为本地默认角色，在 MemoChat 旁边陪用户聊天、学习和整理资料。"
+    property string speechRules: "使用当前选择的单一语言回复，不混用中文、日语或英语。少说套话，先回应情绪，再给明确建议。"
     property string catchphrases: "收到，我会记住。\n先别急，我们一步一步来。"
     property string forbiddenRules: "不要伪装成真人；不要主动索要隐私；不替用户做高风险决定。"
     property string draftStatus: ""
@@ -42,6 +43,18 @@ Rectangle {
     property bool interruptEnabled: true
     property bool cameraEnabled: false
     property bool cloudVisionEnabled: false
+    property bool autoStartPetOnClientStart: false
+    property bool voiceTrainingConsent: false
+    property string voiceTrainingConsentScope: "local_default_reference"
+    property string voiceTrainingJobId: ""
+    property string voiceTrainingStatus: "idle"
+    property string voiceTrainingStage: ""
+    property int voiceTrainingProgress: 0
+    property string voiceTrainingArtifactPath: ""
+    property string voiceTrainingMessage: "等待确认参考音频权限"
+    property string characterAvatarSource: "qrc:/icons/modelive2d.png"
+
+    signal petPreviewRequested(var petAssetSettings)
 
     readonly property color textPrimaryColor: "#253247"
     readonly property color textSecondaryColor: "#4e5d74"
@@ -49,6 +62,7 @@ Rectangle {
     readonly property color accentBlue: Qt.rgba(0.32, 0.56, 0.86, 1.0)
     readonly property color accentGreen: Qt.rgba(0.32, 0.60, 0.44, 1.0)
     readonly property color accentRose: Qt.rgba(0.78, 0.36, 0.45, 1.0)
+    readonly property string characterAvatarFallback: "qrc:/icons/modelive2d.png"
 
     PetAssetSettings {
         id: petAssetSettings
@@ -74,11 +88,99 @@ Rectangle {
     Component.onCompleted: {
         petAssetSettings.load()
         root.applySettingsToDraft()
+        root.refreshCharacterAvatar()
         assetValidationTimer.start()
     }
 
+    function pathDirectory(path) {
+        var slash = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"))
+        return slash >= 0 ? path.slice(0, slash) : ""
+    }
+
+    function pathFileName(path) {
+        var slash = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"))
+        return slash >= 0 ? path.slice(slash + 1) : path
+    }
+
+    function pickPath(kind, picked, applySelection) {
+        if (picked.length === 0) {
+            draftStatus = "已取消选择" + kind
+            return
+        }
+        applySelection(picked)
+        draftStatus = "已选择" + kind
+        root.refreshCharacterAvatar()
+        assetValidationTimer.restart()
+    }
+
+    function refreshCharacterAvatar() {
+        var nextAvatar = ""
+        if (petAssetSettings && petAssetSettings.resolveLive2DAvatarUrl) {
+            nextAvatar = petAssetSettings.resolveLive2DAvatarUrl(root.modelJson, root.modelRoot)
+        }
+        root.characterAvatarSource = nextAvatar && nextAvatar.length > 0 ? nextAvatar : root.characterAvatarFallback
+    }
+
+    function pickModelJson() {
+        root.pickPath("模型文件",
+                      petAssetSettings.pickLocalFilePath("选择 Live2D model3.json",
+                                                         root.modelJson.length > 0 ? root.modelJson : root.modelRoot,
+                                                         "Live2D 模型 (*.model3.json);;JSON 文件 (*.json);;所有文件 (*.*)"),
+                      function(path) {
+                          root.modelJson = path
+                          var directory = root.pathDirectory(path)
+                          if (directory.length > 0) {
+                              root.modelRoot = directory
+                          }
+                      })
+    }
+
+    function pickModelRootDirectory() {
+        root.pickPath("资源目录",
+                      petAssetSettings.pickLocalDirectoryPath("选择 Live2D 资源目录", root.modelRoot),
+                      function(path) { root.modelRoot = path })
+    }
+
+    function pickMotionDirectory() {
+        root.pickPath("动作目录",
+                      petAssetSettings.pickLocalDirectoryPath("选择动作目录", root.motionDirectory.length > 0 ? root.motionDirectory : root.modelRoot),
+                      function(path) { root.motionDirectory = path })
+    }
+
+    function pickExpressionDirectory() {
+        root.pickPath("表情目录",
+                      petAssetSettings.pickLocalDirectoryPath("选择表情目录", root.expressionDirectory.length > 0 ? root.expressionDirectory : root.modelRoot),
+                      function(path) { root.expressionDirectory = path })
+    }
+
+    function pickVoiceDirectory() {
+        root.pickPath("语音目录",
+                      petAssetSettings.pickLocalDirectoryPath("选择语音目录", root.voiceDirectory),
+                      function(path) { root.voiceDirectory = path })
+    }
+
+    function pickDefaultVoice() {
+        root.pickPath("默认音色",
+                      petAssetSettings.pickLocalFilePath("选择默认音频",
+                                                         root.defaultVoicePath().length > 0 ? root.defaultVoicePath() : root.voiceDirectory,
+                                                         "音频文件 (*.wav *.mp3 *.flac *.ogg *.m4a);;所有文件 (*.*)"),
+                      function(path) {
+                          var directory = root.pathDirectory(path)
+                          if (directory.length > 0) {
+                              root.voiceDirectory = directory
+                          }
+                          root.defaultVoice = root.pathFileName(path)
+                      })
+    }
+
     function choosePlaceholder(kind) {
-        draftStatus = "准备选择" + kind
+        if (kind === "模型文件") {
+            root.pickModelJson()
+        } else if (kind === "资源目录") {
+            root.pickModelRootDirectory()
+        } else {
+            draftStatus = "准备选择" + kind
+        }
     }
 
     function assetStatusLabel() {
@@ -159,10 +261,20 @@ Rectangle {
         interruptEnabled = petAssetSettings.interruptEnabled
         cameraEnabled = petAssetSettings.cameraEnabled
         cloudVisionEnabled = petAssetSettings.cloudVisionEnabled
+        autoStartPetOnClientStart = petAssetSettings.autoStartPetOnClientStart
+        voiceTrainingConsent = petAssetSettings.voiceTrainingConsent
+        voiceTrainingConsentScope = petAssetSettings.voiceTrainingConsentScope
+        voiceTrainingJobId = petAssetSettings.voiceTrainingJobId
+        voiceTrainingStatus = petAssetSettings.voiceTrainingStatus
+        voiceTrainingStage = petAssetSettings.voiceTrainingStage
+        voiceTrainingProgress = petAssetSettings.voiceTrainingProgress
+        voiceTrainingArtifactPath = petAssetSettings.voiceTrainingArtifactPath
+        voiceTrainingMessage = petAssetSettings.voiceTrainingMessage
         toneCombo.currentIndex = petAssetSettings.toneIndex
         responseLengthCombo.currentIndex = petAssetSettings.responseLengthIndex
         languageCombo.currentIndex = petAssetSettings.languageIndex
         draftStatus = petAssetSettings.statusText
+        root.refreshCharacterAvatar()
     }
 
     function storeDraftToSettings() {
@@ -195,6 +307,15 @@ Rectangle {
         petAssetSettings.interruptEnabled = interruptEnabled
         petAssetSettings.cameraEnabled = cameraEnabled
         petAssetSettings.cloudVisionEnabled = cloudVisionEnabled
+        petAssetSettings.autoStartPetOnClientStart = autoStartPetOnClientStart
+        petAssetSettings.voiceTrainingConsent = voiceTrainingConsent
+        petAssetSettings.voiceTrainingConsentScope = voiceTrainingConsentScope
+        petAssetSettings.voiceTrainingJobId = voiceTrainingJobId
+        petAssetSettings.voiceTrainingStatus = voiceTrainingStatus
+        petAssetSettings.voiceTrainingStage = voiceTrainingStage
+        petAssetSettings.voiceTrainingProgress = voiceTrainingProgress
+        petAssetSettings.voiceTrainingArtifactPath = voiceTrainingArtifactPath
+        petAssetSettings.voiceTrainingMessage = voiceTrainingMessage
         petAssetSettings.toneIndex = toneCombo.currentIndex
         petAssetSettings.responseLengthIndex = responseLengthCombo.currentIndex
         petAssetSettings.languageIndex = languageCombo.currentIndex
@@ -209,6 +330,7 @@ Rectangle {
         } else {
             draftStatus = petAssetSettings.statusText
         }
+        root.refreshCharacterAvatar()
     }
 
     function resetDraft() {
@@ -216,6 +338,164 @@ Rectangle {
         root.applySettingsToDraft()
         assetValidationTimer.restart()
         draftStatus = petAssetSettings.statusText
+        root.refreshCharacterAvatar()
+    }
+
+    function requestPetPreview() {
+        draftStatus = "正在启动桌宠预览"
+        root.storeDraftToSettings()
+        root.petPreviewRequested(petAssetSettings.toVariantMap())
+    }
+
+    function defaultVoicePath() {
+        if (voiceDirectory.length === 0 || defaultVoice.length === 0) {
+            return ""
+        }
+        var separator = voiceDirectory.endsWith("/") || voiceDirectory.endsWith("\\") ? "" : "/"
+        return voiceDirectory + separator + defaultVoice
+    }
+
+    function languageCode() {
+        var current = languageCombo.currentText
+        if (current === "日语") {
+            return "ja-JP"
+        }
+        if (current === "英语") {
+            return "en-US"
+        }
+        if (current === "韩语") {
+            return "ko-KR"
+        }
+        if (current === "法语") {
+            return "fr-FR"
+        }
+        if (current === "西班牙语") {
+            return "es-ES"
+        }
+        return "zh-CN"
+    }
+
+    onModelRootChanged: root.refreshCharacterAvatar()
+    onModelJsonChanged: root.refreshCharacterAvatar()
+
+    function voiceTrainingStatusLabel() {
+        if (voiceTrainingStatus === "submitting") {
+            return "正在提交"
+        }
+        if (voiceTrainingStatus === "queued") {
+            return "训练队列已创建"
+        }
+        if (voiceTrainingStatus === "ready"
+                || voiceTrainingStage === "ready_for_gpt_sovits"
+                || voiceTrainingStage === "needs_reference_clip") {
+            return "GPT-SoVITS 可用"
+        }
+        if (voiceTrainingStatus === "prepared") {
+            return "训练准备包已生成"
+        }
+        if (voiceTrainingStatus === "blocked") {
+            return "等待授权"
+        }
+        return "未开始"
+    }
+
+    function normalizeVoiceTrainingState() {
+        if (voiceTrainingStage === "ready_for_worker") {
+            voiceTrainingStage = "ready_for_gpt_sovits"
+            if (voiceTrainingStatus === "prepared"
+                    || voiceTrainingStatus === "idle"
+                    || voiceTrainingStatus === "blocked") {
+                voiceTrainingStatus = "ready"
+            }
+            if (voiceTrainingProgress < 70) {
+                voiceTrainingProgress = 70
+            }
+            if (voiceTrainingMessage.length === 0
+                    || voiceTrainingMessage.toLowerCase().indexOf("worker") >= 0) {
+                voiceTrainingMessage = "声音参考已就绪，可直接用于 GPT-SoVITS 零样本合成。"
+            }
+        }
+    }
+
+    function syncVoiceTrainingFromController() {
+        if (!petController) {
+            return
+        }
+        if (petController.voiceTrainingJobId.length > 0) {
+            voiceTrainingJobId = petController.voiceTrainingJobId
+        }
+        if (petController.voiceTrainingStatus.length > 0) {
+            voiceTrainingStatus = petController.voiceTrainingStatus
+        }
+        if (petController.voiceTrainingStage.length > 0) {
+            voiceTrainingStage = petController.voiceTrainingStage
+        }
+        voiceTrainingProgress = petController.voiceTrainingProgress
+        if (petController.voiceTrainingArtifactPath.length > 0) {
+            voiceTrainingArtifactPath = petController.voiceTrainingArtifactPath
+        }
+        if (petController.voiceTrainingMessage.length > 0) {
+            voiceTrainingMessage = petController.voiceTrainingMessage
+        }
+        normalizeVoiceTrainingState()
+        root.storeDraftToSettings()
+        petAssetSettings.save()
+    }
+
+    function startVoiceTraining() {
+        if (!voiceTrainingConsent) {
+            voiceTrainingStatus = "blocked"
+            voiceTrainingMessage = "请先确认你有权使用这段参考音频"
+            draftStatus = voiceTrainingMessage
+            return
+        }
+        var referencePath = defaultVoicePath()
+        if (referencePath.length === 0) {
+            voiceTrainingStatus = "blocked"
+            voiceTrainingMessage = "请先设置语音目录和默认音色"
+            draftStatus = voiceTrainingMessage
+            return
+        }
+        root.storeDraftToSettings()
+        petAssetSettings.save()
+        if (!petController) {
+            voiceTrainingStatus = "prepared"
+            voiceTrainingMessage = "训练配置已保存，等待桌宠控制器连接"
+            draftStatus = voiceTrainingMessage
+            return
+        }
+        voiceTrainingStatus = "submitting"
+        voiceTrainingStage = "submitting"
+        voiceTrainingProgress = 0
+        voiceTrainingMessage = "正在提交声音训练准备任务"
+        petController.startVoiceTraining({
+            "profile_id": "default",
+            "voice_name": defaultVoice.length > 0 ? defaultVoice.replace(/\.[^.]+$/, "") : characterName,
+            "language": languageCode(),
+            "reference_audio_path": referencePath,
+            "reference_audio_directory": voiceDirectory,
+            "reference_audio_file": defaultVoice,
+            "consent_confirmed": voiceTrainingConsent,
+            "consent_scope": voiceTrainingConsentScope,
+            "source": "src-default",
+            "provider": "gpt-sovits",
+            "metadata": {
+                "character": characterName,
+                "asset_status": assetValidator.status,
+                "package_checksum": assetValidator.packageChecksum
+            }
+        })
+        draftStatus = voiceTrainingMessage
+    }
+
+    function refreshVoiceTraining() {
+        if (!petController || voiceTrainingJobId.length === 0) {
+            draftStatus = "没有可刷新的声音训练任务"
+            return
+        }
+        voiceTrainingMessage = "正在刷新声音训练任务"
+        petController.refreshVoiceTrainingJob(voiceTrainingJobId)
+        draftStatus = voiceTrainingMessage
     }
 
     function promptPreview() {
@@ -241,6 +521,15 @@ Rectangle {
         strokeColor: Qt.rgba(1, 1, 1, 0.58)
         glowTopColor: Qt.rgba(1, 1, 1, 0.26)
         glowBottomColor: Qt.rgba(1, 1, 1, 0.05)
+    }
+
+    Connections {
+        target: root.petController
+        ignoreUnknownSignals: true
+
+        function onVoiceTrainingChanged() {
+            root.syncVoiceTrainingFromController()
+        }
     }
 
     ColumnLayout {
@@ -271,8 +560,8 @@ Rectangle {
                         anchors.centerIn: parent
                         width: 44
                         height: 44
-                        source: "qrc:/icons/modelive2d.png"
-                        fillMode: Image.PreserveAspectFit
+                        source: root.characterAvatarSource
+                        fillMode: Image.PreserveAspectCrop
                         mipmap: true
                     }
                 }
@@ -309,6 +598,19 @@ Rectangle {
                             elide: Text.ElideRight
                         }
                     }
+                }
+
+                GlassButton {
+                    Layout.preferredWidth: 96
+                    Layout.preferredHeight: 36
+                    text: "启动桌宠"
+                    textPixelSize: 13
+                    textColor: "#285986"
+                    cornerRadius: 8
+                    normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
+                    hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
+                    pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
+                    onClicked: root.requestPetPreview()
                 }
 
                 GlassButton {
@@ -377,8 +679,8 @@ Rectangle {
                                 anchors.centerIn: parent
                                 width: Math.min(parent.width - 30, 118)
                                 height: width
-                                source: "qrc:/icons/modelive2d.png"
-                                fillMode: Image.PreserveAspectFit
+                                source: root.characterAvatarSource
+                                fillMode: Image.PreserveAspectCrop
                                 mipmap: true
                             }
 
@@ -440,7 +742,7 @@ Rectangle {
                             FieldBlock {
                                 title: "模型根目录"
                                 text: root.modelRoot
-                                placeholderText: "/data/memochat/pet-assets/example-model"
+                                placeholderText: "src/KafuuChino/香风智乃live2D"
                                 onTextChanged: root.modelRoot = text
                             }
 
@@ -464,7 +766,7 @@ Rectangle {
                                     normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.18)
                                     hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.28)
                                     pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.36)
-                                    onClicked: root.choosePlaceholder("模型文件")
+                                    onClicked: root.pickModelJson()
                                 }
 
                                 GlassButton {
@@ -476,7 +778,7 @@ Rectangle {
                                     normalColor: Qt.rgba(0.32, 0.60, 0.44, 0.18)
                                     hoverColor: Qt.rgba(0.32, 0.60, 0.44, 0.28)
                                     pressedColor: Qt.rgba(0.32, 0.60, 0.44, 0.36)
-                                    onClicked: root.choosePlaceholder("资源目录")
+                                    onClicked: root.pickModelRootDirectory()
                                 }
 
                                 Label {
@@ -582,11 +884,35 @@ Rectangle {
                             onTextChanged: root.motionDirectory = text
                         }
 
+                        GlassButton {
+                            Layout.preferredWidth: 72
+                            Layout.preferredHeight: 36
+                            text: "选择"
+                            textPixelSize: 12
+                            cornerRadius: 8
+                            normalColor: Qt.rgba(0.32, 0.60, 0.44, 0.18)
+                            hoverColor: Qt.rgba(0.32, 0.60, 0.44, 0.28)
+                            pressedColor: Qt.rgba(0.32, 0.60, 0.44, 0.36)
+                            onClicked: root.pickMotionDirectory()
+                        }
+
                         FieldBlock {
                             title: "表情目录"
                             text: root.expressionDirectory
                             placeholderText: "expressions / exp3.json"
                             onTextChanged: root.expressionDirectory = text
+                        }
+
+                        GlassButton {
+                            Layout.preferredWidth: 72
+                            Layout.preferredHeight: 36
+                            text: "选择"
+                            textPixelSize: 12
+                            cornerRadius: 8
+                            normalColor: Qt.rgba(0.32, 0.60, 0.44, 0.18)
+                            hoverColor: Qt.rgba(0.32, 0.60, 0.44, 0.28)
+                            pressedColor: Qt.rgba(0.32, 0.60, 0.44, 0.36)
+                            onClicked: root.pickExpressionDirectory()
                         }
                     }
 
@@ -597,15 +923,39 @@ Rectangle {
                         FieldBlock {
                             title: "语音目录"
                             text: root.voiceDirectory
-                            placeholderText: "voice / wav / json"
+                            placeholderText: "src/KafuuChino/香风智乃voice"
                             onTextChanged: root.voiceDirectory = text
+                        }
+
+                        GlassButton {
+                            Layout.preferredWidth: 72
+                            Layout.preferredHeight: 36
+                            text: "选择"
+                            textPixelSize: 12
+                            cornerRadius: 8
+                            normalColor: Qt.rgba(0.32, 0.60, 0.44, 0.18)
+                            hoverColor: Qt.rgba(0.32, 0.60, 0.44, 0.28)
+                            pressedColor: Qt.rgba(0.32, 0.60, 0.44, 0.36)
+                            onClicked: root.pickVoiceDirectory()
                         }
 
                         FieldBlock {
                             title: "默认音色"
                             text: root.defaultVoice
-                            placeholderText: "normal / sweet / calm"
+                            placeholderText: "Kafuuchino-voice.mp3"
                             onTextChanged: root.defaultVoice = text
+                        }
+
+                        GlassButton {
+                            Layout.preferredWidth: 72
+                            Layout.preferredHeight: 36
+                            text: "选择"
+                            textPixelSize: 12
+                            cornerRadius: 8
+                            normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.18)
+                            hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.28)
+                            pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.36)
+                            onClicked: root.pickDefaultVoice()
                         }
                     }
 
@@ -676,6 +1026,135 @@ Rectangle {
                             subtitle: "按情绪选择问候、惊讶、确认等短音频"
                             checked: root.emotionSoundEnabled
                             onCheckedChanged: root.emotionSoundEnabled = checked
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        ToggleRow {
+                            Layout.fillWidth: true
+                            title: "允许使用参考音频"
+                            subtitle: "确认你有权用当前默认音频准备本地声音训练"
+                            checked: root.voiceTrainingConsent
+                            onCheckedChanged: root.voiceTrainingConsent = checked
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            implicitHeight: Math.max(60, voiceTrainingStatusLayout.implicitHeight + 14)
+                            radius: 8
+                            color: Qt.rgba(1, 1, 1, 0.22)
+                            border.color: Qt.rgba(1, 1, 1, 0.34)
+
+                            ColumnLayout {
+                                id: voiceTrainingStatusLayout
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 3
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: root.voiceTrainingStatusLabel()
+                                    color: root.textPrimaryColor
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: root.voiceTrainingMessage
+                                    color: root.textMutedColor
+                                    font.pixelSize: 11
+                                    wrapMode: Text.Wrap
+                                    maximumLineCount: 2
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        GlassButton {
+                            Layout.preferredWidth: 118
+                            Layout.preferredHeight: 32
+                            enabled: root.voiceTrainingConsent
+                                     && (!root.petController || !root.petController.voiceTrainingBusy)
+                            text: "开始声音训练"
+                            textPixelSize: 12
+                            textColor: "#285986"
+                            cornerRadius: 8
+                            normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.22)
+                            hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.32)
+                            pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.40)
+                            onClicked: root.startVoiceTraining()
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: root.voiceTrainingJobId.length > 0
+                                  ? "任务 " + root.voiceTrainingJobId
+                                    + " · " + root.voiceTrainingProgress + "%"
+                                    + (root.voiceTrainingStage.length > 0 ? " · " + root.voiceTrainingStage : "")
+                                  : "默认使用当前 src 音频；真实 GPT-SoVITS 训练稍后接入。"
+                            color: root.textMutedColor
+                            font.pixelSize: 11
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        visible: root.voiceTrainingArtifactPath.length > 0
+                        implicitHeight: Math.max(42, voiceTrainingArtifactLabel.implicitHeight + 18)
+                        radius: 8
+                        color: Qt.rgba(1, 1, 1, 0.18)
+                        border.color: Qt.rgba(1, 1, 1, 0.30)
+
+                        Label {
+                            id: voiceTrainingArtifactLabel
+                            anchors.fill: parent
+                            anchors.margins: 9
+                            text: "准备包 " + root.voiceTrainingArtifactPath
+                            color: root.textMutedColor
+                            font.pixelSize: 11
+                            wrapMode: Text.Wrap
+                            maximumLineCount: 2
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        ProgressBar {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 6
+                            from: 0
+                            to: 100
+                            value: root.voiceTrainingProgress
+                            visible: root.voiceTrainingStatus !== "idle"
+                        }
+
+                        GlassButton {
+                            Layout.preferredWidth: 84
+                            Layout.preferredHeight: 30
+                            enabled: root.voiceTrainingJobId.length > 0
+                                     && root.petController
+                                     && !root.petController.voiceTrainingBusy
+                            text: "刷新"
+                            textPixelSize: 12
+                            cornerRadius: 8
+                            normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.16)
+                            hoverColor: Qt.rgba(0.54, 0.60, 0.68, 0.24)
+                            pressedColor: Qt.rgba(0.54, 0.60, 0.68, 0.32)
+                            onClicked: root.refreshVoiceTraining()
                         }
                     }
                 }
@@ -800,6 +1279,14 @@ Rectangle {
 
                         ToggleRow {
                             Layout.fillWidth: true
+                            title: "打开客户端自启"
+                            subtitle: "默认关闭；保存后下次打开客户端自动启动桌宠"
+                            checked: root.autoStartPetOnClientStart
+                            onCheckedChanged: root.autoStartPetOnClientStart = checked
+                        }
+
+                        ToggleRow {
+                            Layout.fillWidth: true
                             title: "待机动作"
                             subtitle: "无对话时循环 idle motion"
                             checked: root.idleMotionEnabled
@@ -901,7 +1388,7 @@ Rectangle {
     ComboBox {
         id: languageCombo
         visible: false
-        model: ["中文优先", "中日混合", "中英双语"]
+        model: ["中文", "日语", "英语", "韩语", "法语", "西班牙语"]
         currentIndex: 0
     }
 

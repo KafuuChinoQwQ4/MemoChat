@@ -8,7 +8,20 @@ PET_MODEL_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/PetModel.cpp"
 PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/PetController.h"
 PET_SCENE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetScene.qml"
 PET_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetWindow.qml"
+PET_CHAT_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatWindow.qml"
+CHAT_COMPOSER_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/conversation/ChatComposerBar.qml"
+PET_CONTROL_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlWindow.qml"
+CHARACTER_PANE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DCharacterPane.qml"
+CHAT_SHELL_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/ChatShellPage.qml"
+SHARED_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
+LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
+PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/PetController.h"
+PET_CONTROLLER_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/PetController.cpp"
+CLIENT_CMAKE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/CMakeLists.txt"
 QML_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml.qrc"
+PET_CAMERA_CAPTURE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetCameraCapture.qml"
+PET_SPEECH_SYNTH_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/PetSpeechSynthesizer.cpp"
+MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/main.cpp"
 
 
 class PetQmlContractTests(unittest.TestCase):
@@ -16,7 +29,17 @@ class PetQmlContractTests(unittest.TestCase):
         header = PET_MODEL_H.read_text(encoding="utf-8")
         controller = PET_CONTROLLER_H.read_text(encoding="utf-8")
 
-        for prop in ("schemaVersion", "eventId", "turnId", "phase"):
+        for prop in (
+            "schemaVersion",
+            "eventId",
+            "turnId",
+            "phase",
+            "speechTranslation",
+            "speechDisplayText",
+            "speechFinal",
+            "audioUrl",
+            "audioState",
+        ):
             self.assertIn(prop, header)
             self.assertIn(prop, controller)
 
@@ -26,9 +49,12 @@ class PetQmlContractTests(unittest.TestCase):
         for token in (
             'QStringLiteral("animation")',
             'QStringLiteral("audio")',
+            'QStringLiteral("url")',
+            'QStringLiteral("state")',
             'QStringLiteral("text")',
             'QStringLiteral("delta")',
             'QStringLiteral("display")',
+            'QStringLiteral("translation")',
             'QStringLiteral("final")',
             'QStringLiteral("speech")',
             'QStringLiteral("lip_sync")',
@@ -36,28 +62,504 @@ class PetQmlContractTests(unittest.TestCase):
             self.assertIn(token, source)
 
         self.assertIn("_speech_turn_id", source)
+        self.assertIn("displayTextForSpeech", source)
+        self.assertIn("isChineseLanguage", source)
         self.assertIn("jsonBool", source)
+        self.assertIn("_audio_url", source)
+        self.assertIn("_audio_state", source)
 
     def test_pet_scene_keeps_null_controller_and_phase_status_guards(self):
         scene = PET_SCENE_QML.read_text(encoding="utf-8")
 
         self.assertIn('expression: root.petController ? root.petController.expression : "neutral"', scene)
         self.assertIn('motion: root.petController ? root.petController.motion : "idle"', scene)
-        self.assertIn("function phaseText", scene)
-        self.assertIn("function phaseColor", scene)
-        self.assertIn("function displayStatus", scene)
-        self.assertIn("root.petController && root.petController.error.length > 0", scene)
+        self.assertIn("function speechPlaybackText", scene)
+        self.assertIn("PetAudioPlayer.qml", scene)
+        self.assertIn("root.petController.audioUrl", scene)
+        self.assertIn("root.petController.audioState", scene)
+        self.assertIn("root.petController.speechFinal", scene)
+        self.assertIn("if (!root.petController.speechFinal)", scene)
+        self.assertIn("voiceReplyEnabled", scene)
+        self.assertIn("active: root.voiceReplyEnabled && root.petController", scene)
+        self.assertNotIn("speechBubble", scene)
+        self.assertNotIn("bubbleTail", scene)
+        self.assertNotIn("anchors.topMargin: speechBubble.visible", scene)
 
-    def test_pet_window_and_resources_remain_registered(self):
+    def test_pet_audio_player_resource_declares_qt_multimedia(self):
+        qrc = QML_QRC.read_text(encoding="utf-8")
+        cmake = CLIENT_CMAKE.read_text(encoding="utf-8")
+        audio_player = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetAudioPlayer.qml").read_text(encoding="utf-8")
+
+        self.assertIn("qml/pet/PetAudioPlayer.qml", qrc)
+        self.assertIn("find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS Multimedia)", cmake)
+        self.assertIn("Qt${QT_VERSION_MAJOR}::Multimedia", cmake)
+        self.assertIn("import QtMultimedia", audio_player)
+        self.assertIn("import MemoChat 1.0", audio_player)
+        self.assertIn("MediaPlayer", audio_player)
+        self.assertIn("PetSpeechSynthesizer", MAIN_CPP.read_text(encoding="utf-8"))
+        self.assertIn("PetSpeechSynthesizer", audio_player)
+        self.assertIn("Qt.createQmlObject('import QtTextToSpeech; TextToSpeech", audio_player)
+        self.assertIn("property string speechText", audio_player)
+        self.assertIn("property bool speechFinal", audio_player)
+        self.assertIn("property bool textToSpeechFallbackEnabled: false", audio_player)
+        self.assertIn("function maybeSpeakText", audio_player)
+        self.assertIn("if (!root.textToSpeechFallbackEnabled)", audio_player)
+        self.assertIn("function hasPlayableAudio", audio_player)
+        self.assertIn("function isDeterministicFallbackAudio", audio_player)
+        self.assertIn("!isDeterministicFallbackAudio()", audio_player)
+        self.assertIn("deterministic-voice-", audio_player)
+        self.assertIn("property string playbackState", audio_player)
+        self.assertIn("function canPlayForState", audio_player)
+        self.assertIn('playbackState === "ready"', audio_player)
+        self.assertIn('playbackState === "playing"', audio_player)
+        self.assertIn('playbackState === "interrupted"', audio_player)
+        self.assertIn("petAudioPlayer.stop()", audio_player)
+        self.assertIn("petAudioPlayer.play()", audio_player)
+
+    def test_pet_controller_audio_url_is_absolute_and_cache_busted_per_event(self):
+        source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+
+        self.assertIn("QUrlQuery query(url)", source)
+        self.assertIn('query.addQueryItem(QStringLiteral("turn"), _model.turnId())', source)
+        self.assertIn('query.addQueryItem(QStringLiteral("event"), _model.eventId())', source)
+        self.assertIn("url.setQuery(query)", source)
+        self.assertIn("return url.toString()", source)
+
+    def test_pet_speech_state_clears_before_new_manual_input(self):
+        model = PET_MODEL_CPP.read_text(encoding="utf-8")
+        controller = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+
+        self.assertIn("&& !_speech_final && _audio_url.isEmpty()", model)
+        self.assertIn("_speech_final = false;", model)
+        self.assertIn("_model.clearSpeech();", controller)
+
+    def test_pet_chat_window_exposes_wsl_windows_ime_bridge(self):
+        header = PET_CONTROLLER_H.read_text(encoding="utf-8")
+        source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+        chat = PET_CHAT_WINDOW_QML.read_text(encoding="utf-8")
+        composer = CHAT_COMPOSER_BAR_QML.read_text(encoding="utf-8")
+
+        for token in (
+            "windowsImeBridgeAvailable",
+            "windowsImeBridgeBusy",
+            "windowsImeTextCommitted",
+            "openWindowsImeBridge",
+            "selectedModelType",
+            "selectedModelName",
+            "replyLanguage",
+            "setModelSelection",
+            "setReplyLanguage",
+        ):
+            self.assertIn(token, header)
+
+        for token in (
+            "setModelSelection",
+            "setReplyLanguage",
+            "payload[QStringLiteral(\"model_type\")]",
+            "payload[QStringLiteral(\"model_name\")]",
+            "metadata[QStringLiteral(\"reply_language\")]",
+        ):
+            self.assertIn(token, source)
+
+        for token in (
+            "/proc/sys/kernel/osrelease",
+            "powershell.exe",
+            "-EncodedCommand",
+            "System.Windows.Forms.TextBox",
+            "ImeMode",
+            "Microsoft YaHei UI",
+        ):
+            self.assertIn(token, source)
+
+        for token in (
+            "ListModel",
+            "ListView",
+            "ChatMessageDelegate",
+            "ChatComposerBar",
+            "imeBridgeController: root.petController",
+            "voiceChatRequested",
+            "videoChatRequested",
+            "appendOrUpdateAssistantMessage",
+            "syncModelSelection",
+            "syncReplyLanguage",
+            "pendingAssistantIndex",
+            "pendingAssistantTurnId",
+            "sendPendingText",
+            "root.petController.startSession()",
+            "root.petController.sendText(trimmed)",
+            "root.petController.setModelSelection",
+            "root.petController.setReplyLanguage",
+        ):
+            self.assertIn(token, chat)
+
+        self.assertIn("imeBridgeController", composer)
+        self.assertIn("focusMessageInput", composer)
+        self.assertIn("preeditText", composer)
+        self.assertIn("pendingDraftSync", composer)
+        self.assertIn("syncDraftTextFromBinding", composer)
+        self.assertIn("scheduleInputMethodUpdate", composer)
+        self.assertIn("Qt.inputMethod.update(Qt.ImQueryAll)", composer)
+        self.assertIn("onCursorRectangleChanged", composer)
+        self.assertNotIn("imeBridgeActive", composer)
+        self.assertNotIn("preferWindowsImeBridge", composer)
+        self.assertNotIn("openImeBridge", composer)
+        self.assertNotIn("pinyinCandidateMap", composer)
+        self.assertNotIn("currentPinyinToken", composer)
+        self.assertNotIn("pinyinCandidates", composer)
+        self.assertNotIn("commitPinyinCandidate", composer)
+        self.assertNotIn("insertCommittedText", composer)
+        self.assertNotIn("replaceDraftText", composer)
+        self.assertNotIn("onWindowsImeTextCommitted", composer)
+        self.assertNotIn("Qt.inputMethod.show()", composer)
+        self.assertNotIn("Keys.onPressed", composer)
+        self.assertNotIn("pinyinCandidateBar", composer)
+        self.assertNotIn('text: "中"', composer)
+
+    def test_pet_native_tts_uses_desktop_backends_before_qml_fallback(self):
+        source = PET_SPEECH_SYNTH_CPP.read_text(encoding="utf-8")
+        audio_player = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetAudioPlayer.qml").read_text(encoding="utf-8")
+
+        for token in (
+            "System.Speech.Synthesis.SpeechSynthesizer",
+            "powershell.exe",
+            "spd-say",
+            "espeak-ng",
+            "QProcess",
+        ):
+            self.assertIn(token, source)
+        self.assertIn("nativeSpeech.speak(root.speechText, \"zh-CN\")", audio_player)
+        self.assertIn("ensureSpeechEngine", audio_player)
+
+    def test_main_cpp_bootstraps_linux_input_method_env_for_chinese_entry(self):
+        source = MAIN_CPP.read_text(encoding="utf-8")
+
+        for token in (
+            "configureLinuxInputMethod",
+            "QT_IM_MODULE",
+            "GTK_IM_MODULE",
+            "XMODIFIERS",
+            "fcitx5",
+            "ibus-daemon",
+            "startIbusDaemon",
+            "stopIbusDaemons",
+            "selectIbusLibpinyinEngine",
+            "MEMOCHAT_RESTART_IBUS",
+            "pgrep",
+            "pkill",
+            "startDetached",
+            "libfcitx5platforminputcontextplugin.so",
+            "libibusplatforminputcontextplugin.so",
+            "libpinyin",
+            "IBUS_ENABLE_SYNC_MODE",
+            "--replace",
+            "GDK_BACKEND",
+            "WAYLAND_DISPLAY",
+            "qunsetenv",
+            "env.remove(QStringLiteral(\"WAYLAND_DISPLAY\"))",
+            "QT_QPA_PLATFORM",
+            "qtvirtualkeyboard",
+            "QT_VIRTUALKEYBOARD_DESKTOP_DISABLE",
+        ):
+            self.assertIn(token, source)
+
+    def test_pet_camera_capture_upload_contract_uses_qt_multimedia(self):
+        qrc = QML_QRC.read_text(encoding="utf-8")
+        cmake = CLIENT_CMAKE.read_text(encoding="utf-8")
+        header = PET_CONTROLLER_H.read_text(encoding="utf-8")
+        source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+        scene = PET_SCENE_QML.read_text(encoding="utf-8")
+        camera_capture = PET_CAMERA_CAPTURE_QML.read_text(encoding="utf-8")
+
+        self.assertIn("qml/pet/PetCameraCapture.qml", qrc)
+        self.assertIn("Qt${QT_VERSION_MAJOR}::Multimedia", cmake)
+        self.assertIn("Qt${QT_VERSION_MAJOR}::TextToSpeech", cmake)
+        for token in (
+            "Q_INVOKABLE void captureVisionFrame",
+            "Q_INVOKABLE QString nextVisionCaptureFilePath",
+            "Q_INVOKABLE void captureVisionFrameFile",
+        ):
+            self.assertIn(token, header)
+        for token in (
+            "/capture",
+            "frame_base64",
+            "frame_mime",
+            "frame_width",
+            "frame_height",
+            "local_frame_upload",
+        ):
+            self.assertIn(token, source)
+        self.assertIn("PetCameraCapture.qml", scene)
+        for token in (
+            "import QtMultimedia",
+            "MediaDevices",
+            "Camera",
+            "CaptureSession",
+            "ImageCapture",
+            "VideoOutput",
+            "captureToFile",
+            "captureVisionFrameFile",
+        ):
+            self.assertIn(token, camera_capture)
+
+    def test_pet_window_is_transparent_model_first_and_resources_remain_registered(self):
         window = PET_WINDOW_QML.read_text(encoding="utf-8")
+        scene = PET_SCENE_QML.read_text(encoding="utf-8")
         qrc = QML_QRC.read_text(encoding="utf-8")
 
         self.assertIn("Qt.WindowStaysOnTopHint", window)
+        self.assertIn('Qt.platform.os === "linux"', window)
+        self.assertIn("Qt.Window", window)
+        self.assertIn("Qt.Tool", window)
         self.assertIn("root.startSystemMove()", window)
+        self.assertIn("scaledWindowWidth", window)
+        self.assertIn("scaledWindowHeight", window)
+        self.assertIn("applyScale", window)
+        self.assertIn("root.width = scaledWindowWidth(nextScale)", window)
+        self.assertIn("root.height = scaledWindowHeight(nextScale)", window)
+        self.assertNotIn("oldBottom", window)
+        self.assertNotIn("oldCenterX", window)
+        self.assertIn("positionControlWindow()", window)
+        self.assertNotIn("root.width = Math.max(root.minimumWidth", window)
+        self.assertNotIn("root.height = Math.max(root.minimumHeight", window)
+        self.assertNotIn("anchors.fill: parent\n        radius: 18", window)
+        self.assertIn("property var agentController: null", window)
+        self.assertIn("property var petAssetSettings: null", window)
+        self.assertIn("petAssetSettings: root.petAssetSettings", window)
+        self.assertIn("property bool voiceReplyEnabled: true", window)
+        self.assertIn("voiceReplyEnabled: root.voiceReplyEnabled", window)
+        self.assertIn("onVoiceReplyToggled: function(value) { root.voiceReplyEnabled = value; root.syncControlWindowState() }", window)
+        self.assertIn("property var petChatWindowRef: null", window)
+        self.assertIn("property var petControlWindowRef: null", window)
+        self.assertIn("property bool chatPositionPending: false", window)
+        self.assertIn("PetControlWindow", window)
+        self.assertIn('"agentController": root.agentController', window)
+        self.assertIn('"petAssetSettings": root.petAssetSettings', window)
+        self.assertIn("petChatWindowComponent.createObject(null", window)
+        self.assertIn("PetChatWindow { }", window)
+        self.assertIn("scheduleChatWindowPosition()", window)
+        self.assertIn("positionChatWindow()", window)
+        self.assertIn("syncChatWindowState()", window)
+        self.assertIn("onControlsRequested: root.openControlWindow()", window)
+        self.assertIn("id: petDragHandler", scene)
+        self.assertIn("acceptedButtons: Qt.LeftButton", scene)
+        self.assertIn("acceptedButtons: Qt.RightButton", scene)
+        self.assertNotIn("scale: root.scaleFactor", scene)
+        self.assertNotIn("transformOrigin: Item.Bottom", scene)
+        self.assertIn("propagateComposedEvents: true", scene)
+        self.assertIn("mouse.accepted = false", scene)
+        self.assertIn("signal dragRequested", scene)
+        self.assertIn("signal controlsRequested", scene)
+        self.assertIn("root.controlsRequested(mouse.x, mouse.y)", scene)
+        self.assertNotIn("actionPopup.open()", scene)
+        self.assertNotIn("property bool chatPanelOpen", scene)
+        self.assertNotIn("function openChatPanel", scene)
+        self.assertIn("petAudioLoader.item.playbackState = \"stopped\"", scene)
+        self.assertIn("petAudioLoader.item.speechFinal = false", scene)
+        self.assertNotIn("speechBubble", scene)
+        self.assertNotIn("bubbleTail", scene)
+        self.assertIn("Qt.rgba(1.0, 0.96, 0.98, 0.96)", scene)
+        self.assertIn("font.bold: true", scene)
+        self.assertIn("property var petAssetSettings: null", scene)
+        self.assertIn("modelRoot: root.petAssetSettings ? root.petAssetSettings.modelRoot : \"\"", scene)
+        self.assertIn("modelJson: root.petAssetSettings ? root.petAssetSettings.modelJson : \"\"", scene)
+        self.assertNotIn("id: topControls", scene)
+        self.assertNotIn("id: dockControls", scene)
+        self.assertNotIn("Popup", scene)
         self.assertIn("qml/pet/PetWindow.qml", qrc)
         self.assertIn("qml/pet/PetScene.qml", qrc)
+        self.assertIn("qml/pet/PetControlWindow.qml", qrc)
+        self.assertIn("qml/pet/PetChatWindow.qml", qrc)
+        self.assertIn("qml/pet/PetAudioPlayer.qml", qrc)
         self.assertIn("qml/pet/Live2DCharacterPane.qml", qrc)
         self.assertIn('alias="icons/modelive2d.png"', qrc)
+
+    def test_pet_control_window_contains_api_access_controls(self):
+        panel = PET_CONTROL_WINDOW_QML.read_text(encoding="utf-8")
+
+        self.assertIn("Window {", panel)
+        self.assertIn("maximumWidth: 320", panel)
+        self.assertIn("panelCloseButton", panel)
+        self.assertIn("onClicked: root.hide()", panel)
+        self.assertIn('text: "AI API 接入"', panel)
+        self.assertIn("property var agentController", panel)
+        self.assertIn("root.agentController.registerApiProvider", panel)
+        self.assertIn("root.agentController.refreshModelList", panel)
+        self.assertIn("root.agentController.switchModel", panel)
+        self.assertIn("apiProviderStatus", panel)
+        self.assertIn("availableModels", panel)
+
+    def test_pet_chat_window_is_separate_and_uses_pet_controller(self):
+        chat = PET_CHAT_WINDOW_QML.read_text(encoding="utf-8")
+
+        self.assertIn("Window {", chat)
+        self.assertIn("flags: Qt.Window", chat)
+        self.assertIn("Qt.WindowMinimizeButtonHint", chat)
+        self.assertIn("function openChat", chat)
+        self.assertIn("ListModel", chat)
+        self.assertIn("ListView", chat)
+        self.assertIn("ChatMessageDelegate", chat)
+        self.assertIn("ChatComposerBar", chat)
+        self.assertIn("function sendMessage", chat)
+        self.assertIn("function sendPendingText", chat)
+        self.assertIn("function appendOrUpdateAssistantMessage", chat)
+        self.assertIn("pendingSendAlreadyAppended", chat)
+        self.assertIn("function syncModelSelection", chat)
+        self.assertIn("function syncReplyLanguage", chat)
+        self.assertIn("voiceChatRequested", chat)
+        self.assertIn("videoChatRequested", chat)
+        self.assertIn("imeBridgeController: root.petController", chat)
+        self.assertIn("enabledComposer: !!root.petController && !root.petController.busy", chat)
+        self.assertIn("root.petController.startSession()", chat)
+        self.assertIn("root.petController.sendText(trimmed)", chat)
+        self.assertIn("root.petController.setModelSelection", chat)
+        self.assertIn("root.petController.setReplyLanguage", chat)
+        self.assertIn("translationText: model.translationText", chat)
+        self.assertIn("pendingAssistantIndex", chat)
+        self.assertIn("pendingAssistantTurnId", chat)
+        self.assertIn("onControlEventReceived", chat)
+
+    def test_chat_composer_bar_exposes_linux_chinese_input_fallback(self):
+        composer = CHAT_COMPOSER_BAR_QML.read_text(encoding="utf-8")
+
+        self.assertIn("property var imeBridgeController: null", composer)
+        self.assertIn("focusMessageInput", composer)
+        self.assertIn("messageInput.forceActiveFocus()", composer)
+        self.assertIn("preeditText", composer)
+        self.assertIn("pendingDraftSync", composer)
+        self.assertIn("pendingDraftBaseText", composer)
+        self.assertIn("inputMethodUpdatePending", composer)
+        self.assertIn("syncDraftTextFromBinding", composer)
+        self.assertIn("applyDraftText", composer)
+        self.assertIn("scheduleInputMethodUpdate", composer)
+        self.assertIn("Qt.inputMethod.update(Qt.ImQueryAll)", composer)
+        self.assertIn("onCursorPositionChanged", composer)
+        self.assertIn("onCursorRectangleChanged", composer)
+        self.assertIn("inputMethodHints: Qt.ImhMultiLine", composer)
+        self.assertNotIn("ToolButton {\n                Layout.fillWidth: true", composer)
+        self.assertNotIn("imeBridgeActive", composer)
+        self.assertNotIn("preferWindowsImeBridge", composer)
+        self.assertNotIn("openImeBridge", composer)
+        self.assertNotIn("pinyinCandidateMap", composer)
+        self.assertNotIn("currentPinyinToken", composer)
+        self.assertNotIn("pinyinCandidates", composer)
+        self.assertNotIn("commitPinyinCandidate", composer)
+        self.assertNotIn("insertCommittedText", composer)
+        self.assertNotIn("replaceDraftText", composer)
+        self.assertNotIn("Qt.inputMethod.show()", composer)
+        self.assertNotIn("if (root.preferWindowsImeBridge", composer)
+        self.assertNotIn("windowsImeBridgeAvailable", composer)
+        self.assertNotIn("windowsImeBridgeBusy", composer)
+        self.assertNotIn("onWindowsImeTextCommitted", composer)
+        self.assertNotIn("Qt.Key_Space", composer)
+        self.assertNotIn("pinyinCandidateBar", composer)
+        self.assertNotIn('text: "中"', composer)
+
+    def test_live2d_role_page_can_request_pet_preview_from_both_entry_points(self):
+        pane = CHARACTER_PANE_QML.read_text(encoding="utf-8")
+        shell = CHAT_SHELL_PAGE_QML.read_text(encoding="utf-8")
+
+        self.assertRegex(pane, r"\bsignal\s+petPreviewRequested\s*\(\s*var\s+petAssetSettings\s*\)")
+        self.assertRegex(pane, r"\bfunction\s+requestPetPreview\s*\(")
+        self.assertIn('text: "启动桌宠"', pane)
+        self.assertIn("root.storeDraftToSettings()", pane)
+        self.assertIn("root.petPreviewRequested(petAssetSettings.toVariantMap())", pane)
+        self.assertIn("onClicked: root.requestPetPreview()", pane)
+
+        self.assertRegex(shell, r"\bsignal\s+petPreviewRequested\s*\(\s*var\s+petAssetSettings\s*\)")
+        self.assertIn("Live2DCharacterPane", shell)
+        self.assertIn("onPetPreviewRequested: function(petAssetSettings)", shell)
+        self.assertIn("root.petPreviewRequested(petAssetSettings)", shell)
+        self.assertIn("ready_for_gpt_sovits", pane)
+
+        for path in (SHARED_MAIN_QML, LINUX_MAIN_QML):
+            source = path.read_text(encoding="utf-8")
+            self.assertIn("function openPetWindow(petAssetSettings)", source)
+            self.assertIn("function ensurePetWindow(petAssetSettings)", source)
+            self.assertIn("win.openPet()", source)
+            self.assertIn("startupPetTimer", source)
+            self.assertIn('\"petAssetSettings\": settings', source)
+            self.assertIn('\"agentController\": controller.agentController', source)
+            self.assertIn("petWindowRef.petAssetSettings = settings", source)
+            self.assertIn("onPetPreviewRequested: function(petAssetSettings)", source)
+            self.assertIn("root.openPetWindow(petAssetSettings)", source)
+
+    def test_pet_autostart_is_disabled_by_default_and_only_starts_from_saved_setting(self):
+        pane = CHARACTER_PANE_QML.read_text(encoding="utf-8")
+
+        self.assertRegex(pane, r"\bproperty\s+bool\s+autoStartPetOnClientStart\s*:\s*false\b")
+        self.assertIn("autoStartPetOnClientStart = petAssetSettings.autoStartPetOnClientStart", pane)
+        self.assertIn("petAssetSettings.autoStartPetOnClientStart = autoStartPetOnClientStart", pane)
+        self.assertIn('title: "打开客户端自启"', pane)
+        self.assertIn("checked: root.autoStartPetOnClientStart", pane)
+
+        for path in (SHARED_MAIN_QML, LINUX_MAIN_QML):
+            with self.subTest(path=path):
+                source = path.read_text(encoding="utf-8")
+                self.assertIn("PetAssetSettings", source)
+                self.assertIn("startupPetSettings.load()", source)
+                self.assertRegex(
+                    source,
+                    r"if\s*\(\s*startupPetSettings\.autoStartPetOnClientStart\s*\)\s*\{\s*startupPetTimer\.start\s*\(\s*\)",
+                    f"{path.name} should only start the desktop pet when the saved setting is enabled",
+                )
+
+    def test_live2d_resource_path_buttons_open_native_file_pickers(self):
+        pane = CHARACTER_PANE_QML.read_text(encoding="utf-8")
+
+        for function_name in (
+            "pickModelJson",
+            "pickModelRootDirectory",
+            "pickMotionDirectory",
+            "pickExpressionDirectory",
+            "pickVoiceDirectory",
+            "pickDefaultVoice",
+        ):
+            self.assertRegex(pane, rf"\bfunction\s+{function_name}\s*\(")
+
+        for token in (
+            "petAssetSettings.pickLocalFilePath",
+            "petAssetSettings.pickLocalDirectoryPath",
+            "onClicked: root.pickModelJson()",
+            "onClicked: root.pickModelRootDirectory()",
+            "onClicked: root.pickMotionDirectory()",
+            "onClicked: root.pickExpressionDirectory()",
+            "onClicked: root.pickVoiceDirectory()",
+            "onClicked: root.pickDefaultVoice()",
+        ):
+            self.assertIn(token, pane)
+
+    def test_pet_controller_exposes_voice_training_submission_contract(self):
+        header = PET_CONTROLLER_H.read_text(encoding="utf-8")
+        source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+        shell = CHAT_SHELL_PAGE_QML.read_text(encoding="utf-8")
+
+        for token in (
+            "voiceTrainingBusy",
+            "voiceTrainingJobId",
+            "voiceTrainingStatus",
+            "voiceTrainingStage",
+            "voiceTrainingProgress",
+            "voiceTrainingArtifactPath",
+            "voiceTrainingMessage",
+            "Q_INVOKABLE void startVoiceTraining",
+            "Q_INVOKABLE void refreshVoiceTrainingJob",
+            "voiceTrainingChanged",
+        ):
+            self.assertIn(token, header)
+
+        for token in (
+            "/voice-training/jobs",
+            "voice_training_create",
+            "voice_training_get",
+            "consent_confirmed",
+            "reference_audio_path",
+            "reference_audio_base64",
+            "reference_audio_transfer",
+            "applyVoiceTrainingJob",
+        ):
+            self.assertIn(token, source)
+
+        self.assertIn("petController: controller.petController", shell)
 
 
 if __name__ == "__main__":

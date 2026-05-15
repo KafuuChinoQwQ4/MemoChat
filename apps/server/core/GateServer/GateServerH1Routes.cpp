@@ -267,8 +267,12 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic) {
 
         std::vector<std::string> server_load_snapshot;
         std::vector<std::string> least_loaded_servers;
+        std::string route_source;
+        std::string status_route_detail;
+        std::string http_token;
         const auto route_start_ms = gateauthsupport::NowMs();
-        const auto route_nodes = gateauthsupport::LoadGateChatRouteNodes(&server_load_snapshot, &least_loaded_servers);
+        const auto route_nodes = gateauthsupport::SelectChatRouteForLogin(userInfo.uid,
+            &server_load_snapshot, &least_loaded_servers, &route_source, &status_route_detail, &http_token);
         const auto route_select_ms = gateauthsupport::NowMs() - route_start_ms;
         if (route_nodes.empty()) {
             memolog::LogWarn("gate.user_login.failed", "no chat server available",
@@ -279,9 +283,8 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic) {
         }
 
         const auto ticket_start_ms = gateauthsupport::NowMs();
-        std::string http_token;
         const std::string token_key = USERTOKENPREFIX + std::to_string(userInfo.uid);
-        if (!RedisMgr::GetInstance()->Get(token_key, http_token) || http_token.empty()) {
+        if (http_token.empty() && (!RedisMgr::GetInstance()->Get(token_key, http_token) || http_token.empty())) {
             http_token = boost::uuids::to_string(boost::uuids::random_generator()());
             RedisMgr::GetInstance()->Set(token_key, http_token);
         }
@@ -319,15 +322,18 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic) {
         root["port"] = route_nodes.front().port;
         root["login_ticket"] = login_ticket;
         root["ticket_expire_ms"] = static_cast<int64_t>(claims.expire_at_ms);
-        root["user_profile"]["uid"] = userInfo.uid;
-        root["user_profile"]["user_id"] = userInfo.user_id;
-        root["user_profile"]["name"] = userInfo.name;
-        root["user_profile"]["nick"] = userInfo.nick;
-        root["user_profile"]["icon"] = userInfo.icon;
-        root["user_profile"]["desc"] = userInfo.desc;
-        root["user_profile"]["email"] = userInfo.email;
-        root["user_profile"]["sex"] = userInfo.sex;
-        auto chat_endpoints_arr = root["chat_endpoints"];
+        memochat::json::JsonValue user_profile(memochat::json::object_t{});
+        user_profile["uid"] = userInfo.uid;
+        user_profile["user_id"] = userInfo.user_id;
+        user_profile["name"] = userInfo.name;
+        user_profile["nick"] = userInfo.nick;
+        user_profile["icon"] = userInfo.icon;
+        user_profile["desc"] = userInfo.desc;
+        user_profile["email"] = userInfo.email;
+        user_profile["sex"] = userInfo.sex;
+        root["user_profile"] = user_profile;
+
+        memochat::json::JsonValue chat_endpoints_arr(memochat::json::array_t{});
         for (const auto& route_node : route_nodes) {
             if (!route_node.quic_host.empty() && !route_node.quic_port.empty()) {
                 memochat::json::JsonValue quic_endpoint;
@@ -346,10 +352,16 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic) {
             endpoint["priority"] = route_node.priority;
             memochat::json::glaze_array_append(chat_endpoints_arr, endpoint);
         }
-        root["stage_metrics"]["mysql_check_pwd_ms"] = static_cast<int64_t>(mysql_check_pwd_ms);
-        root["stage_metrics"]["route_select_ms"] = static_cast<int64_t>(route_select_ms);
-        root["stage_metrics"]["ticket_issue_ms"] = static_cast<int64_t>(ticket_issue_ms);
-        root["stage_metrics"]["user_login_total_ms"] = static_cast<int64_t>(gateauthsupport::NowMs() - login_start_ms);
+        root["chat_endpoints"] = chat_endpoints_arr;
+
+        memochat::json::JsonValue stage_metrics(memochat::json::object_t{});
+        stage_metrics["mysql_check_pwd_ms"] = static_cast<int64_t>(mysql_check_pwd_ms);
+        stage_metrics["route_select_ms"] = static_cast<int64_t>(route_select_ms);
+        stage_metrics["ticket_issue_ms"] = static_cast<int64_t>(ticket_issue_ms);
+        stage_metrics["user_login_total_ms"] = static_cast<int64_t>(gateauthsupport::NowMs() - login_start_ms);
+        stage_metrics["route_source"] = route_source;
+        stage_metrics["status_route_detail"] = status_route_detail;
+        root["stage_metrics"] = stage_metrics;
         memolog::LogInfo("gate.user_login", "user login succeeded",
             {
                 {"uid", std::to_string(userInfo.uid)},
@@ -357,6 +369,8 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic) {
                 {"chat_host", route_nodes.front().host},
                 {"chat_port", route_nodes.front().port},
                 {"chat_server", route_nodes.front().name},
+                {"route_source", route_source},
+                {"status_route_detail", status_route_detail},
                 {"login_cache_hit", login_cache_hit ? "true" : "false"},
                 {"mysql_check_pwd_ms", std::to_string(mysql_check_pwd_ms)},
                 {"route_select_ms", std::to_string(route_select_ms)},

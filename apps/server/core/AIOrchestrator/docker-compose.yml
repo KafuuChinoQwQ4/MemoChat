@@ -14,6 +14,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+        PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
+        PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn}
     container_name: memochat-ai-orchestrator
     restart: unless-stopped
     ports:
@@ -54,7 +58,21 @@ services:
       - MEMOCHAT_LIVE2D_SDK_ROOT=${MEMOCHAT_LIVE2D_SDK_ROOT:-}
       - MEMOCHAT_PET_ASSET_ROOT=${MEMOCHAT_PET_ASSET_ROOT:-}
       - MEMOCHAT_PET_CLOUD_VISION=${MEMOCHAT_PET_CLOUD_VISION:-false}
+      - MEMOCHAT_PET_LOCAL_VISION=${MEMOCHAT_PET_LOCAL_VISION:-false}
+      - MEMOCHAT_PET_VISION_CAMERA_INDEX=${MEMOCHAT_PET_VISION_CAMERA_INDEX:-0}
+      - MEMOCHAT_PET_VISION_ANALYZER=${MEMOCHAT_PET_VISION_ANALYZER:-opencv}
+      - MEMOCHAT_PET_VISION_RETAIN_RAW_FRAMES=${MEMOCHAT_PET_VISION_RETAIN_RAW_FRAMES:-false}
       - MEMOCHAT_PET_VOICE_CLONE=${MEMOCHAT_PET_VOICE_CLONE:-false}
+      - MEMOCHAT_PET_VOICE_PROVIDER=${MEMOCHAT_PET_VOICE_PROVIDER:-gpt-sovits}
+      - MEMOCHAT_PET_SOVITS_BASE_URL=${MEMOCHAT_PET_SOVITS_BASE_URL:-http://host.docker.internal:9880}
+      - MEMOCHAT_PET_SOVITS_REFERENCE_AUDIO=${MEMOCHAT_PET_SOVITS_REFERENCE_AUDIO:-/data/gpt-sovits/refs/kafuu-chino-ref.wav}
+      - MEMOCHAT_PET_SOVITS_PROMPT_TEXT=${MEMOCHAT_PET_SOVITS_PROMPT_TEXT:-}
+      - MEMOCHAT_PET_SOVITS_PROMPT_LANGUAGE=${MEMOCHAT_PET_SOVITS_PROMPT_LANGUAGE:-ja}
+      - MEMOCHAT_PET_SOVITS_TEXT_LANGUAGE=${MEMOCHAT_PET_SOVITS_TEXT_LANGUAGE:-zh}
+      - MEMOCHAT_PET_SOVITS_OUTPUT_DIR=${MEMOCHAT_PET_SOVITS_OUTPUT_DIR:-/app/.data/pet-voice-cache}
+      - MEMOCHAT_PET_SOVITS_TIMEOUT_SEC=${MEMOCHAT_PET_SOVITS_TIMEOUT_SEC:-60}
+      - MEMOCHAT_PET_VOICE_TRAINING=${MEMOCHAT_PET_VOICE_TRAINING:-true}
+      - MEMOCHAT_PET_VOICE_TRAINING_ARTIFACT_ROOT=${MEMOCHAT_PET_VOICE_TRAINING_ARTIFACT_ROOT:-/app/.data/pet-voice-training}
       - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
       - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
       - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-memochat-ai-local}
@@ -69,6 +87,10 @@ services:
       - type: bind
         source: ${MEMOCHAT_AI_DATA_DIR:-/data/docker-data/memochat/ai-orchestrator/data}
         target: /app/.data
+      - type: bind
+        source: ${MEMOCHAT_PET_SOVITS_HOST_DATA_DIR:-/data/gpt-sovits}
+        target: /data/gpt-sovits
+        read_only: true
       - type: bind
         source: ${MEMOCHAT_AI_HUGGINGFACE_CACHE_DIR:-/data/docker-data/memochat/ai-orchestrator/huggingface}
         target: /app/.cache/huggingface

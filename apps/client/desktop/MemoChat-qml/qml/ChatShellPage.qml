@@ -37,6 +37,8 @@ Rectangle {
         { "label": "数据源", "icon": "qrc:/icons/r18_datasource.png", "mode": 4 }
     ]
 
+    signal petPreviewRequested(var petAssetSettings)
+
     Connections {
         target: controller
         function onCurrentGroupChanged() {
@@ -314,6 +316,7 @@ Rectangle {
                             currentGroupRole: controller.currentGroupRole
                             messageModel: controller.messageModel
                             agentController: controller.agentController
+                            imeBridgeController: controller.petController
                             currentDraftText: controller.currentDraftText
                             currentPendingAttachments: controller.currentPendingAttachments
                             currentDialogPinned: controller.currentDialogPinned
@@ -441,6 +444,10 @@ Rectangle {
                     sourceComponent: Component {
                         Live2DCharacterPane {
                             backdrop: backdropLayer
+                            petController: controller.petController
+                            onPetPreviewRequested: function(petAssetSettings) {
+                                root.petPreviewRequested(petAssetSettings)
+                            }
                         }
                     }
                 }

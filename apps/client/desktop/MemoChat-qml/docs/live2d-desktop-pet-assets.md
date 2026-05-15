@@ -1,8 +1,10 @@
 # Live2D Desktop Pet SDK And Asset Policy
 
-This project keeps Live2D support opt-in. The default MemoChat client builds with
-the placeholder `Live2DRenderItem` and does not require the Live2D Cubism SDK,
-model packages, generated audio, voice references, or provider credentials.
+This project keeps Live2D support opt-in. The default MemoChat client can build
+without the Live2D Cubism SDK, model packages, generated audio, voice
+references, or provider credentials. If the native renderer is unavailable or a
+model cannot be displayed, `Live2DRenderItem` shows an explicit model error diagnostic
+instead of a placeholder character.
 
 ## Local Paths
 
@@ -16,23 +18,25 @@ model packages, generated audio, voice references, or provider credentials.
 
 ## CMake Flags
 
-The native renderer path is disabled by default:
+MemoChat keeps a single Linux preset for normal development. It builds the full
+stack and enables the native Live2D renderer from the local SDK path:
 
 ```bash
-cmake --preset linux-client-gcc16
+cmake --preset linux-full-gcc16
+cmake --build --preset linux-full-gcc16 --parallel 12
 ```
 
-To prepare a local native-renderer build, provide an SDK root explicitly:
+Windows full builds do not require the Linux SDK path:
 
-```bash
-cmake --preset linux-client-gcc16 \
-  -DMEMOCHAT_ENABLE_LIVE2D_NATIVE=ON \
-  -DMEMOCHAT_LIVE2D_SDK_ROOT=/data/third_party/live2d/CubismSdkForNative-current
+```powershell
+cmake --preset msvc2022-full
+cmake --build --preset msvc2022-full
 ```
 
 When `MEMOCHAT_ENABLE_LIVE2D_NATIVE=OFF`, CMake does not require the SDK and the
-placeholder renderer stays active. When the flag is `ON`, an empty or invalid
-SDK root should fail during configure with a clear message.
+runtime item reports a model display error. The checked-in Linux full preset sets
+`MEMOCHAT_ENABLE_LIVE2D_NATIVE=ON`; an empty or invalid SDK root should fail
+during configure with a clear message.
 
 ## What Must Not Be Committed
 

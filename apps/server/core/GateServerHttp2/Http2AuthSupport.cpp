@@ -203,6 +203,7 @@ LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
             userInfo.name = dbUserInfo.name;
             userInfo.email = dbUserInfo.email;
             userInfo.pwd = dbUserInfo.pwd;
+            userInfo.user_id = dbUserInfo.user_id;
             userInfo.nick = dbUserInfo.nick;
             userInfo.icon = dbUserInfo.icon;
             userInfo.desc = dbUserInfo.desc;
@@ -216,16 +217,19 @@ LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
         return result;
     }
 
-    auto route_nodes = gateauthsupport::LoadGateChatRouteNodes();
+    std::string route_source;
+    std::string status_route_detail;
+    std::string http_token;
+    auto route_nodes = gateauthsupport::SelectChatRouteForLogin(userInfo.uid,
+        nullptr, nullptr, &route_source, &status_route_detail, &http_token);
     if (route_nodes.empty()) {
         result.error = ErrorCodes::RPCFailed;
         result.message = "no chat server available";
         return result;
     }
 
-    std::string http_token;
     const std::string token_key = USERTOKENPREFIX + std::to_string(userInfo.uid);
-    if (!RedisMgr::GetInstance()->Get(token_key, http_token) || http_token.empty()) {
+    if (http_token.empty() && (!RedisMgr::GetInstance()->Get(token_key, http_token) || http_token.empty())) {
         http_token = boost::uuids::to_string(boost::uuids::random_generator()());
         RedisMgr::GetInstance()->Set(token_key, http_token);
     }
@@ -267,14 +271,23 @@ LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
     result.data["port"] = route_nodes.front().port;
     result.data["login_ticket"] = login_ticket;
     result.data["ticket_expire_ms"] = static_cast<int64_t>(claims.expire_at_ms);
-    result.data["user_profile"]["uid"] = userInfo.uid;
-    result.data["user_profile"]["user_id"] = userInfo.user_id;
-    result.data["user_profile"]["name"] = userInfo.name;
-    result.data["user_profile"]["nick"] = userInfo.nick;
-    result.data["user_profile"]["icon"] = userInfo.icon;
-    result.data["user_profile"]["desc"] = userInfo.desc;
-    result.data["user_profile"]["email"] = userInfo.email;
-    result.data["user_profile"]["sex"] = userInfo.sex;
+    memochat::json::JsonValue stage_metrics(memochat::json::object_t{});
+    stage_metrics["route_source"] = route_source;
+    stage_metrics["status_route_detail"] = status_route_detail;
+    result.data["stage_metrics"] = stage_metrics;
+
+    memochat::json::JsonValue user_profile(memochat::json::object_t{});
+    user_profile["uid"] = userInfo.uid;
+    user_profile["user_id"] = userInfo.user_id;
+    user_profile["name"] = userInfo.name;
+    user_profile["nick"] = userInfo.nick;
+    user_profile["icon"] = userInfo.icon;
+    user_profile["desc"] = userInfo.desc;
+    user_profile["email"] = userInfo.email;
+    user_profile["sex"] = userInfo.sex;
+    result.data["user_profile"] = user_profile;
+
+    memochat::json::JsonValue chat_endpoints(memochat::json::array_t{});
     for (const auto& route_node : route_nodes) {
         if (!route_node.quic_host.empty() && !route_node.quic_port.empty()) {
             memochat::json::JsonValue quic_ep;
@@ -283,7 +296,7 @@ LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
             quic_ep["port"] = route_node.quic_port;
             quic_ep["server_name"] = route_node.name;
             quic_ep["priority"] = route_node.priority;
-            memochat::json::glaze_append(result.data["chat_endpoints"], quic_ep);
+            memochat::json::glaze_append(chat_endpoints, quic_ep);
         }
         memochat::json::JsonValue tcp_ep;
         tcp_ep["transport"] = "tcp";
@@ -291,8 +304,9 @@ LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
         tcp_ep["port"] = route_node.port;
         tcp_ep["server_name"] = route_node.name;
         tcp_ep["priority"] = route_node.priority;
-        memochat::json::glaze_append(result.data["chat_endpoints"], tcp_ep);
+        memochat::json::glaze_append(chat_endpoints, tcp_ep);
     }
+    result.data["chat_endpoints"] = chat_endpoints;
 
     GateAsyncSideEffects::Instance().PublishAuditLogin(userInfo.uid,
         userInfo.user_id, email, route_nodes.front().name,
@@ -300,7 +314,8 @@ LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
 
     memolog::LogInfo("http2.user_login", "user login via HTTP2 handler",
         {{"uid", std::to_string(userInfo.uid)}, {"email", email},
-         {"route", "/user_login"}, {"login_cache_hit", login_cache_hit ? "true" : "false"}});
+         {"route", "/user_login"}, {"route_source", route_source},
+         {"status_route_detail", status_route_detail}, {"login_cache_hit", login_cache_hit ? "true" : "false"}});
     return result;
 }
 
@@ -324,4 +339,3 @@ LoginResult HandleUserLogout(int uid, const std::string& token) {
 }
 
 }  // namespace Http2AuthSupport
-

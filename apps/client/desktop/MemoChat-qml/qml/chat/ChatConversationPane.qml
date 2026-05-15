@@ -18,6 +18,7 @@ Rectangle {
     property int currentGroupRole: 1
     property var messageModel
     property var agentController: null
+    property var imeBridgeController: null
     property string currentDraftText: ""
     property var currentPendingAttachments: []
     property bool currentDialogPinned: false
@@ -613,6 +614,7 @@ Rectangle {
                 smartBusy: root.smartBusy
                 smartStatusText: root.smartStatusText
                 smartResultTitle: root.smartResultTitle
+                imeBridgeController: root.imeBridgeController
                 onSendComposer: function(text) {
                     root._followTail = true
                     root._stickToBottom = true

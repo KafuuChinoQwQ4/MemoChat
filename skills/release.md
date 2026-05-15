@@ -1,74 +1,74 @@
 ---
-description: Prepare a MemoChat release summary, verify the tree, run selected builds/tests, and create a release commit or tag when requested.
+description: 准备 MemoChat 发布摘要，验证工作树，运行选定构建/测试，并在用户要求时创建 release commit 或 tag。
 ---
 
-# MemoChat Release
+# MemoChat 发布
 
-Use when preparing a release or release candidate for this repository.
+用于为本仓库准备 release 或 release candidate。
 
-## Preconditions
+## 前置条件
 
-1. Run `git status --short`.
-2. If unrelated uncommitted changes exist, stop and ask how to proceed.
-3. Confirm which scope is being released:
+1. 运行 `git status --short`。
+2. 如果存在无关未提交改动，停止并询问如何处理。
+3. 确认发布范围：
    - server
    - client
    - ops
    - full stack
-4. Confirm whether the user wants a commit, a tag, both, or only a release note.
+4. 确认用户想要 commit、tag、二者都要，还是只要 release note。
 
-## Gather Changes
+## 收集变更
 
-Use:
+使用：
 
 ```bash
 git log --oneline --decorate -n 50
 git diff --stat
 ```
 
-If a previous tag exists, compare from that tag:
+如果存在上一个 tag，从该 tag 起比较：
 
 ```bash
 git tag --sort=-v:refname
 git log <tag>..HEAD --oneline
 ```
 
-Write user-facing bullets. Skip noisy intermediate work, generated caches, local `.ai/` artifacts, and Docker data.
+编写面向用户的要点。跳过嘈杂的中间工作、生成缓存、本地 `.ai/` 产物和 Docker 数据。
 
-## Verify Docker Runtime Assumptions
+## 验证 Docker 运行时假设
 
-Check fixed ports and container health:
+检查固定端口和容器健康：
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 ```
 
-Do not change compose ports as part of release cleanup.
+不要把修改 compose 端口作为发布清理的一部分。
 
-## Build/Test Matrix
+## 构建/测试矩阵
 
-Use the Linux GCC16 build before Arch/WSL release/runtime deployment. The deployment script copies from `build-linux-server-gcc16/bin`.
+Arch/WSL 发布/运行时部署前使用 Linux full 构建。部署脚本从 `build-linux-full-gcc16/bin` 复制。
 
 ```bash
 source /root/.memochat-linux-env
-cmake --preset linux-server-gcc16
-cmake --build --preset linux-server-gcc16 --parallel 12
+cmake --preset linux-full-gcc16
+cmake --build --preset linux-full-gcc16 --parallel 12
 ```
 
-Run test presets when release scope needs automated tests:
+发布范围需要自动化测试时，运行 test preset：
 
 ```bash
-ctest --preset linux-server-gcc16 --output-on-failure
+ctest --preset linux-full-gcc16 --output-on-failure
 ```
 
-For runtime release confidence, use the existing service scripts and smoke tests:
+需要运行时发布信心时，使用现有服务脚本和 smoke 测试：
 
 ```bash
 tools/scripts/status/deploy_services.sh
 tools/scripts/status/start-all-services.sh
 ```
 
-Legacy Windows smoke probes may still be run from Windows when needed:
+需要时仍可从 Windows 运行旧版 smoke 探针：
 
 ```powershell
 tools/scripts/test_register_login.ps1
@@ -76,25 +76,25 @@ tools/scripts/test_login.ps1
 tools/scripts/full_flow_test.ps1
 ```
 
-Stop on port conflicts or Docker dependency failures and report the owning process/container.
+遇到端口冲突或 Docker 依赖失败时停止，并报告占用进程/容器。
 
-## Release Note Shape
+## Release Note 形态
 
-Use concise bullets grouped by:
+使用简洁要点并按以下分组：
 
 - Added
 - Changed
 - Fixed
 - Ops / Infrastructure
 
-Keep implementation detail out unless it affects deployment or operation.
+除非影响部署或运维，否则不要写实现细节。
 
 ## Commit/Tag
 
-Only commit or tag when the user explicitly approves the final release text.
+只有在用户明确批准最终 release 文本后，才 commit 或 tag。
 
-Before committing:
+提交前：
 
-- ensure `.ai/` artifacts are not staged unless explicitly requested
-- ensure ignored Docker data and local caches are not staged
-- include verification commands and outcomes in the final message
+- 确保 `.ai/` 产物没有被 staged，除非明确要求
+- 确保 ignored Docker 数据和本地缓存没有被 staged
+- 在最终消息中包含验证命令和结果

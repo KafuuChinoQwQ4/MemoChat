@@ -26,6 +26,7 @@ from .runtime import PetRuntime, PetRuntimeConfig
 from .session_store import PetSessionStore
 from .voice import (
     DeterministicVoiceProvider,
+    GPTSoVITSVoiceProvider,
     VoiceInterruptRequest,
     VoiceProviderError,
     VoiceProviderRouter,
@@ -33,10 +34,14 @@ from .voice import (
     VoiceSynthesisRequest,
     VoiceSynthesisResult,
 )
+from .voice_training import VoiceTrainingJob, VoiceTrainingRequest, VoiceTrainingService, diagnose_reference_audio
+from .vision import LocalVisionAnalyzer, VisionAnalyzerError, VisionCaptureRequest
 
 __all__ = [
     "DeterministicPetProvider",
     "DeterministicVoiceProvider",
+    "GPTSoVITSVoiceProvider",
+    "LocalVisionAnalyzer",
     "PetAnimation",
     "PetAudio",
     "PetControlEvent",
@@ -63,4 +68,10 @@ __all__ = [
     "VoiceInterruptRequest",
     "VoiceSynthesisRequest",
     "VoiceSynthesisResult",
+    "VoiceTrainingJob",
+    "VoiceTrainingRequest",
+    "VoiceTrainingService",
+    "diagnose_reference_audio",
+    "VisionAnalyzerError",
+    "VisionCaptureRequest",
 ]

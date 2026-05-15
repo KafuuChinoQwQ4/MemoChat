@@ -1,28 +1,28 @@
 ---
-description: Implement a MemoChat change, then run an iterative runtime test loop against Docker-backed local services.
+description: 实现一个 MemoChat 变更，然后针对 Docker 支撑的本地服务运行迭代式运行时测试循环。
 ---
 
-# MemoChat With Test
+# MemoChat 带测试工作流
 
-Use when a change needs live validation beyond compilation, such as login, chat persistence, media storage, queues, observability, ops UI, or multi-service behavior.
+当变更需要超出编译之外的 live validation 时使用，例如登录、聊天持久化、媒体存储、队列、观测、ops UI 或多服务行为。
 
-## Stage 1: Implement
+## 阶段 1：实现
 
-Follow `task.md`:
+遵循 `task.md`：
 
-1. create `.ai/<project>/<letter>/`
-2. gather context
-3. plan
-4. open Controller-led parallel lanes by default from `parallel-agents.md`
-5. implement
-6. build
-7. review
+1. 创建 `.ai/<project>/<letter>/`
+2. 收集上下文
+3. 制定计划
+4. 默认根据 `parallel-agents.md` 开启 Controller 主导并行工作线
+5. 实现
+6. 构建
+7. 复审
 
-For runtime-heavy work, dispatch a Tests Worker or Integration Worker by default to prepare smoke probes while Backend/Frontend/Data workers implement, when worker spawning is permitted and safe disjoint scopes exist. The Controller remains responsible for final runtime acceptance.
+对于运行时较重的工作，在允许启动 worker 且存在安全不重叠范围时，默认派发 Tests Worker 或 Integration Worker，让其在 Backend/Frontend/Data worker 实现期间准备 smoke 探针。Controller 仍负责最终运行时验收。
 
-## Stage 2: Runtime Test Loop
+## 阶段 2：运行时测试循环
 
-Maintain:
+维护：
 
 ```text
 .ai/<project>/<letter>/
@@ -33,11 +33,11 @@ Maintain:
   logs/
 ```
 
-Repeat up to five iterations.
+最多重复五轮。
 
-### Step A: Prepare Environment
+### 步骤 A：准备环境
 
-Check Docker first:
+先检查 Docker：
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
@@ -47,71 +47,71 @@ docker exec memochat-rabbitmq rabbitmq-diagnostics -q ping
 docker exec memochat-redpanda rpk cluster info --brokers 127.0.0.1:19092
 ```
 
-Start missing dependencies with the compose files under `infra/deploy/local` or the existing scripts. Keep the published ports unchanged.
+使用 `infra/deploy/local` 下的 compose 文件或现有脚本启动缺失依赖。保持发布端口不变。
 
-### Step B: Deploy And Start Services
+### 步骤 B：部署并启动服务
 
-Use existing scripts:
+使用现有脚本：
 
 ```bash
 source /root/.memochat-linux-env
-cmake --preset linux-server-gcc16
-cmake --build --preset linux-server-gcc16 --parallel 12
+cmake --preset linux-full-gcc16
+cmake --build --preset linux-full-gcc16 --parallel 12
 tools/scripts/status/deploy_services.sh
 tools/scripts/status/start-all-services.sh
 ```
 
-If ports are already bound, use `tools/scripts/status/stop-all-services.sh` or report the owning process. Do not stop Docker dependencies unless the test needs a dependency restart and the user agrees.
+如果端口已被绑定，使用 `tools/scripts/status/stop-all-services.sh` 或报告占用进程。除非测试需要重启某个依赖且用户同意，否则不要停止 Docker 依赖。
 
-### Step C: Write Test Plan
+### 步骤 C：编写测试计划
 
-Write `.ai/<project>/<letter>/test<N>.md` with:
+编写 `.ai/<project>/<letter>/test<N>.md`，包含：
 
-- what behavior is being tested
-- containers/services required
-- scripts or commands to run
-- data setup and cleanup
-- expected logs/database/queue/object-store results
-- screenshots needed for QML/Ops UI work
-- success criteria
+- 要测试的行为
+- 所需容器/服务
+- 要运行的脚本或命令
+- 数据准备和清理
+- 预期日志/数据库/队列/对象存储结果
+- QML/Ops UI 工作所需截图
+- 成功标准
 
-Prefer existing probes:
+优先使用现有探针：
 
-- `tools/scripts/test_register_login.ps1` from Windows
-- `tools/scripts/test_login.ps1` from Windows
-- `tools/scripts/test_login2.ps1` from Windows
-- `tools/scripts/test_login3.ps1` from Windows
-- `tools/scripts/full_flow_test.ps1` from Windows
+- 从 Windows 运行的 `tools/scripts/test_register_login.ps1`
+- 从 Windows 运行的 `tools/scripts/test_login.ps1`
+- 从 Windows 运行的 `tools/scripts/test_login2.ps1`
+- 从 Windows 运行的 `tools/scripts/test_login3.ps1`
+- 从 Windows 运行的 `tools/scripts/full_flow_test.ps1`
 - `python tools/loadtest/python-loadtest/py_loadtest.py --config tools/loadtest/python-loadtest/config.json --scenario all --total 20 --concurrency 5`
-- service logs under `logs`, `artifacts`, and runtime service output files.
+- `logs`、`artifacts` 和运行时服务输出文件下的服务日志。
 
-### Step D: Run Test
+### 步骤 D：运行测试
 
-Run the planned commands. Capture:
+运行计划中的命令。捕获：
 
-- command line
+- 命令行
 - exit code
-- relevant stdout/stderr
-- Docker logs or Loki logs when useful
-- database/queue/object-store verification queries
-- screenshots for UI work
+- 相关 stdout/stderr
+- 有用时的 Docker logs 或 Loki logs
+- 数据库/队列/对象存储验证查询
+- UI 工作的截图
 
-Write `.ai/<project>/<letter>/result<N>.md`.
+写入 `.ai/<project>/<letter>/result<N>.md`。
 
-### Step E: Assess
+### 步骤 E：评估
 
-Choose one:
+选择一个结果：
 
-- `PASS`: behavior meets success criteria.
-- `TEST_NEEDS_RERUN`: test setup/timing/assertion was wrong; adjust the test and rerun.
-- `IMPLEMENTATION_NEEDS_FIX`: product code/config is wrong; write `.ai/<project>/<letter>/fix<N>.md`, fix only that issue, rebuild, redeploy, and restart the loop.
+- `PASS`：行为满足成功标准。
+- `TEST_NEEDS_RERUN`：测试设置、时序或断言错误；调整测试并重跑。
+- `IMPLEMENTATION_NEEDS_FIX`：产品代码/配置错误；编写 `.ai/<project>/<letter>/fix<N>.md`，只修复该问题，重新构建、重新部署并重启循环。
 
-Do not leave debug-only instrumentation in production code unless the user explicitly wants it.
+除非用户明确希望保留，否则不要在生产代码中留下仅用于调试的 instrumentation。
 
-## Cleanup
+## 清理
 
-When finished:
+结束时：
 
-- stop locally started MemoChat services if the test started them
-- leave Docker dependencies running unless the user asked to stop them
-- record final status and any stateful data left behind
+- 如果测试启动了本地 MemoChat 服务，停止这些服务
+- 除非用户要求停止 Docker 依赖，否则让它们保持运行
+- 记录最终状态和留下的任何有状态数据

@@ -44,5 +44,14 @@ void InvalidateLoginCacheByEmail(const std::string& email);
 void InvalidateLoginCacheByUid(int uid);
 std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load_snapshot = nullptr,
                                                   std::vector<std::string>* least_loaded_snapshot = nullptr);
+std::vector<ChatRouteNode> SelectChatRouteViaStatus(int uid,
+                                                    std::string* status_detail = nullptr,
+                                                    std::string* http_token = nullptr);
+std::vector<ChatRouteNode> SelectChatRouteForLogin(int uid,
+                                                   std::vector<std::string>* load_snapshot = nullptr,
+                                                   std::vector<std::string>* least_loaded_snapshot = nullptr,
+                                                   std::string* route_source = nullptr,
+                                                   std::string* status_detail = nullptr,
+                                                   std::string* http_token = nullptr);
 
 } // namespace gateauthsupport

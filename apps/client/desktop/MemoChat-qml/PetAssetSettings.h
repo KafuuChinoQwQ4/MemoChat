@@ -40,6 +40,16 @@ class PetAssetSettings : public QObject
     Q_PROPERTY(bool interruptEnabled READ interruptEnabled WRITE setInterruptEnabled NOTIFY settingsChanged)
     Q_PROPERTY(bool cameraEnabled READ cameraEnabled WRITE setCameraEnabled NOTIFY settingsChanged)
     Q_PROPERTY(bool cloudVisionEnabled READ cloudVisionEnabled WRITE setCloudVisionEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(bool autoStartPetOnClientStart READ autoStartPetOnClientStart WRITE setAutoStartPetOnClientStart NOTIFY settingsChanged)
+    Q_PROPERTY(bool voiceTrainingConsent READ voiceTrainingConsent WRITE setVoiceTrainingConsent NOTIFY settingsChanged)
+    Q_PROPERTY(QString voiceTrainingConsentScope READ voiceTrainingConsentScope WRITE setVoiceTrainingConsentScope NOTIFY settingsChanged)
+    Q_PROPERTY(QString voiceTrainingJobId READ voiceTrainingJobId WRITE setVoiceTrainingJobId NOTIFY settingsChanged)
+    Q_PROPERTY(QString voiceTrainingStatus READ voiceTrainingStatus WRITE setVoiceTrainingStatus NOTIFY settingsChanged)
+    Q_PROPERTY(QString voiceTrainingStage READ voiceTrainingStage WRITE setVoiceTrainingStage NOTIFY settingsChanged)
+    Q_PROPERTY(int voiceTrainingProgress READ voiceTrainingProgress WRITE setVoiceTrainingProgress NOTIFY settingsChanged)
+    Q_PROPERTY(QString voiceTrainingArtifactPath READ voiceTrainingArtifactPath WRITE setVoiceTrainingArtifactPath NOTIFY settingsChanged)
+    Q_PROPERTY(QString voiceTrainingMessage READ voiceTrainingMessage WRITE setVoiceTrainingMessage NOTIFY settingsChanged)
+    Q_PROPERTY(QString live2dAvatarUrl READ live2dAvatarUrl NOTIFY settingsChanged)
     Q_PROPERTY(QString storagePath READ storagePath NOTIFY settingsChanged)
     Q_PROPERTY(bool dirty READ dirty NOTIFY settingsChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY settingsChanged)
@@ -79,6 +89,16 @@ public:
     bool interruptEnabled() const { return _interrupt_enabled; }
     bool cameraEnabled() const { return _camera_enabled; }
     bool cloudVisionEnabled() const { return _cloud_vision_enabled; }
+    bool autoStartPetOnClientStart() const { return _auto_start_pet_on_client_start; }
+    bool voiceTrainingConsent() const { return _voice_training_consent; }
+    QString voiceTrainingConsentScope() const { return _voice_training_consent_scope; }
+    QString voiceTrainingJobId() const { return _voice_training_job_id; }
+    QString voiceTrainingStatus() const { return _voice_training_status; }
+    QString voiceTrainingStage() const { return _voice_training_stage; }
+    int voiceTrainingProgress() const { return _voice_training_progress; }
+    QString voiceTrainingArtifactPath() const { return _voice_training_artifact_path; }
+    QString voiceTrainingMessage() const { return _voice_training_message; }
+    QString live2dAvatarUrl() const;
     QString storagePath() const { return _storage_path; }
     bool dirty() const { return _dirty; }
     QString statusText() const { return _status_text; }
@@ -87,6 +107,9 @@ public:
     Q_INVOKABLE bool save();
     Q_INVOKABLE void resetToDefaults();
     Q_INVOKABLE QVariantMap toVariantMap() const;
+    Q_INVOKABLE QString resolveLive2DAvatarUrl(const QString &modelJson, const QString &modelRoot) const;
+    Q_INVOKABLE QString pickLocalFilePath(const QString &title, const QString &startPath, const QString &nameFilter);
+    Q_INVOKABLE QString pickLocalDirectoryPath(const QString &title, const QString &startPath);
 
 public slots:
     void setCharacterName(const QString &value);
@@ -121,6 +144,15 @@ public slots:
     void setInterruptEnabled(bool value);
     void setCameraEnabled(bool value);
     void setCloudVisionEnabled(bool value);
+    void setAutoStartPetOnClientStart(bool value);
+    void setVoiceTrainingConsent(bool value);
+    void setVoiceTrainingConsentScope(const QString &value);
+    void setVoiceTrainingJobId(const QString &value);
+    void setVoiceTrainingStatus(const QString &value);
+    void setVoiceTrainingStage(const QString &value);
+    void setVoiceTrainingProgress(int value);
+    void setVoiceTrainingArtifactPath(const QString &value);
+    void setVoiceTrainingMessage(const QString &value);
 
 signals:
     void settingsChanged();
@@ -132,6 +164,7 @@ private:
     bool assignBool(bool &target, bool value);
     void applyDefaults(bool dirty);
     void applyObject(const QVariantMap &values, bool dirty);
+    void normalizeVoiceTrainingState();
     void markDirty();
     QString defaultStoragePath() const;
 
@@ -167,6 +200,15 @@ private:
     bool _interrupt_enabled = true;
     bool _camera_enabled = false;
     bool _cloud_vision_enabled = false;
+    bool _auto_start_pet_on_client_start = false;
+    bool _voice_training_consent = false;
+    QString _voice_training_consent_scope;
+    QString _voice_training_job_id;
+    QString _voice_training_status;
+    QString _voice_training_stage;
+    int _voice_training_progress = 0;
+    QString _voice_training_artifact_path;
+    QString _voice_training_message;
     QString _storage_path;
     bool _dirty = false;
     QString _status_text;
