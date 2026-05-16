@@ -86,6 +86,7 @@ Item {
         active: root.voiceReplyEnabled && root.petController
         source: "PetAudioPlayer.qml"
         onLoaded: {
+            item.textToSpeechFallbackEnabled = false
             item.speechKey = root.petController ? root.petController.turnId : ""
             item.sourceUrl = root.petController ? root.petController.audioUrl : ""
             item.playbackState = root.petController ? root.petController.audioState : "idle"
@@ -112,6 +113,7 @@ Item {
         target: root.petController
         function onPetStateChanged() {
             if (root.voiceReplyEnabled && petAudioLoader.item) {
+                petAudioLoader.item.textToSpeechFallbackEnabled = false
                 petAudioLoader.item.speechKey = root.petController ? root.petController.turnId : ""
                 petAudioLoader.item.sourceUrl = root.petController ? root.petController.audioUrl : ""
                 petAudioLoader.item.playbackState = root.petController ? root.petController.audioState : "idle"
@@ -191,6 +193,7 @@ Item {
 
     onVoiceReplyEnabledChanged: {
         if (!root.voiceReplyEnabled && petAudioLoader.item) {
+            petAudioLoader.item.textToSpeechFallbackEnabled = false
             petAudioLoader.item.sourceUrl = ""
             petAudioLoader.item.playbackState = "stopped"
             petAudioLoader.item.speechFinal = false
