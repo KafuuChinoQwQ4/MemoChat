@@ -61,6 +61,8 @@ class PetLive2DAvatarContractTests(unittest.TestCase):
         self.assertIn("function refreshLive2DAvatar", chat)
         self.assertIn("resolveLive2DAvatarUrl", chat)
         self.assertIn("outgoing: root.isOutgoingMessage(model.outgoing)", chat)
+        self.assertIn("senderName: root.messageSenderName(root.isOutgoingMessage(model.outgoing))", chat)
+        self.assertIn("showOutgoingSenderName: true", chat)
         self.assertIn("root.isOutgoingMessage(model.outgoing) ? root.effectiveSelfAvatar() : root.live2dAvatarSource", chat)
         self.assertIn("source: root.live2dAvatarSource", chat)
         self.assertNotIn('avatarSource: model.outgoing ? "qrc:/res/head_1.jpg"', chat)

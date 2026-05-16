@@ -175,8 +175,14 @@ class PetQmlContractTests(unittest.TestCase):
             "ListModel",
             "ListView",
             "ChatMessageDelegate",
-            "ChatComposerBar",
-            "imeBridgeController: root.petController",
+            "function chatWindowFlags()",
+            "flags: chatWindowFlags()",
+            "TextArea",
+            "CompactIconButton",
+            "messageInput",
+            "sendButton",
+            "messageSenderName",
+            "showOutgoingSenderName: true",
             "voiceChatRequested",
             "videoChatRequested",
             "appendOrUpdateAssistantMessage",
@@ -189,6 +195,8 @@ class PetQmlContractTests(unittest.TestCase):
             "root.petController.sendText(trimmed)",
             "root.petController.setModelSelection",
             "root.petController.setReplyLanguage",
+            "onWindowsImeBridgeChanged",
+            "messageInput.forceActiveFocus()",
         ):
             self.assertIn(token, chat)
 
@@ -392,13 +400,14 @@ class PetQmlContractTests(unittest.TestCase):
         chat = PET_CHAT_WINDOW_QML.read_text(encoding="utf-8")
 
         self.assertIn("Window {", chat)
-        self.assertIn("flags: Qt.Window", chat)
-        self.assertIn("Qt.WindowMinimizeButtonHint", chat)
+        self.assertIn("flags: chatWindowFlags()", chat)
+        self.assertIn("Qt.FramelessWindowHint", chat)
         self.assertIn("function openChat", chat)
         self.assertIn("ListModel", chat)
         self.assertIn("ListView", chat)
         self.assertIn("ChatMessageDelegate", chat)
-        self.assertIn("ChatComposerBar", chat)
+        self.assertIn("TextArea", chat)
+        self.assertIn("CompactIconButton", chat)
         self.assertIn("function sendMessage", chat)
         self.assertIn("function sendPendingText", chat)
         self.assertIn("function appendOrUpdateAssistantMessage", chat)
@@ -407,12 +416,13 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("function syncReplyLanguage", chat)
         self.assertIn("voiceChatRequested", chat)
         self.assertIn("videoChatRequested", chat)
-        self.assertIn("imeBridgeController: root.petController", chat)
-        self.assertIn("enabledComposer: !!root.petController && !root.petController.busy", chat)
+        self.assertIn("enabled: !!root.petController && !root.petController.busy", chat)
         self.assertIn("root.petController.startSession()", chat)
         self.assertIn("root.petController.sendText(trimmed)", chat)
         self.assertIn("root.petController.setModelSelection", chat)
         self.assertIn("root.petController.setReplyLanguage", chat)
+        self.assertIn("senderName: root.messageSenderName(root.isOutgoingMessage(model.outgoing))", chat)
+        self.assertIn("showOutgoingSenderName: true", chat)
         self.assertIn("translationText: model.translationText", chat)
         self.assertIn("pendingAssistantIndex", chat)
         self.assertIn("pendingAssistantTurnId", chat)
