@@ -120,6 +120,7 @@ Window {
         petChatWindowRef.selfAvatar = root.selfAvatar
         petChatWindowRef.alwaysOnTop = root.alwaysOnTop
         petChatWindowRef.clickThrough = root.clickThrough
+        petChatWindowRef.voiceCallActive = root.voiceReplyEnabled
     }
 
     function positionChatWindow() {
@@ -314,6 +315,10 @@ Window {
         syncChatWindowState()
     }
     onSelfAvatarChanged: syncChatWindowState()
+    onVoiceReplyEnabledChanged: {
+        syncControlWindowState()
+        syncChatWindowState()
+    }
 
     PetScene {
         anchors.fill: parent
@@ -337,7 +342,9 @@ Window {
 
     Component {
         id: petChatWindowComponent
-        PetChatWindow { }
+        PetChatWindow {
+            onVoiceChatRequested: function(active) { root.voiceReplyEnabled = active }
+        }
     }
 
     Component {

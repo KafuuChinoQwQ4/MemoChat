@@ -22,9 +22,42 @@ class DeterministicPetProvider:
     def __init__(self, voice_provider: DeterministicVoiceProvider | VoiceProviderRouter | None = None) -> None:
         self._voice_provider = voice_provider or DeterministicVoiceProvider()
 
-    async def generate_text(self, content: str, model_type: str = "", model_name: str = "") -> str:
+    async def generate_text(
+        self,
+        content: str,
+        model_type: str = "",
+        model_name: str = "",
+        language: str = "zh-CN",
+    ) -> str:
         style_hint = f"{model_type}:{model_name}".strip(":")
         normalized = content.strip()
+        language_key = _reply_text_language(language)
+        if language_key == "ja":
+            if any(token in normalized for token in ("整理", "思路", "计划")):
+                reply = "もちろんです。要点をまとめて、一つずつ進めましょう。"
+            elif any(token in normalized for token in ("你好", "嗨", "hello", "Hello", "こんにちは")):
+                reply = "こんにちは、ここにいます。"
+            elif normalized.endswith("?") or normalized.endswith("？") or normalized.endswith(("吗", "么", "嘛", "か")):
+                reply = "質問はわかりました。まず大事なところから答えます。"
+            else:
+                reply = "聞こえています。ちゃんと返事をしますね。"
+            if style_hint:
+                reply = f"{reply}（{style_hint} scripted）"
+            return reply
+
+        if language_key == "en":
+            if any(token in normalized for token in ("整理", "思路", "计划", "plan")):
+                reply = "Sure. I will gather the key points first, then go step by step."
+            elif any(token in normalized for token in ("你好", "嗨", "hello", "Hello")):
+                reply = "Hello, I am here."
+            elif normalized.endswith("?") or normalized.endswith("？") or normalized.endswith(("吗", "么", "嘛")):
+                reply = "I understand your question. I will start with the most important part."
+            else:
+                reply = "I hear you, and I am replying carefully."
+            if style_hint:
+                reply = f"{reply} ({style_hint} scripted)"
+            return reply
+
         if any(token in normalized for token in ("整理", "思路", "计划")):
             reply = "可以，我先陪你把重点收拢，再一步一步拆开。"
         elif any(token in normalized for token in ("你好", "嗨", "hello", "Hello")):
@@ -119,17 +152,22 @@ class DeterministicPetProvider:
     async def _generate_reply(self, prompt: PetPromptContext) -> tuple[str, str, str]:
         language = _reply_language(prompt)
         if not _should_use_llm(prompt):
-            return await self._scripted_reply(prompt), "", language
+            return await self._scripted_reply(prompt, language), "", language
         try:
             reply, translation = await self._llm_reply(prompt, language)
             if reply.strip():
                 return reply, translation, language
         except Exception:
             pass
-        return await self._scripted_reply(prompt), "", language
+        return await self._scripted_reply(prompt, language), "", language
 
-    async def _scripted_reply(self, prompt: PetPromptContext) -> str:
-        return await self.generate_text(prompt.user_text, model_type=prompt.model_type, model_name=prompt.model_name)
+    async def _scripted_reply(self, prompt: PetPromptContext, language: str) -> str:
+        return await self.generate_text(
+            prompt.user_text,
+            model_type=prompt.model_type,
+            model_name=prompt.model_name,
+            language=language,
+        )
 
     async def _llm_reply(self, prompt: PetPromptContext, language: str) -> tuple[str, str]:
         from llm.base import LLMMessage
@@ -147,6 +185,9 @@ class DeterministicPetProvider:
             "For Japanese targets, text must be Japanese and translation must be Simplified Chinese. "
             "Do not add markdown fences or extra commentary."
         )
+        speech_rules = str(prompt.runtime_metadata.get("speech_rules") or "").strip()
+        if speech_rules:
+            system_prompt += f" Speech rules: {speech_rules}"
         if prompt.observation_summary:
             system_prompt += f" Observation summary: {json.dumps(prompt.observation_summary, ensure_ascii=False)}."
         messages = [

@@ -98,6 +98,62 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("hello", _response_text(first))
         self.assertTrue(_response_text(first).strip())
 
+    async def test_deterministic_provider_respects_selected_reply_language(self):
+        DeterministicProvider = _load_attr(
+            "harness.pet.providers.deterministic", "DeterministicProvider"
+        )
+        PetPromptContext = _load_attr("harness.pet.persona", "PetPromptContext")
+        VoiceSynthesisResult = _load_attr("harness.pet.voice", "VoiceSynthesisResult")
+
+        class RecordingVoiceRouter:
+            def __init__(self):
+                self.requests = []
+
+            async def synthesize(self, request):
+                self.requests.append(request)
+                return VoiceSynthesisResult(
+                    text=request.text,
+                    state="ready",
+                    chunk_ref="gpt-sovits-ja",
+                    url="/audio/gpt-sovits-ja.wav",
+                    provider=request.provider,
+                    voice=request.voice,
+                    retention="ephemeral",
+                    metadata=dict(request.metadata),
+                )
+
+        voice = RecordingVoiceRouter()
+        provider = DeterministicProvider(voice)
+
+        chunks = await provider.generate(
+            PetPromptContext(
+                session_id="pet-session",
+                uid=7,
+                profile_id="default",
+                persona="memo-pet",
+                provider="scripted",
+                user_text="你好",
+                runtime_metadata={
+                    "reply_language": "ja-JP",
+                    "language": "ja-JP",
+                    "voice_language": "ja-JP",
+                    "voice_provider": "gpt-sovits",
+                    "voice_name": "chino",
+                    "text_lang": "ja",
+                },
+            )
+        )
+
+        self.assertEqual(len(voice.requests), 1)
+        self.assertEqual(voice.requests[0].provider, "gpt-sovits")
+        self.assertEqual(voice.requests[0].language, "ja-JP")
+        self.assertEqual(voice.requests[0].metadata["text_lang"], "ja")
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(chunks[0].text, "こんにちは、ここにいます。")
+        self.assertEqual(chunks[0].voice.to_dict()["text"], "こんにちは、ここにいます。")
+        self.assertEqual(chunks[0].voice.to_dict()["metadata"]["language"], "ja-JP")
+        self.assertEqual(chunks[0].voice.to_dict()["metadata"]["text_lang"], "ja")
+
     async def test_voice_router_deterministic_synthesis_stays_text_only(self):
         VoiceSynthesisRequest = _load_attr("harness.pet.voice", "VoiceSynthesisRequest")
         VoiceProviderRouter = _load_attr("harness.pet.voice", "VoiceProviderRouter")

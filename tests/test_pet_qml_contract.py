@@ -81,6 +81,9 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("if (!root.petController.speechFinal)", scene)
         self.assertIn("voiceReplyEnabled", scene)
         self.assertIn("active: root.voiceReplyEnabled && root.petController", scene)
+        self.assertIn("item.textToSpeechFallbackEnabled = false", scene)
+        self.assertIn("petAudioLoader.item.textToSpeechFallbackEnabled = false", scene)
+        self.assertNotIn("textToSpeechFallbackEnabled = root.voiceReplyEnabled", scene)
         self.assertNotIn("speechBubble", scene)
         self.assertNotIn("bubbleTail", scene)
         self.assertNotIn("anchors.topMargin: speechBubble.visible", scene)
@@ -106,6 +109,8 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("if (!root.textToSpeechFallbackEnabled)", audio_player)
         self.assertIn("function hasPlayableAudio", audio_player)
         self.assertIn("function isDeterministicFallbackAudio", audio_player)
+        self.assertIn("function shouldUseTextFallback", audio_player)
+        self.assertIn("return sourceUrl.length === 0 || isDeterministicFallbackAudio()", audio_player)
         self.assertIn("!isDeterministicFallbackAudio()", audio_player)
         self.assertIn("deterministic-voice-", audio_player)
         self.assertIn("property string playbackState", audio_player)
@@ -147,17 +152,21 @@ class PetQmlContractTests(unittest.TestCase):
             "selectedModelType",
             "selectedModelName",
             "replyLanguage",
+            "speechRules",
             "setModelSelection",
             "setReplyLanguage",
+            "setSpeechRules",
         ):
             self.assertIn(token, header)
 
         for token in (
             "setModelSelection",
             "setReplyLanguage",
+            "setSpeechRules",
             "payload[QStringLiteral(\"model_type\")]",
             "payload[QStringLiteral(\"model_name\")]",
             "metadata[QStringLiteral(\"reply_language\")]",
+            "metadata[QStringLiteral(\"speech_rules\")]",
         ):
             self.assertIn(token, source)
 
@@ -188,6 +197,8 @@ class PetQmlContractTests(unittest.TestCase):
             "appendOrUpdateAssistantMessage",
             "syncModelSelection",
             "syncReplyLanguage",
+            "syncSpeechRules",
+            "speechRulesText",
             "pendingAssistantIndex",
             "pendingAssistantTurnId",
             "sendPendingText",
@@ -195,6 +206,7 @@ class PetQmlContractTests(unittest.TestCase):
             "root.petController.sendText(trimmed)",
             "root.petController.setModelSelection",
             "root.petController.setReplyLanguage",
+            "root.petController.setSpeechRules",
             "onWindowsImeBridgeChanged",
             "messageInput.forceActiveFocus()",
         ):
@@ -336,6 +348,9 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("property bool voiceReplyEnabled: true", window)
         self.assertIn("voiceReplyEnabled: root.voiceReplyEnabled", window)
         self.assertIn("onVoiceReplyToggled: function(value) { root.voiceReplyEnabled = value; root.syncControlWindowState() }", window)
+        self.assertIn("petChatWindowRef.voiceCallActive = root.voiceReplyEnabled", window)
+        self.assertIn("onVoiceReplyEnabledChanged", window)
+        self.assertIn("onVoiceChatRequested: function(active) { root.voiceReplyEnabled = active }", window)
         self.assertIn("property var petChatWindowRef: null", window)
         self.assertIn("property var petControlWindowRef: null", window)
         self.assertIn("property bool chatPositionPending: false", window)
@@ -343,7 +358,8 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn('"agentController": root.agentController', window)
         self.assertIn('"petAssetSettings": root.petAssetSettings', window)
         self.assertIn("petChatWindowComponent.createObject(null", window)
-        self.assertIn("PetChatWindow { }", window)
+        self.assertIn("PetChatWindow {", window)
+        self.assertIn("onVoiceChatRequested: function(active) { root.voiceReplyEnabled = active }", window)
         self.assertIn("scheduleChatWindowPosition()", window)
         self.assertIn("positionChatWindow()", window)
         self.assertIn("syncChatWindowState()", window)
@@ -363,6 +379,7 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertNotIn("function openChatPanel", scene)
         self.assertIn("petAudioLoader.item.playbackState = \"stopped\"", scene)
         self.assertIn("petAudioLoader.item.speechFinal = false", scene)
+        self.assertIn("petAudioLoader.item.textToSpeechFallbackEnabled = false", scene)
         self.assertNotIn("speechBubble", scene)
         self.assertNotIn("bubbleTail", scene)
         self.assertIn("Qt.rgba(1.0, 0.96, 0.98, 0.96)", scene)
@@ -414,16 +431,23 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("pendingSendAlreadyAppended", chat)
         self.assertIn("function syncModelSelection", chat)
         self.assertIn("function syncReplyLanguage", chat)
+        self.assertIn("function syncSpeechRules", chat)
+        self.assertIn("function speechRulesText", chat)
         self.assertIn("voiceChatRequested", chat)
+        self.assertIn("signal voiceChatRequested(bool active)", chat)
+        self.assertIn("root.voiceChatRequested(root.voiceCallActive)", chat)
+        self.assertIn("语音回复已开启", chat)
         self.assertIn("videoChatRequested", chat)
         self.assertIn("enabled: !!root.petController && !root.petController.busy", chat)
         self.assertIn("root.petController.startSession()", chat)
         self.assertIn("root.petController.sendText(trimmed)", chat)
         self.assertIn("root.petController.setModelSelection", chat)
         self.assertIn("root.petController.setReplyLanguage", chat)
-        self.assertIn("senderName: root.messageSenderName(root.isOutgoingMessage(model.outgoing))", chat)
+        self.assertIn("root.petController.setSpeechRules", chat)
+        self.assertIn("senderName: messageDelegateRoot.senderName.length > 0", chat)
+        self.assertIn("root.messageSenderName(messageDelegateRoot.outgoingMessage)", chat)
         self.assertIn("showOutgoingSenderName: true", chat)
-        self.assertIn("translationText: model.translationText", chat)
+        self.assertIn("translationText: messageDelegateRoot.translationText", chat)
         self.assertIn("pendingAssistantIndex", chat)
         self.assertIn("pendingAssistantTurnId", chat)
         self.assertIn("onControlEventReceived", chat)

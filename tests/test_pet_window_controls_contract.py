@@ -112,7 +112,9 @@ class PetWindowControlsContractTests(unittest.TestCase):
 
         self.assertIn("property var petChatWindowRef: null", window)
         self.assertIn("petChatWindowComponent.createObject(null", window)
-        self.assertIn("PetChatWindow { }", window)
+        self.assertIn("PetChatWindow {", window)
+        self.assertIn("onVoiceChatRequested: function(active) { root.voiceReplyEnabled = active }", window)
+        self.assertIn("petChatWindowRef.voiceCallActive = root.voiceReplyEnabled", window)
         self.assertIn("petChatWindowRef.openChat()", window)
         self.assertIn("onChatRequested: root.openPetChat()", window)
         self.assertIn("property bool chatPositionPending: false", window)
