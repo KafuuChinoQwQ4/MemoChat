@@ -36,8 +36,9 @@ Window {
     property var completedAssistantTurnOrder: []
     property string lastSyncedModel: ""
     property string lastSyncedLanguage: ""
+    property string lastSyncedSpeechRules: ""
 
-    signal voiceChatRequested()
+    signal voiceChatRequested(bool active)
     signal videoChatRequested()
 
     ListModel {
@@ -206,6 +207,13 @@ Window {
         }
     }
 
+    function speechRulesText() {
+        if (!root.petAssetSettings || root.petAssetSettings.speechRules === undefined) {
+            return ""
+        }
+        return root.stringValue(root.petAssetSettings.speechRules).trim()
+    }
+
     function currentModelParts() {
         if (!root.agentController || !root.agentController.currentModel) {
             return { "model_type": "", "model_name": "" }
@@ -248,9 +256,23 @@ Window {
         }
     }
 
+    function syncSpeechRules() {
+        if (!root.petController) {
+            return
+        }
+        const nextRules = speechRulesText()
+        if (root.lastSyncedSpeechRules !== nextRules) {
+            root.lastSyncedSpeechRules = nextRules
+            if (root.petController.setSpeechRules) {
+                root.petController.setSpeechRules(nextRules)
+            }
+        }
+    }
+
     function syncContext() {
         syncModelSelection()
         syncReplyLanguage()
+        syncSpeechRules()
     }
 
     function openChat() {
@@ -343,7 +365,9 @@ Window {
             root.rememberCompletedAssistantTurn(resolvedEventKey)
             root.pendingAssistantIndex = -1
             root.pendingAssistantTurnId = ""
-            root.chatStatusText = audio.url && audio.url.length > 0 ? "语音回复已生成" : "文字回复已生成"
+            root.chatStatusText = audioUrl.length > 0
+                    ? "语音回复已生成"
+                    : (root.voiceCallActive ? "语音未生成，已显示文字" : "文字回复已生成")
         } else if (phase === "speaking") {
             root.chatStatusText = "正在回复"
         } else if (phase === "error") {
@@ -397,8 +421,8 @@ Window {
 
     function toggleVoiceCall() {
         root.voiceCallActive = !root.voiceCallActive
-        root.chatStatusText = root.voiceCallActive ? "语音聊天已开启" : "语音聊天已关闭"
-        root.voiceChatRequested()
+        root.chatStatusText = root.voiceCallActive ? "语音回复已开启" : "语音回复已关闭"
+        root.voiceChatRequested(root.voiceCallActive)
     }
 
     function toggleVideoCall() {
@@ -821,7 +845,7 @@ Window {
         ignoreUnknownSignals: true
         function onSettingsChanged() {
             root.refreshLive2DAvatar()
-            root.syncReplyLanguage()
+            root.syncContext()
         }
     }
 

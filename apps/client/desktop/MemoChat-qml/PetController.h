@@ -53,6 +53,7 @@ class PetController : public QObject
     Q_PROPERTY(QString selectedModelType READ selectedModelType NOTIFY modelSelectionChanged)
     Q_PROPERTY(QString selectedModelName READ selectedModelName NOTIFY modelSelectionChanged)
     Q_PROPERTY(QString replyLanguage READ replyLanguage NOTIFY replyLanguageChanged)
+    Q_PROPERTY(QString speechRules READ speechRules NOTIFY speechRulesChanged)
 
 public:
     explicit PetController(ClientGateway *gateway, QObject *parent = nullptr);
@@ -93,6 +94,7 @@ public:
     QString selectedModelType() const { return _selected_model_type; }
     QString selectedModelName() const { return _selected_model_name; }
     QString replyLanguage() const { return _reply_language; }
+    QString speechRules() const { return _speech_rules; }
 
     Q_INVOKABLE void startSession();
     Q_INVOKABLE void sendText(const QString &text);
@@ -111,6 +113,7 @@ public:
     Q_INVOKABLE void openWindowsImeBridge(const QString &initialText = QString());
     Q_INVOKABLE void setModelSelection(const QString &modelType, const QString &modelName);
     Q_INVOKABLE void setReplyLanguage(const QString &language);
+    Q_INVOKABLE void setSpeechRules(const QString &rules);
 
 signals:
     void stateChanged();
@@ -121,6 +124,7 @@ signals:
     void windowsImeTextCommitted(const QString &text);
     void modelSelectionChanged();
     void replyLanguageChanged();
+    void speechRulesChanged();
 
 private:
     void postJson(const QUrl &url, const QJsonObject &payload, const QString &op);
@@ -167,6 +171,7 @@ private:
     QString _selected_model_type;
     QString _selected_model_name;
     QString _reply_language = QStringLiteral("zh-CN");
+    QString _speech_rules;
     QSet<QString> _applied_control_event_keys;
     QStringList _applied_control_event_order;
 };

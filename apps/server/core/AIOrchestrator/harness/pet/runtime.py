@@ -439,11 +439,30 @@ def _request_runtime_metadata(metadata: dict | None) -> dict:
         result["reply_language"] = reply_language
         result["language"] = reply_language
         result["voice_language"] = reply_language
-        if reply_language.lower().startswith("ja"):
-            result["text_lang"] = "ja"
-        elif reply_language.lower().startswith("zh"):
-            result["text_lang"] = "zh"
+        result["text_lang"] = _voice_text_language(reply_language)
     speech_rules = str(metadata.get("speech_rules") or "").strip()
     if speech_rules:
         result["speech_rules"] = speech_rules
     return result
+
+
+def _voice_text_language(language: str) -> str:
+    normalized = str(language or "").strip().lower().replace("_", "-")
+    aliases = {
+        "zh-cn": "zh",
+        "zh-hans": "zh",
+        "zh": "zh",
+        "ja-jp": "ja",
+        "jp": "ja",
+        "ja": "ja",
+        "en-us": "en",
+        "en-gb": "en",
+        "en": "en",
+        "ko-kr": "ko",
+        "ko": "ko",
+        "fr-fr": "fr",
+        "fr": "fr",
+        "es-es": "es",
+        "es": "es",
+    }
+    return aliases.get(normalized, normalized or "zh")

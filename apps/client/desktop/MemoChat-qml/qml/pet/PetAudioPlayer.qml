@@ -35,6 +35,10 @@ Item {
                 || sourceUrl.indexOf("deterministic-voice-") >= 0
     }
 
+    function shouldUseTextFallback() {
+        return sourceUrl.length === 0 || isDeterministicFallbackAudio()
+    }
+
     function assignSource() {
         if (String(petAudioPlayer.source) !== sourceUrl) {
             petAudioPlayer.source = sourceUrl
@@ -97,7 +101,7 @@ Item {
         if (!hasPlayableAudio()) {
             petAudioPlayer.stop()
             petAudioPlayer.source = ""
-            if (sourceUrl.length === 0) {
+            if (shouldUseTextFallback()) {
                 maybeSpeakText()
             }
             return
@@ -127,6 +131,9 @@ Item {
         onErrorOccurred: function(error, errorString) {
             if (error !== MediaPlayer.NoError) {
                 console.warn("pet audio playback failed:", errorString)
+                petAudioPlayer.stop()
+                petAudioPlayer.source = ""
+                root.maybeSpeakText()
             }
         }
     }
@@ -140,7 +147,7 @@ Item {
             petAudioPlayer.stop()
             if (shouldStopForState()) {
                 stopSpeech()
-            } else if (sourceUrl.length === 0) {
+            } else if (shouldUseTextFallback()) {
                 maybeSpeakText()
             }
             return

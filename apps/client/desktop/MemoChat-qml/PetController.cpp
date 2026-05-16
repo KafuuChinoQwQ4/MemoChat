@@ -191,6 +191,10 @@ void PetController::sendText(const QString &text)
     metadata[QStringLiteral("reply_language")] = _reply_language.trimmed().isEmpty()
                                                     ? QStringLiteral("zh-CN")
                                                     : _reply_language.trimmed();
+    const QString speechRules = _speech_rules.trimmed();
+    if (!speechRules.isEmpty()) {
+        metadata[QStringLiteral("speech_rules")] = speechRules;
+    }
     payload[QStringLiteral("metadata")] = metadata;
     postJson(petUrl(QStringLiteral("/sessions/%1/input").arg(encodedSessionId())),
              payload,
@@ -460,6 +464,16 @@ void PetController::setReplyLanguage(const QString &language)
     }
     _reply_language = nextLanguage;
     emit replyLanguageChanged();
+}
+
+void PetController::setSpeechRules(const QString &rules)
+{
+    const QString nextRules = rules.trimmed();
+    if (_speech_rules == nextRules) {
+        return;
+    }
+    _speech_rules = nextRules;
+    emit speechRulesChanged();
 }
 
 void PetController::refreshVoiceTrainingJob(const QString &jobId)
