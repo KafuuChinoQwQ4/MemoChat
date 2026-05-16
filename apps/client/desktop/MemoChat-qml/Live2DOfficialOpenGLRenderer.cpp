@@ -10,6 +10,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QHash>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QRectF>
 #include <QUrl>
 #include <QtMath>
@@ -33,6 +35,10 @@
 #include <Physics/CubismPhysics.hpp>
 #include <Rendering/CubismRenderer.hpp>
 #include <Rendering/OpenGL/CubismRenderer_OpenGLES2.hpp>
+
+#if defined(__linux__)
+#include <GL/glx.h>
+#endif
 
 #if defined(_MSC_VER)
 #include <malloc.h>
@@ -99,6 +105,21 @@ QString normalizedKey(QString value)
 #if MEMOCHAT_ENABLE_LIVE2D_NATIVE && MEMOCHAT_LIVE2D_CUBISM_FOUND
 namespace Csm = Live2D::Cubism::Framework;
 namespace CsmRendering = Live2D::Cubism::Framework::Rendering;
+
+QMutex &cubismRenderMutex()
+{
+    static QMutex mutex;
+    return mutex;
+}
+
+bool hasCurrentOpenGLContext()
+{
+#if defined(__linux__)
+    return glXGetCurrentContext() != nullptr;
+#else
+    return true;
+#endif
+}
 
 class QtCubismAllocator final : public Csm::ICubismAllocator
 {
@@ -267,6 +288,14 @@ GLuint uploadTexture(const QString &path, QString *error)
 
     image = image.convertToFormat(QImage::Format_RGBA8888);
 
+    GLint previousActiveTexture = GL_TEXTURE0;
+    GLint previousTextureBinding = 0;
+    GLint previousUnpackAlignment = 4;
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &previousActiveTexture);
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previousTextureBinding);
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousUnpackAlignment);
+
     GLuint textureId = 0;
     glGenTextures(1, &textureId);
     glBindTexture(GL_TEXTURE_2D, textureId);
@@ -285,7 +314,9 @@ GLuint uploadTexture(const QString &path, QString *error)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousTextureBinding));
+    glPixelStorei(GL_UNPACK_ALIGNMENT, previousUnpackAlignment);
+    glActiveTexture(static_cast<GLenum>(previousActiveTexture));
     return textureId;
 }
 #endif
@@ -301,6 +332,8 @@ struct Live2DOfficialOpenGLRenderer::Impl
 
     bool load(const QString &inputModelPath)
     {
+        QMutexLocker locker(&cubismRenderMutex());
+
         QString frameworkError;
         if (!ensureCubismFramework(&frameworkError)) {
             error = frameworkError;
@@ -387,8 +420,12 @@ struct Live2DOfficialOpenGLRenderer::Impl
 
     void release()
     {
+        QMutexLocker locker(&cubismRenderMutex());
+
         if (!textureIds.isEmpty()) {
-            glDeleteTextures(textureIds.size(), textureIds.constData());
+            if (hasCurrentOpenGLContext()) {
+                glDeleteTextures(textureIds.size(), textureIds.constData());
+            }
             textureIds.clear();
         }
         if (renderer) {
@@ -424,6 +461,8 @@ struct Live2DOfficialOpenGLRenderer::Impl
 
     bool render(const QSize &viewportSize, const Live2DVisualState &state)
     {
+        QMutexLocker locker(&cubismRenderMutex());
+
         if (!ready || !model || !renderer || viewportSize.width() <= 0 || viewportSize.height() <= 0) {
             return false;
         }

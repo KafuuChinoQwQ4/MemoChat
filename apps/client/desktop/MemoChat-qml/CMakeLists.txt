@@ -105,6 +105,7 @@ set(SOURCES
     PetController.cpp
     PetModel.cpp
     PetSpeechSynthesizer.cpp
+    Live2DAvatarOpenGLRenderer.cpp
     Live2DAsset.cpp
     Live2DCoreRenderer.cpp
     Live2DOfficialOpenGLRenderer.cpp
@@ -150,6 +151,7 @@ set(HEADERS
     PetController.h
     PetModel.h
     PetSpeechSynthesizer.h
+    Live2DAvatarOpenGLRenderer.h
     Live2DAsset.h
     Live2DRenderer.h
     Live2DCoreRenderer.h
