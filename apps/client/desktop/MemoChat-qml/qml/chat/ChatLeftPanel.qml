@@ -46,6 +46,12 @@ Rectangle {
     property string pendingAgentDeleteRoomId: ""
     property string pendingAgentDeleteTitle: ""
     readonly property bool pendingAgentDeleteIsRoom: pendingAgentDeleteRoomId.length > 0
+    readonly property string live2dAvatarFallback: "qrc:/icons/modelive2d.png"
+    property string live2dAvatarSource: live2dAvatarFallback
+
+    PetAssetSettings {
+        id: live2dPetSettings
+    }
 
     signal dialogUidSelected(int uid)
     signal chatIndexSelected(int index)
@@ -76,6 +82,13 @@ Rectangle {
     function currentSessionListView() { return sessionPaneLoader.item ? sessionPaneLoader.item.sessionListView : null }
     function currentSessionModel() { return dialogModel }
     function usesSearchHeader() { return false }
+    function refreshLive2DEntryAvatar() {
+        var nextAvatar = ""
+        if (live2dPetSettings && live2dPetSettings.resolveLive2DAvatarUrl) {
+            nextAvatar = live2dPetSettings.live2dAvatarUrl
+        }
+        root.live2dAvatarSource = nextAvatar && nextAvatar.length > 0 ? nextAvatar : root.live2dAvatarFallback
+    }
     function contextualTitle() {
         if (currentTab === AppController.MomentsTabPage) {
             return "朋友圈"
@@ -110,6 +123,17 @@ Rectangle {
         }
         return "在这里管理账户信息和应用设置。"
     }
+
+    Connections {
+        target: live2dPetSettings
+        ignoreUnknownSignals: true
+        function onSettingsChanged() {
+            if (root.currentTab === AppController.Live2DTabPage) {
+                root.refreshLive2DEntryAvatar()
+            }
+        }
+    }
+
     function agentEntries(sessions, rooms, currentSessionId, currentGameRoomId, currentModel) {
         var rows = []
         for (var i = 0; i < (sessions ? sessions.length : 0); ++i) {
@@ -183,9 +207,18 @@ Rectangle {
         if (currentTab === AppController.AgentTabPage) {
             agentRefreshRequested()
         }
+
+        if (currentTab === AppController.Live2DTabPage) {
+            live2dPetSettings.load()
+        }
     }
     onCurrentDialogUidChanged: syncCurrentSelection()
-    Component.onCompleted: root.ensureCurrentSessionSource()
+    Component.onCompleted: {
+        root.ensureCurrentSessionSource()
+        if (currentTab === AppController.Live2DTabPage) {
+            live2dPetSettings.load()
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -1232,11 +1265,26 @@ Rectangle {
                             clip: true
 
                             Image {
+                                id: live2dEntryAvatarImage
                                 anchors.centerIn: parent
-                                width: 40
-                                height: 40
-                                source: "qrc:/icons/modelive2d.png"
+                                width: 48
+                                height: 48
+                                source: root.live2dAvatarSource
+                                fillMode: Image.PreserveAspectCrop
+                                sourceSize.width: 96
+                                sourceSize.height: 96
+                                cache: false
+                                visible: status === Image.Ready
+                                mipmap: true
+                            }
+
+                            Image {
+                                anchors.centerIn: parent
+                                width: 34
+                                height: 34
+                                source: root.live2dAvatarFallback
                                 fillMode: Image.PreserveAspectFit
+                                visible: live2dEntryAvatarImage.status !== Image.Ready
                                 mipmap: true
                             }
                         }

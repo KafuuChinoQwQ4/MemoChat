@@ -601,6 +601,7 @@ void ensureTopLevelQuickWindowHooks()
 int main(int argc, char *argv[])
 {
     QCoreApplication::setApplicationName(QStringLiteral("MemoChatQml"));
+    QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 #ifdef Q_OS_LINUX
     setDefaultEnv("QSG_RENDER_LOOP", "threaded");
     setDefaultEnv("QSG_RHI_BACKEND", "opengl");

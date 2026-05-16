@@ -1,9 +1,10 @@
 #include "PetAssetSettings.h"
 
-#include "Live2DCoreRenderer.h"
+#include "Live2DAvatarOpenGLRenderer.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
+#include <QDebug>
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
@@ -378,16 +379,12 @@ QString saveAvatarToCache(const QImage &avatar, const QString &cachePath)
 
 QImage renderedLive2DAvatar(const QString &modelJsonPath)
 {
-    Live2DCoreRenderer renderer(modelJsonPath);
-    if (!renderer.isReady()) {
-        return {};
+    QString error;
+    const QImage avatar = Live2DAvatarOpenGLRenderer().renderAvatar(modelJsonPath, &error);
+    if (avatar.isNull() && !error.isEmpty()) {
+        qWarning().noquote() << "Live2D avatar OpenGL render unavailable:" << error;
     }
-    Live2DVisualState state;
-    state.expression = QStringLiteral("neutral");
-    state.motion = QStringLiteral("idle");
-    state.emotion = QStringLiteral("neutral");
-    const QImage rendered = renderer.renderToImage(QSize(640, 640), state);
-    return cropHeadAvatar(rendered);
+    return avatar;
 }
 } // namespace
 
@@ -557,7 +554,7 @@ QString PetAssetSettings::resolveLive2DAvatarUrl(const QString &modelJson, const
     QString modelDirectory;
     const QStringList textures = modelTexturePaths(resolvedModelJson, &modelDirectory);
     QCryptographicHash hash(QCryptographicHash::Sha1);
-    hash.addData(QByteArrayLiteral("memochat-live2d-avatar-v2"));
+    hash.addData(QByteArrayLiteral("memochat-live2d-avatar-opengl-v3"));
     addPathFingerprint(hash, resolvedModelJson);
     for (const QString &texture : textures) {
         addPathFingerprint(hash, texture);
@@ -565,7 +562,7 @@ QString PetAssetSettings::resolveLive2DAvatarUrl(const QString &modelJson, const
 
     const QString cacheKey = QString::fromLatin1(hash.result().toHex());
     const QDir cacheDir(avatarCacheDirectory());
-    const QString renderCachePath = cacheDir.absoluteFilePath(QStringLiteral("avatar_render_%1.png").arg(cacheKey));
+    const QString renderCachePath = cacheDir.absoluteFilePath(QStringLiteral("avatar_gl_%1.png").arg(cacheKey));
     if (QFileInfo::exists(renderCachePath)) {
         return QUrl::fromLocalFile(renderCachePath).toString();
     }
