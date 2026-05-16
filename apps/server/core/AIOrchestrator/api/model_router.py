@@ -26,8 +26,13 @@ async def list_models():
     model_items: list[ModelInfo] = []
     provider_items: list[ProviderInfo] = []
     default_model: ModelInfo | None = None
+    seen_providers: set[str] = set()
+    seen_models: set[tuple[str, str]] = set()
 
     for endpoint in endpoints:
+        if endpoint.provider_id in seen_providers:
+            continue
+        seen_providers.add(endpoint.provider_id)
         provider_items.append(
             ProviderInfo(
                 provider_id=endpoint.provider_id,
@@ -39,10 +44,15 @@ async def list_models():
             )
         )
         for model in endpoint.models:
+            model_name = model.get("name", "")
+            model_key = (endpoint.provider_id, model_name)
+            if not model_name or model_key in seen_models:
+                continue
+            seen_models.add(model_key)
             model_info = ModelInfo(
                 model_type=endpoint.provider_id,
-                model_name=model.get("name", ""),
-                display_name=model.get("display", model.get("name", "")),
+                model_name=model_name,
+                display_name=model.get("display", model_name),
                 is_enabled=endpoint.enabled,
                 context_window=model.get("context_window", 0),
                 supports_thinking=bool(model.get("supports_thinking", False)),
@@ -80,20 +90,24 @@ async def register_api_provider(req: RegisterApiProviderReq):
         ai_metrics.http_requests.inc(route="/models/api-provider", status="error")
         return RegisterApiProviderRsp(code=400, message=str(exc))
 
-    models = [
-        ModelInfo(
+    models: list[ModelInfo] = []
+    seen_models: set[str] = set()
+    for model in endpoint.models:
+        model_name = model.get("name", "")
+        if not model_name or model_name in seen_models:
+            continue
+        seen_models.add(model_name)
+        models.append(ModelInfo(
             model_type=endpoint.provider_id,
-            model_name=model.get("name", ""),
-            display_name=model.get("display", model.get("name", "")),
+            model_name=model_name,
+            display_name=model.get("display", model_name),
             is_enabled=True,
             context_window=model.get("context_window", 0),
             supports_thinking=bool(model.get("supports_thinking", False)),
             provider_id=endpoint.provider_id,
             adapter=endpoint.adapter,
             deployment=endpoint.deployment,
-        )
-        for model in endpoint.models
-    ]
+        ))
     ai_metrics.http_requests.inc(route="/models/api-provider", status="ok")
     return RegisterApiProviderRsp(
         code=0,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -257,11 +258,20 @@ class LLMEndpointRegistry:
 
     def list_endpoints(self) -> list[ProviderEndpoint]:
         endpoints: list[ProviderEndpoint] = []
+        endpoint_identities: list[tuple[str, str, str] | None] = []
         llm_cfg = settings.llm
+
+        def append_endpoint(endpoint: ProviderEndpoint, api_key: str = "") -> None:
+            _append_deduped_endpoint(
+                endpoints,
+                endpoint_identities,
+                endpoint,
+                _provider_api_identity(endpoint.adapter, endpoint.base_url, api_key),
+            )
 
         if llm_cfg.ollama.enabled:
             ollama_models = self._list_ollama_configured_models(llm_cfg.ollama.base_url, llm_cfg.ollama.models)
-            endpoints.append(
+            append_endpoint(
                 ProviderEndpoint(
                     provider_id="ollama",
                     adapter="ollama",
@@ -274,7 +284,7 @@ class LLMEndpointRegistry:
                 )
             )
         if llm_cfg.openai.enabled:
-            endpoints.append(
+            append_endpoint(
                 ProviderEndpoint(
                     provider_id="openai",
                     adapter="openai_compatible",
@@ -284,10 +294,11 @@ class LLMEndpointRegistry:
                     enabled=True,
                     thinking_parameter="",
                     models=[model.model_dump() for model in llm_cfg.openai.models],
-                )
+                ),
+                llm_cfg.openai.api_key,
             )
         if llm_cfg.anthropic.enabled:
-            endpoints.append(
+            append_endpoint(
                 ProviderEndpoint(
                     provider_id="claude",
                     adapter="anthropic",
@@ -297,10 +308,11 @@ class LLMEndpointRegistry:
                     enabled=True,
                     thinking_parameter="",
                     models=[model.model_dump() for model in llm_cfg.anthropic.models],
-                )
+                ),
+                llm_cfg.anthropic.api_key,
             )
         if llm_cfg.kimi.enabled:
-            endpoints.append(
+            append_endpoint(
                 ProviderEndpoint(
                     provider_id="kimi",
                     adapter="openai_compatible",
@@ -310,7 +322,8 @@ class LLMEndpointRegistry:
                     enabled=True,
                     thinking_parameter="",
                     models=[model.model_dump() for model in llm_cfg.kimi.models],
-                )
+                ),
+                llm_cfg.kimi.api_key,
             )
 
         for endpoint_cfg in settings.harness.providers.endpoints:
@@ -321,7 +334,7 @@ class LLMEndpointRegistry:
                 api_key = os.getenv(endpoint_cfg.api_key_env, api_key)
             if endpoint_cfg.api_key_env and not api_key:
                 continue
-            endpoints.append(
+            append_endpoint(
                 ProviderEndpoint(
                     provider_id=endpoint_cfg.name,
                     adapter=endpoint_cfg.adapter,
@@ -331,7 +344,8 @@ class LLMEndpointRegistry:
                     enabled=endpoint_cfg.enabled,
                     thinking_parameter=endpoint_cfg.thinking_parameter,
                     models=[model.model_dump() for model in endpoint_cfg.models],
-                )
+                ),
+                api_key,
             )
 
         for endpoint_cfg in self._load_runtime_providers():
@@ -339,7 +353,7 @@ class LLMEndpointRegistry:
                 continue
             if not endpoint_cfg.get("api_key", ""):
                 continue
-            endpoints.append(
+            append_endpoint(
                 ProviderEndpoint(
                     provider_id=endpoint_cfg.get("name", ""),
                     adapter=endpoint_cfg.get("adapter", "openai_compatible"),
@@ -349,7 +363,8 @@ class LLMEndpointRegistry:
                     enabled=True,
                     thinking_parameter=endpoint_cfg.get("thinking_parameter", ""),
                     models=endpoint_cfg.get("models", []),
-                )
+                ),
+                endpoint_cfg.get("api_key", ""),
             )
 
         return endpoints
@@ -378,12 +393,26 @@ class LLMEndpointRegistry:
         if not models:
             raise RuntimeError("no models returned from provider")
 
-        providers = [provider for provider in self._load_runtime_providers() if provider.get("name") != provider_id]
+        providers = self._load_runtime_providers()
         existing_provider = self._find_runtime_provider(provider_id)
-        if existing_provider:
-            models = _merge_model_lists(existing_provider.get("models", []), models)
+        matching_provider = self._find_runtime_provider_by_api(adapter, normalized_url, api_key)
+        target_provider = existing_provider or matching_provider
+        target_provider_id = str(target_provider.get("name") or provider_id) if target_provider else provider_id
+        if target_provider:
+            models = _merge_model_lists(target_provider.get("models", []), models)
+        target_identity = _provider_api_identity(adapter, normalized_url, api_key)
+        providers = [
+            provider
+            for provider in providers
+            if provider.get("name") not in {provider_id, target_provider_id}
+            and _provider_api_identity(
+                str(provider.get("adapter") or "openai_compatible"),
+                str(provider.get("base_url") or ""),
+                str(provider.get("api_key") or ""),
+            ) != target_identity
+        ]
         provider_config = {
-            "name": provider_id,
+            "name": target_provider_id,
             "adapter": adapter,
             "deployment": "external_api",
             "base_url": normalized_url,
@@ -397,10 +426,10 @@ class LLMEndpointRegistry:
         providers.append(provider_config)
         self._save_runtime_providers(providers)
         for cache_key in list(self._custom_clients.keys()):
-            if cache_key.startswith(f"{provider_id}:"):
+            if cache_key.startswith(f"{provider_id}:") or cache_key.startswith(f"{target_provider_id}:"):
                 self._custom_clients.pop(cache_key, None)
         return ProviderEndpoint(
-            provider_id=provider_id,
+            provider_id=target_provider_id,
             adapter=adapter,
             deployment="external_api",
             base_url=normalized_url,
@@ -548,11 +577,12 @@ class LLMEndpointRegistry:
             with _RUNTIME_PROVIDER_FILE.open("r", encoding="utf-8") as file:
                 data = json.load(file)
             providers = data.get("providers", []) if isinstance(data, dict) else []
-            return [provider for provider in providers if isinstance(provider, dict)]
+            return _dedupe_runtime_providers([provider for provider in providers if isinstance(provider, dict)])
         except Exception:
             return []
 
     def _save_runtime_providers(self, providers: list[dict]) -> None:
+        providers = _dedupe_runtime_providers(providers)
         _RUNTIME_PROVIDER_FILE.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = _RUNTIME_PROVIDER_FILE.with_suffix(".tmp")
         with tmp_path.open("w", encoding="utf-8") as file:
@@ -561,6 +591,23 @@ class LLMEndpointRegistry:
 
     def _find_runtime_provider(self, provider_id: str) -> dict | None:
         return next((provider for provider in self._load_runtime_providers() if provider.get("name") == provider_id), None)
+
+    def _find_runtime_provider_by_api(self, adapter: str, base_url: str, api_key: str) -> dict | None:
+        identity = _provider_api_identity(adapter, base_url, api_key)
+        if identity is None:
+            return None
+        return next(
+            (
+                provider
+                for provider in self._load_runtime_providers()
+                if _provider_api_identity(
+                    str(provider.get("adapter") or "openai_compatible"),
+                    str(provider.get("base_url") or ""),
+                    str(provider.get("api_key") or ""),
+                ) == identity
+            ),
+            None,
+        )
 
     def _list_ollama_configured_models(self, base_url: str, configured_models: list) -> list[dict]:
         configured_by_name = {model.name: model.model_dump() for model in configured_models}
@@ -598,6 +645,83 @@ def _normalize_provider_id(name: str) -> str:
     if not cleaned.startswith("api-"):
         cleaned = f"api-{cleaned}"
     return cleaned[:48]
+
+
+def _provider_api_identity(adapter: str, base_url: str, api_key: str) -> tuple[str, str, str] | None:
+    normalized_url = _normalize_base_url(base_url)
+    normalized_adapter = (adapter or "openai_compatible").strip().lower()
+    key = (api_key or "").strip()
+    if not normalized_url or not key:
+        return None
+    return normalized_adapter, normalized_url, hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
+def _provider_identities_match(left: tuple[str, str, str] | None, right: tuple[str, str, str] | None) -> bool:
+    return left is not None and right is not None and left == right
+
+
+def _append_deduped_endpoint(
+    endpoints: list[ProviderEndpoint],
+    identities: list[tuple[str, str, str] | None],
+    endpoint: ProviderEndpoint,
+    identity: tuple[str, str, str] | None,
+) -> None:
+    for index, existing in enumerate(endpoints):
+        if existing.provider_id == endpoint.provider_id or _provider_identities_match(identities[index], identity):
+            if identities[index] is None and identity is not None:
+                identities[index] = identity
+            existing.models = _merge_model_lists(existing.models, endpoint.models)
+            if not existing.default_model and endpoint.default_model:
+                existing.default_model = endpoint.default_model
+            existing.enabled = existing.enabled or endpoint.enabled
+            if not existing.thinking_parameter and endpoint.thinking_parameter:
+                existing.thinking_parameter = endpoint.thinking_parameter
+            return
+    endpoints.append(endpoint)
+    identities.append(identity)
+
+
+def _dedupe_runtime_providers(providers: list[dict]) -> list[dict]:
+    result: list[dict] = []
+    by_name: dict[str, int] = {}
+    by_identity: dict[tuple[str, str, str], int] = {}
+
+    for raw_provider in providers:
+        if not isinstance(raw_provider, dict):
+            continue
+        provider = dict(raw_provider)
+        name = str(provider.get("name") or "").strip()
+        identity = _provider_api_identity(
+            str(provider.get("adapter") or "openai_compatible"),
+            str(provider.get("base_url") or ""),
+            str(provider.get("api_key") or ""),
+        )
+
+        index = by_name.get(name) if name else None
+        if index is None and identity is not None:
+            index = by_identity.get(identity)
+
+        if index is None:
+            provider["models"] = _merge_model_lists([], provider.get("models", []))
+            if identity is not None:
+                by_identity[identity] = len(result)
+            if name:
+                by_name[name] = len(result)
+            result.append(provider)
+            continue
+
+        current = result[index]
+        current["models"] = _merge_model_lists(current.get("models", []), provider.get("models", []))
+        if not current.get("default_model") and provider.get("default_model"):
+            current["default_model"] = provider.get("default_model")
+        if provider.get("enabled", True):
+            current["enabled"] = True
+        if not current.get("thinking_parameter") and provider.get("thinking_parameter"):
+            current["thinking_parameter"] = provider.get("thinking_parameter")
+        if not current.get("timeout_sec") and provider.get("timeout_sec"):
+            current["timeout_sec"] = provider.get("timeout_sec")
+
+    return result
 
 
 def _merge_model_lists(existing_models: list[dict], discovered_models: list[dict]) -> list[dict]:
