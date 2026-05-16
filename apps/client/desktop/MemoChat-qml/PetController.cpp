@@ -19,6 +19,7 @@
 #include <QtGlobal>
 
 namespace {
+constexpr int kMaxRememberedPetControlEvents = 256;
 
 bool isWslRuntime()
 {
@@ -150,6 +151,7 @@ void PetController::startSession()
     if (_busy) {
         return;
     }
+    resetControlEventDedupe();
     setError({});
     setBusy(true, QStringLiteral("正在连接桌宠"));
     QJsonObject payload = authPayload();
@@ -165,12 +167,18 @@ void PetController::sendText(const QString &text)
     if (content.isEmpty()) {
         return;
     }
+    if (_input_request_in_flight) {
+        setStatusText(QStringLiteral("上一条消息仍在发送"));
+        return;
+    }
     if (_session_id.isEmpty()) {
         setError(QStringLiteral("桌宠会话未连接"));
         return;
     }
 
     _model.clearSpeech();
+    _input_request_in_flight = true;
+    setBusy(true, QStringLiteral("正在发送"));
     QJsonObject payload = authPayload();
     payload[QStringLiteral("content")] = content;
     if (!_selected_model_type.trimmed().isEmpty()) {
@@ -537,6 +545,9 @@ void PetController::handleJsonReply(QNetworkReply *reply)
 
     if (op == QStringLiteral("create_session")) {
         setBusy(false);
+    } else if (op == QStringLiteral("input")) {
+        _input_request_in_flight = false;
+        setBusy(false);
     } else if (op == QStringLiteral("voice_training_create")
                || op == QStringLiteral("voice_training_get")) {
         setVoiceTrainingBusy(false);
@@ -569,6 +580,9 @@ void PetController::handleJsonReply(QNetworkReply *reply)
             setError(QStringLiteral("桌宠会话缺少 session_id"));
             return;
         }
+        if (_session_id != nextSessionId) {
+            resetControlEventDedupe();
+        }
         _session_id = nextSessionId;
         setStatusText(QStringLiteral("桌宠会话已创建"));
         emit stateChanged();
@@ -599,8 +613,52 @@ void PetController::applyControlEvent(const QJsonObject &event)
     if (event.value(QStringLiteral("type")).toString() != QStringLiteral("pet.control")) {
         return;
     }
+    if (!rememberControlEvent(event)) {
+        return;
+    }
     _model.applyControlEvent(event);
     emit controlEventReceived(event.toVariantMap());
+}
+
+bool PetController::rememberControlEvent(const QJsonObject &event)
+{
+    const QString sessionId = event.value(QStringLiteral("session_id")).toString(_session_id).trimmed();
+    const QString eventId = event.value(QStringLiteral("event_id")).toString().trimmed();
+    const QString turnId = event.value(QStringLiteral("turn_id")).toString().trimmed();
+    const QString phase = event.value(QStringLiteral("phase")).toString().trimmed();
+    const QString actionName = event.value(QStringLiteral("action")).toObject().value(QStringLiteral("name")).toString().trimmed();
+    const QString textDelta = event.value(QStringLiteral("text")).toObject().value(QStringLiteral("delta")).toString();
+    const QString audioUrl = event.value(QStringLiteral("audio")).toObject().value(QStringLiteral("url")).toString();
+    QString key;
+    if (!eventId.isEmpty()) {
+        key = sessionId + QStringLiteral(":event:") + eventId;
+    } else if (!turnId.isEmpty()) {
+        key = sessionId + QStringLiteral(":turn:")
+            + turnId + QStringLiteral(":") + phase + QStringLiteral(":")
+            + actionName + QStringLiteral(":") + textDelta + QStringLiteral(":") + audioUrl;
+    } else {
+        const int sequence = event.value(QStringLiteral("seq")).toInt(-1);
+        if (sequence < 0) {
+            return true;
+        }
+        key = sessionId + QStringLiteral(":seq:") + QString::number(sequence);
+    }
+
+    if (_applied_control_event_keys.contains(key)) {
+        return false;
+    }
+    _applied_control_event_keys.insert(key);
+    _applied_control_event_order.append(key);
+    while (_applied_control_event_order.size() > kMaxRememberedPetControlEvents) {
+        _applied_control_event_keys.remove(_applied_control_event_order.takeFirst());
+    }
+    return true;
+}
+
+void PetController::resetControlEventDedupe()
+{
+    _applied_control_event_keys.clear();
+    _applied_control_event_order.clear();
 }
 
 void PetController::consumeStreamBytes(const QByteArray &bytes)

@@ -32,6 +32,8 @@ Window {
     property bool pendingSendAlreadyAppended: false
     property string pendingAssistantTurnId: ""
     property int pendingAssistantIndex: -1
+    property var completedAssistantTurnKeys: ({})
+    property var completedAssistantTurnOrder: []
     property string lastSyncedModel: ""
     property string lastSyncedLanguage: ""
 
@@ -152,6 +154,26 @@ Window {
             }
         }
         return ""
+    }
+
+    function assistantTurnCompleted(turnKey) {
+        return turnKey.length > 0 && root.completedAssistantTurnKeys[turnKey] === true
+    }
+
+    function rememberCompletedAssistantTurn(turnKey) {
+        if (turnKey.length === 0 || root.completedAssistantTurnKeys[turnKey] === true) {
+            return
+        }
+        const nextKeys = root.completedAssistantTurnKeys
+        nextKeys[turnKey] = true
+        root.completedAssistantTurnKeys = nextKeys
+        const nextOrder = root.completedAssistantTurnOrder.slice()
+        nextOrder.push(turnKey)
+        while (nextOrder.length > 128) {
+            const oldKey = nextOrder.shift()
+            delete nextKeys[oldKey]
+        }
+        root.completedAssistantTurnOrder = nextOrder
     }
 
     function refreshLive2DAvatar() {
@@ -290,6 +312,9 @@ Window {
         if (resolvedEventKey.length === 0) {
             return
         }
+        if (root.assistantTurnCompleted(resolvedEventKey)) {
+            return
+        }
         if (root.pendingAssistantIndex < 0 || root.pendingAssistantTurnId !== resolvedEventKey) {
             messageModel.append(root.newMessage(false,
                                                 display,
@@ -315,6 +340,7 @@ Window {
             messageList.positionViewAtEnd()
         }
         if (isFinal) {
+            root.rememberCompletedAssistantTurn(resolvedEventKey)
             root.pendingAssistantIndex = -1
             root.pendingAssistantTurnId = ""
             root.chatStatusText = audio.url && audio.url.length > 0 ? "语音回复已生成" : "文字回复已生成"

@@ -9,6 +9,8 @@
 #include <QObject>
 #include <QPointer>
 #include <QProcess>
+#include <QSet>
+#include <QStringList>
 #include <QVariantMap>
 
 class ClientGateway;
@@ -126,6 +128,8 @@ private:
     void startStream();
     void handleJsonReply(QNetworkReply *reply);
     void applyControlEvent(const QJsonObject &event);
+    bool rememberControlEvent(const QJsonObject &event);
+    void resetControlEventDedupe();
     void consumeStreamBytes(const QByteArray &bytes);
     void consumeSseLine(const QByteArray &line);
     void setBusy(bool busy, const QString &statusText = QString());
@@ -148,6 +152,7 @@ private:
     QString _session_id;
     bool _streaming = false;
     bool _busy = false;
+    bool _input_request_in_flight = false;
     bool _voice_training_busy = false;
     bool _windows_ime_bridge_busy = false;
     QPointer<QProcess> _windows_ime_bridge_process;
@@ -162,6 +167,8 @@ private:
     QString _selected_model_type;
     QString _selected_model_name;
     QString _reply_language = QStringLiteral("zh-CN");
+    QSet<QString> _applied_control_event_keys;
+    QStringList _applied_control_event_order;
 };
 
 #endif // PETCONTROLLER_H
