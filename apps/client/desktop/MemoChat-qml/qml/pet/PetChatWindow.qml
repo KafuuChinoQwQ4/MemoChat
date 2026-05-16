@@ -73,12 +73,65 @@ Window {
         return value === true || value === "true" || value === 1
     }
 
+    function stringValue(value) {
+        if (value === undefined || value === null) {
+            return ""
+        }
+        return String(value)
+    }
+
+    function hasText(value) {
+        return root.stringValue(value).trim().length > 0
+    }
+
     function effectiveSelfAvatar() {
         return root.selfAvatar && root.selfAvatar.length > 0 ? root.selfAvatar : "qrc:/res/head_1.jpg"
     }
 
+    function effectiveLive2DAvatar() {
+        return root.live2dAvatarSource && root.live2dAvatarSource.length > 0
+                ? root.live2dAvatarSource
+                : root.live2dAvatarFallback
+    }
+
+    function avatarForMessage(outgoing) {
+        return outgoing ? root.effectiveSelfAvatar() : root.effectiveLive2DAvatar()
+    }
+
+    function defaultAvatarForMessage(outgoing) {
+        return outgoing ? "qrc:/res/head_1.jpg" : root.live2dAvatarFallback
+    }
+
     function messageSenderName(isOutgoing) {
         return isOutgoing ? root.selfName : root.displayName
+    }
+
+    function newMessage(outgoing, text, turnId, state, audioUrl, audioState, translation) {
+        const isOutgoing = root.isOutgoingMessage(outgoing)
+        return {
+            "outgoing": isOutgoing,
+            "turnId": turnId || "",
+            "msgId": (isOutgoing ? "pet-user-" : "pet-ai-")
+                     + Date.now() + "-" + Math.random().toString(16).slice(2),
+            "msgType": "text",
+            "content": text || "",
+            "rawContent": text || "",
+            "translationText": translation || "",
+            "fileName": "",
+            "senderName": root.messageSenderName(isOutgoing),
+            "senderUid": 0,
+            "senderIcon": "",
+            "showAvatar": true,
+            "showTimeDivider": false,
+            "timeDividerText": "",
+            "messageState": state || "sent",
+            "isReply": false,
+            "replyToMsgId": "",
+            "replySender": "",
+            "replyPreview": "",
+            "audioUrl": audioUrl || "",
+            "audioState": audioState || "idle"
+        }
     }
 
     function assistantEventKey(event, turnId) {
@@ -194,20 +247,7 @@ Window {
         if (!text || text.length === 0) {
             return
         }
-        messageModel.append({
-            "outgoing": true,
-            "turnId": "",
-            "msgId": "pet-user-" + Date.now() + "-" + Math.random().toString(16).slice(2),
-            "msgType": "text",
-            "content": text,
-            "rawContent": text,
-            "translationText": "",
-            "fileName": "",
-            "senderName": root.selfName,
-            "messageState": "sent",
-            "audioUrl": "",
-            "audioState": "idle"
-        })
+        messageModel.append(root.newMessage(true, text, "", "sent", "", "idle", ""))
         messageList.positionViewAtEnd()
     }
 
@@ -218,44 +258,56 @@ Window {
         const text = event.text || {}
         const speech = event.speech || {}
         const audio = event.audio || {}
-        const delta = (text.delta || speech.text_delta || event.speech_text || "").trim()
-        const translation = (text.translation || event.speech_translation || speech.translation || "").trim()
-        const display = (text.display || delta || event.speech_display_text || event.speech_text || "").trim()
-        const turnId = (event.turn_id || "").trim()
+        const controllerText = root.petController ? root.stringValue(root.petController.speechDisplayText) : ""
+        const controllerTranslation = root.petController ? root.stringValue(root.petController.speechTranslation) : ""
+        const controllerAudioUrl = root.petController ? root.stringValue(root.petController.audioUrl) : ""
+        const controllerAudioState = root.petController ? root.stringValue(root.petController.audioState) : ""
+        const controllerTurnId = root.petController ? root.stringValue(root.petController.turnId).trim() : ""
+        const delta = root.stringValue(text.delta || speech.text_delta || event.speech_text)
+        const eventTranslation = root.stringValue(text.translation || event.speech_translation || speech.translation)
+        const eventDisplay = root.stringValue(text.display || event.speech_display_text || event.speech_text || delta)
+        const errorText = root.stringValue(text.error || speech.error || event.error || event.message)
+        const phase = root.stringValue(event.phase).trim()
+        var display = root.hasText(controllerText) ? controllerText : eventDisplay
+        var translation = root.hasText(controllerTranslation) ? controllerTranslation : eventTranslation
+        if (!root.hasText(display) && phase === "error") {
+            display = root.hasText(errorText) ? errorText : "回复异常"
+        }
+        const turnId = root.stringValue(event.turn_id).trim()
         const eventKey = root.assistantEventKey(event, turnId)
-        const isFinal = !!text.final
-        const phase = (event.phase || "").trim()
-        const hasContent = display.length > 0 || translation.length > 0 || phase === "error"
+        const isFinal = !!text.final || (!!root.petController && root.petController.speechFinal)
+        const audioUrl = root.hasText(controllerAudioUrl) ? controllerAudioUrl : root.stringValue(audio.url)
+        const audioState = root.hasText(controllerAudioState) ? controllerAudioState : root.stringValue(audio.state || "idle")
+        const hasContent = root.hasText(display)
+                           || root.hasText(translation)
+                           || phase === "error"
+                           || (isFinal && root.pendingAssistantIndex >= 0)
         if (!hasContent) {
             return
         }
 
-        if (eventKey.length === 0) {
+        const resolvedEventKey = eventKey.length > 0 ? eventKey : controllerTurnId
+        if (resolvedEventKey.length === 0) {
             return
         }
-        if (root.pendingAssistantIndex < 0 || root.pendingAssistantTurnId !== eventKey) {
-            messageModel.append({
-                "outgoing": false,
-                "turnId": eventKey,
-                "msgId": "pet-ai-" + Date.now() + "-" + Math.random().toString(16).slice(2),
-                "msgType": "text",
-                "content": display,
-                "rawContent": display,
-                "translationText": translation,
-                "fileName": "",
-                "senderName": root.displayName,
-                "messageState": isFinal ? "sent" : "sending",
-                "audioUrl": audio.url || "",
-                "audioState": audio.state || "idle"
-            })
+        if (root.pendingAssistantIndex < 0 || root.pendingAssistantTurnId !== resolvedEventKey) {
+            messageModel.append(root.newMessage(false,
+                                                display,
+                                                resolvedEventKey,
+                                                isFinal ? "sent" : "sending",
+                                                audioUrl,
+                                                audioState,
+                                                translation))
             root.pendingAssistantIndex = messageModel.count - 1
-            root.pendingAssistantTurnId = eventKey
+            root.pendingAssistantTurnId = resolvedEventKey
         } else if (root.pendingAssistantIndex >= 0) {
-            messageModel.setProperty(root.pendingAssistantIndex, "content", display)
-            messageModel.setProperty(root.pendingAssistantIndex, "rawContent", display)
+            const current = messageModel.get(root.pendingAssistantIndex) || {}
+            const nextDisplay = root.hasText(display) ? display : root.stringValue(current.content)
+            messageModel.setProperty(root.pendingAssistantIndex, "content", nextDisplay)
+            messageModel.setProperty(root.pendingAssistantIndex, "rawContent", nextDisplay)
             messageModel.setProperty(root.pendingAssistantIndex, "translationText", translation)
-            messageModel.setProperty(root.pendingAssistantIndex, "audioUrl", audio.url || "")
-            messageModel.setProperty(root.pendingAssistantIndex, "audioState", audio.state || "idle")
+            messageModel.setProperty(root.pendingAssistantIndex, "audioUrl", audioUrl)
+            messageModel.setProperty(root.pendingAssistantIndex, "audioState", audioState)
             messageModel.setProperty(root.pendingAssistantIndex, "messageState", isFinal ? "sent" : "sending")
         }
 
@@ -495,23 +547,57 @@ Window {
                         spacing: 0
                     model: messageModel
                     boundsBehavior: Flickable.StopAtBounds
-                    delegate: ChatMessageDelegate {
+                    delegate: Item {
+                        id: messageDelegateRoot
+                        required property var outgoing
+                        required property string msgId
+                        required property string msgType
+                        required property string content
+                        required property string rawContent
+                        required property string translationText
+                        required property string fileName
+                        required property string senderName
+                        required property int senderUid
+                        required property bool showAvatar
+                        required property bool showTimeDivider
+                        required property string timeDividerText
+                        required property string messageState
+                        required property bool isReply
+                        required property string replyToMsgId
+                        required property string replySender
+                        required property string replyPreview
+
+                        readonly property bool outgoingMessage: root.isOutgoingMessage(outgoing)
+
                         width: messageList.width
-                        outgoing: root.isOutgoingMessage(model.outgoing)
-                        msgId: model.msgId
-                        msgType: model.msgType
-                        content: model.content
-                        rawContent: model.rawContent
-                        translationText: model.translationText
-                        fileName: model.fileName
-                        senderName: root.messageSenderName(root.isOutgoingMessage(model.outgoing))
-                        showOutgoingSenderName: true
-                            showAvatar: true
-                        showTimeDivider: false
-                        timeDividerText: ""
-                        messageState: model.messageState
-                        avatarSource: root.isOutgoingMessage(model.outgoing) ? root.effectiveSelfAvatar() : root.live2dAvatarSource
-                        defaultAvatarSource: root.isOutgoingMessage(model.outgoing) ? "qrc:/res/head_1.jpg" : root.live2dAvatarFallback
+                        height: messageDelegate.height
+
+                        ChatMessageDelegate {
+                            id: messageDelegate
+                            width: messageDelegateRoot.width
+                            outgoing: messageDelegateRoot.outgoingMessage
+                            msgId: messageDelegateRoot.msgId
+                            senderUid: messageDelegateRoot.senderUid
+                            msgType: messageDelegateRoot.msgType
+                            content: messageDelegateRoot.content
+                            rawContent: messageDelegateRoot.rawContent
+                            translationText: messageDelegateRoot.translationText
+                            fileName: messageDelegateRoot.fileName
+                            senderName: messageDelegateRoot.senderName.length > 0
+                                        ? messageDelegateRoot.senderName
+                                        : root.messageSenderName(messageDelegateRoot.outgoingMessage)
+                            showOutgoingSenderName: true
+                            showAvatar: messageDelegateRoot.showAvatar
+                            showTimeDivider: messageDelegateRoot.showTimeDivider
+                            timeDividerText: messageDelegateRoot.timeDividerText
+                            messageState: messageDelegateRoot.messageState
+                            isReply: messageDelegateRoot.isReply
+                            replyToMsgId: messageDelegateRoot.replyToMsgId
+                            replySender: messageDelegateRoot.replySender
+                            replyPreview: messageDelegateRoot.replyPreview
+                            avatarSource: root.avatarForMessage(messageDelegateRoot.outgoingMessage)
+                            defaultAvatarSource: root.defaultAvatarForMessage(messageDelegateRoot.outgoingMessage)
+                        }
                     }
 
                     ScrollBar.vertical: ScrollBar {
