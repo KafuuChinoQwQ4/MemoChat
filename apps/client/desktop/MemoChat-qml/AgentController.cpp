@@ -18,6 +18,7 @@
 #include <QUrlQuery>
 #include <QSettings>
 #include <QJsonParseError>
+#include <QSet>
 
 namespace {
 constexpr auto kSettingsOrg = "MemoChat";
@@ -1919,23 +1920,33 @@ void AgentController::handleModelListRsp(ReqId id, const QString& res, ErrorCode
 
     _available_models.clear();
     bool currentModelAvailable = false;
+    QSet<QString> seenModels;
     for (const auto& m : models) {
         QJsonObject model = m.toObject();
-        if (model["model_type"].toString() == _current_model_backend &&
-            model["model_name"].toString() == _current_model_name) {
+        const QString modelType = model["model_type"].toString().trimmed();
+        const QString modelName = model["model_name"].toString().trimmed();
+        if (modelType.isEmpty() || modelName.isEmpty()) {
+            continue;
+        }
+        const QString dedupeKey = modelType + QStringLiteral(":") + modelName;
+        if (seenModels.contains(dedupeKey)) {
+            continue;
+        }
+        seenModels.insert(dedupeKey);
+        if (modelType == _current_model_backend && modelName == _current_model_name) {
             currentModelAvailable = true;
         }
         _available_models.append(model);
     }
-    if (!currentModelAvailable && models.isEmpty()) {
+    if (!currentModelAvailable && _available_models.isEmpty()) {
         _current_model_backend.clear();
         _current_model_name.clear();
         clearPersistedModelSelection();
         emit modelChanged();
-    } else if (!currentModelAvailable && !models.isEmpty()) {
+    } else if (!currentModelAvailable && !_available_models.isEmpty()) {
         QJsonObject fallback = root["default_model"].toObject();
         if (fallback.isEmpty()) {
-            fallback = models.first().toObject();
+            fallback = QJsonObject::fromVariantMap(_available_models.first().toMap());
         }
         const QString backend = fallback["model_type"].toString();
         const QString modelName = fallback["model_name"].toString();
