@@ -77,6 +77,30 @@ Window {
         return root.selfAvatar && root.selfAvatar.length > 0 ? root.selfAvatar : "qrc:/res/head_1.jpg"
     }
 
+    function messageSenderName(isOutgoing) {
+        return isOutgoing ? root.selfName : root.displayName
+    }
+
+    function assistantEventKey(event, turnId) {
+        if (turnId.length > 0) {
+            return turnId
+        }
+        if (root.pendingAssistantTurnId.length > 0) {
+            return root.pendingAssistantTurnId
+        }
+        const eventId = event && event.event_id ? String(event.event_id).trim() : ""
+        if (eventId.length > 0) {
+            return eventId
+        }
+        if (event && event.seq !== undefined && event.seq !== null) {
+            const seq = String(event.seq).trim()
+            if (seq.length > 0) {
+                return seq
+            }
+        }
+        return ""
+    }
+
     function refreshLive2DAvatar() {
         var nextAvatar = ""
         if (root.petAssetSettings && root.petAssetSettings.resolveLive2DAvatarUrl) {
@@ -196,8 +220,9 @@ Window {
         const audio = event.audio || {}
         const delta = (text.delta || speech.text_delta || event.speech_text || "").trim()
         const translation = (text.translation || event.speech_translation || speech.translation || "").trim()
-        const display = (text.display || delta || event.speech_text || "").trim()
+        const display = (text.display || delta || event.speech_display_text || event.speech_text || "").trim()
         const turnId = (event.turn_id || "").trim()
+        const eventKey = root.assistantEventKey(event, turnId)
         const isFinal = !!text.final
         const phase = (event.phase || "").trim()
         const hasContent = display.length > 0 || translation.length > 0 || phase === "error"
@@ -205,13 +230,13 @@ Window {
             return
         }
 
-        if (turnId.length === 0) {
+        if (eventKey.length === 0) {
             return
         }
-        if (root.pendingAssistantIndex < 0 || root.pendingAssistantTurnId !== turnId) {
+        if (root.pendingAssistantIndex < 0 || root.pendingAssistantTurnId !== eventKey) {
             messageModel.append({
                 "outgoing": false,
-                "turnId": turnId,
+                "turnId": eventKey,
                 "msgId": "pet-ai-" + Date.now() + "-" + Math.random().toString(16).slice(2),
                 "msgType": "text",
                 "content": display,
@@ -224,7 +249,7 @@ Window {
                 "audioState": audio.state || "idle"
             })
             root.pendingAssistantIndex = messageModel.count - 1
-            root.pendingAssistantTurnId = turnId
+            root.pendingAssistantTurnId = eventKey
         } else if (root.pendingAssistantIndex >= 0) {
             messageModel.setProperty(root.pendingAssistantIndex, "content", display)
             messageModel.setProperty(root.pendingAssistantIndex, "rawContent", display)
@@ -459,8 +484,8 @@ Window {
                 Layout.fillHeight: true
                 radius: 12
                 antialiasing: true
-                    color: Qt.rgba(1, 1, 1, 0.18)
-                    border.color: Qt.rgba(1, 1, 1, 0.42)
+                    color: Qt.rgba(1, 1, 1, 0.24)
+                    border.color: Qt.rgba(1, 1, 1, 0.50)
 
                 ListView {
                     id: messageList
@@ -479,8 +504,8 @@ Window {
                         rawContent: model.rawContent
                         translationText: model.translationText
                         fileName: model.fileName
-                        senderName: ""
-                        showOutgoingSenderName: false
+                        senderName: root.messageSenderName(root.isOutgoingMessage(model.outgoing))
+                        showOutgoingSenderName: true
                             showAvatar: true
                         showTimeDivider: false
                         timeDividerText: ""
