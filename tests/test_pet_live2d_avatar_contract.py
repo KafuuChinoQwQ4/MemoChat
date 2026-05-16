@@ -7,13 +7,14 @@ CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 
 PET_ASSET_SETTINGS_H = CLIENT_DIR / "PetAssetSettings.h"
 PET_ASSET_SETTINGS_CPP = CLIENT_DIR / "PetAssetSettings.cpp"
-LIVE2D_CORE_RENDERER_H = CLIENT_DIR / "Live2DCoreRenderer.h"
-LIVE2D_CORE_RENDERER_CPP = CLIENT_DIR / "Live2DCoreRenderer.cpp"
+LIVE2D_AVATAR_OPENGL_RENDERER_H = CLIENT_DIR / "Live2DAvatarOpenGLRenderer.h"
+LIVE2D_AVATAR_OPENGL_RENDERER_CPP = CLIENT_DIR / "Live2DAvatarOpenGLRenderer.cpp"
 PET_CHAT_WINDOW_QML = CLIENT_DIR / "qml/pet/PetChatWindow.qml"
 PET_WINDOW_QML = CLIENT_DIR / "qml/pet/PetWindow.qml"
 MAIN_QML = CLIENT_DIR / "qml/Main.qml"
 LINUX_MAIN_QML = CLIENT_DIR / "qml/linux/Main.qml"
 CHARACTER_PANE_QML = CLIENT_DIR / "qml/pet/Live2DCharacterPane.qml"
+MAIN_CPP = CLIENT_DIR / "main.cpp"
 
 
 def read(path: Path) -> str:
@@ -24,23 +25,29 @@ class PetLive2DAvatarContractTests(unittest.TestCase):
     def test_pet_asset_settings_derives_cached_live2d_avatar_from_model_package(self):
         header = read(PET_ASSET_SETTINGS_H)
         source = read(PET_ASSET_SETTINGS_CPP)
-        renderer_header = read(LIVE2D_CORE_RENDERER_H)
-        renderer_source = read(LIVE2D_CORE_RENDERER_CPP)
+        renderer_header = read(LIVE2D_AVATAR_OPENGL_RENDERER_H)
+        renderer_source = read(LIVE2D_AVATAR_OPENGL_RENDERER_CPP)
+        main_source = read(MAIN_CPP)
 
         self.assertIn("live2dAvatarUrl", header)
         self.assertIn("resolveLive2DAvatarUrl", header)
         self.assertIn("resolveLive2DAvatarUrl", source)
-        self.assertIn("Live2DCoreRenderer", source)
+        self.assertIn("Live2DAvatarOpenGLRenderer", source)
         self.assertIn("renderedLive2DAvatar", source)
         self.assertIn("modelTexturePaths", source)
         self.assertIn("packageImageCandidates", source)
         self.assertIn("cropHeadAvatar", source)
         self.assertIn("pet/live2d-avatars", source)
+        self.assertIn("memochat-live2d-avatar-opengl-v3", source)
+        self.assertIn("avatar_gl_", source)
         self.assertIn("FileReferences", source)
         self.assertIn("Textures", source)
         self.assertIn("QUrl::fromLocalFile", source)
-        self.assertIn("renderToImage", renderer_header)
-        self.assertIn("QImage Live2DCoreRenderer::renderToImage", renderer_source)
+        self.assertIn("renderAvatar", renderer_header)
+        self.assertIn("QImage Live2DAvatarOpenGLRenderer::renderAvatar", renderer_source)
+        self.assertIn("cropAvatarFrame", renderer_source)
+        self.assertIn("globalShareContext", renderer_source)
+        self.assertIn("AA_ShareOpenGLContexts", main_source)
 
     def test_pet_chat_window_uses_real_self_avatar_and_live2d_avatar_with_fixed_sides(self):
         chat = read(PET_CHAT_WINDOW_QML)
@@ -74,7 +81,8 @@ class PetLive2DAvatarContractTests(unittest.TestCase):
         self.assertIn("resolveLive2DAvatarUrl(root.modelJson, root.modelRoot)", pane)
         self.assertIn("onModelRootChanged: root.refreshCharacterAvatar()", pane)
         self.assertIn("onModelJsonChanged: root.refreshCharacterAvatar()", pane)
-        self.assertIn("source: root.characterAvatarSource", pane)
+        self.assertIn("imageSource: root.characterAvatarSource", pane)
+        self.assertIn("source: avatarPreview.imageSource", pane)
 
 
 if __name__ == "__main__":

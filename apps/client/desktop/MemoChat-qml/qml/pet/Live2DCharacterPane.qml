@@ -556,13 +556,11 @@ Rectangle {
                     border.color: Qt.rgba(1, 1, 1, 0.64)
                     clip: true
 
-                    Image {
-                        anchors.centerIn: parent
-                        width: 44
-                        height: 44
-                        source: root.characterAvatarSource
-                        fillMode: Image.PreserveAspectCrop
-                        mipmap: true
+                    AvatarPreviewImage {
+                        anchors.fill: parent
+                        anchors.margins: 4
+                        imageSource: root.characterAvatarSource
+                        fallbackInset: 8
                     }
                 }
 
@@ -675,13 +673,14 @@ Rectangle {
                             border.color: Qt.rgba(1, 1, 1, 0.62)
                             clip: true
 
-                            Image {
-                                anchors.centerIn: parent
-                                width: Math.min(parent.width - 30, 118)
+                            AvatarPreviewImage {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.top: parent.top
+                                anchors.topMargin: 9
+                                width: Math.min(parent.width - 18, parent.height - 72)
                                 height: width
-                                source: root.characterAvatarSource
-                                fillMode: Image.PreserveAspectCrop
-                                mipmap: true
+                                imageSource: root.characterAvatarSource
+                                fallbackInset: 18
                             }
 
                             Rectangle {
@@ -1390,6 +1389,35 @@ Rectangle {
         visible: false
         model: ["中文", "日语", "英语", "韩语", "法语", "西班牙语"]
         currentIndex: 0
+    }
+
+    component AvatarPreviewImage: Item {
+        id: avatarPreview
+        property string imageSource: ""
+        property int fallbackInset: 8
+
+        Image {
+            id: avatarImage
+            anchors.fill: parent
+            source: avatarPreview.imageSource
+            fillMode: Image.PreserveAspectCrop
+            sourceSize.width: Math.max(1, width * 2)
+            sourceSize.height: Math.max(1, height * 2)
+            cache: false
+            mipmap: true
+            visible: status === Image.Ready
+        }
+
+        Image {
+            anchors.fill: parent
+            anchors.margins: avatarPreview.fallbackInset
+            source: root.characterAvatarFallback
+            fillMode: Image.PreserveAspectFit
+            sourceSize.width: Math.max(1, width * 2)
+            sourceSize.height: Math.max(1, height * 2)
+            mipmap: true
+            visible: avatarImage.status !== Image.Ready
+        }
     }
 
     component StatusChip: Rectangle {
