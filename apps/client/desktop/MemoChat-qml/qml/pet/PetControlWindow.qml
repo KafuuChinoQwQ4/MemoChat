@@ -199,20 +199,6 @@ Window {
 
                         PetMenuButton {
                             Layout.fillWidth: true
-                            text: "陪我整理"
-                            enabled: root.petController
-                            onClicked: root.sendQuickText("陪我整理一下现在的思路")
-                        }
-
-                        PetMenuButton {
-                            Layout.fillWidth: true
-                            text: "清除气泡"
-                            enabled: root.petController
-                            onClicked: root.petController.clearSpeech()
-                        }
-
-                        PetMenuButton {
-                            Layout.fillWidth: true
                             text: "打断"
                             enabled: root.petController && root.petController.sessionId.length > 0
                             onClicked: root.petController.interrupt()
