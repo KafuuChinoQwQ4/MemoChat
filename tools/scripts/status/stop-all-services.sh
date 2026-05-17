@@ -3,23 +3,59 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
+ENV_FILE="${MEMOCHAT_ENV_FILE:-/root/.memochat-linux-env}"
+
+if [[ -f "$ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+fi
+
 RUNTIME_DIR="${MEMOCHAT_RUNTIME_DIR:-${PROJECT_ROOT}/infra/Memo_ops/runtime/services}"
 PID_DIR="${MEMOCHAT_PID_DIR:-${PROJECT_ROOT}/infra/Memo_ops/runtime/pids}"
 KILL_TIMEOUT="${MEMOCHAT_STOP_TIMEOUT:-8}"
+STOP_GPT_SOVITS_OVERRIDE=""
+GPT_SOVITS_PORT="${GPT_SOVITS_PORT:-9880}"
+GPT_SOVITS_ROOT="${GPT_SOVITS_ROOT:-/data/third_party/GPT-SoVITS}"
+GPT_SOVITS_PID_FILE="${PID_DIR}/GPT-SoVITS.pid"
 
 usage() {
     cat <<USAGE
-Usage: $0
+Usage: $0 [--skip-gpt-sovits]
 
 Stop Linux MemoChat backend service processes started by start-all-services.sh.
+GPT-SoVITS is stopped by default because start-all-services.sh starts it as a
+local WSL service. Pass --skip-gpt-sovits or set MEMOCHAT_STOP_GPT_SOVITS=0 to
+leave it running.
 Docker containers are intentionally left running.
 USAGE
 }
 
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    usage
-    exit 0
-fi
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --skip-gpt-sovits|--no-gpt-sovits)
+            STOP_GPT_SOVITS_OVERRIDE=0
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "[FAIL] Unknown argument: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+STOP_GPT_SOVITS="${STOP_GPT_SOVITS_OVERRIDE:-${MEMOCHAT_STOP_GPT_SOVITS:-1}}"
+
+is_truthy() {
+    case "${1,,}" in
+        1|true|yes|on) return 0 ;;
+        *) return 1 ;;
+    esac
+}
 
 port_pids() {
     local port="$1"
@@ -75,6 +111,24 @@ is_runtime_pid() {
     [[ "$cwd" == "${RUNTIME_DIR}"/* ]]
 }
 
+pid_cmdline() {
+    local pid="$1"
+    tr '\0' ' ' <"/proc/${pid}/cmdline" 2>/dev/null || true
+}
+
+is_gpt_sovits_pid() {
+    local pid="$1"
+    local cmdline=""
+    local cwd=""
+    cmdline="$(pid_cmdline "$pid")"
+    cwd="$(readlink "/proc/${pid}/cwd" 2>/dev/null || true)"
+    [[ "$cmdline" == *"api_v2.py"* ]] || return 1
+    if [[ "$cmdline" == *" -p ${GPT_SOVITS_PORT}"* || "$cmdline" == *" --port ${GPT_SOVITS_PORT}"* ]]; then
+        return 0
+    fi
+    [[ -n "$GPT_SOVITS_ROOT" && "$cwd" == "$GPT_SOVITS_ROOT"* ]]
+}
+
 stop_pid_file() {
     local pid_file="$1"
     local label="$2"
@@ -85,6 +139,23 @@ stop_pid_file() {
     pid="$(cat "$pid_file" 2>/dev/null || true)"
     if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1 && ! is_runtime_pid "$pid"; then
         echo "  [WARN] ${label}: pid ${pid} is not under MemoChat runtime; removing stale pid file"
+        rm -f -- "$pid_file"
+        return 0
+    fi
+    stop_pid "$pid" "$label"
+    rm -f -- "$pid_file"
+}
+
+stop_gpt_sovits_pid_file() {
+    local pid_file="$1"
+    local label="$2"
+    if [[ ! -f "$pid_file" ]]; then
+        return 0
+    fi
+    local pid
+    pid="$(cat "$pid_file" 2>/dev/null || true)"
+    if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1 && ! is_gpt_sovits_pid "$pid"; then
+        echo "  [WARN] ${label}: pid ${pid} is not GPT-SoVITS; removing stale pid file"
         rm -f -- "$pid_file"
         return 0
     fi
@@ -130,12 +201,53 @@ stop_by_ports() {
     done
 }
 
+stop_gpt_sovits() {
+    if ! is_truthy "$STOP_GPT_SOVITS"; then
+        echo "  [SKIP] GPT-SoVITS stop disabled"
+        return 0
+    fi
+
+    stop_gpt_sovits_pid_file "$GPT_SOVITS_PID_FILE" "GPT-SoVITS"
+
+    local seen=" "
+    local pid
+    while IFS= read -r pid; do
+        [[ -n "$pid" ]] || continue
+        if [[ "$seen" == *" ${pid} "* ]]; then
+            continue
+        fi
+        seen+="${pid} "
+        if is_gpt_sovits_pid "$pid"; then
+            stop_pid "$pid" "GPT-SoVITS:${GPT_SOVITS_PORT}"
+        else
+            echo "  [WARN] GPT-SoVITS:${GPT_SOVITS_PORT} pid=${pid} is not a GPT-SoVITS API process; skipped"
+        fi
+    done < <(port_pids "$GPT_SOVITS_PORT")
+
+    if command -v pgrep >/dev/null 2>&1; then
+        while IFS= read -r pid; do
+            [[ -n "$pid" ]] || continue
+            if [[ "$seen" == *" ${pid} "* ]]; then
+                continue
+            fi
+            seen+="${pid} "
+            if is_gpt_sovits_pid "$pid"; then
+                stop_pid "$pid" "GPT-SoVITS"
+            fi
+        done < <(pgrep -f "api_v2.py.*-p ${GPT_SOVITS_PORT}" 2>/dev/null || true)
+    fi
+}
+
 echo
 echo "============================================================"
 echo "  MemoChat Linux stop"
 echo "  RUNTIME_DIR: ${RUNTIME_DIR}"
 echo "  PID_DIR:     ${PID_DIR}"
 echo "============================================================"
+echo
+
+echo "[STEP] Stop GPT-SoVITS voice service"
+stop_gpt_sovits
 echo
 
 echo "[STEP] Stop services by PID files"

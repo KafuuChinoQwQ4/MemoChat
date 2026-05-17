@@ -17,6 +17,11 @@ Item {
     property bool debugPanelVisible: false
     property bool providerAvailable: false
     property string cameraCaptureStatus: cameraEnabled ? "摄像头本地捕捉" : "摄像头关闭"
+    property bool manualActionActive: false
+    property string manualExpression: "neutral"
+    property string manualMotion: "idle"
+    property string manualEmotion: "neutral"
+    property int manualActionSerial: 0
 
     signal dragRequested()
     signal controlsRequested(real sceneX, real sceneY)
@@ -70,6 +75,37 @@ Item {
         return root.cameraCaptureStatus.length > 0 ? root.cameraCaptureStatus : "等待摄像头状态"
     }
 
+    function applyLive2DAction(action) {
+        if (!action) {
+            return
+        }
+        var kind = action.kind || ""
+        var trigger = action.trigger || action.name || ""
+        if (trigger.length === 0) {
+            return
+        }
+        root.manualActionActive = true
+        root.manualActionSerial += 1
+        if (kind === "expression") {
+            root.manualExpression = trigger
+            root.manualEmotion = trigger
+        } else if (kind === "motion") {
+            root.manualMotion = trigger
+        } else {
+            root.manualExpression = trigger
+            root.manualMotion = trigger
+            root.manualEmotion = trigger
+        }
+    }
+
+    function clearManualLive2DAction() {
+        root.manualActionActive = false
+        root.manualExpression = "neutral"
+        root.manualMotion = "idle"
+        root.manualEmotion = "neutral"
+        root.manualActionSerial += 1
+    }
+
     function privacyColor() {
         if (root.localOnlyMode) {
             return "#b7a6b0"
@@ -85,13 +121,19 @@ Item {
         anchors.fill: parent
         modelRoot: root.petAssetSettings ? root.petAssetSettings.modelRoot : ""
         modelJson: root.petAssetSettings ? root.petAssetSettings.modelJson : ""
-        expression: root.petController ? root.petController.expression : "neutral"
-        motion: root.petController ? root.petController.motion : "idle"
-        emotion: root.petController ? root.petController.emotion : "neutral"
+        motionDirectory: root.petAssetSettings ? root.petAssetSettings.motionDirectory : ""
+        expressionDirectory: root.petAssetSettings ? root.petAssetSettings.expressionDirectory : ""
+        expression: root.manualActionActive ? root.manualExpression
+                                            : (root.petController ? root.petController.expression : "neutral")
+        motion: root.manualActionActive ? root.manualMotion
+                                        : (root.petController ? root.petController.motion : "idle")
+        emotion: root.manualActionActive ? root.manualEmotion
+                                         : (root.petController ? root.petController.emotion : "neutral")
         intensity: root.petController ? root.petController.intensity : 0.35
         gazeX: root.petController ? root.petController.gazeX : 0.5
         gazeY: root.petController ? root.petController.gazeY : 0.5
         lipSyncValue: root.petController ? root.petController.lipSyncValue : 0
+        actionSerial: root.manualActionSerial
     }
 
     Loader {

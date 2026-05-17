@@ -43,6 +43,7 @@ Window {
     property bool chatPositionPending: false
     property var petChatWindowRef: null
     property var petControlWindowRef: null
+    property var petSceneItem: null
 
     function scaledWindowWidth(value) {
         var factor = value === undefined ? root.scaleFactor : value
@@ -161,7 +162,8 @@ Window {
         if (!petControlWindowRef) {
             petControlWindowRef = petControlWindowComponent.createObject(null, {
                 "petController": root.petController,
-                "agentController": root.agentController
+                "agentController": root.agentController,
+                "petAssetSettings": root.petAssetSettings
             })
         }
         if (petControlWindowRef) {
@@ -231,6 +233,7 @@ Window {
         }
         petControlWindowRef.petController = root.petController
         petControlWindowRef.agentController = root.agentController
+        petControlWindowRef.petAssetSettings = root.petAssetSettings
         petControlWindowRef.alwaysOnTop = root.alwaysOnTop
         petControlWindowRef.clickThrough = root.clickThrough
         petControlWindowRef.debugPanelVisible = root.debugPanelVisible
@@ -242,6 +245,18 @@ Window {
         petControlWindowRef.debugRetentionEnabled = root.debugRetentionEnabled
         petControlWindowRef.voiceReplyEnabled = root.voiceReplyEnabled
         petControlWindowRef.providerAvailable = root.providerRuntimeAvailable()
+    }
+
+    function applyLive2DAction(action) {
+        if (petSceneItem && petSceneItem.applyLive2DAction) {
+            petSceneItem.applyLive2DAction(action)
+        }
+    }
+
+    function clearManualLive2DAction() {
+        if (petSceneItem && petSceneItem.clearManualLive2DAction) {
+            petSceneItem.clearManualLive2DAction()
+        }
     }
 
     function providerRuntimeAvailable() {
@@ -368,6 +383,7 @@ Window {
     }
 
     PetScene {
+        id: petScene
         anchors.fill: parent
         petController: root.petController
         clickThrough: root.clickThrough
@@ -385,6 +401,7 @@ Window {
         onControlsRequested: root.openControlWindow()
         onLocalOnlyModeToggled: function(value) { root.setLocalOnlyMode(value) }
         onDebugRetentionToggled: function(value) { root.debugRetentionEnabled = value; root.syncControlWindowState() }
+        Component.onCompleted: root.petSceneItem = petScene
     }
 
     Component {
@@ -415,6 +432,8 @@ Window {
             onLocalOnlyModeToggled: function(value) { root.setLocalOnlyMode(value) }
             onDebugRetentionToggled: function(value) { root.debugRetentionEnabled = value; root.syncControlWindowState() }
             onVoiceReplyToggled: function(value) { root.voiceReplyEnabled = value; root.syncControlWindowState() }
+            onLive2DActionRequested: function(action) { root.applyLive2DAction(action) }
+            onLive2DAutoRequested: root.clearManualLive2DAction()
         }
     }
 

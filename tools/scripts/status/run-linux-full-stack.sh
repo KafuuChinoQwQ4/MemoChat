@@ -15,6 +15,7 @@ RUN_BUILD=1
 RUN_AI_BUILD=1
 RUN_DEPLOY=1
 RUN_BACKEND=1
+RUN_GPT_SOVITS=1
 CLIENT_DIAGNOSE=0
 APP_ARGS=()
 
@@ -29,6 +30,7 @@ Options:
   --skip-ai-build    Skip AI Orchestrator docker compose rebuild.
   --skip-deploy      Skip service deploy.
   --skip-backend     Skip backend service startup.
+  --skip-gpt-sovits  Do not start the local GPT-SoVITS voice service.
   --no-client        Do not launch MemoChatQml after backend startup.
   --client-diagnose  Print WSLg/Qt/client diagnostics instead of launching.
   --client-exe PATH  Launch a specific MemoChatQml executable.
@@ -38,7 +40,7 @@ Options:
 Environment overrides:
   MEMOCHAT_ENV_FILE, MEMOCHAT_CMAKE_PRESET, MEMOCHAT_BUILD_DIR,
   MEMOCHAT_BUILD_BIN, MEMOCHAT_BUILD_PARALLEL, MEMOCHAT_AI_COMPOSE_FILE,
-  MEMOCHAT_CLIENT_EXE.
+  MEMOCHAT_CLIENT_EXE, MEMOCHAT_START_GPT_SOVITS.
 USAGE
 }
 
@@ -58,6 +60,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-backend)
             RUN_BACKEND=0
+            shift
+            ;;
+        --skip-gpt-sovits|--no-gpt-sovits)
+            RUN_GPT_SOVITS=0
             shift
             ;;
         --no-client)
@@ -117,6 +123,10 @@ fi
 
 cd -- "$PROJECT_ROOT"
 CLIENT_EXE="$(project_path "$CLIENT_EXE")"
+DISPLAY_GPT_SOVITS="$RUN_GPT_SOVITS"
+if [[ "$RUN_GPT_SOVITS" -eq 1 && "${MEMOCHAT_START_GPT_SOVITS:-}" == "0" ]]; then
+    DISPLAY_GPT_SOVITS=0
+fi
 
 echo "============================================================"
 echo "  MemoChat Linux full-stack launcher"
@@ -125,6 +135,7 @@ echo "  PRESET:           ${PRESET}"
 echo "  BUILD_BIN:        ${BUILD_BIN}"
 echo "  BUILD_PARALLEL:   ${BUILD_PARALLEL}"
 echo "  AI_COMPOSE_FILE:  ${AI_COMPOSE_FILE}"
+echo "  GPT_SOVITS:       ${DISPLAY_GPT_SOVITS}"
 echo "  CLIENT_EXE:       ${CLIENT_EXE}"
 echo "============================================================"
 
@@ -151,7 +162,11 @@ else
 fi
 
 if [[ "$RUN_BACKEND" -eq 1 ]]; then
-    run_step "Start backend services" "${SCRIPT_DIR}/start-all-services.sh" --no-deploy
+    start_backend_args=("${SCRIPT_DIR}/start-all-services.sh" --no-deploy)
+    if [[ "$RUN_GPT_SOVITS" -eq 0 ]]; then
+        start_backend_args+=(--skip-gpt-sovits)
+    fi
+    run_step "Start backend services" "${start_backend_args[@]}"
 else
     echo
     echo "[SKIP] Backend startup"
