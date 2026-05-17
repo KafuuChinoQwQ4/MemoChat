@@ -88,6 +88,75 @@ class PetContractTests(unittest.TestCase):
         self.assertFalse(payload["privacy"]["cloud_vision_used"])
         self.assertEqual(payload["privacy"]["retention"], "ephemeral")
 
+    def test_visual_layer_fields_survive_observation_and_control_event_contracts(self):
+        observation = PetObservation.from_dict(
+            {
+                "type": "pet.observation",
+                "session_id": "pet-vision",
+                "vision": {
+                    "enabled": True,
+                    "mode": "mediapipe_face_landmarker",
+                    "face_present": True,
+                    "attention": "user_face",
+                    "expression": "smile",
+                    "confidence": "1.25",
+                    "pose": {"brightness": 0.42, "face_confidence": 0.73},
+                    "head_pose": {"yaw": -0.12, "pitch": 0.04, "roll": 0.02},
+                    "blendshapes": {"jawOpen": 0.18, "mouthSmileLeft": 0.72},
+                    "scene": {
+                        "lighting": "dim",
+                        "brightness": 0.42,
+                        "summary": "画面里有杯子和键盘。",
+                        "object_labels": ["cup", "keyboard"],
+                        "object_count": 2,
+                    },
+                    "objects": [{"label": "cup", "score": 0.81}, "keyboard"],
+                    "gesture": "none",
+                    "source": "uploaded_frame",
+                    "frame": {"width": 320, "height": 180},
+                    "client_frame": {"width": 640, "height": 360},
+                    "frame_mime": "image/jpeg",
+                    "captured_at_ms": "123456",
+                },
+                "privacy": {"raw_frame_sent": False, "raw_audio_recorded": False},
+            }
+        )
+
+        payload = observation.to_dict()
+
+        self.assertEqual(payload["vision"]["mode"], "mediapipe_face_landmarker")
+        self.assertEqual(payload["vision"]["confidence"], 1.0)
+        self.assertEqual(payload["vision"]["head_pose"]["yaw"], -0.12)
+        self.assertEqual(payload["vision"]["blendshapes"]["jawOpen"], 0.18)
+        self.assertEqual(payload["vision"]["scene"]["lighting"], "dim")
+        self.assertEqual(payload["vision"]["scene"]["summary"], "画面里有杯子和键盘。")
+        self.assertEqual(payload["vision"]["scene"]["object_labels"], ["cup", "keyboard"])
+        self.assertEqual(payload["vision"]["objects"][0]["label"], "cup")
+        self.assertEqual(payload["vision"]["source"], "uploaded_frame")
+        self.assertEqual(payload["vision"]["frame"], {"width": 320, "height": 180})
+        self.assertEqual(payload["vision"]["client_frame"], {"width": 640, "height": 360})
+        self.assertEqual(payload["vision"]["frame_mime"], "image/jpeg")
+        self.assertEqual(payload["vision"]["captured_at_ms"], 123456)
+
+        event = PetControlEvent(
+            session_id="pet-vision",
+            seq=1,
+            timestamp_ms=123,
+            vision=payload["vision"],
+            safety=PetSafety(camera_used=True, vision_detail="mediapipe_face_landmarker"),
+        )
+        event_payload = event.to_dict()
+
+        self.assertEqual(event_payload["vision"]["mode"], "mediapipe_face_landmarker")
+        self.assertEqual(event_payload["vision"]["confidence"], 1.0)
+        self.assertEqual(event_payload["vision"]["head_pose"]["pitch"], 0.04)
+        self.assertEqual(event_payload["vision"]["blendshapes"]["mouthSmileLeft"], 0.72)
+        self.assertEqual(event_payload["vision"]["scene"]["brightness"], 0.42)
+        self.assertEqual(event_payload["vision"]["scene"]["summary"], "画面里有杯子和键盘。")
+        self.assertEqual(event_payload["vision"]["objects"][1], "keyboard")
+        self.assertTrue(event_payload["privacy"]["camera_used"])
+        self.assertEqual(event_payload["safety"]["vision_detail"], "mediapipe_face_landmarker")
+
     def test_control_event_tolerates_missing_or_invalid_voice_metadata_defaults(self):
         event = PetControlEvent(
             session_id="pet-test",

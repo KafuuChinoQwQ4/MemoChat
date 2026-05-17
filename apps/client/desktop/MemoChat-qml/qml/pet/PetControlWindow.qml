@@ -80,6 +80,59 @@ Window {
         return status.length > 0 ? status : (phase.length > 0 ? phase : "桌宠")
     }
 
+    function modelProviderAvailable() {
+        if (root.providerAvailable) {
+            return true
+        }
+        if (root.currentModel.length > 0 || root.availableModels.length > 0) {
+            return true
+        }
+        return root.apiProviderStatus.indexOf("已接入") >= 0
+    }
+
+    function cloudVisionRuntimeEnabled() {
+        return root.cloudVisionEnabled && !root.localOnlyMode && root.modelProviderAvailable()
+    }
+
+    function cameraDiagnosticText() {
+        if (!root.cameraEnabled) {
+            return "摄像头关闭"
+        }
+        return root.cameraCaptureStatus.length > 0 ? root.cameraCaptureStatus : "等待摄像头状态"
+    }
+
+    function cloudVisionDiagnosticText() {
+        if (root.localOnlyMode) {
+            return "云视觉被本地优先锁定"
+        }
+        if (!root.cloudVisionEnabled) {
+            return "云视觉关闭"
+        }
+        if (!root.modelProviderAvailable()) {
+            return "云视觉等待 AI 提供方"
+        }
+        return "云视觉已授权"
+    }
+
+    function retentionDiagnosticText() {
+        return root.debugRetentionEnabled ? "调试保留开启" : "原始帧不保留"
+    }
+
+    function requestLocalOnlyMode(checked) {
+        if (checked && root.cloudVisionEnabled) {
+            root.cloudVisionToggled(false)
+        }
+        root.localOnlyModeToggled(checked)
+    }
+
+    function requestCloudVision(checked) {
+        if (checked && (root.localOnlyMode || !root.modelProviderAvailable())) {
+            root.cloudVisionToggled(false)
+            return
+        }
+        root.cloudVisionToggled(checked)
+    }
+
     function sendQuickText(text) {
         if (!root.petController || text.length === 0) {
             return
@@ -251,15 +304,16 @@ Window {
                     OptionSwitch {
                         Layout.fillWidth: true
                         text: "云视觉"
-                        checked: root.cloudVisionEnabled
-                        onToggled: function(checked) { root.cloudVisionToggled(checked) }
+                        enabled: !root.localOnlyMode && root.modelProviderAvailable()
+                        checked: root.cloudVisionRuntimeEnabled()
+                        onToggled: function(checked) { root.requestCloudVision(checked) }
                     }
 
                     OptionSwitch {
                         Layout.fillWidth: true
                         text: "本地优先"
                         checked: root.localOnlyMode
-                        onToggled: function(checked) { root.localOnlyModeToggled(checked) }
+                        onToggled: function(checked) { root.requestLocalOnlyMode(checked) }
                     }
 
                     OptionSwitch {
@@ -282,6 +336,57 @@ Window {
                         text: "调试保留"
                         checked: root.debugRetentionEnabled
                         onToggled: function(checked) { root.debugRetentionToggled(checked) }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: privacyDiagnostics.implicitHeight + 18
+                        radius: 8
+                        antialiasing: true
+                        color: Qt.rgba(0.45, 0.70, 0.73, 0.10)
+                        border.color: Qt.rgba(0.45, 0.70, 0.73, 0.24)
+
+                        ColumnLayout {
+                            id: privacyDiagnostics
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.margins: 9
+                            spacing: 4
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: "视觉隐私"
+                                color: "#4b3042"
+                                font.pixelSize: 12
+                                font.bold: true
+                                elide: Text.ElideRight
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: root.cameraDiagnosticText()
+                                color: "#6a7b92"
+                                font.pixelSize: 11
+                                elide: Text.ElideRight
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: root.cloudVisionDiagnosticText()
+                                color: root.cloudVisionRuntimeEnabled() ? "#4d7f5c" : "#8f7c88"
+                                font.pixelSize: 11
+                                elide: Text.ElideRight
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: root.retentionDiagnosticText()
+                                color: root.debugRetentionEnabled ? "#b46d63" : "#6a7b92"
+                                font.pixelSize: 11
+                                elide: Text.ElideRight
+                            }
+                        }
                     }
 
                     ColumnLayout {
@@ -531,6 +636,7 @@ Window {
         property alias checked: optionSwitch.checked
         signal toggled(bool checked)
         spacing: 8
+        opacity: enabled ? 1.0 : 0.45
 
         Label {
             Layout.fillWidth: true

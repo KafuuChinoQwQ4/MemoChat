@@ -295,6 +295,7 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("Qt${QT_VERSION_MAJOR}::TextToSpeech", cmake)
         for token in (
             "Q_INVOKABLE void captureVisionFrame",
+            "Q_INVOKABLE bool captureVisionVideoFrame",
             "Q_INVOKABLE QString nextVisionCaptureFilePath",
             "Q_INVOKABLE void captureVisionFrameFile",
         ):
@@ -306,6 +307,8 @@ class PetQmlContractTests(unittest.TestCase):
             "frame_width",
             "frame_height",
             "local_frame_upload",
+            "qt_video_sink",
+            "live_frame_upload",
         ):
             self.assertIn(token, source)
         self.assertIn("PetCameraCapture.qml", scene)
@@ -314,12 +317,70 @@ class PetQmlContractTests(unittest.TestCase):
             "MediaDevices",
             "Camera",
             "CaptureSession",
+            "readonly property bool cameraAvailable",
+            "mediaDevices.videoInputs.length",
+            "onVideoInputsChanged",
+            "未检测到摄像头",
+            "等待桌宠会话",
+            "active: root.cameraEnabled && root.cameraAvailable",
+            "videoOutput.videoSink",
+            "onVideoFrameChanged",
+            "property var liveVideoFrame: null",
+            "captureVisionVideoFrame",
+            "typeof root.petController.captureVisionVideoFrame === \"function\"",
             "ImageCapture",
             "VideoOutput",
             "captureToFile",
             "captureVisionFrameFile",
         ):
             self.assertIn(token, camera_capture)
+
+    def test_pet_vision_privacy_controls_have_guardrails_and_diagnostics(self):
+        control = PET_CONTROL_WINDOW_QML.read_text(encoding="utf-8")
+        scene = PET_SCENE_QML.read_text(encoding="utf-8")
+        window = PET_WINDOW_QML.read_text(encoding="utf-8")
+
+        for token in (
+            "function modelProviderAvailable",
+            "function cloudVisionRuntimeEnabled",
+            "function requestCloudVision",
+            "function requestLocalOnlyMode",
+            "root.cloudVisionToggled(false)",
+            "enabled: !root.localOnlyMode && root.modelProviderAvailable()",
+            "checked: root.cloudVisionRuntimeEnabled()",
+            "视觉隐私",
+            "root.cameraDiagnosticText()",
+            "root.cloudVisionDiagnosticText()",
+            "root.retentionDiagnosticText()",
+            "原始帧不保留",
+        ):
+            self.assertIn(token, control)
+
+        for token in (
+            "function providerRuntimeAvailable",
+            "function enforceVisionPrivacy",
+            "function setCloudVisionEnabled",
+            "function setLocalOnlyMode",
+            "function applyAssetPrivacySettings",
+            "root.petAssetSettings.cameraEnabled",
+            "root.petAssetSettings.cloudVisionEnabled",
+            "root.providerRuntimeAvailable()",
+            "onModelChanged",
+            "onModelsChanged",
+            "onModelStateChanged",
+            "root.setCloudVisionEnabled(value)",
+            "root.setLocalOnlyMode(value)",
+        ):
+            self.assertIn(token, window)
+
+        for token in (
+            "云视觉 本地锁定",
+            "云视觉 等待提供方",
+            "function visionDiagnosticText",
+            "root.cameraCaptureStatus = item.statusText",
+            "height: 118",
+        ):
+            self.assertIn(token, scene)
 
     def test_pet_window_is_transparent_model_first_and_resources_remain_registered(self):
         window = PET_WINDOW_QML.read_text(encoding="utf-8")
