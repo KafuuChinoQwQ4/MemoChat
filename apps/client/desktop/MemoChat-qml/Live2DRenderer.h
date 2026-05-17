@@ -17,6 +17,7 @@ struct Live2DVisualState
     qreal gazeY = 0.5;
     qreal lipSyncValue = 0.0;
     qreal idlePhase = 0.0;
+    int actionSerial = 0;
 };
 
 class Live2DRenderer

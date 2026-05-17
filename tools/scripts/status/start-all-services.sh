@@ -9,13 +9,19 @@ PID_DIR="${MEMOCHAT_PID_DIR:-${PROJECT_ROOT}/infra/Memo_ops/runtime/pids}"
 ENV_FILE="${MEMOCHAT_ENV_FILE:-/root/.memochat-linux-env}"
 WAIT_SECONDS=16
 AUTO_DEPLOY=1
+START_GPT_SOVITS_OVERRIDE=""
+GPT_SOVITS_WAIT_SECONDS_OVERRIDE=""
 
 usage() {
     cat <<USAGE
-Usage: $0 [--no-deploy] [--wait-seconds N]
+Usage: $0 [--no-deploy] [--wait-seconds N] [--skip-gpt-sovits] [--gpt-sovits-wait-seconds N]
 
 Start Linux MemoChat backend services from:
   ${RUNTIME_DIR}
+
+GPT-SoVITS is started as a local WSL service by default so AIOrchestrator can
+reach http://host.docker.internal:9880. Set MEMOCHAT_START_GPT_SOVITS=0 or pass
+--skip-gpt-sovits to skip it.
 
 Docker dependencies are not started by this script. Start them separately first.
 USAGE
@@ -29,6 +35,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --wait-seconds)
             WAIT_SECONDS="$2"
+            shift 2
+            ;;
+        --skip-gpt-sovits|--no-gpt-sovits)
+            START_GPT_SOVITS_OVERRIDE=0
+            shift
+            ;;
+        --gpt-sovits-wait-seconds)
+            GPT_SOVITS_WAIT_SECONDS_OVERRIDE="$2"
             shift 2
             ;;
         -h|--help)
@@ -50,8 +64,24 @@ fi
 
 export MEMOCHAT_ENABLE_KAFKA="${MEMOCHAT_ENABLE_KAFKA:-1}"
 export MEMOCHAT_ENABLE_RABBITMQ="${MEMOCHAT_ENABLE_RABBITMQ:-1}"
+START_GPT_SOVITS="${START_GPT_SOVITS_OVERRIDE:-${MEMOCHAT_START_GPT_SOVITS:-1}}"
+GPT_SOVITS_PORT="${GPT_SOVITS_PORT:-9880}"
+GPT_SOVITS_HOST="${GPT_SOVITS_HOST:-0.0.0.0}"
+GPT_SOVITS_API_URL="${GPT_SOVITS_API_URL:-http://127.0.0.1:${GPT_SOVITS_PORT}}"
+GPT_SOVITS_START_SCRIPT="${GPT_SOVITS_START_SCRIPT:-${PROJECT_ROOT}/tools/scripts/pet/start_gpt_sovits_api_wsl.sh}"
+GPT_SOVITS_WAIT_SECONDS="${GPT_SOVITS_WAIT_SECONDS_OVERRIDE:-${MEMOCHAT_GPT_SOVITS_WAIT_SECONDS:-${GPT_SOVITS_WAIT_SECONDS:-180}}}"
+GPT_SOVITS_PID_FILE="${PID_DIR}/GPT-SoVITS.pid"
+GPT_SOVITS_LOG_FILE="${GPT_SOVITS_LOG_FILE:-${LOG_DIR}/GPT-SoVITS_api.log}"
+GPT_SOVITS_LOG_DIR="${GPT_SOVITS_LOG_DIR:-$(dirname -- "$GPT_SOVITS_LOG_FILE")}"
 
-mkdir -p -- "$LOG_DIR" "$PID_DIR"
+mkdir -p -- "$LOG_DIR" "$PID_DIR" "$GPT_SOVITS_LOG_DIR"
+
+is_truthy() {
+    case "${1,,}" in
+        1|true|yes|on) return 0 ;;
+        *) return 1 ;;
+    esac
+}
 
 port_listening() {
     local port="$1"
@@ -67,6 +97,87 @@ port_listening() {
         return $?
     fi
     return 1
+}
+
+port_pid() {
+    local port="$1"
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltnpH 2>/dev/null |
+            awk -v suffix=":${port}" '
+                index($4, suffix) == length($4) - length(suffix) + 1 { print }
+            ' |
+            sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' |
+            head -n 1
+        return 0
+    fi
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -tiTCP:"${port}" -sTCP:LISTEN 2>/dev/null | head -n 1
+        return 0
+    fi
+    return 0
+}
+
+port_listen_addresses() {
+    local port="$1"
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltnH 2>/dev/null |
+            awk -v suffix=":${port}" '
+                index($4, suffix) == length($4) - length(suffix) + 1 { print $4 }
+            '
+    fi
+}
+
+pid_cmdline() {
+    local pid="$1"
+    tr '\0' ' ' <"/proc/${pid}/cmdline" 2>/dev/null || true
+}
+
+is_gpt_sovits_pid() {
+    local pid="$1"
+    local cmdline=""
+    cmdline="$(pid_cmdline "$pid")"
+    [[ "$cmdline" == *"api_v2.py"* ]]
+}
+
+gpt_sovits_loopback_only() {
+    local has_loopback=0
+    local has_wildcard=0
+    local address
+    while IFS= read -r address; do
+        case "$address" in
+            127.0.0.1:${GPT_SOVITS_PORT}|\[::1\]:${GPT_SOVITS_PORT})
+                has_loopback=1
+                ;;
+            0.0.0.0:${GPT_SOVITS_PORT}|\[::\]:${GPT_SOVITS_PORT}|\*:${GPT_SOVITS_PORT})
+                has_wildcard=1
+                ;;
+        esac
+    done < <(port_listen_addresses "$GPT_SOVITS_PORT")
+    [[ "$has_loopback" -eq 1 && "$has_wildcard" -eq 0 ]]
+}
+
+stop_gpt_sovits_for_rebind() {
+    local pid
+    pid="$(port_pid "$GPT_SOVITS_PORT")"
+    if [[ -z "$pid" ]]; then
+        return 0
+    fi
+    if ! is_gpt_sovits_pid "$pid"; then
+        echo "  [WARN] Port ${GPT_SOVITS_PORT} is loopback-only but pid=${pid} is not GPT-SoVITS; skipped restart"
+        return 1
+    fi
+
+    echo "  [*] Restarting GPT-SoVITS because it is bound only to loopback"
+    kill "$pid" >/dev/null 2>&1 || true
+    local waited=0
+    while kill -0 "$pid" >/dev/null 2>&1 && (( waited < 8 )); do
+        sleep 1
+        waited=$((waited + 1))
+    done
+    if kill -0 "$pid" >/dev/null 2>&1; then
+        kill -9 "$pid" >/dev/null 2>&1 || true
+    fi
+    rm -f -- "$GPT_SOVITS_PID_FILE"
 }
 
 sanitize_name() {
@@ -112,6 +223,88 @@ wait_for_port() {
     done
     echo "  [WARN] ${service_name} did not bind port ${port} yet; check logs"
     return 0
+}
+
+gpt_sovits_ready() {
+    curl -fsS "${GPT_SOVITS_API_URL%/}/docs" >/dev/null 2>&1
+}
+
+wait_for_gpt_sovits() {
+    local waited=0
+    while (( waited < GPT_SOVITS_WAIT_SECONDS )); do
+        if gpt_sovits_ready; then
+            echo "  [OK] GPT-SoVITS ready at ${GPT_SOVITS_API_URL}"
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    echo "  [WARN] GPT-SoVITS did not become ready at ${GPT_SOVITS_API_URL}; check logs"
+    return 0
+}
+
+remember_gpt_sovits_pid_from_port() {
+    local pid
+    pid="$(port_pid "$GPT_SOVITS_PORT")"
+    if [[ -n "$pid" ]]; then
+        echo "$pid" > "$GPT_SOVITS_PID_FILE"
+    fi
+}
+
+start_gpt_sovits() {
+    if ! is_truthy "$START_GPT_SOVITS"; then
+        echo "  [SKIP] GPT-SoVITS startup disabled"
+        return 0
+    fi
+
+    if gpt_sovits_loopback_only; then
+        stop_gpt_sovits_for_rebind || return 0
+    fi
+
+    if gpt_sovits_ready; then
+        remember_gpt_sovits_pid_from_port
+        echo "  [OK] GPT-SoVITS already ready at ${GPT_SOVITS_API_URL}"
+        return 0
+    fi
+
+    if pid_running "$GPT_SOVITS_PID_FILE"; then
+        echo "  [WARN] GPT-SoVITS already running with pid $(cat "$GPT_SOVITS_PID_FILE"); waiting for readiness"
+        wait_for_gpt_sovits
+        return 0
+    fi
+
+    if port_listening "$GPT_SOVITS_PORT"; then
+        remember_gpt_sovits_pid_from_port
+        echo "  [WARN] GPT-SoVITS port ${GPT_SOVITS_PORT} is listening but ${GPT_SOVITS_API_URL}/docs is not ready"
+        wait_for_gpt_sovits
+        return 0
+    fi
+
+    if [[ ! -f "$GPT_SOVITS_START_SCRIPT" ]]; then
+        echo "  [WARN] GPT-SoVITS start script missing: ${GPT_SOVITS_START_SCRIPT}"
+        return 0
+    fi
+
+    local out_log="${LOG_DIR}/GPT-SoVITS_out.log"
+    local err_log="${LOG_DIR}/GPT-SoVITS_err.log"
+    : > "$out_log"
+    : > "$err_log"
+
+    echo "  [*] Starting GPT-SoVITS on ${GPT_SOVITS_HOST}:${GPT_SOVITS_PORT}..."
+    (
+        cd "$PROJECT_ROOT"
+        exec nohup env \
+            GPT_SOVITS_HOST="$GPT_SOVITS_HOST" \
+            GPT_SOVITS_PORT="$GPT_SOVITS_PORT" \
+            GPT_SOVITS_LOG_DIR="$GPT_SOVITS_LOG_DIR" \
+            GPT_SOVITS_LOG_FILE="$GPT_SOVITS_LOG_FILE" \
+            bash "$GPT_SOVITS_START_SCRIPT"
+    ) >>"$out_log" 2>>"$err_log" </dev/null &
+
+    local pid=$!
+    echo "$pid" > "$GPT_SOVITS_PID_FILE"
+    echo "  [OK] GPT-SoVITS started pid=${pid}"
+    wait_for_gpt_sovits
 }
 
 launch_svc() {
@@ -169,6 +362,10 @@ echo "  RUNTIME_DIR:  ${RUNTIME_DIR}"
 echo "  LOG_DIR:      ${LOG_DIR}"
 echo "  PID_DIR:      ${PID_DIR}"
 echo "============================================================"
+echo
+
+echo "[STEP] Start GPT-SoVITS voice service"
+start_gpt_sovits
 echo
 
 ensure_runtime

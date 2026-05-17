@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QDirIterator>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -10,6 +11,7 @@
 #include <QCryptographicHash>
 #include <QSet>
 #include <QUrl>
+#include <QVariantMap>
 #include <algorithm>
 
 namespace {
@@ -21,6 +23,11 @@ constexpr auto kStatusReady = "ready";
 bool isQrcPath(const QString &path)
 {
     return path.startsWith(QStringLiteral(":/")) || path.startsWith(QStringLiteral("qrc:/"));
+}
+
+QString normalizedKey(QString value)
+{
+    return value.trimmed().toLower();
 }
 
 bool fileExists(const QString &path)
@@ -159,6 +166,135 @@ void appendMissingDirectoryWarning(QStringList &warnings, const QString &label, 
         warnings.append(QStringLiteral("%1不存在：%2").arg(label, input));
     }
 }
+
+QString actionDisplayName(const QString &name, const QString &file, const QString &fallback)
+{
+    const QString trimmedName = name.trimmed();
+    if (!trimmedName.isEmpty()) {
+        return trimmedName;
+    }
+    const QString fileName = QFileInfo(file).fileName();
+    const QString lowerName = fileName.toLower();
+    QString baseName;
+    if (lowerName.endsWith(QStringLiteral(".motion3.json"))) {
+        baseName = fileName.left(fileName.size() - QStringLiteral(".motion3.json").size());
+    } else if (lowerName.endsWith(QStringLiteral(".exp3.json"))) {
+        baseName = fileName.left(fileName.size() - QStringLiteral(".exp3.json").size());
+    } else {
+        baseName = QFileInfo(file).completeBaseName();
+    }
+    baseName = baseName.trimmed();
+    if (!baseName.isEmpty()) {
+        return baseName;
+    }
+    return fallback.trimmed();
+}
+
+QString actionFileKey(const QString &kind, const QString &file)
+{
+    const QString cleaned = file.trimmed();
+    if (cleaned.isEmpty()) {
+        return {};
+    }
+    QString normalizedFile;
+    if (cleaned.startsWith(QStringLiteral("qrc:/"))) {
+        normalizedFile = QStringLiteral("qrc:") + QUrl(cleaned).path();
+    } else if (cleaned.startsWith(QStringLiteral(":/"))) {
+        normalizedFile = QDir::cleanPath(cleaned);
+    } else if (QFileInfo(cleaned).isAbsolute()) {
+        normalizedFile = QDir::cleanPath(QFileInfo(cleaned).absoluteFilePath());
+    } else {
+        normalizedFile = QDir::cleanPath(cleaned);
+    }
+    return kind + QStringLiteral("|file|") + normalizedKey(normalizedFile);
+}
+
+void appendActionItem(QVariantList &items,
+                      QSet<QString> &actionKeys,
+                      QSet<QString> &actionFiles,
+                      const QString &kind,
+                      const QString &name,
+                      const QString &trigger,
+                      const QString &group,
+                      int index,
+                      const QString &file,
+                      const QString &source)
+{
+    const QString cleanKind = kind.trimmed();
+    QString cleanName = name.trimmed();
+    QString cleanTrigger = trigger.trimmed();
+    if (cleanTrigger.isEmpty()) {
+        cleanTrigger = cleanName;
+    }
+    if (cleanName.isEmpty()) {
+        cleanName = cleanTrigger;
+    }
+    if (cleanKind.isEmpty() || cleanName.isEmpty() || cleanTrigger.isEmpty()) {
+        return;
+    }
+
+    const QString fileKey = actionFileKey(cleanKind, file);
+    if (!fileKey.isEmpty()) {
+        if (actionFiles.contains(fileKey)) {
+            return;
+        }
+    } else {
+        const QString itemKey = cleanKind + QLatin1Char('|') + normalizedKey(cleanTrigger);
+        if (actionKeys.contains(itemKey)) {
+            return;
+        }
+    }
+
+    QVariantMap item;
+    item[QStringLiteral("kind")] = cleanKind;
+    item[QStringLiteral("name")] = cleanName;
+    item[QStringLiteral("trigger")] = cleanTrigger;
+    item[QStringLiteral("group")] = group.trimmed();
+    item[QStringLiteral("index")] = index;
+    item[QStringLiteral("file")] = file.trimmed();
+    item[QStringLiteral("source")] = source.trimmed();
+    items.append(item);
+    if (fileKey.isEmpty()) {
+        actionKeys.insert(cleanKind + QLatin1Char('|') + normalizedKey(cleanTrigger));
+    } else {
+        actionFiles.insert(fileKey);
+    }
+}
+
+void appendDirectoryActionItems(QVariantList &items,
+                                QSet<QString> &actionKeys,
+                                QSet<QString> &actionFiles,
+                                const QString &kind,
+                                const QString &directoryPath,
+                                const QStringList &nameFilters)
+{
+    if (directoryPath.isEmpty() || isQrcPath(directoryPath)) {
+        return;
+    }
+    const QDir dir(directoryPath);
+    if (!dir.exists()) {
+        return;
+    }
+
+    QDirIterator it(dir.absolutePath(),
+                    nameFilters,
+                    QDir::Files | QDir::NoDotAndDotDot,
+                    QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        const QString path = it.next();
+        const QString name = actionDisplayName({}, path, {});
+        appendActionItem(items,
+                         actionKeys,
+                         actionFiles,
+                         kind,
+                         name,
+                         name,
+                         {},
+                         -1,
+                         path,
+                         QStringLiteral("directory"));
+    }
+}
 } // namespace
 
 Live2DAsset::Live2DAsset(QObject *parent)
@@ -224,6 +360,9 @@ void Live2DAsset::validate()
     int motionCount = 0;
     int expressionCount = 0;
     int textureCount = 0;
+    QVariantList actionItems;
+    QSet<QString> actionKeys;
+    QSet<QString> actionFiles;
     QString physicsFile;
     QString poseFile;
     QString userDataFile;
@@ -418,42 +557,92 @@ void Live2DAsset::validate()
     const QJsonObject motions = refs.value(QStringLiteral("Motions")).toObject();
     for (auto category = motions.constBegin(); category != motions.constEnd(); ++category) {
         const QJsonArray items = category.value().toArray();
+        int motionIndex = 0;
         for (const QJsonValue &itemValue : items) {
-            const QString file = itemValue.toObject().value(QStringLiteral("File")).toString().trimmed();
+            const QJsonObject item = itemValue.toObject();
+            const QString file = item.value(QStringLiteral("File")).toString().trimmed();
             if (file.isEmpty()) {
+                ++motionIndex;
                 continue;
             }
             ++motionCount;
+            const QString group = category.key();
             const QString resolvedMotion = resolveModelReference(modelDirectory, file);
+            const QString displayName = actionDisplayName(item.value(QStringLiteral("Name")).toString(),
+                                                          resolvedMotion,
+                                                          QStringLiteral("%1 %2").arg(group).arg(motionIndex + 1));
             if (!fileExists(resolvedMotion)) {
                 warnings.append(QStringLiteral("动作文件不存在：%1").arg(file));
-            } else {
-                appendExistingPackageFile(packageFiles, resolvedMotion);
+                ++motionIndex;
+                continue;
             }
+            appendActionItem(actionItems,
+                             actionKeys,
+                             actionFiles,
+                             QStringLiteral("motion"),
+                              displayName,
+                              QStringLiteral("%1#%2").arg(group).arg(motionIndex),
+                              group,
+                              motionIndex,
+                              resolvedMotion,
+                              QStringLiteral("model3"));
+            appendExistingPackageFile(packageFiles, resolvedMotion);
+            ++motionIndex;
         }
     }
 
     const QJsonArray expressions = refs.value(QStringLiteral("Expressions")).toArray();
     for (const QJsonValue &itemValue : expressions) {
-        const QString file = itemValue.toObject().value(QStringLiteral("File")).toString().trimmed();
+        const QJsonObject item = itemValue.toObject();
+        const QString file = item.value(QStringLiteral("File")).toString().trimmed();
         if (file.isEmpty()) {
             continue;
         }
         ++expressionCount;
         const QString resolvedExpression = resolveModelReference(modelDirectory, file);
+        const QString displayName = actionDisplayName(item.value(QStringLiteral("Name")).toString(),
+                                                      resolvedExpression,
+                                                      QFileInfo(file).completeBaseName());
         if (!fileExists(resolvedExpression)) {
             warnings.append(QStringLiteral("表情文件不存在：%1").arg(file));
-        } else {
-            appendExistingPackageFile(packageFiles, resolvedExpression);
+            continue;
         }
+        appendActionItem(actionItems,
+                         actionKeys,
+                         actionFiles,
+                         QStringLiteral("expression"),
+                         displayName,
+                         displayName,
+                         {},
+                         -1,
+                         resolvedExpression,
+                         QStringLiteral("model3"));
+        appendExistingPackageFile(packageFiles, resolvedExpression);
     }
 
-    const QString resolvedMotionDirectory = resolveInputPath(_motion_directory);
-    const QString resolvedExpressionDirectory = resolveInputPath(_expression_directory);
+    const QString resolvedMotionDirectory = cleanedInput(_motion_directory).isEmpty()
+                                                ? modelDirectory
+                                                : resolveInputPath(_motion_directory, modelDirectory);
+    const QString resolvedExpressionDirectory = cleanedInput(_expression_directory).isEmpty()
+                                                    ? modelDirectory
+                                                    : resolveInputPath(_expression_directory, modelDirectory);
     const QString resolvedVoiceDirectory = resolveInputPath(_voice_directory);
     appendMissingDirectoryWarning(warnings, QStringLiteral("动作目录"), _motion_directory, resolvedMotionDirectory);
     appendMissingDirectoryWarning(warnings, QStringLiteral("表情目录"), _expression_directory, resolvedExpressionDirectory);
     appendMissingDirectoryWarning(warnings, QStringLiteral("语音目录"), _voice_directory, resolvedVoiceDirectory);
+
+    appendDirectoryActionItems(actionItems,
+                               actionKeys,
+                               actionFiles,
+                               QStringLiteral("motion"),
+                               resolvedMotionDirectory,
+                               {QStringLiteral("*.motion3.json")});
+    appendDirectoryActionItems(actionItems,
+                               actionKeys,
+                               actionFiles,
+                               QStringLiteral("expression"),
+                               resolvedExpressionDirectory,
+                               {QStringLiteral("*.exp3.json")});
 
     motionCount = qMax(motionCount,
                        countFilesWithSuffixes(resolvedMotionDirectory,
@@ -502,7 +691,8 @@ void Live2DAsset::validate()
                   userDataFile,
                   resolvedVtubeMapping,
                   checksum,
-                  checksum.isEmpty() ? 0 : packageFiles.size());
+                  checksum.isEmpty() ? 0 : packageFiles.size(),
+                  actionItems);
 }
 
 void Live2DAsset::clear()
@@ -657,7 +847,8 @@ void Live2DAsset::publishResult(const QString &status,
                                 const QString &userDataFile,
                                 const QString &vtubeMappingFile,
                                 const QString &packageChecksum,
-                                int referencedFileCount)
+                                int referencedFileCount,
+                                const QVariantList &actionItems)
 {
     _status = status;
     _valid = status == QString::fromLatin1(kStatusReady);
@@ -674,5 +865,6 @@ void Live2DAsset::publishResult(const QString &status,
     _resolved_vtube_mapping_file = vtubeMappingFile;
     _package_checksum = packageChecksum;
     _referenced_file_count = referencedFileCount;
+    _action_items = actionItems;
     emit validationChanged();
 }

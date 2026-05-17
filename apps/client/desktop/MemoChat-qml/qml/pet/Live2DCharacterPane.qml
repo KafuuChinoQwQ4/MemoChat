@@ -226,6 +226,16 @@ Rectangle {
         return label + " " + (value.length > 0 ? "已识别" : "未声明")
     }
 
+    function actionKindLabel(kind) {
+        if (kind === "motion") {
+            return "动作"
+        }
+        if (kind === "expression") {
+            return "表情"
+        }
+        return "控制"
+    }
+
     function runAssetValidation() {
         assetValidator.validate()
         return assetValidator.statusText
@@ -872,6 +882,74 @@ Rectangle {
                         }
                     }
 
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: actionOverviewLayout.implicitHeight + 18
+                        radius: 8
+                        color: Qt.rgba(1, 1, 1, 0.18)
+                        border.color: Qt.rgba(1, 1, 1, 0.32)
+
+                        ColumnLayout {
+                            id: actionOverviewLayout
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.margins: 9
+                            spacing: 8
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: "动作总览"
+                                    color: root.textPrimaryColor
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+
+                                StatusChip {
+                                    text: assetValidator.actionItems.length + " 个"
+                                    colorBase: root.accentBlue
+                                }
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                visible: assetValidator.actionItems.length === 0
+                                text: "暂无可用动作"
+                                color: root.textMutedColor
+                                font.pixelSize: 11
+                                wrapMode: Text.Wrap
+                                maximumLineCount: 2
+                                elide: Text.ElideRight
+                            }
+
+                            GridLayout {
+                                Layout.fillWidth: true
+                                columns: 4
+                                visible: assetValidator.actionItems.length > 0
+                                rowSpacing: 6
+                                columnSpacing: 6
+
+                                Repeater {
+                                    model: assetValidator.actionItems
+
+                                    delegate: StatusChip {
+                                        required property var modelData
+                                        Layout.fillWidth: true
+                                        text: (modelData.name || modelData.trigger || "")
+                                              + " · " + root.actionKindLabel(modelData.kind || "")
+                                        colorBase: modelData.kind === "expression" ? root.accentRose
+                                                                                   : root.accentBlue
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 10
@@ -1431,11 +1509,16 @@ Rectangle {
 
         Label {
             id: chipText
-            anchors.centerIn: parent
+            anchors.fill: parent
+            anchors.leftMargin: 8
+            anchors.rightMargin: 8
             text: parent.text
             color: root.textSecondaryColor
             font.pixelSize: 11
             font.bold: true
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
         }
     }
 
