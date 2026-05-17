@@ -94,8 +94,18 @@ class PetVision:
     face_present: bool = False
     attention: str = ""
     expression: str = ""
+    confidence: float = 0.0
     pose: dict[str, Any] = field(default_factory=dict)
+    head_pose: dict[str, Any] = field(default_factory=dict)
+    blendshapes: dict[str, Any] = field(default_factory=dict)
+    scene: dict[str, Any] = field(default_factory=dict)
+    objects: list[Any] = field(default_factory=list)
     gesture: str = ""
+    source: str = ""
+    frame: dict[str, Any] = field(default_factory=dict)
+    client_frame: dict[str, Any] = field(default_factory=dict)
+    frame_mime: str = ""
+    captured_at_ms: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -144,7 +154,7 @@ class PetControlEvent:
         animation = {**asdict(PetAnimation()), **_plain_dict(self.animation)}
         audio = {**asdict(PetAudio()), **_plain_dict(self.audio)}
         text = {**asdict(PetText()), **_plain_dict(self.text)}
-        vision = {**asdict(PetVision()), **_plain_dict(self.vision)}
+        vision = _sanitize_vision_payload({**asdict(PetVision()), **_plain_dict(self.vision)})
         privacy = {**asdict(PetPrivacy()), **_plain_dict(self.privacy)}
 
         motion = _preferred_text(self.motion, animation.get("motion"), "idle")
@@ -170,8 +180,6 @@ class PetControlEvent:
         speech["audio_chunk_ref"] = audio.get("chunk_ref")
         speech["audio_url"] = audio.get("url")
 
-        vision["enabled"] = _json_bool(vision.get("enabled", False))
-        vision["face_present"] = _json_bool(vision.get("face_present", False))
         vision["mode"] = str(vision.get("mode") or safety.get("vision_detail") or "none")
         privacy["camera_used"] = _json_bool(privacy.get("camera_used", False)) or _json_bool(
             safety.get("camera_used", False)
@@ -329,23 +337,73 @@ def _sanitize_audio(value: Any) -> dict[str, Any]:
 def _sanitize_vision(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict) or not value:
         return {}
+    return _sanitize_vision_payload(value)
+
+
+def _sanitize_vision_payload(value: Any) -> dict[str, Any]:
     vision = _dict_or_empty(value)
     sanitized = dict(vision)
     enabled = _json_bool(vision.get("enabled", False))
+    pose = _dict_or_empty(vision.get("pose"))
+    face_present = _json_bool(vision.get("face_present", False)) if enabled else False
     sanitized["enabled"] = enabled
     sanitized["mode"] = str(vision.get("mode") or ("landmarks_only" if enabled else "none"))
-    sanitized["face_present"] = _json_bool(vision.get("face_present", False)) if enabled else False
+    sanitized["face_present"] = face_present
+    sanitized["confidence"] = _vision_confidence(vision, pose, enabled, face_present)
     if enabled:
         sanitized["attention"] = str(vision.get("attention") or "")
         sanitized["expression"] = str(vision.get("expression") or "")
-        sanitized["pose"] = vision.get("pose") if isinstance(vision.get("pose"), dict) else {}
+        sanitized["pose"] = pose
+        sanitized["head_pose"] = _dict_or_empty(vision.get("head_pose"))
+        sanitized["blendshapes"] = _dict_or_empty(vision.get("blendshapes"))
+        sanitized["scene"] = _dict_or_empty(vision.get("scene"))
+        sanitized["objects"] = _list_or_empty(vision.get("objects"))
         sanitized["gesture"] = str(vision.get("gesture") or "")
+        sanitized["source"] = str(vision.get("source") or "")
+        sanitized["frame"] = _dict_or_empty(vision.get("frame"))
+        sanitized["client_frame"] = _dict_or_empty(vision.get("client_frame"))
+        sanitized["frame_mime"] = str(vision.get("frame_mime") or "")
+        sanitized["captured_at_ms"] = _non_negative_int(vision.get("captured_at_ms"))
     else:
         sanitized["attention"] = ""
         sanitized["expression"] = ""
         sanitized["pose"] = {}
+        sanitized["head_pose"] = {}
+        sanitized["blendshapes"] = {}
+        sanitized["scene"] = {}
+        sanitized["objects"] = []
         sanitized["gesture"] = ""
+        sanitized["source"] = ""
+        sanitized["frame"] = {}
+        sanitized["client_frame"] = {}
+        sanitized["frame_mime"] = ""
+        sanitized["captured_at_ms"] = 0
     return sanitized
+
+
+def _vision_confidence(vision: dict[str, Any], pose: dict[str, Any], enabled: bool, face_present: bool) -> float:
+    if not enabled:
+        return 0.0
+    fallback = 0.0
+    if "face_confidence" in pose:
+        fallback = _clamp_float(pose.get("face_confidence"), 0.0, 1.0, fallback)
+    return _clamp_float(vision.get("confidence"), 0.0, 1.0, fallback)
+
+
+def _list_or_empty(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return list(value)
+    if isinstance(value, tuple):
+        return list(value)
+    return []
+
+
+def _non_negative_int(value: Any) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, number)
 
 
 def _sanitize_observation_privacy(value: Any) -> dict[str, Any]:

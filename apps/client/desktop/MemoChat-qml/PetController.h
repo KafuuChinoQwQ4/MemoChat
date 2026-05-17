@@ -13,6 +13,10 @@
 #include <QStringList>
 #include <QVariantMap>
 
+#if HAVE_QT_MULTIMEDIA
+class QVideoFrame;
+#endif
+
 class ClientGateway;
 
 class PetController : public QObject
@@ -103,6 +107,11 @@ public:
                                          const QString &frameMime = QStringLiteral("image/jpeg"),
                                          int frameWidth = 0,
                                          int frameHeight = 0);
+#if HAVE_QT_MULTIMEDIA
+    Q_INVOKABLE bool captureVisionVideoFrame(const QVideoFrame &frame,
+                                             int frameWidth = 0,
+                                             int frameHeight = 0);
+#endif
     Q_INVOKABLE QString nextVisionCaptureFilePath() const;
     Q_INVOKABLE void captureVisionFrameFile(const QString &filePath, int frameWidth = 0, int frameHeight = 0);
     Q_INVOKABLE void interrupt();
@@ -138,6 +147,12 @@ private:
     void consumeSseLine(const QByteArray &line);
     void setBusy(bool busy, const QString &statusText = QString());
     void setVoiceTrainingBusy(bool busy, const QString &message = QString());
+    void postVisionCapture(const QString &frameBase64,
+                           const QString &frameMime,
+                           int frameWidth,
+                           int frameHeight,
+                           const QString &source,
+                           const QString &transport);
     void applyVoiceTrainingJob(const QJsonObject &job);
     void setWindowsImeBridgeBusy(bool busy);
     void setStatusText(const QString &statusText);

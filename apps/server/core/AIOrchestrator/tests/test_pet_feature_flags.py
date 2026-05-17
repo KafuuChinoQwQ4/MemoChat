@@ -36,6 +36,8 @@ class PetFeatureFlagTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(settings.pet.local_vision_enabled)
         self.assertEqual(settings.pet.vision_camera_index, 0)
         self.assertEqual(settings.pet.vision_analyzer, "opencv")
+        self.assertEqual(settings.pet.face_landmarker_model_path, "")
+        self.assertEqual(settings.pet.object_detector_model_path, "")
         self.assertFalse(settings.pet.vision_retain_raw_frames)
         self.assertFalse(settings.pet.voice_clone_enabled)
         self.assertEqual(settings.pet.voice_provider, "scripted")
@@ -56,6 +58,8 @@ class PetFeatureFlagTests(unittest.IsolatedAsyncioTestCase):
             MEMOCHAT_PET_LOCAL_VISION="true",
             MEMOCHAT_PET_VISION_CAMERA_INDEX="2",
             MEMOCHAT_PET_VISION_ANALYZER="opencv",
+            MEMOCHAT_PET_FACE_LANDMARKER_MODEL="/data/third_party/mediapipe/face_landmarker.task",
+            MEMOCHAT_PET_OBJECT_DETECTOR_MODEL="/data/third_party/mediapipe/object_detector.tflite",
             MEMOCHAT_PET_VISION_RETAIN_RAW_FRAMES="true",
             MEMOCHAT_PET_VOICE_CLONE="true",
             MEMOCHAT_PET_VOICE_PROVIDER="gpt-sovits",
@@ -76,6 +80,8 @@ class PetFeatureFlagTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(settings.pet.local_vision_enabled)
         self.assertEqual(settings.pet.vision_camera_index, 2)
         self.assertEqual(settings.pet.vision_analyzer, "opencv")
+        self.assertEqual(settings.pet.face_landmarker_model_path, "/data/third_party/mediapipe/face_landmarker.task")
+        self.assertEqual(settings.pet.object_detector_model_path, "/data/third_party/mediapipe/object_detector.tflite")
         self.assertTrue(settings.pet.vision_retain_raw_frames)
         self.assertTrue(settings.pet.voice_clone_enabled)
         self.assertEqual(settings.pet.voice_provider, "gpt-sovits")

@@ -338,6 +338,8 @@ class PetFeatureConfig(BaseModel):
     local_vision_enabled: bool = False
     vision_camera_index: int = 0
     vision_analyzer: str = "opencv"
+    face_landmarker_model_path: str = ""
+    object_detector_model_path: str = ""
     vision_retain_raw_frames: bool = False
     voice_clone_enabled: bool = False
     voice_provider: str = "scripted"
@@ -433,6 +435,8 @@ _PET_ENV_ALIASES = {
     "MEMOCHAT_PET_LOCAL_VISION": "local_vision_enabled",
     "MEMOCHAT_PET_VISION_CAMERA_INDEX": "vision_camera_index",
     "MEMOCHAT_PET_VISION_ANALYZER": "vision_analyzer",
+    "MEMOCHAT_PET_FACE_LANDMARKER_MODEL": "face_landmarker_model_path",
+    "MEMOCHAT_PET_OBJECT_DETECTOR_MODEL": "object_detector_model_path",
     "MEMOCHAT_PET_VISION_RETAIN_RAW_FRAMES": "vision_retain_raw_frames",
     "MEMOCHAT_PET_VOICE_CLONE": "voice_clone_enabled",
     "MEMOCHAT_PET_VOICE_PROVIDER": "voice_provider",

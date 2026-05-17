@@ -190,6 +190,9 @@ class DeterministicPetProvider:
             system_prompt += f" Speech rules: {speech_rules}"
         if prompt.observation_summary:
             system_prompt += f" Observation summary: {json.dumps(prompt.observation_summary, ensure_ascii=False)}."
+        visual_summary = _visual_summary_text(prompt)
+        if visual_summary:
+            system_prompt += f" Visual summary: {visual_summary}."
         messages = [
             LLMMessage(role="system", content=system_prompt),
             LLMMessage(role="user", content=prompt.user_text),
@@ -243,6 +246,19 @@ def _voice_metadata(prompt: PetPromptContext) -> dict:
     if isinstance(prompt.runtime_metadata, dict):
         metadata.update(prompt.runtime_metadata)
     return metadata
+
+
+def _visual_summary_text(prompt: PetPromptContext) -> str:
+    metadata = _voice_metadata(prompt)
+    visual_summary = metadata.get("visual_summary")
+    if not isinstance(visual_summary, dict) or not visual_summary:
+        return ""
+    return str(
+        visual_summary.get("summary_text")
+        or visual_summary.get("cached_summary_text")
+        or visual_summary.get("speech_text")
+        or ""
+    ).strip()
 
 
 def _voice_provider_name(prompt: PetPromptContext) -> str:
