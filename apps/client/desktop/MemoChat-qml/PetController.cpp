@@ -4,6 +4,12 @@
 #include "global.h"
 #include "usermgr.h"
 
+#include <QtCore/QBuffer>
+#include <QtCore/QIODevice>
+#include <QtGui/QImageWriter>
+#if HAVE_QT_MULTIMEDIA
+#include <QtMultimedia/QVideoFrame>
+#endif
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -225,9 +231,70 @@ void PetController::captureVisionFrame(const QString &frameBase64,
         return;
     }
 
+    postVisionCapture(encodedFrame,
+                      frameMime,
+                      frameWidth,
+                      frameHeight,
+                      QStringLiteral("qt_camera"),
+                      QStringLiteral("local_frame_upload"));
+}
+
+#if HAVE_QT_MULTIMEDIA
+bool PetController::captureVisionVideoFrame(const QVideoFrame &frame, int frameWidth, int frameHeight)
+{
+    if (_session_id.isEmpty() || !frame.isValid()) {
+        return false;
+    }
+
+    const QImage image = frame.toImage();
+    if (image.isNull()) {
+        setError(QStringLiteral("摄像头实时帧转换失败"));
+        return false;
+    }
+
+    QByteArray bytes;
+    QBuffer buffer(&bytes);
+    if (!buffer.open(QIODevice::WriteOnly)) {
+        setError(QStringLiteral("摄像头实时帧编码失败"));
+        return false;
+    }
+
+    QImageWriter writer(&buffer, "jpeg");
+    writer.setQuality(82);
+    if (!writer.write(image)) {
+        setError(QStringLiteral("摄像头实时帧编码失败"));
+        return false;
+    }
+
+    postVisionCapture(QString::fromLatin1(bytes.toBase64()),
+                      QStringLiteral("image/jpeg"),
+                      frameWidth,
+                      frameHeight,
+                      QStringLiteral("qt_video_sink"),
+                      QStringLiteral("live_frame_upload"));
+    return true;
+}
+#endif
+
+void PetController::postVisionCapture(const QString &frameBase64,
+                                      const QString &frameMime,
+                                      int frameWidth,
+                                      int frameHeight,
+                                      const QString &source,
+                                      const QString &transport)
+{
+    const QString encodedFrame = frameBase64.trimmed();
+    if (_session_id.isEmpty() || encodedFrame.isEmpty()) {
+        return;
+    }
+
     QJsonObject metadata;
-    metadata[QStringLiteral("source")] = QStringLiteral("qt_camera");
-    metadata[QStringLiteral("transport")] = QStringLiteral("local_frame_upload");
+    metadata[QStringLiteral("source")] = source.trimmed().isEmpty()
+                                             ? QStringLiteral("qt_camera")
+                                             : source.trimmed();
+    metadata[QStringLiteral("transport")] = transport.trimmed().isEmpty()
+                                                ? QStringLiteral("local_frame_upload")
+                                                : transport.trimmed();
 
     QJsonObject payload;
     payload[QStringLiteral("analyzer")] = QStringLiteral("opencv");

@@ -4,7 +4,9 @@ import unittest
 import asyncio
 import sys
 import tempfile
+import types
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -189,6 +191,350 @@ class PetRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(payload["privacy"]["raw_frame_sent"])
         self.assertFalse(payload["privacy"]["raw_audio_recorded"])
         self.assertFalse(payload["privacy"]["cloud_vision_used"])
+
+    async def test_observation_preserves_extended_visual_layer_fields(self):
+        runtime = PetRuntime()
+        session = await runtime.create_session(uid=7)
+
+        event = await runtime.update_observation(
+            PetObservation.from_dict(
+                {
+                    "session_id": session.session_id,
+                    "audio": {"vad": "idle", "rms": 0.0, "interrupt": False},
+                    "vision": {
+                        "enabled": True,
+                        "mode": "mediapipe_face_landmarker",
+                        "face_present": True,
+                        "attention": "user_face",
+                        "expression": "smile",
+                        "confidence": 0.82,
+                        "pose": {"face_confidence": 0.82, "brightness": 0.51},
+                        "head_pose": {"yaw": 0.11, "pitch": -0.03, "roll": 0.01},
+                        "blendshapes": {"jawOpen": 0.21, "eyeBlinkLeft": 0.04},
+                        "scene": {"lighting": "ambient", "brightness": 0.51},
+                        "objects": [{"label": "monitor", "score": 0.77}],
+                        "source": "uploaded_frame",
+                        "frame": {"width": 320, "height": 180},
+                        "captured_at_ms": 123456,
+                    },
+                    "privacy": {"raw_frame_sent": False, "raw_audio_recorded": False},
+                }
+            )
+        )
+
+        payload = event.to_dict()
+
+        self.assert_v1_control_payload(payload, session.session_id)
+        self.assertEqual(payload["expression"], "smile_soft")
+        self.assertEqual(payload["vision"]["mode"], "mediapipe_face_landmarker")
+        self.assertEqual(payload["vision"]["confidence"], 0.82)
+        self.assertEqual(payload["vision"]["head_pose"]["yaw"], 0.11)
+        self.assertEqual(payload["vision"]["blendshapes"]["jawOpen"], 0.21)
+        self.assertEqual(payload["vision"]["scene"]["lighting"], "ambient")
+        self.assertEqual(payload["vision"]["objects"][0]["label"], "monitor")
+        self.assertEqual(payload["vision"]["source"], "uploaded_frame")
+        self.assertEqual(payload["vision"]["frame"], {"width": 320, "height": 180})
+        self.assertEqual(payload["vision"]["captured_at_ms"], 123456)
+        self.assertTrue(payload["privacy"]["camera_used"])
+
+    async def test_observation_prefers_scene_summary_and_object_labels_for_agent_text(self):
+        runtime = PetRuntime()
+        session = await runtime.create_session(uid=7)
+
+        event = await runtime.update_observation(
+            PetObservation.from_dict(
+                {
+                    "session_id": session.session_id,
+                    "audio": {"vad": "idle", "rms": 0.0, "interrupt": False},
+                    "vision": {
+                        "enabled": True,
+                        "mode": "mediapipe_face_landmarker",
+                        "face_present": True,
+                        "attention": "user_face",
+                        "expression": "smile",
+                        "confidence": 0.96,
+                        "pose": {"face_confidence": 0.96, "brightness": 0.51},
+                        "scene": {
+                            "lighting": "bright",
+                            "brightness": 0.51,
+                            "summary": "画面里有杯子和键盘。",
+                            "object_labels": ["cup", "keyboard"],
+                            "object_count": 2,
+                        },
+                        "objects": [
+                            {"label": "cup", "score": 0.82},
+                            {"label": "keyboard", "score": 0.76},
+                        ],
+                        "source": "camera_frame",
+                        "frame": {"width": 640, "height": 480},
+                        "captured_at_ms": 123456,
+                    },
+                    "privacy": {"raw_frame_sent": False, "raw_audio_recorded": False},
+                }
+            )
+        )
+
+        payload = event.to_dict()
+        self.assert_v1_control_payload(payload, session.session_id)
+        self.assertEqual(payload["vision"]["scene"]["summary"], "画面里有杯子和键盘。")
+        self.assertEqual(payload["vision"]["scene"]["object_labels"], ["cup", "keyboard"])
+        self.assertIn("画面里有杯子和键盘。", payload["debug"]["visual_summary"]["summary_text"])
+        self.assertTrue(payload["debug"]["visual_summary"]["speak"])
+        self.assertEqual(payload["action"]["name"], "visual_react")
+
+    async def test_observation_maps_head_pose_and_blendshapes_to_live2d_visual_controls(self):
+        runtime = PetRuntime()
+        session = await runtime.create_session(uid=7)
+
+        event = await runtime.update_observation(
+            PetObservation.from_dict(
+                {
+                    "session_id": session.session_id,
+                    "audio": {"vad": "idle", "rms": 0.12, "interrupt": False},
+                    "vision": {
+                        "enabled": True,
+                        "mode": "mediapipe_face_landmarker",
+                        "face_present": True,
+                        "attention": "user_face",
+                        "expression": "smile",
+                        "confidence": 0.92,
+                        "pose": {"face_confidence": 0.92, "brightness": 0.52},
+                        "head_pose": {"yaw": 24.0, "pitch": 18.0, "roll": 2.0},
+                        "blendshapes": {
+                            "jawOpen": 0.66,
+                            "mouthSmileLeft": 0.68,
+                            "mouthSmileRight": 0.74,
+                            "eyeBlinkLeft": 0.03,
+                            "eyeBlinkRight": 0.04,
+                        },
+                        "scene": {"lighting": "ambient", "brightness": 0.52},
+                        "objects": [{"label": "monitor", "score": 0.77}],
+                        "source": "camera_frame",
+                        "frame": {"width": 640, "height": 480},
+                        "captured_at_ms": 123456,
+                    },
+                    "privacy": {"raw_frame_sent": False, "raw_audio_recorded": False},
+                }
+            )
+        )
+
+        payload = event.to_dict()
+        self.assert_v1_control_payload(payload, session.session_id)
+        self.assertEqual(payload["emotion"], "cheerful")
+        self.assertEqual(payload["expression"], "smile_soft")
+        self.assertEqual(payload["motion"], "talk")
+        self.assertEqual(payload["gaze"]["target"], "user_face")
+        self.assertGreater(payload["gaze"]["x"], 0.6)
+        self.assertLess(payload["gaze"]["y"], 0.45)
+        self.assertGreater(payload["lip_sync"]["value"], 0.6)
+        self.assertGreater(payload["intensity"], 0.6)
+        self.assertEqual(payload["vision"]["mode"], "mediapipe_face_landmarker")
+        self.assertEqual(payload["vision"]["confidence"], 0.92)
+        self.assertEqual(payload["vision"]["head_pose"]["yaw"], 24.0)
+
+    async def test_visual_observation_speaks_when_high_confidence_changes(self):
+        runtime = PetRuntime()
+        session = await runtime.create_session(uid=7)
+
+        with _patched_policy_time(1000.0):
+            event = await runtime.update_observation(
+                PetObservation.from_dict(
+                    {
+                        "session_id": session.session_id,
+                        "audio": {"vad": "idle", "rms": 0.0, "interrupt": False},
+                        "vision": {
+                            "enabled": True,
+                            "mode": "mediapipe_face_landmarker",
+                            "face_present": True,
+                            "expression": "smile",
+                            "confidence": 0.95,
+                            "pose": {"face_confidence": 0.95},
+                        },
+                        "privacy": {"raw_frame_sent": False, "raw_audio_recorded": False},
+                    }
+                )
+            )
+
+        payload = event.to_dict()
+        self.assert_v1_control_payload(payload, session.session_id)
+        self.assertEqual(payload["phase"], "speaking")
+        self.assertEqual(payload["action"]["name"], "visual_react")
+        self.assertTrue(payload["text"]["final"])
+        self.assertEqual(payload["speech"]["text_delta"], "你看起来心情不错。")
+        self.assertEqual(payload["debug"]["visual_summary"]["reason"], "updated")
+        self.assertTrue(payload["debug"]["visual_summary"]["speak"])
+
+    async def test_visual_observation_stays_animation_only_when_low_confidence(self):
+        runtime = PetRuntime()
+        session = await runtime.create_session(uid=7)
+
+        with _patched_policy_time(1000.0):
+            event = await runtime.update_observation(
+                PetObservation.from_dict(
+                    {
+                        "session_id": session.session_id,
+                        "audio": {"vad": "idle", "rms": 0.0, "interrupt": False},
+                        "vision": {
+                            "enabled": True,
+                            "mode": "mediapipe_face_landmarker",
+                            "face_present": True,
+                            "expression": "smile",
+                            "confidence": 0.35,
+                            "pose": {"face_confidence": 0.35},
+                        },
+                        "privacy": {"raw_frame_sent": False, "raw_audio_recorded": False},
+                    }
+                )
+            )
+
+        payload = event.to_dict()
+        self.assert_v1_control_payload(payload, session.session_id)
+        self.assertEqual(payload["phase"], "listening")
+        self.assertEqual(payload["motion"], "observe")
+        self.assertFalse(payload["text"]["final"])
+        self.assertEqual(payload["speech"]["text_delta"], "")
+        self.assertEqual(payload["debug"]["visual_summary"]["reason"], "low_confidence")
+        self.assertFalse(payload["debug"]["visual_summary"]["speak"])
+
+    async def test_visual_observation_stays_animation_only_without_face(self):
+        runtime = PetRuntime()
+        session = await runtime.create_session(uid=7)
+
+        with _patched_policy_time(1000.0):
+            event = await runtime.update_observation(
+                PetObservation.from_dict(
+                    {
+                        "session_id": session.session_id,
+                        "audio": {"vad": "idle", "rms": 0.0, "interrupt": False},
+                        "vision": {
+                            "enabled": True,
+                            "mode": "mediapipe_face_landmarker",
+                            "face_present": False,
+                            "expression": "smile",
+                            "confidence": 0.88,
+                            "pose": {"face_confidence": 0.88},
+                        },
+                        "privacy": {"raw_frame_sent": False, "raw_audio_recorded": False},
+                    }
+                )
+            )
+
+        payload = event.to_dict()
+        self.assert_v1_control_payload(payload, session.session_id)
+        self.assertEqual(payload["phase"], "idle")
+        self.assertEqual(payload["emotion"], "neutral")
+        self.assertEqual(payload["expression"], "neutral")
+        self.assertEqual(payload["speech"]["text_delta"], "")
+        self.assertEqual(payload["debug"]["visual_summary"]["reason"], "no_face")
+        self.assertFalse(payload["debug"]["visual_summary"]["speak"])
+
+    async def test_visual_summary_cooldown_suppresses_repeat_speech(self):
+        runtime = PetRuntime()
+        session = await runtime.create_session(uid=7)
+
+        with _patched_policy_time(1000.0, 1001.0):
+            first = await runtime.update_observation(
+                PetObservation.from_dict(
+                    {
+                        "session_id": session.session_id,
+                        "audio": {"vad": "idle", "rms": 0.0, "interrupt": False},
+                        "vision": {
+                            "enabled": True,
+                            "mode": "mediapipe_face_landmarker",
+                            "face_present": True,
+                            "expression": "smile",
+                            "confidence": 0.95,
+                            "pose": {"face_confidence": 0.95},
+                        },
+                        "privacy": {"raw_frame_sent": False, "raw_audio_recorded": False},
+                    }
+                )
+            )
+            second = await runtime.update_observation(
+                PetObservation.from_dict(
+                    {
+                        "session_id": session.session_id,
+                        "audio": {"vad": "idle", "rms": 0.0, "interrupt": False},
+                        "vision": {
+                            "enabled": True,
+                            "mode": "mediapipe_face_landmarker",
+                            "face_present": True,
+                            "expression": "surprised",
+                            "confidence": 0.95,
+                            "pose": {"face_confidence": 0.95},
+                        },
+                        "privacy": {"raw_frame_sent": False, "raw_audio_recorded": False},
+                    }
+                )
+            )
+
+        first_payload = first.to_dict()
+        second_payload = second.to_dict()
+        self.assertTrue(first_payload["text"]["final"])
+        self.assertTrue(first_payload["speech"]["text_delta"])
+        self.assertFalse(second_payload["text"]["final"])
+        self.assertEqual(second_payload["speech"]["text_delta"], "")
+        self.assertEqual(second_payload["debug"]["visual_summary"]["reason"], "cooldown")
+        self.assertEqual(
+            second_payload["debug"]["visual_summary"]["cached_summary_text"],
+            first_payload["speech"]["text_delta"],
+        )
+
+    async def test_submit_input_carries_cached_visual_summary_into_prompt_metadata(self):
+        runtime = PetRuntime()
+
+        class RecordingProvider:
+            def __init__(self):
+                self.calls = []
+
+            async def generate(self, session, prompt, runtime_metadata=None):
+                self.calls.append(
+                    {
+                        "session": session,
+                        "prompt": prompt,
+                        "runtime_metadata": dict(runtime_metadata or {}),
+                    }
+                )
+                return [types.SimpleNamespace(text="你好", emotion="cheerful", final=True, voice=None)]
+
+        provider = RecordingProvider()
+        runtime._providers = provider  # type: ignore[attr-defined]
+        session = await runtime.create_session(uid=7)
+
+        with _patched_policy_time(1000.0):
+            await runtime.update_observation(
+                PetObservation.from_dict(
+                    {
+                        "session_id": session.session_id,
+                        "audio": {"vad": "idle", "rms": 0.0, "interrupt": False},
+                        "vision": {
+                            "enabled": True,
+                            "mode": "mediapipe_face_landmarker",
+                            "face_present": True,
+                            "expression": "smile",
+                            "confidence": 0.95,
+                            "pose": {"face_confidence": 0.95},
+                        },
+                        "privacy": {"raw_frame_sent": False, "raw_audio_recorded": False},
+                    }
+                )
+            )
+
+        events = await runtime.submit_input(
+            session.session_id,
+            "请继续说",
+            model_type="openai",
+            model_name="gpt-4o",
+        )
+
+        self.assertEqual(len(provider.calls), 1)
+        call = provider.calls[0]
+        self.assertIn("visual_summary", call["runtime_metadata"])
+        self.assertEqual(call["runtime_metadata"]["visual_summary"]["summary_text"], "你看起来心情不错。")
+        self.assertEqual(call["prompt"].observation_summary["vision"]["expression"], "smile")
+        self.assertEqual(call["prompt"].observation_summary["vision"]["confidence"], 0.95)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[1].to_dict()["phase"], "speaking")
 
     async def test_stream_receives_queued_event(self):
         runtime = PetRuntime()
@@ -631,6 +977,14 @@ def _write_wav(path: Path, duration_sec: float, sample_rate: int = 16000) -> Non
         handle.setsampwidth(2)
         handle.setframerate(sample_rate)
         handle.writeframes(b"\0\0" * frame_count)
+
+
+def _patched_policy_time(*values: float):
+    if len(values) == 1:
+        fake_time = types.SimpleNamespace(time=mock.Mock(return_value=values[0]))
+    else:
+        fake_time = types.SimpleNamespace(time=mock.Mock(side_effect=list(values)))
+    return mock.patch("harness.pet.policy.time", fake_time)
 
 
 if __name__ == "__main__":

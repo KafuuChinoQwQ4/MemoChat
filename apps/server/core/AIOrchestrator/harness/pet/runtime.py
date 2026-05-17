@@ -26,6 +26,8 @@ class PetRuntimeConfig:
     local_vision_enabled: bool = False
     vision_camera_index: int = 0
     vision_analyzer: str = "opencv"
+    face_landmarker_model_path: str = ""
+    object_detector_model_path: str = ""
     vision_retain_raw_frames: bool = False
     voice_clone_enabled: bool = False
     voice_provider: str = "scripted"
@@ -63,6 +65,8 @@ class PetRuntime:
             enabled=self._config.local_vision_enabled,
             default_camera_index=self._config.vision_camera_index,
             analyzer=self._config.vision_analyzer,
+            face_landmarker_model_path=self._config.face_landmarker_model_path,
+            object_detector_model_path=self._config.object_detector_model_path,
             retain_raw_frames=self._config.vision_retain_raw_frames,
         )
         self._voice_training = VoiceTrainingService(
@@ -116,6 +120,9 @@ class PetRuntime:
 
         runtime_metadata = self._voice_runtime_metadata()
         runtime_metadata.update(_request_runtime_metadata(metadata))
+        visual_summary = _visual_summary_runtime_metadata(self._policy.visual_summary(session_id))
+        if visual_summary:
+            runtime_metadata["visual_summary"] = visual_summary
 
         try:
             chunks = await self._providers.generate(
@@ -355,6 +362,8 @@ def _runtime_config_from(config: PetRuntimeConfig | object | None) -> PetRuntime
         local_vision_enabled=bool(getattr(config, "local_vision_enabled", False)),
         vision_camera_index=_non_negative_int(getattr(config, "vision_camera_index", 0)),
         vision_analyzer=str(getattr(config, "vision_analyzer", "opencv") or "opencv"),
+        face_landmarker_model_path=str(getattr(config, "face_landmarker_model_path", "") or ""),
+        object_detector_model_path=str(getattr(config, "object_detector_model_path", "") or ""),
         vision_retain_raw_frames=bool(getattr(config, "vision_retain_raw_frames", False)),
         voice_clone_enabled=bool(getattr(config, "voice_clone_enabled", False)),
         voice_provider=str(getattr(config, "voice_provider", "scripted") or "scripted"),
@@ -443,6 +452,27 @@ def _request_runtime_metadata(metadata: dict | None) -> dict:
     speech_rules = str(metadata.get("speech_rules") or "").strip()
     if speech_rules:
         result["speech_rules"] = speech_rules
+    return result
+
+
+def _visual_summary_runtime_metadata(summary: dict | None) -> dict:
+    if not isinstance(summary, dict) or not summary:
+        return {}
+    result = dict(summary)
+    summary_text = str(
+        result.get("summary_text")
+        or result.get("cached_summary_text")
+        or result.get("speech_text")
+        or ""
+    ).strip()
+    if not summary_text:
+        return {}
+    result["summary_text"] = summary_text
+    if not str(result.get("speech_text") or "").strip():
+        result["speech_text"] = summary_text
+    cached_summary_text = str(result.get("cached_summary_text") or summary_text).strip()
+    if cached_summary_text:
+        result["cached_summary_text"] = cached_summary_text
     return result
 
 

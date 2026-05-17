@@ -85,6 +85,42 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error_payload["expression"], "concerned")
         self.assertIn(error_payload["motion"], {"idle", "stop"})
 
+    def test_animation_mapper_maps_observation_vision_to_live2d_controls(self):
+        AnimationMapper = _load_attr("harness.pet.animation", "AnimationMapper")
+        mapper = AnimationMapper()
+
+        mapped = mapper.for_observation_vision(
+            {
+                "enabled": True,
+                "mode": "mediapipe_face_landmarker",
+                "face_present": True,
+                "expression": "smile",
+                "confidence": 0.92,
+                "pose": {"face_confidence": 0.92, "brightness": 0.52},
+                "head_pose": {"yaw": 24.0, "pitch": 18.0, "roll": 2.0},
+                "blendshapes": {
+                    "jawOpen": 0.66,
+                    "mouthSmileLeft": 0.68,
+                    "mouthSmileRight": 0.74,
+                    "eyeBlinkLeft": 0.03,
+                    "eyeBlinkRight": 0.04,
+                },
+                "scene": {"lighting": "ambient", "brightness": 0.52},
+            },
+            audio_rms=0.12,
+        )
+
+        gaze = mapped["gaze"].to_dict() if hasattr(mapped["gaze"], "to_dict") else dict(mapped["gaze"])
+        self.assertEqual(mapped["phase"], "listening")
+        self.assertEqual(mapped["emotion"], "cheerful")
+        self.assertEqual(mapped["expression"], "smile_soft")
+        self.assertEqual(mapped["motion"], "talk")
+        self.assertEqual(gaze["target"], "user_face")
+        self.assertGreater(gaze["x"], 0.6)
+        self.assertLess(gaze["y"], 0.45)
+        self.assertGreater(mapped["lip_sync"], 0.6)
+        self.assertGreater(mapped["intensity"], 0.6)
+
     async def test_deterministic_provider_returns_repeatable_text_response(self):
         DeterministicProvider = _load_attr(
             "harness.pet.providers.deterministic", "DeterministicProvider"
@@ -347,6 +383,53 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(chunks[0].voice.to_dict()["provider"], "gpt-sovits")
         self.assertEqual(chunks[0].voice.to_dict()["url"], "/audio/gpt-sovits-test.wav")
 
+    async def test_deterministic_pet_provider_includes_visual_summary_in_llm_prompt(self):
+        DeterministicProvider = _load_attr(
+            "harness.pet.providers.deterministic", "DeterministicProvider"
+        )
+        PetPromptContext = _load_attr("harness.pet.persona", "PetPromptContext")
+
+        fake_response = types.SimpleNamespace(
+            content='{"text":"我看到了，你看起来心情不错。","translation":""}'
+        )
+        fake_registry = types.SimpleNamespace(
+            complete=mock.AsyncMock(return_value=fake_response),
+        )
+        provider = DeterministicProvider()
+        prompt = PetPromptContext(
+            session_id="pet-session",
+            uid=7,
+            profile_id="default",
+            persona="memo-pet",
+            provider="scripted",
+            user_text="请根据刚才的观察回复我",
+            model_type="openai",
+            model_name="gpt-4o",
+            observation_summary={"vision": {"face_present": True}},
+            runtime_metadata={
+                "speech_rules": "keep it short",
+                "visual_summary": {
+                    "summary_text": "你看起来心情不错。",
+                    "reason": "updated",
+                },
+            },
+        )
+
+        fake_llm_service = types.ModuleType("harness.llm.service")
+        fake_llm_service.LLMEndpointRegistry = lambda: fake_registry
+
+        with mock.patch.dict(sys.modules, {"harness.llm.service": fake_llm_service}):
+            reply, translation = await provider._llm_reply(prompt, "zh-CN")
+
+        self.assertEqual(reply, "我看到了，你看起来心情不错。")
+        self.assertEqual(translation, "")
+        self.assertEqual(fake_registry.complete.await_count, 1)
+        messages = fake_registry.complete.call_args.args[0]
+        system_prompt = messages[0].content
+        self.assertIn("Observation summary:", system_prompt)
+        self.assertIn("Speech rules: keep it short", system_prompt)
+        self.assertIn("Visual summary: 你看起来心情不错。", system_prompt)
+
     async def test_deterministic_pet_provider_keeps_text_when_voice_synthesis_fails(self):
         DeterministicProvider = _load_attr(
             "harness.pet.providers.deterministic", "DeterministicProvider"
@@ -544,6 +627,354 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["vision"].get("source"), "uploaded_frame")
         self.assertFalse(payload["privacy"]["raw_frame_sent"])
         self.assertEqual(payload["privacy"]["retention"], "none")
+
+    async def test_local_vision_analyzer_uses_mediapipe_face_landmarker_when_model_is_available(self):
+        LocalVisionAnalyzer = _load_attr("harness.pet.vision", "LocalVisionAnalyzer")
+        VisionCaptureRequest = _load_attr("harness.pet.vision", "VisionCaptureRequest")
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        model_path = Path(temp_dir.name) / "face_landmarker.task"
+        model_path.write_bytes(b"fake-model")
+
+        class FakeFrame:
+            shape = (480, 640, 3)
+
+        class FakeCapture:
+            def __init__(self, camera_index):
+                self.camera_index = camera_index
+
+            def isOpened(self):
+                return True
+
+            def read(self):
+                return True, FakeFrame()
+
+            def release(self):
+                pass
+
+        class FakeLandmark:
+            def __init__(self, x, y, z=0.0):
+                self.x = x
+                self.y = y
+                self.z = z
+
+        class FakeCategory:
+            def __init__(self, category_name, score):
+                self.category_name = category_name
+                self.score = score
+
+        class FakeGrayFrame:
+            def __init__(self, mean_value):
+                self._mean_value = mean_value
+
+            def mean(self):
+                return self._mean_value
+
+        class FakeLandmarker:
+            def __init__(self, options):
+                self.options = options
+                self.detected = []
+                self.closed = False
+
+            def detect(self, mp_image):
+                self.detected.append(mp_image)
+                return types.SimpleNamespace(
+                    face_landmarks=[
+                        [
+                            FakeLandmark(0.1, 0.2),
+                            FakeLandmark(0.8, 0.2),
+                            FakeLandmark(0.8, 0.7),
+                            FakeLandmark(0.1, 0.7),
+                        ]
+                    ],
+                    face_blendshapes=[
+                        [
+                            FakeCategory("mouthSmileLeft", 0.82),
+                            FakeCategory("mouthSmileRight", 0.79),
+                            FakeCategory("jawOpen", 0.12),
+                            FakeCategory("eyeBlinkLeft", 0.02),
+                            FakeCategory("eyeBlinkRight", 0.03),
+                        ]
+                    ],
+                    facial_transformation_matrixes=[
+                        [
+                            [1.0, 0.0, 0.0, 0.0],
+                            [0.0, 1.0, 0.0, 0.0],
+                            [0.0, 0.0, 1.0, 0.0],
+                            [0.0, 0.0, 0.0, 1.0],
+                        ]
+                    ],
+                )
+
+            def close(self):
+                self.closed = True
+
+        fake_landmarker_instances = []
+
+        def fake_create_from_options(options):
+            instance = FakeLandmarker(options)
+            fake_landmarker_instances.append(instance)
+            return instance
+
+        fake_mp = types.SimpleNamespace(
+            Image=lambda image_format, data: types.SimpleNamespace(image_format=image_format, data=data),
+            ImageFormat=types.SimpleNamespace(SRGB="SRGB"),
+            tasks=types.SimpleNamespace(
+                BaseOptions=lambda model_asset_path=None: types.SimpleNamespace(model_asset_path=model_asset_path),
+                vision=types.SimpleNamespace(
+                    RunningMode=types.SimpleNamespace(IMAGE="IMAGE"),
+                    FaceLandmarkerOptions=lambda **kwargs: types.SimpleNamespace(**kwargs),
+                    FaceLandmarker=types.SimpleNamespace(create_from_options=fake_create_from_options),
+                ),
+            ),
+        )
+        fake_cv2 = types.SimpleNamespace(
+            VideoCapture=FakeCapture,
+            COLOR_BGR2GRAY=0,
+            COLOR_BGR2RGB=1,
+            cvtColor=lambda frame, mode: types.SimpleNamespace(shape=(480, 640, 3))
+            if mode == 1
+            else FakeGrayFrame(100.0),
+            data=types.SimpleNamespace(haarcascades=""),
+            CascadeClassifier=lambda path: types.SimpleNamespace(detectMultiScale=lambda *args, **kwargs: []),
+        )
+        analyzer = LocalVisionAnalyzer(
+            enabled=True,
+            default_camera_index=1,
+            analyzer="mediapipe_face_landmarker",
+            face_landmarker_model_path=str(model_path),
+        )
+
+        with mock.patch.dict(sys.modules, {"cv2": fake_cv2, "mediapipe": fake_mp}):
+            observation = analyzer.capture(
+                VisionCaptureRequest(session_id="pet-session", analyzer="mediapipe_face_landmarker")
+            )
+
+        payload = observation.to_dict()
+        self.assertEqual(len(fake_landmarker_instances), 1)
+        self.assertEqual(
+            Path(fake_landmarker_instances[0].options.base_options.model_asset_path).resolve(),
+            model_path.resolve(),
+        )
+        self.assertEqual(payload["vision"]["analyzer"], "mediapipe_face_landmarker")
+        self.assertEqual(payload["vision"]["mode"], "mediapipe_face_landmarker")
+        self.assertTrue(payload["vision"]["face_present"])
+        self.assertEqual(payload["vision"]["expression"], "smile")
+        self.assertEqual(payload["vision"]["confidence"], 1.0)
+        self.assertEqual(payload["vision"]["blendshapes"]["mouthSmileLeft"], 0.82)
+        self.assertEqual(payload["vision"]["head_pose"]["yaw"], 0.0)
+        self.assertEqual(payload["vision"]["scene"]["lighting"], "ambient")
+        self.assertAlmostEqual(payload["vision"]["pose"]["face_box"]["x"], 0.1, places=3)
+        self.assertAlmostEqual(payload["vision"]["pose"]["face_box"]["width"], 0.7, places=3)
+        self.assertEqual(payload["vision"]["pose"]["face_landmark_count"], 4)
+        self.assertTrue(payload["privacy"]["camera_used"])
+
+    async def test_local_vision_analyzer_reports_object_detector_readiness_when_model_is_available(self):
+        LocalVisionAnalyzer = _load_attr("harness.pet.vision", "LocalVisionAnalyzer")
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        model_path = Path(temp_dir.name) / "lite-model_efficientdet_lite0_detection_metadata_1.tflite"
+        model_path.write_bytes(b"fake-model")
+
+        class FakeFrame:
+            shape = (480, 640, 3)
+
+        class FakeCapture:
+            def __init__(self, camera_index):
+                self.camera_index = camera_index
+
+            def isOpened(self):
+                return True
+
+            def read(self):
+                return True, FakeFrame()
+
+            def release(self):
+                pass
+
+        fake_cv2 = types.SimpleNamespace(
+            VideoCapture=FakeCapture,
+            __version__="4.test",
+        )
+        fake_mp = types.SimpleNamespace()
+        analyzer = LocalVisionAnalyzer(
+            enabled=True,
+            default_camera_index=1,
+            analyzer="opencv",
+            object_detector_model_path=str(model_path),
+        )
+
+        with mock.patch.dict(sys.modules, {"cv2": fake_cv2, "mediapipe": fake_mp}):
+            payload = analyzer.diagnostics(open_camera=True)
+
+        self.assertTrue(payload["object_detector_ready"])
+        self.assertEqual(Path(payload["object_detector_model_resolved"]).resolve(), model_path.resolve())
+        self.assertEqual(payload["object_detector_status"], "ready")
+        self.assertTrue(payload["ready"])
+
+    async def test_local_vision_analyzer_uses_mediapipe_object_detector_when_model_is_available(self):
+        LocalVisionAnalyzer = _load_attr("harness.pet.vision", "LocalVisionAnalyzer")
+        VisionCaptureRequest = _load_attr("harness.pet.vision", "VisionCaptureRequest")
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        model_path = Path(temp_dir.name) / "lite-model_efficientdet_lite0_detection_metadata_1.tflite"
+        model_path.write_bytes(b"fake-model")
+
+        class FakeFrame:
+            shape = (480, 640, 3)
+
+        class FakeCapture:
+            def __init__(self, camera_index):
+                self.camera_index = camera_index
+
+            def isOpened(self):
+                return True
+
+            def read(self):
+                return True, FakeFrame()
+
+            def release(self):
+                pass
+
+        class FakeCategory:
+            def __init__(self, category_name, score):
+                self.category_name = category_name
+                self.score = score
+
+        class FakeDetection:
+            def __init__(self, category_name, score, origin_x, origin_y, width, height):
+                self.categories = [FakeCategory(category_name, score)]
+                self.bounding_box = types.SimpleNamespace(
+                    origin_x=origin_x,
+                    origin_y=origin_y,
+                    width=width,
+                    height=height,
+                )
+
+        class FakeDetector:
+            def __init__(self, options):
+                self.options = options
+                self.closed = False
+
+            def detect(self, mp_image):
+                return types.SimpleNamespace(
+                    detections=[
+                        FakeDetection("cup", 0.92, 64, 48, 160, 120),
+                        FakeDetection("keyboard", 0.81, 300, 220, 220, 90),
+                    ]
+                )
+
+            def close(self):
+                self.closed = True
+
+        fake_detector_instances = []
+
+        def fake_create_from_options(options):
+            instance = FakeDetector(options)
+            fake_detector_instances.append(instance)
+            return instance
+
+        fake_mp = types.SimpleNamespace(
+            Image=lambda image_format, data: types.SimpleNamespace(image_format=image_format, data=data),
+            ImageFormat=types.SimpleNamespace(SRGB="SRGB"),
+            tasks=types.SimpleNamespace(
+                BaseOptions=lambda model_asset_path=None: types.SimpleNamespace(model_asset_path=model_asset_path),
+                vision=types.SimpleNamespace(
+                    RunningMode=types.SimpleNamespace(IMAGE="IMAGE"),
+                    ObjectDetectorOptions=lambda **kwargs: types.SimpleNamespace(**kwargs),
+                    ObjectDetector=types.SimpleNamespace(create_from_options=fake_create_from_options),
+                ),
+            ),
+        )
+        fake_cv2 = types.SimpleNamespace(
+            VideoCapture=FakeCapture,
+            COLOR_BGR2GRAY=0,
+            COLOR_BGR2RGB=1,
+            cvtColor=lambda frame, mode: types.SimpleNamespace(mean=lambda: 120.0)
+            if mode == 0
+            else frame,
+            data=types.SimpleNamespace(haarcascades=""),
+            CascadeClassifier=lambda path: types.SimpleNamespace(detectMultiScale=lambda *args, **kwargs: []),
+        )
+        analyzer = LocalVisionAnalyzer(
+            enabled=True,
+            default_camera_index=1,
+            analyzer="opencv",
+            object_detector_model_path=str(model_path),
+        )
+
+        with mock.patch.dict(sys.modules, {"cv2": fake_cv2, "mediapipe": fake_mp}):
+            observation = analyzer.capture(VisionCaptureRequest(session_id="pet-session"))
+
+        payload = observation.to_dict()
+        self.assertEqual(len(fake_detector_instances), 1)
+        self.assertEqual(
+            Path(fake_detector_instances[0].options.base_options.model_asset_path).resolve(),
+            model_path.resolve(),
+        )
+        self.assertEqual(payload["vision"]["objects"][0]["label"], "cup")
+        self.assertEqual(payload["vision"]["objects"][1]["label"], "keyboard")
+        self.assertEqual(payload["vision"]["scene"]["object_count"], 2)
+        self.assertEqual(payload["vision"]["scene"]["object_labels"], ["cup", "keyboard"])
+        self.assertIn("cup", payload["vision"]["scene"]["summary"])
+        self.assertIn("keyboard", payload["vision"]["scene"]["summary"])
+        self.assertTrue(payload["vision"]["scene"]["object_detector_ready"])
+        self.assertEqual(payload["vision"]["scene"]["object_detector_status"], "ready")
+
+    async def test_local_vision_analyzer_falls_back_to_opencv_when_mediapipe_model_is_missing(self):
+        LocalVisionAnalyzer = _load_attr("harness.pet.vision", "LocalVisionAnalyzer")
+        VisionCaptureRequest = _load_attr("harness.pet.vision", "VisionCaptureRequest")
+
+        class FakeFrame:
+            shape = (360, 640, 3)
+
+        class FakeCapture:
+            def __init__(self, camera_index):
+                self.camera_index = camera_index
+
+            def isOpened(self):
+                return True
+
+            def read(self):
+                return True, FakeFrame()
+
+            def release(self):
+                pass
+
+        fake_cv2 = types.SimpleNamespace(
+            VideoCapture=FakeCapture,
+            COLOR_BGR2GRAY=0,
+            COLOR_BGR2RGB=1,
+            cvtColor=lambda frame, mode: types.SimpleNamespace(mean=lambda: 160.0)
+            if mode == 0
+            else frame,
+            data=types.SimpleNamespace(haarcascades=""),
+            CascadeClassifier=lambda path: types.SimpleNamespace(
+                detectMultiScale=lambda *args, **kwargs: [(12, 18, 160, 120)]
+            ),
+        )
+        analyzer = LocalVisionAnalyzer(
+            enabled=True,
+            default_camera_index=2,
+            analyzer="mediapipe_face_landmarker",
+            face_landmarker_model_path="",
+        )
+
+        with mock.patch.dict(sys.modules, {"cv2": fake_cv2}):
+            observation = analyzer.capture(VisionCaptureRequest(session_id="pet-session"))
+
+        payload = observation.to_dict()
+        self.assertEqual(payload["vision"]["analyzer"], "mediapipe_face_landmarker")
+        self.assertEqual(payload["vision"]["mode"], "opencv_face_detection")
+        self.assertEqual(payload["vision"]["attention"], "face_detected")
+        self.assertTrue(payload["vision"]["face_present"])
+        self.assertEqual(payload["vision"]["pose"]["face_confidence"], 0.72)
+        self.assertEqual(payload["vision"]["confidence"], 0.72)
+        self.assertEqual(payload["vision"]["scene"]["summary"], "看到了你的脸，周围很明亮。")
+        self.assertEqual(payload["vision"]["scene"]["object_count"], 0)
+        self.assertEqual(payload["vision"]["scene"]["object_labels"], [])
+        self.assertFalse(payload["vision"]["scene"]["object_detector_ready"])
+        self.assertEqual(payload["vision"]["scene"]["object_detector_status"], "heuristic_fallback")
 
     async def test_voice_training_service_requires_consent_and_prepares_runtime_reference_without_sidecar(self):
         VoiceTrainingRequest = _load_attr("harness.pet.voice_training", "VoiceTrainingRequest")

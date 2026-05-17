@@ -46,10 +46,13 @@ Item {
     }
 
     function cloudPrivacyText() {
+        if (root.localOnlyMode) {
+            return "云视觉 本地锁定"
+        }
         if (!root.cloudVisionEnabled) {
             return "云视觉 关闭"
         }
-        return root.providerAvailable ? "云视觉 已授权" : "云视觉 无提供方"
+        return root.providerAvailable ? "云视觉 已授权" : "云视觉 等待提供方"
     }
 
     function localModeText() {
@@ -60,7 +63,17 @@ Item {
         return root.debugRetentionEnabled ? "调试保留 开启" : "调试保留 关闭"
     }
 
+    function visionDiagnosticText() {
+        if (!root.cameraEnabled) {
+            return "摄像头关闭"
+        }
+        return root.cameraCaptureStatus.length > 0 ? root.cameraCaptureStatus : "等待摄像头状态"
+    }
+
     function privacyColor() {
+        if (root.localOnlyMode) {
+            return "#b7a6b0"
+        }
         if (!root.cloudVisionEnabled) {
             return "#b7a6b0"
         }
@@ -103,6 +116,7 @@ Item {
             item.petController = root.petController
             item.cameraEnabled = root.cameraEnabled
             item.cloudVisionEnabled = root.cloudVisionEnabled
+            root.cameraCaptureStatus = item.statusText
             item.statusChanged.connect(function(text) {
                 root.cameraCaptureStatus = text
             })
@@ -137,7 +151,7 @@ Item {
         anchors.leftMargin: 10
         anchors.bottomMargin: 10
         width: 182
-        height: 96
+        height: 118
         radius: 10
         antialiasing: true
         color: root.sceneTintColor
@@ -162,6 +176,14 @@ Item {
                 text: root.localModeText()
                 color: "#4b3042"
                 font.pixelSize: 11
+                elide: Text.ElideRight
+            }
+
+            Label {
+                width: parent.width
+                text: root.visionDiagnosticText()
+                color: "#7a6b78"
+                font.pixelSize: 10
                 elide: Text.ElideRight
             }
 

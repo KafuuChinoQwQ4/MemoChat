@@ -76,7 +76,7 @@ class PetEventBus:
         gaze: PetGaze | None = None,
         safety: PetSafety | None = None,
         action_name: str = "",
-        vision: PetVision | None = None,
+        vision: PetVision | dict | None = None,
         privacy: PetPrivacy | None = None,
         debug: dict | None = None,
     ) -> PetControlEvent:

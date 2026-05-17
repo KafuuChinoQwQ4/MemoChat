@@ -241,7 +241,53 @@ Window {
         petControlWindowRef.localOnlyMode = root.localOnlyMode
         petControlWindowRef.debugRetentionEnabled = root.debugRetentionEnabled
         petControlWindowRef.voiceReplyEnabled = root.voiceReplyEnabled
-        petControlWindowRef.providerAvailable = root.providerAvailable
+        petControlWindowRef.providerAvailable = root.providerRuntimeAvailable()
+    }
+
+    function providerRuntimeAvailable() {
+        if (root.providerAvailable) {
+            return true
+        }
+        if (!root.agentController) {
+            return false
+        }
+        var current = root.agentController.currentModel || ""
+        if (current.length > 0) {
+            return true
+        }
+        var models = root.agentController.availableModels || []
+        if (models.length > 0) {
+            return true
+        }
+        var providerStatus = root.agentController.apiProviderStatus || ""
+        return providerStatus.indexOf("已接入") >= 0
+    }
+
+    function enforceVisionPrivacy() {
+        if ((root.localOnlyMode || !root.providerRuntimeAvailable()) && root.cloudVisionEnabled) {
+            root.cloudVisionEnabled = false
+        }
+    }
+
+    function setCloudVisionEnabled(value) {
+        root.cloudVisionEnabled = value && !root.localOnlyMode && root.providerRuntimeAvailable()
+        root.syncControlWindowState()
+    }
+
+    function setLocalOnlyMode(value) {
+        root.localOnlyMode = value
+        root.enforceVisionPrivacy()
+        root.syncControlWindowState()
+    }
+
+    function applyAssetPrivacySettings() {
+        if (!root.petAssetSettings) {
+            return
+        }
+        root.cameraEnabled = root.petAssetSettings.cameraEnabled
+        root.cloudVisionEnabled = root.petAssetSettings.cloudVisionEnabled
+        root.enforceVisionPrivacy()
+        root.syncControlWindowState()
     }
 
     function resetPosition() {
@@ -307,11 +353,12 @@ Window {
         syncChatWindowState()
     }
     onAgentControllerChanged: {
+        enforceVisionPrivacy()
         syncControlWindowState()
         syncChatWindowState()
     }
     onPetAssetSettingsChanged: {
-        syncControlWindowState()
+        applyAssetPrivacySettings()
         syncChatWindowState()
     }
     onSelfAvatarChanged: syncChatWindowState()
@@ -333,10 +380,10 @@ Window {
         localOnlyMode: root.localOnlyMode
         debugRetentionEnabled: root.debugRetentionEnabled
         debugPanelVisible: root.debugPanelVisible
-        providerAvailable: root.providerAvailable
+        providerAvailable: root.providerRuntimeAvailable()
         onDragRequested: root.beginWindowDrag()
         onControlsRequested: root.openControlWindow()
-        onLocalOnlyModeToggled: function(value) { root.localOnlyMode = value; root.syncControlWindowState() }
+        onLocalOnlyModeToggled: function(value) { root.setLocalOnlyMode(value) }
         onDebugRetentionToggled: function(value) { root.debugRetentionEnabled = value; root.syncControlWindowState() }
     }
 
@@ -364,10 +411,26 @@ Window {
             onScaleInteractionFinished: root.endScaleInteraction()
             onMicMuteToggled: function(value) { root.micMuted = value; root.syncControlWindowState() }
             onCameraToggled: function(value) { root.cameraEnabled = value; root.syncControlWindowState() }
-            onCloudVisionToggled: function(value) { root.cloudVisionEnabled = value; root.syncControlWindowState() }
-            onLocalOnlyModeToggled: function(value) { root.localOnlyMode = value; root.syncControlWindowState() }
+            onCloudVisionToggled: function(value) { root.setCloudVisionEnabled(value) }
+            onLocalOnlyModeToggled: function(value) { root.setLocalOnlyMode(value) }
             onDebugRetentionToggled: function(value) { root.debugRetentionEnabled = value; root.syncControlWindowState() }
             onVoiceReplyToggled: function(value) { root.voiceReplyEnabled = value; root.syncControlWindowState() }
+        }
+    }
+
+    Connections {
+        target: root.agentController
+        function onModelChanged() {
+            root.enforceVisionPrivacy()
+            root.syncControlWindowState()
+        }
+        function onModelsChanged() {
+            root.enforceVisionPrivacy()
+            root.syncControlWindowState()
+        }
+        function onModelStateChanged() {
+            root.enforceVisionPrivacy()
+            root.syncControlWindowState()
         }
     }
 
@@ -396,5 +459,8 @@ Window {
         }
     }
 
-    Component.onCompleted: applyWindowFlags()
+    Component.onCompleted: {
+        applyAssetPrivacySettings()
+        applyWindowFlags()
+    }
 }
