@@ -4,6 +4,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
+import MemoChat 1.0
 
 Window {
     id: root
@@ -21,6 +22,7 @@ Window {
 
     property var petController: null
     property var agentController: null
+    property var petAssetSettings: null
     property bool alwaysOnTop: true
     property bool clickThrough: false
     property bool debugPanelVisible: false
@@ -33,6 +35,11 @@ Window {
     property bool voiceReplyEnabled: true
     property bool providerAvailable: false
     property string cameraCaptureStatus: cameraEnabled ? "摄像头本地捕捉" : "摄像头关闭"
+    property string modelRoot: petAssetSettings ? petAssetSettings.modelRoot : ""
+    property string modelJson: petAssetSettings ? petAssetSettings.modelJson : ""
+    property string motionDirectory: petAssetSettings ? petAssetSettings.motionDirectory : ""
+    property string expressionDirectory: petAssetSettings ? petAssetSettings.expressionDirectory : ""
+    property string voiceDirectory: petAssetSettings ? petAssetSettings.voiceDirectory : ""
 
     readonly property color accentColor: "#74b2ba"
     readonly property color panelColor: "#fffafd"
@@ -42,6 +49,7 @@ Window {
     readonly property bool apiProviderBusy: agentController ? agentController.apiProviderBusy : false
     readonly property string apiProviderStatus: agentController ? agentController.apiProviderStatus : ""
     readonly property bool modelRefreshBusy: agentController ? agentController.modelRefreshBusy : false
+    readonly property var live2dActions: live2dActionAsset.actionItems
 
     signal closePetRequested()
     signal chatRequested()
@@ -58,6 +66,27 @@ Window {
     signal localOnlyModeToggled(bool value)
     signal debugRetentionToggled(bool value)
     signal voiceReplyToggled(bool value)
+    signal live2DActionRequested(var action)
+    signal live2DAutoRequested()
+
+    Live2DAsset {
+        id: live2dActionAsset
+        modelRoot: root.modelRoot
+        modelJson: root.modelJson
+        motionDirectory: root.motionDirectory
+        expressionDirectory: root.expressionDirectory
+        voiceDirectory: root.voiceDirectory
+        onAssetInputsChanged: live2dActionRefresh.restart()
+    }
+
+    Timer {
+        id: live2dActionRefresh
+        interval: 160
+        repeat: false
+        onTriggered: live2dActionAsset.validate()
+    }
+
+    Component.onCompleted: live2dActionRefresh.start()
 
     function openPanel() {
         show()
@@ -138,6 +167,23 @@ Window {
             return
         }
         root.petController.sendText(text)
+    }
+
+    function actionKindLabel(kind) {
+        if (kind === "motion") {
+            return "动作"
+        }
+        if (kind === "expression") {
+            return "表情"
+        }
+        return "控制"
+    }
+
+    function requestLive2DAction(action) {
+        if (!action) {
+            return
+        }
+        root.live2DActionRequested(action)
     }
 
     function registerApiProvider() {
@@ -255,6 +301,76 @@ Window {
                             text: "打断"
                             enabled: root.petController && root.petController.sessionId.length > 0
                             onClicked: root.petController.interrupt()
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: root.borderColor
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 7
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: "动作"
+                                color: "#4b3042"
+                                font.pixelSize: 13
+                                font.bold: true
+                                elide: Text.ElideRight
+                            }
+
+                            Label {
+                                text: live2dActionAsset.actionItems.length + " 个"
+                                color: "#6a7b92"
+                                font.pixelSize: 11
+                            }
+
+                            PetMenuButton {
+                                Layout.preferredWidth: 70
+                                text: "自动"
+                                onClicked: root.live2DAutoRequested()
+                            }
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            visible: live2dActionAsset.actionItems.length === 0
+                            text: live2dActionAsset.statusText.length > 0
+                                  ? live2dActionAsset.statusText
+                                  : "未发现可用动作"
+                            color: "#8f7c88"
+                            font.pixelSize: 11
+                            wrapMode: Text.Wrap
+                            maximumLineCount: 2
+                            elide: Text.ElideRight
+                        }
+
+                        GridLayout {
+                            Layout.fillWidth: true
+                            columns: 2
+                            rowSpacing: 6
+                            columnSpacing: 6
+
+                            Repeater {
+                                model: live2dActionAsset.actionItems
+
+                                delegate: PetMenuButton {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    text: (modelData.name || modelData.trigger || "")
+                                          + " · " + root.actionKindLabel(modelData.kind || "")
+                                    enabled: root.petAssetSettings !== null
+                                    onClicked: root.requestLive2DAction(modelData)
+                                }
+                            }
                         }
                     }
 

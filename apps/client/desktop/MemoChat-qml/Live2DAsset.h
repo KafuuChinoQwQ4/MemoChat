@@ -5,6 +5,7 @@
 #include <QJsonValue>
 #include <QString>
 #include <QStringList>
+#include <QVariantList>
 
 class Live2DAsset : public QObject
 {
@@ -29,6 +30,7 @@ class Live2DAsset : public QObject
     Q_PROPERTY(int textureCount READ textureCount NOTIFY validationChanged)
     Q_PROPERTY(int voiceCount READ voiceCount NOTIFY validationChanged)
     Q_PROPERTY(int referencedFileCount READ referencedFileCount NOTIFY validationChanged)
+    Q_PROPERTY(QVariantList actionItems READ actionItems NOTIFY validationChanged)
 
 public:
     explicit Live2DAsset(QObject *parent = nullptr);
@@ -54,6 +56,7 @@ public:
     int textureCount() const { return _texture_count; }
     int voiceCount() const { return _voice_count; }
     int referencedFileCount() const { return _referenced_file_count; }
+    QVariantList actionItems() const { return _action_items; }
 
     Q_INVOKABLE void validate();
     Q_INVOKABLE void clear();
@@ -91,7 +94,8 @@ private:
                        const QString &userDataFile,
                        const QString &vtubeMappingFile,
                        const QString &packageChecksum,
-                       int referencedFileCount);
+                       int referencedFileCount,
+                       const QVariantList &actionItems = QVariantList());
 
     QString _model_root;
     QString _model_json;
@@ -115,6 +119,7 @@ private:
     int _texture_count = 0;
     int _voice_count = 0;
     int _referenced_file_count = 0;
+    QVariantList _action_items;
 };
 
 #endif // LIVE2DASSET_H

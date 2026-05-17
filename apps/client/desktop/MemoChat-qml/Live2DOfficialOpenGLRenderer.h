@@ -10,7 +10,9 @@
 class Live2DOfficialOpenGLRenderer final
 {
 public:
-    explicit Live2DOfficialOpenGLRenderer(const QString &modelPath = QString());
+    explicit Live2DOfficialOpenGLRenderer(const QString &modelPath = QString(),
+                                          const QString &motionDirectory = QString(),
+                                          const QString &expressionDirectory = QString());
     ~Live2DOfficialOpenGLRenderer();
 
     bool isReady() const;

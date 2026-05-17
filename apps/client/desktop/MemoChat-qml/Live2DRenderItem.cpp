@@ -154,8 +154,14 @@ public:
         }
 
         const QString nextModelPath = live2dItem->resolvedModelPath();
-        if (_model_path != nextModelPath) {
+        const QString nextMotionDirectory = live2dItem->motionDirectory();
+        const QString nextExpressionDirectory = live2dItem->expressionDirectory();
+        if (_model_path != nextModelPath
+            || _motion_directory != nextMotionDirectory
+            || _expression_directory != nextExpressionDirectory) {
             _model_path = nextModelPath;
+            _motion_directory = nextMotionDirectory;
+            _expression_directory = nextExpressionDirectory;
             _render_error.clear();
             _official_renderer.reset();
             _native_attempted = false;
@@ -190,7 +196,9 @@ public:
 
         if (!_native_attempted) {
             _native_attempted = true;
-            _official_renderer = std::make_unique<Live2DOfficialOpenGLRenderer>(_model_path);
+            _official_renderer = std::make_unique<Live2DOfficialOpenGLRenderer>(_model_path,
+                                                                                _motion_directory,
+                                                                                _expression_directory);
             if (!_official_renderer->isReady()) {
                 _render_error = _official_renderer->errorString();
                 qWarning().noquote() << "Live2D official OpenGL renderer unavailable for"
@@ -278,6 +286,8 @@ private:
 
     QPointer<Live2DRenderItem> _item;
     QString _model_path;
+    QString _motion_directory;
+    QString _expression_directory;
     QString _render_error;
     QString _last_render_status;
     QString _last_render_error;
@@ -372,6 +382,9 @@ void Live2DRenderItem::applyControlEvent(const QVariantMap &event)
     setGazeY(gaze.value(QStringLiteral("y"), _gaze_y).toDouble());
     const QVariantMap lipSync = event.value(QStringLiteral("lip_sync")).toMap();
     setLipSyncValue(lipSync.value(QStringLiteral("value"), _lip_sync_value).toDouble());
+    if (event.contains(QStringLiteral("expression")) || event.contains(QStringLiteral("motion"))) {
+        setActionSerial(_action_serial + 1);
+    }
 }
 
 void Live2DRenderItem::setModelRoot(const QString &value)
@@ -390,6 +403,26 @@ void Live2DRenderItem::setModelJson(const QString &value)
         return;
     }
     _model_json = value;
+    update();
+    emit modelSourceChanged();
+}
+
+void Live2DRenderItem::setMotionDirectory(const QString &value)
+{
+    if (_motion_directory == value) {
+        return;
+    }
+    _motion_directory = value;
+    update();
+    emit modelSourceChanged();
+}
+
+void Live2DRenderItem::setExpressionDirectory(const QString &value)
+{
+    if (_expression_directory == value) {
+        return;
+    }
+    _expression_directory = value;
     update();
     emit modelSourceChanged();
 }
@@ -461,6 +494,15 @@ void Live2DRenderItem::setLipSyncValue(qreal value)
     updateVisual();
 }
 
+void Live2DRenderItem::setActionSerial(int value)
+{
+    if (_action_serial == value) {
+        return;
+    }
+    _action_serial = value;
+    updateVisual();
+}
+
 qreal Live2DRenderItem::boundedUnit(qreal value, qreal fallback)
 {
     if (qIsNaN(value)) {
@@ -490,6 +532,7 @@ Live2DVisualState Live2DRenderItem::visualState() const
     state.gazeY = _gaze_y;
     state.lipSyncValue = _lip_sync_value;
     state.idlePhase = _idle_phase;
+    state.actionSerial = _action_serial;
     return state;
 }
 

@@ -12,6 +12,13 @@ fi
 RUNTIME_DIR="${MEMOCHAT_RUNTIME_DIR:-${PROJECT_ROOT}/infra/Memo_ops/runtime/services}"
 SOURCE_ROOT="${PROJECT_ROOT}/apps/server/core"
 CHECK_ONLY=0
+GPT_SOVITS_REQUIRED="${MEMOCHAT_REQUIRE_GPT_SOVITS:-0}"
+GPT_SOVITS_START_SCRIPT="${GPT_SOVITS_START_SCRIPT:-${PROJECT_ROOT}/tools/scripts/pet/start_gpt_sovits_api_wsl.sh}"
+GPT_SOVITS_ROOT="${GPT_SOVITS_ROOT:-/data/third_party/GPT-SoVITS}"
+GPT_SOVITS_ENV="${GPT_SOVITS_ENV:-/data/micromamba/envs/gpt-sovits}"
+GPT_SOVITS_HOST_DATA_DIR="${MEMOCHAT_PET_SOVITS_HOST_DATA_DIR:-/data/gpt-sovits}"
+GPT_SOVITS_REF_AUDIO="${MEMOCHAT_PET_SOVITS_REFERENCE_AUDIO:-${GPT_SOVITS_HOST_DATA_DIR}/refs/kafuu-chino-ref.wav}"
+GPT_SOVITS_PROMPT_TEXT_FILE="${MEMOCHAT_PET_SOVITS_PROMPT_TEXT_FILE:-${GPT_SOVITS_HOST_DATA_DIR}/refs/kafuu-chino-ref.ja.txt}"
 
 usage() {
     cat <<USAGE
@@ -25,7 +32,18 @@ The script mirrors deploy_services.ps1 but uses Linux binaries from:
 
 The QML client is copied from:
   ${CLIENT_BUILD_BIN}
+
+GPT-SoVITS is not deployed as a C++ runtime artifact, but this script checks the
+local WSL service prerequisites used by start-all-services.sh. Set
+MEMOCHAT_REQUIRE_GPT_SOVITS=1 to make missing GPT-SoVITS prerequisites fail.
 USAGE
+}
+
+is_truthy() {
+    case "${1,,}" in
+        1|true|yes|on) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
 while [[ $# -gt 0 ]]; do
@@ -112,6 +130,58 @@ copy_optional_from_candidates() {
         fi
     done
     echo "[WARN] Optional source not found for $(basename -- "$dst")"
+}
+
+gpt_sovits_warn_or_fail() {
+    local message="$1"
+    if is_truthy "$GPT_SOVITS_REQUIRED"; then
+        echo "[FAIL] ${message}" >&2
+        exit 1
+    fi
+    echo "[WARN] ${message}"
+}
+
+check_gpt_sovits_path() {
+    local label="$1"
+    local path="$2"
+    local kind="$3"
+
+    case "$kind" in
+        file)
+            if [[ -f "$path" ]]; then
+                echo "[OK] ${label}: ${path}"
+                return 0
+            fi
+            ;;
+        executable)
+            if [[ -x "$path" ]]; then
+                echo "[OK] ${label}: ${path}"
+                return 0
+            fi
+            ;;
+        directory)
+            if [[ -d "$path" ]]; then
+                echo "[OK] ${label}: ${path}"
+                return 0
+            fi
+            ;;
+    esac
+
+    gpt_sovits_warn_or_fail "${label} missing: ${path}"
+}
+
+check_gpt_sovits_prerequisites() {
+    echo
+    echo "[STEP] Check GPT-SoVITS voice service prerequisites"
+    check_gpt_sovits_path "GPT-SoVITS start script" "$GPT_SOVITS_START_SCRIPT" "file"
+    check_gpt_sovits_path "GPT-SoVITS root" "$GPT_SOVITS_ROOT" "directory"
+    check_gpt_sovits_path "GPT-SoVITS Python" "${GPT_SOVITS_ENV}/bin/python" "executable"
+    check_gpt_sovits_path "GPT-SoVITS reference audio" "$GPT_SOVITS_REF_AUDIO" "file"
+    if [[ -f "$GPT_SOVITS_PROMPT_TEXT_FILE" ]]; then
+        echo "[OK] GPT-SoVITS prompt text: ${GPT_SOVITS_PROMPT_TEXT_FILE}"
+    else
+        echo "[WARN] GPT-SoVITS prompt text not found: ${GPT_SOVITS_PROMPT_TEXT_FILE}"
+    fi
 }
 
 cmake_cache_value() {
@@ -277,6 +347,8 @@ fi
 if [[ "$missing" -ne 0 ]]; then
     exit 1
 fi
+
+check_gpt_sovits_prerequisites
 
 if [[ "$CHECK_ONLY" -eq 1 ]]; then
     echo "[SUCCESS] Source files are available for Linux runtime deploy"
