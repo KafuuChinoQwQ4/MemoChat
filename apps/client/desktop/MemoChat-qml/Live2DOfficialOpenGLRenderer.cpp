@@ -512,11 +512,17 @@ struct Live2DOfficialOpenGLRenderer::Impl
         }
         if (expressionManager) {
             expressionManager->StopAllMotions();
+            if (currentExpression) {
+                currentExpression->SetLoop(expressionLoopDefaults.value(currentExpression, false));
+            }
             CSM_DELETE(expressionManager);
             expressionManager = nullptr;
         }
         if (motionManager) {
             motionManager->StopAllMotions();
+            if (currentMotion) {
+                currentMotion->SetLoop(motionLoopDefaults.value(currentMotion, false));
+            }
             CSM_DELETE(motionManager);
             motionManager = nullptr;
         }
@@ -533,16 +539,20 @@ struct Live2DOfficialOpenGLRenderer::Impl
         }
         expressions.clear();
         expressionAliases.clear();
+        expressionLoopDefaults.clear();
         for (auto *motion : motions) {
             Csm::ACubismMotion::Delete(motion);
         }
         motions.clear();
         motionAliases.clear();
+        motionLoopDefaults.clear();
         currentExpression = nullptr;
         lastExpressionSerial = -1;
         currentMotion = nullptr;
         currentMotionKey.clear();
+        currentMotionPersistent = false;
         lastActionSerial = -1;
+        currentExpressionPersistent = false;
         hasLastIdlePhase = false;
         if (moc) {
             Csm::CubismMoc::Delete(moc);
@@ -687,6 +697,7 @@ struct Live2DOfficialOpenGLRenderer::Impl
         motion->SetFadeInTime(0.16f);
         motion->SetFadeOutTime(0.22f);
         motions.insert(key, motion);
+        motionLoopDefaults.insert(motion, motion->GetLoop());
 
         aliasMotion(trimmedGroup, key);
         aliasMotion(QStringLiteral("%1#%2").arg(trimmedGroup).arg(index), key);
@@ -766,6 +777,7 @@ struct Live2DOfficialOpenGLRenderer::Impl
         motion->SetFadeInTime(0.12f);
         motion->SetFadeOutTime(0.16f);
         expressions.insert(key, motion);
+        expressionLoopDefaults.insert(motion, motion->GetLoop());
     }
 
     void aliasExpression(const QString &alias, const QString &target)
@@ -820,12 +832,18 @@ struct Live2DOfficialOpenGLRenderer::Impl
         QString nextMotionKey;
         auto *nextMotion = motionForState(state, &nextMotionKey);
         const bool triggerChanged = state.actionSerial != lastActionSerial;
-        if (triggerChanged || nextMotion != currentMotion || nextMotionKey != currentMotionKey) {
+        const bool persistenceChanged = state.persistentMotion != currentMotionPersistent;
+        if (triggerChanged || persistenceChanged || nextMotion != currentMotion || nextMotionKey != currentMotionKey) {
             motionManager->StopAllMotions();
+            if (currentMotion) {
+                currentMotion->SetLoop(motionLoopDefaults.value(currentMotion, false));
+            }
             currentMotion = nextMotion;
             currentMotionKey = nextMotionKey;
+            currentMotionPersistent = state.persistentMotion;
             lastActionSerial = state.actionSerial;
             if (currentMotion) {
+                currentMotion->SetLoop(currentMotionPersistent || motionLoopDefaults.value(currentMotion, false));
                 motionManager->StartMotionPriority(currentMotion, false, 3);
             }
         }
@@ -856,11 +874,17 @@ struct Live2DOfficialOpenGLRenderer::Impl
         }
         auto *nextExpression = expressionForState(state);
         const bool triggerChanged = state.actionSerial != lastExpressionSerial;
-        if (triggerChanged || nextExpression != currentExpression) {
+        const bool persistenceChanged = state.persistentMotion != currentExpressionPersistent;
+        if (triggerChanged || persistenceChanged || nextExpression != currentExpression) {
             expressionManager->StopAllMotions();
+            if (currentExpression) {
+                currentExpression->SetLoop(expressionLoopDefaults.value(currentExpression, false));
+            }
             currentExpression = nextExpression;
+            currentExpressionPersistent = state.persistentMotion;
             lastExpressionSerial = state.actionSerial;
             if (currentExpression) {
+                currentExpression->SetLoop(currentExpressionPersistent || expressionLoopDefaults.value(currentExpression, false));
                 expressionManager->StartMotion(currentExpression, false);
             }
         }
@@ -1011,11 +1035,15 @@ struct Live2DOfficialOpenGLRenderer::Impl
     Csm::CubismExpressionMotionManager *expressionManager = nullptr;
     QHash<QString, Csm::ACubismMotion *> motions;
     QHash<QString, QString> motionAliases;
+    QHash<Csm::ACubismMotion *, bool> motionLoopDefaults;
     QHash<QString, Csm::ACubismMotion *> expressions;
     QHash<QString, QString> expressionAliases;
+    QHash<Csm::ACubismMotion *, bool> expressionLoopDefaults;
     Csm::ACubismMotion *currentMotion = nullptr;
     QString currentMotionKey;
+    bool currentMotionPersistent = false;
     Csm::ACubismMotion *currentExpression = nullptr;
+    bool currentExpressionPersistent = false;
     QVector<GLuint> textureIds;
     int lastActionSerial = -1;
     int lastExpressionSerial = -1;

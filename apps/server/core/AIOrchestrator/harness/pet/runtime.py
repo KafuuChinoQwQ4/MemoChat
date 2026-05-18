@@ -11,7 +11,7 @@ from .policy import PetPolicy
 from .providers import PetProviderError, PetProviderRouter
 from .session_store import PetSessionStore
 from .vision import LocalVisionAnalyzer, VisionCaptureRequest
-from .voice import GPTSoVITSVoiceProvider, VoiceProviderRouter
+from .voice import GPTSoVITSVoiceProvider, VoiceProviderError, VoiceProviderRouter, VoiceSynthesisRequest
 from .voice_training import VoiceTrainingJob, VoiceTrainingRequest, VoiceTrainingService, diagnose_reference_audio
 
 
@@ -37,7 +37,7 @@ class PetRuntimeConfig:
     voice_sovits_prompt_language: str = "zh"
     voice_sovits_text_language: str = "zh"
     voice_sovits_output_dir: str = "/app/.data/pet-voice-cache"
-    voice_sovits_timeout_sec: float = 60.0
+    voice_sovits_timeout_sec: float = 180.0
     voice_training_enabled: bool = True
     voice_training_artifact_root: str = "/app/.data/pet-voice-training"
 
@@ -141,12 +141,15 @@ class PetRuntime:
         return events
 
     async def update_observation(self, observation: PetObservation) -> PetControlEvent:
-        self._sessions.touch(observation.session_id, status="active")
+        session = self._sessions.touch(observation.session_id, status="active")
         self._observations[observation.session_id] = observation
+        turn_id = f"petturn-observe-{uuid.uuid4().hex}"
+        event_args = self._policy.observation(observation)
+        await self._attach_visual_voice(session, turn_id, event_args, observation)
         return await self._emit(
             observation.session_id,
-            turn_id=f"petturn-observe-{uuid.uuid4().hex}",
-            **self._policy.observation(observation),
+            turn_id=turn_id,
+            **event_args,
         )
 
     async def capture_observation(
@@ -342,6 +345,99 @@ class PetRuntime:
             return ""
         return _prompt_text_from_reference_audio(reference_audio)
 
+    async def _attach_visual_voice(
+        self,
+        session: PetSession,
+        turn_id: str,
+        event_args: dict,
+        observation: PetObservation,
+    ) -> None:
+        speech_text = str(event_args.get("speech_text") or "").strip()
+        if not speech_text:
+            return
+
+        runtime_metadata = self._voice_runtime_metadata()
+        runtime_metadata.update(_request_runtime_metadata(_observation_voice_metadata(observation)))
+        language = str(
+            event_args.get("speech_language")
+            or runtime_metadata.get("reply_language")
+            or runtime_metadata.get("language")
+            or runtime_metadata.get("voice_language")
+            or "zh-CN"
+        ).strip() or "zh-CN"
+        runtime_metadata.setdefault("reply_language", language)
+        runtime_metadata.setdefault("language", language)
+        runtime_metadata["voice_language"] = language
+        runtime_metadata["text_lang"] = _voice_text_language(language)
+        provider = str(runtime_metadata.get("voice_provider") or "scripted")
+        voice_name = str(runtime_metadata.get("voice_name") or provider or "deterministic")
+        if _normalize_provider(provider) in {"", "scripted", "deterministic"}:
+            event_args["audio_state"] = "error"
+            event_args.setdefault("debug", {})["voice"] = {
+                "provider": provider or "scripted",
+                "voice": voice_name,
+                "state": "error",
+                "duration_ms": 0,
+                "retention": "none",
+                "metadata": {
+                    "language": language,
+                    "text_lang": _voice_text_language(language),
+                    "audio_error": "visual speech requires a configured non-deterministic voice provider",
+                    "audio_error_provider": provider or "scripted",
+                    "audio_error_recoverable": True,
+                },
+            }
+            return
+
+        try:
+            voice = await self._voice_router.synthesize(
+                VoiceSynthesisRequest(
+                    session_id=session.session_id,
+                    turn_id=turn_id,
+                    text=speech_text,
+                    provider=provider,
+                    voice=voice_name,
+                    language=language,
+                    metadata=runtime_metadata,
+                )
+            )
+        except VoiceProviderError as exc:
+            event_args["audio_state"] = "error"
+            event_args.setdefault("debug", {})["voice"] = {
+                "provider": exc.provider or provider,
+                "voice": voice_name,
+                "state": "error",
+                "duration_ms": 0,
+                "retention": "none",
+                "metadata": {
+                    "language": language,
+                    "text_lang": _voice_text_language(language),
+                    "audio_error": str(exc),
+                    "audio_error_provider": exc.provider or provider,
+                    "audio_error_recoverable": bool(exc.recoverable),
+                },
+            }
+            return
+
+        voice_payload = voice.to_dict()
+        event_args["audio_state"] = voice_payload.get("state") or "text-only"
+        event_args["audio_sample_rate"] = voice_payload.get("sample_rate") or 0
+        event_args["audio_duration_ms"] = voice_payload.get("duration_ms") or 0
+        event_args["audio_chunk_ref"] = voice_payload.get("chunk_ref")
+        event_args["audio_url"] = voice_payload.get("url")
+        event_args["audio_phoneme"] = voice_payload.get("phoneme")
+        event_args["audio_viseme"] = voice_payload.get("viseme")
+        event_args["privacy_retention"] = voice_payload.get("retention") or "none"
+        event_args["lip_sync"] = max(float(event_args.get("lip_sync") or 0.0), float(voice_payload.get("rms") or 0.0))
+        event_args.setdefault("debug", {})["voice"] = {
+            "provider": voice_payload.get("provider") or provider,
+            "voice": voice_payload.get("voice") or voice_name,
+            "state": voice_payload.get("state") or "text-only",
+            "duration_ms": voice_payload.get("duration_ms") or 0,
+            "retention": voice_payload.get("retention") or "none",
+            "metadata": voice_payload.get("metadata") or {},
+        }
+
 
 def _turn_id() -> str:
     return f"petturn-{uuid.uuid4().hex}"
@@ -376,7 +472,7 @@ def _runtime_config_from(config: PetRuntimeConfig | object | None) -> PetRuntime
             getattr(config, "voice_sovits_output_dir", "/app/.data/pet-voice-cache")
             or "/app/.data/pet-voice-cache"
         ),
-        voice_sovits_timeout_sec=_positive_float(getattr(config, "voice_sovits_timeout_sec", 60.0), 60.0),
+        voice_sovits_timeout_sec=_positive_float(getattr(config, "voice_sovits_timeout_sec", 180.0), 180.0),
         voice_training_enabled=bool(getattr(config, "voice_training_enabled", True)),
         voice_training_artifact_root=str(
             getattr(config, "voice_training_artifact_root", "/app/.data/pet-voice-training")
@@ -452,6 +548,16 @@ def _request_runtime_metadata(metadata: dict | None) -> dict:
     speech_rules = str(metadata.get("speech_rules") or "").strip()
     if speech_rules:
         result["speech_rules"] = speech_rules
+    return result
+
+
+def _observation_voice_metadata(observation: PetObservation) -> dict:
+    vision = observation.vision if isinstance(observation.vision, dict) else {}
+    result = {}
+    for key in ("reply_language", "language", "voice_language", "text_lang", "speech_rules"):
+        value = str(vision.get(key) or "").strip()
+        if value:
+            result[key] = value
     return result
 
 

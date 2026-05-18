@@ -302,7 +302,7 @@ Window {
         const text = event.text || {}
         const speech = event.speech || {}
         const audio = event.audio || {}
-        const controllerText = root.petController ? root.stringValue(root.petController.speechDisplayText) : ""
+        const controllerText = root.petController ? root.stringValue(root.petController.speechText) : ""
         const controllerTranslation = root.petController ? root.stringValue(root.petController.speechTranslation) : ""
         const controllerAudioUrl = root.petController ? root.stringValue(root.petController.audioUrl) : ""
         const controllerAudioState = root.petController ? root.stringValue(root.petController.audioState) : ""

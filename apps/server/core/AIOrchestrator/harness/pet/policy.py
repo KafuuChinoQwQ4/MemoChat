@@ -9,7 +9,14 @@ from .providers import PetProviderError, ProviderChunk
 
 
 _VISUAL_SUMMARY_CONFIDENCE_THRESHOLD = 0.8
+_FIRST_USER_SEEN_CONFIDENCE_THRESHOLD = 0.6
 _VISUAL_SUMMARY_COOLDOWN_SEC = 5.0
+_FIRST_USER_SEEN_SPEECH_TEXT = "我已经看到你了哦~"
+_FIRST_USER_SEEN_SPEECH_TEXT_BY_LANGUAGE = {
+    "ja": "ちゃんと見えているよ~",
+    "zh": _FIRST_USER_SEEN_SPEECH_TEXT,
+    "en": "I can see you now~",
+}
 
 
 class PetPolicy:
@@ -108,6 +115,7 @@ class PetPolicy:
         expression = visual_summary.get("expression") if speak else reaction["expression"]
         lip_sync = max(reaction["lip_sync"], float(visual_summary.get("lip_sync", 0.0))) if speak else reaction["lip_sync"]
         speech_text = str(visual_summary.get("speech_text") or "") if speak else ""
+        speech_language = str(visual_summary.get("speech_language") or _vision_reply_language(vision_payload))
         return {
             "phase": phase,
             "emotion": emotion,
@@ -116,6 +124,7 @@ class PetPolicy:
             "expression": expression,
             "lip_sync": lip_sync,
             "speech_text": speech_text,
+            "speech_language": speech_language,
             "text_final": speak,
             "audio_state": "text-only" if speak else None,
             "gaze": reaction["gaze"],
@@ -154,7 +163,8 @@ class PetPolicy:
     def _update_visual_summary(self, session_id: str, vision: dict, reaction: dict) -> dict:
         now_ms = int(time.time() * 1000)
         state = dict(self._visual_summary_state.get(session_id) or {})
-        summary = _visual_reaction_summary(session_id, vision, reaction, state, now_ms)
+        speech_language = _vision_reply_language(vision)
+        summary = _visual_reaction_summary(session_id, vision, reaction, state, now_ms, speech_language)
         confidence = _clamp_float(summary.get("confidence"), 0.0, 1.0, 0.0)
         if summary.get("speak"):
             summary["intensity"] = _visual_reaction_intensity(confidence)
@@ -215,8 +225,38 @@ def _head_pose_signature(head_pose: dict) -> str:
     return f"{yaw}:{pitch}:{roll}"
 
 
-def _visual_expression_text(expression: str) -> str:
+def _language_key(language: str) -> str:
+    normalized = _normalize_reply_language(language).lower()
+    if normalized.startswith("ja"):
+        return "ja"
+    if normalized.startswith("en"):
+        return "en"
+    return "zh"
+
+
+def _visual_expression_text(expression: str, language: str = "zh-CN") -> str:
     normalized = str(expression or "").strip().lower()
+    language_key = _language_key(language)
+    if language_key == "ja":
+        if normalized in {"smile", "happy", "cheerful"}:
+            return "いい表情をしているね。"
+        if normalized in {"surprised", "surprise"}:
+            return "少し驚いたみたいだね。"
+        if normalized in {"sad", "tired"}:
+            return "少し疲れているみたい。"
+        if normalized in {"concerned", "worried"}:
+            return "少し心配そうに見えるよ。"
+        return "あなたの様子を見ているよ。"
+    if language_key == "en":
+        if normalized in {"smile", "happy", "cheerful"}:
+            return "You look like you are in a good mood."
+        if normalized in {"surprised", "surprise"}:
+            return "You looked a little surprised."
+        if normalized in {"sad", "tired"}:
+            return "You look a little tired."
+        if normalized in {"concerned", "worried"}:
+            return "You look a little worried."
+        return "I am watching your state."
     if normalized in {"smile", "happy", "cheerful"}:
         return "你看起来心情不错。"
     if normalized in {"surprised", "surprise"}:
@@ -228,11 +268,32 @@ def _visual_expression_text(expression: str) -> str:
     return "我在观察你的状态。"
 
 
-def _visual_pose_text(head_pose: dict) -> str:
+def _visual_pose_text(head_pose: dict, language: str = "zh-CN") -> str:
     if not isinstance(head_pose, dict) or not head_pose:
         return ""
     yaw = _clamp_float(head_pose.get("yaw"), -90.0, 90.0, 0.0)
     pitch = _clamp_float(head_pose.get("pitch"), -90.0, 90.0, 0.0)
+    language_key = _language_key(language)
+    if language_key == "ja":
+        if yaw >= 15.0:
+            return "少し右を向いているね。"
+        if yaw <= -15.0:
+            return "少し左を向いているね。"
+        if pitch >= 15.0:
+            return "こちらを見上げているね。"
+        if pitch <= -15.0:
+            return "少し下を向いているね。"
+        return ""
+    if language_key == "en":
+        if yaw >= 15.0:
+            return "You are turned a little to the right."
+        if yaw <= -15.0:
+            return "You are turned a little to the left."
+        if pitch >= 15.0:
+            return "You are looking up at me."
+        if pitch <= -15.0:
+            return "You are looking down a little."
+        return ""
     if yaw >= 15.0:
         return "你现在稍微偏向右边。"
     if yaw <= -15.0:
@@ -244,13 +305,26 @@ def _visual_pose_text(head_pose: dict) -> str:
     return ""
 
 
-def _visual_scene_text(scene: dict) -> str:
+def _visual_scene_text(scene: dict, language: str = "zh-CN") -> str:
     if not isinstance(scene, dict) or not scene:
         return ""
     summary = _normalize_text(str(scene.get("summary") or scene.get("description") or scene.get("caption") or ""))
     if summary:
         return summary
     lighting = str(scene.get("lighting") or "").strip().lower()
+    language_key = _language_key(language)
+    if language_key == "ja":
+        if lighting in {"dim", "dark"}:
+            return "少し暗いみたい。"
+        if lighting in {"bright", "sunny"}:
+            return "明るく見えるね。"
+        return ""
+    if language_key == "en":
+        if lighting in {"dim", "dark"}:
+            return "It looks a little dark there."
+        if lighting in {"bright", "sunny"}:
+            return "It looks bright there."
+        return ""
     if lighting in {"dim", "dark"}:
         return "这里光线有点暗。"
     if lighting in {"bright", "sunny"}:
@@ -258,22 +332,34 @@ def _visual_scene_text(scene: dict) -> str:
     return ""
 
 
-def _visual_summary_text(vision: dict, reaction: dict) -> str:
+def _visual_summary_text(vision: dict, reaction: dict, language: str = "zh-CN") -> str:
+    language_key = _language_key(language)
     parts: list[str] = []
-    parts.append(_visual_expression_text(str(vision.get("expression") or reaction.get("emotion") or "")))
+    parts.append(_visual_expression_text(str(vision.get("expression") or reaction.get("emotion") or ""), language))
     scene = _dict_or_empty(vision.get("scene"))
-    scene_text = _visual_scene_text(scene)
+    scene_text = _visual_scene_text(scene, language)
     if scene_text:
         parts.append(scene_text)
-    pose_text = _visual_pose_text(_dict_or_empty(vision.get("head_pose")))
+    pose_text = _visual_pose_text(_dict_or_empty(vision.get("head_pose")), language)
     if pose_text:
         parts.append(pose_text)
     if not scene_text:
         label = _first_object_label(vision.get("objects"))
         if label:
-            parts.append(f"我注意到你旁边有{label}。")
+            if language_key == "ja":
+                parts.append(f"近くに{label}があるのに気づいたよ。")
+            elif language_key == "en":
+                parts.append(f"I noticed {label} near you.")
+            else:
+                parts.append(f"我注意到你旁边有{label}。")
     summary = " ".join(part for part in parts if part)
-    return _normalize_text(summary or "我在观察你的状态。")
+    if summary:
+        return _normalize_text(summary)
+    if language_key == "ja":
+        return "あなたの様子を見ているよ。"
+    if language_key == "en":
+        return "I am watching your state."
+    return "我在观察你的状态。"
 
 
 def _visual_signature(vision: dict, reaction: dict) -> str:
@@ -300,6 +386,13 @@ def _is_high_confidence(vision: dict) -> bool:
     return face_confidence >= _VISUAL_SUMMARY_CONFIDENCE_THRESHOLD
 
 
+def _is_detected_user(vision: dict) -> bool:
+    confidence = _clamp_float(vision.get("confidence"), 0.0, 1.0, 0.0)
+    pose = _dict_or_empty(vision.get("pose"))
+    face_confidence = _clamp_float(pose.get("face_confidence"), 0.0, 1.0, 0.0)
+    return max(confidence, face_confidence) >= _FIRST_USER_SEEN_CONFIDENCE_THRESHOLD
+
+
 def _visual_reaction_intensity(confidence: float) -> float:
     return max(0.42, min(0.95, 0.48 + confidence * 0.42))
 
@@ -316,7 +409,7 @@ def _visual_summary_state(state: dict, should_speak: bool, summary_text: str, sp
     payload["speak"] = should_speak
     payload["summary_text"] = summary_text if should_speak else ""
     payload["speech_text"] = speech_text if should_speak else ""
-    payload["updated_at_ms"] = now_ms if should_speak else _safe_int(state.get("updated_at_ms"), now_ms)
+    payload["updated_at_ms"] = now_ms if should_speak else _safe_int(state.get("updated_at_ms"), 0)
     payload["reason"] = state.get("reason") or "cached"
     return payload
 
@@ -327,6 +420,7 @@ def _visual_reaction_summary(
     reaction: dict,
     state: dict,
     now_ms: int,
+    speech_language: str = "zh-CN",
 ) -> dict:
     face_present = bool(vision.get("face_present", False))
     confidence = _clamp_float(vision.get("confidence"), 0.0, 1.0, 0.0)
@@ -351,6 +445,30 @@ def _visual_reaction_summary(
             "reason": "no_face",
         }
 
+    previous_face_seen = bool(state.get("ever_seen_face", False))
+    if not previous_face_seen and _is_detected_user(vision):
+        signature = _visual_signature(vision, reaction)
+        summary_text = _visual_summary_text(vision, reaction, speech_language)
+        return {
+            "session_id": session_id,
+            "face_present": True,
+            "ever_seen_face": True,
+            "confidence": confidence,
+            "emotion": "cheerful",
+            "expression": "smile_soft",
+            "motion": "talk",
+            "summary_text": summary_text,
+            "speech_text": _first_user_seen_speech_text(speech_language),
+            "speech_language": speech_language,
+            "cached_summary_text": summary_text,
+            "signature": signature,
+            "cooldown_sec": _VISUAL_SUMMARY_COOLDOWN_SEC,
+            "reason": "first_user_seen",
+            "updated": True,
+            "speak": True,
+            "updated_at_ms": now_ms,
+        }
+
     if not _is_high_confidence(vision):
         return _visual_summary_state(
             state,
@@ -361,6 +479,8 @@ def _visual_reaction_summary(
         ) | {
             "session_id": session_id,
             "face_present": True,
+            "ever_seen_face": previous_face_seen,
+            "speech_language": speech_language,
             "confidence": confidence,
             "emotion": str(reaction.get("emotion") or "neutral"),
             "expression": str(reaction.get("expression") or "neutral"),
@@ -379,11 +499,13 @@ def _visual_reaction_summary(
     cooldown_elapsed = previous_at <= 0 or now_ms - previous_at >= cooldown_ms
     changed = signature != previous_signature
     should_speak = changed and cooldown_elapsed
-    summary_text = _visual_summary_text(vision, reaction)
+    summary_text = _visual_summary_text(vision, reaction, speech_language)
     speech_text = summary_text if should_speak else ""
     result = {
         "session_id": session_id,
         "face_present": True,
+        "ever_seen_face": previous_face_seen,
+        "speech_language": speech_language,
         "confidence": confidence,
         "emotion": str(reaction.get("emotion") or "neutral"),
         "expression": str(reaction.get("expression") or "neutral"),
@@ -404,6 +526,37 @@ def _visual_reaction_summary(
     if state:
         result["cached_summary_text"] = str(state.get("cached_summary_text") or state.get("summary_text") or "")
     return result
+
+
+def _vision_reply_language(vision: dict) -> str:
+    for key in ("reply_language", "language", "voice_language"):
+        value = str(vision.get(key) or "").strip()
+        if value:
+            return _normalize_reply_language(value)
+    text_lang = str(vision.get("text_lang") or "").strip()
+    if text_lang:
+        return _normalize_reply_language(text_lang)
+    return "zh-CN"
+
+
+def _normalize_reply_language(language: str) -> str:
+    normalized = str(language or "").strip().lower().replace("_", "-")
+    if normalized.startswith("ja") or normalized == "jp":
+        return "ja-JP"
+    if normalized.startswith("zh"):
+        return "zh-CN"
+    if normalized.startswith("en"):
+        return "en-US"
+    return str(language or "").strip() or "zh-CN"
+
+
+def _first_user_seen_speech_text(language: str) -> str:
+    normalized = _normalize_reply_language(language).lower()
+    if normalized.startswith("ja"):
+        return _FIRST_USER_SEEN_SPEECH_TEXT_BY_LANGUAGE["ja"]
+    if normalized.startswith("en"):
+        return _FIRST_USER_SEEN_SPEECH_TEXT_BY_LANGUAGE["en"]
+    return _FIRST_USER_SEEN_SPEECH_TEXT_BY_LANGUAGE["zh"]
 
 
 def _dict_or_empty(value):

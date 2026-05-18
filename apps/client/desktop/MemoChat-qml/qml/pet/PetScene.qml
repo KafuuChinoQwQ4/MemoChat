@@ -37,9 +37,7 @@ Item {
         if (!root.petController.speechFinal) {
             return ""
         }
-        return root.petController.speechDisplayText.length > 0
-                ? root.petController.speechDisplayText
-                : root.petController.speechText
+        return root.petController.speechText
     }
 
     function micPrivacyText() {
@@ -134,6 +132,7 @@ Item {
         gazeY: root.petController ? root.petController.gazeY : 0.5
         lipSyncValue: root.petController ? root.petController.lipSyncValue : 0
         actionSerial: root.manualActionSerial
+        persistentMotion: root.manualActionActive
     }
 
     Loader {
@@ -141,11 +140,12 @@ Item {
         active: root.voiceReplyEnabled && root.petController
         source: "PetAudioPlayer.qml"
         onLoaded: {
-            item.textToSpeechFallbackEnabled = false
+            item.textToSpeechFallbackEnabled = root.voiceReplyEnabled
             item.speechKey = root.petController ? root.petController.turnId : ""
             item.sourceUrl = root.petController ? root.petController.audioUrl : ""
             item.playbackState = root.petController ? root.petController.audioState : "idle"
             item.speechText = root.speechPlaybackText()
+            item.speechLanguage = root.petController ? root.petController.speechLanguage : ""
             item.speechFinal = root.petController ? root.petController.speechFinal : false
         }
     }
@@ -154,6 +154,11 @@ Item {
         id: petCameraLoader
         active: root.cameraEnabled && root.petController
         source: "PetCameraCapture.qml"
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        width: 320
+        height: 180
+        z: -1
         onLoaded: {
             item.petController = root.petController
             item.cameraEnabled = root.cameraEnabled
@@ -169,11 +174,12 @@ Item {
         target: root.petController
         function onPetStateChanged() {
             if (root.voiceReplyEnabled && petAudioLoader.item) {
-                petAudioLoader.item.textToSpeechFallbackEnabled = false
+                petAudioLoader.item.textToSpeechFallbackEnabled = root.voiceReplyEnabled
                 petAudioLoader.item.speechKey = root.petController ? root.petController.turnId : ""
                 petAudioLoader.item.sourceUrl = root.petController ? root.petController.audioUrl : ""
                 petAudioLoader.item.playbackState = root.petController ? root.petController.audioState : "idle"
                 petAudioLoader.item.speechText = root.speechPlaybackText()
+                petAudioLoader.item.speechLanguage = root.petController ? root.petController.speechLanguage : ""
                 petAudioLoader.item.speechFinal = root.petController ? root.petController.speechFinal : false
             }
             if (petCameraLoader.item) {
@@ -182,7 +188,9 @@ Item {
         }
 
         function onControlEventReceived(event) {
-            live2d.applyControlEvent(event)
+            if (!root.manualActionActive) {
+                live2d.applyControlEvent(event)
+            }
         }
     }
 
@@ -261,6 +269,9 @@ Item {
             petAudioLoader.item.sourceUrl = ""
             petAudioLoader.item.playbackState = "stopped"
             petAudioLoader.item.speechFinal = false
+            petAudioLoader.item.speechLanguage = ""
+        } else if (petAudioLoader.item) {
+            petAudioLoader.item.textToSpeechFallbackEnabled = true
         }
     }
 

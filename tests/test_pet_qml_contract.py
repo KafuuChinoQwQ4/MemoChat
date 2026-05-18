@@ -36,6 +36,7 @@ class PetQmlContractTests(unittest.TestCase):
             "phase",
             "speechTranslation",
             "speechDisplayText",
+            "speechLanguage",
             "speechFinal",
             "audioUrl",
             "audioState",
@@ -63,7 +64,6 @@ class PetQmlContractTests(unittest.TestCase):
 
         self.assertIn("_speech_turn_id", source)
         self.assertIn("displayTextForSpeech", source)
-        self.assertIn("isChineseLanguage", source)
         self.assertIn("jsonBool", source)
         self.assertIn("_audio_url", source)
         self.assertIn("_audio_state", source)
@@ -71,8 +71,8 @@ class PetQmlContractTests(unittest.TestCase):
     def test_pet_scene_keeps_null_controller_and_phase_status_guards(self):
         scene = PET_SCENE_QML.read_text(encoding="utf-8")
 
-        self.assertIn('expression: root.petController ? root.petController.expression : "neutral"', scene)
-        self.assertIn('motion: root.petController ? root.petController.motion : "idle"', scene)
+        self.assertIn(': (root.petController ? root.petController.expression : "neutral")', scene)
+        self.assertIn(': (root.petController ? root.petController.motion : "idle")', scene)
         self.assertIn("function speechPlaybackText", scene)
         self.assertIn("PetAudioPlayer.qml", scene)
         self.assertIn("root.petController.audioUrl", scene)
@@ -81,9 +81,10 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("if (!root.petController.speechFinal)", scene)
         self.assertIn("voiceReplyEnabled", scene)
         self.assertIn("active: root.voiceReplyEnabled && root.petController", scene)
+        self.assertIn("item.textToSpeechFallbackEnabled = root.voiceReplyEnabled", scene)
+        self.assertIn("petAudioLoader.item.textToSpeechFallbackEnabled = root.voiceReplyEnabled", scene)
         self.assertIn("item.textToSpeechFallbackEnabled = false", scene)
         self.assertIn("petAudioLoader.item.textToSpeechFallbackEnabled = false", scene)
-        self.assertNotIn("textToSpeechFallbackEnabled = root.voiceReplyEnabled", scene)
         self.assertNotIn("speechBubble", scene)
         self.assertNotIn("bubbleTail", scene)
         self.assertNotIn("anchors.topMargin: speechBubble.visible", scene)
@@ -103,6 +104,7 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("PetSpeechSynthesizer", audio_player)
         self.assertIn("Qt.createQmlObject('import QtTextToSpeech; TextToSpeech", audio_player)
         self.assertIn("property string speechText", audio_player)
+        self.assertIn("property string speechLanguage", audio_player)
         self.assertIn("property bool speechFinal", audio_player)
         self.assertIn("property bool textToSpeechFallbackEnabled: false", audio_player)
         self.assertIn("function maybeSpeakText", audio_player)
@@ -110,8 +112,9 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("function hasPlayableAudio", audio_player)
         self.assertIn("function isDeterministicFallbackAudio", audio_player)
         self.assertIn("function shouldUseTextFallback", audio_player)
-        self.assertIn("return sourceUrl.length === 0 || isDeterministicFallbackAudio()", audio_player)
-        self.assertIn("!isDeterministicFallbackAudio()", audio_player)
+        self.assertIn("function normalizedSpeechLocale", audio_player)
+        self.assertIn('return "ja-JP"', audio_player)
+        self.assertIn("root.speechLanguage", audio_player)
         self.assertIn("deterministic-voice-", audio_player)
         self.assertIn("property string playbackState", audio_player)
         self.assertIn("function canPlayForState", audio_player)
@@ -247,7 +250,11 @@ class PetQmlContractTests(unittest.TestCase):
             "QProcess",
         ):
             self.assertIn(token, source)
-        self.assertIn("nativeSpeech.speak(root.speechText, \"zh-CN\")", audio_player)
+        self.assertIn("nativeSpeech.speak(root.speechText, locale)", audio_player)
+        self.assertIn("Qt.locale(qtLocaleName())", audio_player)
+        self.assertIn("$culture='zh*'", source)
+        self.assertIn("$locale.StartsWith('ja')", source)
+        self.assertIn("$culture='ja*'", source)
         self.assertIn("ensureSpeechEngine", audio_player)
 
     def test_main_cpp_bootstraps_linux_input_method_env_for_chinese_entry(self):
@@ -298,6 +305,9 @@ class PetQmlContractTests(unittest.TestCase):
             "Q_INVOKABLE bool captureVisionVideoFrame",
             "Q_INVOKABLE QString nextVisionCaptureFilePath",
             "Q_INVOKABLE void captureVisionFrameFile",
+            "windowsCameraBridgeAvailable",
+            "windowsCameraBridgeBusy",
+            "Q_INVOKABLE bool captureVisionWindowsCameraFrame",
         ):
             self.assertIn(token, header)
         for token in (
@@ -309,6 +319,9 @@ class PetQmlContractTests(unittest.TestCase):
             "local_frame_upload",
             "qt_video_sink",
             "live_frame_upload",
+            "windows_camera_bridge",
+            "wsl_windows_camera_bridge",
+            "Windows.Media.Capture.MediaCapture",
         ):
             self.assertIn(token, source)
         self.assertIn("PetCameraCapture.qml", scene)
@@ -318,16 +331,22 @@ class PetQmlContractTests(unittest.TestCase):
             "Camera",
             "CaptureSession",
             "readonly property bool cameraAvailable",
+            "readonly property bool qtCameraAvailable",
+            "readonly property bool windowsCameraBridgeAvailable",
+            "readonly property bool useWindowsCameraBridge",
             "mediaDevices.videoInputs.length",
             "onVideoInputsChanged",
             "未检测到摄像头",
+            "Windows 摄像头桥已开启",
             "等待桌宠会话",
-            "active: root.cameraEnabled && root.cameraAvailable",
+            "active: root.cameraEnabled && root.qtCameraAvailable",
             "videoOutput.videoSink",
             "onVideoFrameChanged",
             "property var liveVideoFrame: null",
             "captureVisionVideoFrame",
             "typeof root.petController.captureVisionVideoFrame === \"function\"",
+            "captureVisionWindowsCameraFrame",
+            "onWindowsCameraBridgeChanged",
             "ImageCapture",
             "VideoOutput",
             "captureToFile",
@@ -441,6 +460,7 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("petAudioLoader.item.playbackState = \"stopped\"", scene)
         self.assertIn("petAudioLoader.item.speechFinal = false", scene)
         self.assertIn("petAudioLoader.item.textToSpeechFallbackEnabled = false", scene)
+        self.assertIn("petAudioLoader.item.textToSpeechFallbackEnabled = true", scene)
         self.assertNotIn("speechBubble", scene)
         self.assertNotIn("bubbleTail", scene)
         self.assertIn("Qt.rgba(1.0, 0.96, 0.98, 0.96)", scene)

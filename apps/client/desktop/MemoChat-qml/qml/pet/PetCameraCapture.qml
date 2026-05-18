@@ -7,16 +7,23 @@ Item {
     property bool cameraEnabled: false
     property bool cloudVisionEnabled: false
     property int captureIntervalMs: 4500
-    property int frameWidth: Math.round(videoOutput.width)
-    property int frameHeight: Math.round(videoOutput.height)
+    property int frameWidth: videoOutput.sourceRect.width > 0 ? Math.round(videoOutput.sourceRect.width) : Math.round(videoOutput.width)
+    property int frameHeight: videoOutput.sourceRect.height > 0 ? Math.round(videoOutput.sourceRect.height) : Math.round(videoOutput.height)
     property var liveVideoFrame: null
-    readonly property bool cameraAvailable: mediaDevices.videoInputs.length > 0
+    readonly property bool qtCameraAvailable: mediaDevices.videoInputs.length > 0
+    readonly property bool windowsCameraBridgeAvailable: !!root.petController
+                                                            && !!root.petController.windowsCameraBridgeAvailable
+    readonly property bool cameraAvailable: root.qtCameraAvailable || root.windowsCameraBridgeAvailable
+    readonly property bool useWindowsCameraBridge: root.cameraEnabled
+                                                && !root.qtCameraAvailable
+                                                && root.windowsCameraBridgeAvailable
     property string statusText: cameraEnabled ? "摄像头准备中" : "摄像头关闭"
     signal statusChanged(string text)
 
-    width: 1
-    height: 1
-    visible: false
+    width: 320
+    height: 180
+    visible: root.cameraEnabled
+    opacity: 0.01
 
     function updateStatus(text) {
         statusText = text
@@ -28,10 +35,14 @@ Item {
             return "摄像头关闭"
         }
         if (!root.cameraAvailable) {
-            return "未检测到摄像头"
+            return root.windowsCameraBridgeAvailable ? "Windows 摄像头桥可用" : "未检测到摄像头"
         }
         if (!root.petController || root.petController.sessionId.length === 0) {
             return "等待桌宠会话"
+        }
+        if (root.useWindowsCameraBridge) {
+            return root.petController.windowsCameraBridgeBusy ? "Windows 摄像头桥正在捕捉"
+                                                              : "Windows 摄像头桥已开启"
         }
         return root.cloudVisionEnabled ? "摄像头本地分析，云视觉待授权" : "摄像头本地捕捉已开启"
     }
@@ -43,6 +54,20 @@ Item {
         }
         if (!root.cameraAvailable) {
             updateStatus("未检测到摄像头")
+            return
+        }
+        if (root.useWindowsCameraBridge) {
+            if (root.petController.windowsCameraBridgeBusy) {
+                updateStatus("Windows 摄像头桥正在捕捉")
+                return
+            }
+            if (typeof root.petController.captureVisionWindowsCameraFrame === "function"
+                    && root.petController.captureVisionWindowsCameraFrame()) {
+                updateStatus("Windows 摄像头桥正在捕捉")
+            } else {
+                updateStatus(root.petController.windowsCameraBridgeBusy ? "Windows 摄像头桥正在捕捉"
+                                                                        : "Windows 摄像头桥不可用")
+            }
             return
         }
         if (root.liveVideoFrame !== null && typeof root.petController.captureVisionVideoFrame === "function") {
@@ -69,7 +94,7 @@ Item {
 
     Camera {
         id: camera
-        active: root.cameraEnabled && root.cameraAvailable
+        active: root.cameraEnabled && root.qtCameraAvailable
         cameraDevice: mediaDevices.defaultVideoInput
         onErrorOccurred: function(error, errorString) {
             root.liveVideoFrame = null
@@ -95,9 +120,9 @@ Item {
 
     VideoOutput {
         id: videoOutput
-        width: 320
-        height: 180
-        visible: false
+        anchors.fill: parent
+        visible: root.cameraEnabled
+        fillMode: VideoOutput.PreserveAspectFit
     }
 
     ImageCapture {
@@ -128,5 +153,15 @@ Item {
     onCameraEnabledChanged: {
         root.liveVideoFrame = null
         updateStatus(root.cameraStatusText())
+    }
+
+    onWindowsCameraBridgeAvailableChanged: updateStatus(root.cameraStatusText())
+    onUseWindowsCameraBridgeChanged: updateStatus(root.cameraStatusText())
+
+    Connections {
+        target: root.petController
+        function onWindowsCameraBridgeChanged() {
+            root.updateStatus(root.cameraStatusText())
+        }
     }
 }

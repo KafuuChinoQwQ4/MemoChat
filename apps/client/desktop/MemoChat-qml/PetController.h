@@ -35,6 +35,7 @@ class PetController : public QObject
     Q_PROPERTY(QString speechText READ speechText NOTIFY petStateChanged)
     Q_PROPERTY(QString speechTranslation READ speechTranslation NOTIFY petStateChanged)
     Q_PROPERTY(QString speechDisplayText READ speechDisplayText NOTIFY petStateChanged)
+    Q_PROPERTY(QString speechLanguage READ speechLanguage NOTIFY petStateChanged)
     Q_PROPERTY(bool speechFinal READ speechFinal NOTIFY petStateChanged)
     Q_PROPERTY(QString audioUrl READ audioUrl NOTIFY petStateChanged)
     Q_PROPERTY(QString audioState READ audioState NOTIFY petStateChanged)
@@ -54,6 +55,8 @@ class PetController : public QObject
     Q_PROPERTY(QString voiceTrainingMessage READ voiceTrainingMessage NOTIFY voiceTrainingChanged)
     Q_PROPERTY(bool windowsImeBridgeAvailable READ windowsImeBridgeAvailable NOTIFY windowsImeBridgeChanged)
     Q_PROPERTY(bool windowsImeBridgeBusy READ windowsImeBridgeBusy NOTIFY windowsImeBridgeChanged)
+    Q_PROPERTY(bool windowsCameraBridgeAvailable READ windowsCameraBridgeAvailable NOTIFY windowsCameraBridgeChanged)
+    Q_PROPERTY(bool windowsCameraBridgeBusy READ windowsCameraBridgeBusy NOTIFY windowsCameraBridgeChanged)
     Q_PROPERTY(QString selectedModelType READ selectedModelType NOTIFY modelSelectionChanged)
     Q_PROPERTY(QString selectedModelName READ selectedModelName NOTIFY modelSelectionChanged)
     Q_PROPERTY(QString replyLanguage READ replyLanguage NOTIFY replyLanguageChanged)
@@ -76,6 +79,7 @@ public:
     QString speechText() const { return _model.speechText(); }
     QString speechTranslation() const { return _model.speechTranslation(); }
     QString speechDisplayText() const { return _model.speechDisplayText(); }
+    QString speechLanguage() const { return _model.speechLanguage(); }
     bool speechFinal() const { return _model.speechFinal(); }
     QString audioUrl() const;
     QString audioState() const { return _model.audioState(); }
@@ -95,6 +99,8 @@ public:
     QString voiceTrainingMessage() const { return _voice_training_message; }
     bool windowsImeBridgeAvailable() const;
     bool windowsImeBridgeBusy() const { return _windows_ime_bridge_busy; }
+    bool windowsCameraBridgeAvailable() const;
+    bool windowsCameraBridgeBusy() const { return _windows_camera_bridge_busy; }
     QString selectedModelType() const { return _selected_model_type; }
     QString selectedModelName() const { return _selected_model_name; }
     QString replyLanguage() const { return _reply_language; }
@@ -120,6 +126,7 @@ public:
     Q_INVOKABLE void startVoiceTraining(const QVariantMap &request);
     Q_INVOKABLE void refreshVoiceTrainingJob(const QString &jobId = QString());
     Q_INVOKABLE void openWindowsImeBridge(const QString &initialText = QString());
+    Q_INVOKABLE bool captureVisionWindowsCameraFrame();
     Q_INVOKABLE void setModelSelection(const QString &modelType, const QString &modelName);
     Q_INVOKABLE void setReplyLanguage(const QString &language);
     Q_INVOKABLE void setSpeechRules(const QString &rules);
@@ -130,6 +137,7 @@ signals:
     void voiceTrainingChanged();
     void controlEventReceived(const QVariantMap &event);
     void windowsImeBridgeChanged();
+    void windowsCameraBridgeChanged();
     void windowsImeTextCommitted(const QString &text);
     void modelSelectionChanged();
     void replyLanguageChanged();
@@ -153,8 +161,14 @@ private:
                            int frameHeight,
                            const QString &source,
                            const QString &transport);
+    void captureVisionFrameFileWithMetadata(const QString &filePath,
+                                            int frameWidth,
+                                            int frameHeight,
+                                            const QString &source,
+                                            const QString &transport);
     void applyVoiceTrainingJob(const QJsonObject &job);
     void setWindowsImeBridgeBusy(bool busy);
+    void setWindowsCameraBridgeBusy(bool busy);
     void setStatusText(const QString &statusText);
     void setError(const QString &error);
     QJsonObject authPayload() const;
@@ -174,7 +188,9 @@ private:
     bool _input_request_in_flight = false;
     bool _voice_training_busy = false;
     bool _windows_ime_bridge_busy = false;
+    bool _windows_camera_bridge_busy = false;
     QPointer<QProcess> _windows_ime_bridge_process;
+    QPointer<QProcess> _windows_camera_bridge_process;
     QString _voice_training_job_id;
     QString _voice_training_status = QStringLiteral("idle");
     QString _voice_training_stage;

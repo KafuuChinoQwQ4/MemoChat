@@ -469,6 +469,61 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(Exception, "disabled"):
             analyzer.capture(VisionCaptureRequest(session_id="pet-session"))
 
+    async def test_disabled_local_camera_still_accepts_authorized_uploaded_frame(self):
+        LocalVisionAnalyzer = _load_attr("harness.pet.vision", "LocalVisionAnalyzer")
+        VisionCaptureRequest = _load_attr("harness.pet.vision", "VisionCaptureRequest")
+        calls = {"video_capture": 0, "imdecode": 0, "frombuffer": 0}
+
+        class FakeFrame:
+            shape = (1, 2, 3)
+            size = 6
+
+        class FakeCapture:
+            def __init__(self, camera_index):
+                calls["video_capture"] += 1
+
+        class FakeCascade:
+            def detectMultiScale(self, *args, **kwargs):
+                return []
+
+        def fake_frombuffer(data, dtype):
+            calls["frombuffer"] += 1
+            return {"decoded": data, "dtype": dtype}
+
+        def fake_imdecode(buffer, flags):
+            calls["imdecode"] += 1
+            return FakeFrame()
+
+        fake_np = types.SimpleNamespace(uint8="uint8", frombuffer=fake_frombuffer)
+        fake_cv2 = types.SimpleNamespace(
+            VideoCapture=FakeCapture,
+            IMREAD_COLOR=1,
+            imdecode=fake_imdecode,
+            COLOR_BGR2GRAY=0,
+            cvtColor=lambda frame, mode: types.SimpleNamespace(mean=lambda: 196.0),
+            data=types.SimpleNamespace(haarcascades=""),
+            CascadeClassifier=lambda path: FakeCascade(),
+        )
+        analyzer = LocalVisionAnalyzer(enabled=False, analyzer="opencv")
+
+        with mock.patch.dict(sys.modules, {"cv2": fake_cv2, "numpy": fake_np}):
+            observation = analyzer.capture(
+                VisionCaptureRequest.from_dict(
+                    {
+                        "session_id": "pet-session",
+                        "frame_base64": "AQIDBA==",
+                        "frame_mime": "image/jpeg",
+                        "metadata": {"source": "wsl_windows_camera_bridge"},
+                    }
+                )
+            )
+
+        payload = observation.to_dict()
+        self.assertEqual(calls, {"video_capture": 0, "imdecode": 1, "frombuffer": 1})
+        self.assertEqual(payload["vision"]["source"], "uploaded_frame")
+        self.assertTrue(payload["privacy"]["camera_used"])
+        self.assertFalse(payload["privacy"]["raw_frame_sent"])
+
     async def test_local_vision_analyzer_diagnostics_can_probe_one_frame(self):
         LocalVisionAnalyzer = _load_attr("harness.pet.vision", "LocalVisionAnalyzer")
 
@@ -616,7 +671,7 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
                         "frame_mime": "image/png",
                         "frame_width": 2,
                         "frame_height": 1,
-                        "metadata": {"source": "qml"},
+                        "metadata": {"source": "qml", "reply_language": "ja-JP", "speech_rules": "短く話す"},
                     }
                 )
             )
@@ -625,6 +680,8 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls, {"video_capture": 0, "imdecode": 1, "frombuffer": 1})
         self.assertEqual(payload["vision"]["frame"], {"width": 2, "height": 1})
         self.assertEqual(payload["vision"].get("source"), "uploaded_frame")
+        self.assertEqual(payload["vision"].get("reply_language"), "ja-JP")
+        self.assertEqual(payload["vision"].get("speech_rules"), "短く話す")
         self.assertFalse(payload["privacy"]["raw_frame_sent"])
         self.assertEqual(payload["privacy"]["retention"], "none")
 

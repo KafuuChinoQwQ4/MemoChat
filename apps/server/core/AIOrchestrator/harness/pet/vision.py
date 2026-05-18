@@ -185,7 +185,7 @@ class LocalVisionAnalyzer:
                 capture.release()
 
     def capture(self, request: VisionCaptureRequest) -> PetObservation:
-        if not self._enabled:
+        if not self._enabled and not request.has_frame_payload:
             raise VisionAnalyzerError("local vision capture is disabled by configuration")
         try:
             import cv2
@@ -229,6 +229,7 @@ class LocalVisionAnalyzer:
             )
             if request.frame_mime:
                 vision["frame_mime"] = request.frame_mime
+            _apply_request_metadata_to_vision(vision, request.metadata)
             if request.frame_width > 0 or request.frame_height > 0:
                 vision["client_frame"] = {
                     "width": request.frame_width,
@@ -277,6 +278,7 @@ class LocalVisionAnalyzer:
                     "captured_at_ms": int(time.time() * 1000),
                 }
             )
+            _apply_request_metadata_to_vision(vision, request.metadata)
             privacy = {
                 "camera_used": True,
                 "raw_frame_sent": False,
@@ -975,6 +977,15 @@ def _decode_frame_payload(request: VisionCaptureRequest, cv2):
     if frame is None or getattr(frame, "size", 0) == 0:
         raise VisionAnalyzerError("uploaded vision frame could not be decoded")
     return frame
+
+
+def _apply_request_metadata_to_vision(vision: dict[str, Any], metadata: dict[str, Any]) -> None:
+    if not isinstance(metadata, dict):
+        return
+    for key in ("reply_language", "language", "voice_language", "text_lang", "speech_rules"):
+        value = str(metadata.get(key) or "").strip()
+        if value:
+            vision[key] = value
 
 
 def _split_frame_data_url(frame_base64: Any, frame_mime: Any) -> tuple[str, str]:

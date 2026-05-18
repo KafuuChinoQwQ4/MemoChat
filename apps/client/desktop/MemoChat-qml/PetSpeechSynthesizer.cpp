@@ -50,22 +50,29 @@ QString powerShellExecutable()
 #endif
 }
 
-QStringList powerShellSpeakArguments(const QString &text)
+QStringList powerShellSpeakArguments(const QString &text, const QString &locale)
 {
     const QString textBase64 = QString::fromLatin1(text.toUtf8().toBase64());
+    const QString localeBase64 = QString::fromLatin1(locale.toUtf8().toBase64());
     const QString command = QStringLiteral(
         "$ErrorActionPreference='Stop';"
         "$bytes=[Convert]::FromBase64String('%1');"
         "$text=[Text.Encoding]::UTF8.GetString($bytes);"
+        "$localeBytes=[Convert]::FromBase64String('%2');"
+        "$locale=[Text.Encoding]::UTF8.GetString($localeBytes).ToLowerInvariant();"
+        "$culture='zh*';"
+        "if($locale.StartsWith('ja') -or $locale -eq 'jp'){$culture='ja*'} "
+        "elseif($locale.StartsWith('en')){$culture='en*'} "
+        "elseif($locale.StartsWith('ko')){$culture='ko*'};"
         "Add-Type -AssemblyName System.Speech;"
         "$speaker=New-Object System.Speech.Synthesis.SpeechSynthesizer;"
         "$speaker.Volume=100;"
         "$speaker.Rate=0;"
         "try{"
-        "$voice=$speaker.GetInstalledVoices()|Where-Object{$_.VoiceInfo.Culture.Name -like 'zh*'}|Select-Object -First 1;"
+        "$voice=$speaker.GetInstalledVoices()|Where-Object{$_.VoiceInfo.Culture.Name -like $culture}|Select-Object -First 1;"
         "if($voice){$speaker.SelectVoice($voice.VoiceInfo.Name)}"
         "}catch{};"
-        "$speaker.Speak($text);").arg(textBase64);
+        "$speaker.Speak($text);").arg(textBase64, localeBase64);
 
     return {
         QStringLiteral("-NoProfile"),
@@ -119,12 +126,12 @@ bool PetSpeechSynthesizer::speak(const QString &text, const QString &locale)
 
     const QString ps = powerShellExecutable();
 #if defined(Q_OS_WIN)
-    if (!ps.isEmpty() && startSpeechProcess(ps, powerShellSpeakArguments(spokenText))) {
+    if (!ps.isEmpty() && startSpeechProcess(ps, powerShellSpeakArguments(spokenText, requestedLocale))) {
         return true;
     }
 #else
     if (isWslRuntime() && !ps.isEmpty()
-        && startSpeechProcess(ps, powerShellSpeakArguments(spokenText))) {
+        && startSpeechProcess(ps, powerShellSpeakArguments(spokenText, requestedLocale))) {
         return true;
     }
     if (commandExists(QStringLiteral("spd-say"))
@@ -142,7 +149,7 @@ bool PetSpeechSynthesizer::speak(const QString &text, const QString &locale)
                               {QStringLiteral("-v"), espeakVoiceForLocale(requestedLocale), spokenText})) {
         return true;
     }
-    if (!ps.isEmpty() && startSpeechProcess(ps, powerShellSpeakArguments(spokenText))) {
+    if (!ps.isEmpty() && startSpeechProcess(ps, powerShellSpeakArguments(spokenText, requestedLocale))) {
         return true;
     }
 #endif
