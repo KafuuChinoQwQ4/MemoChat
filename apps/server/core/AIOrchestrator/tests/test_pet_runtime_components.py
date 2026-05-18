@@ -1138,6 +1138,34 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(payload["progress"], 70)
         self.assertIn("零样本", payload["message"])
 
+    async def test_voice_training_service_keeps_missing_runtime_audio_at_zero_progress(self):
+        VoiceTrainingService = _load_attr("harness.pet.voice_training", "VoiceTrainingService")
+        VoiceTrainingRequest = _load_attr("harness.pet.voice_training", "VoiceTrainingRequest")
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        artifact_root = Path(temp_dir.name)
+
+        service = VoiceTrainingService(voice_clone_enabled=False, artifact_root=temp_dir.name)
+        job = service.create_job(
+            VoiceTrainingRequest(
+                uid=7,
+                profile_id="default",
+                voice_name="Kafuuchino-voice",
+                language="zh-CN",
+                reference_audio_path=str(artifact_root / "missing.wav"),
+                reference_audio_directory="src/KafuuChino/香风智乃voice",
+                reference_audio_file="Kafuuchino-voice.wav",
+                consent_confirmed=True,
+            )
+        )
+        payload = job.to_dict()
+
+        self.assertEqual(payload["status"], "blocked")
+        self.assertEqual(payload["stage"], "reference_not_visible")
+        self.assertEqual(payload["progress"], 0)
+        self.assertFalse(payload["diagnostics"]["reference_audio_exists"])
+        self.assertEqual(payload["diagnostics"]["reference_audio_persist_source"], "none")
+
     async def test_reference_audio_diagnostics_classifies_short_and_ready_material(self):
         diagnose_reference_audio = _load_attr("harness.pet.voice_training", "diagnose_reference_audio")
         temp_dir = tempfile.TemporaryDirectory()

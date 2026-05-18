@@ -26,7 +26,7 @@ description: 使用 Docker/MCP 支撑的检查来规划并验证 MemoChat 在 Po
 - 不要使用本地主机安装的数据库。
 - Postgres 主机访问保持在 `127.0.0.1:15432`；容器内 Postgres 使用 `5432`。
 - 保持变更具备向后意识：配置、初始化脚本、迁移、运行时代码和测试必须一致。
-- 除非用户明确批准具体 volume 或主机数据路径，否则绝不重置 Docker volumes。当前 Arch 绑定数据位于 `/data/docker-data/memochat`；旧 Docker Desktop 数据位于 `D:\docker-data\memochat`，仅作为旧版备份/源数据。
+- 除非用户明确批准具体 volume 或主机数据路径，否则绝不重置 Docker volumes。当前 `archlinux` 绑定数据位于 `/data/docker-data/memochat`；旧 Docker Desktop 数据位于 `D:\docker-data\memochat`，仅作为旧版备份/源数据。
 
 ## 发现
 
@@ -70,7 +70,7 @@ docker exec memochat-mongo mongosh -u root -p 123456 --authenticationDatabase ad
 
 ## 验证
 
-在任何 Arch/WSL 运行时或部署验证前，先使用 Linux server 构建：
+在任何 `archlinux` WSL 运行时或部署验证前，先使用 Linux server 构建：
 
 ```bash
 source /root/.memochat-linux-env

@@ -66,6 +66,7 @@ private:
 
     std::mutex mu_;
     std::filesystem::path data_root_;
+    std::filesystem::path image_cache_root_;
     std::unordered_map<std::string, R18SourceRecord> sources_;
 };
 

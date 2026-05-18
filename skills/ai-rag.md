@@ -16,14 +16,14 @@ description: 处理 MemoChat AIOrchestrator、Ollama、Qdrant RAG、Neo4j 图记
 - `apps/server/core/AIOrchestrator/docker-compose.yml`
 - `apps/server/core/AIOrchestrator/config.yaml`
 
-AI 绑定数据在 Arch 原生 Docker 下默认位于 `/data/docker-data/memochat/ai-orchestrator`。Docker Desktop 路径仅用于旧版迁移/备份检查。
+AI 绑定数据在 `archlinux` WSL 的 Arch 原生 Docker 下默认位于 `/data/docker-data/memochat/ai-orchestrator`。Docker Desktop 路径仅用于旧版迁移/备份检查。
 
 ## Docker 服务
 
 预期服务和端口：
 
 - AI Orchestrator `8096`
-- Ollama `11434`
+- Ollama `11434`，仅当本地启用 Ollama 时要求存在
 - Qdrant `6333/6334`
 - Neo4j `7474/7687`
 
@@ -32,7 +32,7 @@ AI 绑定数据在 Arch 原生 Docker 下默认位于 `/data/docker-data/memocha
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 curl -fsS http://127.0.0.1:8096/health
-curl -fsS http://127.0.0.1:11434/api/tags
+curl -fsS http://127.0.0.1:11434/api/tags  # only when Ollama is enabled
 curl -fsS http://127.0.0.1:6333/
 curl -fsS http://127.0.0.1:7474/
 ```

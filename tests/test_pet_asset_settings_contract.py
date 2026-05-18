@@ -259,6 +259,22 @@ class PetAssetSettingsContractTests(unittest.TestCase):
         ):
             self.assertContains(source, token)
 
+    def test_pet_asset_settings_discards_stale_blocked_voice_training_jobs_on_load(self):
+        source = read(PET_ASSET_SETTINGS_CPP)
+
+        for token in (
+            "reference_not_visible",
+            "reference_unreadable",
+            "reference_too_short",
+            "_voice_training_job_id.clear()",
+            '_voice_training_status = QStringLiteral("idle")',
+            "_voice_training_stage.clear()",
+            "_voice_training_progress = 0",
+            "_voice_training_artifact_path.clear()",
+            '_voice_training_message = QStringLiteral("等待确认参考音频权限")',
+        ):
+            self.assertContains(source, token)
+
     def test_pet_asset_settings_defaults_to_user_requested_src_character_assets(self):
         source = read(PET_ASSET_SETTINGS_CPP)
         qml = read(CHARACTER_PANE_QML)

@@ -8,10 +8,15 @@ description: 通过部署服务、检查 Docker 依赖、启动服务、探测 A
 
 ## 前置条件
 
-- 被测试服务的 Arch/WSL Linux 服务产物存在于 `build-linux-full-gcc16/bin`。
+- 被测试服务的 `archlinux` WSL Linux 服务产物存在于 `build-linux-full-gcc16/bin`。
 - 任何新的 Linux 服务端或客户端代码变更，都先运行 `cmake --preset linux-full-gcc16` 和 `cmake --build --preset linux-full-gcc16 --parallel 12`；`deploy_services.sh` 默认从该构建输出复制。
 - Docker 依赖运行在 Arch 原生 Docker 下。compose 命令前加载 `/root/.memochat-linux-env`，使 `DOCKER_HOST` 取消设置。
 - 没有旧的 Linux 运行时服务进程仍绑定目标端口。
+- 从 Windows 调用 Linux smoke/build 时使用发行版名 `archlinux`，并显式进入 Linux 路径：
+
+```powershell
+wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat-Qml-Drogon-linux && source /root/.memochat-linux-env && <command>'
+```
 
 ## Docker 依赖检查
 
@@ -21,11 +26,12 @@ description: 通过部署服务、检查 Docker 依赖、启动服务、探测 A
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 docker exec memochat-redis redis-cli -a 123456 ping
 docker exec memochat-postgres psql -U memochat -d memo_pg -c "select 1;"
+docker exec memochat-mongo mongosh -u root -p 123456 --authenticationDatabase admin --quiet --eval "db.adminCommand({ ping: 1 })"
 docker exec memochat-rabbitmq rabbitmq-diagnostics -q ping
 docker exec memochat-redpanda rpk cluster info --brokers 127.0.0.1:19092
 ```
 
-对于媒体或 AI 流程，也检查 MinIO、Qdrant、Neo4j、Ollama 和 AI Orchestrator。
+对于媒体或 AI 流程，也检查 MinIO、Qdrant、Neo4j 和 AI Orchestrator；Ollama 只在本地启用时检查。
 
 ## 部署和启动
 

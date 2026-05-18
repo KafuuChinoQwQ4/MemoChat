@@ -17,6 +17,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iterator>
+#include <mutex>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -38,6 +39,9 @@ constexpr const char* kJmImageBase = "https://cdn-msp.jmapinodeudzn.net";
 constexpr const char* kJmImageHost = "cdn-msp.jmapinodeudzn.net";
 constexpr const char* kJmVersion = "2.0.16";
 constexpr const char* kJmPackageName = "com.example.app";
+constexpr int kJmApiTimeoutSeconds = 6;
+constexpr int kJmImageTimeoutSeconds = 5;
+constexpr int kMaxConcurrentJmImageFetches = 2;
 constexpr const char* kJmUserAgent = "Mozilla/5.0 (Linux; Android 10; K; wv) AppleWebKit/537.36 "
                                      "(KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36";
 
@@ -343,6 +347,128 @@ struct HttpResult {
     std::string body;
 };
 
+std::mutex& JmImageFetchMutex()
+{
+    static std::mutex mu;
+    return mu;
+}
+
+int& JmImageFetchCount()
+{
+    static int count = 0;
+    return count;
+}
+
+std::string EscapeXml(std::string value)
+{
+    std::string escaped;
+    escaped.reserve(value.size());
+    for (char ch : value) {
+        switch (ch) {
+        case '&': escaped += "&amp;"; break;
+        case '<': escaped += "&lt;"; break;
+        case '>': escaped += "&gt;"; break;
+        case '"': escaped += "&quot;"; break;
+        case '\'': escaped += "&apos;"; break;
+        default: escaped.push_back(ch); break;
+        }
+    }
+    return escaped;
+}
+
+class JmImageFetchSlot {
+public:
+    JmImageFetchSlot()
+    {
+        std::lock_guard<std::mutex> lock(JmImageFetchMutex());
+        if (JmImageFetchCount() < kMaxConcurrentJmImageFetches) {
+            ++JmImageFetchCount();
+            acquired_ = true;
+        }
+    }
+
+    ~JmImageFetchSlot()
+    {
+        if (!acquired_) {
+            return;
+        }
+        std::lock_guard<std::mutex> lock(JmImageFetchMutex());
+        --JmImageFetchCount();
+    }
+
+    bool acquired() const { return acquired_; }
+
+private:
+    bool acquired_ = false;
+};
+
+R18ImagePayload PlaceholderImage(const std::string& line1, const std::string& line2 = "")
+{
+    const std::string safe_line1 = EscapeXml(line1);
+    const std::string safe_line2 = EscapeXml(line2);
+    std::ostringstream svg;
+    svg << "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"720\" height=\"1080\" viewBox=\"0 0 720 1080\">"
+        << "<rect width=\"720\" height=\"1080\" fill=\"#201923\"/>"
+        << "<rect x=\"48\" y=\"48\" width=\"624\" height=\"984\" rx=\"18\" fill=\"#2f2734\" stroke=\"#f2a7c5\" stroke-width=\"3\"/>"
+        << "<text x=\"360\" y=\"500\" fill=\"#f8dce7\" font-size=\"36\" text-anchor=\"middle\" font-family=\"Arial\">"
+        << safe_line1
+        << "</text>";
+    if (!safe_line2.empty()) {
+        svg << "<text x=\"360\" y=\"558\" fill=\"#d6bac6\" font-size=\"22\" text-anchor=\"middle\" font-family=\"Arial\">"
+            << safe_line2
+            << "</text>";
+    }
+    svg << "</svg>";
+    R18ImagePayload payload;
+    payload.content_type = "image/svg+xml";
+    payload.body = svg.str();
+    return payload;
+}
+
+bool ReadCachedImage(const std::filesystem::path& cache_root,
+                     const std::string& cache_key,
+                     R18ImagePayload* payload)
+{
+    const auto body_path = cache_root / (cache_key + ".bin");
+    const auto meta_path = cache_root / (cache_key + ".meta");
+    std::ifstream body_in(body_path, std::ios::binary);
+    if (!body_in.is_open()) {
+        return false;
+    }
+    payload->body.assign(std::istreambuf_iterator<char>(body_in), std::istreambuf_iterator<char>());
+    if (payload->body.empty()) {
+        return false;
+    }
+    std::ifstream meta_in(meta_path, std::ios::binary);
+    if (meta_in.is_open()) {
+        std::getline(meta_in, payload->content_type);
+    }
+    if (payload->content_type.empty()) {
+        payload->content_type = "image/jpeg";
+    }
+    return true;
+}
+
+void WriteCachedImage(const std::filesystem::path& cache_root,
+                      const std::string& cache_key,
+                      const R18ImagePayload& payload)
+{
+    std::error_code ec;
+    std::filesystem::create_directories(cache_root, ec);
+    if (ec) {
+        return;
+    }
+    std::ofstream body_out(cache_root / (cache_key + ".bin"), std::ios::binary | std::ios::trunc);
+    if (!body_out.is_open()) {
+        return;
+    }
+    body_out.write(payload.body.data(), static_cast<std::streamsize>(payload.body.size()));
+    std::ofstream meta_out(cache_root / (cache_key + ".meta"), std::ios::binary | std::ios::trunc);
+    if (meta_out.is_open()) {
+        meta_out << payload.content_type;
+    }
+}
+
 HttpResult HttpGet(const std::string& url,
                    const std::vector<std::pair<std::string, std::string>>& headers,
                    int timeout_seconds = 20)
@@ -490,7 +616,7 @@ JsonValue JmApiGet(const std::string& target)
     for (const auto& host : kJmApiHosts) {
         try {
             const std::string url = "https://" + host + target;
-            const HttpResult response = HttpGet(url, JmApiHeaders(unix_time));
+            const HttpResult response = HttpGet(url, JmApiHeaders(unix_time), kJmApiTimeoutSeconds);
             if (response.status != 200) {
                 last_error = host + " HTTP " + std::to_string(response.status);
                 continue;
@@ -662,8 +788,10 @@ R18SourceService& R18SourceService::Instance()
 R18SourceService::R18SourceService()
 {
     data_root_ = ResolveDataRoot();
+    image_cache_root_ = data_root_.parent_path() / "image-cache";
     std::error_code ec;
     std::filesystem::create_directories(data_root_, ec);
+    std::filesystem::create_directories(image_cache_root_, ec);
     InstallBuiltinSourcesLocked();
     LoadLocked();
 }
@@ -700,8 +828,18 @@ JsonValue R18SourceService::ListSources()
     InstallBuiltinSourcesLocked();
     LoadLocked();
     JsonValue arr{json::array_t{}};
-    for (const auto& [_, source] : sources_) {
-        json::glaze_append(arr, ToJson(source));
+    const auto append_source = [this, &arr](const std::string& id) {
+        const auto it = sources_.find(id);
+        if (it != sources_.end()) {
+            json::glaze_append(arr, ToJson(it->second));
+        }
+    };
+    append_source(kJmSourceId);
+    append_source(kMockSourceId);
+    for (const auto& [id, source] : sources_) {
+        if (id != kJmSourceId && id != kMockSourceId) {
+            json::glaze_append(arr, ToJson(source));
+        }
     }
     return arr;
 }
@@ -907,6 +1045,15 @@ R18ImagePayload R18SourceService::FetchImage(const std::string& source_id, const
         if (!IsAllowedJmImageUrl(image_url)) {
             throw std::runtime_error("image url is not an allowed JM media URL");
         }
+        const std::string cache_key = Md5Hex(image_url);
+        R18ImagePayload cached;
+        if (ReadCachedImage(image_cache_root_, cache_key, &cached)) {
+            return cached;
+        }
+        JmImageFetchSlot slot;
+        if (!slot.acquired()) {
+            return PlaceholderImage("JMComic cover queued", "scroll or refresh after images cache");
+        }
         std::vector<std::pair<std::string, std::string>> headers = {
             {"Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"},
             {"Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7"},
@@ -918,24 +1065,22 @@ R18ImagePayload R18SourceService::FetchImage(const std::string& source_id, const
             {"User-Agent", kJmUserAgent},
             {"X-Requested-With", kJmPackageName},
         };
-        HttpResult result = HttpGet(image_url, headers, 30);
-        R18ImagePayload payload;
-        payload.content_type = result.content_type.empty() ? "image/jpeg" : result.content_type;
-        payload.body = std::move(result.body);
-        return payload;
+        try {
+            HttpResult result = HttpGet(image_url, headers, kJmImageTimeoutSeconds);
+            if (result.status < 200 || result.status >= 300 || result.body.empty()) {
+                return PlaceholderImage("JMComic image unavailable", "HTTP " + std::to_string(result.status));
+            }
+            R18ImagePayload payload;
+            payload.content_type = result.content_type.empty() ? "image/jpeg" : result.content_type;
+            payload.body = std::move(result.body);
+            WriteCachedImage(image_cache_root_, cache_key, payload);
+            return payload;
+        } catch (const std::exception& exc) {
+            return PlaceholderImage("JMComic image timeout", exc.what());
+        }
     }
 
-    std::ostringstream svg;
-    svg << "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"720\" height=\"1080\" viewBox=\"0 0 720 1080\">"
-        << "<rect width=\"720\" height=\"1080\" fill=\"#201923\"/>"
-        << "<rect x=\"48\" y=\"48\" width=\"624\" height=\"984\" rx=\"18\" fill=\"#2f2734\" stroke=\"#f2a7c5\" stroke-width=\"3\"/>"
-        << "<text x=\"360\" y=\"506\" fill=\"#f8dce7\" font-size=\"38\" text-anchor=\"middle\" font-family=\"Arial\">R18 Source Image</text>"
-        << "<text x=\"360\" y=\"562\" fill=\"#d6bac6\" font-size=\"22\" text-anchor=\"middle\" font-family=\"Arial\">preview</text>"
-        << "</svg>";
-    R18ImagePayload payload;
-    payload.content_type = "image/svg+xml";
-    payload.body = svg.str();
-    return payload;
+    return PlaceholderImage("R18 Source Image", "preview");
 }
 
 std::optional<R18SourceRecord> R18SourceService::SourceSnapshot(const std::string& source_id)
