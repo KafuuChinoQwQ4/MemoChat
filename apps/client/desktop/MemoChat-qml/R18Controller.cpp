@@ -12,8 +12,34 @@
 #include <QJsonObject>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
+
+namespace {
+constexpr int kR18RequestTimeoutMs = 15000;
+
+void applyR18RequestOptions(QNetworkRequest& request)
+{
+    request.setRawHeader(QByteArrayLiteral("Connection"), QByteArrayLiteral("close"));
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    request.setTransferTimeout(kR18RequestTimeoutMs);
+#endif
+}
+
+void armR18Timeout(QNetworkReply* reply)
+{
+    auto* timer = new QTimer(reply);
+    timer->setSingleShot(true);
+    QObject::connect(timer, &QTimer::timeout, reply, [reply]() {
+        if (reply->isRunning()) {
+            reply->abort();
+        }
+    });
+    QObject::connect(reply, &QNetworkReply::finished, timer, &QTimer::stop);
+    timer->start(kR18RequestTimeoutMs);
+}
+} // namespace
 
 R18Controller::R18Controller(ClientGateway* gateway, QObject* parent)
     : QObject(parent)
@@ -205,7 +231,9 @@ void R18Controller::postJson(const QString& path, const QJsonObject& payload, co
     }
     QNetworkRequest request(QUrl(gate_url_prefix + path));
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+    applyR18RequestOptions(request);
     auto* reply = _network.post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
+    armR18Timeout(reply);
     reply->setProperty("r18_op", op);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         const QString op = reply->property("r18_op").toString();
@@ -246,7 +274,9 @@ void R18Controller::getJson(const QUrl& url, const QString& op)
     setLoading(true);
     setError({});
     QNetworkRequest request(url);
+    applyR18RequestOptions(request);
     auto* reply = _network.get(request);
+    armR18Timeout(reply);
     reply->setProperty("r18_op", op);
     connect(reply, &QNetworkReply::finished, this, [this, reply, url]() {
         const QString op = reply->property("r18_op").toString();
@@ -362,7 +392,9 @@ void R18Controller::downloadAndImportSource(const QUrl& scriptUrl, const QVarian
     setLoading(true);
     setError({});
     QNetworkRequest request(scriptUrl);
+    applyR18RequestOptions(request);
     auto* reply = _network.get(request);
+    armR18Timeout(reply);
     reply->setProperty("r18_source_url", scriptUrl);
     connect(reply, &QNetworkReply::finished, this, [this, reply, item]() {
         const auto networkError = reply->error();

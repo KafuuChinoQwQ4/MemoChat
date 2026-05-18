@@ -44,6 +44,12 @@ description: 通过上下文、计划、实现、Docker 支撑的验证和复审
 - 不要在 Docker 外安装或启动本地 Redis/Postgres/Mongo/RabbitMQ/Redpanda 等服务。
 - 除非明确要求，否则不要改变稳定端口映射。
 - 使用 `docker ps` 和 MCP 工具检查状态。
+- 默认 Linux 环境是 WSL 发行版 `archlinux`，仓库路径是 `/root/code/MemoChat-Qml-Drogon-linux`。从 Windows 调用时使用：
+
+```powershell
+wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat-Qml-Drogon-linux && source /root/.memochat-linux-env && <command>'
+```
+
 - 直接检查时优先使用 Docker 命令：
 
 ```bash
@@ -58,7 +64,7 @@ docker exec memochat-redpanda rpk cluster info --brokers 127.0.0.1:19092
 
 ## 构建选择
 
-将要在 Arch Linux WSL 中部署或运行时测试的代码变更，统一使用 Linux full preset。`deploy_services.sh` 默认从 `build-linux-full-gcc16/bin` 复制服务和客户端产物。
+将要在 `archlinux` WSL 中部署或运行时测试的代码变更，统一使用 Linux full preset。`deploy_services.sh` 默认从 `build-linux-full-gcc16/bin` 复制服务和客户端产物。
 
 ```bash
 source /root/.memochat-linux-env
