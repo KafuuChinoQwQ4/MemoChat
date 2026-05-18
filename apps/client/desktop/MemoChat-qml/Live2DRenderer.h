@@ -18,6 +18,7 @@ struct Live2DVisualState
     qreal lipSyncValue = 0.0;
     qreal idlePhase = 0.0;
     int actionSerial = 0;
+    bool persistentMotion = false;
 };
 
 class Live2DRenderer

@@ -137,7 +137,7 @@ class DeterministicPetProvider:
                 text=text,
                 state="error",
                 sample_rate=0,
-                duration_ms=max(240, min(12000, 90 * len(text))) if text else 0,
+                duration_ms=_estimated_voice_duration_ms(text) if text else 0,
                 rms=_scripted_rms(text),
                 chunk_ref=None,
                 url=None,
@@ -203,7 +203,7 @@ class DeterministicPetProvider:
             model_name=prompt.model_name,
             deployment_preference="any",
             temperature=0.6,
-            max_tokens=512,
+            max_tokens=2048,
         )
         payload = _parse_reply_json(response.content)
         reply = str(payload.get("text") or payload.get("reply") or response.content or "").strip()
@@ -232,13 +232,17 @@ class DeterministicPetProvider:
             model_name=prompt.model_name,
             deployment_preference="any",
             temperature=0.2,
-            max_tokens=256,
+            max_tokens=1024,
         )
         return response.content.strip()
 
 
 def _chunk_text(text: str, size: int) -> list[str]:
     return [text[index:index + size] for index in range(0, len(text), size)] or [""]
+
+
+def _estimated_voice_duration_ms(text: str) -> int:
+    return max(240, min(60000, 90 * len(text))) if text else 0
 
 
 def _voice_metadata(prompt: PetPromptContext) -> dict:

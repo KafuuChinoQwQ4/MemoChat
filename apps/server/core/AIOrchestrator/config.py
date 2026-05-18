@@ -128,7 +128,7 @@ class AgentConfig(BaseModel):
     timeout_per_step_sec: int = 30
     timeout_total_sec: int = 300
     fallback_on_error: bool = True
-    max_tokens_per_response: int = 2048
+    max_tokens_per_response: int = 8192
     temperature: float = 0.7
     hitl_enabled: bool = False
     system_prompt: str = "你是一个专业的 AI 助手。"
@@ -230,7 +230,7 @@ class SemanticCacheConfig(BaseModel):
     ttl_sec: int = 7 * 24 * 60 * 60
     min_question_chars: int = 4
     max_question_chars: int = 2000
-    max_answer_chars: int = 12000
+    max_answer_chars: int = 32000
     dimension: int = 384
     include_model_in_cache_key: bool = True
     cache_tool_results: bool = False
@@ -349,7 +349,7 @@ class PetFeatureConfig(BaseModel):
     voice_sovits_prompt_language: str = "zh"
     voice_sovits_text_language: str = "zh"
     voice_sovits_output_dir: str = "/app/.data/pet-voice-cache"
-    voice_sovits_timeout_sec: float = 60.0
+    voice_sovits_timeout_sec: float = 180.0
     voice_training_enabled: bool = True
     voice_training_artifact_root: str = "/app/.data/pet-voice-training"
 

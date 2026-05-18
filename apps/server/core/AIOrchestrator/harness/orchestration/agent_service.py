@@ -34,7 +34,9 @@ def _request_metadata(request) -> dict:
     return metadata if isinstance(metadata, dict) else {}
 
 
-def _request_max_tokens(request, default_value: int = 2048, skill=None) -> int:
+def _request_max_tokens(request, default_value: int | None = None, skill=None) -> int:
+    if default_value is None:
+        default_value = int(getattr(settings.agent, "max_tokens_per_response", 8192) or 8192)
     metadata = _request_metadata(request)
     raw_value = metadata.get("max_tokens", metadata.get("num_predict", default_value))
     if raw_value == default_value and skill is not None:
@@ -43,7 +45,7 @@ def _request_max_tokens(request, default_value: int = 2048, skill=None) -> int:
         value = int(raw_value)
     except (TypeError, ValueError):
         value = default_value
-    return min(max(value, 1), 4096)
+    return min(max(value, 1), 16384)
 
 
 def _request_temperature(request, default_value: float, skill=None) -> float:

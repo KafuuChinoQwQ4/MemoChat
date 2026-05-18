@@ -4,6 +4,7 @@ import sys
 import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 AI_ORCHESTRATOR_ROOT = str(Path(__file__).resolve().parents[1])
 _AI_PATH_ADDED = False
@@ -167,6 +168,8 @@ class PetVisualLayerUserFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(high_event["action"]["name"], "visual_react")
         self.assertTrue(high_event["debug"]["visual_summary"]["speak"])
         self.assertIn("杯子和键盘", high_event["debug"]["visual_summary"]["summary_text"])
+        self.assertEqual(high_event["speech"]["text_delta"], "我已经看到你了哦~")
+        self.assertEqual(high_event["debug"]["visual_summary"]["reason"], "first_user_seen")
 
         reply = await self.client.post(
             f"/pet/sessions/{agent_session_id}/input",
@@ -183,8 +186,24 @@ class PetVisualLayerUserFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("speaking", phases)
         self.assertEqual(phases[-1], "idle")
 
+        last_visual_at = self.runtime._policy.visual_summary(agent_session_id).get("updated_at_ms", 0)
+        with mock.patch("harness.pet.policy.time", types.SimpleNamespace(time=mock.Mock(return_value=(last_visual_at / 1000.0) + 6.0))):
+            changed = await self.client.post(
+                f"/pet/sessions/{agent_session_id}/observation",
+                json={
+                    "type": "pet.observation",
+                    "audio": {"vad": "idle", "rms": 0.0, "interrupt": False},
+                    "vision": _rich_vision("surprised", 0.94, True),
+                    "privacy": {"raw_frame_sent": False, "raw_audio_recorded": False, "retention": "none"},
+                },
+            )
+        self.assertEqual(changed.status_code, 200, changed.text)
+        changed_event = changed.json()["event"]
+        self.assertEqual(changed_event["debug"]["visual_summary"]["reason"], "updated")
+        self.assertTrue(changed_event["debug"]["visual_summary"]["speak"])
+
         boundaries = (
-            ("cooldown", _rich_vision("surprised", 0.94, True)),
+            ("cooldown", _rich_vision("smile", 0.96, True)),
             ("low_confidence", _rich_vision("smile", 0.35, True)),
             ("no_face", _rich_vision("", 0.91, False)),
         )

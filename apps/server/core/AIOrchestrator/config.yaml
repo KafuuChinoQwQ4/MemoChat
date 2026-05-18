@@ -94,7 +94,7 @@ agent:
   timeout_per_step_sec: 30
   timeout_total_sec: 300
   fallback_on_error: true
-  max_tokens_per_response: 2048
+  max_tokens_per_response: 8192
   temperature: 0.7
   hitl_enabled: false
   system_prompt: |
@@ -154,7 +154,7 @@ semantic_cache:
   ttl_sec: 604800
   min_question_chars: 4
   max_question_chars: 2000
-  max_answer_chars: 12000
+  max_answer_chars: 32000
   dimension: 384
   include_model_in_cache_key: true
   cache_tool_results: false
@@ -415,6 +415,6 @@ pet:
   voice_sovits_prompt_language: "zh"
   voice_sovits_text_language: "zh"
   voice_sovits_output_dir: "/app/.data/pet-voice-cache"
-  voice_sovits_timeout_sec: 60
+  voice_sovits_timeout_sec: 180
   voice_training_enabled: true
   voice_training_artifact_root: "/app/.data/pet-voice-training"

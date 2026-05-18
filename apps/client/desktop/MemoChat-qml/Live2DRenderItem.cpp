@@ -2,23 +2,16 @@
 
 #include "Live2DOfficialOpenGLRenderer.h"
 
-#include <QColor>
 #include <QDir>
 #include <QEvent>
 #include <QFileInfo>
-#include <QFont>
 #include <QMetaObject>
-#include <QPainter>
-#include <QPainterPath>
-#include <QPen>
 #include <QOpenGLContext>
 #include <QOpenGLFramebufferObject>
 #include <QOpenGLFunctions>
-#include <QOpenGLPaintDevice>
 #include <QPointer>
 #include <QQuickOpenGLUtils>
 #include <QQuickWindow>
-#include <QRadialGradient>
 #include <QStringList>
 #include <QUrl>
 #include <QVariant>
@@ -39,100 +32,6 @@ QString readyStatus()
 QString errorStatus()
 {
     return QStringLiteral("error");
-}
-
-QString compactErrorText(QString error)
-{
-    error = error.simplified();
-    constexpr qsizetype kMaximumLength = 220;
-    if (error.size() > kMaximumLength) {
-        error = error.left(kMaximumLength - 3) + QStringLiteral("...");
-    }
-    return error;
-}
-
-QRectF centeredRect(const QPointF &center, qreal width, qreal height)
-{
-    return QRectF(center.x() - width / 2.0,
-                  center.y() - height / 2.0,
-                  width,
-                  height);
-}
-
-void drawModelErrorMarker(QPainter *painter,
-                          const QRectF &itemBounds,
-                          const QString &modelPath,
-                          const QString &error)
-{
-    if (!painter) {
-        return;
-    }
-
-    painter->setRenderHint(QPainter::Antialiasing, true);
-    painter->setRenderHint(QPainter::TextAntialiasing, true);
-    const QRectF bounds = itemBounds.adjusted(10, 10, -10, -10);
-    if (bounds.width() <= 0 || bounds.height() <= 0) {
-        return;
-    }
-
-    const qreal unit = qMin(bounds.width(), bounds.height());
-    const QPointF center = bounds.center();
-
-    QRadialGradient glow(center, unit * 0.50);
-    glow.setColorAt(0.0, QColor(255, 76, 96, 70));
-    glow.setColorAt(0.62, QColor(255, 76, 96, 26));
-    glow.setColorAt(1.0, QColor(255, 76, 96, 0));
-    painter->setPen(Qt::NoPen);
-    painter->setBrush(glow);
-    painter->drawEllipse(center, unit * 0.50, unit * 0.50);
-
-    const QRectF badge = centeredRect(center, unit * 0.62, unit * 0.62);
-    painter->setPen(QPen(QColor(255, 110, 126, 230), qMax<qreal>(2.0, unit * 0.018)));
-    painter->setBrush(QColor(24, 28, 36, 210));
-    painter->drawRoundedRect(badge, unit * 0.08, unit * 0.08);
-
-    QPainterPath warning;
-    warning.moveTo(center.x(), badge.top() + badge.height() * 0.20);
-    warning.lineTo(badge.right() - badge.width() * 0.18, badge.bottom() - badge.height() * 0.18);
-    warning.lineTo(badge.left() + badge.width() * 0.18, badge.bottom() - badge.height() * 0.18);
-    warning.closeSubpath();
-    painter->setPen(QPen(QColor(255, 214, 116, 240), qMax<qreal>(2.0, unit * 0.012)));
-    painter->setBrush(QColor(255, 89, 112, 224));
-    painter->drawPath(warning);
-
-    QFont iconFont = painter->font();
-    iconFont.setBold(true);
-    iconFont.setPixelSize(qMax(22, qRound(unit * 0.17)));
-    painter->setFont(iconFont);
-    painter->setPen(QColor(255, 255, 255, 245));
-    painter->drawText(warning.boundingRect(), Qt::AlignCenter, QStringLiteral("!"));
-
-    const QString pathName = QFileInfo(modelPath).fileName();
-    const QString title = QStringLiteral("模型显示错误");
-    const QString details = pathName.isEmpty()
-                                ? QStringLiteral("未收到 model3.json")
-                                : QStringLiteral("加载失败：%1").arg(pathName);
-    const QString reason = compactErrorText(error);
-    const QString message = reason.isEmpty() ? details : details + QStringLiteral("\n") + reason;
-
-    QRectF textRect(bounds.left(),
-                    qMin(bounds.bottom() - unit * 0.22, badge.bottom() + unit * 0.06),
-                    bounds.width(),
-                    qMax<qreal>(unit * 0.20, bounds.bottom() - badge.bottom() - unit * 0.04));
-    painter->setPen(QColor(255, 246, 249, 245));
-    QFont titleFont = painter->font();
-    titleFont.setBold(true);
-    titleFont.setPixelSize(qMax(13, qRound(unit * 0.052)));
-    painter->setFont(titleFont);
-    painter->drawText(textRect, Qt::AlignHCenter | Qt::AlignTop, title);
-
-    textRect.adjust(6, qMax<qreal>(18, unit * 0.075), -6, 0);
-    QFont detailFont = painter->font();
-    detailFont.setBold(false);
-    detailFont.setPixelSize(qMax(10, qRound(unit * 0.032)));
-    painter->setFont(detailFont);
-    painter->setPen(QColor(255, 226, 232, 220));
-    painter->drawText(textRect, Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap, message);
 }
 
 class Live2DFboRenderer final : public QQuickFramebufferObject::Renderer
@@ -230,22 +129,9 @@ public:
             reportStatus(errorStatus(), _render_error);
         }
 
-        QImage fallback(_item_size, QImage::Format_ARGB32_Premultiplied);
-        fallback.fill(Qt::transparent);
-        QPainter painter(&fallback);
-        drawModelErrorMarker(&painter,
-                             QRectF(QPointF(0, 0), QSizeF(_item_size)),
-                             _model_path,
-                             _render_error);
-        painter.end();
-
         functions->glViewport(0, 0, _item_size.width(), _item_size.height());
         functions->glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         functions->glClear(GL_COLOR_BUFFER_BIT);
-        QOpenGLPaintDevice paintDevice(_item_size);
-        QPainter fboPainter(&paintDevice);
-        fboPainter.drawImage(QPoint(0, 0), fallback);
-        fboPainter.end();
         QQuickOpenGLUtils::resetOpenGLState();
         update();
     }
@@ -503,6 +389,15 @@ void Live2DRenderItem::setActionSerial(int value)
     updateVisual();
 }
 
+void Live2DRenderItem::setPersistentMotion(bool value)
+{
+    if (_persistent_motion == value) {
+        return;
+    }
+    _persistent_motion = value;
+    updateVisual();
+}
+
 qreal Live2DRenderItem::boundedUnit(qreal value, qreal fallback)
 {
     if (qIsNaN(value)) {
@@ -533,6 +428,7 @@ Live2DVisualState Live2DRenderItem::visualState() const
     state.lipSyncValue = _lip_sync_value;
     state.idlePhase = _idle_phase;
     state.actionSerial = _action_serial;
+    state.persistentMotion = _persistent_motion;
     return state;
 }
 

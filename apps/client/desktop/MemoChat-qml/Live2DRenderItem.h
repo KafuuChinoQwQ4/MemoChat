@@ -24,6 +24,7 @@ class Live2DRenderItem : public QQuickFramebufferObject
     Q_PROPERTY(qreal gazeY READ gazeY WRITE setGazeY NOTIFY visualStateChanged)
     Q_PROPERTY(qreal lipSyncValue READ lipSyncValue WRITE setLipSyncValue NOTIFY visualStateChanged)
     Q_PROPERTY(int actionSerial READ actionSerial WRITE setActionSerial NOTIFY visualStateChanged)
+    Q_PROPERTY(bool persistentMotion READ persistentMotion WRITE setPersistentMotion NOTIFY visualStateChanged)
     Q_PROPERTY(QString renderStatus READ renderStatus NOTIFY renderStatusChanged)
     Q_PROPERTY(QString renderError READ renderError NOTIFY renderStatusChanged)
 
@@ -42,6 +43,7 @@ public:
     qreal gazeY() const { return _gaze_y; }
     qreal lipSyncValue() const { return _lip_sync_value; }
     int actionSerial() const { return _action_serial; }
+    bool persistentMotion() const { return _persistent_motion; }
     QString renderStatus() const { return _render_status; }
     QString renderError() const { return _render_error; }
 
@@ -67,6 +69,7 @@ public slots:
     void setGazeY(qreal value);
     void setLipSyncValue(qreal value);
     void setActionSerial(int value);
+    void setPersistentMotion(bool value);
 
 signals:
     void modelSourceChanged();
@@ -91,6 +94,7 @@ private:
     qreal _gaze_y = 0.5;
     qreal _lip_sync_value = 0.0;
     int _action_serial = 0;
+    bool _persistent_motion = false;
     QString _render_status = QStringLiteral("loading");
     QString _render_error;
     QString _render_model_path;
