@@ -655,7 +655,7 @@ Popup {
     }
 
     function imgUrl(key) {
-        return key ? (gate_url_prefix + "/media/download?asset=" + key) : ""
+        return key ? (gateMediaUrlPrefix + "/media/download?asset=" + key) : ""
     }
 
     function applySnapshot() {
@@ -854,7 +854,7 @@ Popup {
                 background: Rectangle { color: "#111111"; anchors.fill: parent }
                 Image {
                     anchors.fill: parent; fillMode: Image.PreserveAspectFit
-                    source: gate_url_prefix + "/media/download?asset=" + imgPopup.currentKey
+                    source: gateMediaUrlPrefix + "/media/download?asset=" + imgPopup.currentKey
                     cache: false
                 }
                 MouseArea {

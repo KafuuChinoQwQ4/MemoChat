@@ -1,10 +1,8 @@
-﻿services:
-  nginx-lb:
-    image: memochat/nginx-lb:latest
-    container_name: memochat-nginx-lb
-    build:
-      context: ../..
-      dockerfile: deploy/images/Dockerfile
+services:
+  envoy-lb:
+    image: envoyproxy/envoy:v1.38.0
+    container_name: memochat-envoy-lb
+    restart: unless-stopped
     ports:
       - "80:80"
       - "8090:8090"
@@ -13,22 +11,16 @@
       - "8093:8093"
       - "8094:8094"
       - "8097:8097"
-    environment:
-      - GATE_SERVER_1=gate-server-1:8080
-      - GATE_SERVER_2=gate-server-2:8080
-      - CHAT_SERVER_1=chat-server-1:8090
-      - CHAT_SERVER_2=chat-server-2:8091
-      - CHAT_SERVER_3=chat-server-3:8092
-      - CHAT_SERVER_4=chat-server-4:8093
-      - CHAT_SERVER_5=chat-server-5:8094
-      - CHAT_SERVER_6=chat-server-6:8097
+    volumes:
+      - ./envoy-lb.yaml:/etc/envoy/envoy.yaml:ro
+    entrypoint: ["envoy"]
+    command: ["-c", "/etc/envoy/envoy.yaml"]
     networks:
       - memochat-net
-    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      test: ["CMD-SHELL", "envoy --mode validate -c /etc/envoy/envoy.yaml >/dev/null 2>&1"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
       start_period: 10s
 
@@ -42,11 +34,6 @@
       - POSTGRES_HOST=memochat-postgres
     networks:
       - memochat-net
-    depends_on:
-      memochat-redis:
-        condition: service_started
-      memochat-postgres:
-        condition: service_started
 
   gate-server-2:
     image: memochat/gate-server:latest
@@ -58,11 +45,6 @@
       - POSTGRES_HOST=memochat-postgres
     networks:
       - memochat-net
-    depends_on:
-      memochat-redis:
-        condition: service_started
-      memochat-postgres:
-        condition: service_started
 
   chat-server-1:
     image: memochat/chat-server:latest
@@ -77,11 +59,6 @@
       - POSTGRES_HOST=memochat-postgres
     networks:
       - memochat-net
-    depends_on:
-      memochat-redis:
-        condition: service_started
-      memochat-postgres:
-        condition: service_started
 
   chat-server-2:
     image: memochat/chat-server:latest
@@ -96,11 +73,6 @@
       - POSTGRES_HOST=memochat-postgres
     networks:
       - memochat-net
-    depends_on:
-      memochat-redis:
-        condition: service_started
-      memochat-postgres:
-        condition: service_started
 
   chat-server-3:
     image: memochat/chat-server:latest
@@ -115,11 +87,6 @@
       - POSTGRES_HOST=memochat-postgres
     networks:
       - memochat-net
-    depends_on:
-      memochat-redis:
-        condition: service_started
-      memochat-postgres:
-        condition: service_started
 
   chat-server-4:
     image: memochat/chat-server:latest
@@ -134,11 +101,6 @@
       - POSTGRES_HOST=memochat-postgres
     networks:
       - memochat-net
-    depends_on:
-      memochat-redis:
-        condition: service_started
-      memochat-postgres:
-        condition: service_started
 
   chat-server-5:
     image: memochat/chat-server:latest
@@ -153,11 +115,6 @@
       - POSTGRES_HOST=memochat-postgres
     networks:
       - memochat-net
-    depends_on:
-      memochat-redis:
-        condition: service_started
-      memochat-postgres:
-        condition: service_started
 
   chat-server-6:
     image: memochat/chat-server:latest
@@ -172,11 +129,6 @@
       - POSTGRES_HOST=memochat-postgres
     networks:
       - memochat-net
-    depends_on:
-      memochat-redis:
-        condition: service_started
-      memochat-postgres:
-        condition: service_started
 
 networks:
   memochat-net:

@@ -22,7 +22,7 @@ namespace {
 
 using memochat::json::JsonValue;
 
-constexpr const char* kDefaultR18SourceId = "jm.official";
+constexpr const char* kDefaultR18SourceId = "";
 
 bool ValidateUserToken(int uid, const std::string& token)
 {

@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$BaseUrl = "http://127.0.0.1",
     [string]$Route = "/user_login",
     [string]$Method = "POST",
@@ -8,7 +8,7 @@ param(
     [string]$ContentType = "application/json",
     [switch]$AllowNo429,
     [switch]$CheckDockerLogs,
-    [string]$NginxContainerName = "memochat-nginx-lb",
+    [string]$EnvoyContainerName = "memochat-envoy-gateway",
     [int]$DockerLogTail = 200
 )
 
@@ -54,7 +54,7 @@ function New-SmokeRequest {
     )
 
     $request = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::new($RequestMethod.ToUpperInvariant()), $Uri)
-    $request.Headers.TryAddWithoutValidation("X-MemoChat-Smoke", "nginx-auth-limit") | Out-Null
+    $request.Headers.TryAddWithoutValidation("X-MemoChat-Smoke", "envoy-auth-limit") | Out-Null
     $request.Headers.TryAddWithoutValidation("X-MemoChat-Smoke-Seq", [string]$RequestNumber) | Out-Null
 
     if ($null -ne $RequestBody -and $RequestBody.Length -gt 0) {
@@ -74,7 +74,7 @@ function Get-StatusKey {
     return "ERROR"
 }
 
-function Test-NginxDocker429 {
+function Test-EnvoyDocker429 {
     param(
         [string]$ContainerName,
         [int]$Tail
@@ -83,17 +83,17 @@ function Test-NginxDocker429 {
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        $logs = & $DockerCli logs --tail $Tail $ContainerName 2>&1
+        $logs = & $DockerCli exec $ContainerName tail -n $Tail /var/log/envoy/access.json 2>&1
         $dockerExitCode = $LASTEXITCODE
     } catch {
-        Write-Host "Docker log 429 check unavailable: $($_.Exception.Message)"
+        Write-Host "Envoy access log 429 check unavailable: $($_.Exception.Message)"
         return
     } finally {
         $ErrorActionPreference = $previousErrorActionPreference
     }
 
     if ($dockerExitCode -ne 0) {
-        Write-Host "Docker log 429 check unavailable: docker logs exited with $dockerExitCode."
+        Write-Host "Envoy access log 429 check unavailable: docker exec exited with $dockerExitCode."
         return
     }
 
@@ -112,7 +112,7 @@ $tasks = New-Object 'System.Collections.Generic.List[System.Threading.Tasks.Task
 $results = New-Object 'System.Collections.Generic.List[object]'
 $startedAt = Get-Date
 
-Write-Host "=== Nginx auth limit smoke ==="
+Write-Host "=== Envoy auth limit smoke ==="
 Write-Host "Target: $Method $uri"
 Write-Host "Requests: $RequestCount"
 Write-Host "TimeoutSec: $TimeoutSec"
@@ -190,9 +190,10 @@ if ($errors.Count -gt 0) {
 Write-Host "Observed429: $observed429"
 
 if ($CheckDockerLogs) {
-    Test-NginxDocker429 -ContainerName $NginxContainerName -Tail $DockerLogTail
+    Test-EnvoyDocker429 -ContainerName $EnvoyContainerName -Tail $DockerLogTail
 }
 
 if (-not $observed429 -and -not $AllowNo429) {
     exit 1
 }
+

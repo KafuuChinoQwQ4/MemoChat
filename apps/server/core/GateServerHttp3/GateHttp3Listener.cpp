@@ -14,7 +14,6 @@
 #include "../common/WinSdkCompat.h"
 
 #include <msquic.h>
-#include <nghttp3/nghttp3.h>
 
 static const QUIC_API_TABLE* g_QuicApi = nullptr;
 static HQUIC g_Registration = nullptr;
@@ -74,7 +73,6 @@ struct GateHttp3Listener::Impl : public std::enable_shared_from_this<Impl> {
             Listener = nullptr;
         }
     }
-    nghttp3_conn* nghttp3Conn = nullptr;
 };
 
 static QUIC_STATUS ConnectionCallback(HQUIC, void*, QUIC_CONNECTION_EVENT*);

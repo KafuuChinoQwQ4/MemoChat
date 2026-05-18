@@ -46,6 +46,10 @@ images:
     repository: memochat/memo-ops
     tag: latest
     pullPolicy: IfNotPresent
+  envoy:
+    repository: envoyproxy/envoy
+    tag: v1.38.0
+    pullPolicy: IfNotPresent
   otelCollector:
     repository: otel/opentelemetry-collector-contrib
     tag: 0.99.0
@@ -98,7 +102,7 @@ gate:
     port: 8080
   ingress:
     enabled: true
-    className: nginx
+    className: envoy
     annotations: {}
     tls: []
   autoscaling:

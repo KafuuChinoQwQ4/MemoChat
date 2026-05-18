@@ -644,6 +644,9 @@ int main(int argc, char *argv[])
     if (gate_host.isEmpty()) {
         gate_host = "127.0.0.1";
     }
+    if (gate_host.compare(QStringLiteral("localhost"), Qt::CaseInsensitive) == 0) {
+        gate_host = QStringLiteral("127.0.0.1");
+    }
 
     QString gate_port = settings.value("GateServer/port").toString().trimmed();
     if (gate_port.isEmpty()) {
@@ -653,7 +656,16 @@ int main(int argc, char *argv[])
         gate_port = "8080";
     }
 
+    QString media_gate_port = settings.value("GateServer/http_port").toString().trimmed();
+    if (media_gate_port.isEmpty()) {
+        media_gate_port = settings.value("GateServer/HttpPort").toString().trimmed();
+    }
+    if (media_gate_port.isEmpty()) {
+        media_gate_port = gate_port;
+    }
+
     gate_url_prefix = (gate_port == "8443") ? "https://" + gate_host + ":" + gate_port : "http://" + gate_host + ":" + gate_port;
+    gate_media_url_prefix = "http://" + gate_host + ":" + media_gate_port;
 
     qmlRegisterUncreatableType<AppController>(
         "MemoChat", 1, 0, "AppController", "Enum only");
@@ -681,6 +693,7 @@ int main(int argc, char *argv[])
     });
     engine.rootContext()->setContextProperty("controller", &controller);
     engine.rootContext()->setContextProperty("gateUrlPrefix", gate_url_prefix);
+    engine.rootContext()->setContextProperty("gateMediaUrlPrefix", gate_media_url_prefix);
     engine.rootContext()->setContextProperty("livekitBridge", controller.livekitBridge());
 
 #ifdef Q_OS_LINUX

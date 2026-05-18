@@ -3,10 +3,7 @@
   "version-string": "0.1.0",
   "builtin-baseline": "2fa7118fb2ce0c27ab73e08ab1991f4cb67af880",
   "dependencies": [
-    {
-      "name": "msquic",
-      "platform": "windows & !static"
-    }
+    "msquic"
   ],
   "default-features": [
     "server"
@@ -36,14 +33,6 @@
         "libpq",
         "libpqxx",
         {
-          "name": "ngtcp2",
-          "features": []
-        },
-        {
-          "name": "nghttp3",
-          "features": []
-        },
-        {
           "name": "nghttp2",
           "features": []
         },
@@ -64,10 +53,9 @@
       ]
     },
     "http3": {
-      "description": "HTTP/3 support via ngtcp2 + nghttp3",
+      "description": "HTTP/3 and QUIC support via MsQuic",
       "dependencies": [
-        "ngtcp2",
-        "nghttp3",
+        "msquic",
         "openssl"
       ]
     }

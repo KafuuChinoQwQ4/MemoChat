@@ -2,6 +2,7 @@
 
 #include <QDataStream>
 #include <QDebug>
+#include <QMetaObject>
 #include <QtEndian>
 #include <QtGlobal>
 
@@ -71,8 +72,15 @@ void QuicChatTransport::handleReceivedBytes(const QByteArray &bytes)
         ::memmove(_recvBuffer.data(), _recvBuffer.data() + _messageLen, _recvBuffer.size() - _messageLen);
         _recvBuffer.chop(_messageLen);
         _recvPending = false;
-        emit sig_message_received(static_cast<ReqId>(_messageId), _messageLen, payload);
+        emitMessageReceivedOnObjectThread(static_cast<ReqId>(_messageId), _messageLen, payload);
     }
+}
+
+void QuicChatTransport::emitMessageReceivedOnObjectThread(ReqId reqId, int len, const QByteArray &data)
+{
+    QMetaObject::invokeMethod(this, [this, reqId, len, data]() {
+        emit sig_message_received(reqId, len, data);
+    }, Qt::QueuedConnection);
 }
 
 void QuicChatTransport::CloseConnection()
@@ -297,16 +305,20 @@ int QuicChatTransport::onConnectionEvent(void *eventPtr)
             &_stream);
         if (QUIC_FAILED(openStatus)) {
             qWarning() << "quic stream open failed. status:" << openStatus;
-            CloseConnection();
-            emit sig_con_success(false);
+            QMetaObject::invokeMethod(this, [this]() {
+                CloseConnection();
+                emit sig_con_success(false);
+            }, Qt::QueuedConnection);
             return QUIC_STATUS_SUCCESS;
         }
 
         const QUIC_STATUS startStatus = _api->StreamStart(_stream, QUIC_STREAM_START_FLAG_NONE);
         if (QUIC_FAILED(startStatus)) {
             qWarning() << "quic stream start failed. status:" << startStatus;
-            CloseConnection();
-            emit sig_con_success(false);
+            QMetaObject::invokeMethod(this, [this]() {
+                CloseConnection();
+                emit sig_con_success(false);
+            }, Qt::QueuedConnection);
             return QUIC_STATUS_SUCCESS;
         }
         return QUIC_STATUS_SUCCESS;
@@ -314,16 +326,22 @@ int QuicChatTransport::onConnectionEvent(void *eventPtr)
     case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_TRANSPORT:
     case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_PEER:
         if (_connecting) {
-            _connect_timer.stop();
-            _connecting = false;
-            emit sig_con_success(false);
+            QMetaObject::invokeMethod(this, [this]() {
+                _connect_timer.stop();
+                _connecting = false;
+                emit sig_con_success(false);
+            }, Qt::QueuedConnection);
         } else if (_connected) {
-            CloseConnection();
+            QMetaObject::invokeMethod(this, [this]() {
+                CloseConnection();
+            }, Qt::QueuedConnection);
         }
         return QUIC_STATUS_SUCCESS;
     case QUIC_CONNECTION_EVENT_SHUTDOWN_COMPLETE:
         if (_connected) {
-            CloseConnection();
+            QMetaObject::invokeMethod(this, [this]() {
+                CloseConnection();
+            }, Qt::QueuedConnection);
         }
         return QUIC_STATUS_SUCCESS;
     default:
@@ -340,16 +358,21 @@ int QuicChatTransport::onStreamEvent(void *eventPtr)
 
     switch (event->Type) {
     case QUIC_STREAM_EVENT_START_COMPLETE:
-        _connect_timer.stop();
-        _connecting = false;
-        _connected = true;
-        _streamReady = true;
-        emit sig_con_success(true);
+        QMetaObject::invokeMethod(this, [this]() {
+            _connect_timer.stop();
+            _connecting = false;
+            _connected = true;
+            _streamReady = true;
+            emit sig_con_success(true);
+        }, Qt::QueuedConnection);
         return QUIC_STATUS_SUCCESS;
     case QUIC_STREAM_EVENT_RECEIVE: {
         for (uint32_t i = 0; i < event->RECEIVE.BufferCount; ++i) {
             const auto &buffer = event->RECEIVE.Buffers[i];
-            handleReceivedBytes(QByteArray(reinterpret_cast<const char *>(buffer.Buffer), static_cast<int>(buffer.Length)));
+            const QByteArray bytes(reinterpret_cast<const char *>(buffer.Buffer), static_cast<int>(buffer.Length));
+            QMetaObject::invokeMethod(this, [this, bytes]() {
+                handleReceivedBytes(bytes);
+            }, Qt::QueuedConnection);
         }
         return QUIC_STATUS_SUCCESS;
     }
@@ -360,7 +383,9 @@ int QuicChatTransport::onStreamEvent(void *eventPtr)
     case QUIC_STREAM_EVENT_PEER_SEND_ABORTED:
     case QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE:
         if (_connected) {
-            CloseConnection();
+            QMetaObject::invokeMethod(this, [this]() {
+                CloseConnection();
+            }, Qt::QueuedConnection);
         }
         return QUIC_STATUS_SUCCESS;
     default:

@@ -33,10 +33,10 @@ scrape_configs:
     static_configs:
       - targets: ["memochat-otel-collector:9464"]
 
-  - job_name: nginx_gateway
-    metrics_path: /metrics
+  - job_name: envoy_gateway
+    metrics_path: /stats/prometheus
     static_configs:
-      - targets: ["memochat-nginx-exporter:9113"]
+      - targets: ["memochat-envoy-gateway:9901"]
 
   # Optional local exporters. Enable these only when the matching process or
   # profile is running, otherwise Prometheus target health becomes noisy.

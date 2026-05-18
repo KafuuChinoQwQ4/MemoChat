@@ -14,7 +14,6 @@
 
 #if MEMOCHAT_ENABLE_HTTP3
 #include <msquic.h>
-#include <nghttp3/nghttp3.h>
 #endif
 
 class LogicSystem;
@@ -33,8 +32,9 @@ public:
 
     LogicSystem& GetLogicSystem() { return logic_; }
 
-private:
     struct Impl;
+
+private:
     std::unique_ptr<Impl> pImpl_;
 
     boost::asio::io_context& ioc_;

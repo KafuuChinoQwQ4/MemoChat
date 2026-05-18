@@ -11,8 +11,18 @@ Item {
     property string keyword: ""
     property string activeChapterId: ""
     property int viewMode: 0 // 0 shelf, 1 search, 2 detail, 3 reader, 4 sources, 5 history
+    property int sourceViewMode: 0 // 0 add, 1 catalog, 2 comics, 3 tags
     property bool readerChromeVisible: true
-    readonly property string gatewayBaseUrl: typeof gateUrlPrefix === "string" ? gateUrlPrefix : ""
+    property bool sourceHelpVisible: false
+    property string sourceCatalogInput: ""
+    property string sourcePackagePathText: ""
+    property string sourcePackageManifestText: ""
+    property string sourceFeedKeyword: ""
+    property bool comicBottomLoadArmed: false
+    property var sourceTagBuckets: []
+    readonly property string gatewayBaseUrl: typeof gateMediaUrlPrefix === "string" && gateMediaUrlPrefix.length > 0
+                                             ? gateMediaUrlPrefix
+                                             : (typeof gateUrlPrefix === "string" ? gateUrlPrefix : "")
 
     readonly property color pageBackgroundColor: "transparent"
     readonly property color panelFillColor: Qt.rgba(1, 1, 1, 0.16)
@@ -29,6 +39,16 @@ Item {
     readonly property color secondaryButtonColor: Qt.rgba(0.54, 0.70, 0.93, 0.22)
     readonly property color secondaryButtonHoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.32)
     readonly property color secondaryButtonPressedColor: Qt.rgba(0.54, 0.70, 0.93, 0.40)
+    readonly property color homeFieldFillColor: "#eceef3"
+    readonly property color homeFieldStrokeColor: "#d7dce5"
+    readonly property color homeCardFillColor: "#ffffff"
+    readonly property color homeCardStrokeColor: "#d8dde6"
+    readonly property color homeBadgeFillColor: "#dce6f8"
+    readonly property color homeBadgeTextColor: "#526173"
+    readonly property color homeArrowColor: "#2f343c"
+    readonly property color homeImportButtonColor: "#0c4f92"
+    readonly property color homeImportButtonHoverColor: "#0f61b0"
+    readonly property color homeImportButtonPressedColor: "#093d72"
     readonly property color textPrimaryColor: "#263241"
     readonly property color textSecondaryColor: "#4e6072"
     readonly property color textMutedColor: "#7b8794"
@@ -62,20 +82,175 @@ Item {
 
     function chooseLocalSourcePackage() {
         if (!root.r18Controller) {
-            return
+            return ""
         }
         var path = root.r18Controller.pickSourcePackage()
         if (path && path.length > 0) {
-            sourcePackagePath.text = path
+            root.sourcePackagePathText = path
         }
+        return path
+    }
+
+    function importChosenSourcePackage() {
+        if (!root.r18Controller) {
+            return
+        }
+        var path = root.chooseLocalSourcePackage()
+        if (path && path.length > 0) {
+            root.r18Controller.importSourcePackage(path, root.sourcePackageManifestText)
+        }
+    }
+
+    function openOfficialSourceCatalog() {
+        root.sourceViewMode = 1
+        if (root.r18Controller) {
+            root.r18Controller.refreshOfficialSources(root.sourceCatalogInput)
+        }
+    }
+
+    function refreshOfficialSourceCatalog() {
+        if (!root.r18Controller) {
+            return
+        }
+        root.r18Controller.refreshOfficialSources(root.sourceCatalogInput)
+    }
+
+    function leaveSourceView() {
+        if (root.sourceViewMode === 1) {
+            root.sourceViewMode = 0
+        } else {
+            root.viewMode = 0
+        }
+    }
+
+    function toggleSourceHelp() {
+        root.sourceHelpVisible = !root.sourceHelpVisible
+    }
+
+    function normalizeTagArray(tags) {
+        if (!tags) {
+            return []
+        }
+        if (typeof tags === "string") {
+            return tags.length > 0 ? [tags] : []
+        }
+        var values = []
+        for (var i = 0; i < tags.length; ++i) {
+            var tag = String(tags[i] || "").trim()
+            if (tag.length > 0) {
+                values.push(tag)
+            }
+        }
+        return values
+    }
+
+    function loadSourceFeed(searchText) {
+        if (!root.r18Controller || root.r18Controller.currentSourceId.length === 0) {
+            return
+        }
+        var query = searchText === undefined ? "" : searchText
+        root.sourceFeedKeyword = query
+        root.comicBottomLoadArmed = false
+        root.r18Controller.search(query, 1)
+    }
+
+    function openImportedSource(sourceId) {
+        if (!root.r18Controller || !sourceId) {
+            return
+        }
+        root.comicBottomLoadArmed = false
+        root.r18Controller.selectSource(sourceId)
+        root.sourceViewMode = 2
+        root.loadSourceFeed()
     }
 
     function selectSourceAndSearch(sourceId) {
         if (!root.r18Controller || !sourceId) {
             return
         }
+        root.comicBottomLoadArmed = false
         root.r18Controller.selectSource(sourceId)
         root.r18Controller.search(root.keyword, 1)
+    }
+
+    function rebuildSourceTagBuckets() {
+        if (!root.r18Controller || !root.r18Controller.comicModel) {
+            root.sourceTagBuckets = []
+            return
+        }
+        var counts = {}
+        var model = root.r18Controller.comicModel
+        var total = model.count !== undefined ? model.count : 0
+        for (var i = 0; i < total; ++i) {
+            var item = model.get(i)
+            if (!item) {
+                continue
+            }
+            var tags = normalizeTagArray(item.tags)
+            for (var j = 0; j < tags.length; ++j) {
+                var key = tags[j]
+                if (!counts[key]) {
+                    counts[key] = 0
+                }
+                counts[key] += 1
+            }
+        }
+        var buckets = []
+        for (var name in counts) {
+            buckets.push({ "name": name, "count": counts[name] })
+        }
+        buckets.sort(function(a, b) {
+            if (b.count !== a.count) {
+                return b.count - a.count
+            }
+            return a.name.localeCompare(b.name)
+        })
+        root.sourceTagBuckets = buckets
+    }
+
+    function openSourceFeed() {
+        root.sourceViewMode = 2
+        root.loadSourceFeed("")
+    }
+
+    function openSourceTags() {
+        root.sourceViewMode = 3
+        if (root.modelCount(root.r18Controller ? root.r18Controller.comicModel : null) === 0) {
+            root.loadSourceFeed("")
+        }
+        root.rebuildSourceTagBuckets()
+    }
+
+    function searchByTag(tag) {
+        if (!root.r18Controller || !tag) {
+            return
+        }
+        root.viewMode = 4
+        root.sourceViewMode = 2
+        root.sourceFeedKeyword = tag
+        root.comicBottomLoadArmed = false
+        root.r18Controller.search(tag, 1)
+    }
+
+    function maybeLoadMoreComics(gridView) {
+        if (!root.r18Controller || !gridView) {
+            return
+        }
+        var atBottom = gridView.contentHeight <= gridView.height
+                     || gridView.contentY + gridView.height >= gridView.contentHeight - 48
+        if (!atBottom) {
+            root.comicBottomLoadArmed = false
+            return
+        }
+        if (root.comicBottomLoadArmed
+                || root.r18Controller.loading
+                || !root.r18Controller.currentSearchHasMore
+                || root.r18Controller.currentSourceId.length === 0) {
+            return
+        }
+        root.comicBottomLoadArmed = true
+        var nextKeyword = root.viewMode === 4 ? root.sourceFeedKeyword : root.keyword
+        root.r18Controller.search(nextKeyword, root.r18Controller.currentSearchPage + 1)
     }
 
     function modelCount(model) {
@@ -97,7 +272,9 @@ Item {
     }
 
     function searchNow() {
-        root.keyword = searchField.text
+        var activeField = root.viewMode === 0 ? homeSearchField : searchField
+        root.keyword = activeField ? activeField.text : root.keyword
+        root.comicBottomLoadArmed = false
         root.viewMode = 1
         if (root.r18Controller) {
             root.r18Controller.search(root.keyword, 1)
@@ -105,6 +282,7 @@ Item {
     }
 
     function activateMode(mode) {
+        root.comicBottomLoadArmed = false
         root.viewMode = mode
         root.refreshModeData(mode)
     }
@@ -116,15 +294,26 @@ Item {
         if (mode === 5) {
             root.r18Controller.refreshHistory()
         } else if (mode === 4) {
+            root.sourceViewMode = 0
+            root.sourceHelpVisible = false
             root.r18Controller.refreshSources()
-            if (root.modelCount(root.r18Controller.officialSourceModel) === 0 &&
-                    root.r18Controller.officialSourceCatalogUrl.length > 0) {
-                root.r18Controller.refreshOfficialSources("")
-            }
         }
     }
 
     onViewModeChanged: refreshModeData(viewMode)
+    onSourceViewModeChanged: {
+        if (root.sourceViewMode === 2 || root.sourceViewMode === 3) {
+            root.rebuildSourceTagBuckets()
+        }
+    }
+
+    Connections {
+        target: root.r18Controller ? root.r18Controller.comicModel : null
+        function onCountChanged() {
+            root.comicBottomLoadArmed = false
+            root.rebuildSourceTagBuckets()
+        }
+    }
 
     function openComic(sourceId, comicId) {
         root.readerChromeVisible = true
@@ -157,7 +346,9 @@ Item {
         if (root.r18Controller) {
             root.r18Controller.refreshSources()
             root.r18Controller.refreshHistory()
-            root.r18Controller.search("", 1)
+            if (root.r18Controller.currentSourceId.length > 0) {
+                root.r18Controller.search("", 1)
+            }
         }
     }
 
@@ -198,176 +389,145 @@ Item {
                             anchors.fill: parent
                             spacing: 12
 
-                            RowLayout {
+                            TextField {
+                                id: homeSearchField
                                 Layout.fillWidth: true
+                                Layout.preferredHeight: 56
+                                placeholderText: "搜索"
+                                placeholderTextColor: root.placeholderColor
+                                color: root.textPrimaryColor
+                                text: root.keyword
+                                selectByMouse: true
+                                leftPadding: 50
+                                rightPadding: 18
+                                font.pixelSize: 16
+                                background: Rectangle {
+                                    radius: 28
+                                    color: root.homeFieldFillColor
+                                    border.color: root.homeFieldStrokeColor
+                                }
+                                onAccepted: root.searchNow()
+
                                 Text {
-                                    Layout.fillWidth: true
-                                    text: "书架"
-                                    color: root.textPrimaryColor
-                                    font.pixelSize: 26
-                                    font.bold: true
-                                    elide: Text.ElideRight
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 18
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "⌕"
+                                    color: root.textMutedColor
+                                    font.pixelSize: 24
                                 }
-                                GlassButton {
-                                    Layout.preferredWidth: 92
-                                    Layout.preferredHeight: 34
-                                    text: "刷新"
-                                    textColor: root.textSecondaryColor
-                                    cornerRadius: 9
-                                    normalColor: root.secondaryButtonColor
-                                    hoverColor: root.secondaryButtonHoverColor
-                                    pressedColor: root.secondaryButtonPressedColor
-                                    onClicked: {
-                                        if (root.r18Controller) {
-                                            root.r18Controller.refreshSources()
-                                            root.r18Controller.refreshHistory()
-                                            root.r18Controller.search(root.keyword, 1)
-                                        }
-                                    }
-                                }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 48
-                                spacing: 14
-
-                                Repeater {
-                                    model: [
-                                        { "title": "搜索结果", "count": root.modelCount(root.r18Controller ? root.r18Controller.comicModel : null), "mode": 1 },
-                                        { "title": "最近阅读", "count": root.modelCount(root.r18Controller ? root.r18Controller.historyModel : null), "mode": 5 },
-                                        { "title": "漫画源", "count": root.modelCount(root.r18Controller ? root.r18Controller.sourceModel : null), "mode": 4 }
-                                    ]
-                                    delegate: Rectangle {
-                                        Layout.preferredWidth: Math.max(104, statText.implicitWidth + statCount.implicitWidth + 36)
-                                        Layout.preferredHeight: 44
-                                        radius: 10
-                                        color: statMouse.containsMouse ? root.itemHoverFillColor : root.itemFillColor
-                                        border.color: root.fieldStrokeColor
-
-                                        Row {
-                                            anchors.centerIn: parent
-                                            spacing: 8
-                                            Text {
-                                                id: statText
-                                                text: modelData.title
-                                                color: root.textPrimaryColor
-                                                font.pixelSize: 13
-                                                elide: Text.ElideRight
-                                            }
-                                            Text {
-                                                id: statCount
-                                                text: modelData.count.toString()
-                                                color: root.textMutedColor
-                                                font.pixelSize: 12
-                                                font.bold: true
-                                            }
-                                        }
-
-                                        MouseArea {
-                                            id: statMouse
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.viewMode = modelData.mode
-                                        }
-                                    }
-                                }
-                            }
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 1
-                                color: root.panelStrokeColor
-                            }
-
-                            Text {
-                                Layout.fillWidth: true
-                                text: "继续阅读"
-                                color: root.textSecondaryColor
-                                font.pixelSize: 15
-                                font.bold: true
-                                elide: Text.ElideRight
                             }
 
                             ListView {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 148
-                                clip: true
-                                orientation: ListView.Horizontal
-                                spacing: 10
-                                model: root.r18Controller ? root.r18Controller.historyModel : null
-                                visible: count > 0
-                                delegate: Rectangle {
-                                    width: 140
-                                    height: 138
-                                    radius: 10
-                                    color: root.itemFillColor
-                                    border.color: root.fieldStrokeColor
-                                    clip: true
-
-                                    Image {
-                                        anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        anchors.top: parent.top
-                                        height: 92
-                                        source: root.absoluteUrl(model.cover)
-                                        fillMode: Image.PreserveAspectCrop
-                                        asynchronous: true
-                                    }
-                                    Text {
-                                        anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        anchors.bottom: parent.bottom
-                                        anchors.margins: 8
-                                        text: model.title || model.itemId || "阅读记录"
-                                        color: root.textPrimaryColor
-                                        font.pixelSize: 12
-                                        maximumLineCount: 2
-                                        wrapMode: Text.WordWrap
-                                        elide: Text.ElideRight
-                                    }
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.openComic(model.sourceId, model.itemId)
-                                    }
-                                }
-                            }
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 80
-                                visible: root.modelCount(root.r18Controller ? root.r18Controller.historyModel : null) === 0
-                                radius: 10
-                                color: root.itemFillColor
-                                border.color: root.fieldStrokeColor
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "暂无阅读记录"
-                                    color: root.textMutedColor
-                                    font.pixelSize: 13
-                                }
-                            }
-
-                            Text {
-                                Layout.fillWidth: true
-                                text: "发现"
-                                color: root.textSecondaryColor
-                                font.pixelSize: 15
-                                font.bold: true
-                                elide: Text.ElideRight
-                            }
-
-                            GridView {
-                                Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 clip: true
-                                cellWidth: Math.max(170, Math.floor(width / Math.max(1, Math.floor(width / 190))))
-                                cellHeight: 238
-                                model: root.r18Controller ? root.r18Controller.comicModel : null
+                                spacing: 12
+                                model: [
+                                    { "title": "历史", "count": root.modelCount(root.r18Controller ? root.r18Controller.historyModel : null), "mode": 5, "action": "mode" },
+                                    { "title": "本地", "count": 0, "mode": 4, "action": "import" },
+                                    { "title": "追更", "count": root.modelCount(root.r18Controller ? root.r18Controller.comicModel : null), "mode": 1, "action": "mode" },
+                                    { "title": "漫画源", "count": root.modelCount(root.r18Controller ? root.r18Controller.sourceModel : null), "mode": 4, "action": "mode" },
+                                    { "title": "图片收藏", "count": root.r18Controller && root.r18Controller.currentFavorite ? 1 : 0, "mode": 1, "action": "favorite" }
+                                ]
                                 ScrollBar.vertical: GlassScrollBar {}
-                                delegate: comicTileDelegate
+                                delegate: Rectangle {
+                                    width: ListView.view.width
+                                    height: modelData.action === "import" ? 106 : 72
+                                    radius: 10
+                                    color: homeCardMouse.containsMouse ? Qt.rgba(0.985, 0.988, 0.992, 1.0) : root.homeCardFillColor
+                                    border.color: root.homeCardStrokeColor
+
+                                    MouseArea {
+                                        id: homeCardMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            if (modelData.action === "import") {
+                                                root.importChosenSourcePackage()
+                                            } else if (modelData.action === "favorite") {
+                                                if (root.currentComicId().length > 0) {
+                                                    root.viewMode = 2
+                                                } else {
+                                                    root.activateMode(1)
+                                                }
+                                            } else {
+                                                root.activateMode(modelData.mode)
+                                            }
+                                        }
+                                    }
+
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 18
+                                        anchors.rightMargin: 18
+                                        anchors.topMargin: 16
+                                        anchors.bottomMargin: modelData.action === "import" ? 16 : 14
+                                        spacing: 8
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 8
+
+                                            Text {
+                                                Layout.preferredWidth: implicitWidth
+                                                text: modelData.title
+                                                color: root.textPrimaryColor
+                                                font.pixelSize: 17
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Rectangle {
+                                                visible: modelData.count !== undefined
+                                                Layout.preferredWidth: countText.implicitWidth + 18
+                                                Layout.preferredHeight: 26
+                                                radius: 9
+                                                color: root.homeBadgeFillColor
+
+                                                Text {
+                                                    id: countText
+                                                    anchors.centerIn: parent
+                                                    text: modelData.count.toString()
+                                                    color: root.homeBadgeTextColor
+                                                    font.pixelSize: 12
+                                                }
+                                            }
+
+                                            Item { Layout.fillWidth: true }
+
+                                            Text {
+                                                text: "›"
+                                                color: root.homeArrowColor
+                                                font.pixelSize: 24
+                                            }
+                                        }
+
+                                        Item {
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            visible: modelData.action === "import"
+                                        }
+                                    }
+
+                                        GlassButton {
+                                            visible: modelData.action === "import"
+                                        anchors.right: parent.right
+                                        anchors.bottom: parent.bottom
+                                        anchors.rightMargin: 18
+                                        anchors.bottomMargin: 14
+                                        width: 92
+                                        height: 40
+                                        text: "导入"
+                                        textPixelSize: 14
+                                        textColor: "#ffffff"
+                                        cornerRadius: 18
+                                            normalColor: root.homeImportButtonColor
+                                            hoverColor: root.homeImportButtonHoverColor
+                                            pressedColor: root.homeImportButtonPressedColor
+                                            onClicked: root.importChosenSourcePackage()
+                                        }
+                                }
                             }
                         }
                     }
@@ -417,7 +577,9 @@ Item {
                                 Layout.fillWidth: true
                                 Text {
                                     Layout.fillWidth: true
-                                    text: root.keyword.length > 0 ? "搜索: " + root.keyword : "搜索漫画"
+                                    text: root.keyword.length > 0
+                                          ? "搜索: " + root.keyword
+                                          : (root.r18Controller && root.r18Controller.currentSourceId.length > 0 ? "搜索漫画" : "请先导入漫画源")
                                     color: root.textPrimaryColor
                                     font.pixelSize: 24
                                     font.bold: true
@@ -431,20 +593,22 @@ Item {
                             }
 
                             GridView {
+                                id: comicGridView
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 clip: true
                                 cellWidth: Math.max(170, Math.floor(width / Math.max(1, Math.floor(width / 190))))
-                                cellHeight: 255
+                                cellHeight: 294
                                 model: root.r18Controller ? root.r18Controller.comicModel : null
                                 ScrollBar.vertical: GlassScrollBar {}
+                                onContentYChanged: root.maybeLoadMoreComics(comicGridView)
                                 delegate: comicTileDelegate
                             }
 
                             Text {
                                 Layout.fillWidth: true
                                 visible: root.modelCount(root.r18Controller ? root.r18Controller.comicModel : null) === 0
-                                text: "没有结果"
+                                text: root.r18Controller && root.r18Controller.currentSourceId.length > 0 ? "没有结果" : "请先导入漫画源"
                                 color: root.textMutedColor
                                 font.pixelSize: 14
                                 horizontalAlignment: Text.AlignHCenter
@@ -709,452 +873,833 @@ Item {
                     Item {
                         ColumnLayout {
                             anchors.fill: parent
-                            spacing: 12
+                            spacing: 16
 
                             RowLayout {
                                 Layout.fillWidth: true
+                                spacing: 12
+
+                                Item {
+                                    Layout.preferredWidth: 44
+                                    Layout.preferredHeight: 44
+
+                                    Rectangle {
+                                        anchors.centerIn: parent
+                                        width: 38
+                                        height: 38
+                                        radius: 19
+                                        color: sourceBackMouse.containsMouse ? Qt.rgba(0.86, 0.91, 1.0, 0.52) : "transparent"
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "←"
+                                            color: root.textPrimaryColor
+                                            font.pixelSize: 28
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: sourceBackMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.leaveSourceView()
+                                    }
+                                }
+
                                 Text {
                                     Layout.fillWidth: true
                                     text: "漫画源"
                                     color: root.textPrimaryColor
-                                    font.pixelSize: 24
+                                    font.pixelSize: 25
                                     font.bold: true
                                     elide: Text.ElideRight
                                 }
+
                                 Text {
                                     text: root.r18Controller && root.r18Controller.currentSourceId.length > 0
                                           ? "当前: " + root.r18Controller.currentSourceId
-                                          : ""
+                                          : "当前: 未选择"
                                     color: root.textMutedColor
                                     font.pixelSize: 12
                                     elide: Text.ElideRight
                                 }
-                                GlassButton {
-                                    Layout.preferredWidth: 86
-                                    Layout.preferredHeight: 36
-                                    text: "刷新"
-                                    textColor: root.textSecondaryColor
-                                    cornerRadius: 18
-                                    normalColor: root.secondaryButtonColor
-                                    hoverColor: root.secondaryButtonHoverColor
-                                    pressedColor: root.secondaryButtonPressedColor
-                                    onClicked: if (root.r18Controller) root.r18Controller.refreshSources()
-                                }
                             }
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 176
-                                spacing: 12
+                                spacing: 10
 
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    radius: 9
-                                    color: root.itemFillColor
-                                    border.color: root.fieldStrokeColor
+                                GlassButton {
+                                    Layout.preferredWidth: 92
+                                    Layout.preferredHeight: 34
+                                    text: "添加"
+                                    textPixelSize: 13
+                                    textColor: root.sourceViewMode === 0 ? root.textPrimaryColor : root.textSecondaryColor
+                                    cornerRadius: 17
+                                    normalColor: root.sourceViewMode === 0 ? root.primaryButtonColor : root.secondaryButtonColor
+                                    hoverColor: root.sourceViewMode === 0 ? root.primaryButtonHoverColor : root.secondaryButtonHoverColor
+                                    pressedColor: root.sourceViewMode === 0 ? root.primaryButtonPressedColor : root.secondaryButtonPressedColor
+                                    onClicked: root.sourceViewMode = 0
+                                }
 
+                                GlassButton {
+                                    Layout.preferredWidth: 104
+                                    Layout.preferredHeight: 34
+                                    text: "官方目录"
+                                    textPixelSize: 13
+                                    textColor: root.sourceViewMode === 1 ? root.textPrimaryColor : root.textSecondaryColor
+                                    cornerRadius: 17
+                                    normalColor: root.sourceViewMode === 1 ? root.primaryButtonColor : root.secondaryButtonColor
+                                    hoverColor: root.sourceViewMode === 1 ? root.primaryButtonHoverColor : root.secondaryButtonHoverColor
+                                    pressedColor: root.sourceViewMode === 1 ? root.primaryButtonPressedColor : root.secondaryButtonPressedColor
+                                    onClicked: root.sourceViewMode = 1
+                                }
+
+                                GlassButton {
+                                    Layout.preferredWidth: 92
+                                    Layout.preferredHeight: 34
+                                    text: "漫画"
+                                    textPixelSize: 13
+                                    textColor: root.sourceViewMode === 2 ? root.textPrimaryColor : root.textSecondaryColor
+                                    cornerRadius: 17
+                                    normalColor: root.sourceViewMode === 2 ? root.primaryButtonColor : root.secondaryButtonColor
+                                    hoverColor: root.sourceViewMode === 2 ? root.primaryButtonHoverColor : root.secondaryButtonHoverColor
+                                    pressedColor: root.sourceViewMode === 2 ? root.primaryButtonPressedColor : root.secondaryButtonPressedColor
+                                    onClicked: root.openSourceFeed()
+                                }
+
+                                GlassButton {
+                                    Layout.preferredWidth: 92
+                                    Layout.preferredHeight: 34
+                                    text: "标签"
+                                    textPixelSize: 13
+                                    textColor: root.sourceViewMode === 3 ? root.textPrimaryColor : root.textSecondaryColor
+                                    cornerRadius: 17
+                                    normalColor: root.sourceViewMode === 3 ? root.primaryButtonColor : root.secondaryButtonColor
+                                    hoverColor: root.sourceViewMode === 3 ? root.primaryButtonHoverColor : root.secondaryButtonHoverColor
+                                    pressedColor: root.sourceViewMode === 3 ? root.primaryButtonPressedColor : root.secondaryButtonPressedColor
+                                    onClicked: root.openSourceTags()
+                                }
+
+                                Item { Layout.fillWidth: true }
+                            }
+
+                            StackLayout {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                currentIndex: root.sourceViewMode
+
+                                Item {
                                     ColumnLayout {
                                         anchors.fill: parent
-                                        anchors.margins: 16
-                                        spacing: 10
+                                        anchors.leftMargin: 2
+                                        anchors.rightMargin: 2
+                                        spacing: 18
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 22
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 12
+
+                                                Image {
+                                                    Layout.preferredWidth: 30
+                                                    Layout.preferredHeight: 30
+                                                    source: "qrc:/icons/r18_datasource.png"
+                                                    fillMode: Image.PreserveAspectFit
+                                                    opacity: 0.88
+                                                    mipmap: true
+                                                }
+
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: "添加漫画源"
+                                                    color: root.textPrimaryColor
+                                                    font.pixelSize: 18
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 6
+
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: "URL"
+                                                    color: root.textPrimaryColor
+                                                    font.pixelSize: 15
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                TextField {
+                                                    id: sourceCatalogEntryField
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredHeight: 34
+                                                    text: root.sourceCatalogInput
+                                                    placeholderText: ""
+                                                    color: root.textPrimaryColor
+                                                    selectByMouse: true
+                                                    leftPadding: 14
+                                                    rightPadding: 14
+                                                    font.pixelSize: 15
+                                                    background: Rectangle {
+                                                        color: "transparent"
+                                                        border.color: "transparent"
+                                                    }
+                                                    onTextEdited: root.sourceCatalogInput = text
+                                                    onAccepted: root.refreshOfficialSourceCatalog()
+                                                }
+
+                                                Rectangle {
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredHeight: 1
+                                                    color: root.homeFieldStrokeColor
+                                                }
+                                            }
+                                        }
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 10
+
+                                            GlassButton {
+                                                Layout.preferredWidth: 168
+                                                Layout.preferredHeight: 40
+                                                text: "漫画源列表"
+                                                textPixelSize: 14
+                                                textColor: root.textSecondaryColor
+                                                cornerRadius: 20
+                                                normalColor: root.secondaryButtonColor
+                                                hoverColor: root.secondaryButtonHoverColor
+                                                pressedColor: root.secondaryButtonPressedColor
+                                                onClicked: root.openOfficialSourceCatalog()
+                                            }
+
+                                            GlassButton {
+                                                Layout.preferredWidth: 174
+                                                Layout.preferredHeight: 40
+                                                text: "使用配置文件"
+                                                textPixelSize: 14
+                                                textColor: root.textSecondaryColor
+                                                cornerRadius: 20
+                                                normalColor: root.secondaryButtonColor
+                                                hoverColor: root.secondaryButtonHoverColor
+                                                pressedColor: root.secondaryButtonPressedColor
+                                                onClicked: {
+                                                    if (!root.r18Controller) {
+                                                        return
+                                                    }
+                                                    var path = root.r18Controller.pickSourceCatalogPath()
+                                                    if (path && path.length > 0) {
+                                                        root.sourceCatalogInput = path
+                                                    }
+                                                }
+                                            }
+
+                                            GlassButton {
+                                                Layout.preferredWidth: 118
+                                                Layout.preferredHeight: 40
+                                                text: "帮助"
+                                                textPixelSize: 14
+                                                textColor: root.textSecondaryColor
+                                                cornerRadius: 20
+                                                normalColor: root.secondaryButtonColor
+                                                hoverColor: root.secondaryButtonHoverColor
+                                                pressedColor: root.secondaryButtonPressedColor
+                                                onClicked: root.toggleSourceHelp()
+                                            }
+
+                                            GlassButton {
+                                                Layout.preferredWidth: 150
+                                                Layout.preferredHeight: 40
+                                                text: "检查更新"
+                                                textPixelSize: 14
+                                                textColor: root.textSecondaryColor
+                                                cornerRadius: 20
+                                                normalColor: root.secondaryButtonColor
+                                                hoverColor: root.secondaryButtonHoverColor
+                                                pressedColor: root.secondaryButtonPressedColor
+                                                onClicked: root.refreshOfficialSourceCatalog()
+                                            }
+
+                                            Item { Layout.fillWidth: true }
+                                        }
 
                                         Text {
                                             Layout.fillWidth: true
-                                            text: "添加自定义 JS 源"
+                                            visible: root.sourceHelpVisible
+                                            text: "该地址应指向 index.json；也可以输入本地目录，例如 D:\\Venera，刷新时会自动读取目录下的 index.json。"
+                                            color: root.textMutedColor
+                                            font.pixelSize: 13
+                                            wrapMode: Text.WordWrap
+                                        }
+
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: "已导入漫画源"
                                             color: root.textPrimaryColor
                                             font.pixelSize: 18
                                             font.bold: true
                                             elide: Text.ElideRight
                                         }
-                                        TextField {
-                                            id: directSourceUrl
-                                            Layout.fillWidth: true
-                                            Layout.preferredHeight: 40
-                                            placeholderText: "https://.../source.js"
-                                            placeholderTextColor: root.placeholderColor
-                                            color: root.textPrimaryColor
-                                            text: ""
-                                            selectByMouse: true
-                                            background: Rectangle {
-                                                radius: 20
-                                                color: root.fieldFillColor
-                                                border.color: "transparent"
-                                            }
-                                        }
-                                        RowLayout {
-                                            Layout.fillWidth: true
-                                            spacing: 8
-                                            GlassButton {
-                                                Layout.preferredWidth: 102
-                                                Layout.preferredHeight: 36
-                                                text: "拉取 URL"
-                                                textColor: root.primaryButtonTextColor
-                                                cornerRadius: 18
-                                                normalColor: root.primaryButtonColor
-                                                hoverColor: root.primaryButtonHoverColor
-                                                pressedColor: root.primaryButtonPressedColor
-                                                onClicked: if (root.r18Controller) root.r18Controller.importSourceUrl(directSourceUrl.text)
-                                            }
-                                            GlassButton {
-                                                Layout.preferredWidth: 102
-                                                Layout.preferredHeight: 36
-                                                text: "选择文件"
-                                                textColor: root.textSecondaryColor
-                                                cornerRadius: 18
-                                                normalColor: root.secondaryButtonColor
-                                                hoverColor: root.secondaryButtonHoverColor
-                                                pressedColor: root.secondaryButtonPressedColor
-                                                onClicked: root.chooseLocalSourcePackage()
-                                            }
-                                            Item { Layout.fillWidth: true }
-                                        }
+
                                         Text {
                                             Layout.fillWidth: true
-                                            text: "自定义 JS 源会先保存到服务端；搜索执行需要后续 MemoChat JS 源运行适配。"
+                                            visible: root.modelCount(root.r18Controller ? root.r18Controller.sourceModel : null) === 0
+                                                     && !(root.r18Controller && root.r18Controller.loading)
+                                            text: "暂无已导入漫画源，导入后会显示在这里"
                                             color: root.textMutedColor
-                                            font.pixelSize: 12
-                                            wrapMode: Text.WordWrap
+                                            font.pixelSize: 13
+                                            horizontalAlignment: Text.AlignHCenter
+                                        }
+
+                                        ListView {
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            clip: true
+                                            spacing: 8
+                                            model: root.r18Controller ? root.r18Controller.sourceModel : null
+                                            ScrollBar.vertical: GlassScrollBar {}
+
+                                            delegate: Rectangle {
+                                                width: ListView.view.width
+                                                height: 96
+                                                radius: 8
+                                                color: root.r18Controller && root.r18Controller.currentSourceId === model.sourceId
+                                                       ? root.itemSelectedFillColor
+                                                       : (importedSourceMouse.containsMouse ? root.itemHoverFillColor : root.itemFillColor)
+                                                border.color: root.r18Controller && root.r18Controller.currentSourceId === model.sourceId
+                                                              ? Qt.rgba(0.28, 0.45, 0.67, 0.42)
+                                                              : root.fieldStrokeColor
+
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    anchors.margins: 10
+                                                    spacing: 12
+
+                                                    ColumnLayout {
+                                                        Layout.fillWidth: true
+                                                        spacing: 4
+
+                                                        RowLayout {
+                                                            Layout.fillWidth: true
+                                                            spacing: 8
+
+                                                            Text {
+                                                                Layout.fillWidth: true
+                                                                text: model.title || model.itemId || "漫画源"
+                                                                color: root.textPrimaryColor
+                                                                font.pixelSize: 16
+                                                                font.bold: true
+                                                                elide: Text.ElideRight
+                                                            }
+
+                                                            Rectangle {
+                                                                visible: model.enabled !== undefined
+                                                                Layout.preferredWidth: 56
+                                                                Layout.preferredHeight: 22
+                                                                radius: 11
+                                                                color: model.enabled ? Qt.rgba(0.66, 0.82, 0.70, 0.34) : Qt.rgba(0.90, 0.60, 0.60, 0.26)
+
+                                                                Text {
+                                                                    anchors.centerIn: parent
+                                                                    text: model.enabled ? "启用" : "停用"
+                                                                    color: root.textPrimaryColor
+                                                                    font.pixelSize: 11
+                                                                }
+                                                            }
+                                                        }
+
+                                                        Text {
+                                                            Layout.fillWidth: true
+                                                            text: root.sourceStatusText(model.status, model.format)
+                                                            color: root.textSecondaryColor
+                                                            font.pixelSize: 12
+                                                            elide: Text.ElideRight
+                                                        }
+
+                                                        Text {
+                                                            Layout.fillWidth: true
+                                                            text: model.sourceUrl || model.url || model.message || ""
+                                                            color: root.textMutedColor
+                                                            font.pixelSize: 11
+                                                            elide: Text.ElideRight
+                                                        }
+                                                    }
+
+                                                    GlassButton {
+                                                        Layout.preferredWidth: 72
+                                                        Layout.preferredHeight: 34
+                                                        visible: model.enabled !== undefined
+                                                        text: model.enabled ? "停用" : "启用"
+                                                        textPixelSize: 13
+                                                        textColor: root.textSecondaryColor
+                                                        cornerRadius: 17
+                                                        normalColor: root.secondaryButtonColor
+                                                        hoverColor: root.secondaryButtonHoverColor
+                                                        pressedColor: root.secondaryButtonPressedColor
+                                                        onClicked: if (root.r18Controller) root.r18Controller.enableSource(model.sourceId, !model.enabled)
+                                                    }
+
+                                                    GlassButton {
+                                                        Layout.preferredWidth: 84
+                                                        Layout.preferredHeight: 34
+                                                        text: "进入"
+                                                        textPixelSize: 13
+                                                        textColor: "#ffffff"
+                                                        cornerRadius: 17
+                                                        normalColor: root.homeImportButtonColor
+                                                        hoverColor: root.homeImportButtonHoverColor
+                                                        pressedColor: root.homeImportButtonPressedColor
+                                                        onClicked: if (root.r18Controller) root.openImportedSource(model.sourceId)
+                                                    }
+                                                }
+
+                                                MouseArea {
+                                                    id: importedSourceMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    acceptedButtons: Qt.NoButton
+                                                }
+                                            }
                                         }
                                     }
                                 }
 
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    radius: 9
-                                    color: root.itemFillColor
-                                    border.color: root.fieldStrokeColor
-
+                                Item {
                                     ColumnLayout {
                                         anchors.fill: parent
-                                        anchors.margins: 16
-                                        spacing: 10
+                                        spacing: 14
+
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: root.sourceHelpVisible ? 232 : 184
+                                            radius: 8
+                                            color: root.homeCardFillColor
+                                            border.color: root.homeCardStrokeColor
+                                            antialiasing: true
+
+                                            ColumnLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 18
+                                                anchors.rightMargin: 18
+                                                anchors.topMargin: 16
+                                                anchors.bottomMargin: 14
+                                                spacing: 10
+
+                                                RowLayout {
+                                                    Layout.fillWidth: true
+                                                    spacing: 12
+
+                                                    Image {
+                                                        Layout.preferredWidth: 26
+                                                        Layout.preferredHeight: 26
+                                                        source: "qrc:/icons/file.png"
+                                                        fillMode: Image.PreserveAspectFit
+                                                        opacity: 0.82
+                                                        mipmap: true
+                                                    }
+
+                                                    Text {
+                                                        Layout.fillWidth: true
+                                                        text: "仓库地址"
+                                                        color: root.textPrimaryColor
+                                                        font.pixelSize: 18
+                                                        elide: Text.ElideRight
+                                                    }
+                                                }
+
+                                                TextField {
+                                                    id: sourceCatalogListField
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredHeight: 38
+                                                    text: root.sourceCatalogInput
+                                                    placeholderText: "https://.../index.json 或 D:\\Venera"
+                                                    placeholderTextColor: root.placeholderColor
+                                                    color: root.textPrimaryColor
+                                                    selectByMouse: true
+                                                    leftPadding: 14
+                                                    rightPadding: 14
+                                                    font.pixelSize: 15
+                                                    background: Rectangle {
+                                                        color: "transparent"
+                                                        border.color: "transparent"
+                                                    }
+                                                    onTextEdited: root.sourceCatalogInput = text
+                                                    onAccepted: root.refreshOfficialSourceCatalog()
+                                                }
+
+                                                Rectangle {
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredHeight: 1
+                                                    color: root.homeFieldStrokeColor
+                                                }
+
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    visible: root.sourceHelpVisible
+                                                    text: "该地址应指向 index.json；也可以选择本地目录，例如 D:\\Venera，刷新后会读取目录中的 index.json。"
+                                                    color: root.textSecondaryColor
+                                                    font.pixelSize: 13
+                                                    lineHeight: 1.2
+                                                    wrapMode: Text.WordWrap
+                                                }
+
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    visible: root.sourceHelpVisible
+                                                    text: "不会默认填入或加载任何仓库地址；需要由用户手动输入或选择目录。"
+                                                    color: root.textMutedColor
+                                                    font.pixelSize: 12
+                                                    wrapMode: Text.WordWrap
+                                                }
+
+                                                Item { Layout.fillHeight: true }
+
+                                                RowLayout {
+                                                    Layout.fillWidth: true
+                                                    spacing: 12
+
+                                                    Item { Layout.fillWidth: true }
+
+                                                    GlassButton {
+                                                        Layout.preferredWidth: 84
+                                                        Layout.preferredHeight: 38
+                                                        text: "帮助"
+                                                        textPixelSize: 14
+                                                        textColor: "#0c4f92"
+                                                        cornerRadius: 19
+                                                        normalColor: "transparent"
+                                                        hoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.18)
+                                                        pressedColor: Qt.rgba(0.54, 0.70, 0.93, 0.26)
+                                                        onClicked: root.toggleSourceHelp()
+                                                    }
+
+                                                    GlassButton {
+                                                        Layout.preferredWidth: 96
+                                                        Layout.preferredHeight: 38
+                                                        text: "刷新"
+                                                        textPixelSize: 14
+                                                        textColor: root.textSecondaryColor
+                                                        cornerRadius: 19
+                                                        normalColor: root.secondaryButtonColor
+                                                        hoverColor: root.secondaryButtonHoverColor
+                                                        pressedColor: root.secondaryButtonPressedColor
+                                                        onClicked: root.refreshOfficialSourceCatalog()
+                                                    }
+                                                }
+                                            }
+                                        }
 
                                         Text {
                                             Layout.fillWidth: true
-                                            text: "自定义源目录"
-                                            color: root.textPrimaryColor
-                                            font.pixelSize: 18
-                                            font.bold: true
-                                            elide: Text.ElideRight
+                                            visible: root.modelCount(root.r18Controller ? root.r18Controller.officialSourceModel : null) === 0
+                                                     && !(root.r18Controller && root.r18Controller.loading)
+                                            text: "暂无漫画源，刷新仓库地址后会出现在这里"
+                                            color: root.textMutedColor
+                                            font.pixelSize: 13
+                                            horizontalAlignment: Text.AlignHCenter
                                         }
-                                        TextField {
-                                            id: officialCatalogUrl
+
+                                        ListView {
                                             Layout.fillWidth: true
-                                            Layout.preferredHeight: 38
-                                            placeholderText: "可选: 自定义目录 index.json"
-                                            placeholderTextColor: root.placeholderColor
-                                            color: root.textPrimaryColor
-                                            text: root.r18Controller ? root.r18Controller.officialSourceCatalogUrl : ""
-                                            selectByMouse: true
-                                            background: Rectangle {
-                                                radius: 19
-                                                color: root.fieldFillColor
+                                            Layout.fillHeight: true
+                                            clip: true
+                                            spacing: 8
+                                            model: root.r18Controller ? root.r18Controller.officialSourceModel : null
+                                            ScrollBar.vertical: GlassScrollBar {}
+
+                                            delegate: Rectangle {
+                                                width: ListView.view.width
+                                                height: 72
+                                                radius: 8
+                                                color: officialSourceMouse.containsMouse ? Qt.rgba(0.94, 0.97, 1.0, 0.74) : "transparent"
                                                 border.color: "transparent"
+
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: 8
+                                                    anchors.rightMargin: 18
+                                                    spacing: 12
+
+                                                    ColumnLayout {
+                                                        Layout.fillWidth: true
+                                                        spacing: 3
+
+                                                        Text {
+                                                            Layout.fillWidth: true
+                                                            text: model.title || model.itemId || "漫画源"
+                                                            color: root.textPrimaryColor
+                                                            font.pixelSize: 17
+                                                            elide: Text.ElideRight
+                                                        }
+
+                                                        Text {
+                                                            Layout.fillWidth: true
+                                                            text: model.status || model.message || model.url || ""
+                                                            color: root.textSecondaryColor
+                                                            font.pixelSize: 13
+                                                            elide: Text.ElideRight
+                                                        }
+                                                    }
+
+                                                    GlassButton {
+                                                        Layout.preferredWidth: 96
+                                                        Layout.preferredHeight: 40
+                                                        text: "添加"
+                                                        textPixelSize: 15
+                                                        textColor: "#ffffff"
+                                                        cornerRadius: 20
+                                                        normalColor: root.homeImportButtonColor
+                                                        hoverColor: root.homeImportButtonHoverColor
+                                                        pressedColor: root.homeImportButtonPressedColor
+                                                        onClicked: if (root.r18Controller) root.r18Controller.importOfficialSource(index)
+                                                    }
+                                                }
+
+                                                MouseArea {
+                                                    id: officialSourceMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    acceptedButtons: Qt.NoButton
+                                                }
                                             }
                                         }
+                                    }
+                                }
+
+                                Item {
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        spacing: 12
+
                                         RowLayout {
                                             Layout.fillWidth: true
-                                            spacing: 8
+                                            spacing: 10
+
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 3
+
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: "源内漫画"
+                                                    color: root.textPrimaryColor
+                                                    font.pixelSize: 20
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: root.r18Controller && root.r18Controller.currentSourceId.length > 0
+                                                          ? root.r18Controller.currentSourceId + " · " + root.modelCount(root.r18Controller.comicModel) + " 项"
+                                                          : "请先在已导入列表选择一个漫画源"
+                                                    color: root.textMutedColor
+                                                    font.pixelSize: 12
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
                                             GlassButton {
-                                                Layout.preferredWidth: 82
+                                                Layout.preferredWidth: 86
                                                 Layout.preferredHeight: 34
                                                 text: "刷新"
-                                                textColor: root.textSecondaryColor
                                                 textPixelSize: 13
+                                                textColor: root.textSecondaryColor
                                                 cornerRadius: 17
                                                 normalColor: root.secondaryButtonColor
                                                 hoverColor: root.secondaryButtonHoverColor
                                                 pressedColor: root.secondaryButtonPressedColor
-                                                onClicked: if (root.r18Controller) root.r18Controller.refreshOfficialSources(officialCatalogUrl.text)
+                                                enabled: root.r18Controller && root.r18Controller.currentSourceId.length > 0
+                                                onClicked: root.loadSourceFeed(root.sourceFeedKeyword)
                                             }
-                                            Text {
+                                        }
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 10
+
+                                            TextField {
+                                                id: sourceFeedSearchField
                                                 Layout.fillWidth: true
-                                            text: root.modelCount(root.r18Controller ? root.r18Controller.officialSourceModel : null) + " 个自定义条目"
-                                                color: root.textMutedColor
-                                                font.pixelSize: 12
-                                                elide: Text.ElideRight
+                                                Layout.preferredHeight: 40
+                                                text: root.sourceFeedKeyword
+                                                placeholderText: "在当前源中搜索"
+                                                placeholderTextColor: root.placeholderColor
+                                                color: root.textPrimaryColor
+                                                selectByMouse: true
+                                                leftPadding: 14
+                                                rightPadding: 14
+                                                font.pixelSize: 14
+                                                background: Rectangle {
+                                                    radius: 20
+                                                    color: root.fieldFillColor
+                                                    border.color: root.fieldStrokeColor
+                                                }
+                                                onTextEdited: root.sourceFeedKeyword = text
+                                                onAccepted: root.loadSourceFeed(root.sourceFeedKeyword)
+                                            }
+
+                                            GlassButton {
+                                                Layout.preferredWidth: 82
+                                                Layout.preferredHeight: 38
+                                                text: "搜索"
+                                                textPixelSize: 13
+                                                textColor: root.primaryButtonTextColor
+                                                cornerRadius: 19
+                                                normalColor: root.primaryButtonColor
+                                                hoverColor: root.primaryButtonHoverColor
+                                                pressedColor: root.primaryButtonPressedColor
+                                                enabled: root.r18Controller && root.r18Controller.currentSourceId.length > 0
+                                                onClicked: root.loadSourceFeed(root.sourceFeedKeyword)
                                             }
                                         }
-                                    }
-                                }
-                            }
 
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 118
-                                radius: 9
-                                color: root.itemFillColor
-                                border.color: root.fieldStrokeColor
-
-                                ColumnLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 20
-                                    anchors.rightMargin: 20
-                                    anchors.topMargin: 12
-                                    anchors.bottomMargin: 12
-                                    spacing: 8
-
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        Text {
-                                            Layout.preferredWidth: 92
-                                            text: "本地导入"
-                                            color: root.textPrimaryColor
-                                            font.pixelSize: 19
-                                        }
-                                        TextField {
-                                            id: sourcePackagePath
-                                            Layout.fillWidth: true
-                                            Layout.preferredHeight: 38
-                                            placeholderText: "本地 zip/js 路径"
-                                            placeholderTextColor: root.placeholderColor
-                                            color: root.textPrimaryColor
-                                            selectByMouse: true
-                                            background: Rectangle {
-                                                radius: 19
-                                                color: root.fieldFillColor
-                                                border.color: "transparent"
-                                            }
-                                        }
-                                        GlassButton {
-                                            Layout.preferredWidth: 76
-                                            Layout.preferredHeight: 38
-                                            text: "选择"
-                                            textColor: root.textSecondaryColor
-                                            cornerRadius: 19
-                                            normalColor: root.secondaryButtonColor
-                                            hoverColor: root.secondaryButtonHoverColor
-                                            pressedColor: root.secondaryButtonPressedColor
-                                            onClicked: root.chooseLocalSourcePackage()
-                                        }
-                                        GlassButton {
-                                            Layout.preferredWidth: 76
-                                            Layout.preferredHeight: 38
-                                            text: "导入"
-                                            textColor: root.primaryButtonTextColor
-                                            cornerRadius: 19
-                                            normalColor: root.primaryButtonColor
-                                            hoverColor: root.primaryButtonHoverColor
-                                            pressedColor: root.primaryButtonPressedColor
-                                            onClicked: {
-                                                if (root.r18Controller) root.r18Controller.importSourcePackage(sourcePackagePath.text, manifestText.text)
-                                            }
-                                        }
-                                    }
-
-                                    TextArea {
-                                        id: manifestText
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        placeholderText: "可选 manifest.json；JS 文件通常可留空"
-                                        placeholderTextColor: root.placeholderColor
-                                        color: root.textPrimaryColor
-                                        wrapMode: TextEdit.Wrap
-                                        selectByMouse: true
-                                        background: Rectangle {
-                                            radius: 10
-                                            color: root.fieldFillColor
-                                            border.color: "transparent"
-                                        }
-                                    }
-                                }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                spacing: 12
-
-                                Rectangle {
-                                    Layout.preferredWidth: Math.min(330, parent.width * 0.38)
-                                    Layout.fillHeight: true
-                                    radius: 9
-                                    color: root.itemFillColor
-                                    border.color: root.fieldStrokeColor
-                                    clip: true
-
-                                    ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 12
-                                        spacing: 8
-                                        Text {
-                                            Layout.fillWidth: true
-                                            text: "自定义目录"
-                                            color: root.textPrimaryColor
-                                            font.pixelSize: 16
-                                            font.bold: true
-                                            elide: Text.ElideRight
-                                        }
-                                        ListView {
+                                        GridView {
+                                            id: sourceComicGridView
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
                                             clip: true
-                                            spacing: 6
-                                            model: root.r18Controller ? root.r18Controller.officialSourceModel : null
+                                            cellWidth: Math.max(170, Math.floor(width / Math.max(1, Math.floor(width / 190))))
+                                            cellHeight: 294
+                                            model: root.r18Controller ? root.r18Controller.comicModel : null
                                             ScrollBar.vertical: GlassScrollBar {}
+                                            onContentYChanged: root.maybeLoadMoreComics(sourceComicGridView)
+                                            delegate: comicTileDelegate
+                                        }
+
+                                        Text {
+                                            Layout.fillWidth: true
+                                            visible: root.modelCount(root.r18Controller ? root.r18Controller.comicModel : null) === 0
+                                                     && !(root.r18Controller && root.r18Controller.loading)
+                                            text: root.r18Controller && root.r18Controller.currentSourceId.length > 0 ? "当前源暂无漫画" : "请先选择已导入漫画源"
+                                            color: root.textMutedColor
+                                            font.pixelSize: 13
+                                            horizontalAlignment: Text.AlignHCenter
+                                        }
+                                    }
+                                }
+
+                                Item {
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        spacing: 12
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 10
+
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 3
+
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: "Tag 分类"
+                                                    color: root.textPrimaryColor
+                                                    font.pixelSize: 20
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: root.sourceTagBuckets.length + " 个标签 · 点击后在当前源中查找"
+                                                    color: root.textMutedColor
+                                                    font.pixelSize: 12
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
+                                            GlassButton {
+                                                Layout.preferredWidth: 86
+                                                Layout.preferredHeight: 34
+                                                text: "重载"
+                                                textPixelSize: 13
+                                                textColor: root.textSecondaryColor
+                                                cornerRadius: 17
+                                                normalColor: root.secondaryButtonColor
+                                                hoverColor: root.secondaryButtonHoverColor
+                                                pressedColor: root.secondaryButtonPressedColor
+                                                enabled: root.r18Controller && root.r18Controller.currentSourceId.length > 0
+                                                onClicked: root.loadSourceFeed("")
+                                            }
+                                        }
+
+                                        GridView {
+                                            id: sourceTagGridView
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            clip: true
+                                            cellWidth: Math.max(138, Math.floor(width / Math.max(1, Math.floor(width / 154))))
+                                            cellHeight: 58
+                                            model: root.sourceTagBuckets
+                                            ScrollBar.vertical: GlassScrollBar {}
+
                                             delegate: Rectangle {
-                                                width: ListView.view.width
-                                                height: 58
+                                                width: GridView.view.cellWidth - 10
+                                                height: 46
                                                 radius: 8
-                                                color: officialMouse.containsMouse ? root.itemHoverFillColor : Qt.rgba(1, 1, 1, 0.08)
+                                                color: tagMouse.containsMouse ? root.itemHoverFillColor : root.itemFillColor
                                                 border.color: root.fieldStrokeColor
-                                                RowLayout {
-                                                    anchors.fill: parent
-                                                    anchors.leftMargin: 10
-                                                    anchors.rightMargin: 8
-                                                    spacing: 8
-                                                    ColumnLayout {
-                                                        Layout.fillWidth: true
-                                                        spacing: 2
-                                                        Text {
-                                                            Layout.fillWidth: true
-                                                            text: model.title || model.itemId
-                                                            color: root.textPrimaryColor
-                                                            font.pixelSize: 13
-                                                            font.bold: true
-                                                            elide: Text.ElideRight
-                                                        }
-                                                        Text {
-                                                            Layout.fillWidth: true
-                                                            text: model.status || model.message || model.url
-                                                            color: root.textMutedColor
-                                                            font.pixelSize: 11
-                                                            elide: Text.ElideRight
-                                                        }
-                                                    }
-                                                    GlassButton {
-                                                        Layout.preferredWidth: 58
-                                                        Layout.preferredHeight: 30
-                                                        text: "导入"
-                                                        textPixelSize: 12
-                                                        textColor: root.primaryButtonTextColor
-                                                        cornerRadius: 15
-                                                        normalColor: root.primaryButtonColor
-                                                        hoverColor: root.primaryButtonHoverColor
-                                                        pressedColor: root.primaryButtonPressedColor
-                                                        onClicked: if (root.r18Controller) root.r18Controller.importOfficialSource(index)
-                                                    }
-                                                }
-                                                MouseArea {
-                                                    id: officialMouse
-                                                    anchors.fill: parent
-                                                    hoverEnabled: true
-                                                    acceptedButtons: Qt.NoButton
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                                antialiasing: true
 
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    radius: 9
-                                    color: root.itemFillColor
-                                    border.color: root.fieldStrokeColor
-                                    clip: true
-
-                                    ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 12
-                                        spacing: 8
-                                        Text {
-                                            Layout.fillWidth: true
-                                            text: "已安装源"
-                                            color: root.textPrimaryColor
-                                            font.pixelSize: 16
-                                            font.bold: true
-                                            elide: Text.ElideRight
-                                        }
-                                        ListView {
-                                            Layout.fillWidth: true
-                                            Layout.fillHeight: true
-                                            clip: true
-                                            spacing: 6
-                                            model: root.r18Controller ? root.r18Controller.sourceModel : null
-                                            ScrollBar.vertical: GlassScrollBar {}
-                                            delegate: Rectangle {
-                                                width: ListView.view.width
-                                                height: 70
-                                                radius: 8
-                                                color: root.r18Controller && root.r18Controller.currentSourceId === model.sourceId
-                                                       ? root.itemSelectedFillColor
-                                                       : sourceRowMouse.containsMouse ? root.itemHoverFillColor : Qt.rgba(1, 1, 1, 0.08)
-                                                border.color: root.r18Controller && root.r18Controller.currentSourceId === model.sourceId
-                                                              ? Qt.rgba(0.42, 0.64, 0.88, 0.55)
-                                                              : root.fieldStrokeColor
                                                 RowLayout {
                                                     anchors.fill: parent
                                                     anchors.leftMargin: 12
                                                     anchors.rightMargin: 10
-                                                    spacing: 10
-                                                    Rectangle {
-                                                        Layout.preferredWidth: 38
-                                                        Layout.preferredHeight: 38
-                                                        radius: 8
-                                                        color: model.enabled ? root.primaryButtonColor : Qt.rgba(0.6, 0.6, 0.6, 0.18)
-                                                        border.color: root.fieldStrokeColor
-                                                        Text {
-                                                            anchors.centerIn: parent
-                                                            text: (model.title || model.sourceId || "?").substring(0, 1)
-                                                            color: root.textPrimaryColor
-                                                            font.pixelSize: 16
-                                                            font.bold: true
-                                                        }
-                                                    }
-                                                    ColumnLayout {
+                                                    spacing: 8
+
+                                                    Text {
                                                         Layout.fillWidth: true
-                                                        spacing: 2
+                                                        text: modelData.name
+                                                        color: root.textPrimaryColor
+                                                        font.pixelSize: 14
+                                                        font.bold: true
+                                                        elide: Text.ElideRight
+                                                    }
+
+                                                    Rectangle {
+                                                        Layout.preferredWidth: tagCountText.implicitWidth + 14
+                                                        Layout.preferredHeight: 22
+                                                        radius: 11
+                                                        color: root.homeBadgeFillColor
+
                                                         Text {
-                                                            Layout.fillWidth: true
-                                                            text: model.title || model.sourceId
-                                                            color: root.textPrimaryColor
-                                                            font.pixelSize: 14
-                                                            font.bold: true
-                                                            elide: Text.ElideRight
-                                                        }
-                                                        Text {
-                                                            Layout.fillWidth: true
-                                                            text: root.sourceStatusText(model.status, model.format)
-                                                            color: root.textMutedColor
+                                                            id: tagCountText
+                                                            anchors.centerIn: parent
+                                                            text: modelData.count
+                                                            color: root.homeBadgeTextColor
                                                             font.pixelSize: 11
-                                                            elide: Text.ElideRight
                                                         }
-                                                        Text {
-                                                            Layout.fillWidth: true
-                                                            visible: model.message && model.message.length > 0
-                                                            text: model.message
-                                                            color: root.textMutedColor
-                                                            font.pixelSize: 10
-                                                            elide: Text.ElideRight
-                                                        }
-                                                    }
-                                                    GlassButton {
-                                                        Layout.preferredWidth: 58
-                                                        Layout.preferredHeight: 30
-                                                        text: "使用"
-                                                        textPixelSize: 12
-                                                        textColor: root.textSecondaryColor
-                                                        cornerRadius: 15
-                                                        normalColor: root.secondaryButtonColor
-                                                        hoverColor: root.secondaryButtonHoverColor
-                                                        pressedColor: root.secondaryButtonPressedColor
-                                                        onClicked: root.selectSourceAndSearch(model.sourceId)
-                                                    }
-                                                    Switch {
-                                                        checked: model.enabled
-                                                        onToggled: if (root.r18Controller) root.r18Controller.enableSource(model.sourceId, checked)
                                                     }
                                                 }
+
                                                 MouseArea {
-                                                    id: sourceRowMouse
+                                                    id: tagMouse
                                                     anchors.fill: parent
                                                     hoverEnabled: true
-                                                    acceptedButtons: Qt.NoButton
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: root.searchByTag(modelData.name)
                                                 }
                                             }
+                                        }
+
+                                        Text {
+                                            Layout.fillWidth: true
+                                            visible: root.sourceTagBuckets.length === 0
+                                                     && !(root.r18Controller && root.r18Controller.loading)
+                                            text: root.r18Controller && root.r18Controller.currentSourceId.length > 0
+                                                  ? "当前加载的漫画还没有 tag，可先刷新漫画列表"
+                                                  : "请先选择已导入漫画源"
+                                            color: root.textMutedColor
+                                            font.pixelSize: 13
+                                            horizontalAlignment: Text.AlignHCenter
                                         }
                                     }
                                 }
@@ -1273,6 +1818,7 @@ Item {
                     color: Qt.rgba(0.54, 0.70, 0.93, 0.24)
                     border.color: Qt.rgba(0.28, 0.45, 0.67, 0.28)
                     visible: root.r18Controller
+                             && root.viewMode !== 4
                              && root.r18Controller.error.length === 0
                              && root.r18Controller.statusText.length > 0
                     z: 20
@@ -1329,7 +1875,8 @@ Item {
 
         Rectangle {
             width: GridView.view.cellWidth - 10
-            height: 242
+            height: 280
+            property var tileTags: root.normalizeTagArray(model.tags)
             radius: 10
             clip: true
             color: tileMouse.containsMouse ? root.itemHoverFillColor : root.itemFillColor
@@ -1348,13 +1895,13 @@ Item {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
-                height: 66
+                height: 104
                 color: root.panelFillColor
                 border.color: root.fieldStrokeColor
                 Column {
                     anchors.fill: parent
                     anchors.margins: 9
-                    spacing: 3
+                    spacing: 5
                     Text {
                         width: parent.width
                         text: model.title
@@ -1371,6 +1918,37 @@ Item {
                         color: root.textMutedColor
                         font.pixelSize: 10
                         elide: Text.ElideRight
+                    }
+
+                    Flow {
+                        width: parent.width
+                        height: 24
+                        spacing: 5
+                        clip: true
+
+                        Repeater {
+                            model: tileTags.slice(0, 3)
+
+                            delegate: Rectangle {
+                                width: Math.min(74, tagText.implicitWidth + 14)
+                                height: 20
+                                radius: 10
+                                color: root.homeBadgeFillColor
+
+                                Text {
+                                    id: tagText
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.leftMargin: 7
+                                    anchors.rightMargin: 7
+                                    text: modelData
+                                    color: root.homeBadgeTextColor
+                                    font.pixelSize: 10
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
                     }
                 }
             }
