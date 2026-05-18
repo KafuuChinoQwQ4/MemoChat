@@ -27,6 +27,7 @@ private:
 
     void resetParser();
     void handleReceivedBytes(const QByteArray &bytes);
+    void emitMessageReceivedOnObjectThread(ReqId reqId, int len, const QByteArray &data);
 
 #if MEMOCHAT_HAS_MSQUIC
     struct SendContext;

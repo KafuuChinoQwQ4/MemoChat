@@ -18,4 +18,4 @@ std::function<QString(QString)> xorString = [](QString input){
 };
 
 QString gate_url_prefix = "";
-
+QString gate_media_url_prefix = "";

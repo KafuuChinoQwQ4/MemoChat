@@ -7,23 +7,30 @@ RUNTIME_DIR="${MEMOCHAT_RUNTIME_DIR:-${PROJECT_ROOT}/infra/Memo_ops/runtime/serv
 LOG_DIR="${MEMOCHAT_LOG_DIR:-${PROJECT_ROOT}/infra/Memo_ops/artifacts/logs/services}"
 PID_DIR="${MEMOCHAT_PID_DIR:-${PROJECT_ROOT}/infra/Memo_ops/runtime/pids}"
 ENV_FILE="${MEMOCHAT_ENV_FILE:-/root/.memochat-linux-env}"
+LOCAL_COMPOSE_FILE="${MEMOCHAT_LOCAL_COMPOSE_FILE:-${PROJECT_ROOT}/infra/deploy/local/docker-compose.yml}"
 WAIT_SECONDS=16
 AUTO_DEPLOY=1
+START_ENVOY_OVERRIDE=""
 START_GPT_SOVITS_OVERRIDE=""
 GPT_SOVITS_WAIT_SECONDS_OVERRIDE=""
 
 usage() {
     cat <<USAGE
-Usage: $0 [--no-deploy] [--wait-seconds N] [--skip-gpt-sovits] [--gpt-sovits-wait-seconds N]
+Usage: $0 [--no-deploy] [--wait-seconds N] [--skip-envoy] [--skip-gpt-sovits] [--gpt-sovits-wait-seconds N]
 
 Start Linux MemoChat backend services from:
   ${RUNTIME_DIR}
+
+Docker Envoy Gateway is started by default from:
+  ${LOCAL_COMPOSE_FILE}
 
 GPT-SoVITS is started as a local WSL service by default so AIOrchestrator can
 reach http://host.docker.internal:9880. Set MEMOCHAT_START_GPT_SOVITS=0 or pass
 --skip-gpt-sovits to skip it.
 
-Docker dependencies are not started by this script. Start them separately first.
+Database, queue, object storage, AI/RAG, and observability containers are not
+started or stopped by this script. Start the broader Docker stack separately
+when those dependencies are not already running.
 USAGE
 }
 
@@ -36,6 +43,10 @@ while [[ $# -gt 0 ]]; do
         --wait-seconds)
             WAIT_SECONDS="$2"
             shift 2
+            ;;
+        --skip-envoy|--no-envoy)
+            START_ENVOY_OVERRIDE=0
+            shift
             ;;
         --skip-gpt-sovits|--no-gpt-sovits)
             START_GPT_SOVITS_OVERRIDE=0
@@ -64,6 +75,8 @@ fi
 
 export MEMOCHAT_ENABLE_KAFKA="${MEMOCHAT_ENABLE_KAFKA:-1}"
 export MEMOCHAT_ENABLE_RABBITMQ="${MEMOCHAT_ENABLE_RABBITMQ:-1}"
+export MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-1}"
+START_ENVOY="${START_ENVOY_OVERRIDE:-${MEMOCHAT_START_ENVOY:-1}}"
 START_GPT_SOVITS="${START_GPT_SOVITS_OVERRIDE:-${MEMOCHAT_START_GPT_SOVITS:-1}}"
 GPT_SOVITS_PORT="${GPT_SOVITS_PORT:-9880}"
 GPT_SOVITS_HOST="${GPT_SOVITS_HOST:-0.0.0.0}"
@@ -81,6 +94,35 @@ is_truthy() {
         1|true|yes|on) return 0 ;;
         *) return 1 ;;
     esac
+}
+
+ensure_envoy_gateway() {
+    if ! is_truthy "$START_ENVOY"; then
+        echo "  [SKIP] Envoy Gateway startup disabled"
+        return 0
+    fi
+
+    if [[ ! -f "$LOCAL_COMPOSE_FILE" ]]; then
+        echo "  [FAIL] Local compose file not found: ${LOCAL_COMPOSE_FILE}" >&2
+        return 1
+    fi
+
+    echo "  [*] Starting Docker Envoy Gateway from ${LOCAL_COMPOSE_FILE}"
+    docker compose -f "$LOCAL_COMPOSE_FILE" up -d memochat-envoy-gateway
+
+    local waited=0
+    while (( waited < WAIT_SECONDS )); do
+        if curl -fsS http://127.0.0.1/health >/dev/null 2>&1; then
+            echo "  [OK] Envoy Gateway ready at http://127.0.0.1/health"
+            echo "  [INFO] Envoy listens on 80 and 8443/tcp+udp; upstream GateServer ports are 8080 and 8084"
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    echo "  [WARN] Envoy Gateway did not answer /health within ${WAIT_SECONDS}s; check docker compose ps memochat-envoy-gateway"
+    return 0
 }
 
 port_listening() {
@@ -115,6 +157,22 @@ port_pid() {
         return 0
     fi
     return 0
+}
+
+udp_port_listening() {
+    local port="$1"
+    if command -v ss >/dev/null 2>&1; then
+        ss -lunH 2>/dev/null | awk -v suffix=":${port}" '
+            index($4, suffix) == length($4) - length(suffix) + 1 { found = 1 }
+            END { exit found ? 0 : 1 }
+        '
+        return $?
+    fi
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iUDP:"${port}" >/dev/null 2>&1
+        return $?
+    fi
+    return 1
 }
 
 port_listen_addresses() {
@@ -222,6 +280,22 @@ wait_for_port() {
         waited=$((waited + 1))
     done
     echo "  [WARN] ${service_name} did not bind port ${port} yet; check logs"
+    return 0
+}
+
+wait_for_udp_port() {
+    local service_name="$1"
+    local port="$2"
+    local waited=0
+    while (( waited < WAIT_SECONDS )); do
+        if udp_port_listening "$port"; then
+            echo "  [OK] ${service_name} listening on UDP port ${port}"
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    echo "  [WARN] ${service_name} did not bind UDP port ${port} yet; check logs"
     return 0
 }
 
@@ -343,6 +417,7 @@ launch_svc() {
         exec nohup env \
             MEMOCHAT_ENABLE_KAFKA="$MEMOCHAT_ENABLE_KAFKA" \
             MEMOCHAT_ENABLE_RABBITMQ="$MEMOCHAT_ENABLE_RABBITMQ" \
+            MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-1}" \
             "./${exe_name}"
     ) >>"$out_log" 2>>"$err_log" </dev/null &
 
@@ -355,13 +430,46 @@ launch_svc() {
     fi
 }
 
+ensure_quic_cert() {
+    local svc_dir="$1"
+    local crt="${svc_dir}/server.crt"
+    local key="${svc_dir}/server.key"
+
+    if [[ -f "$crt" && -f "$key" ]]; then
+        return 0
+    fi
+    if ! command -v openssl >/dev/null 2>&1; then
+        echo "  [WARN] OpenSSL not found; ${svc_dir} QUIC certificate was not generated"
+        return 0
+    fi
+
+    mkdir -p -- "$svc_dir"
+    echo "  [*] Generating QUIC certificate for $(basename -- "$svc_dir")"
+    openssl req -x509 -newkey rsa:2048 -nodes \
+        -keyout "$key" \
+        -out "$crt" \
+        -days 3650 \
+        -subj "/CN=127.0.0.1" \
+        -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+        >/dev/null 2>&1 || {
+            echo "  [WARN] Failed to generate QUIC certificate for ${svc_dir}"
+            return 0
+        }
+    chmod 600 "$key" || true
+}
+
 echo "============================================================"
 echo "  MemoChat Linux startup"
 echo "  PROJECT_ROOT: ${PROJECT_ROOT}"
 echo "  RUNTIME_DIR:  ${RUNTIME_DIR}"
 echo "  LOG_DIR:      ${LOG_DIR}"
 echo "  PID_DIR:      ${PID_DIR}"
+echo "  COMPOSE:      ${LOCAL_COMPOSE_FILE}"
 echo "============================================================"
+echo
+
+echo "[STEP] Start Docker Envoy Gateway"
+ensure_envoy_gateway
 echo
 
 echo "[STEP] Start GPT-SoVITS voice service"
@@ -369,6 +477,15 @@ start_gpt_sovits
 echo
 
 ensure_runtime
+
+echo "[STEP] Prepare ChatServer QUIC certificates"
+ensure_quic_cert "${RUNTIME_DIR}/chatserver1"
+ensure_quic_cert "${RUNTIME_DIR}/chatserver2"
+ensure_quic_cert "${RUNTIME_DIR}/chatserver3"
+ensure_quic_cert "${RUNTIME_DIR}/chatserver4"
+ensure_quic_cert "${RUNTIME_DIR}/chatserver5"
+ensure_quic_cert "${RUNTIME_DIR}/chatserver6"
+echo
 
 echo "[STEP] Start VarifyServer"
 launch_svc "${RUNTIME_DIR}/VarifyServer1" "VarifyServer" "VarifyServer-1" "50051"
@@ -387,6 +504,14 @@ launch_svc "${RUNTIME_DIR}/chatserver3" "ChatServer" "ChatServer-3" "8092"
 launch_svc "${RUNTIME_DIR}/chatserver4" "ChatServer" "ChatServer-4" "8093"
 launch_svc "${RUNTIME_DIR}/chatserver5" "ChatServer" "ChatServer-5" "8094"
 launch_svc "${RUNTIME_DIR}/chatserver6" "ChatServer" "ChatServer-6" "8097"
+if is_truthy "$MEMOCHAT_ENABLE_QUIC"; then
+    wait_for_udp_port "ChatServer-1 QUIC" "8190"
+    wait_for_udp_port "ChatServer-2 QUIC" "8191"
+    wait_for_udp_port "ChatServer-3 QUIC" "8192"
+    wait_for_udp_port "ChatServer-4 QUIC" "8193"
+    wait_for_udp_port "ChatServer-5 QUIC" "8194"
+    wait_for_udp_port "ChatServer-6 QUIC" "8195"
+fi
 echo
 
 echo "[STEP] Start AIServer"
@@ -396,6 +521,7 @@ echo
 echo "[STEP] Start GateServer"
 launch_svc "${RUNTIME_DIR}/GateServer1" "GateServer" "GateServer-1" "8080"
 launch_svc "${RUNTIME_DIR}/GateServer2" "GateServer" "GateServer-2" "8084"
+echo "  [INFO] Client HTTP traffic enters through Docker Envoy on 80 and 8443/tcp+udp"
 echo
 
 echo "Startup command completed. Logs are under:"

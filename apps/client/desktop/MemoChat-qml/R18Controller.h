@@ -26,6 +26,8 @@ class R18Controller : public QObject
     Q_PROPERTY(QVariantMap currentComic READ currentComic NOTIFY currentComicChanged)
     Q_PROPERTY(bool currentFavorite READ currentFavorite NOTIFY currentFavoriteChanged)
     Q_PROPERTY(int currentPageIndex READ currentPageIndex NOTIFY currentPageChanged)
+    Q_PROPERTY(int currentSearchPage READ currentSearchPage NOTIFY searchStateChanged)
+    Q_PROPERTY(bool currentSearchHasMore READ currentSearchHasMore NOTIFY searchStateChanged)
 
 public:
     explicit R18Controller(ClientGateway* gateway, QObject* parent = nullptr);
@@ -44,6 +46,8 @@ public:
     QVariantMap currentComic() const { return _current_comic; }
     bool currentFavorite() const { return _current_favorite; }
     int currentPageIndex() const { return _current_page_index; }
+    int currentSearchPage() const { return _current_search_page; }
+    bool currentSearchHasMore() const { return _current_search_has_more; }
 
     Q_INVOKABLE void refreshSources();
     Q_INVOKABLE void refreshHistory();
@@ -51,6 +55,7 @@ public:
     Q_INVOKABLE void importOfficialSource(int row);
     Q_INVOKABLE void importSourceUrl(const QString& sourceUrl);
     Q_INVOKABLE QString pickSourcePackage();
+    Q_INVOKABLE QString pickSourceCatalogPath();
     Q_INVOKABLE void selectSource(const QString& sourceId);
     Q_INVOKABLE void search(const QString& keyword, int page = 1);
     Q_INVOKABLE void openComic(const QString& sourceId, const QString& comicId);
@@ -69,6 +74,7 @@ signals:
     void currentFavoriteChanged();
     void currentPageChanged();
     void officialSourceCatalogUrlChanged();
+    void searchStateChanged();
 
 private:
     void postJson(const QString& path, const QJsonObject& payload, const QString& op);
@@ -84,6 +90,7 @@ private:
     void setStatusText(const QString& statusText);
     void setCurrentFavorite(bool favorite);
     void setCurrentPageIndex(int pageIndex);
+    void setSearchState(int page, bool hasMore);
     void handleResponse(const QString& op, const QJsonObject& root);
 
     ClientGateway* _gateway = nullptr;
@@ -98,9 +105,12 @@ private:
     QString _status_text;
     bool _loading = false;
     QString _error;
-    QString _current_source_id = QStringLiteral("jm.official");
+    QString _current_source_id;
     QString _current_chapter_id;
     QVariantMap _current_comic;
     bool _current_favorite = false;
     int _current_page_index = 1;
+    int _current_search_page = 0;
+    bool _current_search_has_more = false;
+    int _pending_search_page = 0;
 };

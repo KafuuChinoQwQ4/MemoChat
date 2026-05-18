@@ -488,6 +488,7 @@ private:
     void sendGroupReadAck(qint64 groupId, qint64 readTs = 0);
     void sendPrivateReadAck(int peerUid, qint64 readTs = 0);
     bool tryReconnectChat();
+    bool tryLoginFallbackToTcp(const QString &reason);
     void resetReconnectState();
     void resetHeartbeatTracking();
     bool isHeartbeatLikelyTimeout() const;
@@ -617,6 +618,7 @@ private:
     bool _reconnecting_chat = false;
     int _chat_reconnect_attempts = 0;
     bool _ignore_next_login_disconnect = false;
+    bool _chat_login_tcp_fallback_attempted = false;
     int _last_emitted_dialog_uid = 0;
     QVariantList _pending_send_queue;
     int _pending_send_dialog_uid = 0;

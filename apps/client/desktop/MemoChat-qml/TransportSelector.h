@@ -2,6 +2,7 @@
 #define TRANSPORTSELECTOR_H
 
 #include <QObject>
+#include <QVector>
 #include <memory>
 
 #include "ChatMessageDispatcher.h"
@@ -27,13 +28,17 @@ private:
     void handleTransportClosed(const std::shared_ptr<IChatTransport> &transport);
     ChatEndpoint resolveEndpoint(ChatTransportKind kind) const;
     bool tryActivateTransport(ChatTransportKind kind);
+    bool tryActivateEndpoint(const ChatEndpoint &endpoint);
+    bool tryNextEndpoint();
+    QVector<ChatEndpoint> buildCandidateEndpoints(const ServerInfo &serverInfo) const;
     std::shared_ptr<IChatTransport> transportForKind(ChatTransportKind kind) const;
 
     ServerInfo _pending_server_info;
+    QVector<ChatEndpoint> _candidate_endpoints;
     std::shared_ptr<IChatTransport> _active_transport;
     std::shared_ptr<ChatMessageDispatcher> _dispatcher;
     bool _connecting = false;
-    bool _fallback_attempted = false;
+    int _candidate_index = 0;
     ChatTransportKind _active_kind = ChatTransportKind::Tcp;
 };
 

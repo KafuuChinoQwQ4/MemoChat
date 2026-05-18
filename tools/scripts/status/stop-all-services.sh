@@ -12,7 +12,9 @@ fi
 
 RUNTIME_DIR="${MEMOCHAT_RUNTIME_DIR:-${PROJECT_ROOT}/infra/Memo_ops/runtime/services}"
 PID_DIR="${MEMOCHAT_PID_DIR:-${PROJECT_ROOT}/infra/Memo_ops/runtime/pids}"
+LOCAL_COMPOSE_FILE="${MEMOCHAT_LOCAL_COMPOSE_FILE:-${PROJECT_ROOT}/infra/deploy/local/docker-compose.yml}"
 KILL_TIMEOUT="${MEMOCHAT_STOP_TIMEOUT:-8}"
+STOP_ENVOY_OVERRIDE=""
 STOP_GPT_SOVITS_OVERRIDE=""
 GPT_SOVITS_PORT="${GPT_SOVITS_PORT:-9880}"
 GPT_SOVITS_ROOT="${GPT_SOVITS_ROOT:-/data/third_party/GPT-SoVITS}"
@@ -20,18 +22,26 @@ GPT_SOVITS_PID_FILE="${PID_DIR}/GPT-SoVITS.pid"
 
 usage() {
     cat <<USAGE
-Usage: $0 [--skip-gpt-sovits]
+Usage: $0 [--skip-envoy] [--skip-gpt-sovits]
 
 Stop Linux MemoChat backend service processes started by start-all-services.sh.
+Docker Envoy Gateway is stopped by default because start-all-services.sh starts
+it as the local edge. Pass --skip-envoy or set MEMOCHAT_STOP_ENVOY=0 to leave it
+running.
 GPT-SoVITS is stopped by default because start-all-services.sh starts it as a
 local WSL service. Pass --skip-gpt-sovits or set MEMOCHAT_STOP_GPT_SOVITS=0 to
 leave it running.
-Docker containers are intentionally left running.
+Database, queue, object storage, AI/RAG, and observability Docker containers are
+intentionally left running.
 USAGE
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --skip-envoy|--no-envoy)
+            STOP_ENVOY_OVERRIDE=0
+            shift
+            ;;
         --skip-gpt-sovits|--no-gpt-sovits)
             STOP_GPT_SOVITS_OVERRIDE=0
             shift
@@ -48,6 +58,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+STOP_ENVOY="${STOP_ENVOY_OVERRIDE:-${MEMOCHAT_STOP_ENVOY:-1}}"
 STOP_GPT_SOVITS="${STOP_GPT_SOVITS_OVERRIDE:-${MEMOCHAT_STOP_GPT_SOVITS:-1}}"
 
 is_truthy() {
@@ -70,6 +81,24 @@ port_pids() {
     fi
     if command -v lsof >/dev/null 2>&1; then
         lsof -tiTCP:"${port}" -sTCP:LISTEN 2>/dev/null | sort -u
+        return 0
+    fi
+    return 0
+}
+
+udp_port_pids() {
+    local port="$1"
+    if command -v ss >/dev/null 2>&1; then
+        ss -lunpH 2>/dev/null |
+            awk -v suffix=":${port}" '
+                index($4, suffix) == length($4) - length(suffix) + 1 { print }
+            ' |
+            sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' |
+            sort -u
+        return 0
+    fi
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -tiUDP:"${port}" 2>/dev/null | sort -u
         return 0
     fi
     return 0
@@ -201,6 +230,27 @@ stop_by_ports() {
     done
 }
 
+stop_by_udp_ports() {
+    local label="$1"
+    shift
+    local seen=" "
+    local port pid
+    for port in "$@"; do
+        while IFS= read -r pid; do
+            [[ -n "$pid" ]] || continue
+            if [[ "$seen" == *" ${pid} "* ]]; then
+                continue
+            fi
+            if ! is_runtime_pid "$pid"; then
+                echo "  [WARN] ${label}:udp/${port} pid=${pid} is not under MemoChat runtime; skipped"
+                continue
+            fi
+            seen+="${pid} "
+            stop_pid "$pid" "${label}:udp/${port}"
+        done < <(udp_port_pids "$port")
+    done
+}
+
 stop_gpt_sovits() {
     if ! is_truthy "$STOP_GPT_SOVITS"; then
         echo "  [SKIP] GPT-SoVITS stop disabled"
@@ -238,11 +288,29 @@ stop_gpt_sovits() {
     fi
 }
 
+stop_envoy_gateway() {
+    if ! is_truthy "$STOP_ENVOY"; then
+        echo "  [SKIP] Envoy Gateway stop disabled"
+        return 0
+    fi
+
+    if [[ ! -f "$LOCAL_COMPOSE_FILE" ]]; then
+        echo "  [WARN] Local compose file not found: ${LOCAL_COMPOSE_FILE}; Envoy Gateway was not stopped"
+        return 0
+    fi
+
+    echo "  [*] Stopping Docker Envoy Gateway from ${LOCAL_COMPOSE_FILE}"
+    if ! docker compose -f "$LOCAL_COMPOSE_FILE" stop memochat-envoy-gateway; then
+        echo "  [WARN] Envoy Gateway stop failed; Docker may be unavailable"
+    fi
+}
+
 echo
 echo "============================================================"
 echo "  MemoChat Linux stop"
 echo "  RUNTIME_DIR: ${RUNTIME_DIR}"
 echo "  PID_DIR:     ${PID_DIR}"
+echo "  COMPOSE:     ${LOCAL_COMPOSE_FILE}"
 echo "============================================================"
 echo
 
@@ -263,9 +331,11 @@ done
 
 echo
 echo "[STEP] Stop remaining listeners on MemoChat service ports"
-stop_by_ports "GateServer" 8080 8082 8084 8085
+stop_by_ports "GateServer" 8080 8082 8084 8086
+stop_by_udp_ports "GateServer" 8081 8085
 stop_by_ports "AIServer" 8095
 stop_by_ports "ChatServer" 8090 8091 8092 8093 8094 8097 50055 50056 50057 50058 50059 50581
+stop_by_udp_ports "ChatServer" 8190 8191 8192 8193 8194 8195
 stop_by_ports "StatusServer" 50052 50582
 stop_by_ports "VarifyServer" 50051 48083 8083 8087
 
@@ -278,4 +348,8 @@ stop_by_name_under_runtime "StatusServer" "StatusServer"
 stop_by_name_under_runtime "VarifyServer" "VarifyServer"
 
 echo
-echo "Stop command completed. Docker containers were left running."
+echo "[STEP] Stop Docker Envoy Gateway"
+stop_envoy_gateway
+
+echo
+echo "Stop command completed. Non-Envoy Docker dependencies were left running."

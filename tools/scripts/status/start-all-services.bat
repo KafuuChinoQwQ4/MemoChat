@@ -9,6 +9,8 @@ set "BUILD_DIR=%PROJECT_ROOT%\build"
 set "RUNTIME_DIR=%PROJECT_ROOT%\infra\Memo_ops\runtime\services"
 set "MEMO_OPS_ROOT=%PROJECT_ROOT%\infra\Memo_ops"
 set "VARIFY_DIR=%PROJECT_ROOT%\apps\server\core\VarifyServer"
+set "DOCKER=%PROJECT_ROOT%\tools\scripts\docker\arch-docker.cmd"
+set "LOCAL_COMPOSE_FILE=%PROJECT_ROOT%\infra\deploy\local\docker-compose.yml"
 
 REM ---- Kafka / RabbitMQ 环境变量 ----
 set MEMOCHAT_ENABLE_KAFKA=1
@@ -17,6 +19,22 @@ set MEMOCHAT_ENABLE_RABBITMQ=1
 echo ============================================================
 echo   MemoChat 一键启动 (start-all-services.bat)
 echo ============================================================
+echo.
+
+REM ---- Envoy Gateway ----
+echo [STEP] Start Docker Envoy Gateway
+if "%MEMOCHAT_START_ENVOY%"=="0" (
+    echo   [SKIP] Envoy Gateway startup disabled
+    goto envoy_done
+)
+if not exist "%LOCAL_COMPOSE_FILE%" (
+    echo   [X] Local compose file not found: %LOCAL_COMPOSE_FILE%
+    exit /b 1
+)
+call "%DOCKER%" compose -f "%LOCAL_COMPOSE_FILE%" up -d memochat-envoy-gateway
+if !ERRORLEVEL! neq 0 exit /b !ERRORLEVEL!
+powershell -NoProfile -Command "$ok=$false; for($i=0;$i -lt 16;$i++){ try { $r=Invoke-WebRequest 'http://127.0.0.1/health' -UseBasicParsing -TimeoutSec 2; if($r.StatusCode -eq 200){ $ok=$true; break } } catch {}; Start-Sleep -Seconds 1 }; if($ok){ Write-Host '  [OK] Envoy Gateway ready at http://127.0.0.1/health' } else { Write-Host '  [WARN] Envoy Gateway did not answer /health yet' }"
+:envoy_done
 echo.
 
 REM ---- MinIO ----
@@ -71,6 +89,7 @@ call :launch_svc "%RUNTIME_DIR%\chatserver6"      "ChatServer.exe"   "ChatServer
 call :launch_svc "%RUNTIME_DIR%\AIServer"         "AIServer.exe"     "AIServer"         "config.ini"  "8095"
 call :launch_svc "%RUNTIME_DIR%\GateServer1"      "GateServer.exe"   "GateServer-1"     "config.ini"  "8080"
 call :launch_svc "%RUNTIME_DIR%\GateServer2"      "GateServer.exe"   "GateServer-2"     "config.ini"  "8084"
+echo   [INFO] Client HTTP traffic enters through Docker Envoy on 80 and 8443/tcp+udp
 echo.
 echo 启动完成
 exit /b 0

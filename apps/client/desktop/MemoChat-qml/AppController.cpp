@@ -216,7 +216,14 @@ AppController::AppController(QObject *parent)
         if (!_busy || _page != LoginPage) {
             return;
         }
+        const bool fallbackAlreadyAttempted = _chat_login_tcp_fallback_attempted;
         _gateway.chatTransport()->CloseConnection();
+        if (!fallbackAlreadyAttempted && _chat_login_tcp_fallback_attempted) {
+            return;
+        }
+        if (tryLoginFallbackToTcp(QStringLiteral("login_timeout"))) {
+            return;
+        }
         setBusy(false);
         setTip("聊天服务登录超时，请重试", true);
     });
@@ -262,6 +269,7 @@ void AppController::switchToLogin()
     _chat_endpoints.clear();
     _chat_endpoint_index = -1;
     _pending_login_ticket.clear();
+    _chat_login_tcp_fallback_attempted = false;
     resetReconnectState();
     resetHeartbeatTracking();
     _gateway.chatTransport()->CloseConnection();
