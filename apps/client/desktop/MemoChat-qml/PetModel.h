@@ -16,6 +16,7 @@ class PetModel : public QObject
     Q_PROPERTY(QString speechText READ speechText NOTIFY changed)
     Q_PROPERTY(QString speechTranslation READ speechTranslation NOTIFY changed)
     Q_PROPERTY(QString speechDisplayText READ speechDisplayText NOTIFY changed)
+    Q_PROPERTY(QString speechLanguage READ speechLanguage NOTIFY changed)
     Q_PROPERTY(bool speechFinal READ speechFinal NOTIFY changed)
     Q_PROPERTY(QString audioUrl READ audioUrl NOTIFY changed)
     Q_PROPERTY(QString audioState READ audioState NOTIFY changed)
@@ -38,6 +39,7 @@ public:
     QString speechText() const { return _speech_text; }
     QString speechTranslation() const { return _speech_translation; }
     QString speechDisplayText() const { return _speech_display_text; }
+    QString speechLanguage() const { return _speech_language; }
     bool speechFinal() const { return _speech_final; }
     QString audioUrl() const { return _audio_url; }
     QString audioState() const { return _audio_state; }

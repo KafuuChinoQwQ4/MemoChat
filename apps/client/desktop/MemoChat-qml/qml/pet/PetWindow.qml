@@ -30,6 +30,7 @@ Window {
     property real scaleFactor: 1.0
     property bool micMuted: true
     property bool cameraEnabled: false
+    property string cameraCaptureStatus: cameraEnabled ? "摄像头本地捕捉" : "摄像头关闭"
     property bool cloudVisionEnabled: false
     property bool localOnlyMode: true
     property bool debugRetentionEnabled: false
@@ -240,6 +241,7 @@ Window {
         petControlWindowRef.scaleFactor = root.scaleFactor
         petControlWindowRef.micMuted = root.micMuted
         petControlWindowRef.cameraEnabled = root.cameraEnabled
+        petControlWindowRef.cameraCaptureStatus = root.cameraCaptureStatus
         petControlWindowRef.cloudVisionEnabled = root.cloudVisionEnabled
         petControlWindowRef.localOnlyMode = root.localOnlyMode
         petControlWindowRef.debugRetentionEnabled = root.debugRetentionEnabled
@@ -397,6 +399,10 @@ Window {
         debugRetentionEnabled: root.debugRetentionEnabled
         debugPanelVisible: root.debugPanelVisible
         providerAvailable: root.providerRuntimeAvailable()
+        onCameraCaptureStatusChanged: {
+            root.cameraCaptureStatus = cameraCaptureStatus
+            root.syncControlWindowState()
+        }
         onDragRequested: root.beginWindowDrag()
         onControlsRequested: root.openControlWindow()
         onLocalOnlyModeToggled: function(value) { root.setLocalOnlyMode(value) }

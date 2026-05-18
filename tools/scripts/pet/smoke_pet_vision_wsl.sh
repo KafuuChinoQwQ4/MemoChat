@@ -387,6 +387,10 @@ if expected == "high":
         raise SystemExit("high-confidence observation did not visual_react")
     if not summary.get("speak"):
         raise SystemExit("high-confidence observation did not speak")
+    if speech != "我已经看到你了哦~":
+        raise SystemExit("first detected user greeting was not emitted")
+    if summary.get("reason") != "first_user_seen":
+        raise SystemExit("high-confidence first observation did not use first_user_seen")
     if "杯子和键盘" not in str(summary.get("summary_text") or ""):
         raise SystemExit("high-confidence scene summary was not propagated")
     if event.get("expression") != "smile_soft":

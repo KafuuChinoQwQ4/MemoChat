@@ -13,6 +13,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -115,6 +116,96 @@ if ($form.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 )PS").arg(initialBase64);
 }
 
+QString windowsCameraCaptureScript()
+{
+    return QString::fromUtf8(R"PS(
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+
+$null = [Windows.Media.Capture.MediaCapture,Windows.Media.Capture,ContentType=WindowsRuntime]
+$null = [Windows.Media.Capture.MediaCaptureInitializationSettings,Windows.Media.Capture,ContentType=WindowsRuntime]
+$null = [Windows.Media.Capture.StreamingCaptureMode,Windows.Media.Capture,ContentType=WindowsRuntime]
+$null = [Windows.Media.MediaProperties.ImageEncodingProperties,Windows.Media.MediaProperties,ContentType=WindowsRuntime]
+$null = [Windows.Storage.Streams.InMemoryRandomAccessStream,Windows.Storage.Streams,ContentType=WindowsRuntime]
+$null = [Windows.Storage.Streams.DataReader,Windows.Storage.Streams,ContentType=WindowsRuntime]
+$null = [Windows.Graphics.Imaging.BitmapDecoder,Windows.Graphics.Imaging,ContentType=WindowsRuntime]
+
+$asTaskOperation = ([System.WindowsRuntimeSystemExtensions].GetMethods() |
+    Where-Object {
+        $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and
+        $_.GetParameters().Count -eq 1 -and
+        $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
+    } | Select-Object -First 1)
+$asTaskAction = ([System.WindowsRuntimeSystemExtensions].GetMethods() |
+    Where-Object {
+        $_.Name -eq 'AsTask' -and -not $_.IsGenericMethodDefinition -and
+        $_.GetParameters().Count -eq 1 -and
+        $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncAction'
+    } | Select-Object -First 1)
+
+function Await-Operation($operation, [Type] $resultType) {
+    $task = $asTaskOperation.MakeGenericMethod($resultType).Invoke($null, @($operation))
+    $task.Wait()
+    return $task.Result
+}
+
+function Await-Action($operation) {
+    $task = $asTaskAction.Invoke($null, @($operation))
+    $task.Wait()
+}
+
+$mediaCapture = $null
+$stream = $null
+try {
+    $settings = [Windows.Media.Capture.MediaCaptureInitializationSettings]::new()
+    $settings.StreamingCaptureMode = [Windows.Media.Capture.StreamingCaptureMode]::Video
+    $mediaCapture = [Windows.Media.Capture.MediaCapture]::new()
+    Await-Action $mediaCapture.InitializeAsync($settings)
+
+    $stream = [Windows.Storage.Streams.InMemoryRandomAccessStream]::new()
+    $encoding = [Windows.Media.MediaProperties.ImageEncodingProperties]::CreateJpeg()
+    Await-Action $mediaCapture.CapturePhotoToStreamAsync($encoding, $stream)
+    $size = [uint32] $stream.Size
+    if ($size -le 0) {
+        throw 'Windows camera returned an empty frame.'
+    }
+
+    $width = 0
+    $height = 0
+    try {
+        $stream.Seek(0)
+        $decoder = Await-Operation ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+        $width = [int] $decoder.PixelWidth
+        $height = [int] $decoder.PixelHeight
+    } catch {
+        $width = 0
+        $height = 0
+    }
+
+    $stream.Seek(0)
+    $reader = [Windows.Storage.Streams.DataReader]::new($stream.GetInputStreamAt(0))
+    [void] (Await-Operation $reader.LoadAsync($size) ([UInt32]))
+    $bytes = New-Object byte[] $size
+    $reader.ReadBytes($bytes)
+
+    [pscustomobject] @{
+        frame_base64 = [Convert]::ToBase64String($bytes)
+        frame_mime = 'image/jpeg'
+        frame_width = $width
+        frame_height = $height
+    } | ConvertTo-Json -Compress
+} finally {
+    if ($mediaCapture -is [System.IDisposable]) {
+        $mediaCapture.Dispose()
+    }
+    if ($stream -is [System.IDisposable]) {
+        $stream.Dispose()
+    }
+}
+)PS");
+}
+
 }
 
 PetController::PetController(ClientGateway *gateway, QObject *parent)
@@ -127,6 +218,16 @@ PetController::PetController(ClientGateway *gateway, QObject *parent)
 PetController::~PetController()
 {
     stopStream();
+    if (_windows_camera_bridge_process) {
+        auto *process = _windows_camera_bridge_process.data();
+        _windows_camera_bridge_process.clear();
+        process->disconnect(this);
+        if (process->state() != QProcess::NotRunning) {
+            process->kill();
+            process->waitForFinished(250);
+        }
+        process->deleteLater();
+    }
 }
 
 QString PetController::audioUrl() const
@@ -295,6 +396,13 @@ void PetController::postVisionCapture(const QString &frameBase64,
     metadata[QStringLiteral("transport")] = transport.trimmed().isEmpty()
                                                 ? QStringLiteral("local_frame_upload")
                                                 : transport.trimmed();
+    metadata[QStringLiteral("reply_language")] = _reply_language.trimmed().isEmpty()
+                                                    ? QStringLiteral("zh-CN")
+                                                    : _reply_language.trimmed();
+    const QString speechRules = _speech_rules.trimmed();
+    if (!speechRules.isEmpty()) {
+        metadata[QStringLiteral("speech_rules")] = speechRules;
+    }
 
     QJsonObject payload;
     payload[QStringLiteral("analyzer")] = QStringLiteral("opencv");
@@ -324,6 +432,19 @@ QString PetController::nextVisionCaptureFilePath() const
 }
 
 void PetController::captureVisionFrameFile(const QString &filePath, int frameWidth, int frameHeight)
+{
+    captureVisionFrameFileWithMetadata(filePath,
+                                       frameWidth,
+                                       frameHeight,
+                                       QStringLiteral("qt_camera"),
+                                       QStringLiteral("local_frame_upload"));
+}
+
+void PetController::captureVisionFrameFileWithMetadata(const QString &filePath,
+                                                       int frameWidth,
+                                                       int frameHeight,
+                                                       const QString &source,
+                                                       const QString &transport)
 {
     QString localPath = filePath.trimmed();
     if (localPath.startsWith(QStringLiteral("file://"))) {
@@ -360,7 +481,7 @@ void PetController::captureVisionFrameFile(const QString &filePath, int frameWid
     } else if (suffix == QStringLiteral("webp")) {
         mime = QStringLiteral("image/webp");
     }
-    captureVisionFrame(QString::fromLatin1(bytes.toBase64()), mime, frameWidth, frameHeight);
+    postVisionCapture(QString::fromLatin1(bytes.toBase64()), mime, frameWidth, frameHeight, source, transport);
 }
 
 void PetController::interrupt()
@@ -449,6 +570,11 @@ bool PetController::windowsImeBridgeAvailable() const
     return isWslRuntime() && !windowsPowerShellPath().isEmpty();
 }
 
+bool PetController::windowsCameraBridgeAvailable() const
+{
+    return isWslRuntime() && !windowsPowerShellPath().isEmpty();
+}
+
 void PetController::openWindowsImeBridge(const QString &initialText)
 {
     if (_windows_ime_bridge_busy) {
@@ -506,6 +632,109 @@ void PetController::openWindowsImeBridge(const QString &initialText)
         setWindowsImeBridgeBusy(false);
         setError(QStringLiteral("Windows 中文输入桥启动失败: %1").arg(error));
     }
+}
+
+bool PetController::captureVisionWindowsCameraFrame()
+{
+    if (_session_id.isEmpty()) {
+        setError(QStringLiteral("桌宠会话未连接"));
+        return false;
+    }
+    if (_windows_camera_bridge_busy) {
+        setStatusText(QStringLiteral("Windows 摄像头桥正在捕捉"));
+        return false;
+    }
+
+    const QString program = windowsPowerShellPath();
+    if (!isWslRuntime() || program.isEmpty()) {
+        setError(QStringLiteral("Windows 摄像头桥只在 WSL 中可用"));
+        return false;
+    }
+
+    auto *process = new QProcess(this);
+    _windows_camera_bridge_process = process;
+    setWindowsCameraBridgeBusy(true);
+    setStatusText(QStringLiteral("Windows 摄像头桥正在捕捉"));
+
+    connect(process,
+            qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
+            this,
+            [this, process](int exitCode, QProcess::ExitStatus exitStatus) {
+                if (_windows_camera_bridge_process == process) {
+                    _windows_camera_bridge_process.clear();
+                }
+                const QByteArray stdoutBytes = process->readAllStandardOutput();
+                const QString output = QString::fromUtf8(stdoutBytes).trimmed();
+                QString error = QString::fromUtf8(process->readAllStandardError()).trimmed();
+                if (error.isEmpty() && !output.startsWith(QLatin1Char('{'))) {
+                    error = output;
+                }
+                process->deleteLater();
+                setWindowsCameraBridgeBusy(false);
+
+                if (exitStatus != QProcess::NormalExit || exitCode != 0) {
+                    setError(error.isEmpty()
+                                 ? QStringLiteral("Windows 摄像头桥已退出")
+                                 : QStringLiteral("Windows 摄像头桥失败: %1").arg(error));
+                    return;
+                }
+
+                const int jsonStart = output.indexOf(QLatin1Char('{'));
+                const int jsonEnd = output.lastIndexOf(QLatin1Char('}'));
+                if (jsonStart < 0 || jsonEnd < jsonStart) {
+                    setError(QStringLiteral("Windows 摄像头桥响应格式错误"));
+                    return;
+                }
+
+                QJsonParseError parseError;
+                const QByteArray jsonBytes = output.mid(jsonStart, jsonEnd - jsonStart + 1).toUtf8();
+                const QJsonDocument doc = QJsonDocument::fromJson(jsonBytes, &parseError);
+                if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+                    setError(QStringLiteral("Windows 摄像头桥响应格式错误"));
+                    return;
+                }
+
+                const QJsonObject payload = doc.object();
+                const QString frameBase64 = payload.value(QStringLiteral("frame_base64")).toString().trimmed();
+                if (frameBase64.isEmpty()) {
+                    setError(QStringLiteral("Windows 摄像头桥未返回画面"));
+                    return;
+                }
+
+                postVisionCapture(frameBase64,
+                                  payload.value(QStringLiteral("frame_mime")).toString(QStringLiteral("image/jpeg")),
+                                  payload.value(QStringLiteral("frame_width")).toInt(0),
+                                  payload.value(QStringLiteral("frame_height")).toInt(0),
+                                  QStringLiteral("windows_camera_bridge"),
+                                  QStringLiteral("wsl_windows_camera_bridge"));
+                setStatusText(QStringLiteral("Windows 摄像头桥帧已发送"));
+            });
+
+    process->setProgram(program);
+    process->setArguments({
+        QStringLiteral("-NoProfile"),
+        QStringLiteral("-Sta"),
+        QStringLiteral("-NonInteractive"),
+        QStringLiteral("-ExecutionPolicy"),
+        QStringLiteral("Bypass"),
+        QStringLiteral("-WindowStyle"),
+        QStringLiteral("Hidden"),
+        QStringLiteral("-EncodedCommand"),
+        powershellEncodedCommand(windowsCameraCaptureScript()),
+    });
+    process->setProcessChannelMode(QProcess::SeparateChannels);
+    process->start();
+    if (!process->waitForStarted(3000)) {
+        if (_windows_camera_bridge_process == process) {
+            _windows_camera_bridge_process.clear();
+        }
+        const QString error = process->errorString();
+        process->deleteLater();
+        setWindowsCameraBridgeBusy(false);
+        setError(QStringLiteral("Windows 摄像头桥启动失败: %1").arg(error));
+        return false;
+    }
+    return true;
 }
 
 void PetController::setModelSelection(const QString &modelType, const QString &modelName)
@@ -838,6 +1067,15 @@ void PetController::setWindowsImeBridgeBusy(bool busy)
     }
     _windows_ime_bridge_busy = busy;
     emit windowsImeBridgeChanged();
+}
+
+void PetController::setWindowsCameraBridgeBusy(bool busy)
+{
+    if (_windows_camera_bridge_busy == busy) {
+        return;
+    }
+    _windows_camera_bridge_busy = busy;
+    emit windowsCameraBridgeChanged();
 }
 
 void PetController::setStatusText(const QString &statusText)

@@ -76,7 +76,7 @@ class AgentSpecRegistry:
                     "回答应包含结论、证据、风险或缺口。"
                 ),
                 default_model="ollama:qwen3:4b",
-                model_policy=_policy(ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=3072, temperature=0.35)),
+                model_policy=_policy(ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.35)),
                 default_tools=["duckduckgo_search", "knowledge_base_search"],
                 allowed_tools=["duckduckgo_search", "knowledge_base_search", "calculator"],
                 tool_policy=_policy(ToolPolicy(
@@ -98,7 +98,7 @@ class AgentSpecRegistry:
                     "不要虚构事实；缺少背景时先标注假设。"
                 ),
                 default_model="ollama:qwen3:4b",
-                model_policy=_policy(ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=4096, temperature=0.75)),
+                model_policy=_policy(ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.75)),
                 default_tools=["knowledge_base_search"],
                 allowed_tools=["knowledge_base_search", "translator"],
                 tool_policy=_policy(ToolPolicy(
@@ -120,7 +120,7 @@ class AgentSpecRegistry:
                     "不要只做鼓励性总结。"
                 ),
                 default_model="ollama:qwen3:4b",
-                model_policy=_policy(ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=3072, temperature=0.2)),
+                model_policy=_policy(ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.2)),
                 default_tools=["knowledge_base_search", "calculator"],
                 allowed_tools=["knowledge_base_search", "calculator"],
                 tool_policy=_policy(ToolPolicy(
@@ -142,7 +142,7 @@ class AgentSpecRegistry:
                     "涉及账号、隐私、删除、支付等敏感操作时要求用户确认。"
                 ),
                 default_model="ollama:qwen3:4b",
-                model_policy=_policy(ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=2048, temperature=0.45)),
+                model_policy=_policy(ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.45)),
                 default_tools=["knowledge_base_search"],
                 allowed_tools=["knowledge_base_search", "calculator"],
                 tool_policy=_policy(ToolPolicy(
@@ -164,7 +164,7 @@ class AgentSpecRegistry:
                     "不要删除或改写原始事实；对不确定内容标记待确认。"
                 ),
                 default_model="ollama:qwen3:4b",
-                model_policy=_policy(ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=3072, temperature=0.4)),
+                model_policy=_policy(ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.4)),
                 default_tools=["knowledge_base_search"],
                 allowed_tools=["knowledge_base_search", "graph_recommender"],
                 tool_policy=_policy(ToolPolicy(

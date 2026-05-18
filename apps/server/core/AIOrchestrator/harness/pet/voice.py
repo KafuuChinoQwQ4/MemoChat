@@ -351,7 +351,7 @@ class GPTSoVITSVoiceProvider:
             text=text,
             state="ready",
             sample_rate=sample_rate,
-            duration_ms=duration_ms or max(240, min(12000, 90 * len(text))),
+            duration_ms=duration_ms or _estimated_voice_duration_ms(text),
             rms=_scripted_rms(text),
             chunk_ref=output_path.stem,
             url=f"/audio/{file_name}",
@@ -519,6 +519,10 @@ def _scripted_viseme(text: str) -> str | None:
     return "neutral"
 
 
+def _estimated_voice_duration_ms(text: str) -> int:
+    return max(240, min(60000, 90 * len(text))) if text else 0
+
+
 def _deterministic_result(
     request: VoiceSynthesisRequest,
     text: str,
@@ -528,7 +532,7 @@ def _deterministic_result(
     digest = hashlib.sha1(
         f"{request.session_id}:{request.turn_id}:{request.voice}:{text}".encode("utf-8")
     ).hexdigest()[:16]
-    duration_ms = max(240, min(12000, 90 * len(text))) if text else 0
+    duration_ms = _estimated_voice_duration_ms(text)
     return VoiceSynthesisResult(
         text=text,
         state="text-only",
@@ -600,8 +604,8 @@ def _stream_chunk_size(request: VoiceSynthesisRequest) -> int:
     try:
         size = int(value)
     except (TypeError, ValueError):
-        size = 12
-    return max(1, min(120, size))
+        size = 48
+    return max(1, min(240, size))
 
 
 def _chunk_text(text: str, size: int) -> list[str]:

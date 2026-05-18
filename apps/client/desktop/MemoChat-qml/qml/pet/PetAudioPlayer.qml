@@ -7,6 +7,7 @@ Item {
     property string sourceUrl: ""
     property string playbackState: "idle"
     property string speechText: ""
+    property string speechLanguage: "zh-CN"
     property bool speechFinal: false
     property bool textToSpeechFallbackEnabled: false
     property string speechKey: ""
@@ -36,7 +37,33 @@ Item {
     }
 
     function shouldUseTextFallback() {
-        return sourceUrl.length === 0 || isDeterministicFallbackAudio()
+        return (sourceUrl.length === 0 || isDeterministicFallbackAudio())
+                && playbackState !== "ready"
+                && playbackState !== "playing"
+                && playbackState !== "loading"
+                && playbackState !== "buffering"
+    }
+
+    function normalizedSpeechLocale() {
+        var locale = root.speechLanguage.trim()
+        if (locale.length === 0) {
+            locale = "zh-CN"
+        }
+        var lower = locale.toLowerCase().replace("_", "-")
+        if (lower.indexOf("ja") === 0 || lower === "jp") {
+            return "ja-JP"
+        }
+        if (lower.indexOf("zh") === 0) {
+            return "zh-CN"
+        }
+        if (lower.indexOf("en") === 0) {
+            return "en-US"
+        }
+        return locale
+    }
+
+    function qtLocaleName() {
+        return normalizedSpeechLocale().replace("-", "_")
     }
 
     function assignSource() {
@@ -57,7 +84,7 @@ Item {
             return speechEngine
         }
         try {
-            speechEngine = Qt.createQmlObject('import QtTextToSpeech; TextToSpeech { locale: Qt.locale("zh_CN"); volume: 1.0; rate: 0.0; pitch: 0.0 }',
+            speechEngine = Qt.createQmlObject('import QtTextToSpeech; TextToSpeech { volume: 1.0; rate: 0.0; pitch: 0.0 }',
                                               root,
                                               "PetTextToSpeechFallback")
         } catch (error) {
@@ -71,11 +98,12 @@ Item {
         if (!root.textToSpeechFallbackEnabled) {
             return
         }
-        var key = (root.speechKey.length > 0 ? root.speechKey : "speech") + ":" + root.speechText
+        var locale = normalizedSpeechLocale()
+        var key = (root.speechKey.length > 0 ? root.speechKey : "speech") + ":" + locale + ":" + root.speechText
         if (!root.speechFinal || root.speechText.trim().length === 0 || key === root.lastSpokenKey) {
             return
         }
-        if (nativeSpeech.speak(root.speechText, "zh-CN")) {
+        if (nativeSpeech.speak(root.speechText, locale)) {
             root.lastSpokenKey = key
             petAudioPlayer.stop()
             return
@@ -86,6 +114,9 @@ Item {
         }
         root.lastSpokenKey = key
         petAudioPlayer.stop()
+        if (engine.locale !== undefined) {
+            engine.locale = Qt.locale(qtLocaleName())
+        }
         engine.say(root.speechText)
     }
 
@@ -160,6 +191,7 @@ Item {
     }
 
     onSpeechTextChanged: maybeSpeakText()
+    onSpeechLanguageChanged: maybeSpeakText()
     onSpeechFinalChanged: applyPlayback()
     onSpeechKeyChanged: maybeSpeakText()
 }

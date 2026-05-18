@@ -360,9 +360,149 @@ class PetRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["phase"], "speaking")
         self.assertEqual(payload["action"]["name"], "visual_react")
         self.assertTrue(payload["text"]["final"])
-        self.assertEqual(payload["speech"]["text_delta"], "你看起来心情不错。")
-        self.assertEqual(payload["debug"]["visual_summary"]["reason"], "updated")
+        self.assertEqual(payload["speech"]["text_delta"], "我已经看到你了哦~")
+        self.assertEqual(payload["debug"]["visual_summary"]["reason"], "first_user_seen")
         self.assertTrue(payload["debug"]["visual_summary"]["speak"])
+
+    async def test_visual_observation_speaks_first_user_seen_for_opencv_face(self):
+        runtime = PetRuntime()
+        session = await runtime.create_session(uid=7)
+
+        with _patched_policy_time(1000.0):
+            event = await runtime.update_observation(
+                PetObservation.from_dict(
+                    {
+                        "session_id": session.session_id,
+                        "audio": {"vad": "idle", "rms": 0.0, "interrupt": False},
+                        "vision": {
+                            "enabled": True,
+                            "mode": "opencv_face_detection",
+                            "face_present": True,
+                            "attention": "face_detected",
+                            "expression": "neutral",
+                            "confidence": 0.72,
+                            "pose": {"face_confidence": 0.72},
+                        },
+                        "privacy": {"raw_frame_sent": False, "raw_audio_recorded": False},
+                    }
+                )
+            )
+
+        payload = event.to_dict()
+        self.assert_v1_control_payload(payload, session.session_id)
+        self.assertEqual(payload["phase"], "speaking")
+        self.assertEqual(payload["speech"]["text_delta"], "我已经看到你了哦~")
+        self.assertEqual(payload["debug"]["visual_summary"]["reason"], "first_user_seen")
+        self.assertTrue(payload["debug"]["visual_summary"]["ever_seen_face"])
+
+    async def test_visual_observation_uses_japanese_first_user_seen_language_and_voice(self):
+        from harness.pet import VoiceSynthesisResult
+
+        class RecordingVoiceRouter:
+            def __init__(self):
+                self.calls = []
+
+            async def synthesize(self, request):
+                self.calls.append(request)
+                return VoiceSynthesisResult(
+                    text=request.text,
+                    state="ready",
+                    sample_rate=24000,
+                    duration_ms=900,
+                    rms=0.5,
+                    chunk_ref="visual-ja",
+                    url="/audio/visual-ja.wav",
+                    provider=request.provider,
+                    voice=request.voice,
+                    retention="ephemeral",
+                    metadata={"language": request.language, "text_language": request.metadata["text_lang"]},
+                )
+
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        audio_path = Path(temp_dir.name) / "ref.wav"
+        _write_wav(audio_path, duration_sec=8.0)
+        runtime = PetRuntime(
+            PetRuntimeConfig(
+                voice_provider="gpt-sovits",
+                voice_sovits_base_url="http://127.0.0.1:9880",
+                voice_sovits_reference_audio=str(audio_path),
+            )
+        )
+        voice_router = RecordingVoiceRouter()
+        runtime._voice_router = voice_router  # type: ignore[attr-defined]
+        session = await runtime.create_session(uid=7)
+
+        with _patched_policy_time(1000.0):
+            event = await runtime.update_observation(
+                PetObservation.from_dict(
+                    {
+                        "session_id": session.session_id,
+                        "audio": {"vad": "idle", "rms": 0.0, "interrupt": False},
+                        "vision": {
+                            "enabled": True,
+                            "mode": "opencv_face_detection",
+                            "face_present": True,
+                            "attention": "face_detected",
+                            "expression": "neutral",
+                            "confidence": 0.72,
+                            "pose": {"face_confidence": 0.72},
+                            "reply_language": "ja-JP",
+                        },
+                        "privacy": {"raw_frame_sent": False, "raw_audio_recorded": False},
+                    }
+                )
+            )
+
+        payload = event.to_dict()
+        self.assertEqual(payload["phase"], "speaking")
+        self.assertEqual(payload["speech"]["text_delta"], "ちゃんと見えているよ~")
+        self.assertEqual(payload["text"]["language"], "ja-JP")
+        self.assertEqual(payload["audio"]["url"], "/audio/visual-ja.wav")
+        self.assertEqual(payload["audio"]["state"], "ready")
+        self.assertEqual(payload["debug"]["visual_summary"]["reason"], "first_user_seen")
+        self.assertEqual(payload["debug"]["visual_summary"]["speech_language"], "ja-JP")
+        self.assertEqual(payload["debug"]["voice"]["provider"], "gpt-sovits")
+        self.assertEqual(len(voice_router.calls), 1)
+        self.assertEqual(voice_router.calls[0].text, "ちゃんと見えているよ~")
+        self.assertEqual(voice_router.calls[0].language, "ja-JP")
+        self.assertEqual(voice_router.calls[0].metadata["text_lang"], "ja")
+
+    async def test_visual_observation_does_not_use_scripted_voice_fallback(self):
+        class RejectingVoiceRouter:
+            async def synthesize(self, request):
+                raise AssertionError("scripted visual speech should not synthesize fallback audio")
+
+        runtime = PetRuntime()
+        runtime._voice_router = RejectingVoiceRouter()  # type: ignore[attr-defined]
+        session = await runtime.create_session(uid=7)
+
+        with _patched_policy_time(1000.0):
+            event = await runtime.update_observation(
+                PetObservation.from_dict(
+                    {
+                        "session_id": session.session_id,
+                        "audio": {"vad": "idle", "rms": 0.0, "interrupt": False},
+                        "vision": {
+                            "enabled": True,
+                            "mode": "opencv_face_detection",
+                            "face_present": True,
+                            "attention": "face_detected",
+                            "expression": "neutral",
+                            "confidence": 0.72,
+                            "pose": {"face_confidence": 0.72},
+                        },
+                        "privacy": {"raw_frame_sent": False, "raw_audio_recorded": False},
+                    }
+                )
+            )
+
+        payload = event.to_dict()
+        self.assertEqual(payload["speech"]["text_delta"], "我已经看到你了哦~")
+        self.assertIsNone(payload["audio"]["url"])
+        self.assertEqual(payload["audio"]["state"], "error")
+        self.assertEqual(payload["debug"]["voice"]["provider"], "scripted")
+        self.assertIn("non-deterministic voice provider", payload["debug"]["voice"]["metadata"]["audio_error"])
 
     async def test_visual_observation_stays_animation_only_when_low_confidence(self):
         runtime = PetRuntime()
@@ -477,7 +617,7 @@ class PetRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second_payload["debug"]["visual_summary"]["reason"], "cooldown")
         self.assertEqual(
             second_payload["debug"]["visual_summary"]["cached_summary_text"],
-            first_payload["speech"]["text_delta"],
+            "你看起来心情不错。",
         )
 
     async def test_submit_input_carries_cached_visual_summary_into_prompt_metadata(self):
@@ -531,6 +671,7 @@ class PetRuntimeTests(unittest.IsolatedAsyncioTestCase):
         call = provider.calls[0]
         self.assertIn("visual_summary", call["runtime_metadata"])
         self.assertEqual(call["runtime_metadata"]["visual_summary"]["summary_text"], "你看起来心情不错。")
+        self.assertEqual(call["runtime_metadata"]["visual_summary"]["speech_text"], "我已经看到你了哦~")
         self.assertEqual(call["prompt"].observation_summary["vision"]["expression"], "smile")
         self.assertEqual(call["prompt"].observation_summary["vision"]["confidence"], 0.95)
         self.assertEqual(len(events), 3)

@@ -43,6 +43,8 @@ class PetVisionSmokeContractTests(unittest.TestCase):
             "scene.summary",
             "visual_summary",
             "visual_react",
+            "first_user_seen",
+            "我已经看到你了哦~",
             "low_confidence",
             "no_face",
             "cooldown",
