@@ -47,7 +47,7 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 ## 构建/测试矩阵
 
-Arch/WSL 发布/运行时部署前使用 Linux full 构建。部署脚本从 `build-linux-full-gcc16/bin` 复制。
+`archlinux` WSL 发布/运行时部署前使用 Linux full 构建。部署脚本从 `build-linux-full-gcc16/bin` 复制。
 
 ```bash
 source /root/.memochat-linux-env

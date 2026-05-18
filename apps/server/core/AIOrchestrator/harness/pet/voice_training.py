@@ -326,7 +326,7 @@ def _initial_job_state(
         return (
             "blocked",
             "reference_not_visible",
-            5,
+            0,
             "参考音频没有进入 AI 运行时，请重新选择本地文件或检查容器挂载。",
         )
     if voice_clone_enabled:

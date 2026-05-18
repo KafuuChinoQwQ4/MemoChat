@@ -635,7 +635,19 @@ void PetAssetSettings::setVoiceTrainingMessage(const QString &value) { if (assig
 void PetAssetSettings::normalizeVoiceTrainingState()
 {
     const QString normalizedStage = _voice_training_stage.trimmed().toLower();
+    const QString normalizedStatus = _voice_training_status.trimmed().toLower();
     if (normalizedStage != QStringLiteral("ready_for_worker")) {
+        if (normalizedStatus == QStringLiteral("blocked")
+            && (normalizedStage == QStringLiteral("reference_not_visible")
+                || normalizedStage == QStringLiteral("reference_unreadable")
+                || normalizedStage == QStringLiteral("reference_too_short"))) {
+            _voice_training_job_id.clear();
+            _voice_training_status = QStringLiteral("idle");
+            _voice_training_stage.clear();
+            _voice_training_progress = 0;
+            _voice_training_artifact_path.clear();
+            _voice_training_message = QStringLiteral("等待确认参考音频权限");
+        }
         return;
     }
 
