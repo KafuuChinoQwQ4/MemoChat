@@ -175,6 +175,7 @@ enum ClickLbState{
 
 
 extern QString gate_url_prefix;
+extern QString gate_media_url_prefix;
 
 #define MEMOCHAT_CLIENT_VERSION "3.0.0"
 

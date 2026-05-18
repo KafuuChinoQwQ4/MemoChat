@@ -34,6 +34,7 @@ QVariant R18ListModel::data(const QModelIndex& index, int role) const
     case OrderRole: return item.value(QStringLiteral("order"), item.value(QStringLiteral("index")));
     case FormatRole: return item.value(QStringLiteral("format"));
     case MessageRole: return item.value(QStringLiteral("message"), item.value(QStringLiteral("description")));
+    case TagsRole: return item.value(QStringLiteral("tags"));
     default: return {};
     }
 }
@@ -53,6 +54,7 @@ QHash<int, QByteArray> R18ListModel::roleNames() const
         {OrderRole, "order"},
         {FormatRole, "format"},
         {MessageRole, "message"},
+        {TagsRole, "tags"},
     };
 }
 
@@ -73,6 +75,23 @@ void R18ListModel::setItems(const QVariantList& items)
         _items.push_back(item.toMap());
     }
     endResetModel();
+    emit countChanged();
+}
+
+void R18ListModel::appendItems(const QVariantList& items)
+{
+    if (items.isEmpty()) {
+        return;
+    }
+
+    const int start = _items.size();
+    const int end = start + items.size() - 1;
+    beginInsertRows(QModelIndex(), start, end);
+    _items.reserve(_items.size() + items.size());
+    for (const auto& item : items) {
+        _items.push_back(item.toMap());
+    }
+    endInsertRows();
     emit countChanged();
 }
 

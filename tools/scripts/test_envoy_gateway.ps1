@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$BaseUrl = "http://127.0.0.1",
     [switch]$Login,
     [switch]$ProbePolicyRoutes,
@@ -11,8 +11,9 @@ param(
     [switch]$GenerateTraceId,
     [switch]$GenerateIds,
     [switch]$CheckDockerLogs,
-    [string]$NginxContainerName = "memochat-nginx-lb",
+    [string]$EnvoyContainerName = "memochat-envoy-gateway",
     [int]$DockerLogTail = 100,
+    [string]$AccessLogPath = "\\wsl.localhost\archlinux\data\docker-data\memochat\envoy\logs\access.json",
     [string]$Email = "test",
     [string]$Password = "test",
     [string]$ClientVersion = "3.0.0",
@@ -142,12 +143,13 @@ function Test-TcpPortOpen {
     }
 }
 
-function Test-NginxDockerLogs {
+function Test-EnvoyDockerLogs {
     param(
         [string]$ContainerName,
         [int]$Tail,
         [string]$ExpectedRequestId,
-        [string]$ExpectedTraceId
+        [string]$ExpectedTraceId,
+        [string]$FallbackAccessLogPath
     )
 
     if (-not $ExpectedRequestId -and -not $ExpectedTraceId) {
@@ -155,23 +157,23 @@ function Test-NginxDockerLogs {
         return $true
     }
 
-    Write-Host "=== Nginx docker logs ==="
+    Write-Host "=== Envoy access logs ==="
     $logs = $null
     $dockerExitCode = $null
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        $logs = & $DockerCli logs --tail $Tail $ContainerName 2>&1
+        $logs = & $DockerCli exec $ContainerName tail -n $Tail /var/log/envoy/access.json 2>&1
         $dockerExitCode = $LASTEXITCODE
     } catch {
-        Write-Host "Docker log check unavailable: $($_.Exception.Message)"
+        Write-Host "Envoy access log check unavailable: $($_.Exception.Message)"
         return $true
     } finally {
         $ErrorActionPreference = $previousErrorActionPreference
     }
 
     if ($dockerExitCode -ne 0) {
-        Write-Host "Docker log check unavailable: docker logs exited with $dockerExitCode."
+        Write-Host "Envoy access log check unavailable: docker exec exited with $dockerExitCode."
         return $true
     }
 
@@ -180,19 +182,44 @@ function Test-NginxDockerLogs {
 
     if ($ExpectedRequestId) {
         if ($logText -match [regex]::Escape($ExpectedRequestId)) {
-            Write-Host "Found request ID in recent Nginx logs: $ExpectedRequestId"
+            Write-Host "Found request ID in recent Envoy logs: $ExpectedRequestId"
         } else {
-            Write-Host "Missing request ID in recent Nginx logs: $ExpectedRequestId"
+            Write-Host "Missing request ID in recent Envoy logs: $ExpectedRequestId"
             $matched = $false
         }
     }
 
     if ($ExpectedTraceId) {
         if ($logText -match [regex]::Escape($ExpectedTraceId)) {
-            Write-Host "Found trace ID in recent Nginx logs: $ExpectedTraceId"
+            Write-Host "Found trace ID in recent Envoy logs: $ExpectedTraceId"
         } else {
-            Write-Host "Missing trace ID in recent Nginx logs: $ExpectedTraceId"
+            Write-Host "Missing trace ID in recent Envoy logs: $ExpectedTraceId"
             $matched = $false
+        }
+    }
+
+    if (-not $matched -and $FallbackAccessLogPath -and (Test-Path -LiteralPath $FallbackAccessLogPath)) {
+        Write-Host "=== Envoy access log file fallback ==="
+        Start-Sleep -Milliseconds 750
+        $fallbackText = (Get-Content -LiteralPath $FallbackAccessLogPath -Tail $Tail -ErrorAction Stop) -join "`n"
+        $matched = $true
+
+        if ($ExpectedRequestId) {
+            if ($fallbackText -match [regex]::Escape($ExpectedRequestId)) {
+                Write-Host "Found request ID in access log file: $ExpectedRequestId"
+            } else {
+                Write-Host "Missing request ID in access log file: $ExpectedRequestId"
+                $matched = $false
+            }
+        }
+
+        if ($ExpectedTraceId) {
+            if ($fallbackText -match [regex]::Escape($ExpectedTraceId)) {
+                Write-Host "Found trace ID in access log file: $ExpectedTraceId"
+            } else {
+                Write-Host "Missing trace ID in access log file: $ExpectedTraceId"
+                $matched = $false
+            }
         }
     }
 
@@ -340,10 +367,10 @@ $upstreamTolerantStatusCodes = @(200, 400, 401, 404, 405, 429, 500, 502, 503, 50
 $resolvedRequestId = $RequestId
 $resolvedTraceId = $TraceId
 if (($GenerateIds -or $GenerateRequestId) -and -not $resolvedRequestId) {
-    $resolvedRequestId = New-SmokeCorrelationId -Prefix "nginx-smoke-request"
+    $resolvedRequestId = New-SmokeCorrelationId -Prefix "envoy-smoke-request"
 }
 if (($GenerateIds -or $GenerateTraceId) -and -not $resolvedTraceId) {
-    $resolvedTraceId = New-SmokeCorrelationId -Prefix "nginx-smoke-trace"
+    $resolvedTraceId = New-SmokeCorrelationId -Prefix "envoy-smoke-trace"
 }
 
 $correlationHeaders = New-CorrelationHeaders -ResolvedRequestId $resolvedRequestId -ResolvedTraceId $resolvedTraceId
@@ -360,7 +387,7 @@ if ($ProbePolicyRoutes -or $ProbeResponseHeaders) {
 }
 
 $ok = Invoke-GatewayRequest `
-    -Name "Nginx health" `
+    -Name "Envoy health" `
     -Uri "$normalizedBaseUrl/health" `
     -Headers $correlationHeaders `
     -ExpectedStatusCodes $healthStatusCodes
@@ -372,12 +399,12 @@ if ($Login) {
         client_ver = $ClientVersion
     } | ConvertTo-Json -Compress
 
-    $loginOk = Invoke-GatewayRequest -Name "Nginx user_login" -Uri "$normalizedBaseUrl/user_login" -Method "POST" -Body $payload -Headers $correlationHeaders
+    $loginOk = Invoke-GatewayRequest -Name "Envoy user_login" -Uri "$normalizedBaseUrl/user_login" -Method "POST" -Body $payload -Headers $correlationHeaders
     $ok = $ok -and $loginOk
 }
 
 if ($ProbePolicyRoutes -or $ProbeResponseHeaders) {
-    $probeId = New-SmokeCorrelationId -Prefix "nginx-smoke"
+    $probeId = New-SmokeCorrelationId -Prefix "envoy-smoke"
     $probeHeaders = Merge-Headers -BaseHeaders @{
         "X-Request-Id" = $probeId
         "X-Trace-Id"   = $probeId
@@ -458,7 +485,7 @@ if ($ProbePolicyRoutes -or $ProbeResponseHeaders) {
 }
 
 if ($ProbeAuthFailover) {
-    $failoverProbeId = New-SmokeCorrelationId -Prefix "nginx-auth-failover"
+    $failoverProbeId = New-SmokeCorrelationId -Prefix "envoy-auth-failover"
     $failoverHeaders = Merge-Headers -BaseHeaders @{
         "X-Request-Id" = $failoverProbeId
         "X-Trace-Id"   = $failoverProbeId
@@ -478,19 +505,20 @@ if ($ProbeAuthFailover) {
 if ($CheckDockerLogs) {
     if ($resolvedRequestId -or $resolvedTraceId) {
         $logProbeOk = Invoke-GatewayRequest `
-            -Name "Nginx log correlation probe" `
-            -Uri "$normalizedBaseUrl/__nginx_smoke_correlation" `
+            -Name "Envoy log correlation probe" `
+            -Uri "$normalizedBaseUrl/__envoy_loki_probe" `
             -Headers $correlationHeaders `
             -ExpectedStatusCodes @(200, 400, 401, 404, 405, 429, 502, 503, 504)
 
         $ok = $ok -and $logProbeOk
     }
 
-    $logsOk = Test-NginxDockerLogs `
-        -ContainerName $NginxContainerName `
+    $logsOk = Test-EnvoyDockerLogs `
+        -ContainerName $EnvoyContainerName `
         -Tail $DockerLogTail `
         -ExpectedRequestId $resolvedRequestId `
-        -ExpectedTraceId $resolvedTraceId
+        -ExpectedTraceId $resolvedTraceId `
+        -FallbackAccessLogPath $AccessLogPath
 
     $ok = $ok -and $logsOk
 }
@@ -498,3 +526,4 @@ if ($CheckDockerLogs) {
 if (-not $ok) {
     exit 1
 }
+

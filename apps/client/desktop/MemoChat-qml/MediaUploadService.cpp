@@ -521,7 +521,10 @@ bool MediaUploadService::uploadLocalFile(const QString &localFileUrl,
 
     QString remoteUrl = completeRsp.value("url").toString();
     if (remoteUrl.startsWith("/")) {
-        remoteUrl = gate_url_prefix + remoteUrl;
+        const QString mediaBaseUrl = gate_media_url_prefix.trimmed().isEmpty()
+            ? gate_url_prefix
+            : gate_media_url_prefix;
+        remoteUrl = mediaBaseUrl + remoteUrl;
     }
     QString mediaKey = completeRsp.value("media_key").toString();
     if (mediaKey.isEmpty()) {

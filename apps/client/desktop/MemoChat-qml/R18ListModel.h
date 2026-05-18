@@ -23,7 +23,8 @@ public:
         StatusRole,
         OrderRole,
         FormatRole,
-        MessageRole
+        MessageRole,
+        TagsRole
     };
 
     explicit R18ListModel(QObject* parent = nullptr);
@@ -36,6 +37,7 @@ public:
     Q_INVOKABLE QVariantMap get(int row) const;
 
     void setItems(const QVariantList& items);
+    void appendItems(const QVariantList& items);
     void clear();
 
 signals:

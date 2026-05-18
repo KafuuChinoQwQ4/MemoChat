@@ -25,7 +25,7 @@ wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat-Qml-Drogon-linux && source 
 - 保持容器端口稳定。除非任务明确要求，否则不要修改 compose 端口映射。
 - Linux 缓存、模型、包、vcpkg 产物、Qt 产物以及生成的大文件，优先下载到 `/data`。
 - 本地 Docker 绑定数据使用 `/data/docker-data/memochat`。`D:` 仅用于旧版 Docker Desktop 备份、Windows 产物或明确的 Windows 侧检查。
-- 当前基础设施基线包含：Nginx LB、Redis、Postgres、MongoDB、RabbitMQ、Redpanda、MinIO、Qdrant、Neo4j、AI Orchestrator、Prometheus、Alertmanager、Grafana、Loki、Tempo、OTel Collector、InfluxDB、cAdvisor。Ollama 仅在容器或本机服务实际存在时检查。
+- 当前基础设施基线包含：Envoy Gateway、Redis、Postgres、MongoDB、RabbitMQ、Redpanda、MinIO、Qdrant、Neo4j、AI Orchestrator、Prometheus、Alertmanager、Grafana、Loki、Tempo、OTel Collector、InfluxDB、cAdvisor。Ollama 仅在容器或本机服务实际存在时检查。
 - 可用时使用 MCP 工具：
   - Docker 服务：Prometheus、Loki、Tempo、Grafana、MinIO、RabbitMQ、InfluxDB、cAdvisor。
   - 数据存储：按配置使用 MongoDB、Neo4j、Qdrant、Redpanda、Postgres、Redis。

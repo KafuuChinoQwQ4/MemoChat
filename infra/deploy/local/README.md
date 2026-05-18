@@ -5,7 +5,7 @@ This folder holds the local Docker dependencies and init payloads used by MemoCh
 ## Compose Files
 
 - `docker-compose.yml`
-  - default local Docker architecture, including Nginx HTTP gateway `80`
+  - default local Docker architecture, including Envoy gateway `80` and `8443`
 - `compose/datastores.yml`
   - Redis `6379`
   - PostgreSQL `15432`
@@ -19,8 +19,8 @@ This folder holds the local Docker dependencies and init payloads used by MemoCh
 - `compose/livekit.yml`
   - LiveKit `7880`
   - TURN `3478`
-- `compose/nginx-lb.yml`
-  - containerized Gate/Chat cluster variant with Nginx LB `80` (HTTP), `8090-8094` and `8097` (TCP Stream)
+- `compose/envoy-lb.yml`
+  - containerized Gate/Chat cluster variant with Envoy LB `80` (HTTP), `8090-8094` and `8097` (TCP Stream)
   - do not use this fragment with the default Windows-process local runtime because ChatServer ports would collide
 - `compose/observability.yml`
   - Prometheus `9090` (短期存储)
@@ -94,19 +94,52 @@ curl -fsS http://127.0.0.1:3200/ready
 curl -fsS http://127.0.0.1:8088/metrics
 ```
 
-## Nginx Gateway Check
+## Envoy Gateway Check
 
-The default local architecture includes Nginx as the client-facing HTTP entrypoint on stable host port `80`. It proxies to host GateServer instances on `8080` and `8084` through a container-startup alias named `memochat-host-gateway-ipv4`. That alias is derived from Docker's `host-gateway` entry but keeps Nginx upstream resolution on IPv4 only. Existing direct GateServer smoke scripts still target `http://127.0.0.1:8080`; use the narrow gateway script when you specifically want to verify the Nginx route without changing the full runtime flow.
+The default local architecture now uses `memochat-envoy-gateway` for both the HTTP edge on host port `80` and the HTTPS/HTTP3 edge on host port `8443`. It proxies to the host GateServer instances on `8080` and `8084`, publishes Envoy admin stats on container port `9901`, and writes JSON access logs to the Envoy log mount under `/data/docker-data/memochat/envoy/logs`.
 
-The local gateway only proxies recognized hostnames: `localhost`, `127.0.0.1`, and `host.docker.internal`. Unknown `Host` traffic is handled by the default Nginx server and is not proxied to GateServer. Host-facing traffic stays on port `80`; Nginx status `8081` and exporter `9113` remain internal Docker-network ports.
+Validate the local gateway wiring after changing `infra/deploy/local/docker-compose.yml` or `infra/deploy/local/compose/envoy.yaml`:
 
 ```powershell
-tools\scripts\test_nginx_gateway.ps1
-tools\scripts\test_nginx_gateway.ps1 -Login
-tools\scripts\test_nginx_gateway.ps1 -GenerateIds -CheckDockerLogs
+docker compose -f infra/deploy/local/docker-compose.yml config
+docker compose -f infra/deploy/local/docker-compose.yml ps memochat-envoy-gateway
+curl -fsS http://127.0.0.1/health
+curl.exe -k --http2 https://127.0.0.1:8443/health
 ```
 
-The default check probes `http://127.0.0.1/health`. The optional `-Login` check posts the same lightweight login payload style used by `tools\scripts\test_login.ps1` through `http://127.0.0.1/user_login`. If Nginx is not already running, the script reports the connection failure and exits nonzero; it does not start or stop Docker stacks.
+When HTTP/3-capable curl is available, the same health route should answer over QUIC as well:
+
+```powershell
+curl.exe -k --http3-only https://127.0.0.1:8443/health
+```
+
+## Gateway Policy Verification
+
+Use these checks after changing `compose/envoy.yaml` or the Envoy service in `docker-compose.yml`. They keep host ports `80` and `8443` stable and do not start or stop the broader MemoChat service stack.
+
+```powershell
+docker compose -f infra\deploy\local\docker-compose.yml config --quiet
+docker compose -f infra\deploy\local\docker-compose.yml ps memochat-envoy-gateway
+tools\scripts\test_envoy_gateway.ps1
+tools\scripts\test_envoy_gateway.ps1 -ProbePolicyRoutes
+tools\scripts\test_envoy_gateway.ps1 -ProbeResponseHeaders -ShowHeaders
+```
+
+`-ProbePolicyRoutes` exercises the auth, AI stream, media upload, and media download Envoy routes. It accepts normal upstream/business failures such as `400`, `401`, `404`, `405`, `429`, `500`, `502`, `503`, and `504`, so the probe remains useful even when GateServer is not running. It also checks gateway-owned method restrictions that should return `405`: `GET /user_login`, `GET /ai/chat/stream`, and `POST /media/download`.
+
+Unknown host traffic is rejected by Envoy with `421` instead of being proxied:
+
+```powershell
+curl.exe -i -H "Host: unknown.local" http://127.0.0.1/health
+```
+
+Auth-sensitive routes use Envoy local rate limiting. The protected exact routes are `/get_varifycode`, `/user_login`, `/user_register`, and `/reset_pwd`.
+
+```powershell
+tools\scripts\test_envoy_auth_limit.ps1
+```
+
+The auth-limit smoke is intentionally bursty. Wait briefly after running it from the same local IP before normal login/register/auth smoke.
 
 For full auth smoke, prefer the runtime scripts:
 
@@ -116,122 +149,68 @@ tools\scripts\test_register_login.ps1
 tools\scripts\full_flow_test.ps1
 ```
 
-These scripts default to the Nginx entrypoint `http://127.0.0.1`, mirror the client-side XOR password encoding, and use unique email/user values for registration flows to avoid fixed-account collisions and `1005 UserExist` false failures.
+## Envoy Metrics Check
 
-### Nginx Policy Verification
-
-Use these checks after changing `compose/nginx-local.conf` or when confirming the local gateway policy. They keep port `80` stable and do not start or stop the broader MemoChat service stack.
+Envoy admin and Prometheus stats stay inside the Docker network. `memochat-envoy-gateway` exposes admin port `9901` in the container only, and Prometheus scrapes `/stats/prometheus` through the `envoy_gateway` job.
 
 ```powershell
-docker compose -f infra\deploy\local\docker-compose.yml config --quiet
-docker run --rm -v "${PWD}\infra\deploy\local\compose\nginx-local.conf:/etc/nginx/nginx.conf:ro" nginx:1.26.2-alpine nginx -t
-docker compose -f infra\deploy\local\docker-compose.yml ps memochat-nginx-lb
-tools\scripts\test_nginx_gateway.ps1
+tools\scripts\test_envoy_metrics.ps1
 ```
 
-When Nginx is already running, the gateway script can also probe route-policy locations that are safe without real business state:
+For manual checks:
 
 ```powershell
-tools\scripts\test_nginx_gateway.ps1 -ProbePolicyRoutes
-tools\scripts\test_nginx_gateway.ps1 -ProbeResponseHeaders -ShowHeaders
+docker run --rm --network memochat_default curlimages/curl:8.10.1 -fsS http://memochat-envoy-gateway:9901/ready
+docker run --rm --network memochat_default curlimages/curl:8.10.1 -fsS http://memochat-envoy-gateway:9901/stats/prometheus
+Invoke-WebRequest "http://127.0.0.1:9090/api/v1/query?query=envoy_server_live%7Bjob%3D%22envoy_gateway%22%7D" -UseBasicParsing
 ```
 
-`-ProbePolicyRoutes` exercises the auth, AI stream, media upload, and media download Nginx locations. It accepts normal upstream/business failures such as `400`, `401`, `404`, `405`, `429`, `500`, `502`, `503`, and `504`, so the probe remains useful even when GateServer is not running. It also checks Nginx-owned method restrictions that should return `405`: `GET /user_login`, `GET /ai/chat/stream`, and `POST /media/download`.
+## Envoy Upstream Failover Check
 
-`-ProbeResponseHeaders` checks common gateway response headers from `/health`: `X-Request-Id`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: no-referrer`, and `Permissions-Policy: geolocation=(), microphone=(), camera=()`. It also keeps the AI stream response header check for `X-Accel-Buffering: no` on `/ai/chat/stream`.
-
-To confirm unknown host traffic is rejected at the Nginx edge instead of proxied, use a manual probe and expect Nginx to close the request rather than return a GateServer response:
+The default local Envoy upstream sends client HTTP traffic to host GateServer instances on `8080` and `8084` using the `gate_backend` cluster. The non-destructive failover script checks those ports, sends bounded probes through port `80`, and prints recent upstream evidence from `/var/log/envoy/access.json` inside the container.
 
 ```powershell
-curl.exe -i -H "Host: unknown.local" http://127.0.0.1/health
-```
-
-Auth-sensitive routes use the local Nginx baseline `limit_req_zone $binary_remote_addr zone=auth_per_ip:10m rate=30r/m` with `burst=10 nodelay` and `limit_req_status 429`. The protected exact routes are `/get_varifycode`, `/user_login`, `/user_register`, and `/reset_pwd`.
-
-```powershell
-tools\scripts\test_nginx_auth_limit.ps1
-```
-
-The auth-limit smoke is intentionally bursty. After running it from the same local IP, wait briefly before normal login/register/auth smoke so the Nginx per-IP bucket can drain.
-
-### Nginx Metrics Check
-
-Local Nginx metrics stay inside the Docker network. `memochat-nginx-lb` exposes the internal `stub_status` endpoint at `http://memochat-nginx-lb:8081/stub_status`, and `memochat-nginx-exporter` runs `nginx/nginx-prometheus-exporter:1.5.1` against that endpoint. The exporter listens on container port `9113` only; neither `8081` nor `9113` is published to the Windows host, so host-facing Nginx traffic remains on stable port `80`.
-
-Prometheus scrapes the exporter through the `nginx_gateway` job at `memochat-nginx-exporter:9113`. Use the metrics smoke after changing Nginx, compose observability wiring, or Prometheus scrape configuration:
-
-```powershell
-tools\scripts\test_nginx_metrics.ps1
-```
-
-For manual Docker-network checks:
-
-```powershell
-docker run --rm --network memochat_default curlimages/curl:8.10.1 -fsS http://memochat-nginx-lb:8081/stub_status
-docker run --rm --network memochat_default curlimages/curl:8.10.1 -fsS http://memochat-nginx-exporter:9113/metrics
-Invoke-WebRequest "http://127.0.0.1:9090/api/v1/query?query=nginx_up" -UseBasicParsing
-```
-
-When updating local architecture docs or verification notes for any Nginx step, keep this metrics path in sync with the compose service name, exporter image tag, internal-only ports, Prometheus job name, and smoke script command.
-
-The local Grafana instance at `http://127.0.0.1:3000` provisions a `MemoChat` folder with the `Nginx Gateway` dashboard from `infra/deploy/local/observability/grafana/dashboards/nginx-gateway.json`. It uses the existing Prometheus datasource uid `prometheus` and Loki datasource uid `loki`; no Docker published ports change for the dashboard. The panels cover exporter health, request throughput, connection state, route/status counts, 5xx log events, and recent access logs.
-
-### Nginx Upstream Failover Check
-
-The default local Nginx upstream sends client HTTP traffic on port `80` to two host GateServer instances, `memochat-host-gateway-ipv4:8080` and `memochat-host-gateway-ipv4:8084`. The upstream policy uses `least_conn`; each backend has `max_fails=3` and `fail_timeout=10s`.
-
-Use the failover smoke script in its default diagnostic mode first. This mode is non-destructive: it checks the two GateServer ports, sends bounded probes through Nginx port `80`, and prints recent upstream evidence from the Nginx JSON logs. By default, the script treats gateway errors `502`, `503`, and `504` as failures; add `-AllowGatewayErrors` only when collecting diagnostic evidence while GateServer is intentionally unavailable.
-
-```powershell
-tools\scripts\test_nginx_failover.ps1
+tools\scripts\test_envoy_failover.ps1
 ```
 
 Only use fault injection when the local service windows can be interrupted:
 
 ```powershell
-tools\scripts\test_nginx_failover.ps1 -StopBackend -StopBackendPort 8080
+tools\scripts\test_envoy_failover.ps1 -StopBackend -StopBackendPort 8080
 ```
 
-`-StopBackend` temporarily stops one local GateServer process so Nginx can route through the remaining backend. By default, the script restores only the stopped GateServer instance from `infra\Memo_ops\runtime\services\GateServer1` or `GateServer2`; pass `-RestoreScript tools/scripts/status/start-all-services.bat` only when you intentionally want the broader runtime startup script. If restore is disabled or fails, run that start script manually before continuing other smoke tests.
+`-StopBackend` temporarily stops one local GateServer process so Envoy can route through the remaining backend. By default, the script restores only the stopped GateServer instance from `infra\Memo_ops\runtime\services\GateServer1` or `GateServer2`; pass `-RestoreScript tools/scripts/status/start-all-services.bat` only when you intentionally want the broader runtime startup script.
 
-Confirm failover from `tools\scripts\docker\arch-docker.cmd logs memochat-nginx-lb` by checking the JSON access log fields `upstream_addr`, `upstream_status`, and `upstream_response_time`. During a successful failover check, recent proxied requests should show the healthy backend address and acceptable upstream status/latency values after Nginx marks the stopped backend unavailable.
+## Envoy Structured Log Correlation
 
-### Nginx Structured Log Correlation
+Envoy writes JSON access logs to `/var/log/envoy/access.json` in the container. The same file is mounted from `/data/docker-data/memochat/envoy/logs/access.json`; the OTel Collector tails that mount and exports gateway logs to Loki with `service="memochat-envoy-gateway"` and `component="envoy_gateway"`.
 
-Nginx writes JSON access logs to the container log stream, so `tools\scripts\docker\arch-docker.cmd logs memochat-nginx-lb` remains available for quick local inspection. The same JSON access log stream is also written to `/data/docker-data/memochat/nginx/logs/access.json`; Docker mounts that file path into the OTel Collector, which tails it and exports Nginx gateway logs to Loki with low-cardinality labels such as `service="memochat-nginx-lb"` and `component="nginx_gateway"`.
-
-Host-facing ports stay stable: Nginx HTTP is `80` and Loki is `3100`. Nginx status `8081` and exporter `9113` stay internal to the Docker network.
-
-Use explicit IDs when you want to compare Nginx with GateServer logs, the mounted access log file, and Loki, or ask the smoke scripts to generate them:
+Use explicit IDs when you want to compare Envoy, GateServer logs, the mounted access log file, and Loki:
 
 ```powershell
 $requestId = "manual-request-$([guid]::NewGuid().ToString('N'))"
 $traceId = "manual-trace-$([guid]::NewGuid().ToString('N'))"
-tools\scripts\test_nginx_gateway.ps1 -RequestId $requestId -TraceId $traceId -CheckDockerLogs
-tools\scripts\docker\arch-docker.cmd logs memochat-nginx-lb --tail 50 | Select-String $requestId,$traceId
-Get-Content \\wsl.localhost\archlinux\data\docker-data\memochat\nginx\logs\access.json -Tail 50 | Select-String $requestId
+tools\scripts\test_envoy_gateway.ps1 -RequestId $requestId -TraceId $traceId -CheckDockerLogs
+tools\scripts\docker\arch-docker.cmd exec memochat-envoy-gateway sh -c "tail -n 50 /var/log/envoy/access.json" | Select-String $requestId,$traceId
+Get-Content \\wsl.localhost\archlinux\data\docker-data\memochat\envoy\logs\access.json -Tail 50 | Select-String $requestId
 ```
 
 For a one-command generated trace:
 
 ```powershell
-tools\scripts\test_nginx_gateway.ps1 -GenerateIds -CheckDockerLogs
-tools\scripts\test_nginx_loki.ps1
+tools\scripts\test_envoy_gateway.ps1 -GenerateIds -CheckDockerLogs
+tools\scripts\test_envoy_loki.ps1
 ```
 
-`-CheckDockerLogs` only searches recent Nginx Docker logs for the request/trace IDs. Docker log access failures are reported as unavailable and do not make ordinary gateway health checks depend on Docker log collection.
-
-The Nginx JSON body stores the normalized request path as `uri_path`; it does not log the raw request URI or query string. Query strings are represented only by `query_present=true|false`. The body also includes low-cardinality `route_family` and `status_class` fields for Loki filtering and dashboards. `request_id` and `trace_id` remain searchable in the JSON body for correlation, but they are intentionally not Loki labels.
-
-`tools\scripts\test_nginx_loki.ps1` sends a Nginx-owned `GET /__nginx_loki_probe` probe through `http://127.0.0.1` with generated `X-Request-Id` and `X-Trace-Id` headers, checks the mounted access log file by default, then retries Loki until the request ID appears or the bounded wait expires. It also verifies `route_family` and `status_class` classification and sends a media-style probe with a query token to confirm raw query material is redacted. It does not require GateServer to be running. If you only want the Loki query path, add `-SkipAccessLogFileCheck`.
+The Envoy JSON body stores the normalized request path as `uri_path`; it does not log the raw request URI or query string. Query strings are represented only by `query_present=true|false`. The body also includes low-cardinality `route_family` and `status_class` fields for Loki filtering and dashboards. `request_id` and `trace_id` remain searchable in the JSON body but are intentionally not Loki labels.
 
 For manual Loki checks, use LogQL with the stable service label and a text filter for the request ID:
 
 ```powershell
 $requestId = "manual-request-$([guid]::NewGuid().ToString('N'))"
 $traceId = "manual-trace-$([guid]::NewGuid().ToString('N'))"
-tools\scripts\test_nginx_loki.ps1 -RequestId $requestId -TraceId $traceId
-$query = '{service="memochat-nginx-lb"} |= "' + $requestId + '"'
+tools\scripts\test_envoy_loki.ps1 -RequestId $requestId -TraceId $traceId
+$query = '{service="memochat-envoy-gateway"} |= "' + $requestId + '"'
 Invoke-RestMethod "http://127.0.0.1:3100/loki/api/v1/query_range?query=$([uri]::EscapeDataString($query))&limit=20" -UseBasicParsing
 ```
 
@@ -239,8 +218,8 @@ For manual one-off checks:
 
 ```powershell
 Invoke-WebRequest http://127.0.0.1/health -UseBasicParsing | Select-Object StatusCode,Content
-curl.exe -i -H "X-Request-Id: manual-nginx-check" -H "X-Trace-Id: manual-nginx-check" http://127.0.0.1/ai/chat/stream
-curl.exe -i -H "X-Request-Id: manual-nginx-check" -H "X-Trace-Id: manual-nginx-check" http://127.0.0.1/media/download
+curl.exe -i -H "X-Request-Id: manual-envoy-check" -H "X-Trace-Id: manual-envoy-check" http://127.0.0.1/ai/chat/stream
+curl.exe -i -H "X-Request-Id: manual-envoy-check" -H "X-Trace-Id: manual-envoy-check" http://127.0.0.1/media/download
 ```
 
 The common forwarding headers (`X-Request-Id`, `X-Trace-Id`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`) are set on proxied requests and are best confirmed from GateServer access logs or request logging when the upstream service is running.

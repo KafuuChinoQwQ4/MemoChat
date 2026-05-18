@@ -1,6 +1,6 @@
-param(
+﻿param(
     [string]$BaseUrl = "http://127.0.0.1",
-    [string]$ProbeRoute = "/__nginx_failover_probe",
+    [string]$ProbeRoute = "/__envoy_failover_probe",
     [int[]]$BackendPorts = @(8080, 8084),
     [switch]$StopBackend,
     [int]$StopBackendPort = 8080,
@@ -12,7 +12,7 @@ param(
     [int]$TimeoutSec = 5,
     [int[]]$AcceptableStatusCodes = @(200, 400, 401, 404, 405, 429),
     [switch]$AllowGatewayErrors,
-    [string]$NginxContainerName = "memochat-nginx-lb",
+    [string]$EnvoyContainerName = "memochat-envoy-gateway",
     [int]$DockerLogTail = 160,
     [string]$RestoreScript = "",
     [string]$RuntimeServicesDir = "infra/Memo_ops/runtime/services",
@@ -55,10 +55,33 @@ function Get-ListeningProcessIds {
         Select-Object -ExpandProperty OwningProcess -Unique)
 }
 
+function Test-TcpPortOpen {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$Port,
+        [int]$TimeoutMilliseconds = 1000
+    )
+
+    $client = [System.Net.Sockets.TcpClient]::new()
+    try {
+        $asyncResult = $client.BeginConnect("127.0.0.1", $Port, $null, $null)
+        if (-not $asyncResult.AsyncWaitHandle.WaitOne($TimeoutMilliseconds, $false)) {
+            return $false
+        }
+
+        $client.EndConnect($asyncResult)
+        return $true
+    } catch {
+        return $false
+    } finally {
+        $client.Close()
+    }
+}
+
 function Test-PortListening {
     param([Parameter(Mandatory = $true)][int]$Port)
 
-    return ((Get-ListeningProcessIds -Port $Port).Count -gt 0)
+    return ((Get-ListeningProcessIds -Port $Port).Count -gt 0) -or (Test-TcpPortOpen -Port $Port)
 }
 
 function Write-PortState {
@@ -69,6 +92,11 @@ function Write-PortState {
     foreach ($port in $Ports) {
         $pids = Get-ListeningProcessIds -Port $port
         if ($pids.Count -eq 0) {
+            if (Test-TcpPortOpen -Port $port) {
+                Write-Host "Port ${port}: reachable by TCP"
+                continue
+            }
+
             Write-Host "Port ${port}: not listening"
             $allListening = $false
             continue
@@ -104,7 +132,7 @@ function Invoke-Probe {
     $client = [System.Net.Http.HttpClient]::new()
     $client.Timeout = [TimeSpan]::FromSeconds($RequestTimeoutSec)
     $request = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Get, $Uri)
-    $request.Headers.TryAddWithoutValidation("X-MemoChat-Smoke", "nginx-failover") | Out-Null
+    $request.Headers.TryAddWithoutValidation("X-MemoChat-Smoke", "envoy-failover") | Out-Null
     $request.Headers.TryAddWithoutValidation("X-MemoChat-Smoke-Seq", [string]$RequestNumber) | Out-Null
 
     $startedAt = Get-Date
@@ -153,7 +181,7 @@ function Invoke-BoundedProbes {
         [int]$RequestTimeoutSec
     )
 
-    Write-Host "=== Nginx probes ==="
+    Write-Host "=== Envoy probes ==="
     Write-Host "Target: GET $Uri"
     Write-Host "Count: $Count"
     Write-Host "Accepted status codes: $($ExpectedStatusCodes -join ', ')"
@@ -178,33 +206,28 @@ function Invoke-BoundedProbes {
     return $results
 }
 
-function Show-NginxUpstreamLogSummary {
+function Show-EnvoyUpstreamLogSummary {
     param(
         [string]$ContainerName,
         [int]$Tail,
         [datetime]$Since
     )
 
-    Write-Host "=== Recent Nginx upstream_addr values ==="
+    Write-Host "=== Recent Envoy upstream_addr values ==="
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        $dockerArgs = @("logs", "--tail", [string]$Tail)
-        if ($Since) {
-            $dockerArgs += @("--since", $Since.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))
-        }
-        $dockerArgs += $ContainerName
-        $logs = @(& $DockerCli @dockerArgs 2>&1 | ForEach-Object { $_.ToString() })
+        $logs = @(& $DockerCli exec $ContainerName tail -n $Tail /var/log/envoy/access.json 2>&1 | ForEach-Object { $_.ToString() })
         $dockerExitCode = $LASTEXITCODE
     } catch {
-        Write-Host "Docker log check unavailable: $($_.Exception.Message)"
+        Write-Host "Envoy access log check unavailable: $($_.Exception.Message)"
         return $false
     } finally {
         $ErrorActionPreference = $previousErrorActionPreference
     }
 
     if ($dockerExitCode -ne 0) {
-        Write-Host "Docker log check unavailable: docker logs exited with $dockerExitCode."
+        Write-Host "Envoy access log check unavailable: docker exec exited with $dockerExitCode."
         return $false
     }
 
@@ -474,7 +497,7 @@ $ok = $true
 $stoppedProcess = $null
 $probeWindowStartedAt = Get-Date
 
-Write-Host "=== Nginx failover smoke ==="
+Write-Host "=== Envoy failover smoke ==="
 Write-Host "Mode: $(if ($StopBackend) { 'fault-injection' } else { 'non-destructive' })"
 Write-Host "Backend ports: $($BackendPorts -join ', ')"
 Write-Host "StopBackendPort: $StopBackendPort"
@@ -496,7 +519,7 @@ try {
             -RequestTimeoutSec $TimeoutSec
 
         $ok = $ok -and (($probeResults | Where-Object { $_.Accepted }).Count -eq $probeResults.Count)
-        $logsOk = Show-NginxUpstreamLogSummary -ContainerName $NginxContainerName -Tail $DockerLogTail -Since $probeWindowStartedAt
+        $logsOk = Show-EnvoyUpstreamLogSummary -ContainerName $EnvoyContainerName -Tail $DockerLogTail -Since $probeWindowStartedAt
         $ok = $ok -and $logsOk
     } else {
         $stoppedProcess = Stop-ListeningProcessForPort -Port $StopBackendPort
@@ -527,7 +550,7 @@ try {
         $acceptedCount = ($probeResults | Where-Object { $_.Accepted }).Count
         Write-Host "Accepted probes: $acceptedCount/$($probeResults.Count)"
         $ok = $ok -and ($acceptedCount -eq $probeResults.Count)
-        $logsOk = Show-NginxUpstreamLogSummary -ContainerName $NginxContainerName -Tail $DockerLogTail -Since $probeWindowStartedAt
+        $logsOk = Show-EnvoyUpstreamLogSummary -ContainerName $EnvoyContainerName -Tail $DockerLogTail -Since $probeWindowStartedAt
         $ok = $ok -and $logsOk
     }
 } catch {
@@ -557,3 +580,4 @@ try {
 if (-not $ok) {
     exit 1
 }
+

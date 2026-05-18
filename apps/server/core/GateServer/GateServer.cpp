@@ -9,10 +9,6 @@
 
 #include "../common/WinsockCompat.h"
 
-#include "GateHttp3Listener.h"
-#if MEMOCHAT_HAVE_NGHTTP2
-#include "NgHttp2Server.h"
-#endif
 #include "LogicSystem.h"
 #include "SnowflakeUtil.h"
 #include "CServer.h"
@@ -30,6 +26,7 @@
 #include "logging/TelemetryConfig.h"
 #include <chrono>
 #include <thread>
+#include <cstdlib>
 #include <aws/core/Aws.h>
 #include <iostream>
 #include "const.h"
@@ -100,52 +97,13 @@ int main(int argc, char* argv[]) {
         ioc.stop();
     });
 
-    // ── Start HTTP/3 listener on port gate_port + 1 (QUIC) ────────────────────
-#if MEMOCHAT_ENABLE_HTTP3
-    int http3_port = gate_port + 1;
-    std::string http3_error;
-    auto http3_listener = std::make_shared<GateHttp3Listener>(ioc, *LogicSystem::GetInstance(), http3_port);
-    if (http3_listener->Start(http3_error)) {
-        memolog::LogInfo("service.http3.start", "GateServer HTTP/3 listener started", {{"port", std::to_string(http3_port)}});
-    } else {
-        memolog::LogWarn("service.http3.start.fail", "GateServer HTTP/3 listener failed to start", {{"error", http3_error}});
-    }
-#endif
-
-    // ── Start HTTP/2 server (Boost.Asio + nghttp2) on port gate_port + 2 ──────
-#if MEMOCHAT_HAVE_NGHTTP2
-    std::thread h2_thread;
-    auto h2_port_str = cfgMgr.GetValue("GateServer", "Http2Port");
-    int h2_port = h2_port_str.empty() ? static_cast<int>(gate_port) + 2 : std::atoi(h2_port_str.c_str());
-    auto& h2_server = NgHttp2Server::GetInstance();
-    h2_server.SetPort(h2_port);
-    if (h2_server.Initialize()) {
-        memolog::LogInfo("service.http2.start", "GateServer HTTP/2 (nghttp2) initializing", {{"port", std::to_string(h2_port)}});
-        h2_thread = std::thread([&h2_server, h2_port]() {
-            memolog::LogInfo("service.http2.run", "NgHttp2Server thread started", {{"port", std::to_string(h2_port)}});
-            try {
-                h2_server.Run();
-            } catch (const std::exception& e) {
-                memolog::LogError("gate.http2.thread.exc", "NgHttp2Server thread threw uncaught exception", {{"error", e.what()}});
-            } catch (...) {
-                memolog::LogError("gate.http2.thread.exc", "NgHttp2Server thread threw unknown exception");
-            }
-            memolog::LogInfo("service.http2.stop", "NgHttp2Server thread stopped");
-        });
-    } else {
-        memolog::LogWarn("service.http2.init.fail", "NgHttp2Server Initialize() returned false — HTTP/2 disabled");
-    }
-#endif
+    memolog::LogInfo("gate.edge_protocols",
+        "GateServer embedded HTTP/2 and HTTP/3 entrypoints are disabled; Envoy serves HTTP/2 and HTTP/3 on 8443",
+        {});
 
     ioc.run();
 
     memolog::LogInfo("service.stop", "GateServer stopped");
-#if MEMOCHAT_HAVE_NGHTTP2
-    NgHttp2Server::GetInstance().Stop();
-    if (h2_thread.joinable()) {
-        h2_thread.join();
-    }
-#endif
     GateAsyncSideEffects::Instance().Stop();
     GateWorkerPool::GetInstance()->Stop();
     RedisMgr::GetInstance()->Close();

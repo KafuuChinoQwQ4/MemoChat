@@ -19,6 +19,8 @@
 #include <QSettings>
 #include <QJsonParseError>
 #include <QSet>
+#include <QSslConfiguration>
+#include <QSslSocket>
 
 namespace {
 constexpr auto kSettingsOrg = "MemoChat";
@@ -95,6 +97,19 @@ QJsonObject hostConfigFromVariant(const QVariantMap& host) {
 
 QString aiHttpModule() {
     return QStringLiteral("ai");
+}
+
+void applyLocalGateRequestOptions(QNetworkRequest& request) {
+    const QUrl url = request.url();
+    const QString scheme = url.scheme().toLower();
+    if (scheme == QLatin1String("https")) {
+        QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
+        sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
+        request.setSslConfiguration(sslConfig);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 9, 0)
+        request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);
+#endif
+    }
 }
 }
 
@@ -527,6 +542,7 @@ void AgentController::sendStreamMessage(const QString& content) {
     // 禁用缓存，保持连接
     request.setRawHeader("Cache-Control", "no-cache");
     request.setRawHeader("Connection", "keep-alive");
+    applyLocalGateRequestOptions(request);
 
     // 发送请求并处理流式响应
     QByteArray data = QJsonDocument(payload).toJson(QJsonDocument::Compact);
@@ -956,6 +972,7 @@ void AgentController::sendGameGet(const QUrl& url, const QString& op, const QStr
 
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+    applyLocalGateRequestOptions(request);
     QNetworkReply* reply = _gameNetwork->get(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply, op]() {
         const QByteArray body = reply->readAll();
@@ -986,6 +1003,7 @@ void AgentController::sendGamePost(const QUrl& url, const QJsonObject& payload, 
 
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+    applyLocalGateRequestOptions(request);
     QNetworkReply* reply = _gameNetwork->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
     connect(reply, &QNetworkReply::finished, this, [this, reply, op]() {
         const QByteArray body = reply->readAll();
@@ -1022,6 +1040,7 @@ void AgentController::sendGameDelete(const QUrl& url, const QString& op, const Q
 
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+    applyLocalGateRequestOptions(request);
     QNetworkReply* reply = _gameNetwork->deleteResource(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply, op]() {
         const QByteArray body = reply->readAll();

@@ -1,9 +1,8 @@
 param(
     [string]$ComposeFile = "infra/deploy/local/docker-compose.yml",
-    [string]$NginxContainerName = "memochat-nginx-lb",
-    [string]$ExporterContainerName = "memochat-nginx-exporter",
+    [string]$EnvoyContainerName = "memochat-envoy-gateway",
     [string]$PrometheusBaseUrl = "http://127.0.0.1:9090",
-    [string]$CurlImage = "curlimages/curl:8.10.1",
+    [string]$CurlImage = "alpine:3.20",
     [switch]$SkipPrometheus,
     [int]$TimeoutSec = 10
 )
@@ -24,27 +23,6 @@ function Resolve-ProjectPath {
     return Join-Path -Path $ProjectRoot -ChildPath $Path
 }
 
-function Invoke-DockerExecText {
-    param(
-        [Parameter(Mandatory = $true)][string]$ContainerName,
-        [Parameter(Mandatory = $true)][string[]]$Arguments
-    )
-
-    $previousErrorActionPreference = $ErrorActionPreference
-    try {
-        $ErrorActionPreference = "Continue"
-        $output = @(& $DockerCli exec $ContainerName @Arguments 2>&1 | ForEach-Object { $_.ToString() })
-        $exitCode = $LASTEXITCODE
-    } finally {
-        $ErrorActionPreference = $previousErrorActionPreference
-    }
-
-    return [pscustomobject]@{
-        ExitCode = $exitCode
-        Text     = ($output -join "`n")
-    }
-}
-
 function Invoke-ContainerNetworkHttpText {
     param(
         [Parameter(Mandatory = $true)][string]$ContainerName,
@@ -56,7 +34,14 @@ function Invoke-ContainerNetworkHttpText {
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        $output = @(& $DockerCli run --rm --network "container:$ContainerName" $Image -fsS --max-time $RequestTimeoutSec $Uri 2>&1 | ForEach-Object { $_.ToString() })
+        $wgetCommand = "wget -q -O - -T $RequestTimeoutSec '$Uri'"
+        $dockerArgs = @(
+            "run", "--rm",
+            "--network", "container:$ContainerName",
+            $Image,
+            "sh", "-ec", $wgetCommand
+        )
+        $output = @(& $DockerCli @dockerArgs 2>&1 | ForEach-Object { $_.ToString() })
         $exitCode = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previousErrorActionPreference
@@ -83,13 +68,9 @@ function Invoke-HttpText {
             Error      = $null
         }
     } catch {
-        $statusCode = $null
-        if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
-            $statusCode = [int]$_.Exception.Response.StatusCode
-        }
         return [pscustomobject]@{
             Ok         = $false
-            StatusCode = $statusCode
+            StatusCode = $null
             Text       = ""
             Error      = $_.Exception.Message
         }
@@ -148,10 +129,9 @@ if ($TimeoutSec -lt 1) {
 $composePath = Resolve-ProjectPath -Path $ComposeFile
 $ok = $true
 
-Write-Host "=== Nginx metrics smoke ==="
+Write-Host "=== Envoy metrics smoke ==="
 Write-Host "Compose: $composePath"
-Write-Host "Nginx container: $NginxContainerName"
-Write-Host "Exporter container: $ExporterContainerName"
+Write-Host "Envoy container: $EnvoyContainerName"
 Write-Host "Curl image: $CurlImage"
 
 Write-Host "=== Compose config ==="
@@ -170,20 +150,12 @@ if ($composeExitCode -eq 0) {
     $ok = $false
 }
 
-Write-Host "=== Nginx stub_status ==="
-$stub = Invoke-DockerExecText -ContainerName $NginxContainerName -Arguments @("wget", "-q", "-O", "-", "http://127.0.0.1:8081/stub_status")
-Write-Host $stub.Text
-if ($stub.ExitCode -ne 0 -or $stub.Text -notmatch "Active connections:" -or $stub.Text -notmatch "Reading:") {
-    Write-Host "Nginx stub_status check failed."
-    $ok = $false
-}
-
-Write-Host "=== Exporter metrics ==="
-$metrics = Invoke-ContainerNetworkHttpText -ContainerName $ExporterContainerName -Uri "http://127.0.0.1:9113/metrics" -Image $CurlImage -RequestTimeoutSec $TimeoutSec
-$metricLines = @($metrics.Text -split "`n" | Where-Object { $_ -match "^(nginx_up|nginx_connections_active|nginx_http_requests_total)" })
+Write-Host "=== Envoy admin stats ==="
+$stats = Invoke-ContainerNetworkHttpText -ContainerName $EnvoyContainerName -Uri "http://127.0.0.1:9901/stats/prometheus" -Image $CurlImage -RequestTimeoutSec $TimeoutSec
+$metricLines = @($stats.Text -split "`n" | Where-Object { $_ -match "^(envoy_server_live|envoy_http_downstream_rq_total|envoy_cluster_upstream_cx_connect_fail)" })
 $metricLines | Select-Object -First 20 | ForEach-Object { Write-Host $_ }
-if ($metrics.ExitCode -ne 0 -or $metrics.Text -notmatch "nginx_up 1") {
-    Write-Host "Exporter metrics check failed."
+if ($stats.ExitCode -ne 0 -or $stats.Text -notmatch "envoy_server_live") {
+    Write-Host "Envoy admin stats check failed."
     $ok = $false
 }
 
@@ -192,7 +164,7 @@ if (-not $SkipPrometheus) {
     $promReady = Invoke-HttpText -Uri "$($PrometheusBaseUrl.TrimEnd('/'))/-/ready" -RequestTimeoutSec $TimeoutSec
     if ($promReady.Ok) {
         Write-Host "Prometheus ready: HTTP $($promReady.StatusCode)"
-        $promOk = Test-PrometheusQuery -BaseUrl $PrometheusBaseUrl -Query 'nginx_up{job="nginx_gateway"}' -RequestTimeoutSec $TimeoutSec
+        $promOk = Test-PrometheusQuery -BaseUrl $PrometheusBaseUrl -Query 'envoy_server_live{job="envoy_gateway"}' -RequestTimeoutSec $TimeoutSec
         $ok = $ok -and $promOk
     } else {
         Write-Host "Prometheus ready check failed: $($promReady.Error)"

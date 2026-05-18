@@ -57,7 +57,8 @@ Write-Host "=== Step 2: Poll Redis for code ==="
 $code = $null
 for ($i = 0; $i -lt 20; $i++) {
     Start-Sleep -Milliseconds 300
-    $value = & $DockerCli exec -e REDISCLI_AUTH=123456 memochat-redis redis-cli GET "code_$Email" 2>$null
+    $dockerArgs = @("exec", "-e", "REDISCLI_AUTH=123456", "memochat-redis", "redis-cli", "GET", "code_$Email")
+    $value = & $DockerCli @dockerArgs 2>$null
     if ($LASTEXITCODE -eq 0 -and $value -and $value -ne "(nil)") {
         $code = [string]$value
         break

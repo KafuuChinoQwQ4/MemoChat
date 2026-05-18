@@ -2,52 +2,49 @@ name: memochat
 
 services:
   #######################
-  # Local HTTP Gateway
+  # Local Envoy Gateway
   #######################
-  memochat-nginx-lb:
-    image: nginx:1.26.2-alpine
-    container_name: memochat-nginx-lb
+  memochat-envoy-certgen:
+    image: envoyproxy/envoy:v1.38.0
+    container_name: memochat-envoy-certgen
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - /bin/sh /scripts/generate-envoy-certs.sh
+    volumes:
+      - ./compose/generate-envoy-certs.sh:/scripts/generate-envoy-certs.sh:ro
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/envoy/certs:/certs
+
+  memochat-envoy-gateway:
+    image: envoyproxy/envoy:v1.38.0
+    container_name: memochat-envoy-gateway
     restart: unless-stopped
+    entrypoint:
+      - /bin/sh
+      - -ec
     ports:
       - "80:80"
+      - "8443:8443/tcp"
+      - "8443:8443/udp"
     volumes:
-      - ./compose/nginx-local.conf:/etc/nginx/nginx.conf:ro
-      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/nginx/logs:/var/log/memochat/nginx
-    expose:
-      - "8081"
+      - ./compose/envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/envoy/certs:/etc/envoy/certs:ro
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/envoy/logs:/var/log/envoy
     command:
-      - /bin/sh
-      - -c
-      - |
-        set -eu
-        host_gateway_ipv4="$$(awk '$$2 == "host-gateway" && $$1 ~ /^[0-9.]+$$/ { print $$1; exit }' /etc/hosts)"
-        if [ -z "$$host_gateway_ipv4" ]; then
-          echo "Unable to resolve an IPv4 host-gateway address" >&2
-          exit 1
-        fi
-        printf '%s\tmemochat-host-gateway-ipv4\n' "$$host_gateway_ipv4" >> /etc/hosts
-        exec nginx -g 'daemon off;'
+      - exec envoy -c /etc/envoy/envoy.yaml
     extra_hosts:
       - "host.docker.internal:host-gateway"
       - "host-gateway:host-gateway"
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/health | grep -q OK"]
+      test: ["CMD-SHELL", "envoy --mode validate -c /etc/envoy/envoy.yaml >/dev/null 2>&1"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
-
-  memochat-nginx-exporter:
-    image: nginx/nginx-prometheus-exporter:1.5.1
-    container_name: memochat-nginx-exporter
-    restart: unless-stopped
-    command:
-      - --nginx.scrape-uri=http://memochat-nginx-lb:8081/stub_status
     depends_on:
-      memochat-nginx-lb:
-        condition: service_healthy
-    expose:
-      - "9113"
+      memochat-envoy-certgen:
+        condition: service_completed_successfully
 
   #######################
   # Data Stores
@@ -174,7 +171,7 @@ services:
     depends_on:
       - memochat-influxdb
       - memochat-alertmanager
-      - memochat-nginx-exporter
+      - memochat-envoy-gateway
 
   memochat-alertmanager:
     image: prom/alertmanager:v0.27.0
@@ -268,7 +265,7 @@ services:
       - ./observability/otel/config.yaml:/etc/otelcol-contrib/config.yaml:ro
       - ../../Memo_ops/runtime:/workspace/Memo_ops/runtime:ro
       - ../../../build/bin:/workspace/build/bin:ro
-      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/nginx/logs:/workspace/nginx/logs:ro
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/envoy/logs:/workspace/envoy/logs:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

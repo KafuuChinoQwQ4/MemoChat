@@ -39,6 +39,7 @@ constexpr const char* kJmImageBase = "https://cdn-msp.jmapinodeudzn.net";
 constexpr const char* kJmImageHost = "cdn-msp.jmapinodeudzn.net";
 constexpr const char* kJmVersion = "2.0.16";
 constexpr const char* kJmPackageName = "com.example.app";
+constexpr int kR18SearchPageSize = 40;
 constexpr int kJmApiTimeoutSeconds = 6;
 constexpr int kJmImageTimeoutSeconds = 5;
 constexpr int kMaxConcurrentJmImageFetches = 2;
@@ -673,24 +674,30 @@ JsonValue ErrorData(const std::string& source_id, const std::string& message)
 
 JsonValue JmSearch(const std::string& keyword, int page, int uid, const std::string& token)
 {
+    const int normalized_page = page < 1 ? 1 : page;
     const std::string normalized_keyword = keyword.empty() ? "" : UrlEncode(keyword);
     std::string target = "/search?search_query=" + normalized_keyword + "&o=mr";
-    if (page > 1) {
-        target += "&page=" + std::to_string(page);
+    if (normalized_page > 1) {
+        target += "&page=" + std::to_string(normalized_page);
     }
     const JsonValue result = JmApiGet(target);
 
     JsonValue data;
     data["source_id"] = kJmSourceId;
     data["keyword"] = keyword;
-    data["page"] = page;
+    data["page"] = normalized_page;
     data["items"] = JsonValue{json::array_t{}};
-    data["max_page"] = static_cast<int64_t>((FieldInt(result, "total", 0) + 79) / 80);
+    data["max_page"] = static_cast<int64_t>((FieldInt(result, "total", 0) + kR18SearchPageSize - 1) / kR18SearchPageSize);
 
     const JsonValue content = json::glaze_get(result, "content");
     if (const auto* items = json::glaze_get_array(content)) {
+        int count = 0;
         for (const auto& entry : *items) {
+            if (count >= kR18SearchPageSize) {
+                break;
+            }
             json::glaze_append(data["items"], JmComicToJson(JsonValue(entry), uid, token));
+            ++count;
         }
     }
     return data;
@@ -798,28 +805,7 @@ R18SourceService::R18SourceService()
 
 void R18SourceService::InstallBuiltinSourcesLocked()
 {
-    R18SourceRecord mock;
-    mock.id = kMockSourceId;
-    mock.name = "Mock C++ Source";
-    mock.version = "1.0.0";
-    mock.format = "native";
-    mock.enabled = true;
-    mock.builtin = true;
-    mock.status = "ok";
-    mock.message = "Built-in preview source.";
-    sources_[mock.id] = mock;
-
-    R18SourceRecord jm;
-    jm.id = kJmSourceId;
-    jm.name = "禁漫天堂 官方";
-    jm.version = kJmVersion;
-    jm.format = "official-http";
-    jm.source_url = "https://www.cdnsha.org";
-    jm.enabled = true;
-    jm.builtin = true;
-    jm.status = "ok";
-    jm.message = "MemoChat direct adapter for the official JM mobile API.";
-    sources_[jm.id] = jm;
+    // Intentionally empty: the source list now starts with no preloaded sources.
 }
 
 JsonValue R18SourceService::ListSources()
@@ -951,6 +937,7 @@ JsonValue R18SourceService::Search(const std::string& source_id,
     data["keyword"] = keyword;
     data["page"] = page;
     data["items"] = JsonValue{json::array_t{}};
+    data["max_page"] = 1;
 
     JsonValue first;
     first["source_id"] = source_id;

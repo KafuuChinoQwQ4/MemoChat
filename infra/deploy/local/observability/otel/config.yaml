@@ -15,9 +15,9 @@ receivers:
     operators:
       - type: json_parser
         parse_from: body
-  filelog/nginx:
+  filelog/envoy:
     include:
-      - /workspace/nginx/logs/access.json
+      - /workspace/envoy/logs/access.json
     start_at: end
     operators:
       - type: json_parser
@@ -25,13 +25,13 @@ receivers:
         parse_to: attributes
 
 processors:
-  attributes/nginx_loki:
+  attributes/envoy_loki:
     actions:
       - key: service
-        value: memochat-nginx-lb
+        value: memochat-envoy-gateway
         action: upsert
       - key: component
-        value: nginx_gateway
+        value: envoy_gateway
         action: upsert
       - key: loki.attribute.labels
         value: service,component
@@ -61,7 +61,7 @@ service:
       receivers: [filelog]
       processors: [batch]
       exporters: [loki, debug]
-    logs/nginx:
-      receivers: [filelog/nginx]
-      processors: [attributes/nginx_loki, batch]
+    logs/envoy:
+      receivers: [filelog/envoy]
+      processors: [attributes/envoy_loki, batch]
       exporters: [loki]

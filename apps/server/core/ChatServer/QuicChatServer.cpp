@@ -15,7 +15,9 @@
 
 #if MEMOCHAT_ENABLE_MSQUIC
 #include "../common/WinSdkCompat.h"
+#ifdef _WIN32
 #include <wincrypt.h>
+#endif
 #include <msquic.h>
 #endif
 
@@ -80,7 +82,7 @@ struct QuicChatServer::Impl {
         bool recv_pending = false;
         short msg_id = 0;
         short msg_len = 0;
-        bool start_complete = false;
+        bool send_ready = false;
         std::vector<std::pair<short, std::string>> pending_sends;
     };
 
@@ -101,6 +103,7 @@ struct QuicChatServer::Impl {
     void shutdownHandles();
     static void closeConnectionHandles(Impl* impl, ConnectionContext* ctx);
     static void dispatchFrames(StreamContext* stream_context);
+    static void flushPendingSends(StreamContext* stream_context);
 };
 #else
 struct QuicChatServer::Impl {
@@ -160,11 +163,10 @@ bool QuicChatServer::Impl::ensureInitialized(QuicChatServer* owner, std::string*
     std::string pfx_file  = ReadConfigOrDefault("Quic", "PfxFile", "");
     std::string pfx_password = ReadConfigOrDefault("Quic", "PfxPassword", "");
     std::string cert_thumbprint = ReadConfigOrDefault("Quic", "CertThumbprint", "");
-    std::string cert_store_name = ReadConfigOrDefault("Quic", "CertStore", "My");
-    std::string cert_store_location = ReadConfigOrDefault("Quic", "CertStoreLocation", "CurrentUser");
 
     bool cred_loaded = false;
 
+#ifdef _WIN32
     // Approach 1: Try CERTIFICATE_CONTEXT via Windows Certificate Store (thumbprint)
     if (!cred_loaded && !cert_thumbprint.empty()) {
         HCERTSTORE hStore = CertOpenSystemStoreW(NULL, L"My");
@@ -205,6 +207,7 @@ bool QuicChatServer::Impl::ensureInitialized(QuicChatServer* owner, std::string*
             CertCloseStore(hStore, 0);
         }
     }
+#endif
 
     // Approach 2: Try CERTIFICATE_FILE_PROTECTED (cert + key with password)
     if (!cred_loaded && !cert_file.empty() && !key_file.empty()) {
@@ -379,6 +382,40 @@ void QuicChatServer::Impl::dispatchFrames(StreamContext* stream_context)
 #endif
 
 #if MEMOCHAT_ENABLE_MSQUIC
+void QuicChatServer::Impl::flushPendingSends(StreamContext* stream_context)
+{
+    if (stream_context == nullptr ||
+        stream_context->connection == nullptr ||
+        stream_context->connection->api == nullptr ||
+        stream_context->connection->stream == nullptr ||
+        !stream_context->send_ready) {
+        return;
+    }
+
+    for (auto& [msgid, payload] : stream_context->pending_sends) {
+        auto* send_ctx = new Impl::SendContext();
+        send_ctx->bytes = EncodeFrame(msgid, payload);
+        send_ctx->buffer.Buffer = send_ctx->bytes.data();
+        send_ctx->buffer.Length = static_cast<uint32_t>(send_ctx->bytes.size());
+        const QUIC_STATUS send_status = stream_context->connection->api->StreamSend(
+            stream_context->connection->stream,
+            &send_ctx->buffer,
+            1,
+            QUIC_SEND_FLAG_NONE,
+            send_ctx);
+        if (QUIC_FAILED(send_status)) {
+            delete send_ctx;
+            if (stream_context->connection->session) {
+                stream_context->connection->session->Close();
+            }
+            return;
+        }
+    }
+    stream_context->pending_sends.clear();
+}
+#endif
+
+#if MEMOCHAT_ENABLE_MSQUIC
 QUIC_STATUS QUIC_API QuicChatServer::Impl::ListenerCallback(HQUIC, void* context, QUIC_LISTENER_EVENT* event)
 {
     auto* owner = static_cast<QuicChatServer*>(context);
@@ -407,7 +444,7 @@ QUIC_STATUS QUIC_API QuicChatServer::Impl::ListenerCallback(HQUIC, void* context
             }
 
             QUIC_SEND_FLAGS flags = QUIC_SEND_FLAG_NONE;
-            if (!ctx->start_complete) {
+            if (!ctx->send_ready) {
                 ctx->pending_sends.emplace_back(msgid, payload);
                 return true;
             }
@@ -473,11 +510,13 @@ QUIC_STATUS QUIC_API QuicChatServer::Impl::ConnectionCallback(HQUIC connection, 
         ctx->stream = event->PEER_STREAM_STARTED.Stream;
         ctx->stream_context = std::make_unique<StreamContext>();
         ctx->stream_context->connection = ctx;
+        ctx->stream_context->send_ready = true;
         impl->api->SetCallbackHandler(
             ctx->stream,
             reinterpret_cast<void*>(StreamCallback),
             ctx->stream_context.get());
         impl->api->StreamStart(ctx->stream, QUIC_STREAM_START_FLAG_IMMEDIATE);
+        Impl::flushPendingSends(ctx->stream_context.get());
         return QUIC_STATUS_SUCCESS;
     case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_TRANSPORT:
     case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_PEER:
@@ -508,22 +547,8 @@ QUIC_STATUS QUIC_API QuicChatServer::Impl::StreamCallback(HQUIC stream, void* co
 
     switch (event->Type) {
     case QUIC_STREAM_EVENT_START_COMPLETE:
-        stream_context->start_complete = true;
-        if (stream_context->connection != nullptr && stream_context->connection->api != nullptr) {
-            for (auto& [msgid, payload] : stream_context->pending_sends) {
-                auto* send_ctx = new Impl::SendContext();
-                send_ctx->bytes = EncodeFrame(msgid, payload);
-                send_ctx->buffer.Buffer = send_ctx->bytes.data();
-                send_ctx->buffer.Length = static_cast<uint32_t>(send_ctx->bytes.size());
-                stream_context->connection->api->StreamSend(
-                    stream_context->connection->stream,
-                    &send_ctx->buffer,
-                    1,
-                    QUIC_SEND_FLAG_NONE,
-                    send_ctx);
-            }
-            stream_context->pending_sends.clear();
-        }
+        stream_context->send_ready = true;
+        flushPendingSends(stream_context);
         return QUIC_STATUS_SUCCESS;
     case QUIC_STREAM_EVENT_RECEIVE:
         for (uint32_t i = 0; i < event->RECEIVE.BufferCount; ++i) {

@@ -355,7 +355,7 @@ Rectangle {
 
     function mediaUrl(key) {
         if (!key) return ""
-        return gate_url_prefix + "/media/download?asset=" + key
+        return gateMediaUrlPrefix + "/media/download?asset=" + key
     }
 
     function itemType(item) {

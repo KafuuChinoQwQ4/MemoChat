@@ -1,10 +1,10 @@
-param(
+﻿param(
     [string]$BaseUrl = "http://127.0.0.1",
     [string]$LokiUrl = "http://127.0.0.1:3100",
-    [string]$ProbePath = "/__nginx_loki_probe",
+    [string]$ProbePath = "/__envoy_loki_probe",
     [string]$RequestId,
     [string]$TraceId,
-    [string]$AccessLogPath = "\\wsl.localhost\archlinux\data\docker-data\memochat\nginx\logs\access.json",
+    [string]$AccessLogPath = "\\wsl.localhost\archlinux\data\docker-data\memochat\envoy\logs\access.json",
     [switch]$SkipAccessLogFileCheck,
     [int]$TimeoutSec = 5,
     [int]$FileWaitSec = 10,
@@ -78,7 +78,7 @@ function Read-WebErrorBody {
     }
 }
 
-function Invoke-NginxRequestProbe {
+function Invoke-EnvoyRequestProbe {
     param(
         [string]$Endpoint,
         [string]$PathAndQuery,
@@ -146,7 +146,7 @@ function Invoke-NginxRequestProbe {
     }
 }
 
-function Invoke-NginxHealthProbe {
+function Invoke-EnvoyHealthProbe {
     param(
         [string]$Endpoint,
         [string]$ExpectedRequestId,
@@ -154,7 +154,7 @@ function Invoke-NginxHealthProbe {
         [int]$RequestTimeoutSec
     )
 
-    return Invoke-NginxRequestProbe `
+    return Invoke-EnvoyRequestProbe `
         -Endpoint $Endpoint `
         -PathAndQuery $ProbePath `
         -ExpectedRequestId $ExpectedRequestId `
@@ -295,7 +295,7 @@ function Invoke-LokiRequestIdQuery {
             $lines += $line
             Add-StatusCountFromLine -StatusCounts $statusCounts -Line $line
 
-            $jsonEntry = ConvertTo-NginxLogObject -Line $line
+            $jsonEntry = ConvertTo-EnvoyLogObject -Line $line
             if ($jsonEntry) {
                 $jsonEntries += @($jsonEntry)
             }
@@ -313,7 +313,7 @@ function Invoke-LokiRequestIdQuery {
     }
 }
 
-function ConvertTo-NginxLogObject {
+function ConvertTo-EnvoyLogObject {
     param([string]$Line)
 
     if (-not $Line) {
@@ -451,10 +451,10 @@ function Test-LokiRedaction {
 }
 
 if (-not $RequestId) {
-    $RequestId = New-SmokeCorrelationId -Prefix "nginx-loki-request"
+    $RequestId = New-SmokeCorrelationId -Prefix "envoy-loki-request"
 }
 if (-not $TraceId) {
-    $TraceId = New-SmokeCorrelationId -Prefix "nginx-loki-trace"
+    $TraceId = New-SmokeCorrelationId -Prefix "envoy-loki-trace"
 }
 if ($TimeoutSec -lt 1) {
     $TimeoutSec = 1
@@ -471,13 +471,13 @@ if ($LokiLimit -lt 1) {
 
 $queryStartUtc = [DateTime]::UtcNow.AddSeconds(-30)
 $logQLRequestId = ConvertTo-LogQLStringLiteral -Text $RequestId
-$lokiExpression = '{service="memochat-nginx-lb"} |= ' + $logQLRequestId
-$redactionRequestId = New-SmokeCorrelationId -Prefix "nginx-loki-redact-request"
-$redactionTraceId = New-SmokeCorrelationId -Prefix "nginx-loki-redact-trace"
-$redactionSecret = "nginx-loki-secret-$([guid]::NewGuid().ToString('N'))"
+$lokiExpression = '{service="memochat-envoy-gateway"} |= ' + $logQLRequestId
+$redactionRequestId = New-SmokeCorrelationId -Prefix "envoy-loki-redact-request"
+$redactionTraceId = New-SmokeCorrelationId -Prefix "envoy-loki-redact-trace"
+$redactionSecret = "envoy-loki-secret-$([guid]::NewGuid().ToString('N'))"
 $redactionPath = "/media/download?token=$redactionSecret&asset=loki-smoke"
 $logQLRedactionRequestId = ConvertTo-LogQLStringLiteral -Text $redactionRequestId
-$redactionLokiExpression = '{service="memochat-nginx-lb"} |= ' + $logQLRedactionRequestId
+$redactionLokiExpression = '{service="memochat-envoy-gateway"} |= ' + $logQLRedactionRequestId
 
 Write-Host "RequestId: $RequestId"
 Write-Host "TraceId: $TraceId"
@@ -487,8 +487,8 @@ Write-Host "RedactionTraceId: $redactionTraceId"
 Write-Host "RedactionPath: /media/download?token=<redacted>&asset=loki-smoke"
 Write-Host "RedactionLokiExpression: $redactionLokiExpression"
 
-$ok = Invoke-NginxHealthProbe -Endpoint $BaseUrl -ExpectedRequestId $RequestId -ExpectedTraceId $TraceId -RequestTimeoutSec $TimeoutSec
-$redactionProbeOk = Invoke-NginxRequestProbe `
+$ok = Invoke-EnvoyHealthProbe -Endpoint $BaseUrl -ExpectedRequestId $RequestId -ExpectedTraceId $TraceId -RequestTimeoutSec $TimeoutSec
+$redactionProbeOk = Invoke-EnvoyRequestProbe `
     -Endpoint $BaseUrl `
     -PathAndQuery $redactionPath `
     -ExpectedRequestId $redactionRequestId `
@@ -569,3 +569,4 @@ if (-not $redactionLokiQuery.Matched) {
 if (-not $ok) {
     exit 1
 }
+

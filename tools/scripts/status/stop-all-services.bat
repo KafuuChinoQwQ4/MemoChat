@@ -1,8 +1,8 @@
 @echo off
 REM ============================================================
 REM  MemoChat 一键停止所有可执行进程
-REM  注意: 此脚本只停止 exe 进程，不关闭 Docker 容器
-REM  Docker 容器在 Arch Linux native Docker 中，需用 tools\scripts\docker\arch-docker.cmd 停止
+REM  注意: 此脚本默认停止本地 exe 进程和 Docker Envoy Gateway
+REM  其它 Docker 依赖容器保留运行
 REM
 REM  停止顺序 (大致逆序):
 REM    Tier 5: QML 客户端
@@ -11,7 +11,8 @@ REM    Tier 3: VarifyServer (Node.js)
 REM    Tier 2: C++ 后端服务
 REM
 REM  用法:
-REM    stop-all-services.bat  仅停止所有 exe 进程 (保留 Docker 容器)
+REM    stop-all-services.bat  停止 exe 进程和 Envoy Gateway
+REM    set MEMOCHAT_STOP_ENVOY=0 可保留 Envoy Gateway
 REM ============================================================
 setlocal enabledelayedexpansion
 
@@ -19,10 +20,11 @@ cd /d "%~dp0..\..\.."
 set "PROJECT_ROOT=%CD%"
 set "MEMO_OPS_ROOT=%PROJECT_ROOT%\infra\Memo_ops"
 set "DOCKER=%PROJECT_ROOT%\tools\scripts\docker\arch-docker.cmd"
+set "LOCAL_COMPOSE_FILE=%PROJECT_ROOT%\infra\deploy\local\docker-compose.yml"
 
 echo.
 echo ============================================================
-echo  MemoChat 一键停止 (仅停止 exe 进程)
+echo  MemoChat 一键停止 (exe 进程 + Envoy Gateway)
 echo ============================================================
 echo.
 
@@ -86,14 +88,24 @@ call :check "ChatServer.exe"           "ChatServer"
 call :check "StatusServer.exe"         "StatusServer"
 
 echo.
-echo  Docker 容器 (保持运行):
+echo [STEP] Stop Docker Envoy Gateway
+if "%MEMOCHAT_STOP_ENVOY%"=="0" (
+    echo   [SKIP] Envoy Gateway stop disabled
+) else if not exist "%LOCAL_COMPOSE_FILE%" (
+    echo   [WARN] Local compose file not found: %LOCAL_COMPOSE_FILE%
+) else (
+    "%DOCKER%" compose -f "%LOCAL_COMPOSE_FILE%" stop memochat-envoy-gateway
+)
+
+echo.
+echo  非 Envoy Docker 依赖容器 (保持运行):
 "%DOCKER%" ps --filter "name=memochat" --format "table {{.Names}}\t{{.Status}}"
 
 echo.
 echo  重新启动 exe 进程:
 echo   .\scripts\status\start-all-services.bat
 echo.
-echo  停止 Docker 容器 (如需):
+echo  停止所有 Docker 容器 (如需):
 echo   tools\scripts\docker\arch-docker.cmd compose -f infra\deploy\local\docker-compose.yml down
 echo.
 exit /b 0

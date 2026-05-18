@@ -9,12 +9,14 @@ BUILD_DIR="${MEMOCHAT_BUILD_DIR:-build-linux-full-gcc16}"
 BUILD_BIN="${MEMOCHAT_BUILD_BIN:-${BUILD_DIR}/bin}"
 BUILD_PARALLEL="${MEMOCHAT_BUILD_PARALLEL:-12}"
 AI_COMPOSE_FILE="${MEMOCHAT_AI_COMPOSE_FILE:-apps/server/core/AIOrchestrator/docker-compose.yml}"
+LOCAL_COMPOSE_FILE="${MEMOCHAT_LOCAL_COMPOSE_FILE:-infra/deploy/local/docker-compose.yml}"
 CLIENT_EXE="${MEMOCHAT_CLIENT_EXE:-${BUILD_BIN}/MemoChatQml}"
 RUN_CLIENT=1
 RUN_BUILD=1
 RUN_AI_BUILD=1
 RUN_DEPLOY=1
 RUN_BACKEND=1
+RUN_ENVOY=1
 RUN_GPT_SOVITS=1
 CLIENT_DIAGNOSE=0
 APP_ARGS=()
@@ -30,6 +32,7 @@ Options:
   --skip-ai-build    Skip AI Orchestrator docker compose rebuild.
   --skip-deploy      Skip service deploy.
   --skip-backend     Skip backend service startup.
+  --skip-envoy       Do not start/check the local Docker Envoy gateway.
   --skip-gpt-sovits  Do not start the local GPT-SoVITS voice service.
   --no-client        Do not launch MemoChatQml after backend startup.
   --client-diagnose  Print WSLg/Qt/client diagnostics instead of launching.
@@ -40,7 +43,8 @@ Options:
 Environment overrides:
   MEMOCHAT_ENV_FILE, MEMOCHAT_CMAKE_PRESET, MEMOCHAT_BUILD_DIR,
   MEMOCHAT_BUILD_BIN, MEMOCHAT_BUILD_PARALLEL, MEMOCHAT_AI_COMPOSE_FILE,
-  MEMOCHAT_CLIENT_EXE, MEMOCHAT_START_GPT_SOVITS.
+  MEMOCHAT_LOCAL_COMPOSE_FILE, MEMOCHAT_CLIENT_EXE, MEMOCHAT_START_ENVOY,
+  MEMOCHAT_START_GPT_SOVITS.
 USAGE
 }
 
@@ -60,6 +64,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-backend)
             RUN_BACKEND=0
+            shift
+            ;;
+        --skip-envoy|--no-envoy)
+            RUN_ENVOY=0
             shift
             ;;
         --skip-gpt-sovits|--no-gpt-sovits)
@@ -127,6 +135,10 @@ DISPLAY_GPT_SOVITS="$RUN_GPT_SOVITS"
 if [[ "$RUN_GPT_SOVITS" -eq 1 && "${MEMOCHAT_START_GPT_SOVITS:-}" == "0" ]]; then
     DISPLAY_GPT_SOVITS=0
 fi
+DISPLAY_ENVOY="$RUN_ENVOY"
+if [[ "$RUN_ENVOY" -eq 1 && "${MEMOCHAT_START_ENVOY:-}" == "0" ]]; then
+    DISPLAY_ENVOY=0
+fi
 
 echo "============================================================"
 echo "  MemoChat Linux full-stack launcher"
@@ -135,6 +147,8 @@ echo "  PRESET:           ${PRESET}"
 echo "  BUILD_BIN:        ${BUILD_BIN}"
 echo "  BUILD_PARALLEL:   ${BUILD_PARALLEL}"
 echo "  AI_COMPOSE_FILE:  ${AI_COMPOSE_FILE}"
+echo "  LOCAL_COMPOSE:    ${LOCAL_COMPOSE_FILE}"
+echo "  ENVOY_GATEWAY:    ${DISPLAY_ENVOY}"
 echo "  GPT_SOVITS:       ${DISPLAY_GPT_SOVITS}"
 echo "  CLIENT_EXE:       ${CLIENT_EXE}"
 echo "============================================================"
@@ -163,6 +177,9 @@ fi
 
 if [[ "$RUN_BACKEND" -eq 1 ]]; then
     start_backend_args=("${SCRIPT_DIR}/start-all-services.sh" --no-deploy)
+    if [[ "$RUN_ENVOY" -eq 0 ]]; then
+        start_backend_args+=(--skip-envoy)
+    fi
     if [[ "$RUN_GPT_SOVITS" -eq 0 ]]; then
         start_backend_args+=(--skip-gpt-sovits)
     fi

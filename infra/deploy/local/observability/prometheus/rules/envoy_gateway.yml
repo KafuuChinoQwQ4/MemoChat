@@ -1,0 +1,65 @@
+groups:
+  - name: memochat-envoy-gateway
+    rules:
+      - alert: EnvoyGatewayScrapeMissing
+        expr: absent(up{job="envoy_gateway"})
+        for: 2m
+        labels:
+          severity: critical
+          service: envoy_gateway
+        annotations:
+          summary: "Envoy gateway scrape target is missing"
+          description: "Prometheus has no up{} series for job=envoy_gateway. Check the Prometheus scrape config and the memochat-envoy-gateway service."
+
+      - alert: EnvoyGatewayDown
+        expr: up{job="envoy_gateway"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: envoy_gateway
+        annotations:
+          summary: "Envoy gateway is down"
+          description: "Prometheus cannot scrape memochat-envoy-gateway on {{ $labels.instance }}."
+
+      - alert: EnvoyGatewayListenerDown
+        expr: envoy_server_live{job="envoy_gateway"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: envoy_gateway
+        annotations:
+          summary: "Envoy gateway admin endpoint is unhealthy"
+          description: "The Envoy admin stats endpoint reports envoy_server_live=0 for {{ $labels.instance }}."
+
+      - alert: EnvoyGatewayHttp5xxSpike
+        expr: |
+          sum by (instance) (rate(envoy_http_downstream_rq_5xx{job="envoy_gateway"}[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+          service: envoy_gateway
+        annotations:
+          summary: "Envoy gateway 5xx rate is high"
+          description: "Envoy has been serving more than 1 downstream 5xx request per second for 10 minutes on {{ $labels.instance }}."
+
+      - alert: EnvoyGatewayListenerTrafficStalled
+        expr: |
+          increase(envoy_http_downstream_rq_total{job="envoy_gateway"}[30m]) == 0
+        for: 15m
+        labels:
+          severity: warning
+          service: envoy_gateway
+        annotations:
+          summary: "Envoy gateway traffic is stalled"
+          description: "The Envoy gateway is up, but downstream HTTP traffic has not increased for 30 minutes on {{ $labels.instance }}."
+
+      - alert: EnvoyGatewayUpstreamCxFailure
+        expr: |
+          sum by (instance) (rate(envoy_cluster_upstream_cx_connect_fail{job="envoy_gateway"}[5m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: envoy_gateway
+        annotations:
+          summary: "Envoy upstream connect failures detected"
+          description: "Envoy has been reporting upstream connection failures for 10 minutes on {{ $labels.instance }}."

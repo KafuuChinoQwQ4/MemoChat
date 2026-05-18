@@ -13,9 +13,9 @@
       "tags": [],
       "targetBlank": false,
       "title": "Explore Gateway Logs",
-      "tooltip": "Open Loki Explore for Nginx gateway logs",
+      "tooltip": "Open Loki Explore for Envoy gateway logs",
       "type": "link",
-      "url": "/explore?orgId=1&left=%7B%22datasource%22:%22loki%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bservice%3D%5C%22memochat-nginx-lb%5C%22%7D%20%7C%20json%22%7D%5D,%22range%22:%7B%22from%22:%22now-1h%22,%22to%22:%22now%22%7D%7D"
+      "url": "/explore?orgId=1&left=%7B%22datasource%22:%22loki%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bservice%3D%5C%22memochat-envoy-gateway%5C%22%7D%20%7C%20json%22%7D%5D,%22range%22:%7B%22from%22:%22now-1h%22,%22to%22:%22now%22%7D%7D"
     }
   ],
   "panels": [
@@ -83,12 +83,12 @@
       },
       "targets": [
         {
-          "expr": "nginx_up{job=\"nginx_gateway\"}",
-          "legendFormat": "nginx",
+          "expr": "envoy_server_live{job=\"envoy_gateway\"}",
+          "legendFormat": "envoy",
           "refId": "A"
         }
       ],
-      "title": "Gateway Exporter",
+      "title": "Gateway Live",
       "type": "stat"
     },
     {
@@ -120,8 +120,8 @@
       },
       "targets": [
         {
-          "expr": "rate(nginx_http_requests_total{job=\"nginx_gateway\"}[5m])",
-          "legendFormat": "{{instance}}",
+          "expr": "sum(rate(envoy_http_downstream_rq_total{job=\"envoy_gateway\"}[5m]))",
+          "legendFormat": "requests",
           "refId": "A"
         }
       ],
@@ -157,24 +157,14 @@
       },
       "targets": [
         {
-          "expr": "nginx_connections_active{job=\"nginx_gateway\"}",
+          "expr": "sum(envoy_listener_downstream_cx_active{job=\"envoy_gateway\"})",
           "legendFormat": "active",
           "refId": "A"
         },
         {
-          "expr": "nginx_connections_reading{job=\"nginx_gateway\"}",
-          "legendFormat": "reading",
+          "expr": "sum(rate(envoy_listener_downstream_cx_total{job=\"envoy_gateway\"}[5m]))",
+          "legendFormat": "new connections",
           "refId": "B"
-        },
-        {
-          "expr": "nginx_connections_writing{job=\"nginx_gateway\"}",
-          "legendFormat": "writing",
-          "refId": "C"
-        },
-        {
-          "expr": "nginx_connections_waiting{job=\"nginx_gateway\"}",
-          "legendFormat": "waiting",
-          "refId": "D"
         }
       ],
       "title": "Connections",
@@ -209,7 +199,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (attributes_route_family, attributes_status_class) (count_over_time({service=\"memochat-nginx-lb\"} | json [$__interval]))",
+          "expr": "sum by (attributes_route_family, attributes_status_class) (count_over_time({service=\"memochat-envoy-gateway\"} | json [$__interval]))",
           "legendFormat": "{{attributes_route_family}} {{attributes_status_class}}",
           "refId": "A"
         }
@@ -246,7 +236,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (attributes_route_family, attributes_status_class) (count_over_time({service=\"memochat-nginx-lb\"} | json | attributes_status_class=\"5xx\" [$__interval]))",
+          "expr": "sum by (attributes_route_family, attributes_status_class) (count_over_time({service=\"memochat-envoy-gateway\"} | json | attributes_status_class=\"5xx\" [$__interval]))",
           "legendFormat": "{{attributes_route_family}} {{attributes_status_class}}",
           "refId": "A"
         }
@@ -292,7 +282,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (attributes_route_family, attributes_status_class, attributes_uri_path) (count_over_time({service=\"memochat-nginx-lb\"} | json [$__range]))",
+          "expr": "sum by (attributes_route_family, attributes_status_class, attributes_uri_path) (count_over_time({service=\"memochat-envoy-gateway\"} | json [$__range]))",
           "format": "table",
           "instant": true,
           "legendFormat": "{{attributes_route_family}} {{attributes_status_class}} {{attributes_uri_path}}",
@@ -326,7 +316,7 @@
       },
       "targets": [
         {
-          "expr": "{service=\"memochat-nginx-lb\"} | json | line_format \"{{.attributes_method}} {{.attributes_uri_path}} status={{.attributes_status}} class={{.attributes_status_class}} route={{.attributes_route_family}} rt={{.attributes_request_time}}s upstream={{.attributes_upstream_status}}\"",
+          "expr": "{service=\"memochat-envoy-gateway\"} | json | line_format \"{{.attributes_method}} {{.attributes_uri_path}} status={{.attributes_status}} class={{.attributes_status_class}} route={{.attributes_route_family}} rt={{.attributes_request_time}}ms upstream={{.attributes_upstream_status}}\"",
           "refId": "A"
         }
       ],
@@ -339,7 +329,7 @@
   "style": "dark",
   "tags": [
     "memochat",
-    "nginx",
+    "envoy",
     "gateway"
   ],
   "templating": {
@@ -351,8 +341,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Nginx Gateway",
-  "uid": "memochat-nginx-gateway",
+  "title": "Envoy Gateway",
+  "uid": "memochat-envoy-gateway",
   "version": 1,
   "weekStart": ""
 }

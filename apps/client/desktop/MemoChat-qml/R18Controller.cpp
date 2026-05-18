@@ -6,12 +6,16 @@
 #include "usermgr.h"
 
 #include <QFile>
+#include <QFileDialog>
 #include <QFileInfo>
+#include <QDir>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QSslConfiguration>
+#include <QSslSocket>
 #include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
@@ -19,9 +23,24 @@
 namespace {
 constexpr int kR18RequestTimeoutMs = 15000;
 
+bool looksLikeWindowsDrivePath(const QString& path)
+{
+    return path.size() >= 2
+        && path.at(1) == QLatin1Char(':')
+        && path.at(0).isLetter();
+}
+
 void applyR18RequestOptions(QNetworkRequest& request)
 {
     request.setRawHeader(QByteArrayLiteral("Connection"), QByteArrayLiteral("close"));
+    if (request.url().scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) == 0) {
+        QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
+        sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
+        request.setSslConfiguration(sslConfig);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 9, 0)
+        request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);
+#endif
+    }
 #if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
     request.setTransferTimeout(kR18RequestTimeoutMs);
 #endif
@@ -71,17 +90,25 @@ void R18Controller::refreshHistory()
 
 void R18Controller::refreshOfficialSources(const QString& catalogUrl)
 {
-    if (!catalogUrl.trimmed().isEmpty()) {
-        setOfficialSourceCatalogUrl(catalogUrl.trimmed());
+    const QString trimmedCatalogUrl = catalogUrl.trimmed();
+    if (!trimmedCatalogUrl.isEmpty()) {
+        setOfficialSourceCatalogUrl(trimmedCatalogUrl);
     }
     if (_official_source_catalog_url.trimmed().isEmpty()) {
         _official_sources.clear();
         setStatusText(QStringLiteral("未配置自定义源目录"));
         return;
     }
-    QUrl url(_official_source_catalog_url);
+    const QFileInfo catalogInfo(_official_source_catalog_url);
+    QUrl url = QUrl::fromUserInput(_official_source_catalog_url);
+    if (catalogInfo.exists() || looksLikeWindowsDrivePath(_official_source_catalog_url)) {
+        const QString resolvedPath = catalogInfo.isDir()
+            ? QDir(catalogInfo.absoluteFilePath()).filePath(QStringLiteral("index.json"))
+            : catalogInfo.absoluteFilePath();
+        url = QUrl::fromLocalFile(resolvedPath);
+    }
     if (!url.isValid() || url.scheme().isEmpty()) {
-        setError(QStringLiteral("自定义源目录 URL 无效"));
+        setError(QStringLiteral("自定义源目录路径无效"));
         return;
     }
     setStatusText(QStringLiteral("正在读取自定义源目录"));
@@ -133,30 +160,72 @@ QString R18Controller::pickSourcePackage()
     return fileUrl;
 }
 
+QString R18Controller::pickSourceCatalogPath()
+{
+    const QString directory = QFileDialog::getExistingDirectory(
+        nullptr,
+        QStringLiteral("选择漫画源目录"),
+        QString());
+    if (!directory.isEmpty()) {
+        return directory;
+    }
+
+    const QString fileName = QFileDialog::getOpenFileName(
+        nullptr,
+        QStringLiteral("选择漫画源 index.json"),
+        QString(),
+        QStringLiteral("漫画源目录 (*.json);;所有文件 (*.*)"));
+    return fileName;
+}
+
 void R18Controller::selectSource(const QString& sourceId)
 {
-    const QString nextSource = sourceId.isEmpty() ? QStringLiteral("jm.official") : sourceId;
+    const QString nextSource = sourceId.trimmed();
     if (_current_source_id == nextSource) {
         return;
     }
     _current_source_id = nextSource;
-    setStatusText(QStringLiteral("已选择漫画源: %1").arg(_current_source_id));
+    _comics.clear();
+    setSearchState(0, false);
+    if (_current_source_id.isEmpty()) {
+        setStatusText(QStringLiteral("未选择漫画源"));
+    } else {
+        setStatusText(QStringLiteral("已选择漫画源: %1").arg(_current_source_id));
+    }
     emit currentSourceChanged();
 }
 
 void R18Controller::search(const QString& keyword, int page)
 {
+    const int normalizedPage = page < 1 ? 1 : page;
+    if (_current_source_id.trimmed().isEmpty()) {
+        if (normalizedPage == 1) {
+            _comics.clear();
+            setSearchState(0, false);
+        }
+        setError(QStringLiteral("请先导入或选择漫画源"));
+        return;
+    }
+
     auto payload = authPayload();
     payload[QStringLiteral("source_id")] = _current_source_id;
     payload[QStringLiteral("keyword")] = keyword;
-    payload[QStringLiteral("page")] = page < 1 ? 1 : page;
+    payload[QStringLiteral("page")] = normalizedPage;
+    _pending_search_page = normalizedPage;
+    if (normalizedPage == 1) {
+        _comics.clear();
+        setSearchState(0, false);
+    }
     postJson(QStringLiteral("/api/r18/search"), payload, QStringLiteral("search"));
 }
 
 void R18Controller::openComic(const QString& sourceId, const QString& comicId)
 {
-    _current_source_id = sourceId.isEmpty() ? QStringLiteral("jm.official") : sourceId;
-    emit currentSourceChanged();
+    const QString nextSource = sourceId.trimmed();
+    if (_current_source_id != nextSource) {
+        _current_source_id = nextSource;
+        emit currentSourceChanged();
+    }
     setCurrentFavorite(false);
 
     auto payload = authPayload();
@@ -455,6 +524,15 @@ void R18Controller::setStatusText(const QString& statusText)
     if (_status_text == statusText) return;
     _status_text = statusText;
     emit statusTextChanged();
+    if (_status_text.isEmpty()) {
+        return;
+    }
+    QTimer::singleShot(2500, this, [this, statusText]() {
+        if (_error.isEmpty() && _status_text == statusText) {
+            _status_text.clear();
+            emit statusTextChanged();
+        }
+    });
 }
 
 void R18Controller::setCurrentFavorite(bool favorite)
@@ -472,6 +550,17 @@ void R18Controller::setCurrentPageIndex(int pageIndex)
     emit currentPageChanged();
 }
 
+void R18Controller::setSearchState(int page, bool hasMore)
+{
+    const int normalizedPage = page < 0 ? 0 : page;
+    if (_current_search_page == normalizedPage && _current_search_has_more == hasMore) {
+        return;
+    }
+    _current_search_page = normalizedPage;
+    _current_search_has_more = hasMore;
+    emit searchStateChanged();
+}
+
 void R18Controller::handleResponse(const QString& op, const QJsonObject& root)
 {
     if (root.value(QStringLiteral("error")).toInt() != 0) {
@@ -483,7 +572,16 @@ void R18Controller::handleResponse(const QString& op, const QJsonObject& root)
     if (op == QStringLiteral("sources")) {
         _sources.setItems(data.value(QStringLiteral("sources")).toArray().toVariantList());
     } else if (op == QStringLiteral("search")) {
-        _comics.setItems(data.value(QStringLiteral("items")).toArray().toVariantList());
+        const int page = _pending_search_page < 1 ? 1 : _pending_search_page;
+        const auto items = data.value(QStringLiteral("items")).toArray().toVariantList();
+        if (page <= 1) {
+            _comics.setItems(items);
+        } else {
+            _comics.appendItems(items);
+        }
+        const int maxPage = data.value(QStringLiteral("max_page")).toInt();
+        const bool hasMore = maxPage > 0 ? page < maxPage : items.size() >= 40;
+        setSearchState(page, hasMore);
     } else if (op == QStringLiteral("history")) {
         _history.setItems(data.value(QStringLiteral("items")).toArray().toVariantList());
     } else if (op == QStringLiteral("detail")) {

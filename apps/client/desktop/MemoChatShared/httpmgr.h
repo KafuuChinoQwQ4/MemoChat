@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QByteArray>
 #include <QNetworkAccessManager>
+#include <QVector>
 #include "global.h"
 
 
@@ -28,12 +29,12 @@ private:
         ReqId req_id,
         Modules mod,
         const QString &module,
-        bool allowPlaintextFallback);
+        QVector<QUrl> fallbackUrls);
     void getHttpReqInternal(const QUrl &url,
         ReqId req_id,
         Modules mod,
         const QString &module,
-        bool allowPlaintextFallback);
+        QVector<QUrl> fallbackUrls);
     QNetworkAccessManager _manager;
 public slots:
     void slot_http_finish(ReqId id, QString res, ErrorCodes err, Modules mod);

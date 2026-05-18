@@ -35,7 +35,7 @@ docker compose -f infra/deploy/local/docker-compose.yml ps
 
 预期固定主机端口：
 
-- Nginx LB：`memochat-nginx-lb`，端口 `80`
+- Envoy Gateway：`memochat-envoy-gateway`，端口 `80`、`8443/tcp`、`8443/udp`
 - Redis `6379`
 - Postgres `15432`
 - Mongo `27017`
@@ -57,7 +57,7 @@ docker compose -f infra/deploy/local/docker-compose.yml ps
 
 当前本地容器名基线：
 
-- `memochat-nginx-lb`
+- `memochat-envoy-gateway`
 - `memochat-redis`
 - `memochat-postgres`
 - `memochat-mongo`
@@ -75,7 +75,6 @@ docker compose -f infra/deploy/local/docker-compose.yml ps
 - `memochat-otel-collector`
 - `memochat-influxdb`
 - `memochat-cadvisor`
-- `memochat-nginx-exporter`
 
 ## 健康检查
 

@@ -61,6 +61,16 @@ ChatTransportKind parseTransportKind(const QString &value)
     }
     return ChatTransportKind::Tcp;
 }
+
+bool hasEndpointKind(const QVector<ChatEndpoint> &endpoints, ChatTransportKind kind)
+{
+    for (const auto &endpoint : endpoints) {
+        if (endpoint.transport == kind) {
+            return true;
+        }
+    }
+    return false;
+}
 }
 
 void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
@@ -164,6 +174,7 @@ void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
     _chat_connect_timeout_ms = server_info.ConnectTimeoutMs;
     _chat_backup_dial_delay_ms = server_info.BackupDialDelayMs;
     _chat_total_login_timeout_ms = server_info.TotalLoginTimeoutMs;
+    _chat_login_tcp_fallback_attempted = false;
     _http_login_finished_ms = QDateTime::currentMSecsSinceEpoch();
     _chat_login_timeout_timer.setInterval(_chat_total_login_timeout_ms);
     _message_model.setDownloadAuthContext(_pending_uid, _pending_token);
@@ -313,37 +324,10 @@ void AppController::onTcpConnectFinished(bool success)
     _ignore_next_login_disconnect = false;
     if (!success) {
         _chat_login_timeout_timer.stop();
-        qWarning() << "Chat TCP connect failed. reconnecting:" << _reconnecting_chat
+        qWarning() << "Chat transport connect failed. reconnecting:" << _reconnecting_chat
                    << "page:" << _page
                    << "host:" << _chat_server_host
                    << "port:" << _chat_server_port;
-        if (_chat_endpoint_index + 1 < _chat_endpoints.size()) {
-            ++_chat_endpoint_index;
-            const auto nextEndpoint = _chat_endpoints.at(_chat_endpoint_index);
-            _chat_server_host = nextEndpoint.host;
-            _chat_server_port = nextEndpoint.port;
-            _chat_server_name = nextEndpoint.serverName;
-            ServerInfo retryInfo;
-            retryInfo.Uid = _pending_uid;
-            retryInfo.Host = _chat_server_host;
-            retryInfo.Port = _chat_server_port;
-            retryInfo.Token = _pending_token;
-            retryInfo.LoginTicket = _pending_login_ticket;
-            retryInfo.ServerName = _chat_server_name;
-            retryInfo.ProtocolVersion = _chat_protocol_version;
-            retryInfo.Endpoints = _chat_endpoints;
-            retryInfo.ConnectTimeoutMs = _chat_connect_timeout_ms;
-            retryInfo.BackupDialDelayMs = _chat_backup_dial_delay_ms;
-            retryInfo.TotalLoginTimeoutMs = _chat_total_login_timeout_ms;
-            qWarning() << "Trying backup chat endpoint" << (_chat_endpoint_index + 1)
-                       << "/" << _chat_endpoints.size()
-                       << "host:" << _chat_server_host
-                       << "port:" << _chat_server_port
-                       << "server:" << _chat_server_name;
-            _chat_connect_started_ms = QDateTime::currentMSecsSinceEpoch();
-            _gateway.chatTransport()->connectToServer(retryInfo);
-            return;
-        }
         if (_reconnecting_chat && _page == ChatPage) {
             if (tryReconnectChat()) {
                 return;
@@ -359,7 +343,7 @@ void AppController::onTcpConnectFinished(bool success)
     }
 
     _chat_connect_finished_ms = QDateTime::currentMSecsSinceEpoch();
-    qInfo() << "Chat TCP connected, sending chat login for uid:" << _pending_uid;
+    qInfo() << "Chat transport connected, sending chat login for uid:" << _pending_uid;
     setTip("聊天服务连接成功，正在登录...", false);
     QJsonObject obj;
     obj["protocol_version"] = _chat_protocol_version;
@@ -663,6 +647,9 @@ void AppController::onConnectionClosed()
             if (_chat_login_timeout_timer.isActive()) {
                 _chat_login_timeout_timer.stop();
                 _ignore_next_login_disconnect = false;
+                if (tryLoginFallbackToTcp(QStringLiteral("connection_closed"))) {
+                    return;
+                }
                 setBusy(false);
                 setTip("聊天连接已断开，登录已取消，请重试", true);
             }
@@ -690,6 +677,58 @@ void AppController::onConnectionClosed()
     qWarning() << "Chat reconnect exhausted. heartbeat timeout:" << heartbeatTimeout;
     switchToLogin();
     setTip(heartbeatTimeout ? "心跳超时，请重新登录" : "聊天连接已断开，请重新登录", true);
+}
+
+bool AppController::tryLoginFallbackToTcp(const QString &reason)
+{
+    if (_chat_login_tcp_fallback_attempted) {
+        return false;
+    }
+    if (_page != LoginPage || !_busy) {
+        return false;
+    }
+    if (!hasEndpointKind(_chat_endpoints, ChatTransportKind::Tcp)) {
+        return false;
+    }
+    if (_pending_uid <= 0 || (_chat_protocol_version >= 3 ? _pending_login_ticket.isEmpty() : _pending_token.isEmpty())) {
+        return false;
+    }
+
+    ServerInfo serverInfo;
+    serverInfo.Uid = _pending_uid;
+    serverInfo.Token = _pending_token;
+    serverInfo.LoginTicket = _pending_login_ticket;
+    serverInfo.ProtocolVersion = _chat_protocol_version;
+    serverInfo.Endpoints = _chat_endpoints;
+    serverInfo.PreferredTransport = ChatTransportKind::Tcp;
+    serverInfo.FallbackTransport = ChatTransportKind::Tcp;
+    serverInfo.ConnectTimeoutMs = _chat_connect_timeout_ms;
+    serverInfo.BackupDialDelayMs = _chat_backup_dial_delay_ms;
+    serverInfo.TotalLoginTimeoutMs = _chat_total_login_timeout_ms;
+    for (const auto &endpoint : _chat_endpoints) {
+        if (endpoint.transport == ChatTransportKind::Tcp) {
+            _chat_server_host = endpoint.host;
+            _chat_server_port = endpoint.port;
+            _chat_server_name = endpoint.serverName;
+            serverInfo.Host = endpoint.host;
+            serverInfo.Port = endpoint.port;
+            serverInfo.ServerName = endpoint.serverName;
+            break;
+        }
+    }
+    if (serverInfo.Host.trimmed().isEmpty() || serverInfo.Port.trimmed().isEmpty()) {
+        return false;
+    }
+
+    qWarning() << "Chat login over current transport failed; falling back to tcp."
+               << "reason:" << reason
+               << "host:" << serverInfo.Host
+               << "port:" << serverInfo.Port;
+    _chat_login_tcp_fallback_attempted = true;
+    setTip("QUIC 登录未完成，正在回退到 TCP 长连接...", false);
+    _chat_connect_started_ms = QDateTime::currentMSecsSinceEpoch();
+    _gateway.chatTransport()->connectToServer(serverInfo);
+    return true;
 }
 
 bool AppController::tryReconnectChat()
@@ -727,6 +766,10 @@ bool AppController::tryReconnectChat()
     serverInfo.LoginTicket = _pending_login_ticket;
     serverInfo.ProtocolVersion = _chat_protocol_version;
     serverInfo.Endpoints = _chat_endpoints;
+    serverInfo.PreferredTransport = hasEndpointKind(_chat_endpoints, ChatTransportKind::Quic)
+        ? ChatTransportKind::Quic
+        : ChatTransportKind::Tcp;
+    serverInfo.FallbackTransport = ChatTransportKind::Tcp;
     serverInfo.ConnectTimeoutMs = _chat_connect_timeout_ms;
     serverInfo.BackupDialDelayMs = _chat_backup_dial_delay_ms;
     serverInfo.TotalLoginTimeoutMs = _chat_total_login_timeout_ms;
