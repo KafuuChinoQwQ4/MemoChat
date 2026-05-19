@@ -10,7 +10,14 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from config import settings
-from harness.pet import PetObservation, PetRuntime, VisionAnalyzerError, VisionCaptureRequest, VoiceTrainingRequest
+from harness.pet import (
+    PetObservation,
+    PetRuntime,
+    VisionAnalyzerError,
+    VisionCaptureRequest,
+    VisionSegmentRequest,
+    VoiceTrainingRequest,
+)
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -48,6 +55,24 @@ class PetVisionCaptureReq(BaseModel):
     frame_mime: str = ""
     frame_width: int = 0
     frame_height: int = 0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class PetVisionSegmentFrameReq(BaseModel):
+    frame_base64: str = ""
+    frame_mime: str = ""
+    frame_width: int = 0
+    frame_height: int = 0
+    t_ms: int = 0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class PetVisionSegmentCaptureReq(BaseModel):
+    analyzer: str = "opencv"
+    include_frame: bool = False
+    segment_id: str = ""
+    duration_ms: int = 0
+    frames: list[PetVisionSegmentFrameReq] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -193,6 +218,24 @@ async def capture_observation(session_id: str, req: PetVisionCaptureReq):
     payload["session_id"] = session_id
     try:
         observation, event = await _runtime.capture_observation(VisionCaptureRequest.from_dict(payload))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except VisionAnalyzerError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {
+        "code": 0,
+        "message": "ok",
+        "observation": observation.to_dict(),
+        "event": event.to_dict(),
+    }
+
+
+@router.post("/sessions/{session_id}/capture-segment")
+async def capture_segment_observation(session_id: str, req: PetVisionSegmentCaptureReq):
+    payload = req.model_dump()
+    payload["session_id"] = session_id
+    try:
+        observation, event = await _runtime.capture_segment_observation(VisionSegmentRequest.from_dict(payload))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except VisionAnalyzerError as exc:

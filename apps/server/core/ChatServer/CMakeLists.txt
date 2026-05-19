@@ -34,6 +34,11 @@ add_executable(ChatServer
     MongoMgr.cpp
     MsgNode.cpp
     PostgresDao.cpp
+    PostgresDaoGroupMessages.cpp
+    PostgresDaoGroups.cpp
+    PostgresDaoDialogs.cpp
+    PostgresDaoPrivateMessages.cpp
+    PostgresDaoUsers.cpp
     PostgresPool.cpp
     PostgresMgr.cpp
     RedisMgr.cpp

@@ -67,6 +67,19 @@ set(SHARED_CLIENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../MemoChatShared)
 set(SOURCES
     main.cpp
     AppController.cpp
+    AppControllerAuth.cpp
+    AppControllerAuthResponses.cpp
+    AppControllerConnection.cpp
+    AppControllerContactEvents.cpp
+    AppControllerDialogListEvents.cpp
+    AppControllerDialogState.cpp
+    AppControllerDialogCommands.cpp
+    AppControllerGroupCommands.cpp
+    AppControllerModels.cpp
+    AppControllerNavigation.cpp
+    AppControllerProperties.cpp
+    AppControllerProfileCommands.cpp
+    AppControllerSelection.cpp
     AppCoordinators.cpp
     AppControllerCall.cpp
     AppControllerGroupEvents.cpp
@@ -100,6 +113,9 @@ set(SOURCES
     MomentsController.cpp
     MomentsModel.cpp
     AgentController.cpp
+    AgentControllerGame.cpp
+    AgentControllerKnowledge.cpp
+    AgentControllerStream.cpp
     AgentMessageModel.cpp
     PetAssetSettings.cpp
     PetController.cpp

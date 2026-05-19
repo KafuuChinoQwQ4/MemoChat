@@ -27,6 +27,8 @@
 
 namespace {
 constexpr int kMaxRememberedPetControlEvents = 256;
+constexpr int kVisionSegmentMaxFrames = 8;
+constexpr int kVisionSegmentMaxDurationMs = 12000;
 
 bool isWslRuntime()
 {
@@ -375,6 +377,40 @@ bool PetController::captureVisionVideoFrame(const QVideoFrame &frame, int frameW
                       QStringLiteral("live_frame_upload"));
     return true;
 }
+
+QString PetController::captureVisionSegmentVideoFrame(const QVideoFrame &frame, int frameWidth, int frameHeight)
+{
+    if (_session_id.isEmpty() || !frame.isValid()) {
+        return {};
+    }
+
+    const QImage image = frame.toImage();
+    if (image.isNull()) {
+        setError(QStringLiteral("摄像头实时帧转换失败"));
+        return {};
+    }
+
+    QByteArray bytes;
+    QBuffer buffer(&bytes);
+    if (!buffer.open(QIODevice::WriteOnly)) {
+        setError(QStringLiteral("摄像头实时帧编码失败"));
+        return {};
+    }
+
+    QImageWriter writer(&buffer, "jpeg");
+    writer.setQuality(72);
+    if (!writer.write(image)) {
+        setError(QStringLiteral("摄像头实时帧编码失败"));
+        return {};
+    }
+
+    return appendVisionSegmentFrame(QString::fromLatin1(bytes.toBase64()),
+                                    QStringLiteral("image/jpeg"),
+                                    frameWidth,
+                                    frameHeight,
+                                    QStringLiteral("qt_video_sink_segment"),
+                                    QStringLiteral("keyframe_segment_upload"));
+}
 #endif
 
 void PetController::postVisionCapture(const QString &frameBase64,
@@ -418,6 +454,88 @@ void PetController::postVisionCapture(const QString &frameBase64,
     postJson(petUrl(QStringLiteral("/sessions/%1/capture").arg(encodedSessionId())),
              payload,
              QStringLiteral("vision_capture"));
+}
+
+QString PetController::appendVisionSegmentFrame(const QString &frameBase64,
+                                                const QString &frameMime,
+                                                int frameWidth,
+                                                int frameHeight,
+                                                const QString &source,
+                                                const QString &transport)
+{
+    const QString encodedFrame = frameBase64.trimmed();
+    if (_session_id.isEmpty() || encodedFrame.isEmpty()) {
+        return {};
+    }
+
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (_vision_segment_frames.isEmpty() || _vision_segment_started_at_ms <= 0) {
+        _vision_segment_started_at_ms = now;
+    }
+
+    QJsonObject frame;
+    frame[QStringLiteral("frame_base64")] = encodedFrame;
+    frame[QStringLiteral("frame_mime")] = frameMime.trimmed().isEmpty()
+                                              ? QStringLiteral("image/jpeg")
+                                              : frameMime.trimmed();
+    frame[QStringLiteral("frame_width")] = qMax(0, frameWidth);
+    frame[QStringLiteral("frame_height")] = qMax(0, frameHeight);
+    frame[QStringLiteral("t_ms")] = int(qMax<qint64>(0, now - _vision_segment_started_at_ms));
+    _vision_segment_frames.append(frame);
+
+    while (_vision_segment_frames.size() > kVisionSegmentMaxFrames) {
+        _vision_segment_frames.removeAt(0);
+    }
+
+    const qint64 durationMs = qMax<qint64>(0, now - _vision_segment_started_at_ms);
+    if (_vision_segment_frames.size() >= kVisionSegmentMaxFrames || durationMs >= kVisionSegmentMaxDurationMs) {
+        postVisionSegment(source, transport);
+        return QStringLiteral("视觉片段已上传");
+    }
+
+    return QStringLiteral("视觉片段采样中 %1/%2")
+        .arg(_vision_segment_frames.size())
+        .arg(kVisionSegmentMaxFrames);
+}
+
+void PetController::postVisionSegment(const QString &source, const QString &transport)
+{
+    if (_session_id.isEmpty() || _vision_segment_frames.isEmpty()) {
+        return;
+    }
+
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const int durationMs = int(qMax<qint64>(0, now - _vision_segment_started_at_ms));
+
+    QJsonObject metadata;
+    metadata[QStringLiteral("source")] = source.trimmed().isEmpty()
+                                             ? QStringLiteral("qt_video_sink_segment")
+                                             : source.trimmed();
+    metadata[QStringLiteral("transport")] = transport.trimmed().isEmpty()
+                                                ? QStringLiteral("keyframe_segment_upload")
+                                                : transport.trimmed();
+    metadata[QStringLiteral("reply_language")] = _reply_language.trimmed().isEmpty()
+                                                    ? QStringLiteral("zh-CN")
+                                                    : _reply_language.trimmed();
+    const QString speechRules = _speech_rules.trimmed();
+    if (!speechRules.isEmpty()) {
+        metadata[QStringLiteral("speech_rules")] = speechRules;
+    }
+
+    QJsonObject payload;
+    payload[QStringLiteral("analyzer")] = QStringLiteral("opencv");
+    payload[QStringLiteral("include_frame")] = false;
+    payload[QStringLiteral("segment_id")] = QStringLiteral("qml-segment-%1").arg(now);
+    payload[QStringLiteral("duration_ms")] = durationMs;
+    payload[QStringLiteral("frames")] = _vision_segment_frames;
+    payload[QStringLiteral("metadata")] = metadata;
+
+    _vision_segment_frames = QJsonArray();
+    _vision_segment_started_at_ms = 0;
+
+    postJson(petUrl(QStringLiteral("/sessions/%1/capture-segment").arg(encodedSessionId())),
+             payload,
+             QStringLiteral("vision_segment_capture"));
 }
 
 QString PetController::nextVisionCaptureFilePath() const
@@ -915,6 +1033,12 @@ void PetController::handleJsonReply(QNetworkReply *reply)
         if (!event.isEmpty()) {
             applyControlEvent(event);
         }
+    }
+
+    if (op == QStringLiteral("vision_segment_capture")) {
+        setStatusText(QStringLiteral("视觉片段已分析"));
+    } else if (op == QStringLiteral("vision_capture")) {
+        setStatusText(QStringLiteral("摄像头帧已分析"));
     }
 }
 

@@ -126,13 +126,15 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
                     )
                     self.assertRegex(body, r"\bshow\s*\(")
 
-    def test_live2d_render_item_uses_precise_60fps_timer_and_fbo_target(self):
+    def test_live2d_render_item_uses_precise_throttled_timer_and_fbo_target(self):
         source = read(LIVE2D_CPP) + "\n" + read(LIVE2D_H)
         ctor = cpp_function_body(source, "Live2DRenderItem")
+        render_body = cpp_function_body(source, "render")
 
         self.assertIn("QTimer", source)
         self.assertRegex(source, r"\b(Qt::PreciseTimer|setTimerType\s*\(\s*Qt::PreciseTimer\s*\))")
-        self.assertRegex(source, r"\b(setInterval\s*\(\s*16\s*\)|start\s*\(\s*16\s*\))")
+        self.assertIn("targetFps", source)
+        self.assertRegex(source, r"\bsetInterval\s*\(\s*(?:1000\s*/\s*_target_fps|qMax\s*\(\s*1\s*,\s*1000\s*/\s*_target_fps\s*\))\s*\)")
         self.assertIn("QQuickFramebufferObject", source)
         self.assertIn("createFramebufferObject", source)
         self.assertIn("QOpenGLFramebufferObject", source)
@@ -142,6 +144,7 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
         self.assertRegex(source, r"\b(startAnimation|stopAnimation|updateAnimationTimer|setVisible|visibleChanged|windowChanged)\b")
         self.assertRegex(source, r"\b(isVisible\s*\(|window\s*\(\s*\))")
         self.assertRegex(source, r"\b(update\s*\(|advance|elapsed|phase|animation)\b")
+        self.assertNotRegex(render_body, r"\bupdate\s*\(\s*\)")
         self.assertTrue(
             "QQuickFramebufferObject" in source and "Renderer *createRenderer" in source,
             "Live2DRenderItem should render through a Qt Quick FBO renderer",
@@ -239,6 +242,10 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
         self.assertIn("QSGRendererInterface", source)
         self.assertIn("QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL)", source)
         self.assertIn('setDefaultEnv("QSG_RHI_BACKEND", "opengl")', source)
+        self.assertIn("QML_DISABLE_DISK_CACHE", source)
+        self.assertIn("qunsetenv(\"QML_DISABLE_DISK_CACHE\")", source)
+        self.assertIn('setDefaultEnv("GALLIUM_DRIVER", "d3d12")', source)
+        self.assertIn('setDefaultEnv("MESA_LOADER_DRIVER_OVERRIDE", "d3d12")', source)
 
     def test_post_login_chat_bootstrap_delay_is_100ms(self):
         source = read(APP_CONTROLLER_SESSION_CPP)

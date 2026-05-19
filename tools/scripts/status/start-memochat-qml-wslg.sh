@@ -75,9 +75,21 @@ select_input_method() {
 start_ibus_daemon() {
     local mode="${1:-}"
     if [[ "$mode" == "replace" ]]; then
-        env -u WAYLAND_DISPLAY GDK_BACKEND=x11 QT_QPA_PLATFORM=xcb ibus-daemon -drx --replace >/dev/null 2>&1 || true
+        env -u WAYLAND_DISPLAY \
+            GDK_BACKEND=x11 \
+            QT_QPA_PLATFORM=xcb \
+            GTK_IM_MODULE=ibus \
+            QT_IM_MODULE=ibus \
+            XMODIFIERS=@im=ibus \
+            ibus-daemon -drx --replace >/dev/null 2>&1 || true
     else
-        env -u WAYLAND_DISPLAY GDK_BACKEND=x11 QT_QPA_PLATFORM=xcb ibus-daemon -drx >/dev/null 2>&1 || true
+        env -u WAYLAND_DISPLAY \
+            GDK_BACKEND=x11 \
+            QT_QPA_PLATFORM=xcb \
+            GTK_IM_MODULE=ibus \
+            QT_IM_MODULE=ibus \
+            XMODIFIERS=@im=ibus \
+            ibus-daemon -drx >/dev/null 2>&1 || true
     fi
 }
 
@@ -86,7 +98,11 @@ select_ibus_libpinyin() {
         return 1
     fi
     for _ in 1 2 3 4 5 6 7 8 9 10; do
-        if env -u WAYLAND_DISPLAY ibus engine libpinyin >/dev/null 2>&1; then
+        if env -u WAYLAND_DISPLAY \
+            GTK_IM_MODULE=ibus \
+            QT_IM_MODULE=ibus \
+            XMODIFIERS=@im=ibus \
+            ibus engine libpinyin >/dev/null 2>&1; then
             return 0
         fi
         sleep 0.1
@@ -169,13 +185,24 @@ fi
 # The Qt 6.8.3 kit installed under /data currently includes XCB, not the
 # matching Qt Wayland platform plugin, so XWayland/XCB is the compatible path.
 set_default QT_QPA_PLATFORM "xcb"
+set_default QSG_RENDER_LOOP "threaded"
 set_default QSG_RHI_BACKEND "opengl"
 set_default QT_OPENGL "desktop"
+set_default __GL_THREADED_OPTIMIZATIONS "1"
 set_default QTWEBENGINE_DISABLE_SANDBOX "1"
-set_default QML_DISABLE_DISK_CACHE "1"
 set_default NO_AT_BRIDGE "1"
 set_default LANG "C.UTF-8"
 set_default LC_ALL "C.UTF-8"
+case "${QML_DISABLE_DISK_CACHE:-}" in
+    0|false|FALSE|False|no|NO|No)
+        unset QML_DISABLE_DISK_CACHE
+        ;;
+esac
+if grep -qiE 'microsoft|wsl' /proc/sys/kernel/osrelease 2>/dev/null; then
+    set_default GALLIUM_DRIVER "d3d12"
+    set_default MESA_LOADER_DRIVER_OVERRIDE "d3d12"
+    set_default LIBGL_ALWAYS_SOFTWARE "0"
+fi
 
 if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]] && command -v dbus-launch >/dev/null 2>&1; then
     eval "$(dbus-launch --sh-syntax)" >/dev/null 2>&1 || true
@@ -239,7 +266,13 @@ print_diagnostics() {
     echo "  QT_ROOT:          ${QT_ROOT}"
     echo "  CLIENT_EXE:       ${CLIENT_EXE:-<not found>}"
     echo "  QT_QPA_PLATFORM:  ${QT_QPA_PLATFORM}"
+    echo "  QSG_RENDER_LOOP:  ${QSG_RENDER_LOOP:-<unset>}"
     echo "  QSG_RHI_BACKEND:  ${QSG_RHI_BACKEND}"
+    echo "  QT_OPENGL:        ${QT_OPENGL:-<unset>}"
+    echo "  GALLIUM_DRIVER:   ${GALLIUM_DRIVER:-<unset>}"
+    echo "  MESA_DRIVER:      ${MESA_LOADER_DRIVER_OVERRIDE:-<unset>}"
+    echo "  GL_SOFTWARE:      ${LIBGL_ALWAYS_SOFTWARE:-<unset>}"
+    echo "  QML_DISK_CACHE:   ${QML_DISABLE_DISK_CACHE:-enabled}"
     echo "  DISPLAY:          ${DISPLAY:-<unset>}"
     echo "  WAYLAND_DISPLAY:  ${WAYLAND_DISPLAY:-<unset>}"
     echo "  QT_IM_MODULE:     ${QT_IM_MODULE:-<unset>}"

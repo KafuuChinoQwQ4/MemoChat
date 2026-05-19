@@ -387,6 +387,8 @@ Rectangle {
                 spacing: 0
                 clip: true
                 interactive: false
+                reuseItems: true
+                cacheBuffer: Math.max(height, 720)
                 model: root.messageModel
                 ScrollBar.vertical: GlassScrollBar { }
                 WheelHandler {

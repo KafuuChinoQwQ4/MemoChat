@@ -51,6 +51,67 @@ class VisionCaptureRequest:
         return bool(self.frame_base64.strip())
 
 
+@dataclass(frozen=True)
+class VisionSegmentFrame:
+    frame_base64: str = ""
+    frame_mime: str = ""
+    frame_width: int = 0
+    frame_height: int = 0
+    t_ms: int = 0
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "VisionSegmentFrame":
+        frame_base64, frame_mime = _split_frame_data_url(data.get("frame_base64"), data.get("frame_mime"))
+        return cls(
+            frame_base64=frame_base64,
+            frame_mime=frame_mime,
+            frame_width=_non_negative_int(data.get("frame_width")),
+            frame_height=_non_negative_int(data.get("frame_height")),
+            t_ms=_non_negative_int(data.get("t_ms")),
+            metadata=dict(data.get("metadata")) if isinstance(data.get("metadata"), dict) else {},
+        )
+
+    @property
+    def has_frame_payload(self) -> bool:
+        return bool(self.frame_base64.strip())
+
+
+@dataclass(frozen=True)
+class VisionSegmentRequest:
+    session_id: str
+    analyzer: str = "opencv"
+    include_frame: bool = False
+    segment_id: str = ""
+    duration_ms: int = 0
+    frames: list[VisionSegmentFrame] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "VisionSegmentRequest":
+        raw_frames = data.get("frames")
+        frames: list[VisionSegmentFrame] = []
+        if isinstance(raw_frames, list):
+            for raw_frame in raw_frames[:24]:
+                if isinstance(raw_frame, dict):
+                    frame = VisionSegmentFrame.from_dict(raw_frame)
+                    if frame.has_frame_payload:
+                        frames.append(frame)
+        return cls(
+            session_id=str(data.get("session_id") or ""),
+            analyzer=str(data.get("analyzer") or "opencv"),
+            include_frame=data.get("include_frame") is True,
+            segment_id=str(data.get("segment_id") or ""),
+            duration_ms=_non_negative_int(data.get("duration_ms")),
+            frames=frames,
+            metadata=dict(data.get("metadata")) if isinstance(data.get("metadata"), dict) else {},
+        )
+
+    @property
+    def has_frame_payloads(self) -> bool:
+        return any(frame.has_frame_payload for frame in self.frames)
+
+
 class LocalVisionAnalyzer:
     """Captures one local camera frame and emits structured pet observation data."""
 
@@ -299,6 +360,88 @@ class LocalVisionAnalyzer:
             if capture is not None:
                 capture.release()
 
+    def capture_segment(self, request: VisionSegmentRequest) -> PetObservation:
+        if not self._enabled and not request.has_frame_payloads:
+            raise VisionAnalyzerError("local vision capture is disabled by configuration")
+        if not request.frames:
+            raise VisionAnalyzerError("vision segment does not contain frames")
+        try:
+            import cv2
+        except ImportError as exc:  # pragma: no cover - exercised only on lean images.
+            raise VisionAnalyzerError("opencv-python is required for local vision capture") from exc
+
+        requested_analyzer = request.analyzer or ""
+        configured_analyzer = self._analyzer or "opencv"
+        requested_mode = _normalize_analyzer(requested_analyzer)
+        configured_mode = _normalize_analyzer(configured_analyzer)
+        effective_analyzer = configured_analyzer if requested_mode == "opencv" and configured_mode != "opencv" else (
+            requested_analyzer or configured_analyzer
+        )
+        analyzer_mode = _normalize_analyzer(effective_analyzer)
+        model_path = str(
+            (request.metadata.get("face_landmarker_model_path") if isinstance(request.metadata, dict) else "")
+            or self._face_landmarker_model_path
+        )
+        object_detector_model_path = str(
+            (request.metadata.get("object_detector_model_path") if isinstance(request.metadata, dict) else "")
+            or self._object_detector_model_path
+        )
+
+        analyzed_frames: list[dict[str, Any]] = []
+        for index, segment_frame in enumerate(request.frames):
+            frame = _decode_frame_payload(segment_frame, cv2)
+            height, width = frame.shape[:2]
+            vision = _analyze_frame(
+                frame,
+                effective_analyzer,
+                face_landmarker_model_path=model_path,
+                object_detector_model_path=object_detector_model_path,
+            )
+            vision.update(
+                {
+                    "enabled": True,
+                    "analyzer": analyzer_mode,
+                    "requested_analyzer": requested_analyzer or configured_analyzer,
+                    "source": "uploaded_segment_frame",
+                    "frame": {"width": int(width), "height": int(height)},
+                    "client_frame": {
+                        "width": segment_frame.frame_width,
+                        "height": segment_frame.frame_height,
+                    }
+                    if segment_frame.frame_width > 0 or segment_frame.frame_height > 0
+                    else {},
+                    "frame_mime": segment_frame.frame_mime,
+                    "t_ms": segment_frame.t_ms,
+                    "segment_index": index,
+                }
+            )
+            analyzed_frames.append(vision)
+
+        vision = _aggregate_segment_vision(
+            analyzed_frames,
+            request,
+            analyzer_mode=analyzer_mode,
+            requested_analyzer=requested_analyzer or configured_analyzer,
+        )
+        _apply_request_metadata_to_vision(vision, request.metadata)
+        privacy = {
+            "camera_used": True,
+            "raw_frame_sent": False,
+            "raw_frame_received": True,
+            "raw_frame_count": len(analyzed_frames),
+            "raw_audio_recorded": False,
+            "cloud_vision_used": False,
+            "retention": "debug" if (request.include_frame and self._retain_raw_frames) else "none",
+        }
+        if request.include_frame and self._retain_raw_frames:
+            privacy["raw_frame_retained"] = True
+        return PetObservation(
+            session_id=request.session_id,
+            audio={"vad": "idle", "rms": 0.0, "interrupt": False},
+            vision=vision,
+            privacy=privacy,
+        )
+
 
 def _analyze_frame(
     frame,
@@ -329,6 +472,124 @@ def _analyze_frame(
                 vision = _opencv_face_analysis(frame, base)
 
     return _augment_scene_and_objects(frame, vision, object_detector_model_path=object_detector_model_path)
+
+
+def _aggregate_segment_vision(
+    frames: list[dict[str, Any]],
+    request: VisionSegmentRequest,
+    analyzer_mode: str,
+    requested_analyzer: str,
+) -> dict[str, Any]:
+    latest = dict(frames[-1]) if frames else {}
+    frame_count = len(frames)
+    duration_ms = request.duration_ms or max((int(frame.get("t_ms") or 0) for frame in frames), default=0)
+    face_count = sum(1 for frame in frames if bool(frame.get("face_present", False)))
+    confidences = [_clamp_float(frame.get("confidence"), 0.0, 1.0, 0.0) for frame in frames]
+    confidence_avg = sum(confidences) / max(1, len(confidences))
+    expression_counts = _count_strings(frame.get("expression") for frame in frames)
+    attention_counts = _count_strings(frame.get("attention") for frame in frames)
+    object_labels = _unique_object_labels(frames)
+    expression_timeline = [
+        {"t_ms": int(frame.get("t_ms") or 0), "expression": str(frame.get("expression") or "")}
+        for frame in frames
+        if str(frame.get("expression") or "").strip()
+    ]
+    dominant_expression = _dominant_count_key(expression_counts)
+    dominant_attention = _dominant_count_key(attention_counts)
+    latest_scene = dict(latest.get("scene")) if isinstance(latest.get("scene"), dict) else {}
+    segment = {
+        "segment_id": request.segment_id,
+        "frame_count": frame_count,
+        "duration_ms": duration_ms,
+        "sampled_fps": round((frame_count * 1000.0) / duration_ms, 3) if duration_ms > 0 else 0.0,
+        "face_present_ratio": round(face_count / max(1, frame_count), 3),
+        "confidence_avg": round(confidence_avg, 3),
+        "confidence_max": round(max(confidences) if confidences else 0.0, 3),
+        "dominant_expression": dominant_expression,
+        "dominant_attention": dominant_attention,
+        "expression_counts": expression_counts,
+        "attention_counts": attention_counts,
+        "expression_timeline": expression_timeline[-8:],
+        "object_labels": object_labels,
+        "temporal_mode": "keyframe_segment",
+    }
+    latest_scene["segment"] = {
+        "frame_count": frame_count,
+        "duration_ms": duration_ms,
+        "face_present_ratio": segment["face_present_ratio"],
+        "dominant_expression": dominant_expression,
+        "dominant_attention": dominant_attention,
+        "object_labels": object_labels,
+    }
+    latest_scene["summary"] = _segment_summary_text(latest_scene, segment)
+    latest.update(
+        {
+            "enabled": True,
+            "analyzer": analyzer_mode,
+            "requested_analyzer": requested_analyzer,
+            "source": "uploaded_segment",
+            "captured_at_ms": int(time.time() * 1000),
+            "segment": segment,
+            "scene": latest_scene,
+        }
+    )
+    latest.pop("segment_index", None)
+    latest.pop("t_ms", None)
+    return latest
+
+
+def _count_strings(values) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        key = str(value or "").strip()
+        if not key:
+            continue
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def _dominant_count_key(counts: dict[str, int]) -> str:
+    if not counts:
+        return ""
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
+
+
+def _unique_object_labels(frames: list[dict[str, Any]]) -> list[str]:
+    labels: list[str] = []
+    seen: set[str] = set()
+    for frame in frames:
+        objects = frame.get("objects")
+        if not isinstance(objects, list):
+            continue
+        for item in objects:
+            if not isinstance(item, dict):
+                continue
+            label = str(item.get("label") or "").strip()
+            if label and label not in seen:
+                seen.add(label)
+                labels.append(label)
+    return labels[:8]
+
+
+def _segment_summary_text(scene: dict[str, Any], segment: dict[str, Any]) -> str:
+    base = str(scene.get("summary") or "").strip()
+    expression = str(segment.get("dominant_expression") or "").strip()
+    face_ratio = _clamp_float(segment.get("face_present_ratio"), 0.0, 1.0, 0.0)
+    object_labels = segment.get("object_labels") if isinstance(segment.get("object_labels"), list) else []
+    parts: list[str] = []
+    if face_ratio >= 0.66:
+        parts.append("这一段里持续看到了你的脸")
+    elif face_ratio > 0:
+        parts.append("这一段里间歇看到了你的脸")
+    else:
+        parts.append("这一段里没有稳定检测到人脸")
+    if expression:
+        parts.append(f"主要表情是 {expression}")
+    if object_labels:
+        parts.append("周围出现了 " + "、".join(str(label) for label in object_labels[:3]))
+    if base:
+        parts.append(base.rstrip("。"))
+    return "，".join(parts) + "。"
 
 
 def _opencv_brightness_analysis(frame) -> dict[str, Any]:

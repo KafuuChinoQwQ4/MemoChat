@@ -3,6 +3,7 @@
 
 #include "PetModel.h"
 
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -117,6 +118,9 @@ public:
     Q_INVOKABLE bool captureVisionVideoFrame(const QVideoFrame &frame,
                                              int frameWidth = 0,
                                              int frameHeight = 0);
+    Q_INVOKABLE QString captureVisionSegmentVideoFrame(const QVideoFrame &frame,
+                                                       int frameWidth = 0,
+                                                       int frameHeight = 0);
 #endif
     Q_INVOKABLE QString nextVisionCaptureFilePath() const;
     Q_INVOKABLE void captureVisionFrameFile(const QString &filePath, int frameWidth = 0, int frameHeight = 0);
@@ -161,6 +165,13 @@ private:
                            int frameHeight,
                            const QString &source,
                            const QString &transport);
+    QString appendVisionSegmentFrame(const QString &frameBase64,
+                                     const QString &frameMime,
+                                     int frameWidth,
+                                     int frameHeight,
+                                     const QString &source,
+                                     const QString &transport);
+    void postVisionSegment(const QString &source, const QString &transport);
     void captureVisionFrameFileWithMetadata(const QString &filePath,
                                             int frameWidth,
                                             int frameHeight,
@@ -203,6 +214,8 @@ private:
     QString _selected_model_name;
     QString _reply_language = QStringLiteral("zh-CN");
     QString _speech_rules;
+    QJsonArray _vision_segment_frames;
+    qint64 _vision_segment_started_at_ms = 0;
     QSet<QString> _applied_control_event_keys;
     QStringList _applied_control_event_order;
 };
