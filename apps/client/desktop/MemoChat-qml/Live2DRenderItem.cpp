@@ -41,7 +41,7 @@ public:
     {
         QOpenGLFramebufferObjectFormat format;
         format.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
-        format.setSamples(4);
+        format.setSamples(0);
         return new QOpenGLFramebufferObject(size, format);
     }
 
@@ -114,7 +114,6 @@ public:
         if (_official_renderer && _official_renderer->render(_item_size, _visual_state)) {
             QQuickOpenGLUtils::resetOpenGLState();
             reportStatus(readyStatus(), QString());
-            update();
             return;
         }
 
@@ -133,7 +132,6 @@ public:
         functions->glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         functions->glClear(GL_COLOR_BUFFER_BIT);
         QQuickOpenGLUtils::resetOpenGLState();
-        update();
     }
 
 private:
@@ -227,7 +225,7 @@ Live2DRenderItem::Live2DRenderItem(QQuickItem *parent)
     setMirrorVertically(true);
     _animation_clock.start();
     _frame_timer.setTimerType(Qt::PreciseTimer);
-    _frame_timer.setInterval(16);
+    _frame_timer.setInterval(1000 / _target_fps);
     connect(&_frame_timer, &QTimer::timeout, this, [this]() {
         const qreal elapsed = _animation_clock.elapsed() / 1000.0;
         _idle_phase = elapsed;
@@ -396,6 +394,17 @@ void Live2DRenderItem::setPersistentMotion(bool value)
     }
     _persistent_motion = value;
     updateVisual();
+}
+
+void Live2DRenderItem::setTargetFps(int value)
+{
+    const int next = qBound(15, value, 60);
+    if (_target_fps == next) {
+        return;
+    }
+    _target_fps = next;
+    _frame_timer.setInterval(qMax(1, 1000 / _target_fps));
+    emit targetFpsChanged();
 }
 
 qreal Live2DRenderItem::boundedUnit(qreal value, qreal fallback)

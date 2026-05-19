@@ -685,6 +685,85 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(payload["privacy"]["raw_frame_sent"])
         self.assertEqual(payload["privacy"]["retention"], "none")
 
+    async def test_local_vision_analyzer_aggregates_uploaded_segment_frames(self):
+        vision_module = importlib.import_module("harness.pet.vision")
+        LocalVisionAnalyzer = _load_attr("harness.pet.vision", "LocalVisionAnalyzer")
+        VisionSegmentRequest = _load_attr("harness.pet.vision", "VisionSegmentRequest")
+
+        class FakeFrame:
+            def __init__(self, width, height):
+                self.shape = (height, width, 3)
+
+        decoded_frames = [FakeFrame(320, 240), FakeFrame(320, 240), FakeFrame(320, 240)]
+        analyzed_frames = [
+            {
+                "enabled": True,
+                "mode": "opencv_face_detection",
+                "face_present": True,
+                "attention": "face_detected",
+                "expression": "smile",
+                "confidence": 0.8,
+                "pose": {"brightness": 0.5},
+                "scene": {"summary": "看到了你的脸。"},
+                "objects": [{"label": "cup", "confidence": 0.9}],
+            },
+            {
+                "enabled": True,
+                "mode": "opencv_face_detection",
+                "face_present": True,
+                "attention": "face_detected",
+                "expression": "smile",
+                "confidence": 0.9,
+                "pose": {"brightness": 0.52},
+                "scene": {"summary": "看到了你的脸。"},
+                "objects": [],
+            },
+            {
+                "enabled": True,
+                "mode": "opencv_frame_stats",
+                "face_present": False,
+                "attention": "ambient",
+                "expression": "",
+                "confidence": 0.1,
+                "pose": {"brightness": 0.48},
+                "scene": {"summary": "周围光线稳定。"},
+                "objects": [{"label": "keyboard", "confidence": 0.8}],
+            },
+        ]
+        analyzer = LocalVisionAnalyzer(enabled=False, analyzer="opencv")
+
+        with mock.patch.dict(sys.modules, {"cv2": types.SimpleNamespace()}), mock.patch.object(
+            vision_module, "_decode_frame_payload", side_effect=decoded_frames
+        ), mock.patch.object(vision_module, "_analyze_frame", side_effect=analyzed_frames):
+            observation = analyzer.capture_segment(
+                VisionSegmentRequest.from_dict(
+                    {
+                        "session_id": "pet-session",
+                        "segment_id": "seg-1",
+                        "duration_ms": 3000,
+                        "frames": [
+                            {"frame_base64": "AQID", "frame_mime": "image/jpeg", "frame_width": 320, "frame_height": 240, "t_ms": 0},
+                            {"frame_base64": "BAUG", "frame_mime": "image/jpeg", "frame_width": 320, "frame_height": 240, "t_ms": 1500},
+                            {"frame_base64": "BwgJ", "frame_mime": "image/jpeg", "frame_width": 320, "frame_height": 240, "t_ms": 3000},
+                        ],
+                        "metadata": {"reply_language": "zh-CN"},
+                    }
+                )
+            )
+
+        payload = observation.to_dict()
+        self.assertEqual(payload["vision"]["source"], "uploaded_segment")
+        self.assertEqual(payload["vision"]["segment"]["segment_id"], "seg-1")
+        self.assertEqual(payload["vision"]["segment"]["frame_count"], 3)
+        self.assertEqual(payload["vision"]["segment"]["duration_ms"], 3000)
+        self.assertEqual(payload["vision"]["segment"]["dominant_expression"], "smile")
+        self.assertEqual(payload["vision"]["segment"]["face_present_ratio"], 0.667)
+        self.assertEqual(payload["vision"]["segment"]["object_labels"], ["cup", "keyboard"])
+        self.assertIn("segment", payload["vision"]["scene"])
+        self.assertEqual(payload["privacy"]["raw_frame_count"], 3)
+        self.assertFalse(payload["privacy"]["raw_frame_sent"])
+        self.assertEqual(payload["privacy"]["retention"], "none")
+
     async def test_local_vision_analyzer_uses_mediapipe_face_landmarker_when_model_is_available(self):
         LocalVisionAnalyzer = _load_attr("harness.pet.vision", "LocalVisionAnalyzer")
         VisionCaptureRequest = _load_attr("harness.pet.vision", "VisionCaptureRequest")

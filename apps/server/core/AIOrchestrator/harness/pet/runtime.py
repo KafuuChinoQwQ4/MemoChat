@@ -10,7 +10,7 @@ from .event_bus import PetEventBus
 from .policy import PetPolicy
 from .providers import PetProviderError, PetProviderRouter
 from .session_store import PetSessionStore
-from .vision import LocalVisionAnalyzer, VisionCaptureRequest
+from .vision import LocalVisionAnalyzer, VisionCaptureRequest, VisionSegmentRequest
 from .voice import GPTSoVITSVoiceProvider, VoiceProviderError, VoiceProviderRouter, VoiceSynthesisRequest
 from .voice_training import VoiceTrainingJob, VoiceTrainingRequest, VoiceTrainingService, diagnose_reference_audio
 
@@ -158,6 +158,15 @@ class PetRuntime:
     ) -> tuple[PetObservation, PetControlEvent]:
         self._sessions.touch(request.session_id, status="active")
         observation = self._vision.capture(request)
+        event = await self.update_observation(observation)
+        return observation, event
+
+    async def capture_segment_observation(
+        self,
+        request: VisionSegmentRequest,
+    ) -> tuple[PetObservation, PetControlEvent]:
+        self._sessions.touch(request.session_id, status="active")
+        observation = self._vision.capture_segment(request)
         event = await self.update_observation(observation)
         return observation, event
 

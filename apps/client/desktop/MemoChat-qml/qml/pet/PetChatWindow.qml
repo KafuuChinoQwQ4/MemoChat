@@ -595,6 +595,8 @@ Window {
                         anchors.margins: 10
                     clip: true
                         spacing: 0
+                        reuseItems: true
+                        cacheBuffer: Math.max(height, 720)
                     model: messageModel
                     boundsBehavior: Flickable.StopAtBounds
                     delegate: Item {

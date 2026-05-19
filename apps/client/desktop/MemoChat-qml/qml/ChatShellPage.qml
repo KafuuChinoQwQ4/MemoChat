@@ -24,11 +24,16 @@ Rectangle {
     property int momentsSelectedUid: 0
     property string momentsSelectedName: ""
     property bool r18Mode: false
+    property bool r18PaneWarm: false
+    property bool pendingR18Flip: false
+    property bool targetR18Mode: false
     property real flipAngle: 0
     property int r18ViewMode: 0
     property bool agentGameActive: false
     property int agentGameSetupToken: 0
     property string agentGameSetupKind: "multi"
+    readonly property bool flipInProgress: flipAnimation.running || pendingR18Flip
+    readonly property bool glassEffectsEnabled: Qt.platform.os !== "linux"
     readonly property real acrylicPinkProgress: 0
     readonly property var r18NavigationItems: [
         { "label": "主页", "icon": "qrc:/icons/r18_home.png", "mode": 0 },
@@ -64,12 +69,33 @@ Rectangle {
     }
 
     function toggleR18Mode() {
-        if (flipAnimation.running) {
+        if (flipAnimation.running || pendingR18Flip) {
             return
         }
-        r18Mode = !r18Mode
-        flipAnimation.to = r18Mode ? 180 : 0
+        beginR18Flip(!r18Mode)
+    }
+
+    function beginR18Flip(nextMode) {
+        targetR18Mode = nextMode
+        if (nextMode && !r18PaneWarm) {
+            pendingR18Flip = true
+            r18PaneWarm = true
+            r18WarmupTimer.restart()
+            return
+        }
+        r18Mode = nextMode
+        flipAnimation.to = nextMode ? 180 : 0
         flipAnimation.start()
+    }
+
+    function finishPendingR18Flip() {
+        if (!pendingR18Flip || r18PaneLoader.status !== Loader.Ready) {
+            return
+        }
+        pendingR18Flip = false
+        Qt.callLater(function() {
+            root.beginR18Flip(root.targetR18Mode)
+        })
     }
 
     function switchAccountToLogin() {
@@ -101,8 +127,24 @@ Rectangle {
         id: flipAnimation
         target: root
         property: "flipAngle"
-        duration: 520
-        easing.type: Easing.InOutCubic
+        duration: 320
+        easing.type: Easing.OutCubic
+    }
+
+    Timer {
+        id: r18WarmupTimer
+        interval: 40
+        repeat: true
+        onTriggered: {
+            if (!root.pendingR18Flip) {
+                stop()
+                return
+            }
+            if (r18PaneLoader.status === Loader.Ready) {
+                stop()
+                root.finishPendingR18Flip()
+            }
+        }
     }
 
     GlassBackdrop {
@@ -128,7 +170,7 @@ Rectangle {
             spacing: 10
             visible: root.flipAngle < 90
             enabled: visible
-            layer.enabled: true
+            layer.enabled: visible && root.flipInProgress
             transform: Rotation {
                 origin.x: normalFace.width / 2
                 origin.y: normalFace.height / 2
@@ -143,6 +185,7 @@ Rectangle {
                 Layout.fillHeight: true
                 backdrop: backdropLayer
                 cornerRadius: 14
+                blurEnabled: root.glassEffectsEnabled
                 blurRadius: 18
                 fillColor: Qt.rgba(1, 1, 1, 0.18)
                 strokeColor: Qt.rgba(1, 1, 1, 0.56)
@@ -173,6 +216,7 @@ Rectangle {
             Layout.fillHeight: true
             backdrop: backdropLayer
             cornerRadius: 14
+            blurEnabled: root.glassEffectsEnabled
             blurRadius: 18
             fillColor: Qt.rgba(1, 1, 1, 0.16)
             strokeColor: Qt.rgba(1, 1, 1, 0.48)
@@ -286,6 +330,7 @@ Rectangle {
             Layout.fillHeight: true
             backdrop: backdropLayer
             cornerRadius: 16
+            blurEnabled: root.glassEffectsEnabled
             blurRadius: 20
             fillColor: Qt.rgba(1, 1, 1, 0.14)
             strokeColor: Qt.rgba(1, 1, 1, 0.54)
@@ -591,7 +636,7 @@ Rectangle {
             spacing: 10
             visible: root.flipAngle >= 90
             enabled: visible
-            layer.enabled: true
+            layer.enabled: visible && root.flipInProgress
             transform: Rotation {
                 origin.x: r18Face.width / 2
                 origin.y: r18Face.height / 2
@@ -606,6 +651,7 @@ Rectangle {
                 Layout.fillHeight: true
                 backdrop: backdropLayer
                 cornerRadius: 14
+                blurEnabled: root.glassEffectsEnabled
                 blurRadius: 18
                 fillColor: Qt.rgba(1, 1, 1, 0.18)
                 strokeColor: Qt.rgba(1, 1, 1, 0.56)
@@ -734,6 +780,7 @@ Rectangle {
                 Layout.fillHeight: true
                 backdrop: backdropLayer
                 cornerRadius: 16
+                blurEnabled: root.glassEffectsEnabled
                 blurRadius: 20
                 fillColor: Qt.rgba(1, 1, 1, 0.14)
                 strokeColor: Qt.rgba(1, 1, 1, 0.54)
@@ -744,7 +791,7 @@ Rectangle {
                     id: r18PaneLoader
                     anchors.fill: parent
                     anchors.margins: 8
-                    active: root.r18Mode
+                    active: root.r18PaneWarm
                     asynchronous: true
                     sourceComponent: Component {
                         R18ShellPane {
@@ -754,7 +801,13 @@ Rectangle {
                             onViewModeChanged: root.r18ViewMode = viewMode
                         }
                     }
-                    onLoaded: if (item) { item.viewMode = root.r18ViewMode }
+                    onLoaded: {
+                        if (item) {
+                            item.viewMode = root.r18ViewMode
+                        }
+                        root.finishPendingR18Flip()
+                    }
+                    onStatusChanged: root.finishPendingR18Flip()
                 }
             }
         }
