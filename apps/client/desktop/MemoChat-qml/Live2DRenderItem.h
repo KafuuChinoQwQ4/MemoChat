@@ -25,6 +25,7 @@ class Live2DRenderItem : public QQuickFramebufferObject
     Q_PROPERTY(qreal lipSyncValue READ lipSyncValue WRITE setLipSyncValue NOTIFY visualStateChanged)
     Q_PROPERTY(int actionSerial READ actionSerial WRITE setActionSerial NOTIFY visualStateChanged)
     Q_PROPERTY(bool persistentMotion READ persistentMotion WRITE setPersistentMotion NOTIFY visualStateChanged)
+    Q_PROPERTY(int targetFps READ targetFps WRITE setTargetFps NOTIFY targetFpsChanged)
     Q_PROPERTY(QString renderStatus READ renderStatus NOTIFY renderStatusChanged)
     Q_PROPERTY(QString renderError READ renderError NOTIFY renderStatusChanged)
 
@@ -44,6 +45,7 @@ public:
     qreal lipSyncValue() const { return _lip_sync_value; }
     int actionSerial() const { return _action_serial; }
     bool persistentMotion() const { return _persistent_motion; }
+    int targetFps() const { return _target_fps; }
     QString renderStatus() const { return _render_status; }
     QString renderError() const { return _render_error; }
 
@@ -70,10 +72,12 @@ public slots:
     void setLipSyncValue(qreal value);
     void setActionSerial(int value);
     void setPersistentMotion(bool value);
+    void setTargetFps(int value);
 
 signals:
     void modelSourceChanged();
     void visualStateChanged();
+    void targetFpsChanged();
     void renderStatusChanged();
 
 private:
@@ -95,6 +99,7 @@ private:
     qreal _lip_sync_value = 0.0;
     int _action_serial = 0;
     bool _persistent_motion = false;
+    int _target_fps = 60;
     QString _render_status = QStringLiteral("loading");
     QString _render_error;
     QString _render_model_path;

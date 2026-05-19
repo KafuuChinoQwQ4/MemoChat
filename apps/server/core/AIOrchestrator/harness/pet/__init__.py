@@ -35,7 +35,7 @@ from .voice import (
     VoiceSynthesisResult,
 )
 from .voice_training import VoiceTrainingJob, VoiceTrainingRequest, VoiceTrainingService, diagnose_reference_audio
-from .vision import LocalVisionAnalyzer, VisionAnalyzerError, VisionCaptureRequest
+from .vision import LocalVisionAnalyzer, VisionAnalyzerError, VisionCaptureRequest, VisionSegmentFrame, VisionSegmentRequest
 
 __all__ = [
     "DeterministicPetProvider",
@@ -74,4 +74,6 @@ __all__ = [
     "diagnose_reference_audio",
     "VisionAnalyzerError",
     "VisionCaptureRequest",
+    "VisionSegmentFrame",
+    "VisionSegmentRequest",
 ]

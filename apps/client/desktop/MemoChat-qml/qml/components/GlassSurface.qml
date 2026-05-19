@@ -5,7 +5,7 @@ Item {
     id: root
 
     property Item backdrop: null
-    property bool blurEnabled: true
+    property bool blurEnabled: Qt.platform.os !== "linux"
     property bool liveBlur: false
     property int blurRadius: 18
     property real cornerRadius: 10

@@ -386,6 +386,34 @@ void setDefaultEnv(const char *name, const char *value)
 }
 
 #ifdef Q_OS_LINUX
+bool isWslEnvironment()
+{
+    QFile osrelease(QStringLiteral("/proc/sys/kernel/osrelease"));
+    if (!osrelease.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return !qEnvironmentVariableIsEmpty("WSL_DISTRO_NAME");
+    }
+    const QByteArray release = osrelease.readAll().toLower();
+    return release.contains("microsoft") || release.contains("wsl");
+}
+
+void configureLinuxRendering()
+{
+    setDefaultEnv("QSG_RENDER_LOOP", "threaded");
+    setDefaultEnv("QSG_RHI_BACKEND", "opengl");
+    setDefaultEnv("QT_OPENGL", "desktop");
+    setDefaultEnv("__GL_THREADED_OPTIMIZATIONS", "1");
+    const QByteArray qmlCacheDisable = qgetenv("QML_DISABLE_DISK_CACHE").trimmed().toLower();
+    if (qmlCacheDisable == "0" || qmlCacheDisable == "false" || qmlCacheDisable == "no") {
+        qunsetenv("QML_DISABLE_DISK_CACHE");
+    }
+    if (isWslEnvironment()) {
+        setDefaultEnv("GALLIUM_DRIVER", "d3d12");
+        setDefaultEnv("MESA_LOADER_DRIVER_OVERRIDE", "d3d12");
+        setDefaultEnv("LIBGL_ALWAYS_SOFTWARE", "0");
+    }
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+}
+
 void startIbusDaemon(bool replace)
 {
     QStringList args{QStringLiteral("-drx")};
@@ -603,21 +631,15 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationName(QStringLiteral("MemoChatQml"));
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 #ifdef Q_OS_LINUX
-    setDefaultEnv("QSG_RENDER_LOOP", "threaded");
-    setDefaultEnv("QSG_RHI_BACKEND", "opengl");
-    setDefaultEnv("QT_OPENGL", "desktop");
+    configureLinuxRendering();
     configureLinuxInputMethod();
-    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
 #endif
     QSurfaceFormat format;
-    format.setSamples(8);
+    format.setSamples(4);
 #ifdef Q_OS_LINUX
     format.setAlphaBufferSize(8);
 #endif
     QSurfaceFormat::setDefaultFormat(format);
-
-    // Avoid stale QML cache after frequent qrc/page changes.
-    qputenv("QML_DISABLE_DISK_CACHE", "1");
     QString app_path = QFileInfo(QString::fromLocal8Bit(argv[0])).absolutePath();
     if (app_path.isEmpty()) {
         app_path = QDir::currentPath();

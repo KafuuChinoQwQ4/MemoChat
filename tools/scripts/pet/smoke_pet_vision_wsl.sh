@@ -246,6 +246,59 @@ print(json.dumps({
 PY
 }
 
+make_segment_capture_body() {
+  "$PYTHON_BIN" - "$1" <<'PY'
+import base64
+import json
+import struct
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+data = path.read_bytes()
+mime = "application/octet-stream"
+width = 0
+height = 0
+if data.startswith(b"\x89PNG\r\n\x1a\n") and len(data) >= 24:
+    mime = "image/png"
+    width, height = struct.unpack(">II", data[16:24])
+elif data.startswith(b"\xff\xd8"):
+    mime = "image/jpeg"
+    i = 2
+    while i + 9 < len(data):
+        while i < len(data) and data[i] == 0xff:
+            i += 1
+        marker = data[i] if i < len(data) else 0
+        i += 1
+        if marker in {0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf}:
+            height, width = struct.unpack(">HH", data[i + 3:i + 7])
+            break
+        if i + 2 > len(data):
+            break
+        segment_len = struct.unpack(">H", data[i:i + 2])[0]
+        i += max(segment_len, 2)
+encoded = base64.b64encode(data).decode("ascii")
+frames = [
+    {
+        "frame_base64": encoded,
+        "frame_mime": mime,
+        "frame_width": width,
+        "frame_height": height,
+        "t_ms": t_ms,
+        "metadata": {"source": "synthetic_segment", "index": index},
+    }
+    for index, t_ms in enumerate((0, 1500, 3000))
+]
+print(json.dumps({
+    "segment_id": f"smoke-segment-{path.stem}",
+    "duration_ms": 3000,
+    "include_frame": False,
+    "frames": frames,
+    "metadata": {"source": "uploaded_segment", "file_name": path.name, "test_user": True},
+}, ensure_ascii=False))
+PY
+}
+
 post_json_capture() {
   local url="$1"
   local body="$2"
@@ -299,6 +352,51 @@ scene = vision.get("scene") or {}
 if not scene.get("summary"):
     raise SystemExit("capture scene.summary was missing")
 print("[pet-vision-smoke] upload capture privacy/frame/scene contract OK")
+PY
+}
+
+assert_segment_capture_payload() {
+  JSON_PAYLOAD="$1" "$PYTHON_BIN" - "$2" <<'PY'
+import json
+import os
+import sys
+
+payload = json.loads(os.environ["JSON_PAYLOAD"])
+session_id = sys.argv[1]
+if payload.get("code") != 0:
+    raise SystemExit("segment capture response code was not 0")
+event = payload["event"]
+observation = payload["observation"]
+if event.get("type") != "pet.control":
+    raise SystemExit("segment capture event type was not pet.control")
+if observation.get("type") != "pet.observation":
+    raise SystemExit("segment capture observation type was not pet.observation")
+if event.get("session_id") != session_id or observation.get("session_id") != session_id:
+    raise SystemExit("segment capture session_id mismatch")
+event_privacy = event["privacy"]
+observation_privacy = observation["privacy"]
+if event_privacy.get("raw_frame_sent") is not False:
+    raise SystemExit("segment event privacy.raw_frame_sent was not false")
+if observation_privacy.get("raw_frame_sent") is not False:
+    raise SystemExit("segment observation privacy.raw_frame_sent was not false")
+if observation_privacy.get("retention") != "none":
+    raise SystemExit("segment observation privacy.retention was not none")
+if int(observation_privacy.get("raw_frame_count") or 0) != 3:
+    raise SystemExit("segment observation raw_frame_count was not 3")
+vision = observation["vision"]
+if vision.get("source") != "uploaded_segment":
+    raise SystemExit(f"segment vision.source was {vision.get('source')!r}, expected uploaded_segment")
+segment = vision.get("segment") or {}
+if int(segment.get("frame_count") or 0) != 3:
+    raise SystemExit("segment frame_count was not 3")
+if int(segment.get("duration_ms") or 0) != 3000:
+    raise SystemExit("segment duration_ms was not 3000")
+if segment.get("temporal_mode") != "keyframe_segment":
+    raise SystemExit("segment temporal_mode was not keyframe_segment")
+scene = vision.get("scene") or {}
+if not scene.get("summary") or not scene.get("segment"):
+    raise SystemExit("segment scene summary/metadata was missing")
+print("[pet-vision-smoke] upload segment privacy/frame/scene contract OK")
 PY
 }
 
@@ -533,6 +631,16 @@ if [[ "$HTTP_STATUS" != "200" ]]; then
 else
   print_json "$HTTP_BODY"
   assert_capture_payload "$HTTP_BODY" "$capture_session_id"
+  segment_body="$(make_segment_capture_body "$IMAGE_FILE")"
+  echo "[pet-vision-smoke] POST ${BASE_URL}/sessions/${capture_session_id}/capture-segment (--image-file keyframes)"
+  post_json_capture "${BASE_URL}/sessions/${capture_session_id}/capture-segment" "$segment_body"
+  if [[ "$HTTP_STATUS" != "200" ]]; then
+    print_json "$HTTP_BODY"
+    echo "[pet-vision-smoke] segment capture failed with HTTP ${HTTP_STATUS}" >&2
+    exit 1
+  fi
+  print_json "$HTTP_BODY"
+  assert_segment_capture_payload "$HTTP_BODY" "$capture_session_id"
 fi
 
 if [[ "$FULL_VISUAL_LAYER" != "true" ]]; then
@@ -553,7 +661,7 @@ for observation_kind in high cooldown low_confidence no_face; do
     assert_visual_observation_payload "$HTTP_BODY" "$agent_session_id" "$observation_kind"
   fi
 
-  if [[ "$observation_kind" == "high" ]]; then
+  if [[ "$observation_kind" == "cooldown" ]]; then
     input_body="$(make_input_body)"
     echo "[pet-vision-smoke] POST ${BASE_URL}/sessions/${agent_session_id}/input"
     post_json_ok "${BASE_URL}/sessions/${agent_session_id}/input" "$input_body"

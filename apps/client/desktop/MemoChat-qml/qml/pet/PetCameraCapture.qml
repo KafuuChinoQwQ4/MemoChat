@@ -6,7 +6,8 @@ Item {
     property var petController: null
     property bool cameraEnabled: false
     property bool cloudVisionEnabled: false
-    property int captureIntervalMs: 4500
+    property bool segmentCaptureEnabled: true
+    property int captureIntervalMs: segmentCaptureEnabled ? 1500 : 4500
     property int frameWidth: videoOutput.sourceRect.width > 0 ? Math.round(videoOutput.sourceRect.width) : Math.round(videoOutput.width)
     property int frameHeight: videoOutput.sourceRect.height > 0 ? Math.round(videoOutput.sourceRect.height) : Math.round(videoOutput.height)
     property var liveVideoFrame: null
@@ -44,7 +45,8 @@ Item {
             return root.petController.windowsCameraBridgeBusy ? "Windows 摄像头桥正在捕捉"
                                                               : "Windows 摄像头桥已开启"
         }
-        return root.cloudVisionEnabled ? "摄像头本地分析，云视觉待授权" : "摄像头本地捕捉已开启"
+        return root.segmentCaptureEnabled ? "摄像头片段采样已开启"
+                                          : (root.cloudVisionEnabled ? "摄像头本地分析，云视觉待授权" : "摄像头本地捕捉已开启")
     }
 
     function captureFrame() {
@@ -69,6 +71,17 @@ Item {
                                                                         : "Windows 摄像头桥不可用")
             }
             return
+        }
+        if (root.segmentCaptureEnabled
+                && root.liveVideoFrame !== null
+                && typeof root.petController.captureVisionSegmentVideoFrame === "function") {
+            var segmentStatus = root.petController.captureVisionSegmentVideoFrame(
+                        root.liveVideoFrame, root.frameWidth, root.frameHeight)
+            root.liveVideoFrame = null
+            if (segmentStatus.length > 0) {
+                updateStatus(segmentStatus)
+                return
+            }
         }
         if (root.liveVideoFrame !== null && typeof root.petController.captureVisionVideoFrame === "function") {
             var liveCaptured = root.petController.captureVisionVideoFrame(

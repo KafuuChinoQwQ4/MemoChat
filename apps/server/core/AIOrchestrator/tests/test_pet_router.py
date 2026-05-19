@@ -366,6 +366,79 @@ class PetRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(event["privacy"]["retention"], "none")
         self.assertEqual(observation["vision"]["source"], "uploaded_frame")
 
+    async def test_capture_segment_route_accepts_keyframes_without_raw_retention(self):
+        from harness.pet import PetObservation
+
+        class UploadedSegmentRuntime(PetRuntime):
+            def __init__(self, config):
+                super().__init__(config)
+                self.segment_request = None
+
+            async def capture_segment_observation(self, request):
+                self._sessions.touch(request.session_id, status="active")
+                self.segment_request = request
+                observation = PetObservation(
+                    session_id=request.session_id,
+                    audio={"vad": "idle", "rms": 0.0, "interrupt": False},
+                    vision={
+                        "enabled": True,
+                        "mode": "opencv_frame_stats",
+                        "face_present": True,
+                        "attention": "face_detected",
+                        "expression": "smile",
+                        "pose": {"brightness": 0.5},
+                        "gesture": "",
+                        "frame": {"width": request.frames[-1].frame_width, "height": request.frames[-1].frame_height},
+                        "source": "uploaded_segment",
+                        "segment": {
+                            "segment_id": request.segment_id,
+                            "frame_count": len(request.frames),
+                            "duration_ms": request.duration_ms,
+                        },
+                    },
+                    privacy={
+                        "camera_used": True,
+                        "cloud_vision_used": False,
+                        "raw_frame_sent": False,
+                        "raw_frame_count": len(request.frames),
+                        "raw_audio_recorded": False,
+                        "retention": "none",
+                    },
+                )
+                event = await self.update_observation(observation)
+                return observation, event
+
+        pet_router._runtime = UploadedSegmentRuntime(PetRuntimeConfig(enabled=True, deterministic=True))
+        self.runtime = pet_router._runtime
+        session_id = await self._create_session()
+
+        response = await self.client.post(
+            f"/pet/sessions/{session_id}/capture-segment",
+            json={
+                "segment_id": "seg-router",
+                "duration_ms": 3000,
+                "include_frame": False,
+                "frames": [
+                    {"frame_base64": "AQIDBA==", "frame_mime": "image/jpeg", "frame_width": 320, "frame_height": 240, "t_ms": 0},
+                    {"frame_base64": "BQYHCA==", "frame_mime": "image/jpeg", "frame_width": 320, "frame_height": 240, "t_ms": 3000},
+                ],
+                "metadata": {"source": "qt_video_sink_segment"},
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assert_ok(payload)
+        self.assert_v1_control_payload(payload["event"], session_id)
+        self.assertEqual(self.runtime.segment_request.segment_id, "seg-router")
+        self.assertEqual(self.runtime.segment_request.duration_ms, 3000)
+        self.assertEqual(len(self.runtime.segment_request.frames), 2)
+        self.assertEqual(self.runtime.segment_request.frames[1].t_ms, 3000)
+        self.assertFalse(payload["observation"]["privacy"]["raw_frame_sent"])
+        self.assertEqual(payload["observation"]["privacy"]["raw_frame_count"], 2)
+        self.assertEqual(payload["observation"]["vision"]["source"], "uploaded_segment")
+        self.assertEqual(payload["observation"]["vision"]["segment"]["frame_count"], 2)
+
     async def test_interrupt_returns_interrupted_control_event(self):
         session_id = await self._create_session()
 

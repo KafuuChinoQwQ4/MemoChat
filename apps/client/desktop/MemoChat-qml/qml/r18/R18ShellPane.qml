@@ -597,6 +597,8 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 clip: true
+                                reuseItems: true
+                                cacheBuffer: Math.max(height, 720)
                                 cellWidth: Math.max(170, Math.floor(width / Math.max(1, Math.floor(width / 190))))
                                 cellHeight: 294
                                 model: root.r18Controller ? root.r18Controller.comicModel : null
@@ -708,6 +710,8 @@ Item {
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
                                     clip: true
+                                    reuseItems: true
+                                    cacheBuffer: 480
                                     spacing: 6
                                     model: root.r18Controller ? root.r18Controller.chapterModel : null
                                     ScrollBar.vertical: GlassScrollBar {}
@@ -754,6 +758,8 @@ Item {
                                 anchors.fill: parent
                                 anchors.margins: 8
                                 clip: true
+                                reuseItems: true
+                                cacheBuffer: Math.max(height * 2, 1200)
                                 spacing: 10
                                 model: root.r18Controller ? root.r18Controller.pageModel : null
                                 ScrollBar.vertical: GlassScrollBar {}
@@ -1565,6 +1571,8 @@ Item {
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
                                             clip: true
+                                            reuseItems: true
+                                            cacheBuffer: Math.max(height, 720)
                                             cellWidth: Math.max(170, Math.floor(width / Math.max(1, Math.floor(width / 190))))
                                             cellHeight: 294
                                             model: root.r18Controller ? root.r18Controller.comicModel : null
@@ -1636,6 +1644,8 @@ Item {
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
                                             clip: true
+                                            reuseItems: true
+                                            cacheBuffer: 360
                                             cellWidth: Math.max(138, Math.floor(width / Math.max(1, Math.floor(width / 154))))
                                             cellHeight: 58
                                             model: root.sourceTagBuckets
@@ -1738,6 +1748,8 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 clip: true
+                                reuseItems: true
+                                cacheBuffer: 480
                                 spacing: 8
                                 model: root.r18Controller ? root.r18Controller.historyModel : null
                                 ScrollBar.vertical: GlassScrollBar {}
