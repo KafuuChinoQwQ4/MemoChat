@@ -1,18 +1,15 @@
 import QtQuick 2.15
 import QtMultimedia
-import MemoChat 1.0
 
 Item {
     id: root
     property string sourceUrl: ""
     property string playbackState: "idle"
-    property string speechText: ""
-    property string speechLanguage: "zh-CN"
-    property bool speechFinal: false
-    property bool textToSpeechFallbackEnabled: false
-    property string speechKey: ""
-    property string lastSpokenKey: ""
-    property var speechEngine: null
+    property string lastStartedAudioKey: ""
+    property string lastPlayedAudioKey: ""
+    property bool playbackActive: false
+    property int retryCount: 0
+    readonly property int maxRetryCount: 2
 
     visible: false
 
@@ -28,128 +25,101 @@ Item {
     }
 
     function hasPlayableAudio() {
-        return sourceUrl.length > 0 && !isDeterministicFallbackAudio()
+        return sourceUrl.length > 0
     }
 
-    function isDeterministicFallbackAudio() {
-        return sourceUrl.indexOf("/audio/deterministic-voice-") >= 0
-                || sourceUrl.indexOf("deterministic-voice-") >= 0
+    function audioPlaybackKey(url) {
+        var text = String(url)
+        var fragmentIndex = text.indexOf("#")
+        if (fragmentIndex >= 0) {
+            text = text.substring(0, fragmentIndex)
+        }
+        var queryIndex = text.indexOf("?")
+        if (queryIndex < 0) {
+            return text
+        }
+        var base = text.substring(0, queryIndex)
+        var query = text.substring(queryIndex + 1)
+        var kept = []
+        var parts = query.split("&")
+        for (var index = 0; index < parts.length; ++index) {
+            var part = parts[index]
+            if (part.length === 0) {
+                continue
+            }
+            var equalsIndex = part.indexOf("=")
+            var name = equalsIndex >= 0 ? part.substring(0, equalsIndex) : part
+            if (name === "event" || name === "turn") {
+                continue
+            }
+            kept.push(part)
+        }
+        return kept.length > 0 ? base + "?" + kept.join("&") : base
     }
 
-    function shouldUseTextFallback() {
-        return (sourceUrl.length === 0 || isDeterministicFallbackAudio())
-                && playbackState !== "ready"
-                && playbackState !== "playing"
-                && playbackState !== "loading"
-                && playbackState !== "buffering"
+    function currentSourceAudioKey() {
+        return audioPlaybackKey(petAudioPlayer.source)
     }
 
-    function normalizedSpeechLocale() {
-        var locale = root.speechLanguage.trim()
-        if (locale.length === 0) {
-            locale = "zh-CN"
-        }
-        var lower = locale.toLowerCase().replace("_", "-")
-        if (lower.indexOf("ja") === 0 || lower === "jp") {
-            return "ja-JP"
-        }
-        if (lower.indexOf("zh") === 0) {
-            return "zh-CN"
-        }
-        if (lower.indexOf("en") === 0) {
-            return "en-US"
-        }
-        return locale
+    function playableAudioKey() {
+        return audioPlaybackKey(root.sourceUrl)
     }
 
-    function qtLocaleName() {
-        return normalizedSpeechLocale().replace("-", "_")
+    function refreshPlaybackActivity() {
+        var active = root.lastStartedAudioKey.length > 0
+                || petAudioPlayer.playbackState === MediaPlayer.PlayingState
+                || petAudioPlayer.playbackState === MediaPlayer.PausedState
+        if (root.playbackActive !== active) {
+            root.playbackActive = active
+        }
     }
 
     function assignSource() {
-        if (String(petAudioPlayer.source) !== sourceUrl) {
+        if (currentSourceAudioKey() !== audioPlaybackKey(sourceUrl)) {
             petAudioPlayer.source = sourceUrl
         }
     }
 
-    function stopSpeech() {
-        nativeSpeech.stop()
-        if (speechEngine && speechEngine.stop) {
-            speechEngine.stop()
+    function playPlayableAudio(forceReplay) {
+        var key = playableAudioKey()
+        if (key.length === 0
+                || root.lastStartedAudioKey === key
+                || (!forceReplay && root.lastPlayedAudioKey === key)) {
+            return
         }
+        assignSource()
+        root.lastStartedAudioKey = key
+        root.lastPlayedAudioKey = key
+        refreshPlaybackActivity()
+        petAudioPlayer.play()
     }
 
-    function ensureSpeechEngine() {
-        if (speechEngine) {
-            return speechEngine
-        }
-        try {
-            speechEngine = Qt.createQmlObject('import QtTextToSpeech; TextToSpeech { volume: 1.0; rate: 0.0; pitch: 0.0 }',
-                                              root,
-                                              "PetTextToSpeechFallback")
-        } catch (error) {
-            console.warn("pet text-to-speech unavailable:", error)
-            speechEngine = null
-        }
-        return speechEngine
-    }
-
-    function maybeSpeakText() {
-        if (!root.textToSpeechFallbackEnabled) {
+    function retryPlayableAudio() {
+        if (!hasPlayableAudio() || !canPlayForState()) {
             return
         }
-        var locale = normalizedSpeechLocale()
-        var key = (root.speechKey.length > 0 ? root.speechKey : "speech") + ":" + locale + ":" + root.speechText
-        if (!root.speechFinal || root.speechText.trim().length === 0 || key === root.lastSpokenKey) {
-            return
-        }
-        if (nativeSpeech.speak(root.speechText, locale)) {
-            root.lastSpokenKey = key
-            petAudioPlayer.stop()
-            return
-        }
-        var engine = ensureSpeechEngine()
-        if (!engine || !engine.say) {
-            return
-        }
-        root.lastSpokenKey = key
-        petAudioPlayer.stop()
-        if (engine.locale !== undefined) {
-            engine.locale = Qt.locale(qtLocaleName())
-        }
-        engine.say(root.speechText)
+        root.lastStartedAudioKey = ""
+        assignSource()
+        playPlayableAudio(true)
     }
 
     function applyPlayback() {
-        if (!root.speechFinal && root.speechText.trim().length === 0) {
-            stopSpeech()
-        }
         if (shouldStopForState()) {
             petAudioPlayer.stop()
-            stopSpeech()
+            root.lastStartedAudioKey = ""
+            refreshPlaybackActivity()
             return
         }
         if (!hasPlayableAudio()) {
             petAudioPlayer.stop()
             petAudioPlayer.source = ""
-            if (shouldUseTextFallback()) {
-                maybeSpeakText()
-            }
+            root.lastStartedAudioKey = ""
+            refreshPlaybackActivity()
             return
         }
         assignSource()
         if (canPlayForState()) {
-            stopSpeech()
-            petAudioPlayer.play()
-        }
-    }
-
-    PetSpeechSynthesizer {
-        id: nativeSpeech
-        onErrorOccurred: function(message) {
-            if (message.length > 0) {
-                console.warn("pet native text-to-speech unavailable:", message)
-            }
+            playPlayableAudio()
         }
     }
 
@@ -162,36 +132,59 @@ Item {
         onErrorOccurred: function(error, errorString) {
             if (error !== MediaPlayer.NoError) {
                 console.warn("pet audio playback failed:", errorString)
+                if (root.hasPlayableAudio()
+                        && root.canPlayForState()
+                        && root.retryCount < root.maxRetryCount) {
+                    root.retryCount += 1
+                    petAudioPlayer.stop()
+                    petAudioPlayer.source = ""
+                    root.lastStartedAudioKey = ""
+                    retryTimer.restart()
+                    root.refreshPlaybackActivity()
+                    return
+                }
                 petAudioPlayer.stop()
                 petAudioPlayer.source = ""
-                root.maybeSpeakText()
+                root.lastStartedAudioKey = ""
+                root.refreshPlaybackActivity()
             }
+        }
+
+        onPlaybackStateChanged: {
+            if (petAudioPlayer.playbackState === MediaPlayer.StoppedState
+                    && root.lastStartedAudioKey.length > 0) {
+                root.lastStartedAudioKey = ""
+            }
+            root.refreshPlaybackActivity()
         }
     }
 
     onSourceUrlChanged: {
+        retryTimer.stop()
+        retryCount = 0
         applyPlayback()
+        refreshPlaybackActivity()
+    }
+
+    Timer {
+        id: retryTimer
+        interval: 650
+        repeat: false
+        onTriggered: root.retryPlayableAudio()
     }
 
     onPlaybackStateChanged: {
         if (!hasPlayableAudio() || shouldStopForState()) {
             petAudioPlayer.stop()
             if (shouldStopForState()) {
-                stopSpeech()
-            } else if (shouldUseTextFallback()) {
-                maybeSpeakText()
+                root.lastStartedAudioKey = ""
             }
+            refreshPlaybackActivity()
             return
         }
         if (canPlayForState()) {
-            assignSource()
-            stopSpeech()
-            petAudioPlayer.play()
+            playPlayableAudio()
         }
+        refreshPlaybackActivity()
     }
-
-    onSpeechTextChanged: maybeSpeakText()
-    onSpeechLanguageChanged: maybeSpeakText()
-    onSpeechFinalChanged: applyPlayback()
-    onSpeechKeyChanged: maybeSpeakText()
 }

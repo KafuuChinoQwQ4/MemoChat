@@ -3,9 +3,11 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+APP_CONTROLLER_DIALOG_LIST_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerDialogListEvents.cpp"
 APP_CONTROLLER_PRIVATE_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerPrivateEvents.cpp"
 APP_CONTROLLER_GROUP_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerGroupEvents.cpp"
-APP_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppController.cpp"
+APP_CONTROLLER_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerSelection.cpp"
+APP_CONTROLLER_GROUP_COMMANDS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerGroupCommands.cpp"
 CHATSERVER_CONFIGS = [
     REPO_ROOT / f"apps/server/core/ChatServer/chatserver{i}.ini"
     for i in range(1, 7)
@@ -36,7 +38,7 @@ class OfflineHistoryBootstrapTests(unittest.TestCase):
                 self.assertNotIn("chat_login_offline_push=false", source)
 
     def test_bootstrap_dialog_fetches_unread_private_and_group_history(self):
-        source = APP_CONTROLLER_PRIVATE_EVENTS.read_text(encoding="utf-8")
+        source = APP_CONTROLLER_DIALOG_LIST_EVENTS.read_text(encoding="utf-8")
         body = extract_function(source, "void AppController::onDialogListRsp")
 
         bootstrap_start = body.index("if (bootstrappingDialog)")
@@ -63,7 +65,7 @@ class OfflineHistoryBootstrapTests(unittest.TestCase):
         self.assertIn("if (isPendingRequest) {\n        _private_history_pending_before_ts = 0;", body)
 
     def test_group_dialog_bootstrap_registers_group_placeholder(self):
-        source = APP_CONTROLLER_PRIVATE_EVENTS.read_text(encoding="utf-8")
+        source = APP_CONTROLLER_DIALOG_LIST_EVENTS.read_text(encoding="utf-8")
         body = extract_function(source, "void AppController::onDialogListRsp")
         group_branch_start = body.index('if (dialogType == "group")')
         next_block = body.index("if (merged.empty()", group_branch_start)
@@ -73,31 +75,31 @@ class OfflineHistoryBootstrapTests(unittest.TestCase):
         self.assertIn("_group_list_model.upsertFriend(item);", group_branch)
 
     def test_select_dialog_by_group_uid_falls_back_without_group_list_row(self):
-        source = APP_CONTROLLER.read_text(encoding="utf-8")
+        source = APP_CONTROLLER_SELECTION.read_text(encoding="utf-8")
         body = extract_function(source, "void AppController::selectDialogByUid")
         self.assertIn("ConversationSyncService::groupIdForDialogUid(_group_uid_map, uid)", body)
         self.assertIn("selectGroupByDialogUid(uid, groupId)", body)
 
     def test_select_group_index_derives_group_id_when_uid_map_was_refreshed(self):
-        source = APP_CONTROLLER.read_text(encoding="utf-8")
+        source = APP_CONTROLLER_SELECTION.read_text(encoding="utf-8")
         body = extract_function(source, "void AppController::selectGroupIndex")
         self.assertIn("ConversationSyncService::groupIdForDialogUid(_group_uid_map, pseudoUid)", body)
         self.assertNotIn("_group_uid_map.value(pseudoUid, 0)", body)
 
     def test_group_history_request_is_not_blocked_by_private_history_loading(self):
-        source = APP_CONTROLLER.read_text(encoding="utf-8")
+        source = APP_CONTROLLER_GROUP_COMMANDS.read_text(encoding="utf-8")
         body = extract_function(source, "void AppController::loadGroupHistory")
         self.assertNotIn("if (_private_history_loading) {\n        return;\n    }", body)
         self.assertIn("_group_history_loading", body)
 
     def test_group_bootstrap_history_is_not_blocked_by_private_history_loading(self):
-        source = APP_CONTROLLER.read_text(encoding="utf-8")
+        source = APP_CONTROLLER_GROUP_COMMANDS.read_text(encoding="utf-8")
         body = extract_function(source, "void AppController::requestGroupHistoryForBootstrap")
         self.assertNotIn("groupId == _current_group_id && _private_history_loading", body)
         self.assertIn("_group_history_loading", body)
 
     def test_group_dialog_fallback_creates_placeholder_before_history_request(self):
-        source = APP_CONTROLLER.read_text(encoding="utf-8")
+        source = APP_CONTROLLER_SELECTION.read_text(encoding="utf-8")
         body = extract_function(source, "void AppController::selectGroupByDialogUid")
         placeholder_pos = body.index("_gateway.userMgr()->UpsertGroup(groupInfo);")
         request_pos = body.index("loadGroupHistory();")

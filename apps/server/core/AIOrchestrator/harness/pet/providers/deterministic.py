@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 
@@ -32,6 +33,7 @@ class DeterministicPetProvider:
         style_hint = f"{model_type}:{model_name}".strip(":")
         normalized = content.strip()
         language_key = _reply_text_language(language)
+        reply = ""
         if language_key == "ja":
             if any(token in normalized for token in ("整理", "思路", "计划")):
                 reply = "もちろんです。要点をまとめて、一つずつ進めましょう。"
@@ -39,34 +41,21 @@ class DeterministicPetProvider:
                 reply = "こんにちは、ここにいます。"
             elif normalized.endswith("?") or normalized.endswith("？") or normalized.endswith(("吗", "么", "嘛", "か")):
                 reply = "質問はわかりました。まず大事なところから答えます。"
-            else:
-                reply = "聞こえています。ちゃんと返事をしますね。"
-            if style_hint:
-                reply = f"{reply}（{style_hint} scripted）"
-            return reply
-
-        if language_key == "en":
+        elif language_key == "en":
             if any(token in normalized for token in ("整理", "思路", "计划", "plan")):
                 reply = "Sure. I will gather the key points first, then go step by step."
             elif any(token in normalized for token in ("你好", "嗨", "hello", "Hello")):
                 reply = "Hello, I am here."
             elif normalized.endswith("?") or normalized.endswith("？") or normalized.endswith(("吗", "么", "嘛")):
                 reply = "I understand your question. I will start with the most important part."
-            else:
-                reply = "I hear you, and I am replying carefully."
-            if style_hint:
-                reply = f"{reply} ({style_hint} scripted)"
-            return reply
-
-        if any(token in normalized for token in ("整理", "思路", "计划")):
-            reply = "可以，我先陪你把重点收拢，再一步一步拆开。"
-        elif any(token in normalized for token in ("你好", "嗨", "hello", "Hello")):
-            reply = "你好，我在这里。"
-        elif normalized.endswith("?") or normalized.endswith("？") or normalized.endswith(("吗", "么", "嘛")):
-            reply = "我明白你的问题了，先从最关键的地方开始回答。"
         else:
-            reply = "我听到了，正在认真回应你。"
-        if style_hint:
+            if any(token in normalized for token in ("整理", "思路", "计划")):
+                reply = "可以，我先陪你把重点收拢，再一步一步拆开。"
+            elif any(token in normalized for token in ("你好", "嗨", "hello", "Hello")):
+                reply = "你好，我在这里。"
+            elif normalized.endswith("?") or normalized.endswith("？") or normalized.endswith(("吗", "么", "嘛")):
+                reply = "我明白你的问题了，先从最关键的地方开始回答。"
+        if reply and style_hint:
             reply = f"{reply}（{style_hint} scripted）"
         return reply
 
@@ -76,6 +65,8 @@ class DeterministicPetProvider:
             raise PetProviderError("deterministic provider error requested", provider=self.name)
 
         reply, translation, language = await self._generate_reply(prompt)
+        if not reply.strip():
+            return []
 
         voice_provider_name = _voice_provider_name(prompt)
         metadata = _voice_metadata(prompt)
@@ -84,14 +75,21 @@ class DeterministicPetProvider:
             metadata["text_lang"] = _reply_text_language(language)
         if translation:
             metadata["translation"] = translation
-        voice = await self._synthesize_voice(
-            prompt,
-            text=reply,
-            language=language or _voice_language(prompt),
-            provider_name=voice_provider_name,
-            turn_id="voice-full" if voice_provider_name not in {"scripted", "deterministic"} else "deterministic-full",
-            metadata=metadata,
-        )
+        voice = None
+        if voice_provider_name in {"scripted", "deterministic"}:
+            voice = await self._synthesize_voice(
+                prompt,
+                text=reply,
+                language=language or _voice_language(prompt),
+                provider_name=voice_provider_name,
+                turn_id="deterministic-full",
+                metadata=metadata,
+            )
+        else:
+            metadata["voice_deferred"] = True
+            metadata["voice_provider"] = voice_provider_name
+            metadata["voice_name"] = _voice_name(prompt)
+            metadata["voice_language"] = language or _voice_language(prompt)
         return [
             ProviderChunk(
                 text=reply,
@@ -99,7 +97,7 @@ class DeterministicPetProvider:
                 intensity=0.66,
                 final=True,
                 voice=voice,
-                metadata={"translation": translation, "language": language},
+                metadata={**metadata, "translation": translation, "language": language},
             )
         ]
 
@@ -152,14 +150,21 @@ class DeterministicPetProvider:
     async def _generate_reply(self, prompt: PetPromptContext) -> tuple[str, str, str]:
         language = _reply_language(prompt)
         if not _should_use_llm(prompt):
-            return await self._scripted_reply(prompt, language), "", language
+            reply = await self._scripted_reply(prompt, language)
+            translation = await self._scripted_translation(prompt, language) if _reply_text_language(language) == "ja" else ""
+            return reply, translation, language
         try:
-            reply, translation = await self._llm_reply(prompt, language)
+            reply, translation = await asyncio.wait_for(
+                self._llm_reply(prompt, language),
+                timeout=_text_generation_timeout_sec(prompt),
+            )
             if reply.strip():
                 return reply, translation, language
         except Exception:
             pass
-        return await self._scripted_reply(prompt, language), "", language
+        reply = await self._scripted_reply(prompt, language)
+        translation = await self._scripted_translation(prompt, language) if _reply_text_language(language) == "ja" else ""
+        return reply, translation, language
 
     async def _scripted_reply(self, prompt: PetPromptContext, language: str) -> str:
         return await self.generate_text(
@@ -167,6 +172,16 @@ class DeterministicPetProvider:
             model_type=prompt.model_type,
             model_name=prompt.model_name,
             language=language,
+        )
+
+    async def _scripted_translation(self, prompt: PetPromptContext, language: str) -> str:
+        if _reply_text_language(language) != "ja":
+            return ""
+        return await self.generate_text(
+            prompt.user_text,
+            model_type=prompt.model_type,
+            model_name=prompt.model_name,
+            language="zh-CN",
         )
 
     async def _llm_reply(self, prompt: PetPromptContext, language: str) -> tuple[str, str]:
@@ -285,6 +300,15 @@ def _should_use_llm(prompt: PetPromptContext) -> bool:
     if not normalized:
         return False
     return not (normalized.startswith("scripted") or normalized.startswith("deterministic"))
+
+
+def _text_generation_timeout_sec(prompt: PetPromptContext) -> float:
+    metadata = _voice_metadata(prompt)
+    try:
+        value = float(metadata.get("text_timeout_sec") or metadata.get("pet_text_timeout_sec") or 25.0)
+    except (TypeError, ValueError):
+        value = 25.0
+    return max(0.001, value)
 
 
 def _reply_language(prompt: PetPromptContext) -> str:

@@ -109,7 +109,7 @@ agent:
 agent_queue:
   enabled: true
   backend: "hybrid"
-  worker_concurrency: 8
+  worker_concurrency: 4
   fallback_to_local: true
   resume_stale_on_start: true
   rabbitmq:
@@ -416,5 +416,6 @@ pet:
   voice_sovits_text_language: "zh"
   voice_sovits_output_dir: "/app/.data/pet-voice-cache"
   voice_sovits_timeout_sec: 180
+  pet_text_timeout_sec: 25
   voice_training_enabled: true
   voice_training_artifact_root: "/app/.data/pet-voice-training"

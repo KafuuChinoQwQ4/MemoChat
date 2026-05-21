@@ -187,6 +187,7 @@ void RegisterRoutes(LogicSystem& logic) {
             bool login_cache_hit = gateauthsupport::TryLoadCachedLoginProfile(email, pwd, tempUser);
             if (login_cache_hit) {
                 userInfo = tempUser;
+                gateauthsupport::RefreshLoginProfileFromDb(email, userInfo);
             }
             bool pwd_valid = login_cache_hit;
             if (!pwd_valid) {

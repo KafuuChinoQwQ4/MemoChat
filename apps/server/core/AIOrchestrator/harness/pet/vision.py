@@ -1243,7 +1243,20 @@ def _decode_frame_payload(request: VisionCaptureRequest, cv2):
 def _apply_request_metadata_to_vision(vision: dict[str, Any], metadata: dict[str, Any]) -> None:
     if not isinstance(metadata, dict):
         return
-    for key in ("reply_language", "language", "voice_language", "text_lang", "speech_rules"):
+    for key in (
+        "reply_language",
+        "language",
+        "voice_language",
+        "text_lang",
+        "speech_rules",
+        "voice_provider",
+        "voice_name",
+        "ref_audio_path",
+        "reference_audio_path",
+        "prompt_text",
+        "prompt_lang",
+        "reference_audio_source",
+    ):
         value = str(metadata.get(key) or "").strip()
         if value:
             vision[key] = value

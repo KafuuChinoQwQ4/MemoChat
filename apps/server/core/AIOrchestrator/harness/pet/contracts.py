@@ -106,6 +106,10 @@ class PetVision:
     client_frame: dict[str, Any] = field(default_factory=dict)
     frame_mime: str = ""
     captured_at_ms: int = 0
+    changed_fields: list[str] = field(default_factory=list)
+    stable_for_ms: int = 0
+    state_hash: str = ""
+    semantic_event: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -318,7 +322,7 @@ def _explicit_true(value: Any) -> bool:
 
 def _normalize_phase(value: Any) -> str:
     phase = str(value or "idle").strip().lower()
-    if phase in {"idle", "listening", "thinking", "speaking", "interrupted", "error"}:
+    if phase in {"idle", "listening", "thinking", "speaking", "audio_ready", "interrupted", "error"}:
         return phase
     return "idle"
 
@@ -346,10 +350,12 @@ def _sanitize_vision_payload(value: Any) -> dict[str, Any]:
     enabled = _json_bool(vision.get("enabled", False))
     pose = _dict_or_empty(vision.get("pose"))
     face_present = _json_bool(vision.get("face_present", False)) if enabled else False
+
     sanitized["enabled"] = enabled
     sanitized["mode"] = str(vision.get("mode") or ("landmarks_only" if enabled else "none"))
     sanitized["face_present"] = face_present
     sanitized["confidence"] = _vision_confidence(vision, pose, enabled, face_present)
+
     if enabled:
         sanitized["attention"] = str(vision.get("attention") or "")
         sanitized["expression"] = str(vision.get("expression") or "")
@@ -364,6 +370,10 @@ def _sanitize_vision_payload(value: Any) -> dict[str, Any]:
         sanitized["client_frame"] = _dict_or_empty(vision.get("client_frame"))
         sanitized["frame_mime"] = str(vision.get("frame_mime") or "")
         sanitized["captured_at_ms"] = _non_negative_int(vision.get("captured_at_ms"))
+        sanitized["changed_fields"] = _list_or_empty(vision.get("changed_fields"))
+        sanitized["stable_for_ms"] = _non_negative_int(vision.get("stable_for_ms"))
+        sanitized["state_hash"] = str(vision.get("state_hash") or "")
+        sanitized["semantic_event"] = str(vision.get("semantic_event") or "")
     else:
         sanitized["attention"] = ""
         sanitized["expression"] = ""
@@ -378,6 +388,11 @@ def _sanitize_vision_payload(value: Any) -> dict[str, Any]:
         sanitized["client_frame"] = {}
         sanitized["frame_mime"] = ""
         sanitized["captured_at_ms"] = 0
+        sanitized["changed_fields"] = []
+        sanitized["stable_for_ms"] = 0
+        sanitized["state_hash"] = ""
+        sanitized["semantic_event"] = ""
+
     return sanitized
 
 

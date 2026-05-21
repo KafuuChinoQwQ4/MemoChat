@@ -121,11 +121,19 @@ Rectangle {
                 width: 34
                 height: 34
                 fillMode: Image.PreserveAspectCrop
-                source: root.userIcon
+                property string baseSource: root.userIcon.length > 0 ? root.userIcon : "qrc:/res/head_1.jpg"
+                property bool loadFailed: false
+                source: loadFailed ? "qrc:/res/head_1.jpg" : baseSource
                 cache: true
                 asynchronous: true
                 opacity: (status === Image.Ready) ? 1.0 : 0.0
                 Behavior on opacity { NumberAnimation { duration: 200 } }
+                onBaseSourceChanged: loadFailed = false
+                onStatusChanged: {
+                    if (status === Image.Error) {
+                        loadFailed = true
+                    }
+                }
             }
 
             MouseArea {

@@ -168,7 +168,8 @@ class PetVisualLayerUserFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(high_event["action"]["name"], "visual_react")
         self.assertTrue(high_event["debug"]["visual_summary"]["speak"])
         self.assertIn("杯子和键盘", high_event["debug"]["visual_summary"]["summary_text"])
-        self.assertEqual(high_event["speech"]["text_delta"], "我已经看到你了哦~")
+        self.assertIn("我看到你啦", high_event["speech"]["text_delta"])
+        self.assertIn("心情还不错", high_event["speech"]["text_delta"])
         self.assertEqual(high_event["debug"]["visual_summary"]["reason"], "first_user_seen")
 
         reply = await self.client.post(

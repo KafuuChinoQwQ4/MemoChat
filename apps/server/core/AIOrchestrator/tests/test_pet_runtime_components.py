@@ -190,7 +190,7 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(chunks[0].voice.to_dict()["metadata"]["language"], "ja-JP")
         self.assertEqual(chunks[0].voice.to_dict()["metadata"]["text_lang"], "ja")
 
-    async def test_voice_router_deterministic_synthesis_stays_text_only(self):
+    async def test_voice_router_deterministic_synthesis_emits_scripted_wav(self):
         VoiceSynthesisRequest = _load_attr("harness.pet.voice", "VoiceSynthesisRequest")
         VoiceProviderRouter = _load_attr("harness.pet.voice", "VoiceProviderRouter")
         router = VoiceProviderRouter(deterministic=True)
@@ -206,14 +206,16 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         payload = result.to_dict() if hasattr(result, "to_dict") else vars(result)
 
         self.assertEqual(payload["text"], "hello voice")
-        self.assertEqual(payload["state"], "text-only")
-        self.assertEqual(payload["sample_rate"], 0)
-        self.assertGreaterEqual(payload["duration_ms"], 0)
-        self.assertIsNone(payload["url"])
-        self.assertIsNone(payload["chunk_ref"])
+        self.assertEqual(payload["state"], "ready")
+        self.assertEqual(payload["sample_rate"], 24000)
+        self.assertGreater(payload["duration_ms"], 0)
+        self.assertTrue(str(payload["url"]).startswith("/audio/deterministic-voice-"))
+        self.assertTrue(str(payload["url"]).endswith(".wav"))
+        self.assertTrue(str(payload["chunk_ref"]).startswith("deterministic-voice-"))
         self.assertEqual(payload["provider"], "scripted")
         self.assertEqual(payload["voice"], "deterministic")
-        self.assertEqual(payload["retention"], "none")
+        self.assertEqual(payload["retention"], "ephemeral")
+        self.assertTrue(payload["metadata"].get("audio_persisted"))
 
     async def test_voice_router_exposes_stream_and_interrupt_contract(self):
         VoiceProviderRouter = _load_attr("harness.pet.voice", "VoiceProviderRouter")
@@ -227,7 +229,7 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(callable(getattr(provider, "stream", None)))
         self.assertTrue(callable(getattr(provider, "interrupt", None)))
 
-    async def test_voice_router_deterministic_stream_yields_text_only_segments(self):
+    async def test_voice_router_deterministic_stream_yields_scripted_wav_segments(self):
         VoiceSynthesisRequest = _load_attr("harness.pet.voice", "VoiceSynthesisRequest")
         VoiceProviderRouter = _load_attr("harness.pet.voice", "VoiceProviderRouter")
         router = VoiceProviderRouter(deterministic=True)
@@ -247,11 +249,11 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         for segment in segments:
             payload = _voice_payload(segment)
             self.assertTrue(payload["text"])
-            self.assertEqual(payload["state"], "text-only")
-            self.assertEqual(payload["sample_rate"], 0)
-            self.assertIsNone(payload["url"])
-            self.assertEqual(payload["retention"], "none")
-            self.assertFalse(payload["metadata"].get("audio_persisted", True))
+            self.assertEqual(payload["state"], "ready")
+            self.assertEqual(payload["sample_rate"], 24000)
+            self.assertTrue(str(payload["url"]).startswith("/audio/deterministic-voice-"))
+            self.assertEqual(payload["retention"], "ephemeral")
+            self.assertTrue(payload["metadata"].get("audio_persisted"))
 
     async def test_voice_router_interrupt_is_text_only_and_idempotent(self):
         VoiceInterruptRequest = _load_attr("harness.pet.voice", "VoiceInterruptRequest")
@@ -333,6 +335,126 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["status"], "missing_reference_audio")
         self.assertTrue(payload["configured"])
         self.assertFalse(payload["endpoint_probe_tested"])
+
+    async def test_gpt_sovits_voice_provider_ignores_unreadable_reference_audio(self):
+        GPTSoVITSVoiceProvider = _load_attr("harness.pet.voice", "GPTSoVITSVoiceProvider")
+        VoiceSynthesisRequest = _load_attr("harness.pet.voice", "VoiceSynthesisRequest")
+        VoiceSynthesisResult = _load_attr("harness.pet.voice", "VoiceSynthesisResult")
+
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        fallback_audio = Path(temp_dir.name) / "fallback.wav"
+        _write_wav(fallback_audio, duration_sec=8.0)
+
+        captured = {}
+
+        class FakeResponse:
+            def __init__(self, payload):
+                self.status_code = 200
+                self.headers = {"content-type": "audio/wav"}
+                self.content = payload
+                self.text = ""
+
+            def raise_for_status(self):
+                return None
+
+        class FakeAsyncClient:
+            def __init__(self, timeout=None):
+                self.timeout = timeout
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, url, json=None):
+                captured["url"] = url
+                captured["payload"] = dict(json or {})
+                return FakeResponse(fallback_audio.read_bytes())
+
+        fake_httpx = types.SimpleNamespace(AsyncClient=FakeAsyncClient)
+        provider = GPTSoVITSVoiceProvider(
+            base_url="http://127.0.0.1:9880",
+            reference_audio=str(fallback_audio),
+            prompt_text="おはようございます",
+        )
+
+        with mock.patch.dict(sys.modules, {"httpx": fake_httpx}):
+            result = await provider.synthesize(
+                VoiceSynthesisRequest(
+                    session_id="pet-session",
+                    turn_id="pet-turn",
+                    text="你好",
+                    provider="gpt-sovits",
+                    voice="kafuu-chino",
+                    metadata={"ref_audio_path": "/no/such/audio.wav"},
+                )
+            )
+
+        self.assertIsInstance(result, VoiceSynthesisResult)
+        self.assertEqual(captured["url"], "http://127.0.0.1:9880/tts")
+        self.assertEqual(captured["payload"]["ref_audio_path"], str(fallback_audio))
+        self.assertEqual(captured["payload"]["prompt_text"], "おはようございます")
+
+    async def test_gpt_sovits_voice_provider_includes_http_error_body(self):
+        GPTSoVITSVoiceProvider = _load_attr("harness.pet.voice", "GPTSoVITSVoiceProvider")
+        VoiceProviderError = _load_attr("harness.pet.voice", "VoiceProviderError")
+        VoiceSynthesisRequest = _load_attr("harness.pet.voice", "VoiceSynthesisRequest")
+
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        fallback_audio = Path(temp_dir.name) / "fallback.wav"
+        _write_wav(fallback_audio, duration_sec=8.0)
+
+        class FakeHTTPStatusError(Exception):
+            def __init__(self, response):
+                super().__init__(f"HTTP {response.status_code}")
+                self.response = response
+
+        class FakeResponse:
+            def __init__(self):
+                self.status_code = 400
+                self.headers = {"content-type": "application/json"}
+                self.content = b""
+                self.text = '{"message":"tts failed","Exception":"/no/such/audio.wav not exists"}'
+
+            def raise_for_status(self):
+                raise FakeHTTPStatusError(self)
+
+        class FakeAsyncClient:
+            def __init__(self, timeout=None):
+                self.timeout = timeout
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, url, json=None):
+                return FakeResponse()
+
+        fake_httpx = types.SimpleNamespace(AsyncClient=FakeAsyncClient)
+        provider = GPTSoVITSVoiceProvider(
+            base_url="http://127.0.0.1:9880",
+            reference_audio=str(fallback_audio),
+        )
+
+        with mock.patch.dict(sys.modules, {"httpx": fake_httpx}):
+            with self.assertRaises(VoiceProviderError) as ctx:
+                await provider.synthesize(
+                    VoiceSynthesisRequest(
+                        session_id="pet-session",
+                        turn_id="pet-turn",
+                        text="你好",
+                        provider="gpt-sovits",
+                        voice="kafuu-chino",
+                    )
+                )
+
+        self.assertIn("HTTP 400", str(ctx.exception))
+        self.assertIn("/no/such/audio.wav not exists", str(ctx.exception))
 
     def test_gpt_sovits_language_aliases_match_api_values(self):
         voice_module = importlib.import_module("harness.pet.voice")

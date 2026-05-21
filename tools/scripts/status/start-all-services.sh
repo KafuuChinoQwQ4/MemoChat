@@ -24,9 +24,10 @@ Start Linux MemoChat backend services from:
 Docker Envoy Gateway is started by default from:
   ${LOCAL_COMPOSE_FILE}
 
-GPT-SoVITS is started as a local WSL service by default so AIOrchestrator can
-reach http://host.docker.internal:9880. Set MEMOCHAT_START_GPT_SOVITS=0 or pass
---skip-gpt-sovits to skip it.
+GPT-SoVITS is started and required as a local WSL service by default so
+AIOrchestrator can reach http://host.docker.internal:9880. Set
+MEMOCHAT_START_GPT_SOVITS=0 or pass --skip-gpt-sovits to skip it. Set
+MEMOCHAT_REQUIRE_GPT_SOVITS=0 only when text-only pet replies are acceptable.
 
 Database, queue, object storage, AI/RAG, and observability containers are not
 started or stopped by this script. Start the broader Docker stack separately
@@ -78,6 +79,7 @@ export MEMOCHAT_ENABLE_RABBITMQ="${MEMOCHAT_ENABLE_RABBITMQ:-1}"
 export MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-1}"
 START_ENVOY="${START_ENVOY_OVERRIDE:-${MEMOCHAT_START_ENVOY:-1}}"
 START_GPT_SOVITS="${START_GPT_SOVITS_OVERRIDE:-${MEMOCHAT_START_GPT_SOVITS:-1}}"
+REQUIRE_GPT_SOVITS="${MEMOCHAT_REQUIRE_GPT_SOVITS:-1}"
 GPT_SOVITS_PORT="${GPT_SOVITS_PORT:-9880}"
 GPT_SOVITS_HOST="${GPT_SOVITS_HOST:-0.0.0.0}"
 GPT_SOVITS_API_URL="${GPT_SOVITS_API_URL:-http://127.0.0.1:${GPT_SOVITS_PORT}}"
@@ -303,6 +305,19 @@ gpt_sovits_ready() {
     curl -fsS "${GPT_SOVITS_API_URL%/}/docs" >/dev/null 2>&1
 }
 
+print_gpt_sovits_failure_hint() {
+    echo "  [FAIL] GPT-SoVITS did not become ready at ${GPT_SOVITS_API_URL}" >&2
+    echo "         API docs probe: ${GPT_SOVITS_API_URL%/}/docs" >&2
+    echo "         Logs:" >&2
+    echo "           ${GPT_SOVITS_LOG_FILE}" >&2
+    echo "           ${LOG_DIR}/GPT-SoVITS_out.log" >&2
+    echo "           ${LOG_DIR}/GPT-SoVITS_err.log" >&2
+    echo "         Repair commands:" >&2
+    echo "           ${PROJECT_ROOT}/tools/scripts/pet/smoke_gpt_sovits_tts_wsl.sh" >&2
+    echo "           ${PROJECT_ROOT}/tools/scripts/pet/apply_gpt_sovits_voice_wsl.sh" >&2
+    echo "         To intentionally allow text-only pet replies, set MEMOCHAT_REQUIRE_GPT_SOVITS=0 or pass --skip-gpt-sovits." >&2
+}
+
 wait_for_gpt_sovits() {
     local waited=0
     while (( waited < GPT_SOVITS_WAIT_SECONDS )); do
@@ -313,7 +328,11 @@ wait_for_gpt_sovits() {
         sleep 1
         waited=$((waited + 1))
     done
-    echo "  [WARN] GPT-SoVITS did not become ready at ${GPT_SOVITS_API_URL}; check logs"
+    if is_truthy "$REQUIRE_GPT_SOVITS"; then
+        print_gpt_sovits_failure_hint
+        return 1
+    fi
+    echo "  [WARN] GPT-SoVITS did not become ready at ${GPT_SOVITS_API_URL}; continuing because MEMOCHAT_REQUIRE_GPT_SOVITS=0"
     return 0
 }
 
@@ -332,7 +351,12 @@ start_gpt_sovits() {
     fi
 
     if gpt_sovits_loopback_only; then
-        stop_gpt_sovits_for_rebind || return 0
+        if ! stop_gpt_sovits_for_rebind; then
+            if is_truthy "$REQUIRE_GPT_SOVITS"; then
+                return 1
+            fi
+            return 0
+        fi
     fi
 
     if gpt_sovits_ready; then
@@ -355,7 +379,10 @@ start_gpt_sovits() {
     fi
 
     if [[ ! -f "$GPT_SOVITS_START_SCRIPT" ]]; then
-        echo "  [WARN] GPT-SoVITS start script missing: ${GPT_SOVITS_START_SCRIPT}"
+        echo "  [FAIL] GPT-SoVITS start script missing: ${GPT_SOVITS_START_SCRIPT}" >&2
+        if is_truthy "$REQUIRE_GPT_SOVITS"; then
+            return 1
+        fi
         return 0
     fi
 

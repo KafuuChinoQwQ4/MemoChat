@@ -4,7 +4,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-APP_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppController.cpp"
+APP_CONTROLLER_MODELS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerModels.cpp"
+APP_CONTROLLER_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerSelection.cpp"
 
 
 def extract_function(source: str, signature: str) -> str:
@@ -24,7 +25,7 @@ def extract_function(source: str, signature: str) -> str:
 
 class ChatHistoryInitialRefreshTests(unittest.TestCase):
     def test_private_chat_selection_requests_latest_history_page(self):
-        source = APP_CONTROLLER.read_text(encoding="utf-8")
+        source = APP_CONTROLLER_MODELS.read_text(encoding="utf-8")
         body = extract_function(source, "void AppController::loadCurrentChatMessages()")
 
         self.assertIn("requestPrivateHistory(_current_chat_uid, 0, QString());", body)
@@ -34,7 +35,7 @@ class ChatHistoryInitialRefreshTests(unittest.TestCase):
         )
 
     def test_group_chat_selection_requests_latest_history_page_before_pagination_cursor(self):
-        source = APP_CONTROLLER.read_text(encoding="utf-8")
+        source = APP_CONTROLLER_SELECTION.read_text(encoding="utf-8")
         body = extract_function(source, "void AppController::selectGroupIndex(int index)")
 
         initial_load = body[:body.rindex("loadGroupHistory();")]

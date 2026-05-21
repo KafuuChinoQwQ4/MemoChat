@@ -44,12 +44,20 @@ Item {
 
                 Image {
                     anchors.fill: parent
-                    source: root.iconSource
+                    property string baseSource: root.iconSource.length > 0 ? root.iconSource : "qrc:/res/head_1.jpg"
+                    property bool loadFailed: false
+                    source: loadFailed ? "qrc:/res/head_1.jpg" : baseSource
                     fillMode: Image.PreserveAspectCrop
                     cache: true
                     asynchronous: true
                     opacity: (status === Image.Ready) ? 1.0 : 0.0
                     Behavior on opacity { NumberAnimation { duration: 200 } }
+                    onBaseSourceChanged: loadFailed = false
+                    onStatusChanged: {
+                        if (status === Image.Error) {
+                            loadFailed = true
+                        }
+                    }
                 }
             }
 

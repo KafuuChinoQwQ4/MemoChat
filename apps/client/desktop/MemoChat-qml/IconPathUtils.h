@@ -105,6 +105,31 @@ inline QString normalizeRelativeMediaDownloadUrl(QString icon)
     return attachMediaDownloadAuth(absoluteUrl);
 }
 
+inline bool looksLikeMediaKey(const QString &icon)
+{
+    if (icon.length() < 16 || icon.length() > 96) {
+        return false;
+    }
+    for (const QChar ch : icon) {
+        if (!ch.isLetterOrNumber() && ch != QLatin1Char('-') && ch != QLatin1Char('_')) {
+            return false;
+        }
+    }
+    return icon.contains(QLatin1Char('-'));
+}
+
+inline QString mediaKeyDownloadUrl(const QString &mediaKey)
+{
+    QString baseUrl = mediaDownloadBaseUrl();
+    if (baseUrl.isEmpty()) {
+        return attachMediaDownloadAuth(QStringLiteral("/media/download?asset=") + mediaKey);
+    }
+    if (baseUrl.endsWith(QLatin1Char('/'))) {
+        baseUrl.chop(1);
+    }
+    return attachMediaDownloadAuth(baseUrl + QStringLiteral("/media/download?asset=") + mediaKey);
+}
+
 inline QString normalizeLocalMediaDownloadUrl(const QString &icon)
 {
     const QUrl url(icon);
@@ -170,6 +195,10 @@ inline QString normalizeIconForQml(QString icon)
     if (!icon.contains('/') && !icon.contains('\\')
         && icon.startsWith(QStringLiteral("head_"), Qt::CaseInsensitive)) {
         return QStringLiteral("qrc:/res/") + icon;
+    }
+
+    if (!icon.contains('/') && !icon.contains('\\') && looksLikeMediaKey(icon)) {
+        return mediaKeyDownloadUrl(icon);
     }
 
     const QUrl parsedUrl(icon);

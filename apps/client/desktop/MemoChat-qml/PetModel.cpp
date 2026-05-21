@@ -80,6 +80,26 @@ QString displayTextForSpeech(const QString &speechText)
     return speechText.trimmed();
 }
 
+bool isObservationControlEvent(const QJsonObject &event)
+{
+    const QString actionName = event.value(QStringLiteral("action"))
+                                   .toObject()
+                                   .value(QStringLiteral("name"))
+                                   .toString()
+                                   .trimmed();
+    return actionName == QStringLiteral("observe")
+        || actionName == QStringLiteral("visual_react");
+}
+
+bool isAudioStateStillPresenting(const QString &state)
+{
+    const QString normalized = state.trimmed().toLower();
+    return normalized == QStringLiteral("ready")
+        || normalized == QStringLiteral("playing")
+        || normalized == QStringLiteral("loading")
+        || normalized == QStringLiteral("buffering");
+}
+
 }
 
 PetModel::PetModel(QObject *parent)
@@ -116,37 +136,46 @@ void PetModel::applyControlEvent(const QJsonObject &event)
         changed = true;
     }
 
-    const QString next_phase = jsonString(event, QStringLiteral("phase"), _phase);
+    const bool preserve_voice_for_observation =
+        isObservationControlEvent(event)
+        && !_audio_url.isEmpty()
+        && isAudioStateStillPresenting(_audio_state);
+
+    const QString next_phase = preserve_voice_for_observation
+                                   ? _phase
+                                   : jsonString(event, QStringLiteral("phase"), _phase);
     if (updateString(_phase, next_phase)) {
         changed = true;
     }
     const bool reset_speech_for_waiting_phase =
         next_phase == QStringLiteral("listening") || next_phase == QStringLiteral("thinking");
 
-    const QString next_emotion = jsonString(event, QStringLiteral("emotion"), _emotion);
-    if (updateString(_emotion, next_emotion)) {
-        changed = true;
-    }
-
     const QJsonObject animation = event.value(QStringLiteral("animation")).toObject();
-    const QString next_expression = jsonString(
-        animation, QStringLiteral("expression"), jsonString(event, QStringLiteral("expression"), _expression));
-    if (updateString(_expression, next_expression)) {
-        changed = true;
-    }
+    if (!preserve_voice_for_observation) {
+        const QString next_emotion = jsonString(event, QStringLiteral("emotion"), _emotion);
+        if (updateString(_emotion, next_emotion)) {
+            changed = true;
+        }
 
-    const QString next_motion = jsonString(
-        animation,
-        QStringLiteral("motion"),
-        jsonString(animation, QStringLiteral("motion_group"), jsonString(event, QStringLiteral("motion"), _motion)));
-    if (updateString(_motion, next_motion)) {
-        changed = true;
-    }
+        const QString next_expression = jsonString(
+            animation, QStringLiteral("expression"), jsonString(event, QStringLiteral("expression"), _expression));
+        if (updateString(_expression, next_expression)) {
+            changed = true;
+        }
 
-    const qreal next_intensity = boundedUnit(jsonReal(event, QStringLiteral("intensity"), _intensity), _intensity);
-    if (!qFuzzyCompare(_intensity + 1.0, next_intensity + 1.0)) {
-        _intensity = next_intensity;
-        changed = true;
+        const QString next_motion = jsonString(
+            animation,
+            QStringLiteral("motion"),
+            jsonString(animation, QStringLiteral("motion_group"), jsonString(event, QStringLiteral("motion"), _motion)));
+        if (updateString(_motion, next_motion)) {
+            changed = true;
+        }
+
+        const qreal next_intensity = boundedUnit(jsonReal(event, QStringLiteral("intensity"), _intensity), _intensity);
+        if (!qFuzzyCompare(_intensity + 1.0, next_intensity + 1.0)) {
+            _intensity = next_intensity;
+            changed = true;
+        }
     }
 
     const QJsonObject gaze = event.value(QStringLiteral("gaze")).toObject();
@@ -163,22 +192,24 @@ void PetModel::applyControlEvent(const QJsonObject &event)
 
     const QJsonObject lip_sync = event.value(QStringLiteral("lip_sync")).toObject();
     const QJsonObject audio = event.value(QStringLiteral("audio")).toObject();
-    const qreal next_lip = boundedUnit(
-        jsonReal(lip_sync, QStringLiteral("value"), jsonReal(audio, QStringLiteral("rms"), _lip_sync_value)),
-        _lip_sync_value);
-    if (!qFuzzyCompare(_lip_sync_value + 1.0, next_lip + 1.0)) {
-        _lip_sync_value = next_lip;
-        changed = true;
+    if (!preserve_voice_for_observation) {
+        const qreal next_lip = boundedUnit(
+            jsonReal(lip_sync, QStringLiteral("value"), jsonReal(audio, QStringLiteral("rms"), _lip_sync_value)),
+            _lip_sync_value);
+        if (!qFuzzyCompare(_lip_sync_value + 1.0, next_lip + 1.0)) {
+            _lip_sync_value = next_lip;
+            changed = true;
+        }
     }
     const QString next_audio_url = jsonString(audio, QStringLiteral("url"), QString());
     const QString next_audio_state = jsonString(audio, QStringLiteral("state"), _audio_state);
-    if (reset_speech_for_waiting_phase && !_audio_url.isEmpty()) {
+    if (reset_speech_for_waiting_phase && !_audio_url.isEmpty() && !preserve_voice_for_observation) {
         _audio_url.clear();
         changed = true;
-    } else if (!next_audio_url.isEmpty() && updateString(_audio_url, next_audio_url)) {
+    } else if (!preserve_voice_for_observation && !next_audio_url.isEmpty() && updateString(_audio_url, next_audio_url)) {
         changed = true;
     }
-    if (updateString(_audio_state, next_audio_state)) {
+    if (!preserve_voice_for_observation && updateString(_audio_state, next_audio_state)) {
         changed = true;
     }
 
@@ -195,10 +226,11 @@ void PetModel::applyControlEvent(const QJsonObject &event)
         jsonString(speech,
                    QStringLiteral("translation"),
                    jsonString(text, QStringLiteral("display_translation"), QString())));
-    const bool has_text_update = !delta.isEmpty()
+    const bool has_text_update = !preserve_voice_for_observation
+                                 && (!delta.isEmpty()
                                  || text_final
                                  || !display_text.isEmpty()
-                                 || !translated_text.isEmpty();
+                                 || !translated_text.isEmpty());
 
     if (has_text_update && !next_turn_id.isEmpty() && _speech_turn_id != next_turn_id) {
         _speech_turn_id = next_turn_id;
@@ -211,6 +243,7 @@ void PetModel::applyControlEvent(const QJsonObject &event)
         }
     }
     if (reset_speech_for_waiting_phase
+        && !preserve_voice_for_observation
         && (!_speech_text.isEmpty() || !_speech_translation.isEmpty() || !_speech_display_text.isEmpty() || _speech_final)) {
         _speech_text.clear();
         _speech_translation.clear();
@@ -218,7 +251,7 @@ void PetModel::applyControlEvent(const QJsonObject &event)
         _speech_final = false;
         changed = true;
     }
-    if (updateString(_speech_language, text_language)) {
+    if (has_text_update && !preserve_voice_for_observation && updateString(_speech_language, text_language)) {
         changed = true;
     }
     if (has_text_update && _speech_final != text_final) {

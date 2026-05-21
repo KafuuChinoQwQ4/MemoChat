@@ -40,6 +40,7 @@ int GetChatTicketTtlSec();
 int GetLoginCacheTtlSec();
 bool TryLoadCachedLoginProfile(const std::string& email, const std::string& pwd, UserInfo& userInfo);
 void CacheLoginProfile(const std::string& email, const UserInfo& userInfo);
+bool RefreshLoginProfileFromDb(const std::string& email, UserInfo& userInfo);
 void InvalidateLoginCacheByEmail(const std::string& email);
 void InvalidateLoginCacheByUid(int uid);
 std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load_snapshot = nullptr,

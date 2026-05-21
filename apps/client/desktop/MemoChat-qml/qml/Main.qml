@@ -8,7 +8,7 @@ import "pet"
 
 ApplicationWindow {
     id: root
-    visible: controller.page !== AppController.ChatPage
+    visible: false
     title: appTitle
     flags: Qt.Window | Qt.FramelessWindowHint
     color: "transparent"
@@ -17,9 +17,9 @@ ApplicationWindow {
     property string appTitle: "MemoChat QML"
     property size loginWindowSize: Qt.size(300, 500)
     property size chatWindowSize: Qt.size(900, 640)
-    property var chatWindowRef: null
     property var petWindowRef: null
     property bool memochatStartupCenter: true
+    readonly property bool chatPageActive: controller.page === AppController.ChatPage
 
     PetAssetSettings {
         id: startupPetSettings
@@ -58,6 +58,8 @@ ApplicationWindow {
         if (root.visibility === Window.Maximized) {
             root.showNormal()
         }
+        root.contentItem.enabled = true
+        root.opacity = 1.0
         root.width = loginWindowSize.width
         root.height = loginWindowSize.height
         root.show()
@@ -93,40 +95,23 @@ ApplicationWindow {
         }
     }
 
-    function showChatWindow() {
-        const win = ensureChatWindow()
-        if (!win) {
-            console.warn("Failed to create chat window")
-            return false
+    function showChatPage() {
+        if (root.visibility === Window.Maximized) {
+            root.showNormal()
         }
-        if (win.visibility === Window.Maximized) {
-            win.showNormal()
-        }
-        win.width = chatWindowSize.width
-        win.height = chatWindowSize.height
-        win.show()
-        centerWindowWithRetry(win, 6)
-        win.raise()
-        win.requestActivate()
-        return true
-    }
-
-    function ensureChatWindow() {
-        if (chatWindowRef) {
-            return chatWindowRef
-        }
-        chatWindowRef = chatWindowComponent.createObject(null)
-        if (!chatWindowRef) {
-            return null
-        }
-        return chatWindowRef
-    }
-
-    function hideChatWindow() {
-        if (!chatWindowRef) {
-            return
-        }
-        chatWindowRef.hide()
+        root.contentItem.enabled = true
+        root.opacity = 1.0
+        root.width = chatWindowSize.width
+        root.height = chatWindowSize.height
+        root.show()
+        centerWindowWithRetry(root, 6)
+        root.raise()
+        root.requestActivate()
+        Qt.callLater(function() {
+            if (controller.page === AppController.ChatPage) {
+                controller.beginPostLoginBootstrap()
+            }
+        })
     }
 
     function ensurePetWindow(petAssetSettings) {
@@ -174,21 +159,17 @@ ApplicationWindow {
     function syncWindowsByPage() {
         if (controller.page === AppController.ChatPage) {
             startupShowRetryTimer.stop()
-            root.hide()
-            if (!showChatWindow()) {
-                showLoginWindow()
-            }
+            showChatPage()
         } else {
-            hideChatWindow()
             startupShowRetryTimer.remainingAttempts = 5
             ensureLoginWindowVisible("sync")
         }
     }
 
-    minimumWidth: loginWindowSize.width
-    minimumHeight: loginWindowSize.height
-    maximumWidth: loginWindowSize.width
-    maximumHeight: loginWindowSize.height
+    minimumWidth: root.chatPageActive ? 800 : loginWindowSize.width
+    minimumHeight: root.chatPageActive ? 600 : loginWindowSize.height
+    maximumWidth: root.chatPageActive ? 100000 : loginWindowSize.width
+    maximumHeight: root.chatPageActive ? 100000 : loginWindowSize.height
 
     Component {
         id: loginPageComponent
@@ -237,10 +218,6 @@ ApplicationWindow {
         }
     }
     Component.onDestruction: {
-        if (chatWindowRef) {
-            chatWindowRef.destroy()
-            chatWindowRef = null
-        }
         if (petWindowRef) {
             petWindowRef.destroy()
             petWindowRef = null
@@ -307,7 +284,9 @@ ApplicationWindow {
             anchors.fill: parent
             currentIndex: controller.page === AppController.RegisterPage
                           ? 1
-                          : (controller.page === AppController.ResetPage ? 2 : 0)
+                          : (controller.page === AppController.ResetPage
+                             ? 2
+                             : (controller.page === AppController.ChatPage ? 3 : 0))
 
             Item {
                 Loader {
@@ -335,10 +314,20 @@ ApplicationWindow {
                     sourceComponent: resetPageComponent
                 }
             }
+
+            Item {
+                Loader {
+                    anchors.fill: parent
+                    active: controller.page === AppController.ChatPage
+                    asynchronous: true
+                    sourceComponent: chatShellPageComponent
+                }
+            }
         }
 
         DragHandler {
             target: null
+            enabled: !root.chatPageActive
             onActiveChanged: {
                 if (active) {
                     root.startSystemMove()
@@ -362,6 +351,12 @@ ApplicationWindow {
             spacing: 20
 
             LoginIconButton {
+                visible: root.chatPageActive
+                iconSource: "qrc:/icons/ai.png"
+                onClicked: root.togglePetWindow()
+            }
+
+            LoginIconButton {
                 iconSource: "qrc:/icons/minimize.png"
                 onClicked: root.showMinimized()
             }
@@ -380,100 +375,6 @@ ApplicationWindow {
             LoginIconButton {
                 iconSource: "qrc:/icons/close.png"
                 onClicked: Qt.quit()
-            }
-        }
-    }
-
-    Component {
-        id: chatWindowComponent
-
-        Window {
-            id: chatWindow
-            visible: false
-            title: root.appTitle
-            flags: Qt.Window | Qt.FramelessWindowHint
-            color: "transparent"
-            property real acrylicPinkProgress: 0.0
-            minimumWidth: 800
-            minimumHeight: 600
-            maximumWidth: 100000
-            maximumHeight: 100000
-            width: root.chatWindowSize.width
-            height: root.chatWindowSize.height
-            property bool memochatStartupCenter: true
-            property bool isMaximized: visibility === Window.Maximized
-            property int windowRadius: isMaximized ? 0 : 20
-
-            onClosing: function(close) {
-                close.accepted = false
-                Qt.quit()
-            }
-
-            Rectangle {
-                id: chatShell
-                anchors.fill: parent
-                radius: chatWindow.windowRadius
-                antialiasing: !chatWindow.isMaximized
-                clip: !chatWindow.isMaximized
-                color: "transparent"
-
-                Loader {
-                    anchors.fill: parent
-                    active: chatWindow.visible && controller.page === AppController.ChatPage
-                    asynchronous: true
-                    sourceComponent: chatShellPageComponent
-                }
-            }
-
-            Item {
-                id: chatWindowControls
-                z: 200
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.topMargin: 10
-                anchors.rightMargin: 10
-                width: chatControlsRow.implicitWidth
-                height: chatControlsRow.implicitHeight
-
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: chatControlsRow.implicitWidth + 20
-                    height: chatControlsRow.implicitHeight + 12
-                    radius: 12
-                    color: Qt.rgba(1, 1, 1, 0.18)
-                    border.color: Qt.rgba(1, 1, 1, 0.40)
-                }
-
-                Row {
-                    id: chatControlsRow
-                    spacing: 20
-
-                    LoginIconButton {
-                        iconSource: "qrc:/icons/ai.png"
-                        onClicked: root.togglePetWindow()
-                    }
-
-                    LoginIconButton {
-                        iconSource: "qrc:/icons/minimize.png"
-                        onClicked: chatWindow.showMinimized()
-                    }
-
-                    LoginIconButton {
-                        iconSource: "qrc:/icons/maximize.png"
-                        onClicked: {
-                            if (chatWindow.visibility === Window.Maximized) {
-                                chatWindow.showNormal()
-                            } else {
-                                chatWindow.showMaximized()
-                            }
-                        }
-                    }
-
-                    LoginIconButton {
-                        iconSource: "qrc:/icons/close.png"
-                        onClicked: Qt.quit()
-                    }
-                }
             }
         }
     }

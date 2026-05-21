@@ -1,5 +1,6 @@
 #include "AppController.h"
 #include "IconPathUtils.h"
+#include "usermgr.h"
 
 void AppController::setContactPane(ContactPane pane)
 {
@@ -284,6 +285,74 @@ void AppController::setPage(Page newPage)
 QString AppController::normalizeIconPath(QString icon) const
 {
     return normalizeIconForQml(icon);
+}
+
+void AppController::applyCurrentUserProfile(const QJsonObject &profile, bool preserveExistingIcon)
+{
+    if (profile.isEmpty()) {
+        return;
+    }
+
+    applyCurrentUserProfile(profile.value(QStringLiteral("uid")).toInt(_pending_uid),
+                            profile.value(QStringLiteral("name")).toString(_current_user_name),
+                            profile.value(QStringLiteral("nick")).toString(_current_user_nick),
+                            profile.value(QStringLiteral("icon")).toString(),
+                            profile.value(QStringLiteral("desc")).toString(_current_user_desc),
+                            profile.value(QStringLiteral("user_id")).toString(_current_user_id),
+                            profile.value(QStringLiteral("sex")).toInt(0),
+                            preserveExistingIcon);
+}
+
+void AppController::applyCurrentUserProfile(int uid, const QString &name, const QString &nick, const QString &icon,
+                                            const QString &desc, const QString &userId, int sex,
+                                            bool preserveExistingIcon)
+{
+    QString nextIcon = normalizeIconPath(icon);
+    static const QString kDefaultIcon = QStringLiteral("qrc:/res/head_1.jpg");
+    if (preserveExistingIcon && nextIcon == kDefaultIcon && _current_user_icon != kDefaultIcon) {
+        nextIcon = _current_user_icon;
+    }
+
+    auto userInfo = _gateway.userMgr()->GetUserInfo();
+    if (userInfo) {
+        if (uid > 0) {
+            userInfo->_uid = uid;
+        }
+        userInfo->_name = name;
+        userInfo->_nick = nick;
+        userInfo->_icon = nextIcon;
+        userInfo->_desc = desc;
+        userInfo->_user_id = userId;
+        userInfo->_sex = sex;
+    } else if (uid > 0) {
+        _gateway.userMgr()->SetUserInfo(std::make_shared<UserInfo>(uid, name, nick, nextIcon, sex, QString(), desc, userId));
+    }
+
+    bool changed = false;
+    if (_current_user_name != name) {
+        _current_user_name = name;
+        changed = true;
+    }
+    if (_current_user_nick != nick) {
+        _current_user_nick = nick;
+        changed = true;
+    }
+    if (_current_user_icon != nextIcon) {
+        _current_user_icon = nextIcon;
+        changed = true;
+    }
+    if (_current_user_desc != desc) {
+        _current_user_desc = desc;
+        changed = true;
+    }
+    if (_current_user_id != userId) {
+        _current_user_id = userId;
+        changed = true;
+    }
+
+    if (changed) {
+        emit currentUserChanged();
+    }
 }
 
 void AppController::setDialogsReady(bool ready)

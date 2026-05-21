@@ -125,15 +125,27 @@ services:
     ports:
       - "19092:19092"
       - "18082:18082"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command:
       - redpanda
       - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - "1G"
+      - --reserve-memory
+      - "0M"
+      - --node-id
+      - "0"
+      - --check=false
       - --kafka-addr=0.0.0.0:19092
-      - --advertise-kafka-addr=127.0.0.1:19092
+      - --advertise-kafka-addr=host.docker.internal:19092
       - --pandaproxy-addr=0.0.0.0:18082
-      - --advertise-pandaproxy-addr=127.0.0.1:18082
+      - --advertise-pandaproxy-addr=host.docker.internal:18082
     volumes:
-      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/redpanda:/var/lib/redpanda
+      - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/redpanda/data:/var/lib/redpanda/data
 
   memochat-rabbitmq:
     image: rabbitmq:3.12-management-alpine
