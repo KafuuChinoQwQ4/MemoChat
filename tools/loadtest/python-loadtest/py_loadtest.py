@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""Python-only load test runner for MemoChat.
+"""Python-first load test runner for MemoChat.
 
-The runner intentionally uses only the Python standard library so it works on a
-fresh Windows dev machine without rebuilding extra load-test binaries.
+Most scenarios intentionally use only the Python standard library so they work
+on a fresh dev machine without rebuilding extra load-test binaries. QUIC
+business long-connection scenarios additionally require the optional aioquic
+package.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import base64
 import csv
+import hashlib
+import hmac
 import json
 import math
 import socket
@@ -18,6 +23,8 @@ import struct
 import threading
 import time
 import subprocess
+import shutil
+import ssl
 import urllib.error
 import urllib.request
 import uuid
@@ -27,6 +34,21 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+try:
+    from aioquic.asyncio import connect as aioquic_connect
+    from aioquic.asyncio.protocol import QuicConnectionProtocol
+    from aioquic.quic.configuration import QuicConfiguration
+    from aioquic.quic.events import QuicEvent, StreamDataReceived
+
+    AIOQUIC_IMPORT_ERROR = ""
+except Exception as exc:  # pragma: no cover - exercised when optional dep is absent.
+    aioquic_connect = None
+    QuicConnectionProtocol = object  # type: ignore[assignment]
+    QuicConfiguration = None  # type: ignore[assignment]
+    QuicEvent = object  # type: ignore[assignment]
+    StreamDataReceived = object  # type: ignore[assignment]
+    AIOQUIC_IMPORT_ERROR = str(exc)
 
 
 MSG_CHAT_LOGIN = 1005
@@ -340,7 +362,27 @@ def run_http_sweep(config: dict[str, Any], total: int) -> ScenarioResult:
     points = sweep_concurrency_points(config)
     for concurrency in points:
         run_total = max(total, concurrency * int(config.get("sweep_iterations_per_vu", 10)))
-        run_report = run_k6_http_login(config, run_total, concurrency)
+        if shutil.which("powershell") or shutil.which("pwsh"):
+            run_report = run_k6_http_login(config, run_total, concurrency)
+        else:
+            accounts_path_text = str(config.get("accounts_csv", ""))
+            if not accounts_path_text:
+                raise RuntimeError("http sweep fallback requires accounts_csv")
+            config_path_text = str(config.get("_config_path", "")).strip()
+            config_dir = config_dir_from_path(Path(config_path_text)) if config_path_text else repo_root()
+            accounts = load_accounts(resolve_path(accounts_path_text, config_dir))
+            picker = GateUrlPicker(gate_urls_from_config(config))
+            run_started = now_iso()
+            results, wall_elapsed_sec = run_timed_parallel(
+                run_total,
+                concurrency,
+                lambda i: gate_login(config, accounts[i % len(accounts)], picker.next()),
+            )
+            scenario = scenario_from_operations("http_login", results, run_started, wall_elapsed_sec)
+            scenario.details["runner"] = "python_http_fallback"
+            scenario.details["fallback_reason"] = "powershell_not_found_for_k6_wrapper"
+            scenario.details["concurrency"] = concurrency
+            run_report = build_report(scenario)
         runs.append(run_report)
 
     best_rps = max((float(run["summary"].get("throughput_rps", 0.0)) for run in runs), default=0.0)
@@ -458,6 +500,319 @@ def tcp_chat_login(host: str, port: int, gate_response: dict[str, Any], timeout:
         return OperationResult(False, elapsed, stage="chat_login", error=str(exc))
 
 
+def normalize_chat_host(host: Any) -> str:
+    value = str(host or "127.0.0.1").strip() or "127.0.0.1"
+    if value in {"0.0.0.0", "::", "::1"}:
+        return "127.0.0.1"
+    return value
+
+
+def select_quic_endpoint(gate_response: dict[str, Any], index: int = 0, policy: str = "round_robin") -> dict[str, Any]:
+    endpoints = gate_response.get("chat_endpoints", [])
+    if isinstance(endpoints, list):
+        candidates = [
+            item
+            for item in endpoints
+            if isinstance(item, dict)
+            and str(item.get("transport", "")).lower() == "quic"
+            and str(item.get("host", "")).strip()
+            and str(item.get("port", "")).strip()
+        ]
+        if candidates:
+            candidates.sort(key=lambda item: (int(item.get("priority", 1000) or 1000), int(item.get("port", 0) or 0)))
+            if policy == "priority":
+                return dict(candidates[0])
+            return dict(candidates[index % len(candidates)])
+
+    host = gate_response.get("quic_host") or gate_response.get("QuicHost")
+    port = gate_response.get("quic_port") or gate_response.get("QuicPort")
+    if host and port:
+        return {"transport": "quic", "host": host, "port": port, "server_name": gate_response.get("server_name", "")}
+    return {}
+
+
+def configured_quic_endpoint(config: dict[str, Any], index: int) -> dict[str, Any]:
+    raw = config.get("quic_force_endpoints") or config.get("quic_endpoints")
+    if not isinstance(raw, list) or not raw:
+        return {}
+    candidates = [
+        item
+        for item in raw
+        if isinstance(item, dict)
+        and str(item.get("host", "")).strip()
+        and str(item.get("port", "")).strip()
+        and str(item.get("server_name", "")).strip()
+    ]
+    if not candidates:
+        return {}
+    item = dict(candidates[index % len(candidates)])
+    item["transport"] = "quic"
+    return item
+
+
+def b64url_encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def b64url_decode(raw: str) -> bytes:
+    padding = "=" * (-len(raw) % 4)
+    return base64.urlsafe_b64decode((raw + padding).encode("ascii"))
+
+
+def rewrite_chat_ticket_target(ticket: str, target_server: str, secret: str) -> str:
+    if not ticket or not target_server:
+        return ticket
+    try:
+        payload_text, _ = ticket.split(".", 1)
+        claims = json.loads(b64url_decode(payload_text).decode("utf-8"))
+        if not isinstance(claims, dict):
+            return ticket
+        claims["target_server"] = target_server
+        payload = json.dumps(claims, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        mac = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).digest()
+        return f"{b64url_encode(payload)}.{b64url_encode(mac)}"
+    except Exception:
+        return ticket
+
+
+if aioquic_connect is not None:
+    class MemoChatQuicProtocol(QuicConnectionProtocol):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._memo_stream_queues: dict[int, asyncio.Queue[bytes]] = {}
+
+        def register_memo_stream(self, stream_id: int) -> asyncio.Queue[bytes]:
+            queue: asyncio.Queue[bytes] = asyncio.Queue()
+            self._memo_stream_queues[stream_id] = queue
+            return queue
+
+        def unregister_memo_stream(self, stream_id: int) -> None:
+            self._memo_stream_queues.pop(stream_id, None)
+
+        def quic_event_received(self, event: QuicEvent) -> None:
+            if isinstance(event, StreamDataReceived):
+                queue = self._memo_stream_queues.get(event.stream_id)
+                if queue is not None and event.data:
+                    queue.put_nowait(bytes(event.data))
+else:
+    class MemoChatQuicProtocol:  # type: ignore[no-redef]
+        pass
+
+
+class MemoChatQuicSession:
+    def __init__(
+        self,
+        cm: Any,
+        protocol: MemoChatQuicProtocol,
+        stream_id: int,
+        queue: asyncio.Queue[bytes],
+        timeout: float,
+    ):
+        self._cm = cm
+        self.protocol = protocol
+        self.stream_id = stream_id
+        self.queue = queue
+        self.timeout = timeout
+        self._buffer = bytearray()
+
+    async def close(self) -> None:
+        try:
+            if hasattr(self.protocol, "unregister_memo_stream"):
+                self.protocol.unregister_memo_stream(self.stream_id)
+            if hasattr(self.protocol, "close"):
+                self.protocol.close()
+            if hasattr(self.protocol, "wait_closed"):
+                await asyncio.wait_for(self.protocol.wait_closed(), timeout=1.0)
+        except Exception:
+            pass
+        try:
+            await self._cm.__aexit__(None, None, None)
+        except Exception:
+            pass
+
+    async def send_frame(self, msg_id: int, payload: dict[str, Any]) -> None:
+        payload.setdefault("trace_id", uuid.uuid4().hex)
+        payload.setdefault("protocol_version", 3)
+        raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        self.protocol._quic.send_stream_data(self.stream_id, encode_frame(msg_id, raw), end_stream=False)
+        self.protocol.transmit()
+
+    async def recv_exact(self, size: int) -> bytes:
+        deadline = time.perf_counter() + self.timeout
+        while len(self._buffer) < size:
+            remaining = deadline - time.perf_counter()
+            if remaining <= 0:
+                raise TimeoutError(f"QUIC receive timed out waiting for {size} bytes")
+            chunk = await asyncio.wait_for(self.queue.get(), timeout=remaining)
+            if not chunk:
+                raise ConnectionError("QUIC stream closed before enough data was received")
+            self._buffer.extend(chunk)
+        out = bytes(self._buffer[:size])
+        del self._buffer[:size]
+        return out
+
+    async def recv_frame(self) -> tuple[int, bytes]:
+        msg_id, size = struct.unpack("!HH", await self.recv_exact(4))
+        return msg_id, await self.recv_exact(size)
+
+    async def recv_expected_frame(self, expected_ids: set[int]) -> tuple[int, bytes]:
+        deadline = time.perf_counter() + self.timeout
+        last_msg_id = 0
+        while time.perf_counter() < deadline:
+            remaining = max(0.05, deadline - time.perf_counter())
+            old_timeout = self.timeout
+            self.timeout = remaining
+            try:
+                msg_id, payload = await self.recv_frame()
+            finally:
+                self.timeout = old_timeout
+            if msg_id in expected_ids:
+                return msg_id, payload
+            last_msg_id = msg_id
+        raise TimeoutError(f"expected QUIC frame {sorted(expected_ids)}, last_msg_id={last_msg_id}")
+
+
+def require_aioquic() -> None:
+    if aioquic_connect is None or QuicConfiguration is None:
+        raise RuntimeError(
+            "QUIC load tests require optional dependency aioquic. "
+            "Install it with: python3 -m pip install aioquic. "
+            f"Import error: {AIOQUIC_IMPORT_ERROR}"
+        )
+
+
+async def open_logged_in_quic_session(
+    config: dict[str, Any],
+    account: Account,
+    gate_url: str,
+    endpoint_index: int = 0,
+) -> tuple[MemoChatQuicSession, dict[str, Any]]:
+    require_aioquic()
+    gate = await asyncio.to_thread(gate_login, config, account, gate_url)
+    if not gate.ok:
+        raise RuntimeError(f"gate_login failed: {gate.error or gate.data}")
+    data = gate.data
+    endpoint = configured_quic_endpoint(config, endpoint_index)
+    endpoint_forced = bool(endpoint)
+    if not endpoint:
+        endpoint = select_quic_endpoint(
+            data,
+            endpoint_index,
+            str(config.get("quic_endpoint_policy", "round_robin")),
+        )
+    if not endpoint:
+        raise RuntimeError("missing quic chat endpoint")
+
+    host = normalize_chat_host(endpoint.get("host"))
+    port = int(endpoint.get("port") or 0)
+    if port <= 0:
+        raise RuntimeError("missing quic chat port")
+
+    timeout = float(config.get("quic_timeout_sec", config.get("tcp_timeout_sec", 8.0)))
+    server_name = str(config.get("quic_server_name") or endpoint.get("server_name") or host)
+    configuration = QuicConfiguration(
+        is_client=True,
+        alpn_protocols=[str(config.get("quic_alpn", "memochat-chat"))],
+        server_name=server_name,
+    )
+    configuration.verify_mode = ssl.CERT_NONE
+    cm = aioquic_connect(
+        host,
+        port,
+        configuration=configuration,
+        create_protocol=MemoChatQuicProtocol,
+        wait_connected=True,
+    )
+    protocol = await asyncio.wait_for(cm.__aenter__(), timeout=timeout)
+    stream_id = protocol._quic.get_next_available_stream_id(is_unidirectional=False)
+    queue = protocol.register_memo_stream(stream_id)
+    session = MemoChatQuicSession(cm, protocol, stream_id, queue, timeout)
+    login_ticket = data.get("login_ticket", "")
+    if endpoint_forced:
+        login_ticket = rewrite_chat_ticket_target(
+            str(login_ticket),
+            str(endpoint.get("server_name", "")),
+            str(config.get("quic_ticket_secret", "memochat-dev-chat-secret")),
+        )
+    payload = {
+        "uid": int(data.get("uid", 0)),
+        "token": data.get("token", ""),
+        "login_ticket": login_ticket,
+        "ticket_expire_ms": data.get("ticket_expire_ms", 0),
+        "client_ver": str(config.get("client_ver", "3.0.0")),
+        "protocol_version": 3,
+        "trace_id": uuid.uuid4().hex,
+    }
+    try:
+        await session.send_frame(MSG_CHAT_LOGIN, payload)
+        msg_id, rsp_payload = await session.recv_expected_frame({MSG_CHAT_LOGIN_RSP})
+        if msg_id != MSG_CHAT_LOGIN_RSP:
+            raise RuntimeError(f"unexpected login msg_id={msg_id}")
+        rsp = json.loads(rsp_payload.decode("utf-8")) if rsp_payload else {}
+        error_code = int(rsp.get("error", -1))
+        if error_code != 0:
+            raise RuntimeError(f"chat_login error={error_code}")
+        return session, {
+            "gate": data,
+            "chat_login": rsp,
+            "host": host,
+            "port": port,
+            "gate_ms": gate.elapsed_ms,
+            "endpoint": endpoint,
+            "endpoint_forced": endpoint_forced,
+        }
+    except Exception:
+        await session.close()
+        raise
+
+
+async def quic_chat_login(
+    config: dict[str, Any],
+    account: Account,
+    gate_url: str,
+    endpoint_index: int = 0,
+) -> OperationResult:
+    started = time.perf_counter()
+    session: MemoChatQuicSession | None = None
+    try:
+        session, meta = await open_logged_in_quic_session(config, account, gate_url, endpoint_index)
+        elapsed = (time.perf_counter() - started) * 1000.0
+        data = dict(meta.get("chat_login", {}))
+        data["gate_ms"] = meta.get("gate_ms", 0.0)
+        data["quic_host"] = meta.get("host", "")
+        data["quic_port"] = meta.get("port", 0)
+        data["gate_stage_metrics"] = meta.get("gate", {}).get("stage_metrics", {})
+        return OperationResult(True, elapsed, stage="quic_login", data=data)
+    except Exception as exc:
+        elapsed = (time.perf_counter() - started) * 1000.0
+        return OperationResult(False, elapsed, stage="quic_login", error=str(exc))
+    finally:
+        if session is not None:
+            await session.close()
+
+
+async def quic_request_on_session(
+    session: MemoChatQuicSession,
+    msg_id: int,
+    expected_msg_id: int,
+    payload: dict[str, Any],
+    stage: str,
+) -> OperationResult:
+    started = time.perf_counter()
+    try:
+        await session.send_frame(msg_id, payload)
+        rsp_msg_id, rsp_payload = await session.recv_expected_frame({expected_msg_id})
+        elapsed = (time.perf_counter() - started) * 1000.0
+        if rsp_msg_id != expected_msg_id:
+            return OperationResult(False, elapsed, stage=stage, error=f"unexpected msg_id={rsp_msg_id}")
+        rsp = json.loads(rsp_payload.decode("utf-8")) if rsp_payload else {}
+        error_code = int(rsp.get("error", 0))
+        return OperationResult(error_code == 0, elapsed, stage=stage, error_code=error_code, data=rsp)
+    except Exception as exc:
+        elapsed = (time.perf_counter() - started) * 1000.0
+        return OperationResult(False, elapsed, stage=stage, error=str(exc))
+
+
 def open_logged_in_chat_socket(config: dict[str, Any], account: Account, gate_url: str) -> tuple[socket.socket, dict[str, Any]]:
     gate = gate_login(config, account, gate_url)
     if not gate.ok:
@@ -535,7 +890,7 @@ def tcp_request_on_socket(
 
 
 def run_http_login(config: dict[str, Any], accounts: list[Account], total: int, concurrency: int) -> ScenarioResult:
-    if bool(config.get("use_k6_http", True)):
+    if bool(config.get("use_k6_http", True)) and (shutil.which("powershell") or shutil.which("pwsh")):
         return run_http_login_k6(config, total, concurrency)
 
     started_at = now_iso()
@@ -545,6 +900,9 @@ def run_http_login(config: dict[str, Any], accounts: list[Account], total: int, 
     scenario.details["gate_urls"] = gate_urls_from_config(config)
     scenario.details["fast_http"] = bool(config.get("fast_http", False))
     scenario.details["keep_alive"] = bool(config.get("keep_alive", False))
+    if bool(config.get("use_k6_http", True)):
+        scenario.details["runner"] = "python_http_fallback"
+        scenario.details["fallback_reason"] = "powershell_not_found_for_k6_wrapper"
     return scenario
 
 
@@ -647,6 +1005,173 @@ def run_tcp_relation_bootstrap(config: dict[str, Any], accounts: list[Account], 
         ID_GET_RELATION_BOOTSTRAP_REQ,
         ID_GET_RELATION_BOOTSTRAP_RSP,
         "tcp_relation_bootstrap",
+    )
+
+
+def quic_endpoint_distribution_from_results(results: list[OperationResult]) -> dict[str, int]:
+    distribution: dict[str, int] = {}
+    for result in results:
+        if not result.ok:
+            continue
+        host = normalize_chat_host(result.data.get("quic_host"))
+        port = result.data.get("quic_port")
+        if not port:
+            continue
+        key = f"{host}:{int(port)}"
+        distribution[key] = distribution.get(key, 0) + 1
+    return dict(sorted(distribution.items()))
+
+
+def quic_endpoint_distribution_from_meta(items: list[dict[str, Any]]) -> dict[str, int]:
+    distribution: dict[str, int] = {}
+    for item in items:
+        host = normalize_chat_host(item.get("host"))
+        port = item.get("port")
+        if not port:
+            continue
+        key = f"{host}:{int(port)}"
+        distribution[key] = distribution.get(key, 0) + 1
+    return dict(sorted(distribution.items()))
+
+
+async def run_async_timed_parallel(total: int, concurrency: int, fn) -> tuple[list[Any], float]:
+    total = max(0, int(total))
+    concurrency = max(1, int(concurrency))
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def guarded(i: int) -> Any:
+        async with semaphore:
+            return await fn(i)
+
+    started = time.perf_counter()
+    results = await asyncio.gather(*(guarded(i) for i in range(total)))
+    return list(results), time.perf_counter() - started
+
+
+async def run_quic_login_async(config: dict[str, Any], accounts: list[Account], total: int, concurrency: int) -> ScenarioResult:
+    started_at = now_iso()
+    picker = GateUrlPicker(gate_urls_from_config(config))
+
+    async def one(i: int) -> OperationResult:
+        return await quic_chat_login(config, accounts[i % len(accounts)], picker.next(), i)
+
+    results, wall_elapsed_sec = await run_async_timed_parallel(total, concurrency, one)
+    scenario = scenario_from_operations("quic_login", results, started_at, wall_elapsed_sec)
+    scenario.details["quic_endpoint_distribution"] = quic_endpoint_distribution_from_results(results)
+    scenario.details["gate_urls"] = gate_urls_from_config(config)
+    scenario.details["measured_phase"] = "gate_login_plus_quic_connect_plus_chat_login"
+    scenario.details["quic_alpn"] = str(config.get("quic_alpn", "memochat-chat"))
+    scenario.details["quic_endpoint_policy"] = str(config.get("quic_endpoint_policy", "round_robin"))
+    scenario.details["runner"] = "python_aioquic"
+    return scenario
+
+
+def run_quic_login(config: dict[str, Any], accounts: list[Account], total: int, concurrency: int) -> ScenarioResult:
+    return asyncio.run(run_quic_login_async(config, accounts, total, concurrency))
+
+
+async def run_quic_logged_in_requests_async(
+    config: dict[str, Any],
+    accounts: list[Account],
+    total: int,
+    concurrency: int,
+    scenario_name: str,
+    req_msg_id: int,
+    rsp_msg_id: int,
+    stage: str,
+) -> ScenarioResult:
+    setup_started_at = now_iso()
+    session_count = max(1, min(int(concurrency), int(total)))
+    picker = GateUrlPicker(gate_urls_from_config(config))
+    setup_errors: dict[str, int] = {}
+
+    async def setup_one(i: int) -> tuple[MemoChatQuicSession, dict[str, Any]] | None:
+        try:
+            return await open_logged_in_quic_session(config, accounts[i % len(accounts)], picker.next(), i)
+        except Exception as exc:
+            key = f"setup:{str(exc)[:120]}"
+            setup_errors[key] = setup_errors.get(key, 0) + 1
+            return None
+
+    setup_results, _ = await run_async_timed_parallel(session_count, session_count, setup_one)
+    sessions = [item for item in setup_results if item is not None]
+    if not sessions:
+        result = ScenarioResult(
+            scenario=scenario_name,
+            total=total,
+            success=0,
+            failed=total,
+            latencies_ms=[],
+            started_at=setup_started_at,
+            finished_at=now_iso(),
+            errors=setup_errors or {"setup:no logged-in quic sessions": total},
+        )
+        result.details["setup_sessions_requested"] = session_count
+        result.details["setup_sessions_ready"] = 0
+        result.details["runner"] = "python_aioquic"
+        return result
+
+    per_worker = [total // len(sessions)] * len(sessions)
+    for i in range(total % len(sessions)):
+        per_worker[i] += 1
+    started_at = now_iso()
+    started = time.perf_counter()
+
+    async def run_worker(index: int) -> list[OperationResult]:
+        session, login_meta = sessions[index]
+        results: list[OperationResult] = []
+        uid = int(login_meta.get("gate", {}).get("uid", 0))
+        for _ in range(per_worker[index]):
+            payload = {"uid": uid} if uid > 0 else {}
+            results.append(await quic_request_on_session(session, req_msg_id, rsp_msg_id, payload, stage))
+        return results
+
+    worker_results = await asyncio.gather(*(run_worker(index) for index in range(len(sessions))))
+    wall_elapsed_sec = time.perf_counter() - started
+    results = [result for batch in worker_results for result in batch]
+    for session, _ in sessions:
+        await session.close()
+    scenario = scenario_from_operations(scenario_name, results, started_at, wall_elapsed_sec)
+    scenario.errors.update(setup_errors)
+    scenario.details["setup_started_at"] = setup_started_at
+    scenario.details["setup_sessions_requested"] = session_count
+    scenario.details["setup_sessions_ready"] = len(sessions)
+    scenario.details["measured_phase"] = "logged_in_quic_requests_only"
+    scenario.details["quic_endpoint_distribution"] = quic_endpoint_distribution_from_meta([meta for _, meta in sessions])
+    scenario.details["gate_urls"] = gate_urls_from_config(config)
+    scenario.details["quic_alpn"] = str(config.get("quic_alpn", "memochat-chat"))
+    scenario.details["quic_endpoint_policy"] = str(config.get("quic_endpoint_policy", "round_robin"))
+    scenario.details["runner"] = "python_aioquic"
+    return scenario
+
+
+def run_quic_heartbeat(config: dict[str, Any], accounts: list[Account], total: int, concurrency: int) -> ScenarioResult:
+    return asyncio.run(
+        run_quic_logged_in_requests_async(
+            config,
+            accounts,
+            total,
+            concurrency,
+            "quic_heartbeat",
+            ID_HEART_BEAT_REQ,
+            ID_HEARTBEAT_RSP,
+            "quic_heartbeat",
+        )
+    )
+
+
+def run_quic_relation_bootstrap(config: dict[str, Any], accounts: list[Account], total: int, concurrency: int) -> ScenarioResult:
+    return asyncio.run(
+        run_quic_logged_in_requests_async(
+            config,
+            accounts,
+            total,
+            concurrency,
+            "quic_relation_bootstrap",
+            ID_GET_RELATION_BOOTSTRAP_REQ,
+            ID_GET_RELATION_BOOTSTRAP_RSP,
+            "quic_relation_bootstrap",
+        )
     )
 
 
@@ -899,6 +1424,18 @@ def run_rag(config: dict[str, Any], total: int, concurrency: int) -> ScenarioRes
     cleanup_uploads = bool(config.get("rag_cleanup_uploads", True))
     uploaded_kb_ids: list[str] = []
     upload_errors: list[str] = []
+
+    def cleanup_uploaded_kbs() -> list[str]:
+        cleanup_errors = []
+        for kb_id in uploaded_kb_ids:
+            status, data, error = delete_json(
+                f"{base_url}/kb/{kb_id}?uid={uid}",
+                float(config.get("ai_timeout_sec", 30.0)),
+            )
+            if status != 200 or int(data.get("code", -1)) != 0:
+                cleanup_errors.append(f"{kb_id}: {error or data.get('detail') or data.get('message') or status}")
+        return cleanup_errors
+
     for doc in docs:
         content_b64 = base64.b64encode(doc["content"].encode("utf-8")).decode("ascii")
         status, data, error = post_json(
@@ -928,6 +1465,11 @@ def run_rag(config: dict[str, Any], total: int, concurrency: int) -> ScenarioRes
         scenario.details["rag_base_uid"] = base_uid
         scenario.details["rag_effective_uid"] = uid
         scenario.details["rag_upload_errors"] = upload_errors[:10]
+        if cleanup_uploads and uploaded_kb_ids:
+            cleanup_errors = cleanup_uploaded_kbs()
+            scenario.details["rag_cleanup_attempted"] = len(uploaded_kb_ids)
+            if cleanup_errors:
+                scenario.details["rag_cleanup_errors"] = cleanup_errors[:10]
         return scenario
 
     if not queries:
@@ -1022,14 +1564,7 @@ def run_rag(config: dict[str, Any], total: int, concurrency: int) -> ScenarioRes
     scenario.details["rag_misses"] = requested_misses[:20]
     scenario.details["rag_deep_misses"] = deep_misses[:20]
     if cleanup_uploads:
-        cleanup_errors = []
-        for kb_id in uploaded_kb_ids:
-            status, data, error = delete_json(
-                f"{base_url}/kb/{kb_id}?uid={uid}",
-                float(config.get("ai_timeout_sec", 30.0)),
-            )
-            if status != 200 or int(data.get("code", -1)) != 0:
-                cleanup_errors.append(f"{kb_id}: {error or data.get('detail') or data.get('message') or status}")
+        cleanup_errors = cleanup_uploaded_kbs()
         scenario.details["rag_cleanup_attempted"] = len(uploaded_kb_ids)
         if cleanup_errors:
             scenario.details["rag_cleanup_errors"] = cleanup_errors[:10]
@@ -1166,7 +1701,24 @@ def write_report(report: dict[str, Any], report_dir: Path) -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser(description="MemoChat Python-only load test runner")
     parser.add_argument("--config", default="config.json")
-    parser.add_argument("--scenario", choices=["http", "tcp", "tcp-heartbeat", "tcp-relation-bootstrap", "sweep", "ai-health", "agent", "rag", "all"], default="http")
+    parser.add_argument(
+        "--scenario",
+        choices=[
+            "http",
+            "tcp",
+            "tcp-heartbeat",
+            "tcp-relation-bootstrap",
+            "quic",
+            "quic-heartbeat",
+            "quic-relation-bootstrap",
+            "sweep",
+            "ai-health",
+            "agent",
+            "rag",
+            "all",
+        ],
+        default="http",
+    )
     parser.add_argument("--total", type=int, default=20)
     parser.add_argument("--concurrency", type=int, default=5)
     parser.add_argument("--accounts-csv", default="")
@@ -1187,10 +1739,34 @@ def main() -> int:
     if accounts_path_text:
         accounts = load_accounts(resolve_path(accounts_path_text, config_dir), args.prefer_last_password)
 
-    scenarios = [args.scenario] if args.scenario != "all" else ["http", "tcp", "tcp-heartbeat", "tcp-relation-bootstrap", "sweep", "ai-health", "agent", "rag"]
+    scenarios = (
+        [args.scenario]
+        if args.scenario != "all"
+        else [
+            "http",
+            "tcp",
+            "tcp-heartbeat",
+            "tcp-relation-bootstrap",
+            "quic",
+            "quic-heartbeat",
+            "quic-relation-bootstrap",
+            "sweep",
+            "ai-health",
+            "agent",
+            "rag",
+        ]
+    )
     exit_code = 0
     for scenario in scenarios:
-        if scenario in {"http", "tcp", "tcp-heartbeat", "tcp-relation-bootstrap"} and not accounts:
+        if scenario in {
+            "http",
+            "tcp",
+            "tcp-heartbeat",
+            "tcp-relation-bootstrap",
+            "quic",
+            "quic-heartbeat",
+            "quic-relation-bootstrap",
+        } and not accounts:
             print(f"[ERROR] scenario {scenario} requires accounts_csv")
             exit_code = 1
             continue
@@ -1202,6 +1778,12 @@ def main() -> int:
             result = run_tcp_heartbeat(config, accounts, args.total, args.concurrency)
         elif scenario == "tcp-relation-bootstrap":
             result = run_tcp_relation_bootstrap(config, accounts, args.total, args.concurrency)
+        elif scenario == "quic":
+            result = run_quic_login(config, accounts, args.total, args.concurrency)
+        elif scenario == "quic-heartbeat":
+            result = run_quic_heartbeat(config, accounts, args.total, args.concurrency)
+        elif scenario == "quic-relation-bootstrap":
+            result = run_quic_relation_bootstrap(config, accounts, args.total, args.concurrency)
         elif scenario == "sweep":
             result = run_http_sweep(config, args.total)
         elif scenario == "ai-health":

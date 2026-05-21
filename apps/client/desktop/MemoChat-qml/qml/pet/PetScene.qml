@@ -22,6 +22,17 @@ Item {
     property string manualMotion: "idle"
     property string manualEmotion: "neutral"
     property int manualActionSerial: 0
+    readonly property int speechBubbleSafeHeight: 84
+    readonly property string speechBubbleText: root.petController
+                                                ? root.petController.speechDisplayText.trim()
+                                                : ""
+    readonly property string speechBubbleTranslation: root.petController
+                                                       ? root.petController.speechTranslation.trim()
+                                                       : ""
+    readonly property bool speechBubbleJapanese: root.petController
+                                                 && root.petController.speechLanguage.toLowerCase().indexOf("ja") === 0
+    readonly property bool speechBubbleVisible: root.speechBubbleText.length > 0
+    readonly property int speechBubbleTopMargin: 6
 
     signal dragRequested()
     signal controlsRequested(real sceneX, real sceneY)
@@ -29,16 +40,6 @@ Item {
     signal debugRetentionToggled(bool checked)
 
     readonly property color sceneTintColor: Qt.rgba(1.0, 0.96, 0.98, 0.96)
-
-    function speechPlaybackText() {
-        if (!root.petController) {
-            return ""
-        }
-        if (!root.petController.speechFinal) {
-            return ""
-        }
-        return root.petController.speechText
-    }
 
     function micPrivacyText() {
         return root.voiceReplyEnabled ? "麦克风 开启" : "麦克风 关闭"
@@ -55,7 +56,7 @@ Item {
         if (!root.cloudVisionEnabled) {
             return "云视觉 关闭"
         }
-        return root.providerAvailable ? "云视觉 已授权" : "云视觉 等待提供方"
+        return root.providerAvailable ? "云视觉 已授权" : "云视觉 无提供方"
     }
 
     function localModeText() {
@@ -114,9 +115,36 @@ Item {
         return root.providerAvailable ? "#74b2ba" : "#d28ca6"
     }
 
+    function isObservationVisualEvent(event) {
+        if (!event || !event.action) {
+            return false
+        }
+        var name = event.action.name || ""
+        return name === "observe" || name === "visual_react"
+    }
+
+    function voiceReplyIsActive() {
+        if (!root.voiceReplyEnabled || !root.petController) {
+            return false
+        }
+        var state = root.petController.audioState || ""
+        if (root.petController.audioUrl.length === 0) {
+            return false
+        }
+        return state === "ready"
+                || state === "playing"
+                || state === "loading"
+                || state === "buffering"
+                || (petAudioLoader.item && petAudioLoader.item.playbackActive)
+    }
+
     Live2DRenderItem {
         id: live2d
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.topMargin: root.speechBubbleSafeHeight
+        anchors.bottom: parent.bottom
         modelRoot: root.petAssetSettings ? root.petAssetSettings.modelRoot : ""
         modelJson: root.petAssetSettings ? root.petAssetSettings.modelJson : ""
         motionDirectory: root.petAssetSettings ? root.petAssetSettings.motionDirectory : ""
@@ -135,18 +163,90 @@ Item {
         persistentMotion: root.manualActionActive
     }
 
+    Item {
+        id: speechBubbleAnchor
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
+        anchors.topMargin: root.speechBubbleTopMargin
+        readonly property int bubblePaddingH: 10
+        readonly property int bubblePaddingV: 6
+        readonly property int bubbleMaxWidth: Math.max(128, parent.width - 24)
+        width: Math.min(bubbleMaxWidth, 180)
+        height: 72
+        visible: root.speechBubbleVisible
+        opacity: visible ? 1.0 : 0.0
+        z: 8
+
+        Behavior on opacity {
+            NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+        }
+
+        Rectangle {
+            id: speechBubble
+            anchors.fill: parent
+            radius: 14
+            antialiasing: true
+            color: Qt.rgba(1.0, 0.97, 0.99, 0.94)
+            border.color: "#f0b6ca"
+            border.width: 1
+
+            Rectangle {
+                width: 10
+                height: width
+                radius: 3
+                antialiasing: true
+                color: speechBubble.color
+                border.color: speechBubble.border.color
+                border.width: 1
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: -4
+                rotation: 45
+            }
+        }
+
+        Column {
+            id: speechBubbleColumn
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: speechBubbleAnchor.bubblePaddingH
+            anchors.rightMargin: speechBubbleAnchor.bubblePaddingH
+            spacing: 2
+
+            Text {
+                width: parent.width
+                text: root.speechBubbleText
+                color: "#583247"
+                font.pixelSize: 11
+                font.bold: true
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                maximumLineCount: root.speechBubbleTranslation.length > 0 ? 2 : 3
+                elide: Text.ElideRight
+            }
+
+            Text {
+                width: parent.width
+                visible: root.speechBubbleTranslation.length > 0
+                text: root.speechBubbleTranslation
+                color: "#8a6377"
+                font.pixelSize: 9
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+            }
+        }
+    }
+
     Loader {
         id: petAudioLoader
         active: root.voiceReplyEnabled && root.petController
         source: "PetAudioPlayer.qml"
         onLoaded: {
-            item.textToSpeechFallbackEnabled = root.voiceReplyEnabled
-            item.speechKey = root.petController ? root.petController.turnId : ""
             item.sourceUrl = root.petController ? root.petController.audioUrl : ""
             item.playbackState = root.petController ? root.petController.audioState : "idle"
-            item.speechText = root.speechPlaybackText()
-            item.speechLanguage = root.petController ? root.petController.speechLanguage : ""
-            item.speechFinal = root.petController ? root.petController.speechFinal : false
         }
     }
 
@@ -174,13 +274,8 @@ Item {
         target: root.petController
         function onPetStateChanged() {
             if (root.voiceReplyEnabled && petAudioLoader.item) {
-                petAudioLoader.item.textToSpeechFallbackEnabled = root.voiceReplyEnabled
-                petAudioLoader.item.speechKey = root.petController ? root.petController.turnId : ""
                 petAudioLoader.item.sourceUrl = root.petController ? root.petController.audioUrl : ""
                 petAudioLoader.item.playbackState = root.petController ? root.petController.audioState : "idle"
-                petAudioLoader.item.speechText = root.speechPlaybackText()
-                petAudioLoader.item.speechLanguage = root.petController ? root.petController.speechLanguage : ""
-                petAudioLoader.item.speechFinal = root.petController ? root.petController.speechFinal : false
             }
             if (petCameraLoader.item) {
                 petCameraLoader.item.petController = root.petController
@@ -189,6 +284,9 @@ Item {
 
         function onControlEventReceived(event) {
             if (!root.manualActionActive) {
+                if (voiceReplyIsActive() && isObservationVisualEvent(event)) {
+                    return
+                }
                 live2d.applyControlEvent(event)
             }
         }
@@ -265,13 +363,11 @@ Item {
 
     onVoiceReplyEnabledChanged: {
         if (!root.voiceReplyEnabled && petAudioLoader.item) {
-            petAudioLoader.item.textToSpeechFallbackEnabled = false
             petAudioLoader.item.sourceUrl = ""
             petAudioLoader.item.playbackState = "stopped"
-            petAudioLoader.item.speechFinal = false
-            petAudioLoader.item.speechLanguage = ""
-        } else if (petAudioLoader.item) {
-            petAudioLoader.item.textToSpeechFallbackEnabled = true
+        } else if (petAudioLoader.item && root.petController) {
+            petAudioLoader.item.sourceUrl = root.petController.audioUrl
+            petAudioLoader.item.playbackState = root.petController.audioState
         }
     }
 

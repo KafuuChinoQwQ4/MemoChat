@@ -10,7 +10,7 @@ import "../pet"
 
 ApplicationWindow {
     id: root
-    visible: controller.page !== AppController.ChatPage
+    visible: false
     title: appTitle
     flags: Qt.Window | Qt.FramelessWindowHint
     color: "transparent"
@@ -28,9 +28,9 @@ ApplicationWindow {
     property int normalWindowY: y
     property int normalWindowWidth: loginWindowSize.width
     property int normalWindowHeight: loginWindowSize.height
-    property var chatWindowRef: null
     property var petWindowRef: null
     property bool memochatStartupCenter: true
+    readonly property bool chatPageActive: controller.page === AppController.ChatPage
 
     PetAssetSettings {
         id: startupPetSettings
@@ -97,6 +97,8 @@ ApplicationWindow {
             root.windowMaximized = false
             root.showNormal()
         }
+        root.contentItem.enabled = true
+        root.opacity = 1.0
         root.width = loginWindowSize.width
         root.height = loginWindowSize.height
         root.normalWindowWidth = root.width
@@ -134,43 +136,26 @@ ApplicationWindow {
         }
     }
 
-    function showChatWindow() {
-        const win = ensureChatWindow()
-        if (!win) {
-            console.warn("Failed to create chat window")
-            return false
+    function showChatPage() {
+        if (root.windowMaximized || root.visibility === Window.Maximized) {
+            root.windowMaximized = false
+            root.showNormal()
         }
-        if (win.windowMaximized || win.visibility === Window.Maximized) {
-            win.windowMaximized = false
-            win.showNormal()
-        }
-        win.width = chatWindowSize.width
-        win.height = chatWindowSize.height
-        win.normalWindowWidth = win.width
-        win.normalWindowHeight = win.height
-        win.show()
-        centerWindowWithRetry(win, 6)
-        win.raise()
-        win.requestActivate()
-        return true
-    }
-
-    function ensureChatWindow() {
-        if (chatWindowRef) {
-            return chatWindowRef
-        }
-        chatWindowRef = chatWindowComponent.createObject(null)
-        if (!chatWindowRef) {
-            return null
-        }
-        return chatWindowRef
-    }
-
-    function hideChatWindow() {
-        if (!chatWindowRef) {
-            return
-        }
-        chatWindowRef.hide()
+        root.contentItem.enabled = true
+        root.opacity = 1.0
+        root.width = chatWindowSize.width
+        root.height = chatWindowSize.height
+        root.normalWindowWidth = root.width
+        root.normalWindowHeight = root.height
+        root.show()
+        centerWindowWithRetry(root, 6)
+        root.raise()
+        root.requestActivate()
+        Qt.callLater(function() {
+            if (controller.page === AppController.ChatPage) {
+                controller.beginPostLoginBootstrap()
+            }
+        })
     }
 
     function ensurePetWindow(petAssetSettings) {
@@ -218,19 +203,15 @@ ApplicationWindow {
     function syncWindowsByPage() {
         if (controller.page === AppController.ChatPage) {
             startupShowRetryTimer.stop()
-            root.hide()
-            if (!showChatWindow()) {
-                showLoginWindow()
-            }
+            showChatPage()
         } else {
-            hideChatWindow()
             startupShowRetryTimer.remainingAttempts = 5
             ensureLoginWindowVisible("sync")
         }
     }
 
-    minimumWidth: 340
-    minimumHeight: 520
+    minimumWidth: root.chatPageActive ? 900 : 340
+    minimumHeight: root.chatPageActive ? 640 : 520
     maximumWidth: 100000
     maximumHeight: 100000
 
@@ -281,10 +262,6 @@ ApplicationWindow {
         }
     }
     Component.onDestruction: {
-        if (chatWindowRef) {
-            chatWindowRef.destroy()
-            chatWindowRef = null
-        }
         if (petWindowRef) {
             petWindowRef.destroy()
             petWindowRef = null
@@ -375,7 +352,9 @@ ApplicationWindow {
             anchors.margins: root.shellContentInset
             currentIndex: controller.page === AppController.RegisterPage
                           ? 1
-                          : (controller.page === AppController.ResetPage ? 2 : 0)
+                          : (controller.page === AppController.ResetPage
+                             ? 2
+                             : (controller.page === AppController.ChatPage ? 3 : 0))
 
             Item {
                 Loader {
@@ -403,10 +382,20 @@ ApplicationWindow {
                     sourceComponent: resetPageComponent
                 }
             }
+
+            Item {
+                Loader {
+                    anchors.fill: parent
+                    active: controller.page === AppController.ChatPage
+                    asynchronous: true
+                    sourceComponent: chatShellPageComponent
+                }
+            }
         }
 
         DragHandler {
             target: null
+            enabled: !root.chatPageActive
             onActiveChanged: {
                 if (active) {
                     root.startSystemMove()
@@ -429,6 +418,12 @@ ApplicationWindow {
             id: controlsRow
             anchors.centerIn: parent
             spacing: 20
+
+            SharedComponents.LoginIconButton {
+                visible: root.chatPageActive
+                iconSource: "qrc:/icons/ai.png"
+                onClicked: root.togglePetWindow()
+            }
 
             SharedComponents.LoginIconButton {
                 iconSource: "qrc:/icons/minimize.png"
@@ -515,186 +510,6 @@ ApplicationWindow {
             height: root.borderResizeThickness
             resizeEdges: Qt.BottomEdge | Qt.RightEdge
             resizeCursor: Qt.SizeFDiagCursor
-        }
-    }
-
-    Component {
-        id: chatWindowComponent
-
-        Window {
-            id: chatWindow
-            visible: false
-            title: root.appTitle
-            flags: Qt.Window | Qt.FramelessWindowHint
-            color: "transparent"
-            property real acrylicPinkProgress: 0.0
-            minimumWidth: 900
-            minimumHeight: 640
-            maximumWidth: 100000
-            maximumHeight: 100000
-            width: root.chatWindowSize.width
-            height: root.chatWindowSize.height
-            property bool memochatStartupCenter: true
-            property bool windowMaximized: false
-            property int normalWindowX: x
-            property int normalWindowY: y
-            property int normalWindowWidth: root.chatWindowSize.width
-            property int normalWindowHeight: root.chatWindowSize.height
-            property bool isMaximized: windowMaximized
-            property int windowRadius: isMaximized ? 0 : 24
-            readonly property int glassInset: isMaximized ? 0 : 4
-            readonly property int shellContentInset: isMaximized ? 0 : 8
-
-            onClosing: function(close) {
-                close.accepted = false
-                Qt.quit()
-            }
-
-            Item {
-                id: chatShell
-                anchors.fill: parent
-                anchors.margins: chatWindow.glassInset
-
-                LinuxComponents.WindowGlassShell {
-                    anchors.fill: parent
-                    cornerRadius: chatWindow.windowRadius
-                    fillTopColor: Qt.rgba(0.93, 0.97, 1.0, 0.58)
-                    fillBottomColor: Qt.rgba(0.86, 0.93, 1.0, 0.54)
-                    glowTopColor: Qt.rgba(1, 1, 1, 0.20)
-                    glowMiddleColor: Qt.rgba(0.92, 0.97, 1.0, 0.08)
-                    glowBottomColor: Qt.rgba(0.74, 0.84, 0.96, 0.10)
-                    strokeColor: chatWindow.isMaximized ? "transparent" : Qt.rgba(1, 1, 1, 0.40)
-                    strokeWidth: chatWindow.isMaximized ? 0 : 0.9
-                }
-
-                Loader {
-                    anchors.fill: parent
-                    anchors.margins: chatWindow.shellContentInset
-                    active: chatWindow.visible && controller.page === AppController.ChatPage
-                    asynchronous: true
-                    sourceComponent: chatShellPageComponent
-                }
-            }
-
-            Item {
-                id: chatWindowControls
-                z: 200
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.topMargin: chatWindow.isMaximized
-                                   ? 10
-                                   : chatWindow.glassInset + chatWindow.shellContentInset + 4
-                anchors.rightMargin: chatWindow.isMaximized
-                                     ? 10
-                                     : chatWindow.glassInset + chatWindow.shellContentInset + 18
-                width: chatControlsRow.implicitWidth + root.controlHoverPadding * 4
-                height: chatControlsRow.implicitHeight + root.controlHoverPadding * 2 + 2
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: height / 2
-                    antialiasing: true
-                    color: Qt.rgba(1, 1, 1, 0.32)
-                    border.color: Qt.rgba(1, 1, 1, 0.54)
-                }
-
-                Row {
-                    id: chatControlsRow
-                    anchors.centerIn: parent
-                    spacing: 20
-
-                    SharedComponents.LoginIconButton {
-                        iconSource: "qrc:/icons/ai.png"
-                        onClicked: root.togglePetWindow()
-                    }
-
-                    SharedComponents.LoginIconButton {
-                        iconSource: "qrc:/icons/minimize.png"
-                        onClicked: chatWindow.showMinimized()
-                    }
-
-                    SharedComponents.LoginIconButton {
-                        iconSource: "qrc:/icons/maximize.png"
-                        onClicked: root.toggleWindowMaximized(chatWindow)
-                    }
-
-                    SharedComponents.LoginIconButton {
-                        iconSource: "qrc:/icons/close.png"
-                        onClicked: Qt.quit()
-                    }
-                }
-            }
-
-            Item {
-                id: chatResizeFrame
-                z: 180
-                anchors.fill: parent
-                visible: !chatWindow.isMaximized
-
-                ResizeHandle {
-                    x: root.borderResizeThickness
-                    y: 0
-                    width: Math.max(0, chatWindowControls.x - root.borderResizeThickness * 2)
-                    height: root.borderResizeThickness
-                    resizeEdges: Qt.TopEdge
-                    resizeCursor: Qt.SizeVerCursor
-                }
-
-                ResizeHandle {
-                    x: 0
-                    y: root.borderResizeThickness
-                    width: root.borderResizeThickness
-                    height: Math.max(0, parent.height - root.borderResizeThickness * 2)
-                    resizeEdges: Qt.LeftEdge
-                    resizeCursor: Qt.SizeHorCursor
-                }
-
-                ResizeHandle {
-                    x: parent.width - root.borderResizeThickness
-                    y: Math.min(parent.height - root.borderResizeThickness,
-                                chatWindowControls.y + chatWindowControls.height + 6)
-                    width: root.borderResizeThickness
-                    height: Math.max(0, parent.height - y - root.borderResizeThickness)
-                    resizeEdges: Qt.RightEdge
-                    resizeCursor: Qt.SizeHorCursor
-                }
-
-                ResizeHandle {
-                    x: root.borderResizeThickness
-                    y: parent.height - root.borderResizeThickness
-                    width: Math.max(0, parent.width - root.borderResizeThickness * 2)
-                    height: root.borderResizeThickness
-                    resizeEdges: Qt.BottomEdge
-                    resizeCursor: Qt.SizeVerCursor
-                }
-
-                ResizeHandle {
-                    x: 0
-                    y: 0
-                    width: root.borderResizeThickness
-                    height: root.borderResizeThickness
-                    resizeEdges: Qt.TopEdge | Qt.LeftEdge
-                    resizeCursor: Qt.SizeFDiagCursor
-                }
-
-                ResizeHandle {
-                    x: 0
-                    y: parent.height - root.borderResizeThickness
-                    width: root.borderResizeThickness
-                    height: root.borderResizeThickness
-                    resizeEdges: Qt.BottomEdge | Qt.LeftEdge
-                    resizeCursor: Qt.SizeBDiagCursor
-                }
-
-                ResizeHandle {
-                    x: parent.width - root.borderResizeThickness
-                    y: parent.height - root.borderResizeThickness
-                    width: root.borderResizeThickness
-                    height: root.borderResizeThickness
-                    resizeEdges: Qt.BottomEdge | Qt.RightEdge
-                    resizeCursor: Qt.SizeFDiagCursor
-                }
-            }
         }
     }
 

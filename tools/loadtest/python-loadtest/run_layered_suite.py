@@ -289,8 +289,32 @@ def environment_snapshot() -> dict[str, Any]:
         "rabbitmq_5672": tcp_port_open("127.0.0.1", 5672),
         "redpanda_19092": tcp_port_open("127.0.0.1", 19092),
     }
+    docker_cmd = None
+    for candidate in ("docker", "docker.exe"):
+        try:
+            subprocess.run(
+                [candidate, "version"],
+                cwd=str(repo_root()),
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            docker_cmd = candidate
+            break
+        except FileNotFoundError:
+            continue
+        except Exception:
+            docker_cmd = candidate
+            break
+    if docker_cmd is None:
+        return {
+            "tcp_ports": checks,
+            "docker_ps_exit_code": -1,
+            "docker_ps": "",
+            "docker_ps_stderr": "docker command not available in this shell",
+        }
     docker = subprocess.run(
-        ["docker", "ps", "--format", "{{.Names}}\t{{.Status}}\t{{.Ports}}"],
+        [docker_cmd, "ps", "--format", "{{.Names}}\t{{.Status}}\t{{.Ports}}"],
         cwd=str(repo_root()),
         capture_output=True,
         text=True,

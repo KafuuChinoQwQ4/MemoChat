@@ -11,6 +11,7 @@
 #include <QPointer>
 #include <QProcess>
 #include <QSet>
+#include <QByteArray>
 #include <QStringList>
 #include <QVariantMap>
 
@@ -62,6 +63,7 @@ class PetController : public QObject
     Q_PROPERTY(QString selectedModelName READ selectedModelName NOTIFY modelSelectionChanged)
     Q_PROPERTY(QString replyLanguage READ replyLanguage NOTIFY replyLanguageChanged)
     Q_PROPERTY(QString speechRules READ speechRules NOTIFY speechRulesChanged)
+    Q_PROPERTY(bool visionRequestInFlight READ visionRequestInFlight NOTIFY stateChanged)
 
 public:
     explicit PetController(ClientGateway *gateway, QObject *parent = nullptr);
@@ -102,6 +104,7 @@ public:
     bool windowsImeBridgeBusy() const { return _windows_ime_bridge_busy; }
     bool windowsCameraBridgeAvailable() const;
     bool windowsCameraBridgeBusy() const { return _windows_camera_bridge_busy; }
+    bool visionRequestInFlight() const { return _vision_request_in_flight; }
     QString selectedModelType() const { return _selected_model_type; }
     QString selectedModelName() const { return _selected_model_name; }
     QString replyLanguage() const { return _reply_language; }
@@ -134,6 +137,7 @@ public:
     Q_INVOKABLE void setModelSelection(const QString &modelType, const QString &modelName);
     Q_INVOKABLE void setReplyLanguage(const QString &language);
     Q_INVOKABLE void setSpeechRules(const QString &rules);
+    Q_INVOKABLE void setVoiceRuntimeSettings(const QVariantMap &settings);
 
 signals:
     void stateChanged();
@@ -159,16 +163,19 @@ private:
     void consumeSseLine(const QByteArray &line);
     void setBusy(bool busy, const QString &statusText = QString());
     void setVoiceTrainingBusy(bool busy, const QString &message = QString());
-    void postVisionCapture(const QString &frameBase64,
+    void setVisionRequestInFlight(bool inFlight);
+    bool postVisionCapture(const QString &frameBase64,
                            const QString &frameMime,
                            int frameWidth,
                            int frameHeight,
                            const QString &source,
                            const QString &transport);
+    bool shouldSkipVisionFrame(const QByteArray &signature, qint64 now, const QString &source);
     QString appendVisionSegmentFrame(const QString &frameBase64,
                                      const QString &frameMime,
                                      int frameWidth,
                                      int frameHeight,
+                                     const QByteArray &signature,
                                      const QString &source,
                                      const QString &transport);
     void postVisionSegment(const QString &source, const QString &transport);
@@ -184,6 +191,8 @@ private:
     void setError(const QString &error);
     QJsonObject authPayload() const;
     QJsonObject defaultObservationPayload() const;
+    QJsonObject voiceRuntimeMetadata() const;
+    void appendVoiceRuntimeMetadata(QJsonObject &metadata) const;
     QUrl petUrl(const QString &path) const;
     QString encodedSessionId() const;
 
@@ -214,8 +223,20 @@ private:
     QString _selected_model_name;
     QString _reply_language = QStringLiteral("zh-CN");
     QString _speech_rules;
+    QString _voice_provider;
+    QString _voice_name;
+    QString _voice_language;
+    QString _voice_reference_audio_path;
+    QString _voice_reference_audio_source;
+    QString _voice_prompt_text;
+    QString _voice_prompt_language;
+    QString _voice_text_language;
     QJsonArray _vision_segment_frames;
     qint64 _vision_segment_started_at_ms = 0;
+    qint64 _vision_segment_last_posted_at_ms = 0;
+    QByteArray _last_vision_frame_signature;
+    qint64 _last_vision_frame_accepted_at_ms = 0;
+    bool _vision_request_in_flight = false;
     QSet<QString> _applied_control_event_keys;
     QStringList _applied_control_event_order;
 };

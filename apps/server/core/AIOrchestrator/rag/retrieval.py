@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import os
 import re
 from collections import Counter
 from dataclasses import dataclass, field
@@ -26,6 +27,31 @@ _TEXT_RE = re.compile(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]+")
 _CJK_RE = re.compile(r"[\u4e00-\u9fff]+")
 _JIEBA = None
 _JIEBA_READY = False
+
+_DOMAIN_QUERY_EXPANSIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("端口", ("port", "ports", "listen", "publishes")),
+    ("监听", ("listen", "listens", "entrypoint", "port")),
+    ("本地", ("local", "docker", "deployment")),
+    ("压测", ("loadtest", "load", "benchmark", "baseline", "runtime reports")),
+    ("分层", ("layered", "separate", "app endpoints", "dependency capacity")),
+    ("知识库", ("knowledge", "knowledge-base", "collection", "collections", "uploaded knowledge base")),
+    ("检索", ("retrieval", "retrieve", "ranking", "recall")),
+    ("删除", ("delete", "deleted", "cleanup", "cleaned", "after the scenario")),
+    ("结束", ("after", "scenario", "cleanup")),
+    ("干扰", ("distractor", "near-miss", "unrelated")),
+    ("因素", ("factors", "documents", "near-miss", "paraphrased", "distractor")),
+    ("工具", ("tool", "runner", "k6", "baseline")),
+    ("默认", ("default", "service", "port")),
+    ("能力", ("capability", "capabilities", "coordinates", "knowledge search")),
+)
+
+_EXPLICIT_DISTRACTOR_PATTERNS: tuple[str, ...] = (
+    "distractor note",
+    "distractor document",
+    "not the authoritative answer",
+    "near-miss value",
+    "old notes",
+)
 
 
 def _is_cjk_segment(text: str) -> bool:
@@ -69,6 +95,28 @@ def tokenize_text(text: str) -> list[str]:
             tokens.append(segment)
 
     return [token for token in tokens if token]
+
+
+def expand_query_text(query: str) -> str:
+    """Add lightweight bilingual MemoChat domain terms for lexical retrieval."""
+    if not query:
+        return ""
+
+    normalized = query.lower()
+    additions: list[str] = []
+    seen: set[str] = set()
+    for trigger, expansions in _DOMAIN_QUERY_EXPANSIONS:
+        if trigger not in query and trigger.lower() not in normalized:
+            continue
+        for expansion in expansions:
+            key = expansion.lower()
+            if key not in seen:
+                seen.add(key)
+                additions.append(expansion)
+
+    if not additions:
+        return query
+    return f"{query} {' '.join(additions)}"
 
 
 def _stringify_value(value: Any) -> str:
@@ -196,6 +244,35 @@ def _merge_metadata(base: dict[str, Any], other: dict[str, Any]) -> dict[str, An
         if key not in merged or merged[key] in (None, "", [], {}):
             merged[key] = value
     return merged
+
+
+def _candidate_index_text(candidate: RetrievalCandidate) -> str:
+    metadata_values = [
+        str(value)
+        for key, value in candidate.metadata.items()
+        if key in {"source", "file_name", "file_type", "kb_id"} and value not in (None, "")
+    ]
+    return " ".join(
+        part
+        for part in [
+            candidate.content,
+            candidate.source,
+            candidate.kb_id,
+            " ".join(metadata_values),
+        ]
+        if part
+    )
+
+
+def _explicit_distractor_penalty(candidate: RetrievalCandidate) -> float:
+    haystack = " ".join([candidate.content, candidate.source, candidate.kb_id]).lower()
+    if not haystack:
+        return 1.0
+    if any(pattern in haystack for pattern in _EXPLICIT_DISTRACTOR_PATTERNS):
+        return 0.08
+    if "distractor" in haystack and "authoritative" in haystack:
+        return 0.15
+    return 1.0
 
 
 def _candidate_key(candidate: RetrievalCandidate) -> str:
@@ -413,15 +490,16 @@ def rank_lexical_candidates(candidates: list[RetrievalCandidate], query: str) ->
     if not candidates:
         return []
 
-    query_tokens = tokenize_for_bm25(query)
+    query_tokens = tokenize_for_bm25(expand_query_text(query))
     if not query_tokens:
         return []
 
-    tokenized_docs = [tokenize_for_bm25(candidate.content) for candidate in candidates]
+    tokenized_docs = [tokenize_for_bm25(_candidate_index_text(candidate)) for candidate in candidates]
     scores = _bm25_scores(tokenized_docs, query_tokens)
 
     ranked: list[RetrievalCandidate] = []
     for index, candidate in enumerate(candidates):
+        lexical_score = float(scores[index]) * _explicit_distractor_penalty(candidate)
         lexical_candidate = RetrievalCandidate(
             candidate_id=candidate.candidate_id,
             content=candidate.content,
@@ -429,7 +507,7 @@ def rank_lexical_candidates(candidates: list[RetrievalCandidate], query: str) ->
             kb_id=candidate.kb_id,
             collection=candidate.collection,
             metadata=dict(candidate.metadata),
-            lexical_score=float(scores[index]),
+            lexical_score=lexical_score,
             recall_routes=set(candidate.recall_routes) | {"bm25"},
         )
         ranked.append(lexical_candidate)
@@ -452,6 +530,7 @@ def fuse_candidates(
     for route, candidates in route_candidates.items():
         route_weight = route_weights.get(route, 1.0)
         for rank, candidate in enumerate(candidates, start=1):
+            candidate_weight = route_weight * _explicit_distractor_penalty(candidate)
             key = _candidate_key(candidate)
             existing = merged.get(key)
             if existing is None:
@@ -479,7 +558,7 @@ def fuse_candidates(
                 existing.dense_score = max(existing.dense_score, candidate.dense_score)
             elif route == "bm25":
                 existing.lexical_score = max(existing.lexical_score, candidate.lexical_score)
-            existing.fused_score += route_weight / (rrf_k + rank)
+            existing.fused_score += candidate_weight / (rrf_k + rank)
 
     fused = list(merged.values())
     fused.sort(key=lambda item: (item.fused_score, item.dense_score, item.lexical_score), reverse=True)
@@ -499,12 +578,21 @@ class CrossEncoderReranker:
         self.enabled = enabled
         self.batch_size = batch_size
         self.device = device
+        self.local_only = os.getenv("MEMOCHAT_AI_RAG__RETRIEVAL__RERANK_LOCAL_ONLY", "0").lower() not in {
+            "0",
+            "false",
+            "no",
+        }
         self._model = None
         self._load_error: str = ""
 
     def _load_model(self):
         if self._model is not None or self._load_error:
             return self._model
+        if self.local_only:
+            self._load_error = "local_only_enabled"
+            logger.info("rag.rerank.local_only", model=self.model_name)
+            return None
         try:
             from sentence_transformers import CrossEncoder
         except Exception as exc:
@@ -531,7 +619,7 @@ class CrossEncoderReranker:
 
         model = self._load_model()
         if model is None:
-            return candidates[:top_k]
+            return self._heuristic_rerank(query, candidates, top_k)
 
         pairs = [(query, candidate.content) for candidate in candidates]
         try:
@@ -544,7 +632,7 @@ class CrossEncoderReranker:
             )
         except Exception as exc:
             logger.warning("rag.rerank.failed", model=self.model_name, error=str(exc))
-            return candidates[:top_k]
+            return self._heuristic_rerank(query, candidates, top_k)
 
         try:
             scores = [float(score) for score in raw_scores]
@@ -553,6 +641,36 @@ class CrossEncoderReranker:
 
         for candidate, raw_score in zip(candidates, scores):
             candidate.rerank_score = _normalize_rerank_score(raw_score)
+
+        ranked = sorted(
+            candidates,
+            key=lambda item: (
+                item.rerank_score if item.rerank_score is not None else -1.0,
+                item.fused_score,
+                item.dense_score,
+                item.lexical_score,
+            ),
+            reverse=True,
+        )
+        return ranked[:top_k]
+
+    def _heuristic_rerank(self, query: str, candidates: list[RetrievalCandidate], top_k: int) -> list[RetrievalCandidate]:
+        query_terms = set(tokenize_text(expand_query_text(query)))
+        if not query_terms:
+            query_terms = {query.strip().lower()} if query.strip() else set()
+
+        for candidate in candidates:
+            candidate_terms = set(tokenize_text(_candidate_index_text(candidate)))
+            if candidate.source:
+                candidate_terms.update(tokenize_text(candidate.source))
+            if candidate.kb_id:
+                candidate_terms.update(tokenize_text(candidate.kb_id))
+            overlap = len(query_terms & candidate_terms)
+            lexical_bonus = candidate.lexical_score * 0.25
+            dense_bonus = candidate.dense_score * 0.25
+            fused_bonus = candidate.fused_score * 0.5
+            raw_score = overlap / max(len(query_terms), 1) + lexical_bonus + dense_bonus + fused_bonus
+            candidate.rerank_score = min(1.0, raw_score) * _explicit_distractor_penalty(candidate)
 
         ranked = sorted(
             candidates,

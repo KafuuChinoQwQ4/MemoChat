@@ -7,9 +7,10 @@ GROUP_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/GroupMessageSer
 PRIVATE_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/PrivateMessageService.cpp"
 CHAT_MESSAGE_DISPATCHER = REPO_ROOT / "apps/client/desktop/MemoChatShared/ChatMessageDispatcher.cpp"
 CHAT_MESSAGE_MODEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/ChatMessageModel.cpp"
-APP_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppController.cpp"
+ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/IconPathUtils.h"
+APP_CONTROLLER_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerSelection.cpp"
 APP_CONTROLLER_PRIVATE_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerPrivateEvents.cpp"
-APP_CONTROLLER_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerState.cpp"
+APP_CONTROLLER_DIALOG_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerDialogState.cpp"
 CONVERSATION_SYNC_SERVICE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/ConversationSyncService.cpp"
 
 
@@ -97,9 +98,9 @@ class GroupResponseSerializationTests(unittest.TestCase):
         )
 
     def test_group_dialog_uid_mapping_uses_shared_resolver(self):
-        controller = APP_CONTROLLER.read_text(encoding="utf-8")
+        controller = APP_CONTROLLER_SELECTION.read_text(encoding="utf-8")
         private_events = APP_CONTROLLER_PRIVATE_EVENTS.read_text(encoding="utf-8")
-        state = APP_CONTROLLER_STATE.read_text(encoding="utf-8")
+        state = APP_CONTROLLER_DIALOG_STATE.read_text(encoding="utf-8")
         sync = CONVERSATION_SYNC_SERVICE.read_text(encoding="utf-8")
 
         self.assertIn("makeGroupDialogUid", sync)
@@ -136,6 +137,20 @@ class GroupResponseSerializationTests(unittest.TestCase):
             "void ChatMessageModel::setDownloadAuthContext",
         )
         self.assertIn("entry.senderIcon = normalizeSenderIcon(entry.senderIcon);", set_auth_context)
+
+    def test_local_media_download_urls_use_stable_gate_http_port(self):
+        source = ICON_PATH_UTILS.read_text(encoding="utf-8")
+
+        media_base = extract_function(source, "inline QString mediaDownloadBaseUrl")
+        self.assertIn("gate_media_url_prefix.trimmed()", media_base)
+        self.assertIn("gate_url_prefix.trimmed()", media_base)
+        self.assertNotIn("parsed.setPort(8080)", media_base)
+        self.assertNotIn("port == 80 || port == 8443", media_base)
+
+        normalizer = extract_function(source, "inline QString normalizeLocalMediaDownloadUrl")
+        self.assertIn("normalized.setScheme(parsedBase.scheme())", normalizer)
+        self.assertIn("normalized.setHost(parsedBase.host())", normalizer)
+        self.assertIn("normalized.setPort(parsedBase.port(-1))", normalizer)
 
 
 if __name__ == "__main__":

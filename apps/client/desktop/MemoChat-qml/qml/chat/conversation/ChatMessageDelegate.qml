@@ -68,6 +68,29 @@ Item {
     readonly property real bubbleContentMaxWidth: Math.max(72, bubbleMaxWidth - (bubbleHorizontalPadding * 2 + 2))
     readonly property real imageContentMaxWidth: Math.min(bubbleContentMaxWidth, 280)
     readonly property real imageContentMaxHeight: 240
+    readonly property real replyPreferredWidth: root.isReply
+        ? Math.min(root.bubbleContentMaxWidth,
+                   Math.max(replySenderMeasure.implicitWidth, replyPreviewMeasure.implicitWidth) + 10)
+        : 0
+    readonly property real bodyPreferredWidth: {
+        if (root.msgType === "image") {
+            return Math.min(root.imageContentMaxWidth, 180)
+        }
+        if (root.msgType === "file") {
+            return Math.min(root.bubbleContentMaxWidth, fileMeasure.implicitWidth + 34)
+        }
+        if (root.msgType === "call") {
+            return Math.min(root.bubbleContentMaxWidth, 220)
+        }
+        return Math.min(root.bubbleContentMaxWidth, textMeasure.implicitWidth)
+    }
+    readonly property real bubblePreferredWidth: Math.min(
+        root.bubbleMaxWidth,
+        Math.max(root.bubbleMinWidth,
+                 Math.max(root.replyPreferredWidth, root.bodyPreferredWidth) + root.bubbleHorizontalPadding * 2))
+    readonly property real translationPreferredWidth: Math.min(
+        root.bubbleMaxWidth,
+        Math.max(120, translationTextMeasure.implicitWidth + 22))
     readonly property real messageHeight: Math.max(bubble.implicitHeight, showAvatar ? avatarSize : 0)
     readonly property int translationHeight: translationText.length > 0 ? (translationBubble.implicitHeight + 6) : 0
     readonly property bool showStateLabel: (root.outgoing && root.messageState !== "sent")
@@ -76,6 +99,47 @@ Item {
     readonly property int stateLabelHeight: showStateLabel ? 16 : 0
 
     height: timeDividerHeight + topSpacing + messageHeight + translationHeight + stateLabelHeight + bottomSpacing
+
+    Text {
+        id: textMeasure
+        visible: false
+        text: root.content
+        font.pixelSize: 14
+        wrapMode: Text.NoWrap
+    }
+
+    Text {
+        id: fileMeasure
+        visible: false
+        text: "[FILE] " + (root.fileName.length > 0 ? root.fileName : "文件")
+        font.pixelSize: 14
+        wrapMode: Text.NoWrap
+    }
+
+    Text {
+        id: replySenderMeasure
+        visible: false
+        text: root.replySender.length > 0 ? ("回复 " + root.replySender) : "回复"
+        font.pixelSize: 11
+        font.bold: true
+        wrapMode: Text.NoWrap
+    }
+
+    Text {
+        id: replyPreviewMeasure
+        visible: false
+        text: root.replyPreview
+        font.pixelSize: 11
+        wrapMode: Text.NoWrap
+    }
+
+    Text {
+        id: translationTextMeasure
+        visible: false
+        text: root.translationText
+        font.pixelSize: 13
+        wrapMode: Text.NoWrap
+    }
 
     Rectangle {
         visible: root.showTimeDivider
@@ -121,6 +185,19 @@ Item {
                 border.color: Qt.rgba(1, 1, 1, 0.56)
 
                 Image {
+                    id: leftAvatarFallbackImage
+                    anchors.fill: parent
+                    anchors.margins: Math.max(4, Math.round(root.avatarSize * 0.18))
+                    source: "qrc:/icons/user.png"
+                    fillMode: Image.PreserveAspectFit
+                    cache: true
+                    mipmap: true
+                    opacity: leftAvatarImage.status === Image.Ready ? 0.0 : 0.78
+                    Behavior on opacity { NumberAnimation { duration: 160 } }
+                }
+
+                Image {
+                    id: leftAvatarImage
                     anchors.fill: parent
                     property string baseSource: root.avatarSource.length > 0 ? root.avatarSource : root.defaultAvatarSource
                     property bool loadFailed: false
@@ -164,6 +241,19 @@ Item {
                 border.color: Qt.rgba(1, 1, 1, 0.56)
 
                 Image {
+                    id: rightAvatarFallbackImage
+                    anchors.fill: parent
+                    anchors.margins: Math.max(4, Math.round(root.avatarSize * 0.18))
+                    source: "qrc:/icons/user.png"
+                    fillMode: Image.PreserveAspectFit
+                    cache: true
+                    mipmap: true
+                    opacity: rightAvatarImage.status === Image.Ready ? 0.0 : 0.78
+                    Behavior on opacity { NumberAnimation { duration: 160 } }
+                }
+
+                Image {
+                    id: rightAvatarImage
                     anchors.fill: parent
                     property string baseSource: root.avatarSource.length > 0 ? root.avatarSource : root.defaultAvatarSource
                     property bool loadFailed: false
@@ -192,7 +282,8 @@ Item {
 
     Rectangle {
         id: bubble
-        width: Math.min(root.bubbleMaxWidth, Math.max(root.bubbleMinWidth, bubbleColumn.implicitWidth + root.bubbleHorizontalPadding * 2))
+        width: root.bubblePreferredWidth
+        height: implicitHeight
         implicitHeight: bubbleColumn.implicitHeight + root.bubbleVerticalPadding * 2
         radius: 10
         color: root.outgoing ? Qt.rgba(0.62, 0.80, 1.0, 0.52) : Qt.rgba(1, 1, 1, 0.50)
@@ -292,7 +383,8 @@ Item {
     Rectangle {
         id: translationBubble
         visible: root.translationText.length > 0
-        width: Math.min(root.bubbleMaxWidth, Math.max(120, translationTextItem.implicitWidth + 22))
+        width: root.translationPreferredWidth
+        height: implicitHeight
         implicitHeight: translationColumn.implicitHeight + 14
         radius: 9
         color: Qt.rgba(0.89, 0.94, 1.0, 0.54)
@@ -450,6 +542,8 @@ Item {
             id: fileItem
             property bool hovering: fileArea.containsMouse
             property bool pressed: fileArea.pressed
+            width: implicitWidth
+            height: implicitHeight
             color: fileItem.pressed ? Qt.rgba(0.35, 0.61, 0.90, 0.20)
                                     : fileItem.hovering ? Qt.rgba(0.35, 0.61, 0.90, 0.12)
                                                         : "transparent"
@@ -502,6 +596,8 @@ Item {
         id: callComp
         Rectangle {
             color: "transparent"
+            width: implicitWidth
+            height: implicitHeight
             implicitWidth: Math.min(root.bubbleContentMaxWidth, 220)
             implicitHeight: 62
 

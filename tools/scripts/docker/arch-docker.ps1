@@ -84,4 +84,9 @@ if ($quotedArgs.Count -gt 0) {
     $command += " " + ($quotedArgs -join " ")
 }
 
-& wsl.exe -d $distro -- bash -lc $command
+Push-Location $env:USERPROFILE
+try {
+    & wsl.exe -d $distro -- bash -lc $command
+} finally {
+    Pop-Location
+}

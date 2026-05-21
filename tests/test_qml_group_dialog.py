@@ -75,7 +75,10 @@ class CreateGroupDialogQmlTests(unittest.TestCase):
 
         self.assertIn("function ensureCurrentSessionSource()", left_panel)
         self.assertIn("controller.ensureGroupsInitialized()", left_panel)
-        self.assertIn("Component.onCompleted: root.ensureCurrentSessionSource()", left_panel)
+        self.assertRegex(
+            left_panel,
+            re.compile(r"Component\.onCompleted:\s*\{[^}]*root\.ensureCurrentSessionSource\(\)", re.S),
+        )
         self.assertIn("root.ensureCurrentSessionSource()", left_panel)
         self.assertIn("controller.ensureGroupsInitialized()", shell)
 

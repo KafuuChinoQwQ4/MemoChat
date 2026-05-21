@@ -1,5 +1,5 @@
 @echo off
-REM Fix Redpanda advertised address from host.docker.internal to 127.0.0.1
+REM Fix Redpanda advertised address for WSL Docker bridge access
 REM Current project Docker runs in Arch Linux native Docker.
 cd /d "%~dp0..\.."
 set "PROJECT_ROOT=%CD%"
@@ -28,7 +28,7 @@ echo     advertised_rpc_api:
 echo         address: 127.0.0.1
 echo         port: 33145
 echo     advertised_kafka_api:
-echo         - address: 127.0.0.1
+echo         - address: host.docker.internal
 echo           port: 19092
 echo     developer_mode: true
 echo     auto_create_topics_enabled: true
@@ -47,7 +47,7 @@ echo     pandaproxy_api:
 echo         - address: 0.0.0.0
 echo           port: 18082
 echo     advertised_pandaproxy_api:
-echo         - address: 127.0.0.1
+echo         - address: host.docker.internal
 echo           port: 18082
 echo schema_registry: {}
 ) > "\\wsl.localhost\archlinux\data\docker-data\memochat\redpanda\redpanda.yaml"
@@ -55,14 +55,20 @@ echo schema_registry: {}
 echo Starting Redpanda with fixed config...
 "%DOCKER%" run --rm -v /data/docker-data/memochat/redpanda/redpanda.yaml:/etc/redpanda/redpanda.yaml:ro ^
     -v /data/docker-data/memochat/redpanda/data:/var/lib/redpanda/data ^
+    --add-host host.docker.internal:host-gateway ^
     --network=container:memochat-redpanda ^
     --name memochat-redpanda-temp redpandadata/redpanda:v24.2.6 redpanda start ^
+    --overprovisioned ^
+    --smp 1 ^
+    --memory 1G ^
+    --reserve-memory 0M ^
+    --node-id 0 ^
+    --check=false ^
     --rpc-server 0.0.0.0:33145 ^
     --kafka-addr 0.0.0.0:19092 ^
-    --advertise-kafka-addr 127.0.0.1:19092 ^
-    --admin-addr 0.0.0.0:9644 ^
+    --advertise-kafka-addr host.docker.internal:19092 ^
     --pandaproxy-addr 0.0.0.0:18082 ^
-    --advertise-pandaproxy-addr 127.0.0.1:18082 ^
+    --advertise-pandaproxy-addr host.docker.internal:18082 ^
     --developer-mode true ^
     --auto-create-topics-enabled
 

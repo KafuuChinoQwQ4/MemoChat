@@ -260,7 +260,14 @@ class PetRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("收到：你好，桌宠", speech)
         speaking = [event for event in events if event["phase"] == "speaking"]
         self.assertTrue(speaking)
-        self.assertTrue(str(speaking[0]["audio"]["url"]).startswith("/audio/deterministic-voice-"))
+        audio_url = str(speaking[0]["audio"]["url"])
+        self.assertTrue(audio_url.startswith("/audio/deterministic-voice-"))
+        self.assertEqual(speaking[0]["audio"]["state"], "ready")
+        audio = await self.client.get(f"/pet{audio_url}")
+        self.assertEqual(audio.status_code, 200)
+        self.assertGreater(len(audio.content), 44)
+        self.assertEqual(audio.content[:4], b"RIFF")
+        self.assertEqual(audio.content[8:12], b"WAVE")
 
     async def test_observation_returns_v1_control_event(self):
         session_id = await self._create_session()

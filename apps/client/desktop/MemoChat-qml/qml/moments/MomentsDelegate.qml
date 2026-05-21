@@ -11,6 +11,7 @@ Rectangle {
     color: "transparent"
     // Loader 未设 height：用内容固有高度 + 上下边距，避免正文与点赞行重叠
     implicitHeight: contentLayout.implicitHeight + 24
+    height: implicitHeight
 
     property var backdrop: null
     property var momentData: null

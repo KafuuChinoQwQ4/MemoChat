@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +39,7 @@ class PetRuntimeConfig:
     voice_sovits_text_language: str = "zh"
     voice_sovits_output_dir: str = "/app/.data/pet-voice-cache"
     voice_sovits_timeout_sec: float = 180.0
+    pet_text_timeout_sec: float = 25.0
     voice_training_enabled: bool = True
     voice_training_artifact_root: str = "/app/.data/pet-voice-training"
 
@@ -119,6 +121,7 @@ class PetRuntime:
         )
 
         runtime_metadata = self._voice_runtime_metadata()
+        runtime_metadata["text_timeout_sec"] = self._config.pet_text_timeout_sec
         runtime_metadata.update(_request_runtime_metadata(metadata))
         visual_summary = _visual_summary_runtime_metadata(self._policy.visual_summary(session_id))
         if visual_summary:
@@ -135,7 +138,23 @@ class PetRuntime:
             return events
 
         for chunk in chunks:
-            events.append(await self._emit(session_id, turn_id=turn_id, **self._policy.provider_chunk(chunk)))
+            event_args = self._policy.provider_chunk(chunk)
+            if bool(getattr(chunk, "metadata", {}).get("voice_deferred")):
+                event_args["audio_state"] = "loading"
+                event_args.setdefault("debug", {})["voice"] = {
+                    "provider": str(chunk.metadata.get("voice_provider") or ""),
+                    "voice": str(chunk.metadata.get("voice_name") or ""),
+                    "state": "loading",
+                    "duration_ms": 0,
+                    "retention": "none",
+                    "metadata": {
+                        "async": True,
+                        "language": str(chunk.metadata.get("voice_language") or chunk.metadata.get("language") or "zh-CN"),
+                        "text_lang": str(chunk.metadata.get("text_lang") or ""),
+                    },
+                }
+                self._schedule_provider_chunk_voice(session, turn_id, chunk, event_args)
+            events.append(await self._emit(session_id, turn_id=turn_id, **event_args))
 
         events.append(await self._emit(session_id, turn_id=turn_id, **self._policy.input_finished()))
         return events
@@ -145,7 +164,7 @@ class PetRuntime:
         self._observations[observation.session_id] = observation
         turn_id = f"petturn-observe-{uuid.uuid4().hex}"
         event_args = self._policy.observation(observation)
-        await self._attach_visual_voice(session, turn_id, event_args, observation)
+        self._schedule_visual_voice(session, turn_id, event_args, observation)
         return await self._emit(
             observation.session_id,
             turn_id=turn_id,
@@ -290,6 +309,265 @@ class PetRuntime:
 
     async def _emit(self, session_id: str, **kwargs) -> PetControlEvent:
         return await self._events.publish(session_id, **kwargs)
+
+    def _schedule_visual_voice(
+        self,
+        session: PetSession,
+        turn_id: str,
+        event_args: dict,
+        observation: PetObservation,
+    ) -> None:
+        speech_text = str(event_args.get("speech_text") or "").strip()
+        if not speech_text:
+            return
+
+        runtime_metadata = self._visual_voice_runtime_metadata(event_args, observation)
+        provider = str(runtime_metadata.get("voice_provider") or "scripted")
+        voice_name = str(runtime_metadata.get("voice_name") or provider or "deterministic")
+        language = str(runtime_metadata.get("language") or "zh-CN")
+        if _normalize_provider(provider) in {"", "scripted", "deterministic"}:
+            event_args["audio_state"] = "error"
+            event_args.setdefault("debug", {})["voice"] = self._visual_voice_error_payload(
+                provider=provider or "scripted",
+                voice_name=voice_name,
+                language=language,
+                message="visual speech requires a configured non-deterministic voice provider",
+                recoverable=True,
+            )
+            return
+
+        event_args["audio_state"] = "loading"
+        event_args.setdefault("debug", {})["voice"] = {
+            "provider": provider,
+            "voice": voice_name,
+            "state": "loading",
+            "duration_ms": 0,
+            "retention": "none",
+            "metadata": {
+                "language": language,
+                "text_lang": runtime_metadata.get("text_lang") or _voice_text_language(language),
+                "async": True,
+            },
+        }
+        try:
+            asyncio.create_task(
+                self._emit_visual_voice_when_ready(
+                    session=session,
+                    turn_id=turn_id,
+                    speech_text=speech_text,
+                    provider=provider,
+                    voice_name=voice_name,
+                    language=language,
+                    runtime_metadata=runtime_metadata,
+                    event_args=event_args,
+                )
+            )
+        except RuntimeError:
+            event_args["audio_state"] = "error"
+            event_args.setdefault("debug", {})["voice"] = self._visual_voice_error_payload(
+                provider=provider,
+                voice_name=voice_name,
+                language=language,
+                message="event loop is not available for async visual voice synthesis",
+                recoverable=True,
+            )
+
+    async def _emit_visual_voice_when_ready(
+        self,
+        session: PetSession,
+        turn_id: str,
+        speech_text: str,
+        provider: str,
+        voice_name: str,
+        language: str,
+        runtime_metadata: dict,
+        event_args: dict,
+    ) -> None:
+        try:
+            voice = await self._voice_router.synthesize(
+                VoiceSynthesisRequest(
+                    session_id=session.session_id,
+                    turn_id=turn_id,
+                    text=speech_text,
+                    provider=provider,
+                    voice=voice_name,
+                    language=language,
+                    metadata=runtime_metadata,
+                )
+            )
+            voice_payload = voice.to_dict()
+            payload = self._visual_voice_ready_event_args(event_args, voice_payload, provider, voice_name)
+        except VoiceProviderError as exc:
+            payload = self._visual_voice_error_event_args(event_args, exc, provider, voice_name, language)
+        await self._emit(session.session_id, turn_id=turn_id, **payload)
+
+    def _schedule_provider_chunk_voice(
+        self,
+        session: PetSession,
+        turn_id: str,
+        chunk,
+        event_args: dict,
+    ) -> None:
+        text = str(getattr(chunk, "text", "") or "").strip()
+        if not text:
+            return
+        metadata = dict(getattr(chunk, "metadata", {}) or {})
+        provider = str(metadata.get("voice_provider") or "scripted")
+        voice_name = str(metadata.get("voice_name") or provider or "deterministic")
+        language = str(metadata.get("voice_language") or metadata.get("language") or "zh-CN")
+        if _normalize_provider(provider) in {"", "scripted", "deterministic"}:
+            return
+        try:
+            asyncio.create_task(
+                self._emit_provider_chunk_voice_when_ready(
+                    session=session,
+                    turn_id=turn_id,
+                    speech_text=text,
+                    provider=provider,
+                    voice_name=voice_name,
+                    language=language,
+                    runtime_metadata=metadata,
+                    event_args=event_args,
+                )
+            )
+        except RuntimeError:
+            event_args["audio_state"] = "error"
+            event_args.setdefault("debug", {})["voice"] = self._visual_voice_error_payload(
+                provider=provider,
+                voice_name=voice_name,
+                language=language,
+                message="event loop is not available for async provider voice synthesis",
+                recoverable=True,
+            )
+
+    async def _emit_provider_chunk_voice_when_ready(
+        self,
+        session: PetSession,
+        turn_id: str,
+        speech_text: str,
+        provider: str,
+        voice_name: str,
+        language: str,
+        runtime_metadata: dict,
+        event_args: dict,
+    ) -> None:
+        try:
+            voice = await self._voice_router.synthesize(
+                VoiceSynthesisRequest(
+                    session_id=session.session_id,
+                    turn_id=turn_id,
+                    text=speech_text,
+                    provider=provider,
+                    voice=voice_name,
+                    language=language,
+                    metadata=runtime_metadata,
+                )
+            )
+            payload = self._visual_voice_ready_event_args(
+                event_args,
+                voice.to_dict(),
+                provider,
+                voice_name,
+            )
+        except VoiceProviderError as exc:
+            payload = self._visual_voice_error_event_args(event_args, exc, provider, voice_name, language)
+        await self._emit(session.session_id, turn_id=turn_id, **payload)
+
+    def _visual_voice_runtime_metadata(self, event_args: dict, observation: PetObservation) -> dict:
+        runtime_metadata = self._voice_runtime_metadata()
+        runtime_metadata.update(_request_runtime_metadata(_observation_voice_metadata(observation)))
+        language = str(
+            event_args.get("speech_language")
+            or runtime_metadata.get("reply_language")
+            or runtime_metadata.get("language")
+            or runtime_metadata.get("voice_language")
+            or "zh-CN"
+        ).strip() or "zh-CN"
+        runtime_metadata.setdefault("reply_language", language)
+        runtime_metadata.setdefault("language", language)
+        runtime_metadata["voice_language"] = language
+        runtime_metadata["text_lang"] = _voice_text_language(language)
+        return runtime_metadata
+
+    def _visual_voice_ready_event_args(
+        self,
+        base_args: dict,
+        voice_payload: dict,
+        provider: str,
+        voice_name: str,
+    ) -> dict:
+        event_args = dict(base_args)
+        event_args["debug"] = dict(base_args.get("debug") or {})
+        event_args["phase"] = "audio_ready"
+        event_args["speech_text"] = ""
+        event_args["speech_translation"] = ""
+        event_args["text_final"] = False
+        event_args["audio_state"] = voice_payload.get("state") or "text-only"
+        event_args["audio_sample_rate"] = voice_payload.get("sample_rate") or 0
+        event_args["audio_duration_ms"] = voice_payload.get("duration_ms") or 0
+        event_args["audio_chunk_ref"] = voice_payload.get("chunk_ref")
+        event_args["audio_url"] = voice_payload.get("url")
+        event_args["audio_phoneme"] = voice_payload.get("phoneme")
+        event_args["audio_viseme"] = voice_payload.get("viseme")
+        event_args["privacy_retention"] = voice_payload.get("retention") or "none"
+        event_args["lip_sync"] = max(float(event_args.get("lip_sync") or 0.0), float(voice_payload.get("rms") or 0.0))
+        event_args.setdefault("debug", {})["voice"] = {
+            "provider": voice_payload.get("provider") or provider,
+            "voice": voice_payload.get("voice") or voice_name,
+            "state": voice_payload.get("state") or "text-only",
+            "duration_ms": voice_payload.get("duration_ms") or 0,
+            "retention": voice_payload.get("retention") or "none",
+            "metadata": voice_payload.get("metadata") or {},
+        }
+        return event_args
+
+    def _visual_voice_error_payload(
+        self,
+        provider: str,
+        voice_name: str,
+        language: str,
+        message: str,
+        recoverable: bool,
+    ) -> dict:
+        return {
+            "provider": provider,
+            "voice": voice_name,
+            "state": "error",
+            "duration_ms": 0,
+            "retention": "none",
+            "metadata": {
+                "language": language,
+                "text_lang": _voice_text_language(language),
+                "audio_error": message,
+                "audio_error_provider": provider,
+                "audio_error_recoverable": bool(recoverable),
+                "async": True,
+            },
+        }
+
+    def _visual_voice_error_event_args(
+        self,
+        base_args: dict,
+        error: VoiceProviderError,
+        provider: str,
+        voice_name: str,
+        language: str,
+    ) -> dict:
+        event_args = dict(base_args)
+        event_args["debug"] = dict(base_args.get("debug") or {})
+        event_args["phase"] = "audio_ready"
+        event_args["speech_text"] = ""
+        event_args["speech_translation"] = ""
+        event_args["text_final"] = False
+        event_args["audio_state"] = "error"
+        event_args.setdefault("debug", {})["voice"] = self._visual_voice_error_payload(
+            provider=error.provider or provider,
+            voice_name=voice_name,
+            language=language,
+            message=str(error),
+            recoverable=bool(error.recoverable),
+        )
+        return event_args
 
     def audio_file_path(self, file_name: str):
         safe_name = Path(str(file_name or "")).name
@@ -482,6 +760,7 @@ def _runtime_config_from(config: PetRuntimeConfig | object | None) -> PetRuntime
             or "/app/.data/pet-voice-cache"
         ),
         voice_sovits_timeout_sec=_positive_float(getattr(config, "voice_sovits_timeout_sec", 180.0), 180.0),
+        pet_text_timeout_sec=_positive_float(getattr(config, "pet_text_timeout_sec", 25.0), 25.0, minimum=0.001),
         voice_training_enabled=bool(getattr(config, "voice_training_enabled", True)),
         voice_training_artifact_root=str(
             getattr(config, "voice_training_artifact_root", "/app/.data/pet-voice-training")
@@ -502,12 +781,12 @@ def _non_negative_int(value) -> int:
     return max(0, number)
 
 
-def _positive_float(value, fallback: float) -> float:
+def _positive_float(value, fallback: float, minimum: float = 1.0) -> float:
     try:
         number = float(value)
     except (TypeError, ValueError):
         return fallback
-    return max(1.0, number)
+    return max(minimum, number)
 
 
 def _voice_diagnostics_message(provider: dict, audio: dict, reference_configured: bool) -> str:
@@ -543,31 +822,64 @@ def _request_runtime_metadata(metadata: dict | None) -> dict:
     if not isinstance(metadata, dict):
         return {}
     result: dict = {}
-    reply_language = str(
-        metadata.get("reply_language")
-        or metadata.get("language")
-        or metadata.get("target_language")
-        or ""
-    ).strip()
+    reply_language = _metadata_text(metadata, "reply_language", "language", "target_language")
     if reply_language:
         result["reply_language"] = reply_language
         result["language"] = reply_language
         result["voice_language"] = reply_language
         result["text_lang"] = _voice_text_language(reply_language)
-    speech_rules = str(metadata.get("speech_rules") or "").strip()
+    voice_language = _metadata_text(metadata, "voice_language", "voiceLanguage")
+    if voice_language:
+        result["voice_language"] = voice_language
+    text_lang = _metadata_text(metadata, "text_lang", "textLanguage")
+    if text_lang:
+        result["text_lang"] = _voice_text_language(text_lang)
+    speech_rules = _metadata_text(metadata, "speech_rules", "speechRules")
     if speech_rules:
         result["speech_rules"] = speech_rules
+    voice_provider = _metadata_text(metadata, "voice_provider", "voiceProvider", "provider")
+    if voice_provider:
+        result["voice_provider"] = _normalize_provider(voice_provider) or voice_provider
+    voice_name = _metadata_text(metadata, "voice_name", "voiceName")
+    if voice_name:
+        result["voice_name"] = voice_name
+    reference_audio = _metadata_text(
+        metadata,
+        "ref_audio_path",
+        "refAudioPath",
+        "reference_audio_path",
+        "referenceAudioPath",
+        "voiceTrainingReferenceAudioPath",
+    )
+    if reference_audio:
+        result["ref_audio_path"] = reference_audio
+    prompt_text = _metadata_text(metadata, "prompt_text", "promptText")
+    if prompt_text:
+        result["prompt_text"] = prompt_text
+    prompt_lang = _metadata_text(metadata, "prompt_lang", "promptLanguage")
+    if prompt_lang:
+        result["prompt_lang"] = _voice_text_language(prompt_lang)
+    reference_source = _metadata_text(metadata, "reference_audio_source", "referenceAudioSource")
+    if reference_source:
+        result["reference_audio_source"] = reference_source
+    if result.get("ref_audio_path") and not result.get("voice_provider"):
+        result["voice_provider"] = "gpt-sovits"
+    if result.get("voice_provider") and not result.get("voice_name"):
+        result["voice_name"] = str(result["voice_provider"])
     return result
 
 
 def _observation_voice_metadata(observation: PetObservation) -> dict:
     vision = observation.vision if isinstance(observation.vision, dict) else {}
-    result = {}
-    for key in ("reply_language", "language", "voice_language", "text_lang", "speech_rules"):
-        value = str(vision.get(key) or "").strip()
+    return _request_runtime_metadata(vision)
+
+
+def _metadata_text(metadata: dict, *keys: str) -> str:
+    for key in keys:
+        value = str(metadata.get(key) or "").strip()
         if value:
-            result[key] = value
-    return result
+            return value
+    return ""
 
 
 def _visual_summary_runtime_metadata(summary: dict | None) -> dict:

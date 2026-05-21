@@ -18,6 +18,8 @@ RUN_DEPLOY=1
 RUN_BACKEND=1
 RUN_ENVOY=1
 RUN_GPT_SOVITS=1
+AI_BASE_URL="${MEMOCHAT_AI_BASE_URL:-http://127.0.0.1:8096}"
+AI_VOICE_WAIT_SECONDS="${MEMOCHAT_AI_VOICE_WAIT_SECONDS:-60}"
 CLIENT_DIAGNOSE=0
 APP_ARGS=()
 
@@ -44,7 +46,8 @@ Environment overrides:
   MEMOCHAT_ENV_FILE, MEMOCHAT_CMAKE_PRESET, MEMOCHAT_BUILD_DIR,
   MEMOCHAT_BUILD_BIN, MEMOCHAT_BUILD_PARALLEL, MEMOCHAT_AI_COMPOSE_FILE,
   MEMOCHAT_LOCAL_COMPOSE_FILE, MEMOCHAT_CLIENT_EXE, MEMOCHAT_START_ENVOY,
-  MEMOCHAT_START_GPT_SOVITS.
+  MEMOCHAT_START_GPT_SOVITS, MEMOCHAT_REQUIRE_GPT_SOVITS,
+  MEMOCHAT_AI_BASE_URL, MEMOCHAT_AI_VOICE_WAIT_SECONDS.
 USAGE
 }
 
@@ -116,6 +119,80 @@ run_step() {
     "$@"
 }
 
+is_truthy() {
+    case "${1,,}" in
+        1|true|yes|on) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+ai_voice_ready() {
+    local response_file="$1"
+    local url="${AI_BASE_URL%/}/pet/diagnostics/voice?probe_endpoint=true"
+    curl -fsS "$url" -o "$response_file" >/dev/null 2>&1 || return 1
+    python - "$response_file" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as fh:
+    payload = json.load(fh)
+
+diagnostics = payload.get("diagnostics") or {}
+provider = diagnostics.get("provider") or {}
+ready = bool(payload.get("code") == 0 and diagnostics.get("ready") and provider.get("endpoint_reachable"))
+if not ready:
+    message = diagnostics.get("message") or provider.get("message") or "AI voice diagnostics are not ready"
+    status = provider.get("status") or "unknown"
+    print(f"status={status} message={message}")
+    sys.exit(1)
+print("ready")
+PY
+}
+
+ensure_ai_voice_ready() {
+    if [[ "$RUN_GPT_SOVITS" -eq 0 ]] || [[ "${MEMOCHAT_START_GPT_SOVITS:-}" == "0" ]]; then
+        echo
+        echo "[SKIP] AI voice diagnostics skipped with GPT-SoVITS startup disabled"
+        return 0
+    fi
+    if ! is_truthy "${MEMOCHAT_REQUIRE_GPT_SOVITS:-1}"; then
+        echo
+        echo "[SKIP] AI voice diagnostics skipped because MEMOCHAT_REQUIRE_GPT_SOVITS=0"
+        return 0
+    fi
+
+    local response_file
+    response_file="$(mktemp)"
+    local waited=0
+    local last_error=""
+    local url="${AI_BASE_URL%/}/pet/diagnostics/voice?probe_endpoint=true"
+
+    echo
+    echo "[STEP] Verify AIOrchestrator GPT-SoVITS voice diagnostics"
+    echo "       ${url}"
+    while (( waited < AI_VOICE_WAIT_SECONDS )); do
+        if last_error="$(ai_voice_ready "$response_file" 2>&1)"; then
+            echo "       ready"
+            rm -f -- "$response_file"
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    echo "[FAIL] AIOrchestrator voice diagnostics did not become ready within ${AI_VOICE_WAIT_SECONDS}s" >&2
+    if [[ -n "$last_error" ]]; then
+        echo "       ${last_error}" >&2
+    fi
+    if [[ -s "$response_file" ]]; then
+        echo "       Last response: $(tr -d '\n' < "$response_file")" >&2
+    fi
+    echo "       Run: ${PROJECT_ROOT}/tools/scripts/pet/apply_gpt_sovits_voice_wsl.sh" >&2
+    rm -f -- "$response_file"
+    return 1
+}
+
 project_path() {
     local path="$1"
     case "$path" in
@@ -128,6 +205,8 @@ if [[ -f "$ENV_FILE" ]]; then
     # shellcheck disable=SC1090
     source "$ENV_FILE"
 fi
+AI_BASE_URL="${MEMOCHAT_AI_BASE_URL:-$AI_BASE_URL}"
+AI_VOICE_WAIT_SECONDS="${MEMOCHAT_AI_VOICE_WAIT_SECONDS:-$AI_VOICE_WAIT_SECONDS}"
 
 cd -- "$PROJECT_ROOT"
 CLIENT_EXE="$(project_path "$CLIENT_EXE")"
@@ -150,6 +229,7 @@ echo "  AI_COMPOSE_FILE:  ${AI_COMPOSE_FILE}"
 echo "  LOCAL_COMPOSE:    ${LOCAL_COMPOSE_FILE}"
 echo "  ENVOY_GATEWAY:    ${DISPLAY_ENVOY}"
 echo "  GPT_SOVITS:       ${DISPLAY_GPT_SOVITS}"
+echo "  AI_BASE_URL:      ${AI_BASE_URL}"
 echo "  CLIENT_EXE:       ${CLIENT_EXE}"
 echo "============================================================"
 
@@ -184,6 +264,7 @@ if [[ "$RUN_BACKEND" -eq 1 ]]; then
         start_backend_args+=(--skip-gpt-sovits)
     fi
     run_step "Start backend services" "${start_backend_args[@]}"
+    ensure_ai_voice_ready
 else
     echo
     echo "[SKIP] Backend startup"

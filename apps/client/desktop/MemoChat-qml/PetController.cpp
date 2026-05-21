@@ -6,6 +6,7 @@
 
 #include <QtCore/QBuffer>
 #include <QtCore/QIODevice>
+#include <QColor>
 #include <QtGui/QImageWriter>
 #if HAVE_QT_MULTIMEDIA
 #include <QtMultimedia/QVideoFrame>
@@ -20,15 +21,146 @@
 #include <QNetworkRequest>
 #include <QProcess>
 #include <QStandardPaths>
+#include <QSslConfiguration>
+#include <QSslSocket>
 #include <QUrl>
 #include <QUrlQuery>
 #include <QDateTime>
 #include <QtGlobal>
 
+#include <initializer_list>
+
 namespace {
 constexpr int kMaxRememberedPetControlEvents = 256;
-constexpr int kVisionSegmentMaxFrames = 8;
-constexpr int kVisionSegmentMaxDurationMs = 12000;
+constexpr int kVisionSegmentMaxFrames = 14;
+constexpr int kVisionSegmentWindowMs = 20000;
+constexpr int kVisionSegmentMinUploadMs = 15000;
+constexpr int kVisionDuplicateFrameCooldownMs = 30000;
+constexpr int kVisionFrameSignatureSize = 16;
+constexpr int kVisionFrameSignatureDuplicateDistance = 32;
+
+QByteArray visionFrameSignature(const QImage &image)
+{
+    if (image.isNull()) {
+        return {};
+    }
+    const QImage normalized = image.convertToFormat(QImage::Format_RGB32)
+                                  .scaled(kVisionFrameSignatureSize,
+                                          kVisionFrameSignatureSize,
+                                          Qt::IgnoreAspectRatio,
+                                          Qt::FastTransformation);
+    QByteArray signature;
+    signature.reserve(kVisionFrameSignatureSize * kVisionFrameSignatureSize);
+    for (int y = 0; y < normalized.height(); ++y) {
+        for (int x = 0; x < normalized.width(); ++x) {
+            const QColor pixel(normalized.pixel(x, y));
+            const int luminance = (pixel.red() * 30 + pixel.green() * 59 + pixel.blue() * 11) / 100;
+            signature.append(char(luminance / 16));
+        }
+    }
+    return signature;
+}
+
+void configurePetRequest(QNetworkRequest &request)
+{
+    const QString scheme = request.url().scheme().trimmed().toLower();
+    if (scheme == QLatin1String("http")) {
+        request.setRawHeader(QByteArrayLiteral("Connection"), QByteArrayLiteral("close"));
+        return;
+    }
+    if (scheme != QLatin1String("https")) {
+        return;
+    }
+
+    QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
+    sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
+    request.setSslConfiguration(sslConfig);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 9, 0)
+    request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);
+#endif
+}
+
+int visionFrameSignatureDistance(const QByteArray &left, const QByteArray &right)
+{
+    if (left.isEmpty() || right.isEmpty() || left.size() != right.size()) {
+        return 9999;
+    }
+    int distance = 0;
+    for (int index = 0; index < left.size(); ++index) {
+        distance += qAbs(int(uchar(left.at(index))) - int(uchar(right.at(index))));
+    }
+    return distance;
+}
+
+QString stringFromVariant(const QVariantMap &settings, const QString &key)
+{
+    return settings.value(key).toString().trimmed();
+}
+
+QString firstStringFromVariant(const QVariantMap &settings, std::initializer_list<const char *> keys)
+{
+    for (const char *key : keys) {
+        const QString value = stringFromVariant(settings, QString::fromLatin1(key));
+        if (!value.isEmpty()) {
+            return value;
+        }
+    }
+    return {};
+}
+
+QString localPathFromUrlText(const QString &value)
+{
+    QString text = value.trimmed();
+    if (text.startsWith(QStringLiteral("file://"))) {
+        text = QUrl(text).toLocalFile();
+    }
+    return text.trimmed();
+}
+
+QString joinedPath(const QString &directory, const QString &fileName)
+{
+    const QString dir = localPathFromUrlText(directory);
+    const QString file = localPathFromUrlText(fileName);
+    if (dir.isEmpty() || file.isEmpty()) {
+        return {};
+    }
+    if (QDir::isAbsolutePath(file)) {
+        return file;
+    }
+    return QDir(dir).filePath(file);
+}
+
+bool looksLikeAudioPath(const QString &path)
+{
+    const QString suffix = QFileInfo(path.trimmed()).suffix().toLower();
+    return suffix == QStringLiteral("wav")
+           || suffix == QStringLiteral("mp3")
+           || suffix == QStringLiteral("ogg")
+           || suffix == QStringLiteral("flac")
+           || suffix == QStringLiteral("m4a")
+           || suffix == QStringLiteral("aac");
+}
+
+QString voiceTextLanguage(const QString &language)
+{
+    const QString normalized = language.trimmed().toLower().replace(QLatin1Char('_'), QLatin1Char('-'));
+    if (normalized == QStringLiteral("ja-jp") || normalized == QStringLiteral("jp") || normalized == QStringLiteral("ja")) {
+        return QStringLiteral("ja");
+    }
+    if (normalized == QStringLiteral("en-us") || normalized == QStringLiteral("en-gb") || normalized == QStringLiteral("en")) {
+        return QStringLiteral("en");
+    }
+    if (normalized == QStringLiteral("ko-kr") || normalized == QStringLiteral("ko")) {
+        return QStringLiteral("ko");
+    }
+    if (normalized == QStringLiteral("fr-fr") || normalized == QStringLiteral("fr")) {
+        return QStringLiteral("fr");
+    }
+    if (normalized == QStringLiteral("es-es") || normalized == QStringLiteral("es")) {
+        return QStringLiteral("es");
+    }
+    return QStringLiteral("zh");
+}
 
 bool isWslRuntime()
 {
@@ -116,6 +248,23 @@ if ($form.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     [Console]::Out.Write($textBox.Text)
 }
 )PS").arg(initialBase64);
+}
+
+void normalizeVisionSegmentFrames(QJsonArray &frames)
+{
+    if (frames.isEmpty()) {
+        return;
+    }
+    const qint64 firstCapturedAt = frames.first().toObject().value(QStringLiteral("captured_at_ms")).toVariant().toLongLong();
+    if (firstCapturedAt <= 0) {
+        return;
+    }
+    for (int index = 0; index < frames.size(); ++index) {
+        QJsonObject frame = frames.at(index).toObject();
+        const qint64 capturedAt = frame.value(QStringLiteral("captured_at_ms")).toVariant().toLongLong();
+        frame[QStringLiteral("t_ms")] = int(qMax<qint64>(0, capturedAt - firstCapturedAt));
+        frames[index] = frame;
+    }
 }
 
 QString windowsCameraCaptureScript()
@@ -243,6 +392,33 @@ QString PetController::audioUrl() const
         return raw;
     }
     const QString path = raw.startsWith(QLatin1Char('/')) ? raw : QStringLiteral("/%1").arg(raw);
+    if (path.startsWith(QStringLiteral("/audio/"))) {
+        const QString mediaBase = gate_media_url_prefix.trimmed().isEmpty()
+                                      ? gate_url_prefix.trimmed()
+                                      : gate_media_url_prefix.trimmed();
+        QUrl base(mediaBase);
+        if (base.isValid() && !base.host().isEmpty()) {
+            const int port = base.port(8096);
+            if (port == 8096) {
+                base.setPath(QStringLiteral("/pet") + path);
+            } else if (port == 80 || port == 8080 || port == 8443) {
+                base.setScheme(QStringLiteral("http"));
+                base.setPort(8096);
+                base.setPath(QStringLiteral("/pet") + path);
+            } else {
+                base.setPath(QStringLiteral("/ai/pet") + path);
+            }
+            QUrlQuery query(base);
+            if (!_model.turnId().isEmpty()) {
+                query.addQueryItem(QStringLiteral("turn"), _model.turnId());
+            }
+            if (!_model.eventId().isEmpty()) {
+                query.addQueryItem(QStringLiteral("event"), _model.eventId());
+            }
+            base.setQuery(query);
+            return base.toString();
+        }
+    }
     QUrl url = petUrl(path);
     QUrlQuery query(url);
     if (!_model.turnId().isEmpty()) {
@@ -284,6 +460,9 @@ void PetController::sendText(const QString &text)
         setError(QStringLiteral("桌宠会话未连接"));
         return;
     }
+    if (!_streaming) {
+        startStream();
+    }
 
     _model.clearSpeech();
     _input_request_in_flight = true;
@@ -304,6 +483,7 @@ void PetController::sendText(const QString &text)
     if (!speechRules.isEmpty()) {
         metadata[QStringLiteral("speech_rules")] = speechRules;
     }
+    appendVoiceRuntimeMetadata(metadata);
     payload[QStringLiteral("metadata")] = metadata;
     postJson(petUrl(QStringLiteral("/sessions/%1/input").arg(encodedSessionId())),
              payload,
@@ -318,6 +498,11 @@ void PetController::sendObservation(const QVariantMap &observation)
     QJsonObject payload = QJsonObject::fromVariantMap(observation);
     if (payload.isEmpty()) {
         payload = defaultObservationPayload();
+    }
+    QJsonObject vision = payload.value(QStringLiteral("vision")).toObject();
+    appendVoiceRuntimeMetadata(vision);
+    if (!vision.isEmpty()) {
+        payload[QStringLiteral("vision")] = vision;
     }
     postJson(petUrl(QStringLiteral("/sessions/%1/observation").arg(encodedSessionId())),
              payload,
@@ -369,13 +554,12 @@ bool PetController::captureVisionVideoFrame(const QVideoFrame &frame, int frameW
         return false;
     }
 
-    postVisionCapture(QString::fromLatin1(bytes.toBase64()),
-                      QStringLiteral("image/jpeg"),
-                      frameWidth,
-                      frameHeight,
-                      QStringLiteral("qt_video_sink"),
-                      QStringLiteral("live_frame_upload"));
-    return true;
+    return postVisionCapture(QString::fromLatin1(bytes.toBase64()),
+                             QStringLiteral("image/jpeg"),
+                             frameWidth,
+                             frameHeight,
+                             QStringLiteral("qt_video_sink"),
+                             QStringLiteral("live_frame_upload"));
 }
 
 QString PetController::captureVisionSegmentVideoFrame(const QVideoFrame &frame, int frameWidth, int frameHeight)
@@ -388,6 +572,12 @@ QString PetController::captureVisionSegmentVideoFrame(const QVideoFrame &frame, 
     if (image.isNull()) {
         setError(QStringLiteral("摄像头实时帧转换失败"));
         return {};
+    }
+
+    const QByteArray signature = visionFrameSignature(image);
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (shouldSkipVisionFrame(signature, now, QStringLiteral("qt_video_sink_segment"))) {
+        return QStringLiteral("视觉画面未变化，已跳过");
     }
 
     QByteArray bytes;
@@ -408,12 +598,35 @@ QString PetController::captureVisionSegmentVideoFrame(const QVideoFrame &frame, 
                                     QStringLiteral("image/jpeg"),
                                     frameWidth,
                                     frameHeight,
+                                    signature,
                                     QStringLiteral("qt_video_sink_segment"),
                                     QStringLiteral("keyframe_segment_upload"));
 }
 #endif
 
-void PetController::postVisionCapture(const QString &frameBase64,
+bool PetController::shouldSkipVisionFrame(const QByteArray &signature, qint64 now, const QString &source)
+{
+    if (signature.isEmpty()) {
+        return false;
+    }
+    const bool duplicate = !_last_vision_frame_signature.isEmpty()
+                           && visionFrameSignatureDistance(_last_vision_frame_signature, signature)
+                               <= kVisionFrameSignatureDuplicateDistance
+                           && _last_vision_frame_accepted_at_ms > 0
+                           && (now - _last_vision_frame_accepted_at_ms) < kVisionDuplicateFrameCooldownMs;
+    if (duplicate) {
+        setStatusText(QStringLiteral("视觉画面未变化，已跳过"));
+        return true;
+    }
+    _last_vision_frame_signature = signature;
+    _last_vision_frame_accepted_at_ms = now;
+    if (!source.trimmed().isEmpty()) {
+        setStatusText(QStringLiteral("视觉画面变化，已采样"));
+    }
+    return false;
+}
+
+bool PetController::postVisionCapture(const QString &frameBase64,
                                       const QString &frameMime,
                                       int frameWidth,
                                       int frameHeight,
@@ -422,7 +635,21 @@ void PetController::postVisionCapture(const QString &frameBase64,
 {
     const QString encodedFrame = frameBase64.trimmed();
     if (_session_id.isEmpty() || encodedFrame.isEmpty()) {
-        return;
+        return false;
+    }
+    if (_vision_request_in_flight) {
+        setStatusText(QStringLiteral("视觉分析正在进行，已保留最新帧"));
+        return false;
+    }
+
+    QByteArray rawFrame = QByteArray::fromBase64(encodedFrame.toLatin1());
+    QImage decodedFrame;
+    if (!rawFrame.isEmpty()) {
+        decodedFrame.loadFromData(rawFrame);
+    }
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (!decodedFrame.isNull() && shouldSkipVisionFrame(visionFrameSignature(decodedFrame), now, source)) {
+        return false;
     }
 
     QJsonObject metadata;
@@ -439,6 +666,7 @@ void PetController::postVisionCapture(const QString &frameBase64,
     if (!speechRules.isEmpty()) {
         metadata[QStringLiteral("speech_rules")] = speechRules;
     }
+    appendVoiceRuntimeMetadata(metadata);
 
     QJsonObject payload;
     payload[QStringLiteral("analyzer")] = QStringLiteral("opencv");
@@ -451,21 +679,27 @@ void PetController::postVisionCapture(const QString &frameBase64,
     payload[QStringLiteral("frame_height")] = qMax(0, frameHeight);
     payload[QStringLiteral("metadata")] = metadata;
 
+    setVisionRequestInFlight(true);
     postJson(petUrl(QStringLiteral("/sessions/%1/capture").arg(encodedSessionId())),
              payload,
              QStringLiteral("vision_capture"));
+    return true;
 }
 
 QString PetController::appendVisionSegmentFrame(const QString &frameBase64,
                                                 const QString &frameMime,
                                                 int frameWidth,
                                                 int frameHeight,
+                                                const QByteArray &signature,
                                                 const QString &source,
                                                 const QString &transport)
 {
     const QString encodedFrame = frameBase64.trimmed();
     if (_session_id.isEmpty() || encodedFrame.isEmpty()) {
         return {};
+    }
+    if (_vision_request_in_flight) {
+        return QStringLiteral("视觉分析正在进行，已保留最新片段");
     }
 
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
@@ -480,20 +714,40 @@ QString PetController::appendVisionSegmentFrame(const QString &frameBase64,
                                               : frameMime.trimmed();
     frame[QStringLiteral("frame_width")] = qMax(0, frameWidth);
     frame[QStringLiteral("frame_height")] = qMax(0, frameHeight);
+    frame[QStringLiteral("captured_at_ms")] = now;
     frame[QStringLiteral("t_ms")] = int(qMax<qint64>(0, now - _vision_segment_started_at_ms));
+    if (!signature.isEmpty()) {
+        frame[QStringLiteral("frame_signature")] = QString::fromLatin1(signature.toHex());
+    }
     _vision_segment_frames.append(frame);
 
     while (_vision_segment_frames.size() > kVisionSegmentMaxFrames) {
         _vision_segment_frames.removeAt(0);
     }
 
+    while (!_vision_segment_frames.isEmpty()) {
+        const QJsonObject firstFrame = _vision_segment_frames.first().toObject();
+        const qint64 capturedAt = firstFrame.value(QStringLiteral("captured_at_ms")).toVariant().toLongLong();
+        if (capturedAt <= 0 || now - capturedAt <= kVisionSegmentWindowMs) {
+            break;
+        }
+        _vision_segment_frames.removeAt(0);
+    }
+
+    normalizeVisionSegmentFrames(_vision_segment_frames);
+    _vision_segment_started_at_ms = _vision_segment_frames.isEmpty()
+                                        ? 0
+                                        : _vision_segment_frames.first().toObject().value(QStringLiteral("captured_at_ms")).toVariant().toLongLong();
+
     const qint64 durationMs = qMax<qint64>(0, now - _vision_segment_started_at_ms);
-    if (_vision_segment_frames.size() >= kVisionSegmentMaxFrames || durationMs >= kVisionSegmentMaxDurationMs) {
+    const bool uploadDue = _vision_segment_last_posted_at_ms <= 0
+                           || (now - _vision_segment_last_posted_at_ms) >= kVisionSegmentMinUploadMs;
+    if (_vision_segment_frames.size() >= 2 && durationMs >= kVisionSegmentMinUploadMs && uploadDue) {
         postVisionSegment(source, transport);
         return QStringLiteral("视觉片段已上传");
     }
 
-    return QStringLiteral("视觉片段采样中 %1/%2")
+    return QStringLiteral("视觉环形缓冲采样中 %1/%2")
         .arg(_vision_segment_frames.size())
         .arg(kVisionSegmentMaxFrames);
 }
@@ -521,6 +775,7 @@ void PetController::postVisionSegment(const QString &source, const QString &tran
     if (!speechRules.isEmpty()) {
         metadata[QStringLiteral("speech_rules")] = speechRules;
     }
+    appendVoiceRuntimeMetadata(metadata);
 
     QJsonObject payload;
     payload[QStringLiteral("analyzer")] = QStringLiteral("opencv");
@@ -530,12 +785,14 @@ void PetController::postVisionSegment(const QString &source, const QString &tran
     payload[QStringLiteral("frames")] = _vision_segment_frames;
     payload[QStringLiteral("metadata")] = metadata;
 
-    _vision_segment_frames = QJsonArray();
-    _vision_segment_started_at_ms = 0;
+    _vision_segment_last_posted_at_ms = now;
+    setVisionRequestInFlight(true);
 
     postJson(petUrl(QStringLiteral("/sessions/%1/capture-segment").arg(encodedSessionId())),
              payload,
              QStringLiteral("vision_segment_capture"));
+    _vision_segment_frames = QJsonArray();
+    _vision_segment_started_at_ms = 0;
 }
 
 QString PetController::nextVisionCaptureFilePath() const
@@ -890,6 +1147,80 @@ void PetController::setSpeechRules(const QString &rules)
     emit speechRulesChanged();
 }
 
+void PetController::setVoiceRuntimeSettings(const QVariantMap &settings)
+{
+    QString referenceAudioPath = localPathFromUrlText(firstStringFromVariant(settings,
+                                                                            {"referenceAudioPath",
+                                                                             "reference_audio_path",
+                                                                             "refAudioPath",
+                                                                             "ref_audio_path",
+                                                                             "voiceTrainingReferenceAudioPath"}));
+    if (referenceAudioPath.isEmpty()) {
+        referenceAudioPath = joinedPath(firstStringFromVariant(settings, {"voiceDirectory", "referenceAudioDirectory"}),
+                                        firstStringFromVariant(settings, {"defaultVoice", "referenceAudioFile"}));
+    }
+    if (referenceAudioPath.isEmpty()) {
+        const QString artifactPath = localPathFromUrlText(firstStringFromVariant(settings,
+                                                                                 {"voiceTrainingArtifactPath",
+                                                                                  "artifactPath"}));
+        if (looksLikeAudioPath(artifactPath)) {
+            referenceAudioPath = artifactPath;
+        }
+    }
+    QString referenceSource = firstStringFromVariant(settings, {"referenceAudioSource", "reference_audio_source"});
+    if (_voice_reference_audio_source == QStringLiteral("voice_training")
+        && referenceSource != QStringLiteral("voice_training")
+        && !_voice_reference_audio_path.trimmed().isEmpty()) {
+        referenceAudioPath = _voice_reference_audio_path.trimmed();
+        referenceSource = _voice_reference_audio_source;
+    }
+
+    QString provider = firstStringFromVariant(settings, {"voiceProvider", "provider", "voice_provider"});
+    if (provider.isEmpty() && !referenceAudioPath.isEmpty()) {
+        provider = QStringLiteral("gpt-sovits");
+    }
+
+    QString voiceName = firstStringFromVariant(settings, {"voiceName", "voice_name", "characterName"});
+    if (voiceName.isEmpty()) {
+        const QString defaultVoice = firstStringFromVariant(settings, {"defaultVoice", "referenceAudioFile"});
+        if (!defaultVoice.isEmpty()) {
+            voiceName = QFileInfo(defaultVoice).completeBaseName();
+        }
+    }
+    if (voiceName.isEmpty() && !provider.isEmpty()) {
+        voiceName = provider;
+    }
+
+    QString language = firstStringFromVariant(settings, {"voiceLanguage", "voice_language", "language"});
+    if (language.isEmpty()) {
+        language = _reply_language.trimmed().isEmpty() ? QStringLiteral("zh-CN") : _reply_language.trimmed();
+    }
+    const QString textLanguage = firstStringFromVariant(settings, {"textLanguage", "text_lang"});
+    const QString promptLanguage = firstStringFromVariant(settings, {"promptLanguage", "prompt_lang"});
+    const QString promptText = firstStringFromVariant(settings, {"promptText", "prompt_text"});
+
+    const bool changed = _voice_provider != provider
+                         || _voice_name != voiceName
+                         || _voice_language != language
+                         || _voice_reference_audio_path != referenceAudioPath
+                         || _voice_reference_audio_source != referenceSource
+                         || _voice_prompt_text != promptText
+                         || _voice_prompt_language != promptLanguage
+                         || _voice_text_language != textLanguage;
+    if (!changed) {
+        return;
+    }
+    _voice_provider = provider;
+    _voice_name = voiceName;
+    _voice_language = language;
+    _voice_reference_audio_path = referenceAudioPath;
+    _voice_reference_audio_source = referenceSource;
+    _voice_prompt_text = promptText;
+    _voice_prompt_language = promptLanguage;
+    _voice_text_language = textLanguage;
+    emit stateChanged();
+}
+
 void PetController::refreshVoiceTrainingJob(const QString &jobId)
 {
     const QString selectedJobId = jobId.trimmed().isEmpty() ? _voice_training_job_id : jobId.trimmed();
@@ -906,6 +1237,7 @@ void PetController::postJson(const QUrl &url, const QJsonObject &payload, const 
 {
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+    configurePetRequest(request);
     auto *reply = _network.post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
     reply->setProperty("pet_op", op);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
@@ -917,6 +1249,7 @@ void PetController::getJson(const QUrl &url, const QString &op)
 {
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+    configurePetRequest(request);
     auto *reply = _network.get(request);
     reply->setProperty("pet_op", op);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
@@ -933,6 +1266,7 @@ void PetController::startStream()
     QNetworkRequest request(petUrl(QStringLiteral("/sessions/%1/stream").arg(encodedSessionId())));
     request.setRawHeader("Accept", "text/event-stream");
     request.setRawHeader("Cache-Control", "no-cache");
+    configurePetRequest(request);
     _stream_reply = _stream_network.get(request);
     _streaming = true;
     _stream_buffer.clear();
@@ -965,6 +1299,7 @@ void PetController::startStream()
 void PetController::handleJsonReply(QNetworkReply *reply)
 {
     const QString op = reply->property("pet_op").toString();
+    const bool visionOp = op == QStringLiteral("vision_capture") || op == QStringLiteral("vision_segment_capture");
     const auto networkError = reply->error();
     const QString networkErrorText = reply->errorString();
     const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -982,21 +1317,33 @@ void PetController::handleJsonReply(QNetworkReply *reply)
     }
 
     if (networkError != QNetworkReply::NoError) {
+        if (visionOp) {
+            setVisionRequestInFlight(false);
+        }
         setError(QStringLiteral("桌宠请求失败: %1").arg(networkErrorText));
         return;
     }
     if (httpStatus >= 400) {
+        if (visionOp) {
+            setVisionRequestInFlight(false);
+        }
         setError(QStringLiteral("桌宠 HTTP %1").arg(httpStatus));
         return;
     }
 
     const QJsonDocument doc = QJsonDocument::fromJson(bytes);
     if (!doc.isObject()) {
+        if (visionOp) {
+            setVisionRequestInFlight(false);
+        }
         setError(QStringLiteral("桌宠响应格式错误"));
         return;
     }
     const QJsonObject root = doc.object();
     if (root.value(QStringLiteral("code")).toInt(0) != 0) {
+        if (visionOp) {
+            setVisionRequestInFlight(false);
+        }
         setError(root.value(QStringLiteral("message")).toString(QStringLiteral("桌宠请求失败")));
         return;
     }
@@ -1024,15 +1371,17 @@ void PetController::handleJsonReply(QNetworkReply *reply)
         return;
     }
 
-    if (!_streaming) {
-        const QJsonArray events = root.value(QStringLiteral("events")).toArray();
-        for (const QJsonValue &value : events) {
-            applyControlEvent(value.toObject());
-        }
-        const QJsonObject event = root.value(QStringLiteral("event")).toObject();
-        if (!event.isEmpty()) {
-            applyControlEvent(event);
-        }
+    if (visionOp) {
+        setVisionRequestInFlight(false);
+    }
+
+    const QJsonArray events = root.value(QStringLiteral("events")).toArray();
+    for (const QJsonValue &value : events) {
+        applyControlEvent(value.toObject());
+    }
+    const QJsonObject event = root.value(QStringLiteral("event")).toObject();
+    if (!event.isEmpty()) {
+        applyControlEvent(event);
     }
 
     if (op == QStringLiteral("vision_segment_capture")) {
@@ -1153,6 +1502,15 @@ void PetController::setVoiceTrainingBusy(bool busy, const QString &message)
     }
 }
 
+void PetController::setVisionRequestInFlight(bool inFlight)
+{
+    if (_vision_request_in_flight == inFlight) {
+        return;
+    }
+    _vision_request_in_flight = inFlight;
+    emit stateChanged();
+}
+
 void PetController::applyVoiceTrainingJob(const QJsonObject &job)
 {
     if (job.isEmpty()) {
@@ -1165,6 +1523,26 @@ void PetController::applyVoiceTrainingJob(const QJsonObject &job)
     _voice_training_progress = qBound(0, job.value(QStringLiteral("progress")).toInt(0), 100);
     _voice_training_artifact_path = job.value(QStringLiteral("artifact_path")).toString();
     _voice_training_message = job.value(QStringLiteral("message")).toString(QStringLiteral("声音训练任务已准备"));
+    const QJsonObject diagnostics = job.value(QStringLiteral("diagnostics")).toObject();
+    const QString trainedReferenceAudio = diagnostics.value(QStringLiteral("gpt_sovits_reference_audio")).toString().trimmed().isEmpty()
+                                              ? diagnostics.value(QStringLiteral("reference_audio_runtime_path")).toString().trimmed()
+                                              : diagnostics.value(QStringLiteral("gpt_sovits_reference_audio")).toString().trimmed();
+    if (!trainedReferenceAudio.isEmpty()) {
+        _voice_reference_audio_path = trainedReferenceAudio;
+        _voice_reference_audio_source = QStringLiteral("voice_training");
+        _voice_provider = QStringLiteral("gpt-sovits");
+        const QString trainedVoiceName = job.value(QStringLiteral("voice_name")).toString().trimmed();
+        if (!trainedVoiceName.isEmpty()) {
+            _voice_name = trainedVoiceName;
+        }
+        const QString trainedLanguage = job.value(QStringLiteral("language")).toString().trimmed();
+        if (!trainedLanguage.isEmpty()) {
+            _voice_language = trainedLanguage;
+            if (_voice_text_language.isEmpty()) {
+                _voice_text_language = voiceTextLanguage(trainedLanguage);
+            }
+        }
+    }
     if (_voice_training_stage == QStringLiteral("ready_for_worker")) {
         _voice_training_stage = QStringLiteral("ready_for_gpt_sovits");
         if (_voice_training_status == QStringLiteral("prepared")
@@ -1240,6 +1618,7 @@ QJsonObject PetController::defaultObservationPayload() const
     vision[QStringLiteral("enabled")] = false;
     vision[QStringLiteral("mode")] = QStringLiteral("landmarks_only");
     vision[QStringLiteral("face_present")] = false;
+    appendVoiceRuntimeMetadata(vision);
 
     QJsonObject privacy;
     privacy[QStringLiteral("raw_frame_sent")] = false;
@@ -1253,9 +1632,55 @@ QJsonObject PetController::defaultObservationPayload() const
     return payload;
 }
 
+QJsonObject PetController::voiceRuntimeMetadata() const
+{
+    QJsonObject metadata;
+    const QString provider = _voice_provider.trimmed();
+    const QString referenceAudioPath = _voice_reference_audio_path.trimmed();
+    if (provider.isEmpty() && referenceAudioPath.isEmpty()) {
+        return metadata;
+    }
+    if (!provider.isEmpty()) {
+        metadata[QStringLiteral("voice_provider")] = provider;
+    }
+    if (!_voice_name.trimmed().isEmpty()) {
+        metadata[QStringLiteral("voice_name")] = _voice_name.trimmed();
+    }
+    const QString voiceLanguage = _voice_language.trimmed().isEmpty()
+                                      ? (_reply_language.trimmed().isEmpty() ? QStringLiteral("zh-CN") : _reply_language.trimmed())
+                                      : _voice_language.trimmed();
+    if (!voiceLanguage.isEmpty()) {
+        metadata[QStringLiteral("voice_language")] = voiceLanguage;
+    }
+    if (!referenceAudioPath.isEmpty()) {
+        metadata[QStringLiteral("ref_audio_path")] = referenceAudioPath;
+    }
+    if (!_voice_reference_audio_source.trimmed().isEmpty()) {
+        metadata[QStringLiteral("reference_audio_source")] = _voice_reference_audio_source.trimmed();
+    }
+    if (!_voice_prompt_text.trimmed().isEmpty()) {
+        metadata[QStringLiteral("prompt_text")] = _voice_prompt_text.trimmed();
+    }
+    if (!_voice_prompt_language.trimmed().isEmpty()) {
+        metadata[QStringLiteral("prompt_lang")] = _voice_prompt_language.trimmed();
+    }
+    metadata[QStringLiteral("text_lang")] = _voice_text_language.trimmed().isEmpty()
+                                                ? voiceTextLanguage(voiceLanguage)
+                                                : _voice_text_language.trimmed();
+    return metadata;
+}
+
+void PetController::appendVoiceRuntimeMetadata(QJsonObject &metadata) const
+{
+    const QJsonObject voiceMetadata = voiceRuntimeMetadata();
+    for (auto it = voiceMetadata.constBegin(); it != voiceMetadata.constEnd(); ++it) {
+        metadata.insert(it.key(), it.value());
+    }
+}
+
 QUrl PetController::petUrl(const QString &path) const
 {
-    return QUrl(gate_url_prefix + QStringLiteral("/ai/pet") + path);
+    return QUrl(gate_url_prefix.trimmed() + QStringLiteral("/ai/pet") + path);
 }
 
 QString PetController::encodedSessionId() const

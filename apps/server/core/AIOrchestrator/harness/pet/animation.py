@@ -36,19 +36,21 @@ class AnimationMapper:
             "action_name": "speak",
         }
 
-    def for_voice_chunk(self, text: str, emotion: str, final: bool, voice) -> dict:
-        metadata = {}
+    def for_voice_chunk(self, text: str, emotion: str, final: bool, voice, chunk_metadata: dict | None = None) -> dict:
+        metadata = dict(chunk_metadata or {})
         if voice is not None:
             voice_payload = voice.to_dict() if hasattr(voice, "to_dict") else dict(voice)
-            metadata = voice_payload.get("metadata") or {}
+            metadata = {**metadata, **(voice_payload.get("metadata") or {})}
+        else:
+            voice_payload = {}
         language = str(metadata.get("language") or metadata.get("text_language") or "zh-CN")
         translation = str(metadata.get("translation") or metadata.get("zh_translation") or "")
         event = self.for_provider_chunk(text, emotion, final, language=language, translation=translation)
         if voice is None:
             return event
 
-        rms = voice_payload.get("rms", event["lip_sync"])
-        event["lip_sync"] = rms
+        rms = _clamp_float(voice_payload.get("rms"), 0.0, 1.0, 0.0)
+        event["lip_sync"] = max(rms, event["lip_sync"])
         event["audio_state"] = voice_payload.get("state") or "text-only"
         event["audio_sample_rate"] = voice_payload.get("sample_rate") or 0
         event["audio_duration_ms"] = voice_payload.get("duration_ms") or 0

@@ -10,6 +10,7 @@ PET_SCENE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetScene.q
 PET_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetWindow.qml"
 PET_CHAT_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatWindow.qml"
 CHAT_COMPOSER_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/conversation/ChatComposerBar.qml"
+CHAT_MESSAGE_DELEGATE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/conversation/ChatMessageDelegate.qml"
 PET_CONTROL_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlWindow.qml"
 CHARACTER_PANE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DCharacterPane.qml"
 CHAT_SHELL_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/ChatShellPage.qml"
@@ -20,7 +21,6 @@ PET_CONTROLLER_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/PetController
 CLIENT_CMAKE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/CMakeLists.txt"
 QML_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml.qrc"
 PET_CAMERA_CAPTURE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetCameraCapture.qml"
-PET_SPEECH_SYNTH_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/PetSpeechSynthesizer.cpp"
 MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/main.cpp"
 
 
@@ -73,20 +73,37 @@ class PetQmlContractTests(unittest.TestCase):
 
         self.assertIn(': (root.petController ? root.petController.expression : "neutral")', scene)
         self.assertIn(': (root.petController ? root.petController.motion : "idle")', scene)
-        self.assertIn("function speechPlaybackText", scene)
         self.assertIn("PetAudioPlayer.qml", scene)
         self.assertIn("root.petController.audioUrl", scene)
         self.assertIn("root.petController.audioState", scene)
-        self.assertIn("root.petController.speechFinal", scene)
-        self.assertIn("if (!root.petController.speechFinal)", scene)
         self.assertIn("voiceReplyEnabled", scene)
         self.assertIn("active: root.voiceReplyEnabled && root.petController", scene)
-        self.assertIn("item.textToSpeechFallbackEnabled = root.voiceReplyEnabled", scene)
-        self.assertIn("petAudioLoader.item.textToSpeechFallbackEnabled = root.voiceReplyEnabled", scene)
-        self.assertIn("item.textToSpeechFallbackEnabled = false", scene)
-        self.assertIn("petAudioLoader.item.textToSpeechFallbackEnabled = false", scene)
-        self.assertNotIn("speechBubble", scene)
-        self.assertNotIn("bubbleTail", scene)
+        self.assertIn("function isObservationVisualEvent", scene)
+        self.assertIn("function voiceReplyIsActive", scene)
+        self.assertIn("petAudioLoader.item.playbackActive", scene)
+        self.assertIn("item.sourceUrl = root.petController ? root.petController.audioUrl : \"\"", scene)
+        self.assertIn("item.playbackState = root.petController ? root.petController.audioState : \"idle\"", scene)
+        self.assertIn("speechBubbleText", scene)
+        self.assertIn("speechBubbleTranslation", scene)
+        self.assertIn("speechBubbleJapanese", scene)
+        self.assertIn("speechBubbleVisible", scene)
+        self.assertIn("id: speechBubble", scene)
+        self.assertIn("root.petController.speechDisplayText.trim()", scene)
+        self.assertIn("root.petController.speechTranslation.trim()", scene)
+        self.assertIn("root.petController.speechLanguage.toLowerCase().indexOf(\"ja\") === 0", scene)
+        self.assertIn("width: Math.min(bubbleMaxWidth, 180)", scene)
+        self.assertIn("height: 72", scene)
+        self.assertIn("readonly property int speechBubbleSafeHeight: 84", scene)
+        self.assertIn("anchors.topMargin: root.speechBubbleSafeHeight", scene)
+        self.assertIn("visible: root.speechBubbleTranslation.length > 0", scene)
+        self.assertNotIn("speechBubbleReservedHeight", scene)
+        self.assertNotIn("anchors.topMargin: root.speechBubbleReservedHeight", scene)
+        self.assertNotIn("readonly property real uiScale", scene)
+        self.assertNotIn("speechFinal", scene)
+        self.assertNotIn("speechPlaybackText", scene)
+        self.assertNotIn("textToSpeechFallbackEnabled", scene)
+        self.assertNotIn("audioPlaybackActive", scene)
+        self.assertNotIn("capturePaused", scene)
         self.assertNotIn("anchors.topMargin: speechBubble.visible", scene)
 
     def test_pet_audio_player_resource_declares_qt_multimedia(self):
@@ -97,25 +114,21 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("qml/pet/PetAudioPlayer.qml", qrc)
         self.assertIn("find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS Multimedia)", cmake)
         self.assertIn("Qt${QT_VERSION_MAJOR}::Multimedia", cmake)
+        self.assertNotIn("TextToSpeech", cmake)
         self.assertIn("import QtMultimedia", audio_player)
-        self.assertIn("import MemoChat 1.0", audio_player)
         self.assertIn("MediaPlayer", audio_player)
-        self.assertIn("PetSpeechSynthesizer", MAIN_CPP.read_text(encoding="utf-8"))
-        self.assertIn("PetSpeechSynthesizer", audio_player)
-        self.assertIn("Qt.createQmlObject('import QtTextToSpeech; TextToSpeech", audio_player)
-        self.assertIn("property string speechText", audio_player)
-        self.assertIn("property string speechLanguage", audio_player)
-        self.assertIn("property bool speechFinal", audio_player)
-        self.assertIn("property bool textToSpeechFallbackEnabled: false", audio_player)
-        self.assertIn("function maybeSpeakText", audio_player)
-        self.assertIn("if (!root.textToSpeechFallbackEnabled)", audio_player)
         self.assertIn("function hasPlayableAudio", audio_player)
-        self.assertIn("function isDeterministicFallbackAudio", audio_player)
-        self.assertIn("function shouldUseTextFallback", audio_player)
-        self.assertIn("function normalizedSpeechLocale", audio_player)
-        self.assertIn('return "ja-JP"', audio_player)
-        self.assertIn("root.speechLanguage", audio_player)
-        self.assertIn("deterministic-voice-", audio_player)
+        self.assertIn("return sourceUrl.length > 0", audio_player)
+        self.assertIn("property string lastStartedAudioKey", audio_player)
+        self.assertIn("property bool playbackActive", audio_player)
+        self.assertIn("function refreshPlaybackActivity", audio_player)
+        self.assertIn("function audioPlaybackKey", audio_player)
+        self.assertIn('if (name === "event" || name === "turn")', audio_player)
+        self.assertIn("function playableAudioKey", audio_player)
+        self.assertIn("function playPlayableAudio", audio_player)
+        self.assertIn("root.lastStartedAudioKey === key", audio_player)
+        self.assertIn("root.lastStartedAudioKey = key", audio_player)
+        self.assertIn("MediaPlayer.StoppedState", audio_player)
         self.assertIn("property string playbackState", audio_player)
         self.assertIn("function canPlayForState", audio_player)
         self.assertIn('playbackState === "ready"', audio_player)
@@ -123,15 +136,95 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn('playbackState === "interrupted"', audio_player)
         self.assertIn("petAudioPlayer.stop()", audio_player)
         self.assertIn("petAudioPlayer.play()", audio_player)
+        self.assertNotIn("speechText", audio_player)
+        self.assertNotIn("speechLanguage", audio_player)
+        self.assertNotIn("speechFinal", audio_player)
+        self.assertNotIn("textToSpeechFallbackEnabled", audio_player)
+        self.assertNotIn("PetSpeechSynthesizer", audio_player)
+        self.assertNotIn("QtTextToSpeech", audio_player)
+        self.assertNotIn("nativeSpeech", audio_player)
+        self.assertNotIn("deterministic-voice-", audio_player)
 
     def test_pet_controller_audio_url_is_absolute_and_cache_busted_per_event(self):
         source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
 
+        self.assertIn("gate_media_url_prefix", source)
+        self.assertIn("return QUrl(gate_url_prefix.trimmed() + QStringLiteral(\"/ai/pet\") + path);", source)
+        self.assertIn('if (port == 8096)', source)
+        self.assertIn('base.setPath(QStringLiteral("/pet") + path)', source)
+        self.assertIn('base.setPath(QStringLiteral("/ai/pet") + path)', source)
         self.assertIn("QUrlQuery query(url)", source)
+        self.assertIn("QUrlQuery query(base)", source)
         self.assertIn('query.addQueryItem(QStringLiteral("turn"), _model.turnId())', source)
         self.assertIn('query.addQueryItem(QStringLiteral("event"), _model.eventId())', source)
         self.assertIn("url.setQuery(query)", source)
         self.assertIn("return url.toString()", source)
+
+    def test_pet_controller_configures_direct_https_requests_like_shared_http(self):
+        source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+
+        self.assertIn("configurePetRequest(QNetworkRequest &request)", source)
+        self.assertIn("sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);", source)
+        self.assertIn('request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);', source)
+        self.assertIn("configurePetRequest(request);", source)
+
+    def test_pet_controller_keeps_post_events_with_sse_streaming(self):
+        source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+
+        self.assertIn('if (!_streaming) {\n        startStream();\n    }', source)
+        self.assertNotIn('if (!_streaming) {\n        const QJsonArray events', source)
+        self.assertIn('const QJsonArray events = root.value(QStringLiteral("events")).toArray();', source)
+
+    def test_pet_controller_uses_rolling_vision_segment_buffer(self):
+        source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+
+        for token in (
+            "kVisionSegmentMaxFrames = 14",
+            "kVisionSegmentWindowMs = 20000",
+            "kVisionSegmentMinUploadMs = 15000",
+            "kVisionDuplicateFrameCooldownMs = 30000",
+            "kVisionFrameSignatureSize = 16",
+            "kVisionFrameSignatureDuplicateDistance = 32",
+            "visionFrameSignature",
+            "visionFrameSignatureDistance",
+            "shouldSkipVisionFrame",
+            "frame_signature",
+            "captured_at_ms",
+            "normalizeVisionSegmentFrames",
+            "视觉环形缓冲采样中",
+            "视觉画面未变化，已跳过",
+            "_vision_segment_last_posted_at_ms",
+            "_last_vision_frame_signature",
+            "_last_vision_frame_accepted_at_ms",
+            "_vision_request_in_flight",
+            "setVisionRequestInFlight",
+            "_vision_segment_frames = QJsonArray();",
+        ):
+            self.assertIn(token, source)
+        self.assertNotIn("kVisionSegmentMaxDurationMs", source)
+
+    def test_pet_camera_capture_uses_latest_frame_mailbox_and_analysis_tick(self):
+        qml = PET_CAMERA_CAPTURE_QML.read_text(encoding="utf-8")
+
+        for token in (
+            "analysisIntervalMs: 1000",
+            "latestFrameHoldMs: 1800",
+            "latestVideoFrame",
+            "latestVideoFrameSequence",
+            "latestSubmittedFrameSequence",
+            "latestFrameCapturePending",
+            "root.latestFrameCapturePending = true",
+            "root.latestFrameCapturePending = false",
+            "visionBusy()",
+            "visionRequestInFlight",
+            "摄像头最新帧分析中",
+            "摄像头最新帧已提交分析",
+            "摄像头缓存帧等待回调",
+            "摄像头视频流未就绪，使用单帧兜底",
+            "摄像头画面已过期，等待新帧",
+            "cameraStatusText()",
+        ):
+            self.assertIn(token, qml)
 
     def test_pet_speech_state_clears_before_new_manual_input(self):
         model = PET_MODEL_CPP.read_text(encoding="utf-8")
@@ -140,6 +233,23 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("&& !_speech_final && _audio_url.isEmpty()", model)
         self.assertIn("_speech_final = false;", model)
         self.assertIn("_model.clearSpeech();", controller)
+
+    def test_pet_model_only_updates_speech_language_when_text_changes(self):
+        model = PET_MODEL_CPP.read_text(encoding="utf-8")
+
+        self.assertIn("const bool has_text_update", model)
+        self.assertIn("has_text_update && !preserve_voice_for_observation && updateString(_speech_language, text_language)", model)
+
+    def test_pet_model_preserves_active_voice_for_observation_events(self):
+        model = PET_MODEL_CPP.read_text(encoding="utf-8")
+
+        self.assertIn("preserve_voice_for_observation", model)
+        self.assertIn("isObservationControlEvent", model)
+        self.assertIn("isAudioStateStillPresenting", model)
+        self.assertIn("actionName == QStringLiteral(\"observe\")", model)
+        self.assertIn("actionName == QStringLiteral(\"visual_react\")", model)
+        self.assertIn("!preserve_voice_for_observation", model)
+        self.assertIn("reset_speech_for_waiting_phase && !_audio_url.isEmpty() && !preserve_voice_for_observation", model)
 
     def test_pet_chat_window_exposes_wsl_windows_ime_bridge(self):
         header = PET_CONTROLLER_H.read_text(encoding="utf-8")
@@ -159,6 +269,7 @@ class PetQmlContractTests(unittest.TestCase):
             "setModelSelection",
             "setReplyLanguage",
             "setSpeechRules",
+            "setVoiceRuntimeSettings",
         ):
             self.assertIn(token, header)
 
@@ -166,10 +277,16 @@ class PetQmlContractTests(unittest.TestCase):
             "setModelSelection",
             "setReplyLanguage",
             "setSpeechRules",
+            "setVoiceRuntimeSettings",
+            "voiceRuntimeMetadata",
+            "appendVoiceRuntimeMetadata",
             "payload[QStringLiteral(\"model_type\")]",
             "payload[QStringLiteral(\"model_name\")]",
             "metadata[QStringLiteral(\"reply_language\")]",
             "metadata[QStringLiteral(\"speech_rules\")]",
+            "metadata[QStringLiteral(\"voice_provider\")]",
+            "metadata[QStringLiteral(\"ref_audio_path\")]",
+            "appendVoiceRuntimeMetadata(metadata)",
         ):
             self.assertIn(token, source)
 
@@ -201,12 +318,22 @@ class PetQmlContractTests(unittest.TestCase):
             "syncModelSelection",
             "syncReplyLanguage",
             "syncSpeechRules",
+            "syncVoiceRuntimeSettings",
+            "root.petController.setVoiceRuntimeSettings",
+            "referenceAudioPath",
+            "voiceTrainingArtifactPath",
             "speechRulesText",
             "pendingAssistantIndex",
             "pendingAssistantTurnId",
             "sendPendingText",
             "root.petController.startSession()",
             "root.petController.sendText(trimmed)",
+            "const eventAudioReadyPayload = audioReady || root.hasText(eventAudioUrl) || eventAudioState === \"ready\" || eventAudioState === \"playing\"",
+            "const resolvedEventKey = eventAudioReadyPayload && controllerTurnId.length > 0",
+            "eventAudioReadyPayload && root.updateCompletedAssistantAudio",
+            "function handleControllerError",
+            "messageModel.setProperty(root.pendingAssistantIndex, \"messageState\", \"failed\")",
+            "root.chatStatusText = \"发送失败，可重试\"",
             "root.petController.setModelSelection",
             "root.petController.setReplyLanguage",
             "root.petController.setSpeechRules",
@@ -238,24 +365,21 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertNotIn("pinyinCandidateBar", composer)
         self.assertNotIn('text: "中"', composer)
 
-    def test_pet_native_tts_uses_desktop_backends_before_qml_fallback(self):
-        source = PET_SPEECH_SYNTH_CPP.read_text(encoding="utf-8")
+    def test_pet_audio_player_skips_text_to_speech_fallback(self):
         audio_player = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetAudioPlayer.qml").read_text(encoding="utf-8")
 
-        for token in (
-            "System.Speech.Synthesis.SpeechSynthesizer",
-            "powershell.exe",
-            "spd-say",
-            "espeak-ng",
-            "QProcess",
-        ):
-            self.assertIn(token, source)
-        self.assertIn("nativeSpeech.speak(root.speechText, locale)", audio_player)
-        self.assertIn("Qt.locale(qtLocaleName())", audio_player)
-        self.assertIn("$culture='zh*'", source)
-        self.assertIn("$locale.StartsWith('ja')", source)
-        self.assertIn("$culture='ja*'", source)
-        self.assertIn("ensureSpeechEngine", audio_player)
+        self.assertIn("MediaPlayer", audio_player)
+        self.assertIn("function hasPlayableAudio", audio_player)
+        self.assertIn("return sourceUrl.length > 0", audio_player)
+        self.assertIn("function playPlayableAudio", audio_player)
+        self.assertNotIn("QtTextToSpeech", audio_player)
+        self.assertNotIn("PetSpeechSynthesizer", audio_player)
+        self.assertNotIn("nativeSpeech", audio_player)
+        self.assertNotIn("speechText", audio_player)
+        self.assertNotIn("speechLanguage", audio_player)
+        self.assertNotIn("speechFinal", audio_player)
+        self.assertNotIn("textToSpeechFallbackEnabled", audio_player)
+        self.assertNotIn("deterministic-voice-", audio_player)
 
     def test_main_cpp_bootstraps_linux_input_method_env_for_chinese_entry(self):
         source = MAIN_CPP.read_text(encoding="utf-8")
@@ -299,7 +423,6 @@ class PetQmlContractTests(unittest.TestCase):
 
         self.assertIn("qml/pet/PetCameraCapture.qml", qrc)
         self.assertIn("Qt${QT_VERSION_MAJOR}::Multimedia", cmake)
-        self.assertIn("Qt${QT_VERSION_MAJOR}::TextToSpeech", cmake)
         for token in (
             "Q_INVOKABLE void captureVisionFrame",
             "Q_INVOKABLE bool captureVisionVideoFrame",
@@ -344,15 +467,28 @@ class PetQmlContractTests(unittest.TestCase):
             "onVideoFrameChanged",
             "property var liveVideoFrame: null",
             "captureVisionVideoFrame",
-            "typeof root.petController.captureVisionVideoFrame === \"function\"",
+            "visionRequestInFlight",
+            "visionBusy()",
+            "latestVideoFrame",
+            "latestVideoFrameSequence",
+            "latestSubmittedFrameSequence",
+            "analysisIntervalMs: 1000",
+            "latestFrameHoldMs: 1800",
+            "摄像头最新帧分析中",
+            "摄像头最新帧已提交分析",
+            "摄像头视频流未就绪，使用单帧兜底",
+            "摄像头画面已过期，等待新帧",
             "captureVisionWindowsCameraFrame",
             "onWindowsCameraBridgeChanged",
             "ImageCapture",
             "VideoOutput",
             "captureToFile",
             "captureVisionFrameFile",
+            "root.useWindowsCameraBridge ? 12000 : 1000",
         ):
             self.assertIn(token, camera_capture)
+        self.assertNotIn("segmentCaptureEnabled ? 1500 : 4500", camera_capture)
+        self.assertNotIn("capturePaused", camera_capture)
 
     def test_pet_vision_privacy_controls_have_guardrails_and_diagnostics(self):
         control = PET_CONTROL_WINDOW_QML.read_text(encoding="utf-8")
@@ -394,7 +530,7 @@ class PetQmlContractTests(unittest.TestCase):
 
         for token in (
             "云视觉 本地锁定",
-            "云视觉 等待提供方",
+            "云视觉 无提供方",
             "function visionDiagnosticText",
             "root.cameraCaptureStatus = item.statusText",
             "height: 118",
@@ -414,6 +550,9 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("scaledWindowWidth", window)
         self.assertIn("scaledWindowHeight", window)
         self.assertIn("applyScale", window)
+        self.assertIn("readonly property int speechBubbleSafeHeight: 84", window)
+        self.assertIn("return root.speechBubbleSafeHeight + Math.round(root.baseWindowHeight * factor)", window)
+        self.assertIn("minimumHeight: speechBubbleSafeHeight + Math.round(baseWindowHeight * 0.65)", window)
         self.assertIn("root.width = scaledWindowWidth(nextScale)", window)
         self.assertIn("root.height = scaledWindowHeight(nextScale)", window)
         self.assertNotIn("oldBottom", window)
@@ -425,6 +564,15 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("property var agentController: null", window)
         self.assertIn("property var petAssetSettings: null", window)
         self.assertIn("petAssetSettings: root.petAssetSettings", window)
+        self.assertIn("function settingsLanguageCode", window)
+        self.assertIn("function syncPetRuntimeSettings", window)
+        self.assertIn("root.petController.setReplyLanguage(settingsLanguageCode())", window)
+        self.assertIn("root.petController.setSpeechRules(settingsSpeechRulesText())", window)
+        self.assertIn("function settingsVoicePath", window)
+        self.assertIn("root.petController.setVoiceRuntimeSettings", window)
+        self.assertIn("referenceAudioPath", window)
+        self.assertIn("voiceTrainingArtifactPath", window)
+        self.assertIn("function onSettingsChanged()", window)
         self.assertIn("property bool voiceReplyEnabled: true", window)
         self.assertIn("voiceReplyEnabled: root.voiceReplyEnabled", window)
         self.assertIn("onVoiceReplyToggled: function(value) { root.voiceReplyEnabled = value; root.syncControlWindowState() }", window)
@@ -458,12 +606,20 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertNotIn("property bool chatPanelOpen", scene)
         self.assertNotIn("function openChatPanel", scene)
         self.assertIn("petAudioLoader.item.playbackState = \"stopped\"", scene)
-        self.assertIn("petAudioLoader.item.speechFinal = false", scene)
-        self.assertIn("petAudioLoader.item.textToSpeechFallbackEnabled = false", scene)
-        self.assertIn("petAudioLoader.item.textToSpeechFallbackEnabled = true", scene)
-        self.assertNotIn("speechBubble", scene)
-        self.assertNotIn("bubbleTail", scene)
+        self.assertIn("petAudioLoader.item.sourceUrl = \"\"", scene)
+        self.assertIn("petAudioLoader.item.playbackState = root.petController.audioState", scene)
+        self.assertIn("speechBubbleVisible", scene)
+        self.assertIn("id: speechBubble", scene)
+        self.assertIn("visible: root.speechBubbleTranslation.length > 0", scene)
+        self.assertIn("width: Math.min(bubbleMaxWidth, 180)", scene)
+        self.assertIn("height: 72", scene)
+        self.assertIn("readonly property int speechBubbleSafeHeight: 84", scene)
+        self.assertIn("anchors.topMargin: root.speechBubbleSafeHeight", scene)
+        self.assertNotIn("speechBubbleReservedHeight", scene)
+        self.assertNotIn("anchors.topMargin: root.speechBubbleReservedHeight", scene)
         self.assertIn("Qt.rgba(1.0, 0.96, 0.98, 0.96)", scene)
+        self.assertNotIn("audioPlaybackActive", scene)
+        self.assertNotIn("capturePaused", scene)
         self.assertIn("font.bold: true", scene)
         self.assertIn("property var petAssetSettings: null", scene)
         self.assertIn("modelRoot: root.petAssetSettings ? root.petAssetSettings.modelRoot : \"\"", scene)
@@ -525,6 +681,10 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("root.petController.setModelSelection", chat)
         self.assertIn("root.petController.setReplyLanguage", chat)
         self.assertIn("root.petController.setSpeechRules", chat)
+        self.assertIn("root.petController.setVoiceRuntimeSettings", chat)
+        self.assertIn("function syncVoiceRuntimeSettings", chat)
+        self.assertIn("referenceAudioPath", chat)
+        self.assertIn("voiceTrainingArtifactPath", chat)
         self.assertIn("senderName: messageDelegateRoot.senderName.length > 0", chat)
         self.assertIn("root.messageSenderName(messageDelegateRoot.outgoingMessage)", chat)
         self.assertIn("showOutgoingSenderName: true", chat)
@@ -532,6 +692,15 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("pendingAssistantIndex", chat)
         self.assertIn("pendingAssistantTurnId", chat)
         self.assertIn("onControlEventReceived", chat)
+
+    def test_chat_message_delegate_has_builtin_avatar_fallback_icon(self):
+        delegate = CHAT_MESSAGE_DELEGATE_QML.read_text(encoding="utf-8")
+
+        self.assertIn("id: leftAvatarFallbackImage", delegate)
+        self.assertIn("id: rightAvatarFallbackImage", delegate)
+        self.assertIn('source: "qrc:/icons/user.png"', delegate)
+        self.assertIn("leftAvatarImage.status === Image.Ready", delegate)
+        self.assertIn("rightAvatarImage.status === Image.Ready", delegate)
 
     def test_chat_composer_bar_exposes_linux_chinese_input_fallback(self):
         composer = CHAT_COMPOSER_BAR_QML.read_text(encoding="utf-8")

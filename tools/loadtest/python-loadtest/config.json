@@ -10,6 +10,17 @@
   "report_dir": "../../../infra/Memo_ops/artifacts/loadtest/runtime/reports",
   "http_timeout_sec": 8.0,
   "tcp_timeout_sec": 8.0,
+  "quic_timeout_sec": 8.0,
+  "quic_alpn": "memochat-chat",
+  "quic_endpoint_policy": "round_robin",
+  "quic_force_endpoints": [
+    {"server_name": "chatserver1", "host": "127.0.0.1", "port": 8190},
+    {"server_name": "chatserver2", "host": "127.0.0.1", "port": 8191},
+    {"server_name": "chatserver3", "host": "127.0.0.1", "port": 8192},
+    {"server_name": "chatserver4", "host": "127.0.0.1", "port": 8193},
+    {"server_name": "chatserver5", "host": "127.0.0.1", "port": 8194},
+    {"server_name": "chatserver6", "host": "127.0.0.1", "port": 8195}
+  ],
   "ai_base_url": "http://127.0.0.1:8096",
   "ai_timeout_sec": 60.0,
   "ai_uid": 10001,
