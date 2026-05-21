@@ -30,7 +30,7 @@ wait_for_api() {
 
 if ! curl -fsS "$API_URL/docs" >/dev/null 2>&1; then
   echo "GPT-SoVITS API is not listening; starting it..."
-  setsid -f "$START_SCRIPT" >/data/logs/gpt-sovits/api-launch.out 2>&1 < /dev/null || true
+  "$START_SCRIPT"
   wait_for_api
 fi
 

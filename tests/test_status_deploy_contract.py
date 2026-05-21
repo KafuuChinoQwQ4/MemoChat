@@ -5,6 +5,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEPLOY_SCRIPT = REPO_ROOT / "tools/scripts/status/deploy_services.sh"
+START_SERVICES_SCRIPT = REPO_ROOT / "tools/scripts/status/start-all-services.sh"
 START_QML_SCRIPT = REPO_ROOT / "tools/scripts/status/start-memochat-qml-wslg.sh"
 RUN_FULL_STACK_SCRIPT = REPO_ROOT / "tools/scripts/status/run-linux-full-stack.sh"
 GPT_SOVITS_VOICE_SCRIPT = REPO_ROOT / "tools/scripts/pet/apply_gpt_sovits_voice_wsl.sh"
@@ -125,6 +126,11 @@ class StatusDeployContractTests(unittest.TestCase):
             "build-linux-full-gcc16",
             "apps/server/core/AIOrchestrator/docker-compose.yml",
             "MEMOCHAT_BUILD_PARALLEL",
+            "MEMOCHAT_REQUIRE_GPT_SOVITS",
+            "MEMOCHAT_AI_BASE_URL",
+            "MEMOCHAT_AI_VOICE_WAIT_SECONDS",
+            "ensure_ai_voice_ready",
+            "/pet/diagnostics/voice?probe_endpoint=true",
             "--skip-build",
             "--skip-ai-build",
             "--skip-deploy",
@@ -136,6 +142,22 @@ class StatusDeployContractTests(unittest.TestCase):
 
         self.assertIn("set -Eeuo pipefail", source)
         self.assertIn("exec \"${client_args[@]}\"", source)
+
+    def test_linux_start_requires_gpt_sovits_by_default(self):
+        source = read(START_SERVICES_SCRIPT)
+
+        for token in (
+            "MEMOCHAT_REQUIRE_GPT_SOVITS",
+            "REQUIRE_GPT_SOVITS",
+            "print_gpt_sovits_failure_hint",
+            "GPT-SoVITS did not become ready",
+            "smoke_gpt_sovits_tts_wsl.sh",
+            "apply_gpt_sovits_voice_wsl.sh",
+            "To intentionally allow text-only pet replies",
+            "return 1",
+            "--skip-gpt-sovits",
+        ):
+            self.assertIn(token, source)
 
     def test_gpt_sovits_voice_script_recreates_ai_orchestrator_with_reference_audio(self):
         source = read(GPT_SOVITS_VOICE_SCRIPT)
@@ -160,6 +182,27 @@ class StatusDeployContractTests(unittest.TestCase):
             "/pet/diagnostics/voice?probe_endpoint=true",
         ):
             self.assertIn(token, source)
+
+    def test_gpt_sovits_api_launcher_daemonizes_and_waits_for_docs(self):
+        source = read(REPO_ROOT / "tools/scripts/pet/start_gpt_sovits_api_wsl.sh")
+
+        for token in (
+            "PID_FILE",
+            "START_WAIT_SECONDS",
+            "--foreground",
+            "nohup",
+            "wait_for_api",
+            "GPT-SoVITS already ready",
+            "GPT-SoVITS ready (pid=",
+            "GPT-SoVITS failed to become ready",
+        ):
+            self.assertIn(token, source)
+
+    def test_gpt_sovits_smoke_starts_launcher_directly(self):
+        source = read(REPO_ROOT / "tools/scripts/pet/smoke_gpt_sovits_tts_wsl.sh")
+
+        self.assertNotIn("setsid -f \"$START_SCRIPT\"", source)
+        self.assertIn("\"$START_SCRIPT\"", source)
 
 
 if __name__ == "__main__":

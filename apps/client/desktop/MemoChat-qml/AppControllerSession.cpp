@@ -132,10 +132,12 @@ void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
     _chat_login_timeout_timer.setInterval(_chat_total_login_timeout_ms);
     _message_model.setDownloadAuthContext(_pending_uid, _pending_token);
     setIconDownloadAuthContext(_pending_uid, _pending_token);
+    applyCurrentUserProfile(obj.value(QStringLiteral("user_profile")).toObject(), false);
     _chat_server_host = _chat_endpoints.front().host;
     _chat_server_port = _chat_endpoints.front().port;
     _chat_server_name = _chat_endpoints.front().serverName;
     resetReconnectState();
+    setPage(ChatPage);
     qInfo() << "HTTP login succeeded, connecting chat server host:" << _chat_server_host
             << "port:" << _chat_server_port
             << "uid:" << _pending_uid
@@ -162,6 +164,7 @@ void AppController::onSwitchToChat()
     resetReconnectState();
     resetHeartbeatTracking();
     _last_heartbeat_ack_ms = QDateTime::currentMSecsSinceEpoch();
+    setPage(ChatPage);
     setBusy(false);
     setTip("", false);
     setSearchPending(false);
@@ -197,37 +200,14 @@ void AppController::onSwitchToChat()
     setSettingsStatus("", false);
     setContactPane(ApplyRequestPane);
     setCurrentContact(0, "", "", "qrc:/res/head_1.jpg", "", 0);
-    setPage(ChatPage);
+    _post_login_bootstrap_started = false;
 
     auto user_info = _gateway.userMgr()->GetUserInfo();
     if (user_info) {
         setIconDownloadAuthContext(user_info->_uid, _pending_token);
         _message_model.setDownloadAuthContext(user_info->_uid, _pending_token);
-        _private_cache_store.openForUser(user_info->_uid);
-        _group_cache_store.openForUser(user_info->_uid);
-        loadDraftStore(user_info->_uid);
-        const QString name = user_info->_name;
-        const QString nick = user_info->_nick;
-        const QString icon = normalizeIconPath(user_info->_icon);
-        const QString desc = user_info->_desc;
-        const QString userId = user_info->_user_id;
-
-        if (_current_user_name != name) {
-            _current_user_name = name;
-        }
-        if (_current_user_nick != nick) {
-            _current_user_nick = nick;
-        }
-        if (_current_user_icon != icon) {
-            _current_user_icon = icon;
-        }
-        if (_current_user_desc != desc) {
-            _current_user_desc = desc;
-        }
-        if (_current_user_id != userId) {
-            _current_user_id = userId;
-        }
-        emit currentUserChanged();
+        applyCurrentUserProfile(user_info->_uid, user_info->_name, user_info->_nick, user_info->_icon,
+                                user_info->_desc, user_info->_user_id, user_info->_sex, true);
     } else {
         _dialog_draft_map.clear();
         _dialog_pending_attachment_map.clear();
@@ -237,6 +217,30 @@ void AppController::onSwitchToChat()
         setCurrentPendingAttachments(QVariantList());
         setCurrentDialogPinned(false);
         setCurrentDialogMuted(false);
+    }
+
+    beginPostLoginBootstrap();
+}
+
+void AppController::beginPostLoginBootstrap()
+{
+    if (_page != ChatPage || _post_login_bootstrap_started || !isChatTransportReady()) {
+        return;
+    }
+
+    _post_login_bootstrap_started = true;
+    runPostLoginBootstrap();
+}
+
+void AppController::runPostLoginBootstrap()
+{
+    auto user_info = _gateway.userMgr()->GetUserInfo();
+    if (user_info) {
+        setIconDownloadAuthContext(user_info->_uid, _pending_token);
+        _message_model.setDownloadAuthContext(user_info->_uid, _pending_token);
+        _private_cache_store.openForUser(user_info->_uid);
+        _group_cache_store.openForUser(user_info->_uid);
+        loadDraftStore(user_info->_uid);
     }
 
     QTimer::singleShot(kPostLoginBootstrapDelayMs, this, [this]() {

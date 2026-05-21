@@ -14,7 +14,7 @@ redpanda:
         address: 127.0.0.1
         port: 33145
     advertised_kafka_api:
-        - address: 127.0.0.1
+        - address: host.docker.internal
           port: 19092
     developer_mode: true
     auto_create_topics_enabled: true
@@ -33,6 +33,6 @@ pandaproxy:
         - address: 0.0.0.0
           port: 18082
     advertised_pandaproxy_api:
-        - address: 127.0.0.1
+        - address: host.docker.internal
           port: 18082
 schema_registry: {}

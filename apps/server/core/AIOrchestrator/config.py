@@ -350,6 +350,7 @@ class PetFeatureConfig(BaseModel):
     voice_sovits_text_language: str = "zh"
     voice_sovits_output_dir: str = "/app/.data/pet-voice-cache"
     voice_sovits_timeout_sec: float = 180.0
+    pet_text_timeout_sec: float = 25.0
     voice_training_enabled: bool = True
     voice_training_artifact_root: str = "/app/.data/pet-voice-training"
 
@@ -447,6 +448,7 @@ _PET_ENV_ALIASES = {
     "MEMOCHAT_PET_SOVITS_TEXT_LANGUAGE": "voice_sovits_text_language",
     "MEMOCHAT_PET_SOVITS_OUTPUT_DIR": "voice_sovits_output_dir",
     "MEMOCHAT_PET_SOVITS_TIMEOUT_SEC": "voice_sovits_timeout_sec",
+    "MEMOCHAT_PET_TEXT_TIMEOUT_SEC": "pet_text_timeout_sec",
     "MEMOCHAT_PET_VOICE_TRAINING": "voice_training_enabled",
     "MEMOCHAT_PET_VOICE_TRAINING_ARTIFACT_ROOT": "voice_training_artifact_root",
 }

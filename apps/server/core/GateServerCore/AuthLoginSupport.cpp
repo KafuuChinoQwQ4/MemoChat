@@ -2,6 +2,7 @@
 #include "json/GlazeCompat.h"
 #include "ConfigMgr.h"
 #include "PostgresDao.h"
+#include "PostgresMgr.h"
 #include "RedisMgr.h"
 #include "StatusGrpcClient.h"
 #include "auth/ChatLoginTicket.h"
@@ -191,6 +192,28 @@ void CacheLoginProfile(const std::string& email, const UserInfo& userInfo) {
     if (userInfo.uid > 0) {
         RedisMgr::GetInstance()->SetEx(BuildLoginCacheUidKey(userInfo.uid), email, ttl);
     }
+}
+
+bool RefreshLoginProfileFromDb(const std::string& email, UserInfo& userInfo) {
+    if (email.empty() || userInfo.uid <= 0) {
+        return false;
+    }
+
+    ::UserInfo dbUserInfo;
+    if (!PostgresMgr::GetInstance()->GetUserInfo(userInfo.uid, dbUserInfo)) {
+        return false;
+    }
+
+    userInfo.uid = dbUserInfo.uid;
+    userInfo.name = dbUserInfo.name;
+    userInfo.email = dbUserInfo.email.empty() ? email : dbUserInfo.email;
+    userInfo.user_id = dbUserInfo.user_id;
+    userInfo.nick = dbUserInfo.nick;
+    userInfo.icon = dbUserInfo.icon;
+    userInfo.desc = dbUserInfo.desc;
+    userInfo.sex = dbUserInfo.sex;
+    CacheLoginProfile(email, userInfo);
+    return true;
 }
 
 void InvalidateLoginCacheByEmail(const std::string& email) {

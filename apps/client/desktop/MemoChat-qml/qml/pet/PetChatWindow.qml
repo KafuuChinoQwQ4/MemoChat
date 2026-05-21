@@ -20,6 +20,9 @@ Window {
     property var petController: null
     property var agentController: null
     property var petAssetSettings: null
+    readonly property var petSettingsSignalTarget: root.petAssetSettings
+                                                   && root.petAssetSettings.settingsChanged !== undefined
+                                                   ? root.petAssetSettings : null
     property bool alwaysOnTop: true
     property bool clickThrough: false
     property string selfAvatar: "qrc:/res/head_1.jpg"
@@ -37,6 +40,7 @@ Window {
     property string lastSyncedModel: ""
     property string lastSyncedLanguage: ""
     property string lastSyncedSpeechRules: ""
+    property string lastControllerError: ""
 
     signal voiceChatRequested(bool active)
     signal videoChatRequested()
@@ -177,6 +181,55 @@ Window {
         root.completedAssistantTurnOrder = nextOrder
     }
 
+    function assistantMessageIndex(turnKey) {
+        if (turnKey.length === 0) {
+            return -1
+        }
+        for (var index = messageModel.count - 1; index >= 0; --index) {
+            var message = messageModel.get(index) || {}
+            if (!message.outgoing && root.stringValue(message.turnId) === turnKey) {
+                return index
+            }
+        }
+        return -1
+    }
+
+    function updateCompletedAssistantAudio(turnKey, audioUrl, audioState) {
+        var index = root.assistantMessageIndex(turnKey)
+        if (index < 0) {
+            return false
+        }
+        if (root.hasText(audioUrl)) {
+            messageModel.setProperty(index, "audioUrl", audioUrl)
+        }
+        if (root.hasText(audioState)) {
+            messageModel.setProperty(index, "audioState", audioState)
+        }
+        messageModel.setProperty(index, "messageState", "sent")
+        root.chatStatusText = root.hasText(audioUrl) ? "语音回复已生成" : "语音生成失败，已显示文字"
+        return true
+    }
+
+    function handleControllerError() {
+        const errorText = root.petController ? root.stringValue(root.petController.error).trim() : ""
+        if (errorText.length === 0) {
+            root.lastControllerError = ""
+            return
+        }
+        if (errorText === root.lastControllerError) {
+            return
+        }
+        root.lastControllerError = errorText
+        if (root.pendingAssistantIndex >= 0) {
+            messageModel.setProperty(root.pendingAssistantIndex, "messageState", "failed")
+            root.pendingAssistantIndex = -1
+            root.pendingAssistantTurnId = ""
+        }
+        root.pendingSendText = ""
+        root.pendingSendAlreadyAppended = false
+        root.chatStatusText = "发送失败，可重试"
+    }
+
     function refreshLive2DAvatar() {
         var nextAvatar = ""
         if (root.petAssetSettings && root.petAssetSettings.resolveLive2DAvatarUrl) {
@@ -212,6 +265,37 @@ Window {
             return ""
         }
         return root.stringValue(root.petAssetSettings.speechRules).trim()
+    }
+
+    function petSettingText(name) {
+        if (!root.petAssetSettings || root.petAssetSettings[name] === undefined || root.petAssetSettings[name] === null) {
+            return ""
+        }
+        return root.stringValue(root.petAssetSettings[name]).trim()
+    }
+
+    function settingsVoicePath() {
+        const voiceDirectory = petSettingText("voiceDirectory")
+        const defaultVoice = petSettingText("defaultVoice")
+        if (voiceDirectory.length === 0 || defaultVoice.length === 0) {
+            return ""
+        }
+        if (defaultVoice.indexOf("/") === 0 || defaultVoice.indexOf("\\") === 0
+                || defaultVoice.indexOf(":/") > 0 || /^[A-Za-z]:[\\/]/.test(defaultVoice)) {
+            return defaultVoice
+        }
+        const separator = voiceDirectory.endsWith("/") || voiceDirectory.endsWith("\\") ? "" : "/"
+        return voiceDirectory + separator + defaultVoice
+    }
+
+    function settingsVoiceName() {
+        const defaultVoice = petSettingText("defaultVoice")
+        if (defaultVoice.length > 0) {
+            const normalized = defaultVoice.replace(/\\/g, "/")
+            const baseName = normalized.split("/").pop()
+            return baseName.replace(/\.[^.]+$/, "")
+        }
+        return root.characterName()
     }
 
     function currentModelParts() {
@@ -269,10 +353,30 @@ Window {
         }
     }
 
+    function syncVoiceRuntimeSettings() {
+        if (!root.petController || !root.petController.setVoiceRuntimeSettings) {
+            return
+        }
+        const nextLanguage = languageCode()
+        const voicePath = settingsVoicePath()
+        root.petController.setVoiceRuntimeSettings({
+            "voiceProvider": voicePath.length > 0 ? "gpt-sovits" : "",
+            "voiceName": settingsVoiceName(),
+            "voiceLanguage": nextLanguage,
+            "textLanguage": nextLanguage.split("-")[0].toLowerCase(),
+            "referenceAudioPath": voicePath,
+            "voiceDirectory": petSettingText("voiceDirectory"),
+            "defaultVoice": petSettingText("defaultVoice"),
+            "voiceTrainingArtifactPath": petSettingText("voiceTrainingArtifactPath"),
+            "referenceAudioSource": voicePath.length > 0 ? "pet_asset_settings" : ""
+        })
+    }
+
     function syncContext() {
         syncModelSelection()
         syncReplyLanguage()
         syncSpeechRules()
+        syncVoiceRuntimeSettings()
     }
 
     function openChat() {
@@ -319,22 +423,35 @@ Window {
         }
         const turnId = root.stringValue(event.turn_id).trim()
         const eventKey = root.assistantEventKey(event, turnId)
+        const audioReady = phase === "audio_ready"
         const isFinal = !!text.final || (!!root.petController && root.petController.speechFinal)
-        const audioUrl = root.hasText(controllerAudioUrl) ? controllerAudioUrl : root.stringValue(audio.url)
-        const audioState = root.hasText(controllerAudioState) ? controllerAudioState : root.stringValue(audio.state || "idle")
+        const eventAudioUrl = root.stringValue(audio.url)
+        const eventAudioState = root.stringValue(audio.state || "idle")
+        const audioUrl = audioReady ? eventAudioUrl : (root.hasText(controllerAudioUrl) ? controllerAudioUrl : eventAudioUrl)
+        const audioState = audioReady ? eventAudioState : (root.hasText(controllerAudioState) ? controllerAudioState : eventAudioState)
         const hasContent = root.hasText(display)
                            || root.hasText(translation)
                            || phase === "error"
+                           || audioReady
+                           || root.hasText(audioUrl)
                            || (isFinal && root.pendingAssistantIndex >= 0)
         if (!hasContent) {
             return
         }
 
-        const resolvedEventKey = eventKey.length > 0 ? eventKey : controllerTurnId
+        // Late audio-ready events can arrive after the turn is already closed and may not carry a fresh turn_id.
+        // Keep them attached to the live controller turn so completed messages can be repaired in place.
+        const eventAudioReadyPayload = audioReady || root.hasText(eventAudioUrl) || eventAudioState === "ready" || eventAudioState === "playing"
+        const resolvedEventKey = eventAudioReadyPayload && controllerTurnId.length > 0
+                ? controllerTurnId
+                : (eventKey.length > 0 ? eventKey : controllerTurnId)
         if (resolvedEventKey.length === 0) {
             return
         }
         if (root.assistantTurnCompleted(resolvedEventKey)) {
+            if (eventAudioReadyPayload && root.updateCompletedAssistantAudio(resolvedEventKey, audioUrl, audioState)) {
+                return
+            }
             return
         }
         if (root.pendingAssistantIndex < 0 || root.pendingAssistantTurnId !== resolvedEventKey) {
@@ -405,6 +522,7 @@ Window {
             root.pendingSendAlreadyAppended = true
             root.chatStatusText = "正在连接桌宠"
             root.appendUserMessage(trimmed)
+            root.syncContext()
             root.petController.startSession()
             messageInput.clear()
             messageInput.forceActiveFocus()
@@ -821,6 +939,7 @@ Window {
             if (root.pendingSendText.length > 0 && root.petController.sessionId.length > 0 && !root.petController.busy) {
                 root.sendPendingText()
             }
+            root.handleControllerError()
             root.syncContext()
         }
 
@@ -843,7 +962,7 @@ Window {
     }
 
     Connections {
-        target: root.petAssetSettings
+        target: root.petSettingsSignalTarget
         ignoreUnknownSignals: true
         function onSettingsChanged() {
             root.refreshLive2DAvatar()

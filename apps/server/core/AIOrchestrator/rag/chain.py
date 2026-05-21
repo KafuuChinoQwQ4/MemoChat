@@ -104,7 +104,7 @@ class RAGChain:
                 raise
 
     async def _add_documents_inner(self, uid: int, kb_id: str, chunks: list[Document], embedder, collection: str, client: QdrantClient, dim: int) -> None:
-
+        collection_created = False
         try:
             collections = [c.name for c in client.get_collections().collections]
         except Exception:
@@ -119,9 +119,22 @@ class RAGChain:
                         distance=qdrant_models.Distance.COSINE,
                     ),
                 )
+                collection_created = True
                 logger.info("qdrant.collection_created", collection=collection)
             except Exception as e:
-                logger.warning("qdrant.collection_exists", collection=collection, error=str(e))
+                logger.error("qdrant.collection_create_failed", collection=collection, error=str(e))
+                try:
+                    refreshed = [c.name for c in client.get_collections().collections]
+                    if collection in refreshed:
+                        client.delete_collection(collection_name=collection)
+                        logger.info("qdrant.partial_collection_rolled_back", collection=collection)
+                except Exception as cleanup_exc:
+                    logger.warning(
+                        "qdrant.partial_collection_rollback_failed",
+                        collection=collection,
+                        error=str(cleanup_exc),
+                    )
+                raise
 
         try:
             vectors = await embedder.embed([chunk.page_content for chunk in chunks])
@@ -153,6 +166,16 @@ class RAGChain:
             )
         except Exception as e:
             logger.error("qdrant.add_failed", collection=collection, error=str(e))
+            if collection_created:
+                try:
+                    client.delete_collection(collection_name=collection)
+                    logger.info("qdrant.collection_rolled_back", collection=collection)
+                except Exception as cleanup_exc:
+                    logger.warning(
+                        "qdrant.collection_rollback_failed",
+                        collection=collection,
+                        error=str(cleanup_exc),
+                    )
             raise
 
     async def retrieve(

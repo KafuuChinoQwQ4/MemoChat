@@ -331,7 +331,7 @@ done
 
 echo
 echo "[STEP] Stop remaining listeners on MemoChat service ports"
-stop_by_ports "GateServer" 8080 8082 8084 8086
+stop_by_ports "GateServer" 8080 8082 8084
 stop_by_udp_ports "GateServer" 8081 8085
 stop_by_ports "AIServer" 8095
 stop_by_ports "ChatServer" 8090 8091 8092 8093 8094 8097 50055 50056 50057 50058 50059 50581

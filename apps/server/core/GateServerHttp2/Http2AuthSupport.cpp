@@ -196,6 +196,9 @@ LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
     gateauthsupport::UserInfo userInfo;
     bool login_cache_hit = gateauthsupport::TryLoadCachedLoginProfile(email, pwd, userInfo);
     bool pwd_valid = login_cache_hit;
+    if (login_cache_hit) {
+        gateauthsupport::RefreshLoginProfileFromDb(email, userInfo);
+    }
     if (!pwd_valid) {
         pwd_valid = PostgresMgr::GetInstance()->CheckPwd(email, pwd, dbUserInfo);
         if (pwd_valid) {

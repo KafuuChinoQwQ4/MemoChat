@@ -455,28 +455,13 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    interactive: false
+                    interactive: contentHeight > height
                     visible: root.dialogsReady
                     model: root.currentSessionModel()
+                    boundsBehavior: Flickable.StopAtBounds
                     ScrollBar.vertical: GlassScrollBar { }
                     cacheBuffer: 200
                     maximumFlickVelocity: 4000
-
-                    WheelHandler {
-                        target: null
-                        onWheel: function(event) {
-                            const maxY = Math.max(0, sessionList.contentHeight - sessionList.height)
-                            let deltaY = event.pixelDelta.y !== 0 ? event.pixelDelta.y : ((event.angleDelta.y / 120) * 48)
-                            if (deltaY === 0) {
-                                return
-                            }
-                            const nextY = Math.max(0, Math.min(maxY, sessionList.contentY - deltaY))
-                            if (Math.abs(nextY - sessionList.contentY) > 0.1) {
-                                sessionList.contentY = nextY
-                                event.accepted = true
-                            }
-                        }
-                    }
 
                     onContentYChanged: {
                         const movingDown = contentY > root._sessionLastContentY + 0.5

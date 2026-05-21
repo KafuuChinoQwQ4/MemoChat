@@ -386,36 +386,12 @@ Rectangle {
                 anchors.margins: 14
                 spacing: 0
                 clip: true
-                interactive: false
+                interactive: contentHeight > height
                 reuseItems: true
                 cacheBuffer: Math.max(height, 720)
                 model: root.messageModel
+                boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: GlassScrollBar { }
-                WheelHandler {
-                    target: null
-                    onWheel: function(event) {
-                        let deltaY = 0
-                        if (event.pixelDelta.y !== 0) {
-                            deltaY = event.pixelDelta.y
-                        } else if (event.angleDelta.y !== 0) {
-                            deltaY = (event.angleDelta.y / 120) * root._wheelStepPx
-                        }
-                        if (deltaY === 0) {
-                            return
-                        }
-                        const nextY = root.clampY(messageList.contentY - deltaY)
-                        if (Math.abs(nextY - messageList.contentY) > 0.1) {
-                            messageList.contentY = nextY
-                            if (deltaY > 0) {
-                                root._followTail = false
-                            } else if (root.isAtBottom(1.0)) {
-                                root._followTail = true
-                            }
-                            root._stickToBottom = root.isAtBottom(1.0)
-                            event.accepted = true
-                        }
-                    }
-                }
                 onCountChanged: {
                     if (count > 0
                             && root.hasCurrentChat
@@ -428,6 +404,8 @@ Rectangle {
                     root._stickToBottom = root.isAtBottom(1.0)
                     if (root._stickToBottom) {
                         root._followTail = true
+                    } else if (contentY > root.minContentY() + 1) {
+                        root._followTail = false
                     }
                     if (contentY > 24) {
                         root._topLoadArmed = true

@@ -9,11 +9,62 @@ from rag.retrieval import (
     build_metadata_filter,
     candidate_from_payload,
     collection_matches_filters,
+    expand_query_text,
     fuse_candidates,
     metadata_matches_payload,
     rank_lexical_candidates,
     tokenize_text,
 )
+
+try:
+    from langchain_core.documents import Document
+    from rag.chain import RAGChain
+except ModuleNotFoundError:
+    Document = None
+    RAGChain = None
+
+
+class FakeCollection:
+    def __init__(self, name: str):
+        self.name = name
+
+
+class FakeCollectionsResponse:
+    def __init__(self, names: list[str]):
+        self.collections = [FakeCollection(name) for name in names]
+
+
+class FakeQdrantClient:
+    def __init__(self, *, create_error: Exception | None = None, upsert_error: Exception | None = None):
+        self.create_error = create_error
+        self.upsert_error = upsert_error
+        self.created_collections: list[str] = []
+        self.deleted_collections: list[str] = []
+        self.upserted_collections: list[str] = []
+
+    def get_collections(self):
+        return FakeCollectionsResponse([])
+
+    def create_collection(self, collection_name, vectors_config):
+        if self.create_error is not None:
+            raise self.create_error
+        self.created_collections.append(collection_name)
+
+    def upsert(self, collection_name, points):
+        if self.upsert_error is not None:
+            raise self.upsert_error
+        self.upserted_collections.append(collection_name)
+
+    def delete_collection(self, collection_name):
+        self.deleted_collections.append(collection_name)
+
+
+class FakeEmbedder:
+    def get_dimension(self) -> int:
+        return 4
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        return [[1.0, 0.0, 0.0, 0.0] for _ in texts]
 
 
 class HybridRagRetrievalTests(unittest.TestCase):
@@ -91,6 +142,74 @@ class HybridRagRetrievalTests(unittest.TestCase):
         self.assertGreater(ranked[0].lexical_score, ranked[1].lexical_score)
         self.assertEqual(ranked[0].route_ranks["bm25"], 1)
 
+    def test_expand_query_text_adds_bilingual_domain_terms(self):
+        expanded = expand_query_text("Prometheus 的本地端口是什么？")
+
+        self.assertIn("ports", expanded)
+        self.assertIn("local", expanded)
+
+    def test_rank_lexical_candidates_boosts_authoritative_port_document(self):
+        authoritative = candidate_from_payload(
+            candidate_id="auth",
+            payload={
+                "page_content": (
+                    "Observability containers keep stable ports: Prometheus 9090, "
+                    "Grafana 3000, Loki 3100, Tempo 3200."
+                ),
+                "source": "memochat-loadtest-observability.md",
+            },
+            route="bm25",
+        )
+        distractor = candidate_from_payload(
+            candidate_id="noise",
+            payload={
+                "page_content": (
+                    "Distractor note. Prometheus appears in historical migration notes, "
+                    "but this paragraph is not the authoritative answer. It includes "
+                    "a near-miss value 9099 next to 9090."
+                ),
+                "source": "memochat-rag-distractor-28-metrics-stack.md",
+            },
+            route="bm25",
+        )
+
+        ranked = rank_lexical_candidates(
+            [distractor, authoritative],
+            "Prometheus、Grafana、Loki、Tempo 的本地端口分别是什么？",
+        )
+
+        self.assertEqual(ranked[0].candidate_id, "auth")
+
+    def test_heuristic_reranker_penalizes_explicit_distractors(self):
+        reranker = CrossEncoderReranker(model_name="fake-model", enabled=True)
+        candidates = [
+            RetrievalCandidate(
+                candidate_id="noise",
+                content=(
+                    "Distractor note. Prometheus appears in historical migration notes, "
+                    "but this paragraph is not the authoritative answer for the active benchmark query."
+                ),
+                source="memochat-rag-distractor-28-metrics-stack.md",
+                fused_score=0.4,
+                lexical_score=1.0,
+            ),
+            RetrievalCandidate(
+                candidate_id="auth",
+                content="Observability containers keep stable ports: Prometheus 9090, Grafana 3000, Loki 3100, Tempo 3200.",
+                source="memochat-loadtest-observability.md",
+                fused_score=0.3,
+                lexical_score=0.8,
+            ),
+        ]
+
+        ranked = reranker._heuristic_rerank(
+            "Prometheus、Grafana、Loki、Tempo 的本地端口分别是什么？",
+            candidates,
+            2,
+        )
+
+        self.assertEqual(ranked[0].candidate_id, "auth")
+
     def test_fuse_candidates_merges_dense_and_lexical_routes(self):
         dense = [
             candidate_from_payload(
@@ -150,6 +269,47 @@ class HybridRagRetrievalTests(unittest.TestCase):
 
         self.assertEqual(ranked[0].candidate_id, "high")
         self.assertGreater(ranked[0].rerank_score or 0.0, ranked[1].rerank_score or 0.0)
+
+    @unittest.skipIf(RAGChain is None or Document is None, "rag.chain dependencies are not installed")
+    def test_rag_add_documents_propagates_collection_create_failure(self):
+        client = FakeQdrantClient(create_error=RuntimeError("too many open files"))
+        chain = RAGChain()
+
+        with self.assertRaisesRegex(RuntimeError, "too many open files"):
+            asyncio.run(
+                chain._add_documents_inner(
+                    7,
+                    "kb_create_failed",
+                    [Document(page_content="content", metadata={"source": "a.md"})],
+                    FakeEmbedder(),
+                    "user_7_kb_create_failed",
+                    client,
+                    4,
+                )
+            )
+
+        self.assertEqual(client.upserted_collections, [])
+
+    @unittest.skipIf(RAGChain is None or Document is None, "rag.chain dependencies are not installed")
+    def test_rag_add_documents_rolls_back_new_collection_on_upsert_failure(self):
+        client = FakeQdrantClient(upsert_error=RuntimeError("upsert failed"))
+        chain = RAGChain()
+
+        with self.assertRaisesRegex(RuntimeError, "upsert failed"):
+            asyncio.run(
+                chain._add_documents_inner(
+                    7,
+                    "kb_upsert_failed",
+                    [Document(page_content="content", metadata={"source": "a.md"})],
+                    FakeEmbedder(),
+                    "user_7_kb_upsert_failed",
+                    client,
+                    4,
+                )
+            )
+
+        self.assertEqual(client.created_collections, ["user_7_kb_upsert_failed"])
+        self.assertEqual(client.deleted_collections, ["user_7_kb_upsert_failed"])
 
 
 if __name__ == "__main__":

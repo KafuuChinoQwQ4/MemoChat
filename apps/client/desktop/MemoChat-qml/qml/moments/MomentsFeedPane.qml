@@ -115,11 +115,15 @@ Rectangle {
                     spacing: 12
                     clip: true
                     cacheBuffer: 200
+                    interactive: contentHeight > height
+                    boundsBehavior: Flickable.StopAtBounds
+                    ScrollBar.vertical: GlassScrollBar { }
 
                     model: root.momentsModel ? root.momentsModel : null
 
                     delegate: Loader {
                         width: feedView.width
+                        height: item ? item.height : 0
                         asynchronous: true
                         sourceComponent: Component {
                             MomentsDelegate {

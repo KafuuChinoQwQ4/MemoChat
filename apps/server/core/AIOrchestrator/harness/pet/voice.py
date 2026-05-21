@@ -103,6 +103,7 @@ class DeterministicVoiceProvider:
             text=text,
             output_dir=self._output_dir,
             metadata={
+                **dict(request.metadata or {}),
                 "deterministic": True,
                 "language": request.language,
                 "audio_persisted": False,
@@ -124,6 +125,7 @@ class DeterministicVoiceProvider:
                     text=chunk,
                     output_dir=self._output_dir,
                     metadata={
+                        **dict(request.metadata or {}),
                         "deterministic": True,
                         "language": request.language,
                         "audio_persisted": False,
@@ -266,11 +268,27 @@ class GPTSoVITSVoiceProvider:
             raise VoiceProviderUnavailable("httpx is required for GPT-SoVITS synthesis", provider=self.name) from exc
 
         metadata = dict(request.metadata or {})
-        reference_audio = str(metadata.get("ref_audio_path") or self._reference_audio).strip()
+        requested_reference_audio = str(metadata.get("ref_audio_path") or "").strip()
+        configured_reference_audio = str(self._reference_audio or "").strip()
+        reference_audio = requested_reference_audio or configured_reference_audio
         if not reference_audio:
             raise VoiceProviderUnavailable("GPT-SoVITS reference audio is not configured", provider=self.name)
+        reference_path = Path(reference_audio)
+        fallback_path = Path(configured_reference_audio) if configured_reference_audio else None
+        if not reference_path.is_file():
+            if fallback_path and fallback_path.is_file():
+                if requested_reference_audio and requested_reference_audio != configured_reference_audio:
+                    metadata.setdefault("ref_audio_path_ignored", requested_reference_audio)
+                reference_audio = configured_reference_audio
+                reference_path = fallback_path
+            else:
+                raise VoiceProviderUnavailable(
+                    f"GPT-SoVITS reference audio is not visible to this runtime: {reference_audio}",
+                    provider=self.name,
+                )
 
         media_type = _media_type(metadata.get("media_type"))
+        metadata["ref_audio_path"] = reference_audio
         payload = {
             "text": text,
             "text_lang": _sovits_language(metadata.get("text_lang") or request.language or self._text_language or "zh"),
@@ -292,6 +310,19 @@ class GPTSoVITSVoiceProvider:
                 response = await client.post(f"{self._base_url}/tts", json=payload)
                 response.raise_for_status()
         except Exception as exc:
+            response = getattr(exc, "response", None)
+            if response is not None:
+                detail = str(getattr(response, "text", "") or "").strip()
+                status_code = getattr(response, "status_code", None)
+                if detail:
+                    raise VoiceProviderError(
+                        f"GPT-SoVITS synthesis failed: HTTP {status_code}: {detail}",
+                        provider=self.name,
+                    ) from exc
+                raise VoiceProviderError(
+                    f"GPT-SoVITS synthesis failed: HTTP {status_code}",
+                    provider=self.name,
+                ) from exc
             raise VoiceProviderError(f"GPT-SoVITS synthesis failed: {exc}", provider=self.name) from exc
 
         content_type = response.headers.get("content-type", "")
@@ -529,24 +560,52 @@ def _deterministic_result(
     output_dir: Path,
     metadata: dict[str, Any] | None = None,
 ) -> VoiceSynthesisResult:
+    result_metadata = dict(metadata or {})
     digest = hashlib.sha1(
         f"{request.session_id}:{request.turn_id}:{request.voice}:{text}".encode("utf-8")
     ).hexdigest()[:16]
     duration_ms = _estimated_voice_duration_ms(text)
+    if not text:
+        result_metadata["audio_persisted"] = False
+        return VoiceSynthesisResult(
+            text=text,
+            state="text-only",
+            sample_rate=0,
+            duration_ms=duration_ms,
+            rms=_scripted_rms(text),
+            chunk_ref=None,
+            url=None,
+            phoneme=None,
+            viseme=_scripted_viseme(text),
+            provider=DeterministicVoiceProvider.name,
+            voice=request.voice or "deterministic",
+            retention="none",
+            metadata=result_metadata,
+        )
+
+    sample_rate = 24000
+    file_name = f"deterministic-voice-{digest}.wav"
+    output_path = output_dir / file_name
+    output_dir.mkdir(parents=True, exist_ok=True)
+    existing_sample_rate, _ = _wav_diagnostics(output_path) if output_path.exists() else (0, 0)
+    if not output_path.exists() or output_path.stat().st_size <= 44 or existing_sample_rate != sample_rate:
+        _write_scripted_wav(output_path, text, duration_ms, sample_rate)
+    sample_rate, duration_ms = _wav_diagnostics(output_path)
+    result_metadata["audio_persisted"] = True
     return VoiceSynthesisResult(
         text=text,
-        state="text-only",
-        sample_rate=0,
+        state="ready",
+        sample_rate=sample_rate,
         duration_ms=duration_ms,
         rms=_scripted_rms(text),
-        chunk_ref=None,
-        url=None,
+        chunk_ref=output_path.stem,
+        url=f"/audio/{file_name}",
         phoneme=None,
         viseme=_scripted_viseme(text),
         provider=DeterministicVoiceProvider.name,
         voice=request.voice or "deterministic",
-        retention="none",
-        metadata=metadata or {},
+        retention="ephemeral",
+        metadata=result_metadata,
     )
 
 

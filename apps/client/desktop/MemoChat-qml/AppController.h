@@ -314,6 +314,7 @@ public:
     Q_INVOKABLE void saveLoginCredential(const QString &email, const QString &password);
 
     Q_INVOKABLE void login(const QString &email, const QString &password);
+    Q_INVOKABLE void beginPostLoginBootstrap();
     Q_INVOKABLE void requestRegisterCode(const QString &email);
     Q_INVOKABLE void registerUser(const QString &user, const QString &email, const QString &password,
                                   const QString &confirm, const QString &verifyCode);
@@ -427,6 +428,10 @@ private:
     void setBusy(bool value);
     void setPage(Page newPage);
     QString normalizeIconPath(QString icon) const;
+    void applyCurrentUserProfile(const QJsonObject &profile, bool preserveExistingIcon);
+    void applyCurrentUserProfile(int uid, const QString &name, const QString &nick, const QString &icon,
+                                 const QString &desc, const QString &userId, int sex,
+                                 bool preserveExistingIcon);
     void refreshFriendModels();
     void refreshApplyModel();
     void refreshGroupModel();
@@ -492,6 +497,7 @@ private:
     void resetReconnectState();
     void resetHeartbeatTracking();
     bool isHeartbeatLikelyTimeout() const;
+    void runPostLoginBootstrap();
 
     Page _page;
     QString _tip_text;
@@ -593,6 +599,7 @@ private:
     bool _groups_ready = false;
     bool _apply_ready = false;
     bool _chat_list_initialized = false;
+    bool _post_login_bootstrap_started = false;
 
     ClientGateway _gateway;
     AuthController _auth_controller;

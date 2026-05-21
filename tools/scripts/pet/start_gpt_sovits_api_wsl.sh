@@ -9,6 +9,22 @@ PORT="${GPT_SOVITS_PORT:-9880}"
 CONFIG="${GPT_SOVITS_CONFIG:-GPT_SoVITS/configs/tts_infer.yaml}"
 LOG_DIR="${GPT_SOVITS_LOG_DIR:-/data/logs/gpt-sovits}"
 LOG_FILE="${GPT_SOVITS_LOG_FILE:-$LOG_DIR/api-$PORT.log}"
+PID_FILE="${GPT_SOVITS_PID_FILE:-$LOG_DIR/api-$PORT.pid}"
+START_WAIT_SECONDS="${GPT_SOVITS_START_WAIT_SECONDS:-90}"
+FOREGROUND=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --foreground)
+      FOREGROUND=1
+      shift
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
 
 mkdir -p "$LOG_DIR"
 cd "$ROOT"
@@ -30,6 +46,32 @@ export HF_HOME="${HF_HOME:-/data/hf-cache}"
 export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-/data/hf-cache/transformers}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/data/cache}"
 
+wait_for_api() {
+  for _ in $(seq 1 "$START_WAIT_SECONDS"); do
+    if curl -fsS "http://$HOST:$PORT/docs" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+pid_alive() {
+  local pid="$1"
+  [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1
+}
+
+if [[ -f "$PID_FILE" ]]; then
+  old_pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+  if pid_alive "$old_pid"; then
+    if curl -fsS "http://$HOST:$PORT/docs" >/dev/null 2>&1; then
+      echo "GPT-SoVITS already ready (pid=$old_pid)"
+      exit 0
+    fi
+  fi
+  rm -f "$PID_FILE"
+fi
+
 echo "GPT-SoVITS root: $ROOT"
 echo "Python env: $ENV_DIR"
 echo "API: http://$HOST:$PORT"
@@ -47,4 +89,21 @@ print("torchaudio", torchaudio.__version__)
 print("torchcodec", torchcodec.__version__)
 PY
 
-exec "$ENV_DIR/bin/python" api_v2.py -a "$HOST" -p "$PORT" -c "$CONFIG" >>"$LOG_FILE" 2>&1
+if [[ "$FOREGROUND" -eq 1 ]]; then
+  exec "$ENV_DIR/bin/python" api_v2.py -a "$HOST" -p "$PORT" -c "$CONFIG" >>"$LOG_FILE" 2>&1
+fi
+
+nohup "$ENV_DIR/bin/python" api_v2.py -a "$HOST" -p "$PORT" -c "$CONFIG" >>"$LOG_FILE" 2>&1 < /dev/null &
+pid=$!
+echo "$pid" > "$PID_FILE"
+
+if wait_for_api; then
+  echo "GPT-SoVITS ready (pid=$pid)"
+  exit 0
+fi
+
+echo "GPT-SoVITS failed to become ready within ${START_WAIT_SECONDS}s" >&2
+tail -n 80 "$LOG_FILE" >&2 || true
+kill "$pid" >/dev/null 2>&1 || true
+rm -f "$PID_FILE"
+exit 1

@@ -8,12 +8,13 @@ Window {
     id: root
     readonly property int baseWindowWidth: 320
     readonly property int baseWindowHeight: 460
+    readonly property int speechBubbleSafeHeight: 84
     readonly property int panelGap: 12
 
     width: scaledWindowWidth()
     height: scaledWindowHeight()
     minimumWidth: Math.round(baseWindowWidth * 0.65)
-    minimumHeight: Math.round(baseWindowHeight * 0.65)
+    minimumHeight: speechBubbleSafeHeight + Math.round(baseWindowHeight * 0.65)
     title: "MemoChat Pet"
     flags: (Qt.platform.os === "linux" ? Qt.Window : Qt.Tool)
            | Qt.FramelessWindowHint
@@ -37,6 +38,9 @@ Window {
     property bool voiceReplyEnabled: true
     property bool providerAvailable: false
     property var petAssetSettings: null
+    readonly property var petSettingsSignalTarget: root.petAssetSettings
+                                                   && root.petAssetSettings.settingsChanged !== undefined
+                                                   ? root.petAssetSettings : null
     property string selfAvatar: "qrc:/res/head_1.jpg"
     property bool positionInitialized: false
     property bool scaleInteractionActive: false
@@ -53,10 +57,11 @@ Window {
 
     function scaledWindowHeight(value) {
         var factor = value === undefined ? root.scaleFactor : value
-        return Math.round(root.baseWindowHeight * factor)
+        return root.speechBubbleSafeHeight + Math.round(root.baseWindowHeight * factor)
     }
 
     function openPet() {
+        syncPetRuntimeSettings()
         if (petController && petController.sessionId.length === 0) {
             petController.startSession()
         }
@@ -123,6 +128,91 @@ Window {
         petChatWindowRef.alwaysOnTop = root.alwaysOnTop
         petChatWindowRef.clickThrough = root.clickThrough
         petChatWindowRef.voiceCallActive = root.voiceReplyEnabled
+    }
+
+    function settingsLanguageCode() {
+        if (!root.petAssetSettings) {
+            return "zh-CN"
+        }
+        const index = root.petAssetSettings.languageIndex !== undefined ? root.petAssetSettings.languageIndex : 0
+        switch (index) {
+        case 1:
+            return "ja-JP"
+        case 2:
+            return "en-US"
+        case 3:
+            return "ko-KR"
+        case 4:
+            return "fr-FR"
+        case 5:
+            return "es-ES"
+        default:
+            return "zh-CN"
+        }
+    }
+
+    function settingsSpeechRulesText() {
+        if (!root.petAssetSettings || root.petAssetSettings.speechRules === undefined) {
+            return ""
+        }
+        return String(root.petAssetSettings.speechRules || "").trim()
+    }
+
+    function petSettingText(name) {
+        if (!root.petAssetSettings || root.petAssetSettings[name] === undefined || root.petAssetSettings[name] === null) {
+            return ""
+        }
+        return String(root.petAssetSettings[name] || "").trim()
+    }
+
+    function settingsVoicePath() {
+        const voiceDirectory = petSettingText("voiceDirectory")
+        const defaultVoice = petSettingText("defaultVoice")
+        if (voiceDirectory.length === 0 || defaultVoice.length === 0) {
+            return ""
+        }
+        if (defaultVoice.indexOf("/") === 0 || defaultVoice.indexOf("\\") === 0
+                || defaultVoice.indexOf(":/") > 0 || /^[A-Za-z]:[\\/]/.test(defaultVoice)) {
+            return defaultVoice
+        }
+        const separator = voiceDirectory.endsWith("/") || voiceDirectory.endsWith("\\") ? "" : "/"
+        return voiceDirectory + separator + defaultVoice
+    }
+
+    function settingsVoiceName() {
+        const defaultVoice = petSettingText("defaultVoice")
+        if (defaultVoice.length > 0) {
+            const normalized = defaultVoice.replace(/\\/g, "/")
+            const baseName = normalized.split("/").pop()
+            return baseName.replace(/\.[^.]+$/, "")
+        }
+        return petSettingText("characterName")
+    }
+
+    function syncPetRuntimeSettings() {
+        if (!root.petController) {
+            return
+        }
+        if (root.petController.setReplyLanguage) {
+            root.petController.setReplyLanguage(settingsLanguageCode())
+        }
+        if (root.petController.setSpeechRules) {
+            root.petController.setSpeechRules(settingsSpeechRulesText())
+        }
+        if (root.petController.setVoiceRuntimeSettings) {
+            const voicePath = settingsVoicePath()
+            root.petController.setVoiceRuntimeSettings({
+                "voiceProvider": voicePath.length > 0 ? "gpt-sovits" : "",
+                "voiceName": settingsVoiceName(),
+                "voiceLanguage": settingsLanguageCode(),
+                "textLanguage": settingsLanguageCode().split("-")[0].toLowerCase(),
+                "referenceAudioPath": voicePath,
+                "voiceDirectory": petSettingText("voiceDirectory"),
+                "defaultVoice": petSettingText("defaultVoice"),
+                "voiceTrainingArtifactPath": petSettingText("voiceTrainingArtifactPath"),
+                "referenceAudioSource": voicePath.length > 0 ? "pet_asset_settings" : ""
+            })
+        }
     }
 
     function positionChatWindow() {
@@ -246,7 +336,7 @@ Window {
         petControlWindowRef.localOnlyMode = root.localOnlyMode
         petControlWindowRef.debugRetentionEnabled = root.debugRetentionEnabled
         petControlWindowRef.voiceReplyEnabled = root.voiceReplyEnabled
-        petControlWindowRef.providerAvailable = root.providerRuntimeAvailable()
+        petControlWindowRef.providerAvailable = root.providerAvailable
     }
 
     function applyLive2DAction(action) {
@@ -262,9 +352,6 @@ Window {
     }
 
     function providerRuntimeAvailable() {
-        if (root.providerAvailable) {
-            return true
-        }
         if (!root.agentController) {
             return false
         }
@@ -280,14 +367,18 @@ Window {
         return providerStatus.indexOf("已接入") >= 0
     }
 
+    function refreshProviderAvailability() {
+        root.providerAvailable = root.providerRuntimeAvailable()
+    }
+
     function enforceVisionPrivacy() {
-        if ((root.localOnlyMode || !root.providerRuntimeAvailable()) && root.cloudVisionEnabled) {
+        if ((root.localOnlyMode || !root.providerAvailable) && root.cloudVisionEnabled) {
             root.cloudVisionEnabled = false
         }
     }
 
     function setCloudVisionEnabled(value) {
-        root.cloudVisionEnabled = value && !root.localOnlyMode && root.providerRuntimeAvailable()
+        root.cloudVisionEnabled = value && !root.localOnlyMode && root.providerAvailable
         root.syncControlWindowState()
     }
 
@@ -304,6 +395,7 @@ Window {
         root.cameraEnabled = root.petAssetSettings.cameraEnabled
         root.cloudVisionEnabled = root.petAssetSettings.cloudVisionEnabled
         root.enforceVisionPrivacy()
+        root.syncPetRuntimeSettings()
         root.syncControlWindowState()
     }
 
@@ -366,16 +458,19 @@ Window {
         scheduleChatWindowPosition()
     }
     onPetControllerChanged: {
+        syncPetRuntimeSettings()
         syncControlWindowState()
         syncChatWindowState()
     }
     onAgentControllerChanged: {
+        refreshProviderAvailability()
         enforceVisionPrivacy()
         syncControlWindowState()
         syncChatWindowState()
     }
     onPetAssetSettingsChanged: {
         applyAssetPrivacySettings()
+        syncPetRuntimeSettings()
         syncChatWindowState()
     }
     onSelfAvatarChanged: syncChatWindowState()
@@ -398,7 +493,7 @@ Window {
         localOnlyMode: root.localOnlyMode
         debugRetentionEnabled: root.debugRetentionEnabled
         debugPanelVisible: root.debugPanelVisible
-        providerAvailable: root.providerRuntimeAvailable()
+        providerAvailable: root.providerAvailable
         onCameraCaptureStatusChanged: {
             root.cameraCaptureStatus = cameraCaptureStatus
             root.syncControlWindowState()
@@ -446,16 +541,29 @@ Window {
     Connections {
         target: root.agentController
         function onModelChanged() {
+            root.refreshProviderAvailability()
             root.enforceVisionPrivacy()
             root.syncControlWindowState()
         }
         function onModelsChanged() {
+            root.refreshProviderAvailability()
             root.enforceVisionPrivacy()
             root.syncControlWindowState()
         }
         function onModelStateChanged() {
+            root.refreshProviderAvailability()
             root.enforceVisionPrivacy()
             root.syncControlWindowState()
+        }
+    }
+
+    Connections {
+        target: root.petSettingsSignalTarget
+        ignoreUnknownSignals: true
+        function onSettingsChanged() {
+            root.applyAssetPrivacySettings()
+            root.syncPetRuntimeSettings()
+            root.syncChatWindowState()
         }
     }
 
@@ -485,7 +593,9 @@ Window {
     }
 
     Component.onCompleted: {
+        refreshProviderAvailability()
         applyAssetPrivacySettings()
+        syncPetRuntimeSettings()
         applyWindowFlags()
     }
 }

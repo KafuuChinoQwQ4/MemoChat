@@ -26,9 +26,18 @@ function Resolve-RepoRoot {
 function Convert-ToDockerPath {
     param([string]$Path)
     $resolved = (Resolve-Path $Path).Path
+    $resolved = $resolved -replace '^Microsoft\.PowerShell\.Core\\FileSystem::', ''
     $drive = $resolved.Substring(0, 1).ToLowerInvariant()
     $rest = $resolved.Substring(2).Replace("\", "/")
     return "/$drive$rest"
+}
+
+function Normalize-FileSystemPath {
+    param([string]$Path)
+    $normalized = $Path -replace '^Microsoft\.PowerShell\.Core\\FileSystem::', ''
+    $normalized = $normalized -replace '^\\\\wsl\.localhost\\archlinux\\', 'Y:\'
+    $normalized = $normalized -replace '^\\\\wsl\$\\archlinux\\', 'Y:\'
+    return $normalized.TrimEnd("\")
 }
 
 function Convert-ToWorkPath {
@@ -46,7 +55,8 @@ function Convert-ToWorkPath {
         }
         $resolved = (Join-Path (Resolve-Path $parent).Path $leaf)
     }
-    $rootResolved = (Resolve-Path $Root).Path.TrimEnd("\")
+    $resolved = Normalize-FileSystemPath $resolved
+    $rootResolved = Normalize-FileSystemPath ((Resolve-Path $Root).Path)
     if (-not $resolved.StartsWith($rootResolved, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "Path must be under repo root for Docker k6: $resolved"
     }

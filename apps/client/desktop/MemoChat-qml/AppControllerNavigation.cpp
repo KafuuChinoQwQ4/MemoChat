@@ -17,6 +17,7 @@ void AppController::switchToLogin()
     _heartbeat_timer.stop();
     _chat_login_timeout_timer.stop();
     _ignore_next_login_disconnect = true;
+    _post_login_bootstrap_started = false;
     setPage(LoginPage);
     if (already_on_login_page) {
         emit pageChanged();
@@ -104,8 +105,19 @@ void AppController::switchToLogin()
     setPendingReplyContext(QString(), QString(), QString());
     setCurrentChatPeerName(QString());
     setCurrentChatPeerIcon(QStringLiteral("qrc:/res/head_1.jpg"));
+    const bool userChanged = !_current_user_name.isEmpty()
+        || !_current_user_nick.isEmpty()
+        || _current_user_icon != QStringLiteral("qrc:/res/head_1.jpg")
+        || !_current_user_id.isEmpty()
+        || !_current_user_desc.isEmpty();
+    _current_user_name.clear();
+    _current_user_nick.clear();
+    _current_user_icon = QStringLiteral("qrc:/res/head_1.jpg");
     _current_user_id.clear();
     _current_user_desc.clear();
+    if (userChanged) {
+        emit currentUserChanged();
+    }
     _pending_uid = 0;
     _pending_token.clear();
     _pending_trace_id.clear();
