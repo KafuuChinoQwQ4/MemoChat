@@ -10,6 +10,7 @@ MOMENTS_FEED = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/moments/Moments
 MOMENTS_DELEGATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/moments/MomentsDelegate.qml"
 MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
+MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/main.cpp"
 APP_CONTROLLER_SESSION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerSession.cpp"
 APP_CONTROLLER_NAVIGATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerNavigation.cpp"
 
@@ -64,22 +65,28 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
         self.assertIn("width: implicitWidth", delegate[call_start:])
         self.assertIn("height: implicitHeight", delegate[call_start:])
 
-    def test_login_chat_uses_single_stack_window(self):
+    def test_login_and_chat_use_mutually_exclusive_top_level_windows(self):
         for path in (MAIN_QML, LINUX_MAIN_QML):
             qml = path.read_text(encoding="utf-8")
 
-            self.assertIn("readonly property bool chatPageActive", qml)
-            self.assertIn("root.contentItem.enabled = true", qml)
-            self.assertIn("root.opacity = 1.0", qml)
-            self.assertIn("function showChatPage()", qml)
-            self.assertIn("controller.page === AppController.ChatPage ? 3 : 0", qml)
-            self.assertIn("active: controller.page === AppController.ChatPage", qml)
+            self.assertIn("property var loginWindowRef: null", qml)
+            self.assertIn("property var chatWindowRef: null", qml)
+            self.assertIn("function destroyLoginWindow()", qml)
+            self.assertIn("function destroyChatWindow()", qml)
+            self.assertIn("function showChatWindow()", qml)
+            self.assertIn("destroyLoginWindow()", qml[qml.index("function showChatWindow()"):])
+            self.assertIn("destroyChatWindow()", qml[qml.index("function showLoginWindow()"):])
             self.assertIn("sourceComponent: chatShellPageComponent", qml)
-            self.assertIn("enabled: !root.chatPageActive", qml)
-            self.assertNotIn("chatWindowRef", qml)
-            self.assertNotIn("chatWindowComponent", qml)
+            self.assertIn("Window.window.startSystemMove()", qml)
+            self.assertIn("onClosing: Qt.quit()", qml)
+            self.assertNotIn("StackLayout", qml)
+            self.assertNotIn("controller.page === AppController.ChatPage ? 3 : 0", qml)
+            self.assertNotIn("active: controller.page === AppController.ChatPage", qml)
             self.assertNotIn("windowHandoffToken", qml)
             self.assertNotIn("scheduleWindowHandoff", qml)
+
+        main_cpp = MAIN_CPP.read_text(encoding="utf-8")
+        self.assertIn("setQuitOnLastWindowClosed(false)", main_cpp)
 
     def test_login_and_logout_switch_pages_before_transport_teardown(self):
         source = APP_CONTROLLER_SESSION.read_text(encoding="utf-8")

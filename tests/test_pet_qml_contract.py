@@ -781,11 +781,18 @@ class PetQmlContractTests(unittest.TestCase):
                 source = path.read_text(encoding="utf-8")
                 self.assertIn("PetAssetSettings", source)
                 self.assertIn("startupPetSettings.load()", source)
+                show_chat_start = source.index("function showChatWindow()")
+                show_chat_end = source.index("function ensurePetWindow(petAssetSettings)")
+                show_chat_block = source[show_chat_start:show_chat_end]
+                completed_start = source.index("Component.onCompleted:")
+                completed_end = source.index("Component.onDestruction:")
+                completed_block = source[completed_start:completed_end]
                 self.assertRegex(
-                    source,
+                    show_chat_block,
                     r"if\s*\(\s*startupPetSettings\.autoStartPetOnClientStart\s*\)\s*\{\s*startupPetTimer\.start\s*\(\s*\)",
-                    f"{path.name} should only start the desktop pet when the saved setting is enabled",
+                    f"{path.name} should start the desktop pet after the chat page is shown",
                 )
+                self.assertNotIn("startupPetTimer.start()", completed_block)
 
     def test_live2d_resource_path_buttons_open_native_file_pickers(self):
         pane = CHARACTER_PANE_QML.read_text(encoding="utf-8")

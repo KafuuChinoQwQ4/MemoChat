@@ -652,6 +652,7 @@ int main(int argc, char *argv[])
     QtWebEngineQuick::initialize();
 
     QApplication app(argc, argv);
+    app.setQuitOnLastWindowClosed(false);
     app.setWindowIcon(QIcon(QStringLiteral(":/app/icon.ico")));
 
     const QString runtime_app_path = QCoreApplication::applicationDirPath();
