@@ -96,7 +96,7 @@ class UserAvatarProfileContractTests(unittest.TestCase):
         self.assertIn("inline QString mediaKeyDownloadUrl", icon_utils)
         self.assertIn('QStringLiteral("/media/download?asset=") + mediaKey', icon_utils)
         self.assertIn("return mediaKeyDownloadUrl(icon);", icon_utils)
-        self.assertIn("return attachMediaDownloadAuth(absoluteUrl);", icon_utils)
+        self.assertIn("return attachMediaDownloadAuth(withGateMediaUrlPrefix(icon));", icon_utils)
         self.assertIn("inline QString normalizeLocalMediaDownloadUrl", icon_utils)
         self.assertIn("normalized.setPort(parsedBase.port(-1));", icon_utils)
         self.assertNotIn("parsed.setPort(8080)", icon_utils)

@@ -31,6 +31,84 @@ QString resolveLocalPath(const QString &localFileUrl)
     return localFileUrl;
 }
 
+QString mediaUploadBaseUrl()
+{
+    const QString mediaBase = gate_media_url_prefix.trimmed();
+    if (!mediaBase.isEmpty()) {
+        return mediaBase;
+    }
+    return gate_url_prefix.trimmed();
+}
+
+QUrl mediaUploadUrl(const QString &path)
+{
+    return QUrl(mediaUploadBaseUrl() + path);
+}
+
+QJsonObject normalizeMediaResponse(QJsonObject responseObj)
+{
+    const QJsonValue dataValue = responseObj.value(QStringLiteral("data"));
+    if (dataValue.isObject()) {
+        const QJsonObject dataObject = dataValue.toObject();
+        for (auto it = dataObject.begin(); it != dataObject.end(); ++it) {
+            if (!responseObj.contains(it.key())) {
+                responseObj.insert(it.key(), it.value());
+            }
+        }
+    }
+    return responseObj;
+}
+
+QString responseBodyPreview(const QByteArray &body)
+{
+    QString preview = QString::fromUtf8(body.left(160)).trimmed();
+    preview.replace('\n', QLatin1Char(' '));
+    preview.replace('\r', QLatin1Char(' '));
+    return preview;
+}
+
+QString resolveUploadedMediaUrl(const QString &remoteUrl)
+{
+    if (remoteUrl.startsWith(QLatin1Char('/'))) {
+        const QString mediaBaseUrl = gate_media_url_prefix.trimmed().isEmpty()
+            ? gate_url_prefix.trimmed()
+            : gate_media_url_prefix.trimmed();
+        return mediaBaseUrl + remoteUrl;
+    }
+    return remoteUrl;
+}
+
+bool populateUploadedMediaInfo(const QJsonObject &responseObj,
+                               const QFileInfo &fileInfo,
+                               const QString &mimeType,
+                               UploadedMediaInfo *outInfo,
+                               QString *errorText)
+{
+    const QString remoteUrl = resolveUploadedMediaUrl(responseObj.value(QStringLiteral("url")).toString());
+    if (remoteUrl.isEmpty()) {
+        if (errorText) {
+            *errorText = QStringLiteral("上传失败：无可用地址");
+        }
+        return false;
+    }
+
+    QString mediaKey = responseObj.value(QStringLiteral("media_key")).toString();
+    if (mediaKey.isEmpty()) {
+        const QUrl remoteUrlObj(remoteUrl);
+        const QUrlQuery remoteQuery(remoteUrlObj);
+        mediaKey = remoteQuery.queryItemValue(QStringLiteral("asset"));
+    }
+
+    if (outInfo) {
+        outInfo->mediaKey = mediaKey;
+        outInfo->remoteUrl = remoteUrl;
+        outInfo->fileName = responseObj.value(QStringLiteral("file_name")).toString(fileInfo.fileName());
+        outInfo->mimeType = responseObj.value(QStringLiteral("mime")).toString(mimeType);
+        outInfo->sizeBytes = responseObj.value(QStringLiteral("size")).toVariant().toLongLong();
+    }
+    return true;
+}
+
 struct ClientMediaConfig {
     qint64 maxImageBytes = 200LL * 1024 * 1024;
     qint64 maxFileBytes = 20480LL * 1024 * 1024;
@@ -138,12 +216,15 @@ bool postJson(const QUrl &url, const QJsonObject &payload, QJsonObject *response
     const QJsonDocument doc = QJsonDocument::fromJson(body);
     if (!doc.isObject()) {
         if (errorText) {
-            *errorText = "服务响应格式错误";
+            const QString preview = responseBodyPreview(body);
+            *errorText = preview.isEmpty()
+                ? QStringLiteral("服务响应格式错误")
+                : QStringLiteral("服务响应格式错误: %1").arg(preview);
         }
         return false;
     }
     if (responseObj) {
-        *responseObj = doc.object();
+        *responseObj = normalizeMediaResponse(doc.object());
     }
     return true;
 }
@@ -231,12 +312,15 @@ bool postBinary(const QUrl &url,
     const QJsonDocument doc = QJsonDocument::fromJson(body);
     if (!doc.isObject()) {
         if (errorText) {
-            *errorText = "服务响应格式错误";
+            const QString preview = responseBodyPreview(body);
+            *errorText = preview.isEmpty()
+                ? QStringLiteral("服务响应格式错误")
+                : QStringLiteral("服务响应格式错误: %1").arg(preview);
         }
         return false;
     }
     if (responseObj) {
-        *responseObj = doc.object();
+        *responseObj = normalizeMediaResponse(doc.object());
     }
     return true;
 }
@@ -390,8 +474,51 @@ bool MediaUploadService::uploadLocalFile(const QString &localFileUrl,
 
     const QMimeDatabase mimeDb;
     const QString mimeType = mimeDb.mimeTypeForFile(fileInfo).name();
-    const int requestedChunkSize = mediaCfg.chunkSizeBytes;
+    if (mediaType.compare(QStringLiteral("avatar"), Qt::CaseInsensitive) == 0) {
+        if (progress) {
+            progress(0, QStringLiteral("上传头像..."));
+        }
 
+        if (!file.seek(0)) {
+            if (errorText) {
+                *errorText = "读取文件失败";
+            }
+            return false;
+        }
+
+        const QByteArray binary = file.readAll();
+        if (binary.isEmpty()) {
+            if (errorText) {
+                *errorText = "文件内容为空";
+            }
+            return false;
+        }
+
+        QJsonObject uploadPayload;
+        uploadPayload["uid"] = uid;
+        uploadPayload["token"] = token;
+        uploadPayload["media_type"] = mediaType;
+        uploadPayload["file_name"] = fileInfo.fileName();
+        uploadPayload["mime"] = mimeType;
+        uploadPayload["data_base64"] = QString::fromLatin1(binary.toBase64());
+
+        QJsonObject uploadRsp;
+        if (!postJson(mediaUploadUrl(QStringLiteral("/upload_media")), uploadPayload, &uploadRsp, errorText)) {
+            return false;
+        }
+        if (!isApiSuccess(uploadRsp, errorText)) {
+            return false;
+        }
+        if (!populateUploadedMediaInfo(uploadRsp, fileInfo, mimeType, outInfo, errorText)) {
+            return false;
+        }
+        if (progress) {
+            progress(100, QStringLiteral("上传完成"));
+        }
+        return true;
+    }
+
+    const int requestedChunkSize = mediaCfg.chunkSizeBytes;
     if (progress) {
         progress(0, QStringLiteral("初始化上传..."));
     }
@@ -406,7 +533,7 @@ bool MediaUploadService::uploadLocalFile(const QString &localFileUrl,
     initPayload["chunk_size"] = requestedChunkSize;
 
     QJsonObject initRsp;
-    if (!postJson(QUrl(gate_url_prefix + "/upload_media_init"), initPayload, &initRsp, errorText)) {
+    if (!postJson(mediaUploadUrl(QStringLiteral("/upload_media_init")), initPayload, &initRsp, errorText)) {
         return false;
     }
     if (!isApiSuccess(initRsp, errorText)) {
@@ -425,7 +552,7 @@ bool MediaUploadService::uploadLocalFile(const QString &localFileUrl,
     }
 
     QSet<int> uploadedChunks;
-    QUrl statusUrl(gate_url_prefix + "/upload_media_status");
+    QUrl statusUrl(mediaUploadUrl(QStringLiteral("/upload_media_status")));
     QUrlQuery statusQuery;
     statusQuery.addQueryItem("uid", QString::number(uid));
     statusQuery.addQueryItem("token", token);
@@ -482,7 +609,7 @@ bool MediaUploadService::uploadLocalFile(const QString &localFileUrl,
             headers.append({QByteArrayLiteral("X-Chunk-Index"), QByteArray::number(index)});
 
             QJsonObject chunkRsp;
-            if (!postBinary(QUrl(gate_url_prefix + "/upload_media_chunk"), chunkBytes, headers, &chunkRsp, &lastErr)) {
+            if (!postBinary(mediaUploadUrl(QStringLiteral("/upload_media_chunk")), chunkBytes, headers, &chunkRsp, &lastErr)) {
                 continue;
             }
             if (!isApiSuccess(chunkRsp, &lastErr)) {
@@ -512,39 +639,14 @@ bool MediaUploadService::uploadLocalFile(const QString &localFileUrl,
     completePayload["token"] = token;
     completePayload["upload_id"] = uploadId;
     QJsonObject completeRsp;
-    if (!postJson(QUrl(gate_url_prefix + "/upload_media_complete"), completePayload, &completeRsp, errorText)) {
+    if (!postJson(mediaUploadUrl(QStringLiteral("/upload_media_complete")), completePayload, &completeRsp, errorText)) {
         return false;
     }
     if (!isApiSuccess(completeRsp, errorText)) {
         return false;
     }
-
-    QString remoteUrl = completeRsp.value("url").toString();
-    if (remoteUrl.startsWith("/")) {
-        const QString mediaBaseUrl = gate_media_url_prefix.trimmed().isEmpty()
-            ? gate_url_prefix
-            : gate_media_url_prefix;
-        remoteUrl = mediaBaseUrl + remoteUrl;
-    }
-    QString mediaKey = completeRsp.value("media_key").toString();
-    if (mediaKey.isEmpty()) {
-        const QUrl remoteUrlObj(remoteUrl);
-        const QUrlQuery remoteQuery(remoteUrlObj);
-        mediaKey = remoteQuery.queryItemValue(QStringLiteral("asset"));
-    }
-    if (remoteUrl.isEmpty()) {
-        if (errorText) {
-            *errorText = "上传失败：无可用地址";
-        }
+    if (!populateUploadedMediaInfo(completeRsp, fileInfo, mimeType, outInfo, errorText)) {
         return false;
-    }
-
-    if (outInfo) {
-        outInfo->mediaKey = mediaKey;
-        outInfo->remoteUrl = remoteUrl;
-        outInfo->fileName = completeRsp.value("file_name").toString(fileInfo.fileName());
-        outInfo->mimeType = completeRsp.value("mime").toString(mimeType);
-        outInfo->sizeBytes = completeRsp.value("size").toVariant().toLongLong();
     }
     if (progress) {
         progress(100, QStringLiteral("上传完成"));

@@ -158,15 +158,15 @@ void AppController::onConnectionClosed()
                << "busy:" << _busy
                << "reconnecting:" << _reconnecting_chat
                << "ignore_disconnect:" << _ignore_next_login_disconnect;
-    if (_page != ChatPage) {
-        if (_ignore_next_login_disconnect) {
-            _chat_login_timeout_timer.stop();
-            _ignore_next_login_disconnect = false;
-            resetReconnectState();
-            resetHeartbeatTracking();
-            return;
-        }
+    if (_ignore_next_login_disconnect) {
+        _chat_login_timeout_timer.stop();
+        _ignore_next_login_disconnect = false;
+        resetReconnectState();
+        resetHeartbeatTracking();
+        return;
+    }
 
+    if (_page != ChatPage) {
         if (_busy) {
             if (_chat_login_timeout_timer.isActive()) {
                 _chat_login_timeout_timer.stop();

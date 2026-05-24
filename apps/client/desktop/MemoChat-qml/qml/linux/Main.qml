@@ -34,31 +34,22 @@ Item {
 
     function centerWindow(win) {
         if (!win || win.visibility !== Window.Windowed) {
-            return
+            return false
         }
         const screenObj = win.screen
         if (!screenObj || !screenObj.availableGeometry) {
-            return
+            return false
         }
         const area = screenObj.availableGeometry
         if (area.x === undefined || area.y === undefined
                 || area.width === undefined || area.height === undefined) {
-            return
+            return false
         }
         const centeredX = area.x + Math.round((area.width - win.width) / 2)
         const centeredY = area.y + Math.round((area.height - win.height) / 2)
         win.x = Math.max(area.x, centeredX)
         win.y = Math.max(area.y, centeredY)
-    }
-
-    function centerWindowWithRetry(win, attempts) {
-        if (!win || attempts <= 0) {
-            return
-        }
-        centerWindow(win)
-        retryCenterTimer.targetWindow = win
-        retryCenterTimer.remainingAttempts = attempts - 1
-        retryCenterTimer.restart()
+        return true
     }
 
     function toggleWindowMaximized(win) {
@@ -160,25 +151,20 @@ Item {
         win.normalWindowWidth = win.width
         win.normalWindowHeight = win.height
         win.show()
-        centerWindowWithRetry(win, 6)
+        centerWindow(win)
         win.raise()
         win.requestActivate()
     }
 
     function ensureLoginWindowVisible(reason) {
         if (controller.page === AppController.ChatPage) {
-            startupShowRetryTimer.stop()
             return
         }
         showLoginWindow()
         logWindowState("login-window " + reason, loginWindowRef)
-        if (startupShowRetryTimer.remainingAttempts > 0) {
-            startupShowRetryTimer.restart()
-        }
     }
 
     function showChatWindow() {
-        startupShowRetryTimer.stop()
         destroyLoginWindow()
         const win = ensureChatWindow()
         if (!win) {
@@ -193,7 +179,7 @@ Item {
         win.normalWindowWidth = win.width
         win.normalWindowHeight = win.height
         win.show()
-        centerWindowWithRetry(win, 6)
+        centerWindow(win)
         win.raise()
         win.requestActivate()
         Qt.callLater(function() {
@@ -252,7 +238,6 @@ Item {
         if (controller.page === AppController.ChatPage) {
             showChatWindow()
         } else {
-            startupShowRetryTimer.remainingAttempts = 5
             ensureLoginWindowVisible("sync")
         }
     }
@@ -260,8 +245,6 @@ Item {
     Component.onCompleted: {
         startupPetSettings.load()
         syncWindowsByPage()
-        startupShowRetryTimer.remainingAttempts = 5
-        startupShowRetryTimer.start()
     }
     Component.onDestruction: {
         destroyLoginWindow()
@@ -281,34 +264,6 @@ Item {
             if (petWindowRef) {
                 petWindowRef.selfAvatar = controller.currentUserIcon
             }
-        }
-    }
-
-    Timer {
-        id: retryCenterTimer
-        interval: 80
-        repeat: false
-        property var targetWindow: null
-        property int remainingAttempts: 0
-        onTriggered: {
-            if (targetWindow && targetWindow.visible && remainingAttempts > 0) {
-                centerWindowWithRetry(targetWindow, remainingAttempts)
-            }
-        }
-    }
-
-    Timer {
-        id: startupShowRetryTimer
-        interval: 120
-        repeat: false
-        property int remainingAttempts: 0
-        onTriggered: {
-            if (remainingAttempts <= 0 || controller.page === AppController.ChatPage) {
-                remainingAttempts = 0
-                return
-            }
-            remainingAttempts -= 1
-            root.ensureLoginWindowVisible("retry")
         }
     }
 
@@ -439,14 +394,6 @@ Item {
                     sourceComponent: resetPageComponent
                 }
 
-                DragHandler {
-                    target: null
-                    onActiveChanged: {
-                        if (active && Window.window) {
-                            Window.window.startSystemMove()
-                        }
-                    }
-                }
             }
 
             Item {
