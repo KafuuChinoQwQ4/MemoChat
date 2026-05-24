@@ -308,7 +308,7 @@ void AppController::applyCurrentUserProfile(int uid, const QString &name, const 
                                             bool preserveExistingIcon)
 {
     QString nextIcon = normalizeIconPath(icon);
-    static const QString kDefaultIcon = QStringLiteral("qrc:/res/head_1.jpg");
+    static const QString kDefaultIcon = QStringLiteral("qrc:/res/head_1.png");
     if (preserveExistingIcon && nextIcon == kDefaultIcon && _current_user_icon != kDefaultIcon) {
         nextIcon = _current_user_icon;
     }

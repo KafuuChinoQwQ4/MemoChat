@@ -6,12 +6,15 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMetaObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QSettings>
 #include <QSysInfo>
+#include <QThread>
 #include <QTimer>
 #include <QUuid>
+#include <utility>
 
 namespace {
 
@@ -46,6 +49,16 @@ QNetworkAccessManager *telemetryManager()
 {
     static QNetworkAccessManager *manager = new QNetworkAccessManager(qApp);
     return manager;
+}
+
+void postTelemetrySpan(QNetworkRequest request, QByteArray payload)
+{
+    QNetworkAccessManager *manager = telemetryManager();
+    QNetworkReply *reply = manager->post(request, std::move(payload));
+    if (!reply) {
+        return;
+    }
+    QObject::connect(reply, &QNetworkReply::finished, reply, &QObject::deleteLater);
 }
 
 } // namespace
@@ -163,9 +176,16 @@ void exportZipkinSpan(const QString &name,
 
     QNetworkRequest request(QUrl(cfg.endpoint));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    QNetworkReply *reply = telemetryManager()->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
-    if (!reply) {
+    const QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+
+    if (qApp && QThread::currentThread() != qApp->thread()) {
+        QMetaObject::invokeMethod(qApp,
+            [request, body]() mutable {
+                postTelemetrySpan(request, std::move(body));
+            },
+            Qt::QueuedConnection);
         return;
     }
-    QObject::connect(reply, &QNetworkReply::finished, reply, &QObject::deleteLater);
+
+    postTelemetrySpan(request, body);
 }

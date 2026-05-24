@@ -77,32 +77,44 @@ inline QString mediaDownloadBaseUrl()
     return baseUrl;
 }
 
-inline QString normalizeRelativeMediaDownloadUrl(QString icon)
+inline bool isGateRelativeMediaDownloadUrl(QString icon)
 {
+    icon = icon.trimmed();
+    if (icon.startsWith(QStringLiteral("media/download"))) {
+        icon.prepend('/');
+    }
+    if (!icon.startsWith(QStringLiteral("/"))) {
+        return false;
+    }
+
+    const QUrl relativeUrl(icon);
+    return isMediaDownloadPath(relativeUrl.path());
+}
+
+inline QString withGateMediaUrlPrefix(QString icon)
+{
+    icon = icon.trimmed();
     if (icon.startsWith(QStringLiteral("media/download"))) {
         icon.prepend('/');
     }
 
-    if (!icon.startsWith(QStringLiteral("/"))) {
-        return icon;
-    }
-
-    const QUrl relativeUrl(icon);
-    if (!isMediaDownloadPath(relativeUrl.path())) {
-        return icon;
-    }
-
     QString baseUrl = mediaDownloadBaseUrl();
     if (baseUrl.isEmpty()) {
-        return attachMediaDownloadAuth(icon);
+        return icon;
+    }
+    if (baseUrl.endsWith(QLatin1Char('/')) && icon.startsWith(QLatin1Char('/'))) {
+        baseUrl.chop(1);
+    }
+    return baseUrl + icon;
+}
+
+inline QString normalizeRelativeMediaDownloadUrl(QString icon)
+{
+    if (!isGateRelativeMediaDownloadUrl(icon)) {
+        return icon;
     }
 
-    QString absoluteUrl = baseUrl;
-    if (absoluteUrl.endsWith('/') && icon.startsWith('/')) {
-        absoluteUrl.chop(1);
-    }
-    absoluteUrl += icon;
-    return attachMediaDownloadAuth(absoluteUrl);
+    return attachMediaDownloadAuth(withGateMediaUrlPrefix(icon));
 }
 
 inline bool looksLikeMediaKey(const QString &icon)
@@ -159,7 +171,7 @@ inline QString normalizeLocalMediaDownloadUrl(const QString &icon)
 
 inline QString normalizeIconForQml(QString icon)
 {
-    static const QString kDefaultIcon = QStringLiteral("qrc:/res/head_1.jpg");
+    static const QString kDefaultIcon = QStringLiteral("qrc:/res/head_1.png");
 
     icon = icon.trimmed();
     if (icon.isEmpty()) {
@@ -194,6 +206,9 @@ inline QString normalizeIconForQml(QString icon)
 
     if (!icon.contains('/') && !icon.contains('\\')
         && icon.startsWith(QStringLiteral("head_"), Qt::CaseInsensitive)) {
+        if (icon.compare(QStringLiteral("head_1.jpg"), Qt::CaseInsensitive) == 0) {
+            return QStringLiteral("qrc:/res/head_1.png");
+        }
         return QStringLiteral("qrc:/res/") + icon;
     }
 

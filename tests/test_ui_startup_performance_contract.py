@@ -101,29 +101,21 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
             r"\b(?:setDefaultEnv|qputenv)\s*\(\s*\"QSG_RENDER_LOOP\"\s*,\s*\"threaded\"",
         )
 
-    def test_shared_and_linux_main_qml_retry_center_login_and_chat_windows(self):
+    def test_shared_and_linux_main_qml_center_login_and_chat_windows_once(self):
         for path in (SHARED_MAIN_QML, LINUX_MAIN_QML):
             with self.subTest(path=path):
                 source = read(path)
-                self.assertRegex(
-                    source,
-                    r"\b(centerWindowWithRetry|centerRetryTimer|centerWindowRetryTimer|Timer\s*\{)",
-                    f"{path.name} should include a retry-capable centering helper",
-                )
-                self.assertIn("startupShowRetryTimer", source)
                 self.assertIn("ensureLoginWindowVisible", source)
                 self.assertIn("logWindowState", source)
                 self.assertIn("availableGeometry", source)
-                self.assertRegex(source, r"\b(retry|attempt|remaining|repeat)\b", re.I)
+                self.assertNotIn("centerWindowWithRetry", source)
+                self.assertNotIn("retryCenterTimer", source)
+                self.assertNotIn("startupShowRetryTimer", source)
 
                 for function_name in ("showLoginWindow", "showChatWindow"):
                     body = function_body(source, function_name)
                     self.assertTrue(body, f"{path} must define {function_name}()")
-                    self.assertRegex(
-                        body,
-                        r"\b(centerWindowWithRetry|centerRetryTimer|centerWindowRetryTimer|startupShowRetryTimer|start\s*\()",
-                        f"{function_name}() should use the retry centering path",
-                    )
+                    self.assertIn("centerWindow(win)", body)
                     self.assertRegex(body, r"\bshow\s*\(")
 
     def test_live2d_render_item_uses_precise_throttled_timer_and_fbo_target(self):

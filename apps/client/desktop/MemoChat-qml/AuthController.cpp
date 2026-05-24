@@ -103,7 +103,7 @@ void AuthController::sendRegister(const QString &user, const QString &email, con
     payload["confirm"] = xorString(confirm);
     payload["varifycode"] = verifyCode.trimmed();
     payload["sex"] = 0;
-    payload["icon"] = ":/res/head_1.jpg";
+    payload["icon"] = ":/res/head_1.png";
     payload["nick"] = user.trimmed();
 
     _gateway->httpMgr()->PostHttpReq(
