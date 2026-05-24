@@ -21,6 +21,15 @@ static memochat::json::JsonValue MakeMediaOk(const memochat::json::JsonValue& da
     return resp;
 }
 
+static memochat::json::JsonValue MakeMediaResponse(const Http2MediaSupport::MediaResult& result) {
+    memochat::json::JsonValue resp = MakeMediaOk(result.data);
+    resp["error"] = static_cast<double>(result.error);
+    if (!result.message.empty()) {
+        resp["message"] = result.message;
+    }
+    return resp;
+}
+
 static int ExtractIntHeader(const Http2Request& req, const std::string& name, int default_val = 0) {
     auto it = req.headers.find(name);
     if (it != req.headers.end()) {
@@ -48,7 +57,7 @@ void Http2MediaHandlers::HandleUploadMediaInit(const Http2Request& req, Http2Res
 
     auto result = Http2MediaSupport::HandleUploadMediaInit(
         uid, token, media_type, file_name, mime, file_size);
-    memochat::json::JsonValue out = MakeMediaOk(result.data);
+    memochat::json::JsonValue out = MakeMediaResponse(result);
     resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }
 
@@ -80,7 +89,7 @@ void Http2MediaHandlers::HandleUploadMediaChunk(const Http2Request& req, Http2Re
 
     auto result = Http2MediaSupport::HandleUploadMediaChunk(
         uid, token, upload_id, index, chunk_data_base64);
-    memochat::json::JsonValue out = MakeMediaOk(result.data);
+    memochat::json::JsonValue out = MakeMediaResponse(result);
     resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }
 
@@ -100,7 +109,7 @@ void Http2MediaHandlers::HandleUploadMediaStatus(const Http2Request& req, Http2R
     if (it != req.headers.end()) upload_id = it->second;
 
     auto result = Http2MediaSupport::HandleUploadMediaStatus(uid, token, upload_id);
-    memochat::json::JsonValue out = MakeMediaOk(result.data);
+    memochat::json::JsonValue out = MakeMediaResponse(result);
     resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }
 
@@ -117,7 +126,7 @@ void Http2MediaHandlers::HandleUploadMediaComplete(const Http2Request& req, Http
     const std::string upload_id = memochat::json::glaze_safe_get<std::string>(root, "upload_id", "");
 
     auto result = Http2MediaSupport::HandleUploadMediaComplete(uid, token, upload_id);
-    memochat::json::JsonValue out = MakeMediaOk(result.data);
+    memochat::json::JsonValue out = MakeMediaResponse(result);
     resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }
 
@@ -138,7 +147,7 @@ void Http2MediaHandlers::HandleUploadMedia(const Http2Request& req, Http2Respons
 
     auto result = Http2MediaSupport::HandleUploadMediaSimple(
         uid, token, media_type, file_name, mime, data_base64);
-    memochat::json::JsonValue out = MakeMediaOk(result.data);
+    memochat::json::JsonValue out = MakeMediaResponse(result);
     resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }
 
@@ -189,4 +198,3 @@ void Http2MediaHandlers::HandleMediaDownload(const Http2Request& req, Http2Respo
     memochat::json::JsonValue out = MakeMediaError(1, result.message.empty() ? "file not found" : result.message);
     resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }
-

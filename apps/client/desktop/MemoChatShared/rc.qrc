@@ -11,7 +11,8 @@
         <file>res/search.png</file>
         <file>res/close_search.png</file>
         <file>res/close_transparent.png</file>
-        <file>res/head_1.jpg</file>
+        <file>res/head_1.png</file>
+        <file alias="res/head_1.jpg">res/head_1.png</file>
         <file>res/loading.gif</file>
         <file>res/smile.png</file>
         <file>res/smile_hover.png</file>

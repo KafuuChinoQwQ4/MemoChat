@@ -10,9 +10,26 @@ MOMENTS_FEED = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/moments/Moments
 MOMENTS_DELEGATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/moments/MomentsDelegate.qml"
 MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
+LOGIN_TOP_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/components/LoginTopBar.qml"
 MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/main.cpp"
 APP_CONTROLLER_SESSION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerSession.cpp"
 APP_CONTROLLER_NAVIGATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerNavigation.cpp"
+APP_CONTROLLER_CONNECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerConnection.cpp"
+
+
+def extract_cpp_function(source: str, signature: str) -> str:
+    start = source.index(signature)
+    open_brace = source.index("{", start)
+    depth = 0
+    for index in range(open_brace, len(source)):
+        char = source[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start:index + 1]
+    raise AssertionError(f"Function body not found for {signature}")
 
 
 class QmlScrollWindowHandoffTests(unittest.TestCase):
@@ -77,13 +94,20 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
             self.assertIn("destroyLoginWindow()", qml[qml.index("function showChatWindow()"):])
             self.assertIn("destroyChatWindow()", qml[qml.index("function showLoginWindow()"):])
             self.assertIn("sourceComponent: chatShellPageComponent", qml)
-            self.assertIn("Window.window.startSystemMove()", qml)
             self.assertIn("onClosing: Qt.quit()", qml)
             self.assertNotIn("StackLayout", qml)
             self.assertNotIn("controller.page === AppController.ChatPage ? 3 : 0", qml)
             self.assertNotIn("active: controller.page === AppController.ChatPage", qml)
             self.assertNotIn("windowHandoffToken", qml)
             self.assertNotIn("scheduleWindowHandoff", qml)
+            self.assertNotIn("Window.window.startSystemMove()", qml)
+
+        login_top_bar = LOGIN_TOP_BAR_QML.read_text(encoding="utf-8")
+        login_page = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/LoginPage.qml").read_text(encoding="utf-8")
+        self.assertIn("onPressAndHold", login_top_bar)
+        self.assertIn("signal dragMoveRequested()", login_top_bar)
+        self.assertIn("onDragMoveRequested:", login_page)
+        self.assertIn("Window.window.startSystemMove()", login_page)
 
         main_cpp = MAIN_CPP.read_text(encoding="utf-8")
         self.assertIn("setQuitOnLastWindowClosed(false)", main_cpp)
@@ -105,6 +129,21 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
         self.assertIn("setPage(LoginPage);", logout_block)
         self.assertLess(logout_block.index("setPage(LoginPage);"),
                         logout_block.index("_gateway.chatTransport()->CloseConnection();"))
+
+    def test_stale_account_switch_disconnect_is_ignored_before_chat_page_reconnect(self):
+        source = APP_CONTROLLER_CONNECTION.read_text(encoding="utf-8")
+        body = extract_cpp_function(source, "void AppController::onConnectionClosed")
+
+        ignore_index = body.index("if (_ignore_next_login_disconnect)")
+        page_branch_index = body.index("if (_page != ChatPage)")
+        chat_reconnect_index = body.index("if (_call_session_model.visible())")
+
+        self.assertLess(ignore_index, page_branch_index)
+        self.assertLess(ignore_index, chat_reconnect_index)
+        ignored_block = body[ignore_index:page_branch_index]
+        self.assertIn("_ignore_next_login_disconnect = false;", ignored_block)
+        self.assertIn("resetReconnectState();", ignored_block)
+        self.assertIn("return;", ignored_block)
 
 
 if __name__ == "__main__":
