@@ -1,5 +1,6 @@
 ---
-description: 通过部署服务、检查 Docker 依赖、启动服务、探测 API 和收集日志来运行 MemoChat 本地运行时 smoke 测试。
+name: memochat-runtime-smoke
+description: Use when validating MemoChat local runtime startup, Docker dependencies, service health, API probes, logs, login/register, full-flow smoke, or cleanup.
 ---
 
 # MemoChat 运行时 Smoke

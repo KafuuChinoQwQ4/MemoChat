@@ -1,5 +1,6 @@
 ---
-description: 通过比较已暂存的 AI 工作和用户后续未暂存修正，从 MemoChat 用户纠正中提炼一条可复用规则。
+name: memochat-reflect
+description: Use when comparing staged AI work with later unstaged user corrections to extract one reusable MemoChat rule.
 ---
 
 # MemoChat 反思

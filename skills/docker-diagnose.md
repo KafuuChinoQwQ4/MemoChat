@@ -1,5 +1,6 @@
 ---
-description: 诊断 MemoChat Docker 服务、固定端口、容器健康状态和 MCP 连通性，同时不改变运行时映射。
+name: memochat-docker-diagnose
+description: Use when diagnosing MemoChat Docker services, fixed ports, container health, MCP connectivity, startup failures, or dependency connection problems.
 ---
 
 # MemoChat Docker 诊断

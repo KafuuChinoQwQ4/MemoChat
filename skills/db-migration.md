@@ -1,5 +1,6 @@
 ---
-description: 使用 Docker/MCP 支撑的检查来规划并验证 MemoChat 在 Postgres、Redis、MongoDB、MinIO 元数据、Neo4j 和 Qdrant 上的数据变更。
+name: memochat-db-migration
+description: Use when changing MemoChat Postgres, Redis, MongoDB, MinIO metadata, Neo4j, Qdrant schema, migrations, indexes, seed data, cache keys, persistence, or storage metadata.
 ---
 
 # MemoChat 数据库迁移
@@ -55,8 +56,16 @@ docker exec memochat-mongo mongosh -u root -p 123456 --authenticationDatabase ad
 - 受影响的 table/collection/key/queue/object bucket
 - 要更新的迁移或初始化文件
 - 读取/写入它的运行时代码路径
-- 回滚或兼容性顾虑
+- 回滚、兼容性和幂等性顾虑
 - 验证查询
+
+兼容性检查必须回答：
+
+- 旧服务读取新 schema 是否会失败。
+- 新服务读取旧数据是否有默认值或迁移路径。
+- 迁移重复执行是否安全。
+- 初始化脚本和已有持久化数据是否都会得到同一最终结构。
+- 回滚时是可逆 SQL、前向修复，还是需要明确用户批准的数据操作。
 
 ## 实现
 
@@ -84,6 +93,13 @@ cmake --build --preset linux-full-gcc16 --parallel 12
 tools/scripts/status/deploy_services.sh
 tools/scripts/status/start-all-services.sh
 ```
+
+验证至少覆盖：
+
+- 新鲜初始化路径。
+- 已有数据迁移路径。
+- 关键读写路径。
+- 重复执行迁移或初始化片段的幂等性；不能安全重复时，记录保护条件。
 
 有用时仍可从 Windows 运行旧版探针：
 

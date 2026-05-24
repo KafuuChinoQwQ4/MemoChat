@@ -1,5 +1,6 @@
 ---
-description: 实现或复审 MemoChat QML UI 变更、资源、图标、客户端构建验证以及视觉/运行时检查。
+name: memochat-qml-ui
+description: Use when implementing or reviewing MemoChat QML UI, MemoOps UI, shared client components, resources, icons, layouts, visuals, or client build checks.
 ---
 
 # MemoChat QML UI
@@ -61,6 +62,14 @@ cmake --build --preset linux-full-gcc16 --parallel 12
 
 运行时 UI 检查中，如果屏幕需要后端数据，先启动必需的 Linux 服务。可行时使用截图。如果没有自动化 UI runner，记录准确的手工视觉检查。明确的 Windows 客户端检查使用旧版 `msvc2022-full` 和 `.bat/.ps1` 流程。
 
+视觉或布局改动不能只用“构建通过”作为完成证据。验证日志应包含至少一种证据：
+
+- 截图路径，优先放在 `.ai/<project>/<letter>/screenshots/`。
+- `qmllint`、资源检查或客户端启动命令及输出。
+- 手工检查记录：平台、窗口尺寸、DPI/缩放、数据状态、预期视觉结果和实际结果。
+
+跨平台兼容修复要分别记录被修改平台和任何触及共享路径的平台；无法验证的平台必须列为剩余风险。
+
 ## 复审清单
 
 - 预期窗口尺寸下没有文本重叠
@@ -72,3 +81,4 @@ cmake --build --preset linux-full-gcc16 --parallel 12
 - 没有硬编码本地专用路径，除非它是已记录的开发配置
 - 客户端/服务端契约保持兼容
 - 相关位置处理 error/loading/empty 状态
+- 视觉证据已写入验证日志，或明确记录无法截图/启动的原因
