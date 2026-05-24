@@ -1,5 +1,6 @@
 #include "AppController.h"
 #include "ConversationSyncService.h"
+#include "DialogListService.h"
 #include "IconPathUtils.h"
 #include "IChatTransport.h"
 #include "usermgr.h"
@@ -47,8 +48,20 @@ void AppController::selectChatIndex(int index)
     qInfo() << "Selecting private chat by index:" << index
             << "uid:" << _current_chat_uid
             << "name:" << item.value("name").toString();
-    setCurrentChatPeerName(item.value("name").toString());
-    setCurrentChatPeerIcon(item.value("icon").toString());
+    const auto friendInfo = _gateway.userMgr()->GetFriendById(_current_chat_uid);
+    if (friendInfo) {
+        _chat_list_model.upsertFriend(friendInfo);
+        setCurrentChatPeerName(DialogListService::privateDisplayName(friendInfo));
+        setCurrentChatPeerIcon(friendInfo->_icon.trimmed().isEmpty()
+                               ? QStringLiteral("qrc:/res/head_1.jpg")
+                               : friendInfo->_icon);
+    } else {
+        setCurrentChatPeerName(item.value("name").toString());
+        const QString icon = item.value("icon").toString();
+        setCurrentChatPeerIcon(icon.trimmed().isEmpty()
+                               ? QStringLiteral("qrc:/res/head_1.jpg")
+                               : icon);
+    }
     emitCurrentDialogUidChangedIfNeeded();
     loadCurrentChatMessages();
     syncCurrentDialogDraft();
