@@ -240,4 +240,5 @@ ui_*.h
 !client/**/config.json
 !server/**/config.ini
 !server/**/config.json
-*:Zone.Identifier
+# Windows downloaded-file metadata / alternate data stream markers.
+*Zone.Identifier
