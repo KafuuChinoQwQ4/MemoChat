@@ -206,7 +206,9 @@ void AppController::refreshDialogModelIncremental()
         if (!chat->_chat_msgs.empty() && chat->_chat_msgs.back()) {
             seed.lastMsgTs = chat->_chat_msgs.back()->_created_at;
         }
-        updates.push_back(DialogListService::buildDialogEntry(seed, decorationState));
+        auto item = DialogListService::buildDialogEntry(seed, decorationState);
+        updates.push_back(item);
+        _chat_list_model.upsertFriend(item);
     }
 
     const auto groups = _gateway.userMgr()->GetGroupListSnapshot();
@@ -282,8 +284,10 @@ void AppController::loadCurrentChatMessages()
 
     qInfo() << "Loading current private chat, peer uid:" << _current_chat_uid
             << "existing friend msg count:" << static_cast<qlonglong>(friendInfo->_chat_msgs.size());
-    setCurrentChatPeerName(friendInfo->_name);
-    setCurrentChatPeerIcon(friendInfo->_icon);
+    setCurrentChatPeerName(DialogListService::privateDisplayName(friendInfo));
+    setCurrentChatPeerIcon(friendInfo->_icon.trimmed().isEmpty()
+                           ? QStringLiteral("qrc:/res/head_1.jpg")
+                           : friendInfo->_icon);
 
     const auto localMessages = _private_cache_store.loadRecentMessages(selfInfo->_uid, _current_chat_uid, 20);
     if (!localMessages.empty()) {
@@ -409,12 +413,6 @@ void AppController::selectChatByUid(int uid)
     qInfo() << "Selecting private chat by uid:" << uid
             << "current chat uid:" << _current_chat_uid
             << "current group id:" << _current_group_id;
-    const int idx = _chat_list_model.indexOfUid(uid);
-    if (idx >= 0) {
-        selectChatIndex(idx);
-        return;
-    }
-
     auto friendInfo = _gateway.userMgr()->GetFriendById(uid);
     if (!friendInfo) {
         const int dialogIndex = _dialog_list_model.indexOfUid(uid);
@@ -433,12 +431,48 @@ void AppController::selectChatByUid(int uid)
         }
     }
 
+    const int dialogIndex = _dialog_list_model.indexOfUid(uid);
+    const QVariantMap dialogItem = dialogIndex >= 0 ? _dialog_list_model.get(dialogIndex) : QVariantMap();
+    DialogEntrySeed seed;
+    seed.dialogUid = uid;
+    seed.dialogType = QStringLiteral("private");
+    seed.userId = friendInfo->_user_id;
+    seed.name = dialogItem.value(QStringLiteral("name"), friendInfo->_name).toString();
+    seed.nick = dialogItem.value(QStringLiteral("nick"), friendInfo->_nick).toString();
+    seed.icon = dialogItem.value(QStringLiteral("icon"), friendInfo->_icon).toString();
+    seed.desc = friendInfo->_desc;
+    seed.back = friendInfo->_back;
+    seed.previewText = dialogItem.value(QStringLiteral("lastMsg"), friendInfo->_last_msg).toString();
+    seed.sex = friendInfo->_sex;
+    seed.pinnedRank = dialogItem.value(QStringLiteral("pinnedRank")).toInt();
+    seed.draftText = dialogItem.value(QStringLiteral("draftText")).toString();
+    seed.lastMsgTs = dialogItem.value(QStringLiteral("lastMsgTs")).toLongLong();
+    seed.muteState = dialogItem.value(QStringLiteral("muteState")).toInt();
+    if (seed.lastMsgTs <= 0 && !friendInfo->_chat_msgs.empty() && friendInfo->_chat_msgs.back()) {
+        seed.lastMsgTs = friendInfo->_chat_msgs.back()->_created_at;
+    }
+    DialogListService::applyFriendProfileToPrivateSeed(seed, friendInfo);
+    const DialogDecorationState decorationState {
+        &_dialog_draft_map,
+        &_dialog_mention_map,
+        &_dialog_server_pinned_map,
+        &_dialog_server_mute_map,
+        &_dialog_local_pinned_set
+    };
+    auto dialogEntry = DialogListService::buildDialogEntry(seed, decorationState);
+    if (dialogEntry) {
+        _chat_list_model.upsertFriend(dialogEntry);
+        _dialog_list_model.upsertFriend(dialogEntry);
+    }
+
     _current_chat_uid = uid;
     _dialog_list_model.clearUnread(uid);
     _chat_list_model.clearUnread(uid);
     setCurrentGroup(0, QString());
-    setCurrentChatPeerName(friendInfo->_name);
-    setCurrentChatPeerIcon(friendInfo->_icon);
+    setCurrentChatPeerName(DialogListService::privateDisplayName(friendInfo));
+    setCurrentChatPeerIcon(friendInfo->_icon.trimmed().isEmpty()
+                           ? QStringLiteral("qrc:/res/head_1.jpg")
+                           : friendInfo->_icon);
     emitCurrentDialogUidChangedIfNeeded();
     qInfo() << "Private chat resolved, uid:" << uid
             << "name:" << friendInfo->_name

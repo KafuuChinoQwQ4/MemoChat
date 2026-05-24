@@ -248,10 +248,7 @@ void FriendListModel::upsertBatch(const std::vector<std::shared_ptr<FriendInfo>>
         return;
     }
 
-    std::vector<int> updatedIndices;
-    updatedIndices.reserve(friends.size());
-    std::vector<int> newIndices;
-    newIndices.reserve(friends.size());
+    bool changed = false;
 
     for (const auto &friendInfo : friends) {
         if (!friendInfo) {
@@ -279,25 +276,17 @@ void FriendListModel::upsertBatch(const std::vector<std::shared_ptr<FriendInfo>>
         const int existingIdx = indexOfUid(entry.uid);
         if (existingIdx >= 0) {
             _items[static_cast<size_t>(existingIdx)] = entry;
-            updatedIndices.push_back(existingIdx);
+            emit dataChanged(index(existingIdx, 0), index(existingIdx, 0));
         } else {
+            const int insertRow = rowCount();
+            beginInsertRows(QModelIndex(), insertRow, insertRow);
             _items.push_back(entry);
-            newIndices.push_back(static_cast<int>(_items.size()) - 1);
+            endInsertRows();
         }
+        changed = true;
     }
 
-    if (!updatedIndices.empty()) {
-        for (int idx : updatedIndices) {
-            emit dataChanged(index(idx, 0), index(idx, 0));
-        }
-    }
-
-    if (!newIndices.empty()) {
-        beginInsertRows(QModelIndex(), newIndices.front(), newIndices.back());
-        endInsertRows();
-    }
-
-    if (!updatedIndices.empty() || !newIndices.empty()) {
+    if (changed) {
         emit countChanged();
     }
 }

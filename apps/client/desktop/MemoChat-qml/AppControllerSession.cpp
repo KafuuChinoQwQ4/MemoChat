@@ -1,4 +1,5 @@
 #include "AppController.h"
+#include "DialogListService.h"
 #include "IconPathUtils.h"
 #include "IChatTransport.h"
 #include "usermgr.h"
@@ -292,6 +293,13 @@ void AppController::onRelationBootstrapUpdated()
     _chat_list_initialized = false;
     ensureChatListInitialized();
 
+    const auto friendSnapshot = _gateway.userMgr()->GetFriendListSnapshot();
+    for (const auto &friendInfo : friendSnapshot) {
+        if (friendInfo) {
+            _chat_list_model.upsertFriend(friendInfo);
+        }
+    }
+
     // 增量更新联系人列表：避免全量 clear + set 操作
     // 只有在未初始化时才全量加载，已初始化时使用增量更新
     const auto contactList = _gateway.userMgr()->GetConListPerPage();
@@ -315,6 +323,15 @@ void AppController::onRelationBootstrapUpdated()
 
     // 增量更新会话列表
     refreshDialogModelIncremental();
+    if (_current_chat_uid > 0 && _current_group_id <= 0) {
+        const auto friendInfo = _gateway.userMgr()->GetFriendById(_current_chat_uid);
+        if (friendInfo) {
+            setCurrentChatPeerName(DialogListService::privateDisplayName(friendInfo));
+            setCurrentChatPeerIcon(friendInfo->_icon.trimmed().isEmpty()
+                                   ? QStringLiteral("qrc:/res/head_1.jpg")
+                                   : friendInfo->_icon);
+        }
+    }
     emit pendingApplyChanged();
 }
 

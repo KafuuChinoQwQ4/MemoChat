@@ -83,7 +83,7 @@
         <file alias="icons/r18_local.png">src/本地素材备份.png</file>
         <file alias="icons/r18_navigation.png">src/导航.png</file>
         <file alias="icons/r18_datasource.png">src/源数据分析.png</file>
-        <file>res/ai_icon.png</file>
+        <file alias="res/ai_icon.png">src/ai_icon.png</file>
         <file>qml/moments/MomentsFeedPane.qml</file>
         <file>qml/moments/MomentsPublishPage.qml</file>
         <file>qml/moments/MomentsDelegate.qml</file>

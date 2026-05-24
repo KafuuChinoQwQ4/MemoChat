@@ -5,6 +5,8 @@
 
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QSet>
+#include <QVariantMap>
 
 void AppController::onDialogListRsp(QJsonObject payload)
 {
@@ -31,6 +33,8 @@ void AppController::onDialogListRsp(QJsonObject payload)
     const QJsonArray dialogs = payload.value("dialogs").toArray();
     std::vector<std::shared_ptr<FriendInfo>> merged;
     merged.reserve(dialogs.size());
+    QSet<int> privateDialogUids;
+    QSet<qint64> groupDialogIds;
     _dialog_server_pinned_map.clear();
     _dialog_server_mute_map.clear();
     const DialogDecorationState decorationState {
@@ -71,6 +75,8 @@ void AppController::onDialogListRsp(QJsonObject payload)
             seed.muteState = obj.value("mute_state").toInt(0);
             _dialog_server_pinned_map.insert(peerUid, seed.pinnedRank);
             _dialog_server_mute_map.insert(peerUid, seed.muteState);
+            privateDialogUids.insert(peerUid);
+            DialogListService::applyFriendProfileToPrivateSeed(seed, _gateway.userMgr()->GetFriendById(peerUid));
             auto item = DialogListService::buildDialogEntry(seed, decorationState);
             merged.push_back(item);
             _chat_list_model.upsertFriend(item);
@@ -112,10 +118,34 @@ void AppController::onDialogListRsp(QJsonObject payload)
             _gateway.userMgr()->UpsertGroup(groupInfo);
             _dialog_server_pinned_map.insert(pseudoUid, seed.pinnedRank);
             _dialog_server_mute_map.insert(pseudoUid, seed.muteState);
+            groupDialogIds.insert(groupId);
             auto item = DialogListService::buildDialogEntry(seed, decorationState);
             merged.push_back(item);
             _group_list_model.upsertFriend(item);
             _group_uid_map.insert(pseudoUid, groupId);
+        }
+    }
+
+    DialogListService::appendMissingPrivateDialogs(merged,
+                                                   _gateway.userMgr()->GetFriendListSnapshot(),
+                                                   privateDialogUids,
+                                                   decorationState);
+    DialogListService::appendMissingGroupDialogs(merged,
+                                                 _gateway.userMgr()->GetGroupListSnapshot(),
+                                                 _group_uid_map,
+                                                 groupDialogIds,
+                                                 decorationState);
+    std::vector<QVariantMap> existingDialogs;
+    existingDialogs.reserve(static_cast<size_t>(_dialog_list_model.count()));
+    for (int i = 0; i < _dialog_list_model.count(); ++i) {
+        existingDialogs.push_back(_dialog_list_model.get(i));
+    }
+    DialogListService::appendExistingDialogs(merged, existingDialogs, decorationState);
+    for (const auto &dialog : merged) {
+        if (dialog && dialog->_uid > 0) {
+            _chat_list_model.upsertFriend(dialog);
+        } else if (dialog && dialog->_uid < 0) {
+            _group_list_model.upsertFriend(dialog);
         }
     }
 
