@@ -7,6 +7,7 @@
 1. 始终先读取 `skills/SKILL.md`和`skills/rule.md`，了解 MemoChat 主任务工作流和基本的规则。
 2. 然后只读取相关的聚焦 skill 文件：
    - `skills/docker-diagnose.md`：用于 Docker、固定端口、健康状态或 MCP 启动问题。
+   - `skills/debugging.md`：用于 bug、测试失败、构建失败、异常行为或连续修复无效的问题，先定位根因再修复。
    - `skills/db-migration.md`：用于 Postgres、Redis、MongoDB、MinIO 元数据、Neo4j 或 Qdrant 数据变更。
    - `skills/runtime-smoke.md`：用于部署/启动脚本、服务 smoke 测试、登录/注册/完整流程检查。
    - `skills/observability.md`：用于 Prometheus、Loki、Tempo、Grafana、InfluxDB、cAdvisor、日志、指标和 traces。
@@ -16,7 +17,9 @@
    - `skills/withtest.md`：用于实现加迭代式运行时测试。
    - `skills/planner.md`：用于可复用的 `.ai/<name>/prompt.md` 和 `tasks.json` 自动化计划。
    - `skills/parallel-agents.md`：用于每个实现任务的默认 Controller 主导并发工作流，只要安全的并行工作能加速交付就使用。Controller agent 必须负责架构、计划、契约、派发、集成和最终验收；worker agents 负责互不重叠的实现、反馈和运行时工作线。
+   - `skills/review.md`：用于接收代码审查、外部 AI review、用户反馈清单，或在完成前复审实际 diff。
    - `skills/reflect.md`：用于从用户纠正中学习。
+   - `skills/skill-authoring.md`：用于创建、更新或复审本项目 `skills/*.md`。
    - `skills/release.md`：用于发布准备和验证。
    - `skills/icon.md`：用于 SVG/图标资产工作。
 3. 只有在构造委派式或基于产物的阶段提示词时，才使用 `skills/PROMPTS.md`。

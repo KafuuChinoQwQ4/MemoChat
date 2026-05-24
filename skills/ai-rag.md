@@ -1,5 +1,6 @@
 ---
-description: 处理 MemoChat AIOrchestrator、Ollama、Qdrant RAG、Neo4j 图记忆、MCP bridge 和知识库流程。
+name: memochat-ai-rag
+description: Use when working on MemoChat AIOrchestrator, Ollama, Qdrant RAG, Neo4j graph memory, MCP bridge, knowledge bases, LLM routing, or AI tool contracts.
 ---
 
 # MemoChat AI RAG

@@ -1,5 +1,6 @@
 ---
-description: 准备 MemoChat 发布摘要，验证工作树，运行选定构建/测试，并在用户要求时创建 release commit 或 tag。
+name: memochat-release
+description: Use when preparing a MemoChat release or release candidate, validating the worktree, running selected build/test checks, or creating a release commit or tag.
 ---
 
 # MemoChat 发布
