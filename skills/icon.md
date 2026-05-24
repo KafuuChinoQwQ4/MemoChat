@@ -1,5 +1,6 @@
 ---
-description: 为 MemoChat QML 和 ops UI 创建或改造 SVG/icon 资产；除非用户明确提供外部矢量化服务，否则不使用它们。
+name: memochat-icon
+description: Use when creating, modifying, or reviewing SVG/icon assets for MemoChat QML, MemoOps UI, resources, buttons, navigation, or visual states.
 ---
 
 # MemoChat 图标

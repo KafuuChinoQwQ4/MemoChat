@@ -1,13 +1,13 @@
 ---
 name: memochat-task-think
-description: 编排 MemoChat-Qml-Drogon 的多阶段实现工作流。用于需要结构化收集上下文、制定计划、实现、通过 Docker 检查数据、执行 CMake 构建验证、复审，并在本地 .ai 项目目录下保留持久产物的任务。
+description: Use when a non-trivial MemoChat task needs structured context, planning, implementation, Docker-backed checks, CMake validation, review, and persistent .ai task artifacts.
 ---
 
 # MemoChat 任务流水线
 
 使用这个 skill 推进 `/root/code/MemoChat-Qml-Drogon-linux` 中的非平凡改动，同时让主线程保持精简，并留下有用的过程产物。除非用户明确要求 Windows 侧工作，否则将 `D:\MemoChat-Qml-Drogon` 视为旧版 Windows 检出目录。
 
-对于实现类工作，`skills/parallel-agents.md` 是强制默认执行模式。主线程作为 Controller：负责架构、计划、共享契约、worker 派发、集成、复审和最终验收。Controller 收集到足够上下文并冻结第一版共享契约后，必须立即派发安全且互不重叠的 worker 工作线以加快交付。本地单人执行是例外，仅当当前工具/策略环境禁止启动 worker、用户明确要求单代理、任务确实很小且没有有用的测试/复审工作线、任务严格顺序执行，或不存在安全拆分方式时才允许。继续本地单人实现前，必须在 `plan.md` 中记录准确的例外原因。
+对于实现类工作，`skills/parallel-agents.md` 是默认执行形态。主线程作为 Controller：负责架构、计划、共享契约、worker 派发、集成、复审和最终验收。Controller 收集到足够上下文并冻结第一版共享契约后，只要当前工具策略和用户授权允许启动 worker，就必须立即派发安全且互不重叠的工作线以加快交付。本地单人执行是例外，仅当当前工具/策略环境禁止启动 worker、用户明确要求单代理、任务确实很小且没有有用的测试/复审工作线、任务严格顺序执行，或不存在安全拆分方式时才允许。继续本地单人实现前，必须在 `plan.md` 中记录准确的例外原因。
 
 ## 项目规则
 
@@ -64,6 +64,7 @@ wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat-Qml-Drogon-linux && source 
 3. 选择下一个任务字母（`a`、`b`、...），创建目录，并将任务请求写入 `logs/phase-setup.result.md`。
 4. 在委派前，将任何截图或附件摘要写入 `context.md` 或日志文件。
 5. 对代码改动，读取 `skills/parallel-agents.md`，默认开启 Controller 主导的并发流程。只要存在安全契约和所有权拆分，就立即派发 worker。若没有派发 worker，必须在实现前把阻塞点或例外原因记录到 `plan.md`。
+6. 对大改、实验性改动或跨模块重构，先检查 `git status --short` 并在 `context.md` 记录已有脏文件。需要隔离时建议用户使用 worktree；不得为了隔离执行 reset、checkout 或 revert 用户改动。
 
 ## 阶段 1：上下文
 
@@ -85,17 +86,29 @@ wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat-Qml-Drogon-linux && source 
 
 `context.md` 必须包含任务描述、相关文件、数据/服务依赖、触及的 Docker 容器/端口、使用过的 MCP/数据库查询、构建/测试命令以及未决风险。
 
+当任务涉及新功能、跨服务契约、数据库/RAG schema、QML 大改、运行时部署或稳定端口风险时，在 `context.md` 或 `plan.md` 先写轻量设计段：
+
+- 目标和非目标
+- API/QML/schema/config 契约
+- 平台、数据和兼容性边界
+- 验证策略和回滚/阻塞条件
+
 ## 阶段 2：计划
 
 编写 `.ai/<project>/<letter>/plan.md`，包含：
 
 - 任务摘要
 - 实现思路
+- 轻量设计段，若本任务触发阶段 1 的设计条件
 - 要修改/创建的文件
 - 带有具体文件/函数步骤的实现阶段
 - 必需的 Docker/MCP 检查
 - 构建/测试命令
 - 状态清单
+- 计划质量门：
+  - 每个实现阶段必须有明确文件路径、函数/模块范围和验证命令。
+  - 不要写 `TBD`、`TODO`、`之后补`、`类似上一步` 或没有执行细节的泛化步骤。
+  - 步骤应足够小，便于红绿测试、实现、验证和复审逐步推进。
 - 并发决策：
   - Controller 职责
   - 默认要派发的 worker 工作线
@@ -115,6 +128,7 @@ wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat-Qml-Drogon-linux && source 
 - schema/迁移变更覆盖初始化和运行时影响
 - 客户端/服务端契约变更两侧都已覆盖
 - 构建/测试命令适合触及区域
+- 搜索计划中的占位符、含糊动词和无法执行的测试描述
 
 更新 `plan.md` 并添加 `Assessed: yes`。
 
@@ -123,6 +137,7 @@ wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat-Qml-Drogon-linux && source 
 按阶段实现。
 
 - 手工编辑使用 `apply_patch`。
+- 遇到 bug、测试失败、构建失败、异常行为或连续修复无效时，读取 `skills/debugging.md`，先完成根因调查和单一假设验证，再改代码。
 - 并行工作中，Controller 专注于编排、契约更新、集成和验收，worker 拥有互不重叠的文件范围。
 - 遵循现有代码风格和本地 helper API。
 - 数据库、队列、对象存储和观测检查保持在 Docker/MCP 内完成。
@@ -182,12 +197,18 @@ ctest --preset linux-full-gcc16 --output-on-failure
 
 写入 `.ai/<project>/<letter>/review1.md`。修复必须处理的问题，最多重复三轮。
 
+收到用户、外部 reviewer 或 AI review 的反馈时，读取 `skills/review.md`：先理解和验证反馈，再按技术优先级逐项实现。不要盲目接受，也不要在反馈含糊时先实现一部分。
+
 对于并行工作，Controller 必须读取每个使用过的 `logs/parallel-*.result.md`，检查实际 diff，确认契约与最终代码一致，然后才能接受任务。
 
 ## 阶段 7：完成
 
 最终回复前：
 
+- 执行完成前证据门：
+  1. Identify：列出能证明完成状态的命令、diff 或检查。
+  2. Run/Read：实际执行并读取完整输出、exit code 和失败数量。
+  3. Verify：只有证据确认时才能说通过；否则报告真实状态、阻塞点和风险。
 - 将验证结果记录到 `logs/phase-verify.result.md`。
 - 确认红绿测试、基本功能测试、冒烟测试、边界/异常测试的结果都已记录；如果中途发现问题，确认已经修复、重新编译并重跑相关测试梯度。
 - 如果因重复失败或环境卡死提前停止，记录阻塞点、最后成功步骤、最后失败命令、尝试次数和需要用户处理的事项。

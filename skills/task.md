@@ -1,12 +1,13 @@
 ---
-description: 通过上下文、计划、实现、Docker 支撑的验证和复审来完成 MemoChat 功能或修复。
+name: memochat-task
+description: Use when implementing a normal MemoChat feature, bugfix, refactor, or project documentation change that needs context, planning, validation, and review.
 ---
 
 # MemoChat 任务
 
 用于 `/root/code/MemoChat-Qml-Drogon-linux` 中的常规实现工作。除非用户明确要求 Windows 工作，否则将 `D:\MemoChat-Qml-Drogon` 视为旧版 Windows 检出目录。
 
-实现类任务默认使用 `parallel-agents.md` 中的 Controller 主导并行工作流。Controller 负责架构、计划、契约、worker 派发、集成和最终验收。上下文和第一版契约清楚后，默认派发安全的 worker 工作线。本地单人执行是例外，仅当当前工具/策略环境禁止 worker、用户明确要求单代理、任务确实很小且没有有用的测试/复审工作线、任务严格顺序执行，或不存在安全拆分方式时才允许；实现前必须在 `plan.md` 中记录准确原因。
+实现类任务默认使用 `parallel-agents.md` 中的 Controller 主导并行工作流。Controller 负责架构、计划、契约、worker 派发、集成和最终验收。上下文和第一版契约清楚后，只要当前工具策略和用户授权允许，默认派发安全的 worker 工作线。本地单人执行是例外，仅当当前工具/策略环境禁止 worker、用户明确要求单代理、任务确实很小且没有有用的测试/复审工作线、任务严格顺序执行，或不存在安全拆分方式时才允许；实现前必须在 `plan.md` 中记录准确原因。
 
 ## 调用方式
 
@@ -16,15 +17,16 @@ description: 通过上下文、计划、实现、Docker 支撑的验证和复审
 
 1. 创建 `.ai/<project>/<letter>/`。
 2. 将上下文收集到 `context.md`。
-3. 编写并评估 `plan.md`。
-4. 默认开启并发：
+3. 对新功能、跨服务契约、数据库/RAG schema、QML 大改、部署或稳定端口风险，先写轻量设计段：目标/非目标、契约、兼容性边界、验证和回滚/阻塞条件。
+4. 编写并评估 `plan.md`；计划必须包含具体文件、函数/模块范围、验证命令和可执行小步骤，不能留下 `TBD`、`TODO` 或空泛占位。
+5. 默认开启并发：
    - 在允许时为互不重叠且有用的工作线启动 worker
    - 保持 Controller 负责契约和最终验收
    - 当 worker 派发被阻塞、不安全或没有价值时，实现前记录本地单人原因
-5. 一次实现一个计划阶段。
-6. 用最窄的相关构建/测试/运行时命令验证，并按“红绿测试 -> 基本功能测试 -> 冒烟测试 -> 边界/异常测试”的梯度形成闭环。
-7. 复审 diff 并修复重要问题。
-8. 以简洁状态摘要收尾。
+6. 一次实现一个计划阶段。
+7. 用最窄的相关构建/测试/运行时命令验证，并按“红绿测试 -> 基本功能测试 -> 冒烟测试 -> 边界/异常测试”的梯度形成闭环。
+8. 复审 diff 并修复重要问题；收到 review 反馈时先验证反馈是否符合当前代码和 MemoChat 约束。
+9. 以简洁状态摘要收尾。
 
 ## MemoChat 上下文清单
 
@@ -37,6 +39,13 @@ description: 通过上下文、计划、实现、Docker 支撑的验证和复审
 - 本地 Docker：`infra/deploy/local/docker-compose.yml` 以及 `infra/deploy/local/compose` 下的 compose 片段。
 - 脚本：`tools/scripts` 和 `tools/scripts/status`。
 - 测试/负载工具：`tests`、`apps/server/core/common/*/tests`、`tools/loadtest/python-loadtest`。
+
+## 工作区隔离
+
+- 开始大改、实验性改动或跨模块重构前，用 `git status --short` 识别已有脏文件，并在 `context.md` 记录哪些看起来与本任务无关。
+- 若任务风险高且用户允许，建议使用 git worktree 或独立检出；保持 MemoChat 的 WSL 路径、Docker 数据路径和 `/data` 规则不变。
+- 不允许为了隔离执行 `git reset --hard`、`git checkout --`、`git clean` 或 revert 用户改动。
+- 在当前脏工作区继续时，只触碰任务相关文件；同文件已有用户改动时先读懂再增量编辑。
 
 ## Docker 和 MCP 规则
 
@@ -107,6 +116,7 @@ tools/scripts/status/stop-all-services.sh
 ## 实现规则
 
 - 优先使用现有 helper 和模块边界。
+- 遇到 bug、测试失败、构建失败、异常行为或连续修复无效时，读取 `debugging.md`，先定位根因和验证单一假设，再修复。
 - 保持服务端/客户端协议和配置变更同步。
 - 当持久化 schema 变更必需时，添加迁移或初始化变更。
 - Linux 生成/下载的大文件放在 `/data`；Arch Docker 绑定数据放在 `/data/docker-data/memochat`；只有操作旧版 Windows/Docker Desktop 数据时才使用 `D:`。
@@ -125,3 +135,5 @@ tools/scripts/status/stop-all-services.sh
 - 执行过的 Docker/MCP 检查
 - 已知阻塞点或剩余风险
 - 后续任务可用的 `.ai` 项目名
+
+完成前不要用“应该通过”“看起来好了”替代证据。必须基于本轮实际运行的命令、diff 复审或明确无法执行的原因来描述状态。

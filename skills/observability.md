@@ -1,5 +1,6 @@
 ---
-description: 通过 Prometheus、Loki、Tempo、Grafana、InfluxDB、cAdvisor 和 Docker 调查 MemoChat 指标、日志、链路、仪表盘和容器资源使用情况。
+name: memochat-observability
+description: Use when investigating MemoChat metrics, logs, traces, dashboards, service health, latency, errors, telemetry gaps, or container resource usage.
 ---
 
 # MemoChat 可观测性

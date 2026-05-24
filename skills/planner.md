@@ -1,5 +1,6 @@
 ---
-description: 在 .ai/<name>/ 下创建包含 prompt.md 和 tasks.json 的可复用 MemoChat 自动化计划。
+name: memochat-planner
+description: Use when creating reusable MemoChat automation plans under .ai/<name>/ with prompt.md and tasks.json.
 ---
 
 # MemoChat Planner
