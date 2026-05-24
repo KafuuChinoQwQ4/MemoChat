@@ -407,6 +407,7 @@ void configureLinuxRendering()
         qunsetenv("QML_DISABLE_DISK_CACHE");
     }
     if (isWslEnvironment()) {
+        setDefaultEnv("QT_QPA_PLATFORM", "xcb");
         setDefaultEnv("GALLIUM_DRIVER", "d3d12");
         setDefaultEnv("MESA_LOADER_DRIVER_OVERRIDE", "d3d12");
         setDefaultEnv("LIBGL_ALWAYS_SOFTWARE", "0");
@@ -544,7 +545,11 @@ void configureLinuxInputMethod()
 
 void centerTopLevelWindow(QWindow *window)
 {
-    if (!window || !window->isVisible() || window->visibility() != QWindow::Windowed) {
+    if (!window || !window->isVisible()
+        || window->visibility() == QWindow::Hidden
+        || window->visibility() == QWindow::Minimized
+        || window->visibility() == QWindow::Maximized
+        || window->visibility() == QWindow::FullScreen) {
         return;
     }
 
@@ -623,6 +628,17 @@ void ensureTopLevelQuickWindowHooks()
         ensureAcrylicVisibleHook(quick_window);
 #endif
     }
+}
+
+void scheduleTopLevelQuickWindowHookRetries(QObject *context, int remaining = kInitialCenterRetryCount)
+{
+    if (!context || remaining < 0) {
+        return;
+    }
+    QTimer::singleShot(kInitialCenterRetryIntervalMs, context, [context, remaining]() {
+        ensureTopLevelQuickWindowHooks();
+        scheduleTopLevelQuickWindowHookRetries(context, remaining - 1);
+    });
 }
 }
 
@@ -744,6 +760,7 @@ int main(int argc, char *argv[])
         }
     }
     ensureTopLevelQuickWindowHooks();
+    scheduleTopLevelQuickWindowHookRetries(&app);
     QObject::connect(&app,
                      &QGuiApplication::focusWindowChanged,
                      &app,

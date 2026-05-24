@@ -1,5 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import QtQuick.Window 2.15
 import "../components" as SharedComponents
 import "components" as LinuxComponents
 
@@ -508,6 +509,11 @@ Rectangle {
             opacity: loginRoot.stageValue(0.02, 0.16)
             scale: 0.97 + 0.03 * opacity
             onSettingsClicked: loginRoot.clearTipRequested()
+            onDragMoveRequested: {
+                if (Window.window) {
+                    Window.window.startSystemMove()
+                }
+            }
         }
 
         Item { width: parent.width; height: 12 }

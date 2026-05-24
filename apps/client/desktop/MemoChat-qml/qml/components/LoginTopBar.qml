@@ -13,7 +13,7 @@ Item {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
         cursorShape: Qt.OpenHandCursor
-        onPressAndHold: function(mouse) {
+        onPressed: function(mouse) {
             root.dragMoveRequested()
             mouse.accepted = true
         }
