@@ -610,6 +610,18 @@ void ensureInitialCenteringHook(QQuickWindow *window)
                              scheduleInitialWindowCentering(window);
                          }
                      });
+    QObject::connect(window,
+                     &QWindow::widthChanged,
+                     window,
+                     [window](int) {
+                         scheduleInitialWindowCentering(window);
+                     });
+    QObject::connect(window,
+                     &QWindow::heightChanged,
+                     window,
+                     [window](int) {
+                         scheduleInitialWindowCentering(window);
+                     });
     if (window->isVisible()) {
         scheduleInitialWindowCentering(window);
     }
