@@ -13,23 +13,25 @@ Item {
     property string appTitle: "MemoChat QML"
     property size loginWindowSize: Qt.size(300, 500)
     property size chatWindowSize: Qt.size(900, 640)
-    property var loginWindowRef: null
-    property var chatWindowRef: null
+    property var appWindowRef: null
     property var petWindowRef: null
+    property var pendingCenterWindowRef: null
+    property int pendingCenterPasses: 0
     property bool memochatStartupCenter: true
-    property int windowSwitchToken: 0
     readonly property bool chatPageActive: controller.page === AppController.ChatPage
 
     PetAssetSettings {
         id: startupPetSettings
     }
 
-    function centerWindow(win) {
+    function centerWindowForSize(win, size) {
         if (!win || win.visibility === Window.Maximized
                 || win.visibility === Window.FullScreen
                 || win.visibility === Window.Minimized) {
             return false
         }
+        const targetWidth = size ? size.width : win.width
+        const targetHeight = size ? size.height : win.height
         const screenObj = win.screen || (Qt.application.screens && Qt.application.screens.length > 0
                                          ? Qt.application.screens[0]
                                          : null)
@@ -41,25 +43,45 @@ Item {
                 || area.width === undefined || area.height === undefined) {
             return false
         }
-        const centeredX = area.x + Math.round((area.width - win.width) / 2)
-        const centeredY = area.y + Math.round((area.height - win.height) / 2)
-        const maxX = area.x + Math.max(0, area.width - win.width)
-        const maxY = area.y + Math.max(0, area.height - win.height)
+        const centeredX = area.x + Math.round((area.width - targetWidth) / 2)
+        const centeredY = area.y + Math.round((area.height - targetHeight) / 2)
+        const maxX = area.x + Math.max(0, area.width - targetWidth)
+        const maxY = area.y + Math.max(0, area.height - targetHeight)
         win.x = Math.max(area.x, Math.min(centeredX, maxX))
         win.y = Math.max(area.y, Math.min(centeredY, maxY))
         return true
     }
 
+    function centerWindow(win) {
+        return centerWindowForSize(win, Qt.size(win.width, win.height))
+    }
+
     function showWindowCentered(win) {
+        centerWindow(win)
         win.opacity = 1
-        centerWindow(win)
-        win.showNormal()
-        centerWindow(win)
+        if (win.visibility === Window.Maximized
+                || win.visibility === Window.FullScreen
+                || win.visibility === Window.Minimized) {
+            win.showNormal()
+        } else if (!win.visible) {
+            win.visible = true
+        }
+        requestWindowCenter(win)
         Qt.callLater(function() {
             if (win && win.visible) {
-                centerWindow(win)
+                requestWindowCenter(win)
             }
         })
+    }
+
+    function requestWindowCenter(win) {
+        if (!win) {
+            return
+        }
+        centerWindow(win)
+        pendingCenterWindowRef = win
+        pendingCenterPasses = 4
+        centerWindowTimer.restart()
     }
 
     function logWindowState(label, win) {
@@ -77,92 +99,43 @@ Item {
                      + " page=" + controller.page)
     }
 
-    function destroyLoginWindow() {
-        if (!loginWindowRef) {
-            return
-        }
-        const win = loginWindowRef
-        loginWindowRef = null
-        win.opacity = 0
-        win.visible = false
-        win.hide()
-        win.destroy()
+    function targetWindowSize() {
+        return chatPageActive ? chatWindowSize : loginWindowSize
     }
 
-    function destroyChatWindow() {
-        if (!chatWindowRef) {
-            return
+    function ensureAppWindow() {
+        if (appWindowRef) {
+            return appWindowRef
         }
-        const win = chatWindowRef
-        chatWindowRef = null
-        win.opacity = 0
-        win.visible = false
-        win.hide()
-        win.destroy()
+        appWindowRef = appWindowComponent.createObject(null)
+        if (!appWindowRef) {
+            console.warn("Failed to create app window")
+        }
+        return appWindowRef
     }
 
-    function ensureLoginWindow() {
-        if (loginWindowRef) {
-            return loginWindowRef
-        }
-        loginWindowRef = loginWindowComponent.createObject(null)
-        if (!loginWindowRef) {
-            console.warn("Failed to create login window")
-        }
-        return loginWindowRef
-    }
-
-    function ensureChatWindow() {
-        if (chatWindowRef) {
-            return chatWindowRef
-        }
-        chatWindowRef = chatWindowComponent.createObject(null)
-        if (!chatWindowRef) {
-            console.warn("Failed to create chat window")
-        }
-        return chatWindowRef
-    }
-
-    function showLoginWindow() {
-        destroyChatWindow()
-        const win = ensureLoginWindow()
+    function configureAppWindowForPage(win) {
         if (!win) {
             return
         }
-        if (win.visibility === Window.Maximized) {
-            win.showNormal()
-        }
-        win.width = loginWindowSize.width
-        win.height = loginWindowSize.height
-        showWindowCentered(win)
-        win.raise()
-        win.requestActivate()
+        const loginMode = !chatPageActive
+        win.minimumWidth = loginMode ? root.loginWindowSize.width : 800
+        win.minimumHeight = loginMode ? root.loginWindowSize.height : 600
+        win.maximumWidth = loginMode ? root.loginWindowSize.width : 100000
+        win.maximumHeight = loginMode ? root.loginWindowSize.height : 100000
+        const size = targetWindowSize()
+        centerWindowForSize(win, size)
+        win.width = size.width
+        win.height = size.height
+        requestWindowCenter(win)
     }
 
-    function ensureLoginWindowVisible(reason) {
-        if (controller.page === AppController.ChatPage) {
+    function finishAppWindowShown() {
+        if (!chatPageActive) {
             return
         }
-        showLoginWindow()
-        logWindowState("login-window " + reason, loginWindowRef)
-    }
-
-    function showChatWindow() {
-        destroyLoginWindow()
-        const win = ensureChatWindow()
-        if (!win) {
-            return
-        }
-        if (win.visibility === Window.Maximized) {
-            win.showNormal()
-        }
-        win.width = chatWindowSize.width
-        win.height = chatWindowSize.height
-        showWindowCentered(win)
-        win.raise()
-        win.requestActivate()
         Qt.callLater(function() {
-            if (controller.page === AppController.ChatPage) {
+            if (chatPageActive) {
                 controller.beginPostLoginBootstrap()
             }
         })
@@ -214,23 +187,16 @@ Item {
     }
 
     function syncWindowsByPage() {
-        const token = ++windowSwitchToken
-        const targetChatPage = controller.page === AppController.ChatPage
-        if (targetChatPage) {
-            destroyLoginWindow()
-        } else {
-            destroyChatWindow()
+        const win = ensureAppWindow()
+        if (!win) {
+            return
         }
-        Qt.callLater(function() {
-            if (token !== windowSwitchToken) {
-                return
-            }
-            if (targetChatPage && controller.page === AppController.ChatPage) {
-                showChatWindow()
-            } else if (!targetChatPage && controller.page !== AppController.ChatPage) {
-                ensureLoginWindowVisible("sync")
-            }
-        })
+        configureAppWindowForPage(win)
+        showWindowCentered(win)
+        win.raise()
+        win.requestActivate()
+        logWindowState("app-window sync", win)
+        finishAppWindowShown()
     }
 
     Component.onCompleted: {
@@ -238,8 +204,10 @@ Item {
         syncWindowsByPage()
     }
     Component.onDestruction: {
-        destroyLoginWindow()
-        destroyChatWindow()
+        if (appWindowRef) {
+            appWindowRef.destroy()
+            appWindowRef = null
+        }
         if (petWindowRef) {
             petWindowRef.destroy()
             petWindowRef = null
@@ -263,6 +231,27 @@ Item {
         interval: 160
         repeat: false
         onTriggered: root.openPetWindow()
+    }
+
+    Timer {
+        id: centerWindowTimer
+        interval: 70
+        repeat: false
+        onTriggered: {
+            const win = root.pendingCenterWindowRef
+            if (!win || !win.visible || root.pendingCenterPasses <= 0) {
+                root.pendingCenterWindowRef = null
+                root.pendingCenterPasses = 0
+                return
+            }
+            root.centerWindow(win)
+            root.pendingCenterPasses -= 1
+            if (root.pendingCenterPasses > 0) {
+                restart()
+            } else {
+                root.pendingCenterWindowRef = null
+            }
+        }
     }
 
     Component {
@@ -303,9 +292,9 @@ Item {
     }
 
     Component {
-        id: loginWindowComponent
+        id: appWindowComponent
         ApplicationWindow {
-            id: loginWindow
+            id: appWindow
             visible: false
             title: root.appTitle
             property bool memochatStartupCenter: true
@@ -322,26 +311,26 @@ Item {
             onClosing: Qt.quit()
 
             MouseArea {
-                id: loginHeaderDragArea
+                id: headerDragArea
                 z: 150
                 x: 56
-                y: 0
-                width: Math.max(0, parent.width - x - controlsRow.implicitWidth - 70)
+                y: root.chatPageActive ? 4 : 0
+                width: Math.max(0, parent.width - x - windowControls.width - 70)
                 height: 64
                 acceptedButtons: Qt.LeftButton
                 cursorShape: Qt.SizeAllCursor
                 onPressed: function(mouse) {
-                    loginWindow.startSystemMove()
+                    appWindow.startSystemMove()
                     mouse.accepted = true
                 }
             }
 
             Rectangle {
-                id: loginShell
+                id: appShell
                 anchors.fill: parent
-                radius: loginWindow.windowRadius
-                antialiasing: !loginWindow.isMaximized
-                clip: !loginWindow.isMaximized
+                radius: appWindow.windowRadius
+                antialiasing: !appWindow.isMaximized
+                clip: !appWindow.isMaximized
                 color: "transparent"
 
                 Loader {
@@ -368,9 +357,17 @@ Item {
                     sourceComponent: resetPageComponent
                 }
 
+                Loader {
+                    anchors.fill: parent
+                    active: root.chatPageActive
+                    visible: active
+                    asynchronous: true
+                    sourceComponent: chatShellPageComponent
+                }
             }
 
             Item {
+                id: windowControls
                 z: 200
                 anchors.top: parent.top
                 anchors.right: parent.right
@@ -384,94 +381,23 @@ Item {
                     spacing: 20
 
                     LoginIconButton {
-                        iconSource: "qrc:/icons/minimize.png"
-                        onClicked: loginWindow.showMinimized()
-                    }
-
-                    LoginIconButton {
-                        iconSource: "qrc:/icons/maximize.png"
-                        onClicked: {
-                            if (loginWindow.visibility === Window.Maximized) {
-                                loginWindow.showNormal()
-                            } else {
-                                loginWindow.showMaximized()
-                            }
-                        }
-                    }
-
-                    LoginIconButton {
-                        iconSource: "qrc:/icons/close.png"
-                        onClicked: Qt.quit()
-                    }
-                }
-            }
-        }
-    }
-
-    Component {
-        id: chatWindowComponent
-        ApplicationWindow {
-            id: chatWindow
-            visible: false
-            title: root.appTitle
-            property bool memochatStartupCenter: true
-            flags: Qt.Window | Qt.FramelessWindowHint
-            color: "transparent"
-            width: root.chatWindowSize.width
-            height: root.chatWindowSize.height
-            minimumWidth: 800
-            minimumHeight: 600
-            maximumWidth: 100000
-            maximumHeight: 100000
-            readonly property bool isMaximized: visibility === Window.Maximized
-            readonly property int windowRadius: isMaximized ? 0 : 20
-            onClosing: Qt.quit()
-
-            Rectangle {
-                anchors.fill: parent
-                radius: chatWindow.windowRadius
-                antialiasing: !chatWindow.isMaximized
-                clip: !chatWindow.isMaximized
-                color: "transparent"
-
-                Loader {
-                    anchors.fill: parent
-                    active: true
-                    asynchronous: true
-                    sourceComponent: chatShellPageComponent
-                }
-            }
-
-            Item {
-                z: 200
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.topMargin: 20
-                anchors.rightMargin: 14
-                width: chatControlsRow.implicitWidth
-                height: chatControlsRow.implicitHeight
-
-                Row {
-                    id: chatControlsRow
-                    spacing: 20
-
-                    LoginIconButton {
                         iconSource: "qrc:/icons/ai.png"
+                        visible: root.chatPageActive
                         onClicked: root.togglePetWindow()
                     }
 
                     LoginIconButton {
                         iconSource: "qrc:/icons/minimize.png"
-                        onClicked: chatWindow.showMinimized()
+                        onClicked: appWindow.showMinimized()
                     }
 
                     LoginIconButton {
                         iconSource: "qrc:/icons/maximize.png"
                         onClicked: {
-                            if (chatWindow.visibility === Window.Maximized) {
-                                chatWindow.showNormal()
+                            if (appWindow.visibility === Window.Maximized) {
+                                appWindow.showNormal()
                             } else {
-                                chatWindow.showMaximized()
+                                appWindow.showMaximized()
                             }
                         }
                     }
