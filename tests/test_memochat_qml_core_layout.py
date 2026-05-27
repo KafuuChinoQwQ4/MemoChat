@@ -9,7 +9,7 @@ QML_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 CORE_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core"
 OLD_SHARED_DIR = REPO_ROOT / "apps/client/desktop/MemoChatShared"
 CORE_QRC = CORE_DIR / "rc.qrc"
-MOMENTS_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/controllers/MomentsController.h"
+MOMENTS_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/moments/MomentsController.h"
 
 
 class MemoChatQmlCoreLayoutTests(unittest.TestCase):
@@ -28,15 +28,19 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         expected_files = (
             "app/main.cpp",
             "app/AppController.cpp",
-            "controllers/AgentController.cpp",
-            "controllers/AuthController.cpp",
-            "models/ChatMessageModel.cpp",
-            "models/FriendListModel.cpp",
-            "services/ClientGateway.cpp",
-            "services/MediaUploadService.cpp",
-            "storage/PrivateChatCacheStore.cpp",
-            "utils/IconPathUtils.h",
-            "platform/ClientWinCompat.h",
+            "features/agent/AgentController.cpp",
+            "features/auth/AuthController.cpp",
+            "features/chat/ChatMessageModel.cpp",
+            "features/chat/PrivateChatCacheStore.cpp",
+            "features/contact/FriendListModel.cpp",
+            "features/moments/MomentsControllerParsing.cpp",
+            "features/moments/MomentsControllerPublish.cpp",
+            "features/moments/MomentsControllerRequests.cpp",
+            "features/moments/MomentsControllerResponses.cpp",
+            "shared/gateway/ClientGateway.cpp",
+            "shared/media/MediaUploadService.cpp",
+            "shared/utils/IconPathUtils.h",
+            "platform/windows/ClientWinCompat.h",
             "live2d/Live2DRenderItem.cpp",
         )
 
@@ -51,6 +55,11 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         ]
         self.assertEqual([], root_cpp_or_h)
 
+        old_horizontal_dirs = ("controllers", "models", "services", "storage", "utils")
+        for rel_dir in old_horizontal_dirs:
+            with self.subTest(old_dir=rel_dir):
+                self.assertFalse((QML_DIR / rel_dir).exists())
+
     def test_cmake_adds_core_from_qml_module_without_desktop_shared_entry(self):
         desktop_cmake = DESKTOP_CMAKE.read_text(encoding="utf-8")
         qml_cmake = QML_CMAKE.read_text(encoding="utf-8")
@@ -59,18 +68,46 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("add_subdirectory(MemoChat-qml)", desktop_cmake)
         self.assertIn("add_subdirectory(core)", qml_cmake)
         self.assertIn("set(MEMOCHAT_QML_CORE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/core)", qml_cmake)
+        self.assertIn("set(MEMOCHAT_QML_FEATURE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features)", qml_cmake)
+        self.assertIn("set(MEMOCHAT_QML_SHARED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shared)", qml_cmake)
         self.assertIn("app/AppController.cpp", qml_cmake)
-        self.assertIn("controllers/AgentController.cpp", qml_cmake)
-        self.assertIn("models/ChatMessageModel.cpp", qml_cmake)
-        self.assertIn("services/ClientGateway.cpp", qml_cmake)
-        self.assertIn("storage/PrivateChatCacheStore.cpp", qml_cmake)
+        self.assertIn("features/agent/AgentController.cpp", qml_cmake)
+        self.assertIn("features/chat/ChatMessageModel.cpp", qml_cmake)
+        self.assertIn("features/chat/PrivateChatCacheStore.cpp", qml_cmake)
+        self.assertIn("features/moments/MomentsControllerParsing.cpp", qml_cmake)
+        self.assertIn("features/moments/MomentsControllerPublish.cpp", qml_cmake)
+        self.assertIn("features/moments/MomentsControllerRequests.cpp", qml_cmake)
+        self.assertIn("features/moments/MomentsControllerResponses.cpp", qml_cmake)
+        self.assertIn("shared/gateway/ClientGateway.cpp", qml_cmake)
         self.assertIn("live2d/Live2DRenderItem.cpp", qml_cmake)
-        self.assertIn("${CMAKE_CURRENT_SOURCE_DIR}/controllers", qml_cmake)
-        self.assertIn("${CMAKE_CURRENT_SOURCE_DIR}/models", qml_cmake)
+        self.assertIn("${MEMOCHAT_QML_FEATURE_DIR}/agent", qml_cmake)
+        self.assertIn("${MEMOCHAT_QML_FEATURE_DIR}/chat", qml_cmake)
+        self.assertIn("${MEMOCHAT_QML_SHARED_DIR}/gateway", qml_cmake)
+        self.assertIn("${MEMOCHAT_QML_SHARED_DIR}/media", qml_cmake)
         self.assertIn("${MEMOCHAT_QML_CORE_DIR}/rc.qrc", qml_cmake)
         self.assertIn("${MEMOCHAT_QML_CORE_DIR}/config.ini", qml_cmake)
+        self.assertNotIn("${CMAKE_CURRENT_SOURCE_DIR}/controllers", qml_cmake)
+        self.assertNotIn("${CMAKE_CURRENT_SOURCE_DIR}/models", qml_cmake)
+        self.assertNotIn("${CMAKE_CURRENT_SOURCE_DIR}/services", qml_cmake)
+        self.assertNotIn("${CMAKE_CURRENT_SOURCE_DIR}/storage", qml_cmake)
+        self.assertNotIn("${CMAKE_CURRENT_SOURCE_DIR}/utils", qml_cmake)
         self.assertNotIn("SHARED_CLIENT_DIR", qml_cmake)
         self.assertNotIn("../MemoChatShared", qml_cmake)
+
+    def test_heavy_moments_controller_concerns_are_split(self):
+        controller = (QML_DIR / "features/moments/MomentsController.cpp").read_text(encoding="utf-8")
+        parsing = (QML_DIR / "features/moments/MomentsControllerParsing.cpp").read_text(encoding="utf-8")
+        publish = (QML_DIR / "features/moments/MomentsControllerPublish.cpp").read_text(encoding="utf-8")
+        requests = (QML_DIR / "features/moments/MomentsControllerRequests.cpp").read_text(encoding="utf-8")
+        responses = (QML_DIR / "features/moments/MomentsControllerResponses.cpp").read_text(encoding="utf-8")
+
+        self.assertIn("MomentEntry MomentsController::parseMomentEntry", parsing)
+        self.assertIn("void MomentsController::publishDraftMoment", publish)
+        self.assertIn("void MomentsController::toggleLike", requests)
+        self.assertIn("void MomentsController::onLoadFeedRsp", responses)
+        self.assertNotIn("void MomentsController::publishDraftMoment", controller)
+        self.assertNotIn("void MomentsController::onLoadFeedRsp", controller)
+        self.assertLess(len(controller.splitlines()), 180)
 
     def test_core_resource_aliases_reference_qml_app_assets(self):
         qrc = CORE_QRC.read_text(encoding="utf-8")
