@@ -5,26 +5,43 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 
-PET_ASSET_SETTINGS_H = CLIENT_DIR / "PetAssetSettings.h"
-PET_ASSET_SETTINGS_CPP = CLIENT_DIR / "PetAssetSettings.cpp"
-LIVE2D_AVATAR_OPENGL_RENDERER_H = CLIENT_DIR / "Live2DAvatarOpenGLRenderer.h"
-LIVE2D_AVATAR_OPENGL_RENDERER_CPP = CLIENT_DIR / "Live2DAvatarOpenGLRenderer.cpp"
+PET_ASSET_SETTINGS_H = CLIENT_DIR / "features/pet/PetAssetSettings.h"
+PET_ASSET_SETTINGS_CPP = CLIENT_DIR / "features/pet/PetAssetSettings.cpp"
+PET_ASSET_SETTINGS_PRIVATE_H = CLIENT_DIR / "features/pet/PetAssetSettingsPrivate.h"
+PET_ASSET_SETTINGS_AVATAR_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsAvatar.cpp"
+PET_ASSET_SETTINGS_PERSISTENCE_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsPersistence.cpp"
+PET_ASSET_SETTINGS_STATE_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsState.cpp"
+LIVE2D_AVATAR_OPENGL_RENDERER_H = CLIENT_DIR / "live2d/Live2DAvatarOpenGLRenderer.h"
+LIVE2D_AVATAR_OPENGL_RENDERER_CPP = CLIENT_DIR / "live2d/Live2DAvatarOpenGLRenderer.cpp"
 PET_CHAT_WINDOW_QML = CLIENT_DIR / "qml/pet/PetChatWindow.qml"
 PET_WINDOW_QML = CLIENT_DIR / "qml/pet/PetWindow.qml"
 MAIN_QML = CLIENT_DIR / "qml/Main.qml"
 LINUX_MAIN_QML = CLIENT_DIR / "qml/linux/Main.qml"
 CHARACTER_PANE_QML = CLIENT_DIR / "qml/pet/Live2DCharacterPane.qml"
-MAIN_CPP = CLIENT_DIR / "main.cpp"
+MAIN_CPP = CLIENT_DIR / "app/main.cpp"
 
 
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def pet_asset_settings_source() -> str:
+    return "\n".join(
+        read(path)
+        for path in (
+            PET_ASSET_SETTINGS_CPP,
+            PET_ASSET_SETTINGS_PRIVATE_H,
+            PET_ASSET_SETTINGS_AVATAR_CPP,
+            PET_ASSET_SETTINGS_PERSISTENCE_CPP,
+            PET_ASSET_SETTINGS_STATE_CPP,
+        )
+    )
+
+
 class PetLive2DAvatarContractTests(unittest.TestCase):
     def test_pet_asset_settings_derives_cached_live2d_avatar_from_model_package(self):
         header = read(PET_ASSET_SETTINGS_H)
-        source = read(PET_ASSET_SETTINGS_CPP)
+        source = pet_asset_settings_source()
         renderer_header = read(LIVE2D_AVATAR_OPENGL_RENDERER_H)
         renderer_source = read(LIVE2D_AVATAR_OPENGL_RENDERER_CPP)
         main_source = read(MAIN_CPP)
