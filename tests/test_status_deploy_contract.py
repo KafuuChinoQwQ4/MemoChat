@@ -9,6 +9,8 @@ START_SERVICES_SCRIPT = REPO_ROOT / "tools/scripts/status/start-all-services.sh"
 START_QML_SCRIPT = REPO_ROOT / "tools/scripts/status/start-memochat-qml-wslg.sh"
 RUN_FULL_STACK_SCRIPT = REPO_ROOT / "tools/scripts/status/run-linux-full-stack.sh"
 GPT_SOVITS_VOICE_SCRIPT = REPO_ROOT / "tools/scripts/pet/apply_gpt_sovits_voice_wsl.sh"
+LOCAL_COMPOSE = REPO_ROOT / "infra/deploy/local/docker-compose.yml"
+AI_DOCKER_COMPOSE = REPO_ROOT / "apps/server/core/AIOrchestrator/docker-compose.yml"
 
 
 def read(path: Path) -> str:
@@ -158,6 +160,45 @@ class StatusDeployContractTests(unittest.TestCase):
             "--skip-gpt-sovits",
         ):
             self.assertIn(token, source)
+
+    def test_linux_start_brings_up_post_login_docker_dependencies(self):
+        source = read(START_SERVICES_SCRIPT)
+
+        for token in (
+            "START_DOCKER_DEPS",
+            "--skip-docker-deps",
+            "ensure_docker_dependencies",
+            "memochat-redis",
+            "memochat-postgres",
+            "memochat-mongo",
+            "memochat-minio",
+            "memochat-redpanda",
+            "memochat-rabbitmq",
+            "wait_for_minio",
+            "wait_for_redpanda",
+            "docker compose -f \"$LOCAL_COMPOSE_FILE\" up -d",
+        ):
+            self.assertIn(token, source)
+
+        self.assertLess(source.index("[STEP] Start Docker dependencies"),
+                        source.index("[STEP] Start Docker Envoy Gateway"))
+
+    def test_local_redpanda_has_host_and_docker_network_listeners(self):
+        local_compose = read(LOCAL_COMPOSE)
+        ai_compose = read(AI_DOCKER_COMPOSE)
+
+        for token in (
+            "INTERNAL://0.0.0.0:9092,OUTSIDE://0.0.0.0:19092",
+            "INTERNAL://memochat-redpanda:9092,OUTSIDE://127.0.0.1:19092",
+            "--pandaproxy-addr=0.0.0.0:18082",
+            "--advertise-pandaproxy-addr=127.0.0.1:18082",
+        ):
+            self.assertIn(token, local_compose)
+        self.assertNotIn("--advertise-kafka-addr=host.docker.internal:19092", local_compose)
+
+        self.assertIn("MEMOCHAT_AI_AGENT_QUEUE__REDPANDA__BOOTSTRAP_SERVERS:-memochat-redpanda:9092", ai_compose)
+        self.assertIn("memochat_default", ai_compose)
+        self.assertIn("external: true", ai_compose)
 
     def test_gpt_sovits_voice_script_recreates_ai_orchestrator_with_reference_audio(self):
         source = read(GPT_SOVITS_VOICE_SCRIPT)

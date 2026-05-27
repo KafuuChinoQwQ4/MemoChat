@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+﻿cmake_minimum_required(VERSION 3.16)
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core)
@@ -8,8 +8,8 @@ set(CMAKE_AUTOMOC ON)
 add_executable(live2d_asset_gtest
     main.cpp
     Live2DAssetTest.cpp
-    ../../../apps/client/desktop/MemoChat-qml/Live2DAsset.cpp
-    ../../../apps/client/desktop/MemoChat-qml/Live2DAsset.h
+    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAsset.cpp
+    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAsset.h
 )
 
 target_link_libraries(live2d_asset_gtest PRIVATE
@@ -19,6 +19,7 @@ target_link_libraries(live2d_asset_gtest PRIVATE
 
 target_include_directories(live2d_asset_gtest PRIVATE
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/live2d
 )
 
 target_compile_definitions(live2d_asset_gtest PRIVATE

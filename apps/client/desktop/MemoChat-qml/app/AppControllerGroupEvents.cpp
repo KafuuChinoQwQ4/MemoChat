@@ -34,7 +34,7 @@ void AppController::onGroupListUpdated()
         } else {
             _message_model.clear();
             setCurrentChatPeerName("");
-            setCurrentChatPeerIcon("qrc:/res/head_1.jpg");
+            setCurrentChatPeerIcon("qrc:/res/head_1.png");
             setCurrentDraftText("");
             setCurrentDialogPinned(false);
             setCurrentDialogMuted(false);

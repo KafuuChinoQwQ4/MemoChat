@@ -119,6 +119,16 @@ run_step() {
     "$@"
 }
 
+start_local_docker_deps() {
+    docker compose -f "$LOCAL_COMPOSE_FILE" up -d \
+        memochat-redis \
+        memochat-postgres \
+        memochat-mongo \
+        memochat-minio \
+        memochat-redpanda \
+        memochat-rabbitmq
+}
+
 is_truthy() {
     case "${1,,}" in
         1|true|yes|on) return 0 ;;
@@ -242,6 +252,7 @@ else
 fi
 
 if [[ "$RUN_AI_BUILD" -eq 1 ]]; then
+    run_step "Start local Docker dependencies for AI networking" start_local_docker_deps
     run_step "Rebuild AI Docker stack" docker compose -f "$AI_COMPOSE_FILE" up -d --build
 else
     echo

@@ -1,17 +1,17 @@
-import unittest
+﻿import unittest
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GROUP_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/GroupMessageService.cpp"
 PRIVATE_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/PrivateMessageService.cpp"
-CHAT_MESSAGE_DISPATCHER = REPO_ROOT / "apps/client/desktop/MemoChatShared/ChatMessageDispatcher.cpp"
-CHAT_MESSAGE_MODEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/ChatMessageModel.cpp"
-ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/IconPathUtils.h"
-APP_CONTROLLER_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerSelection.cpp"
-APP_CONTROLLER_PRIVATE_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerPrivateEvents.cpp"
-APP_CONTROLLER_DIALOG_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerDialogState.cpp"
-CONVERSATION_SYNC_SERVICE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/ConversationSyncService.cpp"
+CHAT_MESSAGE_DISPATCHER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/network/ChatMessageDispatcher.cpp"
+CHAT_MESSAGE_MODEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/models/ChatMessageModel.cpp"
+ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/utils/IconPathUtils.h"
+APP_CONTROLLER_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerSelection.cpp"
+APP_CONTROLLER_PRIVATE_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerPrivateEvents.cpp"
+APP_CONTROLLER_DIALOG_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerDialogState.cpp"
+CONVERSATION_SYNC_SERVICE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/services/ConversationSyncService.cpp"
 
 
 def extract_function(source: str, signature: str) -> str:

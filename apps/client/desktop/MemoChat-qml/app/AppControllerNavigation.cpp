@@ -83,7 +83,7 @@ void AppController::switchToLogin()
     emit canLoadMoreChatsChanged();
     _can_load_more_contacts = false;
     emit canLoadMoreContactsChanged();
-    setCurrentContact(0, QString(), QString(), QStringLiteral("qrc:/res/head_1.jpg"), QString(), 0);
+    setCurrentContact(0, QString(), QString(), QStringLiteral("qrc:/res/head_1.png"), QString(), 0);
     _current_chat_uid = 0;
     _current_group_id = 0;
     _current_group_name.clear();
@@ -104,15 +104,15 @@ void AppController::switchToLogin()
     setCurrentDialogMuted(false);
     setPendingReplyContext(QString(), QString(), QString());
     setCurrentChatPeerName(QString());
-    setCurrentChatPeerIcon(QStringLiteral("qrc:/res/head_1.jpg"));
+    setCurrentChatPeerIcon(QStringLiteral("qrc:/res/head_1.png"));
     const bool userChanged = !_current_user_name.isEmpty()
         || !_current_user_nick.isEmpty()
-        || _current_user_icon != QStringLiteral("qrc:/res/head_1.jpg")
+        || _current_user_icon != QStringLiteral("qrc:/res/head_1.png")
         || !_current_user_id.isEmpty()
         || !_current_user_desc.isEmpty();
     _current_user_name.clear();
     _current_user_nick.clear();
-    _current_user_icon = QStringLiteral("qrc:/res/head_1.jpg");
+    _current_user_icon = QStringLiteral("qrc:/res/head_1.png");
     _current_user_id.clear();
     _current_user_desc.clear();
     if (userChanged) {

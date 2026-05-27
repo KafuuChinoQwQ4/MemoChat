@@ -7,7 +7,7 @@ description: Use when a non-trivial MemoChat task needs structured context, plan
 
 使用这个 skill 推进 `/root/code/MemoChat-Qml-Drogon-linux` 中的非平凡改动，同时让主线程保持精简，并留下有用的过程产物。除非用户明确要求 Windows 侧工作，否则将 `D:\MemoChat-Qml-Drogon` 视为旧版 Windows 检出目录。
 
-对于实现类工作，`skills/parallel-agents.md` 是默认执行形态。主线程作为 Controller：负责架构、计划、共享契约、worker 派发、集成、复审和最终验收。Controller 收集到足够上下文并冻结第一版共享契约后，只要当前工具策略和用户授权允许启动 worker，就必须立即派发安全且互不重叠的工作线以加快交付。本地单人执行是例外，仅当当前工具/策略环境禁止启动 worker、用户明确要求单代理、任务确实很小且没有有用的测试/复审工作线、任务严格顺序执行，或不存在安全拆分方式时才允许。继续本地单人实现前，必须在 `plan.md` 中记录准确的例外原因。
+对于实现类工作，`skills/parallel-agents.md` 是并发与 Controller 责任的权威规则。这里保留总入口和任务主线，具体的 worker 拆分、例外条件、结果文件和验收门都以 `parallel-agents.md` 为准。
 
 ## 项目规则
 

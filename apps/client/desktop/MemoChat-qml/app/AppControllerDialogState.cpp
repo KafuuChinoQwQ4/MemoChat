@@ -31,7 +31,7 @@ void AppController::clearCurrentGroupConversation(qint64 groupId)
         setPendingReplyContext(QString(), QString(), QString());
         _message_model.clear();
         setCurrentChatPeerName(QString());
-        setCurrentChatPeerIcon(QStringLiteral("qrc:/res/head_1.jpg"));
+        setCurrentChatPeerIcon(QStringLiteral("qrc:/res/head_1.png"));
         setCurrentDraftText(QString());
         setCurrentDialogPinned(false);
         setCurrentDialogMuted(false);

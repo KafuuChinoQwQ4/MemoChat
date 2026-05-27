@@ -200,7 +200,7 @@ void AppController::onSwitchToChat()
     setAuthStatus("", false);
     setSettingsStatus("", false);
     setContactPane(ApplyRequestPane);
-    setCurrentContact(0, "", "", "qrc:/res/head_1.jpg", "", 0);
+    setCurrentContact(0, "", "", "qrc:/res/head_1.png", "", 0);
     _post_login_bootstrap_started = false;
 
     auto user_info = _gateway.userMgr()->GetUserInfo();
@@ -328,7 +328,7 @@ void AppController::onRelationBootstrapUpdated()
         if (friendInfo) {
             setCurrentChatPeerName(DialogListService::privateDisplayName(friendInfo));
             setCurrentChatPeerIcon(friendInfo->_icon.trimmed().isEmpty()
-                                   ? QStringLiteral("qrc:/res/head_1.jpg")
+                                   ? QStringLiteral("qrc:/res/head_1.png")
                                    : friendInfo->_icon);
         }
     }

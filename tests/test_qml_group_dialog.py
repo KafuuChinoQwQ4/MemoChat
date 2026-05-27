@@ -1,4 +1,4 @@
-import re
+﻿import re
 import unittest
 from pathlib import Path
 
@@ -10,7 +10,7 @@ CHAT_LEFT_PANEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatLef
 GROUP_MANAGEMENT_PANEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/group/GroupManagementPanel.qml"
 GROUP_APPLY_REVIEW_PANE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/group/GroupApplyReviewPane.qml"
 CHAT_CONVERSATION_PANE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatConversationPane.qml"
-APP_CONTROLLER_GROUP_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerGroupEvents.cpp"
+APP_CONTROLLER_GROUP_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerGroupEvents.cpp"
 
 
 class CreateGroupDialogQmlTests(unittest.TestCase):

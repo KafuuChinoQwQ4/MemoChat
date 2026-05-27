@@ -1,10 +1,10 @@
-import unittest
+﻿import unittest
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-TELEMETRY_UTILS = REPO_ROOT / "apps/client/desktop/MemoChatShared/TelemetryUtils.cpp"
-MEDIA_UPLOAD_SERVICE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/MediaUploadService.cpp"
+TELEMETRY_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/network/TelemetryUtils.cpp"
+MEDIA_UPLOAD_SERVICE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/services/MediaUploadService.cpp"
 
 
 class AvatarUploadThreadContractTests(unittest.TestCase):

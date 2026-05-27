@@ -38,10 +38,6 @@ rg -n "qml.qrc|resources|icons|assets" apps/client infra/Memo_ops/client
 - 跨平台 UI 变更优先兼容性。修复 Linux/WSLg、macOS、Windows、Wayland/X11、DPI、字体、compositor 或 graphics-backend 差异时，保留已经正常工作的现有平台行为，并通过平台专用 QML 文件夹、平台保护的 C++/QML 分支、资源 alias 或窄兼容组件添加修复。除非证明 bug 在这些平台共享路径上，否则不要重写共享组件或替换正常工作的视觉路径。
 - 如果平台修复必须触及共享 QML 组件，保持其 public API 和默认渲染与当前正常工作平台兼容，然后为新行为添加 opt-in properties 或平台专用 wrapper。在计划/复审中记录平台边界，并至少验证被修改平台，以及任何共享路径被触及的平台。
 - 优先使用增量平台结构：`qml/linux`、`qml/windows`、`qml/macos`、`Qt.platform.os` 检查，或 `#ifdef Q_OS_*` C++ glue。在 `qml.qrc` 中明确注册平台资源，添加新兼容路径时避免删除或替换旧平台文件。
-- 对平台 glass/acrylic 修复，Windows/macOS 保持在其现有平台路径上，将 WSLg/Linux 兼容性放在 `qml/linux` 或平台保护代码中。不要用 Linux fallback 替换 Windows DWM Acrylic。
-- 在 WSLg/Linux 上，不要使用未遮罩的 `ShaderEffectSource`/`MultiEffect` 捕获，因为它们会在圆角 glass 控件或 logo 后产生矩形 backing plate。如果系统 backdrop blur 不可用，用圆角、抗锯齿的 tint/highlight/border layer 模拟 glass。
-- 透明无边框 Linux 窗口必须保留圆角抗锯齿：每个可见 backdrop/control layer 需要匹配 radius、`antialiasing: true`，并且后面没有方形 parent fill。优先使用 alpha buffer 加 QML 绘制的圆角 layer，并留小的透明 inset；避免整窗 QML `layer.*`，也避免为 soft glass 边缘使用 `QRegion` mask，因为二者在 WSLg 下都可能产生可见矩形或锯齿边缘。
-- 对 WSLg 顶层圆角窗口，不要依赖 `Rectangle.clip` 将子页面裁剪成圆角；它会裁剪到矩形 item bounds。使用仅 Linux 的 `QtQuick.Shapes` 圆角 shell 或等价抗锯齿路径，然后把方形页面/backdrop 内容内缩到足够进入曲线内部的位置。
 
 ## 实现
 
@@ -73,9 +69,6 @@ cmake --build --preset linux-full-gcc16 --parallel 12
 ## 复审清单
 
 - 预期窗口尺寸下没有文本重叠
-- 圆角 glass 控件、logo 或透明窗口角后没有方形 backing plate
-- 平台专用兼容修复是增量式的，并且不会改变 Windows Acrylic 等正常工作的现有平台路径，除非这是明确意图且已验证
-- 为平台修复触及的共享 QML/C++ 保留现有默认行为，并暴露 opt-in 兼容行为
 - 没有缺失资源路径
 - 没有破坏的 import
 - 没有硬编码本地专用路径，除非它是已记录的开发配置

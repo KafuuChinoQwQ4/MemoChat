@@ -257,7 +257,7 @@ const std::vector<QString>  strs ={"hello world !",
                             "My love is written in the wind ever since the whole world is you"};
 
 const std::vector<QString> heads = {
-    ":/res/head_1.jpg"
+    ":/res/head_1.png"
 };
 
 const std::vector<QString> names = {

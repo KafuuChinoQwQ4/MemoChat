@@ -7,6 +7,8 @@ description: Use when implementing a MemoChat change that needs live validation 
 
 当变更需要超出编译之外的 live validation 时使用，例如登录、聊天持久化、媒体存储、队列、观测、ops UI 或多服务行为。
 
+这个 skill 只管测试循环、测试产物和 PASS/阻塞判定，不负责部署策略或日常构建入口。部署、启动、环境健康和清理归 `skills/runtime-smoke.md`。
+
 ## 阶段 1：实现
 
 遵循 `task.md`：
@@ -22,6 +24,8 @@ description: Use when implementing a MemoChat change that needs live validation 
 对于运行时较重的工作，在允许启动 worker 且存在安全不重叠范围时，默认派发 Tests Worker 或 Integration Worker，让其在 Backend/Frontend/Data worker 实现期间准备 smoke 探针。Controller 仍负责最终运行时验收。
 
 ## 阶段 2：运行时测试循环
+
+这套 `test<N>.md` / `result<N>.md` / `fix<N>.md` 产物只属于运行时测试循环，不替代 `parallel-agents.md` 的 worker 结果文件。
 
 维护：
 

@@ -18,7 +18,7 @@ std::shared_ptr<AuthInfo> buildDialogPlaceholder(const FriendListModel &dialogLi
     const QVariantMap dialogItem = dialogIndex >= 0 ? dialogListModel.get(dialogIndex) : QVariantMap();
     return DialogListService::buildPlaceholderAuthInfo(uid,
                                                        dialogItem,
-                                                       QStringLiteral("qrc:/res/head_1.jpg"));
+                                                       QStringLiteral("qrc:/res/head_1.png"));
 }
 }
 

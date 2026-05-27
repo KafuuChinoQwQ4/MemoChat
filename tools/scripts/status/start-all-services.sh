@@ -11,12 +11,13 @@ LOCAL_COMPOSE_FILE="${MEMOCHAT_LOCAL_COMPOSE_FILE:-${PROJECT_ROOT}/infra/deploy/
 WAIT_SECONDS=16
 AUTO_DEPLOY=1
 START_ENVOY_OVERRIDE=""
+START_DOCKER_DEPS_OVERRIDE=""
 START_GPT_SOVITS_OVERRIDE=""
 GPT_SOVITS_WAIT_SECONDS_OVERRIDE=""
 
 usage() {
     cat <<USAGE
-Usage: $0 [--no-deploy] [--wait-seconds N] [--skip-envoy] [--skip-gpt-sovits] [--gpt-sovits-wait-seconds N]
+Usage: $0 [--no-deploy] [--wait-seconds N] [--skip-docker-deps] [--skip-envoy] [--skip-gpt-sovits] [--gpt-sovits-wait-seconds N]
 
 Start Linux MemoChat backend services from:
   ${RUNTIME_DIR}
@@ -24,14 +25,18 @@ Start Linux MemoChat backend services from:
 Docker Envoy Gateway is started by default from:
   ${LOCAL_COMPOSE_FILE}
 
+Docker dependencies required by login, post-login bootstrap, media, and async
+side effects are started by default from the same compose file. Set
+MEMOCHAT_START_DOCKER_DEPS=0 or pass --skip-docker-deps only for specialized
+runtime debugging where those containers are already managed separately.
+
 GPT-SoVITS is started and required as a local WSL service by default so
 AIOrchestrator can reach http://host.docker.internal:9880. Set
 MEMOCHAT_START_GPT_SOVITS=0 or pass --skip-gpt-sovits to skip it. Set
 MEMOCHAT_REQUIRE_GPT_SOVITS=0 only when text-only pet replies are acceptable.
 
-Database, queue, object storage, AI/RAG, and observability containers are not
-started or stopped by this script. Start the broader Docker stack separately
-when those dependencies are not already running.
+Observability and AI/RAG containers are not started by this script. Start the
+broader Docker stack separately when those dependencies are needed.
 USAGE
 }
 
@@ -47,6 +52,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-envoy|--no-envoy)
             START_ENVOY_OVERRIDE=0
+            shift
+            ;;
+        --skip-docker-deps|--no-docker-deps)
+            START_DOCKER_DEPS_OVERRIDE=0
             shift
             ;;
         --skip-gpt-sovits|--no-gpt-sovits)
@@ -77,6 +86,7 @@ fi
 export MEMOCHAT_ENABLE_KAFKA="${MEMOCHAT_ENABLE_KAFKA:-1}"
 export MEMOCHAT_ENABLE_RABBITMQ="${MEMOCHAT_ENABLE_RABBITMQ:-1}"
 export MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-1}"
+START_DOCKER_DEPS="${START_DOCKER_DEPS_OVERRIDE:-${MEMOCHAT_START_DOCKER_DEPS:-1}}"
 START_ENVOY="${START_ENVOY_OVERRIDE:-${MEMOCHAT_START_ENVOY:-1}}"
 START_GPT_SOVITS="${START_GPT_SOVITS_OVERRIDE:-${MEMOCHAT_START_GPT_SOVITS:-1}}"
 REQUIRE_GPT_SOVITS="${MEMOCHAT_REQUIRE_GPT_SOVITS:-1}"
@@ -96,6 +106,58 @@ is_truthy() {
         1|true|yes|on) return 0 ;;
         *) return 1 ;;
     esac
+}
+
+wait_for_minio() {
+    local waited=0
+    while (( waited < WAIT_SECONDS )); do
+        if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1; then
+            echo "  [OK] memochat-minio ready at http://127.0.0.1:9000"
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    echo "  [WARN] memochat-minio did not answer health within ${WAIT_SECONDS}s; check docker compose ps memochat-minio"
+    return 0
+}
+
+wait_for_redpanda() {
+    local waited=0
+    while (( waited < WAIT_SECONDS )); do
+        if docker exec memochat-redpanda rpk cluster info --brokers 127.0.0.1:19092 >/dev/null 2>&1; then
+            echo "  [OK] memochat-redpanda ready at 127.0.0.1:19092"
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    echo "  [WARN] memochat-redpanda did not answer cluster info within ${WAIT_SECONDS}s; check docker compose ps memochat-redpanda"
+    return 0
+}
+
+ensure_docker_dependencies() {
+    if ! is_truthy "$START_DOCKER_DEPS"; then
+        echo "  [SKIP] Docker dependency startup disabled"
+        return 0
+    fi
+
+    if [[ ! -f "$LOCAL_COMPOSE_FILE" ]]; then
+        echo "  [FAIL] Local compose file not found: ${LOCAL_COMPOSE_FILE}" >&2
+        return 1
+    fi
+
+    echo "  [*] Starting Docker dependencies from ${LOCAL_COMPOSE_FILE}"
+    docker compose -f "$LOCAL_COMPOSE_FILE" up -d \
+        memochat-redis \
+        memochat-postgres \
+        memochat-mongo \
+        memochat-minio \
+        memochat-redpanda \
+        memochat-rabbitmq
+
+    wait_for_minio
+    wait_for_redpanda
 }
 
 ensure_envoy_gateway() {
@@ -493,6 +555,10 @@ echo "  LOG_DIR:      ${LOG_DIR}"
 echo "  PID_DIR:      ${PID_DIR}"
 echo "  COMPOSE:      ${LOCAL_COMPOSE_FILE}"
 echo "============================================================"
+echo
+
+echo "[STEP] Start Docker dependencies"
+ensure_docker_dependencies
 echo
 
 echo "[STEP] Start Docker Envoy Gateway"

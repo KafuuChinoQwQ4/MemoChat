@@ -1,11 +1,11 @@
-import unittest
+﻿import unittest
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PET_MODEL_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/PetModel.h"
-PET_MODEL_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/PetModel.cpp"
-PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/PetController.h"
+PET_MODEL_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/models/PetModel.h"
+PET_MODEL_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/models/PetModel.cpp"
+PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/controllers/PetController.h"
 PET_SCENE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetScene.qml"
 PET_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetWindow.qml"
 PET_CHAT_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatWindow.qml"
@@ -16,12 +16,12 @@ CHARACTER_PANE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2
 CHAT_SHELL_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/ChatShellPage.qml"
 SHARED_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
-PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/PetController.h"
-PET_CONTROLLER_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/PetController.cpp"
+PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/controllers/PetController.h"
+PET_CONTROLLER_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/controllers/PetController.cpp"
 CLIENT_CMAKE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/CMakeLists.txt"
 QML_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml.qrc"
 PET_CAMERA_CAPTURE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetCameraCapture.qml"
-MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/main.cpp"
+MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/main.cpp"
 
 
 class PetQmlContractTests(unittest.TestCase):

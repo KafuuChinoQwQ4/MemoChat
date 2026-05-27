@@ -1,11 +1,11 @@
-import re
+﻿import re
 import unittest
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-APP_CONTROLLER_MODELS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerModels.cpp"
-APP_CONTROLLER_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerSelection.cpp"
+APP_CONTROLLER_MODELS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerModels.cpp"
+APP_CONTROLLER_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerSelection.cpp"
 
 
 def extract_function(source: str, signature: str) -> str:

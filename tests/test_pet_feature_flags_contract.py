@@ -1,4 +1,4 @@
-import json
+﻿import json
 import unittest
 from pathlib import Path
 
@@ -12,9 +12,9 @@ PET_ROUTER = REPO_ROOT / "apps/server/core/AIOrchestrator/api/pet_router.py"
 PET_RUNTIME = REPO_ROOT / "apps/server/core/AIOrchestrator/harness/pet/runtime.py"
 AI_DOCKER_COMPOSE = REPO_ROOT / "apps/server/core/AIOrchestrator/docker-compose.yml"
 CLIENT_CMAKE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/CMakeLists.txt"
-LIVE2D_RENDER_ITEM_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/Live2DRenderItem.cpp"
-LIVE2D_OFFICIAL_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/Live2DOfficialOpenGLRenderer.cpp"
-LIVE2D_PLACEHOLDER_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/Live2DPlaceholderRenderer.cpp"
+LIVE2D_RENDER_ITEM_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/live2d/Live2DRenderItem.cpp"
+LIVE2D_OFFICIAL_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/live2d/Live2DOfficialOpenGLRenderer.cpp"
+LIVE2D_PLACEHOLDER_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/live2d/Live2DPlaceholderRenderer.cpp"
 LIVE2D_FIND_MODULE = REPO_ROOT / "cmake/FindLive2DCubism.cmake"
 LIVE2D_POLICY_DOC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/docs/live2d-desktop-pet-assets.md"
 WSLG_LAUNCHER = REPO_ROOT / "tools/scripts/status/start-memochat-qml-wslg.sh"
