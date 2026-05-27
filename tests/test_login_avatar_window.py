@@ -1,11 +1,11 @@
-import re
+﻿import re
 import unittest
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/IconPathUtils.h"
-APP_CONTROLLER_SESSION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerSession.cpp"
+ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/utils/IconPathUtils.h"
+APP_CONTROLLER_SESSION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerSession.cpp"
 MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
 LOGIN_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/LoginPage.qml"
 LOGIN_TOP_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/components/LoginTopBar.qml"
@@ -53,15 +53,21 @@ class LoginAvatarWindowTests(unittest.TestCase):
         )
         self.assertIn("setIconDownloadAuthContext(_pending_uid, _pending_token);", body)
 
-    def test_login_and_chat_windows_center_once_when_opened(self):
+    def test_login_and_chat_share_single_window_and_center_on_page_sync(self):
         source = MAIN_QML.read_text(encoding="utf-8")
-        show_login = extract_qml_function(source, "showLoginWindow")
-        show_chat = extract_qml_function(source, "showChatWindow")
+        sync_windows = extract_qml_function(source, "syncWindowsByPage")
+        configure_window = extract_qml_function(source, "configureAppWindowForPage")
 
         self.assertIn("visible: false", source)
         self.assertIn("return true", extract_qml_function(source, "centerWindow"))
-        self.assertIn("centerWindow(win)", show_login)
-        self.assertIn("centerWindow(win)", show_chat)
+        self.assertIn("property var appWindowRef: null", source)
+        self.assertIn("function ensureAppWindow()", source)
+        self.assertIn("sourceComponent: chatShellPageComponent", source)
+        self.assertIn("sourceComponent: loginPageComponent", source)
+        self.assertIn("configureAppWindowForPage(win)", sync_windows)
+        self.assertIn("showWindowCentered(win)", sync_windows)
+        self.assertIn("centerWindowForSize(win, size)", configure_window)
+        self.assertIn("requestWindowCenter(win)", configure_window)
         self.assertNotIn("centerWindowWithRetry", source)
         self.assertNotIn("retryCenterTimer", source)
         self.assertNotIn("startupShowRetryTimer", source)
@@ -73,7 +79,7 @@ class LoginAvatarWindowTests(unittest.TestCase):
 
         self.assertIn("import QtQuick.Window 2.15", login_page)
         self.assertIn("signal dragMoveRequested()", top_bar)
-        self.assertIn("onPressAndHold", top_bar)
+        self.assertIn("onPressed:", top_bar)
         self.assertIn("onDragMoveRequested:", login_page)
         self.assertIn("Window.window.startSystemMove()", login_page)
 

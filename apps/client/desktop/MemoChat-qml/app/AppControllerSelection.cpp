@@ -18,7 +18,7 @@ void AppController::selectChatIndex(int index)
         _current_chat_uid = 0;
         setCurrentGroup(0, QString());
         setCurrentChatPeerName(QString());
-        setCurrentChatPeerIcon(QStringLiteral("qrc:/res/head_1.jpg"));
+        setCurrentChatPeerIcon(QStringLiteral("qrc:/res/head_1.png"));
         _message_model.clear();
         _private_history_before_ts = 0;
         _private_history_before_msg_id.clear();
@@ -53,13 +53,13 @@ void AppController::selectChatIndex(int index)
         _chat_list_model.upsertFriend(friendInfo);
         setCurrentChatPeerName(DialogListService::privateDisplayName(friendInfo));
         setCurrentChatPeerIcon(friendInfo->_icon.trimmed().isEmpty()
-                               ? QStringLiteral("qrc:/res/head_1.jpg")
+                               ? QStringLiteral("qrc:/res/head_1.png")
                                : friendInfo->_icon);
     } else {
         setCurrentChatPeerName(item.value("name").toString());
         const QString icon = item.value("icon").toString();
         setCurrentChatPeerIcon(icon.trimmed().isEmpty()
-                               ? QStringLiteral("qrc:/res/head_1.jpg")
+                               ? QStringLiteral("qrc:/res/head_1.png")
                                : icon);
     }
     emitCurrentDialogUidChangedIfNeeded();

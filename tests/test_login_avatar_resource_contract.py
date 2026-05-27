@@ -1,16 +1,19 @@
-import unittest
+﻿import unittest
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LOGIN_TOP_BAR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/components/LoginTopBar.qml"
-SHARED_QRC = REPO_ROOT / "apps/client/desktop/MemoChatShared/rc.qrc"
+CORE_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/rc.qrc"
 SHARED_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
-ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/IconPathUtils.h"
-APP_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppController.cpp"
-APP_CONTROLLER_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerState.cpp"
-AUTH_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AuthController.cpp"
+ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/utils/IconPathUtils.h"
+APP_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppController.cpp"
+APP_CONTROLLER_NAVIGATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerNavigation.cpp"
+APP_CONTROLLER_SESSION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerSession.cpp"
+APP_CONTROLLER_MODELS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerModels.cpp"
+APP_CONTROLLER_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerState.cpp"
+AUTH_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/controllers/AuthController.cpp"
 
 
 class LoginAvatarResourceContractTests(unittest.TestCase):
@@ -20,7 +23,7 @@ class LoginAvatarResourceContractTests(unittest.TestCase):
 
         self.assertIn("import QtQuick.Window 2.15", source)
         self.assertIn("MouseArea", source)
-        self.assertIn("onPressAndHold", source)
+        self.assertIn("onPressed:", source)
         self.assertIn("signal dragMoveRequested()", source)
         self.assertIn("root.dragMoveRequested()", source)
         self.assertIn("onDragMoveRequested:", login_page)
@@ -28,10 +31,10 @@ class LoginAvatarResourceContractTests(unittest.TestCase):
         self.assertIn("settingsClicked()", source)
 
     def test_default_avatar_is_registered_as_png_backed_resource(self):
-        source = SHARED_QRC.read_text(encoding="utf-8")
+        source = CORE_QRC.read_text(encoding="utf-8")
 
-        self.assertIn("<file>res/head_1.png</file>", source)
-        self.assertIn('<file alias="res/head_1.jpg">res/head_1.png</file>', source)
+        self.assertIn('<file alias="res/head_1.png">../src/head_1.png</file>', source)
+        self.assertIn('<file alias="res/head_1.jpg">../src/head_1.png</file>', source)
 
         icon_utils = ICON_PATH_UTILS.read_text(encoding="utf-8")
         self.assertIn('QStringLiteral("qrc:/res/head_1.png")', icon_utils)
@@ -47,6 +50,14 @@ class LoginAvatarResourceContractTests(unittest.TestCase):
 
         auth = AUTH_CONTROLLER.read_text(encoding="utf-8")
         self.assertIn('payload["icon"] = ":/res/head_1.png";', auth)
+
+    def test_cpp_default_user_avatar_fallbacks_use_png_canonical_resource(self):
+        for path in (APP_CONTROLLER_NAVIGATION, APP_CONTROLLER_SESSION, APP_CONTROLLER_MODELS):
+            with self.subTest(path=path.name):
+                source = path.read_text(encoding="utf-8")
+                self.assertNotIn('QStringLiteral("qrc:/res/head_1.jpg")', source)
+                self.assertNotIn('"qrc:/res/head_1.jpg"', source)
+                self.assertIn("qrc:/res/head_1.png", source)
 
     def test_login_windows_no_longer_depend_on_immediate_drag_handler(self):
         for path in (SHARED_MAIN_QML, LINUX_MAIN_QML):

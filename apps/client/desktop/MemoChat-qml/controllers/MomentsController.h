@@ -10,8 +10,8 @@
 #include <QVector>
 #include <memory>
 #include "MomentsModel.h"
-#include "../MemoChatShared/httpmgr.h"
-#include "../MemoChatShared/usermgr.h"
+#include "httpmgr.h"
+#include "usermgr.h"
 
 class MomentsController : public QObject
 {

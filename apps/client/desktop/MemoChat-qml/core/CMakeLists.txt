@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(MemoChatShared LANGUAGES CXX)
+project(MemoChatCore LANGUAGES CXX)
 
 if(NOT DEFINED MEMOCHAT_CXX_STANDARD)
     set(MEMOCHAT_CXX_STANDARD "23" CACHE STRING "C++ standard used by MemoChat targets")
@@ -29,35 +29,36 @@ else()
 endif()
 
 set(CORE_SOURCES
-    ChatMessageDispatcher.cpp
-    global.cpp
-    httpmgr.cpp
-    QuicChatTransport.cpp
-    TelemetryUtils.cpp
-    tcpmgr.cpp
-    userdata.cpp
-    usermgr.cpp
-    imagecropperlabel.cpp
-    ScreenCaptureWidget.cpp
-    ScreenCaptureService.cpp
-    WebcamCaptureDialog.cpp
+    common/global.cpp
+    media/imagecropperlabel.cpp
+    media/ScreenCaptureWidget.cpp
+    media/ScreenCaptureService.cpp
+    media/WebcamCaptureDialog.cpp
+    network/ChatMessageDispatcher.cpp
+    network/httpmgr.cpp
+    network/QuicChatTransport.cpp
+    network/TelemetryUtils.cpp
+    network/tcpmgr.cpp
+    session/userdata.cpp
+    session/usermgr.cpp
 )
 
 set(CORE_HEADERS
-    ChatMessageDispatcher.h
-    global.h
-    httpmgr.h
-    IChatTransport.h
-    QuicChatTransport.h
-    TelemetryUtils.h
-    tcpmgr.h
-    userdata.h
-    usermgr.h
-    singleton.h
-    imagecropperlabel.h
-    ScreenCaptureWidget.h
-    ScreenCaptureService.h
-    WebcamCaptureDialog.h
+    common/global.h
+    common/singleton.h
+    media/imagecropperdialog.h
+    media/imagecropperlabel.h
+    media/ScreenCaptureWidget.h
+    media/ScreenCaptureService.h
+    media/WebcamCaptureDialog.h
+    network/ChatMessageDispatcher.h
+    network/httpmgr.h
+    network/IChatTransport.h
+    network/QuicChatTransport.h
+    network/TelemetryUtils.h
+    network/tcpmgr.h
+    session/userdata.h
+    session/usermgr.h
 )
 
 add_library(MemoChatCore STATIC ${CORE_SOURCES} ${CORE_HEADERS})
@@ -68,6 +69,10 @@ set_target_properties(MemoChatCore PROPERTIES
 )
 target_include_directories(MemoChatCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/media
+    ${CMAKE_CURRENT_SOURCE_DIR}/network
+    ${CMAKE_CURRENT_SOURCE_DIR}/session
     ${CMAKE_SOURCE_DIR}/apps/server/core/common
 )
 target_link_libraries(MemoChatCore PUBLIC

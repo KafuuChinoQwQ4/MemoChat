@@ -1,0 +1,54 @@
+﻿<RCC>
+    <qresource prefix="/">
+        <file alias="app/icon.ico">icon.ico</file>
+        <file>style/stylesheet.qss</file>
+        <file alias="res/unvisible.png">../src/unvisible.png</file>
+        <file alias="res/visible.png">../src/visible.png</file>
+        <file alias="res/unvisible_hover.png">../src/unvisible_hover.png</file>
+        <file alias="res/visible_hover.png">../src/visible_hover.png</file>
+        <file alias="res/add_friend_hover.png">../src/add_friend_hover.png</file>
+        <file alias="res/add_friend_normal.png">../src/add_friend_normal.png</file>
+        <file alias="res/search.png">../src/search.png</file>
+        <file alias="res/close_search.png">../src/close_search.png</file>
+        <file alias="res/close_transparent.png">../src/close_transparent.png</file>
+        <file alias="res/head_1.png">../src/head_1.png</file>
+        <file alias="res/head_1.jpg">../src/head_1.png</file>
+        <file alias="res/loading.gif">../src/loading.gif</file>
+        <file alias="res/smile.png">../src/smile.png</file>
+        <file alias="res/smile_hover.png">../src/smile_hover.png</file>
+        <file alias="res/smile_press.png">../src/smile_press.png</file>
+        <file alias="res/filedir.png">../src/filedir.png</file>
+        <file alias="res/filedir_hover.png">../src/filedir_hover.png</file>
+        <file alias="res/filedir_press.png">../src/filedir_press.png</file>
+        <file alias="res/chat_icon.png">../src/chat_icon.png</file>
+        <file alias="res/chat_icon_hover.png">../src/chat_icon_hover.png</file>
+        <file alias="res/chat_icon_press.png">../src/chat_icon_press.png</file>
+        <file alias="res/chat_icon_select_hover.png">../src/chat_icon_select_hover.png</file>
+        <file alias="res/chat_icon_select_press.png">../src/chat_icon_select_press.png</file>
+        <file alias="res/contact_list.png">../src/contact_list.png</file>
+        <file alias="res/contact_list_hover.png">../src/contact_list_hover.png</file>
+        <file alias="res/contact_list_press.png">../src/contact_list_press.png</file>
+        <file alias="res/addtip.png">../src/addtip.png</file>
+        <file alias="res/right_tip.png">../src/right_tip.png</file>
+        <file alias="res/arowdown.png">../src/arowdown.png</file>
+        <file alias="res/tipclose.png">../src/tipclose.png</file>
+        <file alias="res/add_friend.png">../src/add_friend.png</file>
+        <file alias="res/red_point.png">../src/red_point.png</file>
+        <file alias="res/female.png">../src/female.png</file>
+        <file alias="res/male.png">../src/male.png</file>
+        <file alias="res/msg_chat_hover.png">../src/msg_chat_hover.png</file>
+        <file alias="res/msg_chat_normal.png">../src/msg_chat_normal.png</file>
+        <file alias="res/msg_chat_press.png">../src/msg_chat_press.png</file>
+        <file alias="res/video_chat_hover.png">../src/video_chat_hover.png</file>
+        <file alias="res/video_chat_normal.png">../src/video_chat_normal.png</file>
+        <file alias="res/video_chat_press.png">../src/video_chat_press.png</file>
+        <file alias="res/voice_chat_normal.png">../src/voice_chat_normal.png</file>
+        <file alias="res/voice_chat_hover.png">../src/voice_chat_hover.png</file>
+        <file alias="res/voice_chat_press.png">../src/voice_chat_press.png</file>
+        <file alias="res/settings_select_hover.png">../src/settings_select_hover.png</file>
+        <file alias="res/settings.png">../src/settings.png</file>
+        <file alias="res/settings_press.png">../src/settings_press.png</file>
+        <file alias="res/settings_select_press.png">../src/settings_select_press.png</file>
+        <file alias="res/settings_hover.png">../src/settings_hover.png</file>
+    </qresource>
+</RCC>

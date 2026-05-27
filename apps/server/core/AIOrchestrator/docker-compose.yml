@@ -43,7 +43,7 @@ services:
       - MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__PORT=5672
       - MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__USERNAME=${MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__USERNAME:-memochat}
       - MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__PASSWORD=${MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__PASSWORD:-123456}
-      - MEMOCHAT_AI_AGENT_QUEUE__REDPANDA__BOOTSTRAP_SERVERS=${MEMOCHAT_AI_AGENT_QUEUE__REDPANDA__BOOTSTRAP_SERVERS:-host.docker.internal:19092}
+      - MEMOCHAT_AI_AGENT_QUEUE__REDPANDA__BOOTSTRAP_SERVERS=${MEMOCHAT_AI_AGENT_QUEUE__REDPANDA__BOOTSTRAP_SERVERS:-memochat-redpanda:9092}
       - MEMOCHAT_AI_AGENT_QUEUE__REDPANDA__PROXY_URL=${MEMOCHAT_AI_AGENT_QUEUE__REDPANDA__PROXY_URL:-http://host.docker.internal:18082}
       - MEMOCHAT_AI_SEMANTIC_CACHE__ENABLED=${MEMOCHAT_AI_SEMANTIC_CACHE__ENABLED:-true}
       - MEMOCHAT_AI_SEMANTIC_CACHE__REDIS__HOST=${MEMOCHAT_AI_SEMANTIC_CACHE__REDIS__HOST:-host.docker.internal}
@@ -82,6 +82,9 @@ services:
       - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      - default
+      - memochat_default
     volumes:
       - type: bind
         source: ${MEMOCHAT_AI_CONFIG_FILE:-/data/docker-data/memochat/ai-orchestrator/config.yaml}
@@ -183,4 +186,8 @@ volumes:
     external: true
   qdrant_storage:
     name: memochat-qdrant-storage
+    external: true
+
+networks:
+  memochat_default:
     external: true

@@ -4,7 +4,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLIENT_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
-SHARED_CLIENT = REPO_ROOT / "apps/client/desktop/MemoChatShared"
+CORE_CLIENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core"
 GATE_CORE = REPO_ROOT / "apps/server/core/GateServerCore"
 GATE_H1 = REPO_ROOT / "apps/server/core/GateServer"
 GATE_H2 = REPO_ROOT / "apps/server/core/GateServerHttp2"
@@ -62,7 +62,7 @@ class UserAvatarProfileContractTests(unittest.TestCase):
         self.assertIn("emit currentUserChanged();", profile_helper)
 
     def test_chat_login_response_does_not_replace_seeded_icon_with_empty_value(self):
-        dispatcher = read(SHARED_CLIENT / "ChatMessageDispatcher.cpp")
+        dispatcher = read(CORE_CLIENT / "ChatMessageDispatcher.cpp")
         handler = dispatcher[dispatcher.index("_handlers.insert(ID_CHAT_LOGIN_RSP"):]
         handler = handler[:handler.index("_handlers.insert(ID_GET_RELATION_BOOTSTRAP_RSP")]
 

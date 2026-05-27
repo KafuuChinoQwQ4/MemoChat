@@ -63,7 +63,7 @@ void AppController::onDeleteFriendRsp(int error, int friendUid)
         _current_chat_uid = 0;
         _message_model.clear();
         setCurrentChatPeerName(QString());
-        setCurrentChatPeerIcon(QStringLiteral("qrc:/res/head_1.jpg"));
+        setCurrentChatPeerIcon(QStringLiteral("qrc:/res/head_1.png"));
         setCurrentDraftText(QString());
         setCurrentDialogPinned(false);
         setCurrentDialogMuted(false);
@@ -71,7 +71,7 @@ void AppController::onDeleteFriendRsp(int error, int friendUid)
     }
 
     if (_current_contact_uid == friendUid) {
-        setCurrentContact(0, QString(), QString(), QStringLiteral("qrc:/res/head_1.jpg"), QString(), 0);
+        setCurrentContact(0, QString(), QString(), QStringLiteral("qrc:/res/head_1.png"), QString(), 0);
         setContactPane(ApplyRequestPane);
     }
 

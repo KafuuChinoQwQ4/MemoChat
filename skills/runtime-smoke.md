@@ -7,6 +7,8 @@ description: Use when validating MemoChat local runtime startup, Docker dependen
 
 用于在代码/配置变更后验证本地 MemoChat 栈是否正常工作。
 
+这个 skill 只管部署、启动、环境探针、服务健康和清理，不负责测试轮次设计。测试轮次、`test<N>.md` / `result<N>.md` / `fix<N>.md` 产物和 PASS 判定归 `skills/withtest.md`。
+
 ## 前置条件
 
 - 被测试服务的 `archlinux` WSL Linux 服务产物存在于 `build-linux-full-gcc16/bin`。

@@ -10,7 +10,7 @@ description: Use when preparing a MemoChat release or release candidate, validat
 ## 前置条件
 
 1. 运行 `git status --short`。
-2. 如果存在无关未提交改动，停止并询问如何处理。
+2. 如果存在无关未提交改动，先确认这些改动是否属于本次发布；只有在会影响发布内容、验证或提交范围时才停止并询问如何处理。
 3. 确认发布范围：
    - server
    - client
@@ -93,6 +93,8 @@ tools/scripts/full_flow_test.ps1
 ## Commit/Tag
 
 只有在用户明确批准最终 release 文本后，才 commit 或 tag。
+
+发布门槛比普通实现任务更严格。它只适用于 release / release candidate 流程，不覆盖日常功能开发、调试或文档工作。
 
 提交前：
 

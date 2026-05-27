@@ -140,10 +140,10 @@ services:
       - --node-id
       - "0"
       - --check=false
-      - --kafka-addr=0.0.0.0:19092
-      - --advertise-kafka-addr=host.docker.internal:19092
+      - --kafka-addr=INTERNAL://0.0.0.0:9092,OUTSIDE://0.0.0.0:19092
+      - --advertise-kafka-addr=INTERNAL://memochat-redpanda:9092,OUTSIDE://127.0.0.1:19092
       - --pandaproxy-addr=0.0.0.0:18082
-      - --advertise-pandaproxy-addr=host.docker.internal:18082
+      - --advertise-pandaproxy-addr=127.0.0.1:18082
     volumes:
       - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/redpanda/data:/var/lib/redpanda/data
 
