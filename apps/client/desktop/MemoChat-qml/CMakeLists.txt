@@ -62,6 +62,8 @@ find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS Multimedia)
 find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS VirtualKeyboard)
 
 set(MEMOCHAT_QML_CORE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/core)
+set(MEMOCHAT_QML_FEATURE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features)
+set(MEMOCHAT_QML_SHARED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shared)
 add_subdirectory(core)
 
 set(SOURCES
@@ -87,42 +89,52 @@ set(SOURCES
     app/AppControllerPrivateEvents.cpp
     app/AppControllerSession.cpp
     app/AppControllerState.cpp
-    controllers/AuthController.cpp
-    controllers/CallController.cpp
-    controllers/ChatController.cpp
-    controllers/ContactController.cpp
-    controllers/ProfileController.cpp
-    controllers/MomentsController.cpp
-    controllers/AgentController.cpp
-    controllers/AgentControllerGame.cpp
-    controllers/AgentControllerKnowledge.cpp
-    controllers/AgentControllerStream.cpp
-    controllers/PetController.cpp
-    controllers/R18Controller.cpp
-    models/CallSessionModel.cpp
-    models/FriendListModel.cpp
-    models/ChatMessageModel.cpp
-    models/SearchResultModel.cpp
-    models/ApplyRequestModel.cpp
-    models/MomentsModel.cpp
-    models/AgentMessageModel.cpp
-    models/PetModel.cpp
-    models/R18ListModel.cpp
-    services/LivekitBridge.cpp
-    services/ChatDispatchService.cpp
-    services/ClientGateway.cpp
-    services/ConversationSyncService.cpp
-    services/DialogListService.cpp
-    services/TransportSelector.cpp
-    services/LocalFilePickerService.cpp
-    services/MediaUploadService.cpp
-    services/MessagePayloadService.cpp
-    services/WindowShapeService.cpp
-    services/PetSpeechSynthesizer.cpp
-    storage/PrivateChatCacheStore.cpp
-    storage/GroupChatCacheStore.cpp
-    storage/PetAssetSettings.cpp
-    utils/MessageContentCodec.cpp
+    features/auth/AuthController.cpp
+    features/call/CallController.cpp
+    features/call/CallSessionModel.cpp
+    features/call/LivekitBridge.cpp
+    features/chat/ChatController.cpp
+    features/chat/ChatDispatchService.cpp
+    features/chat/ChatMessageModel.cpp
+    features/chat/ConversationSyncService.cpp
+    features/chat/DialogListService.cpp
+    features/chat/GroupChatCacheStore.cpp
+    features/chat/MessageContentCodec.cpp
+    features/chat/MessagePayloadService.cpp
+    features/chat/PrivateChatCacheStore.cpp
+    features/contact/ApplyRequestModel.cpp
+    features/contact/ContactController.cpp
+    features/contact/FriendListModel.cpp
+    features/contact/SearchResultModel.cpp
+    features/profile/ProfileController.cpp
+    features/moments/MomentsController.cpp
+    features/moments/MomentsControllerParsing.cpp
+    features/moments/MomentsControllerPublish.cpp
+    features/moments/MomentsControllerRequests.cpp
+    features/moments/MomentsControllerResponses.cpp
+    features/moments/MomentsModel.cpp
+    features/agent/AgentController.cpp
+    features/agent/AgentControllerGame.cpp
+    features/agent/AgentControllerKnowledge.cpp
+    features/agent/AgentControllerStream.cpp
+    features/agent/AgentMessageModel.cpp
+    features/pet/PetAssetSettings.cpp
+    features/pet/PetAssetSettingsAvatar.cpp
+    features/pet/PetAssetSettingsPersistence.cpp
+    features/pet/PetAssetSettingsState.cpp
+    features/pet/PetController.cpp
+    features/pet/PetControllerNetwork.cpp
+    features/pet/PetControllerVision.cpp
+    features/pet/PetControllerWindowsBridge.cpp
+    features/pet/PetModel.cpp
+    features/pet/PetSpeechSynthesizer.cpp
+    features/r18/R18Controller.cpp
+    features/r18/R18ListModel.cpp
+    shared/gateway/ClientGateway.cpp
+    shared/gateway/TransportSelector.cpp
+    shared/media/LocalFilePickerService.cpp
+    shared/media/MediaUploadService.cpp
+    shared/ui/WindowShapeService.cpp
     live2d/Live2DAvatarOpenGLRenderer.cpp
     live2d/Live2DAsset.cpp
     live2d/Live2DCoreRenderer.cpp
@@ -132,43 +144,45 @@ set(SOURCES
 )
 
 set(HEADERS
-    platform/ClientWinCompat.h
+    platform/windows/ClientWinCompat.h
     app/AppController.h
     app/AppCoordinators.h
-    controllers/AuthController.h
-    controllers/CallController.h
-    controllers/ChatController.h
-    controllers/ContactController.h
-    controllers/ProfileController.h
-    controllers/MomentsController.h
-    controllers/AgentController.h
-    controllers/PetController.h
-    controllers/R18Controller.h
-    models/CallSessionModel.h
-    models/FriendListModel.h
-    models/ChatMessageModel.h
-    models/SearchResultModel.h
-    models/ApplyRequestModel.h
-    models/MomentsModel.h
-    models/AgentMessageModel.h
-    models/PetModel.h
-    models/R18ListModel.h
-    services/LivekitBridge.h
-    services/ChatDispatchService.h
-    services/ClientGateway.h
-    services/ConversationSyncService.h
-    services/DialogListService.h
-    services/TransportSelector.h
-    services/LocalFilePickerService.h
-    services/MediaUploadService.h
-    services/MessagePayloadService.h
-    services/WindowShapeService.h
-    services/PetSpeechSynthesizer.h
-    storage/PrivateChatCacheStore.h
-    storage/GroupChatCacheStore.h
-    storage/PetAssetSettings.h
-    utils/MessageContentCodec.h
-    utils/IconPathUtils.h
+    features/auth/AuthController.h
+    features/call/CallController.h
+    features/call/CallSessionModel.h
+    features/call/LivekitBridge.h
+    features/chat/ChatController.h
+    features/chat/ChatDispatchService.h
+    features/chat/ChatMessageModel.h
+    features/chat/ConversationSyncService.h
+    features/chat/DialogListService.h
+    features/chat/GroupChatCacheStore.h
+    features/chat/MessageContentCodec.h
+    features/chat/MessagePayloadService.h
+    features/chat/PrivateChatCacheStore.h
+    features/contact/ApplyRequestModel.h
+    features/contact/ContactController.h
+    features/contact/FriendListModel.h
+    features/contact/SearchResultModel.h
+    features/profile/ProfileController.h
+    features/moments/MomentsController.h
+    features/moments/MomentsModel.h
+    features/agent/AgentController.h
+    features/agent/AgentMessageModel.h
+    features/pet/PetAssetSettings.h
+    features/pet/PetAssetSettingsPrivate.h
+    features/pet/PetController.h
+    features/pet/PetControllerPrivate.h
+    features/pet/PetModel.h
+    features/pet/PetSpeechSynthesizer.h
+    features/r18/R18Controller.h
+    features/r18/R18ListModel.h
+    shared/gateway/ClientGateway.h
+    shared/gateway/TransportSelector.h
+    shared/media/LocalFilePickerService.h
+    shared/media/MediaUploadService.h
+    shared/ui/WindowShapeService.h
+    shared/utils/IconPathUtils.h
     live2d/Live2DAvatarOpenGLRenderer.h
     live2d/Live2DAsset.h
     live2d/Live2DRenderer.h
@@ -198,12 +212,23 @@ set_target_properties(MemoChatQml PROPERTIES
 target_include_directories(MemoChatQml PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/app
-    ${CMAKE_CURRENT_SOURCE_DIR}/controllers
-    ${CMAKE_CURRENT_SOURCE_DIR}/models
-    ${CMAKE_CURRENT_SOURCE_DIR}/services
-    ${CMAKE_CURRENT_SOURCE_DIR}/storage
-    ${CMAKE_CURRENT_SOURCE_DIR}/utils
     ${CMAKE_CURRENT_SOURCE_DIR}/platform
+    ${CMAKE_CURRENT_SOURCE_DIR}/platform/windows
+    ${MEMOCHAT_QML_FEATURE_DIR}
+    ${MEMOCHAT_QML_FEATURE_DIR}/auth
+    ${MEMOCHAT_QML_FEATURE_DIR}/call
+    ${MEMOCHAT_QML_FEATURE_DIR}/chat
+    ${MEMOCHAT_QML_FEATURE_DIR}/contact
+    ${MEMOCHAT_QML_FEATURE_DIR}/profile
+    ${MEMOCHAT_QML_FEATURE_DIR}/moments
+    ${MEMOCHAT_QML_FEATURE_DIR}/agent
+    ${MEMOCHAT_QML_FEATURE_DIR}/pet
+    ${MEMOCHAT_QML_FEATURE_DIR}/r18
+    ${MEMOCHAT_QML_SHARED_DIR}
+    ${MEMOCHAT_QML_SHARED_DIR}/gateway
+    ${MEMOCHAT_QML_SHARED_DIR}/media
+    ${MEMOCHAT_QML_SHARED_DIR}/ui
+    ${MEMOCHAT_QML_SHARED_DIR}/utils
     ${CMAKE_CURRENT_SOURCE_DIR}/live2d
     ${MEMOCHAT_QML_CORE_DIR}
     ${MEMOCHAT_QML_CORE_DIR}/common

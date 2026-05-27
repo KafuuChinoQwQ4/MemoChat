@@ -6,12 +6,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 GROUP_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/GroupMessageService.cpp"
 PRIVATE_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/PrivateMessageService.cpp"
 CHAT_MESSAGE_DISPATCHER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/network/ChatMessageDispatcher.cpp"
-CHAT_MESSAGE_MODEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/models/ChatMessageModel.cpp"
-ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/utils/IconPathUtils.h"
+CHAT_MESSAGE_MODEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/ChatMessageModel.cpp"
+ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/shared/utils/IconPathUtils.h"
 APP_CONTROLLER_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerSelection.cpp"
 APP_CONTROLLER_PRIVATE_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerPrivateEvents.cpp"
 APP_CONTROLLER_DIALOG_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerDialogState.cpp"
-CONVERSATION_SYNC_SERVICE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/services/ConversationSyncService.cpp"
+CONVERSATION_SYNC_SERVICE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/ConversationSyncService.cpp"
 
 
 def extract_function(source: str, signature: str) -> str:

@@ -7,13 +7,13 @@ LOGIN_TOP_BAR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/components/Log
 CORE_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/rc.qrc"
 SHARED_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
-ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/utils/IconPathUtils.h"
+ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/shared/utils/IconPathUtils.h"
 APP_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppController.cpp"
 APP_CONTROLLER_NAVIGATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerNavigation.cpp"
 APP_CONTROLLER_SESSION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerSession.cpp"
 APP_CONTROLLER_MODELS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerModels.cpp"
 APP_CONTROLLER_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerState.cpp"
-AUTH_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/controllers/AuthController.cpp"
+AUTH_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/AuthController.cpp"
 
 
 class LoginAvatarResourceContractTests(unittest.TestCase):

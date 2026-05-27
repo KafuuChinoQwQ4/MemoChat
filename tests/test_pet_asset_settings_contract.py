@@ -6,10 +6,14 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 
-PET_ASSET_SETTINGS_H = CLIENT_DIR / "PetAssetSettings.h"
-PET_ASSET_SETTINGS_CPP = CLIENT_DIR / "PetAssetSettings.cpp"
+PET_ASSET_SETTINGS_H = CLIENT_DIR / "features/pet/PetAssetSettings.h"
+PET_ASSET_SETTINGS_CPP = CLIENT_DIR / "features/pet/PetAssetSettings.cpp"
+PET_ASSET_SETTINGS_PRIVATE_H = CLIENT_DIR / "features/pet/PetAssetSettingsPrivate.h"
+PET_ASSET_SETTINGS_AVATAR_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsAvatar.cpp"
+PET_ASSET_SETTINGS_PERSISTENCE_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsPersistence.cpp"
+PET_ASSET_SETTINGS_STATE_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsState.cpp"
 CLIENT_CMAKE = CLIENT_DIR / "CMakeLists.txt"
-MAIN_CPP = CLIENT_DIR / "main.cpp"
+MAIN_CPP = CLIENT_DIR / "app/main.cpp"
 CHARACTER_PANE_QML = CLIENT_DIR / "qml/pet/Live2DCharacterPane.qml"
 QML_QRC = CLIENT_DIR / "qml.qrc"
 
@@ -118,6 +122,19 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def pet_asset_settings_source() -> str:
+    return "\n".join(
+        read(path)
+        for path in (
+            PET_ASSET_SETTINGS_CPP,
+            PET_ASSET_SETTINGS_PRIVATE_H,
+            PET_ASSET_SETTINGS_AVATAR_CPP,
+            PET_ASSET_SETTINGS_PERSISTENCE_CPP,
+            PET_ASSET_SETTINGS_STATE_CPP,
+        )
+    )
+
+
 def function_body(source: str, name: str) -> str:
     match = re.search(rf"\bfunction\s+{re.escape(name)}\s*\([^)]*\)\s*\{{", source)
     if not match:
@@ -147,10 +164,33 @@ class PetAssetSettingsContractTests(unittest.TestCase):
     def test_pet_asset_settings_files_exist_and_are_added_to_client_cmake(self):
         self.assertFileExists(PET_ASSET_SETTINGS_H)
         self.assertFileExists(PET_ASSET_SETTINGS_CPP)
+        self.assertFileExists(PET_ASSET_SETTINGS_PRIVATE_H)
+        self.assertFileExists(PET_ASSET_SETTINGS_AVATAR_CPP)
+        self.assertFileExists(PET_ASSET_SETTINGS_PERSISTENCE_CPP)
+        self.assertFileExists(PET_ASSET_SETTINGS_STATE_CPP)
 
         cmake = read(CLIENT_CMAKE)
         self.assertRegex(cmake, r"\bPetAssetSettings\.cpp\b")
+        self.assertRegex(cmake, r"\bPetAssetSettingsAvatar\.cpp\b")
+        self.assertRegex(cmake, r"\bPetAssetSettingsPersistence\.cpp\b")
+        self.assertRegex(cmake, r"\bPetAssetSettingsState\.cpp\b")
         self.assertRegex(cmake, r"\bPetAssetSettings\.h\b")
+        self.assertRegex(cmake, r"\bPetAssetSettingsPrivate\.h\b")
+
+    def test_pet_asset_settings_large_concerns_are_split(self):
+        main = read(PET_ASSET_SETTINGS_CPP)
+        avatar = read(PET_ASSET_SETTINGS_AVATAR_CPP)
+        persistence = read(PET_ASSET_SETTINGS_PERSISTENCE_CPP)
+        state = read(PET_ASSET_SETTINGS_STATE_CPP)
+
+        self.assertIn("QString PetAssetSettings::resolveLive2DAvatarUrl", avatar)
+        self.assertIn("bool PetAssetSettings::load()", persistence)
+        self.assertIn("QVariantMap PetAssetSettings::toVariantMap() const", persistence)
+        self.assertIn("void PetAssetSettings::applyDefaults", state)
+        self.assertIn("void PetAssetSettings::setCharacterName", state)
+        self.assertNotIn("resolveLive2DAvatarUrl", main)
+        self.assertNotIn("QVariantMap PetAssetSettings::toVariantMap", main)
+        self.assertLess(len(main.splitlines()), 120)
 
     def test_pet_asset_settings_qobject_contract_is_exposed(self):
         self.assertFileExists(PET_ASSET_SETTINGS_H)
@@ -183,7 +223,7 @@ class PetAssetSettingsContractTests(unittest.TestCase):
 
     def test_pet_asset_settings_uses_app_data_json_storage(self):
         self.assertFileExists(PET_ASSET_SETTINGS_CPP)
-        source = read(PET_ASSET_SETTINGS_CPP)
+        source = pet_asset_settings_source()
 
         for token in (
             "QStandardPaths",
@@ -205,7 +245,7 @@ class PetAssetSettingsContractTests(unittest.TestCase):
 
     def test_pet_asset_settings_serializes_declared_draft_fields(self):
         self.assertFileExists(PET_ASSET_SETTINGS_CPP)
-        source = read(PET_ASSET_SETTINGS_CPP)
+        source = pet_asset_settings_source()
 
         for field in PERSISTED_DRAFT_FIELDS:
             self.assertContains(
@@ -219,7 +259,7 @@ class PetAssetSettingsContractTests(unittest.TestCase):
 
     def test_pet_asset_settings_defaults_client_pet_autostart_off_and_exposes_pickers(self):
         header = read(PET_ASSET_SETTINGS_H)
-        source = read(PET_ASSET_SETTINGS_CPP)
+        source = pet_asset_settings_source()
 
         self.assertRegex(source, r"_auto_start_pet_on_client_start\s*=\s*false")
         self.assertRegex(source, r"boolValue\s*\(\s*values\s*,\s*QStringLiteral\(\"autoStartPetOnClientStart\"\)")
@@ -240,7 +280,7 @@ class PetAssetSettingsContractTests(unittest.TestCase):
 
     def test_pet_asset_settings_clamps_invalid_json_to_safe_defaults(self):
         self.assertFileExists(PET_ASSET_SETTINGS_CPP)
-        source = read(PET_ASSET_SETTINGS_CPP)
+        source = pet_asset_settings_source()
 
         self.assertRegex(
             source,
@@ -260,7 +300,7 @@ class PetAssetSettingsContractTests(unittest.TestCase):
             self.assertContains(source, token)
 
     def test_pet_asset_settings_discards_stale_blocked_voice_training_jobs_on_load(self):
-        source = read(PET_ASSET_SETTINGS_CPP)
+        source = pet_asset_settings_source()
 
         for token in (
             "reference_not_visible",
@@ -276,7 +316,7 @@ class PetAssetSettingsContractTests(unittest.TestCase):
             self.assertContains(source, token)
 
     def test_pet_asset_settings_defaults_to_user_requested_src_character_assets(self):
-        source = read(PET_ASSET_SETTINGS_CPP)
+        source = pet_asset_settings_source()
         qml = read(CHARACTER_PANE_QML)
         cmake = read(CLIENT_CMAKE)
 
@@ -310,7 +350,7 @@ class PetAssetSettingsContractTests(unittest.TestCase):
 
     def test_character_pane_language_options_are_single_language_only(self):
         qml = read(CHARACTER_PANE_QML)
-        source = read(PET_ASSET_SETTINGS_CPP)
+        source = pet_asset_settings_source()
 
         self.assertIn('model: ["中文", "日语", "英语", "韩语", "法语", "西班牙语"]', qml)
         self.assertIn("kLanguageOptionCount - 1", source)

@@ -4,7 +4,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TELEMETRY_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/network/TelemetryUtils.cpp"
-MEDIA_UPLOAD_SERVICE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/services/MediaUploadService.cpp"
+MEDIA_UPLOAD_SERVICE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/shared/media/MediaUploadService.cpp"
 
 
 class AvatarUploadThreadContractTests(unittest.TestCase):

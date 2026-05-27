@@ -3,9 +3,9 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PET_MODEL_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/models/PetModel.h"
-PET_MODEL_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/models/PetModel.cpp"
-PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/controllers/PetController.h"
+PET_MODEL_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetModel.h"
+PET_MODEL_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetModel.cpp"
+PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetController.h"
 PET_SCENE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetScene.qml"
 PET_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetWindow.qml"
 PET_CHAT_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatWindow.qml"
@@ -16,12 +16,20 @@ CHARACTER_PANE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2
 CHAT_SHELL_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/ChatShellPage.qml"
 SHARED_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
-PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/controllers/PetController.h"
-PET_CONTROLLER_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/controllers/PetController.cpp"
+PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetController.h"
+PET_CONTROLLER_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetController.cpp"
+PET_CONTROLLER_PRIVATE_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetControllerPrivate.h"
+PET_CONTROLLER_NETWORK_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetControllerNetwork.cpp"
+PET_CONTROLLER_VISION_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetControllerVision.cpp"
+PET_CONTROLLER_WINDOWS_BRIDGE_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetControllerWindowsBridge.cpp"
 CLIENT_CMAKE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/CMakeLists.txt"
 QML_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml.qrc"
 PET_CAMERA_CAPTURE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetCameraCapture.qml"
 MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/main.cpp"
+
+
+def read_texts(*paths):
+    return "\n".join(path.read_text(encoding="utf-8") for path in paths)
 
 
 class PetQmlContractTests(unittest.TestCase):
@@ -161,22 +169,43 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("return url.toString()", source)
 
     def test_pet_controller_configures_direct_https_requests_like_shared_http(self):
-        source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+        source = read_texts(PET_CONTROLLER_PRIVATE_H, PET_CONTROLLER_NETWORK_CPP)
 
         self.assertIn("configurePetRequest(QNetworkRequest &request)", source)
         self.assertIn("sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);", source)
         self.assertIn('request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);', source)
         self.assertIn("configurePetRequest(request);", source)
 
-    def test_pet_controller_keeps_post_events_with_sse_streaming(self):
+    def test_pet_controller_large_concerns_stay_split_from_main_controller_file(self):
+        cmake = CLIENT_CMAKE.read_text(encoding="utf-8")
         source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+
+        for token in (
+            "features/pet/PetControllerNetwork.cpp",
+            "features/pet/PetControllerVision.cpp",
+            "features/pet/PetControllerWindowsBridge.cpp",
+            "features/pet/PetControllerPrivate.h",
+        ):
+            self.assertIn(token, cmake)
+
+        for token in (
+            "void PetController::postJson",
+            "void PetController::startStream",
+            "bool PetController::captureVisionVideoFrame",
+            "bool PetController::captureVisionWindowsCameraFrame",
+            "void PetController::openWindowsImeBridge",
+        ):
+            self.assertNotIn(token, source)
+
+    def test_pet_controller_keeps_post_events_with_sse_streaming(self):
+        source = read_texts(PET_CONTROLLER_CPP, PET_CONTROLLER_NETWORK_CPP)
 
         self.assertIn('if (!_streaming) {\n        startStream();\n    }', source)
         self.assertNotIn('if (!_streaming) {\n        const QJsonArray events', source)
         self.assertIn('const QJsonArray events = root.value(QStringLiteral("events")).toArray();', source)
 
     def test_pet_controller_uses_rolling_vision_segment_buffer(self):
-        source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+        source = read_texts(PET_CONTROLLER_H, PET_CONTROLLER_PRIVATE_H, PET_CONTROLLER_CPP, PET_CONTROLLER_VISION_CPP)
 
         for token in (
             "kVisionSegmentMaxFrames = 14",
@@ -253,7 +282,7 @@ class PetQmlContractTests(unittest.TestCase):
 
     def test_pet_chat_window_exposes_wsl_windows_ime_bridge(self):
         header = PET_CONTROLLER_H.read_text(encoding="utf-8")
-        source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+        source = read_texts(PET_CONTROLLER_CPP, PET_CONTROLLER_PRIVATE_H, PET_CONTROLLER_WINDOWS_BRIDGE_CPP)
         chat = PET_CHAT_WINDOW_QML.read_text(encoding="utf-8")
         composer = CHAT_COMPOSER_BAR_QML.read_text(encoding="utf-8")
 
@@ -417,7 +446,7 @@ class PetQmlContractTests(unittest.TestCase):
         qrc = QML_QRC.read_text(encoding="utf-8")
         cmake = CLIENT_CMAKE.read_text(encoding="utf-8")
         header = PET_CONTROLLER_H.read_text(encoding="utf-8")
-        source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+        source = read_texts(PET_CONTROLLER_PRIVATE_H, PET_CONTROLLER_VISION_CPP, PET_CONTROLLER_WINDOWS_BRIDGE_CPP)
         scene = PET_SCENE_QML.read_text(encoding="utf-8")
         camera_capture = PET_CAMERA_CAPTURE_QML.read_text(encoding="utf-8")
 
@@ -781,14 +810,14 @@ class PetQmlContractTests(unittest.TestCase):
                 source = path.read_text(encoding="utf-8")
                 self.assertIn("PetAssetSettings", source)
                 self.assertIn("startupPetSettings.load()", source)
-                show_chat_start = source.index("function showChatWindow()")
-                show_chat_end = source.index("function ensurePetWindow(petAssetSettings)")
-                show_chat_block = source[show_chat_start:show_chat_end]
+                shown_start = source.index("function finishAppWindowShown()")
+                shown_end = source.index("function ensurePetWindow(petAssetSettings)")
+                shown_block = source[shown_start:shown_end]
                 completed_start = source.index("Component.onCompleted:")
                 completed_end = source.index("Component.onDestruction:")
                 completed_block = source[completed_start:completed_end]
                 self.assertRegex(
-                    show_chat_block,
+                    shown_block,
                     r"if\s*\(\s*startupPetSettings\.autoStartPetOnClientStart\s*\)\s*\{\s*startupPetTimer\.start\s*\(\s*\)",
                     f"{path.name} should start the desktop pet after the chat page is shown",
                 )

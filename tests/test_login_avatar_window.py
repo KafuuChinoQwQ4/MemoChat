@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/utils/IconPathUtils.h"
+ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/shared/utils/IconPathUtils.h"
 APP_CONTROLLER_SESSION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerSession.cpp"
 MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
 LOGIN_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/LoginPage.qml"
