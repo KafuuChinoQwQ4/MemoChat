@@ -1,13 +1,13 @@
-import unittest
+﻿import unittest
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-APP_CONTROLLER_DIALOG_LIST_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerDialogListEvents.cpp"
-APP_CONTROLLER_PRIVATE_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerPrivateEvents.cpp"
-APP_CONTROLLER_GROUP_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerGroupEvents.cpp"
-APP_CONTROLLER_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerSelection.cpp"
-APP_CONTROLLER_GROUP_COMMANDS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerGroupCommands.cpp"
+APP_CONTROLLER_DIALOG_LIST_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerDialogListEvents.cpp"
+APP_CONTROLLER_PRIVATE_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerPrivateEvents.cpp"
+APP_CONTROLLER_GROUP_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerGroupEvents.cpp"
+APP_CONTROLLER_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerSelection.cpp"
+APP_CONTROLLER_GROUP_COMMANDS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerGroupCommands.cpp"
 CHATSERVER_CONFIGS = [
     REPO_ROOT / f"apps/server/core/ChatServer/chatserver{i}.ini"
     for i in range(1, 7)
@@ -106,7 +106,7 @@ class OfflineHistoryBootstrapTests(unittest.TestCase):
         self.assertLess(placeholder_pos, request_pos)
 
     def test_group_list_refresh_preserves_cached_group_messages(self):
-        source = (REPO_ROOT / "apps/client/desktop/MemoChatShared/usermgr.cpp").read_text(encoding="utf-8")
+        source = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/session/usermgr.cpp").read_text(encoding="utf-8")
         body = extract_function(source, "void UserMgr::SetGroupList")
         self.assertIn("previousGroups", body)
         self.assertIn("info->_chat_msgs = existing->_chat_msgs;", body)

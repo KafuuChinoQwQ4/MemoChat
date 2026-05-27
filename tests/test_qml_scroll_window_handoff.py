@@ -1,4 +1,4 @@
-import unittest
+﻿import unittest
 from pathlib import Path
 
 
@@ -11,10 +11,10 @@ MOMENTS_DELEGATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/moments/Mom
 MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
 LOGIN_TOP_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/components/LoginTopBar.qml"
-MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/main.cpp"
-APP_CONTROLLER_SESSION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerSession.cpp"
-APP_CONTROLLER_NAVIGATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerNavigation.cpp"
-APP_CONTROLLER_CONNECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/AppControllerConnection.cpp"
+MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/main.cpp"
+APP_CONTROLLER_SESSION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerSession.cpp"
+APP_CONTROLLER_NAVIGATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerNavigation.cpp"
+APP_CONTROLLER_CONNECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerConnection.cpp"
 
 
 def extract_cpp_function(source: str, signature: str) -> str:
@@ -82,29 +82,35 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
         self.assertIn("width: implicitWidth", delegate[call_start:])
         self.assertIn("height: implicitHeight", delegate[call_start:])
 
-    def test_login_and_chat_use_mutually_exclusive_top_level_windows(self):
+    def test_login_and_chat_use_single_top_level_window_with_exclusive_loaders(self):
         for path in (MAIN_QML, LINUX_MAIN_QML):
             qml = path.read_text(encoding="utf-8")
 
-            self.assertIn("property var loginWindowRef: null", qml)
-            self.assertIn("property var chatWindowRef: null", qml)
-            self.assertIn("function destroyLoginWindow()", qml)
-            self.assertIn("function destroyChatWindow()", qml)
-            self.assertIn("function showChatWindow()", qml)
-            self.assertIn("destroyLoginWindow()", qml[qml.index("function showChatWindow()"):])
-            self.assertIn("destroyChatWindow()", qml[qml.index("function showLoginWindow()"):])
+            self.assertIn("property var appWindowRef: null", qml)
+            self.assertIn("function ensureAppWindow()", qml)
+            self.assertIn("function configureAppWindowForPage(win)", qml)
+            self.assertIn("function syncWindowsByPage()", qml)
+            self.assertIn("configureAppWindowForPage(win)", qml)
+            self.assertIn("showWindowCentered(win)", qml)
+            self.assertIn("visible: controller.page === AppController.LoginPage", qml)
+            self.assertIn("visible: controller.page === AppController.RegisterPage", qml)
+            self.assertIn("visible: controller.page === AppController.ResetPage", qml)
+            self.assertIn("active: root.chatPageActive", qml)
             self.assertIn("sourceComponent: chatShellPageComponent", qml)
             self.assertIn("onClosing: Qt.quit()", qml)
             self.assertNotIn("StackLayout", qml)
             self.assertNotIn("controller.page === AppController.ChatPage ? 3 : 0", qml)
-            self.assertNotIn("active: controller.page === AppController.ChatPage", qml)
+            self.assertNotIn("loginWindowRef", qml)
+            self.assertNotIn("chatWindowRef", qml)
+            self.assertNotIn("function destroyLoginWindow()", qml)
+            self.assertNotIn("function destroyChatWindow()", qml)
             self.assertNotIn("windowHandoffToken", qml)
             self.assertNotIn("scheduleWindowHandoff", qml)
             self.assertNotIn("Window.window.startSystemMove()", qml)
 
         login_top_bar = LOGIN_TOP_BAR_QML.read_text(encoding="utf-8")
         login_page = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/LoginPage.qml").read_text(encoding="utf-8")
-        self.assertIn("onPressAndHold", login_top_bar)
+        self.assertIn("onPressed:", login_top_bar)
         self.assertIn("signal dragMoveRequested()", login_top_bar)
         self.assertIn("onDragMoveRequested:", login_page)
         self.assertIn("Window.window.startSystemMove()", login_page)

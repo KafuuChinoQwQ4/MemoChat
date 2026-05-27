@@ -286,7 +286,7 @@ void AppController::loadCurrentChatMessages()
             << "existing friend msg count:" << static_cast<qlonglong>(friendInfo->_chat_msgs.size());
     setCurrentChatPeerName(DialogListService::privateDisplayName(friendInfo));
     setCurrentChatPeerIcon(friendInfo->_icon.trimmed().isEmpty()
-                           ? QStringLiteral("qrc:/res/head_1.jpg")
+                           ? QStringLiteral("qrc:/res/head_1.png")
                            : friendInfo->_icon);
 
     const auto localMessages = _private_cache_store.loadRecentMessages(selfInfo->_uid, _current_chat_uid, 20);
@@ -420,7 +420,7 @@ void AppController::selectChatByUid(int uid)
         auto placeholder = DialogListService::buildPlaceholderAuthInfo(
             uid,
             dialogItem,
-            QStringLiteral("qrc:/res/head_1.jpg"));
+            QStringLiteral("qrc:/res/head_1.png"));
         _gateway.userMgr()->AddFriend(placeholder);
         _chat_list_model.upsertFriend(placeholder);
         _contact_list_model.upsertFriend(placeholder);
@@ -471,7 +471,7 @@ void AppController::selectChatByUid(int uid)
     setCurrentGroup(0, QString());
     setCurrentChatPeerName(DialogListService::privateDisplayName(friendInfo));
     setCurrentChatPeerIcon(friendInfo->_icon.trimmed().isEmpty()
-                           ? QStringLiteral("qrc:/res/head_1.jpg")
+                           ? QStringLiteral("qrc:/res/head_1.png")
                            : friendInfo->_icon);
     emitCurrentDialogUidChangedIfNeeded();
     qInfo() << "Private chat resolved, uid:" << uid

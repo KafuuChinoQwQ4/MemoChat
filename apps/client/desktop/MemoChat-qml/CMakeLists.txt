@@ -61,131 +61,131 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets Network 
 find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS Multimedia)
 find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS VirtualKeyboard)
 
-set(SHARED_CLIENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../MemoChatShared)
+set(MEMOCHAT_QML_CORE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/core)
+add_subdirectory(core)
 
 set(SOURCES
-    main.cpp
-    AppController.cpp
-    AppControllerAuth.cpp
-    AppControllerAuthResponses.cpp
-    AppControllerConnection.cpp
-    AppControllerContactEvents.cpp
-    AppControllerDialogListEvents.cpp
-    AppControllerDialogState.cpp
-    AppControllerDialogCommands.cpp
-    AppControllerGroupCommands.cpp
-    AppControllerModels.cpp
-    AppControllerNavigation.cpp
-    AppControllerProperties.cpp
-    AppControllerProfileCommands.cpp
-    AppControllerSelection.cpp
-    AppCoordinators.cpp
-    AppControllerCall.cpp
-    AppControllerGroupEvents.cpp
-    AppControllerMedia.cpp
-    AppControllerPrivateEvents.cpp
-    AppControllerSession.cpp
-    AppControllerState.cpp
-    AuthController.cpp
-    CallController.cpp
-    CallSessionModel.cpp
-    LivekitBridge.cpp
-    ChatController.cpp
-    ChatDispatchService.cpp
-    ClientGateway.cpp
-    ConversationSyncService.cpp
-    ContactController.cpp
-    DialogListService.cpp
-    FriendListModel.cpp
-    ChatMessageModel.cpp
-    SearchResultModel.cpp
-    ApplyRequestModel.cpp
-    TransportSelector.cpp
-    MessageContentCodec.cpp
-    PrivateChatCacheStore.cpp
-    GroupChatCacheStore.cpp
-    ProfileController.cpp
-    LocalFilePickerService.cpp
-    MediaUploadService.cpp
-    MessagePayloadService.cpp
-    WindowShapeService.cpp
-    MomentsController.cpp
-    MomentsModel.cpp
-    AgentController.cpp
-    AgentControllerGame.cpp
-    AgentControllerKnowledge.cpp
-    AgentControllerStream.cpp
-    AgentMessageModel.cpp
-    PetAssetSettings.cpp
-    PetController.cpp
-    PetModel.cpp
-    PetSpeechSynthesizer.cpp
-    Live2DAvatarOpenGLRenderer.cpp
-    Live2DAsset.cpp
-    Live2DCoreRenderer.cpp
-    Live2DOfficialOpenGLRenderer.cpp
-    Live2DPlaceholderRenderer.cpp
-    Live2DRenderItem.cpp
-    R18Controller.cpp
-    R18ListModel.cpp
+    app/main.cpp
+    app/AppController.cpp
+    app/AppControllerAuth.cpp
+    app/AppControllerAuthResponses.cpp
+    app/AppControllerConnection.cpp
+    app/AppControllerContactEvents.cpp
+    app/AppControllerDialogListEvents.cpp
+    app/AppControllerDialogState.cpp
+    app/AppControllerDialogCommands.cpp
+    app/AppControllerGroupCommands.cpp
+    app/AppControllerModels.cpp
+    app/AppControllerNavigation.cpp
+    app/AppControllerProperties.cpp
+    app/AppControllerProfileCommands.cpp
+    app/AppControllerSelection.cpp
+    app/AppCoordinators.cpp
+    app/AppControllerCall.cpp
+    app/AppControllerGroupEvents.cpp
+    app/AppControllerMedia.cpp
+    app/AppControllerPrivateEvents.cpp
+    app/AppControllerSession.cpp
+    app/AppControllerState.cpp
+    controllers/AuthController.cpp
+    controllers/CallController.cpp
+    controllers/ChatController.cpp
+    controllers/ContactController.cpp
+    controllers/ProfileController.cpp
+    controllers/MomentsController.cpp
+    controllers/AgentController.cpp
+    controllers/AgentControllerGame.cpp
+    controllers/AgentControllerKnowledge.cpp
+    controllers/AgentControllerStream.cpp
+    controllers/PetController.cpp
+    controllers/R18Controller.cpp
+    models/CallSessionModel.cpp
+    models/FriendListModel.cpp
+    models/ChatMessageModel.cpp
+    models/SearchResultModel.cpp
+    models/ApplyRequestModel.cpp
+    models/MomentsModel.cpp
+    models/AgentMessageModel.cpp
+    models/PetModel.cpp
+    models/R18ListModel.cpp
+    services/LivekitBridge.cpp
+    services/ChatDispatchService.cpp
+    services/ClientGateway.cpp
+    services/ConversationSyncService.cpp
+    services/DialogListService.cpp
+    services/TransportSelector.cpp
+    services/LocalFilePickerService.cpp
+    services/MediaUploadService.cpp
+    services/MessagePayloadService.cpp
+    services/WindowShapeService.cpp
+    services/PetSpeechSynthesizer.cpp
+    storage/PrivateChatCacheStore.cpp
+    storage/GroupChatCacheStore.cpp
+    storage/PetAssetSettings.cpp
+    utils/MessageContentCodec.cpp
+    live2d/Live2DAvatarOpenGLRenderer.cpp
+    live2d/Live2DAsset.cpp
+    live2d/Live2DCoreRenderer.cpp
+    live2d/Live2DOfficialOpenGLRenderer.cpp
+    live2d/Live2DPlaceholderRenderer.cpp
+    live2d/Live2DRenderItem.cpp
 )
 
 set(HEADERS
-    ClientWinCompat.h
-    AppController.h
-    AppCoordinators.h
-    AuthController.h
-    CallController.h
-    CallSessionModel.h
-    LivekitBridge.h
-    ChatController.h
-    ChatDispatchService.h
-    ClientGateway.h
-    ConversationSyncService.h
-    ContactController.h
-    DialogListService.h
-    FriendListModel.h
-    ChatMessageModel.h
-    SearchResultModel.h
-    ApplyRequestModel.h
-    TransportSelector.h
-    MessageContentCodec.h
-    MessagePayloadService.h
-    PrivateChatCacheStore.h
-    GroupChatCacheStore.h
-    ProfileController.h
-    LocalFilePickerService.h
-    MediaUploadService.h
-    WindowShapeService.h
-    IconPathUtils.h
-    MomentsController.h
-    MomentsModel.h
-    AgentController.h
-    AgentMessageModel.h
-    PetAssetSettings.h
-    PetController.h
-    PetModel.h
-    PetSpeechSynthesizer.h
-    Live2DAvatarOpenGLRenderer.h
-    Live2DAsset.h
-    Live2DRenderer.h
-    Live2DCoreRenderer.h
-    Live2DOfficialOpenGLRenderer.h
-    Live2DPlaceholderRenderer.h
-    Live2DRenderItem.h
-    R18Controller.h
-    R18ListModel.h
-    ${SHARED_CLIENT_DIR}/imagecropperdialog.h
+    platform/ClientWinCompat.h
+    app/AppController.h
+    app/AppCoordinators.h
+    controllers/AuthController.h
+    controllers/CallController.h
+    controllers/ChatController.h
+    controllers/ContactController.h
+    controllers/ProfileController.h
+    controllers/MomentsController.h
+    controllers/AgentController.h
+    controllers/PetController.h
+    controllers/R18Controller.h
+    models/CallSessionModel.h
+    models/FriendListModel.h
+    models/ChatMessageModel.h
+    models/SearchResultModel.h
+    models/ApplyRequestModel.h
+    models/MomentsModel.h
+    models/AgentMessageModel.h
+    models/PetModel.h
+    models/R18ListModel.h
+    services/LivekitBridge.h
+    services/ChatDispatchService.h
+    services/ClientGateway.h
+    services/ConversationSyncService.h
+    services/DialogListService.h
+    services/TransportSelector.h
+    services/LocalFilePickerService.h
+    services/MediaUploadService.h
+    services/MessagePayloadService.h
+    services/WindowShapeService.h
+    services/PetSpeechSynthesizer.h
+    storage/PrivateChatCacheStore.h
+    storage/GroupChatCacheStore.h
+    storage/PetAssetSettings.h
+    utils/MessageContentCodec.h
+    utils/IconPathUtils.h
+    live2d/Live2DAvatarOpenGLRenderer.h
+    live2d/Live2DAsset.h
+    live2d/Live2DRenderer.h
+    live2d/Live2DCoreRenderer.h
+    live2d/Live2DOfficialOpenGLRenderer.h
+    live2d/Live2DPlaceholderRenderer.h
+    live2d/Live2DRenderItem.h
 )
 
 set_source_files_properties(
-    ${SHARED_CLIENT_DIR}/imagecropperlabel.h
+    ${MEMOCHAT_QML_CORE_DIR}/media/imagecropperlabel.h
     PROPERTIES SKIP_AUTOMOC ON
 )
 
 set(RESOURCES
     qml.qrc
-    ${SHARED_CLIENT_DIR}/rc.qrc
+    ${MEMOCHAT_QML_CORE_DIR}/rc.qrc
 )
 
 add_executable(MemoChatQml WIN32 MACOSX_BUNDLE ${SOURCES} ${HEADERS} ${RESOURCES})
@@ -197,7 +197,19 @@ set_target_properties(MemoChatQml PROPERTIES
 
 target_include_directories(MemoChatQml PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${SHARED_CLIENT_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/app
+    ${CMAKE_CURRENT_SOURCE_DIR}/controllers
+    ${CMAKE_CURRENT_SOURCE_DIR}/models
+    ${CMAKE_CURRENT_SOURCE_DIR}/services
+    ${CMAKE_CURRENT_SOURCE_DIR}/storage
+    ${CMAKE_CURRENT_SOURCE_DIR}/utils
+    ${CMAKE_CURRENT_SOURCE_DIR}/platform
+    ${CMAKE_CURRENT_SOURCE_DIR}/live2d
+    ${MEMOCHAT_QML_CORE_DIR}
+    ${MEMOCHAT_QML_CORE_DIR}/common
+    ${MEMOCHAT_QML_CORE_DIR}/media
+    ${MEMOCHAT_QML_CORE_DIR}/network
+    ${MEMOCHAT_QML_CORE_DIR}/session
 )
 
 target_compile_definitions(MemoChatQml PRIVATE
@@ -273,7 +285,7 @@ endif()
 
 add_custom_command(TARGET MemoChatQml POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
-    ${SHARED_CLIENT_DIR}/config.ini
+    ${MEMOCHAT_QML_CORE_DIR}/config.ini
     $<TARGET_FILE_DIR:MemoChatQml>/config.ini
     COMMENT "Copying config.ini for MemoChatQml"
 )

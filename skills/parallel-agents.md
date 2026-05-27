@@ -7,6 +7,8 @@ description: Use when a MemoChat implementation task can be split into Controlle
 
 在读取 `skills/SKILL.md` 和相关聚焦 skill 之后，每个 MemoChat 实现任务都使用这个 skill 做并发决策。项目默认形态是 **Controller 主导 + 可拆分 worker**，但真正派发 worker 必须同时满足：当前工具策略允许、用户授权允许、工作线安全且互不重叠。Controller 收集到足够上下文并冻结第一版共享契约后，只要这些条件成立，就立即派发 worker。
 
+这个 skill 只管并发决策，不替代 `task.md`、`withtest.md` 或 `review.md`。如果你只是判断要不要开 worker，读到“并行化启发”通常就够了；只有要构造 worker 提示词、接收 worker 结果或做最终验收时，才继续读后面的契约和验收门。
+
 单代理执行是例外，不是便利选项。极小的一行修复，只有在不存在有用的测试、复审、运行时或文档工作线时才可以保持单代理，并且实现前必须在 `plan.md` 中明确记录。任何任务只要在上下文收集、架构、后端、前端、数据库、测试、运行时验证、文档或复审中涉及超过一项，都必须先设计 Controller 主导的并行模型。如果 worker 派发被当前工具、平台策略或用户授权条件阻塞，记录 `Concurrency decision: parallel blocked by active tool/user policy; Controller continued local-only`，并保持其余工作流不变。
 
 ## 不可协商的形态
@@ -138,6 +140,8 @@ NEXT: 准确集成步骤
 ```
 
 如果 worker 结果缺少足够证据，Controller 可以拒绝集成。
+
+`parallel-*.md` 是并发工作线产物，不是测试循环产物。它们用于 Controller 汇总、集成和复审；如果任务还启用了 `skills/withtest.md`，则 `test<N>.md` / `result<N>.md` / `fix<N>.md` 继续作为独立的运行时测试循环记录。
 
 ## Controller 验收门
 

@@ -7,7 +7,7 @@ description: Use when implementing a normal MemoChat feature, bugfix, refactor, 
 
 用于 `/root/code/MemoChat-Qml-Drogon-linux` 中的常规实现工作。除非用户明确要求 Windows 工作，否则将 `D:\MemoChat-Qml-Drogon` 视为旧版 Windows 检出目录。
 
-实现类任务默认使用 `parallel-agents.md` 中的 Controller 主导并行工作流。Controller 负责架构、计划、契约、worker 派发、集成和最终验收。上下文和第一版契约清楚后，只要当前工具策略和用户授权允许，默认派发安全的 worker 工作线。本地单人执行是例外，仅当当前工具/策略环境禁止 worker、用户明确要求单代理、任务确实很小且没有有用的测试/复审工作线、任务严格顺序执行，或不存在安全拆分方式时才允许；实现前必须在 `plan.md` 中记录准确原因。
+实现类任务的并发与 Controller 责任以 `parallel-agents.md` 为准。这里不重复并发细则，只要求任务按该 skill 的工作流收集上下文、计划、实现、验证和复审。
 
 ## 调用方式
 
@@ -19,10 +19,7 @@ description: Use when implementing a normal MemoChat feature, bugfix, refactor, 
 2. 将上下文收集到 `context.md`。
 3. 对新功能、跨服务契约、数据库/RAG schema、QML 大改、部署或稳定端口风险，先写轻量设计段：目标/非目标、契约、兼容性边界、验证和回滚/阻塞条件。
 4. 编写并评估 `plan.md`；计划必须包含具体文件、函数/模块范围、验证命令和可执行小步骤，不能留下 `TBD`、`TODO` 或空泛占位。
-5. 默认开启并发：
-   - 在允许时为互不重叠且有用的工作线启动 worker
-   - 保持 Controller 负责契约和最终验收
-   - 当 worker 派发被阻塞、不安全或没有价值时，实现前记录本地单人原因
+5. 默认按 `parallel-agents.md` 的 Controller 主导并行模型执行；若并发被阻塞、不可用或不划算，先记录原因再继续本地单人。
 6. 一次实现一个计划阶段。
 7. 用最窄的相关构建/测试/运行时命令验证，并按“红绿测试 -> 基本功能测试 -> 冒烟测试 -> 边界/异常测试”的梯度形成闭环。
 8. 复审 diff 并修复重要问题；收到 review 反馈时先验证反馈是否符合当前代码和 MemoChat 约束。
