@@ -5,8 +5,12 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core)
 
 add_executable(dialog_list_service_gtest
     DialogListServiceTest.cpp
+    ../../../apps/client/desktop/MemoChat-qml/features/chat/DialogListEntryBuilder.cpp
     ../../../apps/client/desktop/MemoChat-qml/features/chat/DialogListService.cpp
     ../../../apps/client/desktop/MemoChat-qml/features/contact/FriendListModel.cpp
+    ../../../apps/client/desktop/MemoChat-qml/features/contact/FriendListModelMutations.cpp
+    ../../../apps/client/desktop/MemoChat-qml/features/contact/FriendListModelState.cpp
+    ../../../apps/client/desktop/MemoChat-qml/features/contact/FriendListModelQueries.cpp
 )
 set_target_properties(dialog_list_service_gtest PROPERTIES AUTOMOC ON)
 

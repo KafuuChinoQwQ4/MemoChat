@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import sys
-import unittest
 import tempfile
+import unittest
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -11,8 +11,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 try:
     import httpx
-    from fastapi import FastAPI
     from api import pet_router
+    from fastapi import FastAPI
 except ImportError as exc:  # pragma: no cover - exercised only on lean host images.
     httpx = None
     FastAPI = None
@@ -23,7 +23,6 @@ else:
 
 from harness.pet import PetRuntime
 from harness.pet.runtime import PetRuntimeConfig
-
 
 _ALLOWED_PHASES = {"idle", "listening", "thinking", "speaking", "interrupted", "error"}
 _ANIMATION_KEYS = {
@@ -426,8 +425,20 @@ class PetRouterTests(unittest.IsolatedAsyncioTestCase):
                 "duration_ms": 3000,
                 "include_frame": False,
                 "frames": [
-                    {"frame_base64": "AQIDBA==", "frame_mime": "image/jpeg", "frame_width": 320, "frame_height": 240, "t_ms": 0},
-                    {"frame_base64": "BQYHCA==", "frame_mime": "image/jpeg", "frame_width": 320, "frame_height": 240, "t_ms": 3000},
+                    {
+                        "frame_base64": "AQIDBA==",
+                        "frame_mime": "image/jpeg",
+                        "frame_width": 320,
+                        "frame_height": 240,
+                        "t_ms": 0,
+                    },
+                    {
+                        "frame_base64": "BQYHCA==",
+                        "frame_mime": "image/jpeg",
+                        "frame_width": 320,
+                        "frame_height": 240,
+                        "t_ms": 3000,
+                    },
                 ],
                 "metadata": {"source": "qt_video_sink_segment"},
             },

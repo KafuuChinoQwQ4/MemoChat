@@ -5,11 +5,9 @@ import json
 from typing import Any, AsyncIterator
 
 import structlog
+from config import settings
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel, Field
-
-from config import settings
 from harness.pet import (
     PetObservation,
     PetRuntime,
@@ -18,6 +16,7 @@ from harness.pet import (
     VisionSegmentRequest,
     VoiceTrainingRequest,
 )
+from pydantic import BaseModel, Field
 
 logger = structlog.get_logger()
 router = APIRouter()

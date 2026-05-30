@@ -1,6 +1,7 @@
 """
 Pydantic 请求/响应模型定义
 """
+
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field

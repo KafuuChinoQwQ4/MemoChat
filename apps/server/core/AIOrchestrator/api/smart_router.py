@@ -2,11 +2,11 @@
 智能功能 API 路由
 POST /smart — 摘要 / 建议回复 / 翻译
 """
+
 import json
 
 import structlog
 from fastapi import APIRouter, HTTPException
-
 from harness import HarnessContainer
 from schemas.api import AgentRunReq, SmartReq, SmartRsp
 
@@ -47,9 +47,8 @@ async def smart(req: SmartReq):
                 metadata["context_json"] = req.context_json
         model_type = req.model_type.strip() or str(metadata.get("model_type", "") or "")
         model_name = req.model_name.strip() or str(metadata.get("model_name", "") or "")
-        deployment_preference = (
-            req.deployment_preference.strip()
-            or str(metadata.get("deployment_preference", "any") or "any")
+        deployment_preference = req.deployment_preference.strip() or str(
+            metadata.get("deployment_preference", "any") or "any"
         )
         if model_type:
             metadata["model_type"] = model_type

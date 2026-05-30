@@ -44,7 +44,7 @@
 #undef max
 #endif
 
-#else  /* !_WIN32 */
+#else /* !_WIN32 */
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -58,4 +58,4 @@ typedef int SOCKET;
 #define SOCKET_ERROR (-1)
 #define closesocket close
 
-#endif  /* _WIN32 */
+#endif /* _WIN32 */

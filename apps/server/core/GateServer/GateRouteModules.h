@@ -4,22 +4,26 @@
 
 class LogicSystem;
 
-class AuthHttpService {
+class AuthHttpService
+{
 public:
     static void RegisterRoutes(LogicSystem& logic);
 };
 
-class ProfileHttpService {
+class ProfileHttpService
+{
 public:
     static void RegisterRoutes(LogicSystem& logic);
 };
 
-class CallHttpServiceRoutes {
+class CallHttpServiceRoutes
+{
 public:
     static void RegisterRoutes(LogicSystem& logic);
 };
 
-class R18HttpServiceRoutes {
+class R18HttpServiceRoutes
+{
 public:
     static void RegisterRoutes(LogicSystem& logic);
 };

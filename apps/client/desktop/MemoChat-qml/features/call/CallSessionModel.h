@@ -25,7 +25,7 @@ class CallSessionModel : public QObject
     Q_PROPERTY(bool cameraEnabled READ cameraEnabled NOTIFY changed)
 
 public:
-    explicit CallSessionModel(QObject *parent = nullptr);
+    explicit CallSessionModel(QObject* parent = nullptr);
 
     bool visible() const;
     bool incoming() const;
@@ -44,15 +44,26 @@ public:
     bool muted() const;
     bool cameraEnabled() const;
 
-    void startOutgoing(const QString &callId, const QString &callType, const QString &peerName,
-                       const QString &peerIcon, const QString &stateText, qint64 startedAtMs, qint64 expiresAtMs);
-    void startIncoming(const QString &callId, const QString &callType, const QString &peerName,
-                       const QString &peerIcon, const QString &stateText, qint64 startedAtMs, qint64 expiresAtMs);
-    void markAccepted(const QString &stateText, const QString &roomName, const QString &livekitUrl, qint64 acceptedAtMs);
-    void markTokenReady(const QString &mediaStatusText);
-    void setMediaLaunchJson(const QString &mediaLaunchJson);
-    void setMediaStatusText(const QString &mediaStatusText);
-    void markEnded(const QString &stateText);
+    void startOutgoing(const QString& callId,
+                       const QString& callType,
+                       const QString& peerName,
+                       const QString& peerIcon,
+                       const QString& stateText,
+                       qint64 startedAtMs,
+                       qint64 expiresAtMs);
+    void startIncoming(const QString& callId,
+                       const QString& callType,
+                       const QString& peerName,
+                       const QString& peerIcon,
+                       const QString& stateText,
+                       qint64 startedAtMs,
+                       qint64 expiresAtMs);
+    void
+    markAccepted(const QString& stateText, const QString& roomName, const QString& livekitUrl, qint64 acceptedAtMs);
+    void markTokenReady(const QString& mediaStatusText);
+    void setMediaLaunchJson(const QString& mediaLaunchJson);
+    void setMediaStatusText(const QString& mediaStatusText);
+    void markEnded(const QString& stateText);
     void clear();
     void setMuted(bool muted);
     void setCameraEnabled(bool enabled);

@@ -10,12 +10,12 @@ class Live2DAvatarOpenGLRenderer final
 public:
     Live2DAvatarOpenGLRenderer() = default;
 
-    QImage renderAvatar(const QString &modelJsonPath, QString *error = nullptr) const;
+    QImage renderAvatar(const QString& modelJsonPath, QString* error = nullptr) const;
 
     static QString rendererName();
 
 private:
-    static QImage cropAvatarFrame(const QImage &source, const QSize &outputSize);
+    static QImage cropAvatarFrame(const QImage& source, const QSize& outputSize);
 };
 
 #endif // LIVE2DAVATAROPENGLRENDERER_H

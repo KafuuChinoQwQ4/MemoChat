@@ -10,15 +10,15 @@ class AIServiceClient;
 class AISessionRepo;
 class ConversationContext;
 
-class AIServiceCore {
+class AIServiceCore
+{
 public:
     explicit AIServiceCore();
     ~AIServiceCore();
 
     // 对话处理
     grpc::Status HandleChat(const ai::AIChatReq& req, ai::AIChatRsp* reply);
-    grpc::Status HandleChatStream(const ai::AIChatReq& req,
-                                  grpc::ServerWriter<ai::AIChatStreamChunk>* writer);
+    grpc::Status HandleChatStream(const ai::AIChatReq& req, grpc::ServerWriter<ai::AIChatStreamChunk>* writer);
 
     // 智能功能
     grpc::Status HandleSmart(const ai::AISmartReq& req, ai::AISmartRsp* reply);
@@ -58,13 +58,16 @@ public:
     grpc::Status HandleConfirm(const ai::AIConfirmReq& req, ai::AIConfirmRsp* reply);
 
 private:
-    std::string GetOrCreateSessionId(int32_t uid, const std::string& model_type,
-                                       const std::string& model_name);
-    void SaveUserMessage(const std::string& session_id, int32_t uid,
-                         const std::string& content, const std::string& model_name);
-    void SaveAIMessage(const std::string& session_id, int32_t uid,
-                        const std::string& content, const std::string& model_name,
-                        int64_t tokens_used);
+    std::string GetOrCreateSessionId(int32_t uid, const std::string& model_type, const std::string& model_name);
+    void SaveUserMessage(const std::string& session_id,
+                         int32_t uid,
+                         const std::string& content,
+                         const std::string& model_name);
+    void SaveAIMessage(const std::string& session_id,
+                       int32_t uid,
+                       const std::string& content,
+                       const std::string& model_name,
+                       int64_t tokens_used);
 
     std::unique_ptr<AIServiceClient> _ai_client;
     std::unique_ptr<AISessionRepo> _session_repo;

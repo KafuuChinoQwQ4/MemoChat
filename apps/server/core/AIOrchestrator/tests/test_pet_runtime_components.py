@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import json
 import asyncio
 import importlib
 import inspect
+import json
 import sys
-import unittest
 import tempfile
-from unittest import mock
-from pathlib import Path
 import types
+import unittest
+from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -32,12 +32,8 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         PetEventBus = _load_attr("harness.pet.event_bus", "PetEventBus")
         bus = PetEventBus()
 
-        first = await bus.emit(
-            PetControlEvent(session_id="first", seq=0, timestamp_ms=1, action={"name": "first"})
-        )
-        second = await bus.emit(
-            PetControlEvent(session_id="second", seq=0, timestamp_ms=2, action={"name": "second"})
-        )
+        first = await bus.emit(PetControlEvent(session_id="first", seq=0, timestamp_ms=1, action={"name": "first"}))
+        second = await bus.emit(PetControlEvent(session_id="second", seq=0, timestamp_ms=2, action={"name": "second"}))
         heartbeat = await bus.heartbeat("first")
 
         self.assertEqual(first.to_dict()["seq"], 1)
@@ -122,9 +118,7 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(mapped["intensity"], 0.6)
 
     async def test_deterministic_provider_returns_repeatable_text_response(self):
-        DeterministicProvider = _load_attr(
-            "harness.pet.providers.deterministic", "DeterministicProvider"
-        )
+        DeterministicProvider = _load_attr("harness.pet.providers.deterministic", "DeterministicProvider")
         provider = DeterministicProvider()
 
         first = await _maybe_await(provider.generate_text("hello", model_type="scripted", model_name="deterministic"))
@@ -135,9 +129,7 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(_response_text(first).strip())
 
     async def test_deterministic_provider_respects_selected_reply_language(self):
-        DeterministicProvider = _load_attr(
-            "harness.pet.providers.deterministic", "DeterministicProvider"
-        )
+        DeterministicProvider = _load_attr("harness.pet.providers.deterministic", "DeterministicProvider")
         PetPromptContext = _load_attr("harness.pet.persona", "PetPromptContext")
         VoiceSynthesisResult = _load_attr("harness.pet.voice", "VoiceSynthesisResult")
 
@@ -464,9 +456,7 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(voice_module._sovits_language("en-US"), "en")
 
     async def test_deterministic_pet_provider_synthesizes_external_voice_once_per_reply(self):
-        DeterministicProvider = _load_attr(
-            "harness.pet.providers.deterministic", "DeterministicProvider"
-        )
+        DeterministicProvider = _load_attr("harness.pet.providers.deterministic", "DeterministicProvider")
         PetPromptContext = _load_attr("harness.pet.persona", "PetPromptContext")
         VoiceSynthesisResult = _load_attr("harness.pet.voice", "VoiceSynthesisResult")
 
@@ -506,14 +496,10 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(chunks[0].voice.to_dict()["url"], "/audio/gpt-sovits-test.wav")
 
     async def test_deterministic_pet_provider_includes_visual_summary_in_llm_prompt(self):
-        DeterministicProvider = _load_attr(
-            "harness.pet.providers.deterministic", "DeterministicProvider"
-        )
+        DeterministicProvider = _load_attr("harness.pet.providers.deterministic", "DeterministicProvider")
         PetPromptContext = _load_attr("harness.pet.persona", "PetPromptContext")
 
-        fake_response = types.SimpleNamespace(
-            content='{"text":"我看到了，你看起来心情不错。","translation":""}'
-        )
+        fake_response = types.SimpleNamespace(content='{"text":"我看到了，你看起来心情不错。","translation":""}')
         fake_registry = types.SimpleNamespace(
             complete=mock.AsyncMock(return_value=fake_response),
         )
@@ -553,9 +539,7 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Visual summary: 你看起来心情不错。", system_prompt)
 
     async def test_deterministic_pet_provider_keeps_text_when_voice_synthesis_fails(self):
-        DeterministicProvider = _load_attr(
-            "harness.pet.providers.deterministic", "DeterministicProvider"
-        )
+        DeterministicProvider = _load_attr("harness.pet.providers.deterministic", "DeterministicProvider")
         PetPromptContext = _load_attr("harness.pet.persona", "PetPromptContext")
         VoiceProviderError = _load_attr("harness.pet.voice", "VoiceProviderError")
 
@@ -854,9 +838,11 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         ]
         analyzer = LocalVisionAnalyzer(enabled=False, analyzer="opencv")
 
-        with mock.patch.dict(sys.modules, {"cv2": types.SimpleNamespace()}), mock.patch.object(
-            vision_module, "_decode_frame_payload", side_effect=decoded_frames
-        ), mock.patch.object(vision_module, "_analyze_frame", side_effect=analyzed_frames):
+        with (
+            mock.patch.dict(sys.modules, {"cv2": types.SimpleNamespace()}),
+            mock.patch.object(vision_module, "_decode_frame_payload", side_effect=decoded_frames),
+            mock.patch.object(vision_module, "_analyze_frame", side_effect=analyzed_frames),
+        ):
             observation = analyzer.capture_segment(
                 VisionSegmentRequest.from_dict(
                     {
@@ -864,9 +850,27 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
                         "segment_id": "seg-1",
                         "duration_ms": 3000,
                         "frames": [
-                            {"frame_base64": "AQID", "frame_mime": "image/jpeg", "frame_width": 320, "frame_height": 240, "t_ms": 0},
-                            {"frame_base64": "BAUG", "frame_mime": "image/jpeg", "frame_width": 320, "frame_height": 240, "t_ms": 1500},
-                            {"frame_base64": "BwgJ", "frame_mime": "image/jpeg", "frame_width": 320, "frame_height": 240, "t_ms": 3000},
+                            {
+                                "frame_base64": "AQID",
+                                "frame_mime": "image/jpeg",
+                                "frame_width": 320,
+                                "frame_height": 240,
+                                "t_ms": 0,
+                            },
+                            {
+                                "frame_base64": "BAUG",
+                                "frame_mime": "image/jpeg",
+                                "frame_width": 320,
+                                "frame_height": 240,
+                                "t_ms": 1500,
+                            },
+                            {
+                                "frame_base64": "BwgJ",
+                                "frame_mime": "image/jpeg",
+                                "frame_width": 320,
+                                "frame_height": 240,
+                                "t_ms": 3000,
+                            },
                         ],
                         "metadata": {"reply_language": "zh-CN"},
                     }
@@ -990,9 +994,9 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
             VideoCapture=FakeCapture,
             COLOR_BGR2GRAY=0,
             COLOR_BGR2RGB=1,
-            cvtColor=lambda frame, mode: types.SimpleNamespace(shape=(480, 640, 3))
-            if mode == 1
-            else FakeGrayFrame(100.0),
+            cvtColor=lambda frame, mode: (
+                types.SimpleNamespace(shape=(480, 640, 3)) if mode == 1 else FakeGrayFrame(100.0)
+            ),
             data=types.SimpleNamespace(haarcascades=""),
             CascadeClassifier=lambda path: types.SimpleNamespace(detectMultiScale=lambda *args, **kwargs: []),
         )
@@ -1148,9 +1152,7 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
             VideoCapture=FakeCapture,
             COLOR_BGR2GRAY=0,
             COLOR_BGR2RGB=1,
-            cvtColor=lambda frame, mode: types.SimpleNamespace(mean=lambda: 120.0)
-            if mode == 0
-            else frame,
+            cvtColor=lambda frame, mode: types.SimpleNamespace(mean=lambda: 120.0) if mode == 0 else frame,
             data=types.SimpleNamespace(haarcascades=""),
             CascadeClassifier=lambda path: types.SimpleNamespace(detectMultiScale=lambda *args, **kwargs: []),
         )
@@ -1203,9 +1205,7 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
             VideoCapture=FakeCapture,
             COLOR_BGR2GRAY=0,
             COLOR_BGR2RGB=1,
-            cvtColor=lambda frame, mode: types.SimpleNamespace(mean=lambda: 160.0)
-            if mode == 0
-            else frame,
+            cvtColor=lambda frame, mode: types.SimpleNamespace(mean=lambda: 160.0) if mode == 0 else frame,
             data=types.SimpleNamespace(haarcascades=""),
             CascadeClassifier=lambda path: types.SimpleNamespace(
                 detectMultiScale=lambda *args, **kwargs: [(12, 18, 160, 120)]
@@ -1280,7 +1280,9 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
             payload["diagnostics"]["gpt_sovits_reference_audio"],
         )
         self.assertTrue(Path(payload["diagnostics"]["reference_audio_runtime_path"]).exists())
-        self.assertEqual(service.latest_ready_reference_audio(uid=7), payload["diagnostics"]["reference_audio_runtime_path"])
+        self.assertEqual(
+            service.latest_ready_reference_audio(uid=7), payload["diagnostics"]["reference_audio_runtime_path"]
+        )
         self.assertEqual(payload["language"], "zh-CN")
         self.assertTrue(Path(payload["manifest_path"]).exists())
         self.assertEqual(service.get_job(payload["job_id"]).job_id, payload["job_id"])

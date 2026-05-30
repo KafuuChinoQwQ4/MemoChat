@@ -7,57 +7,226 @@
 
 using namespace memochat::pet_asset_settings;
 
-void PetAssetSettings::setCharacterName(const QString &value) { if (assignString(_character_name, value)) markDirty(); }
-void PetAssetSettings::setRoleIdentity(const QString &value) { if (assignString(_role_identity, value)) markDirty(); }
-void PetAssetSettings::setModelRoot(const QString &value) { if (assignString(_model_root, value)) markDirty(); }
-void PetAssetSettings::setModelJson(const QString &value) { if (assignString(_model_json, value)) markDirty(); }
-void PetAssetSettings::setMotionDirectory(const QString &value) { if (assignString(_motion_directory, value)) markDirty(); }
-void PetAssetSettings::setExpressionDirectory(const QString &value) { if (assignString(_expression_directory, value)) markDirty(); }
-void PetAssetSettings::setVoiceDirectory(const QString &value) { if (assignString(_voice_directory, value)) markDirty(); }
-void PetAssetSettings::setDefaultVoice(const QString &value) { if (assignString(_default_voice, value)) markDirty(); }
-void PetAssetSettings::setIdleMotion(const QString &value) { if (assignString(_idle_motion, value)) markDirty(); }
-void PetAssetSettings::setSpeakingMotion(const QString &value) { if (assignString(_speaking_motion, value)) markDirty(); }
-void PetAssetSettings::setFallbackExpression(const QString &value) { if (assignString(_fallback_expression, value)) markDirty(); }
-void PetAssetSettings::setPersonalityTags(const QString &value) { if (assignString(_personality_tags, value)) markDirty(); }
-void PetAssetSettings::setRelationshipStyle(const QString &value) { if (assignString(_relationship_style, value)) markDirty(); }
-void PetAssetSettings::setWorldSetting(const QString &value) { if (assignString(_world_setting, value)) markDirty(); }
-void PetAssetSettings::setSpeechRules(const QString &value) { if (assignString(_speech_rules, value)) markDirty(); }
-void PetAssetSettings::setCatchphrases(const QString &value) { if (assignString(_catchphrases, value)) markDirty(); }
-void PetAssetSettings::setForbiddenRules(const QString &value) { if (assignString(_forbidden_rules, value)) markDirty(); }
-void PetAssetSettings::setToneIndex(int value) { if (assignInt(_tone_index, value, 0, 3)) markDirty(); }
-void PetAssetSettings::setResponseLengthIndex(int value) { if (assignInt(_response_length_index, value, 0, 2)) markDirty(); }
-void PetAssetSettings::setLanguageIndex(int value) { if (assignInt(_language_index, value, 0, kLanguageOptionCount - 1)) markDirty(); }
-void PetAssetSettings::setEmotionLevel(qreal value) { if (assignReal(_emotion_level, value, 0.0, 1.0)) markDirty(); }
-void PetAssetSettings::setCreativityLevel(qreal value) { if (assignReal(_creativity_level, value, 0.0, 1.0)) markDirty(); }
-void PetAssetSettings::setVoiceSpeed(qreal value) { if (assignReal(_voice_speed, value, 0.70, 1.35)) markDirty(); }
-void PetAssetSettings::setLipSyncSensitivity(qreal value) { if (assignReal(_lip_sync_sensitivity, value, 0.0, 1.0)) markDirty(); }
-void PetAssetSettings::setVoiceLipSyncEnabled(bool value) { if (assignBool(_voice_lip_sync_enabled, value)) markDirty(); }
-void PetAssetSettings::setEmotionSoundEnabled(bool value) { if (assignBool(_emotion_sound_enabled, value)) markDirty(); }
-void PetAssetSettings::setIdleMotionEnabled(bool value) { if (assignBool(_idle_motion_enabled, value)) markDirty(); }
-void PetAssetSettings::setGazeFollowEnabled(bool value) { if (assignBool(_gaze_follow_enabled, value)) markDirty(); }
-void PetAssetSettings::setMemoryEnabled(bool value) { if (assignBool(_memory_enabled, value)) markDirty(); }
-void PetAssetSettings::setInterruptEnabled(bool value) { if (assignBool(_interrupt_enabled, value)) markDirty(); }
-void PetAssetSettings::setCameraEnabled(bool value) { if (assignBool(_camera_enabled, value)) markDirty(); }
-void PetAssetSettings::setCloudVisionEnabled(bool value) { if (assignBool(_cloud_vision_enabled, value)) markDirty(); }
-void PetAssetSettings::setAutoStartPetOnClientStart(bool value) { if (assignBool(_auto_start_pet_on_client_start, value)) markDirty(); }
-void PetAssetSettings::setVoiceTrainingConsent(bool value) { if (assignBool(_voice_training_consent, value)) markDirty(); }
-void PetAssetSettings::setVoiceTrainingConsentScope(const QString &value) { if (assignString(_voice_training_consent_scope, value)) markDirty(); }
-void PetAssetSettings::setVoiceTrainingJobId(const QString &value) { if (assignString(_voice_training_job_id, value)) markDirty(); }
-void PetAssetSettings::setVoiceTrainingStatus(const QString &value) { if (assignString(_voice_training_status, value)) markDirty(); }
-void PetAssetSettings::setVoiceTrainingStage(const QString &value) { if (assignString(_voice_training_stage, value)) markDirty(); }
-void PetAssetSettings::setVoiceTrainingProgress(int value) { if (assignInt(_voice_training_progress, value, 0, 100)) markDirty(); }
-void PetAssetSettings::setVoiceTrainingArtifactPath(const QString &value) { if (assignString(_voice_training_artifact_path, value)) markDirty(); }
-void PetAssetSettings::setVoiceTrainingMessage(const QString &value) { if (assignString(_voice_training_message, value)) markDirty(); }
+void PetAssetSettings::setCharacterName(const QString& value)
+{
+    if (assignString(_character_name, value))
+        markDirty();
+}
+void PetAssetSettings::setRoleIdentity(const QString& value)
+{
+    if (assignString(_role_identity, value))
+        markDirty();
+}
+void PetAssetSettings::setModelRoot(const QString& value)
+{
+    if (assignString(_model_root, value))
+        markDirty();
+}
+void PetAssetSettings::setModelJson(const QString& value)
+{
+    if (assignString(_model_json, value))
+        markDirty();
+}
+void PetAssetSettings::setMotionDirectory(const QString& value)
+{
+    if (assignString(_motion_directory, value))
+        markDirty();
+}
+void PetAssetSettings::setExpressionDirectory(const QString& value)
+{
+    if (assignString(_expression_directory, value))
+        markDirty();
+}
+void PetAssetSettings::setVoiceDirectory(const QString& value)
+{
+    if (assignString(_voice_directory, value))
+        markDirty();
+}
+void PetAssetSettings::setDefaultVoice(const QString& value)
+{
+    if (assignString(_default_voice, value))
+        markDirty();
+}
+void PetAssetSettings::setIdleMotion(const QString& value)
+{
+    if (assignString(_idle_motion, value))
+        markDirty();
+}
+void PetAssetSettings::setSpeakingMotion(const QString& value)
+{
+    if (assignString(_speaking_motion, value))
+        markDirty();
+}
+void PetAssetSettings::setFallbackExpression(const QString& value)
+{
+    if (assignString(_fallback_expression, value))
+        markDirty();
+}
+void PetAssetSettings::setPersonalityTags(const QString& value)
+{
+    if (assignString(_personality_tags, value))
+        markDirty();
+}
+void PetAssetSettings::setRelationshipStyle(const QString& value)
+{
+    if (assignString(_relationship_style, value))
+        markDirty();
+}
+void PetAssetSettings::setWorldSetting(const QString& value)
+{
+    if (assignString(_world_setting, value))
+        markDirty();
+}
+void PetAssetSettings::setSpeechRules(const QString& value)
+{
+    if (assignString(_speech_rules, value))
+        markDirty();
+}
+void PetAssetSettings::setCatchphrases(const QString& value)
+{
+    if (assignString(_catchphrases, value))
+        markDirty();
+}
+void PetAssetSettings::setForbiddenRules(const QString& value)
+{
+    if (assignString(_forbidden_rules, value))
+        markDirty();
+}
+void PetAssetSettings::setToneIndex(int value)
+{
+    if (assignInt(_tone_index, value, 0, 3))
+        markDirty();
+}
+void PetAssetSettings::setResponseLengthIndex(int value)
+{
+    if (assignInt(_response_length_index, value, 0, 2))
+        markDirty();
+}
+void PetAssetSettings::setLanguageIndex(int value)
+{
+    if (assignInt(_language_index, value, 0, kLanguageOptionCount - 1))
+        markDirty();
+}
+void PetAssetSettings::setEmotionLevel(qreal value)
+{
+    if (assignReal(_emotion_level, value, 0.0, 1.0))
+        markDirty();
+}
+void PetAssetSettings::setCreativityLevel(qreal value)
+{
+    if (assignReal(_creativity_level, value, 0.0, 1.0))
+        markDirty();
+}
+void PetAssetSettings::setVoiceSpeed(qreal value)
+{
+    if (assignReal(_voice_speed, value, 0.70, 1.35))
+        markDirty();
+}
+void PetAssetSettings::setLipSyncSensitivity(qreal value)
+{
+    if (assignReal(_lip_sync_sensitivity, value, 0.0, 1.0))
+        markDirty();
+}
+void PetAssetSettings::setVoiceLipSyncEnabled(bool value)
+{
+    if (assignBool(_voice_lip_sync_enabled, value))
+        markDirty();
+}
+void PetAssetSettings::setEmotionSoundEnabled(bool value)
+{
+    if (assignBool(_emotion_sound_enabled, value))
+        markDirty();
+}
+void PetAssetSettings::setIdleMotionEnabled(bool value)
+{
+    if (assignBool(_idle_motion_enabled, value))
+        markDirty();
+}
+void PetAssetSettings::setGazeFollowEnabled(bool value)
+{
+    if (assignBool(_gaze_follow_enabled, value))
+        markDirty();
+}
+void PetAssetSettings::setMemoryEnabled(bool value)
+{
+    if (assignBool(_memory_enabled, value))
+        markDirty();
+}
+void PetAssetSettings::setInterruptEnabled(bool value)
+{
+    if (assignBool(_interrupt_enabled, value))
+        markDirty();
+}
+void PetAssetSettings::setCameraEnabled(bool value)
+{
+    if (assignBool(_camera_enabled, value))
+        markDirty();
+}
+void PetAssetSettings::setCloudVisionEnabled(bool value)
+{
+    if (assignBool(_cloud_vision_enabled, value))
+        markDirty();
+}
+void PetAssetSettings::setAutoStartPetOnClientStart(bool value)
+{
+    if (assignBool(_auto_start_pet_on_client_start, value))
+        markDirty();
+}
+void PetAssetSettings::setVoiceTrainingConsent(bool value)
+{
+    if (assignBool(_voice_training_consent, value))
+        markDirty();
+}
+void PetAssetSettings::setVoiceTrainingConsentScope(const QString& value)
+{
+    if (assignString(_voice_training_consent_scope, value))
+        markDirty();
+}
+void PetAssetSettings::setVoiceTrainingJobId(const QString& value)
+{
+    if (assignString(_voice_training_job_id, value))
+        markDirty();
+}
+void PetAssetSettings::setVoiceTrainingStatus(const QString& value)
+{
+    if (assignString(_voice_training_status, value))
+        markDirty();
+}
+void PetAssetSettings::setVoiceTrainingStage(const QString& value)
+{
+    if (assignString(_voice_training_stage, value))
+        markDirty();
+}
+void PetAssetSettings::setVoiceTrainingProgress(int value)
+{
+    if (assignInt(_voice_training_progress, value, 0, 100))
+        markDirty();
+}
+void PetAssetSettings::setVoiceTrainingArtifactPath(const QString& value)
+{
+    if (assignString(_voice_training_artifact_path, value))
+        markDirty();
+}
+void PetAssetSettings::setVoiceTrainingMessage(const QString& value)
+{
+    if (assignString(_voice_training_message, value))
+        markDirty();
+}
 
 void PetAssetSettings::normalizeVoiceTrainingState()
 {
     const QString normalizedStage = _voice_training_stage.trimmed().toLower();
     const QString normalizedStatus = _voice_training_status.trimmed().toLower();
-    if (normalizedStage != QStringLiteral("ready_for_worker")) {
-        if (normalizedStatus == QStringLiteral("blocked")
-            && (normalizedStage == QStringLiteral("reference_not_visible")
-                || normalizedStage == QStringLiteral("reference_unreadable")
-                || normalizedStage == QStringLiteral("reference_too_short"))) {
+    if (normalizedStage != QStringLiteral("ready_for_worker"))
+    {
+        if (normalizedStatus ==
+            QStringLiteral("blocked") &&
+                           (normalizedStage ==
+                            QStringLiteral("reference_not_visible") ||
+                                           normalizedStage == QStringLiteral("reference_unreadable") ||
+                                                                             normalizedStage ==
+                                                                                 QStringLiteral("reference_too_short")))
+        {
             _voice_training_job_id.clear();
             _voice_training_status = QStringLiteral("idle");
             _voice_training_stage.clear();
@@ -69,52 +238,59 @@ void PetAssetSettings::normalizeVoiceTrainingState()
     }
 
     _voice_training_stage = QStringLiteral("ready_for_gpt_sovits");
-    if (_voice_training_status == QStringLiteral("prepared")
-        || _voice_training_status == QStringLiteral("idle")
-        || _voice_training_status == QStringLiteral("blocked")) {
+    if (_voice_training_status ==
+        QStringLiteral("prepared") || _voice_training_status == QStringLiteral("idle") || _voice_training_status ==
+                                                                                              QStringLiteral("blocked"))
+    {
         _voice_training_status = QStringLiteral("ready");
     }
-    if (_voice_training_progress < 70) {
+    if (_voice_training_progress < 70)
+    {
         _voice_training_progress = 70;
     }
-    if (_voice_training_message.isEmpty()
-        || _voice_training_message.contains(QStringLiteral("worker"), Qt::CaseInsensitive)) {
+    if (_voice_training_message.isEmpty() ||
+        _voice_training_message.contains(QStringLiteral("worker"), Qt::CaseInsensitive))
+    {
         _voice_training_message = QStringLiteral("声音参考已就绪，可直接用于 GPT-SoVITS 零样本合成。");
     }
 }
 
-bool PetAssetSettings::assignString(QString &target, const QString &value)
+bool PetAssetSettings::assignString(QString& target, const QString& value)
 {
-    if (target == value) {
+    if (target == value)
+    {
         return false;
     }
     target = value;
     return true;
 }
 
-bool PetAssetSettings::assignInt(int &target, int value, int minimum, int maximum)
+bool PetAssetSettings::assignInt(int& target, int value, int minimum, int maximum)
 {
     const int bounded = qBound(minimum, value, maximum);
-    if (target == bounded) {
+    if (target == bounded)
+    {
         return false;
     }
     target = bounded;
     return true;
 }
 
-bool PetAssetSettings::assignReal(qreal &target, qreal value, qreal minimum, qreal maximum)
+bool PetAssetSettings::assignReal(qreal& target, qreal value, qreal minimum, qreal maximum)
 {
     const qreal bounded = qBound(minimum, value, maximum);
-    if (qFuzzyCompare(target + 1.0, bounded + 1.0)) {
+    if (qFuzzyCompare(target + 1.0, bounded + 1.0))
+    {
         return false;
     }
     target = bounded;
     return true;
 }
 
-bool PetAssetSettings::assignBool(bool &target, bool value)
+bool PetAssetSettings::assignBool(bool& target, bool value)
 {
-    if (target == value) {
+    if (target == value)
+    {
         return false;
     }
     target = value;
@@ -137,7 +313,8 @@ void PetAssetSettings::applyDefaults(bool dirty)
     _personality_tags = QStringLiteral("认真, 安静, 可靠, 轻声提醒");
     _relationship_style = QStringLiteral("熟悉但不过界的桌面同伴");
     _world_setting = QStringLiteral("以香风智乃素材作为本地默认角色，在 MemoChat 旁边陪用户聊天、学习和整理资料。");
-    _speech_rules = QStringLiteral("使用当前选择的单一语言回复，不混用中文、日语或英语。少说套话，先回应情绪，再给明确建议。");
+    _speech_rules =
+        QStringLiteral("使用当前选择的单一语言回复，不混用中文、日语或英语。少说套话，先回应情绪，再给明确建议。");
     _catchphrases = QStringLiteral("收到，我会记住。\n先别急，我们一步一步来。");
     _forbidden_rules = QStringLiteral("不要伪装成真人；不要主动索要隐私；不替用户做高风险决定。");
     _tone_index = 0;
@@ -168,7 +345,7 @@ void PetAssetSettings::applyDefaults(bool dirty)
     _status_text = dirty ? QStringLiteral("默认草稿待保存") : QStringLiteral("默认草稿已载入");
 }
 
-void PetAssetSettings::applyObject(const QVariantMap &values, bool dirty)
+void PetAssetSettings::applyObject(const QVariantMap& values, bool dirty)
 {
     applyDefaults(dirty);
     _character_name = stringValue(values, QStringLiteral("characterName"), _character_name);
@@ -203,14 +380,18 @@ void PetAssetSettings::applyObject(const QVariantMap &values, bool dirty)
     _interrupt_enabled = boolValue(values, QStringLiteral("interruptEnabled"), _interrupt_enabled);
     _camera_enabled = boolValue(values, QStringLiteral("cameraEnabled"), _camera_enabled);
     _cloud_vision_enabled = boolValue(values, QStringLiteral("cloudVisionEnabled"), _cloud_vision_enabled);
-    _auto_start_pet_on_client_start = boolValue(values, QStringLiteral("autoStartPetOnClientStart"), _auto_start_pet_on_client_start);
+    _auto_start_pet_on_client_start =
+        boolValue(values, QStringLiteral("autoStartPetOnClientStart"), _auto_start_pet_on_client_start);
     _voice_training_consent = boolValue(values, QStringLiteral("voiceTrainingConsent"), _voice_training_consent);
-    _voice_training_consent_scope = stringValue(values, QStringLiteral("voiceTrainingConsentScope"), _voice_training_consent_scope);
+    _voice_training_consent_scope =
+        stringValue(values, QStringLiteral("voiceTrainingConsentScope"), _voice_training_consent_scope);
     _voice_training_job_id = stringValue(values, QStringLiteral("voiceTrainingJobId"), _voice_training_job_id);
     _voice_training_status = stringValue(values, QStringLiteral("voiceTrainingStatus"), _voice_training_status);
     _voice_training_stage = stringValue(values, QStringLiteral("voiceTrainingStage"), _voice_training_stage);
-    _voice_training_progress = intValue(values, QStringLiteral("voiceTrainingProgress"), _voice_training_progress, 0, 100);
-    _voice_training_artifact_path = stringValue(values, QStringLiteral("voiceTrainingArtifactPath"), _voice_training_artifact_path);
+    _voice_training_progress =
+        intValue(values, QStringLiteral("voiceTrainingProgress"), _voice_training_progress, 0, 100);
+    _voice_training_artifact_path =
+        stringValue(values, QStringLiteral("voiceTrainingArtifactPath"), _voice_training_artifact_path);
     _voice_training_message = stringValue(values, QStringLiteral("voiceTrainingMessage"), _voice_training_message);
     _dirty = dirty;
 }
@@ -225,7 +406,8 @@ void PetAssetSettings::markDirty()
 QString PetAssetSettings::defaultStoragePath() const
 {
     QString root = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    if (root.isEmpty()) {
+    if (root.isEmpty())
+    {
         root = QDir::home().absoluteFilePath(QStringLiteral(".memochat"));
     }
     return QDir(root).absoluteFilePath(QStringLiteral("pet/live2d-character-draft.json"));

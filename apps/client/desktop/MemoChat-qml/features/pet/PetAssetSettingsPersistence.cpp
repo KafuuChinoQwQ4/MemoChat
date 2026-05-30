@@ -13,20 +13,23 @@ using namespace memochat::pet_asset_settings;
 bool PetAssetSettings::load()
 {
     QFile file(_storage_path);
-    if (!file.exists()) {
+    if (!file.exists())
+    {
         applyDefaults(false);
         _status_text = QStringLiteral("暂无本地草稿");
         emit settingsChanged();
         return true;
     }
-    if (!file.open(QIODevice::ReadOnly)) {
+    if (!file.open(QIODevice::ReadOnly))
+    {
         _status_text = QStringLiteral("无法读取本地草稿：%1").arg(file.errorString());
         emit settingsChanged();
         return false;
     }
 
     const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
-    if (!document.isObject()) {
+    if (!document.isObject())
+    {
         applyDefaults(false);
         _status_text = QStringLiteral("本地草稿格式错误，已使用默认值");
         emit settingsChanged();
@@ -45,14 +48,16 @@ bool PetAssetSettings::save()
 {
     const QFileInfo info(_storage_path);
     QDir dir(info.absolutePath());
-    if (!dir.exists() && !dir.mkpath(QStringLiteral("."))) {
+    if (!dir.exists() && !dir.mkpath(QStringLiteral(".")))
+    {
         _status_text = QStringLiteral("无法创建草稿目录：%1").arg(info.absolutePath());
         emit settingsChanged();
         return false;
     }
 
     QFile file(_storage_path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
         _status_text = QStringLiteral("无法写入本地草稿：%1").arg(file.errorString());
         emit settingsChanged();
         return false;

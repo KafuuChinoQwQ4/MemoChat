@@ -33,7 +33,7 @@ def query_service_trend(
         f"""
         SELECT minute_utc, {select_expr}
           FROM ops_service_metric_minute
-         WHERE {' AND '.join(clauses)}
+         WHERE {" AND ".join(clauses)}
          GROUP BY minute_utc
          ORDER BY minute_utc ASC
         """,

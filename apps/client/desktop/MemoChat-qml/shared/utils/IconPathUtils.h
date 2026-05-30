@@ -10,19 +10,19 @@
 extern QString gate_url_prefix;
 extern QString gate_media_url_prefix;
 
-inline int &iconDownloadAuthUid()
+inline int& iconDownloadAuthUid()
 {
     static int uid = 0;
     return uid;
 }
 
-inline QString &iconDownloadAuthToken()
+inline QString& iconDownloadAuthToken()
 {
     static QString token;
     return token;
 }
 
-inline void setIconDownloadAuthContext(int uid, const QString &token)
+inline void setIconDownloadAuthContext(int uid, const QString& token)
 {
     iconDownloadAuthUid() = uid;
     iconDownloadAuthToken() = token.trimmed();
@@ -32,17 +32,20 @@ inline QString attachMediaDownloadAuth(QString icon)
 {
     const int uid = iconDownloadAuthUid();
     const QString token = iconDownloadAuthToken();
-    if (uid <= 0 || token.isEmpty()) {
+    if (uid <= 0 || token.isEmpty())
+    {
         return icon;
     }
 
     QUrl url(icon);
-    if (!url.isValid() || url.scheme().isEmpty() || url.isLocalFile()) {
+    if (!url.isValid() || url.scheme().isEmpty() || url.isLocalFile())
+    {
         return icon;
     }
 
     const QString path = url.path();
-    if (!path.endsWith(QStringLiteral("/media/download")) && !path.contains(QStringLiteral("/media/download"))) {
+    if (!path.endsWith(QStringLiteral("/media/download")) && !path.contains(QStringLiteral("/media/download")))
+    {
         return icon;
     }
 
@@ -55,23 +58,24 @@ inline QString attachMediaDownloadAuth(QString icon)
     return url.toString();
 }
 
-inline bool isMediaDownloadPath(const QString &path)
+inline bool isMediaDownloadPath(const QString& path)
 {
     return path.endsWith(QStringLiteral("/media/download")) || path.contains(QStringLiteral("/media/download"));
 }
 
-inline bool isLocalMediaHost(const QString &host)
+inline bool isLocalMediaHost(const QString& host)
 {
     const QString normalized = host.trimmed().toLower();
-    return normalized == QStringLiteral("localhost")
-        || normalized == QStringLiteral("127.0.0.1")
-        || normalized == QStringLiteral("::1");
+    return normalized == QStringLiteral("localhost") ||
+                                        normalized == QStringLiteral("127.0.0.1") ||
+                                                                     normalized == QStringLiteral("::1");
 }
 
 inline QString mediaDownloadBaseUrl()
 {
     QString baseUrl = gate_media_url_prefix.trimmed();
-    if (baseUrl.isEmpty()) {
+    if (baseUrl.isEmpty())
+    {
         baseUrl = gate_url_prefix.trimmed();
     }
     return baseUrl;
@@ -80,10 +84,12 @@ inline QString mediaDownloadBaseUrl()
 inline bool isGateRelativeMediaDownloadUrl(QString icon)
 {
     icon = icon.trimmed();
-    if (icon.startsWith(QStringLiteral("media/download"))) {
+    if (icon.startsWith(QStringLiteral("media/download")))
+    {
         icon.prepend('/');
     }
-    if (!icon.startsWith(QStringLiteral("/"))) {
+    if (!icon.startsWith(QStringLiteral("/")))
+    {
         return false;
     }
 
@@ -94,15 +100,18 @@ inline bool isGateRelativeMediaDownloadUrl(QString icon)
 inline QString withGateMediaUrlPrefix(QString icon)
 {
     icon = icon.trimmed();
-    if (icon.startsWith(QStringLiteral("media/download"))) {
+    if (icon.startsWith(QStringLiteral("media/download")))
+    {
         icon.prepend('/');
     }
 
     QString baseUrl = mediaDownloadBaseUrl();
-    if (baseUrl.isEmpty()) {
+    if (baseUrl.isEmpty())
+    {
         return icon;
     }
-    if (baseUrl.endsWith(QLatin1Char('/')) && icon.startsWith(QLatin1Char('/'))) {
+    if (baseUrl.endsWith(QLatin1Char('/')) && icon.startsWith(QLatin1Char('/')))
+    {
         baseUrl.chop(1);
     }
     return baseUrl + icon;
@@ -110,55 +119,65 @@ inline QString withGateMediaUrlPrefix(QString icon)
 
 inline QString normalizeRelativeMediaDownloadUrl(QString icon)
 {
-    if (!isGateRelativeMediaDownloadUrl(icon)) {
+    if (!isGateRelativeMediaDownloadUrl(icon))
+    {
         return icon;
     }
 
     return attachMediaDownloadAuth(withGateMediaUrlPrefix(icon));
 }
 
-inline bool looksLikeMediaKey(const QString &icon)
+inline bool looksLikeMediaKey(const QString& icon)
 {
-    if (icon.length() < 16 || icon.length() > 96) {
+    if (icon.length() < 16 || icon.length() > 96)
+    {
         return false;
     }
-    for (const QChar ch : icon) {
-        if (!ch.isLetterOrNumber() && ch != QLatin1Char('-') && ch != QLatin1Char('_')) {
+    for (const QChar ch : icon)
+    {
+        if (!ch.isLetterOrNumber() && ch != QLatin1Char('-') && ch != QLatin1Char('_'))
+        {
             return false;
         }
     }
     return icon.contains(QLatin1Char('-'));
 }
 
-inline QString mediaKeyDownloadUrl(const QString &mediaKey)
+inline QString mediaKeyDownloadUrl(const QString& mediaKey)
 {
     QString baseUrl = mediaDownloadBaseUrl();
-    if (baseUrl.isEmpty()) {
+    if (baseUrl.isEmpty())
+    {
         return attachMediaDownloadAuth(QStringLiteral("/media/download?asset=") + mediaKey);
     }
-    if (baseUrl.endsWith(QLatin1Char('/'))) {
+    if (baseUrl.endsWith(QLatin1Char('/')))
+    {
         baseUrl.chop(1);
     }
     return attachMediaDownloadAuth(baseUrl + QStringLiteral("/media/download?asset=") + mediaKey);
 }
 
-inline QString normalizeLocalMediaDownloadUrl(const QString &icon)
+inline QString normalizeLocalMediaDownloadUrl(const QString& icon)
 {
     const QUrl url(icon);
-    if (!url.isValid() || url.scheme().isEmpty() || url.isLocalFile()) {
+    if (!url.isValid() || url.scheme().isEmpty() || url.isLocalFile())
+    {
         return icon;
     }
-    if (!isMediaDownloadPath(url.path()) || !isLocalMediaHost(url.host())) {
+    if (!isMediaDownloadPath(url.path()) || !isLocalMediaHost(url.host()))
+    {
         return icon;
     }
 
     const QString baseUrl = mediaDownloadBaseUrl();
-    if (baseUrl.isEmpty()) {
+    if (baseUrl.isEmpty())
+    {
         return attachMediaDownloadAuth(icon);
     }
 
     const QUrl parsedBase(baseUrl);
-    if (!parsedBase.isValid() || parsedBase.scheme().isEmpty() || parsedBase.host().isEmpty()) {
+    if (!parsedBase.isValid() || parsedBase.scheme().isEmpty() || parsedBase.host().isEmpty())
+    {
         return attachMediaDownloadAuth(icon);
     }
 
@@ -174,53 +193,65 @@ inline QString normalizeIconForQml(QString icon)
     static const QString kDefaultIcon = QStringLiteral("qrc:/res/head_1.png");
 
     icon = icon.trimmed();
-    if (icon.isEmpty()) {
+    if (icon.isEmpty())
+    {
         return kDefaultIcon;
     }
 
-    if (icon.startsWith(QStringLiteral("qrc:/"), Qt::CaseInsensitive)) {
+    if (icon.startsWith(QStringLiteral("qrc:/"), Qt::CaseInsensitive))
+    {
         return icon;
     }
 
-    if (icon.startsWith(QStringLiteral(":/"))) {
+    if (icon.startsWith(QStringLiteral(":/")))
+    {
         return QStringLiteral("qrc") + icon;
     }
 
-    if (icon.startsWith(QStringLiteral("res/"))) {
+    if (icon.startsWith(QStringLiteral("res/")))
+    {
         return QStringLiteral("qrc:/") + icon;
     }
 
-    if (icon.startsWith(QStringLiteral("/res/"))) {
+    if (icon.startsWith(QStringLiteral("/res/")))
+    {
         return QStringLiteral("qrc:") + icon;
     }
 
     const QString mediaDownloadUrl = normalizeRelativeMediaDownloadUrl(icon);
-    if (mediaDownloadUrl != icon) {
+    if (mediaDownloadUrl != icon)
+    {
         return mediaDownloadUrl;
     }
 
     const QString localMediaDownloadUrl = normalizeLocalMediaDownloadUrl(icon);
-    if (localMediaDownloadUrl != icon) {
+    if (localMediaDownloadUrl != icon)
+    {
         return localMediaDownloadUrl;
     }
 
-    if (!icon.contains('/') && !icon.contains('\\')
-        && icon.startsWith(QStringLiteral("head_"), Qt::CaseInsensitive)) {
-        if (icon.compare(QStringLiteral("head_1.jpg"), Qt::CaseInsensitive) == 0) {
+    if (!icon.contains('/') && !icon.contains('\\') && icon.startsWith(QStringLiteral("head_"), Qt::CaseInsensitive))
+    {
+        if (icon.compare(QStringLiteral("head_1.jpg"), Qt::CaseInsensitive) == 0)
+        {
             return QStringLiteral("qrc:/res/head_1.png");
         }
         return QStringLiteral("qrc:/res/") + icon;
     }
 
-    if (!icon.contains('/') && !icon.contains('\\') && looksLikeMediaKey(icon)) {
+    if (!icon.contains('/') && !icon.contains('\\') && looksLikeMediaKey(icon))
+    {
         return mediaKeyDownloadUrl(icon);
     }
 
     const QUrl parsedUrl(icon);
-    if (parsedUrl.isValid() && !parsedUrl.scheme().isEmpty()) {
-        if (parsedUrl.isLocalFile()) {
+    if (parsedUrl.isValid() && !parsedUrl.scheme().isEmpty())
+    {
+        if (parsedUrl.isLocalFile())
+        {
             const QString localPath = parsedUrl.toLocalFile();
-            if (QFileInfo::exists(localPath)) {
+            if (QFileInfo::exists(localPath))
+            {
                 return QUrl::fromLocalFile(localPath).toString();
             }
             return kDefaultIcon;
@@ -228,9 +259,11 @@ inline QString normalizeIconForQml(QString icon)
         return attachMediaDownloadAuth(icon);
     }
 
-    if (QDir::isAbsolutePath(icon)) {
+    if (QDir::isAbsolutePath(icon))
+    {
         const QString normalizedPath = QDir::fromNativeSeparators(icon);
-        if (QFileInfo::exists(normalizedPath)) {
+        if (QFileInfo::exists(normalizedPath))
+        {
             return QUrl::fromLocalFile(normalizedPath).toString();
         }
         return kDefaultIcon;

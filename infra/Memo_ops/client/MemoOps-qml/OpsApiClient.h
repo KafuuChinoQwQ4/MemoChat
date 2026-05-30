@@ -35,7 +35,7 @@ class OpsApiClient : public QObject
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
 
 public:
-    explicit OpsApiClient(QObject *parent = nullptr);
+    explicit OpsApiClient(QObject* parent = nullptr);
 
     QString baseUrl() const;
     QJsonObject overview() const;
@@ -62,54 +62,52 @@ public:
     Q_INVOKABLE void refreshAll();
     Q_INVOKABLE void refreshOverview();
     Q_INVOKABLE void refreshRuns();
-    Q_INVOKABLE void refreshLogs(const QString &service = QString(),
-                                 const QString &level = QString(),
-                                 const QString &traceId = QString());
-    Q_INVOKABLE void refreshLogSearch(const QString &service = QString(),
-                                      const QString &instance = QString(),
-                                      const QString &level = QString(),
-                                      const QString &event = QString(),
-                                      const QString &traceId = QString(),
-                                      const QString &requestId = QString(),
-                                      const QString &keyword = QString(),
-                                      const QString &fromUtc = QString(),
-                                      const QString &toUtc = QString(),
+    Q_INVOKABLE void refreshLogs(const QString& service = QString(),
+                                 const QString& level = QString(),
+                                 const QString& traceId = QString());
+    Q_INVOKABLE void refreshLogSearch(const QString& service = QString(),
+                                      const QString& instance = QString(),
+                                      const QString& level = QString(),
+                                      const QString& event = QString(),
+                                      const QString& traceId = QString(),
+                                      const QString& requestId = QString(),
+                                      const QString& keyword = QString(),
+                                      const QString& fromUtc = QString(),
+                                      const QString& toUtc = QString(),
                                       int page = 1,
                                       int pageSize = 100,
-                                      const QString &sort = QStringLiteral("ts_desc"));
-    Q_INVOKABLE void refreshLogTrend(const QString &service = QString(),
-                                     const QString &instance = QString(),
-                                     const QString &level = QString(),
-                                     const QString &event = QString(),
-                                     const QString &traceId = QString(),
-                                     const QString &requestId = QString(),
-                                     const QString &keyword = QString(),
-                                     const QString &fromUtc = QString(),
-                                     const QString &toUtc = QString());
-    Q_INVOKABLE void refreshTrace(const QString &traceId);
+                                      const QString& sort = QStringLiteral("ts_desc"));
+    Q_INVOKABLE void refreshLogTrend(const QString& service = QString(),
+                                     const QString& instance = QString(),
+                                     const QString& level = QString(),
+                                     const QString& event = QString(),
+                                     const QString& traceId = QString(),
+                                     const QString& requestId = QString(),
+                                     const QString& keyword = QString(),
+                                     const QString& fromUtc = QString(),
+                                     const QString& toUtc = QString());
+    Q_INVOKABLE void refreshTrace(const QString& traceId);
     Q_INVOKABLE void refreshServices();
-    Q_INVOKABLE void refreshServiceTrend(const QString &serviceName,
-                                         const QString &instance = QString(),
-                                         const QString &fromUtc = QString(),
-                                         const QString &toUtc = QString());
-    Q_INVOKABLE void refreshLoadtestTrend(const QString &fromUtc = QString(),
-                                          const QString &toUtc = QString(),
-                                          const QString &groupBy = QStringLiteral("day"));
+    Q_INVOKABLE void refreshServiceTrend(const QString& serviceName,
+                                         const QString& instance = QString(),
+                                         const QString& fromUtc = QString(),
+                                         const QString& toUtc = QString());
+    Q_INVOKABLE void refreshLoadtestTrend(const QString& fromUtc = QString(),
+                                          const QString& toUtc = QString(),
+                                          const QString& groupBy = QStringLiteral("day"));
     Q_INVOKABLE void refreshAlerts();
     Q_INVOKABLE void refreshDataSources();
-    Q_INVOKABLE void selectRun(const QString &runId);
-    Q_INVOKABLE void selectService(const QString &serviceName, const QString &instance = QString());
+    Q_INVOKABLE void selectRun(const QString& runId);
+    Q_INVOKABLE void selectService(const QString& serviceName, const QString& instance = QString());
     Q_INVOKABLE void collectNow();
     Q_INVOKABLE void importReports();
     Q_INVOKABLE void importLogs();
     Q_INVOKABLE void refreshSystemMetrics();
-    Q_INVOKABLE void refreshLoadtestStatus(const QString &runId);
-    Q_INVOKABLE void startLoadtest(const QString &scenario = QStringLiteral("all"),
-                                    int warmup = 10,
-                                    int poolSize = 200);
-    Q_INVOKABLE void fetchTailLogs(const QString &service = QString(),
-                               const QString &level = QString(),
-                               int limit = 50);
+    Q_INVOKABLE void refreshLoadtestStatus(const QString& runId);
+    Q_INVOKABLE void
+    startLoadtest(const QString& scenario = QStringLiteral("all"), int warmup = 10, int poolSize = 200);
+    Q_INVOKABLE void
+    fetchTailLogs(const QString& service = QString(), const QString& level = QString(), int limit = 50);
     Q_INVOKABLE void stopTailLogs();
 
 signals:
@@ -134,27 +132,28 @@ signals:
     void lastErrorChanged();
 
 private:
-    void getJson(const QString &path, const std::function<void(const QJsonObject &)> &onObject);
-    void postJson(const QString &path, const std::function<void(const QJsonObject &)> &onObject);
-    void postJsonWithQuery(const QString &path, const QUrlQuery &query,
-                           const std::function<void(const QJsonObject &)> &onObject);
-    QJsonObject buildLogFilterState(const QString &service,
-                                    const QString &instance,
-                                    const QString &level,
-                                    const QString &event,
-                                    const QString &traceId,
-                                    const QString &requestId,
-                                    const QString &keyword,
-                                    const QString &fromUtc,
-                                    const QString &toUtc,
+    void getJson(const QString& path, const std::function<void(const QJsonObject&)>& onObject);
+    void postJson(const QString& path, const std::function<void(const QJsonObject&)>& onObject);
+    void postJsonWithQuery(const QString& path,
+                           const QUrlQuery& query,
+                           const std::function<void(const QJsonObject&)>& onObject);
+    QJsonObject buildLogFilterState(const QString& service,
+                                    const QString& instance,
+                                    const QString& level,
+                                    const QString& event,
+                                    const QString& traceId,
+                                    const QString& requestId,
+                                    const QString& keyword,
+                                    const QString& fromUtc,
+                                    const QString& toUtc,
                                     int page,
                                     int pageSize,
-                                    const QString &sort) const;
-    QUrlQuery buildLogQuery(const QJsonObject &filters, bool includePaging) const;
-    void applyLogFilterState(const QJsonObject &filters);
+                                    const QString& sort) const;
+    QUrlQuery buildLogQuery(const QJsonObject& filters, bool includePaging) const;
+    void applyLogFilterState(const QJsonObject& filters);
     void refreshSelectedLogs();
     void setBusy(bool value);
-    void setLastError(const QString &message);
+    void setLastError(const QString& message);
 
     QString m_baseUrl;
     QNetworkAccessManager m_network;
@@ -176,7 +175,7 @@ private:
     QJsonArray m_systemMetrics;
     QJsonObject m_loadtestRunStatus;
     QJsonArray m_tailLogs;
-    QTimer *m_tailTimer = nullptr;
+    QTimer* m_tailTimer = nullptr;
     bool m_busy = false;
     int m_inFlight = 0;
     QString m_lastError;

@@ -14,7 +14,7 @@
 #include <vector>
 #endif
 
-static QPixmap grabScreenRect(const QRect &rect)
+static QPixmap grabScreenRect(const QRect& rect)
 {
     const int w = rect.width();
     const int h = rect.height();
@@ -40,28 +40,30 @@ static QPixmap grabScreenRect(const QRect &rect)
     bih.biCompression = BI_RGB;
 
     std::vector<unsigned char> pixels(w * h * 4);
-    GetDIBits(hdcMem, hBitmap, 0, h, pixels.data(),
-              reinterpret_cast<BITMAPINFO *>(&bih), DIB_RGB_COLORS);
+    GetDIBits(hdcMem, hBitmap, 0, h, pixels.data(), reinterpret_cast<BITMAPINFO*>(&bih), DIB_RGB_COLORS);
 
-    QPixmap pm = QPixmap::fromImage(
-        QImage(pixels.data(), w, h, QImage::Format_ARGB32).copy());
+    QPixmap pm = QPixmap::fromImage(QImage(pixels.data(), w, h, QImage::Format_ARGB32).copy());
 
     DeleteObject(hBitmap);
     DeleteDC(hdcMem);
     ReleaseDC(nullptr, hdcScreen);
     return pm;
 #else
-    QScreen *targetScreen = nullptr;
-    for (QScreen *screen : qApp->screens()) {
-        if (screen->geometry().intersects(rect)) {
+    QScreen* targetScreen = nullptr;
+    for (QScreen* screen : qApp->screens())
+    {
+        if (screen->geometry().intersects(rect))
+        {
             targetScreen = screen;
             break;
         }
     }
-    if (!targetScreen) {
+    if (!targetScreen)
+    {
         targetScreen = qApp->primaryScreen();
     }
-    if (!targetScreen) {
+    if (!targetScreen)
+    {
         return QPixmap();
     }
 
@@ -71,34 +73,38 @@ static QPixmap grabScreenRect(const QRect &rect)
 #endif
 }
 
-ScreenCaptureService::ScreenCaptureService(QObject *parent)
-    : QObject(parent) {
+ScreenCaptureService::ScreenCaptureService(QObject* parent)
+    : QObject(parent)
+{
 }
 
 ScreenCaptureService::~ScreenCaptureService() = default;
 
-bool ScreenCaptureService::captureScreen(QPixmap *outPixmap)
+bool ScreenCaptureService::captureScreen(QPixmap* outPixmap)
 {
-    if (!outPixmap) {
+    if (!outPixmap)
+    {
         return false;
     }
 
-    const QList<QScreen *> screens = qApp->screens();
+    const QList<QScreen*> screens = qApp->screens();
     QRect virtualRect;
-    for (QScreen *screen : screens) {
+    for (QScreen* screen : screens)
+    {
         virtualRect = virtualRect.united(screen->geometry());
     }
 
     QPixmap fullDesktop(virtualRect.size());
     fullDesktop.fill(Qt::black);
     QPainter painter(&fullDesktop);
-    for (QScreen *screen : screens) {
+    for (QScreen* screen : screens)
+    {
         QPixmap pm = grabScreenRect(screen->geometry());
         painter.drawPixmap(screen->geometry().topLeft() - virtualRect.topLeft(), pm);
     }
     painter.end();
 
-    ScreenCaptureWidget *widget = new ScreenCaptureWidget(fullDesktop);
+    ScreenCaptureWidget* widget = new ScreenCaptureWidget(fullDesktop);
     widget->show();
     widget->activateWindow();
     widget->raise();
@@ -107,7 +113,8 @@ bool ScreenCaptureService::captureScreen(QPixmap *outPixmap)
     QObject::connect(widget, &QWidget::destroyed, &loop, &QEventLoop::quit);
     loop.exec();
 
-    if (widget->wasConfirmed() && !widget->capturedRegion().isNull()) {
+    if (widget->wasConfirmed() && !widget->capturedRegion().isNull())
+    {
         *outPixmap = widget->capturedRegion();
         return true;
     }

@@ -6,7 +6,8 @@
 #include <vector>
 #include <unordered_map>
 
-struct Http2Request {
+struct Http2Request
+{
     std::string method;
     std::string path;
     std::string query;
@@ -16,31 +17,36 @@ struct Http2Request {
     std::unordered_map<std::string, std::string> headers;
 };
 
-struct Http2Response {
+struct Http2Response
+{
     int status_code = 200;
     std::string status_message = "OK";
     std::string body;
     std::string content_type = "application/json";
     std::unordered_map<std::string, std::string> headers;
 
-    void SetJsonBody(const std::string& json_body) {
+    void SetJsonBody(const std::string& json_body)
+    {
         body = json_body;
         content_type = "application/json";
     }
 
-    void SetStatus(int code, const std::string& msg) {
+    void SetStatus(int code, const std::string& msg)
+    {
         status_code = code;
         status_message = msg;
     }
 
-    void SetHeader(const std::string& key, const std::string& value) {
+    void SetHeader(const std::string& key, const std::string& value)
+    {
         headers[key] = value;
     }
 };
 
 using Http2Handler = std::function<void(const Http2Request&, Http2Response&)>;
 
-class Http2Routes {
+class Http2Routes
+{
 public:
     static void RegisterRoutes();
     static void HandleRequest(const Http2Request& req, Http2Response& resp);

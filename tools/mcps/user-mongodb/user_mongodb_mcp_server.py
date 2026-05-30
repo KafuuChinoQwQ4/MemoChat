@@ -142,15 +142,17 @@ class MCPStdioServer:
         msg_id = message.get("id")
         try:
             if method == "initialize":
-                self._send({
-                    "jsonrpc": "2.0",
-                    "id": msg_id,
-                    "result": {
-                        "protocolVersion": "2024-11-05",
-                        "capabilities": {"tools": {}},
-                        "serverInfo": {"name": "user-mongodb", "version": "1.0.0"},
-                    },
-                })
+                self._send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "result": {
+                            "protocolVersion": "2024-11-05",
+                            "capabilities": {"tools": {}},
+                            "serverInfo": {"name": "user-mongodb", "version": "1.0.0"},
+                        },
+                    }
+                )
             elif method == "notifications/initialized":
                 return
             elif method == "tools/list":
@@ -162,13 +164,21 @@ class MCPStdioServer:
             elif method == "shutdown":
                 self._send({"jsonrpc": "2.0", "id": msg_id, "result": None})
             else:
-                self._send({
+                self._send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "error": {"code": -32601, "message": f"Method not found: {method}"},
+                    }
+                )
+        except Exception as exc:
+            self._send(
+                {
                     "jsonrpc": "2.0",
                     "id": msg_id,
-                    "error": {"code": -32601, "message": f"Method not found: {method}"},
-                })
-        except Exception as exc:
-            self._send({"jsonrpc": "2.0", "id": msg_id, "result": _text_response(f"MongoDB error: {type(exc).__name__}: {exc}")})
+                    "result": _text_response(f"MongoDB error: {type(exc).__name__}: {exc}"),
+                }
+            )
 
     def run(self) -> None:
         while True:

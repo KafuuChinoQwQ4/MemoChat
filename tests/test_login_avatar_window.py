@@ -1,11 +1,10 @@
-﻿import re
+import re
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/shared/utils/IconPathUtils.h"
-APP_CONTROLLER_SESSION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerSession.cpp"
+SESSION_AUTH_LOGIN_RESPONSE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/SessionAuthCoordinatorLoginResponse.cpp"
 MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
 LOGIN_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/LoginPage.qml"
 LOGIN_TOP_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/components/LoginTopBar.qml"
@@ -22,7 +21,7 @@ def extract_cpp_function(source: str, signature: str) -> str:
         elif char == "}":
             depth -= 1
             if depth == 0:
-                return source[start:index + 1]
+                return source[start : index + 1]
     raise AssertionError(f"Function body not found for {signature}")
 
 
@@ -43,15 +42,19 @@ class LoginAvatarWindowTests(unittest.TestCase):
         )
 
     def test_http_login_seeds_user_profile_icon_before_chat_login(self):
-        source = APP_CONTROLLER_SESSION.read_text(encoding="utf-8")
-        body = extract_cpp_function(source, "void AppController::onLoginHttpFinished")
+        source = SESSION_AUTH_LOGIN_RESPONSE.read_text(encoding="utf-8")
+        body = extract_cpp_function(source, "void SessionAuthCoordinator::onLoginHttpFinished")
 
-        self.assertIn('applyCurrentUserProfile(obj.value(QStringLiteral("user_profile")).toObject(), false);', body)
+        self.assertIn(
+            '_app.applyCurrentUserProfile(obj.value(QStringLiteral("user_profile")).toObject(), false);', body
+        )
         self.assertLess(
-            body.index('applyCurrentUserProfile(obj.value(QStringLiteral("user_profile")).toObject(), false);'),
+            body.index('_app.applyCurrentUserProfile(obj.value(QStringLiteral("user_profile")).toObject(), false);'),
             body.index("_gateway.chatTransport()->connectToServer(server_info);"),
         )
-        self.assertIn("setIconDownloadAuthContext(_pending_uid, _pending_token);", body)
+        self.assertIn(
+            "setIconDownloadAuthContext(_app._pending_login_state.uid, _app._pending_login_state.token);", body
+        )
 
     def test_login_and_chat_share_single_window_and_center_on_page_sync(self):
         source = MAIN_QML.read_text(encoding="utf-8")

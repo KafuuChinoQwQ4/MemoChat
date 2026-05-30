@@ -6,16 +6,19 @@
 
 #include "EtcdConfig.h"
 
-namespace memochat::runtime {
+namespace memochat::runtime
+{
 
-struct IniSection {
+struct IniSection
+{
     std::map<std::string, std::string> values;
 
     std::string operator[](const std::string& key) const;
     std::string GetValue(const std::string& key) const;
 };
 
-class IniConfig {
+class IniConfig
+{
 public:
     explicit IniConfig(const std::string& configPath = std::string());
 
@@ -32,7 +35,10 @@ public:
     void StartEtcdWatch();
     void StopEtcdWatch();
 
-    bool IsEtcdAvailable() const { return _etcd_config && _etcd_config->IsAvailable(); }
+    bool IsEtcdAvailable() const
+    {
+        return _etcd_config && _etcd_config->IsAvailable();
+    }
 
 private:
     static std::string SanitizeEnvToken(const std::string& raw);

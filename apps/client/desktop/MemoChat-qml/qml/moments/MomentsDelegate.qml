@@ -55,105 +55,15 @@ Rectangle {
         anchors.topMargin: 12
         spacing: 10
 
-        // Header row: avatar + name + location
-        RowLayout {
+        MomentsHeader {
             Layout.fillWidth: true
-            spacing: 10
-
-            Rectangle {
-                Layout.preferredWidth: 42
-                Layout.preferredHeight: 42
-                radius: 8
-                clip: true
-                color: Qt.rgba(0.8, 0.85, 0.95, 0.5)
-                Image {
-                    anchors.fill: parent
-                    fillMode: Image.PreserveAspectCrop
-                    source: root.userIcon
-                    cache: true
-                    asynchronous: true
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.avatarClicked()
-                    }
-                }
-            }
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 2
-                Label {
-                    text: root.userNick || root.userName || "用户"
-                    font.pixelSize: 14
-                    font.weight: Font.Medium
-                    color: "#1a1a1a"
-                }
-                Label {
-                    text: root.location ? root.location : root.timeAgoText(root.createdAt)
-                    font.pixelSize: 12
-                    color: "#888888"
-                }
-            }
-
-            Item { Layout.fillWidth: true }
-
-            ToolButton {
-                id: moreButton
-                visible: root.canDelete
-                implicitWidth: 32
-                implicitHeight: 32
-                hoverEnabled: true
-                ToolTip.visible: hovered
-                ToolTip.delay: 120
-                ToolTip.text: "更多"
-                background: Rectangle {
-                    radius: 10
-                    color: moreButton.down ? Qt.rgba(0.16, 0.24, 0.36, 0.12)
-                          : moreButton.hovered ? Qt.rgba(0.16, 0.24, 0.36, 0.08)
-                          : "transparent"
-                    border.width: moreButton.hovered ? 1 : 0
-                    border.color: Qt.rgba(0.16, 0.24, 0.36, 0.12)
-                }
-                contentItem: Label {
-                    text: "..."
-                    color: "#4d5f73"
-                    font.pixelSize: 16
-                    font.weight: Font.Medium
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-                onClicked: postMenu.open()
-
-                Menu {
-                    id: postMenu
-                    y: moreButton.height + 4
-                    width: 116
-                    background: Rectangle {
-                        color: "#ffffff"
-                        radius: 10
-                        border.color: Qt.rgba(0.82, 0.84, 0.90, 0.75)
-                        layer.enabled: true
-                    }
-                    MenuItem {
-                        id: postDeleteAction
-                        height: 38
-                        text: "删除"
-                        contentItem: Label {
-                            text: postDeleteAction.text
-                            color: "#d64545"
-                            font.pixelSize: 13
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        background: Rectangle {
-                            radius: 8
-                            color: postDeleteAction.hovered ? Qt.rgba(0.86, 0.18, 0.18, 0.08) : "transparent"
-                        }
-                        onTriggered: root.deleteClicked()
-                    }
-                }
-            }
+            userName: root.userName
+            userNick: root.userNick
+            userIcon: root.userIcon
+            locationText: root.location ? root.location : root.timeAgoText(root.createdAt)
+            canDelete: root.canDelete
+            onAvatarClicked: root.avatarClicked()
+            onDeleteClicked: root.deleteClicked()
         }
 
         // Content items (images / text) — Layout.* 仅对 Layout 容器的直接子项生效，故用 Item + 显式宽高
@@ -273,71 +183,14 @@ Rectangle {
             }
         }
 
-        // Action row: 独占一行、右对齐，与正文留出间距
-        RowLayout {
+        MomentsActionBar {
             Layout.fillWidth: true
             Layout.topMargin: 10
-            spacing: 0
-
-            Item { Layout.fillWidth: true }
-
-            RowLayout {
-                spacing: 20
-
-                MouseArea {
-                    Layout.preferredWidth: Math.max(44, likeRow.implicitWidth + 16)
-                    Layout.preferredHeight: 36
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.likeClicked()
-
-                    Row {
-                        id: likeRow
-                        anchors.centerIn: parent
-                        spacing: 4
-
-                        Image {
-                            width: 18
-                            height: 18
-                            source: root.hasLiked ? "qrc:/icons/like_active.png" : "qrc:/icons/like.png"
-                            fillMode: Image.PreserveAspectFit
-                        }
-                        Label {
-                            text: root.likeCount > 0 ? root.likeCount : ""
-                            font.pixelSize: 13
-                            color: root.hasLiked ? "#e84141" : "#555555"
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                    }
-                }
-
-                MouseArea {
-                    Layout.preferredWidth: Math.max(44, commentActionRow.implicitWidth + 16)
-                    Layout.preferredHeight: 36
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.commentClicked()
-
-                    Row {
-                        id: commentActionRow
-                        anchors.centerIn: parent
-                        spacing: 4
-
-                        Image {
-                            width: 18
-                            height: 18
-                            source: "qrc:/icons/comment.png"
-                            fillMode: Image.PreserveAspectFit
-                        }
-                        Label {
-                            text: root.commentCount > 0 ? root.commentCount : ""
-                            font.pixelSize: 13
-                            color: "#555555"
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                    }
-                }
-            }
+            likeCount: root.likeCount
+            commentCount: root.commentCount
+            hasLiked: root.hasLiked
+            onLikeClicked: root.likeClicked()
+            onCommentClicked: root.commentClicked()
         }
 
     }

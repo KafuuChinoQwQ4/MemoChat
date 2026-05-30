@@ -1,175 +1,85 @@
 #include "DialogListService.h"
 
-#include <QtGlobal>
 #include <algorithm>
 #include <limits>
 
-namespace {
-constexpr int kLocalPinBoost = 1000000;
+#include "DialogListEntryBuilder.h"
 
-QString trimmedOrFallback(const QString &value, const QString &fallback)
+namespace
 {
-    const QString trimmed = value.trimmed();
-    return trimmed.isEmpty() ? fallback : trimmed;
-}
-
 int makeGroupDialogUid(qint64 groupId)
 {
-    if (groupId <= 0 || groupId > static_cast<qint64>(std::numeric_limits<int>::max())) {
+    if (groupId <= 0 || groupId > static_cast<qint64>(std::numeric_limits<int>::max()))
+    {
         return 0;
     }
     return -static_cast<int>(groupId);
 }
 
-int resolveGroupDialogUid(QMap<int, qint64> &groupUidMap, qint64 groupId)
+int resolveGroupDialogUid(QMap<int, qint64>& groupUidMap, qint64 groupId)
 {
-    if (groupId <= 0) {
+    if (groupId <= 0)
+    {
         return 0;
     }
-    for (auto it = groupUidMap.cbegin(); it != groupUidMap.cend(); ++it) {
-        if (it.value() == groupId) {
+    for (auto it = groupUidMap.cbegin(); it != groupUidMap.cend(); ++it)
+    {
+        if (it.value() == groupId)
+        {
             return it.key();
         }
     }
     const int dialogUid = makeGroupDialogUid(groupId);
-    if (dialogUid == 0) {
+    if (dialogUid == 0)
+    {
         return 0;
     }
     groupUidMap.insert(dialogUid, groupId);
     return dialogUid;
 }
-}
+} // namespace
 
-std::shared_ptr<AuthInfo> DialogListService::buildPlaceholderAuthInfo(int uid,
-                                                                      const QVariantMap &dialogItem,
-                                                                      const QString &defaultIcon)
+std::shared_ptr<AuthInfo>
+DialogListService::buildPlaceholderAuthInfo(int uid, const QVariantMap& dialogItem, const QString& defaultIcon)
 {
-    QString fallbackName = QString::number(uid);
-    QString fallbackNick = fallbackName;
-    QString fallbackIcon = defaultIcon;
-
-    const QString dialogName = dialogItem.value(QStringLiteral("name")).toString().trimmed();
-    const QString dialogNick = dialogItem.value(QStringLiteral("nick")).toString().trimmed();
-    const QString dialogIcon = dialogItem.value(QStringLiteral("icon")).toString().trimmed();
-    if (!dialogName.isEmpty()) {
-        fallbackName = dialogName;
-    }
-    fallbackNick = trimmedOrFallback(dialogNick, fallbackName);
-    if (!dialogIcon.isEmpty()) {
-        fallbackIcon = dialogIcon;
-    }
-
-    return std::make_shared<AuthInfo>(uid, fallbackName, fallbackNick, fallbackIcon, 0, QString());
+    return DialogListEntryBuilder::buildPlaceholderAuthInfo(uid, dialogItem, defaultIcon);
 }
 
-std::shared_ptr<FriendInfo> DialogListService::buildDialogEntry(const DialogEntrySeed &seed,
-                                                                const DialogDecorationState &state)
+std::shared_ptr<FriendInfo> DialogListService::buildDialogEntry(const DialogEntrySeed& seed,
+                                                                const DialogDecorationState& state)
 {
-    if (seed.dialogUid == 0) {
-        return nullptr;
-    }
-
-    auto item = std::make_shared<FriendInfo>(seed.dialogUid,
-                                             seed.name,
-                                             seed.nick,
-                                             seed.icon,
-                                             seed.sex,
-                                             seed.desc,
-                                             seed.back,
-                                             seed.previewText,
-                                             seed.userId);
-    item->_dialog_type = seed.dialogType;
-    item->_unread_count = qMax(0, seed.unreadCount);
-    item->_pinned_rank = qMax(0, seed.pinnedRank);
-    item->_draft_text = seed.draftText;
-    item->_last_msg_ts = seed.lastMsgTs;
-    item->_mute_state = qMax(0, seed.muteState);
-
-    if (state.serverPinnedMap) {
-        item->_pinned_rank = qMax(item->_pinned_rank, state.serverPinnedMap->value(seed.dialogUid, 0));
-    }
-    if (state.serverMuteMap) {
-        item->_mute_state = state.serverMuteMap->value(seed.dialogUid, item->_mute_state);
-    }
-    if (state.draftMap && state.draftMap->contains(seed.dialogUid)) {
-        item->_draft_text = state.draftMap->value(seed.dialogUid);
-    }
-    if (state.mentionMap) {
-        item->_mention_count = qMax(0, state.mentionMap->value(seed.dialogUid, 0));
-    }
-    if (state.localPinnedSet && state.localPinnedSet->contains(seed.dialogUid)) {
-        item->_pinned_rank = qMax(item->_pinned_rank, kLocalPinBoost);
-    }
-
-    return item;
+    return DialogListEntryBuilder::buildDialogEntry(seed, state);
 }
 
-QString DialogListService::privateDisplayName(const std::shared_ptr<FriendInfo> &friendInfo)
+QString DialogListService::privateDisplayName(const std::shared_ptr<FriendInfo>& friendInfo)
 {
-    if (!friendInfo) {
-        return {};
-    }
-
-    const QString back = friendInfo->_back.trimmed();
-    if (!back.isEmpty()) {
-        return back;
-    }
-    const QString nick = friendInfo->_nick.trimmed();
-    if (!nick.isEmpty()) {
-        return nick;
-    }
-    const QString name = friendInfo->_name.trimmed();
-    if (!name.isEmpty()) {
-        return name;
-    }
-    return friendInfo->_uid > 0 ? QString::number(friendInfo->_uid) : QString();
+    return DialogListEntryBuilder::privateDisplayName(friendInfo);
 }
 
-void DialogListService::applyFriendProfileToPrivateSeed(DialogEntrySeed &seed,
-                                                        const std::shared_ptr<FriendInfo> &friendInfo)
+void DialogListService::applyFriendProfileToPrivateSeed(DialogEntrySeed& seed,
+                                                        const std::shared_ptr<FriendInfo>& friendInfo)
 {
-    if (!friendInfo || friendInfo->_uid <= 0 || seed.dialogUid != friendInfo->_uid) {
-        return;
-    }
-
-    const QString displayName = privateDisplayName(friendInfo);
-    if (!displayName.isEmpty()) {
-        seed.name = displayName;
-    }
-    const QString nick = friendInfo->_nick.trimmed();
-    seed.nick = nick.isEmpty() ? seed.name : nick;
-    seed.userId = friendInfo->_user_id;
-    seed.desc = friendInfo->_desc;
-    seed.back = friendInfo->_back;
-    seed.sex = friendInfo->_sex;
-    if (!friendInfo->_icon.trimmed().isEmpty()) {
-        seed.icon = friendInfo->_icon;
-    }
-    if (seed.previewText.trimmed().isEmpty()) {
-        seed.previewText = friendInfo->_last_msg;
-    }
-    if (seed.lastMsgTs <= 0) {
-        seed.lastMsgTs = friendInfo->_last_msg_ts;
-        if (!friendInfo->_chat_msgs.empty() && friendInfo->_chat_msgs.back()) {
-            seed.lastMsgTs = friendInfo->_chat_msgs.back()->_created_at;
-        }
-    }
+    DialogListEntryBuilder::applyFriendProfileToPrivateSeed(seed, friendInfo);
 }
 
-void DialogListService::appendMissingPrivateDialogs(std::vector<std::shared_ptr<FriendInfo>> &dialogs,
-                                                    const std::vector<std::shared_ptr<FriendInfo>> &friends,
-                                                    const QSet<int> &existingPrivateUids,
-                                                    const DialogDecorationState &state)
+void DialogListService::appendMissingPrivateDialogs(std::vector<std::shared_ptr<FriendInfo>>& dialogs,
+                                                    const std::vector<std::shared_ptr<FriendInfo>>& friends,
+                                                    const QSet<int>& existingPrivateUids,
+                                                    const DialogDecorationState& state)
 {
     QSet<int> knownPrivateUids = existingPrivateUids;
-    for (const auto &dialog : dialogs) {
-        if (dialog && dialog->_uid > 0) {
+    for (const auto& dialog : dialogs)
+    {
+        if (dialog && dialog->_uid > 0)
+        {
             knownPrivateUids.insert(dialog->_uid);
         }
     }
 
-    for (const auto &friendInfo : friends) {
-        if (!friendInfo || friendInfo->_uid <= 0 || knownPrivateUids.contains(friendInfo->_uid)) {
+    for (const auto& friendInfo : friends)
+    {
+        if (!friendInfo || friendInfo->_uid <= 0 || knownPrivateUids.contains(friendInfo->_uid))
+        {
             continue;
         }
 
@@ -185,13 +95,15 @@ void DialogListService::appendMissingPrivateDialogs(std::vector<std::shared_ptr<
         seed.previewText = friendInfo->_last_msg;
         seed.sex = friendInfo->_sex;
         seed.lastMsgTs = friendInfo->_last_msg_ts;
-        if (!friendInfo->_chat_msgs.empty() && friendInfo->_chat_msgs.back()) {
+        if (!friendInfo->_chat_msgs.empty() && friendInfo->_chat_msgs.back())
+        {
             seed.lastMsgTs = friendInfo->_chat_msgs.back()->_created_at;
         }
         applyFriendProfileToPrivateSeed(seed, friendInfo);
 
         auto item = buildDialogEntry(seed, state);
-        if (!item) {
+        if (!item)
+        {
             continue;
         }
         dialogs.push_back(item);
@@ -199,30 +111,36 @@ void DialogListService::appendMissingPrivateDialogs(std::vector<std::shared_ptr<
     }
 }
 
-void DialogListService::appendMissingGroupDialogs(std::vector<std::shared_ptr<FriendInfo>> &dialogs,
-                                                  const std::vector<std::shared_ptr<GroupInfoData>> &groups,
-                                                  QMap<int, qint64> &groupUidMap,
-                                                  const QSet<qint64> &existingGroupIds,
-                                                  const DialogDecorationState &state)
+void DialogListService::appendMissingGroupDialogs(std::vector<std::shared_ptr<FriendInfo>>& dialogs,
+                                                  const std::vector<std::shared_ptr<GroupInfoData>>& groups,
+                                                  QMap<int, qint64>& groupUidMap,
+                                                  const QSet<qint64>& existingGroupIds,
+                                                  const DialogDecorationState& state)
 {
     QSet<qint64> knownGroupIds = existingGroupIds;
-    for (const auto &dialog : dialogs) {
-        if (!dialog || dialog->_uid >= 0) {
+    for (const auto& dialog : dialogs)
+    {
+        if (!dialog || dialog->_uid >= 0)
+        {
             continue;
         }
         const qint64 groupId = groupUidMap.value(dialog->_uid, -static_cast<qint64>(dialog->_uid));
-        if (groupId > 0) {
+        if (groupId > 0)
+        {
             knownGroupIds.insert(groupId);
         }
     }
 
-    for (const auto &group : groups) {
-        if (!group || group->_group_id <= 0 || knownGroupIds.contains(group->_group_id)) {
+    for (const auto& group : groups)
+    {
+        if (!group || group->_group_id <= 0 || knownGroupIds.contains(group->_group_id))
+        {
             continue;
         }
 
         const int dialogUid = resolveGroupDialogUid(groupUidMap, group->_group_id);
-        if (dialogUid == 0) {
+        if (dialogUid == 0)
+        {
             continue;
         }
 
@@ -231,18 +149,18 @@ void DialogListService::appendMissingGroupDialogs(std::vector<std::shared_ptr<Fr
         seed.dialogType = QStringLiteral("group");
         seed.name = group->_name;
         seed.nick = group->_name;
-        seed.icon = group->_icon.trimmed().isEmpty()
-            ? QStringLiteral("qrc:/res/chat_icon.png")
-            : group->_icon;
+        seed.icon = group->_icon.trimmed().isEmpty() ? QStringLiteral("qrc:/res/chat_icon.png") : group->_icon;
         seed.desc = group->_announcement;
         seed.back = group->_announcement;
         seed.previewText = group->_last_msg;
-        if (!group->_chat_msgs.empty() && group->_chat_msgs.back()) {
+        if (!group->_chat_msgs.empty() && group->_chat_msgs.back())
+        {
             seed.lastMsgTs = group->_chat_msgs.back()->_created_at;
         }
 
         auto item = buildDialogEntry(seed, state);
-        if (!item) {
+        if (!item)
+        {
             continue;
         }
         dialogs.push_back(item);
@@ -250,27 +168,32 @@ void DialogListService::appendMissingGroupDialogs(std::vector<std::shared_ptr<Fr
     }
 }
 
-void DialogListService::appendExistingDialogs(std::vector<std::shared_ptr<FriendInfo>> &dialogs,
-                                              const std::vector<QVariantMap> &existingDialogs,
-                                              const DialogDecorationState &state)
+void DialogListService::appendExistingDialogs(std::vector<std::shared_ptr<FriendInfo>>& dialogs,
+                                              const std::vector<QVariantMap>& existingDialogs,
+                                              const DialogDecorationState& state)
 {
     QSet<int> knownUids;
-    for (const auto &dialog : dialogs) {
-        if (dialog && dialog->_uid != 0) {
+    for (const auto& dialog : dialogs)
+    {
+        if (dialog && dialog->_uid != 0)
+        {
             knownUids.insert(dialog->_uid);
         }
     }
 
-    for (const QVariantMap &existing : existingDialogs) {
+    for (const QVariantMap& existing : existingDialogs)
+    {
         const int uid = existing.value(QStringLiteral("uid")).toInt();
-        if (uid == 0 || knownUids.contains(uid)) {
+        if (uid == 0 || knownUids.contains(uid))
+        {
             continue;
         }
 
         DialogEntrySeed seed;
         seed.dialogUid = uid;
         seed.dialogType = existing.value(QStringLiteral("dialogType")).toString();
-        if (seed.dialogType.trimmed().isEmpty()) {
+        if (seed.dialogType.trimmed().isEmpty())
+        {
             seed.dialogType = uid < 0 ? QStringLiteral("group") : QStringLiteral("private");
         }
         seed.userId = existing.value(QStringLiteral("userId")).toString();
@@ -288,7 +211,8 @@ void DialogListService::appendExistingDialogs(std::vector<std::shared_ptr<Friend
         seed.muteState = existing.value(QStringLiteral("muteState")).toInt();
 
         auto item = buildDialogEntry(seed, state);
-        if (!item) {
+        if (!item)
+        {
             continue;
         }
         dialogs.push_back(item);
@@ -296,17 +220,22 @@ void DialogListService::appendExistingDialogs(std::vector<std::shared_ptr<Friend
     }
 }
 
-void DialogListService::sortDialogs(std::vector<std::shared_ptr<FriendInfo>> &dialogs)
+void DialogListService::sortDialogs(std::vector<std::shared_ptr<FriendInfo>>& dialogs)
 {
-    std::stable_sort(dialogs.begin(), dialogs.end(),
-                     [](const std::shared_ptr<FriendInfo> &lhs, const std::shared_ptr<FriendInfo> &rhs) {
-                         if (!lhs || !rhs) {
+    std::stable_sort(dialogs.begin(),
+                     dialogs.end(),
+                     [](const std::shared_ptr<FriendInfo>& lhs, const std::shared_ptr<FriendInfo>& rhs)
+                     {
+                         if (!lhs || !rhs)
+                         {
                              return static_cast<bool>(lhs);
                          }
-                         if (lhs->_pinned_rank != rhs->_pinned_rank) {
+                         if (lhs->_pinned_rank != rhs->_pinned_rank)
+                         {
                              return lhs->_pinned_rank > rhs->_pinned_rank;
                          }
-                         if (lhs->_last_msg_ts != rhs->_last_msg_ts) {
+                         if (lhs->_last_msg_ts != rhs->_last_msg_ts)
+                         {
                              return lhs->_last_msg_ts > rhs->_last_msg_ts;
                          }
                          return lhs->_uid < rhs->_uid;

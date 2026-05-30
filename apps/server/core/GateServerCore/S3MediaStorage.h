@@ -6,13 +6,16 @@
 #include <string>
 #include <vector>
 
-namespace Aws {
-namespace S3 {
+namespace Aws
+{
+namespace S3
+{
 class S3Client;
-}  // namespace S3
-}  // namespace Aws
+} // namespace S3
+} // namespace Aws
 
-class S3MediaStorage final : public IMediaStorage {
+class S3MediaStorage final : public IMediaStorage
+{
 public:
     explicit S3MediaStorage();
     ~S3MediaStorage() override;
@@ -24,8 +27,7 @@ public:
                          std::string& out_storage_path,
                          std::string& error_text) override;
 
-    bool ResolveReadPath(const std::string& storage_path,
-                         std::filesystem::path& out_path) const override;
+    bool ResolveReadPath(const std::string& storage_path, std::filesystem::path& out_path) const override;
 
     bool ResolvePublicUrl(const std::string& storage_path,
                           const std::string& media_type,

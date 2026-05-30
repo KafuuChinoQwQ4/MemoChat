@@ -5,14 +5,15 @@
 #include <QTemporaryDir>
 #include <gtest/gtest.h>
 
-namespace {
+namespace
+{
 
 QString fixtureRoot()
 {
     return QString::fromLocal8Bit(LIVE2D_FIXTURE_DIR);
 }
 
-void writeFile(const QString &path, const QByteArray &content)
+void writeFile(const QString& path, const QByteArray& content)
 {
     QFile file(path);
     ASSERT_TRUE(file.open(QIODevice::WriteOnly));

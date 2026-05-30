@@ -1,11 +1,10 @@
-﻿import re
+import re
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
-APP_CONTROLLER_MODELS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerModels.cpp"
-APP_CONTROLLER_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerSelection.cpp"
+APP_CONTROLLER_PRIVATE_HISTORY = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerPrivateHistory.cpp"
+APP_CONTROLLER_GROUP_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerGroupSelection.cpp"
 
 
 def extract_function(source: str, signature: str) -> str:
@@ -19,27 +18,27 @@ def extract_function(source: str, signature: str) -> str:
         elif char == "}":
             depth -= 1
             if depth == 0:
-                return source[start:index + 1]
+                return source[start : index + 1]
     raise AssertionError(f"Function body not found for {signature}")
 
 
 class ChatHistoryInitialRefreshTests(unittest.TestCase):
     def test_private_chat_selection_requests_latest_history_page(self):
-        source = APP_CONTROLLER_MODELS.read_text(encoding="utf-8")
+        source = APP_CONTROLLER_PRIVATE_HISTORY.read_text(encoding="utf-8")
         body = extract_function(source, "void AppController::loadCurrentChatMessages()")
 
-        self.assertIn("requestPrivateHistory(_current_chat_uid, 0, QString());", body)
+        self.assertIn("requestPrivateHistory(_chat_state.uid, 0, QString());", body)
         self.assertNotIn(
-            "requestPrivateHistory(_current_chat_uid, _private_history_before_ts, _private_history_before_msg_id);",
+            "requestPrivateHistory(_chat_state.uid, _private_history_before_ts, _private_history_before_msg_id);",
             body,
         )
 
     def test_group_chat_selection_requests_latest_history_page_before_pagination_cursor(self):
-        source = APP_CONTROLLER_SELECTION.read_text(encoding="utf-8")
+        source = APP_CONTROLLER_GROUP_SELECTION.read_text(encoding="utf-8")
         body = extract_function(source, "void AppController::selectGroupIndex(int index)")
 
-        initial_load = body[:body.rindex("loadGroupHistory();")]
-        cursor_writes = re.findall(r"_group_history_before_seq\s*=", initial_load)
+        initial_load = body[: body.rindex("loadGroupHistory();")]
+        cursor_writes = re.findall(r"_group_state\.historyBeforeSeq\s*=", initial_load)
         self.assertEqual(
             4,
             len(cursor_writes),

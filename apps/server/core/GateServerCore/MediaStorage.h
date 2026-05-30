@@ -4,7 +4,8 @@
 #include <string>
 #include <vector>
 
-class IMediaStorage {
+class IMediaStorage
+{
 public:
     virtual ~IMediaStorage() = default;
 
@@ -15,12 +16,10 @@ public:
                                  std::string& out_storage_path,
                                  std::string& error_text) = 0;
 
-    virtual bool ResolveReadPath(const std::string& storage_path,
-                                 std::filesystem::path& out_path) const = 0;
+    virtual bool ResolveReadPath(const std::string& storage_path, std::filesystem::path& out_path) const = 0;
 
-    virtual bool ResolvePublicUrl(const std::string& storage_path,
-                                  const std::string& media_type,
-                                  std::string& out_url) const = 0;
+    virtual bool
+    ResolvePublicUrl(const std::string& storage_path, const std::string& media_type, std::string& out_url) const = 0;
 
     virtual bool ReadObject(const std::string& storage_path,
                             const std::string& media_type,
@@ -29,7 +28,8 @@ public:
                             std::string& error_text) = 0;
 };
 
-class LocalMediaStorage final : public IMediaStorage {
+class LocalMediaStorage final : public IMediaStorage
+{
 public:
     explicit LocalMediaStorage(const std::filesystem::path& uploads_root = {});
 
@@ -40,8 +40,7 @@ public:
                          std::string& out_storage_path,
                          std::string& error_text) override;
 
-    bool ResolveReadPath(const std::string& storage_path,
-                         std::filesystem::path& out_path) const override;
+    bool ResolveReadPath(const std::string& storage_path, std::filesystem::path& out_path) const override;
 
     bool ResolvePublicUrl(const std::string& storage_path,
                           const std::string& media_type,

@@ -5,7 +5,6 @@ import time
 import uuid
 
 import structlog
-
 from config import settings
 from db.postgres_client import PostgresClient
 from rag.chain import RAGChain

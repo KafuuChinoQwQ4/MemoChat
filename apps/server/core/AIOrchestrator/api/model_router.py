@@ -1,9 +1,9 @@
 """
 模型列表 API 路由
 """
-from fastapi import APIRouter
 
 from config import settings
+from fastapi import APIRouter
 from harness import HarnessContainer
 from observability.metrics import ai_metrics
 from schemas.api import (
@@ -97,17 +97,19 @@ async def register_api_provider(req: RegisterApiProviderReq):
         if not model_name or model_name in seen_models:
             continue
         seen_models.add(model_name)
-        models.append(ModelInfo(
-            model_type=endpoint.provider_id,
-            model_name=model_name,
-            display_name=model.get("display", model_name),
-            is_enabled=True,
-            context_window=model.get("context_window", 0),
-            supports_thinking=bool(model.get("supports_thinking", False)),
-            provider_id=endpoint.provider_id,
-            adapter=endpoint.adapter,
-            deployment=endpoint.deployment,
-        ))
+        models.append(
+            ModelInfo(
+                model_type=endpoint.provider_id,
+                model_name=model_name,
+                display_name=model.get("display", model_name),
+                is_enabled=True,
+                context_window=model.get("context_window", 0),
+                supports_thinking=bool(model.get("supports_thinking", False)),
+                provider_id=endpoint.provider_id,
+                adapter=endpoint.adapter,
+                deployment=endpoint.deployment,
+            )
+        )
     ai_metrics.http_requests.inc(route="/models/api-provider", status="ok")
     return RegisterApiProviderRsp(
         code=0,

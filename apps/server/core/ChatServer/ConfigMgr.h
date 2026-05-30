@@ -4,7 +4,8 @@
 
 using SectionInfo = memochat::runtime::IniSection;
 
-class ConfigMgr {
+class ConfigMgr
+{
 public:
     ConfigMgr();
     ~ConfigMgr() = default;
@@ -26,4 +27,3 @@ private:
 
     memochat::runtime::IniConfig _config;
 };
-

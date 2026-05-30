@@ -10,13 +10,15 @@ MCP 协议标准参考: https://modelcontextprotocol.io
 3. 调用 tools/list 获取可用工具列表
 4. 通过 tools/call 调用具体工具
 """
+
 import asyncio
 import json
-import subprocess
 import os
-import structlog
-from typing import Any, Optional
+import subprocess
 from dataclasses import dataclass, field
+from typing import Any, Optional
+
+import structlog
 from langchain_core.tools import BaseTool, StructuredTool
 
 logger = structlog.get_logger()
@@ -25,6 +27,7 @@ logger = structlog.get_logger()
 @dataclass
 class MCPServerConfig:
     """MCP Server 配置"""
+
     name: str
     command: list[str]
     args: list[str] = field(default_factory=list)
@@ -67,14 +70,10 @@ class MCPBridge:
             try:
                 await self._connect_server(srv_cfg)
             except Exception as e:
-                logger.warning("mcp.server.skip",
-                             name=srv_cfg.name,
-                             error=str(e),
-                             command=" ".join(srv_cfg.command))
+                logger.warning("mcp.server.skip", name=srv_cfg.name, error=str(e), command=" ".join(srv_cfg.command))
 
         self._initialized = True
-        logger.info("mcp.ready", tools=len(self._tools),
-                   tool_names=[t.name for t in self._tools])
+        logger.info("mcp.ready", tools=len(self._tools), tool_names=[t.name for t in self._tools])
 
     async def _connect_server(self, srv_cfg: MCPServerConfig) -> None:
         """启动 MCP Server subprocess 并初始化"""
@@ -135,14 +134,14 @@ class MCPBridge:
             for t_meta in tools_meta:
                 tool_inst = self._mcp_tool_to_langchain(t_meta, srv_cfg.name, proc)
                 self._tools.append(tool_inst)
-                logger.info("mcp.tool.registered",
-                          server=srv_cfg.name,
-                          tool=t_meta.get("name"),
-                          description=t_meta.get("description", "")[:60])
+                logger.info(
+                    "mcp.tool.registered",
+                    server=srv_cfg.name,
+                    tool=t_meta.get("name"),
+                    description=t_meta.get("description", "")[:60],
+                )
 
-            logger.info("mcp.server.ready",
-                      name=srv_cfg.name,
-                      tools=len(tools_meta))
+            logger.info("mcp.server.ready", name=srv_cfg.name, tools=len(tools_meta))
 
         except Exception as e:
             logger.error("mcp.server.error", name=srv_cfg.name, error=str(e))
@@ -160,8 +159,7 @@ class MCPBridge:
         proc.stdin.write(data.encode("utf-8"))
         await proc.stdin.drain()
 
-    async def _recv(self, proc: asyncio.subprocess.Process,
-                   timeout: float = 30) -> dict | None:
+    async def _recv(self, proc: asyncio.subprocess.Process, timeout: float = 30) -> dict | None:
         """接收 JSON-RPC 响应"""
         try:
             line = await asyncio.wait_for(proc.stdout.readline(), timeout=timeout)
@@ -175,11 +173,11 @@ class MCPBridge:
             logger.error("mcp.json.error", error=str(e))
             return None
 
-    def _mcp_tool_to_langchain(self, mcp_tool: dict, server_name: str,
-                                proc: asyncio.subprocess.Process) -> BaseTool:
+    def _mcp_tool_to_langchain(self, mcp_tool: dict, server_name: str, proc: asyncio.subprocess.Process) -> BaseTool:
         """将 MCP 工具元数据转换为 LangChain @tool"""
         tool_name = mcp_tool.get("name", "")
         description = mcp_tool.get("description", f"MCP tool from {server_name}")
+
         async def mcp_tool_wrapper(**kwargs) -> str:
             call_id = self._next_id()
             req = {

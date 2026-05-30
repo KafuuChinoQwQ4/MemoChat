@@ -15,7 +15,8 @@ class ApplyRequestModel : public QAbstractListModel
     Q_PROPERTY(bool hasUnapproved READ hasUnapproved NOTIFY unapprovedCountChanged)
 
 public:
-    enum Roles {
+    enum Roles
+    {
         UidRole = Qt::UserRole + 1,
         UserIdRole,
         NameRole,
@@ -27,10 +28,10 @@ public:
         PendingRole
     };
 
-    explicit ApplyRequestModel(QObject *parent = nullptr);
+    explicit ApplyRequestModel(QObject* parent = nullptr);
 
-    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    int rowCount(const QModelIndex& parent = QModelIndex()) const override;
+    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
 
     int count() const;
@@ -38,9 +39,9 @@ public:
     bool hasUnapproved() const;
 
     void clear();
-    void setApplies(const std::vector<std::shared_ptr<ApplyInfo>> &applies);
-    void upsertApply(const std::shared_ptr<ApplyInfo> &applyInfo);
-    void upsertApply(const std::shared_ptr<AddFriendApply> &applyInfo);
+    void setApplies(const std::vector<std::shared_ptr<ApplyInfo>>& applies);
+    void upsertApply(const std::shared_ptr<ApplyInfo>& applyInfo);
+    void upsertApply(const std::shared_ptr<AddFriendApply>& applyInfo);
     void markApproved(int uid);
     void setPending(int uid, bool pending);
 
@@ -53,7 +54,8 @@ signals:
     void unapprovedCountChanged();
 
 private:
-    struct ApplyEntry {
+    struct ApplyEntry
+    {
         int uid;
         QString userId;
         QString name;
@@ -65,7 +67,7 @@ private:
     };
 
     static QString normalizeIcon(QString icon);
-    void upsert(const ApplyEntry &entry);
+    void upsert(const ApplyEntry& entry);
     void refreshUnapprovedCount();
 
     std::vector<ApplyEntry> _items;

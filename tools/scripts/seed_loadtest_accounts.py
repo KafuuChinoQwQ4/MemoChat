@@ -6,11 +6,13 @@ Works for the Python load test tool and the MemoChat XOR-encoded login flow.
 Passwords are stored as-is in the DB (the GateServer /user_login reads pwd from the DB and
 compares with the XOR-encoded value the client sends — no double encoding).
 """
-import psycopg2
+
 import random
 import string
-from pathlib import Path
 import sys
+from pathlib import Path
+
+import psycopg2
 
 DB = dict(
     host="127.0.0.1",
@@ -20,20 +22,25 @@ DB = dict(
     database="memo_pg",
 )
 
+
 def xor_encode(raw: str) -> str:
     """Mirror the GateServer DecodeLegacyXorPwd inverse: encode for DB storage."""
     x = len(raw) % 255
     return "".join(chr((ord(ch) ^ x) & 0xFF) for ch in raw)
 
+
 def random_pwd(length=12):
     chars = string.ascii_letters + string.digits + "!@#$%^&*"
     return "".join(random.choices(chars, k=length))
 
+
 def random_user_id():
     return "u" + str(random.randint(100_000_000, 999_999_999))
 
+
 BATCH = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def main():
     print("[seed] Connecting to PostgreSQL...")
@@ -48,9 +55,7 @@ def main():
     print(f"[seed] Existing max uid={max_uid}, will insert uids {start_uid}–{start_uid + BATCH - 1}")
 
     # Reserve uid block in user_id table
-    next_id = cur.execute(
-        "SELECT COALESCE(MAX(id), 1000) + 1 FROM memo.user_id"
-    )
+    next_id = cur.execute("SELECT COALESCE(MAX(id), 1000) + 1 FROM memo.user_id")
     next_id = cur.fetchone()[0]
     for uid in range(start_uid, start_uid + BATCH):
         cur.execute("INSERT INTO memo.user_id(id) VALUES (%s) ON CONFLICT DO NOTHING", (next_id,))
@@ -77,13 +82,15 @@ def main():
         "INSERT INTO memo.user(uid, name, email, pwd, nick, icon, user_id) "
         "VALUES (%s,%s,%s,%s,%s,%s,%s) "
         "ON CONFLICT (email) DO NOTHING",
-        rows
+        rows,
     )
     inserted = cur.rowcount
     print(f"[seed] Inserted {inserted} accounts (duplicates skipped)")
 
     # Write CSV
-    csv_path = REPO_ROOT / "infra" / "Memo_ops" / "artifacts" / "loadtest" / "runtime" / "accounts" / "accounts.local.csv"
+    csv_path = (
+        REPO_ROOT / "infra" / "Memo_ops" / "artifacts" / "loadtest" / "runtime" / "accounts" / "accounts.local.csv"
+    )
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     with open(csv_path, "w", encoding="utf-8") as f:
         f.write("\n".join(csv_lines))
@@ -99,6 +106,7 @@ def main():
     cur.close()
     conn.close()
     print("[seed] Done.")
+
 
 if __name__ == "__main__":
     main()

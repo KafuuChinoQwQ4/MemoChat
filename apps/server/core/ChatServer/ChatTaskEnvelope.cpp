@@ -9,39 +9,44 @@
 #include "json/GlazeCompat.h"
 #include <memory>
 
-namespace {
+namespace
+{
 int64_t NowMsTaskEnvelope()
 {
-    return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count());
+    return static_cast<int64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count());
 }
 
 std::string NewTaskId()
 {
     return boost::uuids::to_string(boost::uuids::random_generator()());
 }
-}
+} // namespace
 
 TaskEnvelope::TaskEnvelope()
-    : payload(memochat::json::object_t{}) {
+    : payload(memochat::json::object_t{})
+{
 }
 
 TaskEnvelope::TaskEnvelope(const TaskEnvelope& other)
-    : task_id(other.task_id),
-      task_type(other.task_type),
-      trace_id(other.trace_id),
-      request_id(other.request_id),
-      created_at_ms(other.created_at_ms),
-      available_at_ms(other.available_at_ms),
-      retry_count(other.retry_count),
-      max_retries(other.max_retries),
-      routing_key(other.routing_key),
-      payload(other.payload) {
+    : task_id(other.task_id)
+    , task_type(other.task_type)
+    , trace_id(other.trace_id)
+    , request_id(other.request_id)
+    , created_at_ms(other.created_at_ms)
+    , available_at_ms(other.available_at_ms)
+    , retry_count(other.retry_count)
+    , max_retries(other.max_retries)
+    , routing_key(other.routing_key)
+    , payload(other.payload)
+{
 }
 
 TaskEnvelope& TaskEnvelope::operator=(const TaskEnvelope& other)
 {
-    if (this == &other) {
+    if (this == &other)
+    {
         return *this;
     }
     task_id = other.task_id;
@@ -60,23 +65,26 @@ TaskEnvelope& TaskEnvelope::operator=(const TaskEnvelope& other)
 TaskEnvelope::~TaskEnvelope() = default;
 
 TaskEnvelope BuildTaskEnvelope(const std::string& task_type,
-    const std::string& routing_key,
-    const memochat::json::JsonValue& incoming_payload,
-    int delay_ms,
-    int max_retries)
+                               const std::string& routing_key,
+                               const memochat::json::JsonValue& incoming_payload,
+                               int delay_ms,
+                               int max_retries)
 {
     TaskEnvelope envelope;
     envelope.task_id = memochat::json::glaze_safe_get<std::string>(incoming_payload, "task_id", "");
-    if (envelope.task_id.empty()) {
+    if (envelope.task_id.empty())
+    {
         envelope.task_id = NewTaskId();
     }
     envelope.task_type = task_type;
     envelope.trace_id = memolog::TraceContext::GetTraceId();
-    if (envelope.trace_id.empty()) {
+    if (envelope.trace_id.empty())
+    {
         envelope.trace_id = memolog::TraceContext::EnsureTraceId();
     }
     envelope.request_id = memolog::TraceContext::GetRequestId();
-    if (envelope.request_id.empty()) {
+    if (envelope.request_id.empty())
+    {
         envelope.request_id = memolog::TraceContext::NewId();
     }
     envelope.created_at_ms = NowMsTaskEnvelope();
@@ -91,7 +99,8 @@ bool ParseTaskEnvelope(const std::string& serialized, TaskEnvelope& envelope)
 {
     memochat::json::JsonValue root;
     std::string errors;
-    if (!memochat::json::glaze_parse(root, serialized, &errors) || !root.is_object()) {
+    if (!memochat::json::glaze_parse(root, serialized, &errors) || !root.is_object())
+    {
         return false;
     }
     envelope.task_id = memochat::json::glaze_safe_get<std::string>(root, "task_id", "");

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 import base64
 import json
 import sys
@@ -140,7 +140,14 @@ def _text_response(text: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": text}]}
 
 
-def _http_json(service: str, path: str, query: dict[str, Any] | None = None, method: str = "GET", body: Any = None, headers: dict[str, str] | None = None) -> Any:
+def _http_json(
+    service: str,
+    path: str,
+    query: dict[str, Any] | None = None,
+    method: str = "GET",
+    body: Any = None,
+    headers: dict[str, str] | None = None,
+) -> Any:
     url = ENDPOINTS[service] + path
     if query:
         clean = {k: str(v) for k, v in query.items() if v is not None and v != ""}
@@ -173,12 +180,25 @@ def _minio_client():
 def call_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     if name == "minio_list_buckets":
         buckets = _minio_client().list_buckets()
-        return _json_response([{"name": b.name, "creation_date": b.creation_date.isoformat() if b.creation_date else None} for b in buckets])
+        return _json_response(
+            [
+                {"name": b.name, "creation_date": b.creation_date.isoformat() if b.creation_date else None}
+                for b in buckets
+            ]
+        )
     if name == "minio_list_objects":
         limit = int(args.get("limit", 100))
         objects = []
-        for obj in _minio_client().list_objects(args["bucket"], prefix=args.get("prefix", ""), recursive=bool(args.get("recursive", False))):
-            objects.append({"object_name": obj.object_name, "size": obj.size, "last_modified": obj.last_modified.isoformat() if obj.last_modified else None})
+        for obj in _minio_client().list_objects(
+            args["bucket"], prefix=args.get("prefix", ""), recursive=bool(args.get("recursive", False))
+        ):
+            objects.append(
+                {
+                    "object_name": obj.object_name,
+                    "size": obj.size,
+                    "last_modified": obj.last_modified.isoformat() if obj.last_modified else None,
+                }
+            )
             if len(objects) >= limit:
                 break
         return _json_response(objects)
@@ -186,9 +206,21 @@ def call_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
         return _json_response(_http_json("rabbitmq", "/api/overview"))
     if name == "rabbitmq_list_queues":
         queues = _http_json("rabbitmq", "/api/queues")
-        return _json_response([{"name": q.get("name"), "vhost": q.get("vhost"), "messages": q.get("messages"), "consumers": q.get("consumers")} for q in queues])
+        return _json_response(
+            [
+                {
+                    "name": q.get("name"),
+                    "vhost": q.get("vhost"),
+                    "messages": q.get("messages"),
+                    "consumers": q.get("consumers"),
+                }
+                for q in queues
+            ]
+        )
     if name == "prometheus_query":
-        return _json_response(_http_json("prometheus", "/api/v1/query", {"query": args["query"], "time": args.get("time")}))
+        return _json_response(
+            _http_json("prometheus", "/api/v1/query", {"query": args["query"], "time": args.get("time")})
+        )
     if name == "prometheus_targets":
         return _json_response(_http_json("prometheus", "/api/v1/targets"))
     if name == "grafana_datasources":
@@ -196,15 +228,32 @@ def call_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     if name == "grafana_search_dashboards":
         return _json_response(_http_json("grafana", "/api/search", {"query": args.get("query", "")}))
     if name == "loki_query":
-        return _json_response(_http_json("loki", "/loki/api/v1/query", {"query": args["query"], "limit": int(args.get("limit", 100))}))
+        return _json_response(
+            _http_json("loki", "/loki/api/v1/query", {"query": args["query"], "limit": int(args.get("limit", 100))})
+        )
     if name == "tempo_services":
         return _json_response(_http_json("tempo", "/api/search/tags/service.name/values"))
     if name == "tempo_search_traces":
-        return _json_response(_http_json("tempo", "/api/search", {"tags": args.get("tags", ""), "limit": int(args.get("limit", 20))}))
+        return _json_response(
+            _http_json("tempo", "/api/search", {"tags": args.get("tags", ""), "limit": int(args.get("limit", 20))})
+        )
     if name == "influx_query":
-        headers = {"Authorization": f"Token {INFLUX_TOKEN}", "Accept": "application/csv", "Content-Type": "application/vnd.flux"}
+        headers = {
+            "Authorization": f"Token {INFLUX_TOKEN}",
+            "Accept": "application/csv",
+            "Content-Type": "application/vnd.flux",
+        }
         org = args.get("org", INFLUX_ORG)
-        return _text_response(_http_json("influxdb", "/api/v2/query", {"org": org}, method="POST", body=args["query"].encode("utf-8"), headers=headers))
+        return _text_response(
+            _http_json(
+                "influxdb",
+                "/api/v2/query",
+                {"org": org},
+                method="POST",
+                body=args["query"].encode("utf-8"),
+                headers=headers,
+            )
+        )
     if name == "cadvisor_metrics":
         text = _http_json("cadvisor", "/metrics")
         contains = args.get("contains", "")
@@ -230,20 +279,44 @@ class MCPStdioServer:
         msg_id = message.get("id")
         try:
             if method == "initialize":
-                self._send({"jsonrpc": "2.0", "id": msg_id, "result": {"protocolVersion": "2024-11-05", "capabilities": {"tools": {}}, "serverInfo": {"name": "user-docker-services", "version": "1.0.0"}}})
+                self._send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "result": {
+                            "protocolVersion": "2024-11-05",
+                            "capabilities": {"tools": {}},
+                            "serverInfo": {"name": "user-docker-services", "version": "1.0.0"},
+                        },
+                    }
+                )
             elif method == "notifications/initialized":
                 return
             elif method == "tools/list":
                 self._send({"jsonrpc": "2.0", "id": msg_id, "result": {"tools": list(TOOLS.values())}})
             elif method == "tools/call":
                 params = message.get("params", {})
-                self._send({"jsonrpc": "2.0", "id": msg_id, "result": call_tool(params.get("name"), params.get("arguments") or {})})
+                self._send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "result": call_tool(params.get("name"), params.get("arguments") or {}),
+                    }
+                )
             elif method == "shutdown":
                 self._send({"jsonrpc": "2.0", "id": msg_id, "result": None})
             else:
-                self._send({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32601, "message": f"Method not found: {method}"}})
+                self._send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "error": {"code": -32601, "message": f"Method not found: {method}"},
+                    }
+                )
         except Exception as exc:
-            self._send({"jsonrpc": "2.0", "id": msg_id, "result": _text_response(f"Error: {type(exc).__name__}: {exc}")})
+            self._send(
+                {"jsonrpc": "2.0", "id": msg_id, "result": _text_response(f"Error: {type(exc).__name__}: {exc}")}
+            )
 
     def run(self) -> None:
         while True:

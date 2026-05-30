@@ -6,7 +6,8 @@
 
 #if MEMOCHAT_HAVE_NGHTTP2
 
-class NgHttp2Server {
+class NgHttp2Server
+{
 public:
     static NgHttp2Server& GetInstance();
     ~NgHttp2Server();
@@ -14,12 +15,18 @@ public:
     NgHttp2Server(const NgHttp2Server&) = delete;
     NgHttp2Server& operator=(const NgHttp2Server&) = delete;
 
-    void SetPort(int port) { _h2_port = port; }
+    void SetPort(int port)
+    {
+        _h2_port = port;
+    }
     bool Initialize();
-    void Run();    // blocking
+    void Run(); // blocking
     void Stop();
 
-    int h2Port() const { return _h2_port; }
+    int h2Port() const
+    {
+        return _h2_port;
+    }
 
 private:
     NgHttp2Server();
@@ -29,18 +36,31 @@ private:
     int _h2_port = 8080;
 };
 
-#else  // stub when nghttp2 is not available
+#else // stub when nghttp2 is not available
 
-class NgHttp2Server {
+class NgHttp2Server
+{
 public:
-    static NgHttp2Server& GetInstance() {
+    static NgHttp2Server& GetInstance()
+    {
         static NgHttp2Server instance;
         return instance;
     }
-    bool Initialize() { return true; }
-    void Run() { }  // no-op
-    void Stop() { }
-    int h2Port() const { return 0; }
+    bool Initialize()
+    {
+        return true;
+    }
+    void Run()
+    {
+    } // no-op
+    void Stop()
+    {
+    }
+    int h2Port() const
+    {
+        return 0;
+    }
+
 private:
     NgHttp2Server() = default;
 };

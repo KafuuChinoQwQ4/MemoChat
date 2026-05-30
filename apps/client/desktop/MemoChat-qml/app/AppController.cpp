@@ -6,174 +6,136 @@
 #include "httpmgr.h"
 #include <QDebug>
 
-AppController::AppController(QObject *parent)
-    : QObject(parent),
-      _page(LoginPage),
-      _tip_text(""),
-      _tip_error(false),
-      _busy(false),
-      _register_success_page(false),
-      _register_countdown(5),
-      _chat_tab(ChatTabPage),
-      _contact_pane(ApplyRequestPane),
-      _pending_uid(0),
-      _current_user_icon("qrc:/res/head_1.png"),
-      _current_contact_uid(0),
-      _current_contact_sex(0),
-      _current_contact_icon("qrc:/res/head_1.png"),
-      _current_chat_peer_icon("qrc:/res/head_1.png"),
-      _current_chat_uid(0),
-      _current_group_id(0),
-      _chat_list_model(this),
-      _group_list_model(this),
-      _dialog_list_model(this),
-      _contact_list_model(this),
-      _message_model(this),
-      _search_result_model(this),
-      _apply_request_model(this),
-      _search_pending(false),
-      _search_status_error(false),
-      _chat_loading_more(false),
-      _can_load_more_chats(false),
-      _private_history_loading(false),
-      _group_history_loading(false),
-      _can_load_more_private_history(false),
-      _contact_loading_more(false),
-      _can_load_more_contacts(false),
-      _auth_status_error(false),
-      _settings_status_error(false),
-      _group_status_error(false),
-      _private_history_before_ts(0),
-      _private_history_before_msg_id(),
-      _private_history_pending_before_ts(0),
-      _private_history_pending_before_msg_id(),
-      _private_history_pending_peer_uid(0),
-      _group_history_before_seq(0),
-      _group_history_has_more(true),
-      _auth_controller(&_gateway),
-      _call_controller(&_gateway),
-      _call_session_model(this),
-      _livekit_bridge(this),
-      _chat_controller(&_gateway),
-      _contact_controller(&_gateway),
-      _profile_controller(&_gateway),
-      _agent_controller(&_gateway),
-      _pet_controller(&_gateway),
-      _r18_controller(&_gateway),
-      _session_coordinator(std::make_unique<AppSessionCoordinator>(*this)),
-      _contact_coordinator_shell(std::make_unique<ContactCoordinatorShell>(*this)),
-      _group_coordinator(std::make_unique<GroupCoordinator>(*this)),
-      _media_coordinator(std::make_unique<MediaCoordinator>(*this)),
-      _call_coordinator(std::make_unique<CallCoordinator>(*this)),
-      _profile_coordinator(std::make_unique<ProfileCoordinator>(*this))
+AppController::AppController(QObject* parent)
+    : QObject(parent)
+    , _page(LoginPage)
+    , _chat_tab(ChatTabPage)
+    , _contact_pane(ApplyRequestPane)
+    , _chat_list_model(this)
+    , _group_list_model(this)
+    , _dialog_list_model(this)
+    , _contact_list_model(this)
+    , _message_model(this)
+    , _search_result_model(this)
+    , _apply_request_model(this)
+    , _auth_controller(&_gateway)
+    , _call_controller(&_gateway)
+    , _call_session_model(this)
+    , _livekit_bridge(this)
+    , _chat_controller(&_gateway)
+    , _contact_controller(&_gateway)
+    , _profile_controller(&_gateway)
+    , _agent_controller(&_gateway)
+    , _pet_controller(&_gateway)
+    , _r18_controller(&_gateway)
+    , _session_coordinator(std::make_unique<AppSessionCoordinator>(*this))
+    , _contact_coordinator_shell(std::make_unique<ContactCoordinatorShell>(*this))
+    , _group_coordinator(std::make_unique<GroupCoordinator>(*this))
+    , _media_coordinator(std::make_unique<MediaCoordinator>(*this))
+    , _call_coordinator(std::make_unique<CallCoordinator>(*this))
+    , _profile_coordinator(std::make_unique<ProfileCoordinator>(*this))
 {
     const auto chatTransport = _gateway.chatTransport();
     const auto chatDispatcher = _gateway.chatMessageDispatcher();
 
-    connect(_gateway.httpMgr().get(), &HttpMgr::sig_login_mod_finish,
-            this, &AppController::onLoginHttpFinished);
-    connect(_gateway.httpMgr().get(), &HttpMgr::sig_reg_mod_finish,
-            this, &AppController::onRegisterHttpFinished);
-    connect(_gateway.httpMgr().get(), &HttpMgr::sig_reset_mod_finish,
-            this, &AppController::onResetHttpFinished);
-    connect(_gateway.httpMgr().get(), &HttpMgr::sig_settings_mod_finish,
-            this, &AppController::onSettingsHttpFinished);
-    connect(_gateway.httpMgr().get(), &HttpMgr::sig_call_mod_finish,
-            this, &AppController::onCallHttpFinished);
+    connect(_gateway.httpMgr().get(), &HttpMgr::sig_login_mod_finish, this, &AppController::onLoginHttpFinished);
+    connect(_gateway.httpMgr().get(), &HttpMgr::sig_reg_mod_finish, this, &AppController::onRegisterHttpFinished);
+    connect(_gateway.httpMgr().get(), &HttpMgr::sig_reset_mod_finish, this, &AppController::onResetHttpFinished);
+    connect(_gateway.httpMgr().get(), &HttpMgr::sig_settings_mod_finish, this, &AppController::onSettingsHttpFinished);
+    connect(_gateway.httpMgr().get(), &HttpMgr::sig_call_mod_finish, this, &AppController::onCallHttpFinished);
 
-    connect(chatTransport.get(), &IChatTransport::sig_con_success,
-            this, &AppController::onTcpConnectFinished);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_login_failed,
-            this, &AppController::onChatLoginFailed);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_swich_chatdlg,
-            this, &AppController::onSwitchToChat);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_add_auth_friend,
-            this, &AppController::onAddAuthFriend);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_auth_rsp,
-            this, &AppController::onAuthRsp);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_delete_friend_rsp,
-            this, &AppController::onDeleteFriendRsp);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_text_chat_msg,
-            this, &AppController::onTextChatMsg);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_user_search,
-            this, &AppController::onUserSearch);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_friend_apply,
-            this, &AppController::onFriendApply);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_notify_offline,
-            this, &AppController::onNotifyOffline);
-    connect(chatTransport.get(), &IChatTransport::sig_connection_closed,
-            this, &AppController::onConnectionClosed);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_list_updated,
-            this, &AppController::onGroupListUpdated);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_invite,
-            this, &AppController::onGroupInvite);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_apply,
-            this, &AppController::onGroupApply);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_member_changed,
-            this, &AppController::onGroupMemberChanged);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_chat_msg,
-            this, &AppController::onGroupChatMsg);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_rsp,
-            this, &AppController::onGroupRsp);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_relation_bootstrap_updated,
-            this, &AppController::onRelationBootstrapUpdated);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_dialog_list_rsp,
-            this, &AppController::onDialogListRsp);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_private_history_rsp,
-            this, &AppController::onPrivateHistoryRsp);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_private_msg_changed,
-            this, &AppController::onPrivateMsgChanged);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_private_read_ack,
-            this, &AppController::onPrivateReadAck);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_message_status,
-            this, &AppController::onMessageStatus);
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_call_event,
-            this, &AppController::onCallEvent);
-    connect(&_livekit_bridge, &LivekitBridge::roomJoined,
-            this, &AppController::onLivekitRoomJoined);
-    connect(&_livekit_bridge, &LivekitBridge::remoteTrackReady,
-            this, &AppController::onLivekitRemoteTrackReady);
-    connect(&_livekit_bridge, &LivekitBridge::roomDisconnected,
-            this, &AppController::onLivekitRoomDisconnected);
-    connect(&_livekit_bridge, &LivekitBridge::permissionError,
-            this, &AppController::onLivekitPermissionError);
-    connect(&_livekit_bridge, &LivekitBridge::mediaError,
-            this, &AppController::onLivekitMediaError);
-    connect(&_livekit_bridge, &LivekitBridge::reconnecting,
-            this, &AppController::onLivekitReconnecting);
-    connect(&_livekit_bridge, &LivekitBridge::bridgeLog, this, [](const QString &message) {
-        qInfo().noquote() << "[livekit]" << message;
-    });
-    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_heartbeat_ack,
-            this, &AppController::onHeartbeatAck);
-    connect(&_apply_request_model, &ApplyRequestModel::unapprovedCountChanged,
-            this, &AppController::pendingApplyChanged);
+    connect(chatTransport.get(), &IChatTransport::sig_con_success, this, &AppController::onTcpConnectFinished);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_login_failed, this, &AppController::onChatLoginFailed);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_swich_chatdlg, this, &AppController::onSwitchToChat);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_add_auth_friend, this, &AppController::onAddAuthFriend);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_auth_rsp, this, &AppController::onAuthRsp);
+    connect(chatDispatcher.get(),
+            &ChatMessageDispatcher::sig_delete_friend_rsp,
+            this,
+            &AppController::onDeleteFriendRsp);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_text_chat_msg, this, &AppController::onTextChatMsg);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_user_search, this, &AppController::onUserSearch);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_friend_apply, this, &AppController::onFriendApply);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_notify_offline, this, &AppController::onNotifyOffline);
+    connect(chatTransport.get(), &IChatTransport::sig_connection_closed, this, &AppController::onConnectionClosed);
+    connect(chatDispatcher.get(),
+            &ChatMessageDispatcher::sig_group_list_updated,
+            this,
+            &AppController::onGroupListUpdated);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_invite, this, &AppController::onGroupInvite);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_apply, this, &AppController::onGroupApply);
+    connect(chatDispatcher.get(),
+            &ChatMessageDispatcher::sig_group_member_changed,
+            this,
+            &AppController::onGroupMemberChanged);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_chat_msg, this, &AppController::onGroupChatMsg);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_group_rsp, this, &AppController::onGroupRsp);
+    connect(chatDispatcher.get(),
+            &ChatMessageDispatcher::sig_relation_bootstrap_updated,
+            this,
+            &AppController::onRelationBootstrapUpdated);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_dialog_list_rsp, this, &AppController::onDialogListRsp);
+    connect(chatDispatcher.get(),
+            &ChatMessageDispatcher::sig_private_history_rsp,
+            this,
+            &AppController::onPrivateHistoryRsp);
+    connect(chatDispatcher.get(),
+            &ChatMessageDispatcher::sig_private_msg_changed,
+            this,
+            &AppController::onPrivateMsgChanged);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_private_read_ack, this, &AppController::onPrivateReadAck);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_message_status, this, &AppController::onMessageStatus);
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_call_event, this, &AppController::onCallEvent);
+    connect(&_livekit_bridge, &LivekitBridge::roomJoined, this, &AppController::onLivekitRoomJoined);
+    connect(&_livekit_bridge, &LivekitBridge::remoteTrackReady, this, &AppController::onLivekitRemoteTrackReady);
+    connect(&_livekit_bridge, &LivekitBridge::roomDisconnected, this, &AppController::onLivekitRoomDisconnected);
+    connect(&_livekit_bridge, &LivekitBridge::permissionError, this, &AppController::onLivekitPermissionError);
+    connect(&_livekit_bridge, &LivekitBridge::mediaError, this, &AppController::onLivekitMediaError);
+    connect(&_livekit_bridge, &LivekitBridge::reconnecting, this, &AppController::onLivekitReconnecting);
+    connect(&_livekit_bridge,
+            &LivekitBridge::bridgeLog,
+            this,
+            [](const QString& message)
+            {
+                qInfo().noquote() << "[livekit]" << message;
+            });
+    connect(chatDispatcher.get(), &ChatMessageDispatcher::sig_heartbeat_ack, this, &AppController::onHeartbeatAck);
+    connect(&_apply_request_model,
+            &ApplyRequestModel::unapprovedCountChanged,
+            this,
+            &AppController::pendingApplyChanged);
 
-    connect(&_register_countdown_timer, &QTimer::timeout,
-            this, &AppController::onRegisterCountdownTimeout);
-    connect(&_heartbeat_timer, &QTimer::timeout,
-            this, &AppController::onHeartbeatTimeout);
+    connect(&_register_countdown_timer, &QTimer::timeout, this, &AppController::onRegisterCountdownTimeout);
+    connect(&_heartbeat_timer, &QTimer::timeout, this, &AppController::onHeartbeatTimeout);
     _chat_login_timeout_timer.setSingleShot(true);
     _chat_login_timeout_timer.setInterval(15000);
-    connect(&_chat_login_timeout_timer, &QTimer::timeout, this, [this]() {
-        if (_reconnecting_chat && _page == ChatPage) {
-            _gateway.chatTransport()->CloseConnection();
-            return;
-        }
-        if (!_busy || _page != LoginPage) {
-            return;
-        }
-        const bool fallbackAlreadyAttempted = _chat_login_tcp_fallback_attempted;
-        _gateway.chatTransport()->CloseConnection();
-        if (!fallbackAlreadyAttempted && _chat_login_tcp_fallback_attempted) {
-            return;
-        }
-        if (tryLoginFallbackToTcp(QStringLiteral("login_timeout"))) {
-            return;
-        }
-        setBusy(false);
-        setTip("聊天服务登录超时，请重试", true);
-    });
+    connect(&_chat_login_timeout_timer,
+            &QTimer::timeout,
+            this,
+            [this]()
+            {
+                if (_chat_recovery_state.reconnecting && _page == ChatPage)
+                {
+                    _gateway.chatTransport()->CloseConnection();
+                    return;
+                }
+                if (!_shell_state.busy || _page != LoginPage)
+                {
+                    return;
+                }
+                const bool fallbackAlreadyAttempted = _chat_recovery_state.loginTcpFallbackAttempted;
+                _gateway.chatTransport()->CloseConnection();
+                if (!fallbackAlreadyAttempted && _chat_recovery_state.loginTcpFallbackAttempted)
+                {
+                    return;
+                }
+                if (tryLoginFallbackToTcp(QStringLiteral("login_timeout")))
+                {
+                    return;
+                }
+                setBusy(false);
+                setTip("聊天服务登录超时，请重试", true);
+            });
 }
 
 AppController::Page AppController::page() const
@@ -183,12 +145,12 @@ AppController::Page AppController::page() const
 
 AppController::~AppController() = default;
 
-CallSessionModel *AppController::callSession()
+CallSessionModel* AppController::callSession()
 {
     return &_call_session_model;
 }
 
-LivekitBridge *AppController::livekitBridge()
+LivekitBridge* AppController::livekitBridge()
 {
     return &_livekit_bridge;
 }
@@ -198,18 +160,20 @@ void AppController::clearTip()
     setTip("", false);
 }
 
-void AppController::openExternalResource(const QString &url)
+void AppController::openExternalResource(const QString& url)
 {
     QString errorText;
-    if (!LocalFilePickerService::openUrl(url, &errorText)) {
-        if (errorText.isEmpty()) {
+    if (!LocalFilePickerService::openUrl(url, &errorText))
+    {
+        if (errorText.isEmpty())
+        {
             errorText = "打开资源失败";
         }
         setTip(errorText, true);
     }
 }
 
-void AppController::searchUser(const QString &uidText)
+void AppController::searchUser(const QString& uidText)
 {
     _contact_coordinator_shell->searchUser(uidText);
 }
@@ -221,12 +185,12 @@ void AppController::clearSearchState()
     setSearchStatus("", false);
 }
 
-void AppController::requestAddFriend(int uid, const QString &bakName, const QVariantList &labels)
+void AppController::requestAddFriend(int uid, const QString& bakName, const QVariantList& labels)
 {
     _contact_coordinator_shell->requestAddFriend(uid, bakName, labels);
 }
 
-void AppController::approveFriend(int uid, const QString &backName, const QVariantList &labels)
+void AppController::approveFriend(int uid, const QString& backName, const QVariantList& labels)
 {
     _contact_coordinator_shell->approveFriend(uid, backName, labels);
 }

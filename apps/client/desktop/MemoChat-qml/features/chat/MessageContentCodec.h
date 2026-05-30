@@ -3,7 +3,8 @@
 
 #include <QString>
 
-struct DecodedMessageContent {
+struct DecodedMessageContent
+{
     QString type;
     QString content;
     QString fileName;
@@ -18,14 +19,18 @@ struct DecodedMessageContent {
 class MessageContentCodec
 {
 public:
-    static QString encodeImage(const QString &fileUrl);
-    static QString encodeFile(const QString &fileUrl, const QString &fileName = QString(),
-                              const QString &mimeType = QString(), qint64 sizeBytes = 0);
-    static QString encodeCallInvite(const QString &callType, const QString &joinUrl);
-    static QString encodeReplyText(const QString &text, const QString &replyToMsgId,
-                                   const QString &replySender, const QString &replyPreview);
-    static DecodedMessageContent decode(const QString &rawContent);
-    static QString toPreviewText(const QString &rawContent);
+    static QString encodeImage(const QString& fileUrl);
+    static QString encodeFile(const QString& fileUrl,
+                              const QString& fileName = QString(),
+                              const QString& mimeType = QString(),
+                              qint64 sizeBytes = 0);
+    static QString encodeCallInvite(const QString& callType, const QString& joinUrl);
+    static QString encodeReplyText(const QString& text,
+                                   const QString& replyToMsgId,
+                                   const QString& replySender,
+                                   const QString& replyPreview);
+    static DecodedMessageContent decode(const QString& rawContent);
+    static QString toPreviewText(const QString& rawContent);
 };
 
 #endif // MESSAGECONTENTCODEC_H

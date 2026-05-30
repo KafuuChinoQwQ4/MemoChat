@@ -15,7 +15,8 @@ class Live2DRenderItem : public QQuickFramebufferObject
     Q_PROPERTY(QString modelRoot READ modelRoot WRITE setModelRoot NOTIFY modelSourceChanged)
     Q_PROPERTY(QString modelJson READ modelJson WRITE setModelJson NOTIFY modelSourceChanged)
     Q_PROPERTY(QString motionDirectory READ motionDirectory WRITE setMotionDirectory NOTIFY modelSourceChanged)
-    Q_PROPERTY(QString expressionDirectory READ expressionDirectory WRITE setExpressionDirectory NOTIFY modelSourceChanged)
+    Q_PROPERTY(
+        QString expressionDirectory READ expressionDirectory WRITE setExpressionDirectory NOTIFY modelSourceChanged)
     Q_PROPERTY(QString expression READ expression WRITE setExpression NOTIFY visualStateChanged)
     Q_PROPERTY(QString motion READ motion WRITE setMotion NOTIFY visualStateChanged)
     Q_PROPERTY(QString emotion READ emotion WRITE setEmotion NOTIFY visualStateChanged)
@@ -30,42 +31,88 @@ class Live2DRenderItem : public QQuickFramebufferObject
     Q_PROPERTY(QString renderError READ renderError NOTIFY renderStatusChanged)
 
 public:
-    explicit Live2DRenderItem(QQuickItem *parent = nullptr);
+    explicit Live2DRenderItem(QQuickItem* parent = nullptr);
 
-    QString modelRoot() const { return _model_root; }
-    QString modelJson() const { return _model_json; }
-    QString motionDirectory() const { return _motion_directory; }
-    QString expressionDirectory() const { return _expression_directory; }
-    QString expression() const { return _expression; }
-    QString motion() const { return _motion; }
-    QString emotion() const { return _emotion; }
-    qreal intensity() const { return _intensity; }
-    qreal gazeX() const { return _gaze_x; }
-    qreal gazeY() const { return _gaze_y; }
-    qreal lipSyncValue() const { return _lip_sync_value; }
-    int actionSerial() const { return _action_serial; }
-    bool persistentMotion() const { return _persistent_motion; }
-    int targetFps() const { return _target_fps; }
-    QString renderStatus() const { return _render_status; }
-    QString renderError() const { return _render_error; }
+    QString modelRoot() const
+    {
+        return _model_root;
+    }
+    QString modelJson() const
+    {
+        return _model_json;
+    }
+    QString motionDirectory() const
+    {
+        return _motion_directory;
+    }
+    QString expressionDirectory() const
+    {
+        return _expression_directory;
+    }
+    QString expression() const
+    {
+        return _expression;
+    }
+    QString motion() const
+    {
+        return _motion;
+    }
+    QString emotion() const
+    {
+        return _emotion;
+    }
+    qreal intensity() const
+    {
+        return _intensity;
+    }
+    qreal gazeX() const
+    {
+        return _gaze_x;
+    }
+    qreal gazeY() const
+    {
+        return _gaze_y;
+    }
+    qreal lipSyncValue() const
+    {
+        return _lip_sync_value;
+    }
+    int actionSerial() const
+    {
+        return _action_serial;
+    }
+    bool persistentMotion() const
+    {
+        return _persistent_motion;
+    }
+    int targetFps() const
+    {
+        return _target_fps;
+    }
+    QString renderStatus() const
+    {
+        return _render_status;
+    }
+    QString renderError() const
+    {
+        return _render_error;
+    }
 
-    Renderer *createRenderer() const override;
+    Renderer* createRenderer() const override;
     QString resolvedModelPath() const;
     Live2DVisualState visualState() const;
-    void setRenderStatusFromRenderer(const QString &status,
-                                     const QString &error,
-                                     const QString &modelPath);
+    void setRenderStatusFromRenderer(const QString& status, const QString& error, const QString& modelPath);
 
-    Q_INVOKABLE void applyControlEvent(const QVariantMap &event);
+    Q_INVOKABLE void applyControlEvent(const QVariantMap& event);
 
 public slots:
-    void setModelRoot(const QString &value);
-    void setModelJson(const QString &value);
-    void setMotionDirectory(const QString &value);
-    void setExpressionDirectory(const QString &value);
-    void setExpression(const QString &value);
-    void setMotion(const QString &value);
-    void setEmotion(const QString &value);
+    void setModelRoot(const QString& value);
+    void setModelJson(const QString& value);
+    void setMotionDirectory(const QString& value);
+    void setExpressionDirectory(const QString& value);
+    void setExpression(const QString& value);
+    void setMotion(const QString& value);
+    void setEmotion(const QString& value);
     void setIntensity(qreal value);
     void setGazeX(qreal value);
     void setGazeY(qreal value);
@@ -82,7 +129,7 @@ signals:
 
 private:
     static qreal boundedUnit(qreal value, qreal fallback = 0.0);
-    static QString resolveModelPath(const QString &modelRoot, const QString &modelJson);
+    static QString resolveModelPath(const QString& modelRoot, const QString& modelJson);
     void updateVisual();
     void updateFrameTimer();
 

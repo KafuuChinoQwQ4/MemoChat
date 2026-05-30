@@ -112,7 +112,8 @@ class PetEventBus:
                 translation=speech_translation,
             ),
             vision=vision or PetVision(),
-            privacy=privacy or PetPrivacy(
+            privacy=privacy
+            or PetPrivacy(
                 camera_used=bool(safety and safety.camera_used),
                 retention=str(privacy_retention or "none"),
             ),

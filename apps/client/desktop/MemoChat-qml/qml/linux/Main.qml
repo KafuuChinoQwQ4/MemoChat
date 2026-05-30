@@ -15,10 +15,13 @@ Item {
     property string appTitle: "MemoChat QML"
     property size loginWindowSize: Qt.size(360, 560)
     property size chatWindowSize: Qt.size(1240, 900)
+    readonly property size chatWindowMinimumSize: Qt.size(900, 640)
+    readonly property size unboundedWindowSize: Qt.size(100000, 100000)
     property var appWindowRef: null
     property var petWindowRef: null
     property var pendingCenterWindowRef: null
     property int pendingCenterPasses: 0
+    property int appWindowSwitchToken: 0
     property bool memochatStartupCenter: true
     readonly property bool chatPageActive: controller.page === AppController.ChatPage
 
@@ -157,14 +160,18 @@ Item {
             return
         }
         const loginMode = !chatPageActive
-        win.minimumWidth = loginMode ? 340 : 900
-        win.minimumHeight = loginMode ? 520 : 640
-        win.maximumWidth = loginMode ? 340 : 100000
-        win.maximumHeight = loginMode ? 520 : 100000
         const size = targetWindowSize()
+        const minimumSize = loginMode ? root.loginWindowSize : root.chatWindowMinimumSize
+        const maximumSize = loginMode ? root.loginWindowSize : root.unboundedWindowSize
+        win.maximumWidth = root.unboundedWindowSize.width
+        win.maximumHeight = root.unboundedWindowSize.height
+        win.minimumWidth = minimumSize.width
+        win.minimumHeight = minimumSize.height
         centerWindowForSize(win, size)
         win.width = size.width
         win.height = size.height
+        win.maximumWidth = maximumSize.width
+        win.maximumHeight = maximumSize.height
         win.normalWindowWidth = win.width
         win.normalWindowHeight = win.height
         requestWindowCenter(win)
@@ -229,6 +236,30 @@ Item {
     function syncWindowsByPage() {
         const win = ensureAppWindow()
         if (!win) {
+            return
+        }
+        const token = ++appWindowSwitchToken
+        const targetSize = targetWindowSize()
+        const sizeChanged = win.visible
+                && win.visibility !== Window.Maximized
+                && win.visibility !== Window.FullScreen
+                && win.visibility !== Window.Minimized
+                && (Math.round(win.width) !== Math.round(targetSize.width)
+                    || Math.round(win.height) !== Math.round(targetSize.height))
+        if (sizeChanged) {
+            win.opacity = 0
+            win.visible = false
+            configureAppWindowForPage(win)
+            Qt.callLater(function() {
+                if (token !== root.appWindowSwitchToken) {
+                    return
+                }
+                showWindowCentered(win)
+                win.raise()
+                win.requestActivate()
+                logWindowState("app-window hidden-resize sync", win)
+                finishAppWindowShown()
+            })
             return
         }
         configureAppWindowForPage(win)
@@ -354,12 +385,12 @@ Item {
             property bool memochatStartupCenter: true
             flags: Qt.Window | Qt.FramelessWindowHint
             color: "transparent"
-            width: 340
-            height: 520
-            minimumWidth: 340
-            minimumHeight: 520
-            maximumWidth: 100000
-            maximumHeight: 100000
+            width: root.loginWindowSize.width
+            height: root.loginWindowSize.height
+            minimumWidth: root.loginWindowSize.width
+            minimumHeight: root.loginWindowSize.height
+            maximumWidth: root.loginWindowSize.width
+            maximumHeight: root.loginWindowSize.height
             property bool windowMaximized: false
             readonly property bool isMaximized: windowMaximized
             readonly property int windowRadius: isMaximized ? 0 : (root.chatPageActive ? root.chatWindowRadius : root.loginWindowRadius)
@@ -442,42 +473,21 @@ Item {
                 }
             }
 
-            Item {
+            SharedComponents.AppWindowControls {
                 id: appWindowControls
                 z: 200
                 anchors.top: parent.top
                 anchors.right: parent.right
                 anchors.topMargin: appWindow.glassInset + appWindow.shellContentInset + 10
                 anchors.rightMargin: appWindow.glassInset + appWindow.shellContentInset + 10
-                width: controlsRow.implicitWidth + root.controlHoverPadding * 2
-                height: controlsRow.implicitHeight + root.controlHoverPadding * 2
-
-                Row {
-                    id: controlsRow
-                    anchors.centerIn: parent
-                    spacing: 20
-
-                    SharedComponents.LoginIconButton {
-                        iconSource: "qrc:/icons/ai.png"
-                        visible: root.chatPageActive
-                        onClicked: root.togglePetWindow()
-                    }
-
-                    SharedComponents.LoginIconButton {
-                        iconSource: "qrc:/icons/minimize.png"
-                        onClicked: appWindow.showMinimized()
-                    }
-
-                    SharedComponents.LoginIconButton {
-                        iconSource: "qrc:/icons/maximize.png"
-                        onClicked: root.toggleWindowMaximized(appWindow)
-                    }
-
-                    SharedComponents.LoginIconButton {
-                        iconSource: "qrc:/icons/close.png"
-                        onClicked: Qt.quit()
-                    }
-                }
+                width: implicitWidth
+                height: implicitHeight
+                chatPageActive: root.chatPageActive
+                hoverPadding: root.controlHoverPadding
+                onPetRequested: root.togglePetWindow()
+                onMinimizeRequested: appWindow.showMinimized()
+                onMaximizeRequested: root.toggleWindowMaximized(appWindow)
+                onCloseRequested: Qt.quit()
             }
 
             Item {

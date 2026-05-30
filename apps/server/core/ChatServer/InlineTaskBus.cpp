@@ -5,17 +5,19 @@
 #include <algorithm>
 #include <chrono>
 
-namespace {
+namespace
+{
 int64_t NowMsInlineTask()
 {
-    return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count());
+    return static_cast<int64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count());
 }
-}
+} // namespace
 
 bool InlineTaskBus::Publish(const TaskEnvelope& task, std::string* error)
 {
-    (void)error;
+    (void) error;
     std::lock_guard<std::mutex> guard(_mutex);
     _queue.push_back(task);
     return true;
@@ -23,11 +25,13 @@ bool InlineTaskBus::Publish(const TaskEnvelope& task, std::string* error)
 
 bool InlineTaskBus::ConsumeOnce(const std::vector<std::string>& routing_keys, ConsumedTask& task, std::string* error)
 {
-    (void)error;
+    (void) error;
     std::lock_guard<std::mutex> guard(_mutex);
     const auto now_ms = NowMsInlineTask();
-    for (auto it = _queue.begin(); it != _queue.end(); ++it) {
-        if (!RoutingKeyAccepted(routing_keys, *it) || it->available_at_ms > now_ms) {
+    for (auto it = _queue.begin(); it != _queue.end(); ++it)
+    {
+        if (!RoutingKeyAccepted(routing_keys, *it) || it->available_at_ms > now_ms)
+        {
             continue;
         }
         task = ConsumedTask();
@@ -52,21 +56,24 @@ void InlineTaskBus::AckLastConsumed()
 void InlineTaskBus::NackLastConsumed(const std::string& error)
 {
     std::lock_guard<std::mutex> guard(_mutex);
-    if (!_has_last) {
+    if (!_has_last)
+    {
         return;
     }
     TaskEnvelope task = _last_consumed.envelope;
     task.retry_count += 1;
-    if (task.retry_count > task.max_retries) {
-        memolog::LogWarn("chat.task.inline_drop", "inline task dropped after retries",
-            {
-                {"task_id", task.task_id},
-                {"task_type", task.task_type},
-                {"routing_key", task.routing_key},
-                {"retry_count", std::to_string(task.retry_count)},
-                {"error", error}
-            });
-    } else {
+    if (task.retry_count > task.max_retries)
+    {
+        memolog::LogWarn("chat.task.inline_drop",
+                         "inline task dropped after retries",
+                         {{"task_id", task.task_id},
+                          {"task_type", task.task_type},
+                          {"routing_key", task.routing_key},
+                          {"retry_count", std::to_string(task.retry_count)},
+                          {"error", error}});
+    }
+    else
+    {
         task.available_at_ms = NowMsInlineTask() + 1000;
         _queue.push_back(task);
     }
@@ -76,7 +83,8 @@ void InlineTaskBus::NackLastConsumed(const std::string& error)
 
 bool InlineTaskBus::RoutingKeyAccepted(const std::vector<std::string>& routing_keys, const TaskEnvelope& task) const
 {
-    if (routing_keys.empty()) {
+    if (routing_keys.empty())
+    {
         return true;
     }
     return std::find(routing_keys.begin(), routing_keys.end(), task.routing_key) != routing_keys.end();

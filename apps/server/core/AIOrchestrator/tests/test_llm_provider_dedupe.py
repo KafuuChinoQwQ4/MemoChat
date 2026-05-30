@@ -104,7 +104,9 @@ class LLMProviderDedupeTests(unittest.IsolatedAsyncioTestCase):
                     },
                 ]
 
-                with patch.object(service._OpenAICompatibleClient, "list_models", new=AsyncMock(return_value=discovered)):
+                with patch.object(
+                    service._OpenAICompatibleClient, "list_models", new=AsyncMock(return_value=discovered)
+                ):
                     first = await registry.register_api_provider(
                         "deepseek flash",
                         "https://api.deepseek.com/v1",
@@ -127,9 +129,7 @@ class LLMProviderDedupeTests(unittest.IsolatedAsyncioTestCase):
                 )
 
                 endpoints = [
-                    endpoint
-                    for endpoint in registry.list_endpoints()
-                    if endpoint.provider_id == first.provider_id
+                    endpoint for endpoint in registry.list_endpoints() if endpoint.provider_id == first.provider_id
                 ]
                 self.assertEqual(len(endpoints), 1)
                 self.assertEqual(len(endpoints[0].models), 2)

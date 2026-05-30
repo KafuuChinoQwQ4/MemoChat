@@ -7,6 +7,7 @@
 class GateServerHttp2 : public Singleton<GateServerHttp2>
 {
     friend class Singleton<GateServerHttp2>;
+
 public:
     void Initialize();
     void Run();

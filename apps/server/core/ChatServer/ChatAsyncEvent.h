@@ -4,7 +4,8 @@
 #include <string>
 #include "json/GlazeCompat.h"
 
-struct AsyncEventEnvelope {
+struct AsyncEventEnvelope
+{
     std::string event_id;
     std::string topic;
     std::string partition_key;
@@ -19,13 +20,15 @@ struct AsyncEventEnvelope {
     ~AsyncEventEnvelope();
 };
 
-struct AsyncConsumedEvent {
+struct AsyncConsumedEvent
+{
     AsyncEventEnvelope envelope;
     std::string serialized;
     bool parsed = false;
 };
 
-struct AsyncOutboxRecord {
+struct AsyncOutboxRecord
+{
     int64_t id = 0;
     std::string event_id;
     std::string topic;

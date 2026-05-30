@@ -5,7 +5,6 @@ import unittest
 from unittest.mock import AsyncMock
 
 import httpx
-
 from llm.base import LLMMessage
 from llm.ollama_llm import OllamaLLM
 

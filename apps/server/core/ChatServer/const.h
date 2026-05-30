@@ -1,7 +1,8 @@
 #pragma once
 #include <functional>
 
-enum ErrorCodes {
+enum ErrorCodes
+{
     Success = 0,
     Error_Json = 1001,
     RPCFailed = 1002,
@@ -27,10 +28,17 @@ enum ErrorCodes {
     ProtocolVersionMismatch = 1098,
 };
 
-class Defer {
+class Defer
+{
 public:
-    Defer(std::function<void()> func) : func_(func) {}
-    ~Defer() { func_(); }
+    Defer(std::function<void()> func)
+        : func_(func)
+    {
+    }
+    ~Defer()
+    {
+        func_();
+    }
 
 private:
     std::function<void()> func_;
@@ -45,7 +53,8 @@ private:
 #define MAX_MSG_QUE_SIZE 65536
 #define BACKPRESSURE_DROP_LOG_INTERVAL 1024
 
-enum MSG_IDS {
+enum MSG_IDS
+{
     MSG_CHAT_LOGIN = 1005,
     MSG_CHAT_LOGIN_RSP = 1006,
     ID_SEARCH_USER_REQ = 1007,

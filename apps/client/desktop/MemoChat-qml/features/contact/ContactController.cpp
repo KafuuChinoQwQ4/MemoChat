@@ -7,31 +7,36 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 
-namespace {
-QJsonArray buildLabelsArray(const QVariantList &labels)
+namespace
+{
+QJsonArray buildLabelsArray(const QVariantList& labels)
 {
     QJsonArray labelsArray;
-    for (const auto &labelVar : labels) {
+    for (const auto& labelVar : labels)
+    {
         const QString label = labelVar.toString().trimmed();
-        if (!label.isEmpty()) {
+        if (!label.isEmpty())
+        {
             labelsArray.append(label);
         }
     }
     return labelsArray;
 }
-}
+} // namespace
 
-ContactController::ContactController(ClientGateway *gateway)
+ContactController::ContactController(ClientGateway* gateway)
     : _gateway(gateway)
 {
 }
 
-bool ContactController::sendSearchUser(const QString &uidText, QString *errorText) const
+bool ContactController::sendSearchUser(const QString& uidText, QString* errorText) const
 {
     static const QRegularExpression kUserIdPattern("^u[1-9][0-9]{8}$");
     const QString userId = uidText.trimmed();
-    if (!kUserIdPattern.match(userId).hasMatch()) {
-        if (errorText) {
+    if (!kUserIdPattern.match(userId).hasMatch())
+    {
+        if (errorText)
+        {
             *errorText = "请输入有效用户ID（格式 u#########）";
         }
         return false;
@@ -44,8 +49,11 @@ bool ContactController::sendSearchUser(const QString &uidText, QString *errorTex
     return true;
 }
 
-void ContactController::sendAddFriend(int selfUid, const QString &selfName, int targetUid,
-                                      const QString &bakName, const QVariantList &labels) const
+void ContactController::sendAddFriend(int selfUid,
+                                      const QString& selfName,
+                                      int targetUid,
+                                      const QString& bakName,
+                                      const QVariantList& labels) const
 {
     QJsonObject jsonObj;
     jsonObj["uid"] = selfUid;
@@ -58,8 +66,10 @@ void ContactController::sendAddFriend(int selfUid, const QString &selfName, int 
     _gateway->chatTransport()->slot_send_data(ReqId::ID_ADD_FRIEND_REQ, jsonData);
 }
 
-void ContactController::sendApproveFriend(int selfUid, int targetUid, const QString &remark,
-                                          const QVariantList &labels) const
+void ContactController::sendApproveFriend(int selfUid,
+                                          int targetUid,
+                                          const QString& remark,
+                                          const QVariantList& labels) const
 {
     QJsonObject jsonObj;
     jsonObj["fromuid"] = selfUid;

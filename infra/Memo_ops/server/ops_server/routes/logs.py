@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Query
 
-from Memo_ops.server.ops_common.analytics import query_logs, query_log_trends
+from Memo_ops.server.ops_common.analytics import query_log_trends, query_logs
 from Memo_ops.server.ops_common.repositories import get_trace_summary, list_trace_logs
 from Memo_ops.server.ops_server.runtime import OpsServerRuntime
 
@@ -132,6 +132,7 @@ def create_logs_router(runtime: OpsServerRuntime) -> APIRouter:
         def action() -> dict:
             items = _tail_logs(runtime, service, level, limit)
             return {"items": items, "total": len(items), "service": service, "level": level}
+
         return runtime.guarded(action)
 
     return router

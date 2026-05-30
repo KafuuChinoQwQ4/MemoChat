@@ -1,9 +1,11 @@
 """
 计算器工具 — 安全数学计算
 """
+
 import math
-import structlog
 import re
+
+import structlog
 from langchain_core.tools import tool
 
 logger = structlog.get_logger()
@@ -19,16 +21,27 @@ class CalculatorTool:
         支持加减乘除、幂运算、平方根等。
         """
         allowed_names = {
-            "abs": abs, "round": round, "min": min, "max": max,
-            "pow": pow, "sqrt": math.sqrt, "sin": math.sin,
-            "cos": math.cos, "tan": math.tan, "log": math.log,
-            "log10": math.log10, "exp": math.exp, "pi": math.pi, "e": math.e,
-            "floor": math.floor, "ceil": math.ceil,
+            "abs": abs,
+            "round": round,
+            "min": min,
+            "max": max,
+            "pow": pow,
+            "sqrt": math.sqrt,
+            "sin": math.sin,
+            "cos": math.cos,
+            "tan": math.tan,
+            "log": math.log,
+            "log10": math.log10,
+            "exp": math.exp,
+            "pi": math.pi,
+            "e": math.e,
+            "floor": math.floor,
+            "ceil": math.ceil,
         }
 
         expression = expression.strip().replace("^", "**")
 
-        if not re.match(r'^[\d\s\+\-\*\/\.\(\)\,\%A-Za-z_]+$', expression):
+        if not re.match(r"^[\d\s\+\-\*\/\.\(\)\,\%A-Za-z_]+$", expression):
             return f"非法表达式: {expression}"
 
         try:
@@ -58,9 +71,12 @@ class CalculatorTool:
                     raise ValueError(f"Unsupported syntax: {ast.dump(node)}")
 
             ops = {
-                ast.Add: op.add, ast.Sub: op.sub,
-                ast.Mult: op.mul, ast.Div: op.truediv,
-                ast.Pow: op.pow, ast.Mod: op.mod,
+                ast.Add: op.add,
+                ast.Sub: op.sub,
+                ast.Mult: op.mul,
+                ast.Div: op.truediv,
+                ast.Pow: op.pow,
+                ast.Mod: op.mod,
             }
 
             tree = ast.parse(expression, mode="eval")

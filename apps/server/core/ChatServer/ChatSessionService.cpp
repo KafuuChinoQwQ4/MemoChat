@@ -21,17 +21,23 @@
 #include "json/GlazeCompat.h"
 #include <thread>
 
-namespace {
-int64_t NowMsLocal() {
-    return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count());
+namespace
+{
+int64_t NowMsLocal()
+{
+    return static_cast<int64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count());
 }
 
-std::string GetChatAuthSecretLocal() {
-    static const std::string secret = []() {
+std::string GetChatAuthSecretLocal()
+{
+    static const std::string secret = []()
+    {
         auto& cfg = ConfigMgr::Inst();
         auto value = cfg.GetValue("ChatAuth", "HmacSecret");
-        if (value.empty()) {
+        if (value.empty())
+        {
             value = "memochat-dev-chat-secret";
         }
         return value;
@@ -39,40 +45,56 @@ std::string GetChatAuthSecretLocal() {
     return secret;
 }
 
-bool FeatureFlagDefaultTrueLocal(const std::string& name) {
+bool FeatureFlagDefaultTrueLocal(const std::string& name)
+{
     auto raw = ConfigMgr::Inst().GetValue("FeatureFlags", name);
-    if (raw.empty()) {
+    if (raw.empty())
+    {
         return true;
     }
-    std::transform(raw.begin(), raw.end(), raw.begin(),
-        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    std::transform(raw.begin(),
+                   raw.end(),
+                   raw.begin(),
+                   [](unsigned char ch)
+                   {
+                       return static_cast<char>(std::tolower(ch));
+                   });
     return raw == "1" || raw == "true" || raw == "yes" || raw == "on";
 }
 
-int ConfigIntLocal(const std::string& section, const std::string& key, int default_value, int min_value, int max_value) {
+int ConfigIntLocal(const std::string& section, const std::string& key, int default_value, int min_value, int max_value)
+{
     const auto raw = ConfigMgr::Inst().GetValue(section, key);
-    if (raw.empty()) {
+    if (raw.empty())
+    {
         return default_value;
     }
-    try {
+    try
+    {
         return std::clamp(std::stoi(raw), min_value, max_value);
-    } catch (...) {
+    }
+    catch (...)
+    {
         return default_value;
     }
 }
 
-int HeartbeatRouteRefreshSecLocal() {
+int HeartbeatRouteRefreshSecLocal()
+{
     static const int value = ConfigIntLocal("LogicSystem", "HeartbeatRouteRefreshSec", 15, 1, 300);
     return value;
 }
 
-int LoginOfflinePushDelayMsLocal() {
+int LoginOfflinePushDelayMsLocal()
+{
     static const int value = ConfigIntLocal("LogicSystem", "LoginOfflinePushDelayMs", 1000, 0, 60000);
     return value;
 }
 
-void RepairOnlineRouteStateLocal(int uid, const std::shared_ptr<CSession>& session, const std::string& server_name) {
-    if (uid <= 0 || !session || server_name.empty()) {
+void RepairOnlineRouteStateLocal(int uid, const std::shared_ptr<CSession>& session, const std::string& server_name)
+{
+    if (uid <= 0 || !session || server_name.empty())
+    {
         return;
     }
     const auto uid_str = std::to_string(uid);
@@ -82,18 +104,22 @@ void RepairOnlineRouteStateLocal(int uid, const std::shared_ptr<CSession>& sessi
 }
 
 // Compact JSON for wire (Qt QJsonDocument is strict; avoid pretty-print / stray whitespace issues).
-std::string JsonValueToWireString(const memochat::json::JsonValue& v) {
+std::string JsonValueToWireString(const memochat::json::JsonValue& v)
+{
     memochat::json::JsonStreamWriterBuilder builder;
     builder["indentation"] = "";
     return memochat::json::writeString(builder, v);
 }
-}
+} // namespace
 
 ChatSessionService::ChatSessionService(LogicSystem& logic)
-    : _logic(logic) {
+    : _logic(logic)
+{
 }
 
-void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data)
+void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
+                                     short msg_id,
+                                     const std::string& msg_data)
 {
     const auto login_start_ms = NowMsLocal();
     memochat::json::JsonReader reader;
@@ -102,30 +128,42 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, s
     const int protocol_version = memochat::json::glaze_safe_get<int>(root, "protocol_version", 1);
     auto uid = 0;
     auto token = std::string{};
-    if (protocol_version < 3) {
+    if (protocol_version < 3)
+    {
         uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
         token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
     }
     const auto verify_start_ms = NowMsLocal();
     auto trace_id = root.get("trace_id", "").asString();
-    if (trace_id.empty()) {
+    if (trace_id.empty())
+    {
         trace_id = memolog::TraceContext::NewId();
     }
     memolog::TraceContext::SetTraceId(trace_id);
     memolog::TraceContext::SetRequestId(memolog::TraceContext::NewId());
     memolog::TraceContext::SetUid(std::to_string(uid));
     memolog::TraceContext::SetSessionId(session->GetSessionId());
-    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
+    Defer clear_trace(
+        []()
+        {
+            memolog::TraceContext::Clear();
+        });
     const bool verbose_login_logs = FeatureFlagDefaultTrueLocal("chat_login_verbose_logs");
-    if (verbose_login_logs) {
-        memolog::LogInfo("chat.login.received", "chat login request received",
-            {{"uid", std::to_string(uid)}, {"session_id", session->GetSessionId()}, {"tcp_msg_id", std::to_string(msg_id)}});
+    if (verbose_login_logs)
+    {
+        memolog::LogInfo("chat.login.received",
+                         "chat login request received",
+                         {{"uid", std::to_string(uid)},
+                          {"session_id", session->GetSessionId()},
+                          {"tcp_msg_id", std::to_string(msg_id)}});
     }
 
     memochat::json::JsonValue rtvalue;
-    Defer defer([&rtvalue, session]() {
-        session->Send(JsonValueToWireString(rtvalue), MSG_CHAT_LOGIN_RSP);
-    });
+    Defer defer(
+        [&rtvalue, session]()
+        {
+            session->Send(JsonValueToWireString(rtvalue), MSG_CHAT_LOGIN_RSP);
+        });
     rtvalue["trace_id"] = trace_id;
     rtvalue["protocol_version"] = 2;
 
@@ -133,57 +171,77 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, s
     const auto self_server_name = ConfigMgr::Inst().GetValue("SelfServer", "Name");
     std::string uid_str = std::to_string(uid);
     std::string relation_bootstrap_mode = "inline";
-    if (protocol_version >= 3) {
+    if (protocol_version >= 3)
+    {
         relation_bootstrap_mode = "explicit_pull";
         rtvalue["protocol_version"] = 3;
         std::string ticket_error;
         const auto login_ticket = root.get("login_ticket", "").asString();
-        if (!memochat::auth::DecodeAndVerifyTicket(login_ticket, GetChatAuthSecretLocal(), ticket_claims, &ticket_error)) {
+        if (!memochat::auth::DecodeAndVerifyTicket(login_ticket,
+                                                   GetChatAuthSecretLocal(),
+                                                   ticket_claims,
+                                                   &ticket_error))
+        {
             rtvalue["error"] = ErrorCodes::ChatTicketInvalid;
-            memolog::LogWarn("chat.login.failed", "chat ticket invalid",
-                {{"error_code", std::to_string(ErrorCodes::ChatTicketInvalid)}, {"detail", ticket_error}});
+            memolog::LogWarn("chat.login.failed",
+                             "chat ticket invalid",
+                             {{"error_code", std::to_string(ErrorCodes::ChatTicketInvalid)}, {"detail", ticket_error}});
             return;
         }
-        if (ticket_claims.expire_at_ms > 0 && ticket_claims.expire_at_ms < NowMsLocal()) {
+        if (ticket_claims.expire_at_ms > 0 && ticket_claims.expire_at_ms < NowMsLocal())
+        {
             rtvalue["error"] = ErrorCodes::ChatTicketExpired;
-            memolog::LogWarn("chat.login.failed", "chat ticket expired",
-                {{"error_code", std::to_string(ErrorCodes::ChatTicketExpired)}});
+            memolog::LogWarn("chat.login.failed",
+                             "chat ticket expired",
+                             {{"error_code", std::to_string(ErrorCodes::ChatTicketExpired)}});
             return;
         }
-        if (!ticket_claims.target_server.empty() && ticket_claims.target_server != self_server_name) {
+        if (!ticket_claims.target_server.empty() && ticket_claims.target_server != self_server_name)
+        {
             rtvalue["error"] = ErrorCodes::ChatServerMismatch;
-            memolog::LogWarn("chat.login.failed", "chat ticket target server mismatch",
-                {{"error_code", std::to_string(ErrorCodes::ChatServerMismatch)},
-                 {"ticket_target_server", ticket_claims.target_server},
-                 {"self_server", self_server_name}});
+            memolog::LogWarn("chat.login.failed",
+                             "chat ticket target server mismatch",
+                             {{"error_code", std::to_string(ErrorCodes::ChatServerMismatch)},
+                              {"ticket_target_server", ticket_claims.target_server},
+                              {"self_server", self_server_name}});
             return;
         }
         uid = ticket_claims.uid;
         uid_str = std::to_string(uid);
         memolog::TraceContext::SetUid(uid_str);
-    } else if (protocol_version != 2) {
+    }
+    else if (protocol_version != 2)
+    {
         rtvalue["error"] = ErrorCodes::ProtocolVersionMismatch;
         return;
     }
 
-    if (protocol_version < 3) {
+    if (protocol_version < 3)
+    {
         std::string token_key = USERTOKENPREFIX + uid_str;
         std::string token_value;
-        if (!RedisMgr::GetInstance()->Get(token_key, token_value)) {
+        if (!RedisMgr::GetInstance()->Get(token_key, token_value))
+        {
             rtvalue["error"] = ErrorCodes::UidInvalid;
-            memolog::LogWarn("chat.login.failed", "uid invalid", {{"error_code", std::to_string(ErrorCodes::UidInvalid)}});
+            memolog::LogWarn("chat.login.failed",
+                             "uid invalid",
+                             {{"error_code", std::to_string(ErrorCodes::UidInvalid)}});
             return;
         }
-        if (token_value != token) {
+        if (token_value != token)
+        {
             rtvalue["error"] = ErrorCodes::TokenInvalid;
-            memolog::LogWarn("chat.login.failed", "token invalid", {{"error_code", std::to_string(ErrorCodes::TokenInvalid)}});
+            memolog::LogWarn("chat.login.failed",
+                             "token invalid",
+                             {{"error_code", std::to_string(ErrorCodes::TokenInvalid)}});
             return;
         }
     }
 
     rtvalue["error"] = ErrorCodes::Success;
     auto user_info = std::make_shared<UserInfo>();
-    if (protocol_version >= 3) {
+    if (protocol_version >= 3)
+    {
         user_info->uid = ticket_claims.uid;
         user_info->user_id = ticket_claims.user_id;
         user_info->name = ticket_claims.name;
@@ -192,11 +250,16 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, s
         user_info->desc = ticket_claims.desc;
         user_info->email = ticket_claims.email;
         user_info->sex = ticket_claims.sex;
-    } else {
+    }
+    else
+    {
         std::string base_key = USER_BASE_INFO + uid_str;
-        if (!chatusersupport::GetBaseInfo(base_key, uid, user_info)) {
+        if (!chatusersupport::GetBaseInfo(base_key, uid, user_info))
+        {
             rtvalue["error"] = ErrorCodes::UidInvalid;
-            memolog::LogWarn("chat.login.failed", "user base info not found", {{"error_code", std::to_string(ErrorCodes::UidInvalid)}});
+            memolog::LogWarn("chat.login.failed",
+                             "user base info not found",
+                             {{"error_code", std::to_string(ErrorCodes::UidInvalid)}});
             return;
         }
     }
@@ -210,99 +273,135 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session, s
     rtvalue["icon"] = user_info->icon;
     rtvalue["user_id"] = user_info->user_id;
 
-    if (protocol_version < 3) {
+    if (protocol_version < 3)
+    {
         _logic.AppendRelationBootstrapJson(uid, rtvalue);
     }
 
     const auto ticket_verify_ms = NowMsLocal() - verify_start_ms;
     const auto attach_start_ms = NowMsLocal();
     const auto server_name = self_server_name;
-    auto attach_session = [&]() {
+    auto attach_session = [&]()
+    {
         session->SetUserId(uid);
         UserMgr::GetInstance()->SetUserSession(uid, session);
         RepairOnlineRouteStateLocal(uid, session, server_name);
         session->MarkOnlineRouteRefreshed(std::time(nullptr));
     };
     {
-        if (FeatureFlagDefaultTrueLocal("chat_login_duplicate_session_check")) {
+        if (FeatureFlagDefaultTrueLocal("chat_login_duplicate_session_check"))
+        {
             auto lock_key = LOCK_PREFIX + uid_str;
             auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, ACQUIRE_TIME_OUT);
-            Defer defer2([identifier, lock_key]() {
-                RedisMgr::GetInstance()->releaseLock(lock_key, identifier);
-            });
+            Defer defer2(
+                [identifier, lock_key]()
+                {
+                    RedisMgr::GetInstance()->releaseLock(lock_key, identifier);
+                });
 
             std::string uid_ip_value;
             bool b_ip = RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, uid_ip_value);
-            if (b_ip) {
+            if (b_ip)
+            {
                 auto self_name = ConfigMgr::Inst()["SelfServer"]["Name"];
-                if (uid_ip_value == self_name) {
+                if (uid_ip_value == self_name)
+                {
                     auto old_session = UserMgr::GetInstance()->GetSession(uid);
-                    if (old_session) {
+                    if (old_session)
+                    {
                         old_session->NotifyOffline(uid);
                         _logic._p_server->ClearSession(old_session->GetSessionId());
                     }
-                } else {
+                }
+                else
+                {
                     KickUserReq kick_req;
                     kick_req.set_uid(uid);
                     ChatGrpcClient::GetInstance()->NotifyKickUser(uid_ip_value, kick_req);
                 }
             }
             attach_session();
-        } else {
+        }
+        else
+        {
             attach_session();
         }
     }
 
     const auto session_attach_ms = NowMsLocal() - attach_start_ms;
-    if (verbose_login_logs) {
-        memolog::LogInfo("chat.login.succeeded", "chat login success",
-            {{"uid", std::to_string(uid)}, {"session_id", session->GetSessionId()},
-             {"login_protocol_version", std::to_string(protocol_version >= 3 ? 3 : 2)},
-             {"ticket_verify_ms", std::to_string(ticket_verify_ms)}, {"session_attach_ms", std::to_string(session_attach_ms)},
-             {"relation_bootstrap_ms", "0"}, {"relation_bootstrap_mode", relation_bootstrap_mode},
-             {"chat_login_total_ms", std::to_string(NowMsLocal() - login_start_ms)}});
-        memolog::LogInfo("login.stage.summary", "chat login stage summary",
-            {{"uid", std::to_string(uid)}, {"login_protocol_version", std::to_string(protocol_version >= 3 ? 3 : 2)},
-             {"ticket_verify_ms", std::to_string(ticket_verify_ms)}, {"session_attach_ms", std::to_string(session_attach_ms)},
-             {"relation_bootstrap_ms", "0"}, {"relation_bootstrap_mode", relation_bootstrap_mode},
-             {"chat_login_total_ms", std::to_string(NowMsLocal() - login_start_ms)}});
+    if (verbose_login_logs)
+    {
+        memolog::LogInfo("chat.login.succeeded",
+                         "chat login success",
+                         {{"uid", std::to_string(uid)},
+                          {"session_id", session->GetSessionId()},
+                          {"login_protocol_version", std::to_string(protocol_version >= 3 ? 3 : 2)},
+                          {"ticket_verify_ms", std::to_string(ticket_verify_ms)},
+                          {"session_attach_ms", std::to_string(session_attach_ms)},
+                          {"relation_bootstrap_ms", "0"},
+                          {"relation_bootstrap_mode", relation_bootstrap_mode},
+                          {"chat_login_total_ms", std::to_string(NowMsLocal() - login_start_ms)}});
+        memolog::LogInfo("login.stage.summary",
+                         "chat login stage summary",
+                         {{"uid", std::to_string(uid)},
+                          {"login_protocol_version", std::to_string(protocol_version >= 3 ? 3 : 2)},
+                          {"ticket_verify_ms", std::to_string(ticket_verify_ms)},
+                          {"session_attach_ms", std::to_string(session_attach_ms)},
+                          {"relation_bootstrap_ms", "0"},
+                          {"relation_bootstrap_mode", relation_bootstrap_mode},
+                          {"chat_login_total_ms", std::to_string(NowMsLocal() - login_start_ms)}});
     }
 
-    if (FeatureFlagDefaultTrueLocal("chat_login_offline_push")) {
-        std::thread([this, session, uid]() {
-            const int delay_ms = LoginOfflinePushDelayMsLocal();
-            if (delay_ms > 0) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
-            }
-            PushOfflineMessages(session, uid);
-        }).detach();
+    if (FeatureFlagDefaultTrueLocal("chat_login_offline_push"))
+    {
+        std::thread(
+            [this, session, uid]()
+            {
+                const int delay_ms = LoginOfflinePushDelayMsLocal();
+                if (delay_ms > 0)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+                }
+                PushOfflineMessages(session, uid);
+            })
+            .detach();
     }
 }
 
-void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data)
+void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>& session,
+                                                 short msg_id,
+                                                 const std::string& msg_data)
 {
     const auto bootstrap_start_ms = NowMsLocal();
     memochat::json::JsonReader reader;
     memochat::json::JsonValue root;
     reader.parse(msg_data, root);
     auto trace_id = root.get("trace_id", "").asString();
-    if (trace_id.empty()) {
+    if (trace_id.empty())
+    {
         trace_id = memolog::TraceContext::NewId();
     }
     memolog::TraceContext::SetTraceId(trace_id);
     memolog::TraceContext::SetRequestId(memolog::TraceContext::NewId());
-    if (session) {
+    if (session)
+    {
         memolog::TraceContext::SetSessionId(session->GetSessionId());
     }
-    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
+    Defer clear_trace(
+        []()
+        {
+            memolog::TraceContext::Clear();
+        });
 
     memochat::json::JsonValue rtvalue;
     rtvalue["trace_id"] = trace_id;
     rtvalue["protocol_version"] = root.get("protocol_version", 3).asInt();
     const int uid = session ? session->GetUserId() : 0;
-    if (uid <= 0) {
+    if (uid <= 0)
+    {
         rtvalue["error"] = ErrorCodes::UidInvalid;
-        if (session) {
+        if (session)
+        {
             session->Send(JsonValueToWireString(rtvalue), ID_GET_RELATION_BOOTSTRAP_RSP);
         }
         return;
@@ -312,37 +411,46 @@ void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>
     rtvalue["error"] = ErrorCodes::Success;
     rtvalue["uid"] = uid;
     _logic.AppendRelationBootstrapJson(uid, rtvalue);
-    if (session) {
+    if (session)
+    {
         session->Send(JsonValueToWireString(rtvalue), ID_GET_RELATION_BOOTSTRAP_RSP);
     }
-    memolog::LogInfo("chat.relation_bootstrap.succeeded", "relation bootstrap fetched",
-        {{"uid", std::to_string(uid)}, {"tcp_msg_id", std::to_string(msg_id)},
-         {"relation_bootstrap_ms", std::to_string(NowMsLocal() - bootstrap_start_ms)},
-         {"relation_bootstrap_mode", "explicit_pull"}});
+    memolog::LogInfo("chat.relation_bootstrap.succeeded",
+                     "relation bootstrap fetched",
+                     {{"uid", std::to_string(uid)},
+                      {"tcp_msg_id", std::to_string(msg_id)},
+                      {"relation_bootstrap_ms", std::to_string(NowMsLocal() - bootstrap_start_ms)},
+                      {"relation_bootstrap_mode", "explicit_pull"}});
 }
 
 void ChatSessionService::HandleHeartbeat(const std::shared_ptr<CSession>& session, short, const std::string&)
 {
-    if (!session) {
+    if (!session)
+    {
         return;
     }
 
     session->UpdateHeartbeat();
 
     const auto uid = session->GetUserId();
-    if (uid > 0) {
+    if (uid > 0)
+    {
         const auto uid_str = std::to_string(uid);
         const auto self_name = ConfigMgr::Inst()["SelfServer"]["Name"];
         const auto now = std::time(nullptr);
 
         auto existing_session = UserMgr::GetInstance()->GetSession(uid);
-        if (!existing_session || existing_session.get() != session.get()) {
+        if (!existing_session || existing_session.get() != session.get())
+        {
             RepairOnlineRouteStateLocal(uid, session, self_name);
             session->MarkOnlineRouteRefreshed(now);
             UserMgr::GetInstance()->SetUserSession(uid, session);
-            memolog::LogInfo("chat.heartbeat.session_repair", "repaired session mapping",
-                {{"uid", uid_str}, {"session_id", session->GetSessionId()}});
-        } else if (session->TryMarkOnlineRouteRefreshDue(now, HeartbeatRouteRefreshSecLocal())) {
+            memolog::LogInfo("chat.heartbeat.session_repair",
+                             "repaired session mapping",
+                             {{"uid", uid_str}, {"session_id", session->GetSessionId()}});
+        }
+        else if (session->TryMarkOnlineRouteRefreshDue(now, HeartbeatRouteRefreshSecLocal()))
+        {
             RepairOnlineRouteStateLocal(uid, session, self_name);
         }
     }
@@ -354,106 +462,133 @@ void ChatSessionService::HandleHeartbeat(const std::shared_ptr<CSession>& sessio
 
 void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& session, int uid)
 {
-    try {
-    if (!session) {
-        memolog::LogWarn("chat.login.offline_push_skipped", "offline push skipped for null session",
-            {{"uid", std::to_string(uid)}});
-        return;
-    }
-
-    constexpr int kOfflineBatchSize = 50;
-    constexpr int kMaxOfflineBatches = 10;
-
-    memolog::LogInfo("chat.login.offline_push_start", "starting offline message push",
-        {{"uid", std::to_string(uid)}, {"session_id", session->GetSessionId()}});
-
-    int pushed_total = 0;
-    int64_t pagination_cursor_ts = 0;
-    std::string pagination_cursor_msg_id;
-
-    for (int batch = 0; batch < kMaxOfflineBatches; ++batch) {
-        std::vector<std::shared_ptr<PrivateMessageInfo>> messages;
-        if (!PostgresMgr::GetInstance()->GetUndeliveredPrivateMessages(uid, pagination_cursor_ts, pagination_cursor_msg_id, kOfflineBatchSize, messages)
-            || messages.empty()) {
-            break;
+    try
+    {
+        if (!session)
+        {
+            memolog::LogWarn("chat.login.offline_push_skipped",
+                             "offline push skipped for null session",
+                             {{"uid", std::to_string(uid)}});
+            return;
         }
 
-        // 按 from_uid 分组
-        std::map<int, std::vector<std::shared_ptr<PrivateMessageInfo>>> msgs_by_sender;
-        for (const auto& msg : messages) {
-            if (msg && msg->from_uid != uid) {
-                msgs_by_sender[msg->from_uid].push_back(msg);
-                pagination_cursor_ts = msg->created_at;
-                pagination_cursor_msg_id = msg->msg_id;
+        constexpr int kOfflineBatchSize = 50;
+        constexpr int kMaxOfflineBatches = 10;
+
+        memolog::LogInfo("chat.login.offline_push_start",
+                         "starting offline message push",
+                         {{"uid", std::to_string(uid)}, {"session_id", session->GetSessionId()}});
+
+        int pushed_total = 0;
+        int64_t pagination_cursor_ts = 0;
+        std::string pagination_cursor_msg_id;
+
+        for (int batch = 0; batch < kMaxOfflineBatches; ++batch)
+        {
+            std::vector<std::shared_ptr<PrivateMessageInfo>> messages;
+            if (!PostgresMgr::GetInstance()->GetUndeliveredPrivateMessages(uid,
+                                                                           pagination_cursor_ts,
+                                                                           pagination_cursor_msg_id,
+                                                                           kOfflineBatchSize,
+                                                                           messages) ||
+                messages.empty())
+            {
+                break;
             }
-        }
 
-        for (const auto& [sender_uid, sender_msgs] : msgs_by_sender) {
-            memochat::json::JsonValue text_array(memochat::json::array_t{});
-            for (const auto& msg : sender_msgs) {
-                memochat::json::JsonValue element;
-                element["msgid"] = msg->msg_id;
-                element["content"] = msg->content;
-                element["created_at"] = static_cast<int64_t>(msg->created_at);
-                if (msg->reply_to_server_msg_id > 0) {
-                    element["reply_to_server_msg_id"] = static_cast<int64_t>(msg->reply_to_server_msg_id);
+            // 按 from_uid 分组
+            std::map<int, std::vector<std::shared_ptr<PrivateMessageInfo>>> msgs_by_sender;
+            for (const auto& msg : messages)
+            {
+                if (msg && msg->from_uid != uid)
+                {
+                    msgs_by_sender[msg->from_uid].push_back(msg);
+                    pagination_cursor_ts = msg->created_at;
+                    pagination_cursor_msg_id = msg->msg_id;
                 }
-                if (!msg->forward_meta_json.empty()) {
-                    memochat::json::JsonValue forward_meta;
-                    memochat::json::JsonCharReaderBuilder builder;
-                    std::unique_ptr<memochat::json::JsonCharReader> reader(builder.newCharReader());
-                    if (reader->parse(msg->forward_meta_json.data(),
-                                       msg->forward_meta_json.data() + msg->forward_meta_json.size(),
-                                       &forward_meta, nullptr)) {
-                        element["forward_meta"] = forward_meta;
+            }
+
+            for (const auto& [sender_uid, sender_msgs] : msgs_by_sender)
+            {
+                memochat::json::JsonValue text_array(memochat::json::array_t{});
+                for (const auto& msg : sender_msgs)
+                {
+                    memochat::json::JsonValue element;
+                    element["msgid"] = msg->msg_id;
+                    element["content"] = msg->content;
+                    element["created_at"] = static_cast<int64_t>(msg->created_at);
+                    if (msg->reply_to_server_msg_id > 0)
+                    {
+                        element["reply_to_server_msg_id"] = static_cast<int64_t>(msg->reply_to_server_msg_id);
                     }
+                    if (!msg->forward_meta_json.empty())
+                    {
+                        memochat::json::JsonValue forward_meta;
+                        memochat::json::JsonCharReaderBuilder builder;
+                        std::unique_ptr<memochat::json::JsonCharReader> reader(builder.newCharReader());
+                        if (reader->parse(msg->forward_meta_json.data(),
+                                          msg->forward_meta_json.data() + msg->forward_meta_json.size(),
+                                          &forward_meta,
+                                          nullptr))
+                        {
+                            element["forward_meta"] = forward_meta;
+                        }
+                    }
+                    if (msg->edited_at_ms > 0)
+                    {
+                        element["edited_at_ms"] = static_cast<int64_t>(msg->edited_at_ms);
+                    }
+                    if (msg->deleted_at_ms > 0)
+                    {
+                        element["deleted_at_ms"] = static_cast<int64_t>(msg->deleted_at_ms);
+                    }
+                    append(text_array, element);
                 }
-                if (msg->edited_at_ms > 0) {
-                    element["edited_at_ms"] = static_cast<int64_t>(msg->edited_at_ms);
-                }
-                if (msg->deleted_at_ms > 0) {
-                    element["deleted_at_ms"] = static_cast<int64_t>(msg->deleted_at_ms);
-                }
-                append(text_array, element);
+
+                memochat::json::JsonValue notify;
+                notify["error"] = ErrorCodes::Success;
+                notify["fromuid"] = sender_uid;
+                notify["touid"] = uid;
+                notify["text_array"] = text_array;
+
+                session->Send(JsonValueToWireString(notify), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+                pushed_total += static_cast<int>(sender_msgs.size());
+
+                memolog::LogInfo("chat.login.offline_push_batch",
+                                 "pushed offline messages batch",
+                                 {{"uid", std::to_string(uid)},
+                                  {"from_uid", std::to_string(sender_uid)},
+                                  {"count", std::to_string(sender_msgs.size())}});
             }
 
-            memochat::json::JsonValue notify;
-            notify["error"] = ErrorCodes::Success;
-            notify["fromuid"] = sender_uid;
-            notify["touid"] = uid;
-            notify["text_array"] = text_array;
-
-            session->Send(JsonValueToWireString(notify), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
-            pushed_total += static_cast<int>(sender_msgs.size());
-
-            memolog::LogInfo("chat.login.offline_push_batch", "pushed offline messages batch",
-                {{"uid", std::to_string(uid)},
-                 {"from_uid", std::to_string(sender_uid)},
-                 {"count", std::to_string(sender_msgs.size())}});
+            if (static_cast<int>(messages.size()) < kOfflineBatchSize)
+            {
+                break;
+            }
         }
 
-        if (static_cast<int>(messages.size()) < kOfflineBatchSize) {
-            break;
+        if (pushed_total <= 0)
+        {
+            memolog::LogInfo("chat.login.offline_push_skipped", "no unread messages", {{"uid", std::to_string(uid)}});
+            return;
         }
-    }
 
-    if (pushed_total <= 0) {
-        memolog::LogInfo("chat.login.offline_push_skipped", "no unread messages",
-            {{"uid", std::to_string(uid)}});
-        return;
+        memolog::LogInfo("chat.login.offline_push_done",
+                         "offline message push completed",
+                         {{"uid", std::to_string(uid)},
+                          {"session_id", session->GetSessionId()},
+                          {"pushed_total", std::to_string(pushed_total)}});
     }
-
-    memolog::LogInfo("chat.login.offline_push_done", "offline message push completed",
-        {{"uid", std::to_string(uid)},
-         {"session_id", session->GetSessionId()},
-         {"pushed_total", std::to_string(pushed_total)}});
+    catch (const std::exception& e)
+    {
+        memolog::LogError("chat.login.offline_push_failed",
+                          "offline message push failed",
+                          {{"uid", std::to_string(uid)}, {"error", e.what()}});
     }
-    catch (const std::exception& e) {
-        memolog::LogError("chat.login.offline_push_failed", "offline message push failed",
-            {{"uid", std::to_string(uid)}, {"error", e.what()}});
-    }
-    catch (...) {
-        memolog::LogError("chat.login.offline_push_failed", "offline message push failed with unknown exception",
-            {{"uid", std::to_string(uid)}});
+    catch (...)
+    {
+        memolog::LogError("chat.login.offline_push_failed",
+                          "offline message push failed with unknown exception",
+                          {{"uid", std::to_string(uid)}});
     }
 }

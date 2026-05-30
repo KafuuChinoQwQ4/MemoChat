@@ -1,9 +1,9 @@
 """
 RAG 知识库 API 路由
 """
+
 import structlog
 from fastapi import APIRouter, HTTPException
-
 from harness import HarnessContainer
 from observability.langsmith_instrument import set_run_error, set_run_output, trace_context
 from observability.metrics import ai_metrics
@@ -73,7 +73,9 @@ async def search(req: KbSearchReq):
                 req.metadata_filters,
             )
             ai_metrics.http_requests.inc(route="/kb/search", status="ok")
-            set_run_output(run, {"chunk_count": len(results), "scores": [result.get("score", 0.0) for result in results]})
+            set_run_output(
+                run, {"chunk_count": len(results), "scores": [result.get("score", 0.0) for result in results]}
+            )
             return KbSearchRsp(
                 code=0,
                 chunks=[

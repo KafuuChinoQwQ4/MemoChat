@@ -28,7 +28,7 @@ public:
 
     virtual QString rendererName() const = 0;
     virtual bool isNative() const = 0;
-    virtual void paint(QPainter *painter, const QRectF &bounds, const Live2DVisualState &state) = 0;
+    virtual void paint(QPainter* painter, const QRectF& bounds, const Live2DVisualState& state) = 0;
 };
 
 #endif // LIVE2DRENDERER_H

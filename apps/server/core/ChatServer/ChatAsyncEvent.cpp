@@ -7,31 +7,35 @@
 #include <memory>
 #include <utility>
 
-namespace {
+namespace
+{
 
 memochat::json::JsonValue CloneJson(const memochat::json::JsonValue& value)
 {
     return memochat::json::JsonValue(value);
 }
-}
+} // namespace
 
 AsyncEventEnvelope::AsyncEventEnvelope()
-    : payload(memochat::json::object_t{}) {
+    : payload(memochat::json::object_t{})
+{
 }
 
 AsyncEventEnvelope::AsyncEventEnvelope(const AsyncEventEnvelope& other)
-    : event_id(other.event_id),
-      topic(other.topic),
-      partition_key(other.partition_key),
-      trace_id(other.trace_id),
-      request_id(other.request_id),
-      retry_count(other.retry_count),
-      payload(other.payload) {
+    : event_id(other.event_id)
+    , topic(other.topic)
+    , partition_key(other.partition_key)
+    , trace_id(other.trace_id)
+    , request_id(other.request_id)
+    , retry_count(other.retry_count)
+    , payload(other.payload)
+{
 }
 
 AsyncEventEnvelope& AsyncEventEnvelope::operator=(const AsyncEventEnvelope& other)
 {
-    if (this == &other) {
+    if (this == &other)
+    {
         return *this;
     }
     event_id = other.event_id;
@@ -48,7 +52,8 @@ AsyncEventEnvelope::~AsyncEventEnvelope() = default;
 
 std::string BuildAsyncEventPartitionKey(const std::string& topic, const memochat::json::JsonValue& payload)
 {
-    if (topic == memochat::chatruntime::TopicPrivate()) {
+    if (topic == memochat::chatruntime::TopicPrivate())
+    {
         auto mk = memochat::json::make_member_ref(payload);
         const int from_uid = memochat::json::glaze_safe_get<int>(mk, "fromuid", 0);
         const int to_uid = memochat::json::glaze_safe_get<int>(mk, "touid", 0);
@@ -57,7 +62,8 @@ std::string BuildAsyncEventPartitionKey(const std::string& topic, const memochat
         return std::to_string(uid_min) + ":" + std::to_string(uid_max);
     }
 
-    if (topic == memochat::chatruntime::TopicGroup()) {
+    if (topic == memochat::chatruntime::TopicGroup())
+    {
         return std::to_string(memochat::json::make_member_ref(payload)["groupid"].asInt64());
     }
 
@@ -82,7 +88,8 @@ bool ParseAsyncEventEnvelope(const std::string& serialized, AsyncEventEnvelope& 
 {
     memochat::json::JsonValue root;
     std::string errors;
-    if (!memochat::json::glaze_parse(root, serialized, &errors) || !root.is_object()) {
+    if (!memochat::json::glaze_parse(root, serialized, &errors) || !root.is_object())
+    {
         return false;
     }
 

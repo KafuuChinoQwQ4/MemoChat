@@ -27,10 +27,19 @@ public:
     bool Start(std::string& error);
     void Stop();
 
-    bool IsRunning() const { return running_; }
-    int Port() const { return port_; }
+    bool IsRunning() const
+    {
+        return running_;
+    }
+    int Port() const
+    {
+        return port_;
+    }
 
-    LogicSystem& GetLogicSystem() { return logic_; }
+    LogicSystem& GetLogicSystem()
+    {
+        return logic_;
+    }
 
     struct Impl;
 
@@ -43,4 +52,4 @@ private:
     std::atomic<bool> running_{false};
 };
 
-#endif  // MEMOCHAT_GATE_HTTP3_LISTENER_H
+#endif // MEMOCHAT_GATE_HTTP3_LISTENER_H

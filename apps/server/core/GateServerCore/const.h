@@ -21,7 +21,8 @@ namespace net = boost::asio;
 using tcp = boost::asio::ip::tcp;
 using udp = boost::asio::ip::udp;
 
-enum ErrorCodes {
+enum ErrorCodes
+{
     Success = 0,
     Error_Json = 1001,
     RPCFailed = 1002,
@@ -50,10 +51,17 @@ enum ErrorCodes {
     EmailSendFailed = 1022,
 };
 
-class Defer {
+class Defer
+{
 public:
-    Defer(std::function<void()> func) : func_(func) {}
-    ~Defer() { func_(); }
+    Defer(std::function<void()> func)
+        : func_(func)
+    {
+    }
+    ~Defer()
+    {
+        func_();
+    }
 
 private:
     std::function<void()> func_;

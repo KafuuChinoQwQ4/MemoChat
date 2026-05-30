@@ -6,10 +6,9 @@ import uuid
 from typing import Any
 
 import structlog
-
+from config import settings
 from db.postgres_client import PostgresClient
 from harness.contracts import AgentTrace, PlanStep, RunEdge, RunGraph, RunNode, TraceEvent
-from config import settings
 
 logger = structlog.get_logger()
 

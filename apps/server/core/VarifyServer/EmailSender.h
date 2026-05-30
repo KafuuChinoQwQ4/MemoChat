@@ -2,9 +2,11 @@
 
 #include <string>
 
-namespace varifyservice {
+namespace varifyservice
+{
 
-class EmailSender {
+class EmailSender
+{
 public:
     static bool Send(const std::string& to_email, const std::string& code);
 };

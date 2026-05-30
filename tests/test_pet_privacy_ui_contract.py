@@ -2,7 +2,6 @@ import re
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PET_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetWindow.qml"
 PET_SCENE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetScene.qml"
@@ -41,7 +40,7 @@ def function_body(source, name):
         elif char == "}":
             depth -= 1
         index += 1
-    return source[match.end():index - 1]
+    return source[match.end() : index - 1]
 
 
 class PetPrivacyUiContractTests(unittest.TestCase):

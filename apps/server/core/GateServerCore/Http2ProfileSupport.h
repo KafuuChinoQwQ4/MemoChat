@@ -4,9 +4,11 @@
 #include <string_view>
 #include "json/GlazeCompat.h"
 
-namespace Http2ProfileSupport {
+namespace Http2ProfileSupport
+{
 
-struct ProfileResult {
+struct ProfileResult
+{
     int error = 0;
     std::string message;
     memochat::json::JsonValue data;
@@ -18,5 +20,4 @@ memochat::json::JsonValue MakeError(int error_code, const std::string& message);
 ProfileResult HandleUserUpdateProfile(const memochat::json::JsonValue& req);
 ProfileResult HandleGetUserInfo(int uid);
 
-}  // namespace Http2ProfileSupport
-
+} // namespace Http2ProfileSupport

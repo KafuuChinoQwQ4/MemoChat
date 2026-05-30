@@ -3,6 +3,7 @@
 POST /chat — 普通对话
 POST /chat/stream — SSE 流式输出
 """
+
 import json
 import uuid
 from typing import AsyncIterator
@@ -10,7 +11,6 @@ from typing import AsyncIterator
 import structlog
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-
 from harness import HarnessContainer
 from observability.metrics import ai_metrics
 from schemas.api import AgentRunReq, ChatReq, ChatRsp, TraceEventModel

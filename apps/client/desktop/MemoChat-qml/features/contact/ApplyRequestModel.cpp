@@ -1,65 +1,66 @@
 #include "ApplyRequestModel.h"
 #include "IconPathUtils.h"
 
-ApplyRequestModel::ApplyRequestModel(QObject *parent)
-    : QAbstractListModel(parent),
-      _unapproved_count(0)
+ApplyRequestModel::ApplyRequestModel(QObject* parent)
+    : QAbstractListModel(parent)
+    , _unapproved_count(0)
 {
 }
 
-int ApplyRequestModel::rowCount(const QModelIndex &parent) const
+int ApplyRequestModel::rowCount(const QModelIndex& parent) const
 {
-    if (parent.isValid()) {
+    if (parent.isValid())
+    {
         return 0;
     }
 
     return static_cast<int>(_items.size());
 }
 
-QVariant ApplyRequestModel::data(const QModelIndex &index, int role) const
+QVariant ApplyRequestModel::data(const QModelIndex& index, int role) const
 {
-    if (!index.isValid() || index.row() < 0 || index.row() >= rowCount()) {
+    if (!index.isValid() || index.row() < 0 || index.row() >= rowCount())
+    {
         return {};
     }
 
-    const ApplyEntry &entry = _items[static_cast<size_t>(index.row())];
-    switch (role) {
-    case UidRole:
-        return entry.uid;
-    case UserIdRole:
-        return entry.userId;
-    case NameRole:
-        return entry.name;
-    case NickRole:
-        return entry.nick;
-    case DescRole:
-        return entry.desc;
-    case IconRole:
-        return entry.icon;
-    case StatusRole:
-        return entry.status;
-    case ApprovedRole:
-        return entry.status != 0;
-    case PendingRole:
-        return entry.pending;
-    default:
-        return {};
+    const ApplyEntry& entry = _items[static_cast<size_t>(index.row())];
+    switch (role)
+    {
+        case UidRole:
+            return entry.uid;
+        case UserIdRole:
+            return entry.userId;
+        case NameRole:
+            return entry.name;
+        case NickRole:
+            return entry.nick;
+        case DescRole:
+            return entry.desc;
+        case IconRole:
+            return entry.icon;
+        case StatusRole:
+            return entry.status;
+        case ApprovedRole:
+            return entry.status != 0;
+        case PendingRole:
+            return entry.pending;
+        default:
+            return {};
     }
 }
 
 QHash<int, QByteArray> ApplyRequestModel::roleNames() const
 {
-    return {
-        {UidRole, "uid"},
-        {UserIdRole, "userId"},
-        {NameRole, "name"},
-        {NickRole, "nick"},
-        {DescRole, "desc"},
-        {IconRole, "icon"},
-        {StatusRole, "status"},
-        {ApprovedRole, "approved"},
-        {PendingRole, "pending"}
-    };
+    return {{UidRole, "uid"},
+            {UserIdRole, "userId"},
+            {NameRole, "name"},
+            {NickRole, "nick"},
+            {DescRole, "desc"},
+            {IconRole, "icon"},
+            {StatusRole, "status"},
+            {ApprovedRole, "approved"},
+            {PendingRole, "pending"}};
 }
 
 int ApplyRequestModel::count() const
@@ -79,7 +80,8 @@ bool ApplyRequestModel::hasUnapproved() const
 
 void ApplyRequestModel::clear()
 {
-    if (_items.empty()) {
+    if (_items.empty())
+    {
         return;
     }
 
@@ -91,14 +93,16 @@ void ApplyRequestModel::clear()
     emit unapprovedCountChanged();
 }
 
-void ApplyRequestModel::setApplies(const std::vector<std::shared_ptr<ApplyInfo>> &applies)
+void ApplyRequestModel::setApplies(const std::vector<std::shared_ptr<ApplyInfo>>& applies)
 {
     beginResetModel();
     _items.clear();
     _items.reserve(applies.size());
 
-    for (const auto &apply : applies) {
-        if (!apply) {
+    for (const auto& apply : applies)
+    {
+        if (!apply)
+        {
             continue;
         }
 
@@ -119,9 +123,10 @@ void ApplyRequestModel::setApplies(const std::vector<std::shared_ptr<ApplyInfo>>
     emit countChanged();
 }
 
-void ApplyRequestModel::upsertApply(const std::shared_ptr<ApplyInfo> &applyInfo)
+void ApplyRequestModel::upsertApply(const std::shared_ptr<ApplyInfo>& applyInfo)
 {
-    if (!applyInfo) {
+    if (!applyInfo)
+    {
         return;
     }
 
@@ -137,9 +142,10 @@ void ApplyRequestModel::upsertApply(const std::shared_ptr<ApplyInfo> &applyInfo)
     upsert(entry);
 }
 
-void ApplyRequestModel::upsertApply(const std::shared_ptr<AddFriendApply> &applyInfo)
+void ApplyRequestModel::upsertApply(const std::shared_ptr<AddFriendApply>& applyInfo)
 {
-    if (!applyInfo) {
+    if (!applyInfo)
+    {
         return;
     }
 
@@ -158,12 +164,14 @@ void ApplyRequestModel::upsertApply(const std::shared_ptr<AddFriendApply> &apply
 void ApplyRequestModel::markApproved(int uid)
 {
     const int idx = indexOfUid(uid);
-    if (idx < 0) {
+    if (idx < 0)
+    {
         return;
     }
 
-    ApplyEntry &entry = _items[static_cast<size_t>(idx)];
-    if (entry.status == 1 && !entry.pending) {
+    ApplyEntry& entry = _items[static_cast<size_t>(idx)];
+    if (entry.status == 1 && !entry.pending)
+    {
         return;
     }
 
@@ -177,12 +185,14 @@ void ApplyRequestModel::markApproved(int uid)
 void ApplyRequestModel::setPending(int uid, bool pending)
 {
     const int idx = indexOfUid(uid);
-    if (idx < 0) {
+    if (idx < 0)
+    {
         return;
     }
 
-    ApplyEntry &entry = _items[static_cast<size_t>(idx)];
-    if (entry.pending == pending) {
+    ApplyEntry& entry = _items[static_cast<size_t>(idx)];
+    if (entry.pending == pending)
+    {
         return;
     }
 
@@ -194,28 +204,29 @@ void ApplyRequestModel::setPending(int uid, bool pending)
 
 QVariantMap ApplyRequestModel::get(int indexValue) const
 {
-    if (indexValue < 0 || indexValue >= rowCount()) {
+    if (indexValue < 0 || indexValue >= rowCount())
+    {
         return {};
     }
 
-    const ApplyEntry &entry = _items[static_cast<size_t>(indexValue)];
-    return {
-        {"uid", entry.uid},
-        {"userId", entry.userId},
-        {"name", entry.name},
-        {"nick", entry.nick},
-        {"desc", entry.desc},
-        {"icon", entry.icon},
-        {"status", entry.status},
-        {"approved", entry.status != 0},
-        {"pending", entry.pending}
-    };
+    const ApplyEntry& entry = _items[static_cast<size_t>(indexValue)];
+    return {{"uid", entry.uid},
+            {"userId", entry.userId},
+            {"name", entry.name},
+            {"nick", entry.nick},
+            {"desc", entry.desc},
+            {"icon", entry.icon},
+            {"status", entry.status},
+            {"approved", entry.status != 0},
+            {"pending", entry.pending}};
 }
 
 int ApplyRequestModel::indexOfUid(int uid) const
 {
-    for (int i = 0; i < rowCount(); ++i) {
-        if (_items[static_cast<size_t>(i)].uid == uid) {
+    for (int i = 0; i < rowCount(); ++i)
+    {
+        if (_items[static_cast<size_t>(i)].uid == uid)
+        {
             return i;
         }
     }
@@ -226,7 +237,8 @@ int ApplyRequestModel::indexOfUid(int uid) const
 QString ApplyRequestModel::nameByUid(int uid) const
 {
     const int idx = indexOfUid(uid);
-    if (idx < 0) {
+    if (idx < 0)
+    {
         return "";
     }
 
@@ -238,14 +250,16 @@ QString ApplyRequestModel::normalizeIcon(QString icon)
     return normalizeIconForQml(icon);
 }
 
-void ApplyRequestModel::upsert(const ApplyEntry &entry)
+void ApplyRequestModel::upsert(const ApplyEntry& entry)
 {
     const int idx = indexOfUid(entry.uid);
-    if (idx >= 0) {
-        ApplyEntry &stored = _items[static_cast<size_t>(idx)];
+    if (idx >= 0)
+    {
+        ApplyEntry& stored = _items[static_cast<size_t>(idx)];
         const bool keepPending = stored.pending && entry.status == 0;
         stored = entry;
-        if (keepPending) {
+        if (keepPending)
+        {
             stored.pending = true;
         }
         const QModelIndex modelIndex = index(idx, 0);
@@ -264,13 +278,16 @@ void ApplyRequestModel::upsert(const ApplyEntry &entry)
 void ApplyRequestModel::refreshUnapprovedCount()
 {
     int countValue = 0;
-    for (const auto &item : _items) {
-        if (item.status == 0) {
+    for (const auto& item : _items)
+    {
+        if (item.status == 0)
+        {
             ++countValue;
         }
     }
 
-    if (_unapproved_count == countValue) {
+    if (_unapproved_count == countValue)
+    {
         return;
     }
 

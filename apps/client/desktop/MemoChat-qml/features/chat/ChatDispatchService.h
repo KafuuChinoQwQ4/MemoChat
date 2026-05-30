@@ -6,7 +6,8 @@
 #include <QtGlobal>
 #include <functional>
 
-struct OutgoingChatPacket {
+struct OutgoingChatPacket
+{
     int fromUid = 0;
     int toUid = 0;
     QString msgId;
@@ -17,12 +18,12 @@ struct OutgoingChatPacket {
 class ChatDispatchService
 {
 public:
-    using SendPayloadFunc = std::function<void(const QByteArray &)>;
+    using SendPayloadFunc = std::function<void(const QByteArray&)>;
 
-    static QByteArray buildTextPayload(const OutgoingChatPacket &packet);
-    static bool dispatchTextPayload(const OutgoingChatPacket &packet,
-                                    const SendPayloadFunc &sendPayload,
-                                    QString *errorText = nullptr);
+    static QByteArray buildTextPayload(const OutgoingChatPacket& packet);
+    static bool dispatchTextPayload(const OutgoingChatPacket& packet,
+                                    const SendPayloadFunc& sendPayload,
+                                    QString* errorText = nullptr);
 };
 
 #endif // CHATDISPATCHSERVICE_H

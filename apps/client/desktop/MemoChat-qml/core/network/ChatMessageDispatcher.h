@@ -16,9 +16,9 @@ class ChatMessageDispatcher : public QObject
 {
     Q_OBJECT
 public:
-    explicit ChatMessageDispatcher(QObject *parent = nullptr);
+    explicit ChatMessageDispatcher(QObject* parent = nullptr);
 
-    void dispatchMessage(ReqId id, int len, const QByteArray &data);
+    void dispatchMessage(ReqId id, int len, const QByteArray& data);
 
 signals:
     void sig_swich_chatdlg();
@@ -48,6 +48,14 @@ signals:
 
 private:
     void initHandlers();
+    void registerAuthHandlers();
+    void registerContactHandlers();
+    void registerPrivateMessageHandlers();
+    void registerGroupHandlers();
+    void registerSystemHandlers();
+
+    bool parseGroupResponse(ReqId reqId, const QByteArray& data, QJsonObject& jsonObj, bool emitResponse = true);
+    static qint64 normalizeGroupCreatedAt(qint64 createdAt);
 
     QMap<ReqId, std::function<void(ReqId id, int len, QByteArray data)>> _handlers;
 };

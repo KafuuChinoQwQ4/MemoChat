@@ -4,7 +4,8 @@
 #include <QString>
 #include <functional>
 
-struct UploadedMediaInfo {
+struct UploadedMediaInfo
+{
     QString mediaKey;
     QString remoteUrl;
     QString fileName;
@@ -15,15 +16,15 @@ struct UploadedMediaInfo {
 class MediaUploadService
 {
 public:
-    using UploadProgressCallback = std::function<void(int, const QString &)>;
+    using UploadProgressCallback = std::function<void(int, const QString&)>;
 
-    static bool uploadLocalFile(const QString &localFileUrl,
-                                const QString &mediaType,
+    static bool uploadLocalFile(const QString& localFileUrl,
+                                const QString& mediaType,
                                 int uid,
-                                const QString &token,
-                                UploadedMediaInfo *outInfo,
-                                QString *errorText,
-                                const UploadProgressCallback &progress = UploadProgressCallback());
+                                const QString& token,
+                                UploadedMediaInfo* outInfo,
+                                QString* errorText,
+                                const UploadProgressCallback& progress = UploadProgressCallback());
 };
 
 #endif // MEDIAUPLOADSERVICE_H

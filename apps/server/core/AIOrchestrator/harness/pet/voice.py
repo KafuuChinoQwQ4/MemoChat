@@ -74,14 +74,11 @@ class VoiceSynthesisResult:
 class VoiceProvider(Protocol):
     name: str
 
-    async def synthesize(self, request: VoiceSynthesisRequest) -> VoiceSynthesisResult:
-        ...
+    async def synthesize(self, request: VoiceSynthesisRequest) -> VoiceSynthesisResult: ...
 
-    async def stream(self, request: VoiceSynthesisRequest) -> AsyncIterator[VoiceSynthesisResult]:
-        ...
+    async def stream(self, request: VoiceSynthesisRequest) -> AsyncIterator[VoiceSynthesisResult]: ...
 
-    async def interrupt(self, request: VoiceInterruptRequest) -> VoiceSynthesisResult:
-        ...
+    async def interrupt(self, request: VoiceInterruptRequest) -> VoiceSynthesisResult: ...
 
 
 class DeterministicVoiceProvider:
@@ -141,9 +138,7 @@ class DeterministicVoiceProvider:
         if request.turn_id:
             self._active_turns.discard((request.session_id, request.turn_id))
         else:
-            self._active_turns = {
-                item for item in self._active_turns if item[0] != request.session_id
-            }
+            self._active_turns = {item for item in self._active_turns if item[0] != request.session_id}
         return VoiceSynthesisResult(
             text="",
             state="interrupted",
@@ -561,9 +556,9 @@ def _deterministic_result(
     metadata: dict[str, Any] | None = None,
 ) -> VoiceSynthesisResult:
     result_metadata = dict(metadata or {})
-    digest = hashlib.sha1(
-        f"{request.session_id}:{request.turn_id}:{request.voice}:{text}".encode("utf-8")
-    ).hexdigest()[:16]
+    digest = hashlib.sha1(f"{request.session_id}:{request.turn_id}:{request.voice}:{text}".encode("utf-8")).hexdigest()[
+        :16
+    ]
     duration_ms = _estimated_voice_duration_ms(text)
     if not text:
         result_metadata["audio_persisted"] = False
@@ -668,7 +663,7 @@ def _stream_chunk_size(request: VoiceSynthesisRequest) -> int:
 
 
 def _chunk_text(text: str, size: int) -> list[str]:
-    return [text[index:index + size] for index in range(0, len(text), size)] or [""]
+    return [text[index : index + size] for index in range(0, len(text), size)] or [""]
 
 
 def _directory_writable(path: Path) -> bool:

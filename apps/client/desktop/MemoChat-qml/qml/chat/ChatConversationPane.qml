@@ -1,7 +1,5 @@
 import QtQuick 2.15
-import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import "../components"
 import "conversation"
 
 Rectangle {
@@ -66,15 +64,12 @@ Rectangle {
     signal cancelReplyMessage()
     signal avatarProfileRequested(int uid, string name, string icon)
 
-    property string _editMsgId: ""
-    property string _editText: ""
-
     function minContentY() {
-        return messageList.originY
+        return messageList.minContentY()
     }
 
     function maxContentY() {
-        return messageList.originY + Math.max(0, messageList.contentHeight - messageList.height)
+        return messageList.maxContentY()
     }
 
     function clampY(y) {
@@ -82,20 +77,23 @@ Rectangle {
     }
 
     function isAtBottom(epsilon) {
-        return maxContentY() - messageList.contentY <= (epsilon || 1.0)
+        return messageList.isAtBottom(epsilon)
     }
 
     function _requestScrollToEnd() {
         if (!root.hasCurrentChat) {
             return
         }
-        scrollToEndTimer.restart()
+        messageList.scrollToEnd()
     }
 
     function _resetScrollState() {
         _followTail = true
         _topLoadArmed = true
         _stickToBottom = true
+        if (messageList && messageList.resetScrollState) {
+            messageList.resetScrollState()
+        }
     }
 
     function recentTranscript(maxMessages) {
@@ -168,12 +166,10 @@ Rectangle {
         }
         root.pendingTranslateMsgId = msgId
         root.pendingTranslateText = text
-        translateSourceBox.currentIndex = 0
-        translateTargetBox.currentIndex = 1
-        translateDialog.open()
+        smartActionPopups.openTranslateDialog()
     }
 
-    function confirmTranslate() {
+    function confirmTranslate(sourceLanguage, targetLanguage) {
         if (!root.agentController || root.smartBusy || root.pendingTranslateText.length === 0) {
             return
         }
@@ -183,9 +179,8 @@ Rectangle {
         root.smartStatusText = "正在翻译消息..."
         root.agentController.translateMessageWithSource(
                     root.pendingTranslateText,
-                    translateSourceBox.currentText,
-                    translateTargetBox.currentText)
-        translateDialog.close()
+                    sourceLanguage,
+                    targetLanguage)
     }
 
     function runSmartAction(action) {
@@ -224,7 +219,7 @@ Rectangle {
             root.activeSmartAction = "suggest"
             suggestionModel.clear()
             root.selectedSuggestionText = ""
-            suggestionDialog.open()
+            smartActionPopups.openSuggestionDialog()
             root.smartBusy = true
             root.smartStatusText = "正在生成回复建议..."
             root.agentController.suggestReply(root.peerName, context)
@@ -326,51 +321,13 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
 
-        Rectangle {
+        ChatConversationHeader {
             Layout.fillWidth: true
             Layout.preferredHeight: 46
-            radius: 10
-            color: Qt.rgba(1, 1, 1, 0.24)
-            border.color: Qt.rgba(1, 1, 1, 0.46)
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 14
-                anchors.rightMargin: 10
-                spacing: 10
-
-                Label {
-                    Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignVCenter
-                    text: root.peerName.length > 0 ? root.peerName : "聊天"
-                    color: "#2a3649"
-                    font.pixelSize: 17
-                    font.bold: true
-                    elide: Text.ElideRight
-                }
-
-                Item { Layout.fillWidth: true }
-
-                GlassButton {
-                    id: groupSettingsButton
-                    Layout.preferredWidth: 32
-                    Layout.preferredHeight: 28
-                    Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
-                    visible: root.hasCurrentChat && root.isGroupChat
-                    text: "..."
-                    textPixelSize: 22
-                    cornerRadius: 9
-                    normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.22)
-                    hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.32)
-                    pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.40)
-                    disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                    onClicked: root.openGroupManageRequested()
-
-                    ToolTip.visible: hovering
-                    ToolTip.delay: 180
-                    ToolTip.text: "群设置"
-                }
-            }
+            peerName: root.peerName
+            hasCurrentChat: root.hasCurrentChat
+            isGroupChat: root.isGroupChat
+            onOpenGroupManageRequested: root.openGroupManageRequested()
         }
 
         Rectangle {
@@ -380,189 +337,60 @@ Rectangle {
             color: Qt.rgba(1, 1, 1, 0.16)
             border.color: Qt.rgba(1, 1, 1, 0.42)
 
-            ListView {
+            ChatMessageListView {
                 id: messageList
                 anchors.fill: parent
                 anchors.margins: 14
-                spacing: 0
-                clip: true
-                interactive: contentHeight > height
-                reuseItems: true
-                cacheBuffer: Math.max(height, 720)
-                model: root.messageModel
-                boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: GlassScrollBar { }
-                onCountChanged: {
-                    if (count > 0
-                            && root.hasCurrentChat
-                            && root._followTail
-                            && !root.privateHistoryLoading) {
-                        root._requestScrollToEnd()
-                    }
-                }
-                onContentYChanged: {
-                    root._stickToBottom = root.isAtBottom(1.0)
-                    if (root._stickToBottom) {
-                        root._followTail = true
-                    } else if (contentY > root.minContentY() + 1) {
-                        root._followTail = false
-                    }
-                    if (contentY > 24) {
-                        root._topLoadArmed = true
-                    }
-                    if (contentY <= root.minContentY() + 1
-                            && count > 0
-                            && root.canLoadMorePrivateHistory
-                            && !root.privateHistoryLoading
-                            && root._topLoadArmed) {
-                        root._topLoadArmed = false
-                        root._followTail = false
-                        root.requestLoadMoreHistory()
-                    }
-                }
-
-                delegate: ChatMessageDelegate {
-                    width: messageList.width
-                    msgId: model.msgId
-                    senderUid: model.outgoing ? 0 : model.fromUid
-                    outgoing: model.outgoing
-                    msgType: model.msgType
-                    content: model.content
-                    rawContent: model.rawContent
-                    translationText: root.translationForMessage(model.msgId)
-                    fileName: model.fileName
-                    senderName: (model.outgoing && root.isGroupChat) ? root.selfName : model.senderName
-                    showOutgoingSenderName: root.isGroupChat
-                    showAvatar: model.showAvatar
-                    showTimeDivider: model.showTimeDivider
-                    timeDividerText: model.timeDividerText
-                    messageState: model.messageState
-                    isReply: model.isReply
-                    replyToMsgId: model.replyToMsgId
-                    replySender: model.replySender
-                    replyPreview: model.replyPreview
-                    enableContextMenu: root.hasCurrentChat
-                    canReply: root.isGroupChat
-                    canMention: root.isGroupChat && !model.outgoing && model.senderName && model.senderName.length > 0
-                    canForward: root.hasCurrentChat
-                    canEdit: model.outgoing && model.msgType === "text"
-                    canRevoke: root.isGroupChat ? (model.outgoing || root.currentGroupRole >= 2) : model.outgoing
-                    avatarSource: model.outgoing
-                                  ? root.selfAvatar
-                                  : ((model.senderIcon && model.senderIcon.length > 0) ? model.senderIcon : root.peerAvatar)
-                    onOpenUrlRequested: function(url) { root.openAttachment(url) }
-                    onTranslateRequested: function(msgId, text) { root.openTranslateDialog(msgId, text) }
-                    onForwardRequested: function(msgId) { root.forwardMessage(msgId) }
-                    onRevokeRequested: function(msgId) { root.revokeMessage(msgId) }
-                    onReplyRequested: function(msgId, senderName, previewText) { root.replyMessage(msgId, senderName, previewText) }
-                    onMentionRequested: function(mentionText) { composer.insertMention(mentionText) }
-                    onAvatarClicked: function(uid, name, icon) { root.avatarProfileRequested(uid, name, icon) }
-                    onEditRequested: function(msgId, text) {
-                        root._editMsgId = msgId
-                        root._editText = text
-                        editDialog.open()
-                    }
-                }
-            }
-
-            GlassSurface {
-                anchors.centerIn: parent
-                width: 210
-                height: 86
-                visible: messageList.count === 0
                 backdrop: root.backdrop !== null ? root.backdrop : root
-                cornerRadius: 10
-                blurRadius: 16
-                fillColor: Qt.rgba(1, 1, 1, 0.20)
-                strokeColor: Qt.rgba(1, 1, 1, 0.42)
-
-                Label {
-                    anchors.centerIn: parent
-                    text: root.hasCurrentChat
-                          ? "还没有消息，开始聊吧"
-                          : (root.dialogsReady ? "请选择一个会话" : "正在准备最近会话")
-                    color: "#6a7b92"
-                    font.pixelSize: 13
+                messageModel: root.messageModel
+                hasCurrentChat: root.hasCurrentChat
+                isGroupChat: root.isGroupChat
+                currentGroupRole: root.currentGroupRole
+                selfName: root.selfName
+                selfAvatar: root.selfAvatar
+                peerAvatar: root.peerAvatar
+                dialogsReady: root.dialogsReady
+                privateHistoryLoading: root.privateHistoryLoading
+                canLoadMorePrivateHistory: root.canLoadMorePrivateHistory
+                followTail: root._followTail
+                topLoadArmed: root._topLoadArmed
+                stickToBottom: root._stickToBottom
+                translationByMsgId: root.translationByMsgId
+                onScrollStateChanged: function(followTail, topLoadArmed, stickToBottom) {
+                    root._followTail = followTail
+                    root._topLoadArmed = topLoadArmed
+                    root._stickToBottom = stickToBottom
                 }
+                onLoadMoreHistoryRequested: root.requestLoadMoreHistory()
+                onOpenAttachment: function(url) { root.openAttachment(url) }
+                onTranslateRequested: function(msgId, text) { root.openTranslateDialog(msgId, text) }
+                onForwardMessage: function(msgId) { root.forwardMessage(msgId) }
+                onRevokeMessage: function(msgId) { root.revokeMessage(msgId) }
+                onReplyMessage: function(msgId, senderName, previewText) { root.replyMessage(msgId, senderName, previewText) }
+                onMentionRequested: function(mentionText) { composer.insertMention(mentionText) }
+                onEditRequested: function(msgId, text) { smartActionPopups.openEditDialog(msgId, text) }
+                onAvatarProfileRequested: function(uid, name, icon) { root.avatarProfileRequested(uid, name, icon) }
             }
 
-            Item {
-                id: summaryOverlay
+            ChatSmartActionPopups {
+                id: smartActionPopups
                 anchors.fill: parent
                 anchors.margins: 12
                 z: 4
-                visible: summaryCards.count > 0
-
-                Repeater {
-                    model: summaryCards
-
-                    delegate: GlassSurface {
-                        width: Math.min(summaryOverlay.width - 24, 420)
-                        height: Math.min(220, Math.max(124, summaryColumn.implicitHeight + 22))
-                        x: Math.max(0, summaryOverlay.width - width - (index % 2) * 26)
-                        y: 12 + index * 18
-                        backdrop: root.backdrop !== null ? root.backdrop : root
-                        cornerRadius: 12
-                        blurRadius: 18
-                        fillColor: Qt.rgba(1, 1, 1, 0.88)
-                        strokeColor: Qt.rgba(1, 1, 1, 0.62)
-
-                        ColumnLayout {
-                            id: summaryColumn
-                            anchors.fill: parent
-                            anchors.margins: 10
-                            spacing: 7
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 8
-
-                                Label {
-                                    Layout.fillWidth: true
-                                    text: summaryTitle
-                                    color: "#26364d"
-                                    font.pixelSize: 14
-                                    font.bold: true
-                                    elide: Text.ElideRight
-                                }
-
-                                ToolButton {
-                                    Layout.preferredWidth: 26
-                                    Layout.preferredHeight: 26
-                                    text: "x"
-                                    onClicked: summaryCards.remove(index)
-                                }
-                            }
-
-                            Text {
-                                Layout.fillWidth: true
-                                visible: summaryBusy || summaryContent.length === 0
-                                text: summaryStatus
-                                color: summaryBusy ? "#4f6788" : "#9b4b4b"
-                                font.pixelSize: 12
-                                wrapMode: Text.Wrap
-                            }
-
-                            ScrollView {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                visible: summaryContent.length > 0
-                                clip: true
-
-                                TextEdit {
-                                    width: parent.width
-                                    text: summaryContent
-                                    readOnly: true
-                                    selectByMouse: true
-                                    cursorVisible: false
-                                    wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-                                    textFormat: Text.PlainText
-                                    color: "#223047"
-                                    font.pixelSize: 13
-                                }
-                            }
-                        }
-                    }
+                backdrop: root.backdrop !== null ? root.backdrop : root
+                summaryModel: summaryCards
+                suggestionModel: suggestionModel
+                smartBusy: root.smartBusy
+                activeSmartAction: root.activeSmartAction
+                selectedSuggestionText: root.selectedSuggestionText
+                pendingTranslateText: root.pendingTranslateText
+                onSuggestionSelected: function(text) { root.selectedSuggestionText = text }
+                onSuggestedTextAccepted: function(text) { composer.applySuggestedText(text) }
+                onTranslateConfirmed: function(sourceLanguage, targetLanguage) {
+                    root.confirmTranslate(sourceLanguage, targetLanguage)
+                }
+                onEditConfirmed: function(msgId, text) {
+                    root.editMessage(msgId, text)
                 }
             }
         }
@@ -629,336 +457,4 @@ Rectangle {
         }
     }
 
-    Timer {
-        id: scrollToEndTimer
-        interval: 0
-        repeat: false
-        onTriggered: {
-            if (messageList.count > 0) {
-                messageList.positionViewAtEnd()
-                root._stickToBottom = true
-                root._followTail = true
-            }
-        }
-    }
-
-    Popup {
-        id: suggestionDialog
-        modal: false
-        focus: true
-        width: Math.min(root.width - 48, 460)
-        height: 260
-        anchors.centerIn: Overlay.overlay
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-        background: GlassSurface {
-            anchors.fill: parent
-            backdrop: root.backdrop !== null ? root.backdrop : root
-            cornerRadius: 12
-            blurRadius: 18
-            fillColor: Qt.rgba(1, 1, 1, 0.88)
-            strokeColor: Qt.rgba(1, 1, 1, 0.62)
-        }
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 12
-            spacing: 10
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-
-                Label {
-                    Layout.fillWidth: true
-                    text: "建议回复"
-                    color: "#26364d"
-                    font.pixelSize: 15
-                    font.bold: true
-                }
-
-                Label {
-                    text: root.smartBusy && root.activeSmartAction === "suggest" ? "生成中" : ""
-                    color: "#60718a"
-                    font.pixelSize: 12
-                }
-            }
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                spacing: 8
-
-                Repeater {
-                    model: suggestionModel
-
-                    delegate: Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 44
-                        radius: 8
-                        color: root.selectedSuggestionText === optionText
-                               ? Qt.rgba(0.35, 0.61, 0.90, 0.20)
-                               : optionMouse.containsMouse ? Qt.rgba(0.35, 0.61, 0.90, 0.12)
-                                                           : Qt.rgba(1, 1, 1, 0.30)
-                        border.color: root.selectedSuggestionText === optionText
-                                      ? Qt.rgba(0.35, 0.61, 0.90, 0.52)
-                                      : Qt.rgba(1, 1, 1, 0.42)
-
-                        Text {
-                            anchors.fill: parent
-                            anchors.margins: 10
-                            text: optionText
-                            color: "#223047"
-                            font.pixelSize: 13
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideRight
-                        }
-
-                        MouseArea {
-                            id: optionMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.selectedSuggestionText = optionText
-                        }
-                    }
-                }
-
-                Label {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    visible: suggestionModel.count === 0
-                    text: root.smartBusy ? "正在生成 3 条候选回复..." : "暂无建议"
-                    color: "#60718a"
-                    font.pixelSize: 13
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-                Item { Layout.fillWidth: true }
-
-                GlassButton {
-                    text: "取消"
-                    implicitWidth: 72
-                    implicitHeight: 32
-                    textPixelSize: 12
-                    cornerRadius: 8
-                    normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.22)
-                    onClicked: suggestionDialog.close()
-                }
-
-                GlassButton {
-                    text: "确定"
-                    implicitWidth: 72
-                    implicitHeight: 32
-                    textPixelSize: 12
-                    cornerRadius: 8
-                    enabled: root.selectedSuggestionText.length > 0
-                    normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
-                    hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
-                    pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
-                    disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                    onClicked: {
-                        composer.applySuggestedText(root.selectedSuggestionText)
-                        suggestionDialog.close()
-                    }
-                }
-            }
-        }
-    }
-
-    Popup {
-        id: translateDialog
-        modal: true
-        focus: true
-        width: Math.min(root.width - 48, 420)
-        height: 248
-        anchors.centerIn: Overlay.overlay
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-        background: GlassSurface {
-            anchors.fill: parent
-            backdrop: root.backdrop !== null ? root.backdrop : root
-            cornerRadius: 12
-            blurRadius: 18
-            fillColor: Qt.rgba(1, 1, 1, 0.88)
-            strokeColor: Qt.rgba(1, 1, 1, 0.62)
-        }
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 12
-            spacing: 10
-
-            Label {
-                Layout.fillWidth: true
-                text: "翻译消息"
-                color: "#26364d"
-                font.pixelSize: 15
-                font.bold: true
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
-
-                ComboBox {
-                    id: translateSourceBox
-                    Layout.fillWidth: true
-                    editable: true
-                    model: ["自动检测", "中文", "英语", "日语", "韩语", "法语", "德语"]
-                    currentIndex: 0
-                }
-
-                Label {
-                    text: "到"
-                    color: "#60718a"
-                    font.pixelSize: 13
-                }
-
-                ComboBox {
-                    id: translateTargetBox
-                    Layout.fillWidth: true
-                    editable: true
-                    model: ["英语", "中文", "日语", "韩语", "法语", "德语"]
-                    currentIndex: 1
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                radius: 8
-                color: Qt.rgba(1, 1, 1, 0.34)
-                border.color: Qt.rgba(1, 1, 1, 0.42)
-                clip: true
-
-                Text {
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    text: root.pendingTranslateText
-                    color: "#34445c"
-                    font.pixelSize: 12
-                    wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-                    elide: Text.ElideRight
-                    maximumLineCount: 3
-                }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-                Item { Layout.fillWidth: true }
-
-                GlassButton {
-                    text: "取消"
-                    implicitWidth: 72
-                    implicitHeight: 32
-                    textPixelSize: 12
-                    cornerRadius: 8
-                    normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.22)
-                    onClicked: translateDialog.close()
-                }
-
-                GlassButton {
-                    text: "翻译"
-                    implicitWidth: 72
-                    implicitHeight: 32
-                    textPixelSize: 12
-                    cornerRadius: 8
-                    enabled: !root.smartBusy && root.pendingTranslateText.length > 0
-                    normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
-                    hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
-                    pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
-                    disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                    onClicked: root.confirmTranslate()
-                }
-            }
-        }
-    }
-
-    Popup {
-        id: editDialog
-        modal: true
-        focus: true
-        width: Math.min(root.width - 40, 420)
-        height: 220
-        anchors.centerIn: Overlay.overlay
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        onOpened: editInput.text = root._editText
-
-        background: GlassSurface {
-            anchors.fill: parent
-            backdrop: root.backdrop !== null ? root.backdrop : root
-            cornerRadius: 12
-            blurRadius: 18
-            fillColor: Qt.rgba(1, 1, 1, 0.24)
-            strokeColor: Qt.rgba(1, 1, 1, 0.46)
-        }
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 12
-            spacing: 8
-
-            Label {
-                text: "编辑消息"
-                color: "#2a3649"
-                font.pixelSize: 15
-                font.bold: true
-            }
-
-            TextArea {
-                id: editInput
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                text: root._editText
-                wrapMode: Text.Wrap
-                color: "#253247"
-                selectionColor: "#7baee899"
-                selectedTextColor: "#ffffff"
-                background: Rectangle {
-                    radius: 8
-                    color: Qt.rgba(1, 1, 1, 0.30)
-                    border.color: Qt.rgba(1, 1, 1, 0.44)
-                }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-                Item { Layout.fillWidth: true }
-                GlassButton {
-                    text: "取消"
-                    implicitWidth: 72
-                    implicitHeight: 32
-                    cornerRadius: 8
-                    normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.24)
-                    hoverColor: Qt.rgba(0.54, 0.60, 0.68, 0.34)
-                    pressedColor: Qt.rgba(0.54, 0.60, 0.68, 0.42)
-                    disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                    onClicked: editDialog.close()
-                }
-                GlassButton {
-                    text: "保存"
-                    implicitWidth: 72
-                    implicitHeight: 32
-                    cornerRadius: 8
-                    normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
-                    hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
-                    pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
-                    disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                    enabled: editInput.text.trim().length > 0
-                    onClicked: {
-                        root.editMessage(root._editMsgId, editInput.text)
-                        editDialog.close()
-                    }
-                }
-            }
-        }
-    }
 }

@@ -14,7 +14,8 @@
 using namespace ::testing;
 using namespace memolog;
 
-LogConfig make_test_config() {
+LogConfig make_test_config()
+{
     LogConfig cfg;
     cfg.level = "debug";
     cfg.dir = "./logs";
@@ -148,13 +149,8 @@ TEST(JsonLoggerTest, LogError_Reachable)
 TEST(JsonLoggerTest, Log_AcceptsFieldsMap)
 {
     Logger::Init("fields-test", make_test_config());
-    std::map<std::string, std::string> fields = {
-        {"user_id", "123"},
-        {"action", "login"},
-        {"duration_ms", "42"}
-    };
-    ASSERT_NO_THROW(Logger::Log(spdlog::level::info, "login_action",
-                                "user logged in", fields));
+    std::map<std::string, std::string> fields = {{"user_id", "123"}, {"action", "login"}, {"duration_ms", "42"}};
+    ASSERT_NO_THROW(Logger::Log(spdlog::level::info, "login_action", "user logged in", fields));
     EXPECT_NO_THROW(Logger::Shutdown());
 }
 
@@ -167,19 +163,25 @@ TEST(JsonLoggerTest, ConcurrentLog_NoCrash)
     Logger::Get()->set_level(spdlog::level::info);
 
     std::vector<std::future<void>> futures;
-    for (int i = 0; i < 4; ++i) {
-        futures.emplace_back(std::async(std::launch::async, [i]() {
-            for (int j = 0; j < 100; ++j) {
-                std::map<std::string, std::string> f = {
-                    {"thread_id", std::to_string(i)},
-                    {"iter", std::to_string(j)}
-                };
-                Logger::Log(spdlog::level::info, "concurrent_event",
-                            "thread " + std::to_string(i) + " iter " + std::to_string(j), f);
-            }
-        }));
+    for (int i = 0; i < 4; ++i)
+    {
+        futures.emplace_back(
+            std::async(std::launch::async,
+                       [i]()
+                       {
+                           for (int j = 0; j < 100; ++j)
+                           {
+                               std::map<std::string, std::string> f = {{"thread_id", std::to_string(i)},
+                                                                       {"iter", std::to_string(j)}};
+                               Logger::Log(spdlog::level::info,
+                                           "concurrent_event",
+                                           "thread " + std::to_string(i) + " iter " + std::to_string(j),
+                                           f);
+                           }
+                       }));
     }
-    for (auto& f : futures) f.get();
+    for (auto& f : futures)
+        f.get();
 
     EXPECT_NO_THROW(Logger::Shutdown());
 }

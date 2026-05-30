@@ -2,7 +2,6 @@ import re
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLEANUP_SCRIPT = REPO_ROOT / "tools/scripts/status/cleanup-wsl-stale.ps1"
 
@@ -61,7 +60,7 @@ class WslCleanupContractTests(unittest.TestCase):
     def test_selection_is_limited_to_wsl_distro_project_and_age(self):
         source = read(CLEANUP_SCRIPT)
 
-        self.assertIn('Get-CimInstance Win32_Process -Filter "name=\'wsl.exe\'"', source)
+        self.assertIn("Get-CimInstance Win32_Process -Filter \"name='wsl.exe'\"", source)
         self.assertIn("$_.Name -ieq 'wsl.exe'", source)
         self.assertIn("Test-DistroMatch", source)
         self.assertIn("Test-ProjectMatch", source)

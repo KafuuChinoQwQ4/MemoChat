@@ -14,36 +14,45 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <sstream>
 
-namespace Http2AuthSupport {
+namespace Http2AuthSupport
+{
 
-bool ParseJsonBody(std::string_view body_sv, memochat::json::JsonValue& root) {
+bool ParseJsonBody(std::string_view body_sv, memochat::json::JsonValue& root)
+{
     std::string body_str(body_sv);
     return memochat::json::glaze_parse(root, body_str) && memochat::json::glaze_is_object(root);
 }
 
-memochat::json::JsonValue MakeError(int error_code, const std::string& message) {
+memochat::json::JsonValue MakeError(int error_code, const std::string& message)
+{
     memochat::json::JsonValue resp;
     resp["error"] = error_code;
-    if (!message.empty()) {
+    if (!message.empty())
+    {
         resp["message"] = message;
     }
     return resp;
 }
 
-memochat::json::JsonValue MakeOk(const memochat::json::JsonValue& data) {
+memochat::json::JsonValue MakeOk(const memochat::json::JsonValue& data)
+{
     memochat::json::JsonValue resp;
     resp["error"] = 0;
-    if (memochat::json::glaze_is_object(data) || memochat::json::glaze_is_array(data)) {
-        for (const auto& key : memochat::json::getMemberNames(data)) {
+    if (memochat::json::glaze_is_object(data) || memochat::json::glaze_is_array(data))
+    {
+        for (const auto& key : memochat::json::getMemberNames(data))
+        {
             resp[key] = data[key];
         }
     }
     return resp;
 }
 
-LoginResult HandleGetVarifyCode(const std::string& email) {
+LoginResult HandleGetVarifyCode(const std::string& email)
+{
     LoginResult result;
-    if (email.empty()) {
+    if (email.empty())
+    {
         result.error = 1;
         result.message = "email is required";
         return result;
@@ -53,15 +62,17 @@ LoginResult HandleGetVarifyCode(const std::string& email) {
     result.message = rsp.error() == 0 ? "verification code sent" : "verification code failed";
     result.data["email"] = email;
     memolog::LogInfo("http2.get_varifycode",
-        "verify code requested via HTTP2 handler",
-        {{"email", email}, {"error_code", std::to_string(rsp.error())}});
+                     "verify code requested via HTTP2 handler",
+                     {{"email", email}, {"error_code", std::to_string(rsp.error())}});
     return result;
 }
 
-LoginResult HandleUserRegister(const memochat::json::JsonValue& req) {
+LoginResult HandleUserRegister(const memochat::json::JsonValue& req)
+{
     LoginResult result;
     if (!memochat::json::glaze_has_key(req, "email") || !memochat::json::glaze_has_key(req, "user") ||
-        !memochat::json::glaze_has_key(req, "passwd") || !memochat::json::glaze_has_key(req, "confirm")) {
+        !memochat::json::glaze_has_key(req, "passwd") || !memochat::json::glaze_has_key(req, "confirm"))
+    {
         result.error = 1;
         result.message = "missing required fields";
         return result;
@@ -73,26 +84,30 @@ LoginResult HandleUserRegister(const memochat::json::JsonValue& req) {
     const auto confirm = memochat::json::glaze_safe_get<std::string>(req, "confirm", "");
     const auto icon = memochat::json::glaze_safe_get<std::string>(req, "icon", "");
 
-    if (pwd != confirm) {
+    if (pwd != confirm)
+    {
         result.error = 1001;
         result.message = "password mismatch";
         return result;
     }
 
     std::string varify_code;
-    if (!RedisMgr::GetInstance()->Get(CODEPREFIX + email, varify_code)) {
+    if (!RedisMgr::GetInstance()->Get(CODEPREFIX + email, varify_code))
+    {
         result.error = 1002;
         result.message = "verification code expired";
         return result;
     }
-    if (varify_code != memochat::json::glaze_safe_get<std::string>(req, "varifycode", "")) {
+    if (varify_code != memochat::json::glaze_safe_get<std::string>(req, "varifycode", ""))
+    {
         result.error = 1003;
         result.message = "verification code mismatch";
         return result;
     }
 
     const int uid = PostgresMgr::GetInstance()->RegUser(name, email, pwd, icon);
-    if (uid <= 0) {
+    if (uid <= 0)
+    {
         result.error = ErrorCodes::UserExist;
         result.message = "user or email already exists";
         return result;
@@ -116,18 +131,26 @@ LoginResult HandleUserRegister(const memochat::json::JsonValue& req) {
     cached_user.sex = memochat::json::glaze_safe_get<int>(req, "sex", 0);
     gateauthsupport::CacheLoginProfile(email, cached_user);
     GateAsyncSideEffects::Instance().PublishUserProfileChanged(
-        uid, memochat::json::glaze_safe_get<std::string>(result.data, "user_id", ""), email, name, name, icon, cached_user.sex);
+        uid,
+        memochat::json::glaze_safe_get<std::string>(result.data, "user_id", ""),
+        email,
+        name,
+        name,
+        icon,
+        cached_user.sex);
 
     memolog::LogInfo("http2.user_register",
-        "user registered via HTTP2 handler",
-        {{"email", email}, {"uid", std::to_string(uid)}});
+                     "user registered via HTTP2 handler",
+                     {{"email", email}, {"uid", std::to_string(uid)}});
     return result;
 }
 
-LoginResult HandleResetPwd(const memochat::json::JsonValue& req) {
+LoginResult HandleResetPwd(const memochat::json::JsonValue& req)
+{
     LoginResult result;
     if (!memochat::json::glaze_has_key(req, "email") || !memochat::json::glaze_has_key(req, "user") ||
-        !memochat::json::glaze_has_key(req, "passwd") || !memochat::json::glaze_has_key(req, "varifycode")) {
+        !memochat::json::glaze_has_key(req, "passwd") || !memochat::json::glaze_has_key(req, "varifycode"))
+    {
         result.error = 1;
         result.message = "missing required fields";
         return result;
@@ -139,23 +162,27 @@ LoginResult HandleResetPwd(const memochat::json::JsonValue& req) {
     const auto varify_code = memochat::json::glaze_safe_get<std::string>(req, "varifycode", "");
 
     std::string stored_code;
-    if (!RedisMgr::GetInstance()->Get(CODEPREFIX + email, stored_code)) {
+    if (!RedisMgr::GetInstance()->Get(CODEPREFIX + email, stored_code))
+    {
         result.error = 1002;
         result.message = "verification code expired";
         return result;
     }
-    if (stored_code != varify_code) {
+    if (stored_code != varify_code)
+    {
         result.error = 1003;
         result.message = "verification code mismatch";
         return result;
     }
 
-    if (!PostgresMgr::GetInstance()->CheckEmail(name, email)) {
+    if (!PostgresMgr::GetInstance()->CheckEmail(name, email))
+    {
         result.error = ErrorCodes::EmailNotMatch;
         result.message = "user email mismatch";
         return result;
     }
-    if (!PostgresMgr::GetInstance()->UpdatePwd(name, pwd)) {
+    if (!PostgresMgr::GetInstance()->UpdatePwd(name, pwd))
+    {
         result.error = ErrorCodes::PasswdUpFailed;
         result.message = "password update failed";
         return result;
@@ -166,14 +193,15 @@ LoginResult HandleResetPwd(const memochat::json::JsonValue& req) {
     result.error = ErrorCodes::Success;
     result.data["email"] = email;
     result.data["user"] = name;
-    memolog::LogInfo("http2.reset_pwd", "password reset via HTTP2 handler",
-        {{"email", email}});
+    memolog::LogInfo("http2.reset_pwd", "password reset via HTTP2 handler", {{"email", email}});
     return result;
 }
 
-LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
+LoginResult HandleUserLogin(const memochat::json::JsonValue& req)
+{
     LoginResult result;
-    if (!memochat::json::glaze_has_key(req, "email") || !memochat::json::glaze_has_key(req, "passwd")) {
+    if (!memochat::json::glaze_has_key(req, "email") || !memochat::json::glaze_has_key(req, "passwd"))
+    {
         result.error = 1;
         result.message = "missing email or password";
         return result;
@@ -186,7 +214,8 @@ LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
     result.data["min_version"] = gateauthsupport::MinClientVersion();
     result.data["feature_group_chat"] = true;
 
-    if (!gateauthsupport::IsClientVersionAllowed(client_ver, gateauthsupport::MinClientVersion())) {
+    if (!gateauthsupport::IsClientVersionAllowed(client_ver, gateauthsupport::MinClientVersion()))
+    {
         result.error = ErrorCodes::ClientVersionTooLow;
         result.message = "client version too low";
         return result;
@@ -196,12 +225,15 @@ LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
     gateauthsupport::UserInfo userInfo;
     bool login_cache_hit = gateauthsupport::TryLoadCachedLoginProfile(email, pwd, userInfo);
     bool pwd_valid = login_cache_hit;
-    if (login_cache_hit) {
+    if (login_cache_hit)
+    {
         gateauthsupport::RefreshLoginProfileFromDb(email, userInfo);
     }
-    if (!pwd_valid) {
+    if (!pwd_valid)
+    {
         pwd_valid = PostgresMgr::GetInstance()->CheckPwd(email, pwd, dbUserInfo);
-        if (pwd_valid) {
+        if (pwd_valid)
+        {
             userInfo.uid = dbUserInfo.uid;
             userInfo.name = dbUserInfo.name;
             userInfo.email = dbUserInfo.email;
@@ -214,7 +246,8 @@ LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
             gateauthsupport::CacheLoginProfile(email, userInfo);
         }
     }
-    if (!pwd_valid) {
+    if (!pwd_valid)
+    {
         result.error = ErrorCodes::PasswdInvalid;
         result.message = "password invalid";
         return result;
@@ -224,15 +257,21 @@ LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
     std::string status_route_detail;
     std::string http_token;
     auto route_nodes = gateauthsupport::SelectChatRouteForLogin(userInfo.uid,
-        nullptr, nullptr, &route_source, &status_route_detail, &http_token);
-    if (route_nodes.empty()) {
+                                                                nullptr,
+                                                                nullptr,
+                                                                &route_source,
+                                                                &status_route_detail,
+                                                                &http_token);
+    if (route_nodes.empty())
+    {
         result.error = ErrorCodes::RPCFailed;
         result.message = "no chat server available";
         return result;
     }
 
     const std::string token_key = USERTOKENPREFIX + std::to_string(userInfo.uid);
-    if (http_token.empty() && (!RedisMgr::GetInstance()->Get(token_key, http_token) || http_token.empty())) {
+    if (http_token.empty() && (!RedisMgr::GetInstance()->Get(token_key, http_token) || http_token.empty()))
+    {
         http_token = boost::uuids::to_string(boost::uuids::random_generator()());
         RedisMgr::GetInstance()->Set(token_key, http_token);
     }
@@ -249,12 +288,11 @@ LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
     claims.target_server = route_nodes.front().name;
     claims.protocol_version = gateauthsupport::LoginProtocolVersion();
     claims.issued_at_ms = gateauthsupport::NowMs();
-    claims.expire_at_ms = claims.issued_at_ms +
-        static_cast<int64_t>(gateauthsupport::GetChatTicketTtlSec()) * 1000;
-    const std::string login_ticket = memochat::auth::EncodeTicket(
-        claims, gateauthsupport::GetChatAuthSecret());
+    claims.expire_at_ms = claims.issued_at_ms + static_cast<int64_t>(gateauthsupport::GetChatTicketTtlSec()) * 1000;
+    const std::string login_ticket = memochat::auth::EncodeTicket(claims, gateauthsupport::GetChatAuthSecret());
 
-    if (login_ticket.empty()) {
+    if (login_ticket.empty())
+    {
         result.error = ErrorCodes::RPCFailed;
         result.message = "failed to issue login ticket";
         return result;
@@ -263,8 +301,7 @@ LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
     result.error = ErrorCodes::Success;
     result.data["protocol_version"] = gateauthsupport::LoginProtocolVersion();
     result.data["preferred_transport"] =
-        (!route_nodes.front().quic_host.empty() && !route_nodes.front().quic_port.empty())
-        ? "quic" : "tcp";
+        (!route_nodes.front().quic_host.empty() && !route_nodes.front().quic_port.empty()) ? "quic" : "tcp";
     result.data["fallback_transport"] = "tcp";
     result.data["email"] = email;
     result.data["uid"] = userInfo.uid;
@@ -291,8 +328,10 @@ LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
     result.data["user_profile"] = user_profile;
 
     memochat::json::JsonValue chat_endpoints(memochat::json::array_t{});
-    for (const auto& route_node : route_nodes) {
-        if (!route_node.quic_host.empty() && !route_node.quic_port.empty()) {
+    for (const auto& route_node : route_nodes)
+    {
+        if (!route_node.quic_host.empty() && !route_node.quic_port.empty())
+        {
             memochat::json::JsonValue quic_ep;
             quic_ep["transport"] = "quic";
             quic_ep["host"] = route_node.quic_host;
@@ -312,33 +351,43 @@ LoginResult HandleUserLogin(const memochat::json::JsonValue& req) {
     result.data["chat_endpoints"] = chat_endpoints;
 
     GateAsyncSideEffects::Instance().PublishAuditLogin(userInfo.uid,
-        userInfo.user_id, email, route_nodes.front().name,
-        route_nodes.front().host, route_nodes.front().port, login_cache_hit);
+                                                       userInfo.user_id,
+                                                       email,
+                                                       route_nodes.front().name,
+                                                       route_nodes.front().host,
+                                                       route_nodes.front().port,
+                                                       login_cache_hit);
 
-    memolog::LogInfo("http2.user_login", "user login via HTTP2 handler",
-        {{"uid", std::to_string(userInfo.uid)}, {"email", email},
-         {"route", "/user_login"}, {"route_source", route_source},
-         {"status_route_detail", status_route_detail}, {"login_cache_hit", login_cache_hit ? "true" : "false"}});
+    memolog::LogInfo("http2.user_login",
+                     "user login via HTTP2 handler",
+                     {{"uid", std::to_string(userInfo.uid)},
+                      {"email", email},
+                      {"route", "/user_login"},
+                      {"route_source", route_source},
+                      {"status_route_detail", status_route_detail},
+                      {"login_cache_hit", login_cache_hit ? "true" : "false"}});
     return result;
 }
 
-LoginResult HandleUserLogout(int uid, const std::string& token) {
+LoginResult HandleUserLogout(int uid, const std::string& token)
+{
     LoginResult result;
-    if (uid <= 0 || token.empty()) {
+    if (uid <= 0 || token.empty())
+    {
         result.error = ErrorCodes::TokenInvalid;
         result.message = "invalid token";
         return result;
     }
     const std::string token_key = USERTOKENPREFIX + std::to_string(uid);
     std::string stored_token;
-    if (RedisMgr::GetInstance()->Get(token_key, stored_token) && stored_token == token) {
+    if (RedisMgr::GetInstance()->Get(token_key, stored_token) && stored_token == token)
+    {
         RedisMgr::GetInstance()->Del(token_key);
     }
     result.error = ErrorCodes::Success;
     result.message = "logout success";
-    memolog::LogInfo("http2.user_logout", "user logout via HTTP2 handler",
-        {{"uid", std::to_string(uid)}});
+    memolog::LogInfo("http2.user_logout", "user logout via HTTP2 handler", {{"uid", std::to_string(uid)}});
     return result;
 }
 
-}  // namespace Http2AuthSupport
+} // namespace Http2AuthSupport

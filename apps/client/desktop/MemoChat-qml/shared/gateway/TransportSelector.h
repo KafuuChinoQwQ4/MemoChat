@@ -12,7 +12,7 @@ class TransportSelector : public IChatTransport
 {
     Q_OBJECT
 public:
-    explicit TransportSelector(QObject *parent = nullptr);
+    explicit TransportSelector(QObject* parent = nullptr);
     ~TransportSelector() override = default;
 
     void CloseConnection() override;
@@ -23,14 +23,11 @@ public:
     std::shared_ptr<ChatMessageDispatcher> dispatcher() const;
 
 private:
-    void bindTransport(const std::shared_ptr<IChatTransport> &transport);
-    void handleTransportConnectResult(const std::shared_ptr<IChatTransport> &transport, bool success);
-    void handleTransportClosed(const std::shared_ptr<IChatTransport> &transport);
-    ChatEndpoint resolveEndpoint(ChatTransportKind kind) const;
-    bool tryActivateTransport(ChatTransportKind kind);
-    bool tryActivateEndpoint(const ChatEndpoint &endpoint);
+    void bindTransport(const std::shared_ptr<IChatTransport>& transport);
+    void handleTransportConnectResult(const std::shared_ptr<IChatTransport>& transport, bool success);
+    void handleTransportClosed(const std::shared_ptr<IChatTransport>& transport);
+    bool tryActivateEndpoint(const ChatEndpoint& endpoint);
     bool tryNextEndpoint();
-    QVector<ChatEndpoint> buildCandidateEndpoints(const ServerInfo &serverInfo) const;
     std::shared_ptr<IChatTransport> transportForKind(ChatTransportKind kind) const;
 
     ServerInfo _pending_server_info;

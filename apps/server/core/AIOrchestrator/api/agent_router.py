@@ -1,8 +1,8 @@
 """
 AI Harness 管理 API
 """
-from fastapi import APIRouter, HTTPException
 
+from fastapi import APIRouter, HTTPException
 from harness import HarnessContainer
 from harness.layers import list_harness_layers
 from observability.langsmith_instrument import set_run_error, set_run_output, trace_context
@@ -19,19 +19,12 @@ from schemas.api import (
     AgentFlowRsp,
     AgentFlowRunReq,
     AgentFlowRunRsp,
-    AgentMessageModel,
-    GameActionReq,
-    GameAgentAddReq,
-    GameRoomAutoTickReq,
-    GameRoomFromTemplateReq,
-    GameRoomCreateReq,
-    GameRoomJoinReq,
-    GameRoomRsp,
-    GameParticipantUpdateReq,
-    GameTemplatePresetCloneReq,
-    GameTemplateSaveReq,
     AgentLayerInfo,
     AgentLayerListRsp,
+    AgentMessageModel,
+    AgentRunGraphRsp,
+    AgentRunReq,
+    AgentRunRsp,
     AgentSpecListRsp,
     AgentSpecModel,
     AgentSpecRsp,
@@ -39,12 +32,19 @@ from schemas.api import (
     AgentTaskListRsp,
     AgentTaskModel,
     AgentTaskRsp,
-    AgentRunGraphRsp,
-    AgentRunReq,
-    AgentRunRsp,
     AgentTraceRsp,
     FeedbackReq,
     FeedbackRsp,
+    GameActionReq,
+    GameAgentAddReq,
+    GameParticipantUpdateReq,
+    GameRoomAutoTickReq,
+    GameRoomCreateReq,
+    GameRoomFromTemplateReq,
+    GameRoomJoinReq,
+    GameRoomRsp,
+    GameTemplatePresetCloneReq,
+    GameTemplateSaveReq,
     MemoryCreateReq,
     MemoryDeleteReq,
     MemoryItemModel,
@@ -247,10 +247,7 @@ async def list_remote_agents():
     return RemoteAgentListRsp(
         code=0,
         message="ok",
-        agents=[
-            RemoteAgentModel(**agent.to_dict())
-            for agent in container.interop_service.list_remote_agents()
-        ],
+        agents=[RemoteAgentModel(**agent.to_dict()) for agent in container.interop_service.list_remote_agents()],
     )
 
 
@@ -458,7 +455,9 @@ async def delete_game_template(template_id: str, uid: int):
 async def create_game_room_from_template(template_id: str, req: GameRoomFromTemplateReq):
     container = HarnessContainer.get_instance()
     try:
-        state = await container.game_service.create_room_from_template(template_id, req.uid, req.title, req.display_name)
+        state = await container.game_service.create_room_from_template(
+            template_id, req.uid, req.title, req.display_name
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return GameRoomRsp(
@@ -630,10 +629,7 @@ async def list_tools():
     container = HarnessContainer.get_instance()
     return ToolListRsp(
         code=0,
-        tools=[
-            ToolInfo(**tool)
-            for tool in container.tool_executor.list_tools()
-        ],
+        tools=[ToolInfo(**tool) for tool in container.tool_executor.list_tools()],
     )
 
 
