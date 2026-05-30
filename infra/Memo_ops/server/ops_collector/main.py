@@ -11,7 +11,6 @@ from Memo_ops.server.ops_common.ingest import import_logs, import_reports, rebui
 from Memo_ops.server.ops_common.monitoring import collect_snapshots
 from Memo_ops.server.ops_common.schema import init_schema
 
-
 DEFAULT_CONFIG = Path(__file__).resolve().parents[2] / "config" / "opscollector.yaml"
 
 CPU_GAUGE = Gauge("memo_ops_service_cpu_percent", "Service CPU usage", ["service", "instance"])

@@ -1,6 +1,7 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick 2.15
 import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
 import "../../components"
 
 Item {
@@ -167,116 +168,32 @@ Item {
         anchors.topMargin: root.timeDividerHeight + root.topSpacing
         height: root.messageHeight
 
-        Item {
-            id: leftSlot
+        MessageAvatar {
             anchors.left: parent.left
             width: root.avatarSlotWidth
             height: parent.height
-
-            Rectangle {
-                width: root.avatarSize
-                height: root.avatarSize
-                radius: width / 2
-                clip: true
-                anchors.left: parent.left
-                anchors.bottom: parent.bottom
-                visible: !root.outgoing && root.showAvatar
-                color: Qt.rgba(0.73, 0.82, 0.92, 0.50)
-                border.color: Qt.rgba(1, 1, 1, 0.56)
-
-                Image {
-                    id: leftAvatarFallbackImage
-                    anchors.fill: parent
-                    anchors.margins: Math.max(4, Math.round(root.avatarSize * 0.18))
-                    source: "qrc:/icons/user.png"
-                    fillMode: Image.PreserveAspectFit
-                    cache: true
-                    mipmap: true
-                    opacity: leftAvatarImage.status === Image.Ready ? 0.0 : 0.78
-                    Behavior on opacity { NumberAnimation { duration: 160 } }
-                }
-
-                Image {
-                    id: leftAvatarImage
-                    anchors.fill: parent
-                    property string baseSource: root.avatarSource.length > 0 ? root.avatarSource : root.defaultAvatarSource
-                    property bool loadFailed: false
-                    source: loadFailed ? root.defaultAvatarSource : baseSource
-                    fillMode: Image.PreserveAspectCrop
-                    cache: true
-                    asynchronous: true
-                    opacity: (status === Image.Ready) ? 1.0 : 0.0
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
-                    onBaseSourceChanged: loadFailed = false
-                    onStatusChanged: {
-                        if (status === Image.Error) {
-                            loadFailed = true
-                        }
-                    }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.avatarClicked(root.senderUid, root.senderName, root.avatarSource)
-                }
-            }
+            visible: !root.outgoing && root.showAvatar
+            alignRight: false
+            avatarSize: root.avatarSize
+            avatarSource: root.avatarSource
+            defaultAvatarSource: root.defaultAvatarSource
+            senderUid: root.senderUid
+            senderName: root.senderName
+            onAvatarClicked: function(uid, name, icon) { root.avatarClicked(uid, name, icon) }
         }
 
-        Item {
-            id: rightSlot
+        MessageAvatar {
             anchors.right: parent.right
             width: root.avatarSlotWidth
             height: parent.height
-
-            Rectangle {
-                width: root.avatarSize
-                height: root.avatarSize
-                radius: width / 2
-                clip: true
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                visible: root.outgoing && root.showAvatar
-                color: Qt.rgba(0.73, 0.82, 0.92, 0.50)
-                border.color: Qt.rgba(1, 1, 1, 0.56)
-
-                Image {
-                    id: rightAvatarFallbackImage
-                    anchors.fill: parent
-                    anchors.margins: Math.max(4, Math.round(root.avatarSize * 0.18))
-                    source: "qrc:/icons/user.png"
-                    fillMode: Image.PreserveAspectFit
-                    cache: true
-                    mipmap: true
-                    opacity: rightAvatarImage.status === Image.Ready ? 0.0 : 0.78
-                    Behavior on opacity { NumberAnimation { duration: 160 } }
-                }
-
-                Image {
-                    id: rightAvatarImage
-                    anchors.fill: parent
-                    property string baseSource: root.avatarSource.length > 0 ? root.avatarSource : root.defaultAvatarSource
-                    property bool loadFailed: false
-                    source: loadFailed ? root.defaultAvatarSource : baseSource
-                    fillMode: Image.PreserveAspectCrop
-                    cache: true
-                    asynchronous: true
-                    opacity: (status === Image.Ready) ? 1.0 : 0.0
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
-                    onBaseSourceChanged: loadFailed = false
-                    onStatusChanged: {
-                        if (status === Image.Error) {
-                            loadFailed = true
-                        }
-                    }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.avatarClicked(root.senderUid, root.senderName, root.avatarSource)
-                }
-            }
+            visible: root.outgoing && root.showAvatar
+            alignRight: true
+            avatarSize: root.avatarSize
+            avatarSource: root.avatarSource
+            defaultAvatarSource: root.defaultAvatarSource
+            senderUid: root.senderUid
+            senderName: root.senderName
+            onAvatarClicked: function(uid, name, icon) { root.avatarClicked(uid, name, icon) }
         }
     }
 
@@ -469,126 +386,29 @@ Item {
 
     Component {
         id: textComp
-        Text {
-            text: root.content
-            width: Math.min(root.bubbleContentMaxWidth, implicitWidth)
-            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-            color: "#213045"
-            font.pixelSize: 14
+        ChatMessageTextBody {
+            messageText: root.content
+            maxWidth: root.bubbleContentMaxWidth
         }
     }
 
     Component {
         id: imageComp
-        Item {
-            function targetSize() {
-                const srcWidth = img.status === Image.Ready ? Math.max(1, img.implicitWidth) : 180
-                const srcHeight = img.status === Image.Ready ? Math.max(1, img.implicitHeight) : 132
-                const downScale = Math.min(root.imageContentMaxWidth / srcWidth,
-                                           root.imageContentMaxHeight / srcHeight,
-                                           1.0)
-                let width = srcWidth * downScale
-                let height = srcHeight * downScale
-                if (img.status === Image.Ready && width < 96 && height < 96) {
-                    const upScale = Math.min(root.imageContentMaxWidth / srcWidth,
-                                             root.imageContentMaxHeight / srcHeight,
-                                             96 / Math.max(width, height))
-                    width = srcWidth * upScale
-                    height = srcHeight * upScale
-                }
-                return Qt.size(Math.round(width), Math.round(height))
-            }
-
-            readonly property size fittedSize: targetSize()
-            implicitWidth: fittedSize.width
-            implicitHeight: fittedSize.height
-
-            Rectangle {
-                anchors.fill: parent
-                radius: 8
-                color: Qt.rgba(0.88, 0.93, 0.98, 0.42)
-                border.color: Qt.rgba(0.44, 0.61, 0.82, 0.20)
-            }
-
-            Image {
-                id: img
-                anchors.fill: parent
-                anchors.margins: img.status === Image.Error ? 12 : 0
-                fillMode: Image.PreserveAspectFit
-                source: root.content
-            }
-
-            Text {
-                anchors.centerIn: parent
-                visible: img.status === Image.Loading
-                text: "图片加载中..."
-                color: "#5f728b"
-                font.pixelSize: 12
-            }
-
-            Text {
-                anchors.centerIn: parent
-                visible: img.status === Image.Error
-                text: "图片加载失败"
-                color: "#6c7d92"
-                font.pixelSize: 12
-            }
+        ChatMessageImageBody {
+            imageSource: root.content
+            maxWidth: root.imageContentMaxWidth
+            maxHeight: root.imageContentMaxHeight
         }
     }
 
     Component {
         id: fileComp
-        Rectangle {
-            id: fileItem
-            property bool hovering: fileArea.containsMouse
-            property bool pressed: fileArea.pressed
+        ChatMessageFileBody {
+            fileName: root.fileName
+            maxWidth: root.bubbleContentMaxWidth
             width: implicitWidth
             height: implicitHeight
-            color: fileItem.pressed ? Qt.rgba(0.35, 0.61, 0.90, 0.20)
-                                    : fileItem.hovering ? Qt.rgba(0.35, 0.61, 0.90, 0.12)
-                                                        : "transparent"
-            implicitWidth: Math.min(root.bubbleContentMaxWidth, fileText.implicitWidth + 34)
-            implicitHeight: fileText.implicitHeight + 8
-            radius: 6
-            scale: fileItem.pressed ? 0.96 : (fileItem.hovering ? 1.02 : 1.0)
-
-            Behavior on color {
-                ColorAnimation {
-                    duration: 110
-                    easing.type: Easing.OutQuad
-                }
-            }
-            Behavior on scale {
-                NumberAnimation {
-                    duration: 110
-                    easing.type: Easing.OutQuad
-                }
-            }
-
-            Text {
-                id: fileText
-                anchors.verticalCenter: parent.verticalCenter
-                text: "[FILE] " + (root.fileName.length > 0 ? root.fileName : "文件")
-                color: fileItem.pressed ? "#2d5f96" : (fileItem.hovering ? "#366ea9" : "#233247")
-                font.pixelSize: 14
-                font.underline: fileItem.hovering
-                wrapMode: Text.Wrap
-
-                Behavior on color {
-                    ColorAnimation {
-                        duration: 110
-                        easing.type: Easing.OutQuad
-                    }
-                }
-            }
-
-            MouseArea {
-                id: fileArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.openUrlRequested(root.content)
-            }
+            onOpenRequested: root.openUrlRequested(root.content)
         }
     }
 

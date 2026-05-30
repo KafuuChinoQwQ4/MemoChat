@@ -3,9 +3,11 @@
 #include <functional>
 #include <string>
 
-namespace memolog {
+namespace memolog
+{
 
-struct TelemetryConfig {
+struct TelemetryConfig
+{
     bool enabled = false;
     std::string otlp_endpoint = "http://127.0.0.1:9411/api/v2/spans";
     std::string protocol = "zipkin-json";
@@ -16,8 +18,7 @@ struct TelemetryConfig {
     std::string service_name;
     std::string service_namespace = "memochat";
 
-    static TelemetryConfig FromGetter(
-        const std::function<std::string(const std::string&, const std::string&)>& getter);
+    static TelemetryConfig FromGetter(const std::function<std::string(const std::string&, const std::string&)>& getter);
 };
 
 } // namespace memolog

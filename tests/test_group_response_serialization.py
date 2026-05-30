@@ -1,14 +1,16 @@
-﻿import unittest
+import unittest
 from pathlib import Path
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GROUP_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/GroupMessageService.cpp"
 PRIVATE_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/PrivateMessageService.cpp"
-CHAT_MESSAGE_DISPATCHER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/network/ChatMessageDispatcher.cpp"
+CHAT_MESSAGE_DISPATCHER_GROUP = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/network/ChatMessageDispatcherGroup.cpp"
+)
 CHAT_MESSAGE_MODEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/ChatMessageModel.cpp"
+CHAT_MESSAGE_MODEL_CONTENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/ChatMessageModelContent.cpp"
 ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/shared/utils/IconPathUtils.h"
-APP_CONTROLLER_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerSelection.cpp"
+APP_CONTROLLER_GROUP_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerGroupSelection.cpp"
 APP_CONTROLLER_PRIVATE_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerPrivateEvents.cpp"
 APP_CONTROLLER_DIALOG_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerDialogState.cpp"
 CONVERSATION_SYNC_SERVICE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/ConversationSyncService.cpp"
@@ -25,7 +27,7 @@ def extract_function(source: str, signature: str) -> str:
         elif char == "}":
             depth -= 1
             if depth == 0:
-                return source[start:index + 1]
+                return source[start : index + 1]
     raise AssertionError(f"Function body not found for {signature}")
 
 
@@ -35,7 +37,7 @@ class GroupResponseSerializationTests(unittest.TestCase):
 
         self.assertNotIn("session->Send(rtvalue.and_then", source)
         self.assertNotIn(
-            "session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or(\"{}\")",
+            'session->Send(rtvalue.and_then([](auto&& v){ return glz::write_json(v); }).value_or("{}")',
             source,
         )
         self.assertIn("JsonToWireString(rtvalue)", source)
@@ -83,7 +85,7 @@ class GroupResponseSerializationTests(unittest.TestCase):
         self.assertNotIn("session->Send(rtvalue.and_then", handler)
 
     def test_group_list_is_stored_before_group_response_signal(self):
-        source = CHAT_MESSAGE_DISPATCHER.read_text(encoding="utf-8")
+        source = CHAT_MESSAGE_DISPATCHER_GROUP.read_text(encoding="utf-8")
 
         create_start = source.index("_handlers.insert(ID_CREATE_GROUP_RSP")
         create_end = source.index("_handlers.insert(ID_GET_GROUP_LIST_RSP", create_start)
@@ -98,7 +100,7 @@ class GroupResponseSerializationTests(unittest.TestCase):
         )
 
     def test_group_dialog_uid_mapping_uses_shared_resolver(self):
-        controller = APP_CONTROLLER_SELECTION.read_text(encoding="utf-8")
+        controller = APP_CONTROLLER_GROUP_SELECTION.read_text(encoding="utf-8")
         private_events = APP_CONTROLLER_PRIVATE_EVENTS.read_text(encoding="utf-8")
         state = APP_CONTROLLER_DIALOG_STATE.read_text(encoding="utf-8")
         sync = CONVERSATION_SYNC_SERVICE.read_text(encoding="utf-8")
@@ -108,17 +110,20 @@ class GroupResponseSerializationTests(unittest.TestCase):
         self.assertNotIn("-static_cast<int>(group->_group_id)", controller)
         self.assertNotIn("-static_cast<int>(groupId)", private_events)
         self.assertNotIn("-static_cast<int>(_current_group_id)", state)
-        self.assertIn("ConversationSyncService::makeGroupDialogUid(_current_group_id)", state)
+        self.assertIn("ConversationSyncService::makeGroupDialogUid(_group_state.currentId)", state)
 
     def test_group_message_sender_icons_are_normalized_before_qml(self):
-        source = CHAT_MESSAGE_MODEL.read_text(encoding="utf-8")
+        source = CHAT_MESSAGE_MODEL_CONTENT.read_text(encoding="utf-8")
 
         self.assertIn('#include "IconPathUtils.h"', source)
-        self.assertIn("QString ChatMessageModel::normalizeSenderIcon(const QString &icon) const", source)
+        self.assertRegex(
+            source,
+            r"QString\s+ChatMessageModel::normalizeSenderIcon\s*\(\s*const\s+QString\s*&\s*icon\s*\)\s*const",
+        )
 
         normalizer = extract_function(
             source,
-            "QString ChatMessageModel::normalizeSenderIcon(const QString &icon) const",
+            "QString ChatMessageModel::normalizeSenderIcon",
         )
         self.assertIn("const QString trimmed = icon.trimmed();", normalizer)
         self.assertIn("if (trimmed.isEmpty())", normalizer)

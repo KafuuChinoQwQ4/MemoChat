@@ -7,7 +7,6 @@ from Memo_ops.server.ops_common.config import load_yaml_config
 from Memo_ops.server.ops_common.schema import init_schema
 from Memo_ops.server.ops_common.storage import postgres_conn
 
-
 DEFAULT_CONFIG = Path(__file__).resolve().parents[2] / "config" / "opsserver.yaml"
 
 

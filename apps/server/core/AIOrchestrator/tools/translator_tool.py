@@ -1,6 +1,7 @@
 """
 翻译工具 — 使用 LLM 进行翻译
 """
+
 import structlog
 from langchain_core.tools import tool
 from llm import LLMManager, LLMMessage
@@ -27,9 +28,15 @@ class TranslatorTool:
             return "待翻译文本为空。"
 
         lang_map = {
-            "en": "English", "zh": "中文", "ja": "日语",
-            "ko": "韩语", "fr": "法语", "de": "德语",
-            "es": "西班牙语", "ru": "俄语", "auto": "自动",
+            "en": "English",
+            "zh": "中文",
+            "ja": "日语",
+            "ko": "韩语",
+            "fr": "法语",
+            "de": "德语",
+            "es": "西班牙语",
+            "ru": "俄语",
+            "auto": "自动",
         }
 
         lang_name = lang_map.get(target_lang.lower(), target_lang)

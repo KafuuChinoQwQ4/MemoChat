@@ -2,7 +2,8 @@
 
 #include <grpcpp/grpcpp.h>
 
-namespace memolog {
+namespace memolog
+{
 
 void InjectGrpcTraceMetadata(grpc::ClientContext& context);
 void BindGrpcTraceContext(grpc::ServerContext* context);

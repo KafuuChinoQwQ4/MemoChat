@@ -6,10 +6,13 @@
 #include <deque>
 #include <mutex>
 
-class InlineTaskBus : public IAsyncTaskBus {
+class InlineTaskBus : public IAsyncTaskBus
+{
 public:
     bool Publish(const TaskEnvelope& task, std::string* error = nullptr) override;
-    bool ConsumeOnce(const std::vector<std::string>& routing_keys, ConsumedTask& task, std::string* error = nullptr) override;
+    bool ConsumeOnce(const std::vector<std::string>& routing_keys,
+                     ConsumedTask& task,
+                     std::string* error = nullptr) override;
     void AckLastConsumed() override;
     void NackLastConsumed(const std::string& error) override;
 

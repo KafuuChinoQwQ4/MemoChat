@@ -76,16 +76,22 @@ class AgentSpecRegistry:
                     "回答应包含结论、证据、风险或缺口。"
                 ),
                 default_model="ollama:qwen3:4b",
-                model_policy=_policy(ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.35)),
+                model_policy=_policy(
+                    ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.35)
+                ),
                 default_tools=["duckduckgo_search", "knowledge_base_search"],
                 allowed_tools=["duckduckgo_search", "knowledge_base_search", "calculator"],
-                tool_policy=_policy(ToolPolicy(
-                    default_tools=["duckduckgo_search", "knowledge_base_search"],
-                    allowed_tools=["duckduckgo_search", "knowledge_base_search", "calculator"],
-                    default_actions=["web_search", "knowledge_search"],
-                )),
+                tool_policy=_policy(
+                    ToolPolicy(
+                        default_tools=["duckduckgo_search", "knowledge_base_search"],
+                        allowed_tools=["duckduckgo_search", "knowledge_base_search", "calculator"],
+                        default_actions=["web_search", "knowledge_search"],
+                    )
+                ),
                 knowledge_policy=_policy(KnowledgePolicy(enabled=True, top_k=6, cite_sources=True)),
-                memory_policy=_policy(MemoryPolicy(include_history=True, include_semantic_profile=True, include_graph=False)),
+                memory_policy=_policy(
+                    MemoryPolicy(include_history=True, include_semantic_profile=True, include_graph=False)
+                ),
                 guardrail_policy={"require_citations_when_using_search": True, "block_unconfirmed_writes": True},
                 metadata={"category": "research"},
             ),
@@ -98,14 +104,18 @@ class AgentSpecRegistry:
                     "不要虚构事实；缺少背景时先标注假设。"
                 ),
                 default_model="ollama:qwen3:4b",
-                model_policy=_policy(ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.75)),
+                model_policy=_policy(
+                    ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.75)
+                ),
                 default_tools=["knowledge_base_search"],
                 allowed_tools=["knowledge_base_search", "translator"],
-                tool_policy=_policy(ToolPolicy(
-                    default_tools=["knowledge_base_search"],
-                    allowed_tools=["knowledge_base_search", "translator"],
-                    default_actions=["knowledge_search"],
-                )),
+                tool_policy=_policy(
+                    ToolPolicy(
+                        default_tools=["knowledge_base_search"],
+                        allowed_tools=["knowledge_base_search", "translator"],
+                        default_actions=["knowledge_search"],
+                    )
+                ),
                 knowledge_policy=_policy(KnowledgePolicy(enabled=True, top_k=4, cite_sources=False)),
                 memory_policy=_policy(MemoryPolicy(include_history=True, include_semantic_profile=True)),
                 guardrail_policy={"avoid_hidden_reasoning": True},
@@ -116,18 +126,21 @@ class AgentSpecRegistry:
                 display_name="Reviewer",
                 description="Reviews outputs for correctness, completeness, safety, and missing evidence.",
                 system_prompt=(
-                    "你是审阅型 Agent。优先指出问题和风险，按严重程度排序，给出可执行修复建议。"
-                    "不要只做鼓励性总结。"
+                    "你是审阅型 Agent。优先指出问题和风险，按严重程度排序，给出可执行修复建议。不要只做鼓励性总结。"
                 ),
                 default_model="ollama:qwen3:4b",
-                model_policy=_policy(ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.2)),
+                model_policy=_policy(
+                    ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.2)
+                ),
                 default_tools=["knowledge_base_search", "calculator"],
                 allowed_tools=["knowledge_base_search", "calculator"],
-                tool_policy=_policy(ToolPolicy(
-                    default_tools=["knowledge_base_search"],
-                    allowed_tools=["knowledge_base_search", "calculator"],
-                    default_actions=["knowledge_search"],
-                )),
+                tool_policy=_policy(
+                    ToolPolicy(
+                        default_tools=["knowledge_base_search"],
+                        allowed_tools=["knowledge_base_search", "calculator"],
+                        default_actions=["knowledge_search"],
+                    )
+                ),
                 knowledge_policy=_policy(KnowledgePolicy(enabled=True, top_k=5, cite_sources=True)),
                 memory_policy=_policy(MemoryPolicy(include_history=True, include_semantic_profile=False)),
                 guardrail_policy={"prefer_findings_first": True, "block_unconfirmed_writes": True},
@@ -142,14 +155,18 @@ class AgentSpecRegistry:
                     "涉及账号、隐私、删除、支付等敏感操作时要求用户确认。"
                 ),
                 default_model="ollama:qwen3:4b",
-                model_policy=_policy(ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.45)),
+                model_policy=_policy(
+                    ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.45)
+                ),
                 default_tools=["knowledge_base_search"],
                 allowed_tools=["knowledge_base_search", "calculator"],
-                tool_policy=_policy(ToolPolicy(
-                    default_tools=["knowledge_base_search"],
-                    allowed_tools=["knowledge_base_search", "calculator"],
-                    default_actions=["knowledge_search"],
-                )),
+                tool_policy=_policy(
+                    ToolPolicy(
+                        default_tools=["knowledge_base_search"],
+                        allowed_tools=["knowledge_base_search", "calculator"],
+                        default_actions=["knowledge_search"],
+                    )
+                ),
                 knowledge_policy=_policy(KnowledgePolicy(enabled=True, top_k=5, cite_sources=True)),
                 memory_policy=_policy(MemoryPolicy(include_history=True, include_semantic_profile=True)),
                 guardrail_policy={"ask_confirmation_for_sensitive_actions": True},
@@ -164,16 +181,22 @@ class AgentSpecRegistry:
                     "不要删除或改写原始事实；对不确定内容标记待确认。"
                 ),
                 default_model="ollama:qwen3:4b",
-                model_policy=_policy(ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.4)),
+                model_policy=_policy(
+                    ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.4)
+                ),
                 default_tools=["knowledge_base_search"],
                 allowed_tools=["knowledge_base_search", "graph_recommender"],
-                tool_policy=_policy(ToolPolicy(
-                    default_tools=["knowledge_base_search"],
-                    allowed_tools=["knowledge_base_search", "graph_recommender"],
-                    default_actions=["knowledge_search", "graph_recall"],
-                )),
+                tool_policy=_policy(
+                    ToolPolicy(
+                        default_tools=["knowledge_base_search"],
+                        allowed_tools=["knowledge_base_search", "graph_recommender"],
+                        default_actions=["knowledge_search", "graph_recall"],
+                    )
+                ),
                 knowledge_policy=_policy(KnowledgePolicy(enabled=True, top_k=8, cite_sources=True)),
-                memory_policy=_policy(MemoryPolicy(include_history=True, include_semantic_profile=True, include_graph=True)),
+                memory_policy=_policy(
+                    MemoryPolicy(include_history=True, include_semantic_profile=True, include_graph=True)
+                ),
                 guardrail_policy={"preserve_source_facts": True, "block_unconfirmed_writes": True},
                 metadata={"category": "knowledge"},
             ),

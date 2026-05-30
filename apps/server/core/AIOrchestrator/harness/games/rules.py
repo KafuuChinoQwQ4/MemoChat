@@ -101,8 +101,12 @@ class MultiAiChatRuleEngine(GameRuleEngine):
         pending = list(state.state.get("pending_agent_ids", []))
 
         if action.action_type == "skip":
-            state.state["pending_agent_ids"] = [participant_id for participant_id in pending if participant_id != actor.participant_id]
-            return [_event(room, "skip", f"{actor.display_name} 暂不回复。", actor.participant_id, payload={"chat": True})]
+            state.state["pending_agent_ids"] = [
+                participant_id for participant_id in pending if participant_id != actor.participant_id
+            ]
+            return [
+                _event(room, "skip", f"{actor.display_name} 暂不回复。", actor.participant_id, payload={"chat": True})
+            ]
 
         content = (action.content or "").strip()
         if not content:
@@ -146,7 +150,9 @@ class MultiAiChatRuleEngine(GameRuleEngine):
             ]
 
         if actor.kind == "agent":
-            state.state["pending_agent_ids"] = [participant_id for participant_id in pending if participant_id != actor.participant_id]
+            state.state["pending_agent_ids"] = [
+                participant_id for participant_id in pending if participant_id != actor.participant_id
+            ]
         else:
             room.round_index += 1
             state.state["round"] = room.round_index
@@ -238,7 +244,15 @@ class WerewolfRuleEngine(GameRuleEngine):
             room.phase = "day_discussion"
             state.state["phase"] = room.phase
             state.state["night_target"] = target.participant_id
-            events = [_event(room, "night_kill", f"{target.display_name} 在夜晚出局。", actor.participant_id, target.participant_id)]
+            events = [
+                _event(
+                    room,
+                    "night_kill",
+                    f"{target.display_name} 在夜晚出局。",
+                    actor.participant_id,
+                    target.participant_id,
+                )
+            ]
             events.extend(self._maybe_finish(state))
             return events
 
@@ -257,16 +271,34 @@ class WerewolfRuleEngine(GameRuleEngine):
                 raise ValueError("vote target is not alive")
             votes = state.state.setdefault("votes", {})
             votes[actor.participant_id] = target.participant_id
-            events = [_event(room, "vote", f"{actor.display_name} 投票给 {target.display_name}。", actor.participant_id, target.participant_id)]
+            events = [
+                _event(
+                    room,
+                    "vote",
+                    f"{actor.display_name} 投票给 {target.display_name}。",
+                    actor.participant_id,
+                    target.participant_id,
+                )
+            ]
             if len(votes) >= len(_alive(state)):
                 eliminated_id = _majority_target(votes)
                 eliminated = _participant(state, eliminated_id)
                 if eliminated is not None:
                     eliminated.status = "dead"
-                    events.append(_event(room, "vote_result", f"{eliminated.display_name} 被投票出局。", "", eliminated.participant_id))
+                    events.append(
+                        _event(
+                            room,
+                            "vote_result",
+                            f"{eliminated.display_name} 被投票出局。",
+                            "",
+                            eliminated.participant_id,
+                        )
+                    )
                 room.phase = "night"
                 room.round_index += 1
-                state.state.update({"phase": "night", "round": room.round_index, "votes": {}, "night_target": "", "day_speakers": []})
+                state.state.update(
+                    {"phase": "night", "round": room.round_index, "votes": {}, "night_target": "", "day_speakers": []}
+                )
                 events.extend(self._maybe_finish(state))
             return events
 
@@ -395,7 +427,15 @@ class ScriptMurderRuleEngine(GameRuleEngine):
             return [_event(room, "clue", clue, actor.participant_id)]
         if action.action_type == "accuse":
             state.state.setdefault("accusations", {})[actor.participant_id] = action.target_participant_id
-            return [_event(room, "accuse", action.content or "我提出一个嫌疑人。", actor.participant_id, action.target_participant_id)]
+            return [
+                _event(
+                    room,
+                    "accuse",
+                    action.content or "我提出一个嫌疑人。",
+                    actor.participant_id,
+                    action.target_participant_id,
+                )
+            ]
         if action.action_type == "skip":
             return [_event(room, "skip", f"{actor.display_name} 暂不行动。", actor.participant_id)]
         spoken = state.state.setdefault("spoken", [])

@@ -11,173 +11,229 @@
 #include <sstream>
 
 HttpConnection::HttpConnection(boost::asio::io_context& ioc)
-    : _socket(ioc) {}
+    : _socket(ioc)
+{
+}
 
-void HttpConnection::SetFileResponse(const std::string& file_path, const std::string& content_type) {
+void HttpConnection::SetFileResponse(const std::string& file_path, const std::string& content_type)
+{
     _send_file_response = true;
     _send_file_path = file_path;
     _send_file_content_type = content_type;
 }
 
-std::string HttpConnection::RequestTargetString() const {
+std::string HttpConnection::RequestTargetString() const
+{
     const auto target = _request.target();
     return std::string(target.data(), target.size());
 }
 
-std::string HttpConnection::RequestBodyString() const {
+std::string HttpConnection::RequestBodyString() const
+{
     return beast::buffers_to_string(_request.body().data());
 }
 
-void HttpConnection::StartSseStream() {
+void HttpConnection::StartSseStream()
+{
     _streaming_response.store(true, std::memory_order_release);
     auto self = shared_from_this();
-    boost::asio::post(_socket.get_executor(), [self]() {
-        self->EnsureSseStreamStarted();
-    });
+    boost::asio::post(_socket.get_executor(),
+                      [self]()
+                      {
+                          self->EnsureSseStreamStarted();
+                      });
 }
 
-void HttpConnection::WriteStreamChunk(std::string chunk) {
-    if (!HasStreamingResponse()) {
+void HttpConnection::WriteStreamChunk(std::string chunk)
+{
+    if (!HasStreamingResponse())
+    {
         return;
     }
     auto self = shared_from_this();
-    boost::asio::post(_socket.get_executor(), [self, chunk = std::move(chunk)]() mutable {
-        if (self->_stream_closed || self->_stream_finish_requested) {
-            return;
-        }
-        self->EnsureSseStreamStarted();
-        if (chunk.empty()) {
-            return;
-        }
-        std::ostringstream wire;
-        wire << std::hex << chunk.size() << "\r\n" << chunk << "\r\n";
-        self->QueueStreamWrite(wire.str(), false);
-    });
+    boost::asio::post(_socket.get_executor(),
+                      [self, chunk = std::move(chunk)]() mutable
+                      {
+                          if (self->_stream_closed || self->_stream_finish_requested)
+                          {
+                              return;
+                          }
+                          self->EnsureSseStreamStarted();
+                          if (chunk.empty())
+                          {
+                              return;
+                          }
+                          std::ostringstream wire;
+                          wire << std::hex << chunk.size() << "\r\n" << chunk << "\r\n";
+                          self->QueueStreamWrite(wire.str(), false);
+                      });
 }
 
-void HttpConnection::FinishStream() {
-    if (!HasStreamingResponse()) {
+void HttpConnection::FinishStream()
+{
+    if (!HasStreamingResponse())
+    {
         return;
     }
     auto self = shared_from_this();
-    boost::asio::post(_socket.get_executor(), [self]() {
-        if (self->_stream_closed || self->_stream_finish_requested) {
-            return;
-        }
-        self->EnsureSseStreamStarted();
-        self->_stream_finish_requested = true;
-        self->QueueStreamWrite("0\r\n\r\n", true);
-    });
+    boost::asio::post(_socket.get_executor(),
+                      [self]()
+                      {
+                          if (self->_stream_closed || self->_stream_finish_requested)
+                          {
+                              return;
+                          }
+                          self->EnsureSseStreamStarted();
+                          self->_stream_finish_requested = true;
+                          self->QueueStreamWrite("0\r\n\r\n", true);
+                      });
 }
 
-void HttpConnection::Start() {
+void HttpConnection::Start()
+{
     auto self = shared_from_this();
-    http::async_read(_socket, _buffer, _request,
-                     [self](beast::error_code ec, std::size_t bytes_transferred) {
-                         try {
-                             if (ec) {
-                                 memolog::LogWarn("http.read.failed", "http read failed", {{"error", ec.what()}});
-                                 return;
-                             }
+    http::async_read(
+        _socket,
+        _buffer,
+        _request,
+        [self](beast::error_code ec, std::size_t bytes_transferred)
+        {
+            try
+            {
+                if (ec)
+                {
+                    memolog::LogWarn("http.read.failed", "http read failed", {{"error", ec.what()}});
+                    return;
+                }
 
-                             boost::ignore_unused(bytes_transferred);
-                             auto trace_it = self->_request.find("X-Trace-Id");
-                             if (trace_it != self->_request.end()) {
-                                 self->_trace_id = std::string(trace_it->value().data(), trace_it->value().size());
-                             }
-                             if (self->_trace_id.empty()) {
-                                 self->_trace_id = memolog::TraceContext::NewId();
-                             }
-                             auto request_it = self->_request.find("X-Request-Id");
-                             if (request_it != self->_request.end()) {
-                                 self->_request_id = std::string(request_it->value().data(), request_it->value().size());
-                             }
-                             if (self->_request_id.empty()) {
-                                 self->_request_id = memolog::TraceContext::NewId();
-                             }
-                             memolog::TraceContext::SetTraceId(self->_trace_id);
-                             memolog::TraceContext::SetRequestId(self->_request_id);
-                             self->_request_span.reset(new memolog::SpanScope(
-                                 "GateServer.HttpRequest",
-                                 "SERVER",
-                                 {{"http.method", std::string(self->_request.method_string())}}));
+                boost::ignore_unused(bytes_transferred);
+                auto trace_it = self->_request.find("X-Trace-Id");
+                if (trace_it != self->_request.end())
+                {
+                    self->_trace_id = std::string(trace_it->value().data(), trace_it->value().size());
+                }
+                if (self->_trace_id.empty())
+                {
+                    self->_trace_id = memolog::TraceContext::NewId();
+                }
+                auto request_it = self->_request.find("X-Request-Id");
+                if (request_it != self->_request.end())
+                {
+                    self->_request_id = std::string(request_it->value().data(), request_it->value().size());
+                }
+                if (self->_request_id.empty())
+                {
+                    self->_request_id = memolog::TraceContext::NewId();
+                }
+                memolog::TraceContext::SetTraceId(self->_trace_id);
+                memolog::TraceContext::SetRequestId(self->_request_id);
+                self->_request_span.reset(
+                    new memolog::SpanScope("GateServer.HttpRequest",
+                                           "SERVER",
+                                           {{"http.method", std::string(self->_request.method_string())}}));
 
-                             const auto target_sv = self->_request.target();
-                             const auto method_sv = self->_request.method_string();
-                             std::map<std::string, std::string> fields;
-                             fields["route"] = std::string(target_sv.data(), target_sv.size());
-                             fields["method"] = std::string(method_sv.data(), method_sv.size());
-                             fields["module"] = "http";
-                             memolog::LogInfo("http.request.received", "incoming http request", fields);
+                const auto target_sv = self->_request.target();
+                const auto method_sv = self->_request.method_string();
+                std::map<std::string, std::string> fields;
+                fields["route"] = std::string(target_sv.data(), target_sv.size());
+                fields["method"] = std::string(method_sv.data(), method_sv.size());
+                fields["module"] = "http";
+                memolog::LogInfo("http.request.received", "incoming http request", fields);
 
-                             self->HandleReq();
-                             self->CheckDeadline();
-                         } catch (std::exception& exp) {
-                             memolog::LogError("http.request.exception", "http request exception", {{"error", exp.what()}});
-                             self->_request_span.reset();
-                             memolog::TraceContext::Clear();
-                         }
-                     });
+                self->HandleReq();
+                self->CheckDeadline();
+            }
+            catch (std::exception& exp)
+            {
+                memolog::LogError("http.request.exception", "http request exception", {{"error", exp.what()}});
+                self->_request_span.reset();
+                memolog::TraceContext::Clear();
+            }
+        });
 }
 
-unsigned char ToHex(unsigned char x) {
+unsigned char ToHex(unsigned char x)
+{
     return x > 9 ? x + 55 : x + 48;
 }
 
-unsigned char FromHex(unsigned char x) {
+unsigned char FromHex(unsigned char x)
+{
     unsigned char y;
-    if (x >= 'A' && x <= 'Z') {
+    if (x >= 'A' && x <= 'Z')
+    {
         y = x - 'A' + 10;
-    } else if (x >= 'a' && x <= 'z') {
+    }
+    else if (x >= 'a' && x <= 'z')
+    {
         y = x - 'a' + 10;
-    } else if (x >= '0' && x <= '9') {
+    }
+    else if (x >= '0' && x <= '9')
+    {
         y = x - '0';
-    } else {
+    }
+    else
+    {
         assert(0);
     }
     return y;
 }
 
-std::string UrlEncode(const std::string& str) {
+std::string UrlEncode(const std::string& str)
+{
     std::string strTemp;
     const size_t length = str.length();
-    for (size_t i = 0; i < length; i++) {
-        if (isalnum((unsigned char)str[i]) || (str[i] == '-') || (str[i] == '_') ||
-            (str[i] == '.') || (str[i] == '~')) {
+    for (size_t i = 0; i < length; i++)
+    {
+        if (isalnum((unsigned char) str[i]) || (str[i] == '-') || (str[i] == '_') || (str[i] == '.') || (str[i] == '~'))
+        {
             strTemp += str[i];
-        } else if (str[i] == ' ') {
+        }
+        else if (str[i] == ' ')
+        {
             strTemp += "+";
-        } else {
+        }
+        else
+        {
             strTemp += '%';
-            strTemp += ToHex((unsigned char)str[i] >> 4);
-            strTemp += ToHex((unsigned char)str[i] & 0x0F);
+            strTemp += ToHex((unsigned char) str[i] >> 4);
+            strTemp += ToHex((unsigned char) str[i] & 0x0F);
         }
     }
     return strTemp;
 }
 
-std::string UrlDecode(const std::string& str) {
+std::string UrlDecode(const std::string& str)
+{
     std::string strTemp;
     const size_t length = str.length();
-    for (size_t i = 0; i < length; i++) {
-        if (str[i] == '+') {
+    for (size_t i = 0; i < length; i++)
+    {
+        if (str[i] == '+')
+        {
             strTemp += ' ';
-        } else if (str[i] == '%') {
+        }
+        else if (str[i] == '%')
+        {
             assert(i + 2 < length);
-            unsigned char high = FromHex((unsigned char)str[++i]);
-            unsigned char low = FromHex((unsigned char)str[++i]);
+            unsigned char high = FromHex((unsigned char) str[++i]);
+            unsigned char low = FromHex((unsigned char) str[++i]);
             strTemp += high * 16 + low;
-        } else {
+        }
+        else
+        {
             strTemp += str[i];
         }
     }
     return strTemp;
 }
 
-void HttpConnection::PreParseGetParam() {
+void HttpConnection::PreParseGetParam()
+{
     auto uri = _request.target();
     auto query_pos = uri.find('?');
-    if (query_pos == std::string::npos) {
+    if (query_pos == std::string::npos)
+    {
         _get_url = uri;
         return;
     }
@@ -187,19 +243,23 @@ void HttpConnection::PreParseGetParam() {
     std::string key;
     std::string value;
     size_t pos = 0;
-    while ((pos = query_string.find('&')) != std::string::npos) {
+    while ((pos = query_string.find('&')) != std::string::npos)
+    {
         auto pair = query_string.substr(0, pos);
         size_t eq_pos = pair.find('=');
-        if (eq_pos != std::string::npos) {
+        if (eq_pos != std::string::npos)
+        {
             key = UrlDecode(pair.substr(0, eq_pos));
             value = UrlDecode(pair.substr(eq_pos + 1));
             _get_params[key] = value;
         }
         query_string.erase(0, pos + 1);
     }
-    if (!query_string.empty()) {
+    if (!query_string.empty())
+    {
         size_t eq_pos = query_string.find('=');
-        if (eq_pos != std::string::npos) {
+        if (eq_pos != std::string::npos)
+        {
             key = UrlDecode(query_string.substr(0, eq_pos));
             value = UrlDecode(query_string.substr(eq_pos + 1));
             _get_params[key] = value;
@@ -207,28 +267,33 @@ void HttpConnection::PreParseGetParam() {
     }
 }
 
-void HttpConnection::HandleReq() {
+void HttpConnection::HandleReq()
+{
     _response.version(_request.version());
     _response.keep_alive(false);
     _response.set("X-Trace-Id", _trace_id);
     _response.set("X-Request-Id", _request_id);
     _response.set(boost::beast::http::field::access_control_allow_origin, "*");
 
-    if (_request.method() == http::verb::get) {
+    if (_request.method() == http::verb::get)
+    {
         PreParseGetParam();
         bool success = LogicSystem::GetInstance()->HandleGet(_get_url, shared_from_this());
-        if (!success) {
+        if (!success)
+        {
             _response.result(http::status::not_found);
             _response.set(http::field::content_type, "text/plain");
             beast::ostream(_response.body()) << "url not found\r\n";
             WriteResponse();
             return;
         }
-        if (HasStreamingResponse()) {
+        if (HasStreamingResponse())
+        {
             return;
         }
 
-        if (_response.result() == http::status::unknown) {
+        if (_response.result() == http::status::unknown)
+        {
             _response.result(http::status::ok);
         }
         _response.set(http::field::server, "GateServer");
@@ -236,76 +301,108 @@ void HttpConnection::HandleReq() {
         return;
     }
 
-    if (_request.method() == http::verb::post || _request.method() == http::verb::delete_) {
+    if (_request.method() == http::verb::post || _request.method() == http::verb::delete_)
+    {
         auto self = shared_from_this();
-        GateWorkerPool::GetInstance()->post([self]() {
-            try {
-                auto* ioc = gateglobals::g_main_ioc;
-                bool handled = self->_request.method() == http::verb::delete_
-                    ? LogicSystem::GetInstance()->HandleDelete(self->_request.target(), self)
-                    : LogicSystem::GetInstance()->HandlePost(self->_request.target(), self);
-                if (!ioc) {
-                    self->WriteErrorResponse(http::status::internal_server_error, "internal error\r\n");
-                    return;
-                }
-                boost::asio::post(*ioc, [self, handled]() {
-                    try {
-                        if (self->HasStreamingResponse()) {
-                            return;
-                        }
-                        if (!handled) {
-                            self->_response.result(http::status::not_found);
-                            self->_response.set(http::field::content_type, "text/plain");
-                            beast::ostream(self->_response.body()) << "url not found\r\n";
-                        } else {
-                            if (self->_response.result() == http::status::unknown) {
-                                self->_response.result(http::status::ok);
-                            }
-                        }
-                        self->_response.set(http::field::server, "GateServer");
-                        self->WriteResponse();
-                    } catch (const std::exception& e) {
-                        memolog::LogError("http.response.exception", "http response exception", {{"error", e.what()}});
+        GateWorkerPool::GetInstance()->post(
+            [self]()
+            {
+                try
+                {
+                    auto* ioc = gateglobals::g_main_ioc;
+                    bool handled = self->_request.method() == http::verb::delete_
+                                       ? LogicSystem::GetInstance()->HandleDelete(self->_request.target(), self)
+                                       : LogicSystem::GetInstance()->HandlePost(self->_request.target(), self);
+                    if (!ioc)
+                    {
                         self->WriteErrorResponse(http::status::internal_server_error, "internal error\r\n");
+                        return;
                     }
-                });
-            } catch (const std::exception& e) {
-                memolog::LogError("gate.worker.exception", "worker pool exception", {{"error", e.what()}});
-                if (auto* ioc = gateglobals::g_main_ioc) {
-                    boost::asio::post(*ioc, [self]() {
-                        self->WriteErrorResponse(http::status::internal_server_error, "internal error\r\n");
-                    });
+                    boost::asio::post(*ioc,
+                                      [self, handled]()
+                                      {
+                                          try
+                                          {
+                                              if (self->HasStreamingResponse())
+                                              {
+                                                  return;
+                                              }
+                                              if (!handled)
+                                              {
+                                                  self->_response.result(http::status::not_found);
+                                                  self->_response.set(http::field::content_type, "text/plain");
+                                                  beast::ostream(self->_response.body()) << "url not found\r\n";
+                                              }
+                                              else
+                                              {
+                                                  if (self->_response.result() == http::status::unknown)
+                                                  {
+                                                      self->_response.result(http::status::ok);
+                                                  }
+                                              }
+                                              self->_response.set(http::field::server, "GateServer");
+                                              self->WriteResponse();
+                                          }
+                                          catch (const std::exception& e)
+                                          {
+                                              memolog::LogError("http.response.exception",
+                                                                "http response exception",
+                                                                {{"error", e.what()}});
+                                              self->WriteErrorResponse(http::status::internal_server_error,
+                                                                       "internal error\r\n");
+                                          }
+                                      });
                 }
-            }
-        });
+                catch (const std::exception& e)
+                {
+                    memolog::LogError("gate.worker.exception", "worker pool exception", {{"error", e.what()}});
+                    if (auto* ioc = gateglobals::g_main_ioc)
+                    {
+                        boost::asio::post(*ioc,
+                                          [self]()
+                                          {
+                                              self->WriteErrorResponse(http::status::internal_server_error,
+                                                                       "internal error\r\n");
+                                          });
+                    }
+                }
+            });
         return;
     }
 }
 
-void HttpConnection::CheckDeadline() {
+void HttpConnection::CheckDeadline()
+{
     auto self = shared_from_this();
 
     deadline_.expires_after(std::chrono::seconds(600));
-    deadline_.async_wait([self](beast::error_code ec) {
-        if (!ec) {
-            memolog::LogWarn("http.deadline.expired", "http connection deadline expired");
-            self->_socket.close(ec);
-            self->_request_span.reset();
-            memolog::TraceContext::Clear();
-        }
-    });
+    deadline_.async_wait(
+        [self](beast::error_code ec)
+        {
+            if (!ec)
+            {
+                memolog::LogWarn("http.deadline.expired", "http connection deadline expired");
+                self->_socket.close(ec);
+                self->_request_span.reset();
+                memolog::TraceContext::Clear();
+            }
+        });
 }
 
-void HttpConnection::EnsureSseStreamStarted() {
-    if (_stream_closed || _stream_header_started) {
+void HttpConnection::EnsureSseStreamStarted()
+{
+    if (_stream_closed || _stream_header_started)
+    {
         return;
     }
     _stream_header_started = true;
 
     beast::error_code option_ec;
     _socket.set_option(tcp::no_delay(true), option_ec);
-    if (option_ec) {
-        memolog::LogWarn("http.stream.nodelay_failed", "failed to enable TCP_NODELAY",
+    if (option_ec)
+    {
+        memolog::LogWarn("http.stream.nodelay_failed",
+                         "failed to enable TCP_NODELAY",
                          {{"error", option_ec.message()}});
     }
 
@@ -318,56 +415,66 @@ void HttpConnection::EnsureSseStreamStarted() {
            << "Transfer-Encoding: chunked\r\n"
            << "Access-Control-Allow-Origin: *\r\n"
            << "X-Accel-Buffering: no\r\n";
-    if (!_trace_id.empty()) {
+    if (!_trace_id.empty())
+    {
         header << "X-Trace-Id: " << _trace_id << "\r\n";
     }
-    if (!_request_id.empty()) {
+    if (!_request_id.empty())
+    {
         header << "X-Request-Id: " << _request_id << "\r\n";
     }
     header << "\r\n";
     QueueStreamWrite(header.str(), false);
 }
 
-void HttpConnection::QueueStreamWrite(std::string data, bool closes) {
-    if (_stream_closed) {
+void HttpConnection::QueueStreamWrite(std::string data, bool closes)
+{
+    if (_stream_closed)
+    {
         return;
     }
     _stream_write_queue.push_back(StreamWrite{std::move(data), closes});
     DoStreamWrite();
 }
 
-void HttpConnection::DoStreamWrite() {
-    if (_stream_writing || _stream_write_queue.empty() || _stream_closed) {
+void HttpConnection::DoStreamWrite()
+{
+    if (_stream_writing || _stream_write_queue.empty() || _stream_closed)
+    {
         return;
     }
 
     _stream_writing = true;
     auto self = shared_from_this();
-    boost::asio::async_write(
-        _socket,
-        boost::asio::buffer(_stream_write_queue.front().data),
-        [self](beast::error_code ec, std::size_t) {
-            bool closes = false;
-            if (!self->_stream_write_queue.empty()) {
-                closes = self->_stream_write_queue.front().closes;
-                self->_stream_write_queue.pop_front();
-            }
-            self->_stream_writing = false;
+    boost::asio::async_write(_socket,
+                             boost::asio::buffer(_stream_write_queue.front().data),
+                             [self](beast::error_code ec, std::size_t)
+                             {
+                                 bool closes = false;
+                                 if (!self->_stream_write_queue.empty())
+                                 {
+                                     closes = self->_stream_write_queue.front().closes;
+                                     self->_stream_write_queue.pop_front();
+                                 }
+                                 self->_stream_writing = false;
 
-            if (ec || closes) {
-                self->_stream_closed = true;
-                self->_stream_write_queue.clear();
-                self->FinishRequest(ec);
-                return;
-            }
+                                 if (ec || closes)
+                                 {
+                                     self->_stream_closed = true;
+                                     self->_stream_write_queue.clear();
+                                     self->FinishRequest(ec);
+                                     return;
+                                 }
 
-            self->DoStreamWrite();
-        });
+                                 self->DoStreamWrite();
+                             });
 }
 
-void HttpConnection::FinishRequest(beast::error_code ec) {
+void HttpConnection::FinishRequest(beast::error_code ec)
+{
     boost::ignore_unused(ec);
-    if (ec) {
+    if (ec)
+    {
         memolog::LogWarn("http.response.write.failed", "http response write failed", {{"error", ec.message()}});
     }
     beast::error_code shutdown_ec;
@@ -380,7 +487,8 @@ void HttpConnection::FinishRequest(beast::error_code ec) {
     memolog::TraceContext::Clear();
 }
 
-void HttpConnection::WriteErrorResponse(http::status status, const std::string& message) {
+void HttpConnection::WriteErrorResponse(http::status status, const std::string& message)
+{
     _send_file_response = false;
     _send_file_path.clear();
     _send_file_content_type.clear();
@@ -391,7 +499,8 @@ void HttpConnection::WriteErrorResponse(http::status status, const std::string& 
     WriteResponse();
 }
 
-void HttpConnection::WriteFileResponse() {
+void HttpConnection::WriteFileResponse()
+{
     _send_file_response = false;
     auto response = std::make_shared<FileResponse>();
     response->version(_request.version());
@@ -401,7 +510,8 @@ void HttpConnection::WriteFileResponse() {
     response->set("X-Trace-Id", _trace_id);
     response->set("X-Request-Id", _request_id);
     response->set(http::field::access_control_allow_origin, "*");
-    if (!_send_file_content_type.empty()) {
+    if (!_send_file_content_type.empty())
+    {
         response->set(http::field::content_type, _send_file_content_type);
     }
 
@@ -409,7 +519,8 @@ void HttpConnection::WriteFileResponse() {
     response->body().open(_send_file_path.c_str(), beast::file_mode::scan, ec);
     _send_file_path.clear();
     _send_file_content_type.clear();
-    if (ec) {
+    if (ec)
+    {
         WriteErrorResponse(http::status::internal_server_error, "open file failed\r\n");
         return;
     }
@@ -417,22 +528,30 @@ void HttpConnection::WriteFileResponse() {
     response->prepare_payload();
     _file_response = response;
     auto self = shared_from_this();
-    http::async_write(_socket, *response, [self, response](beast::error_code write_ec, std::size_t) {
-        self->FinishRequest(write_ec);
-    });
+    http::async_write(_socket,
+                      *response,
+                      [self, response](beast::error_code write_ec, std::size_t)
+                      {
+                          self->FinishRequest(write_ec);
+                      });
 }
 
-void HttpConnection::WriteResponse() {
+void HttpConnection::WriteResponse()
+{
     auto self = shared_from_this();
 
-    if (_send_file_response) {
+    if (_send_file_response)
+    {
         WriteFileResponse();
         return;
     }
 
     _response.prepare_payload();
 
-    http::async_write(_socket, _response, [self](beast::error_code ec, std::size_t) {
-        self->FinishRequest(ec);
-    });
+    http::async_write(_socket,
+                      _response,
+                      [self](beast::error_code ec, std::size_t)
+                      {
+                          self->FinishRequest(ec);
+                      });
 }

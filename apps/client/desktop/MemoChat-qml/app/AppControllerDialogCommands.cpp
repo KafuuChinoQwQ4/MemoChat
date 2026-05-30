@@ -8,41 +8,52 @@
 #include <QJsonObject>
 #include <QVariantMap>
 
-void AppController::updateCurrentDraft(const QString &text)
+void AppController::updateCurrentDraft(const QString& text)
 {
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
     const int dialogUid = currentDialogUid();
-    if (!selfInfo || dialogUid == 0) {
+    if (!selfInfo || dialogUid == 0)
+    {
         return;
     }
 
     QString nextDraft = text;
-    if (nextDraft.size() > 2000) {
+    if (nextDraft.size() > 2000)
+    {
         nextDraft = nextDraft.left(2000);
     }
     const QString normalizedDraft = nextDraft.trimmed().isEmpty() ? QString() : nextDraft;
-    if (normalizedDraft.isEmpty()) {
-        _dialog_draft_map.remove(dialogUid);
-    } else {
-        _dialog_draft_map.insert(dialogUid, normalizedDraft);
+    if (normalizedDraft.isEmpty())
+    {
+        _dialog_state.draftMap.remove(dialogUid);
+    }
+    else
+    {
+        _dialog_state.draftMap.insert(dialogUid, normalizedDraft);
     }
 
     setCurrentDraftText(normalizedDraft);
     applyDraftToDialogModel(dialogUid, normalizedDraft);
     const int ownerUid = _gateway.userMgr()->GetUid();
-    if (ownerUid > 0) {
+    if (ownerUid > 0)
+    {
         saveDraftStore(ownerUid);
     }
 
     QJsonObject obj;
     obj["fromuid"] = selfInfo->_uid;
-    if (_current_group_id > 0) {
+    if (_group_state.currentId > 0)
+    {
         obj["dialog_type"] = "group";
-        obj["groupid"] = static_cast<qint64>(_current_group_id);
-    } else if (_current_chat_uid > 0) {
+        obj["groupid"] = static_cast<qint64>(_group_state.currentId);
+    }
+    else if (_chat_state.uid > 0)
+    {
         obj["dialog_type"] = "private";
-        obj["peer_uid"] = _current_chat_uid;
-    } else {
+        obj["peer_uid"] = _chat_state.uid;
+    }
+    else
+    {
         return;
     }
     obj["draft_text"] = normalizedDraft;
@@ -65,43 +76,52 @@ void AppController::toggleCurrentDialogMuted()
 void AppController::toggleDialogPinnedByUid(int dialogUid)
 {
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo || dialogUid == 0) {
+    if (!selfInfo || dialogUid == 0)
+    {
         return;
     }
 
     QString dialogType;
     int peerUid = 0;
     qint64 groupId = 0;
-    if (!resolveDialogTarget(dialogUid, dialogType, peerUid, groupId)) {
+    if (!resolveDialogTarget(dialogUid, dialogType, peerUid, groupId))
+    {
         return;
     }
 
-    const bool currentlyPinned = _dialog_local_pinned_set.contains(dialogUid)
-        || _dialog_server_pinned_map.value(dialogUid, 0) > 0;
+    const bool currentlyPinned =
+        _dialog_state.localPinnedSet.contains(dialogUid) || _dialog_state.serverPinnedMap.value(dialogUid, 0) > 0;
     const bool nextPinned = !currentlyPinned;
-    if (!nextPinned) {
-        _dialog_local_pinned_set.remove(dialogUid);
-        _dialog_server_pinned_map.insert(dialogUid, 0);
-    } else {
-        _dialog_local_pinned_set.insert(dialogUid);
-        _dialog_server_pinned_map.insert(dialogUid,
-                                         static_cast<int>(QDateTime::currentSecsSinceEpoch()));
+    if (!nextPinned)
+    {
+        _dialog_state.localPinnedSet.remove(dialogUid);
+        _dialog_state.serverPinnedMap.insert(dialogUid, 0);
     }
-    if (dialogUid == currentDialogUid()) {
+    else
+    {
+        _dialog_state.localPinnedSet.insert(dialogUid);
+        _dialog_state.serverPinnedMap.insert(dialogUid, static_cast<int>(QDateTime::currentSecsSinceEpoch()));
+    }
+    if (dialogUid == currentDialogUid())
+    {
         setCurrentDialogPinned(nextPinned);
     }
 
     const int ownerUid = _gateway.userMgr()->GetUid();
-    if (ownerUid > 0) {
+    if (ownerUid > 0)
+    {
         saveDraftStore(ownerUid);
     }
 
     QJsonObject obj;
     obj["fromuid"] = selfInfo->_uid;
     obj["dialog_type"] = dialogType;
-    if (dialogType == "group") {
+    if (dialogType == "group")
+    {
         obj["groupid"] = static_cast<qint64>(groupId);
-    } else {
+    }
+    else
+    {
         obj["peer_uid"] = peerUid;
     }
     obj["pinned_rank"] = nextPinned ? static_cast<int>(QDateTime::currentSecsSinceEpoch()) : 0;
@@ -114,26 +134,30 @@ void AppController::toggleDialogPinnedByUid(int dialogUid)
 void AppController::toggleDialogMutedByUid(int dialogUid)
 {
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo || dialogUid == 0) {
+    if (!selfInfo || dialogUid == 0)
+    {
         return;
     }
 
     QString dialogType;
     int peerUid = 0;
     qint64 groupId = 0;
-    if (!resolveDialogTarget(dialogUid, dialogType, peerUid, groupId)) {
+    if (!resolveDialogTarget(dialogUid, dialogType, peerUid, groupId))
+    {
         return;
     }
 
-    const bool currentlyMuted = _dialog_server_mute_map.value(dialogUid, 0) > 0;
+    const bool currentlyMuted = _dialog_state.serverMuteMap.value(dialogUid, 0) > 0;
     const int nextMuteState = currentlyMuted ? 0 : 1;
-    _dialog_server_mute_map.insert(dialogUid, nextMuteState);
-    if (dialogUid == currentDialogUid()) {
+    _dialog_state.serverMuteMap.insert(dialogUid, nextMuteState);
+    if (dialogUid == currentDialogUid())
+    {
         setCurrentDialogMuted(nextMuteState > 0);
     }
 
     const int idx = _dialog_list_model.indexOfUid(dialogUid);
-    if (idx >= 0) {
+    if (idx >= 0)
+    {
         const QVariantMap item = _dialog_list_model.get(idx);
         _dialog_list_model.setDialogMeta(dialogUid,
                                          item.value("dialogType").toString(),
@@ -147,12 +171,15 @@ void AppController::toggleDialogMutedByUid(int dialogUid)
     QJsonObject obj;
     obj["fromuid"] = selfInfo->_uid;
     obj["dialog_type"] = dialogType;
-    if (dialogType == "group") {
+    if (dialogType == "group")
+    {
         obj["groupid"] = static_cast<qint64>(groupId);
-    } else {
+    }
+    else
+    {
         obj["peer_uid"] = peerUid;
     }
-    obj["draft_text"] = _dialog_draft_map.value(dialogUid);
+    obj["draft_text"] = _dialog_state.draftMap.value(dialogUid);
     obj["mute_state"] = nextMuteState;
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
     _gateway.chatTransport()->slot_send_data(ReqId::ID_SYNC_DRAFT_REQ, payload);
@@ -160,33 +187,42 @@ void AppController::toggleDialogMutedByUid(int dialogUid)
 
 void AppController::markDialogReadByUid(int dialogUid)
 {
-    if (dialogUid == 0) {
+    if (dialogUid == 0)
+    {
         return;
     }
 
     _dialog_list_model.clearUnread(dialogUid);
     _dialog_list_model.clearMention(dialogUid);
-    _dialog_mention_map.remove(dialogUid);
-    if (dialogUid > 0) {
+    _dialog_state.mentionMap.remove(dialogUid);
+    if (dialogUid > 0)
+    {
         _chat_list_model.clearUnread(dialogUid);
         const qint64 latestPeerTs = latestPrivatePeerCreatedAt(dialogUid);
-        if (latestPeerTs > 0) {
+        if (latestPeerTs > 0)
+        {
             sendPrivateReadAck(dialogUid, latestPeerTs);
-        } else {
+        }
+        else
+        {
             sendPrivateReadAck(dialogUid, 0);
         }
         return;
     }
 
     _group_list_model.clearUnread(dialogUid);
-    const qint64 groupId = ConversationSyncService::groupIdForDialogUid(_group_uid_map, dialogUid);
-    if (groupId <= 0) {
+    const qint64 groupId = ConversationSyncService::groupIdForDialogUid(_group_state.dialogUidMap, dialogUid);
+    if (groupId <= 0)
+    {
         return;
     }
     const qint64 latestGroupTs = latestGroupCreatedAt(groupId);
-    if (latestGroupTs > 0) {
+    if (latestGroupTs > 0)
+    {
         sendGroupReadAck(groupId, latestGroupTs);
-    } else {
+    }
+    else
+    {
         sendGroupReadAck(groupId, 0);
     }
 }
@@ -194,33 +230,40 @@ void AppController::markDialogReadByUid(int dialogUid)
 void AppController::clearDialogDraftByUid(int dialogUid)
 {
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo || dialogUid == 0) {
+    if (!selfInfo || dialogUid == 0)
+    {
         return;
     }
 
     QString dialogType;
     int peerUid = 0;
     qint64 groupId = 0;
-    if (!resolveDialogTarget(dialogUid, dialogType, peerUid, groupId)) {
+    if (!resolveDialogTarget(dialogUid, dialogType, peerUid, groupId))
+    {
         return;
     }
 
-    _dialog_draft_map.remove(dialogUid);
+    _dialog_state.draftMap.remove(dialogUid);
     applyDraftToDialogModel(dialogUid, QString());
-    if (dialogUid == currentDialogUid()) {
+    if (dialogUid == currentDialogUid())
+    {
         setCurrentDraftText(QString());
     }
     const int ownerUid = _gateway.userMgr()->GetUid();
-    if (ownerUid > 0) {
+    if (ownerUid > 0)
+    {
         saveDraftStore(ownerUid);
     }
 
     QJsonObject obj;
     obj["fromuid"] = selfInfo->_uid;
     obj["dialog_type"] = dialogType;
-    if (dialogType == "group") {
+    if (dialogType == "group")
+    {
         obj["groupid"] = static_cast<qint64>(groupId);
-    } else {
+    }
+    else
+    {
         obj["peer_uid"] = peerUid;
     }
     obj["draft_text"] = QString();
@@ -228,14 +271,16 @@ void AppController::clearDialogDraftByUid(int dialogUid)
     _gateway.chatTransport()->slot_send_data(ReqId::ID_SYNC_DRAFT_REQ, payload);
 }
 
-void AppController::beginReplyMessage(const QString &msgId, const QString &senderName, const QString &previewText)
+void AppController::beginReplyMessage(const QString& msgId, const QString& senderName, const QString& previewText)
 {
     const QString normalizedMsgId = msgId.trimmed();
-    if (normalizedMsgId.isEmpty()) {
+    if (normalizedMsgId.isEmpty())
+    {
         return;
     }
     QString normalizedPreview = previewText.trimmed();
-    if (normalizedPreview.length() > 120) {
+    if (normalizedPreview.length() > 120)
+    {
         normalizedPreview = normalizedPreview.left(120);
     }
     setPendingReplyContext(normalizedMsgId, senderName.trimmed(), normalizedPreview);

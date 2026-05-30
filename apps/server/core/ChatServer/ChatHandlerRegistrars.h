@@ -2,27 +2,32 @@
 
 #include "LogicSystem.h"
 
-class ChatSessionServiceRegistrar {
+class ChatSessionServiceRegistrar
+{
 public:
     void Register(LogicSystem& logic, std::map<short, FunCallBack>& callbacks) const;
 };
 
-class ChatRelationServiceRegistrar {
+class ChatRelationServiceRegistrar
+{
 public:
     void Register(LogicSystem& logic, std::map<short, FunCallBack>& callbacks) const;
 };
 
-class PrivateMessageServiceRegistrar {
+class PrivateMessageServiceRegistrar
+{
 public:
     void Register(LogicSystem& logic, std::map<short, FunCallBack>& callbacks) const;
 };
 
-class GroupMessageServiceRegistrar {
+class GroupMessageServiceRegistrar
+{
 public:
     void Register(LogicSystem& logic, std::map<short, FunCallBack>& callbacks) const;
 };
 
-class AsyncEventDispatcherRegistrar {
+class AsyncEventDispatcherRegistrar
+{
 public:
     void Register(LogicSystem& logic, std::map<short, FunCallBack>& callbacks) const;
 };

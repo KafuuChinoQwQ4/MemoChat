@@ -73,7 +73,7 @@ def list_recent_service_snapshots(conn) -> list[dict]:
           FROM ops_service_snapshot
          WHERE observed_at >= CURRENT_TIMESTAMP - INTERVAL '15 minutes'
          ORDER BY observed_at DESC, service_name, instance_name
-        """
+        """,
     )
 
 
@@ -113,7 +113,7 @@ def list_recent_alert_source_snapshots(conn) -> list[dict]:
           FROM ops_service_snapshot
          WHERE observed_at >= CURRENT_TIMESTAMP - INTERVAL '5 minutes'
          ORDER BY observed_at DESC
-        """
+        """,
     )
 
 
@@ -133,7 +133,7 @@ def list_latest_service_health(conn) -> list[dict]:
            AND latest.instance_name = s.instance_name
            AND latest.latest_observed_at = s.observed_at
          ORDER BY s.service_name, s.instance_name
-        """
+        """,
     )
 
 
@@ -168,7 +168,7 @@ def summarize_alert_rows(conn) -> list[dict]:
                AND (cpu_percent >= 85 OR error_rate >= 0.25)
           ) alerts
          GROUP BY severity
-        """
+        """,
     )
 
 
@@ -197,7 +197,7 @@ def list_monitoring_overview_service_snapshots(conn) -> list[dict]:
           FROM ops_service_snapshot
          WHERE observed_at >= CURRENT_TIMESTAMP - INTERVAL '10 minutes'
          ORDER BY observed_at DESC
-        """
+        """,
     )
 
 
@@ -209,5 +209,5 @@ def list_monitoring_overview_recent_log_counts(conn) -> list[dict]:
           FROM ops_log_event_index
          WHERE ts_utc >= CURRENT_TIMESTAMP - INTERVAL '60 minutes'
          GROUP BY service_name
-        """
+        """,
     )

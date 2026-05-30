@@ -15,25 +15,25 @@ import base64
 import csv
 import hashlib
 import hmac
+import http.client
 import json
 import math
+import shutil
 import socket
+import ssl
 import statistics
 import struct
+import subprocess
 import threading
 import time
-import subprocess
-import shutil
-import ssl
 import urllib.error
 import urllib.request
 import uuid
-import http.client
-from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 try:
     from aioquic.asyncio import connect as aioquic_connect
@@ -209,7 +209,9 @@ def thread_http_connection(parsed_url, timeout: float, keep_alive: bool) -> http
     return conn
 
 
-def post_json_fast(url: str, payload: dict[str, Any], timeout: float = 8.0, keep_alive: bool = True) -> tuple[int, dict[str, Any], str]:
+def post_json_fast(
+    url: str, payload: dict[str, Any], timeout: float = 8.0, keep_alive: bool = True
+) -> tuple[int, dict[str, Any], str]:
     parsed = urlparse(url)
     body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     path = parsed.path or "/"
@@ -433,7 +435,9 @@ def gate_login(config: dict[str, Any], account: Account, gate_url: str | None = 
     elapsed = (time.perf_counter() - started) * 1000.0
     if status == 200 and int(data.get("error", -1)) == 0:
         return OperationResult(True, elapsed, data=data)
-    return OperationResult(False, elapsed, stage="gate_login", error=error or json.dumps(data, ensure_ascii=False), data=data)
+    return OperationResult(
+        False, elapsed, stage="gate_login", error=error or json.dumps(data, ensure_ascii=False), data=data
+    )
 
 
 def run_http_login_k6(config: dict[str, Any], total: int, concurrency: int) -> ScenarioResult:
@@ -576,6 +580,7 @@ def rewrite_chat_ticket_target(ticket: str, target_server: str, secret: str) -> 
 
 
 if aioquic_connect is not None:
+
     class MemoChatQuicProtocol(QuicConnectionProtocol):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -595,6 +600,7 @@ if aioquic_connect is not None:
                 if queue is not None and event.data:
                     queue.put_nowait(bytes(event.data))
 else:
+
     class MemoChatQuicProtocol:  # type: ignore[no-redef]
         pass
 
@@ -813,7 +819,9 @@ async def quic_request_on_session(
         return OperationResult(False, elapsed, stage=stage, error=str(exc))
 
 
-def open_logged_in_chat_socket(config: dict[str, Any], account: Account, gate_url: str) -> tuple[socket.socket, dict[str, Any]]:
+def open_logged_in_chat_socket(
+    config: dict[str, Any], account: Account, gate_url: str
+) -> tuple[socket.socket, dict[str, Any]]:
     gate = gate_login(config, account, gate_url)
     if not gate.ok:
         raise RuntimeError(f"gate_login failed: {gate.error or gate.data}")
@@ -895,7 +903,9 @@ def run_http_login(config: dict[str, Any], accounts: list[Account], total: int, 
 
     started_at = now_iso()
     picker = GateUrlPicker(gate_urls_from_config(config))
-    results, wall_elapsed_sec = run_timed_parallel(total, concurrency, lambda i: gate_login(config, accounts[i % len(accounts)], picker.next()))
+    results, wall_elapsed_sec = run_timed_parallel(
+        total, concurrency, lambda i: gate_login(config, accounts[i % len(accounts)], picker.next())
+    )
     scenario = scenario_from_operations("http_login", results, started_at, wall_elapsed_sec)
     scenario.details["gate_urls"] = gate_urls_from_config(config)
     scenario.details["fast_http"] = bool(config.get("fast_http", False))
@@ -995,7 +1005,9 @@ def run_tcp_heartbeat(config: dict[str, Any], accounts: list[Account], total: in
     )
 
 
-def run_tcp_relation_bootstrap(config: dict[str, Any], accounts: list[Account], total: int, concurrency: int) -> ScenarioResult:
+def run_tcp_relation_bootstrap(
+    config: dict[str, Any], accounts: list[Account], total: int, concurrency: int
+) -> ScenarioResult:
     return run_tcp_logged_in_requests(
         config,
         accounts,
@@ -1048,7 +1060,9 @@ async def run_async_timed_parallel(total: int, concurrency: int, fn) -> tuple[li
     return list(results), time.perf_counter() - started
 
 
-async def run_quic_login_async(config: dict[str, Any], accounts: list[Account], total: int, concurrency: int) -> ScenarioResult:
+async def run_quic_login_async(
+    config: dict[str, Any], accounts: list[Account], total: int, concurrency: int
+) -> ScenarioResult:
     started_at = now_iso()
     picker = GateUrlPicker(gate_urls_from_config(config))
 
@@ -1137,7 +1151,9 @@ async def run_quic_logged_in_requests_async(
     scenario.details["setup_sessions_requested"] = session_count
     scenario.details["setup_sessions_ready"] = len(sessions)
     scenario.details["measured_phase"] = "logged_in_quic_requests_only"
-    scenario.details["quic_endpoint_distribution"] = quic_endpoint_distribution_from_meta([meta for _, meta in sessions])
+    scenario.details["quic_endpoint_distribution"] = quic_endpoint_distribution_from_meta(
+        [meta for _, meta in sessions]
+    )
     scenario.details["gate_urls"] = gate_urls_from_config(config)
     scenario.details["quic_alpn"] = str(config.get("quic_alpn", "memochat-chat"))
     scenario.details["quic_endpoint_policy"] = str(config.get("quic_endpoint_policy", "round_robin"))
@@ -1160,7 +1176,9 @@ def run_quic_heartbeat(config: dict[str, Any], accounts: list[Account], total: i
     )
 
 
-def run_quic_relation_bootstrap(config: dict[str, Any], accounts: list[Account], total: int, concurrency: int) -> ScenarioResult:
+def run_quic_relation_bootstrap(
+    config: dict[str, Any], accounts: list[Account], total: int, concurrency: int
+) -> ScenarioResult:
     return asyncio.run(
         run_quic_logged_in_requests_async(
             config,
@@ -1317,7 +1335,12 @@ def default_rag_docs() -> list[dict[str, Any]]:
                 },
                 {
                     "query": "更暴力的检索测试语料应该包含什么干扰因素？",
-                    "expected_terms": ["multiple documents", "near-miss port numbers", "paraphrased questions", "distractor"],
+                    "expected_terms": [
+                        "multiple documents",
+                        "near-miss port numbers",
+                        "paraphrased questions",
+                        "distractor",
+                    ],
                 },
                 {
                     "query": "RAG 压测结束后为什么要删除上传的知识库？",
@@ -1440,13 +1463,20 @@ def run_rag(config: dict[str, Any], total: int, concurrency: int) -> ScenarioRes
         content_b64 = base64.b64encode(doc["content"].encode("utf-8")).decode("ascii")
         status, data, error = post_json(
             f"{base_url}/kb/upload",
-            {"uid": uid, "file_name": doc["file_name"], "file_type": doc.get("file_type", "md"), "content": content_b64},
+            {
+                "uid": uid,
+                "file_name": doc["file_name"],
+                "file_type": doc.get("file_type", "md"),
+                "content": content_b64,
+            },
             float(config.get("ai_timeout_sec", 60.0)),
         )
         if status == 200 and isinstance(data, dict) and data.get("kb_id"):
             uploaded_kb_ids.append(str(data["kb_id"]))
         else:
-            upload_errors.append(f"{doc.get('file_name', '<unnamed>')}: {error or data.get('detail') or data.get('message') or status}")
+            upload_errors.append(
+                f"{doc.get('file_name', '<unnamed>')}: {error or data.get('detail') or data.get('message') or status}"
+            )
 
     if upload_errors and not bool(config.get("rag_allow_partial_uploads", False)):
         results = [
@@ -1528,7 +1558,9 @@ def run_rag(config: dict[str, Any], total: int, concurrency: int) -> ScenarioRes
             if isinstance(r.data.get("recall_by_k", {}), dict)
         ]
         scenario.quality[key] = round(sum(values) / len(values), 4) if values else 0.0
-    scenario.quality["hallucination_rate"] = round(sum(hallucinations) / len(hallucinations), 4) if hallucinations else 0.0
+    scenario.quality["hallucination_rate"] = (
+        round(sum(hallucinations) / len(hallucinations), 4) if hallucinations else 0.0
+    )
     scenario.details["rag_doc_count"] = len(docs)
     scenario.details["rag_query_count"] = len(queries)
     scenario.details["rag_base_uid"] = base_uid
@@ -1731,7 +1763,11 @@ def main() -> int:
     config["_config_path"] = str(config_path)
     config["_config_dir"] = str(config_path.parent)
     config_dir = config_path.parent
-    report_dir = Path(args.report_dir).resolve() if args.report_dir else resolve_path(config.get("report_dir", "reports"), config_dir)
+    report_dir = (
+        Path(args.report_dir).resolve()
+        if args.report_dir
+        else resolve_path(config.get("report_dir", "reports"), config_dir)
+    )
     if args.report_dir:
         config["report_dir"] = str(report_dir)
     accounts_path_text = args.accounts_csv or config.get("accounts_csv", "")
@@ -1758,15 +1794,19 @@ def main() -> int:
     )
     exit_code = 0
     for scenario in scenarios:
-        if scenario in {
-            "http",
-            "tcp",
-            "tcp-heartbeat",
-            "tcp-relation-bootstrap",
-            "quic",
-            "quic-heartbeat",
-            "quic-relation-bootstrap",
-        } and not accounts:
+        if (
+            scenario
+            in {
+                "http",
+                "tcp",
+                "tcp-heartbeat",
+                "tcp-relation-bootstrap",
+                "quic",
+                "quic-heartbeat",
+                "quic-relation-bootstrap",
+            }
+            and not accounts
+        ):
             print(f"[ERROR] scenario {scenario} requires accounts_csv")
             exit_code = 1
             continue

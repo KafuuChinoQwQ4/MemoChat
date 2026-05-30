@@ -1,18 +1,19 @@
 """
 Embedding 管理器 — 支持 sentence-transformers、Ollama Embedding、OpenAI Embedding
 """
-from typing import Optional
+
 import hashlib
 import os
+from typing import Optional
+
+import httpx
 import structlog
+from config import settings
+from langchain_core.documents import Document
+from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qdrant_models
-from langchain_qdrant import QdrantVectorStore
-from langchain_core.documents import Document
 from sentence_transformers import SentenceTransformer
-import httpx
-
-from config import settings
 
 logger = structlog.get_logger()
 
@@ -89,7 +90,7 @@ class EmbeddingManager:
         for token in tokens:
             digest = hashlib.blake2b(token.encode("utf-8"), digest_size=16).digest()
             for offset in range(0, len(digest), 4):
-                bucket = int.from_bytes(digest[offset:offset + 2], "little") % dimension
+                bucket = int.from_bytes(digest[offset : offset + 2], "little") % dimension
                 sign = 1.0 if digest[offset + 2] & 1 else -1.0
                 vector[bucket] += sign
 
@@ -105,10 +106,7 @@ class EmbeddingManager:
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             for text in texts:
-                resp = await client.post(
-                    f"{base_url}/api/embeddings",
-                    json={"model": model, "prompt": text}
-                )
+                resp = await client.post(f"{base_url}/api/embeddings", json={"model": model, "prompt": text})
                 resp.raise_for_status()
                 data = resp.json()
                 vectors.append(data["embedding"])
@@ -117,6 +115,7 @@ class EmbeddingManager:
 
     async def _embed_openai(self, texts: list[str]) -> list[list[float]]:
         import os
+
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if not api_key:
             model = await self._get_local_embedder()

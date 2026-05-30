@@ -1,61 +1,63 @@
 #include "SearchResultModel.h"
 #include "IconPathUtils.h"
 
-SearchResultModel::SearchResultModel(QObject *parent)
-    : QAbstractListModel(parent),
-      _has_result(false),
-      _uid(0)
+SearchResultModel::SearchResultModel(QObject* parent)
+    : QAbstractListModel(parent)
+    , _has_result(false)
+    , _uid(0)
 {
 }
 
-int SearchResultModel::rowCount(const QModelIndex &parent) const
+int SearchResultModel::rowCount(const QModelIndex& parent) const
 {
-    if (parent.isValid()) {
+    if (parent.isValid())
+    {
         return 0;
     }
 
     return _has_result ? 1 : 0;
 }
 
-QVariant SearchResultModel::data(const QModelIndex &index, int role) const
+QVariant SearchResultModel::data(const QModelIndex& index, int role) const
 {
-    if (!_has_result || !index.isValid() || index.row() != 0) {
+    if (!_has_result || !index.isValid() || index.row() != 0)
+    {
         return {};
     }
 
-    switch (role) {
-    case UidRole:
-        return _uid;
-    case UserIdRole:
-        return _user_id;
-    case NameRole:
-        return _name;
-    case NickRole:
-        return _nick;
-    case DescRole:
-        return _desc;
-    case IconRole:
-        return _icon;
-    default:
-        return {};
+    switch (role)
+    {
+        case UidRole:
+            return _uid;
+        case UserIdRole:
+            return _user_id;
+        case NameRole:
+            return _name;
+        case NickRole:
+            return _nick;
+        case DescRole:
+            return _desc;
+        case IconRole:
+            return _icon;
+        default:
+            return {};
     }
 }
 
 QHash<int, QByteArray> SearchResultModel::roleNames() const
 {
-    return {
-        {UidRole, "uid"},
-        {UserIdRole, "userId"},
-        {NameRole, "name"},
-        {NickRole, "nick"},
-        {DescRole, "desc"},
-        {IconRole, "icon"}
-    };
+    return {{UidRole, "uid"},
+            {UserIdRole, "userId"},
+            {NameRole, "name"},
+            {NickRole, "nick"},
+            {DescRole, "desc"},
+            {IconRole, "icon"}};
 }
 
 void SearchResultModel::clear()
 {
-    if (!_has_result) {
+    if (!_has_result)
+    {
         return;
     }
 
@@ -71,9 +73,10 @@ void SearchResultModel::clear()
     emit countChanged();
 }
 
-void SearchResultModel::setResult(const std::shared_ptr<SearchInfo> &result)
+void SearchResultModel::setResult(const std::shared_ptr<SearchInfo>& result)
 {
-    if (!result) {
+    if (!result)
+    {
         clear();
         return;
     }

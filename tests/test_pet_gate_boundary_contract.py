@@ -2,7 +2,6 @@ import re
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 AI_ROUTE_MODULES = REPO_ROOT / "apps/server/core/GateServer/AIRouteModules.cpp"
 PET_SMOKE = REPO_ROOT / "tools/scripts/pet_smoke.ps1"
@@ -16,7 +15,7 @@ class PetGateBoundaryContractTests(unittest.TestCase):
     def test_gate_proxy_maps_ai_pet_to_orchestrator_pet(self):
         source = read(AI_ROUTE_MODULES)
 
-        self.assertIn('ProxyAiOrchestratorPrefix(', source)
+        self.assertIn("ProxyAiOrchestratorPrefix(", source)
         self.assertIn('"/ai/pet"', source)
         self.assertIn('"/pet"', source)
         self.assertIn('"gate.ai.pet.proxy"', source)
@@ -28,8 +27,8 @@ class PetGateBoundaryContractTests(unittest.TestCase):
 
         self.assertGreaterEqual(source.count('req.set("X-Trace-Id"'), 2)
         self.assertGreaterEqual(source.count('req.set("X-Request-Id"'), 2)
-        self.assertIn("connection ? connection->GetTraceId() : \"\"", source)
-        self.assertIn("connection ? connection->GetRequestId() : \"\"", source)
+        self.assertIn('connection ? connection->GetTraceId() : ""', source)
+        self.assertIn('connection ? connection->GetRequestId() : ""', source)
         self.assertIn("res.base().find(http::field::content_type)", source)
         self.assertIn("upstream_content_type.empty()", source)
 

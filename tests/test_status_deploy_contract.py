@@ -2,7 +2,6 @@ import re
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEPLOY_SCRIPT = REPO_ROOT / "tools/scripts/status/deploy_services.sh"
 START_SERVICES_SCRIPT = REPO_ROOT / "tools/scripts/status/start-all-services.sh"
@@ -105,8 +104,10 @@ class StatusDeployContractTests(unittest.TestCase):
         self.assertIn("IBUS_SYNC_MODE:", source)
         self.assertIn("GDK_BACKEND:", source)
         fcitx_index = source.index("has_qt_fcitx_plugin")
-        ibus_index = source.index("elif [[ \"$has_qt_ibus_plugin\" -eq 1 ]]")
-        virtual_keyboard_index = source.index('elif [[ -f "${QT_ROOT}/plugins/platforminputcontexts/libqtvirtualkeyboardplugin.so" ]]')
+        ibus_index = source.index('elif [[ "$has_qt_ibus_plugin" -eq 1 ]]')
+        virtual_keyboard_index = source.index(
+            'elif [[ -f "${QT_ROOT}/plugins/platforminputcontexts/libqtvirtualkeyboardplugin.so" ]]'
+        )
         self.assertLess(fcitx_index, virtual_keyboard_index)
         self.assertLess(ibus_index, virtual_keyboard_index)
         self.assertIn("dbus-launch", source)
@@ -116,10 +117,10 @@ class StatusDeployContractTests(unittest.TestCase):
         source = read(RUN_FULL_STACK_SCRIPT)
 
         for token in (
-            "source \"$ENV_FILE\"",
-            "cmake --preset \"$PRESET\"",
-            "cmake --build --preset \"$PRESET\" --parallel \"$BUILD_PARALLEL\"",
-            "docker compose -f \"$AI_COMPOSE_FILE\" up -d --build",
+            'source "$ENV_FILE"',
+            'cmake --preset "$PRESET"',
+            'cmake --build --preset "$PRESET" --parallel "$BUILD_PARALLEL"',
+            'docker compose -f "$AI_COMPOSE_FILE" up -d --build',
             '"${SCRIPT_DIR}/deploy_services.sh" --build-bin "$BUILD_BIN"',
             '"${SCRIPT_DIR}/start-all-services.sh" --no-deploy',
             '"${SCRIPT_DIR}/start-memochat-qml-wslg.sh" --exe "$CLIENT_EXE"',
@@ -143,7 +144,7 @@ class StatusDeployContractTests(unittest.TestCase):
             self.assertIn(token, source)
 
         self.assertIn("set -Eeuo pipefail", source)
-        self.assertIn("exec \"${client_args[@]}\"", source)
+        self.assertIn('exec "${client_args[@]}"', source)
 
     def test_linux_start_requires_gpt_sovits_by_default(self):
         source = read(START_SERVICES_SCRIPT)
@@ -176,12 +177,13 @@ class StatusDeployContractTests(unittest.TestCase):
             "memochat-rabbitmq",
             "wait_for_minio",
             "wait_for_redpanda",
-            "docker compose -f \"$LOCAL_COMPOSE_FILE\" up -d",
+            'docker compose -f "$LOCAL_COMPOSE_FILE" up -d',
         ):
             self.assertIn(token, source)
 
-        self.assertLess(source.index("[STEP] Start Docker dependencies"),
-                        source.index("[STEP] Start Docker Envoy Gateway"))
+        self.assertLess(
+            source.index("[STEP] Start Docker dependencies"), source.index("[STEP] Start Docker Envoy Gateway")
+        )
 
     def test_local_redpanda_has_host_and_docker_network_listeners(self):
         local_compose = read(LOCAL_COMPOSE)
@@ -242,8 +244,8 @@ class StatusDeployContractTests(unittest.TestCase):
     def test_gpt_sovits_smoke_starts_launcher_directly(self):
         source = read(REPO_ROOT / "tools/scripts/pet/smoke_gpt_sovits_tts_wsl.sh")
 
-        self.assertNotIn("setsid -f \"$START_SCRIPT\"", source)
-        self.assertIn("\"$START_SCRIPT\"", source)
+        self.assertNotIn('setsid -f "$START_SCRIPT"', source)
+        self.assertIn('"$START_SCRIPT"', source)
 
 
 if __name__ == "__main__":

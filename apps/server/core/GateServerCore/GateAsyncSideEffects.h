@@ -7,34 +7,30 @@
 
 #include "json/GlazeCompat.h"
 
-class GateAsyncSideEffects {
+class GateAsyncSideEffects
+{
 public:
     static GateAsyncSideEffects& Instance();
     void Start();
     void Stop();
 
-    void PublishUserProfileChanged(
-        int uid,
-        const std::string& user_id,
-        const std::string& email,
-        const std::string& name,
-        const std::string& nick,
-        const std::string& icon,
-        int sex);
+    void PublishUserProfileChanged(int uid,
+                                   const std::string& user_id,
+                                   const std::string& email,
+                                   const std::string& name,
+                                   const std::string& nick,
+                                   const std::string& icon,
+                                   int sex);
 
-    void PublishAuditLogin(
-        int uid,
-        const std::string& user_id,
-        const std::string& email,
-        const std::string& chat_server,
-        const std::string& chat_host,
-        const std::string& chat_port,
-        bool login_cache_hit);
+    void PublishAuditLogin(int uid,
+                           const std::string& user_id,
+                           const std::string& email,
+                           const std::string& chat_server,
+                           const std::string& chat_host,
+                           const std::string& chat_port,
+                           bool login_cache_hit);
 
-    void PublishCacheInvalidate(
-        const std::string& email,
-        const std::string& user_name,
-        const std::string& reason);
+    void PublishCacheInvalidate(const std::string& email, const std::string& user_name, const std::string& reason);
 
 private:
     GateAsyncSideEffects();
@@ -42,18 +38,16 @@ private:
     GateAsyncSideEffects(const GateAsyncSideEffects&) = delete;
     GateAsyncSideEffects& operator=(const GateAsyncSideEffects&) = delete;
 
-    bool PublishKafka(
-        const std::string& topic,
-        const std::string& partition_key,
-        const std::string& event_type,
-        const memochat::json::JsonValue& payload,
-        std::string* error);
+    bool PublishKafka(const std::string& topic,
+                      const std::string& partition_key,
+                      const std::string& event_type,
+                      const memochat::json::JsonValue& payload,
+                      std::string* error);
 
-    bool PublishRabbit(
-        const std::string& routing_key,
-        const std::string& task_type,
-        const memochat::json::JsonValue& payload,
-        std::string* error);
+    bool PublishRabbit(const std::string& routing_key,
+                       const std::string& task_type,
+                       const memochat::json::JsonValue& payload,
+                       std::string* error);
 
     bool EnsureRabbitConnected(std::string* error);
     bool EnsureRabbitTopology(std::string* error);
@@ -81,4 +75,3 @@ private:
     std::atomic<bool> _stop{false};
     std::thread _worker;
 };
-

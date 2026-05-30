@@ -128,8 +128,7 @@ class RagEvalService:
         metadata_filters: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         return [
-            await self.run_eval(case.case_id, uid=uid, metadata_filters=metadata_filters)
-            for case in self.list_cases()
+            await self.run_eval(case.case_id, uid=uid, metadata_filters=metadata_filters) for case in self.list_cases()
         ]
 
     def evaluate_results(
@@ -154,11 +153,12 @@ class RagEvalService:
         min_term_coverage = expectations.get("min_expected_term_coverage")
         if min_term_coverage is not None and float(metrics["expected_term_coverage"]) < float(min_term_coverage):
             failures.append(
-                "expected_term_coverage "
-                f"{metrics['expected_term_coverage']:.4f} below {float(min_term_coverage):.4f}"
+                f"expected_term_coverage {metrics['expected_term_coverage']:.4f} below {float(min_term_coverage):.4f}"
             )
 
-        required_terms = [_normalize_text(term) for term in _as_list(expectations.get("required_terms")) if _normalize_text(term)]
+        required_terms = [
+            _normalize_text(term) for term in _as_list(expectations.get("required_terms")) if _normalize_text(term)
+        ]
         if required_terms:
             matched_terms = set(metrics["matched_terms"])
             for term in required_terms:
@@ -192,7 +192,9 @@ class RagEvalService:
     ) -> dict[str, Any]:
         expected_items = self._expected_items(expectations)
         matched_items = self._matched_items(chunks, expected_items)
-        expected_terms = [_normalize_text(term) for term in _as_list(expectations.get("expected_terms")) if _normalize_text(term)]
+        expected_terms = [
+            _normalize_text(term) for term in _as_list(expectations.get("expected_terms")) if _normalize_text(term)
+        ]
         haystack = "\n".join(_normalize_text(chunk.get("content")) for chunk in chunks)
         matched_terms = sorted({term for term in expected_terms if term in haystack})
         top_score = max((float(chunk.get("score") or 0.0) for chunk in chunks), default=0.0)

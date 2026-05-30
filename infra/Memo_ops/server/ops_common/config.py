@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from configparser import ConfigParser
 import os
+from configparser import ConfigParser
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -58,7 +58,9 @@ def normalize_config(data: Dict[str, Any]) -> Dict[str, Any]:
 
     repo_cfg = data.setdefault("repo", {})
     cluster_cfg = data.setdefault("cluster", {})
-    cluster_path = cluster_cfg.get("config") or repo_cfg.get("cluster_config_path") or "../../server/StatusServer/config.ini"
+    cluster_path = (
+        cluster_cfg.get("config") or repo_cfg.get("cluster_config_path") or "../../server/StatusServer/config.ini"
+    )
     data["cluster"] = {"config": str(resolve_path(data, cluster_path))}
 
     obs_cfg = data.setdefault("observability", {})

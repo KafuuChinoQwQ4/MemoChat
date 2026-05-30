@@ -5,11 +5,11 @@ import os
 import re
 import subprocess
 import time
+from configparser import ConfigParser
 from pathlib import Path
 from typing import Any, Dict, List
 
 import psutil
-from configparser import ConfigParser
 from fastapi import APIRouter
 
 from Memo_ops.server.ops_server.runtime import OpsServerRuntime
@@ -66,13 +66,17 @@ def _running_procs() -> Dict[str, List[Dict[str, Any]]]:
             info = proc.info
             cmdline = " ".join(info.get("cmdline") or [])
             if "GateServer" in cmdline or "ChatServer" in cmdline or "StatusServer" in cmdline:
-                match = re.search(r"(GateServer|ChatServer|StatusServer|GateServerHttp1|GateServerHttp2|GateServer2)", cmdline)
+                match = re.search(
+                    r"(GateServer|ChatServer|StatusServer|GateServerHttp1|GateServerHttp2|GateServer2)", cmdline
+                )
                 if match:
                     svc = match.group(1)
-                    by_service.setdefault(svc, []).append({
-                        "pid": info["pid"],
-                        "create_time": info["create_time"],
-                    })
+                    by_service.setdefault(svc, []).append(
+                        {
+                            "pid": info["pid"],
+                            "create_time": info["create_time"],
+                        }
+                    )
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
     return by_service
@@ -92,8 +96,13 @@ def _collect_system_metrics(runtime: OpsServerRuntime) -> List[Dict[str, Any]]:
     mem_avail_mb = vm.available / (1024 * 1024)
 
     services = [
-        "GateServer", "GateServerHttp1.1", "GateServerHttp2", "GateServer2",
-        "ChatServer", "StatusServer", "VarifyServer",
+        "GateServer",
+        "GateServerHttp1.1",
+        "GateServerHttp2",
+        "GateServer2",
+        "ChatServer",
+        "StatusServer",
+        "VarifyServer",
     ]
 
     for svc in services:
@@ -142,6 +151,7 @@ def create_system_router(runtime: OpsServerRuntime) -> APIRouter:
                 "services": services,
                 "collected_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
+
         return runtime.guarded(action)
 
     return router

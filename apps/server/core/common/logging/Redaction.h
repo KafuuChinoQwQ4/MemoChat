@@ -3,7 +3,8 @@
 #include <string>
 #include "json/GlazeCompat.h"
 
-namespace memolog {
+namespace memolog
+{
 
 bool IsSensitiveKey(const std::string& key);
 std::string RedactValue(const std::string& key, const std::string& value, bool enabled);

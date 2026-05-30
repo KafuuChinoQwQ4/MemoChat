@@ -2,8 +2,10 @@
 #include "const.h"
 #include "MongoDao.h"
 
-class MongoMgr : public Singleton<MongoMgr> {
+class MongoMgr : public Singleton<MongoMgr>
+{
     friend class Singleton<MongoMgr>;
+
 public:
     ~MongoMgr();
 

@@ -18,34 +18,39 @@
 #include <set>
 #include <vector>
 
-namespace memolog {
+namespace memolog
+{
 
 std::shared_ptr<spdlog::logger> Logger::logger_;
 LogConfig Logger::config_{};
 std::string Logger::service_name_ = "unknown";
 
-namespace {
+namespace
+{
 
-std::string ToLevelString(spdlog::level::level_enum level) {
-    switch (level) {
-    case spdlog::level::trace:
-        return "trace";
-    case spdlog::level::debug:
-        return "debug";
-    case spdlog::level::info:
-        return "info";
-    case spdlog::level::warn:
-        return "warn";
-    case spdlog::level::err:
-        return "error";
-    case spdlog::level::critical:
-        return "critical";
-    default:
-        return "info";
+std::string ToLevelString(spdlog::level::level_enum level)
+{
+    switch (level)
+    {
+        case spdlog::level::trace:
+            return "trace";
+        case spdlog::level::debug:
+            return "debug";
+        case spdlog::level::info:
+            return "info";
+        case spdlog::level::warn:
+            return "warn";
+        case spdlog::level::err:
+            return "error";
+        case spdlog::level::critical:
+            return "critical";
+        default:
+            return "info";
     }
 }
 
-std::string NowIso8601() {
+std::string NowIso8601()
+{
     using namespace std::chrono;
     const auto now = system_clock::now();
     const auto tt = system_clock::to_time_t(now);
@@ -57,7 +62,9 @@ std::string NowIso8601() {
 #endif
     const auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
     char buf[32]{0};
-    std::snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ",
+    std::snprintf(buf,
+                  sizeof(buf),
+                  "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ",
                   tm.tm_year + 1900,
                   tm.tm_mon + 1,
                   tm.tm_mday,
@@ -68,49 +75,51 @@ std::string NowIso8601() {
     return buf;
 }
 
-std::string NormalizeDir(std::string dir) {
-    if (dir.empty()) {
+std::string NormalizeDir(std::string dir)
+{
+    if (dir.empty())
+    {
         return "./logs";
     }
     return dir;
 }
 
-bool IsTopLevelField(const std::string& key) {
-    static const std::set<std::string> known = {
-        "service_instance",
-        "module",
-        "peer_service",
-        "error_code",
-        "error_type",
-        "duration_ms",
-        "uid",
-        "session_id"
-    };
+bool IsTopLevelField(const std::string& key)
+{
+    static const std::set<std::string> known =
+        {"service_instance", "module", "peer_service", "error_code", "error_type", "duration_ms", "uid", "session_id"};
     return known.find(key) != known.end();
 }
 
 } // namespace
 
-spdlog::level::level_enum ParseLevel(const std::string& level) {
-    if (level == "trace") {
+spdlog::level::level_enum ParseLevel(const std::string& level)
+{
+    if (level == "trace")
+    {
         return spdlog::level::trace;
     }
-    if (level == "debug") {
+    if (level == "debug")
+    {
         return spdlog::level::debug;
     }
-    if (level == "warn") {
+    if (level == "warn")
+    {
         return spdlog::level::warn;
     }
-    if (level == "error") {
+    if (level == "error")
+    {
         return spdlog::level::err;
     }
-    if (level == "critical") {
+    if (level == "critical")
+    {
         return spdlog::level::critical;
     }
     return spdlog::level::info;
 }
 
-void Logger::Init(const std::string& service_name, const LogConfig& cfg) {
+void Logger::Init(const std::string& service_name, const LogConfig& cfg)
+{
     config_ = cfg;
     service_name_ = service_name.empty() ? "unknown" : service_name;
 
@@ -118,21 +127,31 @@ void Logger::Init(const std::string& service_name, const LogConfig& cfg) {
     std::filesystem::create_directories(log_dir);
 
     std::vector<spdlog::sink_ptr> sinks;
-    if (config_.to_console) {
+    if (config_.to_console)
+    {
         auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
         console_sink->set_pattern("%v");
         sinks.push_back(console_sink);
     }
 
-    if (config_.rotate_mode == "size") {
+    if (config_.rotate_mode == "size")
+    {
         const auto max_size = static_cast<size_t>(config_.max_size_mb) * 1024U * 1024U;
-        auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-            log_dir + "/" + service_name_ + ".log.json", max_size, config_.max_files);
+        auto file_sink =
+            std::make_shared<spdlog::sinks::rotating_file_sink_mt>(log_dir + "/" + service_name_ + ".log.json",
+                                                                   max_size,
+                                                                   config_.max_files);
         file_sink->set_pattern("%v");
         sinks.push_back(file_sink);
-    } else {
-        auto daily_sink = std::make_shared<spdlog::sinks::daily_file_sink_mt>(
-            log_dir + "/" + service_name_ + ".log.json", 0, 0, false, config_.max_files);
+    }
+    else
+    {
+        auto daily_sink =
+            std::make_shared<spdlog::sinks::daily_file_sink_mt>(log_dir + "/" + service_name_ + ".log.json",
+                                                                0,
+                                                                0,
+                                                                false,
+                                                                config_.max_files);
         daily_sink->set_pattern("%v");
         sinks.push_back(daily_sink);
     }
@@ -143,8 +162,10 @@ void Logger::Init(const std::string& service_name, const LogConfig& cfg) {
     spdlog::register_logger(logger_);
 }
 
-void Logger::Shutdown() {
-    if (logger_) {
+void Logger::Shutdown()
+{
+    if (logger_)
+    {
         logger_->flush();
     }
     spdlog::drop_all();
@@ -154,8 +175,10 @@ void Logger::Shutdown() {
 void Logger::Log(spdlog::level::level_enum level,
                  const std::string& event,
                  const std::string& message,
-                 const std::map<std::string, std::string>& fields) {
-    if (!logger_) {
+                 const std::map<std::string, std::string>& fields)
+{
+    if (!logger_)
+    {
         return;
     }
 
@@ -178,41 +201,56 @@ void Logger::Log(spdlog::level::level_enum level,
     const auto& span_id = TraceContext::GetSpanId();
     const auto& uid = TraceContext::GetUid();
     const auto& session_id = TraceContext::GetSessionId();
-    if (!trace_id.empty()) {
+    if (!trace_id.empty())
+    {
         root["trace_id"] = trace_id;
     }
-    if (!request_id.empty()) {
+    if (!request_id.empty())
+    {
         root["request_id"] = request_id;
     }
-    if (!span_id.empty()) {
+    if (!span_id.empty())
+    {
         root["span_id"] = span_id;
     }
-    if (!uid.empty()) {
+    if (!uid.empty())
+    {
         root["uid"] = uid;
     }
-    if (!session_id.empty()) {
+    if (!session_id.empty())
+    {
         root["session_id"] = session_id;
     }
 
     memochat::json::JsonValue attrs(memochat::json::object_t{});
-    for (const auto& it : fields) {
+    for (const auto& it : fields)
+    {
         const std::string redacted = RedactValue(it.first, it.second, config_.redact);
-        if (it.first == "uid") {
+        if (it.first == "uid")
+        {
             root["uid"] = redacted;
             continue;
         }
-        if (it.first == "session_id") {
+        if (it.first == "session_id")
+        {
             root["session_id"] = redacted;
             continue;
         }
-        if (IsTopLevelField(it.first)) {
-            if (it.first == "duration_ms") {
-                try {
+        if (IsTopLevelField(it.first))
+        {
+            if (it.first == "duration_ms")
+            {
+                try
+                {
                     root[it.first] = std::stod(redacted);
-                } catch (...) {
+                }
+                catch (...)
+                {
                     root[it.first] = redacted;
                 }
-            } else {
+            }
+            else
+            {
                 root[it.first] = redacted;
             }
             continue;
@@ -224,21 +262,25 @@ void Logger::Log(spdlog::level::level_enum level,
     memochat::json::JsonStreamWriterBuilder builder;
     builder["indentation"] = "";
     std::string line = memochat::json::writeString(builder, root);
-    if (!line.empty() && line.back() == '\n') {
+    if (!line.empty() && line.back() == '\n')
+    {
         line.pop_back();
     }
     logger_->log(level, line);
 }
 
-std::shared_ptr<spdlog::logger> Logger::Get() {
+std::shared_ptr<spdlog::logger> Logger::Get()
+{
     return logger_;
 }
 
-const LogConfig& Logger::Config() {
+const LogConfig& Logger::Config()
+{
     return config_;
 }
 
-const std::string& Logger::ServiceName() {
+const std::string& Logger::ServiceName()
+{
     return service_name_;
 }
 

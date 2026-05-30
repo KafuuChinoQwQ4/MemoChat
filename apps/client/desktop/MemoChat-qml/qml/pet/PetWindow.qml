@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick 2.15
 import QtQuick.Window 2.15
 import MemoChat 1.0
+import "PetWindowRuntime.js" as PetWindowRuntime
 
 Window {
     id: root
@@ -52,12 +53,14 @@ Window {
 
     function scaledWindowWidth(value) {
         var factor = value === undefined ? root.scaleFactor : value
-        return Math.round(root.baseWindowWidth * factor)
+        return PetWindowRuntime.scaledWindowWidth(root.baseWindowWidth, factor)
     }
 
     function scaledWindowHeight(value) {
         var factor = value === undefined ? root.scaleFactor : value
-        return root.speechBubbleSafeHeight + Math.round(root.baseWindowHeight * factor)
+        return PetWindowRuntime.scaledWindowHeight(root.baseWindowHeight,
+                                                   root.speechBubbleSafeHeight,
+                                                   factor)
     }
 
     function openPet() {
@@ -131,62 +134,28 @@ Window {
     }
 
     function settingsLanguageCode() {
-        if (!root.petAssetSettings) {
-            return "zh-CN"
-        }
-        const index = root.petAssetSettings.languageIndex !== undefined ? root.petAssetSettings.languageIndex : 0
-        switch (index) {
-        case 1:
-            return "ja-JP"
-        case 2:
-            return "en-US"
-        case 3:
-            return "ko-KR"
-        case 4:
-            return "fr-FR"
-        case 5:
-            return "es-ES"
-        default:
-            return "zh-CN"
-        }
+        const index = root.petAssetSettings && root.petAssetSettings.languageIndex !== undefined
+                ? root.petAssetSettings.languageIndex : 0
+        return PetWindowRuntime.languageCodeFromIndex(index)
     }
 
     function settingsSpeechRulesText() {
-        if (!root.petAssetSettings || root.petAssetSettings.speechRules === undefined) {
-            return ""
-        }
-        return String(root.petAssetSettings.speechRules || "").trim()
+        return PetWindowRuntime.settingsSpeechRulesText(root.petAssetSettings)
     }
 
     function petSettingText(name) {
-        if (!root.petAssetSettings || root.petAssetSettings[name] === undefined || root.petAssetSettings[name] === null) {
-            return ""
-        }
-        return String(root.petAssetSettings[name] || "").trim()
+        return PetWindowRuntime.petSettingText(root.petAssetSettings, name)
     }
 
     function settingsVoicePath() {
         const voiceDirectory = petSettingText("voiceDirectory")
         const defaultVoice = petSettingText("defaultVoice")
-        if (voiceDirectory.length === 0 || defaultVoice.length === 0) {
-            return ""
-        }
-        if (defaultVoice.indexOf("/") === 0 || defaultVoice.indexOf("\\") === 0
-                || defaultVoice.indexOf(":/") > 0 || /^[A-Za-z]:[\\/]/.test(defaultVoice)) {
-            return defaultVoice
-        }
-        const separator = voiceDirectory.endsWith("/") || voiceDirectory.endsWith("\\") ? "" : "/"
-        return voiceDirectory + separator + defaultVoice
+        return PetWindowRuntime.settingsVoicePath(voiceDirectory, defaultVoice)
     }
 
     function settingsVoiceName() {
         const defaultVoice = petSettingText("defaultVoice")
-        if (defaultVoice.length > 0) {
-            const normalized = defaultVoice.replace(/\\/g, "/")
-            const baseName = normalized.split("/").pop()
-            return baseName.replace(/\.[^.]+$/, "")
-        }
-        return petSettingText("characterName")
+        return PetWindowRuntime.settingsVoiceName(defaultVoice, petSettingText("characterName"))
     }
 
     function syncPetRuntimeSettings() {
@@ -221,20 +190,9 @@ Window {
             return
         }
         syncChatWindowState()
-        var areaX = 0
-        var areaY = 0
-        var areaWidth = Screen.desktopAvailableWidth > 0 ? Screen.desktopAvailableWidth : Screen.width
-        var areaHeight = Screen.desktopAvailableHeight > 0 ? Screen.desktopAvailableHeight : Screen.height
-        var rightX = root.x + root.width + root.panelGap
-        var leftX = root.x - panel.width - root.panelGap
-        var rightSpace = areaX + areaWidth - rightX
-        var leftSpace = leftX - areaX
-        var rightFits = rightSpace >= panel.width
-        var leftFits = leftSpace >= 0
-        var nextX = rightFits || (!leftFits && rightSpace >= leftSpace) ? rightX : leftX
-        var desiredY = root.y + Math.round((root.height - panel.height) / 2)
-        panel.x = Math.max(areaX + 8, Math.min(nextX, areaX + areaWidth - panel.width - 8))
-        panel.y = Math.max(areaY + 8, Math.min(desiredY, areaY + areaHeight - panel.height - 8))
+        var position = PetWindowRuntime.sidePanelPosition(root, panel, Screen, root.panelGap)
+        panel.x = position.x
+        panel.y = position.y
     }
 
     function scheduleChatWindowPosition() {
@@ -302,20 +260,9 @@ Window {
             return
         }
         syncControlWindowState()
-        var areaX = 0
-        var areaY = 0
-        var areaWidth = Screen.desktopAvailableWidth > 0 ? Screen.desktopAvailableWidth : Screen.width
-        var areaHeight = Screen.desktopAvailableHeight > 0 ? Screen.desktopAvailableHeight : Screen.height
-        var rightX = root.x + root.width + root.panelGap
-        var leftX = root.x - panel.width - root.panelGap
-        var rightSpace = areaX + areaWidth - rightX
-        var leftSpace = leftX - areaX
-        var rightFits = rightSpace >= panel.width
-        var leftFits = leftSpace >= 0
-        var nextX = rightFits || (!leftFits && rightSpace >= leftSpace) ? rightX : leftX
-        var desiredY = root.y + Math.round((root.height - panel.height) / 2)
-        panel.x = Math.max(areaX + 8, Math.min(nextX, areaX + areaWidth - panel.width - 8))
-        panel.y = Math.max(areaY + 8, Math.min(desiredY, areaY + areaHeight - panel.height - 8))
+        var position = PetWindowRuntime.sidePanelPosition(root, panel, Screen, root.panelGap)
+        panel.x = position.x
+        panel.y = position.y
     }
 
     function syncControlWindowState() {
@@ -355,16 +302,9 @@ Window {
         if (!root.agentController) {
             return false
         }
-        var current = root.agentController.currentModel || ""
-        if (current.length > 0) {
-            return true
-        }
-        var models = root.agentController.availableModels || []
-        if (models.length > 0) {
-            return true
-        }
-        var providerStatus = root.agentController.apiProviderStatus || ""
-        return providerStatus.indexOf("已接入") >= 0
+        return PetWindowRuntime.providerRuntimeAvailable(root.agentController.currentModel || "",
+                                                         root.agentController.availableModels || [],
+                                                         root.agentController.apiProviderStatus || "")
     }
 
     function refreshProviderAvailability() {
@@ -413,18 +353,14 @@ Window {
     }
 
     function applyWindowFlags() {
-        var nextFlags = (Qt.platform.os === "linux" ? Qt.Window : Qt.Tool) | Qt.FramelessWindowHint
-        if (alwaysOnTop) {
-            nextFlags |= Qt.WindowStaysOnTopHint
-        }
-        if (clickThrough) {
-            nextFlags |= Qt.WindowTransparentForInput
-        }
-        flags = nextFlags
+        flags = PetWindowRuntime.petWindowFlags(Qt,
+                                                Qt.platform.os === "linux",
+                                                root.alwaysOnTop,
+                                                root.clickThrough)
     }
 
     function applyScale(value) {
-        var nextScale = Math.max(0.65, Math.min(2.2, value))
+        var nextScale = PetWindowRuntime.clamp(value, 0.65, 2.2)
         if (Math.abs(nextScale - root.scaleFactor) < 0.001) {
             return
         }

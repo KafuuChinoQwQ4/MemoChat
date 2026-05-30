@@ -3,24 +3,28 @@
 #include <vector>
 #include <ctime>
 
-struct ChatMessage {
+struct ChatMessage
+{
     std::string msg_id;
-    std::string role;      // "user" or "assistant"
+    std::string role; // "user" or "assistant"
     std::string content;
     int64_t created_at;
 };
 
-class ConversationContext {
+class ConversationContext
+{
 public:
     ConversationContext() = default;
-    ConversationContext(const std::string& session_id, int32_t uid,
-                       const std::string& model_type, const std::string& model_name);
+    ConversationContext(const std::string& session_id,
+                        int32_t uid,
+                        const std::string& model_type,
+                        const std::string& model_name);
 
     std::string session_id;
     int32_t uid = 0;
     std::string model_type;
     std::string model_name;
-    std::vector<ChatMessage> messages;  // sliding window (max 20)
+    std::vector<ChatMessage> messages; // sliding window (max 20)
     int64_t created_at = 0;
     int64_t last_active_at = 0;
 

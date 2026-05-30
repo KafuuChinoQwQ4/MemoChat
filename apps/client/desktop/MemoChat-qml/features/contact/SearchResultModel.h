@@ -11,7 +11,8 @@ class SearchResultModel : public QAbstractListModel
     Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
 
 public:
-    enum Roles {
+    enum Roles
+    {
         UidRole = Qt::UserRole + 1,
         UserIdRole,
         NameRole,
@@ -20,14 +21,14 @@ public:
         IconRole
     };
 
-    explicit SearchResultModel(QObject *parent = nullptr);
+    explicit SearchResultModel(QObject* parent = nullptr);
 
-    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    int rowCount(const QModelIndex& parent = QModelIndex()) const override;
+    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
 
     void clear();
-    void setResult(const std::shared_ptr<SearchInfo> &result);
+    void setResult(const std::shared_ptr<SearchInfo>& result);
 
 signals:
     void countChanged();

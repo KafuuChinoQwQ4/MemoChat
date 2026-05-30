@@ -4,37 +4,47 @@
 
 #include <algorithm>
 
-namespace {
+namespace
+{
 std::string NormalizeLower(std::string value)
 {
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
-        if (ch >= 'A' && ch <= 'Z') {
-            return static_cast<char>(ch - 'A' + 'a');
-        }
-        return static_cast<char>(ch);
-    });
+    std::transform(value.begin(),
+                   value.end(),
+                   value.begin(),
+                   [](unsigned char ch)
+                   {
+                       if (ch >= 'A' && ch <= 'Z')
+                       {
+                           return static_cast<char>(ch - 'A' + 'a');
+                       }
+                       return static_cast<char>(ch);
+                   });
     return value;
 }
 
 bool ParseBoolFlag(const std::string& raw, bool default_value = false)
 {
-    if (raw.empty()) {
+    if (raw.empty())
+    {
         return default_value;
     }
     const auto value = NormalizeLower(raw);
     return value == "1" || value == "true" || value == "yes" || value == "on";
 }
-}
+} // namespace
 
-namespace memochat::chatruntime {
+namespace memochat::chatruntime
+{
 
 ChatNodeRole CurrentRole()
 {
     auto role = NormalizeLower(ConfigMgr::Inst().GetValue("Runtime", "Role"));
-    if (role == "worker") {
+    if (role == "worker")
+    {
         return ChatNodeRole::Worker;
     }
-    if (role == "hybrid") {
+    if (role == "hybrid")
+    {
         return ChatNodeRole::Hybrid;
     }
     return ChatNodeRole::Ingress;
@@ -60,7 +70,8 @@ bool FeatureEnabled(const std::string& name)
 std::string AsyncEventBusBackend()
 {
     const auto backend = NormalizeLower(ConfigMgr::Inst().GetValue("Runtime", "AsyncEventBus"));
-    if (backend.empty()) {
+    if (backend.empty())
+    {
         return "redis";
     }
     return backend;
@@ -69,7 +80,8 @@ std::string AsyncEventBusBackend()
 std::string TaskBusBackend()
 {
     const auto backend = NormalizeLower(ConfigMgr::Inst().GetValue("Runtime", "TaskBus"));
-    if (backend.empty()) {
+    if (backend.empty())
+    {
         return "inline";
     }
     return backend;
@@ -148,13 +160,16 @@ std::string TaskRoutingOutboxRepair()
 int TaskRetryDelayMs()
 {
     const auto raw = ConfigMgr::Inst().GetValue("RabbitMQ", "RetryDelayMs");
-    if (raw.empty()) {
+    if (raw.empty())
+    {
         return 5000;
     }
-    try {
+    try
+    {
         return std::max(100, std::stoi(raw));
     }
-    catch (...) {
+    catch (...)
+    {
         return 5000;
     }
 }
@@ -162,15 +177,18 @@ int TaskRetryDelayMs()
 int TaskMaxRetries()
 {
     const auto raw = ConfigMgr::Inst().GetValue("RabbitMQ", "MaxRetries");
-    if (raw.empty()) {
+    if (raw.empty())
+    {
         return 5;
     }
-    try {
+    try
+    {
         return std::max(1, std::stoi(raw));
     }
-    catch (...) {
+    catch (...)
+    {
         return 5;
     }
 }
 
-}
+} // namespace memochat::chatruntime

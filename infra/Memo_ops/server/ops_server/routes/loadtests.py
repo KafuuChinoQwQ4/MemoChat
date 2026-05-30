@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import APIRouter, Query, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Query
 
 from Memo_ops.server.ops_common.analytics import query_loadtest_trends
 from Memo_ops.server.ops_common.repositories import (
@@ -110,8 +110,9 @@ def create_loadtests_router(runtime: OpsServerRuntime) -> APIRouter:
                 pass
         return reports
 
-    def _run_loadtest_bg(run_id: str, scenario: str, total: int, concurrency: int,
-                          runner: Path, config_path: Path, report_dir: Path) -> None:
+    def _run_loadtest_bg(
+        run_id: str, scenario: str, total: int, concurrency: int, runner: Path, config_path: Path, report_dir: Path
+    ) -> None:
         started_at = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
         suite_dir = report_dir / f"suite_{started_at}"
         suite_dir.mkdir(parents=True, exist_ok=True)
@@ -119,11 +120,16 @@ def create_loadtests_router(runtime: OpsServerRuntime) -> APIRouter:
         cmd = [
             _find_python(),
             str(runner),
-            "--scenario", scenario,
-            "--config", str(config_path),
-            "--total", str(total),
-            "--concurrency", str(concurrency),
-            "--report-dir", str(suite_dir),
+            "--scenario",
+            scenario,
+            "--config",
+            str(config_path),
+            "--total",
+            str(total),
+            "--concurrency",
+            str(concurrency),
+            "--report-dir",
+            str(suite_dir),
         ]
         try:
             env = {**os.environ}
@@ -160,7 +166,11 @@ def create_loadtests_router(runtime: OpsServerRuntime) -> APIRouter:
         runner = _find_runner(runtime)
         repo_root = Path(runtime.config.get("_package_root", "."))
         configured_config = runtime.config.get("loadtest", {}).get("config_path", "")
-        config_path = Path(configured_config).resolve() if configured_config else repo_root / "tools" / "loadtest" / "python-loadtest" / "config.json"
+        config_path = (
+            Path(configured_config).resolve()
+            if configured_config
+            else repo_root / "tools" / "loadtest" / "python-loadtest" / "config.json"
+        )
 
         if not runner.exists():
             return {"error": f"Python loadtest runner not found: {runner}"}

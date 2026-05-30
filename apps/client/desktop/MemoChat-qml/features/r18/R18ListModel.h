@@ -11,7 +11,8 @@ class R18ListModel : public QAbstractListModel
     Q_PROPERTY(int count READ count NOTIFY countChanged)
 
 public:
-    enum Roles {
+    enum Roles
+    {
         DataRole = Qt::UserRole + 1,
         SourceIdRole,
         IdRole,
@@ -30,7 +31,10 @@ public:
     explicit R18ListModel(QObject* parent = nullptr);
 
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
-    int count() const { return _items.size(); }
+    int count() const
+    {
+        return _items.size();
+    }
     QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
 

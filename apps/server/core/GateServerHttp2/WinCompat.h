@@ -33,15 +33,15 @@
 
 #ifdef _MSC_VER
 #pragma warning(push)
-#pragma warning(disable: 6387)
-#pragma warning(disable: 6031)
+#pragma warning(disable : 6387)
+#pragma warning(disable : 6031)
 #endif
 
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
 
-#endif  /* _WIN32 */
+#endif /* _WIN32 */
 
 #ifndef _WIN32
 #include <netinet/in.h>

@@ -6,28 +6,30 @@
 #include <QVariantMap>
 #include <QtGlobal>
 
-namespace {
-constexpr qint64 kDefaultAdminPermBits =
-    (1LL << 0) | (1LL << 1) | (1LL << 2) | (1LL << 4) | (1LL << 5);
+namespace
+{
+constexpr qint64 kDefaultAdminPermBits = (1LL << 0) | (1LL << 1) | (1LL << 2) | (1LL << 4) | (1LL << 5);
 constexpr qint64 kOwnerPermBits = kDefaultAdminPermBits | (1LL << 3) | (1LL << 6);
-}
+} // namespace
 
 void AppController::clearCurrentGroupConversation(qint64 groupId)
 {
-    const qint64 targetGroupId = groupId > 0 ? groupId : _current_group_id;
-    if (targetGroupId > 0) {
-        const int dialogUid = ConversationSyncService::resolveGroupDialogUid(_group_uid_map, targetGroupId);
-        _dialog_mention_map.remove(dialogUid);
+    const qint64 targetGroupId = groupId > 0 ? groupId : _group_state.currentId;
+    if (targetGroupId > 0)
+    {
+        const int dialogUid = ConversationSyncService::resolveGroupDialogUid(_group_state.dialogUidMap, targetGroupId);
+        _dialog_state.mentionMap.remove(dialogUid);
         _dialog_list_model.clearMention(dialogUid);
         _dialog_list_model.removeByUid(dialogUid);
         _group_list_model.removeByUid(dialogUid);
-        _group_uid_map.remove(dialogUid);
+        _group_state.dialogUidMap.remove(dialogUid);
     }
-    if (targetGroupId <= 0 || _current_group_id == targetGroupId) {
+    if (targetGroupId <= 0 || _group_state.currentId == targetGroupId)
+    {
         setCurrentGroup(0, QString());
-        _group_history_before_seq = 0;
-        _group_history_has_more = true;
-        _group_history_loading = false;
+        _group_state.historyBeforeSeq = 0;
+        _group_state.historyHasMore = true;
+        _loading_state.groupHistoryLoading = false;
         setPendingReplyContext(QString(), QString(), QString());
         _message_model.clear();
         setCurrentChatPeerName(QString());
@@ -42,11 +44,13 @@ void AppController::clearCurrentGroupConversation(qint64 groupId)
 
 int AppController::currentDialogUid() const
 {
-    if (_current_group_id > 0) {
-        return ConversationSyncService::makeGroupDialogUid(_current_group_id);
+    if (_group_state.currentId > 0)
+    {
+        return ConversationSyncService::makeGroupDialogUid(_group_state.currentId);
     }
-    if (_current_chat_uid > 0) {
-        return _current_chat_uid;
+    if (_chat_state.uid > 0)
+    {
+        return _chat_state.uid;
     }
     return 0;
 }
@@ -54,29 +58,33 @@ int AppController::currentDialogUid() const
 void AppController::emitCurrentDialogUidChangedIfNeeded()
 {
     const int dialogUid = currentDialogUid();
-    if (_last_emitted_dialog_uid == dialogUid) {
+    if (_dialog_state.lastEmittedUid == dialogUid)
+    {
         return;
     }
-    _last_emitted_dialog_uid = dialogUid;
+    _dialog_state.lastEmittedUid = dialogUid;
     emit currentDialogUidChanged();
 }
 
-bool AppController::resolveDialogTarget(int dialogUid, QString &dialogType, int &peerUid, qint64 &groupId) const
+bool AppController::resolveDialogTarget(int dialogUid, QString& dialogType, int& peerUid, qint64& groupId) const
 {
     dialogType.clear();
     peerUid = 0;
     groupId = 0;
-    if (dialogUid == 0) {
+    if (dialogUid == 0)
+    {
         return false;
     }
-    if (dialogUid > 0) {
+    if (dialogUid > 0)
+    {
         dialogType = "private";
         peerUid = dialogUid;
         return true;
     }
 
-    const qint64 candidateGroupId = ConversationSyncService::groupIdForDialogUid(_group_uid_map, dialogUid);
-    if (candidateGroupId <= 0) {
+    const qint64 candidateGroupId = ConversationSyncService::groupIdForDialogUid(_group_state.dialogUidMap, dialogUid);
+    if (candidateGroupId <= 0)
+    {
         return false;
     }
     dialogType = "group";
@@ -86,20 +94,25 @@ bool AppController::resolveDialogTarget(int dialogUid, QString &dialogType, int 
 
 qint64 AppController::currentGroupPermissionBitsRaw() const
 {
-    if (_current_group_id <= 0) {
+    if (_group_state.currentId <= 0)
+    {
         return 0;
     }
-    auto groupInfo = _gateway.userMgr()->GetGroupById(_current_group_id);
-    if (!groupInfo) {
+    auto groupInfo = _gateway.userMgr()->GetGroupById(_group_state.currentId);
+    if (!groupInfo)
+    {
         return 0;
     }
-    if (groupInfo->_role >= 3) {
+    if (groupInfo->_role >= 3)
+    {
         return kOwnerPermBits;
     }
-    if (groupInfo->_role < 2) {
+    if (groupInfo->_role < 2)
+    {
         return 0;
     }
-    if (groupInfo->_permission_bits <= 0) {
+    if (groupInfo->_permission_bits <= 0)
+    {
         return kDefaultAdminPermBits;
     }
     return groupInfo->_permission_bits;
@@ -107,7 +120,8 @@ qint64 AppController::currentGroupPermissionBitsRaw() const
 
 bool AppController::hasCurrentGroupPermission(qint64 permissionBit) const
 {
-    if (permissionBit <= 0) {
+    if (permissionBit <= 0)
+    {
         return false;
     }
     return (currentGroupPermissionBitsRaw() & permissionBit) != 0;
@@ -115,16 +129,20 @@ bool AppController::hasCurrentGroupPermission(qint64 permissionBit) const
 
 qint64 AppController::latestGroupCreatedAt(qint64 groupId) const
 {
-    if (groupId <= 0) {
+    if (groupId <= 0)
+    {
         return 0;
     }
     auto groupInfo = _gateway.userMgr()->GetGroupById(groupId);
-    if (!groupInfo) {
+    if (!groupInfo)
+    {
         return 0;
     }
     qint64 latestTs = 0;
-    for (const auto &one : groupInfo->_chat_msgs) {
-        if (one) {
+    for (const auto& one : groupInfo->_chat_msgs)
+    {
+        if (one)
+        {
             latestTs = qMax(latestTs, one->_created_at);
         }
     }
@@ -133,16 +151,20 @@ qint64 AppController::latestGroupCreatedAt(qint64 groupId) const
 
 qint64 AppController::latestPrivatePeerCreatedAt(int peerUid) const
 {
-    if (peerUid <= 0) {
+    if (peerUid <= 0)
+    {
         return 0;
     }
     auto friendInfo = _gateway.userMgr()->GetFriendById(peerUid);
-    if (!friendInfo) {
+    if (!friendInfo)
+    {
         return 0;
     }
     qint64 latestTs = 0;
-    for (const auto &one : friendInfo->_chat_msgs) {
-        if (one && one->_from_uid == peerUid) {
+    for (const auto& one : friendInfo->_chat_msgs)
+    {
+        if (one && one->_from_uid == peerUid)
+        {
             latestTs = qMax(latestTs, one->_created_at);
         }
     }
@@ -152,7 +174,8 @@ qint64 AppController::latestPrivatePeerCreatedAt(int peerUid) const
 void AppController::syncCurrentDialogDraft()
 {
     const int dialogUid = currentDialogUid();
-    if (dialogUid == 0) {
+    if (dialogUid == 0)
+    {
         setCurrentDraftText(QString());
         setCurrentPendingAttachments(QVariantList());
         setCurrentDialogPinned(false);
@@ -160,69 +183,79 @@ void AppController::syncCurrentDialogDraft()
         setPendingReplyContext(QString(), QString(), QString());
         return;
     }
-    setCurrentDraftText(_dialog_draft_map.value(dialogUid));
+    setCurrentDraftText(_dialog_state.draftMap.value(dialogUid));
     syncCurrentPendingAttachments();
-    const bool pinned = _dialog_local_pinned_set.contains(dialogUid)
-        || _dialog_server_pinned_map.value(dialogUid, 0) > 0;
+    const bool pinned =
+        _dialog_state.localPinnedSet.contains(dialogUid) || _dialog_state.serverPinnedMap.value(dialogUid, 0) > 0;
     setCurrentDialogPinned(pinned);
-    setCurrentDialogMuted(_dialog_server_mute_map.value(dialogUid, 0) > 0);
+    setCurrentDialogMuted(_dialog_state.serverMuteMap.value(dialogUid, 0) > 0);
 }
 
 void AppController::syncCurrentPendingAttachments()
 {
     const int dialogUid = currentDialogUid();
-    if (dialogUid == 0) {
+    if (dialogUid == 0)
+    {
         setCurrentPendingAttachments(QVariantList());
         return;
     }
-    setCurrentPendingAttachments(_dialog_pending_attachment_map.value(dialogUid));
+    setCurrentPendingAttachments(_dialog_state.pendingAttachmentMap.value(dialogUid));
 }
 
 void AppController::loadDraftStore(int ownerUid)
 {
-    _dialog_draft_map.clear();
-    _dialog_local_pinned_set.clear();
-    _dialog_server_pinned_map.clear();
-    _dialog_server_mute_map.clear();
-    _dialog_mention_map.clear();
-    if (ownerUid <= 0) {
+    _dialog_state.draftMap.clear();
+    _dialog_state.localPinnedSet.clear();
+    _dialog_state.serverPinnedMap.clear();
+    _dialog_state.serverMuteMap.clear();
+    _dialog_state.mentionMap.clear();
+    if (ownerUid <= 0)
+    {
         return;
     }
 
     QSettings settings("MemoChat", "MemoChatQml");
     const QVariantMap serialized = settings.value(QString("chat_drafts/%1").arg(ownerUid)).toMap();
-    for (auto it = serialized.cbegin(); it != serialized.cend(); ++it) {
+    for (auto it = serialized.cbegin(); it != serialized.cend(); ++it)
+    {
         bool ok = false;
         const int dialogUid = it.key().toInt(&ok);
-        if (!ok) {
+        if (!ok)
+        {
             continue;
         }
         const QString draftText = it.value().toString();
-        if (draftText.trimmed().isEmpty()) {
+        if (draftText.trimmed().isEmpty())
+        {
             continue;
         }
-        _dialog_draft_map.insert(dialogUid, draftText);
+        _dialog_state.draftMap.insert(dialogUid, draftText);
     }
 
     const QStringList pinnedList = settings.value(QString("chat_pinned/%1").arg(ownerUid)).toStringList();
-    for (const QString &entry : pinnedList) {
+    for (const QString& entry : pinnedList)
+    {
         bool ok = false;
         const int dialogUid = entry.toInt(&ok);
-        if (ok && dialogUid != 0) {
-            _dialog_local_pinned_set.insert(dialogUid);
+        if (ok && dialogUid != 0)
+        {
+            _dialog_state.localPinnedSet.insert(dialogUid);
         }
     }
 }
 
 void AppController::saveDraftStore(int ownerUid) const
 {
-    if (ownerUid <= 0) {
+    if (ownerUid <= 0)
+    {
         return;
     }
 
     QVariantMap serialized;
-    for (auto it = _dialog_draft_map.cbegin(); it != _dialog_draft_map.cend(); ++it) {
-        if (it.value().trimmed().isEmpty()) {
+    for (auto it = _dialog_state.draftMap.cbegin(); it != _dialog_state.draftMap.cend(); ++it)
+    {
+        if (it.value().trimmed().isEmpty())
+        {
             continue;
         }
         serialized.insert(QString::number(it.key()), it.value());
@@ -231,17 +264,19 @@ void AppController::saveDraftStore(int ownerUid) const
     QSettings settings("MemoChat", "MemoChatQml");
     settings.setValue(QString("chat_drafts/%1").arg(ownerUid), serialized);
     QStringList pinnedList;
-    pinnedList.reserve(_dialog_local_pinned_set.size());
-    for (int uid : _dialog_local_pinned_set) {
+    pinnedList.reserve(_dialog_state.localPinnedSet.size());
+    for (int uid : _dialog_state.localPinnedSet)
+    {
         pinnedList.push_back(QString::number(uid));
     }
     settings.setValue(QString("chat_pinned/%1").arg(ownerUid), pinnedList);
 }
 
-void AppController::applyDraftToDialogModel(int dialogUid, const QString &draftText)
+void AppController::applyDraftToDialogModel(int dialogUid, const QString& draftText)
 {
     const int idx = _dialog_list_model.indexOfUid(dialogUid);
-    if (idx < 0) {
+    if (idx < 0)
+    {
         return;
     }
     const QVariantMap item = _dialog_list_model.get(idx);

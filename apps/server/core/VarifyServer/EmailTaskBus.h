@@ -8,27 +8,34 @@
 #include <condition_variable>
 #include <queue>
 
-namespace varifyservice {
+namespace varifyservice
+{
 
 class EmailSender;
 
-struct EmailDeliveryTask {
+struct EmailDeliveryTask
+{
     std::string email;
     std::string code;
     std::string trace_id;
     int retry_count = 0;
 };
 
-class EmailTaskBus {
+class EmailTaskBus
+{
 public:
     static EmailTaskBus& Instance();
 
-    bool PublishVerifyDeliveryTask(const std::string& email,
-                                  const std::string& code,
-                                  const std::string& trace_id);
+    bool PublishVerifyDeliveryTask(const std::string& email, const std::string& code, const std::string& trace_id);
 
-    bool IsHealthy() const { return rabbitmq_healthy_.load(std::memory_order_relaxed); }
-    bool IsStarted() const { return started_.load(std::memory_order_acquire); }
+    bool IsHealthy() const
+    {
+        return rabbitmq_healthy_.load(std::memory_order_relaxed);
+    }
+    bool IsStarted() const
+    {
+        return started_.load(std::memory_order_acquire);
+    }
 
     void StartWorker(EmailSender* sender);
     void StopWorker();

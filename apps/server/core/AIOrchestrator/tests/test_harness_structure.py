@@ -14,16 +14,16 @@ from harness.contracts import (
     AgentCapabilities,
     AgentCard,
     AgentCardSkill,
-    AgentSkill,
     AgentFlow,
     AgentMessage,
+    AgentSkill,
     AgentSpec,
     AgentTask,
     AgentTrace,
-    HandoffStep,
     ContextPack,
     ContextSection,
     GuardrailResult,
+    HandoffStep,
     MemorySnapshot,
     PlanStep,
     RemoteAgentRef,
@@ -31,12 +31,12 @@ from harness.contracts import (
     RunEdge,
     RunGraph,
     RunNode,
-    TraceEvent,
     ToolObservation,
     ToolSpec,
+    TraceEvent,
 )
-from harness.evals.service import AgentEvalCase, AgentEvalService
 from harness.evals.rag_service import RagEvalCase, RagEvalService
+from harness.evals.service import AgentEvalCase, AgentEvalService
 from harness.execution.tool_executor import ToolExecutor
 from harness.feedback.trace_store import AgentTraceStore
 from harness.guardrails.service import GuardrailService
@@ -285,11 +285,17 @@ class MultiRoundReactToolExecutor:
         observations: list[ToolObservation] = []
         for step in plan_steps:
             if step.action == "web_search":
-                observations.append(ToolObservation(name="duckduckgo_search", source="builtin", output="未找到相关结果。"))
+                observations.append(
+                    ToolObservation(name="duckduckgo_search", source="builtin", output="未找到相关结果。")
+                )
             elif step.action == "knowledge_search":
                 self.knowledge_calls += 1
                 if self.knowledge_calls == 1:
-                    observations.append(ToolObservation(name="knowledge_search", source="knowledge_base", output="知识库中没有找到相关内容。"))
+                    observations.append(
+                        ToolObservation(
+                            name="knowledge_search", source="knowledge_base", output="知识库中没有找到相关内容。"
+                        )
+                    )
                 else:
                     observations.append(
                         ToolObservation(
@@ -939,9 +945,7 @@ class HarnessStructureTests(unittest.TestCase):
 
     def test_trace_store_decodes_persisted_trace_payloads(self):
         store = AgentTraceStore()
-        steps = store._decode_plan_steps(
-            '[{"action":"knowledge_search","reason":"kb","parameters":{"top_k":3}}]'
-        )
+        steps = store._decode_plan_steps('[{"action":"knowledge_search","reason":"kb","parameters":{"top_k":3}}]')
 
         self.assertEqual(len(steps), 1)
         self.assertEqual(steps[0].action, "knowledge_search")
@@ -1318,7 +1322,10 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(memory.cache_hit_saved.wait(), timeout=1.0)
         self.assertEqual(memory.cache_hit_calls, 1)
         self.assertTrue(
-            any(event.layer == "memory" and event.name == "save_context" and event.status == "queued" for event in result.events)
+            any(
+                event.layer == "memory" and event.name == "save_context" and event.status == "queued"
+                for event in result.events
+            )
         )
 
     async def test_semantic_cache_exact_layer_bypasses_embedding_after_store(self):
@@ -1432,7 +1439,9 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
         result = await service.run_turn(request)
         event_names = [event.name for event in result.events]
 
-        self.assertEqual(tool_executor.calls, [["web_search", "knowledge_search"], ["web_search"], ["knowledge_search"]])
+        self.assertEqual(
+            tool_executor.calls, [["web_search", "knowledge_search"], ["web_search"], ["knowledge_search"]]
+        )
         self.assertEqual(event_names.count("react_observe"), 2)
         self.assertEqual(event_names.count("react_plan"), 2)
         self.assertEqual(event_names.count("react_tool_execution"), 2)
@@ -1614,7 +1623,9 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
                 worker_concurrency=2,
             )
             await service.startup()
-            task = await service.create_task(uid=7, title="Research", content="Do durable work", skill_name="researcher")
+            task = await service.create_task(
+                uid=7, title="Research", content="Do durable work", skill_name="researcher"
+            )
             await asyncio.sleep(0.05)
 
             self.assertEqual(bus.enqueued, [task.task_id])
@@ -1654,9 +1665,7 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(bus.enqueue_attempts, [task.task_id])
             self.assertIsNotNone(completed)
             self.assertEqual(completed.status, "completed")
-            self.assertTrue(
-                any("local fallback" in checkpoint["message"] for checkpoint in completed.checkpoints)
-            )
+            self.assertTrue(any("local fallback" in checkpoint["message"] for checkpoint in completed.checkpoints))
             await service.shutdown()
 
     async def test_agent_task_service_runs_locally_when_queue_backend_is_not_ready(self):
@@ -1728,7 +1737,9 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
                 worker_concurrency=2,
             )
             await service.startup()
-            task = await service.create_task(uid=7, title="Cancel", content="Cancel before consume", skill_name="researcher")
+            task = await service.create_task(
+                uid=7, title="Cancel", content="Cancel before consume", skill_name="researcher"
+            )
             for _ in range(20):
                 if bus.enqueued:
                     break
@@ -1777,7 +1788,9 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(loaded)
             self.assertEqual(loaded.status, "queued")
             self.assertTrue(
-                any(checkpoint["message"] == "Task requeued after service restart." for checkpoint in loaded.checkpoints)
+                any(
+                    checkpoint["message"] == "Task requeued after service restart." for checkpoint in loaded.checkpoints
+                )
             )
             await restored.shutdown()
 

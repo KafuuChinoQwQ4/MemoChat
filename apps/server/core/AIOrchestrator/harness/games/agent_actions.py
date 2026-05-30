@@ -6,7 +6,6 @@ from typing import Any, Callable
 
 from harness.games.contracts import GameAction, GameParticipant, GameState
 
-
 ParticipantNameResolver = Callable[[GameState, str], str]
 TargetResolver = Callable[[GameState, str], str]
 
@@ -85,7 +84,13 @@ class AgentActionService:
             target_lang="",
             requested_tools=[],
             tool_arguments={},
-            metadata={"source": "a2a_game", "room_id": state.room.room_id, "participant_id": actor.participant_id, "max_tokens": 512, "temperature": 0.6},
+            metadata={
+                "source": "a2a_game",
+                "room_id": state.room.room_id,
+                "participant_id": actor.participant_id,
+                "max_tokens": 512,
+                "temperature": 0.6,
+            },
         )
         run_failed = False
         try:
@@ -99,7 +104,12 @@ class AgentActionService:
             trace_id = ""
             payload = {}
 
-        if not run_failed and state.room.ruleset_id == "multi_ai_chat.test" and "speak" in allowed and not is_guardrail_block_output(raw):
+        if (
+            not run_failed
+            and state.room.ruleset_id == "multi_ai_chat.test"
+            and "speak" in allowed
+            and not is_guardrail_block_output(raw)
+        ):
             content = str(payload.get("content") or raw or "").strip()
             action_type = str(payload.get("action_type") or "").strip()
             if not action_type and content:

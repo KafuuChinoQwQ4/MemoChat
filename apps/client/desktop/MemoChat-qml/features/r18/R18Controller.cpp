@@ -1,64 +1,10 @@
 #include "R18Controller.h"
 
-#include "ClientGateway.h"
-#include "LocalFilePickerService.h"
 #include "global.h"
-#include "usermgr.h"
 
-#include <QFile>
-#include <QFileDialog>
-#include <QFileInfo>
-#include <QDir>
-#include <QJsonArray>
-#include <QJsonDocument>
 #include <QJsonObject>
-#include <QNetworkReply>
-#include <QNetworkRequest>
-#include <QSslConfiguration>
-#include <QSslSocket>
-#include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
-
-namespace {
-constexpr int kR18RequestTimeoutMs = 15000;
-
-bool looksLikeWindowsDrivePath(const QString& path)
-{
-    return path.size() >= 2
-        && path.at(1) == QLatin1Char(':')
-        && path.at(0).isLetter();
-}
-
-void applyR18RequestOptions(QNetworkRequest& request)
-{
-    request.setRawHeader(QByteArrayLiteral("Connection"), QByteArrayLiteral("close"));
-    if (request.url().scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) == 0) {
-        QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
-        sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
-        request.setSslConfiguration(sslConfig);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 9, 0)
-        request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);
-#endif
-    }
-#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
-    request.setTransferTimeout(kR18RequestTimeoutMs);
-#endif
-}
-
-void armR18Timeout(QNetworkReply* reply)
-{
-    auto* timer = new QTimer(reply);
-    timer->setSingleShot(true);
-    QObject::connect(timer, &QTimer::timeout, reply, [reply]() {
-        if (reply->isRunning()) {
-            reply->abort();
-        }
-    });
-    QObject::connect(reply, &QNetworkReply::finished, timer, &QTimer::stop);
-    timer->start(kR18RequestTimeoutMs);
-}
-} // namespace
 
 R18Controller::R18Controller(ClientGateway* gateway, QObject* parent)
     : QObject(parent)
@@ -88,108 +34,22 @@ void R18Controller::refreshHistory()
     getJson(url, QStringLiteral("history"));
 }
 
-void R18Controller::refreshOfficialSources(const QString& catalogUrl)
-{
-    const QString trimmedCatalogUrl = catalogUrl.trimmed();
-    if (!trimmedCatalogUrl.isEmpty()) {
-        setOfficialSourceCatalogUrl(trimmedCatalogUrl);
-    }
-    if (_official_source_catalog_url.trimmed().isEmpty()) {
-        _official_sources.clear();
-        setStatusText(QStringLiteral("未配置自定义源目录"));
-        return;
-    }
-    const QFileInfo catalogInfo(_official_source_catalog_url);
-    QUrl url = QUrl::fromUserInput(_official_source_catalog_url);
-    if (catalogInfo.exists() || looksLikeWindowsDrivePath(_official_source_catalog_url)) {
-        const QString resolvedPath = catalogInfo.isDir()
-            ? QDir(catalogInfo.absoluteFilePath()).filePath(QStringLiteral("index.json"))
-            : catalogInfo.absoluteFilePath();
-        url = QUrl::fromLocalFile(resolvedPath);
-    }
-    if (!url.isValid() || url.scheme().isEmpty()) {
-        setError(QStringLiteral("自定义源目录路径无效"));
-        return;
-    }
-    setStatusText(QStringLiteral("正在读取自定义源目录"));
-    getJson(url, QStringLiteral("official_sources"));
-}
-
-void R18Controller::importOfficialSource(int row)
-{
-    const auto item = _official_sources.get(row);
-    if (item.isEmpty()) {
-        setError(QStringLiteral("官方源条目无效"));
-        return;
-    }
-    const QUrl scriptUrl = resolveOfficialSourceUrl(item);
-    if (!scriptUrl.isValid() || scriptUrl.scheme().isEmpty()) {
-        setError(QStringLiteral("官方源脚本 URL 无效"));
-        return;
-    }
-
-    downloadAndImportSource(scriptUrl, item);
-}
-
-void R18Controller::importSourceUrl(const QString& sourceUrl)
-{
-    QUrl scriptUrl(sourceUrl.trimmed());
-    if (!scriptUrl.isValid() || scriptUrl.scheme().isEmpty()) {
-        setError(QStringLiteral("源脚本 URL 无效"));
-        return;
-    }
-    setStatusText(QStringLiteral("正在下载漫画源"));
-    downloadAndImportSource(scriptUrl, {});
-}
-
-QString R18Controller::pickSourcePackage()
-{
-    QString fileUrl;
-    QString displayName;
-    QString errorText;
-    if (!LocalFilePickerService::pickFileUrl(&fileUrl, &displayName, &errorText)) {
-        if (!errorText.isEmpty()) {
-            setError(errorText);
-        }
-        return {};
-    }
-    const QUrl url(fileUrl);
-    if (url.isLocalFile()) {
-        return url.toLocalFile();
-    }
-    return fileUrl;
-}
-
-QString R18Controller::pickSourceCatalogPath()
-{
-    const QString directory = QFileDialog::getExistingDirectory(
-        nullptr,
-        QStringLiteral("选择漫画源目录"),
-        QString());
-    if (!directory.isEmpty()) {
-        return directory;
-    }
-
-    const QString fileName = QFileDialog::getOpenFileName(
-        nullptr,
-        QStringLiteral("选择漫画源 index.json"),
-        QString(),
-        QStringLiteral("漫画源目录 (*.json);;所有文件 (*.*)"));
-    return fileName;
-}
-
 void R18Controller::selectSource(const QString& sourceId)
 {
     const QString nextSource = sourceId.trimmed();
-    if (_current_source_id == nextSource) {
+    if (_current_source_id == nextSource)
+    {
         return;
     }
     _current_source_id = nextSource;
     _comics.clear();
     setSearchState(0, false);
-    if (_current_source_id.isEmpty()) {
+    if (_current_source_id.isEmpty())
+    {
         setStatusText(QStringLiteral("未选择漫画源"));
-    } else {
+    }
+    else
+    {
         setStatusText(QStringLiteral("已选择漫画源: %1").arg(_current_source_id));
     }
     emit currentSourceChanged();
@@ -198,8 +58,10 @@ void R18Controller::selectSource(const QString& sourceId)
 void R18Controller::search(const QString& keyword, int page)
 {
     const int normalizedPage = page < 1 ? 1 : page;
-    if (_current_source_id.trimmed().isEmpty()) {
-        if (normalizedPage == 1) {
+    if (_current_source_id.trimmed().isEmpty())
+    {
+        if (normalizedPage == 1)
+        {
             _comics.clear();
             setSearchState(0, false);
         }
@@ -212,7 +74,8 @@ void R18Controller::search(const QString& keyword, int page)
     payload[QStringLiteral("keyword")] = keyword;
     payload[QStringLiteral("page")] = normalizedPage;
     _pending_search_page = normalizedPage;
-    if (normalizedPage == 1) {
+    if (normalizedPage == 1)
+    {
         _comics.clear();
         setSearchState(0, false);
     }
@@ -222,7 +85,8 @@ void R18Controller::search(const QString& keyword, int page)
 void R18Controller::openComic(const QString& sourceId, const QString& comicId)
 {
     const QString nextSource = sourceId.trimmed();
-    if (_current_source_id != nextSource) {
+    if (_current_source_id != nextSource)
+    {
         _current_source_id = nextSource;
         emit currentSourceChanged();
     }
@@ -248,366 +112,31 @@ void R18Controller::enableSource(const QString& sourceId, bool enabled)
 {
     auto payload = authPayload();
     payload[QStringLiteral("source_id")] = sourceId;
-    postJson(enabled ? QStringLiteral("/api/r18/source/enable") : QStringLiteral("/api/r18/source/disable"),
-             payload,
-             QStringLiteral("source_state"));
-}
-
-void R18Controller::importSourcePackage(const QString& filePath, const QString& manifestJson)
-{
-    const QUrl fileUrl(filePath);
-    const QString localPath = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : filePath;
-    QFile file(localPath);
-    if (!file.open(QIODevice::ReadOnly)) {
-        setError(QStringLiteral("无法打开源包"));
-        return;
-    }
-
-    auto payload = authPayload();
-    payload[QStringLiteral("file_name")] = QFileInfo(localPath).fileName();
-    payload[QStringLiteral("data_base64")] = QString::fromLatin1(file.readAll().toBase64());
-    payload[QStringLiteral("manifest_json")] = manifestJson;
-    setStatusText(QStringLiteral("正在导入源包"));
-    postJson(QStringLiteral("/api/r18/source/import"), payload, QStringLiteral("import"));
+    postJson(enabled ? QStringLiteral("/api/r18/source/enable")
+                     : QStringLiteral("/api/r18/source/disable"), payload, QStringLiteral("source_state"));
 }
 
 void R18Controller::toggleFavorite(const QString& sourceId, const QString& comicId, bool favorited)
 {
     auto payload = authPayload();
     payload[QStringLiteral("source_id")] = sourceId.isEmpty() ? _current_source_id : sourceId;
-    payload[QStringLiteral("comic_id")] = comicId.isEmpty() ? _current_comic.value(QStringLiteral("comic_id")).toString() : comicId;
+    payload[QStringLiteral("comic_id")] = comicId.isEmpty()
+            ? _current_comic.value(QStringLiteral("comic_id")).toString() : comicId;
     payload[QStringLiteral("favorited")] = favorited;
     postJson(QStringLiteral("/api/r18/favorite/toggle"), payload, QStringLiteral("favorite"));
 }
 
-void R18Controller::updateHistory(const QString& sourceId, const QString& comicId, const QString& chapterId, int pageIndex)
+void R18Controller::updateHistory(const QString& sourceId,
+                                  const QString& comicId,
+                                  const QString& chapterId,
+                                  int pageIndex)
 {
     setCurrentPageIndex(pageIndex < 1 ? 1 : pageIndex);
     auto payload = authPayload();
     payload[QStringLiteral("source_id")] = sourceId.isEmpty() ? _current_source_id : sourceId;
-    payload[QStringLiteral("comic_id")] = comicId.isEmpty() ? _current_comic.value(QStringLiteral("comic_id")).toString() : comicId;
+    payload[QStringLiteral("comic_id")] = comicId.isEmpty()
+            ? _current_comic.value(QStringLiteral("comic_id")).toString() : comicId;
     payload[QStringLiteral("chapter_id")] = chapterId.isEmpty() ? _current_chapter_id : chapterId;
     payload[QStringLiteral("page_index")] = _current_page_index;
     postJson(QStringLiteral("/api/r18/history/update"), payload, QStringLiteral("history_update"));
-}
-
-void R18Controller::postJson(const QString& path, const QJsonObject& payload, const QString& op)
-{
-    const bool quiet = op == QStringLiteral("history_update");
-    if (!quiet) {
-        setLoading(true);
-        setError({});
-    }
-    QNetworkRequest request(QUrl(gate_url_prefix + path));
-    request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-    applyR18RequestOptions(request);
-    auto* reply = _network.post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
-    armR18Timeout(reply);
-    reply->setProperty("r18_op", op);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        const QString op = reply->property("r18_op").toString();
-        const bool quiet = op == QStringLiteral("history_update");
-        const auto networkError = reply->error();
-        const QString networkErrorText = reply->errorString();
-        const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        const auto bytes = reply->readAll();
-        reply->deleteLater();
-        if (!quiet) {
-            setLoading(false);
-        }
-        if (networkError != QNetworkReply::NoError) {
-            if (!quiet) {
-                setError(QStringLiteral("R18 网络请求失败: %1").arg(networkErrorText));
-            }
-            return;
-        }
-        if (httpStatus >= 400) {
-            if (!quiet) {
-                setError(QStringLiteral("R18 HTTP %1").arg(httpStatus));
-            }
-            return;
-        }
-        const auto doc = QJsonDocument::fromJson(bytes);
-        if (!doc.isObject()) {
-            if (!quiet) {
-                setError(QStringLiteral("R18 响应格式错误"));
-            }
-            return;
-        }
-        handleResponse(op, doc.object());
-    });
-}
-
-void R18Controller::getJson(const QUrl& url, const QString& op)
-{
-    setLoading(true);
-    setError({});
-    QNetworkRequest request(url);
-    applyR18RequestOptions(request);
-    auto* reply = _network.get(request);
-    armR18Timeout(reply);
-    reply->setProperty("r18_op", op);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, url]() {
-        const QString op = reply->property("r18_op").toString();
-        const auto networkError = reply->error();
-        const QString networkErrorText = reply->errorString();
-        const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        const auto bytes = reply->readAll();
-        reply->deleteLater();
-        setLoading(false);
-        if (networkError != QNetworkReply::NoError) {
-            setError(QStringLiteral("R18 网络请求失败: %1").arg(networkErrorText));
-            return;
-        }
-        if (httpStatus >= 400) {
-            setError(QStringLiteral("R18 HTTP %1").arg(httpStatus));
-            return;
-        }
-        const auto doc = QJsonDocument::fromJson(bytes);
-        if (op == QStringLiteral("official_sources") && doc.isArray()) {
-            QUrl catalogUrl = url;
-            auto items = doc.array().toVariantList();
-            for (auto& entry : items) {
-                auto map = entry.toMap();
-                map[QStringLiteral("catalog_url")] = catalogUrl.toString();
-                const QUrl scriptUrl = resolveOfficialSourceUrl(map);
-                map[QStringLiteral("source_url")] = scriptUrl.toString();
-                entry = map;
-            }
-            _official_sources.setItems(items);
-            setStatusText(QStringLiteral("自定义源目录已加载: %1 项").arg(items.size()));
-            return;
-        }
-        if (!doc.isObject()) {
-            setError(QStringLiteral("R18 响应格式错误"));
-            return;
-        }
-        handleResponse(op, doc.object());
-    });
-}
-
-void R18Controller::setOfficialSourceCatalogUrl(const QString& url)
-{
-    if (_official_source_catalog_url == url) return;
-    _official_source_catalog_url = url;
-    emit officialSourceCatalogUrlChanged();
-}
-
-QJsonObject R18Controller::authPayload() const
-{
-    QJsonObject payload;
-    if (_gateway && _gateway->userMgr()) {
-        payload[QStringLiteral("uid")] = _gateway->userMgr()->GetUid();
-        payload[QStringLiteral("token")] = _gateway->userMgr()->GetToken();
-    }
-    return payload;
-}
-
-QJsonObject R18Controller::officialSourceManifest(const QVariantMap& item, const QUrl& scriptUrl) const
-{
-    QJsonObject manifest;
-    manifest[QStringLiteral("id")] = item.value(QStringLiteral("key"), item.value(QStringLiteral("id"))).toString();
-    manifest[QStringLiteral("name")] = item.value(QStringLiteral("name"), manifest.value(QStringLiteral("id")).toString()).toString();
-    manifest[QStringLiteral("version")] = item.value(QStringLiteral("version"), QStringLiteral("0.0.0")).toString();
-    manifest[QStringLiteral("description")] = item.value(QStringLiteral("description")).toString();
-    manifest[QStringLiteral("format")] = QStringLiteral("source-js");
-    manifest[QStringLiteral("source_url")] = scriptUrl.toString();
-    manifest[QStringLiteral("catalog_url")] = _official_source_catalog_url;
-    return manifest;
-}
-
-QJsonObject R18Controller::sourceUrlManifest(const QUrl& scriptUrl) const
-{
-    const QString fileName = QFileInfo(scriptUrl.path()).fileName();
-    QString id = fileName;
-    if (id.endsWith(QStringLiteral(".js"), Qt::CaseInsensitive)) {
-        id.chop(3);
-    }
-    if (id.isEmpty()) {
-        id = QStringLiteral("custom-source");
-    }
-
-    QJsonObject manifest;
-    manifest[QStringLiteral("id")] = id;
-    manifest[QStringLiteral("name")] = id;
-    manifest[QStringLiteral("version")] = QStringLiteral("0.0.0");
-    manifest[QStringLiteral("format")] = QStringLiteral("source-js");
-    manifest[QStringLiteral("source_url")] = scriptUrl.toString();
-    manifest[QStringLiteral("catalog_url")] = QString();
-    return manifest;
-}
-
-QUrl R18Controller::resolveOfficialSourceUrl(const QVariantMap& item) const
-{
-    const QString explicitUrl = item.value(QStringLiteral("url")).toString();
-    if (!explicitUrl.isEmpty()) {
-        return QUrl(explicitUrl);
-    }
-
-    const QString fileName = item.value(QStringLiteral("fileName"), item.value(QStringLiteral("filename"))).toString();
-    if (fileName.isEmpty()) {
-        return {};
-    }
-
-    QUrl base(item.value(QStringLiteral("catalog_url"), _official_source_catalog_url).toString());
-    if (!base.isValid()) {
-        return {};
-    }
-    return base.resolved(QUrl(fileName));
-}
-
-void R18Controller::downloadAndImportSource(const QUrl& scriptUrl, const QVariantMap& item)
-{
-    setLoading(true);
-    setError({});
-    QNetworkRequest request(scriptUrl);
-    applyR18RequestOptions(request);
-    auto* reply = _network.get(request);
-    armR18Timeout(reply);
-    reply->setProperty("r18_source_url", scriptUrl);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, item]() {
-        const auto networkError = reply->error();
-        const QString networkErrorText = reply->errorString();
-        const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        const auto bytes = reply->readAll();
-        const QUrl scriptUrl = reply->property("r18_source_url").toUrl();
-        reply->deleteLater();
-        setLoading(false);
-        if (networkError != QNetworkReply::NoError) {
-            setError(QStringLiteral("源脚本下载失败: %1").arg(networkErrorText));
-            return;
-        }
-        if (httpStatus >= 400) {
-            setError(QStringLiteral("源脚本下载失败: HTTP %1").arg(httpStatus));
-            return;
-        }
-        if (bytes.isEmpty()) {
-            setError(QStringLiteral("源脚本下载失败"));
-            return;
-        }
-
-        const QJsonObject manifest = item.isEmpty()
-            ? sourceUrlManifest(scriptUrl)
-            : officialSourceManifest(item, scriptUrl);
-        auto payload = authPayload();
-        QString fileName = item.value(QStringLiteral("fileName"), item.value(QStringLiteral("filename"), item.value(QStringLiteral("key")))).toString();
-        if (fileName.isEmpty()) {
-            fileName = QFileInfo(scriptUrl.path()).fileName();
-        }
-        if (fileName.isEmpty()) {
-            fileName = QStringLiteral("custom-source.js");
-        }
-        payload[QStringLiteral("file_name")] = fileName.endsWith(QStringLiteral(".js"), Qt::CaseInsensitive) ? fileName : fileName + QStringLiteral(".js");
-        payload[QStringLiteral("data_base64")] = QString::fromLatin1(bytes.toBase64());
-        payload[QStringLiteral("manifest_json")] = QString::fromUtf8(QJsonDocument(manifest).toJson(QJsonDocument::Compact));
-        setStatusText(QStringLiteral("正在导入漫画源: %1").arg(manifest.value(QStringLiteral("name")).toString(fileName)));
-        postJson(QStringLiteral("/api/r18/source/import"), payload, QStringLiteral("import"));
-    });
-}
-
-void R18Controller::setLoading(bool loading)
-{
-    if (_loading == loading) return;
-    _loading = loading;
-    emit loadingChanged();
-}
-
-void R18Controller::setError(const QString& error)
-{
-    if (_error == error) return;
-    _error = error;
-    emit errorChanged();
-}
-
-void R18Controller::setStatusText(const QString& statusText)
-{
-    if (_status_text == statusText) return;
-    _status_text = statusText;
-    emit statusTextChanged();
-    if (_status_text.isEmpty()) {
-        return;
-    }
-    QTimer::singleShot(2500, this, [this, statusText]() {
-        if (_error.isEmpty() && _status_text == statusText) {
-            _status_text.clear();
-            emit statusTextChanged();
-        }
-    });
-}
-
-void R18Controller::setCurrentFavorite(bool favorite)
-{
-    if (_current_favorite == favorite) return;
-    _current_favorite = favorite;
-    emit currentFavoriteChanged();
-}
-
-void R18Controller::setCurrentPageIndex(int pageIndex)
-{
-    const int normalized = pageIndex < 1 ? 1 : pageIndex;
-    if (_current_page_index == normalized) return;
-    _current_page_index = normalized;
-    emit currentPageChanged();
-}
-
-void R18Controller::setSearchState(int page, bool hasMore)
-{
-    const int normalizedPage = page < 0 ? 0 : page;
-    if (_current_search_page == normalizedPage && _current_search_has_more == hasMore) {
-        return;
-    }
-    _current_search_page = normalizedPage;
-    _current_search_has_more = hasMore;
-    emit searchStateChanged();
-}
-
-void R18Controller::handleResponse(const QString& op, const QJsonObject& root)
-{
-    if (root.value(QStringLiteral("error")).toInt() != 0) {
-        setError(root.value(QStringLiteral("message")).toString(QStringLiteral("R18 请求失败")));
-        return;
-    }
-
-    const auto data = root.value(QStringLiteral("data")).toObject();
-    if (op == QStringLiteral("sources")) {
-        _sources.setItems(data.value(QStringLiteral("sources")).toArray().toVariantList());
-    } else if (op == QStringLiteral("search")) {
-        const int page = _pending_search_page < 1 ? 1 : _pending_search_page;
-        const auto items = data.value(QStringLiteral("items")).toArray().toVariantList();
-        if (page <= 1) {
-            _comics.setItems(items);
-        } else {
-            _comics.appendItems(items);
-        }
-        const int maxPage = data.value(QStringLiteral("max_page")).toInt();
-        const bool hasMore = maxPage > 0 ? page < maxPage : items.size() >= 40;
-        setSearchState(page, hasMore);
-    } else if (op == QStringLiteral("history")) {
-        _history.setItems(data.value(QStringLiteral("items")).toArray().toVariantList());
-    } else if (op == QStringLiteral("detail")) {
-        _current_comic = data.toVariantMap();
-        emit currentComicChanged();
-        _chapters.setItems(data.value(QStringLiteral("chapters")).toArray().toVariantList());
-    } else if (op == QStringLiteral("pages")) {
-        _pages.setItems(data.value(QStringLiteral("pages")).toArray().toVariantList());
-        updateHistory(_current_source_id,
-                      _current_comic.value(QStringLiteral("comic_id")).toString(),
-                      _current_chapter_id,
-                      _current_page_index);
-    } else if (op == QStringLiteral("favorite")) {
-        setCurrentFavorite(data.value(QStringLiteral("favorited")).toBool());
-    } else if (op == QStringLiteral("source_state") || op == QStringLiteral("import")) {
-        const auto source = data.value(QStringLiteral("source")).toObject();
-        const QString sourceId = source.value(QStringLiteral("id")).toString();
-        if (!sourceId.isEmpty()) {
-            _current_source_id = sourceId;
-            emit currentSourceChanged();
-            if (op == QStringLiteral("import")) {
-                setStatusText(QStringLiteral("已导入漫画源: %1").arg(source.value(QStringLiteral("name")).toString(sourceId)));
-            }
-        } else if (op == QStringLiteral("source_state")) {
-            setStatusText(QStringLiteral("漫画源状态已更新"));
-        }
-        refreshSources();
-    }
 }

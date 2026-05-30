@@ -40,95 +40,232 @@ class PetAssetSettings : public QObject
     Q_PROPERTY(bool interruptEnabled READ interruptEnabled WRITE setInterruptEnabled NOTIFY settingsChanged)
     Q_PROPERTY(bool cameraEnabled READ cameraEnabled WRITE setCameraEnabled NOTIFY settingsChanged)
     Q_PROPERTY(bool cloudVisionEnabled READ cloudVisionEnabled WRITE setCloudVisionEnabled NOTIFY settingsChanged)
-    Q_PROPERTY(bool autoStartPetOnClientStart READ autoStartPetOnClientStart WRITE setAutoStartPetOnClientStart NOTIFY settingsChanged)
+    Q_PROPERTY(bool autoStartPetOnClientStart READ autoStartPetOnClientStart WRITE setAutoStartPetOnClientStart NOTIFY
+                   settingsChanged)
     Q_PROPERTY(bool voiceTrainingConsent READ voiceTrainingConsent WRITE setVoiceTrainingConsent NOTIFY settingsChanged)
-    Q_PROPERTY(QString voiceTrainingConsentScope READ voiceTrainingConsentScope WRITE setVoiceTrainingConsentScope NOTIFY settingsChanged)
+    Q_PROPERTY(QString voiceTrainingConsentScope READ voiceTrainingConsentScope WRITE setVoiceTrainingConsentScope
+                   NOTIFY settingsChanged)
     Q_PROPERTY(QString voiceTrainingJobId READ voiceTrainingJobId WRITE setVoiceTrainingJobId NOTIFY settingsChanged)
     Q_PROPERTY(QString voiceTrainingStatus READ voiceTrainingStatus WRITE setVoiceTrainingStatus NOTIFY settingsChanged)
     Q_PROPERTY(QString voiceTrainingStage READ voiceTrainingStage WRITE setVoiceTrainingStage NOTIFY settingsChanged)
-    Q_PROPERTY(int voiceTrainingProgress READ voiceTrainingProgress WRITE setVoiceTrainingProgress NOTIFY settingsChanged)
-    Q_PROPERTY(QString voiceTrainingArtifactPath READ voiceTrainingArtifactPath WRITE setVoiceTrainingArtifactPath NOTIFY settingsChanged)
-    Q_PROPERTY(QString voiceTrainingMessage READ voiceTrainingMessage WRITE setVoiceTrainingMessage NOTIFY settingsChanged)
+    Q_PROPERTY(
+        int voiceTrainingProgress READ voiceTrainingProgress WRITE setVoiceTrainingProgress NOTIFY settingsChanged)
+    Q_PROPERTY(QString voiceTrainingArtifactPath READ voiceTrainingArtifactPath WRITE setVoiceTrainingArtifactPath
+                   NOTIFY settingsChanged)
+    Q_PROPERTY(
+        QString voiceTrainingMessage READ voiceTrainingMessage WRITE setVoiceTrainingMessage NOTIFY settingsChanged)
     Q_PROPERTY(QString live2dAvatarUrl READ live2dAvatarUrl NOTIFY settingsChanged)
     Q_PROPERTY(QString storagePath READ storagePath NOTIFY settingsChanged)
     Q_PROPERTY(bool dirty READ dirty NOTIFY settingsChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY settingsChanged)
 
 public:
-    explicit PetAssetSettings(QObject *parent = nullptr);
+    explicit PetAssetSettings(QObject* parent = nullptr);
 
-    QString characterName() const { return _character_name; }
-    QString roleIdentity() const { return _role_identity; }
-    QString modelRoot() const { return _model_root; }
-    QString modelJson() const { return _model_json; }
-    QString motionDirectory() const { return _motion_directory; }
-    QString expressionDirectory() const { return _expression_directory; }
-    QString voiceDirectory() const { return _voice_directory; }
-    QString defaultVoice() const { return _default_voice; }
-    QString idleMotion() const { return _idle_motion; }
-    QString speakingMotion() const { return _speaking_motion; }
-    QString fallbackExpression() const { return _fallback_expression; }
-    QString personalityTags() const { return _personality_tags; }
-    QString relationshipStyle() const { return _relationship_style; }
-    QString worldSetting() const { return _world_setting; }
-    QString speechRules() const { return _speech_rules; }
-    QString catchphrases() const { return _catchphrases; }
-    QString forbiddenRules() const { return _forbidden_rules; }
-    int toneIndex() const { return _tone_index; }
-    int responseLengthIndex() const { return _response_length_index; }
-    int languageIndex() const { return _language_index; }
-    qreal emotionLevel() const { return _emotion_level; }
-    qreal creativityLevel() const { return _creativity_level; }
-    qreal voiceSpeed() const { return _voice_speed; }
-    qreal lipSyncSensitivity() const { return _lip_sync_sensitivity; }
-    bool voiceLipSyncEnabled() const { return _voice_lip_sync_enabled; }
-    bool emotionSoundEnabled() const { return _emotion_sound_enabled; }
-    bool idleMotionEnabled() const { return _idle_motion_enabled; }
-    bool gazeFollowEnabled() const { return _gaze_follow_enabled; }
-    bool memoryEnabled() const { return _memory_enabled; }
-    bool interruptEnabled() const { return _interrupt_enabled; }
-    bool cameraEnabled() const { return _camera_enabled; }
-    bool cloudVisionEnabled() const { return _cloud_vision_enabled; }
-    bool autoStartPetOnClientStart() const { return _auto_start_pet_on_client_start; }
-    bool voiceTrainingConsent() const { return _voice_training_consent; }
-    QString voiceTrainingConsentScope() const { return _voice_training_consent_scope; }
-    QString voiceTrainingJobId() const { return _voice_training_job_id; }
-    QString voiceTrainingStatus() const { return _voice_training_status; }
-    QString voiceTrainingStage() const { return _voice_training_stage; }
-    int voiceTrainingProgress() const { return _voice_training_progress; }
-    QString voiceTrainingArtifactPath() const { return _voice_training_artifact_path; }
-    QString voiceTrainingMessage() const { return _voice_training_message; }
+    QString characterName() const
+    {
+        return _character_name;
+    }
+    QString roleIdentity() const
+    {
+        return _role_identity;
+    }
+    QString modelRoot() const
+    {
+        return _model_root;
+    }
+    QString modelJson() const
+    {
+        return _model_json;
+    }
+    QString motionDirectory() const
+    {
+        return _motion_directory;
+    }
+    QString expressionDirectory() const
+    {
+        return _expression_directory;
+    }
+    QString voiceDirectory() const
+    {
+        return _voice_directory;
+    }
+    QString defaultVoice() const
+    {
+        return _default_voice;
+    }
+    QString idleMotion() const
+    {
+        return _idle_motion;
+    }
+    QString speakingMotion() const
+    {
+        return _speaking_motion;
+    }
+    QString fallbackExpression() const
+    {
+        return _fallback_expression;
+    }
+    QString personalityTags() const
+    {
+        return _personality_tags;
+    }
+    QString relationshipStyle() const
+    {
+        return _relationship_style;
+    }
+    QString worldSetting() const
+    {
+        return _world_setting;
+    }
+    QString speechRules() const
+    {
+        return _speech_rules;
+    }
+    QString catchphrases() const
+    {
+        return _catchphrases;
+    }
+    QString forbiddenRules() const
+    {
+        return _forbidden_rules;
+    }
+    int toneIndex() const
+    {
+        return _tone_index;
+    }
+    int responseLengthIndex() const
+    {
+        return _response_length_index;
+    }
+    int languageIndex() const
+    {
+        return _language_index;
+    }
+    qreal emotionLevel() const
+    {
+        return _emotion_level;
+    }
+    qreal creativityLevel() const
+    {
+        return _creativity_level;
+    }
+    qreal voiceSpeed() const
+    {
+        return _voice_speed;
+    }
+    qreal lipSyncSensitivity() const
+    {
+        return _lip_sync_sensitivity;
+    }
+    bool voiceLipSyncEnabled() const
+    {
+        return _voice_lip_sync_enabled;
+    }
+    bool emotionSoundEnabled() const
+    {
+        return _emotion_sound_enabled;
+    }
+    bool idleMotionEnabled() const
+    {
+        return _idle_motion_enabled;
+    }
+    bool gazeFollowEnabled() const
+    {
+        return _gaze_follow_enabled;
+    }
+    bool memoryEnabled() const
+    {
+        return _memory_enabled;
+    }
+    bool interruptEnabled() const
+    {
+        return _interrupt_enabled;
+    }
+    bool cameraEnabled() const
+    {
+        return _camera_enabled;
+    }
+    bool cloudVisionEnabled() const
+    {
+        return _cloud_vision_enabled;
+    }
+    bool autoStartPetOnClientStart() const
+    {
+        return _auto_start_pet_on_client_start;
+    }
+    bool voiceTrainingConsent() const
+    {
+        return _voice_training_consent;
+    }
+    QString voiceTrainingConsentScope() const
+    {
+        return _voice_training_consent_scope;
+    }
+    QString voiceTrainingJobId() const
+    {
+        return _voice_training_job_id;
+    }
+    QString voiceTrainingStatus() const
+    {
+        return _voice_training_status;
+    }
+    QString voiceTrainingStage() const
+    {
+        return _voice_training_stage;
+    }
+    int voiceTrainingProgress() const
+    {
+        return _voice_training_progress;
+    }
+    QString voiceTrainingArtifactPath() const
+    {
+        return _voice_training_artifact_path;
+    }
+    QString voiceTrainingMessage() const
+    {
+        return _voice_training_message;
+    }
     QString live2dAvatarUrl() const;
-    QString storagePath() const { return _storage_path; }
-    bool dirty() const { return _dirty; }
-    QString statusText() const { return _status_text; }
+    QString storagePath() const
+    {
+        return _storage_path;
+    }
+    bool dirty() const
+    {
+        return _dirty;
+    }
+    QString statusText() const
+    {
+        return _status_text;
+    }
 
     Q_INVOKABLE bool load();
     Q_INVOKABLE bool save();
     Q_INVOKABLE void resetToDefaults();
     Q_INVOKABLE QVariantMap toVariantMap() const;
-    Q_INVOKABLE QString resolveLive2DAvatarUrl(const QString &modelJson, const QString &modelRoot) const;
-    Q_INVOKABLE QString pickLocalFilePath(const QString &title, const QString &startPath, const QString &nameFilter);
-    Q_INVOKABLE QString pickLocalDirectoryPath(const QString &title, const QString &startPath);
+    Q_INVOKABLE QString resolveLive2DAvatarUrl(const QString& modelJson, const QString& modelRoot) const;
+    Q_INVOKABLE QString pickLocalFilePath(const QString& title, const QString& startPath, const QString& nameFilter);
+    Q_INVOKABLE QString pickLocalDirectoryPath(const QString& title, const QString& startPath);
 
 public slots:
-    void setCharacterName(const QString &value);
-    void setRoleIdentity(const QString &value);
-    void setModelRoot(const QString &value);
-    void setModelJson(const QString &value);
-    void setMotionDirectory(const QString &value);
-    void setExpressionDirectory(const QString &value);
-    void setVoiceDirectory(const QString &value);
-    void setDefaultVoice(const QString &value);
-    void setIdleMotion(const QString &value);
-    void setSpeakingMotion(const QString &value);
-    void setFallbackExpression(const QString &value);
-    void setPersonalityTags(const QString &value);
-    void setRelationshipStyle(const QString &value);
-    void setWorldSetting(const QString &value);
-    void setSpeechRules(const QString &value);
-    void setCatchphrases(const QString &value);
-    void setForbiddenRules(const QString &value);
+    void setCharacterName(const QString& value);
+    void setRoleIdentity(const QString& value);
+    void setModelRoot(const QString& value);
+    void setModelJson(const QString& value);
+    void setMotionDirectory(const QString& value);
+    void setExpressionDirectory(const QString& value);
+    void setVoiceDirectory(const QString& value);
+    void setDefaultVoice(const QString& value);
+    void setIdleMotion(const QString& value);
+    void setSpeakingMotion(const QString& value);
+    void setFallbackExpression(const QString& value);
+    void setPersonalityTags(const QString& value);
+    void setRelationshipStyle(const QString& value);
+    void setWorldSetting(const QString& value);
+    void setSpeechRules(const QString& value);
+    void setCatchphrases(const QString& value);
+    void setForbiddenRules(const QString& value);
     void setToneIndex(int value);
     void setResponseLengthIndex(int value);
     void setLanguageIndex(int value);
@@ -146,24 +283,24 @@ public slots:
     void setCloudVisionEnabled(bool value);
     void setAutoStartPetOnClientStart(bool value);
     void setVoiceTrainingConsent(bool value);
-    void setVoiceTrainingConsentScope(const QString &value);
-    void setVoiceTrainingJobId(const QString &value);
-    void setVoiceTrainingStatus(const QString &value);
-    void setVoiceTrainingStage(const QString &value);
+    void setVoiceTrainingConsentScope(const QString& value);
+    void setVoiceTrainingJobId(const QString& value);
+    void setVoiceTrainingStatus(const QString& value);
+    void setVoiceTrainingStage(const QString& value);
     void setVoiceTrainingProgress(int value);
-    void setVoiceTrainingArtifactPath(const QString &value);
-    void setVoiceTrainingMessage(const QString &value);
+    void setVoiceTrainingArtifactPath(const QString& value);
+    void setVoiceTrainingMessage(const QString& value);
 
 signals:
     void settingsChanged();
 
 private:
-    static bool assignString(QString &target, const QString &value);
-    bool assignInt(int &target, int value, int minimum, int maximum);
-    bool assignReal(qreal &target, qreal value, qreal minimum, qreal maximum);
-    bool assignBool(bool &target, bool value);
+    static bool assignString(QString& target, const QString& value);
+    bool assignInt(int& target, int value, int minimum, int maximum);
+    bool assignReal(qreal& target, qreal value, qreal minimum, qreal maximum);
+    bool assignBool(bool& target, bool value);
     void applyDefaults(bool dirty);
-    void applyObject(const QVariantMap &values, bool dirty);
+    void applyObject(const QVariantMap& values, bool dirty);
     void normalizeVoiceTrainingState();
     void markDirty();
     QString defaultStoragePath() const;

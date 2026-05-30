@@ -1,9 +1,9 @@
 """
 推荐系统 API
 """
-from fastapi import APIRouter, HTTPException
-import structlog
 
+import structlog
+from fastapi import APIRouter, HTTPException
 from graph.recommendation import RecommendationEngine
 
 logger = structlog.get_logger()

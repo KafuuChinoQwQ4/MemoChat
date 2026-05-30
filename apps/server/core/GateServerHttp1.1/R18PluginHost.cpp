@@ -9,7 +9,8 @@
 #include <dlfcn.h>
 #endif
 
-namespace {
+namespace
+{
 
 template <typename T>
 T LoadSymbol(
@@ -31,7 +32,8 @@ T LoadSymbol(
 
 int main(int argc, char** argv)
 {
-    if (argc < 2) {
+    if (argc < 2)
+    {
         std::cerr << "usage: R18PluginHost <plugin-library>\n";
         return 2;
     }
@@ -41,7 +43,8 @@ int main(int argc, char** argv)
 #else
     void* lib = dlopen(argv[1], RTLD_NOW);
 #endif
-    if (!lib) {
+    if (!lib)
+    {
         std::cerr << "failed to load plugin\n";
         return 3;
     }
@@ -50,26 +53,33 @@ int main(int argc, char** argv)
     auto call = LoadSymbol<R18PluginCallFn>(lib, "r18_plugin_call");
     auto free_result = LoadSymbol<R18PluginFreeFn>(lib, "r18_plugin_free");
     auto shutdown = LoadSymbol<R18PluginShutdownFn>(lib, "r18_plugin_shutdown");
-    if (!abi || !call || !free_result || abi() != MEMOCHAT_R18_PLUGIN_ABI_VERSION) {
+    if (!abi || !call || !free_result || abi() != MEMOCHAT_R18_PLUGIN_ABI_VERSION)
+    {
         std::cerr << "invalid r18 plugin ABI\n";
         return 4;
     }
 
     std::string line;
-    while (std::getline(std::cin, line)) {
-        if (line.empty()) {
+    while (std::getline(std::cin, line))
+    {
+        if (line.empty())
+        {
             continue;
         }
         const char* response = call(line.c_str());
-        if (response) {
+        if (response)
+        {
             std::cout << response << std::endl;
             free_result(response);
-        } else {
+        }
+        else
+        {
             std::cout << "{\"error\":500,\"message\":\"plugin returned null\"}" << std::endl;
         }
     }
 
-    if (shutdown) {
+    if (shutdown)
+    {
         shutdown();
     }
 

@@ -1,13 +1,32 @@
 ---
 name: memochat-withtest
-description: Use when implementing a MemoChat change that needs live validation beyond compilation, including local Docker-backed service, login, chat, media, queue, observability, ops UI, or multi-service behavior.
+description: Use when implementing a MemoChat change that needs CI-retained tests or live validation beyond compilation, including unit, functional, stress, boundary, exception, concurrency-safety, data-driven, Docker-backed, login, chat, media, queue, observability, ops UI, or multi-service behavior.
 ---
 
 # MemoChat 带测试工作流
 
-当变更需要超出编译之外的 live validation 时使用，例如登录、聊天持久化、媒体存储、队列、观测、ops UI 或多服务行为。
+当变更需要超出编译之外的验证，或需要给 CI/CD 流水线保留自动化测试时使用，例如单元、功能、压力、边界、异常、并发安全、数据驱动、登录、聊天持久化、媒体存储、队列、观测、ops UI 或多服务行为。
 
 这个 skill 只管测试循环、测试产物和 PASS/阻塞判定，不负责部署策略或日常构建入口。部署、启动、环境健康和清理归 `skills/runtime-smoke.md`。
+
+## CI/CD 持久测试要求
+
+测试必须能进入流水线反复运行，不允许只做一次性手工验证或只把临时脚本写在 `.ai` 里。每次实现或修复都要按改动风险保留以下测试面；如果某一类确实不适用，必须在 `test<N>.md`、`result<N>.md` 和最终回复中写明原因：
+
+- 单元测试：覆盖核心函数、类、解析器、状态机、服务方法或模型更新。
+- 功能测试：覆盖用户可见正常路径、服务端/客户端契约、状态变化和持久化结果。
+- 压力测试：覆盖吞吐、重复请求、批量数据、长连接、队列、缓存或模型加载等本次变更相关负载。
+- 边界测试：覆盖空输入、最大/最小值、缺字段、重复对象、分页边界、资源不存在和极限尺寸。
+- 异常测试：覆盖非法输入、权限失败、依赖不可用、网络超时、解析失败、存储失败和回滚路径。
+- 并发安全测试：覆盖重复点击、并发请求、重连、重复消息、并发读写、幂等和竞态风险。
+- 数据驱动测试：用参数化用例、fixtures、表格数据或小型样本集覆盖协议 payload、schema、模型字段和多类型输入。
+
+代码测试必须落在 `tests/` 下并接入现有构建/测试入口：
+
+- C++ 测试使用 GTest 编写，文件放入 `tests/` 的相关子目录，注册到对应 `CMakeLists.txt`，并能通过 `ctest --preset linux-full-gcc16 --output-on-failure` 运行。
+- Python 测试放入 `tests/`，优先用 `pytest`；也可以沿用项目已有 `unittest`/其他 runner，但必须有明确命令并能被 CI 调用。
+- 压力、smoke 或运行时探针可以复用 `tools/` 下现有脚本，但不能替代 `tests/` 下持久化测试；需要新增脚本时要同时保留可被 CI 调用的测试入口或文档化命令。
+- 不要把测试文件放在临时目录、构建目录、`.ai` 或日志目录中；`.ai` 只记录计划、命令、结果和无法覆盖的理由。
 
 ## 阶段 1：实现
 
@@ -40,7 +59,7 @@ description: Use when implementing a MemoChat change that needs live validation 
 
 最多重复五轮；如果同一阶段、同一命令或同一环境依赖连续重复失败/卡住，通常连续 2 次就停止自动尝试，不要为了凑满五轮而空转。
 
-每轮都按“红绿测试 -> 基本功能测试 -> 冒烟测试 -> 边界/异常测试”组织验证。编译通过只是进入测试循环的前置条件，不是功能完成标准。任一层发现问题，都必须写入 `result<N>.md`，在 `fix<N>.md` 记录修复，重新编译、重新部署，并重跑受影响的最窄测试及后续相关梯度，直到 `PASS` 或达到明确阻塞。
+每轮都按“红绿测试 -> 单元测试 -> 功能测试 -> 压力测试 -> 边界测试 -> 异常测试 -> 并发安全测试 -> 数据驱动测试 -> 冒烟测试”组织验证。编译通过只是进入测试循环的前置条件，不是功能完成标准。任一层发现问题，都必须写入 `result<N>.md`，在 `fix<N>.md` 记录修复，重新编译、重新部署，并重跑受影响的最窄测试及后续相关梯度，直到 `PASS` 或达到明确阻塞。
 
 判定 `PASS` 前必须执行完成前证据门：列出证明该轮通过的命令或查询，实际运行并读取 exit code/stdout/stderr/日志，再把证据写入 `result<N>.md`。不能根据“服务已启动”“脚本看起来正常”推断功能完成。
 
@@ -79,7 +98,9 @@ tools/scripts/status/start-all-services.sh
 编写 `.ai/<project>/<letter>/test<N>.md`，包含：
 
 - 要测试的行为
-- 红绿测试、基本功能测试、冒烟测试、边界/异常测试的覆盖点；无法覆盖的层要写明原因
+- 红绿测试、单元测试、功能测试、压力测试、边界测试、异常测试、并发安全测试、数据驱动测试、冒烟测试的覆盖点；无法覆盖的层要写明原因
+- 要新增或更新的持久化测试文件路径，区分 C++ GTest 和 Python pytest/unittest/其他 runner
+- 测试如何接入 CMake/CTest、pytest、unittest 或 CI 命令
 - 所需容器/服务
 - 要运行的脚本或命令
 - 数据准备和清理
@@ -104,6 +125,8 @@ tools/scripts/status/start-all-services.sh
 - `python tools/loadtest/python-loadtest/py_loadtest.py --config tools/loadtest/python-loadtest/config.json --scenario all --total 20 --concurrency 5`
 - `logs`、`artifacts` 和运行时服务输出文件下的服务日志。
 
+这些探针只作为运行时和压力证据。产品修复或新功能仍必须在 `tests/` 下保留对应的 C++ GTest 或 Python 自动化测试，除非该测试面被明确记录为不可自动化。
+
 ### 步骤 D：运行测试
 
 运行计划中的命令。捕获：
@@ -114,6 +137,8 @@ tools/scripts/status/start-all-services.sh
 - 有用时的 Docker logs 或 Loki logs
 - 数据库/队列/对象存储验证查询
 - UI 工作的截图
+- 新增/更新测试文件路径和测试 runner
+- CI 可复用命令，例如 `ctest --preset linux-full-gcc16 --output-on-failure`、`pytest tests/...` 或现有 Python runner 命令
 
 写入 `.ai/<project>/<letter>/result<N>.md`。
 
@@ -136,3 +161,4 @@ tools/scripts/status/start-all-services.sh
 - 除非用户要求停止 Docker 依赖，否则让它们保持运行
 - 记录最终状态和留下的任何有状态数据
 - 执行测试计划中的安全清理；不能清理的数据必须带 run id 并记录位置
+- 保留 `tests/` 下新增或更新的 C++/Python 测试文件和必要 fixtures；只清理临时数据、临时日志和一次性调试脚本

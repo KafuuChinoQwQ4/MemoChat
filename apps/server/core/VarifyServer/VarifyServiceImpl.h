@@ -8,14 +8,18 @@
 #include <string>
 #include <unordered_map>
 
-namespace varifyservice {
+namespace varifyservice
+{
 
-inline bool IsSyntheticLoadtestEmail(const std::string& email) {
-    if (email.size() < 14) return false;
+inline bool IsSyntheticLoadtestEmail(const std::string& email)
+{
+    if (email.size() < 14)
+        return false;
     return email.compare(email.size() - 14, 14, "@loadtest.local") == 0;
 }
 
-enum class VarifyError {
+enum class VarifyError
+{
     Success = 0,
     RedisErr = 1,
     Exception = 2,
@@ -23,7 +27,8 @@ enum class VarifyError {
     InvalidEmail = 4,
 };
 
-struct VarifyMetrics {
+struct VarifyMetrics
+{
     std::atomic<uint64_t> requests_total{0};
     std::atomic<uint64_t> requests_success{0};
     std::atomic<uint64_t> requests_failed{0};
@@ -37,14 +42,15 @@ struct VarifyMetrics {
 
 extern VarifyMetrics g_metrics;
 
-class VarifyServiceImpl final : public message::VarifyService::Service {
+class VarifyServiceImpl final : public message::VarifyService::Service
+{
 public:
     VarifyServiceImpl();
     ~VarifyServiceImpl() override;
 
     grpc::Status GetVarifyCode(grpc::ServerContext* context,
-                                const message::GetVarifyReq* request,
-                                message::GetVarifyRsp* reply) override;
+                               const message::GetVarifyReq* request,
+                               message::GetVarifyRsp* reply) override;
 
 private:
     std::string GenerateVerifyCode();
@@ -60,7 +66,8 @@ private:
 
     std::string ExtractPeerIP(grpc::ServerContext* context);
 
-    struct {
+    struct
+    {
         int code_length = 6;
         int code_ttl_sec = 600;
         int email_rate_limit_count = 3;

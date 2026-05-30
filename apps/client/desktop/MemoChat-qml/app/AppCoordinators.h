@@ -2,27 +2,105 @@
 
 #include <QString>
 #include <QVariantList>
+#include <memory>
+
+#include "global.h"
 
 class AppController;
 struct UploadedMediaInfo;
 
-class AppSessionCoordinator {
+class SessionAuthCoordinator
+{
 public:
-    explicit AppSessionCoordinator(AppController& controller);
+    explicit SessionAuthCoordinator(AppController& controller);
 
     void login(const QString& email, const QString& password);
     void requestRegisterCode(const QString& email);
-    void registerUser(const QString& user, const QString& email, const QString& password,
-                      const QString& confirm, const QString& verifyCode);
+    void registerUser(const QString& user,
+                      const QString& email,
+                      const QString& password,
+                      const QString& confirm,
+                      const QString& verifyCode);
     void requestResetCode(const QString& email);
-    void resetPassword(const QString& user, const QString& email, const QString& password,
-                       const QString& verifyCode);
+    void resetPassword(const QString& user, const QString& email, const QString& password, const QString& verifyCode);
+    void onLoginHttpFinished(ReqId id, QString res, ErrorCodes err);
+    void onRegisterHttpFinished(ReqId id, QString res, ErrorCodes err);
+    void onResetHttpFinished(ReqId id, QString res, ErrorCodes err);
 
 private:
     AppController& _app;
 };
 
-class ContactCoordinatorShell {
+class SessionRelationBootstrap
+{
+public:
+    explicit SessionRelationBootstrap(AppController& controller);
+
+    void requestRelationBootstrap();
+    void onRelationBootstrapUpdated();
+
+private:
+    AppController& _app;
+};
+
+class SessionChatEntryCoordinator
+{
+public:
+    explicit SessionChatEntryCoordinator(AppController& controller);
+
+    void onSwitchToChat();
+    void beginPostLoginBootstrap();
+    void runPostLoginBootstrap();
+
+private:
+    AppController& _app;
+};
+
+class RegisterCountdownController
+{
+public:
+    explicit RegisterCountdownController(AppController& controller);
+
+    void onRegisterCountdownTimeout();
+
+private:
+    AppController& _app;
+};
+
+class AppSessionCoordinator
+{
+public:
+    explicit AppSessionCoordinator(AppController& controller);
+
+    void login(const QString& email, const QString& password);
+    void requestRegisterCode(const QString& email);
+    void registerUser(const QString& user,
+                      const QString& email,
+                      const QString& password,
+                      const QString& confirm,
+                      const QString& verifyCode);
+    void requestResetCode(const QString& email);
+    void resetPassword(const QString& user, const QString& email, const QString& password, const QString& verifyCode);
+    void onLoginHttpFinished(ReqId id, QString res, ErrorCodes err);
+    void onRegisterHttpFinished(ReqId id, QString res, ErrorCodes err);
+    void onResetHttpFinished(ReqId id, QString res, ErrorCodes err);
+    void onSwitchToChat();
+    void beginPostLoginBootstrap();
+    void runPostLoginBootstrap();
+    void requestRelationBootstrap();
+    void onRelationBootstrapUpdated();
+    void onRegisterCountdownTimeout();
+
+private:
+    AppController& _app;
+    std::unique_ptr<SessionAuthCoordinator> _auth;
+    std::unique_ptr<SessionChatEntryCoordinator> _chat_entry;
+    std::unique_ptr<SessionRelationBootstrap> _relation_bootstrap;
+    std::unique_ptr<RegisterCountdownController> _register_countdown;
+};
+
+class ContactCoordinatorShell
+{
 public:
     explicit ContactCoordinatorShell(AppController& controller);
 
@@ -34,7 +112,8 @@ private:
     AppController& _app;
 };
 
-class CallCoordinator {
+class CallCoordinator
+{
 public:
     explicit CallCoordinator(AppController& controller);
 
@@ -53,7 +132,8 @@ private:
     AppController& _app;
 };
 
-class ProfileCoordinator {
+class ProfileCoordinator
+{
 public:
     explicit ProfileCoordinator(AppController& controller);
 
@@ -64,7 +144,8 @@ private:
     AppController& _app;
 };
 
-class GroupCoordinator {
+class GroupCoordinator
+{
 public:
     explicit GroupCoordinator(AppController& controller);
 
@@ -86,7 +167,8 @@ private:
     AppController& _app;
 };
 
-class MediaCoordinator {
+class MediaCoordinator
+{
 public:
     explicit MediaCoordinator(AppController& controller);
 

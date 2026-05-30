@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from typing import Any, Iterator
 
 import structlog
-
 from config import LangSmithConfig, ObservabilityConfig, settings
 
 logger = structlog.get_logger()

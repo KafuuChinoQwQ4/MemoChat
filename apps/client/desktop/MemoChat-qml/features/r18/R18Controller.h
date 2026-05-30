@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QObject>
+#include <QUrl>
 #include <QVariantMap>
 
 class ClientGateway;
@@ -18,7 +19,8 @@ class R18Controller : public QObject
     Q_PROPERTY(R18ListModel* pageModel READ pageModel CONSTANT)
     Q_PROPERTY(R18ListModel* historyModel READ historyModel CONSTANT)
     Q_PROPERTY(R18ListModel* officialSourceModel READ officialSourceModel CONSTANT)
-    Q_PROPERTY(QString officialSourceCatalogUrl READ officialSourceCatalogUrl WRITE setOfficialSourceCatalogUrl NOTIFY officialSourceCatalogUrlChanged)
+    Q_PROPERTY(QString officialSourceCatalogUrl READ officialSourceCatalogUrl WRITE setOfficialSourceCatalogUrl NOTIFY
+                   officialSourceCatalogUrlChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
     Q_PROPERTY(QString error READ error NOTIFY errorChanged)
@@ -32,22 +34,70 @@ class R18Controller : public QObject
 public:
     explicit R18Controller(ClientGateway* gateway, QObject* parent = nullptr);
 
-    R18ListModel* sourceModel() { return &_sources; }
-    R18ListModel* comicModel() { return &_comics; }
-    R18ListModel* chapterModel() { return &_chapters; }
-    R18ListModel* pageModel() { return &_pages; }
-    R18ListModel* historyModel() { return &_history; }
-    R18ListModel* officialSourceModel() { return &_official_sources; }
-    QString officialSourceCatalogUrl() const { return _official_source_catalog_url; }
-    QString statusText() const { return _status_text; }
-    bool loading() const { return _loading; }
-    QString error() const { return _error; }
-    QString currentSourceId() const { return _current_source_id; }
-    QVariantMap currentComic() const { return _current_comic; }
-    bool currentFavorite() const { return _current_favorite; }
-    int currentPageIndex() const { return _current_page_index; }
-    int currentSearchPage() const { return _current_search_page; }
-    bool currentSearchHasMore() const { return _current_search_has_more; }
+    R18ListModel* sourceModel()
+    {
+        return &_sources;
+    }
+    R18ListModel* comicModel()
+    {
+        return &_comics;
+    }
+    R18ListModel* chapterModel()
+    {
+        return &_chapters;
+    }
+    R18ListModel* pageModel()
+    {
+        return &_pages;
+    }
+    R18ListModel* historyModel()
+    {
+        return &_history;
+    }
+    R18ListModel* officialSourceModel()
+    {
+        return &_official_sources;
+    }
+    QString officialSourceCatalogUrl() const
+    {
+        return _official_source_catalog_url;
+    }
+    QString statusText() const
+    {
+        return _status_text;
+    }
+    bool loading() const
+    {
+        return _loading;
+    }
+    QString error() const
+    {
+        return _error;
+    }
+    QString currentSourceId() const
+    {
+        return _current_source_id;
+    }
+    QVariantMap currentComic() const
+    {
+        return _current_comic;
+    }
+    bool currentFavorite() const
+    {
+        return _current_favorite;
+    }
+    int currentPageIndex() const
+    {
+        return _current_page_index;
+    }
+    int currentSearchPage() const
+    {
+        return _current_search_page;
+    }
+    bool currentSearchHasMore() const
+    {
+        return _current_search_has_more;
+    }
 
     Q_INVOKABLE void refreshSources();
     Q_INVOKABLE void refreshHistory();
@@ -63,7 +113,8 @@ public:
     Q_INVOKABLE void enableSource(const QString& sourceId, bool enabled);
     Q_INVOKABLE void importSourcePackage(const QString& filePath, const QString& manifestJson = QString());
     Q_INVOKABLE void toggleFavorite(const QString& sourceId, const QString& comicId, bool favorited);
-    Q_INVOKABLE void updateHistory(const QString& sourceId, const QString& comicId, const QString& chapterId, int pageIndex);
+    Q_INVOKABLE void
+    updateHistory(const QString& sourceId, const QString& comicId, const QString& chapterId, int pageIndex);
 
 signals:
     void loadingChanged();

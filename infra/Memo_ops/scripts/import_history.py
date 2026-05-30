@@ -9,7 +9,11 @@ from Memo_ops.server.ops_common.schema import init_schema
 
 
 def main() -> int:
-    config_path = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / "config" / "opscollector.yaml"
+    config_path = (
+        Path(sys.argv[1]).resolve()
+        if len(sys.argv) > 1
+        else Path(__file__).resolve().parents[1] / "config" / "opscollector.yaml"
+    )
     cfg = load_yaml_config(config_path)
     init_schema(cfg["postgresql"])
     report_stats = import_reports(cfg)

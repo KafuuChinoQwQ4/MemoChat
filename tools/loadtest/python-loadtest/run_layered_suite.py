@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 APP_CASES = ["http-health", "http-login", "tcp-login", "tcp-heartbeat", "tcp-relation-bootstrap"]
 DB_CASES = ["redis", "postgres", "mongo", "qdrant"]
 AI_CASES = ["ai-health"]
@@ -352,7 +351,9 @@ def bottleneck_hints(reports: list[dict[str, Any]], environment: dict[str, Any])
 
     ports = environment.get("tcp_ports", {})
     if not ports.get("gate_8080") and not ports.get("gate_8084"):
-        hints.append("GateServer 8080/8084 is not reachable, so HTTP/TCP business benchmarks will measure environment failure.")
+        hints.append(
+            "GateServer 8080/8084 is not reachable, so HTTP/TCP business benchmarks will measure environment failure."
+        )
 
     health = by_scenario.get("http_health_k6")
     http = by_scenario.get("http_login_k6")
@@ -361,21 +362,29 @@ def bottleneck_hints(reports: list[dict[str, Any]], environment: dict[str, Any])
         h_rps = float(health["summary"].get("throughput_rps", 0.0))
         l_rps = float(http["summary"].get("throughput_rps", 0.0))
         if h_rps > 0 and l_rps < h_rps * 0.5:
-            hints.append("HTTP login throughput is below 50% of HTTP health baseline; login-side DB/cache/auth logic is likely dominating.")
+            hints.append(
+                "HTTP login throughput is below 50% of HTTP health baseline; login-side DB/cache/auth logic is likely dominating."
+            )
     if http and tcp and report_failed(http) == 0 and report_failed(tcp) == 0:
         h_rps = float(http["summary"].get("throughput_rps", 0.0))
         t_rps = float(tcp["summary"].get("throughput_rps", 0.0))
         if h_rps > 0 and t_rps < h_rps * 0.7:
-            hints.append("TCP full login is much lower than HTTP login; ChatServer auth, TCP connection churn, or status side effects need inspection.")
+            hints.append(
+                "TCP full login is much lower than HTTP login; ChatServer auth, TCP connection churn, or status side effects need inspection."
+            )
 
     for report in reports:
         latency = summarize_latency(report)
         p95 = float(latency.get("p95_ms", 0.0) or 0.0)
         p99 = float(latency.get("p99_ms", 0.0) or 0.0)
         if p95 > 0 and p99 > p95 * 2:
-            hints.append(f"{report.get('scenario')} has a wide p95->p99 tail ({p95}ms -> {p99}ms); check queueing, connection pools, and slow dependency calls.")
+            hints.append(
+                f"{report.get('scenario')} has a wide p95->p99 tail ({p95}ms -> {p99}ms); check queueing, connection pools, and slow dependency calls."
+            )
 
-    dependency_reports = [report for report in reports if report.get("layer") == "dependency" and report_failed(report) == 0]
+    dependency_reports = [
+        report for report in reports if report.get("layer") == "dependency" and report_failed(report) == 0
+    ]
     slow_deps = sorted(
         dependency_reports,
         key=lambda report: float(summarize_latency(report).get("p99_ms", 0.0) or 0.0),
@@ -383,8 +392,7 @@ def bottleneck_hints(reports: list[dict[str, Any]], environment: dict[str, Any])
     )[:3]
     if slow_deps:
         text = ", ".join(
-            f"{item.get('scenario')} p99={summarize_latency(item).get('p99_ms', 0)}ms"
-            for item in slow_deps
+            f"{item.get('scenario')} p99={summarize_latency(item).get('p99_ms', 0)}ms" for item in slow_deps
         )
         hints.append(f"Highest dependency tail latencies: {text}.")
     return hints
@@ -413,7 +421,9 @@ def write_markdown_summary(path: Path, suite: dict[str, Any]) -> None:
                 total=summary.get("total", summary.get("total_runs", 0)),
                 success=summary.get("success", ""),
                 failed=summary.get("failed", ""),
-                success_rate=round(float(summary.get("success_rate", 0.0)) * 100, 2) if "success_rate" in summary else "",
+                success_rate=round(float(summary.get("success_rate", 0.0)) * 100, 2)
+                if "success_rate" in summary
+                else "",
                 rps=summary.get("throughput_rps", summary.get("best_throughput_rps", "")),
                 min_ms=latency.get("min_ms", ""),
                 avg_ms=latency.get("avg_ms", ""),
@@ -445,7 +455,11 @@ def write_markdown_summary(path: Path, suite: dict[str, Any]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run split MemoChat application and dependency benchmarks")
     parser.add_argument("--config", default=str(Path(__file__).with_name("config.benchmark.json")))
-    parser.add_argument("--cases", default="default", help="default, all, or comma list: http-health,http-login,tcp-login,tcp-heartbeat,tcp-relation-bootstrap,redis,postgres,mongo,qdrant,ai-health,agent,rag")
+    parser.add_argument(
+        "--cases",
+        default="default",
+        help="default, all, or comma list: http-health,http-login,tcp-login,tcp-heartbeat,tcp-relation-bootstrap,redis,postgres,mongo,qdrant,ai-health,agent,rag",
+    )
     parser.add_argument("--total", type=int, default=200)
     parser.add_argument("--concurrency", type=int, default=20)
     parser.add_argument("--db-total", type=int, default=0)
@@ -459,9 +473,13 @@ def main() -> int:
     config_path = Path(args.config).resolve()
     config = load_json(config_path)
     config_dir = config_path.parent
-    report_dir = Path(args.report_dir).resolve() if args.report_dir else resolve_path(
-        str(config.get("report_dir", "../../../infra/Memo_ops/artifacts/loadtest/runtime/reports")),
-        config_dir,
+    report_dir = (
+        Path(args.report_dir).resolve()
+        if args.report_dir
+        else resolve_path(
+            str(config.get("report_dir", "../../../infra/Memo_ops/artifacts/loadtest/runtime/reports")),
+            config_dir,
+        )
     )
     report_dir.mkdir(parents=True, exist_ok=True)
 
@@ -479,7 +497,9 @@ def main() -> int:
     reports: list[dict[str, Any]] = []
 
     for case in cases:
-        print(f"[RUN] {case} total={total if case not in DB_CASES else db_total} concurrency={concurrency if case not in DB_CASES else db_concurrency}")
+        print(
+            f"[RUN] {case} total={total if case not in DB_CASES else db_total} concurrency={concurrency if case not in DB_CASES else db_concurrency}"
+        )
         if case == "http-health":
             reports.extend(run_k6_case(case, "health", config_path, report_dir, total, concurrency, args.timeout_sec))
         elif case == "http-login":
@@ -487,15 +507,25 @@ def main() -> int:
         elif case == "tcp-login":
             reports.extend(run_py_case(case, "tcp", config_path, report_dir, total, concurrency, args.timeout_sec))
         elif case == "tcp-heartbeat":
-            reports.extend(run_py_case(case, "tcp-heartbeat", config_path, report_dir, total, concurrency, args.timeout_sec))
+            reports.extend(
+                run_py_case(case, "tcp-heartbeat", config_path, report_dir, total, concurrency, args.timeout_sec)
+            )
         elif case == "tcp-relation-bootstrap":
-            reports.extend(run_py_case(case, "tcp-relation-bootstrap", config_path, report_dir, total, concurrency, args.timeout_sec))
+            reports.extend(
+                run_py_case(
+                    case, "tcp-relation-bootstrap", config_path, report_dir, total, concurrency, args.timeout_sec
+                )
+            )
         elif case == "ai-health":
-            reports.extend(run_py_case(case, "ai-health", config_path, report_dir, total, concurrency, args.timeout_sec))
+            reports.extend(
+                run_py_case(case, "ai-health", config_path, report_dir, total, concurrency, args.timeout_sec)
+            )
         elif case in {"agent", "rag"}:
             slow_total = min(total, 20)
             slow_concurrency = min(concurrency, 4)
-            reports.extend(run_py_case(case, case, config_path, report_dir, slow_total, slow_concurrency, args.timeout_sec))
+            reports.extend(
+                run_py_case(case, case, config_path, report_dir, slow_total, slow_concurrency, args.timeout_sec)
+            )
         elif case in DB_CASES:
             reports.extend(run_db_case(case, db_total, db_concurrency))
         else:

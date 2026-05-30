@@ -8,9 +8,10 @@
 #include <QDateTime>
 #include <memory>
 
-struct MomentItem {
+struct MomentItem
+{
     int seq = 0;
-    QString mediaType;   // text, image, video
+    QString mediaType; // text, image, video
     QString mediaKey;
     QString thumbKey;
     QString content;
@@ -19,14 +20,16 @@ struct MomentItem {
     int durationMs = 0;
 };
 
-struct MomentLike {
+struct MomentLike
+{
     int uid = 0;
     QString userNick;
     QString userIcon;
     qint64 createdAt = 0;
 };
 
-struct MomentComment {
+struct MomentComment
+{
     qint64 id = 0;
     int uid = 0;
     QString userNick;
@@ -40,14 +43,15 @@ struct MomentComment {
     QVector<MomentLike> likes;
 };
 
-struct MomentEntry {
+struct MomentEntry
+{
     qint64 momentId = 0;
     int uid = 0;
     QString userId;
     QString userName;
     QString userNick;
     QString userIcon;
-    int visibility = 0;  // 0=public, 1=friends, 2=private
+    int visibility = 0; // 0=public, 1=friends, 2=private
     QString location;
     qint64 createdAt = 0;
     int likeCount = 0;
@@ -64,7 +68,8 @@ class MomentsModel : public QAbstractListModel
     Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
 
 public:
-    enum Roles {
+    enum Roles
+    {
         MomentIdRole = Qt::UserRole + 1,
         UidRole,
         UserIdRole,
@@ -119,4 +124,4 @@ private:
     QVector<MomentEntry> _items;
 };
 
-#endif  // MOMENTSMODEL_H
+#endif // MOMENTSMODEL_H

@@ -6,7 +6,6 @@ from typing import Any, Callable
 
 from harness.games.contracts import GameAction, GameEvent, GameParticipant, GameState
 
-
 EventFactory = Callable[
     [GameState, str, str, str, str, dict[str, Any] | None],
     GameEvent,
@@ -73,7 +72,9 @@ class GameHostService:
             )
         )
 
-    async def append_tick_event(self, state: GameState, actor: GameParticipant, action: GameAction, status: str) -> None:
+    async def append_tick_event(
+        self, state: GameState, actor: GameParticipant, action: GameAction, status: str
+    ) -> None:
         host = self.config(state)
         if not host.get("enabled"):
             return

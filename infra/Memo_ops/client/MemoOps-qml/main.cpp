@@ -4,7 +4,7 @@
 
 #include "OpsApiClient.h"
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("MemoOpsQml"));
@@ -13,7 +13,8 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("opsApi"), &apiClient);
     engine.load(QUrl(QStringLiteral("qrc:/qml/Main.qml")));
-    if (engine.rootObjects().isEmpty()) {
+    if (engine.rootObjects().isEmpty())
+    {
         return -1;
     }
     apiClient.refreshAll();

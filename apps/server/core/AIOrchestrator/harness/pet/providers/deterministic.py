@@ -151,7 +151,9 @@ class DeterministicPetProvider:
         language = _reply_language(prompt)
         if not _should_use_llm(prompt):
             reply = await self._scripted_reply(prompt, language)
-            translation = await self._scripted_translation(prompt, language) if _reply_text_language(language) == "ja" else ""
+            translation = (
+                await self._scripted_translation(prompt, language) if _reply_text_language(language) == "ja" else ""
+            )
             return reply, translation, language
         try:
             reply, translation = await asyncio.wait_for(
@@ -163,7 +165,9 @@ class DeterministicPetProvider:
         except Exception:
             pass
         reply = await self._scripted_reply(prompt, language)
-        translation = await self._scripted_translation(prompt, language) if _reply_text_language(language) == "ja" else ""
+        translation = (
+            await self._scripted_translation(prompt, language) if _reply_text_language(language) == "ja" else ""
+        )
         return reply, translation, language
 
     async def _scripted_reply(self, prompt: PetPromptContext, language: str) -> str:
@@ -185,8 +189,8 @@ class DeterministicPetProvider:
         )
 
     async def _llm_reply(self, prompt: PetPromptContext, language: str) -> tuple[str, str]:
-        from llm.base import LLMMessage
         from harness.llm.service import LLMEndpointRegistry
+        from llm.base import LLMMessage
 
         registry = LLMEndpointRegistry()
         target_language = _language_name(language)
@@ -228,8 +232,8 @@ class DeterministicPetProvider:
         return reply, translation
 
     async def _translate_reply(self, text: str, language: str, prompt: PetPromptContext) -> str:
-        from llm.base import LLMMessage
         from harness.llm.service import LLMEndpointRegistry
+        from llm.base import LLMMessage
 
         if not text.strip():
             return ""
@@ -253,7 +257,7 @@ class DeterministicPetProvider:
 
 
 def _chunk_text(text: str, size: int) -> list[str]:
-    return [text[index:index + size] for index in range(0, len(text), size)] or [""]
+    return [text[index : index + size] for index in range(0, len(text), size)] or [""]
 
 
 def _estimated_voice_duration_ms(text: str) -> int:

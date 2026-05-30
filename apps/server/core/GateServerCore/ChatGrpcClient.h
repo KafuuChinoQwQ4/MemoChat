@@ -21,14 +21,16 @@ using message::ChatService;
 using message::GroupEventNotifyReq;
 using message::GroupEventNotifyRsp;
 
-class ChatConPool {
+class ChatConPool
+{
 public:
     ChatConPool(size_t poolSize, std::string host, std::string port)
-        : b_stop_(false) {
-        for (size_t i = 0; i < poolSize; ++i) {
-            std::shared_ptr<Channel> channel = grpc::CreateChannel(
-                host + ":" + port,
-                grpc::InsecureChannelCredentials());
+        : b_stop_(false)
+    {
+        for (size_t i = 0; i < poolSize; ++i)
+        {
+            std::shared_ptr<Channel> channel =
+                grpc::CreateChannel(host + ":" + port, grpc::InsecureChannelCredentials());
             connections_.push(ChatService::NewStub(channel));
         }
     }
@@ -47,6 +49,7 @@ private:
 class ChatGrpcClient : public Singleton<ChatGrpcClient>
 {
     friend class Singleton<ChatGrpcClient>;
+
 public:
     GroupEventNotifyRsp NotifyCallEvent(const std::string& server_name, const GroupEventNotifyReq& req);
 

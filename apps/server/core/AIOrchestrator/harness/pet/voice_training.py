@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import time
-import uuid
-from dataclasses import asdict, dataclass, field
 import base64
 import binascii
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
+import time
+import uuid
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 
@@ -179,9 +179,7 @@ class VoiceTrainingService:
             if job.status != "ready":
                 continue
             reference_audio = str(
-                diagnostics.get("gpt_sovits_reference_audio")
-                or diagnostics.get("reference_audio_runtime_path")
-                or ""
+                diagnostics.get("gpt_sovits_reference_audio") or diagnostics.get("reference_audio_runtime_path") or ""
             ).strip()
             if reference_audio and Path(reference_audio).is_file():
                 return reference_audio
@@ -255,9 +253,7 @@ def _redacted_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
 def _persist_reference_audio(artifact_dir: Path, request: VoiceTrainingRequest) -> tuple[str, dict[str, Any]]:
     metadata = request.metadata if isinstance(request.metadata, dict) else {}
     upload = _text(
-        metadata.get("reference_audio_base64")
-        or metadata.get("reference_audio_data")
-        or metadata.get("audio_base64"),
+        metadata.get("reference_audio_base64") or metadata.get("reference_audio_data") or metadata.get("audio_base64"),
         "",
     )
     file_name = _safe_audio_file_name(
@@ -470,10 +466,14 @@ def _material_readiness(diagnostics: dict[str, Any]) -> dict[str, Any]:
         next_step = "Provide WAV/MP3/FLAC audio with readable metadata, or install ffprobe in the runtime image."
     elif duration_sec < 5.0:
         status = "too_short"
-        next_step = "Provide at least 5 seconds for zero-shot inference, and preferably 60 seconds or more for fine-tuning."
+        next_step = (
+            "Provide at least 5 seconds for zero-shot inference, and preferably 60 seconds or more for fine-tuning."
+        )
     elif duration_sec < 60.0:
         status = "zero_shot_ready"
-        next_step = "Enough for GPT-SoVITS zero-shot inference; provide 60 seconds or more for better few-shot fine-tuning."
+        next_step = (
+            "Enough for GPT-SoVITS zero-shot inference; provide 60 seconds or more for better few-shot fine-tuning."
+        )
     else:
         status = "few_shot_ready"
         next_step = "Enough duration for few-shot preparation; segment a clean 5-15 second reference clip and transcribe it before synthesis or fine-tuning."

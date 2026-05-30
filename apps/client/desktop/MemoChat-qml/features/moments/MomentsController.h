@@ -27,21 +27,37 @@ public:
     explicit MomentsController(QObject* parent = nullptr);
     ~MomentsController();
 
-    MomentsModel* model() const { return _model; }
-    bool loading() const { return _loading; }
-    bool hasMore() const { return _has_more; }
-    QString errorText() const { return _error_text; }
-    QString progressText() const { return _progress_text; }
-    int authorFilterUid() const { return _author_filter_uid; }
+    MomentsModel* model() const
+    {
+        return _model;
+    }
+    bool loading() const
+    {
+        return _loading;
+    }
+    bool hasMore() const
+    {
+        return _has_more;
+    }
+    QString errorText() const
+    {
+        return _error_text;
+    }
+    QString progressText() const
+    {
+        return _progress_text;
+    }
+    int authorFilterUid() const
+    {
+        return _author_filter_uid;
+    }
 
     Q_INVOKABLE void loadFeed();
     Q_INVOKABLE void loadFeedForAuthor(int authorUid);
     Q_INVOKABLE void loadMore();
-    Q_INVOKABLE void publishMoment(const QString& location, int visibility,
-                                   const QVariantList& items);
+    Q_INVOKABLE void publishMoment(const QString& location, int visibility, const QVariantList& items);
     Q_INVOKABLE QVariantList pickMomentMedia();
-    Q_INVOKABLE void publishDraftMoment(const QString& text, int visibility,
-                                        const QVariantList& attachments);
+    Q_INVOKABLE void publishDraftMoment(const QString& text, int visibility, const QVariantList& attachments);
     Q_INVOKABLE void deleteMoment(qint64 momentId);
     Q_INVOKABLE void toggleLike(qint64 momentId);
     Q_INVOKABLE void addComment(qint64 momentId, const QString& content, int replyUid = 0);
@@ -51,10 +67,9 @@ public:
     Q_INVOKABLE void refreshComments(qint64 momentId);
 
     static QVariantList buildTextItem(const QString& content);
-    static QVariantList buildImageItem(const QString& mediaKey, const QString& thumbKey,
-                                      int width, int height);
-    static QVariantList buildVideoItem(const QString& mediaKey, const QString& thumbKey,
-                                      int width, int height, int durationMs);
+    static QVariantList buildImageItem(const QString& mediaKey, const QString& thumbKey, int width, int height);
+    static QVariantList
+    buildVideoItem(const QString& mediaKey, const QString& thumbKey, int width, int height, int durationMs);
 
 signals:
     void loadingChanged();
@@ -86,14 +101,14 @@ private:
     void setErrorText(const QString& text);
     void setProgressText(const QString& text);
     void setAuthorFilterUid(int uid);
-    void submitPublishRequest(const QString& location, int visibility,
-                              const QVariantList& items, bool manageLoading);
+    void submitPublishRequest(const QString& location, int visibility, const QVariantList& items, bool manageLoading);
     QJsonObject buildAuthJson() const;
     MomentEntry parseMomentEntry(const QJsonObject& obj) const;
     void applyAuthoritativeState(MomentEntry& entry) const;
     void submitLikeRequest(qint64 momentId, bool liked);
 
-    struct PendingLike {
+    struct PendingLike
+    {
         qint64 momentId = 0;
         bool rollbackLiked = false;
         int rollbackCount = 0;
@@ -113,7 +128,8 @@ private:
     qint64 _pending_published_moment_id = 0;
     static constexpr int kPageSize = 20;
 
-    /// One network request per moment at a time. Extra taps update desired state and are sent after the current request resolves.
+    /// One network request per moment at a time. Extra taps update desired state and are sent after the current request
+    /// resolves.
     QSet<qint64> _like_in_flight;
     QHash<qint64, PendingLike> _pending_likes;
     QHash<ReqId, qint64> _pending_comment_moments;
@@ -123,4 +139,4 @@ private:
     QHash<qint64, int> _authoritative_comment_counts;
 };
 
-#endif  // MOMENTSCONTROLLER_H
+#endif // MOMENTSCONTROLLER_H

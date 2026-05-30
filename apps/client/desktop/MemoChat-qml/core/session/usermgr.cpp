@@ -1,13 +1,19 @@
 #include "usermgr.h"
-#include <QJsonArray>
-#include <algorithm>
 
 UserMgr::~UserMgr()
 {
-
 }
 
-void UserMgr::SetUserInfo(std::shared_ptr<UserInfo> user_info) {
+UserMgr::UserMgr()
+    : _user_info(nullptr)
+    , _chat_loaded(0)
+    , _contact_loaded(0)
+    , _group_loaded(0)
+{
+}
+
+void UserMgr::SetUserInfo(std::shared_ptr<UserInfo> user_info)
+{
     _user_info = user_info;
 }
 
@@ -18,7 +24,8 @@ void UserMgr::SetToken(QString token)
 
 int UserMgr::GetUid()
 {
-    if (!_user_info) {
+    if (!_user_info)
+    {
         return 0;
     }
     return _user_info->_uid;
@@ -26,7 +33,8 @@ int UserMgr::GetUid()
 
 QString UserMgr::GetName()
 {
-    if (!_user_info) {
+    if (!_user_info)
+    {
         return {};
     }
     return _user_info->_name;
@@ -34,7 +42,8 @@ QString UserMgr::GetName()
 
 QString UserMgr::GetNick()
 {
-    if (!_user_info) {
+    if (!_user_info)
+    {
         return {};
     }
     return _user_info->_nick;
@@ -42,7 +51,8 @@ QString UserMgr::GetNick()
 
 QString UserMgr::GetIcon()
 {
-    if (!_user_info) {
+    if (!_user_info)
+    {
         return {};
     }
     return _user_info->_icon;
@@ -50,7 +60,8 @@ QString UserMgr::GetIcon()
 
 QString UserMgr::GetDesc()
 {
-    if (!_user_info) {
+    if (!_user_info)
+    {
         return {};
     }
     return _user_info->_desc;
@@ -61,18 +72,20 @@ QString UserMgr::GetToken()
     return _token;
 }
 
-void UserMgr::UpdateNickAndDesc(const QString &nick, const QString &desc)
+void UserMgr::UpdateNickAndDesc(const QString& nick, const QString& desc)
 {
-    if (!_user_info) {
+    if (!_user_info)
+    {
         return;
     }
     _user_info->_nick = nick;
     _user_info->_desc = desc;
 }
 
-void UserMgr::UpdateIcon(const QString &icon)
+void UserMgr::UpdateIcon(const QString& icon)
 {
-    if (!_user_info) {
+    if (!_user_info)
+    {
         return;
     }
     _user_info->_icon = icon;
@@ -97,189 +110,6 @@ void UserMgr::ResetSession()
     _group_loaded = 0;
 }
 
-void UserMgr::AppendApplyList(QJsonArray array)
-{
-    _apply_list.clear();
-
-    for (const QJsonValue &value : array) {
-        auto name = value["name"].toString();
-        auto desc = value["desc"].toString();
-        auto icon = value["icon"].toString();
-        auto nick = value["nick"].toString();
-        auto sex = value["sex"].toInt();
-        auto uid = value["uid"].toInt();
-        auto userId = value["user_id"].toString();
-        auto status = value["status"].toInt();
-        auto info = std::make_shared<ApplyInfo>(uid, name,
-                           desc, icon, nick, sex, status, userId);
-        _apply_list.push_back(info);
-    }
-}
-
-void UserMgr::AppendFriendList(QJsonArray array) {
-    _friend_list.clear();
-    _friend_map.clear();
-    _chat_loaded = 0;
-    _contact_loaded = 0;
-
-    for (const QJsonValue& value : array) {
-        auto name = value["name"].toString();
-        auto desc = value["desc"].toString();
-        auto icon = value["icon"].toString();
-        auto nick = value["nick"].toString();
-        auto sex = value["sex"].toInt();
-        auto uid = value["uid"].toInt();
-        auto userId = value["user_id"].toString();
-        auto back = value["back"].toString();
-
-        auto info = std::make_shared<FriendInfo>(uid, name,
-            nick, icon, sex, desc, back, "", userId);
-        _friend_list.push_back(info);
-        _friend_map.insert(uid, info);
-    }
-}
-
-void UserMgr::SetGroupList(const QJsonArray &array)
-{
-    const auto previousGroups = _group_map;
-    _group_list.clear();
-    _group_map.clear();
-    _group_loaded = 0;
-    for (const QJsonValue &value : array) {
-        auto info = std::make_shared<GroupInfoData>();
-        info->_group_id = value["groupid"].toVariant().toLongLong();
-        info->_group_code = value["group_code"].toString();
-        info->_name = value["name"].toString();
-        info->_icon = value["icon"].toString();
-        info->_announcement = value["announcement"].toString();
-        info->_owner_uid = value["owner_uid"].toInt();
-        info->_member_limit = value["member_limit"].toInt(200);
-        info->_member_count = value["member_count"].toInt(0);
-        info->_role = value["role"].toInt(1);
-        info->_is_all_muted = value["is_all_muted"].toInt(0);
-        info->_permission_bits = value["permission_bits"].toVariant().toLongLong();
-        if (info->_group_id <= 0) {
-            continue;
-        }
-        auto previous = previousGroups.find(info->_group_id);
-        if (previous != previousGroups.end()) {
-            const auto &existing = previous.value();
-            if (existing) {
-                info->_chat_msgs = existing->_chat_msgs;
-                if (info->_last_msg.isEmpty()) {
-                    info->_last_msg = existing->_last_msg;
-                }
-            }
-        }
-        _group_list.push_back(info);
-        _group_map.insert(info->_group_id, info);
-    }
-}
-
-std::vector<std::shared_ptr<ApplyInfo> > UserMgr::GetApplyList()
-{
-    return _apply_list;
-}
-
-std::vector<std::shared_ptr<ApplyInfo> > UserMgr::GetApplyListSnapshot() const
-{
-    return _apply_list;
-}
-
-void UserMgr::AddApplyList(std::shared_ptr<ApplyInfo> app)
-{
-    if (!app) {
-        return;
-    }
-
-    for (const auto &item : _apply_list) {
-        if (!item) {
-            continue;
-        }
-        if (item->_uid == app->_uid) {
-            item->_name = app->_name;
-            item->_nick = app->_nick;
-            item->_desc = app->_desc;
-            item->_icon = app->_icon;
-            item->_sex = app->_sex;
-            item->_status = app->_status;
-            return;
-        }
-    }
-
-    _apply_list.push_back(app);
-}
-
-bool UserMgr::AlreadyApply(int uid)
-{
-    for(auto& apply: _apply_list){
-        if(apply->_uid == uid){
-            return true;
-        }
-    }
-
-    return false;
-}
-
-void UserMgr::MarkApplyStatus(int uid, int status)
-{
-    for (const auto &apply : _apply_list) {
-        if (!apply) {
-            continue;
-        }
-        if (apply->_uid == uid) {
-            apply->_status = status;
-            return;
-        }
-    }
-}
-
-std::vector<std::shared_ptr<FriendInfo>> UserMgr::GetChatListPerPage() {
-    
-    std::vector<std::shared_ptr<FriendInfo>> friend_list;
-    int begin = _chat_loaded;
-    int end = begin + CHAT_COUNT_PER_PAGE;
-
-    if (begin >= _friend_list.size()) {
-        return friend_list;
-    }
-
-    if (end > _friend_list.size()) {
-        friend_list = std::vector<std::shared_ptr<FriendInfo>>(_friend_list.begin() + begin, _friend_list.end());
-        return friend_list;
-    }
-
-
-    friend_list = std::vector<std::shared_ptr<FriendInfo>>(_friend_list.begin() + begin, _friend_list.begin()+ end);
-    return friend_list;
-}
-
-
-std::vector<std::shared_ptr<FriendInfo>> UserMgr::GetConListPerPage() {
-    std::vector<std::shared_ptr<FriendInfo>> friend_list;
-    int begin = _contact_loaded;
-    int end = begin + CHAT_COUNT_PER_PAGE;
-
-    if (begin >= _friend_list.size()) {
-        return friend_list;
-    }
-
-    if (end > _friend_list.size()) {
-        friend_list = std::vector<std::shared_ptr<FriendInfo>>(_friend_list.begin() + begin, _friend_list.end());
-        return friend_list;
-    }
-
-
-    friend_list = std::vector<std::shared_ptr<FriendInfo>>(_friend_list.begin() + begin, _friend_list.begin() + end);
-    return friend_list;
-}
-
-
-UserMgr::UserMgr():_user_info(nullptr), _chat_loaded(0),_contact_loaded(0), _group_loaded(0)
-{
-
-}
-
 void UserMgr::SlotAddFriendRsp(std::shared_ptr<AuthRsp> rsp)
 {
     AddFriend(rsp);
@@ -288,458 +118,4 @@ void UserMgr::SlotAddFriendRsp(std::shared_ptr<AuthRsp> rsp)
 void UserMgr::SlotAddFriendAuth(std::shared_ptr<AuthInfo> auth)
 {
     AddFriend(auth);
-}
-
-bool UserMgr::IsLoadChatFin() {
-    if (_chat_loaded >= _friend_list.size()) {
-        return true;
-    }
-
-    return false;
-}
-
-void UserMgr::UpdateChatLoadedCount() {
-    int begin = _chat_loaded;
-    int end = begin + CHAT_COUNT_PER_PAGE;
-
-    if (begin >= _friend_list.size()) {
-        return ;
-    }
-
-    if (end > _friend_list.size()) {
-        _chat_loaded = _friend_list.size();
-        return ;
-    }
-
-    _chat_loaded = end;
-}
-
-void UserMgr::UpdateContactLoadedCount() {
-    int begin = _contact_loaded;
-    int end = begin + CHAT_COUNT_PER_PAGE;
-
-    if (begin >= _friend_list.size()) {
-        return;
-    }
-
-    if (end > _friend_list.size()) {
-        _contact_loaded = _friend_list.size();
-        return;
-    }
-
-    _contact_loaded = end;
-}
-
-bool UserMgr::IsLoadConFin()
-{
-    if (_contact_loaded >= _friend_list.size()) {
-        return true;
-    }
-
-    return false;
-}
-
-bool UserMgr::CheckFriendById(int uid)
-{
-    auto iter = _friend_map.find(uid);
-    if(iter == _friend_map.end()){
-        return false;
-    }
-
-    return true;
-}
-
-void UserMgr::AddFriend(std::shared_ptr<AuthRsp> auth_rsp)
-{
-    auto friend_info = std::make_shared<FriendInfo>(auth_rsp);
-    auto iter = _friend_map.find(friend_info->_uid);
-    if (iter == _friend_map.end()) {
-        _friend_list.push_back(friend_info);
-    }
-    _friend_map[friend_info->_uid] = friend_info;
-}
-
-void UserMgr::AddFriend(std::shared_ptr<AuthInfo> auth_info)
-{
-    auto friend_info = std::make_shared<FriendInfo>(auth_info);
-    auto iter = _friend_map.find(friend_info->_uid);
-    if (iter == _friend_map.end()) {
-        _friend_list.push_back(friend_info);
-    }
-    _friend_map[friend_info->_uid] = friend_info;
-}
-
-std::shared_ptr<FriendInfo> UserMgr::GetFriendById(int uid)
-{
-    auto find_it = _friend_map.find(uid);
-    if(find_it == _friend_map.end()){
-        return nullptr;
-    }
-
-    return *find_it;
-}
-
-void UserMgr::RemoveFriend(int uid)
-{
-    _friend_map.remove(uid);
-    _friend_list.erase(std::remove_if(_friend_list.begin(), _friend_list.end(),
-                                      [uid](const std::shared_ptr<FriendInfo>& info) {
-                                          return info && info->_uid == uid;
-                                      }),
-                       _friend_list.end());
-    if (_chat_loaded > static_cast<int>(_friend_list.size())) _chat_loaded = static_cast<int>(_friend_list.size());
-    if (_contact_loaded > static_cast<int>(_friend_list.size())) _contact_loaded = static_cast<int>(_friend_list.size());
-}
-
-std::vector<std::shared_ptr<FriendInfo> > UserMgr::GetFriendListSnapshot() const
-{
-    return _friend_list;
-}
-
-void UserMgr::AppendFriendChatMsg(int friend_id,std::vector<std::shared_ptr<TextChatData> > msgs)
-{
-    auto find_iter = _friend_map.find(friend_id);
-    if(find_iter == _friend_map.end()){
-        qDebug()<<"append friend uid  " << friend_id << " not found";
-        return;
-    }
-
-    find_iter.value()->AppendChatMsgs(msgs);
-}
-
-bool UserMgr::UpdatePrivateChatMsgState(int peer_uid, const QString &msgId, const QString &state)
-{
-    auto iter = _friend_map.find(peer_uid);
-    if (iter == _friend_map.end() || !iter.value() || msgId.isEmpty()) {
-        return false;
-    }
-
-    auto &chatMsgs = iter.value()->_chat_msgs;
-    for (auto &one : chatMsgs) {
-        if (!one || one->_msg_id != msgId) {
-            continue;
-        }
-        one->_msg_state = state;
-        return true;
-    }
-    return false;
-}
-
-bool UserMgr::UpdatePrivateChatMsgContent(int peer_uid, const QString &msgId, const QString &content,
-                                          const QString &state, qint64 editedAtMs, qint64 deletedAtMs)
-{
-    auto iter = _friend_map.find(peer_uid);
-    if (iter == _friend_map.end() || !iter.value() || msgId.isEmpty()) {
-        return false;
-    }
-
-    auto &chatMsgs = iter.value()->_chat_msgs;
-    for (auto &one : chatMsgs) {
-        if (!one || one->_msg_id != msgId) {
-            continue;
-        }
-        one->_msg_content = content;
-        if (!state.isEmpty()) {
-            one->_msg_state = state;
-        }
-        if (editedAtMs > 0) {
-            one->_edited_at_ms = editedAtMs;
-        }
-        if (deletedAtMs > 0) {
-            one->_deleted_at_ms = deletedAtMs;
-        }
-        if (!chatMsgs.empty() && chatMsgs.back() && chatMsgs.back()->_msg_id == msgId) {
-            iter.value()->_last_msg = content;
-        }
-        return true;
-    }
-    return false;
-}
-
-int UserMgr::MarkPrivateOutgoingReadUntil(int peer_uid, int self_uid, qint64 read_ts)
-{
-    auto iter = _friend_map.find(peer_uid);
-    if (iter == _friend_map.end() || !iter.value() || self_uid <= 0 || read_ts <= 0) {
-        return 0;
-    }
-
-    int updated = 0;
-    auto &chatMsgs = iter.value()->_chat_msgs;
-    for (auto &one : chatMsgs) {
-        if (!one) {
-            continue;
-        }
-        if (one->_from_uid != self_uid || one->_created_at > read_ts) {
-            continue;
-        }
-        if (one->_msg_state == "read") {
-            continue;
-        }
-        if (one->_msg_state == "sending" || one->_msg_state == "failed") {
-            continue;
-        }
-        one->_msg_state = "read";
-        ++updated;
-    }
-    return updated;
-}
-
-std::vector<std::shared_ptr<GroupInfoData>> UserMgr::GetGroupListPerPage()
-{
-    std::vector<std::shared_ptr<GroupInfoData>> groups;
-    int begin = _group_loaded;
-    int end = begin + CHAT_COUNT_PER_PAGE;
-    if (begin >= _group_list.size()) {
-        return groups;
-    }
-    if (end > _group_list.size()) {
-        groups = std::vector<std::shared_ptr<GroupInfoData>>(_group_list.begin() + begin, _group_list.end());
-        return groups;
-    }
-    groups = std::vector<std::shared_ptr<GroupInfoData>>(_group_list.begin() + begin, _group_list.begin() + end);
-    return groups;
-}
-
-bool UserMgr::IsLoadGroupFin()
-{
-    return _group_loaded >= _group_list.size();
-}
-
-void UserMgr::UpdateGroupLoadedCount()
-{
-    int begin = _group_loaded;
-    int end = begin + CHAT_COUNT_PER_PAGE;
-    if (begin >= _group_list.size()) {
-        return;
-    }
-    if (end > _group_list.size()) {
-        _group_loaded = static_cast<int>(_group_list.size());
-        return;
-    }
-    _group_loaded = end;
-}
-
-std::shared_ptr<GroupInfoData> UserMgr::GetGroupById(qint64 groupId)
-{
-    auto iter = _group_map.find(groupId);
-    if (iter == _group_map.end()) {
-        return nullptr;
-    }
-    return iter.value();
-}
-
-bool UserMgr::CheckGroupById(qint64 groupId)
-{
-    return _group_map.find(groupId) != _group_map.end();
-}
-
-void UserMgr::UpsertGroup(const std::shared_ptr<GroupInfoData> &groupInfo)
-{
-    if (!groupInfo || groupInfo->_group_id <= 0) {
-        return;
-    }
-    auto iter = _group_map.find(groupInfo->_group_id);
-    if (iter == _group_map.end()) {
-        _group_list.push_back(groupInfo);
-        _group_map.insert(groupInfo->_group_id, groupInfo);
-        return;
-    }
-    auto stored = iter.value();
-    if (!stored) {
-        iter.value() = groupInfo;
-        return;
-    }
-    stored->_name = groupInfo->_name;
-    stored->_icon = groupInfo->_icon;
-    stored->_announcement = groupInfo->_announcement;
-    stored->_owner_uid = groupInfo->_owner_uid;
-    stored->_member_limit = groupInfo->_member_limit;
-    stored->_member_count = groupInfo->_member_count;
-    stored->_role = groupInfo->_role;
-    stored->_is_all_muted = groupInfo->_is_all_muted;
-    stored->_permission_bits = groupInfo->_permission_bits;
-    if (!groupInfo->_group_code.isEmpty()) {
-        stored->_group_code = groupInfo->_group_code;
-    }
-    if (!groupInfo->_last_msg.isEmpty()) {
-        stored->_last_msg = groupInfo->_last_msg;
-    }
-}
-
-void UserMgr::RemoveGroup(qint64 groupId)
-{
-    _group_map.remove(groupId);
-    _group_list.erase(std::remove_if(_group_list.begin(), _group_list.end(),
-                                     [groupId](const std::shared_ptr<GroupInfoData>& info) {
-                                         return info && info->_group_id == groupId;
-                                     }),
-                      _group_list.end());
-    if (_group_loaded > static_cast<int>(_group_list.size())) {
-        _group_loaded = static_cast<int>(_group_list.size());
-    }
-}
-
-void UserMgr::AppendGroupChatMsg(qint64 group_id, const std::shared_ptr<TextChatData> &msg)
-{
-    auto iter = _group_map.find(group_id);
-    if (iter == _group_map.end() || !iter.value() || !msg) {
-        return;
-    }
-    auto &chatMsgs = iter.value()->_chat_msgs;
-    for (const auto &one : chatMsgs) {
-        if (one && one->_msg_id == msg->_msg_id) {
-            return;
-        }
-    }
-    chatMsgs.push_back(msg);
-    std::sort(chatMsgs.begin(), chatMsgs.end(),
-              [](const std::shared_ptr<TextChatData> &lhs, const std::shared_ptr<TextChatData> &rhs) {
-                  if (!lhs || !rhs) {
-                      return static_cast<bool>(lhs);
-                  }
-                  if (lhs->_group_seq > 0 && rhs->_group_seq > 0 && lhs->_group_seq != rhs->_group_seq) {
-                      return lhs->_group_seq < rhs->_group_seq;
-                  }
-                  if (lhs->_created_at != rhs->_created_at) {
-                      return lhs->_created_at < rhs->_created_at;
-                  }
-                  if (lhs->_server_msg_id > 0 && rhs->_server_msg_id > 0 && lhs->_server_msg_id != rhs->_server_msg_id) {
-                      return lhs->_server_msg_id < rhs->_server_msg_id;
-                  }
-                  return lhs->_msg_id < rhs->_msg_id;
-              });
-    iter.value()->_last_msg = msg->_msg_content;
-}
-
-void UserMgr::UpsertGroupChatMsg(qint64 group_id, const std::shared_ptr<TextChatData> &msg)
-{
-    auto iter = _group_map.find(group_id);
-    if (iter == _group_map.end() || !iter.value() || !msg) {
-        return;
-    }
-
-    auto &chatMsgs = iter.value()->_chat_msgs;
-    bool found = false;
-    for (auto &one : chatMsgs) {
-        if (!one || one->_msg_id != msg->_msg_id) {
-            continue;
-        }
-        one->_msg_content = msg->_msg_content;
-        one->_from_uid = msg->_from_uid;
-        one->_to_uid = msg->_to_uid;
-        one->_from_name = msg->_from_name;
-        one->_from_icon = msg->_from_icon;
-        one->_created_at = msg->_created_at;
-        one->_msg_state = msg->_msg_state;
-        one->_server_msg_id = msg->_server_msg_id;
-        one->_group_seq = msg->_group_seq;
-        one->_reply_to_server_msg_id = msg->_reply_to_server_msg_id;
-        one->_forward_meta_json = msg->_forward_meta_json;
-        one->_edited_at_ms = msg->_edited_at_ms;
-        one->_deleted_at_ms = msg->_deleted_at_ms;
-        found = true;
-        break;
-    }
-
-    if (!found) {
-        chatMsgs.push_back(msg);
-    }
-
-    std::sort(chatMsgs.begin(), chatMsgs.end(),
-              [](const std::shared_ptr<TextChatData> &lhs, const std::shared_ptr<TextChatData> &rhs) {
-                  if (!lhs || !rhs) {
-                      return static_cast<bool>(lhs);
-                  }
-                  if (lhs->_group_seq > 0 && rhs->_group_seq > 0 && lhs->_group_seq != rhs->_group_seq) {
-                      return lhs->_group_seq < rhs->_group_seq;
-                  }
-                  if (lhs->_created_at != rhs->_created_at) {
-                      return lhs->_created_at < rhs->_created_at;
-                  }
-                  if (lhs->_server_msg_id > 0 && rhs->_server_msg_id > 0 && lhs->_server_msg_id != rhs->_server_msg_id) {
-                      return lhs->_server_msg_id < rhs->_server_msg_id;
-                  }
-                  return lhs->_msg_id < rhs->_msg_id;
-              });
-    iter.value()->_last_msg = msg->_msg_content;
-}
-
-bool UserMgr::UpdateGroupChatMsgState(qint64 group_id, const QString &msgId, const QString &state)
-{
-    auto iter = _group_map.find(group_id);
-    if (iter == _group_map.end() || !iter.value() || msgId.isEmpty()) {
-        return false;
-    }
-
-    auto &chatMsgs = iter.value()->_chat_msgs;
-    for (auto &one : chatMsgs) {
-        if (!one || one->_msg_id != msgId) {
-            continue;
-        }
-        one->_msg_state = state;
-        return true;
-    }
-    return false;
-}
-
-bool UserMgr::UpdateGroupChatMsgContent(qint64 group_id, const QString &msgId, const QString &content,
-                                        const QString &state, qint64 editedAtMs, qint64 deletedAtMs)
-{
-    auto iter = _group_map.find(group_id);
-    if (iter == _group_map.end() || !iter.value() || msgId.isEmpty()) {
-        return false;
-    }
-
-    auto &chatMsgs = iter.value()->_chat_msgs;
-    for (auto &one : chatMsgs) {
-        if (!one || one->_msg_id != msgId) {
-            continue;
-        }
-        one->_msg_content = content;
-        if (!state.isEmpty()) {
-            one->_msg_state = state;
-        }
-        if (editedAtMs > 0) {
-            one->_edited_at_ms = editedAtMs;
-        }
-        if (deletedAtMs > 0) {
-            one->_deleted_at_ms = deletedAtMs;
-        }
-        iter.value()->_last_msg = content;
-        return true;
-    }
-    return false;
-}
-
-int UserMgr::MarkGroupOutgoingReadUntil(qint64 group_id, int self_uid, qint64 read_ts)
-{
-    auto iter = _group_map.find(group_id);
-    if (iter == _group_map.end() || !iter.value() || self_uid <= 0 || read_ts <= 0) {
-        return 0;
-    }
-
-    int updated = 0;
-    auto &chatMsgs = iter.value()->_chat_msgs;
-    for (auto &one : chatMsgs) {
-        if (!one) {
-            continue;
-        }
-        if (one->_from_uid != self_uid || one->_created_at > read_ts) {
-            continue;
-        }
-        if (one->_msg_state == "read") {
-            continue;
-        }
-        if (one->_msg_state == "sending" || one->_msg_state == "failed") {
-            continue;
-        }
-        one->_msg_state = "read";
-        ++updated;
-    }
-    return updated;
-}
-
-std::vector<std::shared_ptr<GroupInfoData> > UserMgr::GetGroupListSnapshot() const
-{
-    return _group_list;
 }

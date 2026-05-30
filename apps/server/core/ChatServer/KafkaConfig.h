@@ -2,7 +2,8 @@
 
 #include <string>
 
-struct KafkaConfig {
+struct KafkaConfig
+{
     std::string brokers;
     std::string client_id;
     std::string consumer_group;

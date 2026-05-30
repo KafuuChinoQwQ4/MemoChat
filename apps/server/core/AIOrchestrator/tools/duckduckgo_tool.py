@@ -1,9 +1,10 @@
 """
 DuckDuckGo 搜索工具
 """
+
 import structlog
-from langchain_core.tools import tool
 from duckduckgo_search import AsyncDDGS
+from langchain_core.tools import tool
 
 logger = structlog.get_logger()
 

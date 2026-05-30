@@ -9,32 +9,32 @@
 #include <QVector>
 #include "global.h"
 
-
-class HttpMgr:public QObject, public Singleton<HttpMgr>,
-        public std::enable_shared_from_this<HttpMgr>
+class HttpMgr
+    : public QObject
+    , public Singleton<HttpMgr>
+    , public std::enable_shared_from_this<HttpMgr>
 {
     Q_OBJECT
 
 public:
     ~HttpMgr();
-    void PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod, const QString &module = QStringLiteral("http"));
-    void GetHttpReq(QUrl url, ReqId req_id, Modules mod, const QString &module = QStringLiteral("http"));
+    void
+    PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod, const QString& module = QStringLiteral("http"));
+    void GetHttpReq(QUrl url, ReqId req_id, Modules mod, const QString& module = QStringLiteral("http"));
     /** Drop pooled idle sockets (e.g. after logout) so the next login does not reuse a dead connection. */
     void clearConnectionCache();
+
 private:
     friend class Singleton<HttpMgr>;
     HttpMgr();
-    void postHttpReqInternal(const QUrl &url,
-        const QByteArray &data,
-        ReqId req_id,
-        Modules mod,
-        const QString &module,
-        QVector<QUrl> fallbackUrls);
-    void getHttpReqInternal(const QUrl &url,
-        ReqId req_id,
-        Modules mod,
-        const QString &module,
-        QVector<QUrl> fallbackUrls);
+    void postHttpReqInternal(const QUrl& url,
+                             const QByteArray& data,
+                             ReqId req_id,
+                             Modules mod,
+                             const QString& module,
+                             QVector<QUrl> fallbackUrls);
+    void
+    getHttpReqInternal(const QUrl& url, ReqId req_id, Modules mod, const QString& module, QVector<QUrl> fallbackUrls);
     QNetworkAccessManager _manager;
 public slots:
     void slot_http_finish(ReqId id, QString res, ErrorCodes err, Modules mod);
@@ -42,7 +42,7 @@ signals:
     void sig_http_finish(ReqId id, QString res, ErrorCodes err, Modules mod);
 
     void sig_reg_mod_finish(ReqId id, QString res, ErrorCodes err);
-   void sig_reset_mod_finish(ReqId id, QString res, ErrorCodes err);
+    void sig_reset_mod_finish(ReqId id, QString res, ErrorCodes err);
     void sig_login_mod_finish(ReqId id, QString res, ErrorCodes err);
     void sig_settings_mod_finish(ReqId id, QString res, ErrorCodes err);
     void sig_call_mod_finish(ReqId id, QString res, ErrorCodes err);

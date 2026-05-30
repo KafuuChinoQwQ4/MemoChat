@@ -4,7 +4,6 @@ import re
 import time
 
 import structlog
-
 from config import settings
 from graph.neo4j_client import Neo4jClient
 from graph.recommendation import RecommendationEngine

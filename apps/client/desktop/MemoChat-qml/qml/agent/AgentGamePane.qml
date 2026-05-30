@@ -4,6 +4,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "../components"
+import "AgentGameRuntime.js" as AgentGameRuntime
 
 Rectangle {
     id: root
@@ -44,43 +45,15 @@ Rectangle {
     signal closeRequested()
 
     function firstModel() {
-        if (availableModels && availableModels.length > 0) {
-            return availableModels[0]
-        }
-        return { "model_type": "ollama", "model_name": "qwen2.5:7b" }
+        return AgentGameRuntime.firstModel(root.availableModels)
     }
 
     function modelLabel(model) {
-        if (!model) {
-            return "ollama:qwen2.5:7b"
-        }
-        return (model.model_type || "") + ":" + (model.model_name || "")
+        return AgentGameRuntime.modelLabel(model)
     }
 
     function formalRulesets() {
-        var rows = []
-        var preferred = null
-        for (var i = 0; i < (gameRulesets ? gameRulesets.length : 0); ++i) {
-            var item = gameRulesets[i] || {}
-            var rulesetId = item.ruleset_id || item.id || ""
-            if (rulesetId !== root.testRulesetId) {
-                if (rulesetId === "werewolf.basic") {
-                    preferred = item
-                } else {
-                    rows.push(item)
-                }
-            }
-        }
-        if (preferred !== null) {
-            rows.unshift(preferred)
-        }
-        if (rows.length === 0) {
-            rows.push({
-                "ruleset_id": "werewolf.basic",
-                "display_name": "狼人杀"
-            })
-        }
-        return rows
+        return AgentGameRuntime.formalRulesets(root.gameRulesets, root.testRulesetId)
     }
 
     function selectedRulesetId() {
@@ -95,62 +68,20 @@ Rectangle {
     }
 
     function fallbackWerewolfRoles() {
-        return [
-            { "role_key": "werewolf", "display_name": "狼人", "description": "夜晚可选择击杀目标；白天隐藏身份、误导投票，狼人阵营胜利条件是人数压制好人阵营。" },
-            { "role_key": "villager", "display_name": "村民", "description": "没有夜晚技能；白天通过发言、票型和逻辑找出狼人。" },
-            { "role_key": "seer", "display_name": "预言家", "description": "每晚可查验一名玩家阵营；白天需要在保护身份和公布信息之间取舍。" },
-            { "role_key": "witch", "display_name": "女巫", "description": "拥有解药和毒药；夜晚可救人或毒杀一名玩家，通常每种药只能使用一次。" },
-            { "role_key": "hunter", "display_name": "猎人", "description": "出局时可开枪带走一名玩家；需要用发言压制狼人并保护好人信息。" },
-            { "role_key": "guard", "display_name": "守卫", "description": "每晚可守护一名玩家免于出局；通常不能连续守护同一目标。" },
-            { "role_key": "idiot", "display_name": "白痴", "description": "被投票出局时可翻牌免死，但之后通常失去投票权，只能继续发言。" }
-        ]
+        return AgentGameRuntime.fallbackWerewolfRoles()
     }
 
     function gameRoleOptions() {
-        var rows = [{
-            "label": "系统随机",
-            "value": "",
-            "hint": "开始游戏时随机分配身份",
-            "rule": "未指定身份时，系统会在开局时随机分配角色。",
-            "showValue": false
-        }]
-        var seen = { "": true }
-        var source = root.gameRolePresets && root.gameRolePresets.length > 0
-            ? root.gameRolePresets
-            : (root.selectedRulesetId() === "werewolf.basic" ? root.fallbackWerewolfRoles() : [])
-        for (var i = 0; i < source.length; ++i) {
-            var item = source[i] || {}
-            var key = item.role_key || item.key || ""
-            if (key.length === 0 || seen[key]) {
-                continue
-            }
-            rows.push({
-                "label": item.display_name || item.name || key,
-                "value": key,
-                "hint": item.description || item.rule || item.persona || "",
-                "rule": item.rule || item.rules || item.description || item.persona || "",
-                "showValue": false
-            })
-            seen[key] = true
-        }
-        rows.push({
-            "label": "自定义身份",
-            "value": root.customHumanRoleValue,
-            "hint": "输入自定义 role_key",
-            "rule": "使用你输入的 role_key 加入房间；开局时后端会保留该身份。",
-            "showValue": false
-        })
-        return rows
+        return AgentGameRuntime.roleOptions(
+                    root.gameRolePresets, root.selectedRulesetId(),
+                    root.customHumanRoleValue,
+                    "开始游戏时随机分配身份",
+                    "未指定身份时，系统会在开局时随机分配角色。",
+                    "使用你输入的 role_key 加入房间；开局时后端会保留该身份。")
     }
 
     function optionText(options, index) {
-        if (index < 0 || index >= options.length) {
-            return ""
-        }
-        var item = options[index] || {}
-        return item.showValue !== false && item.value && item.value.length > 0 && item.value !== root.customHumanRoleValue
-            ? item.label + " · " + item.value
-            : item.label
+        return AgentGameRuntime.optionText(options, index, [root.customHumanRoleValue])
     }
 
     function selectedRoleKey() {
@@ -172,11 +103,7 @@ Rectangle {
         if (!root.gameSetupMode || roleCombo.currentIndex < 0) {
             return ""
         }
-        var rows = root.gameRoleOptions()
-        if (roleCombo.currentIndex >= rows.length) {
-            return ""
-        }
-        return rows[roleCombo.currentIndex].rule || rows[roleCombo.currentIndex].hint || ""
+        return AgentGameRuntime.optionRule(root.gameRoleOptions(), roleCombo.currentIndex)
     }
 
     function comboBackground(combo) {
@@ -215,19 +142,8 @@ Rectangle {
     }
 
     function addDraftAgent(seed) {
-        var model = firstModel()
         var next = draftAgents.slice()
-        var item = seed || {}
-        next.push({
-            "display_name": item.display_name || item.name || ((root.gameSetupMode ? "玩家 AI " : "AI ") + (next.length + 1)),
-            "role_key": root.gameSetupMode ? (item.role_key || "") : "",
-            "environment": item.environment || "",
-            "persona": item.persona || "",
-            "skill_name": item.skill_name || "writer",
-            "strategy": item.strategy || (root.gameSetupMode ? "roleplay" : "group_chat"),
-            "model_type": item.model_type || model.model_type || "ollama",
-            "model_name": item.model_name || model.model_name || "qwen2.5:7b"
-        })
+        next.push(AgentGameRuntime.createDraftAgent(seed, next.length, root.gameSetupMode, firstModel()))
         draftAgents = next
     }
 
@@ -250,25 +166,9 @@ Rectangle {
     }
 
     function normalizedAgent(agent) {
-        var model = firstModel()
-        var env = agent.environment || ""
-        var persona = agent.persona || ""
-        var gameContent = root.gameSetupMode ? gameContentField.text.trim() : ""
-        if (env.length > 0) {
-            persona = "上下文:\n" + env + (persona.length > 0 ? "\n\n说话风格:\n" + persona : "")
-        }
-        if (gameContent.length > 0) {
-            persona = "游戏内容:\n" + gameContent + (persona.length > 0 ? "\n\n角色设定:\n" + persona : "")
-        }
-        return {
-            "display_name": agent.display_name || "AI",
-            "role_key": root.gameSetupMode ? (agent.role_key || "") : "",
-            "persona": persona,
-            "skill_name": agent.skill_name || "writer",
-            "strategy": agent.strategy || (root.gameSetupMode ? "roleplay" : "group_chat"),
-            "model_type": agent.model_type || model.model_type || "ollama",
-            "model_name": agent.model_name || model.model_name || "qwen2.5:7b"
-        }
+        return AgentGameRuntime.normalizedAgent(
+                    agent, firstModel(), root.gameSetupMode,
+                    root.gameSetupMode ? gameContentField.text.trim() : "")
     }
 
     function roomAgents() {
@@ -280,32 +180,17 @@ Rectangle {
     }
 
     function disabledHostConfig() {
-        return {
-            "enabled": false,
-            "display_name": "",
-            "persona": "",
-            "model_type": "",
-            "model_name": "",
-            "skill_name": ""
-        }
+        return AgentGameRuntime.disabledHostConfig(root.gameSetupMode ? selectedRoleKey() : "")
     }
 
     function hostConfig() {
         if (!root.gameSetupMode || !hostEnabledCheck.checked) {
-            var disabled = disabledHostConfig()
-            disabled["human_role_key"] = root.gameSetupMode ? selectedRoleKey() : ""
-            return disabled
+            return disabledHostConfig()
         }
-        var model = firstModel()
-        return {
-            "enabled": true,
-            "display_name": hostNameField.text.trim().length > 0 ? hostNameField.text.trim() : "游戏主持人",
-            "persona": hostPersonaField.text.trim().length > 0 ? hostPersonaField.text.trim() : gameContentField.text.trim(),
-            "model_type": model.model_type || "ollama",
-            "model_name": model.model_name || "qwen2.5:7b",
-            "skill_name": "writer",
-            "human_role_key": selectedRoleKey()
-        }
+        return AgentGameRuntime.hostConfig(
+                    root.gameSetupMode, hostEnabledCheck.checked,
+                    hostNameField.text.trim(), hostPersonaField.text.trim(),
+                    gameContentField.text.trim(), firstModel(), selectedRoleKey())
     }
 
     function createRoom() {
@@ -403,43 +288,12 @@ Rectangle {
                 height: implicitHeight
                 spacing: 10
 
-            RowLayout {
+            AgentGameSetupHeader {
                 Layout.fillWidth: true
-                spacing: 10
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 0
-                    spacing: 3
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: root.setupTitle()
-                        color: "#243145"
-                        font.pixelSize: 20
-                        font.bold: true
-                        elide: Text.ElideRight
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: root.setupHint()
-                        color: root.gameError.length > 0 ? "#b64a4a" : "#65758b"
-                        font.pixelSize: 12
-                        elide: Text.ElideRight
-                    }
-                }
-
-                GlassButton {
-                    Layout.preferredWidth: 72
-                    Layout.preferredHeight: 32
-                    text: "关闭"
-                    textPixelSize: 12
-                    cornerRadius: 8
-                    normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.20)
-                    hoverColor: Qt.rgba(0.54, 0.60, 0.68, 0.30)
-                    onClicked: root.closeRequested()
-                }
+                title: root.setupTitle()
+                hint: root.setupHint()
+                error: root.gameError.length > 0
+                onCloseRequested: root.closeRequested()
             }
 
             TextField {

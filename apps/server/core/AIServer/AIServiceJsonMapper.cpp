@@ -1,9 +1,10 @@
 #include "AIServiceJsonMapper.h"
 
-namespace {
+namespace
+{
 
-template <typename T>
-void PopulateModelInfo(const T& model_json, ai::ModelInfo* out) {
+template <typename T> void PopulateModelInfo(const T& model_json, ai::ModelInfo* out)
+{
     out->set_model_type(memochat::json::glaze_safe_get<std::string>(model_json["model_type"], ""));
     out->set_model_name(memochat::json::glaze_safe_get<std::string>(model_json["model_name"], ""));
     out->set_display_name(memochat::json::glaze_safe_get<std::string>(model_json["display_name"], out->model_name()));
@@ -12,29 +13,37 @@ void PopulateModelInfo(const T& model_json, ai::ModelInfo* out) {
     out->set_supports_thinking(memochat::json::glaze_safe_get<bool>(model_json["supports_thinking"], false));
 }
 
-}  // namespace
+} // namespace
 
-namespace ai_service_json_mapper {
+namespace ai_service_json_mapper
+{
 
-bool PopulateModelListFromJson(const memochat::json::JsonValue& result, ai::AIListModelsRsp* reply) {
+bool PopulateModelListFromJson(const memochat::json::JsonValue& result, ai::AIListModelsRsp* reply)
+{
     reply->clear_models();
     reply->clear_default_model();
     reply->set_code(memochat::json::glaze_safe_get<int>(result["code"], 0));
 
-    if (result.isObject()) {
+    if (result.isObject())
+    {
         const auto& object = result.impl().get<memochat::json::object_t>();
         auto models_it = object.find("models");
-        if (models_it != object.end() && models_it->second.holds<memochat::json::array_t>()) {
-            for (const auto& model_item : models_it->second.get<memochat::json::array_t>()) {
+        if (models_it != object.end() && models_it->second.holds<memochat::json::array_t>())
+        {
+            for (const auto& model_item : models_it->second.get<memochat::json::array_t>())
+            {
                 auto* model = reply->add_models();
                 PopulateModelInfo(memochat::json::JsonMemberRef(model_item), model);
             }
         }
 
         auto default_model_it = object.find("default_model");
-        if (default_model_it != object.end() && default_model_it->second.holds<memochat::json::object_t>()) {
+        if (default_model_it != object.end() && default_model_it->second.holds<memochat::json::object_t>())
+        {
             PopulateModelInfo(memochat::json::JsonValue(default_model_it->second), reply->mutable_default_model());
-        } else if (reply->models_size() > 0) {
+        }
+        else if (reply->models_size() > 0)
+        {
             reply->mutable_default_model()->CopyFrom(reply->models(0));
         }
     }
@@ -42,43 +51,51 @@ bool PopulateModelListFromJson(const memochat::json::JsonValue& result, ai::AILi
     return result.isObject() && reply->code() == 0;
 }
 
-void PopulateRegisterApiProviderFromJson(const memochat::json::JsonValue& result, ai::AIRegisterApiProviderRsp* reply) {
+void PopulateRegisterApiProviderFromJson(const memochat::json::JsonValue& result, ai::AIRegisterApiProviderRsp* reply)
+{
     reply->clear_models();
     reply->set_code(memochat::json::glaze_safe_get<int>(result["code"], 0));
     reply->set_message(memochat::json::glaze_safe_get<std::string>(result["message"], "ok"));
     reply->set_provider_id(memochat::json::glaze_safe_get<std::string>(result["provider_id"], ""));
 
-    if (!result.isObject()) {
+    if (!result.isObject())
+    {
         return;
     }
 
     const auto& object = result.impl().get<memochat::json::object_t>();
     auto models_it = object.find("models");
-    if (models_it == object.end() || !models_it->second.holds<memochat::json::array_t>()) {
+    if (models_it == object.end() || !models_it->second.holds<memochat::json::array_t>())
+    {
         return;
     }
 
-    for (const auto& model_item : models_it->second.get<memochat::json::array_t>()) {
+    for (const auto& model_item : models_it->second.get<memochat::json::array_t>())
+    {
         auto* model = reply->add_models();
         PopulateModelInfo(memochat::json::JsonMemberRef(model_item), model);
     }
 }
 
-void PopulateKbListFromJson(const memochat::json::JsonValue& result, ai::AIKbListRsp* reply) {
+void PopulateKbListFromJson(const memochat::json::JsonValue& result, ai::AIKbListRsp* reply)
+{
     reply->clear_knowledge_bases();
     reply->set_code(memochat::json::glaze_safe_get<int>(result["code"], 0));
 
-    if (!result.isObject()) {
+    if (!result.isObject())
+    {
         return;
     }
 
     const auto& object = result.impl().get<memochat::json::object_t>();
     auto knowledge_bases_it = object.find("knowledge_bases");
-    if (knowledge_bases_it == object.end() || !knowledge_bases_it->second.holds<memochat::json::array_t>()) {
+    if (knowledge_bases_it == object.end() || !knowledge_bases_it->second.holds<memochat::json::array_t>())
+    {
         return;
     }
 
-    for (const auto& kb_item : knowledge_bases_it->second.get<memochat::json::array_t>()) {
+    for (const auto& kb_item : knowledge_bases_it->second.get<memochat::json::array_t>())
+    {
         memochat::json::JsonValue kb(kb_item);
         auto* info = reply->add_knowledge_bases();
         info->set_kb_id(memochat::json::glaze_safe_get<std::string>(kb["kb_id"], ""));
@@ -89,9 +106,10 @@ void PopulateKbListFromJson(const memochat::json::JsonValue& result, ai::AIKbLis
     }
 }
 
-void PopulateKbDeleteFromJson(const memochat::json::JsonValue& result, ai::AIKbDeleteRsp* reply) {
+void PopulateKbDeleteFromJson(const memochat::json::JsonValue& result, ai::AIKbDeleteRsp* reply)
+{
     reply->set_code(memochat::json::glaze_safe_get<int>(result["code"], 0));
     reply->set_message(memochat::json::glaze_safe_get<std::string>(result["message"], "ok"));
 }
 
-}  // namespace ai_service_json_mapper
+} // namespace ai_service_json_mapper

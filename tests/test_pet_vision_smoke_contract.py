@@ -1,7 +1,6 @@
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PET_VISION_SMOKE = REPO_ROOT / "tools/scripts/pet/smoke_pet_vision_wsl.sh"
 

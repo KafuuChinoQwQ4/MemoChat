@@ -56,17 +56,32 @@ BUCKETS = {
 
 # Extensions -> bucket
 EXT_BUCKET_MAP = {
-    ".jpg": "image", ".jpeg": "image", ".png": "image", ".gif": "image",
-    ".webp": "image", ".bmp": "image", ".svg": "image",
-    ".mp4": "video", ".avi": "video", ".mov": "video", ".mkv": "video",
-    ".flv": "video", ".wmv": "video", ".webm": "video",
-    ".mp3": "video", ".wav": "video", ".ogg": "video",
-    ".flac": "video", ".aac": "video", ".m4a": "video",
+    ".jpg": "image",
+    ".jpeg": "image",
+    ".png": "image",
+    ".gif": "image",
+    ".webp": "image",
+    ".bmp": "image",
+    ".svg": "image",
+    ".mp4": "video",
+    ".avi": "video",
+    ".mov": "video",
+    ".mkv": "video",
+    ".flv": "video",
+    ".wmv": "video",
+    ".webm": "video",
+    ".mp3": "video",
+    ".wav": "video",
+    ".ogg": "video",
+    ".flac": "video",
+    ".aac": "video",
+    ".m4a": "video",
 }
 
 
 def load_pg_config():
     import yaml
+
     with open(OPS_CONFIG, encoding="utf-8") as f:
         config = yaml.safe_load(f)
     pg = config.get("postgresql", {})
@@ -83,9 +98,12 @@ def load_pg_config():
 
 def get_bucket(media_type: str, media_key: str) -> str:
     t = (media_type or "").lower().strip()
-    if t in ("avatar",):       return BUCKETS["avatar"]
-    if t in ("image",):       return BUCKETS["image"]
-    if t in ("video", "audio"): return BUCKETS["video"]
+    if t in ("avatar",):
+        return BUCKETS["avatar"]
+    if t in ("image",):
+        return BUCKETS["image"]
+    if t in ("video", "audio"):
+        return BUCKETS["video"]
     # Fallback: infer from file extension in media_key
     ext = Path(media_key).suffix.lower()
     if ext in EXT_BUCKET_MAP:
@@ -139,10 +157,7 @@ def get_minio_client():
 
 def ensure_alias_in_mc():
     """Verify mc alias is configured. docker exec the minio container."""
-    result = subprocess.run(
-        ["docker", "exec", "memochat-minio", "mc", "alias", "list"],
-        capture_output=True, text=True
-    )
+    result = subprocess.run(["docker", "exec", "memochat-minio", "mc", "alias", "list"], capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"mc alias list failed: {result.stderr}")
     return True
@@ -153,9 +168,9 @@ def ensure_alias_in_mc():
 # ---------------------------------------------------------------------------
 def run_migration(dry_run: bool):
     mode = "DRY-RUN" if dry_run else "LIVE"
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  MemoChat Media Migration to MinIO  [{mode}]")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
     print(f"PostgreSQL : {OPS_CONFIG}")
     print(f"MinIO      : {MINIO_ENDPOINT}")
     print(f"Uploads    : {UPLOADS_ROOT}")
@@ -167,10 +182,12 @@ def run_migration(dry_run: bool):
 
     # Connect to PostgreSQL
     conn = psycopg2.connect(
-        host=pg["host"], port=pg["port"],
-        user=pg["user"], password=pg["password"],
+        host=pg["host"],
+        port=pg["port"],
+        user=pg["user"],
+        password=pg["password"],
         database=pg["database"],
-        options=f"-c search_path={pg['schema']}"
+        options=f"-c search_path={pg['schema']}",
     )
     conn.autocommit = True
     cur = conn.cursor()
@@ -349,9 +366,7 @@ def run_migration(dry_run: bool):
                 length=local_path.stat().st_size,
             )
             new_icon_url = f"{MINIO_PUBLIC_URL}/memochat-avatar/{s3_key}"
-            cur.execute(
-                f"UPDATE \"user\" SET icon='{sanitize_key(new_icon_url)}' WHERE uid = {uid}"
-            )
+            cur.execute(f"UPDATE \"user\" SET icon='{sanitize_key(new_icon_url)}' WHERE uid = {uid}")
             conn.commit()
             log(f"AVATAR_OK|uid={uid}|{new_icon_url}")
             avatar_ok += 1
@@ -362,9 +377,9 @@ def run_migration(dry_run: bool):
     # ---------------------------------------------------------------------------
     # Summary
     # ---------------------------------------------------------------------------
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  Migration Complete  [{mode}]")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
     log("=" * 60)
     log("SUMMARY:")
     log(f"  Media records  : OK={ok}  SKIP={skip}  FAIL={fail}")
@@ -388,7 +403,6 @@ def run_migration(dry_run: bool):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Migrate MemoChat media to MinIO")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Preview migration without making changes")
+    parser.add_argument("--dry-run", action="store_true", help="Preview migration without making changes")
     args = parser.parse_args()
     run_migration(dry_run=args.dry_run)

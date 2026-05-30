@@ -230,7 +230,9 @@ def collect_snapshots(config: dict) -> list[dict]:
         }
         with mysql_conn(config["postgresql"]) as conn:
             _insert_snapshot(conn, snapshot)
-        set_json_cache(redis_handle, prefixed_key(redis_cfg, f"service:{descriptor.instance_name}:current"), snapshot, 60)
+        set_json_cache(
+            redis_handle, prefixed_key(redis_cfg, f"service:{descriptor.instance_name}:current"), snapshot, 60
+        )
         snapshots.append(snapshot)
 
     alerts = build_active_alerts(config, snapshots)

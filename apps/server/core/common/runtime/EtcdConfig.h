@@ -9,16 +9,21 @@
 #include <thread>
 #include <vector>
 
-namespace memochat::runtime {
+namespace memochat::runtime
+{
 
-class EtcdClient {
+class EtcdClient
+{
 public:
     using WatchCallback = std::function<void(const std::string& key, const std::string& value)>;
 
     explicit EtcdClient(const std::string& endpoints);
     ~EtcdClient();
 
-    bool IsConnected() const { return _connected.load(); }
+    bool IsConnected() const
+    {
+        return _connected.load();
+    }
 
     bool Get(const std::string& key, std::string& value);
     bool Set(const std::string& key, const std::string& value, int64_t ttl = 0);
@@ -43,14 +48,19 @@ private:
     std::thread _connect_thread;
 };
 
-class EtcdConfig {
+class EtcdConfig
+{
 public:
-    using ChangeCallback = std::function<void(const std::string& section, const std::string& key, const std::string& value)>;
+    using ChangeCallback =
+        std::function<void(const std::string& section, const std::string& key, const std::string& value)>;
 
     explicit EtcdConfig(const std::string& endpoints, const std::string& service_name);
     ~EtcdConfig();
 
-    bool IsAvailable() const { return _client && _client->IsConnected(); }
+    bool IsAvailable() const
+    {
+        return _client && _client->IsConnected();
+    }
 
     bool Get(const std::string& section, const std::string& key, std::string& value);
     void SetChangeCallback(ChangeCallback callback);
@@ -75,7 +85,8 @@ private:
     std::atomic<bool> _watching{false};
 };
 
-class EtcdConfigLoader {
+class EtcdConfigLoader
+{
 public:
     static std::shared_ptr<EtcdConfig> TryCreate(const std::string& endpoints, const std::string& service_name);
 };

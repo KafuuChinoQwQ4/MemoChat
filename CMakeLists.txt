@@ -11,6 +11,7 @@ set(unofficial-utf8proc_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake/package-redirects
 project(MemoChat LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(MemoChatFormatting)
 
 set(MEMOCHAT_CXX_STANDARD "23" CACHE STRING "C++ standard used by MemoChat targets")
 set_property(CACHE MEMOCHAT_CXX_STANDARD PROPERTY STRINGS 23 26)
@@ -40,6 +41,7 @@ option(BUILD_CLIENT "Build MemoChat QML client" ON)
 option(BUILD_SERVER "Build all backend servers (GateServer, GateServerHttp2, StatusServer, ChatServer, VarifyServer)" ON)
 option(BUILD_OPS "Build MemoOps monitoring platform" ON)
 option(BUILD_TESTS "Build unit tests with Google Test" ON)
+memochat_define_format_targets()
 
 # Determine what was already configured via preset (used by start_all_services.bat)
 # If the user used a preset that configured only certain things, respect those settings
@@ -105,3 +107,5 @@ endif()
 if(BUILD_TESTS)
     add_dependencies(build-all gtest_tests)
 endif()
+
+memochat_attach_format_to_all_targets()

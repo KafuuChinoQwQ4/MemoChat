@@ -125,9 +125,8 @@ public:
     Q_INVOKABLE void summarizeChat(const QString& dialogUid, const QString& chatHistoryJson);
     Q_INVOKABLE void suggestReply(const QString& dialogUid, const QString& chatHistoryJson);
     Q_INVOKABLE void translateMessage(const QString& msgContent, const QString& targetLang);
-    Q_INVOKABLE void translateMessageWithSource(const QString& msgContent,
-                                                const QString& sourceLang,
-                                                const QString& targetLang);
+    Q_INVOKABLE void
+    translateMessageWithSource(const QString& msgContent, const QString& sourceLang, const QString& targetLang);
 
     Q_INVOKABLE void uploadDocument(const QString& filePath);
     Q_INVOKABLE void chooseAndUploadDocument();
@@ -162,7 +161,8 @@ public:
     Q_INVOKABLE void cloneGameTemplatePreset(const QString& presetId, const QString& title);
     Q_INVOKABLE QString exportGameTemplate(const QString& templateId);
     Q_INVOKABLE bool importGameTemplate(const QString& templateJson);
-    Q_INVOKABLE void createGameRoomFromTemplate(const QString& templateId, const QString& title, const QString& displayName = QString());
+    Q_INVOKABLE void
+    createGameRoomFromTemplate(const QString& templateId, const QString& title, const QString& displayName = QString());
     Q_INVOKABLE void startGameRoom(const QString& roomId);
     Q_INVOKABLE void restartGameRoom(const QString& roomId);
     Q_INVOKABLE void tickGameRoom(const QString& roomId);
@@ -321,4 +321,4 @@ private:
     QString _current_game_room_id;
 };
 
-#endif  // AGENTCONTROLLER_H
+#endif // AGENTCONTROLLER_H

@@ -6,9 +6,11 @@
 #include <thread>
 #include <vector>
 
-namespace memochat::runtime {
+namespace memochat::runtime
+{
 
-class IoContextPool {
+class IoContextPool
+{
 public:
     using IOService = boost::asio::io_context;
     using Work = boost::asio::executor_work_guard<IOService::executor_type>;

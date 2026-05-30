@@ -149,7 +149,9 @@ class PetRuntime:
                     "retention": "none",
                     "metadata": {
                         "async": True,
-                        "language": str(chunk.metadata.get("voice_language") or chunk.metadata.get("language") or "zh-CN"),
+                        "language": str(
+                            chunk.metadata.get("voice_language") or chunk.metadata.get("language") or "zh-CN"
+                        ),
                         "text_lang": str(chunk.metadata.get("text_lang") or ""),
                     },
                 }
@@ -291,7 +293,9 @@ class PetRuntime:
             "reference_audio": audio,
             "needs_user_material": needs_material,
             "needs_reference_clip": bool(audio.get("needs_reference_clip")),
-            "needs_prompt_text": bool(reference_audio) and bool(audio.get("zero_shot_ready")) and not bool(prompt_text.strip()),
+            "needs_prompt_text": bool(reference_audio)
+            and bool(audio.get("zero_shot_ready"))
+            and not bool(prompt_text.strip()),
             "needs_training_material": bool(audio.get("needs_more_audio_for_training")),
             "message": _voice_diagnostics_message(provider_diagnostics, audio, bool(reference_audio)),
         }
@@ -476,13 +480,16 @@ class PetRuntime:
     def _visual_voice_runtime_metadata(self, event_args: dict, observation: PetObservation) -> dict:
         runtime_metadata = self._voice_runtime_metadata()
         runtime_metadata.update(_request_runtime_metadata(_observation_voice_metadata(observation)))
-        language = str(
-            event_args.get("speech_language")
-            or runtime_metadata.get("reply_language")
-            or runtime_metadata.get("language")
-            or runtime_metadata.get("voice_language")
+        language = (
+            str(
+                event_args.get("speech_language")
+                or runtime_metadata.get("reply_language")
+                or runtime_metadata.get("language")
+                or runtime_metadata.get("voice_language")
+                or "zh-CN"
+            ).strip()
             or "zh-CN"
-        ).strip() or "zh-CN"
+        )
         runtime_metadata.setdefault("reply_language", language)
         runtime_metadata.setdefault("language", language)
         runtime_metadata["voice_language"] = language
@@ -645,13 +652,16 @@ class PetRuntime:
 
         runtime_metadata = self._voice_runtime_metadata()
         runtime_metadata.update(_request_runtime_metadata(_observation_voice_metadata(observation)))
-        language = str(
-            event_args.get("speech_language")
-            or runtime_metadata.get("reply_language")
-            or runtime_metadata.get("language")
-            or runtime_metadata.get("voice_language")
+        language = (
+            str(
+                event_args.get("speech_language")
+                or runtime_metadata.get("reply_language")
+                or runtime_metadata.get("language")
+                or runtime_metadata.get("voice_language")
+                or "zh-CN"
+            ).strip()
             or "zh-CN"
-        ).strip() or "zh-CN"
+        )
         runtime_metadata.setdefault("reply_language", language)
         runtime_metadata.setdefault("language", language)
         runtime_metadata["voice_language"] = language
@@ -756,8 +766,7 @@ def _runtime_config_from(config: PetRuntimeConfig | object | None) -> PetRuntime
         voice_sovits_prompt_language=str(getattr(config, "voice_sovits_prompt_language", "zh") or "zh"),
         voice_sovits_text_language=str(getattr(config, "voice_sovits_text_language", "zh") or "zh"),
         voice_sovits_output_dir=str(
-            getattr(config, "voice_sovits_output_dir", "/app/.data/pet-voice-cache")
-            or "/app/.data/pet-voice-cache"
+            getattr(config, "voice_sovits_output_dir", "/app/.data/pet-voice-cache") or "/app/.data/pet-voice-cache"
         ),
         voice_sovits_timeout_sec=_positive_float(getattr(config, "voice_sovits_timeout_sec", 180.0), 180.0),
         pet_text_timeout_sec=_positive_float(getattr(config, "pet_text_timeout_sec", 25.0), 25.0, minimum=0.001),
@@ -887,10 +896,7 @@ def _visual_summary_runtime_metadata(summary: dict | None) -> dict:
         return {}
     result = dict(summary)
     summary_text = str(
-        result.get("summary_text")
-        or result.get("cached_summary_text")
-        or result.get("speech_text")
-        or ""
+        result.get("summary_text") or result.get("cached_summary_text") or result.get("speech_text") or ""
     ).strip()
     if not summary_text:
         return {}

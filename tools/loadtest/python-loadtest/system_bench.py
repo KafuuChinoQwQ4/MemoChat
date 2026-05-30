@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import queue
 import random
 import socket
 import string
@@ -13,7 +14,6 @@ import subprocess
 import time
 import urllib.request
 import uuid
-import queue
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
@@ -78,7 +78,9 @@ def summarize(result: BenchResult) -> dict[str, Any]:
     }
 
 
-def run_parallel(name: str, total: int, concurrency: int, fn: Callable[[int], tuple[bool, dict[str, Any]]]) -> BenchResult:
+def run_parallel(
+    name: str, total: int, concurrency: int, fn: Callable[[int], tuple[bool, dict[str, Any]]]
+) -> BenchResult:
     started_at = now_iso()
     started = time.perf_counter()
     latencies: list[float] = []
@@ -101,12 +103,16 @@ def run_parallel(name: str, total: int, concurrency: int, fn: Callable[[int], tu
                 error_buckets[key] = error_buckets.get(key, 0) + 1
             latencies.append(elapsed_ms)
     wall = time.perf_counter() - started
-    return BenchResult(name, total, total - failed, failed, latencies, started_at, now_iso(), wall, {"errors": error_buckets})
+    return BenchResult(
+        name, total, total - failed, failed, latencies, started_at, now_iso(), wall, {"errors": error_buckets}
+    )
 
 
 def bench_redis(total: int, concurrency: int) -> list[dict[str, Any]]:
     value = "x" * 256
-    pool = redis.ConnectionPool(host="127.0.0.1", port=6379, password="123456", max_connections=max(8, concurrency * 2), decode_responses=False)
+    pool = redis.ConnectionPool(
+        host="127.0.0.1", port=6379, password="123456", max_connections=max(8, concurrency * 2), decode_responses=False
+    )
 
     def write_one(i: int) -> tuple[bool, dict[str, Any]]:
         key = f"bench:resume:{i}:{uuid.uuid4().hex}"
@@ -132,15 +138,19 @@ def bench_redis(total: int, concurrency: int) -> list[dict[str, Any]]:
         except Exception as exc:
             return False, {"elapsed_ms": (time.perf_counter() - started) * 1000.0, "error": str(exc)}
 
-    return [summarize(run_parallel("redis_set_256b", total, concurrency, write_one)),
-            summarize(run_parallel("redis_get_256b", total, concurrency, read_one))]
+    return [
+        summarize(run_parallel("redis_set_256b", total, concurrency, write_one)),
+        summarize(run_parallel("redis_get_256b", total, concurrency, read_one)),
+    ]
 
 
 def bench_postgres(total: int, concurrency: int) -> list[dict[str, Any]]:
     conninfo = "host=127.0.0.1 port=15432 dbname=memo_pg user=memochat password=123456"
     with psycopg.connect(conninfo, autocommit=True) as conn:
         conn.execute("CREATE SCHEMA IF NOT EXISTS bench;")
-        conn.execute("CREATE TABLE IF NOT EXISTS bench.resume_kv (id text PRIMARY KEY, value text, updated_at timestamptz DEFAULT now());")
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS bench.resume_kv (id text PRIMARY KEY, value text, updated_at timestamptz DEFAULT now());"
+        )
     payload = "p" * 256
     with psycopg.connect(conninfo, autocommit=True) as conn:
         with conn.cursor() as cur:
@@ -166,7 +176,9 @@ def bench_postgres(total: int, concurrency: int) -> list[dict[str, Any]]:
         started = time.perf_counter()
         try:
             with psycopg.connect(conninfo, autocommit=True) as conn:
-                raw = conn.execute("SELECT length(value) FROM bench.resume_kv WHERE id=%s;", (f"seed_{i % 200}",)).fetchone()
+                raw = conn.execute(
+                    "SELECT length(value) FROM bench.resume_kv WHERE id=%s;", (f"seed_{i % 200}",)
+                ).fetchone()
             return raw and raw[0] == 256, {"elapsed_ms": (time.perf_counter() - started) * 1000.0}
         except Exception as exc:
             return False, {"elapsed_ms": (time.perf_counter() - started) * 1000.0, "error": str(exc)}
@@ -199,7 +211,9 @@ def bench_postgres(total: int, concurrency: int) -> list[dict[str, Any]]:
         started = time.perf_counter()
         conn = pool.get()
         try:
-            raw = conn.execute("SELECT length(value) FROM bench.resume_kv WHERE id=%s;", (f"seed_{i % 200}",)).fetchone()
+            raw = conn.execute(
+                "SELECT length(value) FROM bench.resume_kv WHERE id=%s;", (f"seed_{i % 200}",)
+            ).fetchone()
             return raw and raw[0] == 256, {"elapsed_ms": (time.perf_counter() - started) * 1000.0}
         except Exception as exc:
             return False, {"elapsed_ms": (time.perf_counter() - started) * 1000.0, "error": str(exc)}
@@ -207,10 +221,12 @@ def bench_postgres(total: int, concurrency: int) -> list[dict[str, Any]]:
             pool.put(conn)
 
     try:
-        reports.extend([
-            summarize(run_parallel("postgres_upsert_256b_pooled", total, concurrency, pooled_write_one)),
-            summarize(run_parallel("postgres_pk_read_256b_pooled", total, concurrency, pooled_read_one)),
-        ])
+        reports.extend(
+            [
+                summarize(run_parallel("postgres_upsert_256b_pooled", total, concurrency, pooled_write_one)),
+                summarize(run_parallel("postgres_pk_read_256b_pooled", total, concurrency, pooled_read_one)),
+            ]
+        )
     finally:
         while not pool.empty():
             conn = pool.get_nowait()
@@ -219,7 +235,9 @@ def bench_postgres(total: int, concurrency: int) -> list[dict[str, Any]]:
 
 
 def bench_mongo(total: int, concurrency: int) -> list[dict[str, Any]]:
-    client = pymongo.MongoClient("mongodb://memochat_app:123456@127.0.0.1:27017/memochat", maxPoolSize=max(8, concurrency * 2))
+    client = pymongo.MongoClient(
+        "mongodb://memochat_app:123456@127.0.0.1:27017/memochat", maxPoolSize=max(8, concurrency * 2)
+    )
     collection = client["memochat"]["resume_bench"]
     collection.create_index("_id")
     payload = "m" * 256
@@ -239,12 +257,16 @@ def bench_mongo(total: int, concurrency: int) -> list[dict[str, Any]]:
         started = time.perf_counter()
         try:
             doc = collection.find_one({"_id": f"seed_{i % 200}"})
-            return bool(doc) and len(doc.get("value", "")) == 256, {"elapsed_ms": (time.perf_counter() - started) * 1000.0}
+            return bool(doc) and len(doc.get("value", "")) == 256, {
+                "elapsed_ms": (time.perf_counter() - started) * 1000.0
+            }
         except Exception as exc:
             return False, {"elapsed_ms": (time.perf_counter() - started) * 1000.0, "error": str(exc)}
 
-    return [summarize(run_parallel("mongo_insert_256b", total, concurrency, write_one)),
-            summarize(run_parallel("mongo_findone_256b", total, concurrency, read_one))]
+    return [
+        summarize(run_parallel("mongo_insert_256b", total, concurrency, write_one)),
+        summarize(run_parallel("mongo_findone_256b", total, concurrency, read_one)),
+    ]
 
 
 def http_json(method: str, url: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -266,7 +288,9 @@ def bench_qdrant(total: int, concurrency: int) -> list[dict[str, Any]]:
         started = time.perf_counter()
         try:
             point = {"id": 100000 + i, "vector": [random.random() for _ in range(16)], "payload": {"kind": "bench"}}
-            data = http_json("PUT", f"http://127.0.0.1:6333/collections/{collection}/points?wait=true", {"points": [point]})
+            data = http_json(
+                "PUT", f"http://127.0.0.1:6333/collections/{collection}/points?wait=true", {"points": [point]}
+            )
             return data.get("status") == "ok", {"elapsed_ms": (time.perf_counter() - started) * 1000.0}
         except Exception as exc:
             return False, {"elapsed_ms": (time.perf_counter() - started) * 1000.0, "error": str(exc)}
@@ -274,13 +298,19 @@ def bench_qdrant(total: int, concurrency: int) -> list[dict[str, Any]]:
     def search_one(_: int) -> tuple[bool, dict[str, Any]]:
         started = time.perf_counter()
         try:
-            data = http_json("POST", f"http://127.0.0.1:6333/collections/{collection}/points/search", {"vector": [random.random() for _ in range(16)], "limit": 5, "with_payload": True})
+            data = http_json(
+                "POST",
+                f"http://127.0.0.1:6333/collections/{collection}/points/search",
+                {"vector": [random.random() for _ in range(16)], "limit": 5, "with_payload": True},
+            )
             return data.get("status") == "ok", {"elapsed_ms": (time.perf_counter() - started) * 1000.0}
         except Exception as exc:
             return False, {"elapsed_ms": (time.perf_counter() - started) * 1000.0, "error": str(exc)}
 
-    return [summarize(run_parallel("qdrant_upsert_16d", total, concurrency, write_one)),
-            summarize(run_parallel("qdrant_vector_search_top5_16d", total, concurrency, search_one))]
+    return [
+        summarize(run_parallel("qdrant_upsert_16d", total, concurrency, write_one)),
+        summarize(run_parallel("qdrant_vector_search_top5_16d", total, concurrency, search_one)),
+    ]
 
 
 def main() -> int:

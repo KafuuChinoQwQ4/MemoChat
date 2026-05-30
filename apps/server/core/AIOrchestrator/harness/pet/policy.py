@@ -8,7 +8,6 @@ from .contracts import PetObservation, PetPrivacy, PetSafety, PetSession
 from .persona import PetPromptBuilder, PetPromptContext
 from .providers import PetProviderError, ProviderChunk
 
-
 _VISUAL_SUMMARY_CONFIDENCE_THRESHOLD = 0.8
 _FIRST_USER_SEEN_CONFIDENCE_THRESHOLD = 0.6
 _VISUAL_SUMMARY_COOLDOWN_SEC = 45.0
@@ -142,10 +141,14 @@ class PetPolicy:
         speak = bool(visual_summary.get("speak"))
         phase = "speaking" if speak else reaction["phase"]
         emotion = visual_summary.get("emotion") if speak else reaction["emotion"]
-        intensity = max(reaction["intensity"], float(visual_summary.get("intensity", 0.0))) if speak else reaction["intensity"]
+        intensity = (
+            max(reaction["intensity"], float(visual_summary.get("intensity", 0.0))) if speak else reaction["intensity"]
+        )
         motion = "talk" if speak else reaction["motion"]
         expression = visual_summary.get("expression") if speak else reaction["expression"]
-        lip_sync = max(reaction["lip_sync"], float(visual_summary.get("lip_sync", 0.0))) if speak else reaction["lip_sync"]
+        lip_sync = (
+            max(reaction["lip_sync"], float(visual_summary.get("lip_sync", 0.0))) if speak else reaction["lip_sync"]
+        )
         speech_text = str(visual_summary.get("speech_text") or "") if speak else ""
         speech_language = str(visual_summary.get("speech_language") or _vision_reply_language(vision_payload))
         speech_translation = str(visual_summary.get("speech_translation") or "")
@@ -379,7 +382,14 @@ def _visual_scene_text(scene: dict, language: str = "zh-CN") -> str:
 
 def _visual_summary_text(vision: dict, reaction: dict, language: str = "zh-CN") -> str:
     semantic_event = str(_dict_or_empty(vision.get("state_snapshot")).get("semantic_event") or "").strip()
-    if semantic_event in {"face_entered", "face_left", "new_object", "attention_changed", "expression_changed", "stable"}:
+    if semantic_event in {
+        "face_entered",
+        "face_left",
+        "new_object",
+        "attention_changed",
+        "expression_changed",
+        "stable",
+    }:
         summary = _visual_event_line(vision, reaction, language, speech_mode=False)
     else:
         language_key = _language_key(language)
@@ -563,7 +573,16 @@ def _visual_state_snapshot(vision: dict, reaction: dict, now_ms: int) -> dict:
 def _annotate_state_snapshot(snapshot: dict, previous_snapshot: dict, now_ms: int) -> dict:
     payload = dict(snapshot)
     changed_fields: list[str] = []
-    for key in ("face_present", "attention", "expression", "objects", "scene", "head_pose", "blendshapes", "confidence"):
+    for key in (
+        "face_present",
+        "attention",
+        "expression",
+        "objects",
+        "scene",
+        "head_pose",
+        "blendshapes",
+        "confidence",
+    ):
         if _normalize_snapshot_value(previous_snapshot.get(key)) != _normalize_snapshot_value(payload.get(key)):
             changed_fields.append(key)
     payload["changed_fields"] = changed_fields
@@ -788,7 +807,9 @@ def _visual_reaction_summary(
     spoken_signatures = _list_or_empty(state.get("spoken_signatures"))
     already_spoken = signature in {str(item) for item in spoken_signatures}
     special_emotion_change = changed and _is_special_emotion_change(previous_signature, signature)
-    should_speak = changed and not already_spoken and (cooldown_elapsed or (special_emotion_change and emotion_delta_elapsed))
+    should_speak = (
+        changed and not already_spoken and (cooldown_elapsed or (special_emotion_change and emotion_delta_elapsed))
+    )
     summary_text = _visual_summary_text(vision, reaction, speech_language)
     speech_text = _visual_speech_text(vision, reaction, summary_text, speech_language) if should_speak else ""
     result = {
@@ -808,7 +829,9 @@ def _visual_reaction_summary(
             reaction,
             summary_text,
             speech_language,
-        ) if should_speak else "",
+        )
+        if should_speak
+        else "",
         "signature": signature,
         "cooldown_sec": _VISUAL_SUMMARY_COOLDOWN_SEC,
         "reason": _visual_summary_skip_reason(

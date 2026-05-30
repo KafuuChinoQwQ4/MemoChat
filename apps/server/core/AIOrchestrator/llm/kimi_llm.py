@@ -1,8 +1,10 @@
 """
 Kimi (Moonshot) LLM 适配器 — 支持 moonshot-v1 系列
 """
-import httpx
+
 from typing import AsyncIterator
+
+import httpx
 
 from .base import BaseLLM, LLMMessage, LLMResponse, LLMStreamChunk, LLMUsage
 
@@ -83,6 +85,7 @@ class KimiLLM(BaseLLM):
                     break
 
                 import json
+
                 try:
                     data = json.loads(data_str)
                 except json.JSONDecodeError:
@@ -107,4 +110,5 @@ class KimiLLM(BaseLLM):
     def close(self):
         if self._client and not self._client.is_closed:
             import asyncio
+
             asyncio.create_task(self._client.aclose())

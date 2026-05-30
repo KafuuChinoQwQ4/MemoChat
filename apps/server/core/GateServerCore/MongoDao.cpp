@@ -14,77 +14,99 @@
 #include <mongocxx/instance.hpp>
 #include <mongocxx/options/replace.hpp>
 
-namespace {
+namespace
+{
 using bsoncxx::builder::basic::kvp;
 using bsoncxx::builder::basic::make_document;
 using bsoncxx::builder::basic::sub_array;
 using bsoncxx::builder::basic::sub_document;
 
-mongocxx::instance& MongoInstance() {
+mongocxx::instance& MongoInstance()
+{
     static mongocxx::instance instance{};
     return instance;
 }
 
-bool ParseBool(const std::string& raw) {
+bool ParseBool(const std::string& raw)
+{
     std::string normalized = raw;
-    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
+    std::transform(normalized.begin(),
+                   normalized.end(),
+                   normalized.begin(),
+                   [](unsigned char ch)
+                   {
+                       return static_cast<char>(std::tolower(ch));
+                   });
     return normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on";
 }
 
-std::string GetString(const bsoncxx::document::view& view, const char* key, const std::string& default_value = "") {
+std::string GetString(const bsoncxx::document::view& view, const char* key, const std::string& default_value = "")
+{
     auto element = view[key];
-    if (!element || element.type() != bsoncxx::type::k_string) {
+    if (!element || element.type() != bsoncxx::type::k_string)
+    {
         return default_value;
     }
     return std::string(element.get_string().value);
 }
 
-int GetInt(const bsoncxx::document::view& view, const char* key, int default_value = 0) {
+int GetInt(const bsoncxx::document::view& view, const char* key, int default_value = 0)
+{
     auto element = view[key];
-    if (!element) {
+    if (!element)
+    {
         return default_value;
     }
-    if (element.type() == bsoncxx::type::k_int32) {
+    if (element.type() == bsoncxx::type::k_int32)
+    {
         return element.get_int32().value;
     }
-    if (element.type() == bsoncxx::type::k_int64) {
+    if (element.type() == bsoncxx::type::k_int64)
+    {
         return static_cast<int>(element.get_int64().value);
     }
     return default_value;
 }
 
-int64_t GetInt64(const bsoncxx::document::view& view, const char* key, int64_t default_value = 0) {
+int64_t GetInt64(const bsoncxx::document::view& view, const char* key, int64_t default_value = 0)
+{
     auto element = view[key];
-    if (!element) {
+    if (!element)
+    {
         return default_value;
     }
-    if (element.type() == bsoncxx::type::k_int64) {
+    if (element.type() == bsoncxx::type::k_int64)
+    {
         return element.get_int64().value;
     }
-    if (element.type() == bsoncxx::type::k_int32) {
+    if (element.type() == bsoncxx::type::k_int32)
+    {
         return element.get_int32().value;
     }
     return default_value;
 }
-}  // namespace
+} // namespace
 
-MongoDao::MongoDao() {
+MongoDao::MongoDao()
+{
     init_ok_ = Init();
 }
 
-MongoDao::~MongoDao() {
+MongoDao::~MongoDao()
+{
 }
 
-bool MongoDao::Enabled() const {
+bool MongoDao::Enabled() const
+{
     return enabled_ && init_ok_ && pool_ != nullptr;
 }
 
-bool MongoDao::Init() {
+bool MongoDao::Init()
+{
     auto& cfg = ConfigMgr::Inst();
     enabled_ = ParseBool(cfg.GetValue("Mongo", "Enabled"));
-    if (!enabled_) {
+    if (!enabled_)
+    {
         std::cerr << "[MongoDao] MongoDB not enabled, Moments content will not be stored" << std::endl;
         return false;
     }
@@ -92,21 +114,25 @@ bool MongoDao::Init() {
     uri_ = cfg.GetValue("Mongo", "Uri");
     database_name_ = cfg.GetValue("Mongo", "Database");
     moments_collection_name_ = cfg.GetValue("Mongo", "MomentsCollection");
-    if (uri_.empty() || database_name_.empty()) {
+    if (uri_.empty() || database_name_.empty())
+    {
         std::cerr << "[MongoDao] Mongo config missing Uri or Database" << std::endl;
         enabled_ = false;
         return false;
     }
-    if (moments_collection_name_.empty()) {
+    if (moments_collection_name_.empty())
+    {
         moments_collection_name_ = "moments_content";
     }
 
-    try {
-        (void)MongoInstance();
-        pool_.reset(new mongocxx::pool(mongocxx::uri{ uri_ }));
+    try
+    {
+        (void) MongoInstance();
+        pool_.reset(new mongocxx::pool(mongocxx::uri{uri_}));
         return EnsureIndexes();
     }
-    catch (const std::exception& e) {
+    catch (const std::exception& e)
+    {
         std::cerr << "[MongoDao] init failed: " << e.what() << std::endl;
         pool_.reset();
         enabled_ = false;
@@ -114,12 +140,15 @@ bool MongoDao::Init() {
     }
 }
 
-bool MongoDao::EnsureIndexes() {
-    if (!pool_) {
+bool MongoDao::EnsureIndexes()
+{
+    if (!pool_)
+    {
         return false;
     }
 
-    try {
+    try
+    {
         auto client = pool_->acquire();
         auto db = (*client)[database_name_];
         auto coll = db[moments_collection_name_];
@@ -131,18 +160,22 @@ bool MongoDao::EnsureIndexes() {
 
         return true;
     }
-    catch (const std::exception& e) {
+    catch (const std::exception& e)
+    {
         std::cerr << "[MongoDao] ensure indexes failed: " << e.what() << std::endl;
         return false;
     }
 }
 
-bool MongoDao::InsertMomentContent(const MomentContentInfo& content) {
-    if (!Enabled() || content.moment_id <= 0) {
+bool MongoDao::InsertMomentContent(const MomentContentInfo& content)
+{
+    if (!Enabled() || content.moment_id <= 0)
+    {
         return false;
     }
 
-    try {
+    try
+    {
         auto client = pool_->acquire();
         auto collection = (*client)[database_name_][moments_collection_name_];
 
@@ -150,7 +183,8 @@ bool MongoDao::InsertMomentContent(const MomentContentInfo& content) {
         doc.append(kvp("moment_id", content.moment_id));
 
         bsoncxx::builder::basic::array items_arr;
-        for (const auto& item : content.items) {
+        for (const auto& item : content.items)
+        {
             bsoncxx::builder::basic::document item_doc;
             item_doc.append(kvp("seq", item.seq));
             item_doc.append(kvp("media_type", item.media_type));
@@ -169,39 +203,44 @@ bool MongoDao::InsertMomentContent(const MomentContentInfo& content) {
         const auto doc_value = doc.extract();
         collection.delete_one(filter.view());
         const auto inserted = collection.insert_one(doc_value.view());
-        if (!inserted) {
-            std::cerr << "[MongoDao] InsertMomentContent insert_one returned null, moment_id="
-                      << content.moment_id << std::endl;
+        if (!inserted)
+        {
+            std::cerr << "[MongoDao] InsertMomentContent insert_one returned null, moment_id=" << content.moment_id
+                      << std::endl;
             return false;
         }
 
         const auto verify = collection.find_one(filter.view());
-        if (!verify) {
-            std::cerr << "[MongoDao] InsertMomentContent verify failed, moment_id="
-                      << content.moment_id
-                      << " db=" << database_name_
-                      << " collection=" << moments_collection_name_
+        if (!verify)
+        {
+            std::cerr << "[MongoDao] InsertMomentContent verify failed, moment_id=" << content.moment_id
+                      << " db=" << database_name_ << " collection=" << moments_collection_name_
                       << " items=" << content.items.size() << std::endl;
             return false;
         }
         return true;
     }
-    catch (const std::exception& e) {
+    catch (const std::exception& e)
+    {
         std::cerr << "[MongoDao] InsertMomentContent failed: " << e.what() << std::endl;
         return false;
     }
 }
 
-bool MongoDao::GetMomentContent(int64_t moment_id, MomentContentInfo& content) {
-    if (!Enabled() || moment_id <= 0) {
+bool MongoDao::GetMomentContent(int64_t moment_id, MomentContentInfo& content)
+{
+    if (!Enabled() || moment_id <= 0)
+    {
         return false;
     }
 
-    try {
+    try
+    {
         auto client = pool_->acquire();
         auto collection = (*client)[database_name_][moments_collection_name_];
         auto result = collection.find_one(bsoncxx::builder::basic::make_document(kvp("moment_id", moment_id)));
-        if (!result) {
+        if (!result)
+        {
             return false;
         }
 
@@ -211,9 +250,12 @@ bool MongoDao::GetMomentContent(int64_t moment_id, MomentContentInfo& content) {
         content.items.clear();
 
         auto items_view = doc["items"];
-        if (items_view && items_view.type() == bsoncxx::type::k_array) {
-            for (auto&& elem : items_view.get_array().value) {
-                if (elem.type() != bsoncxx::type::k_document) {
+        if (items_view && items_view.type() == bsoncxx::type::k_array)
+        {
+            for (auto&& elem : items_view.get_array().value)
+            {
+                if (elem.type() != bsoncxx::type::k_document)
+                {
                     continue;
                 }
                 auto item_view = elem.get_document().view();
@@ -232,24 +274,29 @@ bool MongoDao::GetMomentContent(int64_t moment_id, MomentContentInfo& content) {
 
         return true;
     }
-    catch (const std::exception& e) {
+    catch (const std::exception& e)
+    {
         std::cerr << "[MongoDao] GetMomentContent failed: " << e.what() << std::endl;
         return false;
     }
 }
 
-bool MongoDao::DeleteMomentContent(int64_t moment_id) {
-    if (!Enabled() || moment_id <= 0) {
+bool MongoDao::DeleteMomentContent(int64_t moment_id)
+{
+    if (!Enabled() || moment_id <= 0)
+    {
         return false;
     }
 
-    try {
+    try
+    {
         auto client = pool_->acquire();
         auto collection = (*client)[database_name_][moments_collection_name_];
         collection.delete_one(bsoncxx::builder::basic::make_document(kvp("moment_id", moment_id)));
         return true;
     }
-    catch (const std::exception& e) {
+    catch (const std::exception& e)
+    {
         std::cerr << "[MongoDao] DeleteMomentContent failed: " << e.what() << std::endl;
         return false;
     }

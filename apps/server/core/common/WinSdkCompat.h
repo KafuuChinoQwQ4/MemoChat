@@ -43,11 +43,11 @@
 #undef byte
 #endif
 
-#else  /* !_WIN32 */
+#else /* !_WIN32 */
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
-#endif  /* _WIN32 */
+#endif /* _WIN32 */

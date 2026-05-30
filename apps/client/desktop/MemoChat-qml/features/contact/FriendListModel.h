@@ -13,7 +13,8 @@ class FriendListModel : public QAbstractListModel
     Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
 
 public:
-    enum Roles {
+    enum Roles
+    {
         UidRole = Qt::UserRole + 1,
         UserIdRole,
         NameRole,
@@ -32,30 +33,35 @@ public:
         MentionCountRole
     };
 
-    explicit FriendListModel(QObject *parent = nullptr);
+    explicit FriendListModel(QObject* parent = nullptr);
 
-    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    int rowCount(const QModelIndex& parent = QModelIndex()) const override;
+    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
 
     int count() const;
 
     void clear();
-    void setFriends(const std::vector<std::shared_ptr<FriendInfo>> &friends);
-    void appendFriends(const std::vector<std::shared_ptr<FriendInfo>> &friends);
-    void upsertFriend(const std::shared_ptr<FriendInfo> &friendInfo);
-    void upsertFriend(const std::shared_ptr<AuthInfo> &authInfo);
-    void upsertFriend(const std::shared_ptr<AuthRsp> &authRsp);
-    void upsertBatch(const std::vector<std::shared_ptr<FriendInfo>> &friends, bool resetFirst = false);
-    void updateLastMessage(int uid, const QString &lastMsg, qint64 lastMsgTs = 0);
+    void setFriends(const std::vector<std::shared_ptr<FriendInfo>>& friends);
+    void appendFriends(const std::vector<std::shared_ptr<FriendInfo>>& friends);
+    void upsertFriend(const std::shared_ptr<FriendInfo>& friendInfo);
+    void upsertFriend(const std::shared_ptr<AuthInfo>& authInfo);
+    void upsertFriend(const std::shared_ptr<AuthRsp>& authRsp);
+    void upsertBatch(const std::vector<std::shared_ptr<FriendInfo>>& friends, bool resetFirst = false);
+    void updateLastMessage(int uid, const QString& lastMsg, qint64 lastMsgTs = 0);
     void incrementUnread(int uid, int delta = 1);
     void clearUnread(int uid);
     void incrementMention(int uid, int delta = 1);
     void clearMention(int uid);
     void setMentionCount(int uid, int count);
     void removeByUid(int uid);
-    void setDialogMeta(int uid, const QString &dialogType, int unreadCount, int pinnedRank,
-                       const QString &draftText, qint64 lastMsgTs, int muteState);
+    void setDialogMeta(int uid,
+                       const QString& dialogType,
+                       int unreadCount,
+                       int pinnedRank,
+                       const QString& draftText,
+                       qint64 lastMsgTs,
+                       int muteState);
 
     Q_INVOKABLE QVariantMap get(int index) const;
     Q_INVOKABLE int indexOfUid(int uid) const;
@@ -64,7 +70,8 @@ signals:
     void countChanged();
 
 private:
-    struct FriendEntry {
+    struct FriendEntry
+    {
         int uid;
         QString userId;
         QString name;
@@ -84,7 +91,7 @@ private:
     };
 
     static QString normalizeIcon(QString icon);
-    void upsert(const FriendEntry &entry);
+    void upsert(const FriendEntry& entry);
 
     std::vector<FriendEntry> _items;
 };

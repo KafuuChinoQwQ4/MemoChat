@@ -11,14 +11,18 @@ bool RedisAsyncEventBus::Publish(const std::string& topic, const memochat::json:
 {
     auto envelope = BuildAsyncEventEnvelope(topic, payload);
     const auto serialized = SerializeAsyncEventEnvelope(envelope);
-    if (serialized.empty()) {
-        if (error) {
+    if (serialized.empty())
+    {
+        if (error)
+        {
             *error = "serialize_failed";
         }
         return false;
     }
-    if (!RedisMgr::GetInstance()->RPush(memochat::chatruntime::QueueKeyForTopic(topic), serialized)) {
-        if (error) {
+    if (!RedisMgr::GetInstance()->RPush(memochat::chatruntime::QueueKeyForTopic(topic), serialized))
+    {
+        if (error)
+        {
             *error = "queue_publish_failed";
         }
         return false;
@@ -26,20 +30,26 @@ bool RedisAsyncEventBus::Publish(const std::string& topic, const memochat::json:
     return true;
 }
 
-bool RedisAsyncEventBus::ConsumeOnce(const std::vector<std::string>& topics, AsyncConsumedEvent& event, std::string* error)
+bool RedisAsyncEventBus::ConsumeOnce(const std::vector<std::string>& topics,
+                                     AsyncConsumedEvent& event,
+                                     std::string* error)
 {
-    for (const auto& one_topic : topics) {
+    for (const auto& one_topic : topics)
+    {
         std::string raw;
-        if (!RedisMgr::GetInstance()->LPop(memochat::chatruntime::QueueKeyForTopic(one_topic), raw) || raw.empty()) {
+        if (!RedisMgr::GetInstance()->LPop(memochat::chatruntime::QueueKeyForTopic(one_topic), raw) || raw.empty())
+        {
             continue;
         }
 
         event = AsyncConsumedEvent();
         event.serialized = raw;
         event.parsed = ParseAsyncEventEnvelope(raw, event.envelope);
-        if (!event.parsed) {
+        if (!event.parsed)
+        {
             event.envelope.topic = one_topic;
-            if (error) {
+            if (error)
+            {
                 *error = "parse_failed";
             }
         }
@@ -59,7 +69,8 @@ void RedisAsyncEventBus::AckLastConsumed()
 
 void RedisAsyncEventBus::NackLastConsumed(const std::string&)
 {
-    if (_last_topic.empty() || _last_serialized.empty()) {
+    if (_last_topic.empty() || _last_serialized.empty())
+    {
         return;
     }
     RedisMgr::GetInstance()->RPush(memochat::chatruntime::QueueKeyForTopic(_last_topic), _last_serialized);

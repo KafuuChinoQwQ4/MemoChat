@@ -5,8 +5,9 @@ user-qdrant MCP Server
 
 依赖安装: pip install qdrant-client
 """
-import sys
+
 import json
+import sys
 from typing import Any
 
 try:
@@ -118,9 +119,7 @@ def _init_handlers():
                     "status": getattr(status, "value", status),
                 }
             )
-        return {
-            "collections": result
-        }
+        return {"collections": result}
 
     def search(args):
         limit = args.get("limit", 5)
@@ -163,10 +162,7 @@ def _init_handlers():
             with_payload=args.get("with_payload", True),
         )
         return {
-            "points": [
-                {"id": str(p.id), "vector": p.vector, "payload": p.payload}
-                for p in results[0]
-            ],
+            "points": [{"id": str(p.id), "vector": p.vector, "payload": p.payload} for p in results[0]],
             "next_page_offset": str(results[1]) if results[1] else None,
         }
 
@@ -234,21 +230,21 @@ class MCPStdioServer:
                     raise ValueError(f"Unknown tool: {tool_name}")
                 result = TOOL_HANDLERS[tool_name](tool_args)
                 text = json.dumps(result, ensure_ascii=False, indent=2)
-                self._send({
-                    "jsonrpc": "2.0",
-                    "id": msg_id,
-                    "result": {"content": [{"type": "text", "text": text}]},
-                })
+                self._send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "result": {"content": [{"type": "text", "text": text}]},
+                    }
+                )
             except Exception as e:
-                self._send({
-                    "jsonrpc": "2.0",
-                    "id": msg_id,
-                    "result": {
-                        "content": [
-                            {"type": "text", "text": f"Qdrant 错误: {type(e).__name__}: {e}"}
-                        ]
-                    },
-                })
+                self._send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "result": {"content": [{"type": "text", "text": f"Qdrant 错误: {type(e).__name__}: {e}"}]},
+                    }
+                )
 
         elif method == "shutdown":
             self._send({"jsonrpc": "2.0", "id": msg_id, "result": None})
@@ -262,6 +258,7 @@ class MCPStdioServer:
                 break
             # handle_message is sync-safe for most tools, run in sync mode
             import asyncio
+
             asyncio.run(self.handle_message(msg))
 
 

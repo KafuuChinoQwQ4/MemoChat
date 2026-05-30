@@ -6,9 +6,10 @@
 
 #include <mongocxx/pool.hpp>
 
-struct MomentItemInfo {
+struct MomentItemInfo
+{
     int seq = 0;
-    std::string media_type;   // text, image, video
+    std::string media_type; // text, image, video
     std::string media_key;
     std::string thumb_key;
     std::string content;
@@ -17,13 +18,15 @@ struct MomentItemInfo {
     int duration_ms = 0;
 };
 
-struct MomentContentInfo {
+struct MomentContentInfo
+{
     int64_t moment_id = 0;
     std::vector<MomentItemInfo> items;
     int64_t server_time = 0;
 };
 
-class MongoDao {
+class MongoDao
+{
 public:
     MongoDao();
     ~MongoDao();

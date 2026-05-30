@@ -25,6 +25,7 @@ from harness.games.tick_graph import GameTickGraph
 try:
     import structlog
 except ModuleNotFoundError:
+
     class _FallbackLogger:
         def info(self, *args, **kwargs):
             return None
@@ -69,7 +70,11 @@ class A2AGameService:
         loaded = 0
         for state in rooms:
             if state.room.ruleset_id not in self._rulesets:
-                logger.warning("game.persistence.unknown_ruleset_skipped", room_id=state.room.room_id, ruleset_id=state.room.ruleset_id)
+                logger.warning(
+                    "game.persistence.unknown_ruleset_skipped",
+                    room_id=state.room.room_id,
+                    ruleset_id=state.room.ruleset_id,
+                )
                 continue
             self._refresh_view(state)
             self._rooms[state.room.room_id] = state
@@ -231,7 +236,9 @@ class A2AGameService:
         self._templates.pop(template_id, None)
         return True
 
-    async def create_room_from_template(self, template_id: str, uid: int, title: str = "", display_name: str = "") -> GameState:
+    async def create_room_from_template(
+        self, template_id: str, uid: int, title: str = "", display_name: str = ""
+    ) -> GameState:
         template = await self._get_template(template_id, uid)
         if template is None:
             raise ValueError(f"game template not found: {template_id}")
@@ -296,9 +303,7 @@ class A2AGameService:
         if human_role_key:
             human.role_key = human_role_key
             human.private_state["role_key"] = human_role_key
-        participants = [
-            human
-        ]
+        participants = [human]
         for config_item in agent_configs:
             if len(participants) >= room.max_players:
                 raise ValueError("initial participants exceed max_players")
@@ -309,7 +314,9 @@ class A2AGameService:
         state.state["shuffle_marker"] = shuffle_marker
         state.events.append(self._event(state, "room_created", f"{room.title} 已创建。"))
         state.events.extend(
-            self._event(state, "participant_joined", f"{participant.display_name} 加入房间。", participant.participant_id)
+            self._event(
+                state, "participant_joined", f"{participant.display_name} 加入房间。", participant.participant_id
+            )
             for participant in participants
         )
         create_line = (
@@ -366,7 +373,11 @@ class A2AGameService:
                 display_name=display_name,
             )
             state.participants.append(participant)
-            state.events.append(self._event(state, "participant_joined", f"{participant.display_name} 加入房间。", participant.participant_id))
+            state.events.append(
+                self._event(
+                    state, "participant_joined", f"{participant.display_name} 加入房间。", participant.participant_id
+                )
+            )
         self._touch(state)
         self._refresh_view(state, uid)
         self._schedule_save(state)
@@ -380,7 +391,11 @@ class A2AGameService:
             self._ensure_capacity(state)
             participant = self._participants.create_agent(room_id, config_item)
             state.participants.append(participant)
-            state.events.append(self._event(state, "participant_joined", f"{participant.display_name} 加入房间。", participant.participant_id))
+            state.events.append(
+                self._event(
+                    state, "participant_joined", f"{participant.display_name} 加入房间。", participant.participant_id
+                )
+            )
         self._touch(state)
         self._refresh_view(state)
         self._schedule_save(state)
@@ -454,9 +469,7 @@ class A2AGameService:
         locked_ruleset = str(locked_config.get("ruleset_id") or previous.room.ruleset_id)
         locked_max_players = int(locked_config.get("max_players") or previous.room.max_players)
         locked_agent_count = int(
-            locked_config.get("agent_count")
-            or len(locked_config.get("agent_preset_pool", []))
-            or 0
+            locked_config.get("agent_count") or len(locked_config.get("agent_preset_pool", [])) or 0
         )
         current_agent_count = len([participant for participant in previous.participants if participant.kind == "agent"])
         if locked_agent_count != current_agent_count:
@@ -555,7 +568,13 @@ class A2AGameService:
             return {"status": "idle", "message": "pending actor missing", "state": state, "graph": graph_metadata}
         if actor.kind == "human":
             self._schedule_save(state)
-            return {"status": "waiting_human", "message": f"waiting for {actor.display_name}", "actor": actor.to_dict(), "state": state, "graph": graph_metadata}
+            return {
+                "status": "waiting_human",
+                "message": f"waiting for {actor.display_name}",
+                "actor": actor.to_dict(),
+                "state": state,
+                "graph": graph_metadata,
+            }
 
         allowed = engine.available_actions(state, actor.participant_id)
         ai_action, trace_id, raw_content, parsed = await self._agent_actions.ask_for_action(state, actor, allowed)
@@ -579,7 +598,13 @@ class A2AGameService:
                 self._touch(state)
                 self._refresh_view(state, uid)
                 self._schedule_save(state)
-                return {"status": "agent_error", "message": "no fallback action", "actor": actor.to_dict(), "state": state, "graph": graph_metadata}
+                return {
+                    "status": "agent_error",
+                    "message": "no fallback action",
+                    "actor": actor.to_dict(),
+                    "state": state,
+                    "graph": graph_metadata,
+                }
             ai_action.action_type = fallback
             ai_action.content = ai_action.content or "我暂时跳过。"
             ai_action.target_participant_id = ""
@@ -660,7 +685,15 @@ class A2AGameService:
         participant = self._participant(state, participant_id)
         return participant.display_name if participant is not None else participant_id
 
-    def _event(self, state: GameState, event_type: str, content: str = "", actor: str = "", target: str = "", payload: dict[str, Any] | None = None) -> GameEvent:
+    def _event(
+        self,
+        state: GameState,
+        event_type: str,
+        content: str = "",
+        actor: str = "",
+        target: str = "",
+        payload: dict[str, Any] | None = None,
+    ) -> GameEvent:
         return GameEvent(
             event_id=uuid.uuid4().hex,
             room_id=state.room.room_id,

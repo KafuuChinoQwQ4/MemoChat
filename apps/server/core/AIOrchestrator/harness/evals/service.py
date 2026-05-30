@@ -151,9 +151,7 @@ class AgentEvalService:
             guardrails = metrics["guardrails"]
             for name, status in required_guardrails.items():
                 if guardrails.get(name) != status:
-                    failures.append(
-                        f"guardrail {name!r} expected {status!r}, got {guardrails.get(name)!r}"
-                    )
+                    failures.append(f"guardrail {name!r} expected {status!r}, got {guardrails.get(name)!r}")
 
         max_latency_ms = int(expectations.get("max_latency_ms") or 0)
         if max_latency_ms > 0 and metrics["latency_ms"] > max_latency_ms:

@@ -6,7 +6,7 @@
 
 void Http2Handlers::HandleGetTest(const Http2Request& req, Http2Response& resp)
 {
-    (void)req;
+    (void) req;
     resp.SetStatus(200, "OK");
     resp.SetHeader("Content-Type", "text/plain");
     resp.body = "receive get_test req";
@@ -19,13 +19,15 @@ void Http2Handlers::HandleTestProcedure(const Http2Request& req, Http2Response& 
     memochat::json::JsonValue src_root;
     // reader_parse(json_str, JsonValue_out) - correct argument order
     bool parse_success = memochat::json::reader_parse(req.body, src_root);
-    if (!parse_success) {
+    if (!parse_success)
+    {
         std::cout << "Failed to parse JSON data!" << std::endl;
         root["error"] = 1;
         resp.SetJsonBody(memochat::json::glaze_stringify(root));
         return;
     }
-    if (!memochat::json::glaze_has_key(src_root, "email")) {
+    if (!memochat::json::glaze_has_key(src_root, "email"))
+    {
         root["error"] = 1;
         resp.SetJsonBody(memochat::json::glaze_stringify(root));
         return;

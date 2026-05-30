@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import unittest
 import asyncio
 import sys
 import tempfile
 import types
+import unittest
 from pathlib import Path
 from unittest import mock
 
@@ -12,7 +12,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from harness.pet import PetObservation, PetRuntime
 from harness.pet.runtime import PetRuntimeConfig
-
 
 _ALLOWED_PHASES = {"idle", "listening", "thinking", "speaking", "audio_ready", "interrupted", "error"}
 _ANIMATION_KEYS = {
@@ -822,7 +821,9 @@ class PetRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("changed_fields", first_payload["debug"]["visual_summary"]["state_snapshot"])
         self.assertEqual(first_payload["debug"]["visual_summary"]["state_snapshot"]["semantic_event"], "first_snapshot")
         self.assertIn("expression", second_payload["debug"]["visual_summary"]["state_snapshot"]["changed_fields"])
-        self.assertEqual(second_payload["debug"]["visual_summary"]["state_snapshot"]["semantic_event"], "expression_changed")
+        self.assertEqual(
+            second_payload["debug"]["visual_summary"]["state_snapshot"]["semantic_event"], "expression_changed"
+        )
         self.assertGreaterEqual(second_payload["debug"]["visual_summary"]["state_snapshot"]["stable_for_ms"], 0)
 
     async def test_visual_summary_uses_semantic_event_specific_lines(self):
@@ -929,7 +930,10 @@ class PetRuntimeTests(unittest.IsolatedAsyncioTestCase):
             for semantic_event, observation, expected in observations:
                 payload = (await runtime.update_observation(PetObservation.from_dict(observation))).to_dict()
                 summary = payload["debug"]["visual_summary"]
-                self.assertIn(expected, summary["summary_text"] or summary["speech_text"] or summary.get("cached_summary_text", ""))
+                self.assertIn(
+                    expected,
+                    summary["summary_text"] or summary["speech_text"] or summary.get("cached_summary_text", ""),
+                )
                 if last_summary is not None and semantic_event != "stable":
                     self.assertNotEqual(summary.get("summary_text", ""), last_summary.get("summary_text", ""))
                 last_summary = summary
@@ -1106,7 +1110,10 @@ class PetRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(second_payload["seq"], first_payload["seq"])
         self.assertGreater(streamed_payload["seq"], first_payload["seq"])
         self.assertEqual(runtime.get_session(session.session_id).status, "active")
-        self.assertIn("我明白你的问题了，先从最关键的地方开始回答。", "".join(event.to_dict()["text"]["delta"] for event in events))
+        self.assertIn(
+            "我明白你的问题了，先从最关键的地方开始回答。",
+            "".join(event.to_dict()["text"]["delta"] for event in events),
+        )
 
     async def test_list_sessions_orders_by_recent_update_and_filters_uid(self):
         runtime = PetRuntime()
@@ -1563,7 +1570,9 @@ class PetRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("你好，我在这里。", voice_router.calls[0].text)
 
     async def test_runtime_voice_diagnostics_identifies_when_user_material_is_needed(self):
-        runtime = PetRuntime(PetRuntimeConfig(voice_provider="gpt-sovits", voice_sovits_base_url="http://127.0.0.1:9880"))
+        runtime = PetRuntime(
+            PetRuntimeConfig(voice_provider="gpt-sovits", voice_sovits_base_url="http://127.0.0.1:9880")
+        )
 
         payload = await runtime.voice_diagnostics()
 

@@ -5,9 +5,10 @@ user-neo4j MCP Server
 
 依赖安装: pip install neo4j pydantic
 """
-import sys
-import json
+
 import asyncio
+import json
+import sys
 from typing import Any
 
 try:
@@ -59,9 +60,7 @@ async def get_schema() -> dict:
     """获取 Neo4j 数据库 schema"""
     labels_result = await run_cypher("CALL db.labels() YIELD label RETURN label")
     rel_types_result = await run_cypher("CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType")
-    props_result = await run_cypher(
-        "MATCH (n) UNWIND keys(n) as k WITH DISTINCT k RETURN k as propertyKey LIMIT 100"
-    )
+    props_result = await run_cypher("MATCH (n) UNWIND keys(n) as k WITH DISTINCT k RETURN k as propertyKey LIMIT 100")
     return {
         "labels": [r["label"] for r in labels_result],
         "relationship_types": [r["relationshipType"] for r in rel_types_result],
@@ -73,8 +72,8 @@ TOOLS = {
     "read_neo4j_cypher": {
         "name": "read_neo4j_cypher",
         "description": "Execute a read Cypher query on the Neo4j graph database. "
-                      "Use this for MATCH, RETURN, WITH, WHERE, ORDER BY, LIMIT, etc. "
-                      "All queries are read-only (MATCH/OPTIONAL MATCH only).",
+        "Use this for MATCH, RETURN, WITH, WHERE, ORDER BY, LIMIT, etc. "
+        "All queries are read-only (MATCH/OPTIONAL MATCH only).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -94,7 +93,7 @@ TOOLS = {
     "write_neo4j_cypher": {
         "name": "write_neo4j_cypher",
         "description": "Execute a write Cypher query on the Neo4j graph database. "
-                      "Use for CREATE, MERGE, SET, DELETE, DETACH DELETE, REMOVE, etc.",
+        "Use for CREATE, MERGE, SET, DELETE, DETACH DELETE, REMOVE, etc.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -125,10 +124,25 @@ TOOL_HANDLERS = {
 }
 
 READ_ONLY_PATTERNS = (
-    "MATCH", "OPTIONAL MATCH", "CALL", "YIELD",
-    "WHERE", "RETURN", "WITH", "ORDER BY", "LIMIT",
-    "SKIP", "DISTINCT", "COUNT", "COLLECT", "REDUCE",
-    "HEAD", "TAIL", "LAST", "START", "LOAD CSV",
+    "MATCH",
+    "OPTIONAL MATCH",
+    "CALL",
+    "YIELD",
+    "WHERE",
+    "RETURN",
+    "WITH",
+    "ORDER BY",
+    "LIMIT",
+    "SKIP",
+    "DISTINCT",
+    "COUNT",
+    "COLLECT",
+    "REDUCE",
+    "HEAD",
+    "TAIL",
+    "LAST",
+    "START",
+    "LOAD CSV",
 )
 
 
@@ -187,7 +201,7 @@ class MCPStdioServer:
                         {
                             "type": "text",
                             "text": "安全拒绝：read_neo4j_cypher 工具仅支持只读查询。"
-                                    "请使用 write_neo4j_cypher 执行写入操作。",
+                            "请使用 write_neo4j_cypher 执行写入操作。",
                         }
                     ]
                 }
@@ -198,13 +212,9 @@ class MCPStdioServer:
                 text = json.dumps(result, ensure_ascii=False, indent=2)
             else:
                 text = json.dumps(result, ensure_ascii=False, indent=2)
-            return {
-                "content": [{"type": "text", "text": text}]
-            }
+            return {"content": [{"type": "text", "text": text}]}
         except Exception as e:
-            return {
-                "content": [{"type": "text", "text": f"Neo4j 查询错误: {type(e).__name__}: {e}"}]
-            }
+            return {"content": [{"type": "text", "text": f"Neo4j 查询错误: {type(e).__name__}: {e}"}]}
 
     async def handle_message(self, msg: dict) -> None:
         method = msg.get("method")
@@ -228,11 +238,13 @@ class MCPStdioServer:
                 result = await self._handle_tools_call(params)
                 self._send({"jsonrpc": "2.0", "id": msg_id, "result": result})
             except Exception as e:
-                self._send({
-                    "jsonrpc": "2.0",
-                    "id": msg_id,
-                    "error": {"code": -32603, "message": str(e)},
-                })
+                self._send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "error": {"code": -32603, "message": str(e)},
+                    }
+                )
 
         elif method == "shutdown":
             await close_driver()
