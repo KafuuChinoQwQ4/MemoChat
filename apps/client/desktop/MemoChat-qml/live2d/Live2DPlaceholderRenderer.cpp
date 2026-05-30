@@ -8,16 +8,14 @@
 #include <QRadialGradient>
 #include <QtMath>
 
-namespace {
-QRectF centeredRect(const QPointF &center, qreal width, qreal height)
+namespace
 {
-    return QRectF(center.x() - width / 2.0,
-                  center.y() - height / 2.0,
-                  width,
-                  height);
+QRectF centeredRect(const QPointF& center, qreal width, qreal height)
+{
+    return QRectF(center.x() - width / 2.0, center.y() - height / 2.0, width, height);
 }
 
-void drawSoftShadow(QPainter *painter, const QPointF &center, qreal width, qreal height)
+void drawSoftShadow(QPainter* painter, const QPointF& center, qreal width, qreal height)
 {
     QRadialGradient shadow(center, width * 0.50);
     shadow.setColorAt(0.0, QColor(38, 45, 62, 82));
@@ -29,7 +27,7 @@ void drawSoftShadow(QPainter *painter, const QPointF &center, qreal width, qreal
     painter->drawEllipse(center, width * 0.50, height * 0.50);
 }
 
-void drawRibbon(QPainter *painter, const QPointF &base, qreal unit, bool mirrored)
+void drawRibbon(QPainter* painter, const QPointF& base, qreal unit, bool mirrored)
 {
     painter->save();
     painter->translate(base);
@@ -37,12 +35,8 @@ void drawRibbon(QPainter *painter, const QPointF &base, qreal unit, bool mirrore
 
     QPainterPath ribbon;
     ribbon.moveTo(-unit * 0.03, -unit * 0.03);
-    ribbon.cubicTo(unit * 0.18, -unit * 0.18,
-                   unit * 0.40, -unit * 0.12,
-                   unit * 0.45, unit * 0.06);
-    ribbon.cubicTo(unit * 0.26, unit * 0.16,
-                   unit * 0.10, unit * 0.12,
-                   -unit * 0.02, unit * 0.03);
+    ribbon.cubicTo(unit * 0.18, -unit * 0.18, unit * 0.40, -unit * 0.12, unit * 0.45, unit * 0.06);
+    ribbon.cubicTo(unit * 0.26, unit * 0.16, unit * 0.10, unit * 0.12, -unit * 0.02, unit * 0.03);
     ribbon.closeSubpath();
 
     QLinearGradient ribbonFill(QPointF(0, -unit * 0.18), QPointF(unit * 0.44, unit * 0.14));
@@ -58,7 +52,7 @@ void drawRibbon(QPainter *painter, const QPointF &base, qreal unit, bool mirrore
     painter->restore();
 }
 
-void drawHairStrand(QPainter *painter, const QPointF &top, const QPointF &bottom, qreal width, const QColor &color)
+void drawHairStrand(QPainter* painter, const QPointF& top, const QPointF& bottom, qreal width, const QColor& color)
 {
     QPainterPath strand;
     strand.moveTo(top);
@@ -73,11 +67,12 @@ void drawHairStrand(QPainter *painter, const QPointF &top, const QPointF &bottom
     painter->drawPath(strand);
 }
 
-void drawPlaceholderPet(QPainter *painter, const QRectF &bounds, const Live2DVisualState &state)
+void drawPlaceholderPet(QPainter* painter, const QRectF& bounds, const Live2DVisualState& state)
 {
     const QRectF stage = bounds.adjusted(8, 8, -8, -8);
     const qreal unit = qMin(stage.width(), stage.height());
-    if (unit <= 0) {
+    if (unit <= 0)
+    {
         return;
     }
 
@@ -88,10 +83,7 @@ void drawPlaceholderPet(QPainter *painter, const QRectF &bounds, const Live2DVis
     const qreal tilt = (state.gazeX - 0.5) * 2.8 + qSin(state.idlePhase * 0.85) * 0.8;
     const QPointF base(stage.center().x(), stage.top() + unit * 0.52 + bob);
 
-    drawSoftShadow(painter,
-                   QPointF(stage.center().x(), stage.bottom() - unit * 0.07),
-                   unit * 0.58,
-                   unit * 0.14);
+    drawSoftShadow(painter, QPointF(stage.center().x(), stage.bottom() - unit * 0.07), unit * 0.58, unit * 0.14);
 
     painter->save();
     painter->translate(base);
@@ -135,12 +127,18 @@ void drawPlaceholderPet(QPainter *painter, const QRectF &bounds, const Live2DVis
                              unit * 0.018);
 
     const QColor hairBack(226, 232, 250, 238);
-    drawHairStrand(painter, QPointF(-unit * 0.20, -unit * 0.34), QPointF(-unit * 0.34, unit * 0.30), unit * 0.30, hairBack);
-    drawHairStrand(painter, QPointF(unit * 0.20, -unit * 0.34), QPointF(unit * 0.34, unit * 0.30), unit * 0.30, hairBack);
+    drawHairStrand(painter,
+                   QPointF(-unit * 0.20, -unit * 0.34),
+                   QPointF(-unit * 0.34, unit * 0.30),
+                   unit * 0.30,
+                   hairBack);
+    drawHairStrand(painter,
+                   QPointF(unit * 0.20, -unit * 0.34),
+                   QPointF(unit * 0.34, unit * 0.30),
+                   unit * 0.30,
+                   hairBack);
 
-    const QRectF head = centeredRect(QPointF(gazeX * 0.35, -unit * 0.30 + gazeY * 0.20),
-                                     unit * 0.34,
-                                     unit * 0.38);
+    const QRectF head = centeredRect(QPointF(gazeX * 0.35, -unit * 0.30 + gazeY * 0.20), unit * 0.34, unit * 0.38);
     QLinearGradient faceFill(head.topLeft(), head.bottomRight());
     faceFill.setColorAt(0.0, QColor(255, 238, 225, 252));
     faceFill.setColorAt(1.0, QColor(244, 203, 194, 250));
@@ -150,33 +148,36 @@ void drawPlaceholderPet(QPainter *painter, const QRectF &bounds, const Live2DVis
 
     QPainterPath bangs;
     bangs.moveTo(head.left() + head.width() * 0.08, head.top() + head.height() * 0.30);
-    bangs.cubicTo(head.left() + head.width() * 0.24, head.top() - head.height() * 0.06,
-                  head.left() + head.width() * 0.58, head.top() - head.height() * 0.10,
-                  head.right() - head.width() * 0.05, head.top() + head.height() * 0.28);
-    bangs.cubicTo(head.right() - head.width() * 0.18, head.top() + head.height() * 0.44,
-                  head.left() + head.width() * 0.28, head.top() + head.height() * 0.40,
-                  head.left() + head.width() * 0.08, head.top() + head.height() * 0.30);
+    bangs.cubicTo(head.left() + head.width() * 0.24,
+                  head.top() - head.height() * 0.06,
+                  head.left() + head.width() * 0.58,
+                  head.top() - head.height() * 0.10,
+                  head.right() - head.width() * 0.05,
+                  head.top() + head.height() * 0.28);
+    bangs.cubicTo(head.right() - head.width() * 0.18,
+                  head.top() + head.height() * 0.44,
+                  head.left() + head.width() * 0.28,
+                  head.top() + head.height() * 0.40,
+                  head.left() + head.width() * 0.08,
+                  head.top() + head.height() * 0.30);
     painter->setPen(Qt::NoPen);
     painter->setBrush(QColor(218, 225, 246, 242));
     painter->drawPath(bangs);
 
-    const QRectF leftTail = centeredRect(QPointF(head.left() - unit * 0.07, head.center().y() + unit * 0.05),
-                                         unit * 0.11,
-                                         unit * 0.46);
-    const QRectF rightTail = centeredRect(QPointF(head.right() + unit * 0.07, head.center().y() + unit * 0.05),
-                                          unit * 0.11,
-                                          unit * 0.46);
+    const QRectF leftTail =
+        centeredRect(QPointF(head.left() - unit * 0.07, head.center().y() + unit * 0.05), unit * 0.11, unit * 0.46);
+    const QRectF rightTail =
+        centeredRect(QPointF(head.right() + unit * 0.07, head.center().y() + unit * 0.05), unit * 0.11, unit * 0.46);
     painter->setBrush(QColor(210, 218, 242, 232));
     painter->drawRoundedRect(leftTail, unit * 0.05, unit * 0.05);
     painter->drawRoundedRect(rightTail, unit * 0.05, unit * 0.05);
 
     const QString expression = state.expression.toLower();
     const QString emotion = state.emotion.toLower();
-    const bool cheerful = emotion == QStringLiteral("cheerful")
-                          || expression.contains(QStringLiteral("smile"))
-                          || expression.contains(QStringLiteral("脸红"));
-    const bool concerned = expression.contains(QStringLiteral("concerned"))
-                           || emotion == QStringLiteral("concerned");
+    const bool cheerful =
+        emotion == QStringLiteral("cheerful") || expression.contains(QStringLiteral("smile")) ||
+                                                                     expression.contains(QStringLiteral("脸红"));
+    const bool concerned = expression.contains(QStringLiteral("concerned")) || emotion == QStringLiteral("concerned");
 
     const qreal eyeY = head.center().y() - head.height() * 0.055;
     const qreal eyeOffsetX = head.width() * 0.18;
@@ -194,13 +195,16 @@ void drawPlaceholderPet(QPainter *painter, const QRectF &bounds, const Live2DVis
                          head.height() * 0.035);
 
     painter->setBrush(QColor(44, 74, 106, 240));
-    if (blink < 0.25) {
+    if (blink < 0.25)
+    {
         painter->setPen(QPen(QColor(44, 74, 106, 230), unit * 0.010, Qt::SolidLine, Qt::RoundCap));
         painter->drawLine(QPointF(head.center().x() - eyeOffsetX - unit * 0.020, eyeY),
                           QPointF(head.center().x() - eyeOffsetX + unit * 0.020, eyeY));
         painter->drawLine(QPointF(head.center().x() + eyeOffsetX - unit * 0.020, eyeY),
                           QPointF(head.center().x() + eyeOffsetX + unit * 0.020, eyeY));
-    } else {
+    }
+    else
+    {
         painter->setPen(Qt::NoPen);
         painter->drawEllipse(QPointF(head.center().x() - eyeOffsetX + eyeGazeX, eyeY + eyeGazeY),
                              unit * 0.018,
@@ -209,36 +213,37 @@ void drawPlaceholderPet(QPainter *painter, const QRectF &bounds, const Live2DVis
                              unit * 0.018,
                              unit * 0.027 * blink);
         painter->setBrush(QColor(255, 255, 255, 218));
-        painter->drawEllipse(QPointF(head.center().x() - eyeOffsetX + eyeGazeX - unit * 0.006,
-                                     eyeY + eyeGazeY - unit * 0.010),
-                             unit * 0.0045,
-                             unit * 0.006);
-        painter->drawEllipse(QPointF(head.center().x() + eyeOffsetX + eyeGazeX - unit * 0.006,
-                                     eyeY + eyeGazeY - unit * 0.010),
-                             unit * 0.0045,
-                             unit * 0.006);
+        painter->drawEllipse(
+            QPointF(head.center().x() - eyeOffsetX + eyeGazeX - unit * 0.006, eyeY + eyeGazeY - unit * 0.010),
+            unit * 0.0045,
+            unit * 0.006);
+        painter->drawEllipse(
+            QPointF(head.center().x() + eyeOffsetX + eyeGazeX - unit * 0.006, eyeY + eyeGazeY - unit * 0.010),
+            unit * 0.0045,
+            unit * 0.006);
     }
 
     const QString motion = state.motion.toLower();
     const qreal speakingPulse = (motion == QStringLiteral("talk") || motion == QStringLiteral("speak"))
-                                    ? (0.5 + 0.5 * qSin(state.idlePhase * 15.0)) * 0.18
-                                    : 0.0;
+                                 ? (0.5 + 0.5 * qSin(state.idlePhase * 15.0)) * 0.18
+                                 : 0.0;
     const qreal mouthSignal = qBound<qreal>(0.0, state.lipSyncValue + speakingPulse, 1.0);
     const QPointF mouthCenter(head.center().x(), head.center().y() + head.height() * 0.20);
     const qreal mouthWidth = head.width() * (cheerful ? 0.20 : 0.16);
     const qreal mouthHeight = head.height() * (0.030 + mouthSignal * 0.12);
 
-    if (mouthSignal > 0.18) {
+    if (mouthSignal > 0.18)
+    {
         painter->setPen(QPen(QColor(110, 62, 76, 220), unit * 0.006));
         painter->setBrush(QColor(126, 64, 84, 210));
         painter->drawEllipse(centeredRect(mouthCenter, mouthWidth * 0.62, mouthHeight));
-    } else {
+    }
+    else
+    {
         painter->setPen(QPen(QColor(104, 63, 74, 230), unit * 0.010, Qt::SolidLine, Qt::RoundCap));
         const int startAngle = concerned ? 18 * 16 : 0;
         const int spanAngle = concerned ? 144 * 16 : -180 * 16;
-        painter->drawArc(centeredRect(mouthCenter, mouthWidth, mouthHeight),
-                         startAngle,
-                         spanAngle);
+        painter->drawArc(centeredRect(mouthCenter, mouthWidth, mouthHeight), startAngle, spanAngle);
     }
 
     const QRectF leftShoe = centeredRect(QPointF(-unit * 0.11, unit * 0.53), unit * 0.18, unit * 0.08);
@@ -262,16 +267,18 @@ bool Live2DPlaceholderRenderer::isNative() const
     return false;
 }
 
-void Live2DPlaceholderRenderer::paint(QPainter *painter, const QRectF &itemBounds, const Live2DVisualState &state)
+void Live2DPlaceholderRenderer::paint(QPainter* painter, const QRectF& itemBounds, const Live2DVisualState& state)
 {
-    if (!painter) {
+    if (!painter)
+    {
         return;
     }
 
     painter->setRenderHint(QPainter::Antialiasing, true);
     painter->setRenderHint(QPainter::SmoothPixmapTransform, true);
     const QRectF bounds = itemBounds.adjusted(2, 2, -2, -2);
-    if (bounds.width() <= 0 || bounds.height() <= 0) {
+    if (bounds.width() <= 0 || bounds.height() <= 0)
+    {
         return;
     }
 

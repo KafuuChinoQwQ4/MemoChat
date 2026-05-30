@@ -7,7 +7,6 @@ from typing import Awaitable, Callable
 from urllib.parse import quote
 
 import structlog
-
 from config import AgentQueueConfig, RabbitMQQueueConfig, RedpandaQueueConfig
 from harness.contracts import AgentTask
 

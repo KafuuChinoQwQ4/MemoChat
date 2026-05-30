@@ -17,14 +17,19 @@
 /*******************************************************
  *  Loacl private class, which do image-cropping
  *  Used in class ImageCropper
-*******************************************************/
-class ImageCropperDialogPrivate : public QDialog {
+ *******************************************************/
+class ImageCropperDialogPrivate : public QDialog
+{
     Q_OBJECT
 public:
-    ImageCropperDialogPrivate(const QPixmap& imageIn, QPixmap& outputImage,
-                              int windowWidth, int windowHeight,
-                              CropperShape shape, QSize cropperSize = QSize()) :
-        QDialog(nullptr),  outputImage(outputImage)
+    ImageCropperDialogPrivate(const QPixmap& imageIn,
+                              QPixmap& outputImage,
+                              int windowWidth,
+                              int windowHeight,
+                              CropperShape shape,
+                              QSize cropperSize = QSize())
+        : QDialog(nullptr)
+        , outputImage(outputImage)
     {
         this->setAttribute(Qt::WA_DeleteOnClose, true);
         this->setWindowTitle("Image Cropper");
@@ -49,14 +54,22 @@ public:
         mainLayout->addWidget(imageLabel);
         mainLayout->addLayout(btnLayout);
 
-        connect(btnOk, &QPushButton::clicked, this, [this](){
-            this->outputImage = this->imageLabel->getCroppedImage();
-            this->close();
-        });
-        connect(btnCancel, &QPushButton::clicked, this, [this](){
-            this->outputImage = QPixmap();
-            this->close();
-        });
+        connect(btnOk,
+                &QPushButton::clicked,
+                this,
+                [this]()
+                {
+                    this->outputImage = this->imageLabel->getCroppedImage();
+                    this->close();
+                });
+        connect(btnCancel,
+                &QPushButton::clicked,
+                this,
+                [this]()
+                {
+                    this->outputImage = QPixmap();
+                    this->close();
+                });
     }
 
 private:
@@ -66,48 +79,56 @@ private:
     QPixmap& outputImage;
 };
 
-
 /*******************************************************************
  *  class ImageCropperDialog
  *      create a instane of class ImageCropperDialogPrivate
  *      and get cropped image from the instance(after closing)
-********************************************************************/
-class ImageCropperDialog : QObject {
+ ********************************************************************/
+class ImageCropperDialog : QObject
+{
 public:
-    static QPixmap getCroppedImage(const QString& filename, int windowWidth, int windowHeight,
-                                   CropperShape cropperShape, QSize cropperSize = QSize())
+    static QPixmap getCroppedImage(const QString& filename,
+                                   int windowWidth,
+                                   int windowHeight,
+                                   CropperShape cropperShape,
+                                   QSize cropperSize = QSize())
     {
         QPixmap inputImage;
         QPixmap outputImage;
 
-        if (!inputImage.load(filename)) {
+        if (!inputImage.load(filename))
+        {
             QMessageBox::critical(nullptr, "Error", "Load image failed!", QMessageBox::Ok);
             return outputImage;
         }
 
-        ImageCropperDialogPrivate* imageCropperDo =
-            new ImageCropperDialogPrivate(inputImage, outputImage,
-                                          windowWidth, windowHeight,
-                                          cropperShape, cropperSize);
+        ImageCropperDialogPrivate* imageCropperDo = new ImageCropperDialogPrivate(inputImage,
+                                                                                  outputImage,
+                                                                                  windowWidth,
+                                                                                  windowHeight,
+                                                                                  cropperShape,
+                                                                                  cropperSize);
         imageCropperDo->exec();
 
         return outputImage;
     }
 
     static QPixmap getCroppedImage(const QPixmap& inputImage,
-                                   int windowWidth, int windowHeight,
-                                   CropperShape cropperShape, QSize cropperSize = QSize())
+                                   int windowWidth,
+                                   int windowHeight,
+                                   CropperShape cropperShape,
+                                   QSize cropperSize = QSize())
     {
         QPixmap outputImage;
-        ImageCropperDialogPrivate* imageCropperDo =
-            new ImageCropperDialogPrivate(inputImage, outputImage,
-                                          windowWidth, windowHeight,
-                                          cropperShape, cropperSize);
+        ImageCropperDialogPrivate* imageCropperDo = new ImageCropperDialogPrivate(inputImage,
+                                                                                  outputImage,
+                                                                                  windowWidth,
+                                                                                  windowHeight,
+                                                                                  cropperShape,
+                                                                                  cropperSize);
         imageCropperDo->exec();
         return outputImage;
     }
 };
-
-
 
 #endif // IMAGECROPPER_H

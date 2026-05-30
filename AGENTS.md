@@ -16,7 +16,7 @@
    - `skills/qml-platform-compat.md`：用于 QML 的平台专用兼容路径、WSLg/Linux 透明圆角、Windows/macOS 路径保留或共享 UI 兼容分支。
    - `skills/task.md`：用于普通实现工作流。
    - `skills/clarify-first.md`：用于任务目标、约束或改法不清楚时，先向用户收集更多信息再执行。
-   - `skills/withtest.md`：用于实现加迭代式运行时测试。
+   - `skills/withtest.md`：用于实现加 CI/CD 可保留测试、迭代式运行时测试、单元/功能/压力/边界/异常/并发安全/数据驱动测试。
    - `skills/planner.md`：用于可复用的 `.ai/<name>/prompt.md` 和 `tasks.json` 自动化计划。
    - `skills/parallel-agents.md`：用于每个实现任务的默认 Controller 主导并发工作流，只要安全的并行工作能加速交付就使用。Controller agent 必须负责架构、计划、契约、派发、集成和最终验收；worker agents 负责互不重叠的实现、反馈和运行时工作线。
    - `skills/review.md`：用于接收代码审查、外部 AI review、用户反馈清单，或在完成前复审实际 diff。

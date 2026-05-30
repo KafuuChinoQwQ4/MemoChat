@@ -9,13 +9,15 @@
 #include <string>
 #include <functional>
 
-namespace cppkafka {
+namespace cppkafka
+{
 class Consumer;
 class Producer;
 class Message;
-}
+} // namespace cppkafka
 
-class KafkaAsyncEventBus : public IAsyncEventBus {
+class KafkaAsyncEventBus : public IAsyncEventBus
+{
 public:
     using PublishOutboxRepairTaskFn = std::function<bool(int64_t, int, int, std::string*)>;
 
@@ -24,13 +26,19 @@ public:
     explicit KafkaAsyncEventBus(PublishOutboxRepairTaskFn publish_outbox_repair_task = nullptr);
     ~KafkaAsyncEventBus() override;
 
-    bool Publish(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error = nullptr) override;
-    bool ConsumeOnce(const std::vector<std::string>& topics, AsyncConsumedEvent& event, std::string* error = nullptr) override;
+    bool
+    Publish(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error = nullptr) override;
+    bool ConsumeOnce(const std::vector<std::string>& topics,
+                     AsyncConsumedEvent& event,
+                     std::string* error = nullptr) override;
     void AckLastConsumed() override;
     void NackLastConsumed(const std::string& error) override;
 
 private:
-    bool ProduceSerialized(const std::string& topic, const std::string& partition_key, const std::string& payload_json, std::string* error);
+    bool ProduceSerialized(const std::string& topic,
+                           const std::string& partition_key,
+                           const std::string& payload_json,
+                           std::string* error);
     std::string DlqTopicForLastConsumed() const;
     void ClearLastConsumed();
 

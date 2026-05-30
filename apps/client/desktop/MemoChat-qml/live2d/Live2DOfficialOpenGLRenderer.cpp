@@ -48,9 +48,10 @@
 #endif
 #endif
 
-namespace {
+namespace
+{
 
-QString clientSourcePath(const QString &relativePath)
+QString clientSourcePath(const QString& relativePath)
 {
 #ifdef MEMOCHAT_QML_SOURCE_DIR
     const QString root = QString::fromUtf8(MEMOCHAT_QML_SOURCE_DIR);
@@ -60,11 +61,13 @@ QString clientSourcePath(const QString &relativePath)
     return QDir(root).absoluteFilePath(relativePath);
 }
 
-QByteArray readFileBytes(const QString &path, QString *error)
+QByteArray readFileBytes(const QString& path, QString* error)
 {
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
-        if (error) {
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        if (error)
+        {
             *error = QStringLiteral("failed to open %1: %2").arg(path, file.errorString());
         }
         return {};
@@ -72,24 +75,29 @@ QByteArray readFileBytes(const QString &path, QString *error)
     return file.readAll();
 }
 
-QString resolveModelPath(const QString &modelPath)
+QString resolveModelPath(const QString& modelPath)
 {
     const QString cleaned = modelPath.trimmed();
-    if (cleaned.isEmpty()) {
+    if (cleaned.isEmpty())
+    {
         return Live2DOfficialOpenGLRenderer::defaultModelPath();
     }
-    if (cleaned.startsWith(QStringLiteral("qrc:/"))) {
+    if (cleaned.startsWith(QStringLiteral("qrc:/")))
+    {
         return QStringLiteral(":") + QUrl(cleaned).path();
     }
-    if (cleaned.startsWith(QStringLiteral(":/"))) {
+    if (cleaned.startsWith(QStringLiteral(":/")))
+    {
         return QDir::cleanPath(cleaned);
     }
 
     const QUrl url(cleaned);
-    if (url.isLocalFile()) {
+    if (url.isLocalFile())
+    {
         return QDir::cleanPath(url.toLocalFile());
     }
-    if (QDir::isAbsolutePath(cleaned)) {
+    if (QDir::isAbsolutePath(cleaned))
+    {
         return QDir::cleanPath(cleaned);
     }
     return QDir::cleanPath(QDir::current().absoluteFilePath(cleaned));
@@ -109,7 +117,7 @@ QString normalizedKey(QString value)
 namespace Csm = Live2D::Cubism::Framework;
 namespace CsmRendering = Live2D::Cubism::Framework::Rendering;
 
-QMutex &cubismRenderMutex()
+QMutex& cubismRenderMutex()
 {
     static QMutex mutex;
     return mutex;
@@ -124,71 +132,78 @@ bool hasCurrentOpenGLContext()
 #endif
 }
 
-QString resolveAssetDirectory(const QString &inputDirectory, const QDir &modelDir)
+QString resolveAssetDirectory(const QString& inputDirectory, const QDir& modelDir)
 {
     const QString cleaned = inputDirectory.trimmed();
-    if (cleaned.isEmpty()) {
+    if (cleaned.isEmpty())
+    {
         return modelDir.absolutePath();
     }
     const QUrl url(cleaned);
-    if (url.isLocalFile()) {
+    if (url.isLocalFile())
+    {
         return QDir::cleanPath(url.toLocalFile());
     }
-    if (QDir::isAbsolutePath(cleaned) || cleaned.startsWith(QStringLiteral(":/"))) {
+    if (QDir::isAbsolutePath(cleaned) || cleaned.startsWith(QStringLiteral(":/")))
+    {
         return QDir::cleanPath(cleaned);
     }
     const QString modelRelative = modelDir.absoluteFilePath(cleaned);
-    if (QFileInfo::exists(modelRelative)) {
+    if (QFileInfo::exists(modelRelative))
+    {
         return QDir::cleanPath(modelRelative);
     }
     return QDir::cleanPath(QDir::current().absoluteFilePath(cleaned));
 }
 
-void collectFilesRecursive(const QDir &dir,
-                           const QStringList &nameFilters,
-                           QStringList *files)
+void collectFilesRecursive(const QDir& dir, const QStringList& nameFilters, QStringList* files)
 {
-    if (!files || !dir.exists()) {
+    if (!files || !dir.exists())
+    {
         return;
     }
 
-    const QFileInfoList entries = dir.entryInfoList(nameFilters,
-                                                    QDir::Files | QDir::NoDotAndDotDot,
-                                                    QDir::Name | QDir::IgnoreCase);
-    for (const QFileInfo &entry : entries) {
+    const QFileInfoList entries =
+        dir.entryInfoList(nameFilters, QDir::Files | QDir::NoDotAndDotDot, QDir::Name | QDir::IgnoreCase);
+    for (const QFileInfo& entry : entries)
+    {
         files->append(entry.absoluteFilePath());
     }
 
-    const QFileInfoList childDirs = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot,
-                                                      QDir::Name | QDir::IgnoreCase);
-    for (const QFileInfo &childDir : childDirs) {
+    const QFileInfoList childDirs = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name | QDir::IgnoreCase);
+    for (const QFileInfo& childDir : childDirs)
+    {
         collectFilesRecursive(QDir(childDir.absoluteFilePath()), nameFilters, files);
     }
 }
 
-QString live2dFileStem(const QString &path)
+QString live2dFileStem(const QString& path)
 {
     const QString fileName = QFileInfo(path).fileName();
     const QString lowerName = fileName.toLower();
-    if (lowerName.endsWith(QStringLiteral(".motion3.json"))) {
+    if (lowerName.endsWith(QStringLiteral(".motion3.json")))
+    {
         return fileName.left(fileName.size() - QStringLiteral(".motion3.json").size());
     }
-    if (lowerName.endsWith(QStringLiteral(".exp3.json"))) {
+    if (lowerName.endsWith(QStringLiteral(".exp3.json")))
+    {
         return fileName.left(fileName.size() - QStringLiteral(".exp3.json").size());
     }
     return QFileInfo(path).completeBaseName();
 }
 
-QString resolvedAssetPath(const QString &fileName, const QDir &modelDir)
+QString resolvedAssetPath(const QString& fileName, const QDir& modelDir)
 {
     const QString trimmed = fileName.trimmed();
-    if (trimmed.isEmpty()) {
+    if (trimmed.isEmpty())
+    {
         return {};
     }
-    if (QFileInfo(trimmed).isAbsolute() || trimmed.startsWith(QStringLiteral(":/")) || trimmed.startsWith(QStringLiteral("qrc:/"))) {
-        return QDir::cleanPath(trimmed.startsWith(QStringLiteral("qrc:/"))
-                                   ? QStringLiteral(":") + QUrl(trimmed).path()
-                                   : trimmed);
+    if (QFileInfo(trimmed).isAbsolute() || trimmed.startsWith(QStringLiteral(":/")) ||
+                                                              trimmed.startsWith(QStringLiteral("qrc:/")))
+    {
+        return QDir::cleanPath(trimmed.startsWith(QStringLiteral("qrc:/")) ? QStringLiteral(":") + QUrl(trimmed).path()
+                                                                           : trimmed);
     }
     return QDir::cleanPath(modelDir.absoluteFilePath(trimmed));
 }
@@ -196,30 +211,31 @@ QString resolvedAssetPath(const QString &fileName, const QDir &modelDir)
 class QtCubismAllocator final : public Csm::ICubismAllocator
 {
 public:
-    void *Allocate(const Csm::csmSizeType size) override
+    void* Allocate(const Csm::csmSizeType size) override
     {
         return std::malloc(size);
     }
 
-    void Deallocate(void *memory) override
+    void Deallocate(void* memory) override
     {
         std::free(memory);
     }
 
-    void *AllocateAligned(const Csm::csmSizeType size, const Csm::csmUint32 alignment) override
+    void* AllocateAligned(const Csm::csmSizeType size, const Csm::csmUint32 alignment) override
     {
-        void *memory = nullptr;
+        void* memory = nullptr;
 #if defined(_MSC_VER)
         memory = _aligned_malloc(size, alignment);
 #else
-        if (posix_memalign(&memory, alignment, size) != 0) {
+        if (posix_memalign(&memory, alignment, size) != 0)
+        {
             memory = nullptr;
         }
 #endif
         return memory;
     }
 
-    void DeallocateAligned(void *alignedMemory) override
+    void DeallocateAligned(void* alignedMemory) override
     {
 #if defined(_MSC_VER)
         _aligned_free(alignedMemory);
@@ -229,11 +245,12 @@ public:
     }
 };
 
-QString frameworkShaderPath(const std::string &filePath)
+QString frameworkShaderPath(const std::string& filePath)
 {
     const QString requested = QString::fromStdString(filePath);
     const QFileInfo requestedInfo(requested);
-    if (requestedInfo.isAbsolute() || requested.startsWith(QStringLiteral(":/"))) {
+    if (requestedInfo.isAbsolute() || requested.startsWith(QStringLiteral(":/")))
+    {
         return requested;
     }
 
@@ -244,95 +261,108 @@ QString frameworkShaderPath(const std::string &filePath)
 #endif
 
     QString shaderName = requested;
-    if (shaderName.startsWith(QStringLiteral("FrameworkShaders/"))) {
+    if (shaderName.startsWith(QStringLiteral("FrameworkShaders/")))
+    {
         shaderName = shaderName.mid(QStringLiteral("FrameworkShaders/").size());
     }
 
     QStringList candidates;
-    if (!frameworkRoot.isEmpty()) {
-        candidates << QDir(frameworkRoot).absoluteFilePath(
-            QStringLiteral("Rendering/OpenGL/Shaders/Standard/%1").arg(shaderName));
+    if (!frameworkRoot.isEmpty())
+    {
+        candidates << QDir(frameworkRoot)
+                          .absoluteFilePath(QStringLiteral("Rendering/OpenGL/Shaders/Standard/%1").arg(shaderName));
         candidates << QDir(frameworkRoot).absoluteFilePath(requested);
     }
     candidates << QDir(QCoreApplication::applicationDirPath()).absoluteFilePath(requested);
     candidates << QDir::current().absoluteFilePath(requested);
 
-    for (const QString &candidate : candidates) {
-        if (QFileInfo::exists(candidate)) {
+    for (const QString& candidate : candidates)
+    {
+        if (QFileInfo::exists(candidate))
+        {
             return candidate;
         }
     }
     return candidates.value(0, requested);
 }
 
-Csm::csmByte *loadCubismFile(const std::string filePath, Csm::csmSizeInt *outSize)
+Csm::csmByte* loadCubismFile(const std::string filePath, Csm::csmSizeInt* outSize)
 {
-    if (outSize) {
+    if (outSize)
+    {
         *outSize = 0;
     }
 
     QString error;
     const QByteArray bytes = readFileBytes(frameworkShaderPath(filePath), &error);
-    if (bytes.isEmpty()) {
+    if (bytes.isEmpty())
+    {
         qWarning().noquote() << "Live2D Cubism file loader:" << error;
         return nullptr;
     }
 
-    auto *buffer = static_cast<Csm::csmByte *>(std::malloc(static_cast<size_t>(bytes.size())));
-    if (!buffer) {
-        qWarning().noquote() << "Live2D Cubism file loader: allocation failed for"
-                             << QString::fromStdString(filePath);
+    auto* buffer = static_cast<Csm::csmByte*>(std::malloc(static_cast<size_t>(bytes.size())));
+    if (!buffer)
+    {
+        qWarning().noquote() << "Live2D Cubism file loader: allocation failed for" << QString::fromStdString(filePath);
         return nullptr;
     }
     std::memcpy(buffer, bytes.constData(), static_cast<size_t>(bytes.size()));
-    if (outSize) {
+    if (outSize)
+    {
         *outSize = static_cast<Csm::csmSizeInt>(bytes.size());
     }
     return buffer;
 }
 
-void releaseCubismBytes(Csm::csmByte *byteData)
+void releaseCubismBytes(Csm::csmByte* byteData)
 {
     std::free(byteData);
 }
 
-void cubismLog(const char *message)
+void cubismLog(const char* message)
 {
-    if (!message) {
+    if (!message)
+    {
         return;
     }
     qInfo().noquote() << QString::fromUtf8(message).trimmed();
 }
 
-bool ensureCubismFramework(QString *error)
+bool ensureCubismFramework(QString* error)
 {
     static QtCubismAllocator allocator;
     static Csm::CubismFramework::Option option;
 
-    if (!Csm::CubismFramework::IsStarted()) {
+    if (!Csm::CubismFramework::IsStarted())
+    {
         option.LogFunction = cubismLog;
         option.LoggingLevel = Csm::CubismFramework::Option::LogLevel_Warning;
         option.LoadFileFunction = loadCubismFile;
         option.ReleaseBytesFunction = releaseCubismBytes;
-        if (!Csm::CubismFramework::StartUp(&allocator, &option)) {
-            if (error) {
+        if (!Csm::CubismFramework::StartUp(&allocator, &option))
+        {
+            if (error)
+            {
                 *error = QStringLiteral("failed to start Cubism Framework");
             }
             return false;
         }
     }
 
-    if (!Csm::CubismFramework::IsInitialized()) {
+    if (!Csm::CubismFramework::IsInitialized())
+    {
         Csm::CubismFramework::Initialize();
     }
     return Csm::CubismFramework::IsInitialized();
 }
 
-bool ensureGlew(QString *error)
+bool ensureGlew(QString* error)
 {
     static bool attempted = false;
     static bool ready = false;
-    if (attempted) {
+    if (attempted)
+    {
         return ready;
     }
     attempted = true;
@@ -341,18 +371,21 @@ bool ensureGlew(QString *error)
     const GLenum result = glewInit();
     glGetError();
     ready = result == GLEW_OK;
-    if (!ready && error) {
-        *error = QStringLiteral("failed to initialize GLEW: %1")
-                     .arg(QString::fromUtf8(reinterpret_cast<const char *>(glewGetErrorString(result))));
+    if (!ready && error)
+    {
+        *error = QStringLiteral("failed to initialize GLEW: %1") .arg(
+            QString::fromUtf8(reinterpret_cast<const char*>(glewGetErrorString(result))));
     }
     return ready;
 }
 
-GLuint uploadTexture(const QString &path, QString *error)
+GLuint uploadTexture(const QString& path, QString* error)
 {
     QImage image(path);
-    if (image.isNull()) {
-        if (error) {
+    if (image.isNull())
+    {
+        if (error)
+        {
             *error = QStringLiteral("failed to load Live2D texture: %1").arg(path);
         }
         return 0;
@@ -402,18 +435,19 @@ struct Live2DOfficialOpenGLRenderer::Impl
         release();
     }
 
-    bool load(const QString &inputModelPath,
-              const QString &inputMotionDirectory,
-              const QString &inputExpressionDirectory)
+    bool
+    load(const QString& inputModelPath, const QString& inputMotionDirectory, const QString& inputExpressionDirectory)
     {
         QMutexLocker locker(&cubismRenderMutex());
 
         QString frameworkError;
-        if (!ensureCubismFramework(&frameworkError)) {
+        if (!ensureCubismFramework(&frameworkError))
+        {
             error = frameworkError;
             return false;
         }
-        if (!ensureGlew(&frameworkError)) {
+        if (!ensureGlew(&frameworkError))
+        {
             error = frameworkError;
             return false;
         }
@@ -423,7 +457,8 @@ struct Live2DOfficialOpenGLRenderer::Impl
         modelPath = resolveModelPath(inputModelPath);
         QString fileError;
         const QByteArray modelBytes = readFileBytes(modelPath, &fileError);
-        if (modelBytes.isEmpty()) {
+        if (modelBytes.isEmpty())
+        {
             error = fileError;
             return false;
         }
@@ -433,7 +468,8 @@ struct Live2DOfficialOpenGLRenderer::Impl
         const QJsonObject fileReferences = root.value(QStringLiteral("FileReferences")).toObject();
         const QString mocName = fileReferences.value(QStringLiteral("Moc")).toString();
         const QJsonArray textures = fileReferences.value(QStringLiteral("Textures")).toArray();
-        if (mocName.isEmpty() || textures.isEmpty()) {
+        if (mocName.isEmpty() || textures.isEmpty())
+        {
             error = QStringLiteral("model3.json is missing Moc or Textures: %1").arg(modelPath);
             return false;
         }
@@ -443,21 +479,23 @@ struct Live2DOfficialOpenGLRenderer::Impl
         expressionDirectory = resolveAssetDirectory(inputExpressionDirectory, modelDir);
         const QString mocPath = modelDir.absoluteFilePath(mocName);
         const QByteArray mocBytes = readFileBytes(mocPath, &fileError);
-        if (mocBytes.isEmpty()) {
+        if (mocBytes.isEmpty())
+        {
             error = fileError;
             return false;
         }
 
-        moc = Csm::CubismMoc::Create(
-            reinterpret_cast<const Csm::csmByte *>(mocBytes.constData()),
-            static_cast<Csm::csmSizeInt>(mocBytes.size()));
-        if (!moc) {
+        moc = Csm::CubismMoc::Create(reinterpret_cast<const Csm::csmByte*>(mocBytes.constData()),
+                                     static_cast<Csm::csmSizeInt>(mocBytes.size()));
+        if (!moc)
+        {
             error = QStringLiteral("failed to create Cubism moc: %1").arg(mocPath);
             return false;
         }
 
         model = moc->CreateModel();
-        if (!model) {
+        if (!model)
+        {
             error = QStringLiteral("failed to create Cubism model: %1").arg(mocPath);
             return false;
         }
@@ -468,9 +506,9 @@ struct Live2DOfficialOpenGLRenderer::Impl
         loadExpressions(fileReferences, modelDir, QDir(expressionDirectory));
         model->SaveParameters();
 
-        renderer = static_cast<CsmRendering::CubismRenderer_OpenGLES2 *>(
-            CsmRendering::CubismRenderer::Create(1, 1));
-        if (!renderer) {
+        renderer = static_cast<CsmRendering::CubismRenderer_OpenGLES2*>(CsmRendering::CubismRenderer::Create(1, 1));
+        if (!renderer)
+        {
             error = QStringLiteral("failed to create official Cubism OpenGL renderer");
             return false;
         }
@@ -478,13 +516,16 @@ struct Live2DOfficialOpenGLRenderer::Impl
         renderer->IsPremultipliedAlpha(false);
         renderer->IsCulling(false);
 
-        for (int i = 0; i < textures.size(); ++i) {
+        for (int i = 0; i < textures.size(); ++i)
+        {
             const QString textureName = textures.at(i).toString();
-            if (textureName.isEmpty()) {
+            if (textureName.isEmpty())
+            {
                 continue;
             }
             const GLuint textureId = uploadTexture(modelDir.absoluteFilePath(textureName), &fileError);
-            if (textureId == 0) {
+            if (textureId == 0)
+            {
                 error = fileError;
                 return false;
             }
@@ -500,47 +541,58 @@ struct Live2DOfficialOpenGLRenderer::Impl
     {
         QMutexLocker locker(&cubismRenderMutex());
 
-        if (!textureIds.isEmpty()) {
-            if (hasCurrentOpenGLContext()) {
+        if (!textureIds.isEmpty())
+        {
+            if (hasCurrentOpenGLContext())
+            {
                 glDeleteTextures(textureIds.size(), textureIds.constData());
             }
             textureIds.clear();
         }
-        if (renderer) {
+        if (renderer)
+        {
             CsmRendering::CubismRenderer::Delete(renderer);
             renderer = nullptr;
         }
-        if (expressionManager) {
+        if (expressionManager)
+        {
             expressionManager->StopAllMotions();
-            if (currentExpression) {
+            if (currentExpression)
+            {
                 currentExpression->SetLoop(expressionLoopDefaults.value(currentExpression, false));
             }
             CSM_DELETE(expressionManager);
             expressionManager = nullptr;
         }
-        if (motionManager) {
+        if (motionManager)
+        {
             motionManager->StopAllMotions();
-            if (currentMotion) {
+            if (currentMotion)
+            {
                 currentMotion->SetLoop(motionLoopDefaults.value(currentMotion, false));
             }
             CSM_DELETE(motionManager);
             motionManager = nullptr;
         }
-        if (moc && model) {
+        if (moc && model)
+        {
             moc->DeleteModel(model);
             model = nullptr;
         }
-        if (physics) {
+        if (physics)
+        {
             Csm::CubismPhysics::Delete(physics);
             physics = nullptr;
         }
-        for (auto *motion : expressions) {
+        for (auto* motion : expressions)
+        {
             Csm::ACubismMotion::Delete(motion);
         }
         expressions.clear();
         expressionAliases.clear();
         expressionLoopDefaults.clear();
-        for (auto *motion : motions) {
+        for (auto* motion : motions)
+        {
             Csm::ACubismMotion::Delete(motion);
         }
         motions.clear();
@@ -554,18 +606,20 @@ struct Live2DOfficialOpenGLRenderer::Impl
         lastActionSerial = -1;
         currentExpressionPersistent = false;
         hasLastIdlePhase = false;
-        if (moc) {
+        if (moc)
+        {
             Csm::CubismMoc::Delete(moc);
             moc = nullptr;
         }
         ready = false;
     }
 
-    bool render(const QSize &viewportSize, const Live2DVisualState &state)
+    bool render(const QSize& viewportSize, const Live2DVisualState& state)
     {
         QMutexLocker locker(&cubismRenderMutex());
 
-        if (!ready || !model || !renderer || viewportSize.width() <= 0 || viewportSize.height() <= 0) {
+        if (!ready || !model || !renderer || viewportSize.width() <= 0 || viewportSize.height() <= 0)
+        {
             return false;
         }
 
@@ -581,7 +635,8 @@ struct Live2DOfficialOpenGLRenderer::Impl
         applyVisualState(state);
         applyMotion(state, deltaSeconds);
         applyExpression(state);
-        if (physics) {
+        if (physics)
+        {
             physics->Evaluate(model, deltaSeconds);
         }
         model->Update();
@@ -598,7 +653,8 @@ struct Live2DOfficialOpenGLRenderer::Impl
     {
         const float current = static_cast<float>(idlePhase);
         float delta = 1.0f / 60.0f;
-        if (hasLastIdlePhase) {
+        if (hasLastIdlePhase)
+        {
             delta = clamped(current - lastIdlePhase, 1.0f / 240.0f, 1.0f / 15.0f);
         }
         lastIdlePhase = current;
@@ -606,91 +662,90 @@ struct Live2DOfficialOpenGLRenderer::Impl
         return delta;
     }
 
-    void loadPhysics(const QJsonObject &fileReferences, const QDir &modelDir)
+    void loadPhysics(const QJsonObject& fileReferences, const QDir& modelDir)
     {
         const QString physicsName = fileReferences.value(QStringLiteral("Physics")).toString();
-        if (physicsName.isEmpty()) {
+        if (physicsName.isEmpty())
+        {
             return;
         }
 
         QString fileError;
         const QString physicsPath = modelDir.absoluteFilePath(physicsName);
         const QByteArray physicsBytes = readFileBytes(physicsPath, &fileError);
-        if (physicsBytes.isEmpty()) {
+        if (physicsBytes.isEmpty())
+        {
             qWarning().noquote() << "Live2D physics unavailable:" << fileError;
             return;
         }
-        physics = Csm::CubismPhysics::Create(
-            reinterpret_cast<const Csm::csmByte *>(physicsBytes.constData()),
-            static_cast<Csm::csmSizeInt>(physicsBytes.size()));
-        if (!physics) {
+        physics = Csm::CubismPhysics::Create(reinterpret_cast<const Csm::csmByte*>(physicsBytes.constData()),
+                                             static_cast<Csm::csmSizeInt>(physicsBytes.size()));
+        if (!physics)
+        {
             qWarning().noquote() << "Live2D physics unavailable: failed to parse" << physicsPath;
         }
     }
 
-    void loadMotions(const QJsonObject &fileReferences, const QDir &modelDir, const QDir &motionDir)
+    void loadMotions(const QJsonObject& fileReferences, const QDir& modelDir, const QDir& motionDir)
     {
         QSet<QString> declaredFiles;
         const QJsonObject motionGroups = fileReferences.value(QStringLiteral("Motions")).toObject();
-        for (auto group = motionGroups.constBegin(); group != motionGroups.constEnd(); ++group) {
+        for (auto group = motionGroups.constBegin(); group != motionGroups.constEnd(); ++group)
+        {
             const QJsonArray items = group.value().toArray();
-            for (int i = 0; i < items.size(); ++i) {
+            for (int i = 0; i < items.size(); ++i)
+            {
                 const QJsonObject item = items.at(i).toObject();
                 declaredFiles.insert(resolvedAssetPath(item.value(QStringLiteral("File")).toString(), modelDir));
                 addMotion(group.key(),
                           i,
                           item.value(QStringLiteral("Name")).toString(),
-                          item.value(QStringLiteral("File")).toString(),
-                          modelDir);
+                                     item.value(QStringLiteral("File")).toString(), modelDir);
             }
         }
 
         QStringList files;
         collectFilesRecursive(motionDir, {QStringLiteral("*.motion3.json")}, &files);
         int directoryIndex = 0;
-        for (const QString &file : files) {
-            if (declaredFiles.contains(QDir::cleanPath(file))) {
+        for (const QString& file : files)
+        {
+            if (declaredFiles.contains(QDir::cleanPath(file)))
+            {
                 continue;
             }
-            addMotion(QStringLiteral("Directory"),
-                      directoryIndex,
-                      live2dFileStem(file),
-                      file,
-                      modelDir);
+            addMotion(QStringLiteral("Directory"), directoryIndex, live2dFileStem(file), file, modelDir);
             ++directoryIndex;
         }
     }
 
-    void addMotion(const QString &group,
-                   int index,
-                   const QString &name,
-                   const QString &fileName,
-                   const QDir &modelDir)
+    void addMotion(const QString& group, int index, const QString& name, const QString& fileName, const QDir& modelDir)
     {
         const QString trimmedGroup = group.trimmed();
         const QString trimmedFile = fileName.trimmed();
-        if (trimmedFile.isEmpty()) {
+        if (trimmedFile.isEmpty())
+        {
             return;
         }
 
         const QString key = motionKey(trimmedGroup, index);
-        if (key.isEmpty() || motions.contains(key)) {
+        if (key.isEmpty() || motions.contains(key))
+        {
             return;
         }
 
         QString fileError;
-        const QString motionPath = QFileInfo(trimmedFile).isAbsolute()
-                                       ? trimmedFile
-                                       : modelDir.absoluteFilePath(trimmedFile);
+        const QString motionPath =
+            QFileInfo(trimmedFile).isAbsolute() ? trimmedFile : modelDir.absoluteFilePath(trimmedFile);
         const QByteArray motionBytes = readFileBytes(motionPath, &fileError);
-        if (motionBytes.isEmpty()) {
+        if (motionBytes.isEmpty())
+        {
             return;
         }
 
-        auto *motion = Csm::CubismMotion::Create(
-            reinterpret_cast<const Csm::csmByte *>(motionBytes.constData()),
-            static_cast<Csm::csmSizeInt>(motionBytes.size()));
-        if (!motion) {
+        auto* motion = Csm::CubismMotion::Create(reinterpret_cast<const Csm::csmByte*>(motionBytes.constData()),
+                                                 static_cast<Csm::csmSizeInt>(motionBytes.size()));
+        if (!motion)
+        {
             qWarning().noquote() << "Live2D motion unavailable: failed to parse" << motionPath;
             return;
         }
@@ -702,22 +757,23 @@ struct Live2DOfficialOpenGLRenderer::Impl
         aliasMotion(trimmedGroup, key);
         aliasMotion(QStringLiteral("%1#%2").arg(trimmedGroup).arg(index), key);
         const QString trimmedName = name.trimmed();
-        if (!trimmedName.isEmpty()) {
+        if (!trimmedName.isEmpty())
+        {
             aliasMotion(trimmedName, key);
         }
         aliasMotion(live2dFileStem(trimmedFile), key);
     }
 
-    void loadExpressions(const QJsonObject &fileReferences, const QDir &modelDir, const QDir &expressionDir)
+    void loadExpressions(const QJsonObject& fileReferences, const QDir& modelDir, const QDir& expressionDir)
     {
         QSet<QString> declaredFiles;
         const QJsonArray expressionItems = fileReferences.value(QStringLiteral("Expressions")).toArray();
-        for (const QJsonValue &itemValue : expressionItems) {
+        for (const QJsonValue& itemValue : expressionItems)
+        {
             const QJsonObject item = itemValue.toObject();
             declaredFiles.insert(resolvedAssetPath(item.value(QStringLiteral("File")).toString(), modelDir));
             addExpression(item.value(QStringLiteral("Name")).toString(),
-                          item.value(QStringLiteral("File")).toString(),
-                          modelDir);
+                                     item.value(QStringLiteral("File")).toString(), modelDir);
         }
 
         addExpression(QStringLiteral("脸红"), QStringLiteral("脸红.exp3.json"), modelDir);
@@ -726,8 +782,10 @@ struct Live2DOfficialOpenGLRenderer::Impl
 
         QStringList files;
         collectFilesRecursive(expressionDir, {QStringLiteral("*.exp3.json")}, &files);
-        for (const QString &file : files) {
-            if (declaredFiles.contains(QDir::cleanPath(file))) {
+        for (const QString& file : files)
+        {
+            if (declaredFiles.contains(QDir::cleanPath(file)))
+            {
                 continue;
             }
             addExpression(live2dFileStem(file), file, modelDir);
@@ -744,33 +802,35 @@ struct Live2DOfficialOpenGLRenderer::Impl
         aliasExpression(QStringLiteral("tibi"), QStringLiteral("提比"));
     }
 
-    void addExpression(const QString &name, const QString &fileName, const QDir &modelDir)
+    void addExpression(const QString& name, const QString& fileName, const QDir& modelDir)
     {
         const QString trimmedName = name.trimmed();
         const QString trimmedFile = fileName.trimmed();
-        if (trimmedFile.isEmpty()) {
+        if (trimmedFile.isEmpty())
+        {
             return;
         }
 
-        const QString key = normalizedKey(trimmedName.isEmpty() ? live2dFileStem(trimmedFile)
-                                                                : trimmedName);
-        if (key.isEmpty() || expressions.contains(key)) {
+        const QString key = normalizedKey(trimmedName.isEmpty() ? live2dFileStem(trimmedFile) : trimmedName);
+        if (key.isEmpty() || expressions.contains(key))
+        {
             return;
         }
 
         QString fileError;
-        const QString expressionPath = QFileInfo(trimmedFile).isAbsolute()
-                                           ? trimmedFile
-                                           : modelDir.absoluteFilePath(trimmedFile);
+        const QString expressionPath =
+            QFileInfo(trimmedFile).isAbsolute() ? trimmedFile : modelDir.absoluteFilePath(trimmedFile);
         const QByteArray expressionBytes = readFileBytes(expressionPath, &fileError);
-        if (expressionBytes.isEmpty()) {
+        if (expressionBytes.isEmpty())
+        {
             return;
         }
 
-        auto *motion = Csm::CubismExpressionMotion::Create(
-            reinterpret_cast<const Csm::csmByte *>(expressionBytes.constData()),
-            static_cast<Csm::csmSizeInt>(expressionBytes.size()));
-        if (!motion) {
+        auto* motion =
+            Csm::CubismExpressionMotion::Create(reinterpret_cast<const Csm::csmByte*>(expressionBytes.constData()),
+                                                static_cast<Csm::csmSizeInt>(expressionBytes.size()));
+        if (!motion)
+        {
             qWarning().noquote() << "Live2D expression unavailable: failed to parse" << expressionPath;
             return;
         }
@@ -780,69 +840,79 @@ struct Live2DOfficialOpenGLRenderer::Impl
         expressionLoopDefaults.insert(motion, motion->GetLoop());
     }
 
-    void aliasExpression(const QString &alias, const QString &target)
+    void aliasExpression(const QString& alias, const QString& target)
     {
         const QString targetKey = normalizedKey(target);
-        if (!expressions.contains(targetKey)) {
+        if (!expressions.contains(targetKey))
+        {
             return;
         }
         expressionAliases.insert(normalizedKey(alias), targetKey);
     }
 
-    QString motionKey(const QString &group, int index) const
+    QString motionKey(const QString& group, int index) const
     {
         const QString normalizedGroup = normalizedKey(group);
-        if (normalizedGroup.isEmpty() || index < 0) {
+        if (normalizedGroup.isEmpty() || index < 0)
+        {
             return {};
         }
         return QStringLiteral("%1#%2").arg(normalizedGroup).arg(index);
     }
 
-    void aliasMotion(const QString &alias, const QString &targetKey)
+    void aliasMotion(const QString& alias, const QString& targetKey)
     {
         const QString aliasKey = normalizedKey(alias);
-        if (aliasKey.isEmpty() || targetKey.isEmpty() || !motions.contains(targetKey)) {
+        if (aliasKey.isEmpty() || targetKey.isEmpty() || !motions.contains(targetKey))
+        {
             return;
         }
         motionAliases.insert(aliasKey, targetKey);
     }
 
-    Csm::ACubismMotion *motionForState(const Live2DVisualState &state, QString *resolvedKey) const
+    Csm::ACubismMotion* motionForState(const Live2DVisualState& state, QString* resolvedKey) const
     {
         QString key = normalizedKey(state.motion);
-        if (key.isEmpty()) {
-            if (resolvedKey) {
+        if (key.isEmpty())
+        {
+            if (resolvedKey)
+            {
                 resolvedKey->clear();
             }
             return nullptr;
         }
         key = motionAliases.value(key, key);
-        if (resolvedKey) {
+        if (resolvedKey)
+        {
             *resolvedKey = key;
         }
         return motions.value(key, nullptr);
     }
 
-    void applyMotion(const Live2DVisualState &state, float deltaSeconds)
+    void applyMotion(const Live2DVisualState& state, float deltaSeconds)
     {
-        if (!motionManager) {
+        if (!motionManager)
+        {
             return;
         }
 
         QString nextMotionKey;
-        auto *nextMotion = motionForState(state, &nextMotionKey);
+        auto* nextMotion = motionForState(state, &nextMotionKey);
         const bool triggerChanged = state.actionSerial != lastActionSerial;
         const bool persistenceChanged = state.persistentMotion != currentMotionPersistent;
-        if (triggerChanged || persistenceChanged || nextMotion != currentMotion || nextMotionKey != currentMotionKey) {
+        if (triggerChanged || persistenceChanged || nextMotion != currentMotion || nextMotionKey != currentMotionKey)
+        {
             motionManager->StopAllMotions();
-            if (currentMotion) {
+            if (currentMotion)
+            {
                 currentMotion->SetLoop(motionLoopDefaults.value(currentMotion, false));
             }
             currentMotion = nextMotion;
             currentMotionKey = nextMotionKey;
             currentMotionPersistent = state.persistentMotion;
             lastActionSerial = state.actionSerial;
-            if (currentMotion) {
+            if (currentMotion)
+            {
                 currentMotion->SetLoop(currentMotionPersistent || motionLoopDefaults.value(currentMotion, false));
                 motionManager->StartMotionPriority(currentMotion, false, 3);
             }
@@ -850,48 +920,56 @@ struct Live2DOfficialOpenGLRenderer::Impl
         motionManager->UpdateMotion(model, deltaSeconds);
     }
 
-    Csm::ACubismMotion *expressionForState(const Live2DVisualState &state) const
+    Csm::ACubismMotion* expressionForState(const Live2DVisualState& state) const
     {
         QString key = normalizedKey(state.expression);
         const QString emotion = normalizedKey(state.emotion);
-        if (key == QStringLiteral("neutral") || key == QStringLiteral("focus")) {
+        if (key == QStringLiteral("neutral") || key == QStringLiteral("focus"))
+        {
             key.clear();
         }
-        if (key.isEmpty() && emotion != QStringLiteral("neutral") && emotion != QStringLiteral("speaking")) {
+        if (key.isEmpty() && emotion != QStringLiteral("neutral") && emotion != QStringLiteral("speaking"))
+        {
             key = emotion;
         }
-        if (key.isEmpty()) {
+        if (key.isEmpty())
+        {
             return nullptr;
         }
         key = expressionAliases.value(key, key);
         return expressions.value(key, nullptr);
     }
 
-    void applyExpression(const Live2DVisualState &state)
+    void applyExpression(const Live2DVisualState& state)
     {
-        if (!expressionManager) {
+        if (!expressionManager)
+        {
             return;
         }
-        auto *nextExpression = expressionForState(state);
+        auto* nextExpression = expressionForState(state);
         const bool triggerChanged = state.actionSerial != lastExpressionSerial;
         const bool persistenceChanged = state.persistentMotion != currentExpressionPersistent;
-        if (triggerChanged || persistenceChanged || nextExpression != currentExpression) {
+        if (triggerChanged || persistenceChanged || nextExpression != currentExpression)
+        {
             expressionManager->StopAllMotions();
-            if (currentExpression) {
+            if (currentExpression)
+            {
                 currentExpression->SetLoop(expressionLoopDefaults.value(currentExpression, false));
             }
             currentExpression = nextExpression;
             currentExpressionPersistent = state.persistentMotion;
             lastExpressionSerial = state.actionSerial;
-            if (currentExpression) {
-                currentExpression->SetLoop(currentExpressionPersistent || expressionLoopDefaults.value(currentExpression, false));
+            if (currentExpression)
+            {
+                currentExpression->SetLoop(currentExpressionPersistent ||
+                                           expressionLoopDefaults.value(currentExpression, false));
                 expressionManager->StartMotion(currentExpression, false);
             }
         }
         expressionManager->UpdateMotion(model, 1.0f / 60.0f);
     }
 
-    void applyVisualState(const Live2DVisualState &state)
+    void applyVisualState(const Live2DVisualState& state)
     {
         resetSpecialExpressionParameters();
 
@@ -902,14 +980,14 @@ struct Live2DOfficialOpenGLRenderer::Impl
         const float blink = std::sin(idle * 3.15f) > 0.982f ? 0.12f : 1.0f;
         const QString expression = state.expression.toLower();
         const QString emotion = state.emotion.toLower();
-        const bool cheerful = expression.contains(QStringLiteral("smile"))
-                              || expression.contains(QStringLiteral("脸红"))
-                              || emotion == QStringLiteral("happy")
-                              || emotion == QStringLiteral("cheerful");
-        const bool angry = expression.contains(QStringLiteral("angry"))
-                           || expression.contains(QStringLiteral("脸黑"))
-                           || expression.contains(QStringLiteral("生气"))
-                           || emotion == QStringLiteral("angry");
+        const bool cheerful = expression.contains(
+            QStringLiteral("smile")) ||
+            expression.contains(QStringLiteral("脸红")) ||
+                                emotion == QStringLiteral("happy") || emotion == QStringLiteral("cheerful");
+        const bool angry = expression.contains(
+            QStringLiteral("angry")) ||
+            expression.contains(QStringLiteral("脸黑")) || expression.contains(QStringLiteral("生气")) ||
+                                                                               emotion == QStringLiteral("angry");
 
         setParameter("ParamAngleX", gazeX * 18.0f + std::sin(idle * 0.8f) * 3.0f);
         setParameter("ParamAngleY", gazeY * 12.0f + std::sin(idle * 0.9f) * 2.0f);
@@ -926,10 +1004,9 @@ struct Live2DOfficialOpenGLRenderer::Impl
 
         const QString motion = state.motion.toLower();
         const float speakingPulse = (motion == QStringLiteral("talk") || motion == QStringLiteral("speak"))
-                                        ? (0.5f + 0.5f * std::sin(idle * 16.0f)) * 0.85f
-                                        : 0.0f;
-        setParameter("ParamMouthOpenY",
-                     clamped(static_cast<float>(state.lipSyncValue) + speakingPulse, 0.0f, 1.0f));
+                                     ? (0.5f + 0.5f * std::sin(idle * 16.0f)) * 0.85f
+                                     : 0.0f;
+        setParameter("ParamMouthOpenY", clamped(static_cast<float>(state.lipSyncValue) + speakingPulse, 0.0f, 1.0f));
         setParameter("ParamCheek", cheerful ? 1.0f : 0.0f);
         setParameter("lianhong", cheerful ? 1.0f : 0.0f);
         setParameter("shrngqi", angry ? 1.0f : 0.0f);
@@ -944,13 +1021,15 @@ struct Live2DOfficialOpenGLRenderer::Impl
         setParameter("ParamCheek", 0.0f);
     }
 
-    void setParameter(const char *id, float value, float weight = 1.0f)
+    void setParameter(const char* id, float value, float weight = 1.0f)
     {
-        if (!model || !id) {
+        if (!model || !id)
+        {
             return;
         }
         const Csm::CubismIdHandle handle = Csm::CubismFramework::GetIdManager()->GetId(id);
-        if (!handle) {
+        if (!handle)
+        {
             return;
         }
         model->SetParameterValue(handle, value, weight);
@@ -965,21 +1044,28 @@ struct Live2DOfficialOpenGLRenderer::Impl
         float maxY = 0.0f;
 
         const int drawableCount = model->GetDrawableCount();
-        for (int drawable = 0; drawable < drawableCount; ++drawable) {
-            if (visibleOnly && !model->GetDrawableDynamicFlagIsVisible(drawable)) {
+        for (int drawable = 0; drawable < drawableCount; ++drawable)
+        {
+            if (visibleOnly && !model->GetDrawableDynamicFlagIsVisible(drawable))
+            {
                 continue;
             }
             const int vertexCount = model->GetDrawableVertexCount(drawable);
-            const Live2D::Cubism::Core::csmVector2 *positions = model->GetDrawableVertexPositions(drawable);
-            if (!positions) {
+            const Live2D::Cubism::Core::csmVector2* positions = model->GetDrawableVertexPositions(drawable);
+            if (!positions)
+            {
                 continue;
             }
-            for (int i = 0; i < vertexCount; ++i) {
-                if (!hasPoint) {
+            for (int i = 0; i < vertexCount; ++i)
+            {
+                if (!hasPoint)
+                {
                     minX = maxX = positions[i].X;
                     minY = maxY = positions[i].Y;
                     hasPoint = true;
-                } else {
+                }
+                else
+                {
                     minX = std::min(minX, positions[i].X);
                     minY = std::min(minY, positions[i].Y);
                     maxX = std::max(maxX, positions[i].X);
@@ -988,19 +1074,22 @@ struct Live2DOfficialOpenGLRenderer::Impl
             }
         }
 
-        if (!hasPoint) {
+        if (!hasPoint)
+        {
             return {};
         }
         return QRectF(QPointF(minX, minY), QPointF(maxX, maxY)).normalized();
     }
 
-    Csm::CubismMatrix44 fittedMvp(const QSize &viewportSize) const
+    Csm::CubismMatrix44 fittedMvp(const QSize& viewportSize) const
     {
         QRectF bounds = modelBounds(true);
-        if (bounds.isEmpty()) {
+        if (bounds.isEmpty())
+        {
             bounds = modelBounds(false);
         }
-        if (bounds.isEmpty()) {
+        if (bounds.isEmpty())
+        {
             const float canvasWidth = std::max(1.0f, model->GetCanvasWidth());
             const float canvasHeight = std::max(1.0f, model->GetCanvasHeight());
             bounds = QRectF(-canvasWidth * 0.5f, -canvasHeight * 0.5f, canvasWidth, canvasHeight);
@@ -1027,22 +1116,22 @@ struct Live2DOfficialOpenGLRenderer::Impl
     QString modelPath;
     QString motionDirectory;
     QString expressionDirectory;
-    Csm::CubismMoc *moc = nullptr;
-    Csm::CubismModel *model = nullptr;
-    CsmRendering::CubismRenderer_OpenGLES2 *renderer = nullptr;
-    Csm::CubismPhysics *physics = nullptr;
-    Csm::CubismMotionManager *motionManager = nullptr;
-    Csm::CubismExpressionMotionManager *expressionManager = nullptr;
-    QHash<QString, Csm::ACubismMotion *> motions;
+    Csm::CubismMoc* moc = nullptr;
+    Csm::CubismModel* model = nullptr;
+    CsmRendering::CubismRenderer_OpenGLES2* renderer = nullptr;
+    Csm::CubismPhysics* physics = nullptr;
+    Csm::CubismMotionManager* motionManager = nullptr;
+    Csm::CubismExpressionMotionManager* expressionManager = nullptr;
+    QHash<QString, Csm::ACubismMotion*> motions;
     QHash<QString, QString> motionAliases;
-    QHash<Csm::ACubismMotion *, bool> motionLoopDefaults;
-    QHash<QString, Csm::ACubismMotion *> expressions;
+    QHash<Csm::ACubismMotion*, bool> motionLoopDefaults;
+    QHash<QString, Csm::ACubismMotion*> expressions;
     QHash<QString, QString> expressionAliases;
-    QHash<Csm::ACubismMotion *, bool> expressionLoopDefaults;
-    Csm::ACubismMotion *currentMotion = nullptr;
+    QHash<Csm::ACubismMotion*, bool> expressionLoopDefaults;
+    Csm::ACubismMotion* currentMotion = nullptr;
     QString currentMotionKey;
     bool currentMotionPersistent = false;
-    Csm::ACubismMotion *currentExpression = nullptr;
+    Csm::ACubismMotion* currentExpression = nullptr;
     bool currentExpressionPersistent = false;
     QVector<GLuint> textureIds;
     int lastActionSerial = -1;
@@ -1050,14 +1139,14 @@ struct Live2DOfficialOpenGLRenderer::Impl
     float lastIdlePhase = 0.0f;
     bool hasLastIdlePhase = false;
 #else
-    bool load(const QString &, const QString &, const QString &)
+    bool load(const QString&, const QString&, const QString&)
     {
         ready = false;
         error = QStringLiteral("Live2D Cubism Native OpenGL is not enabled in this build");
         return false;
     }
 
-    bool render(const QSize &, const Live2DVisualState &)
+    bool render(const QSize&, const Live2DVisualState&)
     {
         return false;
     }
@@ -1067,9 +1156,9 @@ struct Live2DOfficialOpenGLRenderer::Impl
 #endif
 };
 
-Live2DOfficialOpenGLRenderer::Live2DOfficialOpenGLRenderer(const QString &modelPath,
-                                                           const QString &motionDirectory,
-                                                           const QString &expressionDirectory)
+Live2DOfficialOpenGLRenderer::Live2DOfficialOpenGLRenderer(const QString& modelPath,
+                                                           const QString& motionDirectory,
+                                                           const QString& expressionDirectory)
     : _impl(std::make_unique<Impl>())
 {
     _impl->load(modelPath, motionDirectory, expressionDirectory);
@@ -1097,7 +1186,7 @@ bool Live2DOfficialOpenGLRenderer::isNative() const
     return isReady();
 }
 
-bool Live2DOfficialOpenGLRenderer::render(const QSize &viewportSize, const Live2DVisualState &state)
+bool Live2DOfficialOpenGLRenderer::render(const QSize& viewportSize, const Live2DVisualState& state)
 {
     return _impl && _impl->render(viewportSize, state);
 }

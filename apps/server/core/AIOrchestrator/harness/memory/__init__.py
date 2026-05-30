@@ -12,4 +12,5 @@ def __getattr__(name: str):
         return MemoryService
     raise AttributeError(f"module 'harness.memory' has no attribute {name!r}")
 
+
 __all__ = ["MemoryService", "GraphMemoryService"]

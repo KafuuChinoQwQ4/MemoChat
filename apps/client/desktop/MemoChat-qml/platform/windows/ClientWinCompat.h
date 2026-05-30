@@ -37,4 +37,4 @@
 #undef max
 #endif
 
-#endif  /* _WIN32 */
+#endif /* _WIN32 */

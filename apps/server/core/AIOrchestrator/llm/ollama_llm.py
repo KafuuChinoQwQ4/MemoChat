@@ -1,17 +1,18 @@
 """
 Ollama LLM 适配器 — 支持本地大模型
 """
+
 import asyncio
-import httpx
 import json
 import re
 from typing import AsyncIterator
 
+import httpx
 import structlog
-
-from .base import BaseLLM, LLMMessage, LLMResponse, LLMStreamChunk, LLMUsage
 from observability.langsmith_instrument import set_run_error, set_run_output, trace_context
 from observability.metrics import ai_metrics
+
+from .base import BaseLLM, LLMMessage, LLMResponse, LLMStreamChunk, LLMUsage
 
 logger = structlog.get_logger()
 
@@ -238,7 +239,9 @@ class OllamaLLM(BaseLLM):
                                 prompt_tokens=prompt_eval_count,
                                 completion_tokens=eval_count,
                                 total_tokens=total_tokens,
-                            ) if done else None,
+                            )
+                            if done
+                            else None,
                             model=self.model_name,
                         )
 

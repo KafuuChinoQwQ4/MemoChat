@@ -19,7 +19,8 @@ namespace http = beast::http;
 namespace net = boost::asio;
 using tcp = boost::asio::ip::tcp;
 
-enum ErrorCodes {
+enum ErrorCodes
+{
     Success = 0,
     Error_Json = 1001,
     RPCFailed = 1002,
@@ -35,10 +36,17 @@ enum ErrorCodes {
     ClientVersionTooLow = 1014,
 };
 
-class Defer {
+class Defer
+{
 public:
-    Defer(std::function<void()> func) : func_(func) {}
-    ~Defer() { func_(); }
+    Defer(std::function<void()> func)
+        : func_(func)
+    {
+    }
+    ~Defer()
+    {
+        func_();
+    }
 
 private:
     std::function<void()> func_;

@@ -30,33 +30,55 @@ endif()
 
 set(CORE_SOURCES
     common/global.cpp
+    media/ImageCropperGeometry.cpp
+    media/ImageCropperInteraction.cpp
+    media/ImageCropperPaint.cpp
     media/imagecropperlabel.cpp
     media/ScreenCaptureWidget.cpp
     media/ScreenCaptureService.cpp
     media/WebcamCaptureDialog.cpp
+    network/ChatFrameCodec.cpp
     network/ChatMessageDispatcher.cpp
+    network/ChatMessageDispatcherAuth.cpp
+    network/ChatMessageDispatcherContacts.cpp
+    network/ChatMessageDispatcherPrivate.cpp
+    network/ChatMessageDispatcherGroup.cpp
+    network/ChatMessageDispatcherSystem.cpp
+    network/HttpMgrRequestUtils.cpp
     network/httpmgr.cpp
     network/QuicChatTransport.cpp
+    network/QuicChatTransportMsquic.cpp
     network/TelemetryUtils.cpp
     network/tcpmgr.cpp
     session/userdata.cpp
     session/usermgr.cpp
+    session/UserMgrApply.cpp
+    session/UserMgrFriends.cpp
+    session/UserMgrGroupList.cpp
+    session/UserMgrGroupMessages.cpp
+    session/UserMgrPrivateMessages.cpp
 )
 
 set(CORE_HEADERS
     common/global.h
     common/singleton.h
+    media/ImageCropperGeometry.h
     media/imagecropperdialog.h
     media/imagecropperlabel.h
     media/ScreenCaptureWidget.h
     media/ScreenCaptureService.h
     media/WebcamCaptureDialog.h
+    network/ChatFrameCodec.h
     network/ChatMessageDispatcher.h
+    network/HttpMgrRequestUtils.h
     network/httpmgr.h
     network/IChatTransport.h
     network/QuicChatTransport.h
     network/TelemetryUtils.h
     network/tcpmgr.h
+    session/UserContactData.h
+    session/UserGroupData.h
+    session/UserMessageData.h
     session/userdata.h
     session/usermgr.h
 )

@@ -5,9 +5,11 @@
 #include <map>
 #include <string>
 
-namespace memolog {
+namespace memolog
+{
 
-class Telemetry {
+class Telemetry
+{
 public:
     static void Init(const std::string& service_name, const TelemetryConfig& cfg);
     static void Shutdown();
@@ -30,7 +32,8 @@ private:
     static std::string service_instance_;
 };
 
-class SpanScope {
+class SpanScope
+{
 public:
     SpanScope(const std::string& name,
               const std::string& kind,

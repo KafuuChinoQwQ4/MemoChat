@@ -29,29 +29,86 @@ class PetModel : public QObject
     Q_PROPERTY(qreal lipSyncValue READ lipSyncValue NOTIFY changed)
 
 public:
-    explicit PetModel(QObject *parent = nullptr);
+    explicit PetModel(QObject* parent = nullptr);
 
-    int sequence() const { return _sequence; }
-    int schemaVersion() const { return _schema_version; }
-    QString eventId() const { return _event_id; }
-    QString turnId() const { return _turn_id; }
-    QString phase() const { return _phase; }
-    QString speechText() const { return _speech_text; }
-    QString speechTranslation() const { return _speech_translation; }
-    QString speechDisplayText() const { return _speech_display_text; }
-    QString speechLanguage() const { return _speech_language; }
-    bool speechFinal() const { return _speech_final; }
-    QString audioUrl() const { return _audio_url; }
-    QString audioState() const { return _audio_state; }
-    QString emotion() const { return _emotion; }
-    QString expression() const { return _expression; }
-    QString motion() const { return _motion; }
-    qreal intensity() const { return _intensity; }
-    qreal gazeX() const { return _gaze_x; }
-    qreal gazeY() const { return _gaze_y; }
-    qreal lipSyncValue() const { return _lip_sync_value; }
+    int sequence() const
+    {
+        return _sequence;
+    }
+    int schemaVersion() const
+    {
+        return _schema_version;
+    }
+    QString eventId() const
+    {
+        return _event_id;
+    }
+    QString turnId() const
+    {
+        return _turn_id;
+    }
+    QString phase() const
+    {
+        return _phase;
+    }
+    QString speechText() const
+    {
+        return _speech_text;
+    }
+    QString speechTranslation() const
+    {
+        return _speech_translation;
+    }
+    QString speechDisplayText() const
+    {
+        return _speech_display_text;
+    }
+    QString speechLanguage() const
+    {
+        return _speech_language;
+    }
+    bool speechFinal() const
+    {
+        return _speech_final;
+    }
+    QString audioUrl() const
+    {
+        return _audio_url;
+    }
+    QString audioState() const
+    {
+        return _audio_state;
+    }
+    QString emotion() const
+    {
+        return _emotion;
+    }
+    QString expression() const
+    {
+        return _expression;
+    }
+    QString motion() const
+    {
+        return _motion;
+    }
+    qreal intensity() const
+    {
+        return _intensity;
+    }
+    qreal gazeX() const
+    {
+        return _gaze_x;
+    }
+    qreal gazeY() const
+    {
+        return _gaze_y;
+    }
+    qreal lipSyncValue() const
+    {
+        return _lip_sync_value;
+    }
 
-    Q_INVOKABLE void applyControlEvent(const QJsonObject &event);
+    Q_INVOKABLE void applyControlEvent(const QJsonObject& event);
     Q_INVOKABLE void clearSpeech();
 
 signals:

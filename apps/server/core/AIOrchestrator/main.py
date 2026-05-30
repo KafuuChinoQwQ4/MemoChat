@@ -2,29 +2,29 @@
 MemoChat AIOrchestrator — Python 微服务入口
 FastAPI + Uvicorn，提供 /chat、/smart、/kb、/models 路由
 """
+
 import asyncio
 import signal
 import sys
 from contextlib import asynccontextmanager
 
-import uvicorn
 import structlog
+import uvicorn
+from api.agent_router import router as agent_router
+from api.chat_router import router as chat_router
+from api.kb_router import router as kb_router
+from api.model_router import router as model_router
+from api.pet_router import router as pet_router
+from api.recommend_router import router as recommend_router
+from api.smart_router import router as smart_router
+from config import settings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
-
-from config import settings
-from api.chat_router import router as chat_router
-from api.smart_router import router as smart_router
-from api.kb_router import router as kb_router
-from api.model_router import router as model_router
-from api.recommend_router import router as recommend_router
-from api.agent_router import router as agent_router
-from api.pet_router import router as pet_router
 from harness import HarnessContainer
+from observability.langsmith_instrument import init_langsmith
 from observability.metrics import ai_metrics
 from observability.tracer import init_tracing
-from observability.langsmith_instrument import init_langsmith
 
 logger = structlog.get_logger()
 
@@ -40,6 +40,7 @@ async def lifespan(app: FastAPI):
 
     # MCP 桥接初始化
     from tools.registry import ToolRegistry
+
     registry = ToolRegistry.get_instance()
     await registry.initialize_mcp()
     await HarnessContainer.get_instance().startup()
@@ -52,20 +53,26 @@ async def lifespan(app: FastAPI):
 
     # 关闭 MCP Server
     from tools.registry import ToolRegistry
+
     registry = ToolRegistry.get_instance()
     await registry.close()
 
     # 关闭 LLM 客户端
-    from llm.ollama_llm import OllamaLLM
-    from llm.openai_llm import OpenAILLM
     from llm.claude_llm import ClaudeLLM
     from llm.kimi_llm import KimiLLM
-    for name, inst in [(n, i) for n, i in [
-        ("ollama", OllamaLLM._instance),
-        ("openai", OpenAILLM._instance),
-        ("claude", ClaudeLLM._instance),
-        ("kimi", KimiLLM._instance),
-    ] if i is not None]:
+    from llm.ollama_llm import OllamaLLM
+    from llm.openai_llm import OpenAILLM
+
+    for name, inst in [
+        (n, i)
+        for n, i in [
+            ("ollama", OllamaLLM._instance),
+            ("openai", OpenAILLM._instance),
+            ("claude", ClaudeLLM._instance),
+            ("kimi", KimiLLM._instance),
+        ]
+        if i is not None
+    ]:
         try:
             if hasattr(inst, "close"):
                 inst.close()
@@ -105,6 +112,7 @@ def create_app() -> FastAPI:
     @app.get("/ready")
     async def ready():
         from llm.manager import LLMManager
+
         manager = LLMManager.get_instance()
         available = []
         for backend in ["ollama", "openai", "claude", "kimi"]:

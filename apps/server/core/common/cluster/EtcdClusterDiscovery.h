@@ -10,9 +10,11 @@
 
 #include "runtime/EtcdConfig.h"
 
-namespace memochat::cluster {
+namespace memochat::cluster
+{
 
-struct EtcdServiceEndpoint {
+struct EtcdServiceEndpoint
+{
     std::string host;
     std::string tcp_port;
     std::string quic_port;
@@ -21,7 +23,8 @@ struct EtcdServiceEndpoint {
     bool healthy = true;
 };
 
-struct EtcdServiceRegistration {
+struct EtcdServiceRegistration
+{
     std::string service_name;
     std::string instance_id;
     std::string host;
@@ -37,17 +40,21 @@ struct EtcdServiceRegistration {
     static std::string DecodeBase64(const std::string& input);
 };
 
-class EtcdServiceRegistry {
+class EtcdServiceRegistry
+{
 public:
     using HealthCheckCallback = std::function<bool()>;
     using RegisterCallback = std::function<void(bool success, const std::string& error)>;
 
     explicit EtcdServiceRegistry(const std::string& endpoints,
-                                const std::string& service_name,
-                                const std::string& instance_id);
+                                 const std::string& service_name,
+                                 const std::string& instance_id);
     ~EtcdServiceRegistry();
 
-    bool IsAvailable() const { return _etcd_config && _etcd_config->IsAvailable(); }
+    bool IsAvailable() const
+    {
+        return _etcd_config && _etcd_config->IsAvailable();
+    }
 
     void SetEndpoints(const EtcdServiceEndpoint& endpoints);
     void SetHealthCheck(HealthCheckCallback callback);
@@ -80,7 +87,8 @@ private:
     std::thread _heartbeat_thread;
 };
 
-class EtcdClusterDiscovery {
+class EtcdClusterDiscovery
+{
 public:
     using NodesChangedCallback = std::function<void(const std::vector<ChatNodeDescriptor>& nodes)>;
 
@@ -89,7 +97,10 @@ public:
                                   const std::string& self_node_name = "");
     ~EtcdClusterDiscovery();
 
-    bool IsAvailable() const { return _etcd_config && _etcd_config->IsAvailable(); }
+    bool IsAvailable() const
+    {
+        return _etcd_config && _etcd_config->IsAvailable();
+    }
 
     ChatClusterConfig DiscoverCluster();
     std::vector<ChatNodeDescriptor> GetNodes();
@@ -120,10 +131,11 @@ private:
     std::atomic<bool> _watching{false};
 };
 
-class EtcdClusterDiscoveryLoader {
+class EtcdClusterDiscoveryLoader
+{
 public:
     static std::unique_ptr<EtcdClusterDiscovery> TryCreate(const ConfigValueGetter& getter,
-                                                            const std::string& self_node_name = "");
+                                                           const std::string& self_node_name = "");
 };
 
 } // namespace memochat::cluster

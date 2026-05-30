@@ -21,8 +21,8 @@ except ImportError:  # pragma: no cover - keeps this route-flow test runnable on
 
 try:
     import httpx
-    from fastapi import FastAPI
     from api import pet_router
+    from fastapi import FastAPI
 except ImportError as exc:  # pragma: no cover - exercised only on lean host images.
     httpx = None
     FastAPI = None
@@ -188,7 +188,10 @@ class PetVisualLayerUserFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(phases[-1], "idle")
 
         last_visual_at = self.runtime._policy.visual_summary(agent_session_id).get("updated_at_ms", 0)
-        with mock.patch("harness.pet.policy.time", types.SimpleNamespace(time=mock.Mock(return_value=(last_visual_at / 1000.0) + 6.0))):
+        with mock.patch(
+            "harness.pet.policy.time",
+            types.SimpleNamespace(time=mock.Mock(return_value=(last_visual_at / 1000.0) + 6.0)),
+        ):
             changed = await self.client.post(
                 f"/pet/sessions/{agent_session_id}/observation",
                 json={

@@ -2,23 +2,24 @@ import re
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
-MAIN_CPP = CLIENT_DIR / "main.cpp"
+MAIN_CPP = CLIENT_DIR / "app/main.cpp"
+MAIN_PLATFORM_BOOTSTRAP_CPP = CLIENT_DIR / "app/MainPlatformBootstrap.cpp"
+MAIN_WINDOW_HOOKS_CPP = CLIENT_DIR / "app/MainWindowHooks.cpp"
 SHARED_MAIN_QML = CLIENT_DIR / "qml/Main.qml"
 LINUX_MAIN_QML = CLIENT_DIR / "qml/linux/Main.qml"
-LIVE2D_CPP = CLIENT_DIR / "Live2DRenderItem.cpp"
-LIVE2D_H = CLIENT_DIR / "Live2DRenderItem.h"
-LIVE2D_RENDERER_H = CLIENT_DIR / "Live2DRenderer.h"
-LIVE2D_CORE_CPP = CLIENT_DIR / "Live2DCoreRenderer.cpp"
-LIVE2D_CORE_H = CLIENT_DIR / "Live2DCoreRenderer.h"
-LIVE2D_OFFICIAL_CPP = CLIENT_DIR / "Live2DOfficialOpenGLRenderer.cpp"
-LIVE2D_OFFICIAL_H = CLIENT_DIR / "Live2DOfficialOpenGLRenderer.h"
-LIVE2D_PLACEHOLDER_CPP = CLIENT_DIR / "Live2DPlaceholderRenderer.cpp"
-LIVE2D_PLACEHOLDER_H = CLIENT_DIR / "Live2DPlaceholderRenderer.h"
+LIVE2D_CPP = CLIENT_DIR / "live2d/Live2DRenderItem.cpp"
+LIVE2D_H = CLIENT_DIR / "live2d/Live2DRenderItem.h"
+LIVE2D_RENDERER_H = CLIENT_DIR / "live2d/Live2DRenderer.h"
+LIVE2D_CORE_CPP = CLIENT_DIR / "live2d/Live2DCoreRenderer.cpp"
+LIVE2D_CORE_H = CLIENT_DIR / "live2d/Live2DCoreRenderer.h"
+LIVE2D_OFFICIAL_CPP = CLIENT_DIR / "live2d/Live2DOfficialOpenGLRenderer.cpp"
+LIVE2D_OFFICIAL_H = CLIENT_DIR / "live2d/Live2DOfficialOpenGLRenderer.h"
+LIVE2D_PLACEHOLDER_CPP = CLIENT_DIR / "live2d/Live2DPlaceholderRenderer.cpp"
+LIVE2D_PLACEHOLDER_H = CLIENT_DIR / "live2d/Live2DPlaceholderRenderer.h"
 CLIENT_CMAKE = CLIENT_DIR / "CMakeLists.txt"
-APP_CONTROLLER_SESSION_CPP = CLIENT_DIR / "AppControllerSession.cpp"
+SESSION_CHAT_ENTRY_CPP = CLIENT_DIR / "app/SessionChatEntryCoordinator.cpp"
 
 
 def read(path):
@@ -39,7 +40,7 @@ def function_body(source, name):
         elif char == "}":
             depth -= 1
         index += 1
-    return source[match.end():index - 1]
+    return source[match.end() : index - 1]
 
 
 def cpp_function_body(source, name):
@@ -60,12 +61,12 @@ def cpp_function_body(source, name):
         elif char == "}":
             depth -= 1
         index += 1
-    return source[open_brace + 1:index - 1]
+    return source[open_brace + 1 : index - 1]
 
 
 class UiStartupPerformanceContractTests(unittest.TestCase):
     def test_main_cpp_defines_top_level_centering_retry_contract(self):
-        source = read(MAIN_CPP)
+        source = read(MAIN_WINDOW_HOOKS_CPP)
 
         self.assertRegex(
             source,
@@ -81,7 +82,7 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
         self.assertRegex(source, r"\bsetY\s*\(|\bsetPosition\s*\(")
 
     def test_main_cpp_sets_linux_threaded_render_loop_without_overriding_user_env(self):
-        source = read(MAIN_CPP)
+        source = read(MAIN_PLATFORM_BOOTSTRAP_CPP)
 
         linux_blocks = re.findall(r"#ifdef\s+Q_OS_LINUX(?P<body>.*?)#endif", source, flags=re.S)
         self.assertTrue(linux_blocks, "main.cpp should keep Linux-specific startup defaults guarded")
@@ -89,7 +90,9 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
 
         self.assertIn("QSG_RENDER_LOOP", linux_source)
         self.assertIn("threaded", linux_source)
-        self.assertRegex(source, r"\bvoid\s+setDefaultEnv\s*\(\s*const\s+char\s*\*\s*name\s*,\s*const\s+char\s*\*\s*value\s*\)")
+        self.assertRegex(
+            source, r"\bvoid\s+setDefaultEnv\s*\(\s*const\s+char\s*\*\s*name\s*,\s*const\s+char\s*\*\s*value\s*\)"
+        )
         self.assertRegex(source, r"\b(qEnvironmentVariableIsSet|qEnvironmentVariableIsEmpty|qgetenv)\s*\(")
         self.assertRegex(
             source,
@@ -105,18 +108,39 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
         for path in (SHARED_MAIN_QML, LINUX_MAIN_QML):
             with self.subTest(path=path):
                 source = read(path)
-                self.assertIn("ensureLoginWindowVisible", source)
-                self.assertIn("logWindowState", source)
-                self.assertIn("availableGeometry", source)
+                for token in (
+                    "ensureAppWindow",
+                    "syncWindowsByPage",
+                    "configureAppWindowForPage",
+                    "showWindowCentered",
+                    "requestWindowCenter",
+                    "logWindowState",
+                    "availableGeometry",
+                    "Component.onCompleted",
+                    "onPageChanged",
+                ):
+                    self.assertIn(token, source)
                 self.assertNotIn("centerWindowWithRetry", source)
                 self.assertNotIn("retryCenterTimer", source)
                 self.assertNotIn("startupShowRetryTimer", source)
 
-                for function_name in ("showLoginWindow", "showChatWindow"):
-                    body = function_body(source, function_name)
-                    self.assertTrue(body, f"{path} must define {function_name}()")
-                    self.assertIn("centerWindow(win)", body)
-                    self.assertRegex(body, r"\bshow\s*\(")
+                show_body = function_body(source, "showWindowCentered")
+                self.assertTrue(show_body, f"{path} must define showWindowCentered()")
+                self.assertIn("centerWindow(win)", show_body)
+                self.assertIn("win.visible = true", show_body)
+                self.assertIn("showNormal()", show_body)
+                self.assertIn("requestWindowCenter(win)", show_body)
+
+                configure_body = function_body(source, "configureAppWindowForPage")
+                self.assertTrue(configure_body, f"{path} must define configureAppWindowForPage()")
+                self.assertIn("centerWindowForSize(win, size)", configure_body)
+                self.assertIn("requestWindowCenter(win)", configure_body)
+
+                sync_body = function_body(source, "syncWindowsByPage")
+                self.assertTrue(sync_body, f"{path} must define syncWindowsByPage()")
+                self.assertIn("ensureAppWindow()", sync_body)
+                self.assertIn("configureAppWindowForPage(win)", sync_body)
+                self.assertIn("showWindowCentered(win)", sync_body)
 
     def test_live2d_render_item_uses_precise_throttled_timer_and_fbo_target(self):
         source = read(LIVE2D_CPP) + "\n" + read(LIVE2D_H)
@@ -126,19 +150,24 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
         self.assertIn("QTimer", source)
         self.assertRegex(source, r"\b(Qt::PreciseTimer|setTimerType\s*\(\s*Qt::PreciseTimer\s*\))")
         self.assertIn("targetFps", source)
-        self.assertRegex(source, r"\bsetInterval\s*\(\s*(?:1000\s*/\s*_target_fps|qMax\s*\(\s*1\s*,\s*1000\s*/\s*_target_fps\s*\))\s*\)")
+        self.assertRegex(
+            source,
+            r"\bsetInterval\s*\(\s*(?:1000\s*/\s*_target_fps|qMax\s*\(\s*1\s*,\s*1000\s*/\s*_target_fps\s*\))\s*\)",
+        )
         self.assertIn("QQuickFramebufferObject", source)
         self.assertIn("createFramebufferObject", source)
         self.assertIn("QOpenGLFramebufferObject", source)
         self.assertNotIn("QQuickPaintedItem", source)
         self.assertNotIn("#ifdef Q_OS_LINUX", ctor)
         self.assertRegex(source, r"\bconnect\s*\(")
-        self.assertRegex(source, r"\b(startAnimation|stopAnimation|updateAnimationTimer|setVisible|visibleChanged|windowChanged)\b")
+        self.assertRegex(
+            source, r"\b(startAnimation|stopAnimation|updateAnimationTimer|setVisible|visibleChanged|windowChanged)\b"
+        )
         self.assertRegex(source, r"\b(isVisible\s*\(|window\s*\(\s*\))")
         self.assertRegex(source, r"\b(update\s*\(|advance|elapsed|phase|animation)\b")
         self.assertNotRegex(render_body, r"\bupdate\s*\(\s*\)")
         self.assertTrue(
-            "QQuickFramebufferObject" in source and "Renderer *createRenderer" in source,
+            "QQuickFramebufferObject" in source and re.search(r"\bRenderer\s*\*\s*createRenderer", source),
             "Live2DRenderItem should render through a Qt Quick FBO renderer",
         )
 
@@ -224,28 +253,31 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
         self.assertIn("setModelJson", source)
         self.assertIn("resolvedModelPath", source)
         self.assertIn("resolveModelPath", source)
-        self.assertIn("Live2DOfficialOpenGLRenderer(const QString &modelPath", official_header)
+        self.assertRegex(
+            official_header,
+            r"Live2DOfficialOpenGLRenderer\s*\(\s*const\s+QString\s*&\s*modelPath",
+        )
         self.assertIn("defaultModelPath()", official_source)
         self.assertIn("resolveModelPath(inputModelPath)", official_source)
 
     def test_main_cpp_forces_opengl_backend_for_official_live2d_renderer(self):
-        source = read(MAIN_CPP)
+        source = read(MAIN_PLATFORM_BOOTSTRAP_CPP)
 
         self.assertIn("QSGRendererInterface", source)
         self.assertIn("QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL)", source)
         self.assertIn('setDefaultEnv("QSG_RHI_BACKEND", "opengl")', source)
         self.assertIn("QML_DISABLE_DISK_CACHE", source)
-        self.assertIn("qunsetenv(\"QML_DISABLE_DISK_CACHE\")", source)
+        self.assertIn('qunsetenv("QML_DISABLE_DISK_CACHE")', source)
         self.assertIn('setDefaultEnv("GALLIUM_DRIVER", "d3d12")', source)
         self.assertIn('setDefaultEnv("MESA_LOADER_DRIVER_OVERRIDE", "d3d12")', source)
 
     def test_post_login_chat_bootstrap_delay_is_100ms(self):
-        source = read(APP_CONTROLLER_SESSION_CPP)
+        source = read(SESSION_CHAT_ENTRY_CPP)
 
         self.assertRegex(source, r"constexpr\s+int\s+kPostLoginBootstrapDelayMs\s*=\s*100\s*;")
         self.assertRegex(
             source,
-            r"QTimer::singleShot\s*\(\s*kPostLoginBootstrapDelayMs\s*,\s*this\s*,\s*\[this\]",
+            r"QTimer::singleShot\s*\(\s*kPostLoginBootstrapDelayMs\s*,\s*&_app\s*,\s*\[this\]",
         )
 
 

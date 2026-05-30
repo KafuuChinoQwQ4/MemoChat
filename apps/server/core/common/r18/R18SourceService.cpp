@@ -28,8 +28,10 @@ namespace net = boost::asio;
 namespace ssl = boost::asio::ssl;
 using tcp = net::ip::tcp;
 
-namespace memochat::r18 {
-namespace {
+namespace memochat::r18
+{
+namespace
+{
 
 using json::JsonValue;
 
@@ -53,7 +55,8 @@ const std::array<std::string, 4> kJmApiHosts = {
     "www.cdnaspa.cc",
 };
 
-struct ParsedUrl {
+struct ParsedUrl
+{
     std::string scheme;
     std::string host;
     std::string port;
@@ -66,21 +69,31 @@ std::filesystem::path ResolveDataRoot()
 {
     const auto cwd = std::filesystem::current_path();
     std::string leaf = cwd.filename().string();
-    std::transform(leaf.begin(), leaf.end(), leaf.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(leaf.begin(),
+                   leaf.end(),
+                   leaf.begin(),
+                   [](unsigned char c)
+                   {
+                       return static_cast<char>(std::tolower(c));
+                   });
     const auto base = leaf.rfind("gateserver", 0) == 0 ? cwd.parent_path() : cwd;
     return base / "data" / "r18" / "sources";
 }
 
 bool EndsWithCaseInsensitive(const std::string& value, const std::string& suffix)
 {
-    if (value.size() < suffix.size()) {
+    if (value.size() < suffix.size())
+    {
         return false;
     }
-    return std::equal(suffix.rbegin(), suffix.rend(), value.rbegin(), [](char a, char b) {
-        return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
-    });
+    return std::equal(suffix.rbegin(),
+                      suffix.rend(),
+                      value.rbegin(),
+                      [](char a, char b)
+                      {
+                          return std::tolower(static_cast<unsigned char>(a)) ==
+                                 std::tolower(static_cast<unsigned char>(b));
+                      });
 }
 
 std::string Stem(const std::string& file_name)
@@ -92,50 +105,74 @@ std::string Stem(const std::string& file_name)
 
 std::string NormalizeId(std::string value)
 {
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-        if (std::isalnum(c)) return static_cast<char>(std::tolower(c));
-        return '-';
-    });
-    value.erase(std::unique(value.begin(), value.end(), [](char a, char b) {
-        return a == '-' && b == '-';
-    }), value.end());
-    while (!value.empty() && value.front() == '-') value.erase(value.begin());
-    while (!value.empty() && value.back() == '-') value.pop_back();
+    std::transform(value.begin(),
+                   value.end(),
+                   value.begin(),
+                   [](unsigned char c)
+                   {
+                       if (std::isalnum(c))
+                           return static_cast<char>(std::tolower(c));
+                       return '-';
+                   });
+    value.erase(std::unique(value.begin(),
+                            value.end(),
+                            [](char a, char b)
+                            {
+                                return a == '-' && b == '-';
+                            }),
+                value.end());
+    while (!value.empty() && value.front() == '-')
+        value.erase(value.begin());
+    while (!value.empty() && value.back() == '-')
+        value.pop_back();
     return value.empty() ? "imported-source" : value;
 }
 
 std::string NormalizePathSegment(std::string value, const std::string& fallback)
 {
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-        if (std::isalnum(c) || c == '.' || c == '_' || c == '-') {
-            return static_cast<char>(c);
-        }
-        return '-';
-    });
-    value.erase(std::unique(value.begin(), value.end(), [](char a, char b) {
-        return a == '-' && b == '-';
-    }), value.end());
-    while (!value.empty() && (value.front() == '.' || value.front() == '-' || value.front() == '_')) {
+    std::transform(value.begin(),
+                   value.end(),
+                   value.begin(),
+                   [](unsigned char c)
+                   {
+                       if (std::isalnum(c) || c == '.' || c == '_' || c == '-')
+                       {
+                           return static_cast<char>(c);
+                       }
+                       return '-';
+                   });
+    value.erase(std::unique(value.begin(),
+                            value.end(),
+                            [](char a, char b)
+                            {
+                                return a == '-' && b == '-';
+                            }),
+                value.end());
+    while (!value.empty() && (value.front() == '.' || value.front() == '-' || value.front() == '_'))
+    {
         value.erase(value.begin());
     }
-    while (!value.empty() && (value.back() == '.' || value.back() == '-' || value.back() == '_')) {
+    while (!value.empty() && (value.back() == '.' || value.back() == '-' || value.back() == '_'))
+    {
         value.pop_back();
     }
     return value.empty() ? fallback : value;
 }
 
-bool LooksLikeJavaScript(const std::string& file_name,
-                         const std::string& manifest_json,
-                         const std::string& binary)
+bool LooksLikeJavaScript(const std::string& file_name, const std::string& manifest_json, const std::string& binary)
 {
-    if (EndsWithCaseInsensitive(file_name, ".js")) {
+    if (EndsWithCaseInsensitive(file_name, ".js"))
+    {
         return true;
     }
-    if (!manifest_json.empty()) {
+    if (!manifest_json.empty())
+    {
         JsonValue manifest;
-        if (json::glaze_parse(manifest, manifest_json)) {
+        if (json::glaze_parse(manifest, manifest_json))
+        {
             const std::string format = json::glaze_safe_get<std::string>(manifest, "format", "");
-            if (format == "source-js" || format == "javascript") {
+            if (format == "source-js" || format == "javascript")
+            {
                 return true;
             }
         }
@@ -186,13 +223,16 @@ R18SourceRecord FromJson(const JsonValue& item)
 
 std::string StringValue(const JsonValue& value)
 {
-    if (value.isString()) {
+    if (value.isString())
+    {
         return value.asString();
     }
-    if (value.isNumber()) {
+    if (value.isNumber())
+    {
         return std::to_string(value.asInt64());
     }
-    if (value.isBool()) {
+    if (value.isBool())
+    {
         return value.asBool() ? "true" : "false";
     }
     return "";
@@ -200,7 +240,8 @@ std::string StringValue(const JsonValue& value)
 
 std::string FieldString(const JsonValue& object, const std::string& key, const std::string& fallback = "")
 {
-    if (!object.isObject() || !json::glaze_has_key(object, key)) {
+    if (!object.isObject() || !json::glaze_has_key(object, key))
+    {
         return fallback;
     }
     const std::string value = StringValue(json::glaze_get(object, key));
@@ -209,17 +250,23 @@ std::string FieldString(const JsonValue& object, const std::string& key, const s
 
 int64_t FieldInt(const JsonValue& object, const std::string& key, int64_t fallback = 0)
 {
-    if (!object.isObject() || !json::glaze_has_key(object, key)) {
+    if (!object.isObject() || !json::glaze_has_key(object, key))
+    {
         return fallback;
     }
     const JsonValue value = json::glaze_get(object, key);
-    if (value.isNumber()) {
+    if (value.isNumber())
+    {
         return value.asInt64();
     }
-    if (value.isString()) {
-        try {
+    if (value.isString())
+    {
+        try
+        {
             return std::stoll(value.asString());
-        } catch (...) {
+        }
+        catch (...)
+        {
             return fallback;
         }
     }
@@ -230,28 +277,28 @@ std::string UrlEncode(const std::string& input)
 {
     std::ostringstream out;
     out << std::hex << std::uppercase;
-    for (unsigned char c : input) {
-        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+    for (unsigned char c : input)
+    {
+        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~')
+        {
             out << static_cast<char>(c);
-        } else {
+        }
+        else
+        {
             out << '%' << std::setw(2) << std::setfill('0') << static_cast<int>(c);
         }
     }
     return out.str();
 }
 
-std::string ImageProxyUrl(int uid,
-                          const std::string& token,
-                          const std::string& source_id,
-                          const std::string& image_url)
+std::string ImageProxyUrl(int uid, const std::string& token, const std::string& source_id, const std::string& image_url)
 {
-    if (image_url.empty()) {
+    if (image_url.empty())
+    {
         return "";
     }
-    return "/api/r18/image?uid=" + std::to_string(uid) +
-           "&token=" + UrlEncode(token) +
-           "&source_id=" + UrlEncode(source_id) +
-           "&image_url=" + UrlEncode(image_url);
+    return "/api/r18/image?uid=" + std::to_string(uid) + "&token=" + UrlEncode(token) +
+           "&source_id=" + UrlEncode(source_id) + "&image_url=" + UrlEncode(image_url);
 }
 
 std::string JmCoverUrl(const std::string& id)
@@ -266,18 +313,27 @@ std::string JmImageUrl(const std::string& id, const std::string& image_name)
 
 bool IsAllowedJmImageUrl(const std::string& image_url)
 {
-    try {
+    try
+    {
         ParsedUrl parsed = ParseUrl(image_url);
-        std::transform(parsed.scheme.begin(), parsed.scheme.end(), parsed.scheme.begin(), [](unsigned char c) {
-            return static_cast<char>(std::tolower(c));
-        });
-        std::transform(parsed.host.begin(), parsed.host.end(), parsed.host.begin(), [](unsigned char c) {
-            return static_cast<char>(std::tolower(c));
-        });
-        return parsed.scheme == "https" &&
-               parsed.host == kJmImageHost &&
-               parsed.target.rfind("/media/", 0) == 0;
-    } catch (...) {
+        std::transform(parsed.scheme.begin(),
+                       parsed.scheme.end(),
+                       parsed.scheme.begin(),
+                       [](unsigned char c)
+                       {
+                           return static_cast<char>(std::tolower(c));
+                       });
+        std::transform(parsed.host.begin(),
+                       parsed.host.end(),
+                       parsed.host.begin(),
+                       [](unsigned char c)
+                       {
+                           return static_cast<char>(std::tolower(c));
+                       });
+        return parsed.scheme == "https" && parsed.host == kJmImageHost && parsed.target.rfind("/media/", 0) == 0;
+    }
+    catch (...)
+    {
         return false;
     }
 }
@@ -285,8 +341,10 @@ bool IsAllowedJmImageUrl(const std::string& image_url)
 JsonValue MakeTags(const std::vector<std::string>& tags)
 {
     JsonValue arr{json::array_t{}};
-    for (const auto& tag : tags) {
-        if (!tag.empty()) {
+    for (const auto& tag : tags)
+    {
+        if (!tag.empty())
+        {
             json::glaze_append(arr, tag);
         }
     }
@@ -317,32 +375,37 @@ JsonValue JmComicToJson(const JsonValue& comic, int uid, const std::string& toke
 ParsedUrl ParseUrl(const std::string& url)
 {
     const auto scheme_end = url.find("://");
-    if (scheme_end == std::string::npos) {
+    if (scheme_end == std::string::npos)
+    {
         throw std::runtime_error("URL missing scheme");
     }
     ParsedUrl parsed;
     parsed.scheme = url.substr(0, scheme_end);
     const auto authority_begin = scheme_end + 3;
     const auto path_begin = url.find('/', authority_begin);
-    std::string authority = path_begin == std::string::npos
-        ? url.substr(authority_begin)
-        : url.substr(authority_begin, path_begin - authority_begin);
+    std::string authority = path_begin == std::string::npos ? url.substr(authority_begin)
+                                                            : url.substr(authority_begin, path_begin - authority_begin);
     parsed.target = path_begin == std::string::npos ? "/" : url.substr(path_begin);
     const auto port_pos = authority.rfind(':');
-    if (port_pos != std::string::npos && authority.find(']') == std::string::npos) {
+    if (port_pos != std::string::npos && authority.find(']') == std::string::npos)
+    {
         parsed.host = authority.substr(0, port_pos);
         parsed.port = authority.substr(port_pos + 1);
-    } else {
+    }
+    else
+    {
         parsed.host = authority;
         parsed.port = parsed.scheme == "https" ? "443" : "80";
     }
-    if (parsed.host.empty()) {
+    if (parsed.host.empty())
+    {
         throw std::runtime_error("URL missing host");
     }
     return parsed;
 }
 
-struct HttpResult {
+struct HttpResult
+{
     int status = 0;
     std::string content_type;
     std::string body;
@@ -364,25 +427,41 @@ std::string EscapeXml(std::string value)
 {
     std::string escaped;
     escaped.reserve(value.size());
-    for (char ch : value) {
-        switch (ch) {
-        case '&': escaped += "&amp;"; break;
-        case '<': escaped += "&lt;"; break;
-        case '>': escaped += "&gt;"; break;
-        case '"': escaped += "&quot;"; break;
-        case '\'': escaped += "&apos;"; break;
-        default: escaped.push_back(ch); break;
+    for (char ch : value)
+    {
+        switch (ch)
+        {
+            case '&':
+                escaped += "&amp;";
+                break;
+            case '<':
+                escaped += "&lt;";
+                break;
+            case '>':
+                escaped += "&gt;";
+                break;
+            case '"':
+                escaped += "&quot;";
+                break;
+            case '\'':
+                escaped += "&apos;";
+                break;
+            default:
+                escaped.push_back(ch);
+                break;
         }
     }
     return escaped;
 }
 
-class JmImageFetchSlot {
+class JmImageFetchSlot
+{
 public:
     JmImageFetchSlot()
     {
         std::lock_guard<std::mutex> lock(JmImageFetchMutex());
-        if (JmImageFetchCount() < kMaxConcurrentJmImageFetches) {
+        if (JmImageFetchCount() < kMaxConcurrentJmImageFetches)
+        {
             ++JmImageFetchCount();
             acquired_ = true;
         }
@@ -390,14 +469,18 @@ public:
 
     ~JmImageFetchSlot()
     {
-        if (!acquired_) {
+        if (!acquired_)
+        {
             return;
         }
         std::lock_guard<std::mutex> lock(JmImageFetchMutex());
         --JmImageFetchCount();
     }
 
-    bool acquired() const { return acquired_; }
+    bool acquired() const
+    {
+        return acquired_;
+    }
 
 private:
     bool acquired_ = false;
@@ -410,14 +493,15 @@ R18ImagePayload PlaceholderImage(const std::string& line1, const std::string& li
     std::ostringstream svg;
     svg << "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"720\" height=\"1080\" viewBox=\"0 0 720 1080\">"
         << "<rect width=\"720\" height=\"1080\" fill=\"#201923\"/>"
-        << "<rect x=\"48\" y=\"48\" width=\"624\" height=\"984\" rx=\"18\" fill=\"#2f2734\" stroke=\"#f2a7c5\" stroke-width=\"3\"/>"
+        << "<rect x=\"48\" y=\"48\" width=\"624\" height=\"984\" rx=\"18\" fill=\"#2f2734\" stroke=\"#f2a7c5\" "
+           "stroke-width=\"3\"/>"
         << "<text x=\"360\" y=\"500\" fill=\"#f8dce7\" font-size=\"36\" text-anchor=\"middle\" font-family=\"Arial\">"
-        << safe_line1
-        << "</text>";
-    if (!safe_line2.empty()) {
-        svg << "<text x=\"360\" y=\"558\" fill=\"#d6bac6\" font-size=\"22\" text-anchor=\"middle\" font-family=\"Arial\">"
-            << safe_line2
-            << "</text>";
+        << safe_line1 << "</text>";
+    if (!safe_line2.empty())
+    {
+        svg << "<text x=\"360\" y=\"558\" fill=\"#d6bac6\" font-size=\"22\" text-anchor=\"middle\" "
+               "font-family=\"Arial\">"
+            << safe_line2 << "</text>";
     }
     svg << "</svg>";
     R18ImagePayload payload;
@@ -426,25 +510,27 @@ R18ImagePayload PlaceholderImage(const std::string& line1, const std::string& li
     return payload;
 }
 
-bool ReadCachedImage(const std::filesystem::path& cache_root,
-                     const std::string& cache_key,
-                     R18ImagePayload* payload)
+bool ReadCachedImage(const std::filesystem::path& cache_root, const std::string& cache_key, R18ImagePayload* payload)
 {
     const auto body_path = cache_root / (cache_key + ".bin");
     const auto meta_path = cache_root / (cache_key + ".meta");
     std::ifstream body_in(body_path, std::ios::binary);
-    if (!body_in.is_open()) {
+    if (!body_in.is_open())
+    {
         return false;
     }
     payload->body.assign(std::istreambuf_iterator<char>(body_in), std::istreambuf_iterator<char>());
-    if (payload->body.empty()) {
+    if (payload->body.empty())
+    {
         return false;
     }
     std::ifstream meta_in(meta_path, std::ios::binary);
-    if (meta_in.is_open()) {
+    if (meta_in.is_open())
+    {
         std::getline(meta_in, payload->content_type);
     }
-    if (payload->content_type.empty()) {
+    if (payload->content_type.empty())
+    {
         payload->content_type = "image/jpeg";
     }
     return true;
@@ -456,16 +542,19 @@ void WriteCachedImage(const std::filesystem::path& cache_root,
 {
     std::error_code ec;
     std::filesystem::create_directories(cache_root, ec);
-    if (ec) {
+    if (ec)
+    {
         return;
     }
     std::ofstream body_out(cache_root / (cache_key + ".bin"), std::ios::binary | std::ios::trunc);
-    if (!body_out.is_open()) {
+    if (!body_out.is_open())
+    {
         return;
     }
     body_out.write(payload.body.data(), static_cast<std::streamsize>(payload.body.size()));
     std::ofstream meta_out(cache_root / (cache_key + ".meta"), std::ios::binary | std::ios::trunc);
-    if (meta_out.is_open()) {
+    if (meta_out.is_open())
+    {
         meta_out << payload.content_type;
     }
 }
@@ -482,17 +571,20 @@ HttpResult HttpGet(const std::string& url,
     req.set(http::field::host, parsed.host);
     req.set(http::field::user_agent, kJmUserAgent);
     req.set(http::field::accept_encoding, "identity");
-    for (const auto& [key, value] : headers) {
+    for (const auto& [key, value] : headers)
+    {
         req.set(key, value);
     }
 
     beast::flat_buffer buffer;
     http::response<http::string_body> res;
-    if (parsed.scheme == "https") {
+    if (parsed.scheme == "https")
+    {
         ssl::context ctx(ssl::context::tls_client);
         ctx.set_verify_mode(ssl::verify_none);
         beast::ssl_stream<beast::tcp_stream> stream(ioc, ctx);
-        if (!SSL_set_tlsext_host_name(stream.native_handle(), parsed.host.c_str())) {
+        if (!SSL_set_tlsext_host_name(stream.native_handle(), parsed.host.c_str()))
+        {
             throw std::runtime_error("failed to set TLS SNI host");
         }
         beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(timeout_seconds));
@@ -503,7 +595,9 @@ HttpResult HttpGet(const std::string& url,
         http::read(stream, buffer, res);
         beast::error_code ec;
         stream.shutdown(ec);
-    } else if (parsed.scheme == "http") {
+    }
+    else if (parsed.scheme == "http")
+    {
         beast::tcp_stream stream(ioc);
         stream.expires_after(std::chrono::seconds(timeout_seconds));
         stream.connect(resolver.resolve(parsed.host, parsed.port));
@@ -512,7 +606,9 @@ HttpResult HttpGet(const std::string& url,
         http::read(stream, buffer, res);
         beast::error_code ec;
         stream.socket().shutdown(tcp::socket::shutdown_both, ec);
-    } else {
+    }
+    else
+    {
         throw std::runtime_error("unsupported URL scheme");
     }
 
@@ -520,7 +616,8 @@ HttpResult HttpGet(const std::string& url,
     result.status = res.result_int();
     result.body = std::move(res.body());
     auto ct = res.find(http::field::content_type);
-    if (ct != res.end()) {
+    if (ct != res.end())
+    {
         result.content_type.assign(ct->value().data(), ct->value().size());
     }
     return result;
@@ -531,19 +628,22 @@ std::string Md5Hex(const std::string& input)
     std::array<unsigned char, EVP_MAX_MD_SIZE> digest{};
     unsigned int digest_len = 0;
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
-    if (!ctx) {
+    if (!ctx)
+    {
         throw std::runtime_error("EVP_MD_CTX_new failed");
     }
     const bool ok = EVP_DigestInit_ex(ctx, EVP_md5(), nullptr) == 1 &&
                     EVP_DigestUpdate(ctx, input.data(), input.size()) == 1 &&
                     EVP_DigestFinal_ex(ctx, digest.data(), &digest_len) == 1;
     EVP_MD_CTX_free(ctx);
-    if (!ok) {
+    if (!ok)
+    {
         throw std::runtime_error("MD5 failed");
     }
     std::ostringstream out;
     out << std::hex << std::setfill('0');
-    for (unsigned int i = 0; i < digest_len; ++i) {
+    for (unsigned int i = 0; i < digest_len; ++i)
+    {
         out << std::setw(2) << static_cast<int>(digest[i]);
     }
     return out.str();
@@ -552,7 +652,8 @@ std::string Md5Hex(const std::string& input)
 std::string Aes256EcbDecrypt(const std::string& cipher_text, const std::string& key)
 {
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) {
+    if (!ctx)
+    {
         throw std::runtime_error("EVP_CIPHER_CTX_new failed");
     }
     std::vector<unsigned char> out(cipher_text.size() + EVP_MAX_BLOCK_LENGTH);
@@ -571,7 +672,8 @@ std::string Aes256EcbDecrypt(const std::string& cipher_text, const std::string& 
                                       static_cast<int>(cipher_text.size())) == 1 &&
                     EVP_DecryptFinal_ex(ctx, out.data() + out_len_1, &out_len_2) == 1;
     EVP_CIPHER_CTX_free(ctx);
-    if (!ok) {
+    if (!ok)
+    {
         throw std::runtime_error("AES decrypt failed");
     }
     return std::string(reinterpret_cast<char*>(out.data()), static_cast<std::size_t>(out_len_1 + out_len_2));
@@ -581,7 +683,8 @@ std::string TrimJsonPayload(const std::string& value)
 {
     const auto start = value.find_first_of("[{");
     const auto end = value.find_last_of("]}");
-    if (start == std::string::npos || end == std::string::npos || end < start) {
+    if (start == std::string::npos || end == std::string::npos || end < start)
+    {
         throw std::runtime_error("decrypted payload is not JSON");
     }
     return value.substr(start, end - start + 1);
@@ -614,39 +717,48 @@ JsonValue JmApiGet(const std::string& target)
     const auto now = std::chrono::system_clock::now();
     const auto unix_time = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
     std::string last_error;
-    for (const auto& host : kJmApiHosts) {
-        try {
+    for (const auto& host : kJmApiHosts)
+    {
+        try
+        {
             const std::string url = "https://" + host + target;
             const HttpResult response = HttpGet(url, JmApiHeaders(unix_time), kJmApiTimeoutSeconds);
-            if (response.status != 200) {
+            if (response.status != 200)
+            {
                 last_error = host + " HTTP " + std::to_string(response.status);
                 continue;
             }
 
             JsonValue encrypted_root;
-            if (!json::glaze_parse(encrypted_root, response.body)) {
+            if (!json::glaze_parse(encrypted_root, response.body))
+            {
                 last_error = host + " returned invalid JSON";
                 continue;
             }
             const std::string encrypted_data = json::glaze_safe_get<std::string>(encrypted_root, "data", "");
-            if (encrypted_data.empty()) {
+            if (encrypted_data.empty())
+            {
                 last_error = host + " returned empty encrypted payload";
                 continue;
             }
             std::string cipher_text;
-            if (!DecodeBase64(encrypted_data, cipher_text)) {
+            if (!DecodeBase64(encrypted_data, cipher_text))
+            {
                 last_error = host + " returned invalid base64 payload";
                 continue;
             }
             const std::string key = Md5Hex(std::to_string(unix_time) + "185Hcomic3PAPP7R");
             const std::string clear = TrimJsonPayload(Aes256EcbDecrypt(cipher_text, key));
             JsonValue result;
-            if (!json::glaze_parse(result, clear)) {
+            if (!json::glaze_parse(result, clear))
+            {
                 last_error = host + " decrypted payload parse failed";
                 continue;
             }
             return result;
-        } catch (const std::exception& exc) {
+        }
+        catch (const std::exception& exc)
+        {
             last_error = host + ": " + exc.what();
         }
     }
@@ -677,7 +789,8 @@ JsonValue JmSearch(const std::string& keyword, int page, int uid, const std::str
     const int normalized_page = page < 1 ? 1 : page;
     const std::string normalized_keyword = keyword.empty() ? "" : UrlEncode(keyword);
     std::string target = "/search?search_query=" + normalized_keyword + "&o=mr";
-    if (normalized_page > 1) {
+    if (normalized_page > 1)
+    {
         target += "&page=" + std::to_string(normalized_page);
     }
     const JsonValue result = JmApiGet(target);
@@ -687,13 +800,17 @@ JsonValue JmSearch(const std::string& keyword, int page, int uid, const std::str
     data["keyword"] = keyword;
     data["page"] = normalized_page;
     data["items"] = JsonValue{json::array_t{}};
-    data["max_page"] = static_cast<int64_t>((FieldInt(result, "total", 0) + kR18SearchPageSize - 1) / kR18SearchPageSize);
+    data["max_page"] =
+        static_cast<int64_t>((FieldInt(result, "total", 0) + kR18SearchPageSize - 1) / kR18SearchPageSize);
 
     const JsonValue content = json::glaze_get(result, "content");
-    if (const auto* items = json::glaze_get_array(content)) {
+    if (const auto* items = json::glaze_get_array(content))
+    {
         int count = 0;
-        for (const auto& entry : *items) {
-            if (count >= kR18SearchPageSize) {
+        for (const auto& entry : *items)
+        {
+            if (count >= kR18SearchPageSize)
+            {
                 break;
             }
             json::glaze_append(data["items"], JmComicToJson(JsonValue(entry), uid, token));
@@ -706,7 +823,8 @@ JsonValue JmSearch(const std::string& keyword, int page, int uid, const std::str
 JsonValue JmDetail(const std::string& comic_id, int uid, const std::string& token)
 {
     std::string id = comic_id;
-    if (id.rfind("jm", 0) == 0) {
+    if (id.rfind("jm", 0) == 0)
+    {
         id = id.substr(2);
     }
     const JsonValue result = JmApiGet("/album?id=" + UrlEncode(id));
@@ -724,15 +842,21 @@ JsonValue JmDetail(const std::string& comic_id, int uid, const std::string& toke
 
     std::vector<JsonValue> chapters;
     const JsonValue series = json::glaze_get(result, "series");
-    if (const auto* arr = json::glaze_get_array(series)) {
-        for (const auto& entry : *arr) {
+    if (const auto* arr = json::glaze_get_array(series))
+    {
+        for (const auto& entry : *arr)
+        {
             chapters.emplace_back(entry);
         }
-        std::sort(chapters.begin(), chapters.end(), [](const JsonValue& a, const JsonValue& b) {
-            return FieldInt(a, "sort", 0) < FieldInt(b, "sort", 0);
-        });
+        std::sort(chapters.begin(),
+                  chapters.end(),
+                  [](const JsonValue& a, const JsonValue& b)
+                  {
+                      return FieldInt(a, "sort", 0) < FieldInt(b, "sort", 0);
+                  });
     }
-    if (chapters.empty()) {
+    if (chapters.empty())
+    {
         JsonValue chapter;
         chapter["source_id"] = kJmSourceId;
         chapter["comic_id"] = id;
@@ -740,13 +864,17 @@ JsonValue JmDetail(const std::string& comic_id, int uid, const std::string& toke
         chapter["title"] = "第1話";
         chapter["order"] = 1;
         json::glaze_append(data["chapters"], chapter);
-    } else {
+    }
+    else
+    {
         int order = 1;
-        for (const auto& entry : chapters) {
+        for (const auto& entry : chapters)
+        {
             JsonValue chapter;
             const std::string chapter_id = FieldString(entry, "id", id);
             std::string title = FieldString(entry, "name");
-            if (title.empty()) {
+            if (title.empty())
+            {
                 title = "第" + std::to_string(FieldInt(entry, "sort", order)) + "話";
             }
             chapter["source_id"] = kJmSourceId;
@@ -770,8 +898,10 @@ JsonValue JmPages(const std::string& chapter_id, int uid, const std::string& tok
 
     const JsonValue images = json::glaze_get(result, "images");
     int index = 1;
-    if (const auto* arr = json::glaze_get_array(images)) {
-        for (const auto& entry : *arr) {
+    if (const auto* arr = json::glaze_get_array(images))
+    {
+        for (const auto& entry : *arr)
+        {
             const std::string image_name = StringValue(JsonValue(entry));
             JsonValue page;
             page["index"] = index;
@@ -814,16 +944,20 @@ JsonValue R18SourceService::ListSources()
     InstallBuiltinSourcesLocked();
     LoadLocked();
     JsonValue arr{json::array_t{}};
-    const auto append_source = [this, &arr](const std::string& id) {
+    const auto append_source = [this, &arr](const std::string& id)
+    {
         const auto it = sources_.find(id);
-        if (it != sources_.end()) {
+        if (it != sources_.end())
+        {
             json::glaze_append(arr, ToJson(it->second));
         }
     };
     append_source(kJmSourceId);
     append_source(kMockSourceId);
-    for (const auto& [id, source] : sources_) {
-        if (id != kJmSourceId && id != kMockSourceId) {
+    for (const auto& [id, source] : sources_)
+    {
+        if (id != kJmSourceId && id != kMockSourceId)
+        {
             json::glaze_append(arr, ToJson(source));
         }
     }
@@ -836,8 +970,10 @@ bool R18SourceService::EnableSource(const std::string& id, bool enabled, std::st
     InstallBuiltinSourcesLocked();
     LoadLocked();
     auto it = sources_.find(id);
-    if (it == sources_.end()) {
-        if (error) *error = "source not found";
+    if (it == sources_.end())
+    {
+        if (error)
+            *error = "source not found";
         return false;
     }
     it->second.enabled = enabled;
@@ -855,14 +991,18 @@ R18SourceRecord R18SourceService::ImportZip(const std::string& file_name,
     LoadLocked();
     const bool zip_payload = binary.size() >= 4 && binary[0] == 'P' && binary[1] == 'K';
     const bool js_payload = LooksLikeJavaScript(file_name, manifest_json, binary);
-    if (!zip_payload && !js_payload) {
-        if (error) *error = "plugin package must be a zip file or JavaScript source";
+    if (!zip_payload && !js_payload)
+    {
+        if (error)
+            *error = "plugin package must be a zip file or JavaScript source";
         return {};
     }
 
     JsonValue manifest;
-    if (!manifest_json.empty() && !json::glaze_parse(manifest, manifest_json)) {
-        if (error) *error = "manifest_json is invalid";
+    if (!manifest_json.empty() && !json::glaze_parse(manifest, manifest_json))
+    {
+        if (error)
+            *error = "manifest_json is invalid";
         return {};
     }
 
@@ -879,35 +1019,43 @@ R18SourceRecord R18SourceService::ImportZip(const std::string& file_name,
     rec.enabled = false;
     rec.builtin = false;
     rec.status = js_payload ? "staged-js" : "staged";
-    rec.message = js_payload
-        ? "JavaScript source saved. Execution requires a MemoChat source runtime adapter."
-        : "Package staged. Build/unpack validation is handled by the plugin host deployment step.";
+    rec.message = js_payload ? "JavaScript source saved. Execution requires a MemoChat source runtime adapter."
+                             : "Package staged. Build/unpack validation is handled by the plugin host deployment step.";
 
-    if (rec.id.empty()) {
-        if (error) *error = "source id is empty";
+    if (rec.id.empty())
+    {
+        if (error)
+            *error = "source id is empty";
         return {};
     }
-    if (IsBuiltinSourceId(rec.id)) {
-        if (error) *error = "source id is reserved for a built-in adapter";
+    if (IsBuiltinSourceId(rec.id))
+    {
+        if (error)
+            *error = "source id is reserved for a built-in adapter";
         return {};
     }
 
     const auto dir = data_root_ / rec.id / rec.version;
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
-    if (ec) {
-        if (error) *error = "failed to create source directory";
+    if (ec)
+    {
+        if (error)
+            *error = "failed to create source directory";
         return {};
     }
     const auto source_path = dir / (js_payload ? "source.js" : "source.zip");
     std::ofstream out(source_path, std::ios::binary | std::ios::trunc);
-    if (!out.is_open()) {
-        if (error) *error = "failed to persist source package";
+    if (!out.is_open())
+    {
+        if (error)
+            *error = "failed to persist source package";
         return {};
     }
     out.write(binary.data(), static_cast<std::streamsize>(binary.size()));
     out.close();
-    if (!manifest_json.empty()) {
+    if (!manifest_json.empty())
+    {
         std::ofstream manifest_out(dir / "manifest.json", std::ios::binary | std::ios::trunc);
         manifest_out << manifest_json;
     }
@@ -924,10 +1072,14 @@ JsonValue R18SourceService::Search(const std::string& source_id,
                                    int uid,
                                    const std::string& token)
 {
-    if (source_id == kJmSourceId) {
-        try {
+    if (source_id == kJmSourceId)
+    {
+        try
+        {
             return JmSearch(keyword, page < 1 ? 1 : page, uid, token);
-        } catch (const std::exception& exc) {
+        }
+        catch (const std::exception& exc)
+        {
             return ErrorData(kJmSourceId, exc.what());
         }
     }
@@ -952,15 +1104,17 @@ JsonValue R18SourceService::Search(const std::string& source_id,
     return data;
 }
 
-JsonValue R18SourceService::Detail(const std::string& source_id,
-                                   const std::string& comic_id,
-                                   int uid,
-                                   const std::string& token)
+JsonValue
+R18SourceService::Detail(const std::string& source_id, const std::string& comic_id, int uid, const std::string& token)
 {
-    if (source_id == kJmSourceId) {
-        try {
+    if (source_id == kJmSourceId)
+    {
+        try
+        {
             return JmDetail(comic_id, uid, token);
-        } catch (const std::exception& exc) {
+        }
+        catch (const std::exception& exc)
+        {
             JsonValue data;
             data["source_id"] = kJmSourceId;
             data["comic_id"] = comic_id;
@@ -981,7 +1135,8 @@ JsonValue R18SourceService::Detail(const std::string& source_id,
     data["cover"] = "/api/r18/image?uid=" + std::to_string(uid) + "&token=" + UrlEncode(token) +
                     "&source_id=" + UrlEncode(source_id) + "&image_id=cover";
     data["chapters"] = JsonValue{json::array_t{}};
-    for (int i = 1; i <= 3; ++i) {
+    for (int i = 1; i <= 3; ++i)
+    {
         JsonValue ch;
         ch["source_id"] = source_id;
         ch["comic_id"] = comic_id;
@@ -993,15 +1148,17 @@ JsonValue R18SourceService::Detail(const std::string& source_id,
     return data;
 }
 
-JsonValue R18SourceService::Pages(const std::string& source_id,
-                                  const std::string& chapter_id,
-                                  int uid,
-                                  const std::string& token)
+JsonValue
+R18SourceService::Pages(const std::string& source_id, const std::string& chapter_id, int uid, const std::string& token)
 {
-    if (source_id == kJmSourceId) {
-        try {
+    if (source_id == kJmSourceId)
+    {
+        try
+        {
             return JmPages(chapter_id, uid, token);
-        } catch (const std::exception& exc) {
+        }
+        catch (const std::exception& exc)
+        {
             JsonValue data;
             data["source_id"] = kJmSourceId;
             data["chapter_id"] = chapter_id;
@@ -1015,12 +1172,14 @@ JsonValue R18SourceService::Pages(const std::string& source_id,
     data["source_id"] = source_id;
     data["chapter_id"] = chapter_id;
     data["pages"] = JsonValue{json::array_t{}};
-    for (int i = 1; i <= 5; ++i) {
+    for (int i = 1; i <= 5; ++i)
+    {
         JsonValue page;
         page["index"] = i;
         page["image_id"] = chapter_id + "-p" + std::to_string(i);
         page["url"] = "/api/r18/image?uid=" + std::to_string(uid) + "&token=" + UrlEncode(token) +
-                      "&source_id=" + UrlEncode(source_id) + "&image_id=" + UrlEncode(chapter_id + "-p" + std::to_string(i));
+                      "&source_id=" + UrlEncode(source_id) +
+                      "&image_id=" + UrlEncode(chapter_id + "-p" + std::to_string(i));
         json::glaze_append(data["pages"], page);
     }
     return data;
@@ -1028,17 +1187,21 @@ JsonValue R18SourceService::Pages(const std::string& source_id,
 
 R18ImagePayload R18SourceService::FetchImage(const std::string& source_id, const std::string& image_url)
 {
-    if (source_id == kJmSourceId && !image_url.empty()) {
-        if (!IsAllowedJmImageUrl(image_url)) {
+    if (source_id == kJmSourceId && !image_url.empty())
+    {
+        if (!IsAllowedJmImageUrl(image_url))
+        {
             throw std::runtime_error("image url is not an allowed JM media URL");
         }
         const std::string cache_key = Md5Hex(image_url);
         R18ImagePayload cached;
-        if (ReadCachedImage(image_cache_root_, cache_key, &cached)) {
+        if (ReadCachedImage(image_cache_root_, cache_key, &cached))
+        {
             return cached;
         }
         JmImageFetchSlot slot;
-        if (!slot.acquired()) {
+        if (!slot.acquired())
+        {
             return PlaceholderImage("JMComic cover queued", "scroll or refresh after images cache");
         }
         std::vector<std::pair<std::string, std::string>> headers = {
@@ -1052,9 +1215,11 @@ R18ImagePayload R18SourceService::FetchImage(const std::string& source_id, const
             {"User-Agent", kJmUserAgent},
             {"X-Requested-With", kJmPackageName},
         };
-        try {
+        try
+        {
             HttpResult result = HttpGet(image_url, headers, kJmImageTimeoutSeconds);
-            if (result.status < 200 || result.status >= 300 || result.body.empty()) {
+            if (result.status < 200 || result.status >= 300 || result.body.empty())
+            {
                 return PlaceholderImage("JMComic image unavailable", "HTTP " + std::to_string(result.status));
             }
             R18ImagePayload payload;
@@ -1062,7 +1227,9 @@ R18ImagePayload R18SourceService::FetchImage(const std::string& source_id, const
             payload.body = std::move(result.body);
             WriteCachedImage(image_cache_root_, cache_key, payload);
             return payload;
-        } catch (const std::exception& exc) {
+        }
+        catch (const std::exception& exc)
+        {
             return PlaceholderImage("JMComic image timeout", exc.what());
         }
     }
@@ -1076,7 +1243,8 @@ std::optional<R18SourceRecord> R18SourceService::SourceSnapshot(const std::strin
     InstallBuiltinSourcesLocked();
     LoadLocked();
     auto it = sources_.find(source_id);
-    if (it == sources_.end()) {
+    if (it == sources_.end())
+    {
         return std::nullopt;
     }
     return it->second;
@@ -1088,10 +1256,12 @@ void R18SourceService::LoadLocked()
     const bool has_shared_manifest = std::filesystem::exists(manifest_path);
     LoadManifestLocked(manifest_path);
     const auto legacy_root = std::filesystem::current_path() / "data" / "r18" / "sources";
-    if (!has_shared_manifest && legacy_root != data_root_) {
+    if (!has_shared_manifest && legacy_root != data_root_)
+    {
         const auto before = sources_.size();
         LoadManifestLocked(legacy_root / "sources.json");
-        if (sources_.size() != before) {
+        if (sources_.size() != before)
+        {
             SaveLocked();
         }
     }
@@ -1100,22 +1270,27 @@ void R18SourceService::LoadLocked()
 void R18SourceService::LoadManifestLocked(const std::filesystem::path& manifest_path)
 {
     std::ifstream in(manifest_path, std::ios::binary);
-    if (!in.is_open()) {
+    if (!in.is_open())
+    {
         return;
     }
     const std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     JsonValue root;
-    if (!json::glaze_parse(root, content)) {
+    if (!json::glaze_parse(root, content))
+    {
         return;
     }
     JsonValue sources = json::glaze_get(root, "sources");
     auto arr = json::glaze_get_array(sources);
-    if (!arr) {
+    if (!arr)
+    {
         return;
     }
-    for (const auto& item_json : *arr) {
+    for (const auto& item_json : *arr)
+    {
         const R18SourceRecord rec = FromJson(JsonValue(item_json));
-        if (!rec.id.empty() && !rec.builtin && !IsBuiltinSourceId(rec.id)) {
+        if (!rec.id.empty() && !rec.builtin && !IsBuiltinSourceId(rec.id))
+        {
             sources_[rec.id] = rec;
         }
     }
@@ -1125,8 +1300,10 @@ void R18SourceService::SaveLocked()
 {
     JsonValue root;
     root["sources"] = JsonValue{json::array_t{}};
-    for (const auto& [_, source] : sources_) {
-        if (!source.builtin) {
+    for (const auto& [_, source] : sources_)
+    {
+        if (!source.builtin)
+        {
             json::glaze_append(root["sources"], ToJson(source));
         }
     }
@@ -1139,24 +1316,31 @@ bool DecodeBase64(const std::string& input, std::string& out)
     static constexpr unsigned char kInvalid = 255;
     unsigned char table[256];
     std::fill(std::begin(table), std::end(table), kInvalid);
-    for (int i = 0; i < 26; ++i) {
+    for (int i = 0; i < 26; ++i)
+    {
         table[static_cast<unsigned char>('A' + i)] = static_cast<unsigned char>(i);
         table[static_cast<unsigned char>('a' + i)] = static_cast<unsigned char>(26 + i);
     }
-    for (int i = 0; i < 10; ++i) table[static_cast<unsigned char>('0' + i)] = static_cast<unsigned char>(52 + i);
+    for (int i = 0; i < 10; ++i)
+        table[static_cast<unsigned char>('0' + i)] = static_cast<unsigned char>(52 + i);
     table[static_cast<unsigned char>('+')] = 62;
     table[static_cast<unsigned char>('/')] = 63;
 
     out.clear();
     int val = 0;
     int bits = -8;
-    for (unsigned char c : input) {
-        if (std::isspace(c)) continue;
-        if (c == '=') break;
-        if (table[c] == kInvalid) return false;
+    for (unsigned char c : input)
+    {
+        if (std::isspace(c))
+            continue;
+        if (c == '=')
+            break;
+        if (table[c] == kInvalid)
+            return false;
         val = (val << 6) + table[c];
         bits += 6;
-        if (bits >= 0) {
+        if (bits >= 0)
+        {
             out.push_back(static_cast<char>((val >> bits) & 0xFF));
             bits -= 8;
         }

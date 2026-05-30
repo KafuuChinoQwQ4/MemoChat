@@ -10,7 +10,6 @@ from types import SimpleNamespace
 from typing import Any
 
 import structlog
-
 from config import settings
 from harness.contracts import AgentTask
 from harness.runtime.message_bus import AgentTaskBus

@@ -94,14 +94,20 @@ class PlanningPolicy:
         content = str(getattr(request, "content", "") or "")
         needs = {
             "web": skill.allow_web or action_counts["web_search"] > 0 or self._content_needs_web(content),
-            "knowledge": skill.allow_knowledge or action_counts["knowledge_search"] > 0 or self._content_needs_knowledge(content),
+            "knowledge": skill.allow_knowledge
+            or action_counts["knowledge_search"] > 0
+            or self._content_needs_knowledge(content),
             "calculation": action_counts["calculate"] > 0 or self._content_needs_calculation(content),
             "graph": skill.allow_graph or action_counts["graph_recall"] > 0 or self._content_needs_graph(content),
         }
         statuses = {
             "web": self._observation_status(self._observations_named(observations, "duckduckgo_search"), "web"),
-            "knowledge": self._observation_status(self._observations_named(observations, "knowledge_search"), "knowledge"),
-            "calculation": self._observation_status(self._observations_named(observations, "calculator"), "calculation"),
+            "knowledge": self._observation_status(
+                self._observations_named(observations, "knowledge_search"), "knowledge"
+            ),
+            "calculation": self._observation_status(
+                self._observations_named(observations, "calculator"), "calculation"
+            ),
             "graph": self._observation_status(self._observations_named(observations, "graph_recommender"), "graph"),
         }
         gaps: list[str] = []
@@ -149,7 +155,9 @@ class PlanningPolicy:
             "observation_count": len(observations),
         }
 
-    def _step_for_action(self, action: str, reason: str, request, skill: AgentSkill, followup: bool = False) -> PlanStep:
+    def _step_for_action(
+        self, action: str, reason: str, request, skill: AgentSkill, followup: bool = False
+    ) -> PlanStep:
         parameters: dict = {}
         if action == "web_search":
             parameters = {
@@ -316,16 +324,16 @@ class PlanningPolicy:
         memory_snapshot: MemorySnapshot,
         observations: list[ToolObservation],
     ) -> str:
-        observation_block = "\n".join(observation.to_summary() for observation in observations) if observations else "无"
+        observation_block = (
+            "\n".join(observation.to_summary() for observation in observations) if observations else "无"
+        )
         semantic_block = (
             json.dumps(memory_snapshot.semantic_profile, ensure_ascii=False)
             if memory_snapshot.semantic_profile
             else "{}"
         )
         graph_block = (
-            json.dumps(memory_snapshot.graph_context, ensure_ascii=False)
-            if memory_snapshot.graph_context
-            else "[]"
+            json.dumps(memory_snapshot.graph_context, ensure_ascii=False) if memory_snapshot.graph_context else "[]"
         )
         return (
             f"{settings.agent.system_prompt}\n\n"

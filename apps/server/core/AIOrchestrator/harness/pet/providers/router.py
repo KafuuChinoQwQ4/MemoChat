@@ -38,8 +38,7 @@ class ProviderChunk:
 class PetTextProvider(Protocol):
     name: str
 
-    async def generate(self, prompt: PetPromptContext) -> list[ProviderChunk]:
-        ...
+    async def generate(self, prompt: PetPromptContext) -> list[ProviderChunk]: ...
 
 
 class PetProviderRouter:

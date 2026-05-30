@@ -4,9 +4,11 @@
 #include <string_view>
 #include "json/GlazeCompat.h"
 
-namespace Http2AuthSupport {
+namespace Http2AuthSupport
+{
 
-struct LoginResult {
+struct LoginResult
+{
     int error = 0;
     std::string message;
     memochat::json::JsonValue data;

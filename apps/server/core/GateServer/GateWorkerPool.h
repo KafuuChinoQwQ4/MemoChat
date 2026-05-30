@@ -4,8 +4,10 @@
 #include <thread>
 #include "Singleton.h"
 
-class GateWorkerPool : public Singleton<GateWorkerPool> {
+class GateWorkerPool : public Singleton<GateWorkerPool>
+{
     friend class Singleton<GateWorkerPool>;
+
 public:
     explicit GateWorkerPool(std::size_t num_threads = 0);
     ~GateWorkerPool();
@@ -13,10 +15,13 @@ public:
     GateWorkerPool(const GateWorkerPool&) = delete;
     GateWorkerPool& operator=(const GateWorkerPool&) = delete;
 
-    boost::asio::thread_pool& pool() { return _pool; }
+    boost::asio::thread_pool& pool()
+    {
+        return _pool;
+    }
 
-    template<typename F>
-    void post(F&& handler) {
+    template <typename F> void post(F&& handler)
+    {
         boost::asio::post(_pool, std::forward<F>(handler));
     }
 

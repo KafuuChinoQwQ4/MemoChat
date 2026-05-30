@@ -2,8 +2,9 @@
 
 #include <string>
 
-namespace CertUtil {
+namespace CertUtil
+{
 
 bool GenerateSelfSignedCertPem(const std::string& crt_path, const std::string& key_path);
 
-}  // namespace CertUtil
+} // namespace CertUtil

@@ -7,7 +7,8 @@
 
 struct ApplyInfo;
 struct UserInfo;
-namespace chatusersupport {
+namespace chatusersupport
+{
 
 bool IsPureDigit(const std::string& str);
 void GetUserByUid(const std::string& uid_str, memochat::json::JsonValue& rtvalue);

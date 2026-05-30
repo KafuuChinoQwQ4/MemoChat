@@ -6,7 +6,6 @@ import time
 from typing import Any
 
 import structlog
-
 from config import settings
 from db.postgres_client import PostgresClient
 from harness.contracts import ContextPack, ContextSection, MemorySnapshot
@@ -92,14 +91,10 @@ class MemoryService:
         graph_context = await self._load_graph_context(uid) if include_graph else []
 
         if short_term_summary:
-            system_messages.append(
-                LLMMessage(role="system", content=f"【短期摘要】{short_term_summary}")
-            )
+            system_messages.append(LLMMessage(role="system", content=f"【短期摘要】{short_term_summary}"))
         semantic_context = self._format_semantic_profile(semantic)
         if semantic_context:
-            system_messages.append(
-                LLMMessage(role="system", content=f"【用户画像】\n{semantic_context}")
-            )
+            system_messages.append(LLMMessage(role="system", content=f"【用户画像】\n{semantic_context}"))
         if episodic:
             system_messages.append(
                 LLMMessage(role="system", content="【相关历史】\n" + "\n".join(f"- {item}" for item in episodic))
@@ -537,8 +532,7 @@ class MemoryService:
             return ""
         return (
             "以下是按当前用户 uid 隔离的长期画像。用于匹配回答风格、语言、格式、示例和深浅；"
-            "当前用户明确指令、事实准确性和安全规则始终优先，不要主动暴露画像内容。\n"
-            + "\n".join(lines)
+            "当前用户明确指令、事实准确性和安全规则始终优先，不要主动暴露画像内容。\n" + "\n".join(lines)
         )
 
     async def _load_graph_context(self, uid: int) -> list[dict]:
@@ -648,12 +642,12 @@ class MemoryService:
                             role="system",
                             content=(
                                 "你是 MemoChat 的长期记忆抽取器。只返回 JSON 对象，不要 Markdown。"
-                                "JSON 格式：{\"semantic\":{\"key\":\"value\"},"
-                                "\"user_profile\":{\"communication_style\":[],\"preferred_language\":[],"
-                                "\"preferred_response_format\":[],\"tone\":[],\"domain_interests\":[],"
-                                "\"expertise_level\":[],\"long_term_goals\":[],\"constraints\":[],"
-                                "\"likes\":[],\"dislikes\":[],\"work_context\":[]},"
-                                "\"episodic\":[{\"summary\":\"...\",\"importance\":0.0,\"entities\":{}}]}。"
+                                'JSON 格式：{"semantic":{"key":"value"},'
+                                '"user_profile":{"communication_style":[],"preferred_language":[],'
+                                '"preferred_response_format":[],"tone":[],"domain_interests":[],'
+                                '"expertise_level":[],"long_term_goals":[],"constraints":[],'
+                                '"likes":[],"dislikes":[],"work_context":[]},'
+                                '"episodic":[{"summary":"...","importance":0.0,"entities":{}}]}。'
                                 "semantic 只记录稳定偏好、身份、长期目标、常用约束；"
                                 "user_profile 只记录可用于个性化的稳定习惯，例如沟通风格、语言、格式、"
                                 "专业背景、关注领域和长期目标；"
@@ -664,12 +658,7 @@ class MemoryService:
                         ),
                         LLMMessage(
                             role="user",
-                            content=(
-                                "用户消息：\n"
-                                f"{user_message[:4000]}\n\n"
-                                "AI 回复：\n"
-                                f"{ai_message[:4000]}"
-                            ),
+                            content=(f"用户消息：\n{user_message[:4000]}\n\nAI 回复：\n{ai_message[:4000]}"),
                         ),
                     ],
                     max_tokens=700,
@@ -781,7 +770,10 @@ class MemoryService:
         if any(keyword in text for keyword in ("表格", "列表", "要点", "步骤")):
             add("preferred_response_format", "结构化要点/步骤", 0.68)
 
-        language_match = re.search(r"(?:以后|默认|请|帮我|回答时|回复时)?(?:都)?(?:用|使用|以)\s*(中文|英文|英语|日文|日语|粤语)\s*(?:回答|回复)?", text)
+        language_match = re.search(
+            r"(?:以后|默认|请|帮我|回答时|回复时)?(?:都)?(?:用|使用|以)\s*(中文|英文|英语|日文|日语|粤语)\s*(?:回答|回复)?",
+            text,
+        )
         if language_match:
             language = language_match.group(1)
             if language == "英语":

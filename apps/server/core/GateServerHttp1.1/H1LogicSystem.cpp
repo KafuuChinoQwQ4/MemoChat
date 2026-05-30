@@ -20,54 +20,64 @@ namespace http = beast::http;
 
 H1LogicSystem::H1LogicSystem()
 {
-    RegGet("/healthz", [](std::shared_ptr<H1Connection> connection) {
-        memochat::json::JsonValue root;
-        root["status"] = "ok";
-        root["service"] = "GateServerHttp1.1";
-        connection->_response.result(http::status::ok);
-        connection->_response.set(http::field::content_type, "application/json");
-        beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
-        return true;
-    });
+    RegGet("/healthz",
+           [](std::shared_ptr<H1Connection> connection)
+           {
+               memochat::json::JsonValue root;
+               root["status"] = "ok";
+               root["service"] = "GateServerHttp1.1";
+               connection->_response.result(http::status::ok);
+               connection->_response.set(http::field::content_type, "application/json");
+               beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
+               return true;
+           });
 
-    RegGet("/readyz", [](std::shared_ptr<H1Connection> connection) {
-        memochat::json::JsonValue root;
-        root["status"] = "ready";
-        root["service"] = "GateServerHttp1.1";
-        connection->_response.result(http::status::ok);
-        connection->_response.set(http::field::content_type, "application/json");
-        beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
-        return true;
-    });
+    RegGet("/readyz",
+           [](std::shared_ptr<H1Connection> connection)
+           {
+               memochat::json::JsonValue root;
+               root["status"] = "ready";
+               root["service"] = "GateServerHttp1.1";
+               connection->_response.result(http::status::ok);
+               connection->_response.set(http::field::content_type, "application/json");
+               beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
+               return true;
+           });
 
-    RegGet("/get_test", [](std::shared_ptr<H1Connection> connection) {
-        beast::ostream(connection->_response.body()) << "receive get_test req " << std::endl;
-        int i = 0;
-        for (auto& elem : connection->_get_params) {
-            ++i;
-            beast::ostream(connection->_response.body()) << "param" << i << " key is " << elem.first;
-            beast::ostream(connection->_response.body()) << ", value is " << elem.second << std::endl;
-        }
-        connection->_response.set(http::field::content_type, "text/plain");
-        return true;
-    });
+    RegGet("/get_test",
+           [](std::shared_ptr<H1Connection> connection)
+           {
+               beast::ostream(connection->_response.body()) << "receive get_test req " << std::endl;
+               int i = 0;
+               for (auto& elem : connection->_get_params)
+               {
+                   ++i;
+                   beast::ostream(connection->_response.body()) << "param" << i << " key is " << elem.first;
+                   beast::ostream(connection->_response.body()) << ", value is " << elem.second << std::endl;
+               }
+               connection->_response.set(http::field::content_type, "text/plain");
+               return true;
+           });
 
-    RegPost("/test_procedure", [](std::shared_ptr<H1Connection> connection) {
-        const auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
-        std::cout << "receive body is " << body_str << std::endl;
-        connection->_response.set(http::field::content_type, "text/json");
-        memochat::json::JsonValue root;
-        memochat::json::JsonValue src_root;
-        if (!reader_parse(body_str, src_root) || !src_root.isMember("email")) {
-            root["error"] = ErrorCodes::Error_Json;
-            beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
-            return true;
-        }
-        root["error"] = ErrorCodes::Success;
-        root["email"] = src_root["email"];
-        beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
-        return true;
-    });
+    RegPost("/test_procedure",
+            [](std::shared_ptr<H1Connection> connection)
+            {
+                const auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
+                std::cout << "receive body is " << body_str << std::endl;
+                connection->_response.set(http::field::content_type, "text/json");
+                memochat::json::JsonValue root;
+                memochat::json::JsonValue src_root;
+                if (!reader_parse(body_str, src_root) || !src_root.isMember("email"))
+                {
+                    root["error"] = ErrorCodes::Error_Json;
+                    beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
+                    return true;
+                }
+                root["error"] = ErrorCodes::Success;
+                root["email"] = src_root["email"];
+                beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
+                return true;
+            });
 
     H1AuthService::RegisterRoutes(*this);
     H1ProfileService::RegisterRoutes(*this);
@@ -87,11 +97,14 @@ void H1LogicSystem::RegPost(std::string url, HttpHandler handler)
     _post_handlers.insert(make_pair(url, handler));
 }
 
-H1LogicSystem::~H1LogicSystem() {}
+H1LogicSystem::~H1LogicSystem()
+{
+}
 
 bool H1LogicSystem::HandleGet(std::string path, std::shared_ptr<H1Connection> con)
 {
-    if (_get_handlers.find(path) == _get_handlers.end()) {
+    if (_get_handlers.find(path) == _get_handlers.end())
+    {
         return false;
     }
     memolog::TraceContext::SetTraceId(con ? con->_trace_id : "");
@@ -102,7 +115,8 @@ bool H1LogicSystem::HandleGet(std::string path, std::shared_ptr<H1Connection> co
 
 bool H1LogicSystem::HandlePost(std::string path, std::shared_ptr<H1Connection> con)
 {
-    if (_post_handlers.find(path) == _post_handlers.end()) {
+    if (_post_handlers.find(path) == _post_handlers.end())
+    {
         memolog::LogWarn("gate.http1.post.not_found", "HTTP/1.1 post route not found", {{"route", path}});
         return false;
     }

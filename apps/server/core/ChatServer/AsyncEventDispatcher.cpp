@@ -19,50 +19,61 @@
 #include <thread>
 #include <vector>
 
-namespace {
-enum class OnlineRouteKind {
+namespace
+{
+enum class OnlineRouteKind
+{
     Offline,
     Local,
     Remote,
     Stale
 };
 
-struct OnlineRouteDecision {
+struct OnlineRouteDecision
+{
     OnlineRouteKind kind = OnlineRouteKind::Offline;
     std::shared_ptr<CSession> session;
     std::string redis_server;
     bool local_session_found = false;
 };
 
-std::string TrimCopyAsync(const std::string& text) {
+std::string TrimCopyAsync(const std::string& text)
+{
     const auto begin = text.find_first_not_of(" \t\r\n");
-    if (begin == std::string::npos) {
+    if (begin == std::string::npos)
+    {
         return std::string();
     }
     const auto end = text.find_last_not_of(" \t\r\n");
     return text.substr(begin, end - begin + 1);
 }
 
-std::string ServerOnlineUsersKeyAsync(const std::string& server_name) {
+std::string ServerOnlineUsersKeyAsync(const std::string& server_name)
+{
     return std::string(SERVER_ONLINE_USERS_PREFIX) + server_name;
 }
 
-std::vector<std::string> KnownChatServerNamesAsync() {
+std::vector<std::string> KnownChatServerNamesAsync()
+{
     std::vector<std::string> servers;
     auto& cfg = ConfigMgr::Inst();
     static const auto cluster = memochat::cluster::LoadChatClusterConfig(
-        [&cfg](const std::string& section, const std::string& key) {
+        [&cfg](const std::string& section, const std::string& key)
+        {
             return cfg.GetValue(section, key);
         },
         TrimCopyAsync(cfg["SelfServer"]["Name"]));
-    for (const auto& node : cluster.enabledNodes()) {
+    for (const auto& node : cluster.enabledNodes())
+    {
         servers.push_back(node.name);
     }
     return servers;
 }
 
-void RepairOnlineRouteStateAsync(int uid, const std::shared_ptr<CSession>& session, const std::string& server_name) {
-    if (uid <= 0 || !session || server_name.empty()) {
+void RepairOnlineRouteStateAsync(int uid, const std::shared_ptr<CSession>& session, const std::string& server_name)
+{
+    if (uid <= 0 || !session || server_name.empty())
+    {
         return;
     }
     const auto uid_str = std::to_string(uid);
@@ -71,23 +82,29 @@ void RepairOnlineRouteStateAsync(int uid, const std::shared_ptr<CSession>& sessi
     RedisMgr::GetInstance()->SAdd(ServerOnlineUsersKeyAsync(server_name), uid_str);
 }
 
-std::string ResolveServerFromOnlineSetsAsync(const std::string& uid_str) {
-    if (uid_str.empty()) {
+std::string ResolveServerFromOnlineSetsAsync(const std::string& uid_str)
+{
+    if (uid_str.empty())
+    {
         return std::string();
     }
 
-    for (const auto& server_name : KnownChatServerNamesAsync()) {
+    for (const auto& server_name : KnownChatServerNamesAsync())
+    {
         std::vector<std::string> online_uids;
         RedisMgr::GetInstance()->SMembers(ServerOnlineUsersKeyAsync(server_name), online_uids);
-        if (std::find(online_uids.begin(), online_uids.end(), uid_str) != online_uids.end()) {
+        if (std::find(online_uids.begin(), online_uids.end(), uid_str) != online_uids.end())
+        {
             return server_name;
         }
     }
     return std::string();
 }
 
-void ClearTrackedOnlineRouteAsync(int uid, const std::string& server_name) {
-    if (uid <= 0 || server_name.empty()) {
+void ClearTrackedOnlineRouteAsync(int uid, const std::string& server_name)
+{
+    if (uid <= 0 || server_name.empty())
+    {
         return;
     }
     const auto uid_str = std::to_string(uid);
@@ -96,15 +113,18 @@ void ClearTrackedOnlineRouteAsync(int uid, const std::string& server_name) {
     RedisMgr::GetInstance()->SRem(ServerOnlineUsersKeyAsync(server_name), uid_str);
 }
 
-OnlineRouteDecision ResolveOnlineRouteAsync(int uid) {
+OnlineRouteDecision ResolveOnlineRouteAsync(int uid)
+{
     OnlineRouteDecision route;
-    if (uid <= 0) {
+    if (uid <= 0)
+    {
         return route;
     }
 
     const auto self_name = ConfigMgr::Inst()["SelfServer"]["Name"];
     auto session = UserMgr::GetInstance()->GetSession(uid);
-    if (session) {
+    if (session)
+    {
         route.kind = OnlineRouteKind::Local;
         route.session = session;
         route.redis_server = self_name;
@@ -115,22 +135,27 @@ OnlineRouteDecision ResolveOnlineRouteAsync(int uid) {
 
     const auto uid_str = std::to_string(uid);
     std::string redis_server;
-    if (!RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, redis_server) || redis_server.empty()) {
+    if (!RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, redis_server) || redis_server.empty())
+    {
         redis_server = ResolveServerFromOnlineSetsAsync(uid_str);
-        if (redis_server.empty()) {
+        if (redis_server.empty())
+        {
             return route;
         }
     }
     route.redis_server = redis_server;
-    if (redis_server != self_name) {
+    if (redis_server != self_name)
+    {
         route.kind = OnlineRouteKind::Remote;
         return route;
     }
 
     std::string reloaded_server;
-    if (RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, reloaded_server) && !reloaded_server.empty()) {
+    if (RedisMgr::GetInstance()->Get(USERIPPREFIX + uid_str, reloaded_server) && !reloaded_server.empty())
+    {
         route.redis_server = reloaded_server;
-        if (reloaded_server != self_name) {
+        if (reloaded_server != self_name)
+        {
             route.kind = OnlineRouteKind::Remote;
             return route;
         }
@@ -141,46 +166,57 @@ OnlineRouteDecision ResolveOnlineRouteAsync(int uid) {
     return route;
 }
 
-const char* RouteResultNameAsync(OnlineRouteKind kind) {
-    switch (kind) {
-    case OnlineRouteKind::Local:
-        return "local";
-    case OnlineRouteKind::Remote:
-        return "remote";
-    case OnlineRouteKind::Stale:
-        return "stale";
-    case OnlineRouteKind::Offline:
-    default:
-        return "offline";
+const char* RouteResultNameAsync(OnlineRouteKind kind)
+{
+    switch (kind)
+    {
+        case OnlineRouteKind::Local:
+            return "local";
+        case OnlineRouteKind::Remote:
+            return "remote";
+        case OnlineRouteKind::Stale:
+            return "stale";
+        case OnlineRouteKind::Offline:
+        default:
+            return "offline";
     }
 }
 
-int64_t NowMsAsync() {
-    return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count());
+int64_t NowMsAsync()
+{
+    return static_cast<int64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count());
 }
 
-std::string JsonToCompactStringAsync(const memochat::json::JsonValue& value) {
+std::string JsonToCompactStringAsync(const memochat::json::JsonValue& value)
+{
     return memochat::json::glaze_json(value);
 }
 
-void InvalidateRelationBootstrapCacheAsync(int uid) {
-    if (uid <= 0) {
+void InvalidateRelationBootstrapCacheAsync(int uid)
+{
+    if (uid <= 0)
+    {
         return;
     }
     RedisMgr::GetInstance()->Del(std::string("relation_bootstrap_") + std::to_string(uid));
 }
 
-void AppendUniqueUidAsync(std::vector<int>& values, int uid) {
-    if (uid <= 0) {
+void AppendUniqueUidAsync(std::vector<int>& values, int uid)
+{
+    if (uid <= 0)
+    {
         return;
     }
-    if (std::find(values.begin(), values.end(), uid) == values.end()) {
+    if (std::find(values.begin(), values.end(), uid) == values.end())
+    {
         values.push_back(uid);
     }
 }
 
-bool ParseJsonObjectAsync(const std::string& payload, memochat::json::JsonValue& root) {
+bool ParseJsonObjectAsync(const std::string& payload, memochat::json::JsonValue& root)
+{
     memochat::json::JsonCharReaderBuilder builder;
     std::unique_ptr<memochat::json::JsonCharReader> reader(memochat::json::newCharReader(builder));
     std::string errors;
@@ -188,42 +224,48 @@ bool ParseJsonObjectAsync(const std::string& payload, memochat::json::JsonValue&
 }
 
 void LogPrivateRouteAsync(const std::string& event,
-    int from_uid,
-    int to_uid,
-    const std::string& msg_id,
-    const OnlineRouteDecision& route,
-    const std::string& grpc_status,
-    bool notify_delivered) {
-    const auto fields = std::map<std::string, std::string>{
-        {"from_uid", std::to_string(from_uid)},
-        {"to_uid", std::to_string(to_uid)},
-        {"msg_id", msg_id},
-        {"redis_server", route.redis_server},
-        {"route_result", RouteResultNameAsync(route.kind)},
-        {"local_session_found", route.local_session_found ? "true" : "false"},
-        {"grpc_status", grpc_status},
-        {"notify_delivered", notify_delivered ? "true" : "false"}
-    };
-    if (route.kind == OnlineRouteKind::Stale || !notify_delivered) {
+                          int from_uid,
+                          int to_uid,
+                          const std::string& msg_id,
+                          const OnlineRouteDecision& route,
+                          const std::string& grpc_status,
+                          bool notify_delivered)
+{
+    const auto fields =
+        std::map<std::string, std::string>{{"from_uid", std::to_string(from_uid)},
+                                           {"to_uid", std::to_string(to_uid)},
+                                           {"msg_id", msg_id},
+                                           {"redis_server", route.redis_server},
+                                           {"route_result", RouteResultNameAsync(route.kind)},
+                                           {"local_session_found", route.local_session_found ? "true" : "false"},
+                                           {"grpc_status", grpc_status},
+                                           {"notify_delivered", notify_delivered ? "true" : "false"}};
+    if (route.kind == OnlineRouteKind::Stale || !notify_delivered)
+    {
         memolog::LogWarn(event, "private message notify not delivered", fields);
         return;
     }
     memolog::LogInfo(event, "private message notify delivered", fields);
 }
-}
+} // namespace
 
 AsyncEventDispatcher::AsyncEventDispatcher(std::shared_ptr<IAsyncEventBus> event_bus,
-    StopRequested stop_requested,
-    PushGroupPayloadFn push_group_payload)
-    : _event_bus(std::move(event_bus)),
-      _stop_requested(std::move(stop_requested)),
-      _push_group_payload(std::move(push_group_payload)) {
+                                           StopRequested stop_requested,
+                                           PushGroupPayloadFn push_group_payload)
+    : _event_bus(std::move(event_bus))
+    , _stop_requested(std::move(stop_requested))
+    , _push_group_payload(std::move(push_group_payload))
+{
 }
 
-bool AsyncEventDispatcher::PublishAsyncEvent(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error)
+bool AsyncEventDispatcher::PublishAsyncEvent(const std::string& topic,
+                                             const memochat::json::JsonValue& payload,
+                                             std::string* error)
 {
-    if (!_event_bus) {
-        if (error) {
+    if (!_event_bus)
+    {
+        if (error)
+        {
             *error = "event_bus_unavailable";
         }
         return false;
@@ -233,45 +275,60 @@ bool AsyncEventDispatcher::PublishAsyncEvent(const std::string& topic, const mem
 
 void AsyncEventDispatcher::DealAsyncEvents()
 {
-    while (!_stop_requested()) {
-        if (!memochat::chatruntime::IsWorkerEnabled()) {
+    while (!_stop_requested())
+    {
+        if (!memochat::chatruntime::IsWorkerEnabled())
+        {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
             continue;
         }
 
         AsyncConsumedEvent event;
         std::string consume_error;
-        static const std::vector<std::string> s_async_topics{
-            memochat::chatruntime::TopicPrivate(),
-            memochat::chatruntime::TopicGroup(),
-            memochat::chatruntime::TopicDialogSync(),
-            memochat::chatruntime::TopicRelationState()
-        };
-        const bool handled = _event_bus &&
-            _event_bus->ConsumeOnce(s_async_topics, event, &consume_error);
-        if (handled) {
-            if (!event.parsed) {
-                memolog::LogWarn("chat.async.invalid_event", "async chat event parse failed",
-                    { {"topic", event.envelope.topic}, {"error", consume_error} });
+        static const std::vector<std::string> s_async_topics{memochat::chatruntime::TopicPrivate(),
+                                                             memochat::chatruntime::TopicGroup(),
+                                                             memochat::chatruntime::TopicDialogSync(),
+                                                             memochat::chatruntime::TopicRelationState()};
+        const bool handled = _event_bus && _event_bus->ConsumeOnce(s_async_topics, event, &consume_error);
+        if (handled)
+        {
+            if (!event.parsed)
+            {
+                memolog::LogWarn("chat.async.invalid_event",
+                                 "async chat event parse failed",
+                                 {{"topic", event.envelope.topic}, {"error", consume_error}});
                 _event_bus->AckLastConsumed();
-            } else if (event.envelope.topic == memochat::chatruntime::TopicPrivate()) {
+            }
+            else if (event.envelope.topic == memochat::chatruntime::TopicPrivate())
+            {
                 HandlePrivateAsyncEvent(event.envelope.payload);
                 _event_bus->AckLastConsumed();
-            } else if (event.envelope.topic == memochat::chatruntime::TopicGroup()) {
+            }
+            else if (event.envelope.topic == memochat::chatruntime::TopicGroup())
+            {
                 HandleGroupAsyncEvent(event.envelope.payload);
                 _event_bus->AckLastConsumed();
-            } else if (event.envelope.topic == memochat::chatruntime::TopicDialogSync()) {
+            }
+            else if (event.envelope.topic == memochat::chatruntime::TopicDialogSync())
+            {
                 HandleDialogSyncEvent(event.envelope.payload);
                 _event_bus->AckLastConsumed();
-            } else if (event.envelope.topic == memochat::chatruntime::TopicRelationState()) {
+            }
+            else if (event.envelope.topic == memochat::chatruntime::TopicRelationState())
+            {
                 HandleRelationStateEvent(event.envelope.payload);
                 _event_bus->AckLastConsumed();
-            } else {
-                memolog::LogWarn("chat.async.unknown_topic", "async chat event topic is not registered", { {"topic", event.envelope.topic} });
+            }
+            else
+            {
+                memolog::LogWarn("chat.async.unknown_topic",
+                                 "async chat event topic is not registered",
+                                 {{"topic", event.envelope.topic}});
                 _event_bus->AckLastConsumed();
             }
         }
-        if (!handled) {
+        if (!handled)
+        {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
     }
@@ -280,16 +337,19 @@ void AsyncEventDispatcher::DealAsyncEvents()
 void AsyncEventDispatcher::NotifyMessageStatus(const memochat::json::JsonValue& payload)
 {
     const int uid = payload.get("fromuid", 0).asInt();
-    if (uid <= 0) {
+    if (uid <= 0)
+    {
         return;
     }
     const auto route = ResolveOnlineRouteAsync(uid);
     const auto serialized = JsonToCompactStringAsync(payload);
-    if (route.kind == OnlineRouteKind::Local && route.session) {
+    if (route.kind == OnlineRouteKind::Local && route.session)
+    {
         route.session->Send(serialized, ID_NOTIFY_MSG_STATUS_REQ);
         return;
     }
-    if (route.kind == OnlineRouteKind::Remote) {
+    if (route.kind == OnlineRouteKind::Remote)
+    {
         GroupMessageNotifyReq req;
         req.add_touids(uid);
         req.set_tcp_msgid(ID_NOTIFY_MSG_STATUS_REQ);
@@ -300,13 +360,15 @@ void AsyncEventDispatcher::NotifyMessageStatus(const memochat::json::JsonValue& 
 
 void AsyncEventDispatcher::HandlePrivateAsyncEvent(const memochat::json::JsonValue& root)
 {
-    if (!root.isObject()) {
+    if (!root.isObject())
+    {
         return;
     }
     const int from_uid = root.get("fromuid", 0).asInt();
     const int to_uid = root.get("touid", 0).asInt();
     const memochat::json::JsonValue text_array = root["text_array"];
-    if (from_uid <= 0 || to_uid <= 0 || !text_array.isArray() || text_array.empty()) {
+    if (from_uid <= 0 || to_uid <= 0 || !text_array.isArray() || text_array.empty())
+    {
         return;
     }
 
@@ -322,7 +384,8 @@ void AsyncEventDispatcher::HandlePrivateAsyncEvent(const memochat::json::JsonVal
     notify_payload["text_array"] = memochat::json::arrayValue;
     std::string first_msg_id;
 
-    for (const auto& txt_obj : text_array) {
+    for (const auto& txt_obj : text_array)
+    {
         PrivateMessageInfo msg;
         msg.msg_id = txt_obj.get("msgid", "").asString();
         msg.content = txt_obj.get("content", "").asString();
@@ -334,22 +397,28 @@ void AsyncEventDispatcher::HandlePrivateAsyncEvent(const memochat::json::JsonVal
         msg.reply_to_server_msg_id = txt_obj.get("reply_to_server_msg_id", 0).asInt64();
         msg.edited_at_ms = txt_obj.get("edited_at_ms", 0).asInt64();
         msg.deleted_at_ms = txt_obj.get("deleted_at_ms", 0).asInt64();
-        if (msg.msg_id.empty() || msg.content.empty()) {
+        if (msg.msg_id.empty() || msg.content.empty())
+        {
             continue;
         }
-        if (msg.created_at <= 0) {
+        if (msg.created_at <= 0)
+        {
             msg.created_at = NowMsAsync();
         }
-        if (txt_obj.isMember("forward_meta")) {
+        if (txt_obj.isMember("forward_meta"))
+        {
             msg.forward_meta_json = JsonToCompactStringAsync(txt_obj["forward_meta"]);
         }
-        if (!PostgresMgr::GetInstance()->SavePrivateMessage(msg)) {
+        if (!PostgresMgr::GetInstance()->SavePrivateMessage(msg))
+        {
             continue;
         }
-        if (MongoMgr::GetInstance()->Enabled()) {
+        if (MongoMgr::GetInstance()->Enabled())
+        {
             MongoMgr::GetInstance()->SavePrivateMessage(msg);
         }
-        if (first_msg_id.empty()) {
+        if (first_msg_id.empty())
+        {
             first_msg_id = msg.msg_id;
         }
         auto* text_msg = text_msg_req.add_textmsgs();
@@ -360,20 +429,33 @@ void AsyncEventDispatcher::HandlePrivateAsyncEvent(const memochat::json::JsonVal
         one["msgid"] = msg.msg_id;
         one["content"] = msg.content;
         one["created_at"] = static_cast<int64_t>(msg.created_at);
-        if (msg.reply_to_server_msg_id > 0) {
+        if (msg.reply_to_server_msg_id > 0)
+        {
             one["reply_to_server_msg_id"] = static_cast<int64_t>(msg.reply_to_server_msg_id);
         }
         notify_payload["text_array"].append(one);
     }
 
     const auto route = ResolveOnlineRouteAsync(to_uid);
-    if (route.kind == OnlineRouteKind::Local && route.session) {
+    if (route.kind == OnlineRouteKind::Local && route.session)
+    {
         route.session->Send(JsonToCompactStringAsync(notify_payload), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
         LogPrivateRouteAsync("chat.private.route.async", from_uid, to_uid, first_msg_id, route, "n/a", true);
-    } else if (route.kind == OnlineRouteKind::Remote) {
-        const auto notify_rsp = ChatGrpcClient::GetInstance()->NotifyTextChatMsg(route.redis_server, text_msg_req, notify_payload);
-        LogPrivateRouteAsync("chat.private.route.async", from_uid, to_uid, first_msg_id, route, std::to_string(notify_rsp.error()), notify_rsp.error() == ErrorCodes::Success);
-    } else {
+    }
+    else if (route.kind == OnlineRouteKind::Remote)
+    {
+        const auto notify_rsp =
+            ChatGrpcClient::GetInstance()->NotifyTextChatMsg(route.redis_server, text_msg_req, notify_payload);
+        LogPrivateRouteAsync("chat.private.route.async",
+                             from_uid,
+                             to_uid,
+                             first_msg_id,
+                             route,
+                             std::to_string(notify_rsp.error()),
+                             notify_rsp.error() == ErrorCodes::Success);
+    }
+    else
+    {
         LogPrivateRouteAsync("chat.private.route.async", from_uid, to_uid, first_msg_id, route, "skipped", false);
     }
 
@@ -397,26 +479,29 @@ void AsyncEventDispatcher::HandlePrivateAsyncEvent(const memochat::json::JsonVal
     dialog_sync["event_ts"] = static_cast<int64_t>(NowMsAsync());
     dialog_sync["text_array"] = notify_payload["text_array"];
     std::string publish_error;
-    if (!first_msg_id.empty() && !PublishAsyncEvent(memochat::chatruntime::TopicDialogSync(), dialog_sync, &publish_error)) {
-        memolog::LogWarn("chat.dialog_sync.publish_failed", "failed to publish private dialog sync event",
-            {
-                {"from_uid", std::to_string(from_uid)},
-                {"to_uid", std::to_string(to_uid)},
-                {"client_msg_id", first_msg_id},
-                {"error", publish_error}
-            });
+    if (!first_msg_id.empty() &&
+        !PublishAsyncEvent(memochat::chatruntime::TopicDialogSync(), dialog_sync, &publish_error))
+    {
+        memolog::LogWarn("chat.dialog_sync.publish_failed",
+                         "failed to publish private dialog sync event",
+                         {{"from_uid", std::to_string(from_uid)},
+                          {"to_uid", std::to_string(to_uid)},
+                          {"client_msg_id", first_msg_id},
+                          {"error", publish_error}});
     }
 }
 
 void AsyncEventDispatcher::HandleGroupAsyncEvent(const memochat::json::JsonValue& root)
 {
-    if (!root.isObject()) {
+    if (!root.isObject())
+    {
         return;
     }
     const int from_uid = root.get("fromuid", 0).asInt();
     const int64_t group_id = root.get("groupid", 0).asInt64();
     memochat::json::JsonValue msg = root["msg"];
-    if (from_uid <= 0 || group_id <= 0 || !msg.isObject()) {
+    if (from_uid <= 0 || group_id <= 0 || !msg.isObject())
+    {
         return;
     }
 
@@ -434,28 +519,33 @@ void AsyncEventDispatcher::HandleGroupAsyncEvent(const memochat::json::JsonValue
     info.edited_at_ms = msg.get("edited_at_ms", 0).asInt64();
     info.deleted_at_ms = msg.get("deleted_at_ms", 0).asInt64();
     info.created_at = NowMsAsync();
-    if (msg.isMember("forward_meta")) {
+    if (msg.isMember("forward_meta"))
+    {
         info.forward_meta_json = JsonToCompactStringAsync(msg["forward_meta"]);
     }
-    if (info.msg_id.empty() || info.content.empty()) {
+    if (info.msg_id.empty() || info.content.empty())
+    {
         return;
     }
 
     int64_t server_msg_id = 0;
     int64_t group_seq = 0;
-    if (!PostgresMgr::GetInstance()->SaveGroupMessage(info, &server_msg_id, &group_seq)) {
+    if (!PostgresMgr::GetInstance()->SaveGroupMessage(info, &server_msg_id, &group_seq))
+    {
         return;
     }
     info.server_msg_id = server_msg_id;
     info.group_seq = group_seq;
 
     auto sender_info = PostgresMgr::GetInstance()->GetUser(from_uid);
-    if (sender_info) {
+    if (sender_info)
+    {
         info.from_name = sender_info->name;
         info.from_nick = sender_info->nick;
         info.from_icon = sender_info->icon;
     }
-    if (MongoMgr::GetInstance()->Enabled()) {
+    if (MongoMgr::GetInstance()->Enabled())
+    {
         MongoMgr::GetInstance()->SaveGroupMessage(info);
     }
 
@@ -471,22 +561,26 @@ void AsyncEventDispatcher::HandleGroupAsyncEvent(const memochat::json::JsonValue
     notify_payload["msg"]["created_at"] = static_cast<int64_t>(info.created_at);
     notify_payload["msg"]["server_msg_id"] = static_cast<int64_t>(info.server_msg_id);
     notify_payload["msg"]["group_seq"] = static_cast<int64_t>(info.group_seq);
-    if (sender_info) {
+    if (sender_info)
+    {
         notify_payload["from_name"] = sender_info->name;
         notify_payload["from_nick"] = sender_info->nick;
         notify_payload["from_icon"] = sender_info->icon;
         notify_payload["from_user_id"] = sender_info->user_id;
     }
     std::shared_ptr<GroupInfo> group_info;
-    if (PostgresMgr::GetInstance()->GetGroupById(group_id, group_info) && group_info) {
+    if (PostgresMgr::GetInstance()->GetGroupById(group_id, group_info) && group_info)
+    {
         notify_payload["group_code"] = group_info->group_code;
     }
 
     std::vector<std::shared_ptr<GroupMemberInfo>> members;
     PostgresMgr::GetInstance()->GetGroupMemberList(group_id, members);
     std::vector<int> recipients;
-    for (const auto& member : members) {
-        if (member && member->status == 1) {
+    for (const auto& member : members)
+    {
+        if (member && member->status == 1)
+        {
             recipients.push_back(member->uid);
         }
     }
@@ -503,7 +597,8 @@ void AsyncEventDispatcher::HandleGroupAsyncEvent(const memochat::json::JsonValue
     status_payload["status"] = "persisted";
     status_payload["persist_ts"] = static_cast<int64_t>(NowMsAsync());
     status_payload["msg"] = notify_payload["msg"];
-    if (sender_info) {
+    if (sender_info)
+    {
         status_payload["from_name"] = sender_info->name;
         status_payload["from_nick"] = sender_info->nick;
         status_payload["from_icon"] = sender_info->icon;
@@ -520,81 +615,94 @@ void AsyncEventDispatcher::HandleGroupAsyncEvent(const memochat::json::JsonValue
     dialog_sync["event_ts"] = static_cast<int64_t>(NowMsAsync());
     dialog_sync["msg"] = notify_payload["msg"];
     std::string publish_error;
-    if (!info.msg_id.empty() && !PublishAsyncEvent(memochat::chatruntime::TopicDialogSync(), dialog_sync, &publish_error)) {
-        memolog::LogWarn("chat.dialog_sync.publish_failed", "failed to publish group dialog sync event",
-            {
-                {"from_uid", std::to_string(from_uid)},
-                {"group_id", std::to_string(group_id)},
-                {"client_msg_id", info.msg_id},
-                {"error", publish_error}
-            });
+    if (!info.msg_id.empty() &&
+        !PublishAsyncEvent(memochat::chatruntime::TopicDialogSync(), dialog_sync, &publish_error))
+    {
+        memolog::LogWarn("chat.dialog_sync.publish_failed",
+                         "failed to publish group dialog sync event",
+                         {{"from_uid", std::to_string(from_uid)},
+                          {"group_id", std::to_string(group_id)},
+                          {"client_msg_id", info.msg_id},
+                          {"error", publish_error}});
     }
 }
 
 void AsyncEventDispatcher::HandleDialogSyncEvent(const memochat::json::JsonValue& root)
 {
-    if (!root.isObject()) {
+    if (!root.isObject())
+    {
         return;
     }
 
     std::vector<int> owner_uids;
     const std::string scope = root.get("scope", "").asString();
-    if (scope == "private") {
+    if (scope == "private")
+    {
         AppendUniqueUidAsync(owner_uids, root.get("fromuid", 0).asInt());
         AppendUniqueUidAsync(owner_uids, root.get("touid", 0).asInt());
-    } else if (scope == "group") {
+    }
+    else if (scope == "group")
+    {
         const int from_uid = root.get("fromuid", 0).asInt();
         const int64_t group_id = root.get("groupid", 0).asInt64();
         AppendUniqueUidAsync(owner_uids, from_uid);
-        if (group_id > 0) {
+        if (group_id > 0)
+        {
             std::vector<std::shared_ptr<GroupMemberInfo>> members;
             PostgresMgr::GetInstance()->GetGroupMemberList(group_id, members);
-            for (const auto& member : members) {
-                if (member && member->status == 1) {
+            for (const auto& member : members)
+            {
+                if (member && member->status == 1)
+                {
                     AppendUniqueUidAsync(owner_uids, member->uid);
                 }
             }
         }
     }
 
-    for (const auto owner_uid : owner_uids) {
-        if (!PostgresMgr::GetInstance()->RefreshDialogsForOwner(owner_uid)) {
-            memolog::LogWarn("chat.dialog_sync.refresh_failed", "failed to refresh dialog runtime",
-                {
-                    {"scope", scope},
-                    {"owner_uid", std::to_string(owner_uid)},
-                    {"client_msg_id", root.get("client_msg_id", "").asString()}
-                });
+    for (const auto owner_uid : owner_uids)
+    {
+        if (!PostgresMgr::GetInstance()->RefreshDialogsForOwner(owner_uid))
+        {
+            memolog::LogWarn("chat.dialog_sync.refresh_failed",
+                             "failed to refresh dialog runtime",
+                             {{"scope", scope},
+                              {"owner_uid", std::to_string(owner_uid)},
+                              {"client_msg_id", root.get("client_msg_id", "").asString()}});
         }
     }
 }
 
 void AsyncEventDispatcher::HandleRelationStateEvent(const memochat::json::JsonValue& root)
 {
-    if (!root.isObject()) {
+    if (!root.isObject())
+    {
         return;
     }
 
     std::vector<int> affected_uids;
-    if (root.isMember("uids") && root["uids"].isArray()) {
-        for (const auto& uid_value : root["uids"]) {
+    if (root.isMember("uids") && root["uids"].isArray())
+    {
+        for (const auto& uid_value : root["uids"])
+        {
             AppendUniqueUidAsync(affected_uids, uid_value.asInt());
         }
-    } else {
+    }
+    else
+    {
         AppendUniqueUidAsync(affected_uids, root.get("uid", 0).asInt());
         AppendUniqueUidAsync(affected_uids, root.get("touid", 0).asInt());
         AppendUniqueUidAsync(affected_uids, root.get("recipient_uid", 0).asInt());
     }
 
-    for (const auto uid : affected_uids) {
+    for (const auto uid : affected_uids)
+    {
         InvalidateRelationBootstrapCacheAsync(uid);
-        if (!PostgresMgr::GetInstance()->RefreshDialogsForOwner(uid)) {
-            memolog::LogWarn("chat.relation_state.refresh_failed", "failed to refresh dialogs after relation event",
-                {
-                    {"uid", std::to_string(uid)},
-                    {"event_type", root.get("event_type", "").asString()}
-                });
+        if (!PostgresMgr::GetInstance()->RefreshDialogsForOwner(uid))
+        {
+            memolog::LogWarn("chat.relation_state.refresh_failed",
+                             "failed to refresh dialogs after relation event",
+                             {{"uid", std::to_string(uid)}, {"event_type", root.get("event_type", "").asString()}});
         }
     }
 }
-

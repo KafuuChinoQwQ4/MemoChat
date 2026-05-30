@@ -1,10 +1,11 @@
 """
 PostgreSQL 客户端 — AI 相关表的读写操作
 """
-import asyncpg
-import structlog
+
 from typing import Any, Optional
 
+import asyncpg
+import structlog
 from config import settings
 
 logger = structlog.get_logger()

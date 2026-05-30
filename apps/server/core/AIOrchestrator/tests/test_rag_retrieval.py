@@ -153,8 +153,7 @@ class HybridRagRetrievalTests(unittest.TestCase):
             candidate_id="auth",
             payload={
                 "page_content": (
-                    "Observability containers keep stable ports: Prometheus 9090, "
-                    "Grafana 3000, Loki 3100, Tempo 3200."
+                    "Observability containers keep stable ports: Prometheus 9090, Grafana 3000, Loki 3100, Tempo 3200."
                 ),
                 "source": "memochat-loadtest-observability.md",
             },

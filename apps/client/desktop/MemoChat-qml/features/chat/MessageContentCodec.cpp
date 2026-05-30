@@ -4,31 +4,38 @@
 #include <QFileInfo>
 #include <QUrl>
 
-namespace {
+namespace
+{
 const QString kImagePrefix = "__memochat_img__:";
 const QString kFilePrefix = "__memochat_file__:";
 const QString kCallPrefix = "__memochat_call__:";
 const QString kReplyPrefix = "__memochat_reply__:";
-}
+} // namespace
 
-QString MessageContentCodec::encodeImage(const QString &fileUrl)
+QString MessageContentCodec::encodeImage(const QString& fileUrl)
 {
     return kImagePrefix + fileUrl;
 }
 
-QString MessageContentCodec::encodeFile(const QString &fileUrl, const QString &fileName,
-                                        const QString &mimeType, qint64 sizeBytes)
+QString MessageContentCodec::encodeFile(const QString& fileUrl,
+                                        const QString& fileName,
+                                        const QString& mimeType,
+                                        qint64 sizeBytes)
 {
-    if (!fileName.isEmpty() || !mimeType.isEmpty() || sizeBytes > 0) {
+    if (!fileName.isEmpty() || !mimeType.isEmpty() || sizeBytes > 0)
+    {
         QJsonObject fileObj;
         fileObj["url"] = fileUrl;
-        if (!fileName.isEmpty()) {
+        if (!fileName.isEmpty())
+        {
             fileObj["name"] = fileName;
         }
-        if (!mimeType.isEmpty()) {
+        if (!mimeType.isEmpty())
+        {
             fileObj["mime"] = mimeType;
         }
-        if (sizeBytes > 0) {
+        if (sizeBytes > 0)
+        {
             fileObj["size"] = static_cast<qint64>(sizeBytes);
         }
         const QByteArray compact = QJsonDocument(fileObj).toJson(QJsonDocument::Compact);
@@ -37,7 +44,7 @@ QString MessageContentCodec::encodeFile(const QString &fileUrl, const QString &f
     return kFilePrefix + fileUrl;
 }
 
-QString MessageContentCodec::encodeCallInvite(const QString &callType, const QString &joinUrl)
+QString MessageContentCodec::encodeCallInvite(const QString& callType, const QString& joinUrl)
 {
     QJsonObject callObj;
     callObj["type"] = callType;
@@ -46,8 +53,10 @@ QString MessageContentCodec::encodeCallInvite(const QString &callType, const QSt
     return kCallPrefix + QString::fromLatin1(compact.toBase64());
 }
 
-QString MessageContentCodec::encodeReplyText(const QString &text, const QString &replyToMsgId,
-                                             const QString &replySender, const QString &replyPreview)
+QString MessageContentCodec::encodeReplyText(const QString& text,
+                                             const QString& replyToMsgId,
+                                             const QString& replySender,
+                                             const QString& replyPreview)
 {
     QJsonObject replyObj;
     replyObj["text"] = text;
@@ -58,25 +67,29 @@ QString MessageContentCodec::encodeReplyText(const QString &text, const QString 
     return kReplyPrefix + QString::fromLatin1(compact.toBase64());
 }
 
-DecodedMessageContent MessageContentCodec::decode(const QString &rawContent)
+DecodedMessageContent MessageContentCodec::decode(const QString& rawContent)
 {
     DecodedMessageContent decoded;
     decoded.type = "text";
     decoded.content = rawContent;
 
-    if (rawContent.startsWith(kImagePrefix)) {
+    if (rawContent.startsWith(kImagePrefix))
+    {
         decoded.type = "image";
         decoded.content = rawContent.mid(kImagePrefix.size());
         return decoded;
     }
 
-    if (rawContent.startsWith(kFilePrefix)) {
+    if (rawContent.startsWith(kFilePrefix))
+    {
         decoded.type = "file";
         const QString payload = rawContent.mid(kFilePrefix.size());
-        if (payload.startsWith("json:")) {
+        if (payload.startsWith("json:"))
+        {
             const QByteArray jsonBytes = QByteArray::fromBase64(payload.mid(5).toLatin1());
             const QJsonDocument doc = QJsonDocument::fromJson(jsonBytes);
-            if (doc.isObject()) {
+            if (doc.isObject())
+            {
                 const QJsonObject obj = doc.object();
                 decoded.content = obj.value("url").toString();
                 decoded.fileName = obj.value("name").toString();
@@ -85,33 +98,41 @@ DecodedMessageContent MessageContentCodec::decode(const QString &rawContent)
             }
         }
 
-        if (decoded.content.isEmpty()) {
+        if (decoded.content.isEmpty())
+        {
             decoded.content = payload;
         }
 
         const QUrl url(decoded.content);
-        if (url.isLocalFile()) {
+        if (url.isLocalFile())
+        {
             decoded.fileName = QFileInfo(url.toLocalFile()).fileName();
-        } else if (decoded.fileName.isEmpty()) {
+        }
+        else if (decoded.fileName.isEmpty())
+        {
             decoded.fileName = QFileInfo(decoded.content).fileName();
         }
-        if (decoded.fileName.isEmpty()) {
+        if (decoded.fileName.isEmpty())
+        {
             decoded.fileName = "文件";
         }
         return decoded;
     }
 
-    if (rawContent.startsWith(kCallPrefix)) {
+    if (rawContent.startsWith(kCallPrefix))
+    {
         decoded.type = "call";
         const QString encodedPayload = rawContent.mid(kCallPrefix.size());
         const QByteArray payload = QByteArray::fromBase64(encodedPayload.toLatin1());
         const QJsonDocument doc = QJsonDocument::fromJson(payload);
-        if (doc.isObject()) {
+        if (doc.isObject())
+        {
             const QJsonObject obj = doc.object();
             const QString callType = obj.value("type").toString();
             decoded.content = obj.value("url").toString();
             decoded.fileName = (callType == "video") ? "视频通话邀请" : "语音通话邀请";
-            if (decoded.content.isEmpty()) {
+            if (decoded.content.isEmpty())
+            {
                 decoded.content = rawContent;
                 decoded.type = "text";
                 decoded.fileName.clear();
@@ -125,11 +146,13 @@ DecodedMessageContent MessageContentCodec::decode(const QString &rawContent)
         return decoded;
     }
 
-    if (rawContent.startsWith(kReplyPrefix)) {
+    if (rawContent.startsWith(kReplyPrefix))
+    {
         const QString encodedPayload = rawContent.mid(kReplyPrefix.size());
         const QByteArray payload = QByteArray::fromBase64(encodedPayload.toLatin1());
         const QJsonDocument doc = QJsonDocument::fromJson(payload);
-        if (doc.isObject()) {
+        if (doc.isObject())
+        {
             const QJsonObject obj = doc.object();
             const QString text = obj.value("text").toString();
             decoded.isReply = true;
@@ -137,7 +160,8 @@ DecodedMessageContent MessageContentCodec::decode(const QString &rawContent)
             decoded.replySender = obj.value("reply_sender").toString();
             decoded.replyPreview = obj.value("reply_preview").toString();
             decoded.content = text;
-            if (!decoded.replyPreview.isEmpty() && decoded.replyPreview.length() > 80) {
+            if (!decoded.replyPreview.isEmpty() && decoded.replyPreview.length() > 80)
+            {
                 decoded.replyPreview = decoded.replyPreview.left(80);
             }
             return decoded;
@@ -147,23 +171,29 @@ DecodedMessageContent MessageContentCodec::decode(const QString &rawContent)
     return decoded;
 }
 
-QString MessageContentCodec::toPreviewText(const QString &rawContent)
+QString MessageContentCodec::toPreviewText(const QString& rawContent)
 {
     const DecodedMessageContent decoded = decode(rawContent);
-    if (decoded.type == "image") {
+    if (decoded.type == "image")
+    {
         return "[图片]";
     }
-    if (decoded.type == "file") {
-        if (!decoded.fileName.isEmpty()) {
+    if (decoded.type == "file")
+    {
+        if (!decoded.fileName.isEmpty())
+        {
             return QString("[文件] %1").arg(decoded.fileName);
         }
         return "[文件]";
     }
-    if (decoded.type == "call") {
+    if (decoded.type == "call")
+    {
         return decoded.fileName.isEmpty() ? "[通话邀请]" : QString("[%1]").arg(decoded.fileName);
     }
-    if (decoded.isReply) {
-        if (decoded.content.isEmpty()) {
+    if (decoded.isReply)
+    {
+        if (decoded.content.isEmpty())
+        {
             return "[回复]";
         }
         return QString("[回复] %1").arg(decoded.content);

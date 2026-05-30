@@ -12,7 +12,8 @@
 namespace beast = boost::beast;
 namespace http = beast::http;
 
-namespace {
+namespace
+{
 
 memochat::json::JsonValue MakeMediaNotImplementedResponse(const char* route)
 {
@@ -28,40 +29,52 @@ memochat::json::JsonValue MakeMediaNotImplementedResponse(const char* route)
 
 void H1MediaService::RegisterRoutes(H1LogicSystem& logic)
 {
-    logic.RegPost("/upload_media_init", [](std::shared_ptr<H1Connection> connection) {
-        auto root = MakeMediaNotImplementedResponse("/upload_media_init");
-        connection->_response.set(http::field::content_type, "text/json");
-        beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
-        return true;
-    });
-    logic.RegPost("/upload_media_chunk", [](std::shared_ptr<H1Connection> connection) {
-        auto root = MakeMediaNotImplementedResponse("/upload_media_chunk");
-        connection->_response.set(http::field::content_type, "text/json");
-        beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
-        return true;
-    });
-    logic.RegGet("/upload_media_status", [](std::shared_ptr<H1Connection> connection) {
-        auto root = MakeMediaNotImplementedResponse("/upload_media_status");
-        connection->_response.set(http::field::content_type, "text/json");
-        beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
-        return true;
-    });
-    logic.RegPost("/upload_media_complete", [](std::shared_ptr<H1Connection> connection) {
-        auto root = MakeMediaNotImplementedResponse("/upload_media_complete");
-        connection->_response.set(http::field::content_type, "text/json");
-        beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
-        return true;
-    });
-    logic.RegPost("/upload_media", [](std::shared_ptr<H1Connection> connection) {
-        auto root = MakeMediaNotImplementedResponse("/upload_media");
-        connection->_response.set(http::field::content_type, "text/json");
-        beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
-        return true;
-    });
-    logic.RegGet("/media/download", [](std::shared_ptr<H1Connection> connection) {
-        auto root = MakeMediaNotImplementedResponse("/media/download");
-        connection->_response.set(http::field::content_type, "text/json");
-        beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
-        return true;
-    });
+    logic.RegPost("/upload_media_init",
+                  [](std::shared_ptr<H1Connection> connection)
+                  {
+                      auto root = MakeMediaNotImplementedResponse("/upload_media_init");
+                      connection->_response.set(http::field::content_type, "text/json");
+                      beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
+                      return true;
+                  });
+    logic.RegPost("/upload_media_chunk",
+                  [](std::shared_ptr<H1Connection> connection)
+                  {
+                      auto root = MakeMediaNotImplementedResponse("/upload_media_chunk");
+                      connection->_response.set(http::field::content_type, "text/json");
+                      beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
+                      return true;
+                  });
+    logic.RegGet("/upload_media_status",
+                 [](std::shared_ptr<H1Connection> connection)
+                 {
+                     auto root = MakeMediaNotImplementedResponse("/upload_media_status");
+                     connection->_response.set(http::field::content_type, "text/json");
+                     beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
+                     return true;
+                 });
+    logic.RegPost("/upload_media_complete",
+                  [](std::shared_ptr<H1Connection> connection)
+                  {
+                      auto root = MakeMediaNotImplementedResponse("/upload_media_complete");
+                      connection->_response.set(http::field::content_type, "text/json");
+                      beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
+                      return true;
+                  });
+    logic.RegPost("/upload_media",
+                  [](std::shared_ptr<H1Connection> connection)
+                  {
+                      auto root = MakeMediaNotImplementedResponse("/upload_media");
+                      connection->_response.set(http::field::content_type, "text/json");
+                      beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
+                      return true;
+                  });
+    logic.RegGet("/media/download",
+                 [](std::shared_ptr<H1Connection> connection)
+                 {
+                     auto root = MakeMediaNotImplementedResponse("/media/download");
+                     connection->_response.set(http::field::content_type, "text/json");
+                     beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
+                     return true;
+                 });
 }

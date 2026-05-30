@@ -11,12 +11,12 @@ class LivekitBridge : public QObject
     Q_PROPERTY(bool embeddedEnabled READ embeddedEnabled NOTIFY stateChanged)
 
 public:
-    explicit LivekitBridge(QObject *parent = nullptr);
+    explicit LivekitBridge(QObject* parent = nullptr);
 
     QString roomPageUrl() const;
     bool embeddedEnabled() const;
 
-    void requestJoinRoom(const QString &wsUrl, const QString &token, const QString &metadataJson);
+    void requestJoinRoom(const QString& wsUrl, const QString& token, const QString& metadataJson);
 
     Q_INVOKABLE void setPageReady(bool ready);
     Q_INVOKABLE void toggleMic();
@@ -25,25 +25,25 @@ public:
 
     Q_INVOKABLE void reportRoomJoined();
     Q_INVOKABLE void reportRemoteTrackReady();
-    Q_INVOKABLE void reportRoomDisconnected(const QString &reason, bool recoverable);
-    Q_INVOKABLE void reportPermissionError(const QString &deviceType, const QString &message);
-    Q_INVOKABLE void reportMediaError(const QString &message);
-    Q_INVOKABLE void reportReconnecting(const QString &message);
-    Q_INVOKABLE void reportLog(const QString &message);
+    Q_INVOKABLE void reportRoomDisconnected(const QString& reason, bool recoverable);
+    Q_INVOKABLE void reportPermissionError(const QString& deviceType, const QString& message);
+    Q_INVOKABLE void reportMediaError(const QString& message);
+    Q_INVOKABLE void reportReconnecting(const QString& message);
+    Q_INVOKABLE void reportLog(const QString& message);
 
 signals:
     void stateChanged();
-    void joinRequested(const QString &wsUrl, const QString &token, const QString &metadataJson);
+    void joinRequested(const QString& wsUrl, const QString& token, const QString& metadataJson);
     void micToggleRequested();
     void cameraToggleRequested();
     void leaveRequested();
     void roomJoined();
     void remoteTrackReady();
-    void roomDisconnected(const QString &reason, bool recoverable);
-    void permissionError(const QString &deviceType, const QString &message);
-    void mediaError(const QString &message);
-    void reconnecting(const QString &message);
-    void bridgeLog(const QString &message);
+    void roomDisconnected(const QString& reason, bool recoverable);
+    void permissionError(const QString& deviceType, const QString& message);
+    void mediaError(const QString& message);
+    void reconnecting(const QString& message);
+    void bridgeLog(const QString& message);
 
 private:
     void loadConfig();

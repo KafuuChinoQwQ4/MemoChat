@@ -2,11 +2,11 @@ import re
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 QML_QRC = CLIENT_DIR / "qml.qrc"
 PET_WINDOW_QML = CLIENT_DIR / "qml/pet/PetWindow.qml"
+PET_WINDOW_RUNTIME_JS = CLIENT_DIR / "qml/pet/PetWindowRuntime.js"
 PET_SCENE_QML = CLIENT_DIR / "qml/pet/PetScene.qml"
 SHARED_MAIN_QML = CLIENT_DIR / "qml/Main.qml"
 LINUX_MAIN_QML = CLIENT_DIR / "qml/linux/Main.qml"
@@ -32,7 +32,7 @@ def function_body(source, name):
         elif char == "}":
             depth -= 1
         index += 1
-    return source[match.end():index - 1]
+    return source[match.end() : index - 1]
 
 
 class PetQmlPlatformContractTests(unittest.TestCase):
@@ -52,11 +52,12 @@ class PetQmlPlatformContractTests(unittest.TestCase):
 
     def test_pet_window_keeps_transparent_click_through_opt_in_and_recoverable(self):
         window = read(PET_WINDOW_QML)
+        runtime = read(PET_WINDOW_RUNTIME_JS)
         open_body = function_body(window, "openPet")
-        flags_body = function_body(window, "applyWindowFlags")
+        flags_body = function_body(window, "applyWindowFlags") + "\n" + function_body(runtime, "petWindowFlags")
 
         self.assertIn('color: "transparent"', window)
-        self.assertIn("Qt.WindowTransparentForInput", flags_body)
+        self.assertRegex(flags_body, r"\b(?:Qt|qt)\.WindowTransparentForInput\b")
         self.assertRegex(flags_body, r"\bif\s*\(\s*clickThrough\s*\)")
         self.assertRegex(open_body, r"\bclickThrough\s*=\s*false\b")
         self.assertRegex(open_body, r"\bdecorativeMode\s*=\s*false\b")

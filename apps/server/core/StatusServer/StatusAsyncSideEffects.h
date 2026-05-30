@@ -8,7 +8,8 @@
 #include <thread>
 #include <unordered_set>
 
-class StatusAsyncSideEffects {
+class StatusAsyncSideEffects
+{
 public:
     explicit StatusAsyncSideEffects(const std::unordered_set<std::string>& known_servers);
     ~StatusAsyncSideEffects();
@@ -16,22 +17,22 @@ public:
     void Start();
     void Stop();
     void PublishAuditLogin(int uid,
-        const std::string& server_name,
-        const std::string& host,
-        const std::string& port,
-        const std::string& event_type);
+                           const std::string& server_name,
+                           const std::string& host,
+                           const std::string& port,
+                           const std::string& event_type);
     void PublishPresenceRefresh(int uid, const std::string& selected_server, const std::string& reason);
 
 private:
     bool PublishKafka(const std::string& topic,
-        const std::string& partition_key,
-        const std::string& event_type,
-        const memochat::json::JsonValue& payload,
-        std::string* error);
+                      const std::string& partition_key,
+                      const std::string& event_type,
+                      const memochat::json::JsonValue& payload,
+                      std::string* error);
     bool PublishRabbit(const std::string& routing_key,
-        const std::string& task_type,
-        const memochat::json::JsonValue& payload,
-        std::string* error);
+                       const std::string& task_type,
+                       const memochat::json::JsonValue& payload,
+                       std::string* error);
     void ConsumePresenceRefreshLoop();
     bool EnsureRabbitConnected(std::string* error);
     bool EnsureRabbitTopology(std::string* error);

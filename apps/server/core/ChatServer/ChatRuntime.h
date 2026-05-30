@@ -2,9 +2,11 @@
 
 #include <string>
 
-namespace memochat::chatruntime {
+namespace memochat::chatruntime
+{
 
-enum class ChatNodeRole {
+enum class ChatNodeRole
+{
     Ingress,
     Worker,
     Hybrid
@@ -33,4 +35,4 @@ std::string TaskRoutingOutboxRepair();
 int TaskRetryDelayMs();
 int TaskMaxRetries();
 
-}
+} // namespace memochat::chatruntime

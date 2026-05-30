@@ -2,6 +2,7 @@
 配置管理：从 config.yaml 加载所有配置项
 使用 pydantic-settings 做类型验证
 """
+
 import os
 from pathlib import Path
 from typing import Any
@@ -410,7 +411,7 @@ def _merge_env_overrides(raw: dict[str, Any]) -> dict[str, Any]:
         if not env_key.startswith(prefix):
             continue
 
-        path = [part.lower() for part in env_key[len(prefix):].split(delimiter) if part]
+        path = [part.lower() for part in env_key[len(prefix) :].split(delimiter) if part]
         if not path:
             continue
 

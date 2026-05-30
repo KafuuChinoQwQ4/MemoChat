@@ -172,7 +172,8 @@ TEST(ProtoMessageTest, TextChatMsgReq_MultipleMessages)
     req.set_fromuid(1);
     req.set_touid(2);
 
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 3; ++i)
+    {
         TextChatData* msg = req.add_textmsgs();
         msg->set_msgid("msg-" + std::to_string(i));
         msg->set_msgcontent("content-" + std::to_string(i));
@@ -183,7 +184,8 @@ TEST(ProtoMessageTest, TextChatMsgReq_MultipleMessages)
     TextChatMsgReq parsed;
     ASSERT_TRUE(parsed.ParseFromString(bytes));
     EXPECT_EQ(parsed.textmsgs_size(), 3);
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 3; ++i)
+    {
         EXPECT_EQ(parsed.textmsgs(i).msgid(), "msg-" + std::to_string(i));
         EXPECT_EQ(parsed.textmsgs(i).msgcontent(), "content-" + std::to_string(i));
     }

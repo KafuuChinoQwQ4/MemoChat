@@ -9,18 +9,23 @@
 #include <iostream>
 #include <mutex>
 
-namespace {
+namespace
+{
 
-struct RouteKey {
+struct RouteKey
+{
     std::string method;
     std::string path;
-    bool operator==(const RouteKey& other) const {
+    bool operator==(const RouteKey& other) const
+    {
         return method == other.method && path == other.path;
     }
 };
 
-struct RouteKeyHash {
-    size_t operator()(const RouteKey& k) const {
+struct RouteKeyHash
+{
+    size_t operator()(const RouteKey& k) const
+    {
         size_t h1 = std::hash<std::string>{}(k.method);
         size_t h2 = std::hash<std::string>{}(k.path);
         return h1 ^ (h2 << 1);
@@ -30,35 +35,47 @@ struct RouteKeyHash {
 static std::unordered_map<RouteKey, Http2Handler, RouteKeyHash> g_routes;
 static std::mutex g_routes_mutex;
 
-}  // namespace
+} // namespace
 
-void Http2Routes::RegisterHandler(const std::string& method, const std::string& path, Http2Handler handler) {
+void Http2Routes::RegisterHandler(const std::string& method, const std::string& path, Http2Handler handler)
+{
     std::lock_guard<std::mutex> lock(g_routes_mutex);
     g_routes[{method, path}] = std::move(handler);
 }
 
-void Http2Routes::HandleRequest(const Http2Request& req, Http2Response& resp) {
+void Http2Routes::HandleRequest(const Http2Request& req, Http2Response& resp)
+{
     RouteKey key{req.method, req.path};
     std::lock_guard<std::mutex> lock(g_routes_mutex);
     auto it = g_routes.find(key);
-    if (it != g_routes.end()) {
+    if (it != g_routes.end())
+    {
         it->second(req, resp);
-    } else {
+    }
+    else
+    {
         resp.SetStatus(404, "Not Found");
         resp.SetJsonBody(R"({"error":404,"message":"route not found"})");
     }
 }
 
-void Http2Routes::RegisterRoutes() {
+void Http2Routes::RegisterRoutes()
+{
     // Health check endpoints
-    RegisterHandler("GET", "/healthz", [](const Http2Request& req, Http2Response& resp) {
-        (void)req;
-        resp.SetJsonBody(R"({"status":"ok","service":"GateServerHttp2"})");
-    });
-    RegisterHandler("GET", "/readyz", [](const Http2Request& req, Http2Response& resp) {
-        (void)req;
-        resp.SetJsonBody(R"({"status":"ready","service":"GateServerHttp2"})");
-    });
+    RegisterHandler("GET",
+                    "/healthz",
+                    [](const Http2Request& req, Http2Response& resp)
+                    {
+                        (void) req;
+                        resp.SetJsonBody(R"({"status":"ok","service":"GateServerHttp2"})");
+                    });
+    RegisterHandler("GET",
+                    "/readyz",
+                    [](const Http2Request& req, Http2Response& resp)
+                    {
+                        (void) req;
+                        resp.SetJsonBody(R"({"status":"ready","service":"GateServerHttp2"})");
+                    });
 
     // Auth routes
     RegisterHandler("POST", "/get_varifycode", Http2AuthHandlers::HandleGetVarifyCode);

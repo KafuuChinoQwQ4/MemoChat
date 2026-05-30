@@ -192,7 +192,9 @@ class GuardrailService:
             description=str(raw.get("description", "")),
             source=str(raw.get("source", "builtin")),
             category=str(raw.get("category", "")),
-            parameters_schema=raw.get("parameters_schema", {}) if isinstance(raw.get("parameters_schema", {}), dict) else {},
+            parameters_schema=raw.get("parameters_schema", {})
+            if isinstance(raw.get("parameters_schema", {}), dict)
+            else {},
             timeout_seconds=int(raw.get("timeout_seconds", 30) or 30),
             permission=str(raw.get("permission", "read")),
             requires_confirmation=bool(raw.get("requires_confirmation", False)),
@@ -201,4 +203,3 @@ class GuardrailService:
 
     def _is_confirmed(self, payload: dict[str, Any]) -> bool:
         return payload.get("confirmed", payload.get("confirm", False)) is True
-

@@ -2,11 +2,18 @@
 
 #include <string>
 
-namespace varifyservice {
+namespace varifyservice
+{
 
-class RateLimiter {
+class RateLimiter
+{
 public:
-    enum class Result { Allowed, RateLimited, Error };
+    enum class Result
+    {
+        Allowed,
+        RateLimited,
+        Error
+    };
 
     static Result CheckEmail(const std::string& email, int window_sec, int max_requests);
     static Result CheckIP(const std::string& ip, int window_sec, int max_requests);

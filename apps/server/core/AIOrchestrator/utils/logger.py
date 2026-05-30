@@ -1,7 +1,9 @@
 """
 结构化日志工具 — structlog 统一配置
 """
+
 import sys
+
 import structlog
 from structlog.types import Processor
 

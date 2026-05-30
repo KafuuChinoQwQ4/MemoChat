@@ -13,10 +13,13 @@ Item {
     property string appTitle: "MemoChat QML"
     property size loginWindowSize: Qt.size(300, 500)
     property size chatWindowSize: Qt.size(900, 640)
+    readonly property size chatWindowMinimumSize: Qt.size(800, 600)
+    readonly property size unboundedWindowSize: Qt.size(100000, 100000)
     property var appWindowRef: null
     property var petWindowRef: null
     property var pendingCenterWindowRef: null
     property int pendingCenterPasses: 0
+    property int appWindowSwitchToken: 0
     property bool memochatStartupCenter: true
     readonly property bool chatPageActive: controller.page === AppController.ChatPage
 
@@ -119,14 +122,18 @@ Item {
             return
         }
         const loginMode = !chatPageActive
-        win.minimumWidth = loginMode ? root.loginWindowSize.width : 800
-        win.minimumHeight = loginMode ? root.loginWindowSize.height : 600
-        win.maximumWidth = loginMode ? root.loginWindowSize.width : 100000
-        win.maximumHeight = loginMode ? root.loginWindowSize.height : 100000
         const size = targetWindowSize()
+        const minimumSize = loginMode ? root.loginWindowSize : root.chatWindowMinimumSize
+        const maximumSize = loginMode ? root.loginWindowSize : root.unboundedWindowSize
+        win.maximumWidth = root.unboundedWindowSize.width
+        win.maximumHeight = root.unboundedWindowSize.height
+        win.minimumWidth = minimumSize.width
+        win.minimumHeight = minimumSize.height
         centerWindowForSize(win, size)
         win.width = size.width
         win.height = size.height
+        win.maximumWidth = maximumSize.width
+        win.maximumHeight = maximumSize.height
         requestWindowCenter(win)
     }
 
@@ -189,6 +196,30 @@ Item {
     function syncWindowsByPage() {
         const win = ensureAppWindow()
         if (!win) {
+            return
+        }
+        const token = ++appWindowSwitchToken
+        const targetSize = targetWindowSize()
+        const sizeChanged = win.visible
+                && win.visibility !== Window.Maximized
+                && win.visibility !== Window.FullScreen
+                && win.visibility !== Window.Minimized
+                && (Math.round(win.width) !== Math.round(targetSize.width)
+                    || Math.round(win.height) !== Math.round(targetSize.height))
+        if (sizeChanged) {
+            win.opacity = 0
+            win.visible = false
+            configureAppWindowForPage(win)
+            Qt.callLater(function() {
+                if (token !== root.appWindowSwitchToken) {
+                    return
+                }
+                showWindowCentered(win)
+                win.raise()
+                win.requestActivate()
+                logWindowState("app-window hidden-resize sync", win)
+                finishAppWindowShown()
+            })
             return
         }
         configureAppWindowForPage(win)
@@ -366,47 +397,26 @@ Item {
                 }
             }
 
-            Item {
+            AppWindowControls {
                 id: windowControls
                 z: 200
                 anchors.top: parent.top
                 anchors.right: parent.right
                 anchors.topMargin: 20
                 anchors.rightMargin: 14
-                width: controlsRow.implicitWidth
-                height: controlsRow.implicitHeight
-
-                Row {
-                    id: controlsRow
-                    spacing: 20
-
-                    LoginIconButton {
-                        iconSource: "qrc:/icons/ai.png"
-                        visible: root.chatPageActive
-                        onClicked: root.togglePetWindow()
-                    }
-
-                    LoginIconButton {
-                        iconSource: "qrc:/icons/minimize.png"
-                        onClicked: appWindow.showMinimized()
-                    }
-
-                    LoginIconButton {
-                        iconSource: "qrc:/icons/maximize.png"
-                        onClicked: {
-                            if (appWindow.visibility === Window.Maximized) {
-                                appWindow.showNormal()
-                            } else {
-                                appWindow.showMaximized()
-                            }
-                        }
-                    }
-
-                    LoginIconButton {
-                        iconSource: "qrc:/icons/close.png"
-                        onClicked: Qt.quit()
+                width: implicitWidth
+                height: implicitHeight
+                chatPageActive: root.chatPageActive
+                onPetRequested: root.togglePetWindow()
+                onMinimizeRequested: appWindow.showMinimized()
+                onMaximizeRequested: {
+                    if (appWindow.visibility === Window.Maximized) {
+                        appWindow.showNormal()
+                    } else {
+                        appWindow.showMaximized()
                     }
                 }
+                onCloseRequested: Qt.quit()
             }
         }
     }

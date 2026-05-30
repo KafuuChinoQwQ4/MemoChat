@@ -1,343 +1,473 @@
 #include "PostgresMgr.h"
 #include "logging/Logger.h"
 
-
-PostgresMgr::~PostgresMgr() {
-	if (_dao) {
-		_dao.reset();
-	}
+PostgresMgr::~PostgresMgr()
+{
+    if (_dao)
+    {
+        _dao.reset();
+    }
 }
 
-void PostgresMgr::EnsurePostgresDaoInitialized(PostgresMgr* mgr) {
-	if (mgr->_dao) {
-		return;
-	}
-	try {
-		mgr->_dao = std::make_unique<PostgresDao>();
-	}
-	catch (const std::exception& e) {
-		memolog::LogError("service.postgres_init_failed",
-			"PostgresMgr failed to initialize PostgresDao - service cannot start",
-			{{"error", e.what()}});
-		throw;
-	}
+void PostgresMgr::EnsurePostgresDaoInitialized(PostgresMgr* mgr)
+{
+    if (mgr->_dao)
+    {
+        return;
+    }
+    try
+    {
+        mgr->_dao = std::make_unique<PostgresDao>();
+    }
+    catch (const std::exception& e)
+    {
+        memolog::LogError("service.postgres_init_failed",
+                          "PostgresMgr failed to initialize PostgresDao - service cannot start",
+                          {{"error", e.what()}});
+        throw;
+    }
 }
 
-PostgresMgr::PostgresMgr() {
+PostgresMgr::PostgresMgr()
+{
 }
 
-int PostgresMgr::RegUser(const std::string& name, const std::string& email, const std::string& pwd) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->RegUser(name, email, pwd);
+int PostgresMgr::RegUser(const std::string& name, const std::string& email, const std::string& pwd)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->RegUser(name, email, pwd);
 }
 
-bool PostgresMgr::CheckEmail(const std::string& name, const std::string& email) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->CheckEmail(name, email);
+bool PostgresMgr::CheckEmail(const std::string& name, const std::string& email)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->CheckEmail(name, email);
 }
 
-bool PostgresMgr::UpdatePwd(const std::string& name, const std::string& pwd) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->UpdatePwd(name, pwd);
+bool PostgresMgr::UpdatePwd(const std::string& name, const std::string& pwd)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->UpdatePwd(name, pwd);
 }
 
-bool PostgresMgr::CheckPwd(const std::string& name, const std::string& pwd, UserInfo& userInfo) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->CheckPwd(name, pwd, userInfo);
+bool PostgresMgr::CheckPwd(const std::string& name, const std::string& pwd, UserInfo& userInfo)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->CheckPwd(name, pwd, userInfo);
 }
 
-bool PostgresMgr::AddFriendApply(const int& from, const int& to) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->AddFriendApply(from, to);
+bool PostgresMgr::AddFriendApply(const int& from, const int& to)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->AddFriendApply(from, to);
 }
 
-bool PostgresMgr::AuthFriendApply(const int& from, const int& to) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->AuthFriendApply(from, to);
+bool PostgresMgr::AuthFriendApply(const int& from, const int& to)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->AuthFriendApply(from, to);
 }
 
-bool PostgresMgr::AddFriend(const int& from, const int& to, std::string back_name) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->AddFriend(from, to, back_name);
+bool PostgresMgr::AddFriend(const int& from, const int& to, std::string back_name)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->AddFriend(from, to, back_name);
 }
 
-bool PostgresMgr::DeleteFriend(const int& from, const int& to) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->DeleteFriend(from, to);
+bool PostgresMgr::DeleteFriend(const int& from, const int& to)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->DeleteFriend(from, to);
 }
 
-bool PostgresMgr::ReplaceApplyTags(const int& from, const int& to, const std::vector<std::string>& tags) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->ReplaceApplyTags(from, to, tags);
+bool PostgresMgr::ReplaceApplyTags(const int& from, const int& to, const std::vector<std::string>& tags)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->ReplaceApplyTags(from, to, tags);
 }
 
-bool PostgresMgr::ReplaceFriendTags(const int& self_id, const int& friend_id, const std::vector<std::string>& tags) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->ReplaceFriendTags(self_id, friend_id, tags);
+bool PostgresMgr::ReplaceFriendTags(const int& self_id, const int& friend_id, const std::vector<std::string>& tags)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->ReplaceFriendTags(self_id, friend_id, tags);
 }
 
-std::vector<std::string> PostgresMgr::GetApplyTags(const int& from, const int& to) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetApplyTags(from, to);
+std::vector<std::string> PostgresMgr::GetApplyTags(const int& from, const int& to)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetApplyTags(from, to);
 }
 
-std::vector<std::string> PostgresMgr::GetFriendTags(const int& self_id, const int& friend_id) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetFriendTags(self_id, friend_id);
+std::vector<std::string> PostgresMgr::GetFriendTags(const int& self_id, const int& friend_id)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetFriendTags(self_id, friend_id);
 }
-std::shared_ptr<UserInfo> PostgresMgr::GetUser(int uid) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetUser(uid);
-}
-
-std::shared_ptr<UserInfo> PostgresMgr::GetUser(std::string name) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetUser(name);
+std::shared_ptr<UserInfo> PostgresMgr::GetUser(int uid)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetUser(uid);
 }
 
-bool PostgresMgr::GetUidByUserId(const std::string& user_id, int& uid) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetUidByUserId(user_id, uid);
+std::shared_ptr<UserInfo> PostgresMgr::GetUser(std::string name)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetUser(name);
 }
 
-bool PostgresMgr::GetApplyList(int touid,
-	std::vector<std::shared_ptr<ApplyInfo>>& applyList, int begin, int limit) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetApplyList(touid, applyList, begin, limit);
+bool PostgresMgr::GetUidByUserId(const std::string& user_id, int& uid)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetUidByUserId(user_id, uid);
 }
 
-bool PostgresMgr::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo> >& user_info) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetFriendList(self_id, user_info);
+bool PostgresMgr::GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& applyList, int begin, int limit)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetApplyList(touid, applyList, begin, limit);
 }
 
-bool PostgresMgr::SavePrivateMessage(const PrivateMessageInfo& msg) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->SavePrivateMessage(msg);
+bool PostgresMgr::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo>>& user_info)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetFriendList(self_id, user_info);
 }
 
-bool PostgresMgr::EnqueueChatOutboxEvent(const ChatOutboxEventInfo& event) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->EnqueueChatOutboxEvent(event);
+bool PostgresMgr::SavePrivateMessage(const PrivateMessageInfo& msg)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->SavePrivateMessage(msg);
 }
 
-bool PostgresMgr::GetPendingChatOutboxEvents(int limit, std::vector<ChatOutboxEventInfo>& events) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetPendingChatOutboxEvents(limit, events);
+bool PostgresMgr::EnqueueChatOutboxEvent(const ChatOutboxEventInfo& event)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->EnqueueChatOutboxEvent(event);
 }
 
-bool PostgresMgr::MarkChatOutboxEventPublished(int64_t id, int64_t published_at_ms) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->MarkChatOutboxEventPublished(id, published_at_ms);
+bool PostgresMgr::GetPendingChatOutboxEvents(int limit, std::vector<ChatOutboxEventInfo>& events)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetPendingChatOutboxEvents(limit, events);
 }
 
-bool PostgresMgr::MarkChatOutboxEventRetry(int64_t id, int retry_count, int64_t next_retry_at_ms, const std::string& last_error, bool terminal_error) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->MarkChatOutboxEventRetry(id, retry_count, next_retry_at_ms, last_error, terminal_error);
+bool PostgresMgr::MarkChatOutboxEventPublished(int64_t id, int64_t published_at_ms)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->MarkChatOutboxEventPublished(id, published_at_ms);
 }
 
-bool PostgresMgr::ExpediteChatOutboxEventRetry(int64_t id) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->ExpediteChatOutboxEventRetry(id);
+bool PostgresMgr::MarkChatOutboxEventRetry(int64_t id,
+                                           int retry_count,
+                                           int64_t next_retry_at_ms,
+                                           const std::string& last_error,
+                                           bool terminal_error)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->MarkChatOutboxEventRetry(id, retry_count, next_retry_at_ms, last_error, terminal_error);
 }
 
-bool PostgresMgr::GetPrivateHistory(const int& uid, const int& peer_uid, const int64_t& before_ts, const std::string& before_msg_id, const int& limit,
-	std::vector<std::shared_ptr<PrivateMessageInfo>>& messages, bool& has_more) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetPrivateHistory(uid, peer_uid, before_ts, before_msg_id, limit, messages, has_more);
+bool PostgresMgr::ExpediteChatOutboxEventRetry(int64_t id)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->ExpediteChatOutboxEventRetry(id);
 }
 
-bool PostgresMgr::GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_ptr<PrivateMessageInfo>& message) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetPrivateMessageByMsgId(msg_id, message);
+bool PostgresMgr::GetPrivateHistory(const int& uid,
+                                    const int& peer_uid,
+                                    const int64_t& before_ts,
+                                    const std::string& before_msg_id,
+                                    const int& limit,
+                                    std::vector<std::shared_ptr<PrivateMessageInfo>>& messages,
+                                    bool& has_more)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetPrivateHistory(uid, peer_uid, before_ts, before_msg_id, limit, messages, has_more);
 }
 
-bool PostgresMgr::UpdatePrivateMessageContent(const int& uid, const int& peer_uid, const std::string& msg_id,
-	const std::string& content, int64_t edited_at_ms) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->UpdatePrivateMessageContent(uid, peer_uid, msg_id, content, edited_at_ms);
+bool PostgresMgr::GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_ptr<PrivateMessageInfo>& message)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetPrivateMessageByMsgId(msg_id, message);
 }
 
-bool PostgresMgr::RevokePrivateMessage(const int& uid, const int& peer_uid, const std::string& msg_id,
-	int64_t deleted_at_ms) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->RevokePrivateMessage(uid, peer_uid, msg_id, deleted_at_ms);
+bool PostgresMgr::UpdatePrivateMessageContent(const int& uid,
+                                              const int& peer_uid,
+                                              const std::string& msg_id,
+                                              const std::string& content,
+                                              int64_t edited_at_ms)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->UpdatePrivateMessageContent(uid, peer_uid, msg_id, content, edited_at_ms);
 }
 
-bool PostgresMgr::UpsertPrivateReadState(const int& uid, const int& peer_uid, const int64_t& read_ts) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->UpsertPrivateReadState(uid, peer_uid, read_ts);
+bool PostgresMgr::RevokePrivateMessage(const int& uid,
+                                       const int& peer_uid,
+                                       const std::string& msg_id,
+                                       int64_t deleted_at_ms)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->RevokePrivateMessage(uid, peer_uid, msg_id, deleted_at_ms);
 }
 
-bool PostgresMgr::IsFriend(const int& self_id, const int& friend_id) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->IsFriend(self_id, friend_id);
+bool PostgresMgr::UpsertPrivateReadState(const int& uid, const int& peer_uid, const int64_t& read_ts)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->UpsertPrivateReadState(uid, peer_uid, read_ts);
 }
 
-bool PostgresMgr::CreateGroup(const int& owner_uid, const std::string& name, const std::string& announcement,
-	const int& member_limit, const std::vector<int>& initial_members, int64_t& out_group_id, std::string& out_group_code) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->CreateGroup(owner_uid, name, announcement, member_limit, initial_members, out_group_id, out_group_code);
+bool PostgresMgr::IsFriend(const int& self_id, const int& friend_id)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->IsFriend(self_id, friend_id);
 }
 
-bool PostgresMgr::GetGroupIdByCode(const std::string& group_code, int64_t& out_group_id) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetGroupIdByCode(group_code, out_group_id);
+bool PostgresMgr::CreateGroup(const int& owner_uid,
+                              const std::string& name,
+                              const std::string& announcement,
+                              const int& member_limit,
+                              const std::vector<int>& initial_members,
+                              int64_t& out_group_id,
+                              std::string& out_group_code)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao
+        ->CreateGroup(owner_uid, name, announcement, member_limit, initial_members, out_group_id, out_group_code);
 }
 
-bool PostgresMgr::GetUserGroupList(const int& uid, std::vector<std::shared_ptr<GroupInfo>>& group_list) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetUserGroupList(uid, group_list);
+bool PostgresMgr::GetGroupIdByCode(const std::string& group_code, int64_t& out_group_id)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetGroupIdByCode(group_code, out_group_id);
 }
 
-bool PostgresMgr::GetGroupMemberList(const int64_t& group_id, std::vector<std::shared_ptr<GroupMemberInfo>>& member_list) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetGroupMemberList(group_id, member_list);
+bool PostgresMgr::GetUserGroupList(const int& uid, std::vector<std::shared_ptr<GroupInfo>>& group_list)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetUserGroupList(uid, group_list);
 }
 
-bool PostgresMgr::InviteGroupMember(const int64_t& group_id, const int& inviter_uid, const int& target_uid, const std::string& reason) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->InviteGroupMember(group_id, inviter_uid, target_uid, reason);
+bool PostgresMgr::GetGroupMemberList(const int64_t& group_id,
+                                     std::vector<std::shared_ptr<GroupMemberInfo>>& member_list)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetGroupMemberList(group_id, member_list);
 }
 
-bool PostgresMgr::ApplyJoinGroup(const int64_t& group_id, const int& applicant_uid, const std::string& reason) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->ApplyJoinGroup(group_id, applicant_uid, reason);
+bool PostgresMgr::InviteGroupMember(const int64_t& group_id,
+                                    const int& inviter_uid,
+                                    const int& target_uid,
+                                    const std::string& reason)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->InviteGroupMember(group_id, inviter_uid, target_uid, reason);
 }
 
-bool PostgresMgr::ReviewGroupApply(const int64_t& apply_id, const int& reviewer_uid, const bool& agree, std::shared_ptr<GroupApplyInfo>& apply_info) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->ReviewGroupApply(apply_id, reviewer_uid, agree, apply_info);
+bool PostgresMgr::ApplyJoinGroup(const int64_t& group_id, const int& applicant_uid, const std::string& reason)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->ApplyJoinGroup(group_id, applicant_uid, reason);
 }
 
-bool PostgresMgr::SaveGroupMessage(const GroupMessageInfo& msg, int64_t* out_server_msg_id, int64_t* out_group_seq, int64_t assigned_group_seq) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->SaveGroupMessage(msg, out_server_msg_id, out_group_seq, assigned_group_seq);
+bool PostgresMgr::ReviewGroupApply(const int64_t& apply_id,
+                                   const int& reviewer_uid,
+                                   const bool& agree,
+                                   std::shared_ptr<GroupApplyInfo>& apply_info)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->ReviewGroupApply(apply_id, reviewer_uid, agree, apply_info);
 }
 
-bool PostgresMgr::UpdateGroupMessageContent(const int64_t& group_id, const int& operator_uid, const std::string& msg_id,
-	const std::string& content, int64_t edited_at_ms) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->UpdateGroupMessageContent(group_id, operator_uid, msg_id, content, edited_at_ms);
+bool PostgresMgr::SaveGroupMessage(const GroupMessageInfo& msg,
+                                   int64_t* out_server_msg_id,
+                                   int64_t* out_group_seq,
+                                   int64_t assigned_group_seq)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->SaveGroupMessage(msg, out_server_msg_id, out_group_seq, assigned_group_seq);
 }
 
-bool PostgresMgr::RevokeGroupMessage(const int64_t& group_id, const int& operator_uid, const std::string& msg_id,
-	int64_t deleted_at_ms) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->RevokeGroupMessage(group_id, operator_uid, msg_id, deleted_at_ms);
+bool PostgresMgr::UpdateGroupMessageContent(const int64_t& group_id,
+                                            const int& operator_uid,
+                                            const std::string& msg_id,
+                                            const std::string& content,
+                                            int64_t edited_at_ms)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->UpdateGroupMessageContent(group_id, operator_uid, msg_id, content, edited_at_ms);
 }
 
-bool PostgresMgr::GetGroupHistory(const int64_t& group_id, const int64_t& before_ts, const int64_t& before_seq, const int& limit,
-	std::vector<std::shared_ptr<GroupMessageInfo>>& messages, bool& has_more) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetGroupHistory(group_id, before_ts, before_seq, limit, messages, has_more);
+bool PostgresMgr::RevokeGroupMessage(const int64_t& group_id,
+                                     const int& operator_uid,
+                                     const std::string& msg_id,
+                                     int64_t deleted_at_ms)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->RevokeGroupMessage(group_id, operator_uid, msg_id, deleted_at_ms);
 }
 
-bool PostgresMgr::UpdateGroupAnnouncement(const int64_t& group_id, const int& operator_uid, const std::string& announcement) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->UpdateGroupAnnouncement(group_id, operator_uid, announcement);
+bool PostgresMgr::GetGroupHistory(const int64_t& group_id,
+                                  const int64_t& before_ts,
+                                  const int64_t& before_seq,
+                                  const int& limit,
+                                  std::vector<std::shared_ptr<GroupMessageInfo>>& messages,
+                                  bool& has_more)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetGroupHistory(group_id, before_ts, before_seq, limit, messages, has_more);
 }
 
-bool PostgresMgr::UpdateGroupIcon(const int64_t& group_id, const int& operator_uid, const std::string& icon) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->UpdateGroupIcon(group_id, operator_uid, icon);
+bool PostgresMgr::UpdateGroupAnnouncement(const int64_t& group_id,
+                                          const int& operator_uid,
+                                          const std::string& announcement)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->UpdateGroupAnnouncement(group_id, operator_uid, announcement);
 }
 
-bool PostgresMgr::SetGroupAdmin(const int64_t& group_id, const int& operator_uid, const int& target_uid, const bool& is_admin, const int64_t& permission_bits) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->SetGroupAdmin(group_id, operator_uid, target_uid, is_admin, permission_bits);
+bool PostgresMgr::UpdateGroupIcon(const int64_t& group_id, const int& operator_uid, const std::string& icon)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->UpdateGroupIcon(group_id, operator_uid, icon);
 }
 
-bool PostgresMgr::MuteGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid, const int64_t& mute_until) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->MuteGroupMember(group_id, operator_uid, target_uid, mute_until);
+bool PostgresMgr::SetGroupAdmin(const int64_t& group_id,
+                                const int& operator_uid,
+                                const int& target_uid,
+                                const bool& is_admin,
+                                const int64_t& permission_bits)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->SetGroupAdmin(group_id, operator_uid, target_uid, is_admin, permission_bits);
 }
 
-bool PostgresMgr::KickGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->KickGroupMember(group_id, operator_uid, target_uid);
+bool PostgresMgr::MuteGroupMember(const int64_t& group_id,
+                                  const int& operator_uid,
+                                  const int& target_uid,
+                                  const int64_t& mute_until)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->MuteGroupMember(group_id, operator_uid, target_uid, mute_until);
 }
 
-bool PostgresMgr::QuitGroup(const int64_t& group_id, const int& uid) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->QuitGroup(group_id, uid);
+bool PostgresMgr::KickGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->KickGroupMember(group_id, operator_uid, target_uid);
 }
 
-bool PostgresMgr::DissolveGroup(const int64_t& group_id, const int& operator_uid) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->DissolveGroup(group_id, operator_uid);
+bool PostgresMgr::QuitGroup(const int64_t& group_id, const int& uid)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->QuitGroup(group_id, uid);
 }
 
-bool PostgresMgr::GetGroupById(const int64_t& group_id, std::shared_ptr<GroupInfo>& group_info) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetGroupById(group_id, group_info);
+bool PostgresMgr::DissolveGroup(const int64_t& group_id, const int& operator_uid)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->DissolveGroup(group_id, operator_uid);
 }
 
-bool PostgresMgr::GetUserRoleInGroup(const int64_t& group_id, const int& uid, int& role) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetUserRoleInGroup(group_id, uid, role);
+bool PostgresMgr::GetGroupById(const int64_t& group_id, std::shared_ptr<GroupInfo>& group_info)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetGroupById(group_id, group_info);
 }
 
-bool PostgresMgr::IsUserInGroup(const int64_t& group_id, const int& uid) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->IsUserInGroup(group_id, uid);
+bool PostgresMgr::GetUserRoleInGroup(const int64_t& group_id, const int& uid, int& role)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetUserRoleInGroup(group_id, uid, role);
 }
 
-bool PostgresMgr::GetPendingGroupApplyForReviewer(const int& reviewer_uid, std::vector<std::shared_ptr<GroupApplyInfo>>& applies, int limit) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetPendingGroupApplyForReviewer(reviewer_uid, applies, limit);
+bool PostgresMgr::IsUserInGroup(const int64_t& group_id, const int& uid)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->IsUserInGroup(group_id, uid);
 }
 
-bool PostgresMgr::GetDialogMetaByOwner(const int& owner_uid, std::vector<std::shared_ptr<DialogMetaInfo>>& metas) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetDialogMetaByOwner(owner_uid, metas);
+bool PostgresMgr::GetPendingGroupApplyForReviewer(const int& reviewer_uid,
+                                                  std::vector<std::shared_ptr<GroupApplyInfo>>& applies,
+                                                  int limit)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetPendingGroupApplyForReviewer(reviewer_uid, applies, limit);
 }
 
-bool PostgresMgr::GetPrivateDialogRuntime(const int& owner_uid, const int& peer_uid, DialogRuntimeInfo& runtime) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetPrivateDialogRuntime(owner_uid, peer_uid, runtime);
+bool PostgresMgr::GetDialogMetaByOwner(const int& owner_uid, std::vector<std::shared_ptr<DialogMetaInfo>>& metas)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetDialogMetaByOwner(owner_uid, metas);
 }
 
-bool PostgresMgr::GetGroupDialogRuntime(const int& owner_uid, const int64_t& group_id, DialogRuntimeInfo& runtime) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetGroupDialogRuntime(owner_uid, group_id, runtime);
+bool PostgresMgr::GetPrivateDialogRuntime(const int& owner_uid, const int& peer_uid, DialogRuntimeInfo& runtime)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetPrivateDialogRuntime(owner_uid, peer_uid, runtime);
 }
 
-bool PostgresMgr::RefreshDialogsForOwner(const int& owner_uid) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->RefreshDialogsForOwner(owner_uid);
+bool PostgresMgr::GetGroupDialogRuntime(const int& owner_uid, const int64_t& group_id, DialogRuntimeInfo& runtime)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetGroupDialogRuntime(owner_uid, group_id, runtime);
 }
 
-bool PostgresMgr::UpsertGroupReadState(const int& uid, const int64_t& group_id, const int64_t& read_ts) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->UpsertGroupReadState(uid, group_id, read_ts);
+bool PostgresMgr::RefreshDialogsForOwner(const int& owner_uid)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->RefreshDialogsForOwner(owner_uid);
 }
 
-bool PostgresMgr::GetGroupMessageByMsgId(const int64_t& group_id, const std::string& msg_id, std::shared_ptr<GroupMessageInfo>& message) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetGroupMessageByMsgId(group_id, msg_id, message);
+bool PostgresMgr::UpsertGroupReadState(const int& uid, const int64_t& group_id, const int64_t& read_ts)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->UpsertGroupReadState(uid, group_id, read_ts);
 }
 
-bool PostgresMgr::UpsertDialogDraft(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
-	const int64_t& group_id, const std::string& draft_text) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->UpsertDialogDraft(owner_uid, dialog_type, peer_uid, group_id, draft_text);
+bool PostgresMgr::GetGroupMessageByMsgId(const int64_t& group_id,
+                                         const std::string& msg_id,
+                                         std::shared_ptr<GroupMessageInfo>& message)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetGroupMessageByMsgId(group_id, msg_id, message);
 }
 
-bool PostgresMgr::UpsertDialogPinned(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
-	const int64_t& group_id, const int& pinned_rank) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->UpsertDialogPinned(owner_uid, dialog_type, peer_uid, group_id, pinned_rank);
+bool PostgresMgr::UpsertDialogDraft(const int& owner_uid,
+                                    const std::string& dialog_type,
+                                    const int& peer_uid,
+                                    const int64_t& group_id,
+                                    const std::string& draft_text)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->UpsertDialogDraft(owner_uid, dialog_type, peer_uid, group_id, draft_text);
 }
 
-bool PostgresMgr::UpsertDialogMuteState(const int& owner_uid, const std::string& dialog_type, const int& peer_uid,
-	const int64_t& group_id, const int& mute_state) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->UpsertDialogMuteState(owner_uid, dialog_type, peer_uid, group_id, mute_state);
+bool PostgresMgr::UpsertDialogPinned(const int& owner_uid,
+                                     const std::string& dialog_type,
+                                     const int& peer_uid,
+                                     const int64_t& group_id,
+                                     const int& pinned_rank)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->UpsertDialogPinned(owner_uid, dialog_type, peer_uid, group_id, pinned_rank);
 }
 
-bool PostgresMgr::GetUndeliveredPrivateMessages(const int& to_uid, const int64_t& after_created_at, const std::string& after_msg_id, int limit,
-	std::vector<std::shared_ptr<PrivateMessageInfo>>& messages) {
-	EnsurePostgresDaoInitialized(this);
-	return _dao->GetUndeliveredPrivateMessages(to_uid, after_created_at, after_msg_id, limit, messages);
+bool PostgresMgr::UpsertDialogMuteState(const int& owner_uid,
+                                        const std::string& dialog_type,
+                                        const int& peer_uid,
+                                        const int64_t& group_id,
+                                        const int& mute_state)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->UpsertDialogMuteState(owner_uid, dialog_type, peer_uid, group_id, mute_state);
+}
+
+bool PostgresMgr::GetUndeliveredPrivateMessages(const int& to_uid,
+                                                const int64_t& after_created_at,
+                                                const std::string& after_msg_id,
+                                                int limit,
+                                                std::vector<std::shared_ptr<PrivateMessageInfo>>& messages)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetUndeliveredPrivateMessages(to_uid, after_created_at, after_msg_id, limit, messages);
 }

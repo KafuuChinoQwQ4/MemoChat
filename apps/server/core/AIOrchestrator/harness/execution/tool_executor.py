@@ -4,7 +4,6 @@ import asyncio
 import re
 
 import structlog
-
 from graph.recommendation import RecommendationEngine
 from harness.contracts import PlanStep, ToolObservation, ToolSpec
 from harness.knowledge.service import KnowledgeService
@@ -51,8 +50,12 @@ class ToolExecutor:
                         tags=["tool", "rag"],
                     ) as run:
                         try:
-                            hits = await self._knowledge_service.search(uid, content, top_k=step.parameters.get("top_k"))
-                            set_run_output(run, {"hit_count": len(hits), "scores": [hit.get("score", 0.0) for hit in hits]})
+                            hits = await self._knowledge_service.search(
+                                uid, content, top_k=step.parameters.get("top_k")
+                            )
+                            set_run_output(
+                                run, {"hit_count": len(hits), "scores": [hit.get("score", 0.0) for hit in hits]}
+                            )
                         except Exception as exc:
                             set_run_error(run, exc)
                             raise
@@ -249,16 +252,16 @@ class ToolExecutor:
         lowered = tool_name.lower()
         if any(token in lowered for token in ("delete", "remove", "drop", "destroy", "purge", "reset")):
             return "admin"
-        if any(token in lowered for token in ("write", "create", "update", "edit", "insert", "upsert", "send", "publish")):
+        if any(
+            token in lowered for token in ("write", "create", "update", "edit", "insert", "upsert", "send", "publish")
+        ):
             return "write"
         return "read"
 
     def _validate_tool_payload(self, spec: ToolSpec, payload: dict) -> dict:
         schema = spec.parameters_schema or {}
         clean_payload = {
-            key: value
-            for key, value in payload.items()
-            if key not in {"confirm", "confirmed", "confirmation_token"}
+            key: value for key, value in payload.items() if key not in {"confirm", "confirmed", "confirmation_token"}
         }
 
         required = schema.get("required", [])

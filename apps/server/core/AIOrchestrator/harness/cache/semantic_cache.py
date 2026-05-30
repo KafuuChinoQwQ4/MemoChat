@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
-
 from config import settings
 from observability.metrics import ai_metrics
 
@@ -56,7 +55,9 @@ _VOLATILE_KEYWORDS = (
     "current",
 )
 _CJK_TEXT_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
-_CJK_INNER_SPACE_RE = re.compile(r"(?<=[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])\s+(?=[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])")
+_CJK_INNER_SPACE_RE = re.compile(
+    r"(?<=[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])\s+(?=[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])"
+)
 _TERMINAL_PUNCTUATION = "?？!！。."
 
 
@@ -428,7 +429,9 @@ class SemanticCacheService:
             return _CacheDecision(False, "question_too_long")
 
         actions = {str(getattr(step, "action", "") or "") for step in (plan_steps or [])}
-        requested_tools = [str(tool).strip() for tool in (getattr(request, "requested_tools", []) or []) if str(tool).strip()]
+        requested_tools = [
+            str(tool).strip() for tool in (getattr(request, "requested_tools", []) or []) if str(tool).strip()
+        ]
         if not force and requested_tools and not self._config.cache_tool_results:
             return _CacheDecision(False, "requested_tools")
         if not force and actions and not self._config.cache_tool_results:
@@ -438,7 +441,11 @@ class SemanticCacheService:
         if not force and actions.intersection(blocked_actions):
             return _CacheDecision(False, "non_cacheable_action")
         lowered = content.lower()
-        if not force and self._config.skip_volatile_inputs and any(keyword in content or keyword in lowered for keyword in _VOLATILE_KEYWORDS):
+        if (
+            not force
+            and self._config.skip_volatile_inputs
+            and any(keyword in content or keyword in lowered for keyword in _VOLATILE_KEYWORDS)
+        ):
             return _CacheDecision(False, "volatile_input")
 
         scope_key = self._scope_key(request, metadata)

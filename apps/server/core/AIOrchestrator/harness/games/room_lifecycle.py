@@ -33,7 +33,9 @@ def is_locked_room(state: GameState) -> bool:
     if not isinstance(state.room.config, dict):
         return False
     locked_config = state.room.config.get("locked_config")
-    return bool(state.room.config.get("locked") or isinstance(locked_config, dict) and locked_config.get("locked", True))
+    return bool(
+        state.room.config.get("locked") or isinstance(locked_config, dict) and locked_config.get("locked", True)
+    )
 
 
 def get_locked_config(state: GameState) -> dict[str, Any]:
@@ -41,9 +43,7 @@ def get_locked_config(state: GameState) -> dict[str, Any]:
     if isinstance(raw, dict):
         return copy.deepcopy(raw)
     agent_preset_pool = [
-        _agent_preset_from_participant(participant)
-        for participant in state.participants
-        if participant.kind == "agent"
+        _agent_preset_from_participant(participant) for participant in state.participants if participant.kind == "agent"
     ]
     human = next((participant for participant in state.participants if participant.kind == "human"), None)
     return {
@@ -100,11 +100,7 @@ def reset_participants_for_restart(
     locked_config: dict[str, Any],
     shuffle_marker: str,
 ) -> list[GameParticipant]:
-    agent_preset_pool = [
-        dict(item)
-        for item in locked_config.get("agent_preset_pool", [])
-        if isinstance(item, dict)
-    ]
+    agent_preset_pool = [dict(item) for item in locked_config.get("agent_preset_pool", []) if isinstance(item, dict)]
     agents = [participant for participant in participants if participant.kind == "agent"]
     if len(agent_preset_pool) != len(agents):
         raise ValueError("locked agent preset pool does not match room participants")
@@ -156,7 +152,9 @@ def _agent_preset_from_participant(participant: GameParticipant) -> dict[str, An
 
 
 def _apply_agent_preset(participant: GameParticipant, preset: dict[str, Any], shuffle_marker: str) -> None:
-    participant.display_name = str(preset.get("display_name") or preset.get("name") or participant.display_name or "AI玩家")
+    participant.display_name = str(
+        preset.get("display_name") or preset.get("name") or participant.display_name or "AI玩家"
+    )
     participant.model_type = str(preset.get("model_type") or "")
     participant.model_name = str(preset.get("model_name") or "")
     participant.persona = str(preset.get("persona") or "")

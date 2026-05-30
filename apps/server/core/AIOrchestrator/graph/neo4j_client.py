@@ -2,13 +2,14 @@
 Neo4j 客户端 — 异步连接管理
 支持同步/异步查询，自动重连，连接池
 """
+
 import asyncio
 from typing import Any, Optional
-import structlog
-from neo4j import AsyncGraphDatabase, Driver, GraphDatabase
-from neo4j.exceptions import ServiceUnavailable, AuthError
 
+import structlog
 from config import settings
+from neo4j import AsyncGraphDatabase, Driver, GraphDatabase
+from neo4j.exceptions import AuthError, ServiceUnavailable
 
 logger = structlog.get_logger()
 
@@ -120,6 +121,7 @@ class Neo4jClient:
 
         if self._async_driver:
             import asyncio
+
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():

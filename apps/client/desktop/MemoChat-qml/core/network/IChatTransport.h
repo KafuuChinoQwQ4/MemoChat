@@ -10,7 +10,10 @@ class IChatTransport : public QObject
 {
     Q_OBJECT
 public:
-    explicit IChatTransport(QObject *parent = nullptr) : QObject(parent) {}
+    explicit IChatTransport(QObject* parent = nullptr)
+        : QObject(parent)
+    {
+    }
     ~IChatTransport() override = default;
 
     virtual void CloseConnection() = 0;

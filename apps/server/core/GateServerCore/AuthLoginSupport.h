@@ -6,9 +6,11 @@
 #include <string>
 #include <vector>
 
-namespace gateauthsupport {
+namespace gateauthsupport
+{
 
-struct UserInfo {
+struct UserInfo
+{
     std::string name;
     std::string pwd;
     int uid = 0;
@@ -20,7 +22,8 @@ struct UserInfo {
     int sex = 0;
 };
 
-struct ChatRouteNode {
+struct ChatRouteNode
+{
     std::string name;
     std::string host;
     std::string port;
@@ -45,9 +48,8 @@ void InvalidateLoginCacheByEmail(const std::string& email);
 void InvalidateLoginCacheByUid(int uid);
 std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load_snapshot = nullptr,
                                                   std::vector<std::string>* least_loaded_snapshot = nullptr);
-std::vector<ChatRouteNode> SelectChatRouteViaStatus(int uid,
-                                                    std::string* status_detail = nullptr,
-                                                    std::string* http_token = nullptr);
+std::vector<ChatRouteNode>
+SelectChatRouteViaStatus(int uid, std::string* status_detail = nullptr, std::string* http_token = nullptr);
 std::vector<ChatRouteNode> SelectChatRouteForLogin(int uid,
                                                    std::vector<std::string>* load_snapshot = nullptr,
                                                    std::vector<std::string>* least_loaded_snapshot = nullptr,

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import sys
 import unittest
-from typing import get_type_hints
 from pathlib import Path
+from typing import get_type_hints
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

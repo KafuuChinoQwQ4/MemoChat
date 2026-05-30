@@ -11,6 +11,12 @@
 #include <QSet>
 #include "global.h"
 #include "AuthController.h"
+#include "AppControllerConnectionState.h"
+#include "AppControllerDialogStateData.h"
+#include "AppControllerGroupState.h"
+#include "AppControllerPendingSendState.h"
+#include "AppControllerRuntimeState.h"
+#include "AppControllerUserState.h"
 #include "CallController.h"
 #include "CallSessionModel.h"
 #include "ChatController.h"
@@ -114,7 +120,8 @@ class AppController : public QObject
     Q_PROPERTY(CallSessionModel* callSession READ callSession CONSTANT)
     Q_PROPERTY(LivekitBridge* livekitBridge READ livekitBridge CONSTANT)
     Q_PROPERTY(QString currentDraftText READ currentDraftText NOTIFY currentDraftTextChanged)
-    Q_PROPERTY(QVariantList currentPendingAttachments READ currentPendingAttachments NOTIFY currentPendingAttachmentsChanged)
+    Q_PROPERTY(
+        QVariantList currentPendingAttachments READ currentPendingAttachments NOTIFY currentPendingAttachmentsChanged)
     Q_PROPERTY(bool hasPendingAttachments READ hasPendingAttachments NOTIFY currentPendingAttachmentsChanged)
     Q_PROPERTY(bool currentDialogPinned READ currentDialogPinned NOTIFY currentDialogPinnedChanged)
     Q_PROPERTY(bool currentDialogMuted READ currentDialogMuted NOTIFY currentDialogMutedChanged)
@@ -128,7 +135,8 @@ class AppController : public QObject
     Q_PROPERTY(bool chatShellBusy READ chatShellBusy NOTIFY lazyBootstrapStateChanged)
 
 public:
-    enum Page {
+    enum Page
+    {
         LoginPage = 0,
         RegisterPage = 1,
         ResetPage = 2,
@@ -136,7 +144,8 @@ public:
     };
     Q_ENUM(Page)
 
-    enum ChatTab {
+    enum ChatTab
+    {
         ChatTabPage = 0,
         ContactTabPage = 1,
         SettingsTabPage = 2,
@@ -146,13 +155,14 @@ public:
     };
     Q_ENUM(ChatTab)
 
-    enum ContactPane {
+    enum ContactPane
+    {
         ApplyRequestPane = 0,
         FriendInfoPane = 1
     };
     Q_ENUM(ContactPane)
 
-    explicit AppController(QObject *parent = nullptr);
+    explicit AppController(QObject* parent = nullptr);
     ~AppController();
 
     Page page() const;
@@ -191,19 +201,19 @@ public:
     bool currentGroupCanPinMessages() const;
     bool currentGroupCanBanUsers() const;
     bool currentGroupCanManageTopics() const;
-    FriendListModel *dialogListModel();
-    FriendListModel *chatListModel();
-    FriendListModel *groupListModel();
-    FriendListModel *contactListModel();
-    ChatMessageModel *messageModel();
-    SearchResultModel *searchResultModel();
-    ApplyRequestModel *applyRequestModel();
-    MomentsModel *momentsModel() const;
-    MomentsController *momentsController() const;
-    AgentController *agentController() const;
-    AgentMessageModel *agentMessageModel() const;
-    PetController *petController() const;
-    R18Controller *r18Controller() const;
+    FriendListModel* dialogListModel();
+    FriendListModel* chatListModel();
+    FriendListModel* groupListModel();
+    FriendListModel* contactListModel();
+    ChatMessageModel* messageModel();
+    SearchResultModel* searchResultModel();
+    ApplyRequestModel* applyRequestModel();
+    MomentsModel* momentsModel() const;
+    MomentsController* momentsController() const;
+    AgentController* agentController() const;
+    AgentMessageModel* agentMessageModel() const;
+    PetController* petController() const;
+    R18Controller* r18Controller() const;
     bool searchPending() const;
     QString searchStatusText() const;
     bool searchStatusError() const;
@@ -222,8 +232,8 @@ public:
     bool groupStatusError() const;
     bool mediaUploadInProgress() const;
     QString mediaUploadProgressText() const;
-    CallSessionModel *callSession();
-    LivekitBridge *livekitBridge();
+    CallSessionModel* callSession();
+    LivekitBridge* livekitBridge();
     QString currentDraftText() const;
     QVariantList currentPendingAttachments() const;
     bool hasPendingAttachments() const;
@@ -258,17 +268,17 @@ public:
     Q_INVOKABLE void loadMoreChats();
     Q_INVOKABLE void loadMorePrivateHistory();
     Q_INVOKABLE void loadMoreContacts();
-    Q_INVOKABLE void sendTextMessage(const QString &text);
-    Q_INVOKABLE void sendCurrentComposerPayload(const QString &text);
+    Q_INVOKABLE void sendTextMessage(const QString& text);
+    Q_INVOKABLE void sendCurrentComposerPayload(const QString& text);
     Q_INVOKABLE void sendImageMessage();
     Q_INVOKABLE void sendFileMessage();
-    Q_INVOKABLE void removePendingAttachment(const QString &attachmentId);
+    Q_INVOKABLE void removePendingAttachment(const QString& attachmentId);
     Q_INVOKABLE void clearPendingAttachments();
-    Q_INVOKABLE void openExternalResource(const QString &url);
-    Q_INVOKABLE void searchUser(const QString &uidText);
+    Q_INVOKABLE void openExternalResource(const QString& url);
+    Q_INVOKABLE void searchUser(const QString& uidText);
     Q_INVOKABLE void clearSearchState();
-    Q_INVOKABLE void requestAddFriend(int uid, const QString &bakName, const QVariantList &labels = QVariantList());
-    Q_INVOKABLE void approveFriend(int uid, const QString &backName, const QVariantList &labels = QVariantList());
+    Q_INVOKABLE void requestAddFriend(int uid, const QString& bakName, const QVariantList& labels = QVariantList());
+    Q_INVOKABLE void approveFriend(int uid, const QString& backName, const QVariantList& labels = QVariantList());
     Q_INVOKABLE void clearAuthStatus();
     Q_INVOKABLE void startVoiceChat();
     Q_INVOKABLE void startVideoChat();
@@ -278,49 +288,52 @@ public:
     Q_INVOKABLE void toggleCallMuted();
     Q_INVOKABLE void toggleCallCamera();
     Q_INVOKABLE void chooseAvatar(int source = 0);
-    Q_INVOKABLE void saveProfile(const QString &nick, const QString &desc);
+    Q_INVOKABLE void saveProfile(const QString& nick, const QString& desc);
     Q_INVOKABLE void clearSettingsStatus();
     Q_INVOKABLE void refreshGroupList();
-    Q_INVOKABLE void createGroup(const QString &name, const QVariantList &memberUserIdList = QVariantList());
-    Q_INVOKABLE void inviteGroupMember(const QString &userId, const QString &reason = QString());
-    Q_INVOKABLE void applyJoinGroup(const QString &groupCode, const QString &reason = QString());
+    Q_INVOKABLE void createGroup(const QString& name, const QVariantList& memberUserIdList = QVariantList());
+    Q_INVOKABLE void inviteGroupMember(const QString& userId, const QString& reason = QString());
+    Q_INVOKABLE void applyJoinGroup(const QString& groupCode, const QString& reason = QString());
     Q_INVOKABLE void reviewGroupApply(qint64 applyId, bool agree);
-    Q_INVOKABLE void sendGroupTextMessage(const QString &text);
+    Q_INVOKABLE void sendGroupTextMessage(const QString& text);
     Q_INVOKABLE void sendGroupImageMessage();
     Q_INVOKABLE void sendGroupFileMessage();
-    Q_INVOKABLE void editGroupMessage(const QString &msgId, const QString &text);
-    Q_INVOKABLE void revokeGroupMessage(const QString &msgId);
-    Q_INVOKABLE void forwardGroupMessage(const QString &msgId);
+    Q_INVOKABLE void editGroupMessage(const QString& msgId, const QString& text);
+    Q_INVOKABLE void revokeGroupMessage(const QString& msgId);
+    Q_INVOKABLE void forwardGroupMessage(const QString& msgId);
     Q_INVOKABLE void loadGroupHistory();
-    Q_INVOKABLE void updateGroupAnnouncement(const QString &announcement);
+    Q_INVOKABLE void updateGroupAnnouncement(const QString& announcement);
     Q_INVOKABLE void updateGroupIcon(int source = 0);
-    Q_INVOKABLE void setGroupAdmin(const QString &userId, bool isAdmin, qint64 permissionBits = 0);
-    Q_INVOKABLE void muteGroupMember(const QString &userId, int muteSeconds);
-    Q_INVOKABLE void kickGroupMember(const QString &userId);
+    Q_INVOKABLE void setGroupAdmin(const QString& userId, bool isAdmin, qint64 permissionBits = 0);
+    Q_INVOKABLE void muteGroupMember(const QString& userId, int muteSeconds);
+    Q_INVOKABLE void kickGroupMember(const QString& userId);
     Q_INVOKABLE void quitCurrentGroup();
     Q_INVOKABLE void dissolveCurrentGroup();
     Q_INVOKABLE void clearGroupStatus();
-    Q_INVOKABLE void updateCurrentDraft(const QString &text);
+    Q_INVOKABLE void updateCurrentDraft(const QString& text);
     Q_INVOKABLE void toggleCurrentDialogPinned();
     Q_INVOKABLE void toggleCurrentDialogMuted();
     Q_INVOKABLE void toggleDialogPinnedByUid(int dialogUid);
     Q_INVOKABLE void toggleDialogMutedByUid(int dialogUid);
     Q_INVOKABLE void markDialogReadByUid(int dialogUid);
     Q_INVOKABLE void clearDialogDraftByUid(int dialogUid);
-    Q_INVOKABLE void beginReplyMessage(const QString &msgId, const QString &senderName, const QString &previewText);
+    Q_INVOKABLE void beginReplyMessage(const QString& msgId, const QString& senderName, const QString& previewText);
     Q_INVOKABLE void cancelReplyMessage();
 
     Q_INVOKABLE QString loginCredentialCacheJson() const;
-    Q_INVOKABLE void saveLoginCredential(const QString &email, const QString &password);
+    Q_INVOKABLE void saveLoginCredential(const QString& email, const QString& password);
 
-    Q_INVOKABLE void login(const QString &email, const QString &password);
+    Q_INVOKABLE void login(const QString& email, const QString& password);
     Q_INVOKABLE void beginPostLoginBootstrap();
-    Q_INVOKABLE void requestRegisterCode(const QString &email);
-    Q_INVOKABLE void registerUser(const QString &user, const QString &email, const QString &password,
-                                  const QString &confirm, const QString &verifyCode);
-    Q_INVOKABLE void requestResetCode(const QString &email);
-    Q_INVOKABLE void resetPassword(const QString &user, const QString &email, const QString &password,
-                                   const QString &verifyCode);
+    Q_INVOKABLE void requestRegisterCode(const QString& email);
+    Q_INVOKABLE void registerUser(const QString& user,
+                                  const QString& email,
+                                  const QString& password,
+                                  const QString& confirm,
+                                  const QString& verifyCode);
+    Q_INVOKABLE void requestResetCode(const QString& email);
+    Q_INVOKABLE void
+    resetPassword(const QString& user, const QString& email, const QString& password, const QString& verifyCode);
 
 signals:
     void pageChanged();
@@ -392,45 +405,57 @@ private slots:
     void onCallEvent(QJsonObject payload);
     void onLivekitRoomJoined();
     void onLivekitRemoteTrackReady();
-    void onLivekitRoomDisconnected(const QString &reason, bool recoverable);
-    void onLivekitPermissionError(const QString &deviceType, const QString &message);
-    void onLivekitMediaError(const QString &message);
-    void onLivekitReconnecting(const QString &message);
+    void onLivekitRoomDisconnected(const QString& reason, bool recoverable);
+    void onLivekitPermissionError(const QString& deviceType, const QString& message);
+    void onLivekitMediaError(const QString& message);
+    void onLivekitReconnecting(const QString& message);
 
 private:
     friend class AppSessionCoordinator;
+    friend class SessionAuthCoordinator;
+    friend class SessionChatEntryCoordinator;
+    friend class SessionRelationBootstrap;
+    friend class RegisterCountdownController;
     friend class ContactCoordinatorShell;
     friend class GroupCoordinator;
     friend class MediaCoordinator;
     friend class CallCoordinator;
     friend class ProfileCoordinator;
 
-    bool parseJson(const QString &res, QJsonObject &obj);
-    bool checkEmailValid(const QString &email);
-    bool checkPwdValid(const QString &password);
-    bool checkUserValid(const QString &user);
-    bool checkVerifyCodeValid(const QString &code);
+    bool parseJson(const QString& res, QJsonObject& obj);
+    bool checkEmailValid(const QString& email);
+    bool checkPwdValid(const QString& password);
+    bool checkUserValid(const QString& user);
+    bool checkVerifyCodeValid(const QString& code);
     bool isChatTransportReady() const;
-    bool dispatchChatContent(const QString &content, const QString &previewText);
-    bool dispatchGroupChatContent(const QString &content, const QString &previewText);
-    void startMediaUploadAndSend(const QString &fileUrl, const QString &mediaType, const QString &fallbackName);
-    void addPendingAttachments(const QVariantList &attachments);
-    void removePendingAttachmentById(const QString &attachmentId, int dialogUid = 0);
-    void setCurrentPendingAttachments(const QVariantList &attachments);
+    bool dispatchChatContent(const QString& content, const QString& previewText);
+    bool dispatchGroupChatContent(const QString& content, const QString& previewText);
+    void startMediaUploadAndSend(const QString& fileUrl, const QString& mediaType, const QString& fallbackName);
+    void addPendingAttachments(const QVariantList& attachments);
+    void removePendingAttachmentById(const QString& attachmentId, int dialogUid = 0);
+    void setCurrentPendingAttachments(const QVariantList& attachments);
     void processPendingAttachmentQueue();
-    bool sendUploadedAttachmentToDialog(const QVariantMap &attachment, const UploadedMediaInfo &uploaded,
-                                        int dialogUid, int chatUid, qint64 groupId);
-    void sendCallInvite(const QString &callType);
+    bool sendUploadedAttachmentToDialog(const QVariantMap& attachment,
+                                        const UploadedMediaInfo& uploaded,
+                                        int dialogUid,
+                                        int chatUid,
+                                        qint64 groupId);
+    void sendCallInvite(const QString& callType);
     bool ensureCallTargetFromCurrentChat();
-    void startCallFlow(const QString &callType);
-    void finalizeEndedCall(const QString &statusText);
-    void setTip(const QString &tip, bool isError);
+    void startCallFlow(const QString& callType);
+    void finalizeEndedCall(const QString& statusText);
+    void setTip(const QString& tip, bool isError);
     void setBusy(bool value);
     void setPage(Page newPage);
     QString normalizeIconPath(QString icon) const;
-    void applyCurrentUserProfile(const QJsonObject &profile, bool preserveExistingIcon);
-    void applyCurrentUserProfile(int uid, const QString &name, const QString &nick, const QString &icon,
-                                 const QString &desc, const QString &userId, int sex,
+    void applyCurrentUserProfile(const QJsonObject& profile, bool preserveExistingIcon);
+    void applyCurrentUserProfile(int uid,
+                                 const QString& name,
+                                 const QString& nick,
+                                 const QString& icon,
+                                 const QString& desc,
+                                 const QString& userId,
+                                 int sex,
                                  bool preserveExistingIcon);
     void refreshFriendModels();
     void refreshApplyModel();
@@ -451,35 +476,40 @@ private:
     void refreshContactLoadMoreState();
     void loadCurrentChatMessages();
     void selectGroupByDialogUid(int dialogUid, qint64 groupId);
-    void requestPrivateHistory(int peerUid, qint64 beforeTs, const QString &beforeMsgId = QString());
+    void requestPrivateHistory(int peerUid, qint64 beforeTs, const QString& beforeMsgId = QString());
     void requestPrivateHistoryForBootstrap(int peerUid);
     void requestGroupHistoryForBootstrap(qint64 groupId);
     void setContactPane(ContactPane pane);
-    void setCurrentContact(int uid, const QString &name, const QString &nick, const QString &icon,
-                           const QString &back, int sex, const QString &userId = QString());
-    void setCurrentChatPeerName(const QString &name);
-    void setCurrentChatPeerIcon(const QString &icon);
+    void setCurrentContact(int uid,
+                           const QString& name,
+                           const QString& nick,
+                           const QString& icon,
+                           const QString& back,
+                           int sex,
+                           const QString& userId = QString());
+    void setCurrentChatPeerName(const QString& name);
+    void setCurrentChatPeerIcon(const QString& icon);
     void selectChatByUid(int uid);
     void setSearchPending(bool pending);
-    void setSearchStatus(const QString &text, bool isError);
+    void setSearchStatus(const QString& text, bool isError);
     void clearSearchResultOnly();
     void setChatLoadingMore(bool loading);
     void setPrivateHistoryLoading(bool loading);
     void setCanLoadMorePrivateHistory(bool canLoad);
     void setContactLoadingMore(bool loading);
-    void setAuthStatus(const QString &text, bool isError);
-    void setSettingsStatus(const QString &text, bool isError);
-    void setCurrentGroup(qint64 groupId, const QString &name, const QString &groupCode = QString());
-    void setGroupStatus(const QString &text, bool isError);
+    void setAuthStatus(const QString& text, bool isError);
+    void setSettingsStatus(const QString& text, bool isError);
+    void setCurrentGroup(qint64 groupId, const QString& name, const QString& groupCode = QString());
+    void setGroupStatus(const QString& text, bool isError);
     void setMediaUploadInProgress(bool inProgress);
-    void setMediaUploadProgressText(const QString &text);
-    void setCurrentDraftText(const QString &text);
+    void setMediaUploadProgressText(const QString& text);
+    void setCurrentDraftText(const QString& text);
     void setCurrentDialogPinned(bool pinned);
     void setCurrentDialogMuted(bool muted);
-    void setPendingReplyContext(const QString &msgId, const QString &senderName, const QString &previewText);
+    void setPendingReplyContext(const QString& msgId, const QString& senderName, const QString& previewText);
     int currentDialogUid() const;
     void emitCurrentDialogUidChangedIfNeeded();
-    bool resolveDialogTarget(int dialogUid, QString &dialogType, int &peerUid, qint64 &groupId) const;
+    bool resolveDialogTarget(int dialogUid, QString& dialogType, int& peerUid, qint64& groupId) const;
     qint64 currentGroupPermissionBitsRaw() const;
     bool hasCurrentGroupPermission(qint64 permissionBit) const;
     qint64 latestGroupCreatedAt(qint64 groupId) const;
@@ -488,61 +518,43 @@ private:
     void clearCurrentGroupConversation(qint64 groupId);
     void loadDraftStore(int ownerUid);
     void saveDraftStore(int ownerUid) const;
-    void applyDraftToDialogModel(int dialogUid, const QString &draftText);
+    void applyDraftToDialogModel(int dialogUid, const QString& draftText);
     void syncCurrentPendingAttachments();
     void sendGroupReadAck(qint64 groupId, qint64 readTs = 0);
     void sendPrivateReadAck(int peerUid, qint64 readTs = 0);
     bool tryReconnectChat();
-    bool tryLoginFallbackToTcp(const QString &reason);
+    void handleChatConnectFailureDuringRecovery();
+    bool tryLoginFallbackToTcp(const QString& reason);
     void resetReconnectState();
     void resetHeartbeatTracking();
     bool isHeartbeatLikelyTimeout() const;
     void runPostLoginBootstrap();
+    bool handleGroupRspError(ReqId reqId, int error, const QJsonObject& payload);
+    void handleGroupManagementRsp(ReqId reqId, const QJsonObject& payload);
+    void handleGroupHistoryRsp(const QJsonObject& payload);
+    void handleGroupMessageAckRsp(ReqId reqId, const QJsonObject& payload);
+    void handleGroupMessageMutationRsp(ReqId reqId, const QJsonObject& payload);
+    void handlePrivateMessageMutationRsp(ReqId reqId, const QJsonObject& payload);
+    void handlePrivateForwardRsp(const QJsonObject& payload);
+    void handleDialogMetaRsp(ReqId reqId, const QJsonObject& payload);
 
     Page _page;
-    QString _tip_text;
-    bool _tip_error;
-    bool _busy;
-    bool _register_success_page;
-    int _register_countdown;
     ChatTab _chat_tab;
     ContactPane _contact_pane;
-    int _pending_uid;
-    QString _pending_token;
-    QString _pending_login_ticket;
-    QString _pending_trace_id;
-    QString _chat_server_host;
-    QString _chat_server_port;
-    QString _chat_server_name;
-    QVector<ChatEndpoint> _chat_endpoints;
-    int _chat_endpoint_index = -1;
-    int _chat_connect_timeout_ms = 1200;
-    int _chat_backup_dial_delay_ms = 250;
-    int _chat_total_login_timeout_ms = 5000;
-    int _chat_protocol_version = 2;
-    qint64 _login_started_ms = 0;
-    qint64 _http_login_finished_ms = 0;
-    qint64 _chat_connect_started_ms = 0;
-    qint64 _chat_connect_finished_ms = 0;
+    AppPendingLoginState _pending_login_state;
+    AppChatEndpointState _chat_endpoint_state;
+    AppChatRecoveryState _chat_recovery_state;
+    AppShellRuntimeState _shell_state;
+    AppSearchRuntimeState _search_state;
+    AppFeatureStatusState _feature_status_state;
+    AppLoadingRuntimeState _loading_state;
+    AppLazyBootstrapState _bootstrap_state;
+    AppMediaUploadRuntimeState _media_upload_state;
 
-    QString _current_user_name;
-    QString _current_user_nick;
-    QString _current_user_icon;
-    QString _current_user_desc;
-    QString _current_user_id;
-    int _current_contact_uid;
-    QString _current_contact_name;
-    QString _current_contact_nick;
-    QString _current_contact_icon;
-    QString _current_contact_back;
-    int _current_contact_sex;
-    QString _current_contact_user_id;
-    QString _current_chat_peer_name;
-    QString _current_chat_peer_icon;
-    int _current_chat_uid;
-    qint64 _current_group_id;
-    QString _current_group_name;
-    QString _current_group_code;
+    AppCurrentUserState _user_state;
+    AppCurrentContactState _contact_state;
+    AppCurrentChatState _chat_state;
+    AppGroupRuntimeState _group_state;
 
     FriendListModel _chat_list_model;
     FriendListModel _group_list_model;
@@ -551,55 +563,8 @@ private:
     ChatMessageModel _message_model;
     SearchResultModel _search_result_model;
     ApplyRequestModel _apply_request_model;
-    bool _search_pending;
-    QString _search_status_text;
-    bool _search_status_error;
-    bool _chat_loading_more;
-    bool _can_load_more_chats;
-    bool _private_history_loading;
-    bool _group_history_loading;
-    bool _can_load_more_private_history;
-    bool _contact_loading_more;
-    bool _can_load_more_contacts;
-    QString _auth_status_text;
-    bool _auth_status_error;
-    QString _settings_status_text;
-    bool _settings_status_error;
-    QString _group_status_text;
-    bool _group_status_error;
-    bool _media_upload_in_progress = false;
-    bool _settings_avatar_upload_in_progress = false;
-    bool _group_icon_upload_in_progress = false;
-    QString _media_upload_progress_text;
-    QString _current_draft_text;
-    QVariantList _current_pending_attachments;
-    QHash<int, QVariantList> _dialog_pending_attachment_map;
-    bool _current_dialog_pinned = false;
-    bool _current_dialog_muted = false;
-    QString _reply_to_msg_id;
-    QString _reply_target_name;
-    QString _reply_preview_text;
-    QMap<int, qint64> _group_uid_map;
-    QHash<QString, qint64> _pending_group_msg_group_map;
-    QHash<int, QString> _dialog_draft_map;
-    QSet<int> _dialog_local_pinned_set;
-    QHash<int, int> _dialog_server_pinned_map;
-    QHash<int, int> _dialog_server_mute_map;
-    QHash<int, int> _dialog_mention_map;
-    qint64 _private_history_before_ts;
-    QString _private_history_before_msg_id;
-    qint64 _private_history_pending_before_ts;
-    QString _private_history_pending_before_msg_id;
-    int _private_history_pending_peer_uid;
-    qint64 _group_history_before_seq;
-    bool _group_history_has_more;
-    bool _dialog_bootstrap_loading = false;
-    bool _dialogs_ready = false;
-    bool _contacts_ready = false;
-    bool _groups_ready = false;
-    bool _apply_ready = false;
-    bool _chat_list_initialized = false;
-    bool _post_login_bootstrap_started = false;
+    AppDialogRuntimeState _dialog_state;
+    AppPrivateHistoryState _private_history_state;
 
     ClientGateway _gateway;
     AuthController _auth_controller;
@@ -618,20 +583,7 @@ private:
     QTimer _register_countdown_timer;
     QTimer _heartbeat_timer;
     QTimer _chat_login_timeout_timer;
-    qint64 _last_heartbeat_sent_ms = 0;
-    qint64 _last_heartbeat_ack_ms = 0;
-    int _heartbeat_ack_miss_count = 0;
-    bool _closed_by_heartbeat_watchdog = false;
-    bool _reconnecting_chat = false;
-    int _chat_reconnect_attempts = 0;
-    bool _ignore_next_login_disconnect = false;
-    bool _chat_login_tcp_fallback_attempted = false;
-    int _last_emitted_dialog_uid = 0;
-    QVariantList _pending_send_queue;
-    int _pending_send_dialog_uid = 0;
-    int _pending_send_chat_uid = 0;
-    qint64 _pending_send_group_id = 0;
-    int _pending_send_total_count = 0;
+    AppPendingSendQueueState _pending_send_state;
 
     std::unique_ptr<AppSessionCoordinator> _session_coordinator;
     std::unique_ptr<ContactCoordinatorShell> _contact_coordinator_shell;

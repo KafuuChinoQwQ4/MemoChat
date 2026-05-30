@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import json
-import unittest
 import sys
+import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from harness.games.service import A2AGameService
 from harness.games.contracts import GameState, GameTemplate
+from harness.games.service import A2AGameService
 
 
 class FakeAgentService:
@@ -73,13 +73,19 @@ class A2AGameServiceTests(unittest.IsolatedAsyncioTestCase):
         for key, value in config.items():
             if isinstance(value, dict) and ("lock" in key or "fixed" in key or "init" in key):
                 candidates.append((key, value))
-        if any(key in config for key in ("locked", "ruleset_id", "agent_count", "agent_preset_pool", "preset_pool", "agent_presets")):
+        if any(
+            key in config
+            for key in ("locked", "ruleset_id", "agent_count", "agent_preset_pool", "preset_pool", "agent_presets")
+        ):
             candidates.append(("room.config", config))
 
         for name, candidate in candidates:
             if "locked" in candidate:
                 self.assertTrue(candidate["locked"], f"{name}.locked should be true")
-            if self._lock_value(candidate, "ruleset_id", "ruleset") is not None and self._lock_agent_pool(candidate, required=False) is not None:
+            if (
+                self._lock_value(candidate, "ruleset_id", "ruleset") is not None
+                and self._lock_agent_pool(candidate, required=False) is not None
+            ):
                 return candidate
 
         self.fail(f"room.config does not expose a locked initialization contract: {config!r}")
@@ -119,8 +125,7 @@ class A2AGameServiceTests(unittest.IsolatedAsyncioTestCase):
                 if "shuffle" in lowered or "identity_marker" in lowered or "preset_binding_marker" in lowered:
                     return self._canonical(value)
         self.fail(
-            "game state does not record a shuffle marker in state, room metadata/config, "
-            "or lifecycle event payloads"
+            "game state does not record a shuffle marker in state, room metadata/config, or lifecycle event payloads"
         )
 
     def _force_ended(self, state: GameState) -> None:
@@ -470,7 +475,12 @@ class A2AGameServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(restarted.room.phase, "night")
         self.assertEqual(restarted.state["phase"], "night")
         self.assertTrue(all(participant.status == "alive" for participant in restarted.participants))
-        self.assertTrue(all(participant.private_state.get("role_key") == participant.role_key for participant in restarted.participants))
+        self.assertTrue(
+            all(
+                participant.private_state.get("role_key") == participant.role_key
+                for participant in restarted.participants
+            )
+        )
         self.assertNotEqual(new_marker, started_marker)
 
     async def test_persistent_snapshot_round_trip_preserves_locked_config_and_restarts(self):
@@ -634,11 +644,14 @@ class A2AGameServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["auto"])
         self.assertEqual(result["steps"], 3)
         self.assertEqual(result["stop_reason"], "waiting_human")
-        self.assertEqual([event.content for event in speak_events[-3:]], [
-            "先测试一下多 AI 对话。",
-            "我从产品角度看，先验证发送和回复闭环。",
-            "我补一个技术检查点：看事件是否稳定入库。",
-        ])
+        self.assertEqual(
+            [event.content for event in speak_events[-3:]],
+            [
+                "先测试一下多 AI 对话。",
+                "我从产品角度看，先验证发送和回复闭环。",
+                "我补一个技术检查点：看事件是否稳定入库。",
+            ],
+        )
         self.assertEqual(final_state.state["pending_agent_ids"], [])
         self.assertEqual(final_state.pending_actor_id, human.participant_id)
         self.assertEqual(len(fake.calls), 2)

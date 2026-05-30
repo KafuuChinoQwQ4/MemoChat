@@ -14,8 +14,11 @@ add_subdirectory(../apps/server/core/common/proto/tests   ${CMAKE_CURRENT_BINARY
 add_subdirectory(../apps/server/core/common/logging/tests ${CMAKE_CURRENT_BINARY_DIR}/logging)
 add_subdirectory(../apps/server/core/common/json/tests    ${CMAKE_CURRENT_BINARY_DIR}/json)
 add_subdirectory(../apps/server/core/AIServer/tests       ${CMAKE_CURRENT_BINARY_DIR}/aiserver)
+add_subdirectory(client/cache                          ${CMAKE_CURRENT_BINARY_DIR}/client_cache)
 add_subdirectory(client/live2d                         ${CMAKE_CURRENT_BINARY_DIR}/client_live2d)
 add_subdirectory(client/dialog                         ${CMAKE_CURRENT_BINARY_DIR}/client_dialog)
+add_subdirectory(client/moments                        ${CMAKE_CURRENT_BINARY_DIR}/client_moments)
+add_subdirectory(client/network                        ${CMAKE_CURRENT_BINARY_DIR}/client_network)
 
 # Hook into CTest so "ctest" / "RUN_TESTS" discovers everything.
 # Discovery is handled in each subdirectory's CMakeLists.txt via

@@ -6,7 +6,6 @@ import uuid
 from typing import AsyncIterator
 
 import structlog
-
 from config import settings
 from harness.cache.semantic_cache import SemanticCacheHit, SemanticCacheService
 from harness.contracts import GuardrailResult, HarnessRunResult, ToolObservation, TraceEvent
@@ -163,7 +162,9 @@ def _skill_model_target(skill, request) -> tuple[str, str, str]:
     policy = _skill_model_policy(skill)
     prefer_backend = getattr(request, "model_type", "") or str(policy.get("provider", "") or "")
     model_name = getattr(request, "model_name", "") or str(policy.get("model", "") or "")
-    deployment_preference = getattr(request, "deployment_preference", "") or str(policy.get("deployment_preference", "any") or "any")
+    deployment_preference = getattr(request, "deployment_preference", "") or str(
+        policy.get("deployment_preference", "any") or "any"
+    )
     return prefer_backend, model_name, deployment_preference
 
 
@@ -248,7 +249,9 @@ class AgentHarnessService:
         observations: list[str] | None = None,
     ) -> HarnessRunResult:
         response_content = hit.answer
-        feedback_summary = str(hit.metadata.get("feedback_summary") or "").strip() if isinstance(hit.metadata, dict) else ""
+        feedback_summary = (
+            str(hit.metadata.get("feedback_summary") or "").strip() if isinstance(hit.metadata, dict) else ""
+        )
         match_kind = getattr(hit, "match_kind", "") or "semantic"
         if not feedback_summary:
             feedback_summary = f"semantic_cache_hit {match_kind} similarity={hit.similarity:.4f}"
@@ -313,10 +316,14 @@ class AgentHarnessService:
             events=events,
         )
 
-    def _schedule_semantic_cache_memory_save(self, request, session_id: str, response_content: str, trace_id: str) -> None:
+    def _schedule_semantic_cache_memory_save(
+        self, request, session_id: str, response_content: str, trace_id: str
+    ) -> None:
         save_cache_hit = getattr(self._memory_service, "save_semantic_cache_hit", None)
         if save_cache_hit is None:
-            logger.debug("harness.semantic_cache.memory_save_skipped", trace_id=trace_id, reason="unsupported_memory_port")
+            logger.debug(
+                "harness.semantic_cache.memory_save_skipped", trace_id=trace_id, reason="unsupported_memory_port"
+            )
             return
 
         async def _save() -> None:
@@ -508,7 +515,9 @@ class AgentHarnessService:
             tags=["agent", "guardrails"],
         ) as guardrail_run:
             input_guardrails = self._guardrail_service.check_input(request, skill, plan_steps)
-            set_run_output(guardrail_run, {"status": _guardrail_event_status(input_guardrails), "count": len(input_guardrails)})
+            set_run_output(
+                guardrail_run, {"status": _guardrail_event_status(input_guardrails), "count": len(input_guardrails)}
+            )
             await self._add_guardrail_event(trace.trace_id, "input", input_guardrails)
         if self._guardrail_service.has_blocking(input_guardrails):
             return await self._finish_blocked_run(
@@ -576,7 +585,9 @@ class AgentHarnessService:
             tags=["agent", "guardrails", "tools"],
         ) as tool_guardrail_run:
             tool_guardrails = self._guardrail_service.check_tool_plan(request, plan_steps, self._tool_specs())
-            set_run_output(tool_guardrail_run, {"status": _guardrail_event_status(tool_guardrails), "count": len(tool_guardrails)})
+            set_run_output(
+                tool_guardrail_run, {"status": _guardrail_event_status(tool_guardrails), "count": len(tool_guardrails)}
+            )
             await self._add_guardrail_event(trace.trace_id, "tool_plan", tool_guardrails)
         if self._guardrail_service.has_blocking(tool_guardrails):
             return await self._finish_blocked_run(
@@ -609,7 +620,9 @@ class AgentHarnessService:
                     requested_tools=getattr(request, "requested_tools", []),
                     tool_arguments=getattr(request, "tool_arguments", {}),
                 )
-                set_run_output(tool_run, {"observation_count": len(observations), "tools": [obs.name for obs in observations]})
+                set_run_output(
+                    tool_run, {"observation_count": len(observations), "tools": [obs.name for obs in observations]}
+                )
             except Exception as exc:
                 set_run_error(tool_run, exc)
                 raise
@@ -636,9 +649,11 @@ class AgentHarnessService:
 
         system_prompt = self._planner.build_system_prompt(skill, memory_snapshot, observations)
         user_prompt = self._planner.build_user_prompt(request, observations)
-        messages = [LLMMessage(role="system", content=system_prompt)] + memory_snapshot.as_messages() + [
-            LLMMessage(role="user", content=user_prompt)
-        ]
+        messages = (
+            [LLMMessage(role="system", content=system_prompt)]
+            + memory_snapshot.as_messages()
+            + [LLMMessage(role="user", content=user_prompt)]
+        )
 
         model_started = _now_ms()
         try:
@@ -725,7 +740,10 @@ class AgentHarnessService:
             tags=["agent", "guardrails"],
         ) as output_guardrail_run:
             output_guardrails = self._guardrail_service.check_output(response.content, observations)
-            set_run_output(output_guardrail_run, {"status": _guardrail_event_status(output_guardrails), "count": len(output_guardrails)})
+            set_run_output(
+                output_guardrail_run,
+                {"status": _guardrail_event_status(output_guardrails), "count": len(output_guardrails)},
+            )
             await self._add_guardrail_event(trace.trace_id, "output", output_guardrails)
         if self._guardrail_service.has_blocking(output_guardrails):
             return await self._finish_blocked_run(
@@ -748,7 +766,9 @@ class AgentHarnessService:
             tags=["agent", "memory"],
         ) as memory_save_run:
             try:
-                await self._memory_service.save_after_response(request.uid, session_id, request.content, response.content)
+                await self._memory_service.save_after_response(
+                    request.uid, session_id, request.content, response.content
+                )
                 set_run_output(memory_save_run, {"status": "ok"})
             except Exception as exc:
                 set_run_error(memory_save_run, exc)
@@ -968,9 +988,11 @@ class AgentHarnessService:
 
         system_prompt = self._planner.build_system_prompt(skill, memory_snapshot, observations)
         user_prompt = self._planner.build_user_prompt(request, observations)
-        messages = [LLMMessage(role="system", content=system_prompt)] + memory_snapshot.as_messages() + [
-            LLMMessage(role="user", content=user_prompt)
-        ]
+        messages = (
+            [LLMMessage(role="system", content=system_prompt)]
+            + memory_snapshot.as_messages()
+            + [LLMMessage(role="user", content=user_prompt)]
+        )
 
         accumulated = ""
         model_name = ""

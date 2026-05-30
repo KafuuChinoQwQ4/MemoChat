@@ -8,6 +8,7 @@
 class AsioIOServicePool : public Singleton<AsioIOServicePool>
 {
     friend Singleton<AsioIOServicePool>;
+
 public:
     using IOService = boost::asio::io_context;
     using Work = boost::asio::executor_work_guard<IOService::executor_type>;

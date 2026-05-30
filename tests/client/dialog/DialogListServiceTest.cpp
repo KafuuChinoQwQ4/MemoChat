@@ -10,23 +10,20 @@
 QString gate_url_prefix;
 QString gate_media_url_prefix;
 
-namespace {
-std::shared_ptr<FriendInfo> makeFriend(int uid, const QString &name, const QString &lastMsg = QString())
+namespace
 {
-    auto info = std::make_shared<FriendInfo>(uid,
-                                             name,
-                                             name,
-                                             QStringLiteral("qrc:/res/head_1.jpg"),
-                                             0,
-                                             QStringLiteral("desc"),
-                                             name,
-                                             lastMsg,
-                                             QStringLiteral("u000000001"));
+std::shared_ptr<FriendInfo> makeFriend(int uid, const QString& name, const QString& lastMsg = QString())
+{
+    auto info = std::make_shared<FriendInfo>(
+        uid,
+        name,
+        name,
+        QStringLiteral("qrc:/res/head_1.jpg"), 0, QStringLiteral("desc"), name, lastMsg, QStringLiteral("u000000001"));
     info->_dialog_type = QStringLiteral("private");
     return info;
 }
 
-std::shared_ptr<GroupInfoData> makeGroup(qint64 groupId, const QString &name, const QString &lastMsg = QString())
+std::shared_ptr<GroupInfoData> makeGroup(qint64 groupId, const QString& name, const QString& lastMsg = QString())
 {
     auto group = std::make_shared<GroupInfoData>();
     group->_group_id = groupId;
@@ -36,7 +33,7 @@ std::shared_ptr<GroupInfoData> makeGroup(qint64 groupId, const QString &name, co
     group->_last_msg = lastMsg;
     return group;
 }
-}
+} // namespace
 
 TEST(DialogListServiceTest, AppendsLocalFriendsMissingFromDialogResponse)
 {
@@ -45,8 +42,7 @@ TEST(DialogListServiceTest, AppendsLocalFriendsMissingFromDialogResponse)
 
     const std::vector<std::shared_ptr<FriendInfo>> localFriends = {
         makeFriend(10, QStringLiteral("Duplicate Friend")),
-        makeFriend(20, QStringLiteral("Local Friend"), QStringLiteral("cached preview"))
-    };
+                   makeFriend(20, QStringLiteral("Local Friend"), QStringLiteral("cached preview"))};
 
     QHash<int, QString> drafts;
     drafts.insert(20, QStringLiteral("draft text"));
@@ -54,18 +50,9 @@ TEST(DialogListServiceTest, AppendsLocalFriendsMissingFromDialogResponse)
     mentions.insert(20, 2);
     QSet<int> localPinned;
     localPinned.insert(20);
-    const DialogDecorationState decorationState {
-        &drafts,
-        &mentions,
-        nullptr,
-        nullptr,
-        &localPinned
-    };
+    const DialogDecorationState decorationState{&drafts, &mentions, nullptr, nullptr, &localPinned};
 
-    DialogListService::appendMissingPrivateDialogs(dialogs,
-                                                   localFriends,
-                                                   QSet<int> {10},
-                                                   decorationState);
+    DialogListService::appendMissingPrivateDialogs(dialogs, localFriends, QSet<int>{10}, decorationState);
 
     ASSERT_EQ(dialogs.size(), 2U);
     ASSERT_NE(dialogs[1], nullptr);
@@ -76,6 +63,59 @@ TEST(DialogListServiceTest, AppendsLocalFriendsMissingFromDialogResponse)
     EXPECT_EQ(dialogs[1]->_draft_text, QStringLiteral("draft text"));
     EXPECT_EQ(dialogs[1]->_mention_count, 2);
     EXPECT_GT(dialogs[1]->_pinned_rank, 0);
+}
+
+TEST(DialogListServiceTest, BuildsPlaceholderAuthInfoFromDialogFallbacks)
+{
+    QVariantMap dialogItem;
+    dialogItem.insert(QStringLiteral("name"), QStringLiteral("  Server Name  "));
+    dialogItem.insert(QStringLiteral("nick"), QStringLiteral("  "));
+    dialogItem.insert(QStringLiteral("icon"), QStringLiteral(" http://127.0.0.1:8080/media/download?asset=avatar "));
+
+    auto auth = DialogListService::buildPlaceholderAuthInfo(1060, dialogItem, QStringLiteral("qrc:/res/head_1.png"));
+
+    ASSERT_NE(auth, nullptr);
+    EXPECT_EQ(auth->_uid, 1060);
+    EXPECT_EQ(auth->_name, QStringLiteral("Server Name"));
+    EXPECT_EQ(auth->_nick, QStringLiteral("Server Name"));
+    EXPECT_EQ(auth->_icon, QStringLiteral("http://127.0.0.1:8080/media/download?asset=avatar"));
+}
+
+TEST(DialogListServiceTest, BuildDialogEntryAppliesDecorationPrecedence)
+{
+    DialogEntrySeed seed;
+    seed.dialogUid = 20;
+    seed.dialogType = QStringLiteral("private");
+    seed.name = QStringLiteral("Local Friend");
+    seed.nick = QStringLiteral("Local Friend");
+    seed.icon = QStringLiteral("qrc:/res/head_1.jpg");
+    seed.previewText = QStringLiteral("preview");
+    seed.unreadCount = -5;
+    seed.pinnedRank = 3;
+    seed.draftText = QStringLiteral("server draft");
+    seed.muteState = -1;
+
+    QHash<int, QString> drafts;
+    drafts.insert(20, QStringLiteral("local draft"));
+    QHash<int, int> mentions;
+    mentions.insert(20, -3);
+    QHash<int, int> serverPinned;
+    serverPinned.insert(20, 9);
+    QHash<int, int> serverMute;
+    serverMute.insert(20, 1);
+    QSet<int> localPinned;
+    localPinned.insert(20);
+    const DialogDecorationState decorationState{&drafts, &mentions, &serverPinned, &serverMute, &localPinned};
+
+    auto item = DialogListService::buildDialogEntry(seed, decorationState);
+
+    ASSERT_NE(item, nullptr);
+    EXPECT_EQ(item->_uid, 20);
+    EXPECT_EQ(item->_unread_count, 0);
+    EXPECT_GT(item->_pinned_rank, serverPinned.value(20));
+    EXPECT_EQ(item->_draft_text, QStringLiteral("local draft"));
+    EXPECT_EQ(item->_mention_count, 0);
+    EXPECT_EQ(item->_mute_state, 1);
 }
 
 TEST(DialogListServiceTest, AppliesLocalFriendProfileToPrivateDialogSeed)
@@ -97,7 +137,7 @@ TEST(DialogListServiceTest, AppliesLocalFriendProfileToPrivateDialogSeed)
 
     DialogListService::applyFriendProfileToPrivateSeed(seed, friendInfo);
 
-    const DialogDecorationState decorationState {};
+    const DialogDecorationState decorationState{};
     auto item = DialogListService::buildDialogEntry(seed, decorationState);
 
     ASSERT_NE(item, nullptr);
@@ -119,26 +159,15 @@ TEST(DialogListServiceTest, AppendsLocalGroupsMissingFromDialogResponse)
     QMap<int, qint64> groupUidMap;
     groupUidMap.insert(-88, 88);
     const std::vector<std::shared_ptr<GroupInfoData>> localGroups = {
-        makeGroup(88, QStringLiteral("Memo Group"), QStringLiteral("group preview"))
-    };
+        makeGroup(88, QStringLiteral("Memo Group"), QStringLiteral("group preview"))};
 
     QHash<int, QString> drafts;
     drafts.insert(-88, QStringLiteral("group draft"));
     QSet<int> localPinned;
     localPinned.insert(-88);
-    const DialogDecorationState decorationState {
-        &drafts,
-        nullptr,
-        nullptr,
-        nullptr,
-        &localPinned
-    };
+    const DialogDecorationState decorationState{&drafts, nullptr, nullptr, nullptr, &localPinned};
 
-    DialogListService::appendMissingGroupDialogs(dialogs,
-                                                 localGroups,
-                                                 groupUidMap,
-                                                 QSet<qint64> {},
-                                                 decorationState);
+    DialogListService::appendMissingGroupDialogs(dialogs, localGroups, groupUidMap, QSet<qint64>{}, decorationState);
 
     ASSERT_EQ(dialogs.size(), 2U);
     ASSERT_NE(dialogs[1], nullptr);
@@ -161,10 +190,8 @@ TEST(DialogListServiceTest, PreservesExistingPrivateDialogWhenPartialResponseHas
     groupSeed.icon = QStringLiteral("qrc:/res/chat_icon.png");
     groupSeed.previewText = QStringLiteral("group preview");
 
-    const DialogDecorationState decorationState {};
-    std::vector<std::shared_ptr<FriendInfo>> dialogs {
-        DialogListService::buildDialogEntry(groupSeed, decorationState)
-    };
+    const DialogDecorationState decorationState{};
+    std::vector<std::shared_ptr<FriendInfo>> dialogs{DialogListService::buildDialogEntry(groupSeed, decorationState)};
 
     QVariantMap existingPrivate;
     existingPrivate.insert(QStringLiteral("uid"), 1060);
@@ -177,9 +204,7 @@ TEST(DialogListServiceTest, PreservesExistingPrivateDialogWhenPartialResponseHas
     existingPrivate.insert(QStringLiteral("unreadCount"), 2);
     existingPrivate.insert(QStringLiteral("lastMsgTs"), static_cast<qint64>(1234567890000));
 
-    DialogListService::appendExistingDialogs(dialogs,
-                                             std::vector<QVariantMap> {existingPrivate},
-                                             decorationState);
+    DialogListService::appendExistingDialogs(dialogs, std::vector<QVariantMap>{existingPrivate}, decorationState);
 
     ASSERT_EQ(dialogs.size(), 2U);
     ASSERT_NE(dialogs[1], nullptr);
@@ -199,14 +224,13 @@ TEST(FriendListModelTest, UpsertBatchEmitsInsertBeforeRowsAreVisible)
 
     QObject::connect(&model,
                      &QAbstractItemModel::rowsAboutToBeInserted,
-                     [&model, &rowCountsBeforeInsert](const QModelIndex &, int, int) {
+                     [&model, &rowCountsBeforeInsert](const QModelIndex&, int, int)
+                     {
                          rowCountsBeforeInsert.push_back(model.rowCount());
                      });
 
-    const std::vector<std::shared_ptr<FriendInfo>> friends = {
-        makeFriend(1060, QStringLiteral("yangksl")),
-        makeFriend(1059, QStringLiteral("friend"))
-    };
+    const std::vector<std::shared_ptr<FriendInfo>> friends = {makeFriend(1060, QStringLiteral("yangksl")),
+                                                                         makeFriend(1059, QStringLiteral("friend"))};
 
     model.upsertBatch(friends);
 

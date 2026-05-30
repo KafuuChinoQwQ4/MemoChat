@@ -2,14 +2,13 @@ import re
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 
-LIVE2D_ASSET_H = CLIENT_DIR / "Live2DAsset.h"
-LIVE2D_ASSET_CPP = CLIENT_DIR / "Live2DAsset.cpp"
+LIVE2D_ASSET_H = CLIENT_DIR / "live2d/Live2DAsset.h"
+LIVE2D_ASSET_CPP = CLIENT_DIR / "live2d/Live2DAsset.cpp"
 CLIENT_CMAKE = CLIENT_DIR / "CMakeLists.txt"
-MAIN_CPP = CLIENT_DIR / "main.cpp"
+MAIN_QML_TYPE_REGISTRY_CPP = CLIENT_DIR / "app/MainQmlTypeRegistry.cpp"
 CHARACTER_PANE_QML = CLIENT_DIR / "qml/pet/Live2DCharacterPane.qml"
 QML_QRC = CLIENT_DIR / "qml.qrc"
 LIVE2D_FIXTURE_DIR = REPO_ROOT / "tests/fixtures/live2d/minimal_model"
@@ -133,11 +132,11 @@ class Live2DAssetContractTests(unittest.TestCase):
         self.assertRegex(source, r"\.toHex\s*\(")
 
     def test_main_registers_live2d_asset_in_memo_chat_module(self):
-        main = read(MAIN_CPP)
+        qml_registry = read(MAIN_QML_TYPE_REGISTRY_CPP)
 
-        self.assertContains(main, '#include "Live2DAsset.h"')
+        self.assertContains(qml_registry, '#include "Live2DAsset.h"')
         self.assertRegex(
-            main,
+            qml_registry,
             r"qmlRegisterType\s*<\s*Live2DAsset\s*>\s*\(\s*\"MemoChat\"\s*,\s*1\s*,\s*0\s*,\s*\"Live2DAsset\"\s*\)",
         )
 

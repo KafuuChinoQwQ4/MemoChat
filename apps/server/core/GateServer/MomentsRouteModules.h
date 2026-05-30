@@ -2,7 +2,8 @@
 
 #include "GateRouteModules.h"
 
-class MomentsHttpServiceRoutes {
+class MomentsHttpServiceRoutes
+{
 public:
     static void RegisterRoutes(LogicSystem& logic);
 };

@@ -16,20 +16,23 @@
 #include <QUuid>
 #include <utility>
 
-namespace {
+namespace
+{
 
 QString appConfigPath()
 {
     return QCoreApplication::applicationDirPath() + "/config.ini";
 }
 
-QString normalizeHexId(const QString &raw)
+QString normalizeHexId(const QString& raw)
 {
     QString out;
     out.reserve(raw.size());
-    for (const QChar ch : raw) {
-        if (ch.isDigit() || (ch >= QLatin1Char('a') && ch <= QLatin1Char('f'))
-            || (ch >= QLatin1Char('A') && ch <= QLatin1Char('F'))) {
+    for (const QChar ch : raw)
+    {
+        if (ch.isDigit() || (ch >= QLatin1Char('a') && ch <= QLatin1Char('f')) ||
+            (ch >= QLatin1Char('A') && ch <= QLatin1Char('F')))
+        {
             out.append(ch.toLower());
         }
     }
@@ -39,23 +42,25 @@ QString normalizeHexId(const QString &raw)
 QString defaultServiceName()
 {
     const QString appName = QCoreApplication::applicationName().trimmed();
-    if (!appName.isEmpty()) {
+    if (!appName.isEmpty())
+    {
         return appName;
     }
     return QStringLiteral("MemoChatClient");
 }
 
-QNetworkAccessManager *telemetryManager()
+QNetworkAccessManager* telemetryManager()
 {
-    static QNetworkAccessManager *manager = new QNetworkAccessManager(qApp);
+    static QNetworkAccessManager* manager = new QNetworkAccessManager(qApp);
     return manager;
 }
 
 void postTelemetrySpan(QNetworkRequest request, QByteArray payload)
 {
-    QNetworkAccessManager *manager = telemetryManager();
-    QNetworkReply *reply = manager->post(request, std::move(payload));
-    if (!reply) {
+    QNetworkAccessManager* manager = telemetryManager();
+    QNetworkReply* reply = manager->post(request, std::move(payload));
+    if (!reply)
+    {
         return;
     }
     QObject::connect(reply, &QNetworkReply::finished, reply, &QObject::deleteLater);
@@ -74,17 +79,20 @@ ClientTelemetryConfig loadClientTelemetryConfig()
     cfg.exportTraces = settings.value("Telemetry/ExportTraces", true).toBool();
     cfg.exportMetrics = settings.value("Telemetry/ExportMetrics", false).toBool();
     cfg.serviceName = settings.value("Telemetry/ServiceName").toString().trimmed();
-    if (cfg.serviceName.isEmpty()) {
+    if (cfg.serviceName.isEmpty())
+    {
         cfg.serviceName = defaultServiceName();
     }
     cfg.serviceNamespace = settings.value("Telemetry/ServiceNamespace", cfg.serviceNamespace).toString().trimmed();
-    if (cfg.serviceNamespace.isEmpty()) {
+    if (cfg.serviceNamespace.isEmpty())
+    {
         cfg.serviceNamespace = QStringLiteral("memochat");
     }
-    cfg.serviceInstance = QStringLiteral("%1@%2:%3")
-                              .arg(cfg.serviceName,
-                                   QSysInfo::machineHostName().isEmpty() ? QStringLiteral("localhost") : QSysInfo::machineHostName(),
-                                   QString::number(QCoreApplication::applicationPid()));
+    cfg.serviceInstance =
+        QStringLiteral("%1@%2:%3") .arg(cfg.serviceName,
+                                        QSysInfo::machineHostName().isEmpty()
+                                        ? QStringLiteral("localhost") : QSysInfo::machineHostName(),
+                                                         QString::number(QCoreApplication::applicationPid()));
     return cfg;
 }
 
@@ -113,7 +121,7 @@ QString newSpanId()
     return newTraceId().left(16);
 }
 
-void applyTraceHeaders(QNetworkRequest &request, QString *traceId, QString *requestId, QString *spanId)
+void applyTraceHeaders(QNetworkRequest& request, QString* traceId, QString* requestId, QString* spanId)
 {
     QString localTraceId = traceId && !traceId->trimmed().isEmpty() ? traceId->trimmed() : newTraceId();
     QString localRequestId = requestId && !requestId->trimmed().isEmpty() ? requestId->trimmed() : newRequestId();
@@ -123,35 +131,40 @@ void applyTraceHeaders(QNetworkRequest &request, QString *traceId, QString *requ
     request.setRawHeader("X-Request-Id", localRequestId.toUtf8());
     request.setRawHeader("X-Span-Id", localSpanId.toUtf8());
 
-    if (traceId) {
+    if (traceId)
+    {
         *traceId = localTraceId;
     }
-    if (requestId) {
+    if (requestId)
+    {
         *requestId = localRequestId;
     }
-    if (spanId) {
+    if (spanId)
+    {
         *spanId = localSpanId;
     }
 }
 
-void exportZipkinSpan(const QString &name,
-                      const QString &kind,
-                      const QString &traceId,
-                      const QString &spanId,
-                      const QString &parentSpanId,
+void exportZipkinSpan(const QString& name,
+                      const QString& kind,
+                      const QString& traceId,
+                      const QString& spanId,
+                      const QString& parentSpanId,
                       qint64 startTimeMs,
                       qint64 durationMs,
-                      const QVariantMap &attributes)
+                      const QVariantMap& attributes)
 {
     const ClientTelemetryConfig cfg = loadClientTelemetryConfig();
-    if (!cfg.enabled || !cfg.exportTraces || cfg.endpoint.isEmpty() || traceId.isEmpty() || spanId.isEmpty()) {
+    if (!cfg.enabled || !cfg.exportTraces || cfg.endpoint.isEmpty() || traceId.isEmpty() || spanId.isEmpty())
+    {
         return;
     }
 
     QJsonObject spanObj;
     spanObj.insert("traceId", traceId);
     spanObj.insert("id", spanId);
-    if (!parentSpanId.isEmpty()) {
+    if (!parentSpanId.isEmpty())
+    {
         spanObj.insert("parentId", parentSpanId);
     }
     spanObj.insert("name", name);
@@ -166,7 +179,8 @@ void exportZipkinSpan(const QString &name,
     QJsonObject tags;
     tags.insert("service.instance.id", cfg.serviceInstance);
     tags.insert("service.namespace", cfg.serviceNamespace);
-    for (auto it = attributes.cbegin(); it != attributes.cend(); ++it) {
+    for (auto it = attributes.cbegin(); it != attributes.cend(); ++it)
+    {
         tags.insert(it.key(), QJsonValue::fromVariant(it.value()));
     }
     spanObj.insert("tags", tags);
@@ -178,9 +192,12 @@ void exportZipkinSpan(const QString &name,
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     const QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
 
-    if (qApp && QThread::currentThread() != qApp->thread()) {
-        QMetaObject::invokeMethod(qApp,
-            [request, body]() mutable {
+    if (qApp && QThread::currentThread() != qApp->thread())
+    {
+        QMetaObject::invokeMethod(
+            qApp,
+            [request, body]() mutable
+            {
                 postTelemetrySpan(request, std::move(body));
             },
             Qt::QueuedConnection);

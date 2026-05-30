@@ -12,7 +12,11 @@ class AnimationMapper:
             return {"expression": "smile_soft", "motion": "talk" if phase == "speaking" else "idle", "phase": phase}
         if normalized in {"surprised", "surprise"}:
             return {"expression": "surprised", "motion": "idle", "phase": phase}
-        return {"expression": "focus" if phase == "speaking" else "neutral", "motion": "talk" if phase == "speaking" else "idle", "phase": phase}
+        return {
+            "expression": "focus" if phase == "speaking" else "neutral",
+            "motion": "talk" if phase == "speaking" else "idle",
+            "phase": phase,
+        }
 
     def for_provider_chunk(
         self,

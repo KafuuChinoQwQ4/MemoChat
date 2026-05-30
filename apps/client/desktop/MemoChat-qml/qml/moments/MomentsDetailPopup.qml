@@ -51,40 +51,10 @@ Popup {
         anchors.fill: parent
         spacing: 0
 
-        // ── 标题栏: 固定 48px ─────────────────────────
-        Rectangle {
+        MomentsDetailHeader {
             width: parent.width
             height: 48
-            color: "transparent"
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 16
-                anchors.rightMargin: 8
-                spacing: 8
-                Label {
-                    text: "朋友圈详情"
-                    font.pixelSize: 15
-                    font.weight: Font.Medium
-                    color: "#1a1a1a"
-                }
-                Item { Layout.fillWidth: true }
-                ToolButton {
-                    icon.source: "qrc:/icons/close.png"
-                    icon.width: 18
-                    icon.height: 18
-                    onClicked: root.close()
-                }
-            }
-
-            // 标题栏底部细线
-            Rectangle {
-                anchors.bottom: parent.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                height: 1
-                color: Qt.rgba(0.88, 0.88, 0.92, 0.6)
-            }
+            onCloseRequested: root.close()
         }
 
         // ── 正文滚动区: 撑满中间空间 ───────────────────
@@ -107,38 +77,16 @@ Popup {
                 anchors.topMargin: 12
                 spacing: 10
 
-                // ── 用户信息 ────────────────────────────
-                RowLayout {
+                MomentsDetailAuthorRow {
                     width: parent.width
-                    spacing: 10
-                    Rectangle {
-                        width: 42; height: 42; radius: 10; clip: true
-                        color: Qt.rgba(0.85, 0.88, 0.97, 1.0)
-                        Image {
-                            anchors.fill: parent; fillMode: Image.PreserveAspectCrop
-                            source: momentUserIcon; cache: true; asynchronous: true
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.avatarProfileRequested(root.momentUid,
-                                                                   root.momentUserNick || root.momentUserName || "用户",
-                                                                   root.momentUserIcon,
-                                                                   root.momentUserId)
-                        }
-                    }
-                    ColumnLayout {
-                        Layout.fillWidth: true; spacing: 3
-                        Label {
-                            text: momentUserNick || " "
-                            font.pixelSize: 14; font.weight: Font.Medium; color: "#1a1a1a"
-                            wrapMode: Text.Wrap; Layout.fillWidth: true
-                        }
-                        Label {
-                            text: momentLocation ? momentLocation : momentTimeText
-                            font.pixelSize: 12; color: "#888888"
-                            visible: text.length > 0; Layout.fillWidth: true
-                        }
+                    userNick: root.momentUserNick
+                    userName: root.momentUserName
+                    userIcon: root.momentUserIcon
+                    locationText: root.momentLocation ? root.momentLocation : root.momentTimeText
+                    uid: root.momentUid
+                    userId: root.momentUserId
+                    onAvatarProfileRequested: function(uid, name, icon, userId) {
+                        root.avatarProfileRequested(uid, name, icon, userId)
                     }
                 }
 
@@ -149,63 +97,14 @@ Popup {
                     visible: momentText.length > 0
                 }
 
-                // ── 图片网格 ────────────────────────────
-                GridLayout {
-                    width: parent.width; visible: momentMediaTiles.length > 0
-                    columns: momentMediaTiles.length === 1 ? 1 : 3
-                    rowSpacing: 6; columnSpacing: 6
-
-                    Repeater {
-                        model: momentMediaTiles
-                        delegate: Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: mediaTileHeight(modelData)
-                            radius: 8; color: Qt.rgba(0.93, 0.95, 0.98, 1.0); clip: true
-                            Image {
-                                anchors.fill: parent; fillMode: Image.PreserveAspectCrop
-                                source: modelData.type === "image" ? imgUrl(modelData.key) : ""
-                                cache: true; asynchronous: true
-                                visible: modelData.type === "image"
-                            }
-                            Rectangle {
-                                anchors.fill: parent
-                                visible: modelData.type === "video"
-                                color: "#1d2430"
-                                gradient: Gradient {
-                                    GradientStop { position: 0.0; color: "#2d3b50" }
-                                    GradientStop { position: 1.0; color: "#121821" }
-                                }
-                                Column {
-                                    anchors.centerIn: parent
-                                    spacing: 6
-                                    Label {
-                                        text: "▶"
-                                        font.pixelSize: 30
-                                        color: "#ffffff"
-                                        horizontalAlignment: Text.AlignHCenter
-                                        width: 80
-                                    }
-                                    Label {
-                                        text: videoDuration(modelData.duration)
-                                        font.pixelSize: 11
-                                        color: "#d6e3f2"
-                                        horizontalAlignment: Text.AlignHCenter
-                                        width: 80
-                                    }
-                                }
-                            }
-                            MouseArea {
-                                anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    if (modelData.type === "image") {
-                                        imgPopupLoader.active = true
-                                        if (imgPopupLoader.item) imgPopupLoader.item.open(modelData.key)
-                                    } else {
-                                        Qt.openUrlExternally(imgUrl(modelData.key))
-                                    }
-                                }
-                            }
-                        }
+                MomentsDetailMediaGrid {
+                    width: parent.width
+                    mediaTiles: root.momentMediaTiles
+                    mediaUrlResolver: root.imgUrl
+                    mediaHeightResolver: root.mediaTileHeight
+                    videoDurationFormatter: root.videoDuration
+                    onImageRequested: function(key) {
+                        imagePreviewPopup.openImage(key)
                     }
                 }
 
@@ -231,363 +130,28 @@ Popup {
                     color: Qt.rgba(0.88, 0.88, 0.92, 0.5)
                 }
 
-                // ── 评论区白底卡片 ──────────────────────
-                Rectangle {
+                MomentsCommentList {
                     width: parent.width
-                    height: Math.max(64, commentColumn.implicitHeight + 20)
-                    color: "#ffffff"
-                    border.color: Qt.rgba(0.82, 0.84, 0.90, 0.5)
-                    border.width: 1
-                    radius: 10
-
-                    Column {
-                        id: commentColumn
-                        anchors.fill: parent
-                        anchors.margins: 10
-                        spacing: 6
-
-                        // 标题行
-                        Row {
-                            spacing: 4
-                            Label {
-                                text: "评论"
-                                font.pixelSize: 13; font.weight: Font.Medium; color: "#1a1a1a"
-                            }
-                            Label {
-                                text: "(" + commentCount + ")"
-                                font.pixelSize: 13; color: "#888888"
-                                visible: (commentCount !== undefined && commentCount > 0)
-                            }
-                        }
-
-                        // 无评论
-                        Label {
-                            text: "暂无评论，快来抢沙发"
-                            font.pixelSize: 12; color: "#bbbbbb"
-                            visible: !commentsLoading && (!commentList || commentList.length === 0)
-                        }
-
-                        // 加载中（count>0 但 list 为空）
-                        Label {
-                            text: "评论加载中..."
-                            font.pixelSize: 12; color: "#999999"
-                            visible: commentsLoading && (!commentList || commentList.length === 0)
-                        }
-
-                        // 评论列表
-                        Column {
-                            width: parent.width
-                            spacing: 8
-                            visible: commentListModel.count > 0
-                            Repeater {
-                                model: commentListModel
-                                delegate: commentItem
-                            }
-                        }
-                    }
+                    commentModel: commentListModel
+                    commentsLoading: root.commentsLoading
+                    commentCount: root.commentCount
+                    currentUserUid: root.currentUserUid
+                    onReplyRequested: function(uid, nick) { root.prepareReply(uid, nick) }
+                    onLikeToggled: function(commentId, liked) { root.toggleCommentLike(commentId, liked) }
+                    onDeleteRequested: function(commentId) { root.deleteOwnComment(commentId) }
                 }
             }
         }
 
-        // ── 底部输入框: 固定高度 56px ──────────────────
-        // 底部左右下角圆角跟外层背景一致，融入而不溢出
-        Rectangle {
+        MomentsCommentComposer {
             id: commentInputBar
             width: parent.width
-            height: replyUid > 0 ? 92 : 64
-            color: "#ffffff"
-            clip: true   // 裁掉超出圆角的部分
-
-            // 输入框顶部分隔线
-            Rectangle {
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                height: 1
-                color: Qt.rgba(0.88, 0.88, 0.92, 0.5)
-            }
-
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 8
-                spacing: 6
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 26
-                    visible: replyUid > 0
-                    radius: 13
-                    color: Qt.rgba(0.16, 0.48, 0.89, 0.08)
-                    border.color: Qt.rgba(0.16, 0.48, 0.89, 0.18)
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 10
-                        anchors.rightMargin: 4
-                        spacing: 6
-
-                        Label {
-                            Layout.fillWidth: true
-                            text: "回复 " + (replyNick || "用户")
-                            color: "#2a7ae2"
-                            font.pixelSize: 12
-                            elide: Text.ElideRight
-                            verticalAlignment: Text.AlignVCenter
-                        }
-
-                        ToolButton {
-                            id: clearReplyButton
-                            implicitWidth: 22
-                            implicitHeight: 22
-                            padding: 0
-                            text: "×"
-                            font.pixelSize: 13
-                            background: Rectangle {
-                                radius: 11
-                                color: clearReplyButton.hovered ? Qt.rgba(0.16, 0.24, 0.36, 0.08) : "transparent"
-                            }
-                            onClicked: {
-                                replyUid = 0
-                                replyNick = ""
-                                commentInput.placeholderText = "写评论..."
-                            }
-                        }
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    spacing: 8
-
-                    TextField {
-                        id: commentInput
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        placeholderText: "写评论..."
-                        placeholderTextColor: "#aaaaaa"
-                        font.pixelSize: 14
-                        color: "#1a1a1a"
-                        background: Rectangle {
-                            color: "#f5f6f9"
-                            radius: 12
-                            border.color: Qt.rgba(0.82, 0.84, 0.90, 0.4)
-                            border.width: 1
-                        }
-                        leftPadding: 12; rightPadding: 12
-                        verticalAlignment: TextInput.AlignVCenter
-                        onAccepted: sendComment()
-                    }
-
-                    Button {
-                        id: sendBtn
-                        Layout.preferredWidth: 64
-                        Layout.fillHeight: true
-                        enabled: commentInput.text.trim().length > 0 && !commentSending
-                        background: Rectangle {
-                            radius: 12
-                            color: sendBtn.enabled ? "#2a7ae2" : Qt.rgba(0.82, 0.85, 0.90, 1.0)
-                        }
-                        contentItem: Label {
-                            anchors.centerIn: parent
-                            text: commentSending ? "..." : "发送"
-                            color: sendBtn.enabled ? "#ffffff" : "#aaaaaa"
-                            font.pixelSize: 14; font.weight: Font.Medium
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        onClicked: sendComment()
-                    }
-                }
-            }
-        }
-    }
-
-    // ── 单条评论条目 ─────────────────────────────────────
-    Component {
-        id: commentItem
-        Rectangle {
-            id: commentRoot
-            width: parent ? parent.width : 0
-            height: commentCol.implicitHeight + 16
-            color: Qt.rgba(0.96, 0.98, 1.0, 0.92)
-            radius: 10
-            border.color: Qt.rgba(0.82, 0.86, 0.92, 0.45)
-
-            required property int commentId
-            required property int commentUid
-            required property string commentNick
-            required property string commentText
-            required property int targetReplyUid
-            required property string targetReplyNick
-            required property bool likedByMe
-            required property int commentLikeCount
-            required property string commentLikeText
-            property bool ownComment: root.currentUserUid <= 0 || commentUid === Number(root.currentUserUid)
-
-            Column {
-                id: commentCol
-                width: parent.width - 16
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.margins: 8
-                spacing: 6
-
-                RowLayout {
-                    width: parent.width
-                    height: 24
-                    spacing: 4
-                    Label {
-                        text: commentRoot.commentNick
-                        font.pixelSize: 12; font.weight: Font.Medium; color: "#2a7ae2"
-                        Layout.maximumWidth: parent.width * 0.42
-                        elide: Text.ElideRight
-                    }
-                    Label {
-                        text: commentRoot.targetReplyUid > 0 ? (" 回复 " + commentRoot.targetReplyNick) : ""
-                        font.pixelSize: 12; color: "#2a7ae2"
-                        visible: commentRoot.targetReplyUid > 0
-                        Layout.maximumWidth: parent.width * 0.32
-                        elide: Text.ElideRight
-                    }
-                    Label { text: "："; font.pixelSize: 12; color: "#555555" }
-                    Item { Layout.fillWidth: true }
-                    ToolButton {
-                        id: commentMoreButton
-                        Layout.preferredWidth: 30
-                        Layout.preferredHeight: 24
-                        text: "..."
-                        padding: 0
-                        font.pixelSize: 14
-                        ToolTip.visible: hovered
-                        ToolTip.delay: 120
-                        ToolTip.text: "更多"
-                        background: Rectangle {
-                            radius: 9
-                            color: commentMoreButton.down ? Qt.rgba(0.16, 0.24, 0.36, 0.12)
-                                  : commentMoreButton.hovered ? Qt.rgba(0.16, 0.24, 0.36, 0.08)
-                                  : "transparent"
-                            border.width: commentMoreButton.hovered ? 1 : 0
-                            border.color: Qt.rgba(0.16, 0.24, 0.36, 0.12)
-                        }
-                        onClicked: commentMenu.open()
-                    }
-                }
-                Label {
-                    width: parent.width
-                    text: commentRoot.commentText.length > 0 ? commentRoot.commentText : " "
-                    font.pixelSize: 13; color: "#1a1a1a"; wrapMode: Text.Wrap
-                }
-
-                Row {
-                    width: parent.width
-                    height: commentRoot.commentLikeCount > 0 ? 22 : 0
-                    visible: height > 0
-                    spacing: 6
-
-                    Rectangle {
-                        width: Math.min(parent.width, likedLabel.implicitWidth + 38)
-                        height: 22
-                        radius: 11
-                        color: Qt.rgba(0.91, 0.20, 0.20, 0.07)
-                        border.color: Qt.rgba(0.91, 0.20, 0.20, 0.14)
-
-                        Image {
-                            id: commentLikeIcon
-                            width: 13
-                            height: 13
-                            source: "qrc:/icons/like_active.png"
-                            anchors.left: parent.left
-                            anchors.leftMargin: 10
-                            anchors.verticalCenter: parent.verticalCenter
-                            fillMode: Image.PreserveAspectFit
-                        }
-
-                        Label {
-                            id: likedLabel
-                            anchors.left: commentLikeIcon.right
-                            anchors.leftMargin: 5
-                            anchors.right: parent.right
-                            anchors.rightMargin: 10
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: commentRoot.commentLikeText.length > 0
-                                  ? commentRoot.commentLikeText
-                                  : (commentRoot.commentLikeCount + " 人点赞")
-                            color: "#d64545"
-                            font.pixelSize: 11
-                            elide: Text.ElideRight
-                        }
-                    }
-                }
-            }
-
-            Menu {
-                id: commentMenu
-                y: commentMoreButton.y + commentMoreButton.height + 4
-                x: Math.max(0, parent.width - width - 8)
-                width: 132
-                background: Rectangle {
-                    color: "#ffffff"
-                    radius: 10
-                    border.color: Qt.rgba(0.82, 0.84, 0.90, 0.75)
-                }
-                MenuItem {
-                    id: replyCommentAction
-                    height: 36
-                    text: "回复"
-                    contentItem: Label {
-                        text: replyCommentAction.text
-                        color: "#26384d"
-                        font.pixelSize: 13
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    background: Rectangle {
-                        radius: 8
-                        color: replyCommentAction.hovered ? Qt.rgba(0.16, 0.24, 0.36, 0.08) : "transparent"
-                    }
-                    onTriggered: root.prepareReply(commentRoot.commentUid, commentRoot.commentNick)
-                }
-                MenuItem {
-                    id: likeCommentAction
-                    height: 36
-                    text: commentRoot.likedByMe ? "取消点赞" : "点赞评论"
-                    contentItem: Label {
-                        text: likeCommentAction.text
-                        color: "#26384d"
-                        font.pixelSize: 13
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    background: Rectangle {
-                        radius: 8
-                        color: likeCommentAction.hovered ? Qt.rgba(0.16, 0.24, 0.36, 0.08) : "transparent"
-                    }
-                    onTriggered: root.toggleCommentLike(commentRoot.commentId, !commentRoot.likedByMe)
-                }
-                MenuSeparator {
-                    visible: commentRoot.ownComment
-                }
-                MenuItem {
-                    id: deleteCommentAction
-                    height: 36
-                    text: "删除"
-                    visible: commentRoot.ownComment
-                    enabled: visible
-                    contentItem: Label {
-                        text: deleteCommentAction.text
-                        color: "#d64545"
-                        font.pixelSize: 13
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    background: Rectangle {
-                        radius: 8
-                        color: deleteCommentAction.hovered ? Qt.rgba(0.86, 0.18, 0.18, 0.08) : "transparent"
-                    }
-                    onTriggered: root.deleteOwnComment(commentRoot.commentId)
-                }
-            }
+            replyUid: root.replyUid
+            replyNick: root.replyNick
+            commentSending: root.commentSending
+            placeholderText: root.commentPlaceholderText
+            onReplyCleared: root.clearReplyTarget()
+            onCommentSubmitted: function(text) { root.sendComment(text) }
         }
     }
 
@@ -604,6 +168,7 @@ Popup {
     property var commentList: []
     property int replyUid: 0
     property string replyNick: ""
+    property string commentPlaceholderText: "写评论..."
     property bool commentSending: false
     property bool commentsLoading: false
 
@@ -768,9 +333,7 @@ Popup {
         console.log("[MomentsDetail] openMoment called, momentId=" + momentId + " controller=" + !!root.controller)
         root.currentMomentId = momentId
         clearSnapshot()
-        replyUid = 0
-        replyNick = ""
-        commentInput.placeholderText = "写评论..."
+        clearReplyTarget()
         commentsLoading = true
         applySnapshot()
         root.open()
@@ -783,22 +346,27 @@ Popup {
         }
     }
 
-    function sendComment() {
-        var text = commentInput.text.trim()
+    function sendComment(text) {
+        text = String(text || "").trim()
         if (!text || !root.controller || root.currentMomentId <= 0) return
         commentSending = true
         commentsLoading = true
         root.controller.addComment(root.currentMomentId, text, replyUid)
-        commentInput.clear()
-        replyUid = 0; replyNick = ""
-        commentInput.placeholderText = "写评论..."
+        commentInputBar.clearInput()
+        clearReplyTarget()
+    }
+
+    function clearReplyTarget() {
+        replyUid = 0
+        replyNick = ""
+        commentPlaceholderText = "写评论..."
     }
 
     function prepareReply(uid, nick) {
         replyUid = uid || 0
         replyNick = nick || "用户"
-        commentInput.placeholderText = replyUid > 0 ? ("回复 " + replyNick + "...") : "写评论..."
-        commentInput.forceActiveFocus()
+        commentPlaceholderText = replyUid > 0 ? ("回复 " + replyNick + "...") : "写评论..."
+        commentInputBar.focusInput()
     }
 
     function toggleCommentLike(commentId, liked) {
@@ -825,7 +393,7 @@ Popup {
             if (root.opened && (momentId <= 0 || momentId === root.currentMomentId)) {
                 commentSending = false
                 if (replyUid === 0)
-                    commentInput.placeholderText = "写评论..."
+                    commentPlaceholderText = "写评论..."
                 applySnapshot()
             }
         }
@@ -838,30 +406,8 @@ Popup {
         }
     }
 
-    Loader {
-        id: imgPopupLoader
-        active: false
-        sourceComponent: Component {
-            Popup {
-                id: imgPopup
-                modal: true; focus: true
-                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-                property string currentKey: ""
-                function open(key) { currentKey = key; imgPopup.open() }
-                width: parent && parent.width ? parent.width - 40 : 680
-                height: parent && parent.height ? parent.height - 40 : 500
-                anchors.centerIn: Overlay.overlay
-                background: Rectangle { color: "#111111"; anchors.fill: parent }
-                Image {
-                    anchors.fill: parent; fillMode: Image.PreserveAspectFit
-                    source: gateMediaUrlPrefix + "/media/download?asset=" + imgPopup.currentKey
-                    cache: false
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: imgPopup.close()
-                }
-            }
-        }
+    MomentsImagePreviewPopup {
+        id: imagePreviewPopup
+        gatewayPrefix: gateMediaUrlPrefix
     }
 }

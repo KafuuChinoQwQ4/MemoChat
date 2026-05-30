@@ -2,7 +2,9 @@
 推荐系统 — 好友/群组/兴趣推荐
 基于 Neo4j 图数据库的协同过滤推荐
 """
+
 from typing import Optional
+
 import structlog
 
 logger = structlog.get_logger()

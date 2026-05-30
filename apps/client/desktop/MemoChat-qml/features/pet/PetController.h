@@ -66,137 +66,246 @@ class PetController : public QObject
     Q_PROPERTY(bool visionRequestInFlight READ visionRequestInFlight NOTIFY stateChanged)
 
 public:
-    explicit PetController(ClientGateway *gateway, QObject *parent = nullptr);
+    explicit PetController(ClientGateway* gateway, QObject* parent = nullptr);
     ~PetController() override;
 
-    PetModel *model() { return &_model; }
-    QString sessionId() const { return _session_id; }
-    bool streaming() const { return _streaming; }
-    bool busy() const { return _busy; }
-    QString error() const { return _error; }
-    QString statusText() const { return _status_text; }
-    int schemaVersion() const { return _model.schemaVersion(); }
-    QString eventId() const { return _model.eventId(); }
-    QString turnId() const { return _model.turnId(); }
-    QString phase() const { return _model.phase(); }
-    QString speechText() const { return _model.speechText(); }
-    QString speechTranslation() const { return _model.speechTranslation(); }
-    QString speechDisplayText() const { return _model.speechDisplayText(); }
-    QString speechLanguage() const { return _model.speechLanguage(); }
-    bool speechFinal() const { return _model.speechFinal(); }
+    PetModel* model()
+    {
+        return &_model;
+    }
+    QString sessionId() const
+    {
+        return _session_id;
+    }
+    bool streaming() const
+    {
+        return _streaming;
+    }
+    bool busy() const
+    {
+        return _busy;
+    }
+    QString error() const
+    {
+        return _error;
+    }
+    QString statusText() const
+    {
+        return _status_text;
+    }
+    int schemaVersion() const
+    {
+        return _model.schemaVersion();
+    }
+    QString eventId() const
+    {
+        return _model.eventId();
+    }
+    QString turnId() const
+    {
+        return _model.turnId();
+    }
+    QString phase() const
+    {
+        return _model.phase();
+    }
+    QString speechText() const
+    {
+        return _model.speechText();
+    }
+    QString speechTranslation() const
+    {
+        return _model.speechTranslation();
+    }
+    QString speechDisplayText() const
+    {
+        return _model.speechDisplayText();
+    }
+    QString speechLanguage() const
+    {
+        return _model.speechLanguage();
+    }
+    bool speechFinal() const
+    {
+        return _model.speechFinal();
+    }
     QString audioUrl() const;
-    QString audioState() const { return _model.audioState(); }
-    QString emotion() const { return _model.emotion(); }
-    QString expression() const { return _model.expression(); }
-    QString motion() const { return _model.motion(); }
-    qreal intensity() const { return _model.intensity(); }
-    qreal gazeX() const { return _model.gazeX(); }
-    qreal gazeY() const { return _model.gazeY(); }
-    qreal lipSyncValue() const { return _model.lipSyncValue(); }
-    bool voiceTrainingBusy() const { return _voice_training_busy; }
-    QString voiceTrainingJobId() const { return _voice_training_job_id; }
-    QString voiceTrainingStatus() const { return _voice_training_status; }
-    QString voiceTrainingStage() const { return _voice_training_stage; }
-    int voiceTrainingProgress() const { return _voice_training_progress; }
-    QString voiceTrainingArtifactPath() const { return _voice_training_artifact_path; }
-    QString voiceTrainingMessage() const { return _voice_training_message; }
+    QString audioState() const
+    {
+        return _model.audioState();
+    }
+    QString emotion() const
+    {
+        return _model.emotion();
+    }
+    QString expression() const
+    {
+        return _model.expression();
+    }
+    QString motion() const
+    {
+        return _model.motion();
+    }
+    qreal intensity() const
+    {
+        return _model.intensity();
+    }
+    qreal gazeX() const
+    {
+        return _model.gazeX();
+    }
+    qreal gazeY() const
+    {
+        return _model.gazeY();
+    }
+    qreal lipSyncValue() const
+    {
+        return _model.lipSyncValue();
+    }
+    bool voiceTrainingBusy() const
+    {
+        return _voice_training_busy;
+    }
+    QString voiceTrainingJobId() const
+    {
+        return _voice_training_job_id;
+    }
+    QString voiceTrainingStatus() const
+    {
+        return _voice_training_status;
+    }
+    QString voiceTrainingStage() const
+    {
+        return _voice_training_stage;
+    }
+    int voiceTrainingProgress() const
+    {
+        return _voice_training_progress;
+    }
+    QString voiceTrainingArtifactPath() const
+    {
+        return _voice_training_artifact_path;
+    }
+    QString voiceTrainingMessage() const
+    {
+        return _voice_training_message;
+    }
     bool windowsImeBridgeAvailable() const;
-    bool windowsImeBridgeBusy() const { return _windows_ime_bridge_busy; }
+    bool windowsImeBridgeBusy() const
+    {
+        return _windows_ime_bridge_busy;
+    }
     bool windowsCameraBridgeAvailable() const;
-    bool windowsCameraBridgeBusy() const { return _windows_camera_bridge_busy; }
-    bool visionRequestInFlight() const { return _vision_request_in_flight; }
-    QString selectedModelType() const { return _selected_model_type; }
-    QString selectedModelName() const { return _selected_model_name; }
-    QString replyLanguage() const { return _reply_language; }
-    QString speechRules() const { return _speech_rules; }
+    bool windowsCameraBridgeBusy() const
+    {
+        return _windows_camera_bridge_busy;
+    }
+    bool visionRequestInFlight() const
+    {
+        return _vision_request_in_flight;
+    }
+    QString selectedModelType() const
+    {
+        return _selected_model_type;
+    }
+    QString selectedModelName() const
+    {
+        return _selected_model_name;
+    }
+    QString replyLanguage() const
+    {
+        return _reply_language;
+    }
+    QString speechRules() const
+    {
+        return _speech_rules;
+    }
 
     Q_INVOKABLE void startSession();
-    Q_INVOKABLE void sendText(const QString &text);
-    Q_INVOKABLE void sendObservation(const QVariantMap &observation);
-    Q_INVOKABLE void captureVisionFrame(const QString &frameBase64,
-                                         const QString &frameMime = QStringLiteral("image/jpeg"),
-                                         int frameWidth = 0,
-                                         int frameHeight = 0);
+    Q_INVOKABLE void sendText(const QString& text);
+    Q_INVOKABLE void sendObservation(const QVariantMap& observation);
+    Q_INVOKABLE void captureVisionFrame(const QString& frameBase64,
+                                        const QString& frameMime = QStringLiteral("image/jpeg"),
+                                                                                  int frameWidth = 0,
+                                                                                  int frameHeight = 0);
 #if HAVE_QT_MULTIMEDIA
-    Q_INVOKABLE bool captureVisionVideoFrame(const QVideoFrame &frame,
-                                             int frameWidth = 0,
-                                             int frameHeight = 0);
-    Q_INVOKABLE QString captureVisionSegmentVideoFrame(const QVideoFrame &frame,
+    Q_INVOKABLE bool captureVisionVideoFrame(const QVideoFrame& frame, int frameWidth = 0, int frameHeight = 0);
+    Q_INVOKABLE QString captureVisionSegmentVideoFrame(const QVideoFrame& frame,
                                                        int frameWidth = 0,
                                                        int frameHeight = 0);
 #endif
     Q_INVOKABLE QString nextVisionCaptureFilePath() const;
-    Q_INVOKABLE void captureVisionFrameFile(const QString &filePath, int frameWidth = 0, int frameHeight = 0);
+    Q_INVOKABLE void captureVisionFrameFile(const QString& filePath, int frameWidth = 0, int frameHeight = 0);
     Q_INVOKABLE void interrupt();
     Q_INVOKABLE void stopStream();
     Q_INVOKABLE void clearSpeech();
-    Q_INVOKABLE void startVoiceTraining(const QVariantMap &request);
-    Q_INVOKABLE void refreshVoiceTrainingJob(const QString &jobId = QString());
-    Q_INVOKABLE void openWindowsImeBridge(const QString &initialText = QString());
+    Q_INVOKABLE void startVoiceTraining(const QVariantMap& request);
+    Q_INVOKABLE void refreshVoiceTrainingJob(const QString& jobId = QString());
+    Q_INVOKABLE void openWindowsImeBridge(const QString& initialText = QString());
     Q_INVOKABLE bool captureVisionWindowsCameraFrame();
-    Q_INVOKABLE void setModelSelection(const QString &modelType, const QString &modelName);
-    Q_INVOKABLE void setReplyLanguage(const QString &language);
-    Q_INVOKABLE void setSpeechRules(const QString &rules);
-    Q_INVOKABLE void setVoiceRuntimeSettings(const QVariantMap &settings);
+    Q_INVOKABLE void setModelSelection(const QString& modelType, const QString& modelName);
+    Q_INVOKABLE void setReplyLanguage(const QString& language);
+    Q_INVOKABLE void setSpeechRules(const QString& rules);
+    Q_INVOKABLE void setVoiceRuntimeSettings(const QVariantMap& settings);
 
 signals:
     void stateChanged();
     void petStateChanged();
     void voiceTrainingChanged();
-    void controlEventReceived(const QVariantMap &event);
+    void controlEventReceived(const QVariantMap& event);
     void windowsImeBridgeChanged();
     void windowsCameraBridgeChanged();
-    void windowsImeTextCommitted(const QString &text);
+    void windowsImeTextCommitted(const QString& text);
     void modelSelectionChanged();
     void replyLanguageChanged();
     void speechRulesChanged();
 
 private:
-    void postJson(const QUrl &url, const QJsonObject &payload, const QString &op);
-    void getJson(const QUrl &url, const QString &op);
+    void postJson(const QUrl& url, const QJsonObject& payload, const QString& op);
+    void getJson(const QUrl& url, const QString& op);
     void startStream();
-    void handleJsonReply(QNetworkReply *reply);
-    void applyControlEvent(const QJsonObject &event);
-    bool rememberControlEvent(const QJsonObject &event);
+    void handleJsonReply(QNetworkReply* reply);
+    void applyControlEvent(const QJsonObject& event);
+    bool rememberControlEvent(const QJsonObject& event);
     void resetControlEventDedupe();
-    void consumeStreamBytes(const QByteArray &bytes);
-    void consumeSseLine(const QByteArray &line);
-    void setBusy(bool busy, const QString &statusText = QString());
-    void setVoiceTrainingBusy(bool busy, const QString &message = QString());
+    void consumeStreamBytes(const QByteArray& bytes);
+    void consumeSseLine(const QByteArray& line);
+    void setBusy(bool busy, const QString& statusText = QString());
+    void setVoiceTrainingBusy(bool busy, const QString& message = QString());
     void setVisionRequestInFlight(bool inFlight);
-    bool postVisionCapture(const QString &frameBase64,
-                           const QString &frameMime,
+    bool postVisionCapture(const QString& frameBase64,
+                           const QString& frameMime,
                            int frameWidth,
                            int frameHeight,
-                           const QString &source,
-                           const QString &transport);
-    bool shouldSkipVisionFrame(const QByteArray &signature, qint64 now, const QString &source);
-    QString appendVisionSegmentFrame(const QString &frameBase64,
-                                     const QString &frameMime,
+                           const QString& source,
+                           const QString& transport);
+    bool shouldSkipVisionFrame(const QByteArray& signature, qint64 now, const QString& source);
+    QString appendVisionSegmentFrame(const QString& frameBase64,
+                                     const QString& frameMime,
                                      int frameWidth,
                                      int frameHeight,
-                                     const QByteArray &signature,
-                                     const QString &source,
-                                     const QString &transport);
-    void postVisionSegment(const QString &source, const QString &transport);
-    void captureVisionFrameFileWithMetadata(const QString &filePath,
+                                     const QByteArray& signature,
+                                     const QString& source,
+                                     const QString& transport);
+    void postVisionSegment(const QString& source, const QString& transport);
+    void captureVisionFrameFileWithMetadata(const QString& filePath,
                                             int frameWidth,
                                             int frameHeight,
-                                            const QString &source,
-                                            const QString &transport);
-    void applyVoiceTrainingJob(const QJsonObject &job);
+                                            const QString& source,
+                                            const QString& transport);
+    void applyVoiceTrainingJob(const QJsonObject& job);
     void setWindowsImeBridgeBusy(bool busy);
     void setWindowsCameraBridgeBusy(bool busy);
-    void setStatusText(const QString &statusText);
-    void setError(const QString &error);
+    void setStatusText(const QString& statusText);
+    void setError(const QString& error);
     QJsonObject authPayload() const;
     QJsonObject defaultObservationPayload() const;
     QJsonObject voiceRuntimeMetadata() const;
-    void appendVoiceRuntimeMetadata(QJsonObject &metadata) const;
-    QUrl petUrl(const QString &path) const;
+    void appendVoiceRuntimeMetadata(QJsonObject& metadata) const;
+    QUrl petUrl(const QString& path) const;
     QString encodedSessionId() const;
 
-    ClientGateway *_gateway = nullptr;
+    ClientGateway* _gateway = nullptr;
     PetModel _model;
     QNetworkAccessManager _network;
     QNetworkAccessManager _stream_network;

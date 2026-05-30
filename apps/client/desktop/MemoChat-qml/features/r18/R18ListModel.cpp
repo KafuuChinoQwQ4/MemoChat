@@ -7,7 +7,8 @@ R18ListModel::R18ListModel(QObject* parent)
 
 int R18ListModel::rowCount(const QModelIndex& parent) const
 {
-    if (parent.isValid()) {
+    if (parent.isValid())
+    {
         return 0;
     }
     return _items.size();
@@ -15,27 +16,49 @@ int R18ListModel::rowCount(const QModelIndex& parent) const
 
 QVariant R18ListModel::data(const QModelIndex& index, int role) const
 {
-    if (!index.isValid() || index.row() < 0 || index.row() >= _items.size()) {
+    if (!index.isValid() || index.row() < 0 || index.row() >= _items.size())
+    {
         return {};
     }
     const auto& item = _items.at(index.row());
-    switch (role) {
-    case DataRole: return item;
-    case SourceIdRole: return item.value(QStringLiteral("source_id"), item.value(QStringLiteral("id"), item.value(QStringLiteral("key"))));
-    case IdRole: return item.value(QStringLiteral("comic_id"), item.value(QStringLiteral("chapter_id"), item.value(QStringLiteral("id"), item.value(QStringLiteral("key")))));
-    case TitleRole: return item.value(QStringLiteral("title"), item.value(QStringLiteral("name")));
-    case SubtitleRole: return item.value(QStringLiteral("subtitle"), item.value(QStringLiteral("message"), item.value(QStringLiteral("description"))));
-    case CoverRole: return item.value(QStringLiteral("cover"));
-    case UrlRole: return item.value(QStringLiteral("url"),
-                                     item.value(QStringLiteral("source_url"),
-                                                item.value(QStringLiteral("fileName"), item.value(QStringLiteral("filename")))));
-    case EnabledRole: return item.value(QStringLiteral("enabled"));
-    case StatusRole: return item.value(QStringLiteral("status"), item.value(QStringLiteral("version")));
-    case OrderRole: return item.value(QStringLiteral("order"), item.value(QStringLiteral("index")));
-    case FormatRole: return item.value(QStringLiteral("format"));
-    case MessageRole: return item.value(QStringLiteral("message"), item.value(QStringLiteral("description")));
-    case TagsRole: return item.value(QStringLiteral("tags"));
-    default: return {};
+    switch (role)
+    {
+        case DataRole:
+            return item;
+        case SourceIdRole:
+            return item.value(QStringLiteral("source_id"),
+                                             item.value(QStringLiteral("id"), item.value(QStringLiteral("key"))));
+        case IdRole:
+            return item.value(QStringLiteral("comic_id"),
+                item.value(QStringLiteral("chapter_id"),
+                                          item.value(QStringLiteral("id"), item.value(QStringLiteral("key")))));
+        case TitleRole:
+            return item.value(QStringLiteral("title"), item.value(QStringLiteral("name")));
+        case SubtitleRole:
+            return item.value(
+                QStringLiteral("subtitle"),
+                               item.value(QStringLiteral("message"), item.value(QStringLiteral("description"))));
+        case CoverRole:
+            return item.value(QStringLiteral("cover"));
+        case UrlRole:
+            return item.value(QStringLiteral("url"),
+                item.value(
+                    QStringLiteral("source_url"),
+                                   item.value(QStringLiteral("fileName"), item.value(QStringLiteral("filename")))));
+        case EnabledRole:
+            return item.value(QStringLiteral("enabled"));
+        case StatusRole:
+            return item.value(QStringLiteral("status"), item.value(QStringLiteral("version")));
+        case OrderRole:
+            return item.value(QStringLiteral("order"), item.value(QStringLiteral("index")));
+        case FormatRole:
+            return item.value(QStringLiteral("format"));
+        case MessageRole:
+            return item.value(QStringLiteral("message"), item.value(QStringLiteral("description")));
+        case TagsRole:
+            return item.value(QStringLiteral("tags"));
+        default:
+            return {};
     }
 }
 
@@ -60,7 +83,8 @@ QHash<int, QByteArray> R18ListModel::roleNames() const
 
 QVariantMap R18ListModel::get(int row) const
 {
-    if (row < 0 || row >= _items.size()) {
+    if (row < 0 || row >= _items.size())
+    {
         return {};
     }
     return _items.at(row);
@@ -71,7 +95,8 @@ void R18ListModel::setItems(const QVariantList& items)
     beginResetModel();
     _items.clear();
     _items.reserve(items.size());
-    for (const auto& item : items) {
+    for (const auto& item : items)
+    {
         _items.push_back(item.toMap());
     }
     endResetModel();
@@ -80,7 +105,8 @@ void R18ListModel::setItems(const QVariantList& items)
 
 void R18ListModel::appendItems(const QVariantList& items)
 {
-    if (items.isEmpty()) {
+    if (items.isEmpty())
+    {
         return;
     }
 
@@ -88,7 +114,8 @@ void R18ListModel::appendItems(const QVariantList& items)
     const int end = start + items.size() - 1;
     beginInsertRows(QModelIndex(), start, end);
     _items.reserve(_items.size() + items.size());
-    for (const auto& item : items) {
+    for (const auto& item : items)
+    {
         _items.push_back(item.toMap());
     }
     endInsertRows();

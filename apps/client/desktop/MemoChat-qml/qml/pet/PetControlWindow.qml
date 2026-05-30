@@ -5,6 +5,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
 import MemoChat 1.0
+import "PetControlRuntime.js" as PetControlRuntime
 
 Window {
     id: root
@@ -98,53 +99,35 @@ Window {
     }
 
     function displayStatus() {
-        if (!root.petController) {
-            return "桌宠"
-        }
-        var phase = root.petController.phase || ""
-        var status = root.petController.statusText || ""
-        if (root.petController.error.length > 0) {
-            status = root.petController.error
-        }
-        return status.length > 0 ? status : (phase.length > 0 ? phase : "桌宠")
+        return PetControlRuntime.displayStatus(root.petController)
     }
 
     function modelProviderAvailable() {
-        if (root.providerAvailable) {
-            return true
-        }
-        if (root.currentModel.length > 0 || root.availableModels.length > 0) {
-            return true
-        }
-        return root.apiProviderStatus.indexOf("已接入") >= 0
+        return PetControlRuntime.modelProviderAvailable(root.providerAvailable,
+                                                        root.currentModel,
+                                                        root.availableModels,
+                                                        root.apiProviderStatus)
     }
 
     function cloudVisionRuntimeEnabled() {
-        return root.cloudVisionEnabled && !root.localOnlyMode && root.modelProviderAvailable()
+        return PetControlRuntime.cloudVisionRuntimeEnabled(root.cloudVisionEnabled,
+                                                          root.localOnlyMode,
+                                                          root.modelProviderAvailable())
     }
 
     function cameraDiagnosticText() {
-        if (!root.cameraEnabled) {
-            return "摄像头关闭"
-        }
-        return root.cameraCaptureStatus.length > 0 ? root.cameraCaptureStatus : "等待摄像头状态"
+        return PetControlRuntime.cameraDiagnosticText(root.cameraEnabled,
+                                                     root.cameraCaptureStatus)
     }
 
     function cloudVisionDiagnosticText() {
-        if (root.localOnlyMode) {
-            return "云视觉被本地优先锁定"
-        }
-        if (!root.cloudVisionEnabled) {
-            return "云视觉关闭"
-        }
-        if (!root.modelProviderAvailable()) {
-            return "云视觉等待 AI 提供方"
-        }
-        return "云视觉已授权"
+        return PetControlRuntime.cloudVisionDiagnosticText(root.localOnlyMode,
+                                                          root.cloudVisionEnabled,
+                                                          root.modelProviderAvailable())
     }
 
     function retentionDiagnosticText() {
-        return root.debugRetentionEnabled ? "调试保留开启" : "原始帧不保留"
+        return PetControlRuntime.retentionDiagnosticText(root.debugRetentionEnabled)
     }
 
     function requestLocalOnlyMode(checked) {
@@ -169,30 +152,11 @@ Window {
         root.petController.sendText(text)
     }
 
-    function actionKindLabel(kind) {
-        if (kind === "motion") {
-            return "动作"
-        }
-        if (kind === "expression") {
-            return "表情"
-        }
-        return "控制"
-    }
-
     function requestLive2DAction(action) {
         if (!action) {
             return
         }
         root.live2DActionRequested(action)
-    }
-
-    function registerApiProvider() {
-        if (!root.agentController || root.apiProviderBusy) {
-            return
-        }
-        root.agentController.registerApiProvider(apiProviderNameField.text,
-                                                 apiBaseUrlField.text,
-                                                 apiKeyField.text)
     }
 
     Rectangle {
@@ -219,48 +183,12 @@ Window {
             anchors.margins: 12
             spacing: 10
 
-            RowLayout {
+            PetControlHeader {
                 Layout.fillWidth: true
-                spacing: 8
-
-                Rectangle {
-                    Layout.preferredWidth: 9
-                    Layout.preferredHeight: 9
-                    radius: 5
-                    color: root.petController && root.petController.error.length > 0 ? "#e35b5b" : "#74b2ba"
-                }
-
-                Label {
-                    Layout.fillWidth: true
-                    text: root.displayStatus()
-                    color: "#4b3042"
-                    font.pixelSize: 13
-                    font.bold: true
-                    elide: Text.ElideRight
-                }
-
-                Button {
-                    id: panelCloseButton
-                    Layout.preferredWidth: 28
-                    Layout.preferredHeight: 28
-                    text: "×"
-                    padding: 0
-                    onClicked: root.hide()
-                    background: Rectangle {
-                        radius: 14
-                        antialiasing: true
-                        color: panelCloseButton.down ? "#f1d7e3"
-                                                     : panelCloseButton.hovered ? "#f8e6ee" : "#fffafd"
-                        border.color: "#dcc8d4"
-                    }
-                    contentItem: Label {
-                        text: panelCloseButton.text
-                        color: "#6c4a5e"
-                        font.pixelSize: 18
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                }
+                statusText: root.displayStatus()
+                hasError: root.petController && root.petController.error.length > 0
+                borderColor: "#dcc8d4"
+                onCloseRequested: root.hide()
             }
 
             Flickable {
@@ -310,68 +238,13 @@ Window {
                         color: root.borderColor
                     }
 
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 7
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: "动作"
-                                color: "#4b3042"
-                                font.pixelSize: 13
-                                font.bold: true
-                                elide: Text.ElideRight
-                            }
-
-                            Label {
-                                text: live2dActionAsset.actionItems.length + " 个"
-                                color: "#6a7b92"
-                                font.pixelSize: 11
-                            }
-
-                            PetMenuButton {
-                                Layout.preferredWidth: 70
-                                text: "自动"
-                                onClicked: root.live2DAutoRequested()
-                            }
-                        }
-
-                        Label {
-                            Layout.fillWidth: true
-                            visible: live2dActionAsset.actionItems.length === 0
-                            text: live2dActionAsset.statusText.length > 0
-                                  ? live2dActionAsset.statusText
-                                  : "未发现可用动作"
-                            color: "#8f7c88"
-                            font.pixelSize: 11
-                            wrapMode: Text.Wrap
-                            maximumLineCount: 2
-                            elide: Text.ElideRight
-                        }
-
-                        GridLayout {
-                            Layout.fillWidth: true
-                            columns: 2
-                            rowSpacing: 6
-                            columnSpacing: 6
-
-                            Repeater {
-                                model: live2dActionAsset.actionItems
-
-                                delegate: PetMenuButton {
-                                    required property var modelData
-                                    Layout.fillWidth: true
-                                    text: (modelData.name || modelData.trigger || "")
-                                          + " · " + root.actionKindLabel(modelData.kind || "")
-                                    enabled: root.petAssetSettings !== null
-                                    onClicked: root.requestLive2DAction(modelData)
-                                }
-                            }
-                        }
+                    PetControlLive2DActionPanel {
+                        actionItems: live2dActionAsset.actionItems
+                        statusText: live2dActionAsset.statusText
+                        assetAvailable: root.petAssetSettings !== null
+                        borderColor: root.borderColor
+                        onActionRequested: function(action) { root.requestLive2DAction(action) }
+                        onAutoRequested: root.live2DAutoRequested()
                     }
 
                     Rectangle {
@@ -454,55 +327,12 @@ Window {
                         onToggled: function(checked) { root.debugRetentionToggled(checked) }
                     }
 
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: privacyDiagnostics.implicitHeight + 18
-                        radius: 8
-                        antialiasing: true
-                        color: Qt.rgba(0.45, 0.70, 0.73, 0.10)
-                        border.color: Qt.rgba(0.45, 0.70, 0.73, 0.24)
-
-                        ColumnLayout {
-                            id: privacyDiagnostics
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.top: parent.top
-                            anchors.margins: 9
-                            spacing: 4
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: "视觉隐私"
-                                color: "#4b3042"
-                                font.pixelSize: 12
-                                font.bold: true
-                                elide: Text.ElideRight
-                            }
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: root.cameraDiagnosticText()
-                                color: "#6a7b92"
-                                font.pixelSize: 11
-                                elide: Text.ElideRight
-                            }
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: root.cloudVisionDiagnosticText()
-                                color: root.cloudVisionRuntimeEnabled() ? "#4d7f5c" : "#8f7c88"
-                                font.pixelSize: 11
-                                elide: Text.ElideRight
-                            }
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: root.retentionDiagnosticText()
-                                color: root.debugRetentionEnabled ? "#b46d63" : "#6a7b92"
-                                font.pixelSize: 11
-                                elide: Text.ElideRight
-                            }
-                        }
+                    PetVisionPrivacyCard {
+                        cameraDiagnosticText: root.cameraDiagnosticText()
+                        cloudVisionDiagnosticText: root.cloudVisionDiagnosticText()
+                        retentionDiagnosticText: root.retentionDiagnosticText()
+                        cloudVisionEnabled: root.cloudVisionRuntimeEnabled()
+                        debugRetentionEnabled: root.debugRetentionEnabled
                     }
 
                     ColumnLayout {
@@ -540,150 +370,28 @@ Window {
                         color: root.borderColor
                     }
 
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 7
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: "AI API 接入"
-                                color: "#4b3042"
-                                font.pixelSize: 13
-                                font.bold: true
-                            }
-
-                            Label {
-                                text: root.apiProviderBusy ? "解析中" : ""
-                                color: "#6a7b92"
-                                font.pixelSize: 11
-                                visible: root.apiProviderBusy
+                    PetControlApiProviderPanel {
+                        availableModels: root.availableModels
+                        currentModel: root.currentModel
+                        apiProviderStatus: root.apiProviderStatus
+                        apiProviderBusy: root.apiProviderBusy
+                        modelRefreshBusy: root.modelRefreshBusy
+                        agentAvailable: root.agentController !== null
+                        accentColor: root.accentColor
+                        borderColor: root.borderColor
+                        onRegisterRequested: function(providerName, baseUrl, apiKey) {
+                            if (root.agentController && !root.apiProviderBusy) {
+                                root.agentController.registerApiProvider(providerName, baseUrl, apiKey)
                             }
                         }
-
-                        PetTextField {
-                            id: apiProviderNameField
-                            Layout.fillWidth: true
-                            placeholderText: "名称，例如 gpt"
-                            text: "gpt"
-                        }
-
-                        PetTextField {
-                            id: apiBaseUrlField
-                            Layout.fillWidth: true
-                            placeholderText: "API 地址，例如 https://api.openai.com/v1"
-                            text: "https://api.openai.com/v1"
-                        }
-
-                        PetTextField {
-                            id: apiKeyField
-                            Layout.fillWidth: true
-                            placeholderText: "API Key"
-                            echoMode: TextInput.Password
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: root.apiProviderStatus
-                                color: root.apiProviderStatus.indexOf("已接入") >= 0 ? "#4d7f5c" : "#6a7b92"
-                                font.pixelSize: 11
-                                elide: Text.ElideRight
-                            }
-
-                            PetMenuButton {
-                                Layout.preferredWidth: 82
-                                text: root.apiProviderBusy ? "解析中" : "接入"
-                                enabled: root.agentController && !root.apiProviderBusy
-                                onClicked: root.registerApiProvider()
+                        onRefreshRequested: function() {
+                            if (root.agentController) {
+                                root.agentController.refreshModelList()
                             }
                         }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: root.currentModel.length > 0 ? root.currentModel : "未选择模型"
-                                color: "#6a7b92"
-                                font.pixelSize: 11
-                                elide: Text.ElideRight
-                            }
-
-                            PetMenuButton {
-                                Layout.preferredWidth: 82
-                                text: root.modelRefreshBusy ? "刷新中" : "刷新"
-                                enabled: root.agentController && !root.modelRefreshBusy
-                                onClicked: root.agentController.refreshModelList()
-                            }
-                        }
-
-                        ListView {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: Math.min(148, Math.max(64, contentHeight))
-                            clip: true
-                            model: root.availableModels
-                            spacing: 6
-
-                            delegate: Rectangle {
-                                id: modelRow
-                                required property var modelData
-
-                                width: ListView.view.width
-                                height: 42
-                                radius: 8
-                                antialiasing: true
-                                color: {
-                                    var fullName = (modelRow.modelData.model_type || "") + ":" + (modelRow.modelData.model_name || "")
-                                    if (fullName === root.currentModel) {
-                                        return Qt.rgba(0.45, 0.70, 0.73, 0.18)
-                                    }
-                                    return modelMouse.containsMouse ? "#e8f6f4" : "#fffafd"
-                                }
-                                border.color: "#ead6e1"
-
-                                MouseArea {
-                                    id: modelMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (root.agentController && modelRow.modelData.model_type && modelRow.modelData.model_name) {
-                                            root.agentController.switchModel(modelRow.modelData.model_type, modelRow.modelData.model_name)
-                                        }
-                                    }
-                                }
-
-                                ColumnLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 10
-                                    anchors.rightMargin: 10
-                                    spacing: 1
-
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: modelRow.modelData.display_name || modelRow.modelData.model_name || ""
-                                        color: "#4b3042"
-                                        font.pixelSize: 12
-                                        font.bold: true
-                                        elide: Text.ElideRight
-                                    }
-
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: modelRow.modelData.model_type || ""
-                                        color: "#8f7c88"
-                                        font.pixelSize: 10
-                                        elide: Text.ElideRight
-                                    }
-                                }
+                        onModelSelected: function(modelType, modelName) {
+                            if (root.agentController) {
+                                root.agentController.switchModel(modelType, modelName)
                             }
                         }
                     }
@@ -706,21 +414,6 @@ Window {
                     }
                 }
             }
-        }
-    }
-
-    component PetTextField: TextField {
-        id: field
-        Layout.preferredHeight: 32
-        font.pixelSize: 12
-        selectByMouse: true
-        color: "#2d2630"
-        placeholderTextColor: "#8f7c88"
-        background: Rectangle {
-            radius: 8
-            antialiasing: true
-            color: "#ffffff"
-            border.color: field.activeFocus ? root.accentColor : "#dcc8d4"
         }
     }
 

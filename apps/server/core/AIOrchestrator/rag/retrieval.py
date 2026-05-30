@@ -296,8 +296,16 @@ def candidate_from_payload(
     kb_id = _stringify_value(payload.get("kb_id") or metadata.get("kb_id"))
     source = payload.get("source") or metadata.get("source") or collection
     candidate = RetrievalCandidate(
-        candidate_id=_stringify_value(candidate_id) or _candidate_key(
-            RetrievalCandidate(candidate_id="", content=str(payload.get("page_content", "")), source=str(source), kb_id=str(kb_id), collection=collection, metadata=metadata)
+        candidate_id=_stringify_value(candidate_id)
+        or _candidate_key(
+            RetrievalCandidate(
+                candidate_id="",
+                content=str(payload.get("page_content", "")),
+                source=str(source),
+                kb_id=str(kb_id),
+                collection=collection,
+                metadata=metadata,
+            )
         ),
         content=str(payload.get("page_content", "")),
         source=str(source),
@@ -346,7 +354,9 @@ def metadata_matches_payload(payload: dict[str, Any] | None, metadata_filters: d
     return True
 
 
-def collection_matches_filters(collection_name: str, prefix: str, uid: int, metadata_filters: dict[str, Any] | None) -> bool:
+def collection_matches_filters(
+    collection_name: str, prefix: str, uid: int, metadata_filters: dict[str, Any] | None
+) -> bool:
     if not metadata_filters:
         return True
     kb_ids = _normalize_filter_values(metadata_filters.get("kb_ids") or metadata_filters.get("kb_id"))
@@ -360,9 +370,7 @@ def build_metadata_filter(uid: int, metadata_filters: dict[str, Any] | None) -> 
     if not metadata_filters:
         return None
 
-    must: list[Any] = [
-        qdrant_models.FieldCondition(key="uid", match=qdrant_models.MatchValue(value=uid))
-    ]
+    must: list[Any] = [qdrant_models.FieldCondition(key="uid", match=qdrant_models.MatchValue(value=uid))]
 
     kb_ids = _normalize_filter_values(metadata_filters.get("kb_ids") or metadata_filters.get("kb_id"))
     if kb_ids:
@@ -376,7 +384,9 @@ def build_metadata_filter(uid: int, metadata_filters: dict[str, Any] | None) -> 
         should.append(
             qdrant_models.FieldCondition(
                 key="metadata.kb_id",
-                match=qdrant_models.MatchAny(any=kb_ids) if len(kb_ids) > 1 else qdrant_models.MatchValue(value=kb_ids[0]),
+                match=qdrant_models.MatchAny(any=kb_ids)
+                if len(kb_ids) > 1
+                else qdrant_models.MatchValue(value=kb_ids[0]),
             )
         )
         must.append(qdrant_models.Filter(should=should))
@@ -386,7 +396,9 @@ def build_metadata_filter(uid: int, metadata_filters: dict[str, Any] | None) -> 
         should = [
             qdrant_models.FieldCondition(
                 key=key,
-                match=qdrant_models.MatchAny(any=sources) if len(sources) > 1 else qdrant_models.MatchValue(value=sources[0]),
+                match=qdrant_models.MatchAny(any=sources)
+                if len(sources) > 1
+                else qdrant_models.MatchValue(value=sources[0]),
             )
             for key in ("source", "metadata.source")
         ]
@@ -397,7 +409,9 @@ def build_metadata_filter(uid: int, metadata_filters: dict[str, Any] | None) -> 
         should = [
             qdrant_models.FieldCondition(
                 key=key,
-                match=qdrant_models.MatchAny(any=file_types) if len(file_types) > 1 else qdrant_models.MatchValue(value=file_types[0]),
+                match=qdrant_models.MatchAny(any=file_types)
+                if len(file_types) > 1
+                else qdrant_models.MatchValue(value=file_types[0]),
             )
             for key in ("file_type", "metadata.file_type")
         ]
@@ -553,7 +567,9 @@ def fuse_candidates(
                 existing.merge(candidate)
 
             existing.recall_routes.add(route)
-            existing.route_ranks[route] = rank if route not in existing.route_ranks else min(existing.route_ranks[route], rank)
+            existing.route_ranks[route] = (
+                rank if route not in existing.route_ranks else min(existing.route_ranks[route], rank)
+            )
             if route == "dense":
                 existing.dense_score = max(existing.dense_score, candidate.dense_score)
             elif route == "bm25":
@@ -654,7 +670,9 @@ class CrossEncoderReranker:
         )
         return ranked[:top_k]
 
-    def _heuristic_rerank(self, query: str, candidates: list[RetrievalCandidate], top_k: int) -> list[RetrievalCandidate]:
+    def _heuristic_rerank(
+        self, query: str, candidates: list[RetrievalCandidate], top_k: int
+    ) -> list[RetrievalCandidate]:
         query_terms = set(tokenize_text(expand_query_text(query)))
         if not query_terms:
             query_terms = {query.strip().lower()} if query.strip() else set()

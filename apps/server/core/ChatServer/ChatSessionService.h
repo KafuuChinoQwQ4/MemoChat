@@ -6,7 +6,8 @@
 class CSession;
 class LogicSystem;
 
-class ChatSessionService {
+class ChatSessionService
+{
 public:
     explicit ChatSessionService(LogicSystem& logic);
 

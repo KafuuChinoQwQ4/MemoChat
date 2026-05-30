@@ -9,9 +9,11 @@
 
 class QuicSession;
 
-namespace memochat::chatserver {
+namespace memochat::chatserver
+{
 
-class QuicChatServer {
+class QuicChatServer
+{
 public:
     explicit QuicChatServer(boost::asio::io_context& io_context);
     ~QuicChatServer();

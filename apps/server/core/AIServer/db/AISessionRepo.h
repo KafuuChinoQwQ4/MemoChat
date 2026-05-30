@@ -6,13 +6,13 @@
 #include <ctime>
 #include <memory>
 
-class AISessionRepo {
+class AISessionRepo
+{
 public:
     explicit AISessionRepo();
     ~AISessionRepo();
 
-    std::string Create(int32_t uid, const std::string& model_type,
-                        const std::string& model_name);
+    std::string Create(int32_t uid, const std::string& model_type, const std::string& model_name);
 
     bool SoftDelete(const std::string& session_id);
 
@@ -20,12 +20,14 @@ public:
 
     std::vector<ai::AISessionInfo> ListByUid(int32_t uid);
 
-    bool SaveMessage(const std::string& session_id, int32_t uid,
-                     const std::string& role, const std::string& content,
-                     const std::string& model_name, int64_t tokens_used);
+    bool SaveMessage(const std::string& session_id,
+                     int32_t uid,
+                     const std::string& role,
+                     const std::string& content,
+                     const std::string& model_name,
+                     int64_t tokens_used);
 
-    std::vector<ai::AIMessage> GetMessages(const std::string& session_id,
-                                            int limit, int offset);
+    std::vector<ai::AIMessage> GetMessages(const std::string& session_id, int limit, int offset);
 
 private:
     class Impl;

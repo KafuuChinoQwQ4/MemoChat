@@ -6,16 +6,21 @@
 #include <algorithm>
 #include <cctype>
 
-namespace {
+namespace
+{
 int ReadIntConfig(const char* section, const char* key, int fallback)
 {
     const auto raw = ConfigMgr::Inst().GetValue(section, key);
-    if (raw.empty()) {
+    if (raw.empty())
+    {
         return fallback;
     }
-    try {
+    try
+    {
         return std::stoi(raw);
-    } catch (...) {
+    }
+    catch (...)
+    {
         return fallback;
     }
 }
@@ -23,16 +28,21 @@ int ReadIntConfig(const char* section, const char* key, int fallback)
 bool ReadBoolConfig(const char* section, const char* key, bool fallback)
 {
     const auto raw = ConfigMgr::Inst().GetValue(section, key);
-    if (raw.empty()) {
+    if (raw.empty())
+    {
         return fallback;
     }
     std::string value = raw;
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
+    std::transform(value.begin(),
+                   value.end(),
+                   value.begin(),
+                   [](unsigned char ch)
+                   {
+                       return static_cast<char>(std::tolower(ch));
+                   });
     return value == "1" || value == "true" || value == "yes" || value == "on";
 }
-}
+} // namespace
 
 bool KafkaConfig::valid() const
 {
@@ -58,16 +68,20 @@ KafkaConfig LoadKafkaConfig()
     config.outbox_retry_base_ms = ReadIntConfig("Kafka", "OutboxRetryBaseMs", 1000);
     config.outbox_retry_max_ms = ReadIntConfig("Kafka", "OutboxRetryMaxMs", 30000);
     config.consume_retry_max = ReadIntConfig("Kafka", "ConsumeRetryMax", 5);
-    if (config.topic_private.empty()) {
+    if (config.topic_private.empty())
+    {
         config.topic_private = memochat::chatruntime::TopicPrivate();
     }
-    if (config.topic_group.empty()) {
+    if (config.topic_group.empty())
+    {
         config.topic_group = memochat::chatruntime::TopicGroup();
     }
-    if (config.topic_private_dlq.empty()) {
+    if (config.topic_private_dlq.empty())
+    {
         config.topic_private_dlq = memochat::chatruntime::TopicPrivateDlq();
     }
-    if (config.topic_group_dlq.empty()) {
+    if (config.topic_group_dlq.empty())
+    {
         config.topic_group_dlq = memochat::chatruntime::TopicGroupDlq();
     }
     return config;
@@ -75,10 +89,12 @@ KafkaConfig LoadKafkaConfig()
 
 std::string DlqTopicFor(const KafkaConfig& config, const std::string& topic)
 {
-    if (topic == config.topic_private) {
+    if (topic == config.topic_private)
+    {
         return config.topic_private_dlq;
     }
-    if (topic == config.topic_group) {
+    if (topic == config.topic_group)
+    {
         return config.topic_group_dlq;
     }
     return topic + ".dlq";

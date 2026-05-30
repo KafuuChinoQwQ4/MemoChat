@@ -1,15 +1,15 @@
 """
 文档处理器 — PDF / TXT / MD / DOCX 加载与分块
 """
+
 import io
 
 import structlog
+from config import settings
+from docx import Document as DocxDocument
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from pypdf import PdfReader
-from docx import Document as DocxDocument
-
-from config import settings
 
 logger = structlog.get_logger()
 
@@ -25,6 +25,7 @@ class DocProcessor:
             separators=["\n\n", "\n", "。", "！", "？", " ", ""],
             length_function=len,
         )
+
     async def process(self, file_bytes: bytes, file_type: str, file_name: str) -> list[Document]:
         """
         加载文档 → 分块 → 添加元数据
@@ -35,12 +36,14 @@ class DocProcessor:
             chunks = self.splitter.split_documents(docs)
 
             for i, chunk in enumerate(chunks):
-                chunk.metadata.update({
-                    "source": file_name,
-                    "chunk_index": i,
-                    "file_type": file_type,
-                    "total_chunks": len(chunks),
-                })
+                chunk.metadata.update(
+                    {
+                        "source": file_name,
+                        "chunk_index": i,
+                        "file_type": file_type,
+                        "total_chunks": len(chunks),
+                    }
+                )
 
             logger.info("doc.processed", file_name=file_name, chunks=len(chunks))
             return chunks

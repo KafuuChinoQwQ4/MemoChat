@@ -1,7 +1,6 @@
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 
@@ -9,11 +8,16 @@ PET_ASSET_SETTINGS_H = CLIENT_DIR / "features/pet/PetAssetSettings.h"
 PET_ASSET_SETTINGS_CPP = CLIENT_DIR / "features/pet/PetAssetSettings.cpp"
 PET_ASSET_SETTINGS_PRIVATE_H = CLIENT_DIR / "features/pet/PetAssetSettingsPrivate.h"
 PET_ASSET_SETTINGS_AVATAR_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsAvatar.cpp"
+PET_AVATAR_PATH_UTILS_H = CLIENT_DIR / "features/pet/PetAvatarPathUtils.h"
+PET_AVATAR_PATH_UTILS_CPP = CLIENT_DIR / "features/pet/PetAvatarPathUtils.cpp"
+PET_AVATAR_RESOLVER_H = CLIENT_DIR / "features/pet/PetAvatarResolver.h"
+PET_AVATAR_RESOLVER_CPP = CLIENT_DIR / "features/pet/PetAvatarResolver.cpp"
 PET_ASSET_SETTINGS_PERSISTENCE_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsPersistence.cpp"
 PET_ASSET_SETTINGS_STATE_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsState.cpp"
 LIVE2D_AVATAR_OPENGL_RENDERER_H = CLIENT_DIR / "live2d/Live2DAvatarOpenGLRenderer.h"
 LIVE2D_AVATAR_OPENGL_RENDERER_CPP = CLIENT_DIR / "live2d/Live2DAvatarOpenGLRenderer.cpp"
 PET_CHAT_WINDOW_QML = CLIENT_DIR / "qml/pet/PetChatWindow.qml"
+PET_CHAT_MESSAGE_LIST_QML = CLIENT_DIR / "qml/pet/PetChatMessageList.qml"
 PET_WINDOW_QML = CLIENT_DIR / "qml/pet/PetWindow.qml"
 MAIN_QML = CLIENT_DIR / "qml/Main.qml"
 LINUX_MAIN_QML = CLIENT_DIR / "qml/linux/Main.qml"
@@ -32,6 +36,10 @@ def pet_asset_settings_source() -> str:
             PET_ASSET_SETTINGS_CPP,
             PET_ASSET_SETTINGS_PRIVATE_H,
             PET_ASSET_SETTINGS_AVATAR_CPP,
+            PET_AVATAR_PATH_UTILS_H,
+            PET_AVATAR_PATH_UTILS_CPP,
+            PET_AVATAR_RESOLVER_H,
+            PET_AVATAR_RESOLVER_CPP,
             PET_ASSET_SETTINGS_PERSISTENCE_CPP,
             PET_ASSET_SETTINGS_STATE_CPP,
         )
@@ -68,22 +76,24 @@ class PetLive2DAvatarContractTests(unittest.TestCase):
 
     def test_pet_chat_window_uses_real_self_avatar_and_live2d_avatar_with_fixed_sides(self):
         chat = read(PET_CHAT_WINDOW_QML)
+        message_list = read(PET_CHAT_MESSAGE_LIST_QML)
+        chat_contract = chat + "\n" + message_list
         window = read(PET_WINDOW_QML)
         main = read(MAIN_QML)
         linux_main = read(LINUX_MAIN_QML)
 
         self.assertIn('property string selfAvatar: "qrc:/res/head_1.jpg"', chat)
         self.assertIn("property string live2dAvatarSource", chat)
-        self.assertIn("function isOutgoingMessage", chat)
+        self.assertIn("function isOutgoingMessage", chat_contract)
         self.assertIn("function refreshLive2DAvatar", chat)
         self.assertIn("resolveLive2DAvatarUrl", chat)
-        self.assertIn("readonly property bool outgoingMessage: root.isOutgoingMessage(outgoing)", chat)
-        self.assertIn("outgoing: messageDelegateRoot.outgoingMessage", chat)
-        self.assertIn("root.messageSenderName(messageDelegateRoot.outgoingMessage)", chat)
-        self.assertIn("showOutgoingSenderName: true", chat)
-        self.assertIn("function avatarForMessage", chat)
-        self.assertIn("return outgoing ? root.effectiveSelfAvatar() : root.effectiveLive2DAvatar()", chat)
-        self.assertIn("source: root.live2dAvatarSource", chat)
+        self.assertIn("readonly property bool outgoingMessage: root.isOutgoingMessage(outgoing)", chat_contract)
+        self.assertIn("outgoing: messageDelegateRoot.outgoingMessage", chat_contract)
+        self.assertIn("root.messageSenderName(messageDelegateRoot.outgoingMessage)", chat_contract)
+        self.assertIn("showOutgoingSenderName: true", chat_contract)
+        self.assertIn("function avatarForMessage", chat_contract)
+        self.assertIn("return outgoing ? root.effectiveSelfAvatar() : root.effectiveLive2DAvatar()", chat_contract)
+        self.assertIn("live2dAvatarSource: root.live2dAvatarSource", chat)
         self.assertNotIn('avatarSource: model.outgoing ? "qrc:/res/head_1.jpg"', chat)
 
         self.assertIn('property string selfAvatar: "qrc:/res/head_1.jpg"', window)
@@ -103,7 +113,7 @@ class PetLive2DAvatarContractTests(unittest.TestCase):
         self.assertIn("onModelRootChanged: root.refreshCharacterAvatar()", pane)
         self.assertIn("onModelJsonChanged: root.refreshCharacterAvatar()", pane)
         self.assertIn("imageSource: root.characterAvatarSource", pane)
-        self.assertIn("source: avatarPreview.imageSource", pane)
+        self.assertIn("Live2DAvatarPreviewImage", pane)
 
 
 if __name__ == "__main__":

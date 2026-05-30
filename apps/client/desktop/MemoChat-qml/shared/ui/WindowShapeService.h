@@ -6,7 +6,7 @@ class QWindow;
 class WindowShapeService
 {
 public:
-    static void bindRoundedMask(QWindow *window, int radius);
+    static void bindRoundedMask(QWindow* window, int radius);
 };
 
 #endif // WINDOWSHAPESERVICE_H

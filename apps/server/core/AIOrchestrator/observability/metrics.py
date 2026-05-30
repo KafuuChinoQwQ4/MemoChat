@@ -35,8 +35,7 @@ class _CounterFamily:
         for key, value in sorted(items):
             if self.label_names:
                 labels = ",".join(
-                    f'{label}="{_escape_label_value(label_value)}"'
-                    for label, label_value in zip(self.label_names, key)
+                    f'{label}="{_escape_label_value(label_value)}"' for label, label_value in zip(self.label_names, key)
                 )
                 lines.append(f"{self.name}{{{labels}}} {value}")
             else:

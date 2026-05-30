@@ -14,7 +14,8 @@
 namespace beast = boost::beast;
 namespace http = beast::http;
 
-namespace {
+namespace
+{
 
 memochat::json::JsonValue MakeNotImplementedResponse(const char* route)
 {
@@ -30,72 +31,112 @@ memochat::json::JsonValue MakeNotImplementedResponse(const char* route)
 
 void H1AuthService::RegisterRoutes(H1LogicSystem& logic)
 {
-    logic.RegPost("/get_varifycode", [](std::shared_ptr<H1Connection> connection) {
-        auto root = MakeNotImplementedResponse("/get_varifycode");
-        connection->_response.set(http::field::content_type, "text/json");
-        beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
-        return true;
-    });
-    logic.RegPost("/user_register", [](std::shared_ptr<H1Connection> connection) {
-        auto root = MakeNotImplementedResponse("/user_register");
-        connection->_response.set(http::field::content_type, "text/json");
-        beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
-        return true;
-    });
-    logic.RegPost("/reset_pwd", [](std::shared_ptr<H1Connection> connection) {
-        auto root = MakeNotImplementedResponse("/reset_pwd");
-        connection->_response.set(http::field::content_type, "text/json");
-        beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
-        return true;
-    });
-    logic.RegPost("/user_login", [](std::shared_ptr<H1Connection> connection) {
-        auto root = MakeNotImplementedResponse("/user_login");
-        connection->_response.set(http::field::content_type, "text/json");
-        beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
-        return true;
-    });
+    logic.RegPost("/get_varifycode",
+                  [](std::shared_ptr<H1Connection> connection)
+                  {
+                      auto root = MakeNotImplementedResponse("/get_varifycode");
+                      connection->_response.set(http::field::content_type, "text/json");
+                      beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
+                      return true;
+                  });
+    logic.RegPost("/user_register",
+                  [](std::shared_ptr<H1Connection> connection)
+                  {
+                      auto root = MakeNotImplementedResponse("/user_register");
+                      connection->_response.set(http::field::content_type, "text/json");
+                      beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
+                      return true;
+                  });
+    logic.RegPost("/reset_pwd",
+                  [](std::shared_ptr<H1Connection> connection)
+                  {
+                      auto root = MakeNotImplementedResponse("/reset_pwd");
+                      connection->_response.set(http::field::content_type, "text/json");
+                      beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
+                      return true;
+                  });
+    logic.RegPost("/user_login",
+                  [](std::shared_ptr<H1Connection> connection)
+                  {
+                      auto root = MakeNotImplementedResponse("/user_login");
+                      connection->_response.set(http::field::content_type, "text/json");
+                      beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
+                      return true;
+                  });
 }
 
 void H1ProfileService::RegisterRoutes(H1LogicSystem& logic)
 {
-    logic.RegPost("/user_update_profile", [](std::shared_ptr<H1Connection> connection) {
-        auto root = MakeNotImplementedResponse("/user_update_profile");
-        connection->_response.set(http::field::content_type, "text/json");
-        beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
-        return true;
-    });
+    logic.RegPost("/user_update_profile",
+                  [](std::shared_ptr<H1Connection> connection)
+                  {
+                      auto root = MakeNotImplementedResponse("/user_update_profile");
+                      connection->_response.set(http::field::content_type, "text/json");
+                      beast::ostream(connection->_response.body()) << memochat::json::glaze_stringify(root);
+                      return true;
+                  });
 }
 
 void H1CallServiceRoutes::RegisterRoutes(H1LogicSystem& logic)
 {
-    logic.RegPost("/api/call/start", [](std::shared_ptr<H1Connection> connection) {
-        return H1JsonSupport::HandleJsonPost(connection,
-            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
-                return CallService::GetInstance()->StartCall(src_root, root, trace_id);
-            });
-    });
-    logic.RegPost("/api/call/accept", [](std::shared_ptr<H1Connection> connection) {
-        return H1JsonSupport::HandleJsonPost(connection,
-            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
-                return CallService::GetInstance()->AcceptCall(src_root, root, trace_id);
-            });
-    });
-    logic.RegPost("/api/call/reject", [](std::shared_ptr<H1Connection> connection) {
-        return H1JsonSupport::HandleJsonPost(connection,
-            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
-                return CallService::GetInstance()->RejectCall(src_root, root, trace_id);
-            });
-    });
-    logic.RegPost("/api/call/cancel", [](std::shared_ptr<H1Connection> connection) {
-        return H1JsonSupport::HandleJsonPost(connection,
-            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
-                return CallService::GetInstance()->CancelCall(src_root, root, trace_id);
-            });
-    });
-    logic.RegPost("/api/call/hangup", [](std::shared_ptr<H1Connection> connection) {
-        return H1JsonSupport::HandleJsonPost(connection,
-            [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id) {
-                return CallService::GetInstance()->HangupCall(src_root, root, trace_id);
-            });
-    });
+    logic.RegPost("/api/call/start",
+                  [](std::shared_ptr<H1Connection> connection)
+                  {
+                      return H1JsonSupport::HandleJsonPost(
+                          connection,
+                          [](const memochat::json::JsonValue& src_root,
+                             memochat::json::JsonValue& root,
+                             const std::string& trace_id)
+                          {
+                              return CallService::GetInstance()->StartCall(src_root, root, trace_id);
+                          });
+                  });
+    logic.RegPost("/api/call/accept",
+                  [](std::shared_ptr<H1Connection> connection)
+                  {
+                      return H1JsonSupport::HandleJsonPost(
+                          connection,
+                          [](const memochat::json::JsonValue& src_root,
+                             memochat::json::JsonValue& root,
+                             const std::string& trace_id)
+                          {
+                              return CallService::GetInstance()->AcceptCall(src_root, root, trace_id);
+                          });
+                  });
+    logic.RegPost("/api/call/reject",
+                  [](std::shared_ptr<H1Connection> connection)
+                  {
+                      return H1JsonSupport::HandleJsonPost(
+                          connection,
+                          [](const memochat::json::JsonValue& src_root,
+                             memochat::json::JsonValue& root,
+                             const std::string& trace_id)
+                          {
+                              return CallService::GetInstance()->RejectCall(src_root, root, trace_id);
+                          });
+                  });
+    logic.RegPost("/api/call/cancel",
+                  [](std::shared_ptr<H1Connection> connection)
+                  {
+                      return H1JsonSupport::HandleJsonPost(
+                          connection,
+                          [](const memochat::json::JsonValue& src_root,
+                             memochat::json::JsonValue& root,
+                             const std::string& trace_id)
+                          {
+                              return CallService::GetInstance()->CancelCall(src_root, root, trace_id);
+                          });
+                  });
+    logic.RegPost("/api/call/hangup",
+                  [](std::shared_ptr<H1Connection> connection)
+                  {
+                      return H1JsonSupport::HandleJsonPost(
+                          connection,
+                          [](const memochat::json::JsonValue& src_root,
+                             memochat::json::JsonValue& root,
+                             const std::string& trace_id)
+                          {
+                              return CallService::GetInstance()->HangupCall(src_root, root, trace_id);
+                          });
+                  });
 }

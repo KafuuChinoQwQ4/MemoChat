@@ -14,7 +14,8 @@ class AgentMessageModel : public QAbstractListModel
     Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
 
 public:
-    enum Roles {
+    enum Roles
+    {
         MsgIdRole = Qt::UserRole + 1,
         ContentRole,
         RoleRole,
@@ -49,7 +50,8 @@ signals:
     void countChanged();
 
 private:
-    struct MessageEntry {
+    struct MessageEntry
+    {
         QString msgId;
         QString content;
         QString streamingContent;
@@ -71,4 +73,4 @@ private:
     QVector<MessageEntry> _items;
 };
 
-#endif  // AGENTMESSAGEMODEL_H
+#endif // AGENTMESSAGEMODEL_H

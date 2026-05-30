@@ -1,10 +1,10 @@
-﻿import unittest
+import unittest
 from pathlib import Path
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CHAT_LEFT_PANEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatLeftPanel.qml"
 CHAT_CONVERSATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatConversationPane.qml"
+CHAT_MESSAGE_LIST_VIEW = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/conversation/ChatMessageListView.qml"
 CHAT_MESSAGE_DELEGATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/conversation/ChatMessageDelegate.qml"
 MOMENTS_FEED = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/moments/MomentsFeedPane.qml"
 MOMENTS_DELEGATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/moments/MomentsDelegate.qml"
@@ -12,9 +12,9 @@ MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
 LOGIN_TOP_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/components/LoginTopBar.qml"
 MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/main.cpp"
-APP_CONTROLLER_SESSION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerSession.cpp"
+SESSION_AUTH_LOGIN_RESPONSE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/SessionAuthCoordinatorLoginResponse.cpp"
 APP_CONTROLLER_NAVIGATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerNavigation.cpp"
-APP_CONTROLLER_CONNECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerConnection.cpp"
+APP_CONTROLLER_RECONNECT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerReconnect.cpp"
 
 
 def extract_cpp_function(source: str, signature: str) -> str:
@@ -28,7 +28,7 @@ def extract_cpp_function(source: str, signature: str) -> str:
         elif char == "}":
             depth -= 1
             if depth == 0:
-                return source[start:index + 1]
+                return source[start : index + 1]
     raise AssertionError(f"Function body not found for {signature}")
 
 
@@ -36,17 +36,18 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
     def test_chat_lists_use_native_listview_scrolling(self):
         left_panel = CHAT_LEFT_PANEL.read_text(encoding="utf-8")
         conversation = CHAT_CONVERSATION.read_text(encoding="utf-8")
+        message_list_source = CHAT_MESSAGE_LIST_VIEW.read_text(encoding="utf-8")
 
         self.assertIn("interactive: contentHeight > height", left_panel)
         self.assertIn("boundsBehavior: Flickable.StopAtBounds", left_panel)
         self.assertNotIn("interactive: false", left_panel)
         self.assertNotIn("WheelHandler", left_panel)
 
-        self.assertIn("interactive: contentHeight > height", conversation)
-        self.assertIn("boundsBehavior: Flickable.StopAtBounds", conversation)
-        message_list_block = conversation[
-            conversation.index("id: messageList"):
-            conversation.index("delegate: ChatMessageDelegate")
+        self.assertIn("ChatMessageListView", conversation)
+        self.assertIn("interactive: contentHeight > height", message_list_source)
+        self.assertIn("boundsBehavior: Flickable.StopAtBounds", message_list_source)
+        message_list_block = message_list_source[
+            message_list_source.index("id: messageList") : message_list_source.index("delegate: ChatMessageDelegate")
         ]
         self.assertNotIn("WheelHandler", message_list_block)
 
@@ -118,36 +119,85 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
         main_cpp = MAIN_CPP.read_text(encoding="utf-8")
         self.assertIn("setQuitOnLastWindowClosed(false)", main_cpp)
 
-    def test_login_and_logout_switch_pages_before_transport_teardown(self):
-        source = APP_CONTROLLER_SESSION.read_text(encoding="utf-8")
+    def test_page_size_handoff_releases_login_constraints_before_chat_resize(self):
+        for path in (MAIN_QML, LINUX_MAIN_QML):
+            qml = path.read_text(encoding="utf-8")
+            configure_window = extract_cpp_function(qml, "function configureAppWindowForPage")
+            sync_windows = extract_cpp_function(qml, "function syncWindowsByPage")
 
-        login_block_start = source.index("void AppController::onLoginHttpFinished")
-        login_block_end = source.index("void AppController::onSwitchToChat")
-        login_block = source[login_block_start:login_block_end]
-        self.assertIn("setPage(ChatPage);", login_block)
-        self.assertLess(login_block.index("setPage(ChatPage);"),
-                        login_block.index("_gateway.chatTransport()->connectToServer(server_info);"))
+            self.assertIn("const size = targetWindowSize()", configure_window)
+            self.assertIn(
+                "const minimumSize = loginMode ? root.loginWindowSize : root.chatWindowMinimumSize", configure_window
+            )
+            self.assertIn(
+                "const maximumSize = loginMode ? root.loginWindowSize : root.unboundedWindowSize", configure_window
+            )
+            self.assertIn("win.maximumWidth = root.unboundedWindowSize.width", configure_window)
+            self.assertIn("win.maximumHeight = root.unboundedWindowSize.height", configure_window)
+            self.assertLess(
+                configure_window.index("win.maximumWidth = root.unboundedWindowSize.width"),
+                configure_window.index("win.minimumWidth = minimumSize.width"),
+            )
+            self.assertLess(
+                configure_window.index("win.maximumHeight = root.unboundedWindowSize.height"),
+                configure_window.index("win.minimumHeight = minimumSize.height"),
+            )
+            self.assertLess(
+                configure_window.index("win.maximumWidth = root.unboundedWindowSize.width"),
+                configure_window.index("win.width = size.width"),
+            )
+            self.assertLess(
+                configure_window.index("win.maximumHeight = root.unboundedWindowSize.height"),
+                configure_window.index("win.height = size.height"),
+            )
+            self.assertIn("win.maximumWidth = maximumSize.width", configure_window)
+            self.assertIn("win.maximumHeight = maximumSize.height", configure_window)
+
+            self.assertIn("const targetSize = targetWindowSize()", sync_windows)
+            self.assertIn("const sizeChanged = win.visible", sync_windows)
+            self.assertLess(
+                sync_windows.index("win.visible = false"),
+                sync_windows.index("configureAppWindowForPage(win)"),
+            )
+            self.assertIn("width: root.loginWindowSize.width", qml)
+            self.assertIn("height: root.loginWindowSize.height", qml)
+            self.assertIn("minimumWidth: root.loginWindowSize.width", qml)
+            self.assertIn("minimumHeight: root.loginWindowSize.height", qml)
+            self.assertIn("maximumWidth: root.loginWindowSize.width", qml)
+            self.assertIn("maximumHeight: root.loginWindowSize.height", qml)
+
+    def test_login_and_logout_switch_pages_before_transport_teardown(self):
+        source = SESSION_AUTH_LOGIN_RESPONSE.read_text(encoding="utf-8")
+
+        login_block = extract_cpp_function(source, "void SessionAuthCoordinator::onLoginHttpFinished")
+        self.assertIn("setPage(AppController::ChatPage);", login_block)
+        self.assertLess(
+            login_block.index("setPage(AppController::ChatPage);"),
+            login_block.index("_gateway.chatTransport()->connectToServer(server_info);"),
+        )
 
         navigation_source = APP_CONTROLLER_NAVIGATION.read_text(encoding="utf-8")
         logout_block_start = navigation_source.index("void AppController::switchToLogin()")
         logout_block_end = navigation_source.index("void AppController::switchToRegister()")
         logout_block = navigation_source[logout_block_start:logout_block_end]
         self.assertIn("setPage(LoginPage);", logout_block)
-        self.assertLess(logout_block.index("setPage(LoginPage);"),
-                        logout_block.index("_gateway.chatTransport()->CloseConnection();"))
+        self.assertLess(
+            logout_block.index("setPage(LoginPage);"),
+            logout_block.index("_gateway.chatTransport()->CloseConnection();"),
+        )
 
     def test_stale_account_switch_disconnect_is_ignored_before_chat_page_reconnect(self):
-        source = APP_CONTROLLER_CONNECTION.read_text(encoding="utf-8")
+        source = APP_CONTROLLER_RECONNECT.read_text(encoding="utf-8")
         body = extract_cpp_function(source, "void AppController::onConnectionClosed")
 
-        ignore_index = body.index("if (_ignore_next_login_disconnect)")
+        ignore_index = body.index("if (_chat_recovery_state.ignoreNextLoginDisconnect)")
         page_branch_index = body.index("if (_page != ChatPage)")
         chat_reconnect_index = body.index("if (_call_session_model.visible())")
 
         self.assertLess(ignore_index, page_branch_index)
         self.assertLess(ignore_index, chat_reconnect_index)
         ignored_block = body[ignore_index:page_branch_index]
-        self.assertIn("_ignore_next_login_disconnect = false;", ignored_block)
+        self.assertIn("_chat_recovery_state.ignoreNextLoginDisconnect = false;", ignored_block)
         self.assertIn("resetReconnectState();", ignored_block)
         self.assertIn("return;", ignored_block)
 

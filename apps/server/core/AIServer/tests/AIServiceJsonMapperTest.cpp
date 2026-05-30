@@ -3,17 +3,20 @@
 #include <gtest/gtest.h>
 #include <string_view>
 
-namespace {
+namespace
+{
 
-memochat::json::JsonValue ParseJson(std::string_view payload) {
+memochat::json::JsonValue ParseJson(std::string_view payload)
+{
     memochat::json::JsonValue value;
     EXPECT_TRUE(memochat::json::reader_parse(payload, value));
     return value;
 }
 
-}  // namespace
+} // namespace
 
-TEST(AIServiceJsonMapperTest, PopulatesModelListAndExplicitDefaultModel) {
+TEST(AIServiceJsonMapperTest, PopulatesModelListAndExplicitDefaultModel)
+{
     auto payload = ParseJson(R"json(
         {
           "code": 0,
@@ -62,7 +65,8 @@ TEST(AIServiceJsonMapperTest, PopulatesModelListAndExplicitDefaultModel) {
     EXPECT_TRUE(reply.default_model().supports_thinking());
 }
 
-TEST(AIServiceJsonMapperTest, FallsBackToFirstModelWhenDefaultModelMissing) {
+TEST(AIServiceJsonMapperTest, FallsBackToFirstModelWhenDefaultModelMissing)
+{
     auto payload = ParseJson(R"json(
         {
           "code": 0,
@@ -86,7 +90,8 @@ TEST(AIServiceJsonMapperTest, FallsBackToFirstModelWhenDefaultModelMissing) {
     EXPECT_EQ(reply.default_model().display_name(), "Qwen 3 4B");
 }
 
-TEST(AIServiceJsonMapperTest, AcceptsEmptyModelList) {
+TEST(AIServiceJsonMapperTest, AcceptsEmptyModelList)
+{
     auto payload = ParseJson(R"json(
         {
           "code": 0,
@@ -103,7 +108,8 @@ TEST(AIServiceJsonMapperTest, AcceptsEmptyModelList) {
     EXPECT_FALSE(reply.has_default_model());
 }
 
-TEST(AIServiceJsonMapperTest, PopulatesRegisteredApiProviderModels) {
+TEST(AIServiceJsonMapperTest, PopulatesRegisteredApiProviderModels)
+{
     auto payload = ParseJson(R"json(
         {
           "code": 0,
@@ -134,7 +140,8 @@ TEST(AIServiceJsonMapperTest, PopulatesRegisteredApiProviderModels) {
     EXPECT_FALSE(reply.models(0).supports_thinking());
 }
 
-TEST(AIServiceJsonMapperTest, PopulatesKnowledgeBaseListFields) {
+TEST(AIServiceJsonMapperTest, PopulatesKnowledgeBaseListFields)
+{
     auto payload = ParseJson(R"json(
         {
           "code": 0,
@@ -162,7 +169,8 @@ TEST(AIServiceJsonMapperTest, PopulatesKnowledgeBaseListFields) {
     EXPECT_EQ(reply.knowledge_bases(0).status(), "ready");
 }
 
-TEST(AIServiceJsonMapperTest, PopulatesKnowledgeBaseDeleteResponse) {
+TEST(AIServiceJsonMapperTest, PopulatesKnowledgeBaseDeleteResponse)
+{
     auto payload = ParseJson(R"json(
         {
           "code": 0,

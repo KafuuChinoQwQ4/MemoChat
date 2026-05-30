@@ -1,7 +1,6 @@
-﻿import json
+import json
 import unittest
 from pathlib import Path
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ROOT_CMAKE = REPO_ROOT / "CMakeLists.txt"
@@ -167,7 +166,7 @@ class PetFeatureFlagsContractTests(unittest.TestCase):
         self.assertIn("Live2DOfficialOpenGLRenderer.cpp", cmake)
         self.assertIn("MemoChatLive2DCubismFramework", cmake)
         self.assertIn("CubismRenderer_OpenGLES2", official)
-        self.assertIn('std::make_unique<Live2DOfficialOpenGLRenderer>', render_item)
+        self.assertIn("std::make_unique<Live2DOfficialOpenGLRenderer>", render_item)
         self.assertNotIn("drawModelErrorMarker", render_item)
         self.assertNotIn("QOpenGLPaintDevice", render_item)
         self.assertNotIn("QImage fallback", render_item)

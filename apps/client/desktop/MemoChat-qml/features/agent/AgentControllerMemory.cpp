@@ -1,0 +1,158 @@
+#include "AgentController.h"
+
+#include "ClientGateway.h"
+#include "global.h"
+#include "httpmgr.h"
+#include "usermgr.h"
+
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QUrl>
+#include <QUrlQuery>
+
+namespace
+{
+QString aiHttpModule()
+{
+    return QStringLiteral("ai");
+}
+} // namespace
+
+void AgentController::setMemoryBusy(bool busy, const QString& statusText)
+{
+    bool changed = _memory_busy != busy || _memory_status_text != statusText;
+    _memory_busy = busy;
+    _memory_status_text = statusText;
+    if (changed)
+    {
+        emit memoryStateChanged();
+    }
+}
+
+void AgentController::setMemoryError(const QString& error)
+{
+    if (_memory_error == error)
+    {
+        return;
+    }
+    _memory_error = error;
+    emit memoryStateChanged();
+}
+
+void AgentController::clearMemoryError()
+{
+    if (_memory_error.isEmpty())
+    {
+        return;
+    }
+    _memory_error.clear();
+    emit memoryStateChanged();
+}
+
+void AgentController::listMemories()
+{
+    auto uid = _gateway->userMgr()->GetUid();
+    clearErrorState();
+    clearMemoryError();
+    setMemoryBusy(true, "正在加载记忆...");
+    QUrl url(gate_url_prefix + "/ai/memory/list");
+    QUrlQuery query;
+    query.addQueryItem("uid", QString::number(uid));
+    url.setQuery(query);
+
+    ReqId reqId = ID_AI_MEMORY_LIST;
+    _pending_requests[reqId] = "memory_list";
+    HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
+}
+
+void AgentController::createMemory(const QString& content)
+{
+    const QString trimmed = content.trimmed();
+    if (trimmed.isEmpty())
+    {
+        return;
+    }
+    auto uid = _gateway->userMgr()->GetUid();
+    clearErrorState();
+    clearMemoryError();
+    setMemoryBusy(true, "正在保存记忆...");
+
+    QJsonObject payload;
+    payload["uid"] = uid;
+    payload["content"] = trimmed;
+
+    ReqId reqId = ID_AI_MEMORY_CREATE;
+    _pending_requests[reqId] = "memory_create";
+    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/memory"),
+                                        payload,
+                                        reqId,
+                                        Modules::LOGINMOD,
+                                        aiHttpModule());
+}
+
+void AgentController::deleteMemory(const QString& memoryId)
+{
+    const QString trimmed = memoryId.trimmed();
+    if (trimmed.isEmpty())
+    {
+        return;
+    }
+    auto uid = _gateway->userMgr()->GetUid();
+    clearErrorState();
+    clearMemoryError();
+    setMemoryBusy(true, "正在删除记忆...");
+
+    QJsonObject payload;
+    payload["uid"] = uid;
+    payload["memory_id"] = trimmed;
+
+    ReqId reqId = ID_AI_MEMORY_DELETE;
+    _pending_requests[reqId] = "memory_delete";
+    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/memory/delete"),
+                                        payload,
+                                        reqId,
+                                        Modules::LOGINMOD,
+                                        aiHttpModule());
+}
+
+void AgentController::handleMemoryRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType)
+{
+    Q_UNUSED(id);
+    Q_UNUSED(err);
+    QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8());
+    QJsonObject root = doc.object();
+
+    if (reqType == "memory_list")
+    {
+        QJsonArray memories = root["memories"].toArray();
+        _memories.clear();
+        for (const auto& memory : memories)
+        {
+            if (memory.isObject())
+            {
+                _memories.append(memory.toObject());
+            }
+        }
+        clearErrorState();
+        clearMemoryError();
+        setMemoryBusy(false,
+                      _memories.isEmpty() ? "当前还没有可见记忆。"
+                                          : QString("已加载 %1 条记忆。").arg(_memories.size()));
+        emit memoriesChanged();
+    }
+    else if (reqType == "memory_create")
+    {
+        clearErrorState();
+        clearMemoryError();
+        setMemoryBusy(false, "记忆已保存，正在刷新...");
+        listMemories();
+    }
+    else if (reqType == "memory_delete")
+    {
+        clearErrorState();
+        clearMemoryError();
+        setMemoryBusy(false, "记忆已删除，正在刷新...");
+        listMemories();
+    }
+}

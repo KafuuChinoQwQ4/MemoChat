@@ -7,7 +7,6 @@ import sys
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = REPO_ROOT / "tools" / "loadtest" / "python-loadtest" / "py_loadtest.py"
 

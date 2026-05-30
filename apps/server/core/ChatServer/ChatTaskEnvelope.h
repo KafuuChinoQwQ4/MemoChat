@@ -4,7 +4,8 @@
 #include <string>
 #include "json/GlazeCompat.h"
 
-struct TaskEnvelope {
+struct TaskEnvelope
+{
     std::string task_id;
     std::string task_type;
     std::string trace_id;
@@ -22,16 +23,17 @@ struct TaskEnvelope {
     ~TaskEnvelope();
 };
 
-struct ConsumedTask {
+struct ConsumedTask
+{
     TaskEnvelope envelope;
     std::string serialized;
     bool parsed = false;
 };
 
 TaskEnvelope BuildTaskEnvelope(const std::string& task_type,
-    const std::string& routing_key,
-    const memochat::json::JsonValue& payload,
-    int delay_ms,
-    int max_retries);
+                               const std::string& routing_key,
+                               const memochat::json::JsonValue& payload,
+                               int delay_ms,
+                               int max_retries);
 bool ParseTaskEnvelope(const std::string& serialized, TaskEnvelope& envelope);
 std::string SerializeTaskEnvelope(const TaskEnvelope& envelope);

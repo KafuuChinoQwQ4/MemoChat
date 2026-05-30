@@ -14,15 +14,19 @@
 #include <QUrl>
 #include <QUuid>
 
-namespace {
-QString makeUuid() {
+namespace
+{
+QString makeUuid()
+{
     return QUuid::createUuid().toString(QUuid::WithoutBraces);
 }
 
-void applyLocalGateRequestOptions(QNetworkRequest& request) {
+void applyLocalGateRequestOptions(QNetworkRequest& request)
+{
     const QUrl url = request.url();
     const QString scheme = url.scheme().toLower();
-    if (scheme == QLatin1String("https")) {
+    if (scheme == QLatin1String("https"))
+    {
         QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
         sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
         request.setSslConfiguration(sslConfig);
@@ -31,10 +35,12 @@ void applyLocalGateRequestOptions(QNetworkRequest& request) {
 #endif
     }
 }
-}
+} // namespace
 
-void AgentController::sendStreamMessage(const QString& content) {
-    if (content.trimmed().isEmpty()) return;
+void AgentController::sendStreamMessage(const QString& content)
+{
+    if (content.trimmed().isEmpty())
+        return;
 
     auto uid = _gateway->userMgr()->GetUid();
     QString sessionId = _current_session_id;
@@ -60,11 +66,13 @@ void AgentController::sendStreamMessage(const QString& content) {
     payload["model_name"] = _current_model_name;
     payload["metadata"] = buildChatMetadata();
     const QString skillName = resolvedSkillName();
-    if (!skillName.isEmpty()) {
+    if (!skillName.isEmpty())
+    {
         payload["skill_name"] = skillName;
     }
     const QJsonArray requestedTools = requestedToolsForSkillMode();
-    if (!requestedTools.isEmpty()) {
+    if (!requestedTools.isEmpty())
+    {
         payload["requested_tools"] = requestedTools;
     }
 
@@ -81,28 +89,32 @@ void AgentController::sendStreamMessage(const QString& content) {
     QByteArray data = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     _currentStreamReply = _streamManager->post(request, data);
 
-    connect(_currentStreamReply, &QNetworkReply::readyRead,
-            this, &AgentController::onStreamReadyRead);
-    connect(_currentStreamReply, &QNetworkReply::finished,
-            this, &AgentController::onStreamFinished);
+    connect(_currentStreamReply, &QNetworkReply::readyRead, this, &AgentController::onStreamReadyRead);
+    connect(_currentStreamReply, &QNetworkReply::finished, this, &AgentController::onStreamFinished);
 }
 
-void AgentController::cancelStream() {
+void AgentController::cancelStream()
+{
     const QString msgId = _currentStreamMsgId;
     const QString partialContent = _accumulatedContent;
 
     QNetworkReply* reply = _currentStreamReply;
     _currentStreamReply = nullptr;
-    if (reply) {
+    if (reply)
+    {
         reply->disconnect(this);
         reply->abort();
         reply->deleteLater();
     }
 
-    if (!msgId.isEmpty()) {
-        if (!partialContent.isEmpty()) {
+    if (!msgId.isEmpty())
+    {
+        if (!partialContent.isEmpty())
+        {
             _model->updateStreamingContent(msgId, partialContent);
-        } else {
+        }
+        else
+        {
             _model->updateStreamingContent(msgId, QStringLiteral("已停止生成"));
         }
         _model->finalizeAIMessage(msgId);
@@ -118,17 +130,21 @@ void AgentController::cancelStream() {
     emit streamingChanged();
 }
 
-void AgentController::onStreamReadyRead() {
-    if (!_currentStreamReply) return;
+void AgentController::onStreamReadyRead()
+{
+    if (!_currentStreamReply)
+        return;
 
     QByteArray data = _currentStreamReply->readAll();
     _streamBuffer.append(QString::fromUtf8(data));
 
     // 解析 SSE 数据：逐行处理
     int linesEnd = 0;
-    while (true) {
+    while (true)
+    {
         int newlinePos = _streamBuffer.indexOf('\n', linesEnd);
-        if (newlinePos == -1) {
+        if (newlinePos == -1)
+        {
             // 没有完整的行，保留缓冲区
             _streamBuffer = _streamBuffer.mid(linesEnd);
             break;
@@ -138,46 +154,57 @@ void AgentController::onStreamReadyRead() {
         linesEnd = newlinePos + 1;
 
         // 处理空行（可能表示事件结束）
-        if (line.isEmpty()) continue;
+        if (line.isEmpty())
+            continue;
 
         // 解析 SSE 行
         parseSSEChunk(line);
     }
 }
 
-void AgentController::parseSSEChunk(const QString& line) {
-    if (!line.startsWith("data:")) return;
+void AgentController::parseSSEChunk(const QString& line)
+{
+    if (!line.startsWith("data:"))
+        return;
 
     QString jsonStr = line.mid(5).trimmed();
-    if (jsonStr.isEmpty() || jsonStr == "[DONE]") return;
+    if (jsonStr.isEmpty() || jsonStr == "[DONE]")
+        return;
 
     QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8());
-    if (doc.isNull() || !doc.isObject()) return;
+    if (doc.isNull() || !doc.isObject())
+        return;
 
     QJsonObject chunk = doc.object();
     QString chunkText = chunk["chunk"].toString();
     bool isFinal = chunk["is_final"].toBool();
     QString msgId = chunk["msg_id"].toString();
 
-    if (isFinal) {
+    if (isFinal)
+    {
         updateTraceFromResponse(chunk);
     }
 
-    if (!chunkText.isEmpty()) {
+    if (!chunkText.isEmpty())
+    {
         _accumulatedContent += chunkText;
-        if (!_currentStreamMsgId.isEmpty()) {
+        if (!_currentStreamMsgId.isEmpty())
+        {
             _model->updateStreamingContent(_currentStreamMsgId, _accumulatedContent);
         }
         emit streamingChunkReceived(_currentStreamMsgId, chunkText);
     }
 
-    if (isFinal) {
+    if (isFinal)
+    {
         finishStream(_currentStreamMsgId, _accumulatedContent);
     }
 }
 
-void AgentController::onStreamFinished() {
-    if (!_currentStreamReply) return;
+void AgentController::onStreamFinished()
+{
+    if (!_currentStreamReply)
+        return;
 
     QNetworkReply::NetworkError err = _currentStreamReply->error();
     QString errorStr = _currentStreamReply->errorString();
@@ -186,17 +213,17 @@ void AgentController::onStreamFinished() {
     _currentStreamReply->deleteLater();
     _currentStreamReply = nullptr;
 
-    if (hasUsefulContent && !_streamFinalReceived && !_currentStreamMsgId.isEmpty()) {
+    if (hasUsefulContent && !_streamFinalReceived && !_currentStreamMsgId.isEmpty())
+    {
         finishStream(_currentStreamMsgId, _accumulatedContent);
     }
 
-    const bool normalStreamClose =
-        hasUsefulContent && err == QNetworkReply::RemoteHostClosedError;
-    if (err != QNetworkReply::NoError &&
-        err != QNetworkReply::OperationCanceledError &&
-        !normalStreamClose) {
+    const bool normalStreamClose = hasUsefulContent && err == QNetworkReply::RemoteHostClosedError;
+    if (err != QNetworkReply::NoError && err != QNetworkReply::OperationCanceledError && !normalStreamClose)
+    {
         qWarning() << "[AgentController] Stream error:" << err << errorStr;
-        if (!_currentStreamMsgId.isEmpty()) {
+        if (!_currentStreamMsgId.isEmpty())
+        {
             _model->setError(_currentStreamMsgId, errorStr);
             _model->finalizeAIMessage(_currentStreamMsgId);
             emit streamingFinished(_currentStreamMsgId);
@@ -213,12 +240,15 @@ void AgentController::onStreamFinished() {
     emit streamingChanged();
 }
 
-void AgentController::finishStream(const QString& msgId, const QString& finalContent) {
-    if (_streamFinalReceived) {
+void AgentController::finishStream(const QString& msgId, const QString& finalContent)
+{
+    if (_streamFinalReceived)
+    {
         return;
     }
     _streamFinalReceived = true;
-    if (!msgId.isEmpty()) {
+    if (!msgId.isEmpty())
+    {
         _model->updateStreamingContent(msgId, finalContent);
         _model->finalizeAIMessage(msgId);
         emit streamingFinished(msgId);
@@ -228,7 +258,8 @@ void AgentController::finishStream(const QString& msgId, const QString& finalCon
 
     // 清理状态
     _streaming = false;
-    if (_current_session_id.isEmpty()) {
+    if (_current_session_id.isEmpty())
+    {
         _selectNewestSessionAfterList = true;
         loadSessions();
     }

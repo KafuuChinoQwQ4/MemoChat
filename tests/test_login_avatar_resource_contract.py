@@ -1,6 +1,5 @@
-﻿import unittest
+import unittest
 from pathlib import Path
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LOGIN_TOP_BAR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/components/LoginTopBar.qml"
@@ -9,10 +8,12 @@ SHARED_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
 ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/shared/utils/IconPathUtils.h"
 APP_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppController.cpp"
+APP_CONTROLLER_USER_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerUserState.h"
 APP_CONTROLLER_NAVIGATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerNavigation.cpp"
-APP_CONTROLLER_SESSION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerSession.cpp"
-APP_CONTROLLER_MODELS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerModels.cpp"
-APP_CONTROLLER_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerState.cpp"
+APP_CONTROLLER_PRIVATE_HISTORY = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerPrivateHistory.cpp"
+APP_CONTROLLER_PRIVATE_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerPrivateSelection.cpp"
+APP_CONTROLLER_PROFILE_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerProfileState.cpp"
+SESSION_CHAT_ENTRY = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/SessionChatEntryCoordinator.cpp"
 AUTH_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/AuthController.cpp"
 
 
@@ -40,19 +41,23 @@ class LoginAvatarResourceContractTests(unittest.TestCase):
         self.assertIn('QStringLiteral("qrc:/res/head_1.png")', icon_utils)
         self.assertIn('if (icon.compare(QStringLiteral("head_1.jpg"), Qt::CaseInsensitive) == 0)', icon_utils)
 
-        controller = APP_CONTROLLER.read_text(encoding="utf-8")
-        self.assertIn('_current_user_icon("qrc:/res/head_1.png")', controller)
-        self.assertIn('_current_contact_icon("qrc:/res/head_1.png")', controller)
-        self.assertIn('_current_chat_peer_icon("qrc:/res/head_1.png")', controller)
+        state_header = APP_CONTROLLER_USER_STATE.read_text(encoding="utf-8")
+        self.assertIn('QString icon = QStringLiteral("qrc:/res/head_1.png");', state_header)
+        self.assertIn('QString peerIcon = QStringLiteral("qrc:/res/head_1.png");', state_header)
 
-        state = APP_CONTROLLER_STATE.read_text(encoding="utf-8")
-        self.assertIn('QStringLiteral("qrc:/res/head_1.png")', state)
+        profile_state = APP_CONTROLLER_PROFILE_STATE.read_text(encoding="utf-8")
+        self.assertIn('QStringLiteral("qrc:/res/head_1.png")', profile_state)
 
         auth = AUTH_CONTROLLER.read_text(encoding="utf-8")
         self.assertIn('payload["icon"] = ":/res/head_1.png";', auth)
 
     def test_cpp_default_user_avatar_fallbacks_use_png_canonical_resource(self):
-        for path in (APP_CONTROLLER_NAVIGATION, APP_CONTROLLER_SESSION, APP_CONTROLLER_MODELS):
+        for path in (
+            APP_CONTROLLER_NAVIGATION,
+            SESSION_CHAT_ENTRY,
+            APP_CONTROLLER_PRIVATE_HISTORY,
+            APP_CONTROLLER_PRIVATE_SELECTION,
+        ):
             with self.subTest(path=path.name):
                 source = path.read_text(encoding="utf-8")
                 self.assertNotIn('QStringLiteral("qrc:/res/head_1.jpg")', source)

@@ -1,11 +1,11 @@
 """
 知识库检索工具 — 查询用户私有知识库
 """
-import structlog
-from langchain_core.tools import tool
 
-from rag import RAGChain, EmbeddingManager
+import structlog
 from config import settings
+from langchain_core.tools import tool
+from rag import EmbeddingManager, RAGChain
 
 logger = structlog.get_logger()
 

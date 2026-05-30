@@ -15,20 +15,23 @@
 #include <QSurfaceFormat>
 #include <QtMath>
 
-namespace {
+namespace
+{
 constexpr int kRenderEdge = 1536;
 constexpr int kAvatarEdge = 512;
 constexpr int kAlphaThreshold = 8;
 
-QRect alphaBoundsInRect(const QImage &image, const QRect &scanRect, int alphaThreshold = kAlphaThreshold)
+QRect alphaBoundsInRect(const QImage& image, const QRect& scanRect, int alphaThreshold = kAlphaThreshold)
 {
-    if (image.isNull()) {
+    if (image.isNull())
+    {
         return {};
     }
 
     const QImage argb = image.convertToFormat(QImage::Format_ARGB32);
     const QRect rect = scanRect.intersected(argb.rect());
-    if (rect.isEmpty()) {
+    if (rect.isEmpty())
+    {
         return {};
     }
 
@@ -37,10 +40,13 @@ QRect alphaBoundsInRect(const QImage &image, const QRect &scanRect, int alphaThr
     int right = rect.left() - 1;
     int bottom = rect.top() - 1;
 
-    for (int y = rect.top(); y <= rect.bottom(); ++y) {
-        const QRgb *line = reinterpret_cast<const QRgb *>(argb.constScanLine(y));
-        for (int x = rect.left(); x <= rect.right(); ++x) {
-            if (qAlpha(line[x]) <= alphaThreshold) {
+    for (int y = rect.top(); y <= rect.bottom(); ++y)
+    {
+        const QRgb* line = reinterpret_cast<const QRgb*>(argb.constScanLine(y));
+        for (int x = rect.left(); x <= rect.right(); ++x)
+        {
+            if (qAlpha(line[x]) <= alphaThreshold)
+            {
                 continue;
             }
             left = qMin(left, x);
@@ -50,26 +56,29 @@ QRect alphaBoundsInRect(const QImage &image, const QRect &scanRect, int alphaThr
         }
     }
 
-    if (right < left || bottom < top) {
+    if (right < left || bottom < top)
+    {
         return {};
     }
     return QRect(QPoint(left, top), QPoint(right, bottom));
 }
 
-QRect alphaBounds(const QImage &image, int alphaThreshold = kAlphaThreshold)
+QRect alphaBounds(const QImage& image, int alphaThreshold = kAlphaThreshold)
 {
     return alphaBoundsInRect(image, image.rect(), alphaThreshold);
 }
 
-QPointF alphaCentroid(const QImage &image, const QRect &scanRect, int alphaThreshold = kAlphaThreshold)
+QPointF alphaCentroid(const QImage& image, const QRect& scanRect, int alphaThreshold = kAlphaThreshold)
 {
-    if (image.isNull()) {
+    if (image.isNull())
+    {
         return {};
     }
 
     const QImage argb = image.convertToFormat(QImage::Format_ARGB32);
     const QRect rect = scanRect.intersected(argb.rect());
-    if (rect.isEmpty()) {
+    if (rect.isEmpty())
+    {
         return {};
     }
 
@@ -77,11 +86,14 @@ QPointF alphaCentroid(const QImage &image, const QRect &scanRect, int alphaThres
     double weightedY = 0.0;
     double weightSum = 0.0;
 
-    for (int y = rect.top(); y <= rect.bottom(); ++y) {
-        const QRgb *line = reinterpret_cast<const QRgb *>(argb.constScanLine(y));
-        for (int x = rect.left(); x <= rect.right(); ++x) {
+    for (int y = rect.top(); y <= rect.bottom(); ++y)
+    {
+        const QRgb* line = reinterpret_cast<const QRgb*>(argb.constScanLine(y));
+        for (int x = rect.left(); x <= rect.right(); ++x)
+        {
             const int alpha = qAlpha(line[x]);
-            if (alpha <= alphaThreshold) {
+            if (alpha <= alphaThreshold)
+            {
                 continue;
             }
             weightedX += static_cast<double>(x) * alpha;
@@ -90,15 +102,17 @@ QPointF alphaCentroid(const QImage &image, const QRect &scanRect, int alphaThres
         }
     }
 
-    if (weightSum <= 0.0) {
+    if (weightSum <= 0.0)
+    {
         return {};
     }
     return QPointF(weightedX / weightSum, weightedY / weightSum);
 }
 
-QRect clampedSquareAround(const QPointF &center, int side, const QRect &imageRect)
+QRect clampedSquareAround(const QPointF& center, int side, const QRect& imageRect)
 {
-    if (side <= 0 || imageRect.isEmpty()) {
+    if (side <= 0 || imageRect.isEmpty())
+    {
         return {};
     }
 
@@ -110,19 +124,18 @@ QRect clampedSquareAround(const QPointF &center, int side, const QRect &imageRec
     return QRect(x, y, side, side).intersected(imageRect);
 }
 
-QRect avatarCropRect(const QImage &source)
+QRect avatarCropRect(const QImage& source)
 {
     const QRect model = alphaBounds(source);
-    if (model.isEmpty()) {
+    if (model.isEmpty())
+    {
         return {};
     }
 
-    const QRect upperScan(model.left(),
-                          model.top(),
-                          model.width(),
-                          qMax(1, qRound(model.height() * 0.40)));
+    const QRect upperScan(model.left(), model.top(), model.width(), qMax(1, qRound(model.height() * 0.40)));
     QRect upper = alphaBoundsInRect(source, upperScan);
-    if (upper.isEmpty()) {
+    if (upper.isEmpty())
+    {
         upper = model;
     }
 
@@ -131,20 +144,21 @@ QRect avatarCropRect(const QImage &source)
                          model.width(),
                          qMax(1, qRound(model.height() * 0.26)));
     QRect face = alphaBoundsInRect(source, faceScan);
-    if (face.isEmpty()) {
+    if (face.isEmpty())
+    {
         face = upper;
     }
 
     QPointF center = alphaCentroid(source, face);
-    if (center.isNull()) {
+    if (center.isNull())
+    {
         center = face.center();
     }
 
     const int sideFromUpper = qRound(qMax(upper.width() * 0.92, upper.height() * 0.70));
     const int sideFromFace = qRound(qMax(face.width() * 1.10, face.height() * 1.02));
     const int sideFromModel = qRound(qMax(model.width() * 0.50, model.height() * 0.24));
-    int side = qMax(96, qMax(sideFromModel, qMin(qMax(sideFromUpper, sideFromFace),
-                                                 qRound(model.height() * 0.36))));
+    int side = qMax(96, qMax(sideFromModel, qMin(qMax(sideFromUpper, sideFromFace), qRound(model.height() * 0.36))));
     side = qMin(side, qMin(source.width(), source.height()));
 
     const qreal portraitCenterY = model.top() + model.height() * 0.23;
@@ -162,9 +176,10 @@ QSurfaceFormat avatarSurfaceFormat()
     return format;
 }
 
-void setError(QString *error, const QString &message)
+void setError(QString* error, const QString& message)
 {
-    if (error) {
+    if (error)
+    {
         *error = message;
     }
 }
@@ -175,12 +190,13 @@ QString Live2DAvatarOpenGLRenderer::rendererName()
     return QStringLiteral("cubism-official-opengl-avatar");
 }
 
-QImage Live2DAvatarOpenGLRenderer::renderAvatar(const QString &modelJsonPath, QString *error) const
+QImage Live2DAvatarOpenGLRenderer::renderAvatar(const QString& modelJsonPath, QString* error) const
 {
     static QMutex avatarRenderMutex;
     QMutexLocker locker(&avatarRenderMutex);
 
-    if (!QGuiApplication::instance()) {
+    if (!QGuiApplication::instance())
+    {
         setError(error, QStringLiteral("QGuiApplication is not available for Live2D avatar rendering"));
         return {};
     }
@@ -188,21 +204,25 @@ QImage Live2DAvatarOpenGLRenderer::renderAvatar(const QString &modelJsonPath, QS
     QOffscreenSurface surface;
     surface.setFormat(avatarSurfaceFormat());
     surface.create();
-    if (!surface.isValid()) {
+    if (!surface.isValid())
+    {
         setError(error, QStringLiteral("failed to create offscreen surface for Live2D avatar"));
         return {};
     }
 
     QOpenGLContext context;
     context.setFormat(surface.format());
-    if (QOpenGLContext *shareContext = QOpenGLContext::globalShareContext()) {
+    if (QOpenGLContext* shareContext = QOpenGLContext::globalShareContext())
+    {
         context.setShareContext(shareContext);
     }
-    if (!context.create()) {
+    if (!context.create())
+    {
         setError(error, QStringLiteral("failed to create OpenGL context for Live2D avatar"));
         return {};
     }
-    if (!context.makeCurrent(&surface)) {
+    if (!context.makeCurrent(&surface))
+    {
         setError(error, QStringLiteral("failed to activate OpenGL context for Live2D avatar"));
         return {};
     }
@@ -215,15 +235,23 @@ QImage Live2DAvatarOpenGLRenderer::renderAvatar(const QString &modelJsonPath, QS
 
         const QSize renderSize(kRenderEdge, kRenderEdge);
         QOpenGLFramebufferObject fbo(renderSize, fboFormat);
-        if (!fbo.isValid()) {
+        if (!fbo.isValid())
+        {
             renderError = QStringLiteral("failed to create Live2D avatar framebuffer");
-        } else if (!fbo.bind()) {
+        }
+        else if (!fbo.bind())
+        {
             renderError = QStringLiteral("failed to bind Live2D avatar framebuffer");
-        } else {
+        }
+        else
+        {
             Live2DOfficialOpenGLRenderer renderer(modelJsonPath);
-            if (!renderer.isReady()) {
+            if (!renderer.isReady())
+            {
                 renderError = renderer.errorString();
-            } else {
+            }
+            else
+            {
                 Live2DVisualState state;
                 state.expression = QStringLiteral("neutral");
                 state.motion = QStringLiteral("idle");
@@ -232,10 +260,14 @@ QImage Live2DAvatarOpenGLRenderer::renderAvatar(const QString &modelJsonPath, QS
                 state.gazeY = 0.48;
                 state.idlePhase = 0.0;
 
-                if (!renderer.render(renderSize, state)) {
+                if (!renderer.render(renderSize, state))
+                {
                     renderError = QStringLiteral("official OpenGL renderer returned false for Live2D avatar");
-                } else {
-                    if (QOpenGLFunctions *functions = context.functions()) {
+                }
+                else
+                {
+                    if (QOpenGLFunctions* functions = context.functions())
+                    {
                         functions->glFlush();
                     }
                     const QImage rendered = fbo.toImage(true).convertToFormat(QImage::Format_ARGB32_Premultiplied);
@@ -248,24 +280,30 @@ QImage Live2DAvatarOpenGLRenderer::renderAvatar(const QString &modelJsonPath, QS
 
     context.doneCurrent();
 
-    if (avatar.isNull()) {
-        setError(error, renderError.isEmpty()
-                            ? QStringLiteral("Live2D avatar crop produced an empty image")
-                            : renderError);
-    } else {
+    if (avatar.isNull())
+    {
+        setError(error,
+                 renderError.isEmpty()
+                 ? QStringLiteral("Live2D avatar crop produced an empty image")
+                 : renderError);
+    }
+    else
+    {
         setError(error, QString());
     }
     return avatar;
 }
 
-QImage Live2DAvatarOpenGLRenderer::cropAvatarFrame(const QImage &source, const QSize &outputSize)
+QImage Live2DAvatarOpenGLRenderer::cropAvatarFrame(const QImage& source, const QSize& outputSize)
 {
-    if (source.isNull() || outputSize.isEmpty()) {
+    if (source.isNull() || outputSize.isEmpty())
+    {
         return {};
     }
 
     const QRect crop = avatarCropRect(source);
-    if (crop.isEmpty()) {
+    if (crop.isEmpty())
+    {
         return {};
     }
 

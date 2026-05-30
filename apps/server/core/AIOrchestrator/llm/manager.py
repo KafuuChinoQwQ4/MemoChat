@@ -1,17 +1,19 @@
 """
 LLM 管理器 — 统一调度所有 LLM 后端，支持自动降级
 """
+
 import asyncio
 from typing import AsyncIterator, Optional
 
 import structlog
-from .base import BaseLLM, LLMMessage, LLMResponse, LLMStreamChunk, LLMUsage
-from .ollama_llm import OllamaLLM
-from .openai_llm import OpenAILLM
-from .claude_llm import ClaudeLLM
-from .kimi_llm import KimiLLM
 from config import settings
 from observability.langsmith_instrument import set_run_error, set_run_output, trace_context
+
+from .base import BaseLLM, LLMMessage, LLMResponse, LLMStreamChunk, LLMUsage
+from .claude_llm import ClaudeLLM
+from .kimi_llm import KimiLLM
+from .ollama_llm import OllamaLLM
+from .openai_llm import OpenAILLM
 
 logger = structlog.get_logger()
 
@@ -31,6 +33,7 @@ class LLMManager:
     2. 提供统一 chat 接口
     3. 自动降级（FallbackChain）
     """
+
     _instance: "LLMManager | None" = None
 
     def __init__(self):
@@ -55,7 +58,11 @@ class LLMManager:
             try:
                 self._backends["ollama"] = OllamaLLM(
                     base_url=llm_cfg.ollama.base_url,
-                    model_name=llm_cfg.default_model if llm_cfg.default_backend == "ollama" else llm_cfg.ollama.models[0].name if llm_cfg.ollama.models else "qwen3:4b",
+                    model_name=llm_cfg.default_model
+                    if llm_cfg.default_backend == "ollama"
+                    else llm_cfg.ollama.models[0].name
+                    if llm_cfg.ollama.models
+                    else "qwen3:4b",
                     timeout_sec=llm_cfg.ollama.timeout_sec or settings.agent.timeout_total_sec,
                 )
                 logger.info("llm.backend_loaded", backend="ollama", url=llm_cfg.ollama.base_url)
@@ -67,7 +74,11 @@ class LLMManager:
                 self._backends["openai"] = OpenAILLM(
                     api_key=llm_cfg.openai.api_key,
                     base_url=llm_cfg.openai.base_url,
-                    model_name=llm_cfg.default_model if llm_cfg.default_backend == "openai" else llm_cfg.openai.models[0].name if llm_cfg.openai.models else "gpt-4o",
+                    model_name=llm_cfg.default_model
+                    if llm_cfg.default_backend == "openai"
+                    else llm_cfg.openai.models[0].name
+                    if llm_cfg.openai.models
+                    else "gpt-4o",
                 )
                 logger.info("llm.backend_loaded", backend="openai")
             except Exception as e:
@@ -78,7 +89,11 @@ class LLMManager:
                 self._backends["claude"] = ClaudeLLM(
                     api_key=llm_cfg.anthropic.api_key,
                     base_url=llm_cfg.anthropic.base_url,
-                    model_name=llm_cfg.default_model if llm_cfg.default_backend == "claude" else llm_cfg.anthropic.models[0].name if llm_cfg.anthropic.models else "claude-3-5-sonnet-20241022",
+                    model_name=llm_cfg.default_model
+                    if llm_cfg.default_backend == "claude"
+                    else llm_cfg.anthropic.models[0].name
+                    if llm_cfg.anthropic.models
+                    else "claude-3-5-sonnet-20241022",
                 )
                 logger.info("llm.backend_loaded", backend="claude")
             except Exception as e:
@@ -89,7 +104,11 @@ class LLMManager:
                 self._backends["kimi"] = KimiLLM(
                     api_key=llm_cfg.kimi.api_key,
                     base_url=llm_cfg.kimi.base_url,
-                    model_name=llm_cfg.default_model if llm_cfg.default_backend == "kimi" else llm_cfg.kimi.models[0].name if llm_cfg.kimi.models else "moonshot-v1-8k",
+                    model_name=llm_cfg.default_model
+                    if llm_cfg.default_backend == "kimi"
+                    else llm_cfg.kimi.models[0].name
+                    if llm_cfg.kimi.models
+                    else "moonshot-v1-8k",
                 )
                 logger.info("llm.backend_loaded", backend="kimi")
             except Exception as e:
@@ -115,8 +134,9 @@ class LLMManager:
 
         raise AllBackendsFailedError("No LLM backend available")
 
-    async def achat(self, messages: list[LLMMessage], prefer_backend: str = "",
-                    model_name: str = "", **kwargs) -> LLMResponse:
+    async def achat(
+        self, messages: list[LLMMessage], prefer_backend: str = "", model_name: str = "", **kwargs
+    ) -> LLMResponse:
         """
         带自动降级的异步 LLM 调用。
         """
@@ -169,13 +189,13 @@ class LLMManager:
                         set_run_error(run, exc)
                         logger.warning("llm.timeout", backend=backend_type, attempt=attempt)
                         if attempt < self._fallback_config.retry_count:
-                            await asyncio.sleep(self._fallback_config.retry_delay_sec * (2 ** attempt))
+                            await asyncio.sleep(self._fallback_config.retry_delay_sec * (2**attempt))
                         continue
                     except RateLimitError as exc:
                         set_run_error(run, exc)
                         logger.warning("llm.rate_limited", backend=backend_type, attempt=attempt)
                         if attempt < self._fallback_config.retry_count:
-                            await asyncio.sleep(self._fallback_config.retry_delay_sec * (2 ** attempt))
+                            await asyncio.sleep(self._fallback_config.retry_delay_sec * (2**attempt))
                         continue
                     except Exception as e:
                         set_run_error(run, e)
@@ -184,8 +204,9 @@ class LLMManager:
 
         raise AllBackendsFailedError(f"All LLM backends failed. Tried: {tried}")
 
-    async def astream(self, messages: list[LLMMessage], prefer_backend: str = "",
-                      model_name: str = "", **kwargs) -> AsyncIterator[LLMStreamChunk]:
+    async def astream(
+        self, messages: list[LLMMessage], prefer_backend: str = "", model_name: str = "", **kwargs
+    ) -> AsyncIterator[LLMStreamChunk]:
         """
         带自动降级的异步流式 LLM 调用。
         当主后端失败时自动切换到 fallback 后端。

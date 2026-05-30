@@ -9,13 +9,11 @@ from pathlib import Path
 from typing import AsyncIterator
 
 import httpx
-
 from config import settings
 from harness.contracts import ProviderEndpoint
 from llm import LLMManager
 from llm.base import LLMMessage, LLMResponse, LLMStreamChunk, LLMUsage
 from llm.claude_llm import ClaudeLLM
-
 
 _RUNTIME_PROVIDER_FILE = Path(
     os.getenv(
@@ -111,7 +109,12 @@ class _OpenAICompatibleClient:
                 reasoning = delta_obj.get("reasoning_content") or delta_obj.get("reasoning") or ""
                 delta = delta_obj.get("content", "")
                 if reasoning and kwargs.get("think", False):
-                    yield LLMStreamChunk(content=_wrap_thinking(reasoning, ""), reasoning_content=reasoning, is_final=False, model=payload["model"])
+                    yield LLMStreamChunk(
+                        content=_wrap_thinking(reasoning, ""),
+                        reasoning_content=reasoning,
+                        is_final=False,
+                        model=payload["model"],
+                    )
                 if delta:
                     yield LLMStreamChunk(content=delta, is_final=False, model=payload["model"])
 
@@ -198,7 +201,9 @@ class _OllamaCompatibleClient:
         response.raise_for_status()
         data = response.json()
         return LLMResponse(
-            content=data.get("message", {}).get("content", "") if kwargs.get("think", False) else self._strip_think_blocks(data.get("message", {}).get("content", "")),
+            content=data.get("message", {}).get("content", "")
+            if kwargs.get("think", False)
+            else self._strip_think_blocks(data.get("message", {}).get("content", "")),
             usage=LLMUsage(
                 prompt_tokens=data.get("prompt_eval_count", 0),
                 completion_tokens=data.get("eval_count", 0),
@@ -277,7 +282,10 @@ class LLMEndpointRegistry:
                     adapter="ollama",
                     deployment="local_api",
                     base_url=llm_cfg.ollama.base_url,
-                    default_model=llm_cfg.default_model if llm_cfg.default_backend == "ollama" and any(model.get("name") == llm_cfg.default_model for model in ollama_models) else (ollama_models[0].get("name", "") if ollama_models else ""),
+                    default_model=llm_cfg.default_model
+                    if llm_cfg.default_backend == "ollama"
+                    and any(model.get("name") == llm_cfg.default_model for model in ollama_models)
+                    else (ollama_models[0].get("name", "") if ollama_models else ""),
                     enabled=True,
                     thinking_parameter="think",
                     models=ollama_models,
@@ -290,7 +298,9 @@ class LLMEndpointRegistry:
                     adapter="openai_compatible",
                     deployment="external_api",
                     base_url=llm_cfg.openai.base_url,
-                    default_model=llm_cfg.default_model if llm_cfg.default_backend == "openai" else (llm_cfg.openai.models[0].name if llm_cfg.openai.models else ""),
+                    default_model=llm_cfg.default_model
+                    if llm_cfg.default_backend == "openai"
+                    else (llm_cfg.openai.models[0].name if llm_cfg.openai.models else ""),
                     enabled=True,
                     thinking_parameter="",
                     models=[model.model_dump() for model in llm_cfg.openai.models],
@@ -304,7 +314,9 @@ class LLMEndpointRegistry:
                     adapter="anthropic",
                     deployment="external_api",
                     base_url=llm_cfg.anthropic.base_url,
-                    default_model=llm_cfg.default_model if llm_cfg.default_backend == "claude" else (llm_cfg.anthropic.models[0].name if llm_cfg.anthropic.models else ""),
+                    default_model=llm_cfg.default_model
+                    if llm_cfg.default_backend == "claude"
+                    else (llm_cfg.anthropic.models[0].name if llm_cfg.anthropic.models else ""),
                     enabled=True,
                     thinking_parameter="",
                     models=[model.model_dump() for model in llm_cfg.anthropic.models],
@@ -318,7 +330,9 @@ class LLMEndpointRegistry:
                     adapter="openai_compatible",
                     deployment="external_api",
                     base_url=llm_cfg.kimi.base_url,
-                    default_model=llm_cfg.default_model if llm_cfg.default_backend == "kimi" else (llm_cfg.kimi.models[0].name if llm_cfg.kimi.models else ""),
+                    default_model=llm_cfg.default_model
+                    if llm_cfg.default_backend == "kimi"
+                    else (llm_cfg.kimi.models[0].name if llm_cfg.kimi.models else ""),
                     enabled=True,
                     thinking_parameter="",
                     models=[model.model_dump() for model in llm_cfg.kimi.models],
@@ -409,7 +423,8 @@ class LLMEndpointRegistry:
                 str(provider.get("adapter") or "openai_compatible"),
                 str(provider.get("base_url") or ""),
                 str(provider.get("api_key") or ""),
-            ) != target_identity
+            )
+            != target_identity
         ]
         provider_config = {
             "name": target_provider_id,
@@ -443,9 +458,7 @@ class LLMEndpointRegistry:
         normalized_provider_id = _normalize_provider_id(provider_id or "")
         providers = self._load_runtime_providers()
         next_providers = [
-            provider
-            for provider in providers
-            if provider.get("name") not in {provider_id, normalized_provider_id}
+            provider for provider in providers if provider.get("name") not in {provider_id, normalized_provider_id}
         ]
         if len(next_providers) == len(providers):
             return False
@@ -541,7 +554,9 @@ class LLMEndpointRegistry:
         if cache_key in self._custom_clients:
             return self._custom_clients[cache_key]
 
-        endpoint_cfg = next((item for item in settings.harness.providers.endpoints if item.name == endpoint.provider_id), None)
+        endpoint_cfg = next(
+            (item for item in settings.harness.providers.endpoints if item.name == endpoint.provider_id), None
+        )
         runtime_cfg = self._find_runtime_provider(endpoint.provider_id)
         api_key = ""
         timeout_sec = 120
@@ -590,7 +605,9 @@ class LLMEndpointRegistry:
         tmp_path.replace(_RUNTIME_PROVIDER_FILE)
 
     def _find_runtime_provider(self, provider_id: str) -> dict | None:
-        return next((provider for provider in self._load_runtime_providers() if provider.get("name") == provider_id), None)
+        return next(
+            (provider for provider in self._load_runtime_providers() if provider.get("name") == provider_id), None
+        )
 
     def _find_runtime_provider_by_api(self, adapter: str, base_url: str, api_key: str) -> dict | None:
         identity = _provider_api_identity(adapter, base_url, api_key)
@@ -604,7 +621,8 @@ class LLMEndpointRegistry:
                     str(provider.get("adapter") or "openai_compatible"),
                     str(provider.get("base_url") or ""),
                     str(provider.get("api_key") or ""),
-                ) == identity
+                )
+                == identity
             ),
             None,
         )

@@ -2,7 +2,8 @@
 
 class LogicSystem;
 
-class MediaHttpService {
+class MediaHttpService
+{
 public:
     static void RegisterRoutes(LogicSystem& logic);
 };

@@ -8,11 +8,13 @@
 
 class CServer;
 
-namespace memochat::chatserver {
+namespace memochat::chatserver
+{
 
 class QuicChatServer;
 
-class ChatIngressCoordinator {
+class ChatIngressCoordinator
+{
 public:
     explicit ChatIngressCoordinator(boost::asio::io_context& io_context);
     ~ChatIngressCoordinator();

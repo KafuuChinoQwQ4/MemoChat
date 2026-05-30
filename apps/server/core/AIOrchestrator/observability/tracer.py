@@ -1,12 +1,12 @@
 """
 OpenTelemetry 追踪初始化
 """
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 
 from config import settings
+from opentelemetry import trace
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 
 def init_tracing():
@@ -14,14 +14,17 @@ def init_tracing():
     if not settings.observability.enabled:
         return
 
-    resource = Resource.create({
-        SERVICE_NAME: settings.observability.otel.service_name,
-    })
+    resource = Resource.create(
+        {
+            SERVICE_NAME: settings.observability.otel.service_name,
+        }
+    )
 
     provider = TracerProvider(resource=resource)
 
     try:
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
         exporter = OTLPSpanExporter(
             endpoint=settings.observability.otel.endpoint,
             insecure=True,
@@ -29,6 +32,7 @@ def init_tracing():
         provider.add_span_processor(BatchSpanProcessor(exporter))
     except Exception as e:
         import structlog
+
         structlog.get_logger().warning("otel.exporter_failed", error=str(e))
 
     trace.set_tracer_provider(provider)

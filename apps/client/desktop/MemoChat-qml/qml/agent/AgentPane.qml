@@ -1,7 +1,9 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import "../components"
+import "AgentPaneRuntime.js" as AgentPaneRuntime
 
 Rectangle {
     id: root
@@ -49,10 +51,6 @@ Rectangle {
     property string gameStatusText: root.agentController ? root.agentController.gameStatusText : ""
     property string gameError: root.agentController ? root.agentController.gameError : ""
     property bool multiAiDetailsExpanded: false
-    readonly property int headerActionWidth: 58
-    readonly property int headerActionHeight: 26
-    readonly property int headerActionTextSize: 12
-    readonly property int headerActionRadius: 7
     readonly property color glassPanelColor: Qt.rgba(0.96, 0.98, 1.0, 0.62)
     readonly property color glassPanelHoverColor: Qt.rgba(1, 1, 1, 0.76)
     readonly property color glassPanelPressedColor: Qt.rgba(0.86, 0.92, 1.0, 0.70)
@@ -74,280 +72,80 @@ Rectangle {
     onCurrentGameRoomIdChanged: multiAiDetailsExpanded = false
 
     function currentSessionTitle() {
-        if (gameRoomActive) {
-            var room = gameState && gameState.room ? gameState.room : ({})
-            return room.title || (multiAiRoomActive ? "多 AI 聊天" : "Game 房间")
-        }
-        if (!sessions || currentSessionId.length === 0) {
-            return "未选择会话"
-        }
-        for (var i = 0; i < sessions.length; ++i) {
-            var session = sessions[i]
-            if (session.session_id === currentSessionId) {
-                return session.title && session.title.length > 0 ? session.title : "当前会话"
-            }
-        }
-        return "当前会话"
+        return AgentPaneRuntime.currentSessionTitle({
+            "gameRoomActive": root.gameRoomActive,
+            "gameState": root.gameState,
+            "multiAiRoomActive": root.multiAiRoomActive,
+            "sessions": root.sessions,
+            "currentSessionId": root.currentSessionId
+        })
     }
 
     function sessionSummary() {
-        if (gameRoomActive) {
-            if (gameBusy) {
-                return multiAiRoomActive ? "多 AI 正在回复。" : "Game 正在推进。"
-            }
-            if (gameError.length > 0) {
-                return gameError
-            }
-            if (gameStatusText.length > 0) {
-                return gameStatusText
-            }
-            return multiAiRoomActive ? "当前是多 AI 聊天房间。" : "当前是 Game 房间，可在时间线里提交行动。"
-        }
-        if (currentSessionId.length === 0) {
-            return "从左侧选择或新建会话开始。"
-        }
-        if (streaming) {
-            return "AI 正在生成回复。"
-        }
-        if (loading) {
-            return "AI 正在处理你的问题。"
-        }
-        return "当前会话已就绪，可以继续追问。"
+        return AgentPaneRuntime.sessionSummary({
+            "gameRoomActive": root.gameRoomActive,
+            "multiAiRoomActive": root.multiAiRoomActive,
+            "gameBusy": root.gameBusy,
+            "gameError": root.gameError,
+            "gameStatusText": root.gameStatusText,
+            "currentSessionId": root.currentSessionId,
+            "streaming": root.streaming,
+            "loading": root.loading
+        })
     }
 
     function roomObject() {
-        var room = gameState && gameState.room ? gameState.room : ({})
-        var roomId = room.room_id || room.id || ""
-        if (currentGameRoomId.length > 0 && roomId.length > 0 && roomId !== currentGameRoomId) {
-            return ({})
-        }
-        return room
+        return AgentPaneRuntime.roomObject(root.gameState, root.currentGameRoomId)
     }
 
     function currentRulesetId() {
-        var room = roomObject()
-        return room.ruleset_id || room.ruleset || ""
+        return AgentPaneRuntime.rulesetId(root.gameState, root.currentGameRoomId)
     }
 
     function participants() {
-        return gameState && gameState.participants ? gameState.participants : []
+        return AgentPaneRuntime.participants(root.gameState)
     }
 
     function events() {
-        return gameState && gameState.events ? gameState.events : []
+        return AgentPaneRuntime.events(root.gameState)
     }
 
     function availableActions() {
-        return gameState && gameState.available_actions ? gameState.available_actions : []
+        return AgentPaneRuntime.availableActions(root.gameState)
     }
 
     function roomStatusValue() {
-        var room = roomObject()
-        return (room.status || gameState.status || gameState.phase || "").toString().toLowerCase()
+        return AgentPaneRuntime.roomStatusValue(root.gameState, root.currentGameRoomId)
     }
 
     function isGameEnded() {
-        var value = roomStatusValue()
-        return value === "ended" || value === "finished" || value === "complete" || value === "completed"
+        return AgentPaneRuntime.isGameEnded(root.gameState, root.currentGameRoomId)
     }
 
     function skillModeHint() {
-        if (agentSkillMode === "knowledge") {
-            return "优先检索已上传文档后回答。"
-        }
-        if (agentSkillMode === "research") {
-            return "先联网搜索，再基于观察回答。"
-        }
-        if (agentSkillMode === "graph") {
-            return "调用图谱记忆和关系推荐。"
-        }
-        if (agentSkillMode === "calculate") {
-            return "显式调用计算器工具。"
-        }
-        return "根据问题自动选择技能和工具。"
+        return AgentPaneRuntime.skillModeHint(root.agentSkillMode)
     }
 
     ColumnLayout {
         anchors.fill: parent
         spacing: 10
 
-        Rectangle {
+        AgentPaneHeader {
             Layout.fillWidth: true
             Layout.preferredHeight: 78
-            radius: 12
-            color: Qt.rgba(1, 1, 1, 0.22)
-            border.color: Qt.rgba(1, 1, 1, 0.46)
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 18
-                anchors.rightMargin: 18
-                spacing: 8
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 0
-                    spacing: 4
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.minimumWidth: 0
-                        spacing: 8
-
-                        Label {
-                            text: root.gameRoomActive ? (root.multiAiRoomActive ? "多 AI 聊天" : "Game 模式") : "AI 助手"
-                            color: "#2a3649"
-                            font.pixelSize: 18
-                            font.bold: true
-                        }
-
-                        Rectangle {
-                            Layout.preferredHeight: 24
-                            Layout.preferredWidth: sessionTitleLabel.implicitWidth + 18
-                            Layout.maximumWidth: 110
-                            radius: 12
-                            color: Qt.rgba(1, 1, 1, 0.32)
-                            border.width: 1
-                            border.color: Qt.rgba(1, 1, 1, 0.36)
-
-                            Label {
-                                id: sessionTitleLabel
-                                anchors.centerIn: parent
-                                width: parent.width - 14
-                                text: root.currentSessionTitle()
-                                color: "#4e5d74"
-                                font.pixelSize: 11
-                                font.bold: true
-                                elide: Text.ElideRight
-                            }
-                        }
-
-                        Rectangle {
-                            Layout.preferredHeight: 24
-                            Layout.preferredWidth: modelChipLabel.implicitWidth + 16
-                            Layout.maximumWidth: 132
-                            radius: 12
-                            color: Qt.rgba(0.36, 0.62, 0.92, 0.16)
-                            visible: root.currentModel.length > 0 && !root.gameRoomActive
-
-                            Label {
-                                id: modelChipLabel
-                                anchors.centerIn: parent
-                                width: parent.width - 12
-                                text: root.currentModel
-                                color: "#2d6fb4"
-                                font.pixelSize: 11
-                                font.bold: true
-                                elide: Text.ElideRight
-                            }
-                        }
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: root.sessionSummary()
-                        color: "#6a7b92"
-                        font.pixelSize: 12
-                        wrapMode: Text.Wrap
-                        maximumLineCount: 2
-                    }
-                }
-
-                RowLayout {
-                    Layout.preferredWidth: root.multiAiRoomActive ? 134 : 94
-                    Layout.preferredHeight: 32
-                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                    spacing: 8
-
-                    Rectangle {
-                        id: multiAiDetailsToggle
-                        Layout.preferredWidth: 32
-                        Layout.preferredHeight: 32
-                        radius: 10
-                        visible: root.multiAiRoomActive
-                        color: multiAiDetailsMouseArea.pressed ? root.glassPanelPressedColor
-                              : multiAiDetailsMouseArea.containsMouse ? root.glassPanelHoverColor
-                                                                    : root.glassPanelColor
-                        border.width: 1
-                        border.color: root.glassBorderColor
-
-                        Image {
-                            anchors.centerIn: parent
-                            width: 14
-                            height: 14
-                            source: "qrc:/icons/dropdown.png"
-                            fillMode: Image.PreserveAspectFit
-                            rotation: root.multiAiDetailsExpanded ? 180 : 0
-                            opacity: 0.78
-                            smooth: true
-                        }
-
-                        MouseArea {
-                            id: multiAiDetailsMouseArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.multiAiDetailsExpanded = !root.multiAiDetailsExpanded
-                        }
-                    }
-
-                    Rectangle {
-                        id: modeMenuAnchor
-                        Layout.preferredWidth: 48
-                        Layout.preferredHeight: 32
-                        radius: 10
-                        color: modeMouseArea.pressed ? root.glassPanelPressedColor
-                              : modeMouseArea.containsMouse ? root.glassPanelHoverColor
-                                                            : root.glassPanelColor
-                        border.width: 1
-                        border.color: root.glassBorderColor
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "模式"
-                            color: "#4e5d74"
-                            font.pixelSize: 12
-                            font.bold: true
-                        }
-
-                        MouseArea {
-                            id: modeMouseArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: modeMenu.open()
-                        }
-                    }
-
-                    Rectangle {
-                        id: moreMenuAnchor
-                        Layout.preferredWidth: 38
-                        Layout.preferredHeight: 32
-                        radius: 10
-                        color: moreMouseArea.pressed ? root.glassPanelPressedColor
-                              : moreMouseArea.containsMouse ? root.glassPanelHoverColor
-                                                            : root.glassPanelColor
-                        border.width: 1
-                        border.color: root.glassBorderColor
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "..."
-                            color: "#4e5d74"
-                            font.pixelSize: 18
-                            font.bold: true
-                        }
-
-                        MouseArea {
-                            id: moreMouseArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: moreMenu.open()
-                        }
-                    }
-                }
-            }
+            gameRoomActive: root.gameRoomActive
+            multiAiRoomActive: root.multiAiRoomActive
+            multiAiDetailsExpanded: root.multiAiDetailsExpanded
+            sessionTitle: root.currentSessionTitle()
+            sessionSummary: root.sessionSummary()
+            currentModel: root.currentModel
+            glassPanelColor: root.glassPanelColor
+            glassPanelHoverColor: root.glassPanelHoverColor
+            glassPanelPressedColor: root.glassPanelPressedColor
+            glassBorderColor: root.glassBorderColor
+            onDetailsToggled: root.multiAiDetailsExpanded = !root.multiAiDetailsExpanded
+            onModeMenuRequested: modeMenu.open()
+            onMoreMenuRequested: moreMenu.open()
         }
 
         Menu {
@@ -659,572 +457,130 @@ Rectangle {
         anchors.fill: parent
         active: false
         sourceComponent: Component {
-            Rectangle {
-                anchors.fill: parent
-                color: Qt.rgba(20, 28, 40, 0.22)
-
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: modelSettingsLoader.active = false
+            AgentModelControlBar {
+                currentModel: root.currentModel
+                availableModels: root.availableModels
+                modelRefreshBusy: root.modelRefreshBusy
+                apiProviderBusy: root.apiProviderBusy
+                apiProviderStatus: root.apiProviderStatus
+                thinkingEnabled: root.thinkingEnabled
+                currentModelSupportsThinking: root.currentModelSupportsThinking
+                onCloseRequested: modelSettingsLoader.active = false
+                onThinkingToggled: function(checked) {
+                    if (root.agentController) {
+                        root.agentController.thinkingEnabled = checked
+                    }
                 }
-
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: Math.min(460, Math.max(0, root.width - 32))
-                    height: Math.min(560, Math.max(0, root.height - 32))
-                    radius: 14
-                    clip: true
-                    color: Qt.rgba(0.96, 0.98, 1.0, 0.84)
-                    border.color: Qt.rgba(1, 1, 1, 0.48)
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 16
-                        spacing: 12
-
-                        Label {
-                            text: "选择模型"
-                            font.pixelSize: 16
-                            font.bold: true
-                            color: "#2a3649"
-                        }
-
-                        Label {
-                            Layout.fillWidth: true
-                            text: root.currentModel.length > 0 ? ("当前使用: " + root.currentModel) : "当前模型尚未加载"
-                            color: "#6a7b92"
-                            font.pixelSize: 12
-                            wrapMode: Text.Wrap
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            visible: root.currentModelSupportsThinking
-                            spacing: 10
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: "Think"
-                                color: "#2a3649"
-                                font.pixelSize: 13
-                                font.bold: true
-                            }
-
-                            Switch {
-                                id: thinkingSwitch
-                                checked: root.thinkingEnabled
-                                text: checked ? "开" : "关"
-                                onToggled: {
-                                    if (root.agentController) {
-                                        root.agentController.thinkingEnabled = checked
-                                    }
-                                }
-                            }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: apiFormColumn.implicitHeight + 18
-                            radius: 10
-                            color: Qt.rgba(1, 1, 1, 0.22)
-                            border.width: 1
-                            border.color: Qt.rgba(1, 1, 1, 0.30)
-
-                            ColumnLayout {
-                                id: apiFormColumn
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.top: parent.top
-                                anchors.margins: 9
-                                spacing: 7
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 8
-
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: "API 接入"
-                                        color: "#2a3649"
-                                        font.pixelSize: 13
-                                        font.bold: true
-                                    }
-
-                                    Label {
-                                        text: root.apiProviderBusy ? "解析中" : ""
-                                        color: "#6a7b92"
-                                        font.pixelSize: 11
-                                        visible: root.apiProviderBusy
-                                    }
-                                }
-
-                                TextField {
-                                    id: apiProviderNameField
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 30
-                                    placeholderText: "名称，例如 gpt"
-                                    text: "gpt"
-                                    font.pixelSize: 12
-                                    selectByMouse: true
-                                }
-
-                                TextField {
-                                    id: apiBaseUrlField
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 30
-                                    placeholderText: "API 地址，例如 https://api.openai.com/v1"
-                                    text: "https://api.openai.com/v1"
-                                    font.pixelSize: 12
-                                    selectByMouse: true
-                                }
-
-                                TextField {
-                                    id: apiKeyField
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 30
-                                    placeholderText: "API Key"
-                                    echoMode: TextInput.Password
-                                    font.pixelSize: 12
-                                    selectByMouse: true
-                                }
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 8
-
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: root.apiProviderStatus
-                                        color: root.apiProviderStatus.indexOf("已接入") >= 0 ? "#4d7f5c" : "#6a7b92"
-                                        font.pixelSize: 11
-                                        elide: Text.ElideRight
-                                    }
-
-                                    GlassButton {
-                                        Layout.preferredWidth: 90
-                                        Layout.preferredHeight: 30
-                                        text: root.apiProviderBusy ? "解析中" : "接入"
-                                        textPixelSize: 12
-                                        cornerRadius: 8
-                                        enabled: !root.apiProviderBusy
-                                        normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
-                                        hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
-                                        pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
-                                        onClicked: {
-                                            if (root.agentController) {
-                                                root.agentController.registerApiProvider(
-                                                    apiProviderNameField.text,
-                                                    apiBaseUrlField.text,
-                                                    apiKeyField.text)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        ListView {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            clip: true
-                            model: root.availableModels
-                            spacing: 6
-
-                            delegate: Rectangle {
-                                width: ListView.view.width
-                                height: 48
-                                radius: 8
-                                color: {
-                                    const fullName = (modelData.model_type || "") + ":" + (modelData.model_name || "")
-                                    if (fullName === root.currentModel) {
-                                        return Qt.rgba(0.54, 0.70, 0.93, 0.18)
-                                    }
-                                    return modelMouseArea.containsMouse ? Qt.rgba(0.54, 0.70, 0.93, 0.10) : "transparent"
-                                }
-                                border.color: Qt.rgba(1, 1, 1, 0.32)
-
-                                MouseArea {
-                                    id: modelMouseArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (root.agentController && modelData.model_type && modelData.model_name) {
-                                            root.agentController.switchModel(modelData.model_type, modelData.model_name)
-                                        }
-                                        modelSettingsLoader.active = false
-                                    }
-                                }
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 12
-                                    anchors.rightMargin: 12
-                                    spacing: 8
-
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 2
-
-                                        Label {
-                                            Layout.fillWidth: true
-                                            text: modelData.display_name || modelData.model_name || ""
-                                            color: "#2a3649"
-                                            font.pixelSize: 14
-                                            font.bold: true
-                                            elide: Text.ElideRight
-                                        }
-
-                                        Label {
-                                            Layout.fillWidth: true
-                                            text: (modelData.model_type || "") + (modelData.supports_thinking ? " · Think" : "")
-                                            color: "#6a7b92"
-                                            font.pixelSize: 11
-                                            elide: Text.ElideRight
-                                        }
-                                    }
-
-                                    GlassButton {
-                                        Layout.preferredWidth: 54
-                                        Layout.preferredHeight: 28
-                                        visible: (modelData.model_type || "").indexOf("api-") === 0
-                                        text: "删除"
-                                        textPixelSize: 12
-                                        cornerRadius: 7
-                                        normalColor: Qt.rgba(0.82, 0.38, 0.38, 0.16)
-                                        hoverColor: Qt.rgba(0.82, 0.38, 0.38, 0.26)
-                                        pressedColor: Qt.rgba(0.82, 0.38, 0.38, 0.34)
-                                        onClicked: {
-                                            if (root.agentController && modelData.model_type) {
-                                                root.agentController.deleteApiProvider(modelData.model_type)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 72
-                            radius: 10
-                            color: Qt.rgba(1, 1, 1, 0.24)
-                            border.color: Qt.rgba(1, 1, 1, 0.30)
-                            visible: root.availableModels.length === 0
-
-                            Label {
-                                anchors.centerIn: parent
-                                width: parent.width - 24
-                                text: root.modelRefreshBusy ? "正在刷新模型列表..." : "当前没有可用模型。请刷新模型列表，或检查 AIServer / AIOrchestrator 配置。"
-                                color: "#6a7b92"
-                                font.pixelSize: 12
-                                wrapMode: Text.Wrap
-                                horizontalAlignment: Text.AlignHCenter
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-
-                            Item { Layout.fillWidth: true }
-
-                            GlassButton {
-                                Layout.preferredWidth: 96
-                                Layout.preferredHeight: 32
-                                text: "刷新模型"
-                                textPixelSize: 13
-                                cornerRadius: 8
-                                enabled: !root.modelRefreshBusy
-                                normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
-                                hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
-                                pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
-                                onClicked: {
-                                    if (root.agentController) {
-                                        root.agentController.refreshModelList()
-                                    }
-                                }
-                            }
-                        }
+                onApiProviderRegistered: function(name, baseUrl, apiKey) {
+                    if (root.agentController) {
+                        root.agentController.registerApiProvider(name, baseUrl, apiKey)
+                    }
+                }
+                onModelSelected: function(modelType, modelName) {
+                    if (root.agentController && modelType.length > 0 && modelName.length > 0) {
+                        root.agentController.switchModel(modelType, modelName)
+                    }
+                }
+                onModelDeleted: function(modelType) {
+                    if (root.agentController && modelType.length > 0) {
+                        root.agentController.deleteApiProvider(modelType)
+                    }
+                }
+                onRefreshModelsRequested: {
+                    if (root.agentController) {
+                        root.agentController.refreshModelList()
                     }
                 }
             }
         }
     }
 
-    Loader {
+    AgentStatusOverlay {
         id: knowledgeBaseLoader
         anchors.fill: parent
         active: false
-        sourceComponent: Component {
-            Rectangle {
-                anchors.fill: parent
-                color: Qt.rgba(20, 28, 40, 0.22)
-
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: knowledgeBaseLoader.active = false
-                }
-
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: Math.min(560, Math.max(0, root.width - 32))
-                    height: Math.min(640, Math.max(0, root.height - 32))
-                    radius: 14
-                    clip: true
-                    color: Qt.rgba(0.96, 0.98, 1.0, 0.84)
-                    border.color: Qt.rgba(1, 1, 1, 0.48)
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 16
-                        spacing: 12
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: "知识库"
-                                font.pixelSize: 16
-                                font.bold: true
-                                color: "#2a3649"
-                            }
-
-                            GlassButton {
-                                Layout.preferredWidth: 72
-                                Layout.preferredHeight: 30
-                                text: "关闭"
-                                textPixelSize: 12
-                                cornerRadius: 8
-                                normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.24)
-                                onClicked: knowledgeBaseLoader.active = false
-                            }
-                        }
-
-                        KnowledgeBasePane {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            agentController: root.agentController
-                            kbList: root.knowledgeBases
-                            searchResult: root.knowledgeSearchResult
-                            busy: root.knowledgeBusy
-                            statusText: root.knowledgeStatusText
-                            errorText: root.knowledgeError
-                            onReloadRequested: {
-                                if (root.agentController) {
-                                    root.agentController.listKnowledgeBases()
-                                }
-                            }
-                        }
+        title: "知识库"
+        maxPanelWidth: 560
+        maxPanelHeight: 640
+        onCloseRequested: active = false
+        contentComponent: Component {
+            KnowledgeBasePane {
+                agentController: root.agentController
+                kbList: root.knowledgeBases
+                searchResult: root.knowledgeSearchResult
+                busy: root.knowledgeBusy
+                statusText: root.knowledgeStatusText
+                errorText: root.knowledgeError
+                onReloadRequested: {
+                    if (root.agentController) {
+                        root.agentController.listKnowledgeBases()
                     }
                 }
             }
         }
     }
 
-    Loader {
+    AgentStatusOverlay {
         id: traceLoader
         anchors.fill: parent
         active: false
-        sourceComponent: Component {
-            Rectangle {
-                anchors.fill: parent
-                color: Qt.rgba(20, 28, 40, 0.22)
-
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: traceLoader.active = false
-                }
-
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: Math.min(720, Math.max(0, root.width - 32))
-                    height: Math.min(660, Math.max(0, root.height - 32))
-                    radius: 14
-                    clip: true
-                    color: Qt.rgba(0.96, 0.98, 1.0, 0.84)
-                    border.color: Qt.rgba(1, 1, 1, 0.48)
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 16
-                        spacing: 12
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: "AI Agent 轨迹"
-                                font.pixelSize: 16
-                                font.bold: true
-                                color: "#2a3649"
-                            }
-
-                            GlassButton {
-                                Layout.preferredWidth: 72
-                                Layout.preferredHeight: 30
-                                text: "关闭"
-                                textPixelSize: 12
-                                cornerRadius: 8
-                                normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.24)
-                                onClicked: traceLoader.active = false
-                            }
-                        }
-
-                        AgentTracePane {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            traceId: root.currentTraceId
-                            skill: root.currentSkill
-                            feedbackSummary: root.currentFeedbackSummary
-                            observations: root.traceObservations
-                            events: root.traceEvents
-                        }
-                    }
-                }
+        title: "AI Agent 轨迹"
+        maxPanelWidth: 720
+        maxPanelHeight: 660
+        onCloseRequested: active = false
+        contentComponent: Component {
+            AgentTracePane {
+                traceId: root.currentTraceId
+                skill: root.currentSkill
+                feedbackSummary: root.currentFeedbackSummary
+                observations: root.traceObservations
+                events: root.traceEvents
             }
         }
     }
 
-    Loader {
+    AgentStatusOverlay {
         id: memoryLoader
         anchors.fill: parent
         active: false
-        sourceComponent: Component {
-            Rectangle {
-                anchors.fill: parent
-                color: Qt.rgba(20, 28, 40, 0.22)
-
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: memoryLoader.active = false
-                }
-
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: Math.min(620, Math.max(0, root.width - 32))
-                    height: Math.min(640, Math.max(0, root.height - 32))
-                    radius: 14
-                    clip: true
-                    color: Qt.rgba(0.96, 0.98, 1.0, 0.84)
-                    border.color: Qt.rgba(1, 1, 1, 0.48)
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 16
-                        spacing: 12
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: "AI 记忆"
-                                font.pixelSize: 16
-                                font.bold: true
-                                color: "#2a3649"
-                            }
-
-                            GlassButton {
-                                Layout.preferredWidth: 72
-                                Layout.preferredHeight: 30
-                                text: "关闭"
-                                textPixelSize: 12
-                                cornerRadius: 8
-                                normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.24)
-                                onClicked: memoryLoader.active = false
-                            }
-                        }
-
-                        AgentMemoryPane {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            agentController: root.agentController
-                            memories: root.memories
-                            busy: root.memoryBusy
-                            statusText: root.memoryStatusText
-                            errorText: root.memoryError
-                            onReloadRequested: {
-                                if (root.agentController) {
-                                    root.agentController.listMemories()
-                                }
-                            }
-                        }
+        title: "AI 记忆"
+        maxPanelWidth: 620
+        maxPanelHeight: 640
+        onCloseRequested: active = false
+        contentComponent: Component {
+            AgentMemoryPane {
+                agentController: root.agentController
+                memories: root.memories
+                busy: root.memoryBusy
+                statusText: root.memoryStatusText
+                errorText: root.memoryError
+                onReloadRequested: {
+                    if (root.agentController) {
+                        root.agentController.listMemories()
                     }
                 }
             }
         }
     }
 
-    Loader {
+    AgentStatusOverlay {
         id: taskLoader
         anchors.fill: parent
         active: false
-        sourceComponent: Component {
-            Rectangle {
-                anchors.fill: parent
-                color: Qt.rgba(20, 28, 40, 0.22)
-
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: taskLoader.active = false
-                }
-
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: Math.min(660, Math.max(0, root.width - 32))
-                    height: Math.min(640, Math.max(0, root.height - 32))
-                    radius: 14
-                    clip: true
-                    color: Qt.rgba(0.96, 0.98, 1.0, 0.84)
-                    border.color: Qt.rgba(1, 1, 1, 0.48)
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 16
-                        spacing: 12
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: "AI 任务"
-                                font.pixelSize: 16
-                                font.bold: true
-                                color: "#2a3649"
-                            }
-
-                            GlassButton {
-                                Layout.preferredWidth: 72
-                                Layout.preferredHeight: 30
-                                text: "关闭"
-                                textPixelSize: 12
-                                cornerRadius: 8
-                                normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.24)
-                                onClicked: taskLoader.active = false
-                            }
-                        }
-
-                        AgentTaskPane {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            agentController: root.agentController
-                            tasks: root.agentTasks
-                            busy: root.agentTaskBusy
-                            statusText: root.agentTaskStatusText
-                            errorText: root.agentTaskError
-                            onReloadRequested: {
-                                if (root.agentController) {
-                                    root.agentController.listAgentTasks()
-                                }
-                            }
-                        }
+        title: "AI 任务"
+        maxPanelWidth: 660
+        maxPanelHeight: 640
+        onCloseRequested: active = false
+        contentComponent: Component {
+            AgentTaskPane {
+                agentController: root.agentController
+                tasks: root.agentTasks
+                busy: root.agentTaskBusy
+                statusText: root.agentTaskStatusText
+                errorText: root.agentTaskError
+                onReloadRequested: {
+                    if (root.agentController) {
+                        root.agentController.listAgentTasks()
                     }
                 }
             }

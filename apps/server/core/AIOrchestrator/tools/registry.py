@@ -1,16 +1,18 @@
 """
 工具注册表 — 注册所有可用工具（含 MCP）
 """
+
 import asyncio
-import structlog
 from typing import Optional
+
+import structlog
 from langchain_core.tools import BaseTool
 
+from .calculator_tool import CalculatorTool
 from .duckduckgo_tool import DuckDuckGoSearchTool
 from .knowledge_base_tool import KnowledgeBaseTool
-from .calculator_tool import CalculatorTool
-from .translator_tool import TranslatorTool
 from .mcp_bridge import MCPBridge
+from .translator_tool import TranslatorTool
 
 logger = structlog.get_logger()
 
@@ -18,9 +20,10 @@ logger = structlog.get_logger()
 class ToolRegistry:
     """
     LangChain 工具注册表（单例）
-    
+
     注册内置工具和 MCP 工具，提供统一的工具查询接口。
     """
+
     _instance: Optional["ToolRegistry"] = None
 
     def __init__(self):
@@ -65,13 +68,14 @@ class ToolRegistry:
 
         try:
             from config import settings
-            mcp_config = getattr(settings, 'mcp', None)
+
+            mcp_config = getattr(settings, "mcp", None)
             if mcp_config is None:
                 logger.info("mcp.not_configured")
                 return
 
             # 支持 Pydantic 模型或 dict
-            if hasattr(mcp_config, 'model_dump'):
+            if hasattr(mcp_config, "model_dump"):
                 mcp_dict = mcp_config.model_dump()
             elif isinstance(mcp_config, dict):
                 mcp_dict = mcp_config

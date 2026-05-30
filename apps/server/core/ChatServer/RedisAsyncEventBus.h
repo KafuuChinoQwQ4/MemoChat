@@ -2,10 +2,14 @@
 
 #include "IAsyncEventBus.h"
 
-class RedisAsyncEventBus : public IAsyncEventBus {
+class RedisAsyncEventBus : public IAsyncEventBus
+{
 public:
-    bool Publish(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error = nullptr) override;
-    bool ConsumeOnce(const std::vector<std::string>& topics, AsyncConsumedEvent& event, std::string* error = nullptr) override;
+    bool
+    Publish(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error = nullptr) override;
+    bool ConsumeOnce(const std::vector<std::string>& topics,
+                     AsyncConsumedEvent& event,
+                     std::string* error = nullptr) override;
     void AckLastConsumed() override;
     void NackLastConsumed(const std::string& error) override;
 

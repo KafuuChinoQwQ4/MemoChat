@@ -20,24 +20,23 @@ class MessagePayloadService
 {
 public:
     static qint64 normalizeEpochMs(qint64 value, bool useNowWhenEmpty = false);
-    static QString extractForwardMetaJson(const QJsonValue &value);
-    static QString resolveMessageState(const QString &content,
+    static QString extractForwardMetaJson(const QJsonValue& value);
+    static QString resolveMessageState(const QString& content,
                                        qint64 editedAtMs,
                                        qint64 deletedAtMs,
-                                       const QString &msgType = QString());
-    static MessageUpdateFields parseMessageUpdateFields(const QJsonObject &payload,
-                                                        const QString &event = QString(),
+                                       const QString& msgType = QString());
+    static MessageUpdateFields parseMessageUpdateFields(const QJsonObject& payload,
+                                                        const QString& event = QString(),
                                                         bool allowEmptyContent = false);
-    static std::shared_ptr<TextChatData> buildPrivateHistoryMessage(const QJsonObject &obj);
-    static std::shared_ptr<TextChatData> buildPrivateForwardedMessage(const QJsonObject &payload,
-                                                                      const QJsonObject &msgObj,
-                                                                      int fromUid);
-    static std::shared_ptr<TextChatData> buildGroupAckMessage(const QJsonObject &payload,
-                                                              const QJsonObject &msgObj,
+    static std::shared_ptr<TextChatData> buildPrivateHistoryMessage(const QJsonObject& obj);
+    static std::shared_ptr<TextChatData>
+    buildPrivateForwardedMessage(const QJsonObject& payload, const QJsonObject& msgObj, int fromUid);
+    static std::shared_ptr<TextChatData> buildGroupAckMessage(const QJsonObject& payload,
+                                                              const QJsonObject& msgObj,
                                                               int fromUid,
-                                                              const QString &fromName,
-                                                              const QString &fromIcon);
-    static std::shared_ptr<TextChatData> buildGroupIncomingMessage(const GroupChatMsg &msg);
+                                                              const QString& fromName,
+                                                              const QString& fromIcon);
+    static std::shared_ptr<TextChatData> buildGroupIncomingMessage(const GroupChatMsg& msg);
 };
 
 #endif // MESSAGEPAYLOADSERVICE_H

@@ -8,13 +8,16 @@
 #include <memory>
 #include <string>
 
-namespace spdlog {
+namespace spdlog
+{
 class logger;
 }
 
-namespace memolog {
+namespace memolog
+{
 
-class Logger {
+class Logger
+{
 public:
     static void Init(const std::string& service_name, const LogConfig& cfg);
     static void Shutdown();
@@ -34,27 +37,27 @@ private:
 
 spdlog::level::level_enum ParseLevel(const std::string& level);
 
-inline void LogDebug(const std::string& event,
-                     const std::string& message,
-                     const std::map<std::string, std::string>& fields = {}) {
+inline void
+LogDebug(const std::string& event, const std::string& message, const std::map<std::string, std::string>& fields = {})
+{
     Logger::Log(spdlog::level::debug, event, message, fields);
 }
 
-inline void LogInfo(const std::string& event,
-                    const std::string& message,
-                    const std::map<std::string, std::string>& fields = {}) {
+inline void
+LogInfo(const std::string& event, const std::string& message, const std::map<std::string, std::string>& fields = {})
+{
     Logger::Log(spdlog::level::info, event, message, fields);
 }
 
-inline void LogWarn(const std::string& event,
-                    const std::string& message,
-                    const std::map<std::string, std::string>& fields = {}) {
+inline void
+LogWarn(const std::string& event, const std::string& message, const std::map<std::string, std::string>& fields = {})
+{
     Logger::Log(spdlog::level::warn, event, message, fields);
 }
 
-inline void LogError(const std::string& event,
-                     const std::string& message,
-                     const std::map<std::string, std::string>& fields = {}) {
+inline void
+LogError(const std::string& event, const std::string& message, const std::map<std::string, std::string>& fields = {})
+{
     Logger::Log(spdlog::level::err, event, message, fields);
 }
 

@@ -8,9 +8,11 @@
 #include <string>
 #include <unordered_map>
 
-namespace memochat::r18 {
+namespace memochat::r18
+{
 
-struct R18SourceRecord {
+struct R18SourceRecord
+{
     std::string id;
     std::string name;
     std::string version;
@@ -24,12 +26,14 @@ struct R18SourceRecord {
     std::string message;
 };
 
-struct R18ImagePayload {
+struct R18ImagePayload
+{
     std::string content_type = "application/octet-stream";
     std::string body;
 };
 
-class R18SourceService {
+class R18SourceService
+{
 public:
     static R18SourceService& Instance();
 
@@ -40,19 +44,12 @@ public:
                               const std::string& binary,
                               std::string* error);
 
-    memochat::json::JsonValue Search(const std::string& source_id,
-                                     const std::string& keyword,
-                                     int page,
-                                     int uid,
-                                     const std::string& token);
-    memochat::json::JsonValue Detail(const std::string& source_id,
-                                     const std::string& comic_id,
-                                     int uid,
-                                     const std::string& token);
-    memochat::json::JsonValue Pages(const std::string& source_id,
-                                    const std::string& chapter_id,
-                                    int uid,
-                                    const std::string& token);
+    memochat::json::JsonValue
+    Search(const std::string& source_id, const std::string& keyword, int page, int uid, const std::string& token);
+    memochat::json::JsonValue
+    Detail(const std::string& source_id, const std::string& comic_id, int uid, const std::string& token);
+    memochat::json::JsonValue
+    Pages(const std::string& source_id, const std::string& chapter_id, int uid, const std::string& token);
     R18ImagePayload FetchImage(const std::string& source_id, const std::string& image_url);
 
 private:

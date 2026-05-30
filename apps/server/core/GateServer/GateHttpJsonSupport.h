@@ -7,10 +7,14 @@
 
 class HttpConnection;
 
-class GateHttpJsonSupport {
+class GateHttpJsonSupport
+{
 public:
-    static bool ParseJsonBody(std::shared_ptr<HttpConnection> connection, memochat::json::JsonValue& root, memochat::json::JsonValue& src_root);
+    static bool ParseJsonBody(std::shared_ptr<HttpConnection> connection,
+                              memochat::json::JsonValue& root,
+                              memochat::json::JsonValue& src_root);
     static bool HandleJsonPost(
         std::shared_ptr<HttpConnection> connection,
-        const std::function<bool(const memochat::json::JsonValue&, memochat::json::JsonValue&, const std::string&)>& fn);
+        const std::function<bool(const memochat::json::JsonValue&, memochat::json::JsonValue&, const std::string&)>&
+            fn);
 };

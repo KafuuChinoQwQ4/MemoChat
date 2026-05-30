@@ -3,19 +3,23 @@
 #include <QTimer>
 #include <QTcpSocket>
 
+#include "ChatFrameCodec.h"
 #include "IChatTransport.h"
 #include "singleton.h"
 
-class TcpMgr: public IChatTransport, public Singleton<TcpMgr>,
-        public std::enable_shared_from_this<TcpMgr>
+class TcpMgr
+    : public IChatTransport
+    , public Singleton<TcpMgr>
+    , public std::enable_shared_from_this<TcpMgr>
 {
     Q_OBJECT
 public:
-   ~ TcpMgr() override;
+    ~TcpMgr() override;
     void CloseConnection() override;
     bool isConnected() const override;
     void connectToServer(ServerInfo serverInfo) override;
     void slot_send_data(ReqId reqId, QByteArray data) override;
+
 private:
     friend class Singleton<TcpMgr>;
     TcpMgr();
@@ -23,11 +27,8 @@ private:
     QTcpSocket _socket;
     QString _host;
     uint16_t _port;
-    QByteArray _buffer;
-    bool _b_recv_pending;
+    ChatFrameParser _frame_parser;
     bool _connecting;
-    quint16 _message_id;
-    quint16 _message_len;
     QTimer _connect_timeout_timer;
 signals:
     void sig_send_data(ReqId reqId, QByteArray data);

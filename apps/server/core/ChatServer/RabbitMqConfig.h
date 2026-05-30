@@ -2,7 +2,8 @@
 
 #include <string>
 
-struct RabbitMqConfig {
+struct RabbitMqConfig
+{
     std::string host;
     int port = 5672;
     std::string username;
@@ -14,7 +15,10 @@ struct RabbitMqConfig {
     int retry_delay_ms = 5000;
     int max_retries = 5;
 
-    bool valid() const { return !host.empty() && port > 0; }
+    bool valid() const
+    {
+        return !host.empty() && port > 0;
+    }
 };
 
 RabbitMqConfig LoadRabbitMqConfig();

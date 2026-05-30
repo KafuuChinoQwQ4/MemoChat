@@ -3,9 +3,11 @@
 #include <functional>
 #include <string>
 
-namespace memolog {
+namespace memolog
+{
 
-struct LogConfig {
+struct LogConfig
+{
     std::string level = "info";
     std::string dir = "./logs";
     std::string format = "json";
@@ -16,8 +18,7 @@ struct LogConfig {
     bool redact = true;
     std::string env = "local";
 
-    static LogConfig FromGetter(
-        const std::function<std::string(const std::string&, const std::string&)>& getter);
+    static LogConfig FromGetter(const std::function<std::string(const std::string&, const std::string&)>& getter);
 };
 
 } // namespace memolog

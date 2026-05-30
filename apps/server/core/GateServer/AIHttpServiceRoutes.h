@@ -4,7 +4,8 @@
 class LogicSystem;
 class ChatTransportContext;
 
-class AIHttpServiceRoutes {
+class AIHttpServiceRoutes
+{
 public:
     static void RegisterRoutes(LogicSystem& logic);
 };

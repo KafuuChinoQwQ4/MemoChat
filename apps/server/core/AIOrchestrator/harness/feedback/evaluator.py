@@ -19,9 +19,4 @@ class FeedbackEvaluator:
         elif skill_name in {"knowledge_copilot", "research_assistant", "graph_recommender"}:
             confidence = "low"
 
-        return (
-            f"skill={skill_name}; "
-            f"tools={tool_names}; "
-            f"response_chars={response_size}; "
-            f"confidence={confidence}"
-        )
+        return f"skill={skill_name}; tools={tool_names}; response_chars={response_size}; confidence={confidence}"

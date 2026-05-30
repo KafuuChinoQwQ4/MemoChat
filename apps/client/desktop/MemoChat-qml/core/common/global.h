@@ -13,16 +13,16 @@
 
 extern std::function<void(QWidget*)> repolish;
 
-
 extern std::function<QString(QString)> xorString;
 
-enum ReqId{
+enum ReqId
+{
     ID_GET_VARIFY_CODE = 1001,
     ID_REG_USER = 1002,
     ID_RESET_PWD = 1003,
     ID_LOGIN_USER = 1004,
     ID_CHAT_LOGIN = 1005,
-    ID_CHAT_LOGIN_RSP= 1006,
+    ID_CHAT_LOGIN_RSP = 1006,
     ID_SEARCH_USER_REQ = 1007,
     ID_SEARCH_USER_RSP = 1008,
     ID_ADD_FRIEND_REQ = 1009,
@@ -33,8 +33,8 @@ enum ReqId{
     ID_NOTIFY_AUTH_FRIEND_REQ = 1015,
     ID_DELETE_FRIEND_REQ = 1016,
     ID_DELETE_FRIEND_RSP = 1020,
-    ID_TEXT_CHAT_MSG_REQ  = 1017,
-    ID_TEXT_CHAT_MSG_RSP  = 1018,
+    ID_TEXT_CHAT_MSG_REQ = 1017,
+    ID_TEXT_CHAT_MSG_RSP = 1018,
     ID_NOTIFY_TEXT_CHAT_MSG_REQ = 1019,
     ID_NOTIFY_OFF_LINE_REQ = 1021,
     ID_HEART_BEAT_REQ = 1023,
@@ -138,7 +138,8 @@ enum ReqId{
     ID_AI_MODEL_API_DELETE = 1219,
 };
 
-enum ErrorCodes{
+enum ErrorCodes
+{
     SUCCESS = 0,
     ERR_JSON = 1,
     ERR_NETWORK = 2,
@@ -149,7 +150,8 @@ enum ErrorCodes{
     ERR_PROTOCOL_VERSION = 1098,
 };
 
-enum Modules{
+enum Modules
+{
     REGISTERMOD = 0,
     RESETMOD = 1,
     LOGINMOD = 2,
@@ -158,7 +160,8 @@ enum Modules{
     MOMENTSMOD = 5,
 };
 
-enum TipErr{
+enum TipErr
+{
     TIP_SUCCESS = 0,
     TIP_EMAIL_ERR = 1,
     TIP_PWD_ERR = 2,
@@ -168,23 +171,25 @@ enum TipErr{
     TIP_USER_ERR = 6
 };
 
-enum ClickLbState{
+enum ClickLbState
+{
     Normal = 0,
     Selected = 1
 };
-
 
 extern QString gate_url_prefix;
 extern QString gate_media_url_prefix;
 
 #define MEMOCHAT_CLIENT_VERSION "3.0.0"
 
-enum class ChatTransportKind {
+enum class ChatTransportKind
+{
     Tcp = 0,
     Quic = 1
 };
 
-struct ChatEndpoint {
+struct ChatEndpoint
+{
     ChatTransportKind transport = ChatTransportKind::Tcp;
     QString host;
     QString port;
@@ -192,8 +197,8 @@ struct ChatEndpoint {
     int priority = 0;
 };
 
-
-struct ServerInfo{
+struct ServerInfo
+{
     QString Host;
     QString Port;
     QString Token;
@@ -211,27 +216,27 @@ struct ServerInfo{
 
 enum class ChatRole
 {
-
     Self,
     Other
 };
 
-struct MsgInfo{
-    QString msgFlag;//"text,image,file"
+struct MsgInfo
+{
+    QString msgFlag; //"text,image,file"
     QString content;
     QPixmap pixmap;
 };
 
-
-enum ChatUIMode{
+enum ChatUIMode
+{
     SearchMode,
     ChatMode,
     ContactMode,
     SettingsMode,
 };
 
-
-enum ListItemType{
+enum ListItemType
+{
     CHAT_USER_ITEM,
     CONTACT_USER_ITEM,
     SEARCH_USER_ITEM,
@@ -242,36 +247,22 @@ enum ListItemType{
     APPLY_FRIEND_ITEM,
 };
 
-
 const int MIN_APPLY_LABEL_ED_LEN = 40;
 
 const QString add_prefix = "添加标签 ";
 
-const int  tip_offset = 5;
+const int tip_offset = 5;
 
+const std::vector<QString> strs = {"hello world !",
+                                   "nice to meet u",
+                                   "New year，new life",
+                                   "You have to love yourself",
+                                   "My love is written in the wind ever since the whole world is you"};
 
-const std::vector<QString>  strs ={"hello world !",
-                             "nice to meet u",
-                             "New year，new life",
-                            "You have to love yourself",
-                            "My love is written in the wind ever since the whole world is you"};
+const std::vector<QString> heads = {":/res/head_1.png"};
 
-const std::vector<QString> heads = {
-    ":/res/head_1.png"
-};
-
-const std::vector<QString> names = {
-    "HanMeiMei",
-    "Lily",
-    "Ben",
-    "Androw",
-    "Max",
-    "Summer",
-    "Candy",
-    "Hunter"
-};
+const std::vector<QString> names = {"HanMeiMei", "Lily", "Ben", "Androw", "Max", "Summer", "Candy", "Hunter"};
 
 const int CHAT_COUNT_PER_PAGE = 13;
-
 
 #endif // GLOBAL_H

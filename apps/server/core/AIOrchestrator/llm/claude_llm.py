@@ -1,9 +1,11 @@
 """
 Claude LLM 适配器 — 支持 Claude 3.5 Sonnet 等
 """
-import httpx
+
 import json
 from typing import AsyncIterator
+
+import httpx
 
 from .base import BaseLLM, LLMMessage, LLMResponse, LLMStreamChunk, LLMUsage
 
@@ -11,7 +13,12 @@ from .base import BaseLLM, LLMMessage, LLMResponse, LLMStreamChunk, LLMUsage
 class ClaudeLLM(BaseLLM):
     _instance: "ClaudeLLM | None" = None
 
-    def __init__(self, api_key: str, base_url: str = "https://api.anthropic.com/v1", model_name: str = "claude-3-5-sonnet-20241022"):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = "https://api.anthropic.com/v1",
+        model_name: str = "claude-3-5-sonnet-20241022",
+    ):
         super().__init__(model_name)
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
@@ -140,4 +147,5 @@ class ClaudeLLM(BaseLLM):
     def close(self):
         if self._client and not self._client.is_closed:
             import asyncio
+
             asyncio.create_task(self._client.aclose())

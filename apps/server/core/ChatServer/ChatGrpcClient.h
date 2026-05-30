@@ -14,60 +14,71 @@
 #include "data.h"
 #include "json/GlazeCompat.h"
 
-
-
 using grpc::Channel;
-using grpc::Status;
 using grpc::ClientContext;
+using grpc::Status;
 
 using message::AddFriendReq;
 using message::AddFriendRsp;
 using message::AuthFriendReq;
 using message::AuthFriendRsp;
-using message::GetChatServerRsp;
-using message::LoginRsp;
-using message::LoginReq;
 using message::ChatService;
-using message::TextChatMsgReq;
-using message::TextChatMsgRsp;
-using message::TextChatData;
-using message::KickUserReq;
-using message::KickUserRsp;
-using message::GroupMessageNotifyReq;
-using message::GroupMessageNotifyRsp;
+using message::GetChatServerRsp;
 using message::GroupEventNotifyReq;
 using message::GroupEventNotifyRsp;
 using message::GroupMemberBatchReq;
 using message::GroupMemberBatchRsp;
+using message::GroupMessageNotifyReq;
+using message::GroupMessageNotifyRsp;
+using message::KickUserReq;
+using message::KickUserRsp;
+using message::LoginReq;
+using message::LoginRsp;
+using message::TextChatData;
+using message::TextChatMsgReq;
+using message::TextChatMsgRsp;
 
-class ChatConPool {
+class ChatConPool
+{
 public:
     ChatConPool(size_t poolSize, std::string host, std::string port)
-        : poolSize_(poolSize), host_(std::move(host)), port_(std::move(port)), b_stop_(false) {
-        for (size_t i = 0; i < poolSize_; ++i) {
-            std::shared_ptr<Channel> channel = grpc::CreateChannel(host_ + ":" + port_,
-                grpc::InsecureChannelCredentials());
+        : poolSize_(poolSize)
+        , host_(std::move(host))
+        , port_(std::move(port))
+        , b_stop_(false)
+    {
+        for (size_t i = 0; i < poolSize_; ++i)
+        {
+            std::shared_ptr<Channel> channel =
+                grpc::CreateChannel(host_ + ":" + port_, grpc::InsecureChannelCredentials());
             connections_.push(ChatService::NewStub(channel));
         }
     }
 
-    ~ChatConPool() {
+    ~ChatConPool()
+    {
         std::lock_guard<std::mutex> lock(mutex_);
         Close();
-        while (!connections_.empty()) {
+        while (!connections_.empty())
+        {
             connections_.pop();
         }
     }
 
-    std::unique_ptr<ChatService::Stub> getConnection() {
+    std::unique_ptr<ChatService::Stub> getConnection()
+    {
         std::unique_lock<std::mutex> lock(mutex_);
-        cond_.wait(lock, [this] {
-            if (b_stop_) {
-                return true;
-            }
-            return !connections_.empty();
-            });
-        if (b_stop_) {
+        cond_.wait(lock,
+                   [this]
+                   {
+                       if (b_stop_)
+                       {
+                           return true;
+                       }
+                       return !connections_.empty();
+                   });
+        if (b_stop_)
+        {
             return nullptr;
         }
         auto context = std::move(connections_.front());
@@ -75,16 +86,19 @@ public:
         return context;
     }
 
-    void returnConnection(std::unique_ptr<ChatService::Stub> context) {
+    void returnConnection(std::unique_ptr<ChatService::Stub> context)
+    {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (b_stop_) {
+        if (b_stop_)
+        {
             return;
         }
         connections_.push(std::move(context));
         cond_.notify_one();
     }
 
-    void Close() {
+    void Close()
+    {
         b_stop_ = true;
         cond_.notify_all();
     }
@@ -102,13 +116,17 @@ private:
 class ChatGrpcClient : public Singleton<ChatGrpcClient>
 {
     friend class Singleton<ChatGrpcClient>;
+
 public:
-    ~ChatGrpcClient() {}
+    ~ChatGrpcClient()
+    {
+    }
 
     AddFriendRsp NotifyAddFriend(std::string server_ip, const AddFriendReq& req);
     AuthFriendRsp NotifyAuthFriend(std::string server_ip, const AuthFriendReq& req);
     bool GetBaseInfo(std::string base_key, int uid, std::shared_ptr<UserInfo>& userinfo);
-    TextChatMsgRsp NotifyTextChatMsg(std::string server_ip, const TextChatMsgReq& req, const memochat::json::JsonValue& rtvalue);
+    TextChatMsgRsp
+    NotifyTextChatMsg(std::string server_ip, const TextChatMsgReq& req, const memochat::json::JsonValue& rtvalue);
     KickUserRsp NotifyKickUser(std::string server_ip, const KickUserReq& req);
     GroupMessageNotifyRsp NotifyGroupMessage(std::string server_ip, const GroupMessageNotifyReq& req);
     GroupEventNotifyRsp NotifyGroupEvent(std::string server_ip, const GroupEventNotifyReq& req);

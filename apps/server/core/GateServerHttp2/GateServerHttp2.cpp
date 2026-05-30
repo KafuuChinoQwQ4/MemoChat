@@ -6,7 +6,8 @@
 #include <iostream>
 #include <cstdlib>
 
-struct GateServerHttp2Ctx {
+struct GateServerHttp2Ctx
+{
     h2o_context_t http2_ctx;
 };
 

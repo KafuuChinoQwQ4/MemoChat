@@ -5,7 +5,8 @@
 #include <QString>
 #include <QVariantMap>
 
-struct ClientTelemetryConfig {
+struct ClientTelemetryConfig
+{
     bool enabled = true;
     QString endpoint = QStringLiteral("http://127.0.0.1:9411/api/v2/spans");
     QString protocol = QStringLiteral("zipkin-json");
@@ -23,14 +24,17 @@ QString clientServiceInstance();
 QString newTraceId();
 QString newRequestId();
 QString newSpanId();
-void applyTraceHeaders(QNetworkRequest &request, QString *traceId = nullptr, QString *requestId = nullptr, QString *spanId = nullptr);
-void exportZipkinSpan(const QString &name,
-                      const QString &kind,
-                      const QString &traceId,
-                      const QString &spanId,
-                      const QString &parentSpanId,
+void applyTraceHeaders(QNetworkRequest& request,
+                       QString* traceId = nullptr,
+                       QString* requestId = nullptr,
+                       QString* spanId = nullptr);
+void exportZipkinSpan(const QString& name,
+                      const QString& kind,
+                      const QString& traceId,
+                      const QString& spanId,
+                      const QString& parentSpanId,
                       qint64 startTimeMs,
                       qint64 durationMs,
-                      const QVariantMap &attributes = QVariantMap());
+                      const QVariantMap& attributes = QVariantMap());
 
 #endif // TELEMETRYUTILS_H

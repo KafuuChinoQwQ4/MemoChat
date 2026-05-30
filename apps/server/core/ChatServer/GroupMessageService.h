@@ -6,7 +6,8 @@
 
 class CSession;
 class LogicSystem;
-class GroupMessageService {
+class GroupMessageService
+{
 public:
     explicit GroupMessageService(LogicSystem& logic);
 
@@ -22,7 +23,8 @@ public:
     void HandleRevokeGroupMessage(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
     void HandleForwardGroupMessage(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
     void HandleGroupReadAck(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
-    void HandleUpdateGroupAnnouncement(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
+    void
+    HandleUpdateGroupAnnouncement(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
     void HandleUpdateGroupIcon(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
     void HandleSetGroupAdmin(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);
     void HandleMuteGroupMember(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data);

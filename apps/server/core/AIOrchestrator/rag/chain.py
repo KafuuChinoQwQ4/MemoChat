@@ -2,20 +2,20 @@
 RAG Chain — 检索增强生成链
 文档上传 → Qdrant 存储 → 检索 → 注入 LLM
 """
-from typing import Any
+
 import uuid
+from typing import Any
 
 import structlog
-from qdrant_client import QdrantClient
-from qdrant_client.http import models as qdrant_models
-from langchain_core.embeddings import Embeddings
+from config import settings
 from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
-
-from config import settings
 from observability.langsmith_instrument import set_run_error, set_run_output, trace_context
+from qdrant_client import QdrantClient
+from qdrant_client.http import models as qdrant_models
 from rag.retrieval import (
     CrossEncoderReranker,
     RetrievalCandidate,
@@ -44,10 +44,12 @@ class QdrantEmbeddings(Embeddings):
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         import asyncio
+
         return asyncio.get_event_loop().run_until_complete(self.aembed_documents(texts))
 
     def embed_query(self, text: str) -> list[float]:
         import asyncio
+
         return asyncio.get_event_loop().run_until_complete(self.aembed_query(text))
 
 
@@ -103,7 +105,9 @@ class RAGChain:
                 set_run_error(run, exc)
                 raise
 
-    async def _add_documents_inner(self, uid: int, kb_id: str, chunks: list[Document], embedder, collection: str, client: QdrantClient, dim: int) -> None:
+    async def _add_documents_inner(
+        self, uid: int, kb_id: str, chunks: list[Document], embedder, collection: str, client: QdrantClient, dim: int
+    ) -> None:
         collection_created = False
         try:
             collections = [c.name for c in client.get_collections().collections]
@@ -216,8 +220,14 @@ class RAGChain:
                 set_run_error(run, exc)
                 raise
 
-    def _collection_candidates(self, collections: list[str], uid: int, prefix: str, metadata_filters: dict[str, Any]) -> list[str]:
-        return [collection for collection in collections if collection_matches_filters(collection, prefix, uid, metadata_filters)]
+    def _collection_candidates(
+        self, collections: list[str], uid: int, prefix: str, metadata_filters: dict[str, Any]
+    ) -> list[str]:
+        return [
+            collection
+            for collection in collections
+            if collection_matches_filters(collection, prefix, uid, metadata_filters)
+        ]
 
     def _search_points(
         self,
@@ -296,9 +306,7 @@ class RAGChain:
             collections = []
 
         user_collections = [
-            collection
-            for collection in collections
-            if collection.startswith(prefix) and f"_{uid}_" in collection
+            collection for collection in collections if collection.startswith(prefix) and f"_{uid}_" in collection
         ]
         user_collections = self._collection_candidates(user_collections, uid, prefix, metadata_filters)
         if not user_collections:
@@ -325,7 +333,9 @@ class RAGChain:
                 if not search_results and query_filter is not None:
                     search_results = self._search_points(client, collection, query_vector, dense_limit, None, threshold)
                 if not search_results and threshold:
-                    search_results = self._search_points(client, collection, query_vector, dense_limit, query_filter, None)
+                    search_results = self._search_points(
+                        client, collection, query_vector, dense_limit, query_filter, None
+                    )
                 if not search_results and query_filter is not None:
                     search_results = self._search_points(client, collection, query_vector, dense_limit, None, None)
 
@@ -413,12 +423,14 @@ class RAGChain:
             kb_id = coll.replace(f"{prefix}{uid}_", "")
             try:
                 info = client.get_collection(collection_name=coll)
-                user_kbs.append({
-                    "kb_id": kb_id,
-                    "name": kb_id,
-                    "chunk_count": info.vectors_count,
-                    "status": "ready",
-                })
+                user_kbs.append(
+                    {
+                        "kb_id": kb_id,
+                        "name": kb_id,
+                        "chunk_count": info.vectors_count,
+                        "status": "ready",
+                    }
+                )
             except Exception:
                 user_kbs.append({"kb_id": kb_id, "name": kb_id, "chunk_count": 0, "status": "error"})
 

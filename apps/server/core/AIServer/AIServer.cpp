@@ -10,7 +10,8 @@
 #include "logging/TelemetryConfig.h"
 #include "logging/Telemetry.h"
 
-void RunServer() {
+void RunServer()
+{
     auto& cfg = ConfigMgr::Inst();
 
     std::string server_address(cfg["AIServer"]["Host"] + ":" + cfg["AIServer"]["Port"]);
@@ -25,27 +26,39 @@ void RunServer() {
 
     boost::asio::io_context io_context;
     boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
-    signals.async_wait([&server, &io_context](const boost::system::error_code& error, int signal_number) {
-        if (!error) {
-            memolog::LogInfo("service.stop", "AIServer shutting down");
-            server->Shutdown();
-            io_context.stop();
-        }
-    });
+    signals.async_wait(
+        [&server, &io_context](const boost::system::error_code& error, int signal_number)
+        {
+            if (!error)
+            {
+                memolog::LogInfo("service.stop", "AIServer shutting down");
+                server->Shutdown();
+                io_context.stop();
+            }
+        });
 
-    std::thread([&io_context]() { io_context.run(); }).detach();
+    std::thread(
+        [&io_context]()
+        {
+            io_context.run();
+        })
+        .detach();
     server->Wait();
 }
 
-int main(int argc, char** argv) {
-    try {
+int main(int argc, char** argv)
+{
+    try
+    {
         auto& cfg = ConfigMgr::Inst();
         auto log_cfg = memolog::LogConfig::FromGetter(
-            [&cfg](const std::string& section, const std::string& key) {
+            [&cfg](const std::string& section, const std::string& key)
+            {
                 return cfg.GetValue(section, key);
             });
         auto telemetry_cfg = memolog::TelemetryConfig::FromGetter(
-            [&cfg](const std::string& section, const std::string& key) {
+            [&cfg](const std::string& section, const std::string& key)
+            {
                 return cfg.GetValue(section, key);
             });
         memolog::Logger::Init("AIServer", log_cfg);
@@ -59,7 +72,8 @@ int main(int argc, char** argv) {
         memolog::Telemetry::Shutdown();
         memolog::Logger::Shutdown();
     }
-    catch (const std::exception& e) {
+    catch (const std::exception& e)
+    {
         memolog::LogError("service.fatal", "AIServer crashed", {{"error", e.what()}});
         memolog::Telemetry::Shutdown();
         memolog::Logger::Shutdown();

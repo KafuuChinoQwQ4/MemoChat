@@ -27,14 +27,8 @@ class AgentInteropService:
         self._remote_tasks: dict[str, RemoteAgentTask] = {}
 
     def local_agent_card(self) -> AgentCard:
-        skills = [
-            self._skill_from_agent_spec(spec)
-            for spec in self._skill_registry.list_specs()
-        ]
-        skills.extend(
-            self._skill_from_flow(flow)
-            for flow in self._handoff_service.list_flows()
-        )
+        skills = [self._skill_from_agent_spec(spec) for spec in self._skill_registry.list_specs()]
+        skills.extend(self._skill_from_flow(flow) for flow in self._handoff_service.list_flows())
         return AgentCard(
             name="MemoChat AI Agent",
             description=(
@@ -47,9 +41,7 @@ class AgentInteropService:
                 "url": self._public_base_url,
             },
             version="0.10.0",
-            additional_interfaces=[
-                {"url": f"{self._public_base_url}/agent/a2a", "transport": "JSONRPC"}
-            ],
+            additional_interfaces=[{"url": f"{self._public_base_url}/agent/a2a", "transport": "JSONRPC"}],
             capabilities=AgentCapabilities(
                 streaming=True,
                 push_notifications=False,

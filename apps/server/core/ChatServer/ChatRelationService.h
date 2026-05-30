@@ -7,7 +7,8 @@
 class CSession;
 class LogicSystem;
 
-class ChatRelationService {
+class ChatRelationService
+{
 public:
     explicit ChatRelationService(LogicSystem& logic);
 

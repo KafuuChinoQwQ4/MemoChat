@@ -2,12 +2,18 @@ import re
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PET_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetWindow.qml"
+PET_WINDOW_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetWindowRuntime.js"
 PET_SCENE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetScene.qml"
 PET_CONTROL_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlWindow.qml"
+PET_CONTROL_HEADER_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlHeader.qml"
+PET_CONTROL_API_PROVIDER_PANEL_QML = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlApiProviderPanel.qml"
+)
 PET_CHAT_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatWindow.qml"
+PET_CHAT_MESSAGE_LIST_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatMessageList.qml"
+PET_CHAT_COMPOSER_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatComposer.qml"
 
 WINDOW_CONTROL_PROPERTIES = (
     "alwaysOnTop",
@@ -64,7 +70,7 @@ def function_body(source, name):
         elif char == "}":
             depth -= 1
         index += 1
-    return source[match.end():index - 1]
+    return source[match.end() : index - 1]
 
 
 class PetWindowControlsContractTests(unittest.TestCase):
@@ -91,17 +97,18 @@ class PetWindowControlsContractTests(unittest.TestCase):
 
     def test_pet_window_apply_flags_uses_additive_control_flags(self):
         window = read_qml(PET_WINDOW_QML)
-        body = function_body(window, "applyWindowFlags")
+        runtime = read_qml(PET_WINDOW_RUNTIME_JS)
+        body = function_body(window, "applyWindowFlags") + "\n" + function_body(runtime, "petWindowFlags")
         self.assertTrue(body, "PetWindow.qml must define applyWindowFlags()")
 
         for token in (
-            "Qt.Window",
-            "Qt.Tool",
-            "Qt.FramelessWindowHint",
-            "Qt.WindowStaysOnTopHint",
-            "Qt.WindowTransparentForInput",
+            "Window",
+            "Tool",
+            "FramelessWindowHint",
+            "WindowStaysOnTopHint",
+            "WindowTransparentForInput",
         ):
-            self.assertIn(token, body)
+            self.assertRegex(body, rf"\b(?:Qt|qt)\.{token}\b")
 
         self.assertIn('Qt.platform.os === "linux"', body)
         self.assertRegex(body, r"\balwaysOnTop\b")
@@ -125,6 +132,7 @@ class PetWindowControlsContractTests(unittest.TestCase):
 
     def test_pet_window_owns_independent_control_window(self):
         window = read_qml(PET_WINDOW_QML)
+        contract = window + "\n" + read_qml(PET_WINDOW_RUNTIME_JS)
 
         self.assertIn("property var petControlWindowRef: null", window)
         self.assertIn("petControlWindowComponent.createObject(null", window)
@@ -134,10 +142,10 @@ class PetWindowControlsContractTests(unittest.TestCase):
         self.assertIn("positionControlWindow()", window)
         self.assertIn("panel.x =", window)
         self.assertIn("panel.y =", window)
-        self.assertIn("rightSpace", window)
-        self.assertIn("leftSpace", window)
-        self.assertIn("rightFits", window)
-        self.assertIn("leftFits", window)
+        self.assertIn("rightSpace", contract)
+        self.assertIn("leftSpace", contract)
+        self.assertIn("rightFits", contract)
+        self.assertIn("leftFits", contract)
         self.assertIn("scaleInteractionActive", window)
         self.assertIn("panelPositionPending", window)
 
@@ -207,8 +215,8 @@ class PetWindowControlsContractTests(unittest.TestCase):
 
         self.assertIn("voiceReplyEnabled", scene)
         self.assertIn("PetAudioPlayer.qml", scene)
-        self.assertIn("petAudioLoader.item.sourceUrl = \"\"", scene)
-        self.assertIn("petAudioLoader.item.playbackState = \"stopped\"", scene)
+        self.assertIn('petAudioLoader.item.sourceUrl = ""', scene)
+        self.assertIn('petAudioLoader.item.playbackState = "stopped"', scene)
         self.assertIn("active: root.voiceReplyEnabled && root.petController", scene)
         self.assertIn("speechBubbleText", scene)
         self.assertIn("speechBubbleTranslation", scene)
@@ -228,13 +236,21 @@ class PetWindowControlsContractTests(unittest.TestCase):
         self.assertNotIn("textToSpeechFallbackEnabled", scene)
 
     def test_pet_control_window_contains_fixed_side_panel_controls_and_api_access(self):
-        panel = read_qml(PET_CONTROL_WINDOW_QML)
+        panel = "\n".join(
+            read_qml(path)
+            for path in (
+                PET_CONTROL_WINDOW_QML,
+                PET_CONTROL_HEADER_QML,
+                PET_CONTROL_API_PROVIDER_PANEL_QML,
+            )
+        )
 
         self.assertIn("Window {", panel)
         self.assertIn("maximumWidth: 320", panel)
         self.assertIn("function openPanel", panel)
         self.assertIn("panelCloseButton", panel)
-        self.assertIn("onClicked: root.hide()", panel)
+        self.assertIn("onCloseRequested: root.hide()", panel)
+        self.assertIn("onClicked: root.closeRequested()", panel)
         self.assertIn("Slider", panel)
         self.assertIn("scaleInteractionStarted", panel)
         self.assertIn("scaleInteractionFinished", panel)
@@ -257,7 +273,14 @@ class PetWindowControlsContractTests(unittest.TestCase):
         self.assertIn("availableModels", panel)
 
     def test_pet_chat_window_sends_text_and_minimizes_independently(self):
-        chat = read_qml(PET_CHAT_WINDOW_QML)
+        chat = "\n".join(
+            read_qml(path)
+            for path in (
+                PET_CHAT_WINDOW_QML,
+                PET_CHAT_MESSAGE_LIST_QML,
+                PET_CHAT_COMPOSER_QML,
+            )
+        )
 
         self.assertIn("Window {", chat)
         self.assertIn("flags: chatWindowFlags()", chat)

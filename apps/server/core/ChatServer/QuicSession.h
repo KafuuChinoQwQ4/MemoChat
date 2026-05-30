@@ -4,14 +4,13 @@
 
 #include <functional>
 
-class QuicSession : public CSession {
+class QuicSession : public CSession
+{
 public:
     using SendCallback = std::function<bool(const std::string&, short)>;
     using CloseCallback = std::function<void(const std::string&)>;
 
-    QuicSession(boost::asio::io_context& io_context,
-                SendCallback send_callback,
-                CloseCallback close_callback);
+    QuicSession(boost::asio::io_context& io_context, SendCallback send_callback, CloseCallback close_callback);
     ~QuicSession() override;
 
     void Start() override;

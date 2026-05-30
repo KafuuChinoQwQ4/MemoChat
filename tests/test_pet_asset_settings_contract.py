@@ -2,7 +2,6 @@ import re
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 
@@ -10,11 +9,15 @@ PET_ASSET_SETTINGS_H = CLIENT_DIR / "features/pet/PetAssetSettings.h"
 PET_ASSET_SETTINGS_CPP = CLIENT_DIR / "features/pet/PetAssetSettings.cpp"
 PET_ASSET_SETTINGS_PRIVATE_H = CLIENT_DIR / "features/pet/PetAssetSettingsPrivate.h"
 PET_ASSET_SETTINGS_AVATAR_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsAvatar.cpp"
+PET_AVATAR_RESOLVER_H = CLIENT_DIR / "features/pet/PetAvatarResolver.h"
+PET_AVATAR_RESOLVER_CPP = CLIENT_DIR / "features/pet/PetAvatarResolver.cpp"
 PET_ASSET_SETTINGS_PERSISTENCE_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsPersistence.cpp"
 PET_ASSET_SETTINGS_STATE_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsState.cpp"
 CLIENT_CMAKE = CLIENT_DIR / "CMakeLists.txt"
 MAIN_CPP = CLIENT_DIR / "app/main.cpp"
+MAIN_QML_TYPE_REGISTRY_CPP = CLIENT_DIR / "app/MainQmlTypeRegistry.cpp"
 CHARACTER_PANE_QML = CLIENT_DIR / "qml/pet/Live2DCharacterPane.qml"
+RESOURCE_VOICE_PANEL_QML = CLIENT_DIR / "qml/pet/Live2DResourceVoicePanel.qml"
 QML_QRC = CLIENT_DIR / "qml.qrc"
 
 REQUIRED_PROPERTIES = (
@@ -65,9 +68,7 @@ REQUIRED_PROPERTIES = (
 )
 
 PERSISTED_DRAFT_FIELDS = tuple(
-    prop
-    for prop in REQUIRED_PROPERTIES
-    if prop not in {"storagePath", "dirty", "statusText"}
+    prop for prop in REQUIRED_PROPERTIES if prop not in {"storagePath", "dirty", "statusText"}
 )
 
 REQUIRED_INVOKABLES = (
@@ -129,6 +130,8 @@ def pet_asset_settings_source() -> str:
             PET_ASSET_SETTINGS_CPP,
             PET_ASSET_SETTINGS_PRIVATE_H,
             PET_ASSET_SETTINGS_AVATAR_CPP,
+            PET_AVATAR_RESOLVER_H,
+            PET_AVATAR_RESOLVER_CPP,
             PET_ASSET_SETTINGS_PERSISTENCE_CPP,
             PET_ASSET_SETTINGS_STATE_CPP,
         )
@@ -149,7 +152,7 @@ def function_body(source: str, name: str) -> str:
         elif char == "}":
             depth -= 1
             if depth == 0:
-                return source[start + 1:index]
+                return source[start + 1 : index]
     raise AssertionError(f"Expected QML function {name}() to have a closed body")
 
 
@@ -166,29 +169,37 @@ class PetAssetSettingsContractTests(unittest.TestCase):
         self.assertFileExists(PET_ASSET_SETTINGS_CPP)
         self.assertFileExists(PET_ASSET_SETTINGS_PRIVATE_H)
         self.assertFileExists(PET_ASSET_SETTINGS_AVATAR_CPP)
+        self.assertFileExists(PET_AVATAR_RESOLVER_H)
+        self.assertFileExists(PET_AVATAR_RESOLVER_CPP)
         self.assertFileExists(PET_ASSET_SETTINGS_PERSISTENCE_CPP)
         self.assertFileExists(PET_ASSET_SETTINGS_STATE_CPP)
 
         cmake = read(CLIENT_CMAKE)
         self.assertRegex(cmake, r"\bPetAssetSettings\.cpp\b")
         self.assertRegex(cmake, r"\bPetAssetSettingsAvatar\.cpp\b")
+        self.assertRegex(cmake, r"\bPetAvatarResolver\.cpp\b")
         self.assertRegex(cmake, r"\bPetAssetSettingsPersistence\.cpp\b")
         self.assertRegex(cmake, r"\bPetAssetSettingsState\.cpp\b")
         self.assertRegex(cmake, r"\bPetAssetSettings\.h\b")
         self.assertRegex(cmake, r"\bPetAssetSettingsPrivate\.h\b")
+        self.assertRegex(cmake, r"\bPetAvatarResolver\.h\b")
 
     def test_pet_asset_settings_large_concerns_are_split(self):
         main = read(PET_ASSET_SETTINGS_CPP)
         avatar = read(PET_ASSET_SETTINGS_AVATAR_CPP)
+        avatar_resolver = read(PET_AVATAR_RESOLVER_CPP)
         persistence = read(PET_ASSET_SETTINGS_PERSISTENCE_CPP)
         state = read(PET_ASSET_SETTINGS_STATE_CPP)
 
         self.assertIn("QString PetAssetSettings::resolveLive2DAvatarUrl", avatar)
+        self.assertIn("QString resolveLive2DAvatarCacheUrl", avatar_resolver)
         self.assertIn("bool PetAssetSettings::load()", persistence)
         self.assertIn("QVariantMap PetAssetSettings::toVariantMap() const", persistence)
         self.assertIn("void PetAssetSettings::applyDefaults", state)
         self.assertIn("void PetAssetSettings::setCharacterName", state)
         self.assertNotIn("resolveLive2DAvatarUrl", main)
+        self.assertNotIn("modelTexturePaths", avatar)
+        self.assertNotIn("packageImageCandidates", avatar)
         self.assertNotIn("QVariantMap PetAssetSettings::toVariantMap", main)
         self.assertLess(len(main.splitlines()), 120)
 
@@ -213,7 +224,7 @@ class PetAssetSettingsContractTests(unittest.TestCase):
             )
 
     def test_main_registers_pet_asset_settings_in_memo_chat_module(self):
-        main = read(MAIN_CPP)
+        main = read(MAIN_CPP) + "\n" + read(MAIN_QML_TYPE_REGISTRY_CPP)
 
         self.assertContains(main, '#include "PetAssetSettings.h"')
         self.assertRegex(
@@ -400,7 +411,7 @@ class PetAssetSettingsContractTests(unittest.TestCase):
         )
 
     def test_character_pane_exposes_safe_voice_training_controls(self):
-        qml = read(CHARACTER_PANE_QML)
+        qml = read(CHARACTER_PANE_QML) + "\n" + read(RESOURCE_VOICE_PANEL_QML)
 
         for token in (
             "voiceTrainingConsent",

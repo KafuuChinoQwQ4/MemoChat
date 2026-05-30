@@ -3,7 +3,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
-QByteArray ChatDispatchService::buildTextPayload(const OutgoingChatPacket &packet)
+QByteArray ChatDispatchService::buildTextPayload(const OutgoingChatPacket& packet)
 {
     QJsonObject msgObj;
     msgObj["content"] = packet.content;
@@ -20,24 +20,30 @@ QByteArray ChatDispatchService::buildTextPayload(const OutgoingChatPacket &packe
     return QJsonDocument(payload).toJson(QJsonDocument::Compact);
 }
 
-bool ChatDispatchService::dispatchTextPayload(const OutgoingChatPacket &packet,
-                                              const SendPayloadFunc &sendPayload,
-                                              QString *errorText)
+bool ChatDispatchService::dispatchTextPayload(const OutgoingChatPacket& packet,
+                                              const SendPayloadFunc& sendPayload,
+                                              QString* errorText)
 {
-    if (packet.fromUid <= 0 || packet.toUid <= 0) {
-        if (errorText) {
+    if (packet.fromUid <= 0 || packet.toUid <= 0)
+    {
+        if (errorText)
+        {
             *errorText = "消息参数非法";
         }
         return false;
     }
-    if (packet.msgId.isEmpty() || packet.content.isEmpty()) {
-        if (errorText) {
+    if (packet.msgId.isEmpty() || packet.content.isEmpty())
+    {
+        if (errorText)
+        {
             *errorText = "消息内容不能为空";
         }
         return false;
     }
-    if (!sendPayload) {
-        if (errorText) {
+    if (!sendPayload)
+    {
+        if (errorText)
+        {
             *errorText = "消息发送器不可用";
         }
         return false;

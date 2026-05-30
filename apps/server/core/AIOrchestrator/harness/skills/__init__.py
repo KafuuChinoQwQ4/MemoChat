@@ -8,4 +8,5 @@ def __getattr__(name: str):
         return SkillRegistry
     raise AttributeError(f"module 'harness.skills' has no attribute {name!r}")
 
+
 __all__ = ["SkillRegistry"]

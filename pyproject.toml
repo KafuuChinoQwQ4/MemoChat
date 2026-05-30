@@ -1,0 +1,54 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+indent-width = 4
+extend-exclude = [
+  ".ai",
+  ".cache",
+  ".git",
+  ".mypy_cache",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".venv",
+  "build",
+  "build-*",
+  "build-*/*",
+  "htmlcov",
+  "node_modules",
+  "vcpkg",
+  "vcpkg_installed",
+  "Memo_ops/runtime",
+  "Memo_ops/artifacts",
+  "infra/Memo_ops/runtime",
+  "infra/Memo_ops/artifacts",
+  "apps/server/core/AIOrchestrator/.cache",
+  "apps/server/core/AIOrchestrator/.data",
+  "apps/server/core/AIOrchestrator/.venv",
+]
+
+[tool.ruff.lint]
+select = [
+  "E",
+  "F",
+  "I",
+  "B",
+  "C4",
+  "UP",
+  "SIM",
+  "RUF",
+]
+ignore = [
+  "E501",
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+known-first-party = [
+  "Memo_ops",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = true

@@ -8,12 +8,15 @@
 #include <iostream>
 #include "json/GlazeCompat.h"
 
-namespace chatusersupport {
+namespace chatusersupport
+{
 
 bool IsPureDigit(const std::string& str)
 {
-    for (char c : str) {
-        if (!std::isdigit(static_cast<unsigned char>(c))) {
+    for (char c : str)
+    {
+        if (!std::isdigit(static_cast<unsigned char>(c)))
+        {
             return false;
         }
     }
@@ -26,7 +29,8 @@ void GetUserByUid(const std::string& uid_str, memochat::json::JsonValue& rtvalue
     const std::string base_key = USER_BASE_INFO + uid_str;
 
     auto user_info = PostgresMgr::GetInstance()->GetUser(std::stoi(uid_str));
-    if (!user_info) {
+    if (!user_info)
+    {
         rtvalue["error"] = ErrorCodes::UidInvalid;
         return;
     }
@@ -59,7 +63,8 @@ void GetUserByName(const std::string& name, memochat::json::JsonValue& rtvalue)
     const std::string base_key = NAME_INFO + name;
 
     std::string info_str;
-    if (RedisMgr::GetInstance()->Get(base_key, info_str)) {
+    if (RedisMgr::GetInstance()->Get(base_key, info_str))
+    {
         memochat::json::JsonReader reader;
         memochat::json::JsonValue root;
         reader.parse(info_str, root);
@@ -74,7 +79,8 @@ void GetUserByName(const std::string& name, memochat::json::JsonValue& rtvalue)
     }
 
     auto user_info = PostgresMgr::GetInstance()->GetUser(name);
-    if (!user_info) {
+    if (!user_info)
+    {
         rtvalue["error"] = ErrorCodes::UidInvalid;
         return;
     }
@@ -103,7 +109,8 @@ void GetUserByName(const std::string& name, memochat::json::JsonValue& rtvalue)
 bool GetBaseInfo(const std::string& base_key, int uid, std::shared_ptr<UserInfo>& userinfo)
 {
     std::string info_str;
-    if (RedisMgr::GetInstance()->Get(base_key, info_str)) {
+    if (RedisMgr::GetInstance()->Get(base_key, info_str))
+    {
         memochat::json::JsonReader reader;
         memochat::json::JsonValue root;
         reader.parse(info_str, root);
@@ -120,7 +127,8 @@ bool GetBaseInfo(const std::string& base_key, int uid, std::shared_ptr<UserInfo>
     }
 
     auto user_info = PostgresMgr::GetInstance()->GetUser(uid);
-    if (!user_info) {
+    if (!user_info)
+    {
         return false;
     }
     userinfo = user_info;

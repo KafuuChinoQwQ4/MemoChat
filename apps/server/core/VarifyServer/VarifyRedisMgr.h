@@ -8,9 +8,11 @@
 #include <string>
 #include <memory>
 
-namespace varifyservice {
+namespace varifyservice
+{
 
-class VarifyRedisConPool {
+class VarifyRedisConPool
+{
 public:
     VarifyRedisConPool(size_t poolSize, const char* host, int port, const char* pwd);
     ~VarifyRedisConPool();
@@ -33,7 +35,8 @@ private:
     std::thread check_thread_;
 };
 
-class VarifyRedisMgr {
+class VarifyRedisMgr
+{
 public:
     static VarifyRedisMgr& Instance();
 

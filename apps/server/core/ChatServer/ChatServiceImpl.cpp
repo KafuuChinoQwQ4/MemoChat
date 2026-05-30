@@ -11,14 +11,16 @@
 #include "PostgresMgr.h"
 #include "MongoMgr.h"
 
-namespace {
+namespace
+{
 // Compact wire JSON for TCP/QUIC transport (Qt QJsonDocument is strict).
-std::string JsonToWireString(const memochat::json::JsonValue& v) {
+std::string JsonToWireString(const memochat::json::JsonValue& v)
+{
     memochat::json::JsonStreamWriterBuilder builder;
     builder["indentation"] = "";
     return memochat::json::writeString(builder, v);
 }
-}
+} // namespace
 
 ChatServiceImpl::ChatServiceImpl()
 {
@@ -27,19 +29,28 @@ ChatServiceImpl::ChatServiceImpl()
 Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendReq* request, AddFriendRsp* reply)
 {
     memolog::BindGrpcTraceContext(context);
-    memolog::SpanScope span("ChatService.NotifyAddFriend", "SERVER",
-                            {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyAddFriend"}});
-    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
+    memolog::SpanScope span(
+        "ChatService.NotifyAddFriend",
+        "SERVER",
+        {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyAddFriend"}});
+    Defer clear_trace(
+        []()
+        {
+            memolog::TraceContext::Clear();
+        });
     auto touid = request->touid();
     auto session = UserMgr::GetInstance()->GetSession(touid);
 
-    Defer defer([request, reply]() {
-        reply->set_error(ErrorCodes::Success);
-        reply->set_applyuid(request->applyuid());
-        reply->set_touid(request->touid());
+    Defer defer(
+        [request, reply]()
+        {
+            reply->set_error(ErrorCodes::Success);
+            reply->set_applyuid(request->applyuid());
+            reply->set_touid(request->touid());
         });
 
-    if (session == nullptr) {
+    if (session == nullptr)
+    {
         return Status::OK;
     }
 
@@ -52,7 +63,8 @@ Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendR
     rtvalue["sex"] = request->sex();
     rtvalue["nick"] = request->nick();
     auto apply_info = PostgresMgr::GetInstance()->GetUser(request->applyuid());
-    if (apply_info) {
+    if (apply_info)
+    {
         rtvalue["user_id"] = apply_info->user_id;
     }
 
@@ -60,23 +72,32 @@ Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendR
     return Status::OK;
 }
 
-Status ChatServiceImpl::NotifyAuthFriend(ServerContext* context, const AuthFriendReq* request,
-    AuthFriendRsp* reply) {
+Status ChatServiceImpl::NotifyAuthFriend(ServerContext* context, const AuthFriendReq* request, AuthFriendRsp* reply)
+{
     memolog::BindGrpcTraceContext(context);
-    memolog::SpanScope span("ChatService.NotifyAuthFriend", "SERVER",
-                            {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyAuthFriend"}});
-    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
+    memolog::SpanScope span(
+        "ChatService.NotifyAuthFriend",
+        "SERVER",
+        {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyAuthFriend"}});
+    Defer clear_trace(
+        []()
+        {
+            memolog::TraceContext::Clear();
+        });
     auto touid = request->touid();
     auto fromuid = request->fromuid();
     auto session = UserMgr::GetInstance()->GetSession(touid);
 
-    Defer defer([request, reply]() {
-        reply->set_error(ErrorCodes::Success);
-        reply->set_fromuid(request->fromuid());
-        reply->set_touid(request->touid());
+    Defer defer(
+        [request, reply]()
+        {
+            reply->set_error(ErrorCodes::Success);
+            reply->set_fromuid(request->fromuid());
+            reply->set_touid(request->touid());
         });
 
-    if (session == nullptr) {
+    if (session == nullptr)
+    {
         return Status::OK;
     }
 
@@ -88,14 +109,16 @@ Status ChatServiceImpl::NotifyAuthFriend(ServerContext* context, const AuthFrien
     std::string base_key = USER_BASE_INFO + std::to_string(fromuid);
     auto user_info = std::make_shared<UserInfo>();
     bool b_info = GetBaseInfo(base_key, fromuid, user_info);
-    if (b_info) {
+    if (b_info)
+    {
         rtvalue["name"] = user_info->name;
         rtvalue["nick"] = user_info->nick;
         rtvalue["icon"] = user_info->icon;
         rtvalue["sex"] = user_info->sex;
         rtvalue["user_id"] = user_info->user_id;
     }
-    else {
+    else
+    {
         rtvalue["error"] = ErrorCodes::UidInvalid;
     }
 
@@ -103,16 +126,24 @@ Status ChatServiceImpl::NotifyAuthFriend(ServerContext* context, const AuthFrien
     return Status::OK;
 }
 
-Status ChatServiceImpl::NotifyTextChatMsg(::grpc::ServerContext* context,
-    const TextChatMsgReq* request, TextChatMsgRsp* reply) {
+Status
+ChatServiceImpl::NotifyTextChatMsg(::grpc::ServerContext* context, const TextChatMsgReq* request, TextChatMsgRsp* reply)
+{
     memolog::BindGrpcTraceContext(context);
-    memolog::SpanScope span("ChatService.NotifyTextChatMsg", "SERVER",
-                            {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyTextChatMsg"}});
-    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
+    memolog::SpanScope span(
+        "ChatService.NotifyTextChatMsg",
+        "SERVER",
+        {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyTextChatMsg"}});
+    Defer clear_trace(
+        []()
+        {
+            memolog::TraceContext::Clear();
+        });
     auto touid = request->touid();
     auto session = UserMgr::GetInstance()->GetSession(touid);
 
-    if (session == nullptr) {
+    if (session == nullptr)
+    {
         reply->set_error(ErrorCodes::TargetOffline);
         return Status::OK;
     }
@@ -124,19 +155,24 @@ Status ChatServiceImpl::NotifyTextChatMsg(::grpc::ServerContext* context,
     rtvalue["touid"] = request->touid();
 
     memochat::json::JsonValue text_array;
-    for (auto& msg : request->textmsgs()) {
+    for (auto& msg : request->textmsgs())
+    {
         memochat::json::JsonValue element;
         element["content"] = msg.msgcontent();
         element["msgid"] = msg.msgid();
         std::shared_ptr<PrivateMessageInfo> private_msg;
         int64_t created_at = 0;
-        if ((MongoMgr::GetInstance()->Enabled() && MongoMgr::GetInstance()->GetPrivateMessageByMsgId(msg.msgid(), private_msg) && private_msg) ||
-            (PostgresMgr::GetInstance()->GetPrivateMessageByMsgId(msg.msgid(), private_msg) && private_msg)) {
+        if ((MongoMgr::GetInstance()->Enabled() &&
+             MongoMgr::GetInstance()->GetPrivateMessageByMsgId(msg.msgid(), private_msg) && private_msg) ||
+            (PostgresMgr::GetInstance()->GetPrivateMessageByMsgId(msg.msgid(), private_msg) && private_msg))
+        {
             created_at = private_msg->created_at;
         }
-        if (created_at <= 0) {
+        if (created_at <= 0)
+        {
             created_at = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::system_clock::now().time_since_epoch()).count());
+                                                  std::chrono::system_clock::now().time_since_epoch())
+                                                  .count());
         }
         element["created_at"] = static_cast<int64_t>(created_at);
         append(text_array, element);
@@ -151,7 +187,8 @@ bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr
 {
     std::string info_str = "";
     bool b_base = RedisMgr::GetInstance()->Get(base_key, info_str);
-    if (b_base) {
+    if (b_base)
+    {
         memochat::json::JsonReader reader;
         memochat::json::JsonValue root;
         reader.parse(info_str, root);
@@ -165,10 +202,12 @@ bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr
         userinfo->sex = root["sex"].asInt();
         userinfo->icon = root["icon"].asString();
     }
-    else {
+    else
+    {
         std::shared_ptr<UserInfo> user_info = nullptr;
         user_info = PostgresMgr::GetInstance()->GetUser(uid);
-        if (user_info == nullptr) {
+        if (user_info == nullptr)
+        {
             return false;
         }
 
@@ -190,22 +229,29 @@ bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr
     return true;
 }
 
-Status ChatServiceImpl::NotifyKickUser(::grpc::ServerContext* context,
-    const KickUserReq* request, KickUserRsp* reply)
+Status ChatServiceImpl::NotifyKickUser(::grpc::ServerContext* context, const KickUserReq* request, KickUserRsp* reply)
 {
     memolog::BindGrpcTraceContext(context);
-    memolog::SpanScope span("ChatService.NotifyKickUser", "SERVER",
+    memolog::SpanScope span("ChatService.NotifyKickUser",
+                            "SERVER",
                             {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyKickUser"}});
-    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
+    Defer clear_trace(
+        []()
+        {
+            memolog::TraceContext::Clear();
+        });
     auto uid = request->uid();
     auto session = UserMgr::GetInstance()->GetSession(uid);
 
-    Defer defer([request, reply]() {
-        reply->set_error(ErrorCodes::Success);
-        reply->set_uid(request->uid());
+    Defer defer(
+        [request, reply]()
+        {
+            reply->set_error(ErrorCodes::Success);
+            reply->set_uid(request->uid());
         });
 
-    if (session == nullptr) {
+    if (session == nullptr)
+    {
         return Status::OK;
     }
 
@@ -216,17 +262,26 @@ Status ChatServiceImpl::NotifyKickUser(::grpc::ServerContext* context,
 }
 
 Status ChatServiceImpl::NotifyGroupMessage(::grpc::ServerContext* context,
-    const GroupMessageNotifyReq* request, GroupMessageNotifyRsp* response)
+                                           const GroupMessageNotifyReq* request,
+                                           GroupMessageNotifyRsp* response)
 {
     memolog::BindGrpcTraceContext(context);
-    memolog::SpanScope span("ChatService.NotifyGroupMessage", "SERVER",
-                            {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyGroupMessage"}});
-    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
+    memolog::SpanScope span(
+        "ChatService.NotifyGroupMessage",
+        "SERVER",
+        {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyGroupMessage"}});
+    Defer clear_trace(
+        []()
+        {
+            memolog::TraceContext::Clear();
+        });
     int delivered = 0;
-    for (int i = 0; i < request->touids_size(); ++i) {
+    for (int i = 0; i < request->touids_size(); ++i)
+    {
         auto uid = request->touids(i);
         auto session = UserMgr::GetInstance()->GetSession(uid);
-        if (!session) {
+        if (!session)
+        {
             continue;
         }
         session->Send(request->payload_json(), static_cast<short>(request->tcp_msgid()));
@@ -238,17 +293,26 @@ Status ChatServiceImpl::NotifyGroupMessage(::grpc::ServerContext* context,
 }
 
 Status ChatServiceImpl::NotifyGroupEvent(::grpc::ServerContext* context,
-    const GroupEventNotifyReq* request, GroupEventNotifyRsp* response)
+                                         const GroupEventNotifyReq* request,
+                                         GroupEventNotifyRsp* response)
 {
     memolog::BindGrpcTraceContext(context);
-    memolog::SpanScope span("ChatService.NotifyGroupEvent", "SERVER",
-                            {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyGroupEvent"}});
-    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
+    memolog::SpanScope span(
+        "ChatService.NotifyGroupEvent",
+        "SERVER",
+        {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyGroupEvent"}});
+    Defer clear_trace(
+        []()
+        {
+            memolog::TraceContext::Clear();
+        });
     int delivered = 0;
-    for (int i = 0; i < request->touids_size(); ++i) {
+    for (int i = 0; i < request->touids_size(); ++i)
+    {
         auto uid = request->touids(i);
         auto session = UserMgr::GetInstance()->GetSession(uid);
-        if (!session) {
+        if (!session)
+        {
             continue;
         }
         session->Send(request->payload_json(), static_cast<short>(request->tcp_msgid()));
@@ -260,17 +324,26 @@ Status ChatServiceImpl::NotifyGroupEvent(::grpc::ServerContext* context,
 }
 
 Status ChatServiceImpl::NotifyGroupMemberBatch(::grpc::ServerContext* context,
-    const GroupMemberBatchReq* request, GroupMemberBatchRsp* response)
+                                               const GroupMemberBatchReq* request,
+                                               GroupMemberBatchRsp* response)
 {
     memolog::BindGrpcTraceContext(context);
-    memolog::SpanScope span("ChatService.NotifyGroupMemberBatch", "SERVER",
-                            {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyGroupMemberBatch"}});
-    Defer clear_trace([]() { memolog::TraceContext::Clear(); });
+    memolog::SpanScope span(
+        "ChatService.NotifyGroupMemberBatch",
+        "SERVER",
+        {{"rpc.system", "grpc"}, {"rpc.service", "ChatService"}, {"rpc.method", "NotifyGroupMemberBatch"}});
+    Defer clear_trace(
+        []()
+        {
+            memolog::TraceContext::Clear();
+        });
     int delivered = 0;
-    for (int i = 0; i < request->touids_size(); ++i) {
+    for (int i = 0; i < request->touids_size(); ++i)
+    {
         auto uid = request->touids(i);
         auto session = UserMgr::GetInstance()->GetSession(uid);
-        if (!session) {
+        if (!session)
+        {
             continue;
         }
         session->Send(request->payload_json(), static_cast<short>(request->tcp_msgid()));

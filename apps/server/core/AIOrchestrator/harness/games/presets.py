@@ -5,7 +5,6 @@ from typing import Any
 
 from harness.games.contracts import GameTemplate
 
-
 ROLE_PRESETS: dict[str, list[dict[str, Any]]] = {
     "werewolf.basic": [
         {
@@ -276,11 +275,7 @@ def list_role_presets(ruleset_id: str) -> list[dict[str, Any]]:
 
 
 def list_template_presets(ruleset_id: str = "") -> list[GameTemplate]:
-    return [
-        _clone_template(preset)
-        for preset in TEMPLATE_PRESETS
-        if not ruleset_id or preset.ruleset_id == ruleset_id
-    ]
+    return [_clone_template(preset) for preset in TEMPLATE_PRESETS if not ruleset_id or preset.ruleset_id == ruleset_id]
 
 
 def find_template_preset(preset_id: str) -> GameTemplate | None:

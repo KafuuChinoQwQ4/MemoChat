@@ -4,30 +4,27 @@
 
 #include <utility>
 
-namespace memo::db {
-
-template <typename Tx>
-pqxx::result Exec0(Tx& tx, std::string_view query)
+namespace memo::db
 {
-	return tx.exec(query).no_rows();
+
+template <typename Tx> pqxx::result Exec0(Tx& tx, std::string_view query)
+{
+    return tx.exec(query).no_rows();
 }
 
-template <typename Tx>
-pqxx::row Exec1(Tx& tx, std::string_view query)
+template <typename Tx> pqxx::row Exec1(Tx& tx, std::string_view query)
 {
-	return tx.exec(query).one_row();
+    return tx.exec(query).one_row();
 }
 
-template <typename Tx, typename... Args>
-pqxx::result ExecParams(Tx& tx, std::string_view query, Args&&... args)
+template <typename Tx, typename... Args> pqxx::result ExecParams(Tx& tx, std::string_view query, Args&&... args)
 {
-	return tx.exec(query, pqxx::params{std::forward<Args>(args)...});
+    return tx.exec(query, pqxx::params{std::forward<Args>(args)...});
 }
 
-template <typename Tx, typename... Args>
-pqxx::result ExecParams0(Tx& tx, std::string_view query, Args&&... args)
+template <typename Tx, typename... Args> pqxx::result ExecParams0(Tx& tx, std::string_view query, Args&&... args)
 {
-	return tx.exec(query, pqxx::params{std::forward<Args>(args)...}).no_rows();
+    return tx.exec(query, pqxx::params{std::forward<Args>(args)...}).no_rows();
 }
 
 } // namespace memo::db

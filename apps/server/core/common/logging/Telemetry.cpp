@@ -25,19 +25,22 @@
 #include <unistd.h>
 #endif
 
-namespace memolog {
+namespace memolog
+{
 
 TelemetryConfig Telemetry::config_{};
 std::string Telemetry::service_name_ = "unknown";
 std::string Telemetry::service_instance_ = "unknown";
 
-namespace {
+namespace
+{
 namespace beast = boost::beast;
 namespace http = beast::http;
 namespace net = boost::asio;
 using tcp = net::ip::tcp;
 
-struct ParsedHttpEndpoint {
+struct ParsedHttpEndpoint
+{
     bool ok = false;
     std::string host;
     std::string port = "80";
@@ -52,31 +55,38 @@ bool g_export_stop = false;
 bool g_export_started = false;
 constexpr std::size_t kMaxQueuedExports = 1024;
 
-long long NowUnixMicros() {
+long long NowUnixMicros()
+{
     using namespace std::chrono;
     return duration_cast<microseconds>(system_clock::now().time_since_epoch()).count();
 }
 
-ParsedHttpEndpoint ParseHttpEndpoint(const std::string& raw) {
+ParsedHttpEndpoint ParseHttpEndpoint(const std::string& raw)
+{
     ParsedHttpEndpoint endpoint;
     std::string value = raw;
     const std::string http_prefix = "http://";
-    if (value.rfind(http_prefix, 0) == 0) {
+    if (value.rfind(http_prefix, 0) == 0)
+    {
         value.erase(0, http_prefix.size());
     }
 
     const auto slash_pos = value.find('/');
     std::string host_port = slash_pos == std::string::npos ? value : value.substr(0, slash_pos);
     endpoint.target = slash_pos == std::string::npos ? "/" : value.substr(slash_pos);
-    if (host_port.empty()) {
+    if (host_port.empty())
+    {
         return endpoint;
     }
 
     const auto colon_pos = host_port.rfind(':');
-    if (colon_pos != std::string::npos && colon_pos + 1 < host_port.size()) {
+    if (colon_pos != std::string::npos && colon_pos + 1 < host_port.size())
+    {
         endpoint.host = host_port.substr(0, colon_pos);
         endpoint.port = host_port.substr(colon_pos + 1);
-    } else {
+    }
+    else
+    {
         endpoint.host = host_port;
     }
 
@@ -84,9 +94,11 @@ ParsedHttpEndpoint ParseHttpEndpoint(const std::string& raw) {
     return endpoint;
 }
 
-std::string DetectServiceInstance(const std::string& service_name) {
+std::string DetectServiceInstance(const std::string& service_name)
+{
     const char* host = std::getenv("COMPUTERNAME");
-    if (host == nullptr || *host == '\0') {
+    if (host == nullptr || *host == '\0')
+    {
         host = std::getenv("HOSTNAME");
     }
     const char* instance = std::getenv("MEMOCHAT_INSTANCE_NAME");
@@ -98,20 +110,24 @@ std::string DetectServiceInstance(const std::string& service_name) {
     const int pid = getpid();
 #endif
     std::string value = service_name + "@";
-    if (!instance_name.empty()) {
+    if (!instance_name.empty())
+    {
         value += instance_name + ".";
     }
     value += host_name + ":" + std::to_string(pid);
     return value;
 }
 
-void PostJsonBestEffort(const std::string& endpoint, const std::string& body) {
+void PostJsonBestEffort(const std::string& endpoint, const std::string& body)
+{
     const ParsedHttpEndpoint parsed = ParseHttpEndpoint(endpoint);
-    if (!parsed.ok) {
+    if (!parsed.ok)
+    {
         return;
     }
 
-    try {
+    try
+    {
         net::io_context ioc;
         tcp::resolver resolver(ioc);
         beast::tcp_stream stream(ioc);
@@ -134,23 +150,31 @@ void PostJsonBestEffort(const std::string& endpoint, const std::string& body) {
 
         beast::error_code ec;
         stream.socket().shutdown(tcp::socket::shutdown_both, ec);
-    } catch (...) {
+    }
+    catch (...)
+    {
     }
 }
 
-std::string ToJsonPayload(const memochat::json::JsonValue& value) {
+std::string ToJsonPayload(const memochat::json::JsonValue& value)
+{
     return memochat::json::glaze_stringify(value);
 }
 
-void ExportWorkerLoop() {
-    for (;;) {
+void ExportWorkerLoop()
+{
+    for (;;)
+    {
         std::pair<std::string, std::string> job;
         {
             std::unique_lock<std::mutex> lock(g_export_mutex);
-            g_export_cv.wait(lock, []() {
-                return g_export_stop || !g_export_queue.empty();
-            });
-            if (g_export_stop && g_export_queue.empty()) {
+            g_export_cv.wait(lock,
+                             []()
+                             {
+                                 return g_export_stop || !g_export_queue.empty();
+                             });
+            if (g_export_stop && g_export_queue.empty())
+            {
                 return;
             }
             job = std::move(g_export_queue.front());
@@ -160,9 +184,11 @@ void ExportWorkerLoop() {
     }
 }
 
-void StartExportWorkerIfNeeded() {
+void StartExportWorkerIfNeeded()
+{
     std::lock_guard<std::mutex> lock(g_export_mutex);
-    if (g_export_started) {
+    if (g_export_started)
+    {
         return;
     }
     g_export_stop = false;
@@ -170,16 +196,19 @@ void StartExportWorkerIfNeeded() {
     g_export_thread = std::thread(&ExportWorkerLoop);
 }
 
-void StopExportWorker() {
+void StopExportWorker()
+{
     {
         std::lock_guard<std::mutex> lock(g_export_mutex);
-        if (!g_export_started) {
+        if (!g_export_started)
+        {
             return;
         }
         g_export_stop = true;
     }
     g_export_cv.notify_all();
-    if (g_export_thread.joinable()) {
+    if (g_export_thread.joinable())
+    {
         g_export_thread.join();
     }
     std::lock_guard<std::mutex> lock(g_export_mutex);
@@ -188,14 +217,17 @@ void StopExportWorker() {
     g_export_stop = false;
 }
 
-void EnqueueJsonBestEffort(const std::string& endpoint, const std::string& body) {
-    if (endpoint.empty() || body.empty()) {
+void EnqueueJsonBestEffort(const std::string& endpoint, const std::string& body)
+{
+    if (endpoint.empty() || body.empty())
+    {
         return;
     }
     StartExportWorkerIfNeeded();
     {
         std::lock_guard<std::mutex> lock(g_export_mutex);
-        if (g_export_queue.size() >= kMaxQueuedExports) {
+        if (g_export_queue.size() >= kMaxQueuedExports)
+        {
             g_export_queue.pop_front();
         }
         g_export_queue.emplace_back(endpoint, body);
@@ -205,35 +237,43 @@ void EnqueueJsonBestEffort(const std::string& endpoint, const std::string& body)
 
 } // namespace
 
-void Telemetry::Init(const std::string& service_name, const TelemetryConfig& cfg) {
+void Telemetry::Init(const std::string& service_name, const TelemetryConfig& cfg)
+{
     config_ = cfg;
     service_name_ = service_name.empty() ? "unknown" : service_name;
-    if (config_.service_name.empty()) {
+    if (config_.service_name.empty())
+    {
         config_.service_name = service_name_;
     }
     service_instance_ = DetectServiceInstance(service_name_);
-    if (Enabled()) {
+    if (Enabled())
+    {
         StartExportWorkerIfNeeded();
     }
 }
 
-void Telemetry::Shutdown() {
+void Telemetry::Shutdown()
+{
     StopExportWorker();
 }
 
-const TelemetryConfig& Telemetry::Config() {
+const TelemetryConfig& Telemetry::Config()
+{
     return config_;
 }
 
-const std::string& Telemetry::ServiceName() {
+const std::string& Telemetry::ServiceName()
+{
     return service_name_;
 }
 
-const std::string& Telemetry::ServiceInstance() {
+const std::string& Telemetry::ServiceInstance()
+{
     return service_instance_;
 }
 
-bool Telemetry::Enabled() {
+bool Telemetry::Enabled()
+{
     return config_.enabled && config_.export_traces;
 }
 
@@ -244,15 +284,18 @@ void Telemetry::ExportSpan(const std::string& trace_id,
                            const std::string& kind,
                            long long start_time_unix_us,
                            long long duration_us,
-                           const std::map<std::string, std::string>& attributes) {
-    if (!Enabled() || trace_id.empty() || span_id.empty()) {
+                           const std::map<std::string, std::string>& attributes)
+{
+    if (!Enabled() || trace_id.empty() || span_id.empty())
+    {
         return;
     }
 
     memochat::json::JsonValue span = memochat::json::glaze_empty_object();
     span["traceId"] = trace_id;
     span["id"] = span_id;
-    if (!parent_span_id.empty()) {
+    if (!parent_span_id.empty())
+    {
         span["parentId"] = parent_span_id;
     }
     span["name"] = name;
@@ -267,8 +310,10 @@ void Telemetry::ExportSpan(const std::string& trace_id,
     memochat::json::JsonValue tags = memochat::json::glaze_empty_object();
     tags["service.instance.id"] = service_instance_;
     tags["service.namespace"] = config_.service_namespace;
-    for (const auto& entry : attributes) {
-        if (!entry.first.empty() && !entry.second.empty()) {
+    for (const auto& entry : attributes)
+    {
+        if (!entry.first.empty() && !entry.second.empty())
+        {
             tags[entry.first] = entry.second;
         }
     }
@@ -282,17 +327,20 @@ void Telemetry::ExportSpan(const std::string& trace_id,
 SpanScope::SpanScope(const std::string& name,
                      const std::string& kind,
                      const std::map<std::string, std::string>& attributes)
-    : name_(name),
-      kind_(kind),
-      trace_id_(TraceContext::EnsureTraceId()),
-      parent_span_id_(TraceContext::GetSpanId()),
-      previous_span_id_(TraceContext::GetSpanId()),
-      attributes_(attributes) {
-    if (!Telemetry::Enabled() || trace_id_.empty()) {
+    : name_(name)
+    , kind_(kind)
+    , trace_id_(TraceContext::EnsureTraceId())
+    , parent_span_id_(TraceContext::GetSpanId())
+    , previous_span_id_(TraceContext::GetSpanId())
+    , attributes_(attributes)
+{
+    if (!Telemetry::Enabled() || trace_id_.empty())
+    {
         return;
     }
     span_id_ = TraceContext::NewSpanId();
-    if (span_id_.empty()) {
+    if (span_id_.empty())
+    {
         return;
     }
     start_time_unix_us_ = NowUnixMicros();
@@ -300,14 +348,14 @@ SpanScope::SpanScope(const std::string& name,
     active_ = true;
 }
 
-SpanScope::~SpanScope() {
-    if (!active_) {
+SpanScope::~SpanScope()
+{
+    if (!active_)
+    {
         return;
     }
     const long long end_time_unix_us = NowUnixMicros();
-    const long long duration_us = end_time_unix_us > start_time_unix_us_
-        ? end_time_unix_us - start_time_unix_us_
-        : 0;
+    const long long duration_us = end_time_unix_us > start_time_unix_us_ ? end_time_unix_us - start_time_unix_us_ : 0;
     Telemetry::ExportSpan(trace_id_,
                           span_id_,
                           parent_span_id_,
@@ -319,18 +367,23 @@ SpanScope::~SpanScope() {
     TraceContext::SetSpanId(previous_span_id_);
 }
 
-void SpanScope::SetAttribute(const std::string& key, const std::string& value) {
-    if (!key.empty()) {
+void SpanScope::SetAttribute(const std::string& key, const std::string& value)
+{
+    if (!key.empty())
+    {
         attributes_[key] = value;
     }
 }
 
-void SpanScope::SetStatusError(const std::string& error_type, const std::string& error_message) {
+void SpanScope::SetStatusError(const std::string& error_type, const std::string& error_message)
+{
     attributes_["otel.status_code"] = "ERROR";
-    if (!error_type.empty()) {
+    if (!error_type.empty())
+    {
         attributes_["error.type"] = error_type;
     }
-    if (!error_message.empty()) {
+    if (!error_message.empty())
+    {
         attributes_["error"] = error_message;
     }
 }

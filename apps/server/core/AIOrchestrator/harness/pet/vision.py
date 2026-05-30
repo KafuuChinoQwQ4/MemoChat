@@ -138,9 +138,7 @@ class LocalVisionAnalyzer:
         resolved_object_model_path = _resolve_object_detector_model_path(self._object_detector_model_path)
         mediapipe_available = _mediapipe_available()
         mediapipe_ready = (
-            requested_analyzer == "mediapipe_face_landmarker"
-            and bool(resolved_model_path)
-            and mediapipe_available
+            requested_analyzer == "mediapipe_face_landmarker" and bool(resolved_model_path) and mediapipe_available
         )
         object_detector_ready = bool(resolved_object_model_path) and mediapipe_available
         if object_detector_ready:
@@ -190,7 +188,9 @@ class LocalVisionAnalyzer:
         result["opencv_available"] = True
         result["opencv_version"] = str(getattr(cv2, "__version__", ""))
         if not open_camera:
-            result["ready"] = bool(result["camera_devices"]) and (requested_analyzer != "mediapipe_face_landmarker" or mediapipe_ready)
+            result["ready"] = bool(result["camera_devices"]) and (
+                requested_analyzer != "mediapipe_face_landmarker" or mediapipe_ready
+            )
             result["status"] = "camera_probe_skipped"
             if requested_analyzer == "mediapipe_face_landmarker" and not mediapipe_ready:
                 if not mediapipe_available:
@@ -233,9 +233,7 @@ class LocalVisionAnalyzer:
                     result["message"] = "OpenCV can read frames, but MediaPipe is not installed."
                 else:
                     result["status"] = "mediapipe_model_missing"
-                    result["message"] = (
-                        "OpenCV can read frames, but MediaPipe Face Landmarker is not configured."
-                    )
+                    result["message"] = "OpenCV can read frames, but MediaPipe Face Landmarker is not configured."
                 return result
             result["ready"] = True
             result["status"] = "ready"
@@ -257,8 +255,10 @@ class LocalVisionAnalyzer:
         configured_analyzer = self._analyzer or "opencv"
         requested_mode = _normalize_analyzer(requested_analyzer)
         configured_mode = _normalize_analyzer(configured_analyzer)
-        effective_analyzer = configured_analyzer if requested_mode == "opencv" and configured_mode != "opencv" else (
-            requested_analyzer or configured_analyzer
+        effective_analyzer = (
+            configured_analyzer
+            if requested_mode == "opencv" and configured_mode != "opencv"
+            else (requested_analyzer or configured_analyzer)
         )
         analyzer_mode = _normalize_analyzer(effective_analyzer)
         model_path = str(
@@ -374,8 +374,10 @@ class LocalVisionAnalyzer:
         configured_analyzer = self._analyzer or "opencv"
         requested_mode = _normalize_analyzer(requested_analyzer)
         configured_mode = _normalize_analyzer(configured_analyzer)
-        effective_analyzer = configured_analyzer if requested_mode == "opencv" and configured_mode != "opencv" else (
-            requested_analyzer or configured_analyzer
+        effective_analyzer = (
+            configured_analyzer
+            if requested_mode == "opencv" and configured_mode != "opencv"
+            else (requested_analyzer or configured_analyzer)
         )
         analyzer_mode = _normalize_analyzer(effective_analyzer)
         model_path = str(
@@ -887,7 +889,9 @@ def _mediapipe_object_detector_result(frame, result) -> list[dict[str, Any]]:
 def _detection_label_and_score(categories, fallback_label: str = "object") -> tuple[str, str, float]:
     for category in categories or []:
         if isinstance(category, dict):
-            name = str(category.get("category_name") or category.get("display_name") or category.get("name") or "").strip()
+            name = str(
+                category.get("category_name") or category.get("display_name") or category.get("name") or ""
+            ).strip()
             score = _clamp_float(category.get("score"), 0.0, 1.0, 0.0)
         else:
             name = str(

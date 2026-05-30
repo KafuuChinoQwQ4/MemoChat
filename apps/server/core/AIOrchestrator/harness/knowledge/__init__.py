@@ -8,4 +8,5 @@ def __getattr__(name: str):
         return KnowledgeService
     raise AttributeError(f"module 'harness.knowledge' has no attribute {name!r}")
 
+
 __all__ = ["KnowledgeService"]

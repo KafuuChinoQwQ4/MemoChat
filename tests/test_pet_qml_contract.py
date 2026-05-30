@@ -1,6 +1,6 @@
-﻿import unittest
+import re
+import unittest
 from pathlib import Path
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PET_MODEL_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetModel.h"
@@ -8,28 +8,66 @@ PET_MODEL_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetMo
 PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetController.h"
 PET_SCENE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetScene.qml"
 PET_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetWindow.qml"
+PET_WINDOW_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetWindowRuntime.js"
 PET_CHAT_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatWindow.qml"
+PET_CHAT_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatRuntime.js"
+PET_CHAT_MESSAGE_LIST_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatMessageList.qml"
+PET_CHAT_COMPOSER_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatComposer.qml"
 CHAT_COMPOSER_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/conversation/ChatComposerBar.qml"
 CHAT_MESSAGE_DELEGATE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/conversation/ChatMessageDelegate.qml"
+CHAT_MESSAGE_AVATAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/conversation/MessageAvatar.qml"
 PET_CONTROL_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlWindow.qml"
+PET_CONTROL_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlRuntime.js"
+PET_CONTROL_LIVE2D_ACTION_PANEL_QML = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlLive2DActionPanel.qml"
+)
+PET_CONTROL_API_PROVIDER_PANEL_QML = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlApiProviderPanel.qml"
+)
+PET_CONTROL_HEADER_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlHeader.qml"
+PET_VISION_PRIVACY_CARD_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetVisionPrivacyCard.qml"
 CHARACTER_PANE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DCharacterPane.qml"
+LIVE2D_CHARACTER_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DCharacterRuntime.js"
+LIVE2D_CHARACTER_PREVIEW_PANEL_QML = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DCharacterPreviewPanel.qml"
+)
+LIVE2D_RESOURCE_VOICE_PANEL_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DResourceVoicePanel.qml"
+LIVE2D_BEHAVIOR_MEMORY_PANEL_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DBehaviorMemoryPanel.qml"
 CHAT_SHELL_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/ChatShellPage.qml"
 SHARED_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
 PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetController.h"
 PET_CONTROLLER_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetController.cpp"
 PET_CONTROLLER_PRIVATE_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetControllerPrivate.h"
+PET_CONTROLLER_NETWORK_UTILS_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetNetworkRequestUtils.h"
+PET_CONTROLLER_VISION_ENCODER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetVisionFrameEncoder.h"
+PET_CONTROLLER_VISION_ENCODER_CPP = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetVisionFrameEncoder.cpp"
+)
+PET_CONTROLLER_VISION_UTILS_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetVisionFrameUtils.h"
+PET_CONTROLLER_WINDOWS_UTILS_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetWindowsBridgeUtils.h"
 PET_CONTROLLER_NETWORK_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetControllerNetwork.cpp"
 PET_CONTROLLER_VISION_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetControllerVision.cpp"
-PET_CONTROLLER_WINDOWS_BRIDGE_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetControllerWindowsBridge.cpp"
+PET_CONTROLLER_WINDOWS_BRIDGE_CPP = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetControllerWindowsBridge.cpp"
+)
 CLIENT_CMAKE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/CMakeLists.txt"
 QML_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml.qrc"
 PET_CAMERA_CAPTURE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetCameraCapture.qml"
 MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/main.cpp"
+MAIN_PLATFORM_BOOTSTRAP_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/MainPlatformBootstrap.cpp"
+PET_CONTROLLER_SESSION_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetControllerSession.cpp"
+PET_CONTROLLER_VOICE_TRAINING_CPP = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetControllerVoiceTraining.cpp"
+)
 
 
 def read_texts(*paths):
     return "\n".join(path.read_text(encoding="utf-8") for path in paths)
+
+
+def compact_ws(source: str) -> str:
+    return " ".join(source.split())
 
 
 class PetQmlContractTests(unittest.TestCase):
@@ -89,8 +127,8 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("function isObservationVisualEvent", scene)
         self.assertIn("function voiceReplyIsActive", scene)
         self.assertIn("petAudioLoader.item.playbackActive", scene)
-        self.assertIn("item.sourceUrl = root.petController ? root.petController.audioUrl : \"\"", scene)
-        self.assertIn("item.playbackState = root.petController ? root.petController.audioState : \"idle\"", scene)
+        self.assertIn('item.sourceUrl = root.petController ? root.petController.audioUrl : ""', scene)
+        self.assertIn('item.playbackState = root.petController ? root.petController.audioState : "idle"', scene)
         self.assertIn("speechBubbleText", scene)
         self.assertIn("speechBubbleTranslation", scene)
         self.assertIn("speechBubbleJapanese", scene)
@@ -98,7 +136,7 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("id: speechBubble", scene)
         self.assertIn("root.petController.speechDisplayText.trim()", scene)
         self.assertIn("root.petController.speechTranslation.trim()", scene)
-        self.assertIn("root.petController.speechLanguage.toLowerCase().indexOf(\"ja\") === 0", scene)
+        self.assertIn('root.petController.speechLanguage.toLowerCase().indexOf("ja") === 0', scene)
         self.assertIn("width: Math.min(bubbleMaxWidth, 180)", scene)
         self.assertIn("height: 72", scene)
         self.assertIn("readonly property int speechBubbleSafeHeight: 84", scene)
@@ -117,7 +155,9 @@ class PetQmlContractTests(unittest.TestCase):
     def test_pet_audio_player_resource_declares_qt_multimedia(self):
         qrc = QML_QRC.read_text(encoding="utf-8")
         cmake = CLIENT_CMAKE.read_text(encoding="utf-8")
-        audio_player = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetAudioPlayer.qml").read_text(encoding="utf-8")
+        audio_player = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetAudioPlayer.qml").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn("qml/pet/PetAudioPlayer.qml", qrc)
         self.assertIn("find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS Multimedia)", cmake)
@@ -154,11 +194,13 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertNotIn("deterministic-voice-", audio_player)
 
     def test_pet_controller_audio_url_is_absolute_and_cache_busted_per_event(self):
-        source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+        source = read_texts(
+            PET_CONTROLLER_CPP, REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetControllerState.cpp"
+        )
 
         self.assertIn("gate_media_url_prefix", source)
-        self.assertIn("return QUrl(gate_url_prefix.trimmed() + QStringLiteral(\"/ai/pet\") + path);", source)
-        self.assertIn('if (port == 8096)', source)
+        self.assertIn('return QUrl(gate_url_prefix.trimmed() + QStringLiteral("/ai/pet") + path);', source)
+        self.assertIn("if (port == 8096)", source)
         self.assertIn('base.setPath(QStringLiteral("/pet") + path)', source)
         self.assertIn('base.setPath(QStringLiteral("/ai/pet") + path)', source)
         self.assertIn("QUrlQuery query(url)", source)
@@ -169,11 +211,11 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("return url.toString()", source)
 
     def test_pet_controller_configures_direct_https_requests_like_shared_http(self):
-        source = read_texts(PET_CONTROLLER_PRIVATE_H, PET_CONTROLLER_NETWORK_CPP)
+        source = read_texts(PET_CONTROLLER_PRIVATE_H, PET_CONTROLLER_NETWORK_UTILS_H, PET_CONTROLLER_NETWORK_CPP)
 
-        self.assertIn("configurePetRequest(QNetworkRequest &request)", source)
+        self.assertRegex(source, r"configurePetRequest\s*\(\s*QNetworkRequest\s*&\s*request\s*\)")
         self.assertIn("sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);", source)
-        self.assertIn('request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);', source)
+        self.assertIn("request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);", source)
         self.assertIn("configurePetRequest(request);", source)
 
     def test_pet_controller_large_concerns_stay_split_from_main_controller_file(self):
@@ -185,6 +227,11 @@ class PetQmlContractTests(unittest.TestCase):
             "features/pet/PetControllerVision.cpp",
             "features/pet/PetControllerWindowsBridge.cpp",
             "features/pet/PetControllerPrivate.h",
+            "features/pet/PetNetworkRequestUtils.h",
+            "features/pet/PetVisionFrameEncoder.cpp",
+            "features/pet/PetVisionFrameEncoder.h",
+            "features/pet/PetVisionFrameUtils.h",
+            "features/pet/PetWindowsBridgeUtils.h",
         ):
             self.assertIn(token, cmake)
 
@@ -197,15 +244,36 @@ class PetQmlContractTests(unittest.TestCase):
         ):
             self.assertNotIn(token, source)
 
-    def test_pet_controller_keeps_post_events_with_sse_streaming(self):
-        source = read_texts(PET_CONTROLLER_CPP, PET_CONTROLLER_NETWORK_CPP)
+    def test_pet_vision_frame_encoding_is_split_from_controller_state(self):
+        cmake = CLIENT_CMAKE.read_text(encoding="utf-8")
+        vision = PET_CONTROLLER_VISION_CPP.read_text(encoding="utf-8")
+        encoder = read_texts(PET_CONTROLLER_VISION_ENCODER_H, PET_CONTROLLER_VISION_ENCODER_CPP)
 
-        self.assertIn('if (!_streaming) {\n        startStream();\n    }', source)
-        self.assertNotIn('if (!_streaming) {\n        const QJsonArray events', source)
+        self.assertIn("features/pet/PetVisionFrameEncoder.cpp", cmake)
+        self.assertIn("features/pet/PetVisionFrameEncoder.h", cmake)
+        self.assertIn("encodeVisionVideoFrameAsJpeg(frame, 82)", vision)
+        self.assertIn("encodeVisionVideoFrameAsJpeg(frame, 72)", vision)
+        self.assertIn("readVisionFrameFile(localPath)", vision)
+        self.assertIn("struct EncodedVisionFrame", encoder)
+        self.assertIn("EncodedVisionFrame encodeVisionImageAsJpeg", encoder)
+        self.assertIn("QString visionFrameFileMime", encoder)
+
+    def test_pet_controller_keeps_post_events_with_sse_streaming(self):
+        source = read_texts(PET_CONTROLLER_CPP, PET_CONTROLLER_SESSION_CPP, PET_CONTROLLER_NETWORK_CPP)
+        compact = compact_ws(source)
+
+        self.assertIn("if (!_streaming) { startStream(); }", compact)
+        self.assertNotIn("if (!_streaming) { const QJsonArray events", compact)
         self.assertIn('const QJsonArray events = root.value(QStringLiteral("events")).toArray();', source)
 
     def test_pet_controller_uses_rolling_vision_segment_buffer(self):
-        source = read_texts(PET_CONTROLLER_H, PET_CONTROLLER_PRIVATE_H, PET_CONTROLLER_CPP, PET_CONTROLLER_VISION_CPP)
+        source = read_texts(
+            PET_CONTROLLER_H,
+            PET_CONTROLLER_PRIVATE_H,
+            PET_CONTROLLER_VISION_UTILS_H,
+            PET_CONTROLLER_CPP,
+            PET_CONTROLLER_VISION_CPP,
+        )
 
         for token in (
             "kVisionSegmentMaxFrames = 14",
@@ -257,9 +325,10 @@ class PetQmlContractTests(unittest.TestCase):
 
     def test_pet_speech_state_clears_before_new_manual_input(self):
         model = PET_MODEL_CPP.read_text(encoding="utf-8")
-        controller = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+        controller = read_texts(PET_CONTROLLER_CPP, PET_CONTROLLER_SESSION_CPP)
+        compact_model = compact_ws(model)
 
-        self.assertIn("&& !_speech_final && _audio_url.isEmpty()", model)
+        self.assertIn("&& !_speech_final && _audio_url.isEmpty()", compact_model)
         self.assertIn("_speech_final = false;", model)
         self.assertIn("_model.clearSpeech();", controller)
 
@@ -267,7 +336,9 @@ class PetQmlContractTests(unittest.TestCase):
         model = PET_MODEL_CPP.read_text(encoding="utf-8")
 
         self.assertIn("const bool has_text_update", model)
-        self.assertIn("has_text_update && !preserve_voice_for_observation && updateString(_speech_language, text_language)", model)
+        self.assertIn(
+            "has_text_update && !preserve_voice_for_observation && updateString(_speech_language, text_language)", model
+        )
 
     def test_pet_model_preserves_active_voice_for_observation_events(self):
         model = PET_MODEL_CPP.read_text(encoding="utf-8")
@@ -275,15 +346,24 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("preserve_voice_for_observation", model)
         self.assertIn("isObservationControlEvent", model)
         self.assertIn("isAudioStateStillPresenting", model)
-        self.assertIn("actionName == QStringLiteral(\"observe\")", model)
-        self.assertIn("actionName == QStringLiteral(\"visual_react\")", model)
+        self.assertIn('actionName == QStringLiteral("observe")', model)
+        self.assertIn('actionName == QStringLiteral("visual_react")', model)
         self.assertIn("!preserve_voice_for_observation", model)
-        self.assertIn("reset_speech_for_waiting_phase && !_audio_url.isEmpty() && !preserve_voice_for_observation", model)
+        self.assertIn(
+            "reset_speech_for_waiting_phase && !_audio_url.isEmpty() && !preserve_voice_for_observation", model
+        )
 
     def test_pet_chat_window_exposes_wsl_windows_ime_bridge(self):
         header = PET_CONTROLLER_H.read_text(encoding="utf-8")
-        source = read_texts(PET_CONTROLLER_CPP, PET_CONTROLLER_PRIVATE_H, PET_CONTROLLER_WINDOWS_BRIDGE_CPP)
-        chat = PET_CHAT_WINDOW_QML.read_text(encoding="utf-8")
+        source = read_texts(
+            PET_CONTROLLER_CPP,
+            PET_CONTROLLER_SESSION_CPP,
+            REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetControllerVoiceRuntime.cpp",
+            PET_CONTROLLER_PRIVATE_H,
+            PET_CONTROLLER_WINDOWS_UTILS_H,
+            PET_CONTROLLER_WINDOWS_BRIDGE_CPP,
+        )
+        chat = read_texts(PET_CHAT_WINDOW_QML, PET_CHAT_RUNTIME_JS, PET_CHAT_MESSAGE_LIST_QML, PET_CHAT_COMPOSER_QML)
         composer = CHAT_COMPOSER_BAR_QML.read_text(encoding="utf-8")
 
         for token in (
@@ -309,12 +389,12 @@ class PetQmlContractTests(unittest.TestCase):
             "setVoiceRuntimeSettings",
             "voiceRuntimeMetadata",
             "appendVoiceRuntimeMetadata",
-            "payload[QStringLiteral(\"model_type\")]",
-            "payload[QStringLiteral(\"model_name\")]",
-            "metadata[QStringLiteral(\"reply_language\")]",
-            "metadata[QStringLiteral(\"speech_rules\")]",
-            "metadata[QStringLiteral(\"voice_provider\")]",
-            "metadata[QStringLiteral(\"ref_audio_path\")]",
+            'payload[QStringLiteral("model_type")]',
+            'payload[QStringLiteral("model_name")]',
+            'metadata[QStringLiteral("reply_language")]',
+            'metadata[QStringLiteral("speech_rules")]',
+            'metadata[QStringLiteral("voice_provider")]',
+            'metadata[QStringLiteral("ref_audio_path")]',
             "appendVoiceRuntimeMetadata(metadata)",
         ):
             self.assertIn(token, source)
@@ -357,12 +437,18 @@ class PetQmlContractTests(unittest.TestCase):
             "sendPendingText",
             "root.petController.startSession()",
             "root.petController.sendText(trimmed)",
-            "const eventAudioReadyPayload = audioReady || root.hasText(eventAudioUrl) || eventAudioState === \"ready\" || eventAudioState === \"playing\"",
-            "const resolvedEventKey = eventAudioReadyPayload && controllerTurnId.length > 0",
-            "eventAudioReadyPayload && root.updateCompletedAssistantAudio",
+            "function assistantEventSnapshot",
+            "function assistantControllerSnapshot",
+            "function assistantFinalStatus",
+            "function assistantProgressStatus",
+            "PetChatRuntime.assistantEventSnapshot",
+            "PetChatRuntime.assistantControllerSnapshot(root.petController)",
+            "assistantEvent.audioReadyPayload",
+            "assistantEvent.resolvedEventKey",
+            "root.updateCompletedAssistantAudio(assistantEvent.resolvedEventKey",
             "function handleControllerError",
-            "messageModel.setProperty(root.pendingAssistantIndex, \"messageState\", \"failed\")",
-            "root.chatStatusText = \"发送失败，可重试\"",
+            'messageModel.setProperty(root.pendingAssistantIndex, "messageState", "failed")',
+            'root.chatStatusText = "发送失败，可重试"',
             "root.petController.setModelSelection",
             "root.petController.setReplyLanguage",
             "root.petController.setSpeechRules",
@@ -395,7 +481,9 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertNotIn('text: "中"', composer)
 
     def test_pet_audio_player_skips_text_to_speech_fallback(self):
-        audio_player = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetAudioPlayer.qml").read_text(encoding="utf-8")
+        audio_player = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetAudioPlayer.qml").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn("MediaPlayer", audio_player)
         self.assertIn("function hasPlayableAudio", audio_player)
@@ -411,7 +499,7 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertNotIn("deterministic-voice-", audio_player)
 
     def test_main_cpp_bootstraps_linux_input_method_env_for_chinese_entry(self):
-        source = MAIN_CPP.read_text(encoding="utf-8")
+        source = read_texts(MAIN_CPP, MAIN_PLATFORM_BOOTSTRAP_CPP)
 
         for token in (
             "configureLinuxInputMethod",
@@ -435,7 +523,7 @@ class PetQmlContractTests(unittest.TestCase):
             "GDK_BACKEND",
             "WAYLAND_DISPLAY",
             "qunsetenv",
-            "env.remove(QStringLiteral(\"WAYLAND_DISPLAY\"))",
+            'env.remove(QStringLiteral("WAYLAND_DISPLAY"))',
             "QT_QPA_PLATFORM",
             "qtvirtualkeyboard",
             "QT_VIRTUALKEYBOARD_DESKTOP_DISABLE",
@@ -446,7 +534,13 @@ class PetQmlContractTests(unittest.TestCase):
         qrc = QML_QRC.read_text(encoding="utf-8")
         cmake = CLIENT_CMAKE.read_text(encoding="utf-8")
         header = PET_CONTROLLER_H.read_text(encoding="utf-8")
-        source = read_texts(PET_CONTROLLER_PRIVATE_H, PET_CONTROLLER_VISION_CPP, PET_CONTROLLER_WINDOWS_BRIDGE_CPP)
+        source = read_texts(
+            PET_CONTROLLER_PRIVATE_H,
+            PET_CONTROLLER_VISION_UTILS_H,
+            PET_CONTROLLER_WINDOWS_UTILS_H,
+            PET_CONTROLLER_VISION_CPP,
+            PET_CONTROLLER_WINDOWS_BRIDGE_CPP,
+        )
         scene = PET_SCENE_QML.read_text(encoding="utf-8")
         camera_capture = PET_CAMERA_CAPTURE_QML.read_text(encoding="utf-8")
 
@@ -520,7 +614,8 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertNotIn("capturePaused", camera_capture)
 
     def test_pet_vision_privacy_controls_have_guardrails_and_diagnostics(self):
-        control = PET_CONTROL_WINDOW_QML.read_text(encoding="utf-8")
+        control = read_texts(PET_CONTROL_WINDOW_QML, PET_CONTROL_RUNTIME_JS)
+        privacy_card = PET_VISION_PRIVACY_CARD_QML.read_text(encoding="utf-8")
         scene = PET_SCENE_QML.read_text(encoding="utf-8")
         window = PET_WINDOW_QML.read_text(encoding="utf-8")
 
@@ -532,13 +627,22 @@ class PetQmlContractTests(unittest.TestCase):
             "root.cloudVisionToggled(false)",
             "enabled: !root.localOnlyMode && root.modelProviderAvailable()",
             "checked: root.cloudVisionRuntimeEnabled()",
-            "视觉隐私",
             "root.cameraDiagnosticText()",
             "root.cloudVisionDiagnosticText()",
             "root.retentionDiagnosticText()",
             "原始帧不保留",
         ):
             self.assertIn(token, control)
+
+        for token in (
+            "视觉隐私",
+            "cameraDiagnosticText",
+            "cloudVisionDiagnosticText",
+            "retentionDiagnosticText",
+            "cloudVisionEnabled",
+            "debugRetentionEnabled",
+        ):
+            self.assertIn(token, privacy_card)
 
         for token in (
             "function providerRuntimeAvailable",
@@ -568,6 +672,7 @@ class PetQmlContractTests(unittest.TestCase):
 
     def test_pet_window_is_transparent_model_first_and_resources_remain_registered(self):
         window = PET_WINDOW_QML.read_text(encoding="utf-8")
+        window_runtime = PET_WINDOW_RUNTIME_JS.read_text(encoding="utf-8")
         scene = PET_SCENE_QML.read_text(encoding="utf-8")
         qrc = QML_QRC.read_text(encoding="utf-8")
 
@@ -580,7 +685,9 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("scaledWindowHeight", window)
         self.assertIn("applyScale", window)
         self.assertIn("readonly property int speechBubbleSafeHeight: 84", window)
-        self.assertIn("return root.speechBubbleSafeHeight + Math.round(root.baseWindowHeight * factor)", window)
+        self.assertIn('import "PetWindowRuntime.js" as PetWindowRuntime', window)
+        self.assertIn("function scaledWindowHeight", window_runtime)
+        self.assertIn("return speechBubbleSafeHeight + Math.round(baseWindowHeight * scaleFactor)", window_runtime)
         self.assertIn("minimumHeight: speechBubbleSafeHeight + Math.round(baseWindowHeight * 0.65)", window)
         self.assertIn("root.width = scaledWindowWidth(nextScale)", window)
         self.assertIn("root.height = scaledWindowHeight(nextScale)", window)
@@ -604,7 +711,10 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("function onSettingsChanged()", window)
         self.assertIn("property bool voiceReplyEnabled: true", window)
         self.assertIn("voiceReplyEnabled: root.voiceReplyEnabled", window)
-        self.assertIn("onVoiceReplyToggled: function(value) { root.voiceReplyEnabled = value; root.syncControlWindowState() }", window)
+        self.assertIn(
+            "onVoiceReplyToggled: function(value) { root.voiceReplyEnabled = value; root.syncControlWindowState() }",
+            window,
+        )
         self.assertIn("petChatWindowRef.voiceCallActive = root.voiceReplyEnabled", window)
         self.assertIn("onVoiceReplyEnabledChanged", window)
         self.assertIn("onVoiceChatRequested: function(active) { root.voiceReplyEnabled = active }", window)
@@ -634,8 +744,8 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertNotIn("actionPopup.open()", scene)
         self.assertNotIn("property bool chatPanelOpen", scene)
         self.assertNotIn("function openChatPanel", scene)
-        self.assertIn("petAudioLoader.item.playbackState = \"stopped\"", scene)
-        self.assertIn("petAudioLoader.item.sourceUrl = \"\"", scene)
+        self.assertIn('petAudioLoader.item.playbackState = "stopped"', scene)
+        self.assertIn('petAudioLoader.item.sourceUrl = ""', scene)
         self.assertIn("petAudioLoader.item.playbackState = root.petController.audioState", scene)
         self.assertIn("speechBubbleVisible", scene)
         self.assertIn("id: speechBubble", scene)
@@ -651,36 +761,56 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertNotIn("capturePaused", scene)
         self.assertIn("font.bold: true", scene)
         self.assertIn("property var petAssetSettings: null", scene)
-        self.assertIn("modelRoot: root.petAssetSettings ? root.petAssetSettings.modelRoot : \"\"", scene)
-        self.assertIn("modelJson: root.petAssetSettings ? root.petAssetSettings.modelJson : \"\"", scene)
+        self.assertIn('modelRoot: root.petAssetSettings ? root.petAssetSettings.modelRoot : ""', scene)
+        self.assertIn('modelJson: root.petAssetSettings ? root.petAssetSettings.modelJson : ""', scene)
         self.assertNotIn("id: topControls", scene)
         self.assertNotIn("id: dockControls", scene)
         self.assertNotIn("Popup", scene)
         self.assertIn("qml/pet/PetWindow.qml", qrc)
+        self.assertIn("qml/pet/PetWindowRuntime.js", qrc)
         self.assertIn("qml/pet/PetScene.qml", qrc)
         self.assertIn("qml/pet/PetControlWindow.qml", qrc)
+        self.assertIn("qml/pet/PetControlRuntime.js", qrc)
+        self.assertIn("qml/pet/PetControlLive2DActionPanel.qml", qrc)
+        self.assertIn("qml/pet/PetControlApiProviderPanel.qml", qrc)
         self.assertIn("qml/pet/PetChatWindow.qml", qrc)
         self.assertIn("qml/pet/PetAudioPlayer.qml", qrc)
         self.assertIn("qml/pet/Live2DCharacterPane.qml", qrc)
         self.assertIn('alias="icons/modelive2d.png"', qrc)
 
     def test_pet_control_window_contains_api_access_controls(self):
-        panel = PET_CONTROL_WINDOW_QML.read_text(encoding="utf-8")
+        panel = read_texts(
+            PET_CONTROL_WINDOW_QML,
+            PET_CONTROL_RUNTIME_JS,
+            PET_CONTROL_LIVE2D_ACTION_PANEL_QML,
+            PET_CONTROL_API_PROVIDER_PANEL_QML,
+        )
+        header = PET_CONTROL_HEADER_QML.read_text(encoding="utf-8")
 
         self.assertIn("Window {", panel)
         self.assertIn("maximumWidth: 320", panel)
-        self.assertIn("panelCloseButton", panel)
-        self.assertIn("onClicked: root.hide()", panel)
+        self.assertIn("PetControlHeader", panel)
+        self.assertIn("PetControlRuntime.displayStatus", panel)
+        self.assertIn("PetControlLive2DActionPanel", panel)
+        self.assertIn("PetControlApiProviderPanel", panel)
+        self.assertIn("function actionKindLabel", panel)
+        self.assertIn("function modelFullName", panel)
+        self.assertIn("onCloseRequested: root.hide()", panel)
+        self.assertIn("panelCloseButton", header)
+        self.assertIn("onClicked: root.closeRequested()", header)
         self.assertIn('text: "AI API 接入"', panel)
         self.assertIn("property var agentController", panel)
         self.assertIn("root.agentController.registerApiProvider", panel)
         self.assertIn("root.agentController.refreshModelList", panel)
         self.assertIn("root.agentController.switchModel", panel)
+        self.assertIn("onRegisterRequested", panel)
+        self.assertIn("onRefreshRequested", panel)
+        self.assertIn("onModelSelected", panel)
         self.assertIn("apiProviderStatus", panel)
         self.assertIn("availableModels", panel)
 
     def test_pet_chat_window_is_separate_and_uses_pet_controller(self):
-        chat = PET_CHAT_WINDOW_QML.read_text(encoding="utf-8")
+        chat = read_texts(PET_CHAT_WINDOW_QML, PET_CHAT_RUNTIME_JS, PET_CHAT_MESSAGE_LIST_QML, PET_CHAT_COMPOSER_QML)
 
         self.assertIn("Window {", chat)
         self.assertIn("flags: chatWindowFlags()", chat)
@@ -694,6 +824,9 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("function sendMessage", chat)
         self.assertIn("function sendPendingText", chat)
         self.assertIn("function appendOrUpdateAssistantMessage", chat)
+        self.assertIn("function assistantEventSnapshot", chat)
+        self.assertIn("PetChatRuntime.assistantEventSnapshot", chat)
+        self.assertIn("assistantEvent.resolvedEventKey", chat)
         self.assertIn("pendingSendAlreadyAppended", chat)
         self.assertIn("function syncModelSelection", chat)
         self.assertIn("function syncReplyLanguage", chat)
@@ -704,7 +837,8 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("root.voiceChatRequested(root.voiceCallActive)", chat)
         self.assertIn("语音回复已开启", chat)
         self.assertIn("videoChatRequested", chat)
-        self.assertIn("enabled: !!root.petController && !root.petController.busy", chat)
+        self.assertIn("controllerAvailable: !!root.petController", chat)
+        self.assertIn("enabled: root.controllerAvailable && !root.controllerBusy", chat)
         self.assertIn("root.petController.startSession()", chat)
         self.assertIn("root.petController.sendText(trimmed)", chat)
         self.assertIn("root.petController.setModelSelection", chat)
@@ -724,12 +858,13 @@ class PetQmlContractTests(unittest.TestCase):
 
     def test_chat_message_delegate_has_builtin_avatar_fallback_icon(self):
         delegate = CHAT_MESSAGE_DELEGATE_QML.read_text(encoding="utf-8")
+        avatar = CHAT_MESSAGE_AVATAR_QML.read_text(encoding="utf-8")
 
-        self.assertIn("id: leftAvatarFallbackImage", delegate)
-        self.assertIn("id: rightAvatarFallbackImage", delegate)
-        self.assertIn('source: "qrc:/icons/user.png"', delegate)
-        self.assertIn("leftAvatarImage.status === Image.Ready", delegate)
-        self.assertIn("rightAvatarImage.status === Image.Ready", delegate)
+        self.assertIn("MessageAvatar", delegate)
+        self.assertIn('source: "qrc:/icons/user.png"', avatar)
+        self.assertIn("avatarImage.status === Image.Ready", avatar)
+        self.assertIn("property bool loadFailed: false", avatar)
+        self.assertIn("source: loadFailed ? root.defaultAvatarSource : baseSource", avatar)
 
     def test_chat_composer_bar_exposes_linux_chinese_input_fallback(self):
         composer = CHAT_COMPOSER_BAR_QML.read_text(encoding="utf-8")
@@ -769,7 +904,13 @@ class PetQmlContractTests(unittest.TestCase):
 
     def test_live2d_role_page_can_request_pet_preview_from_both_entry_points(self):
         pane = CHARACTER_PANE_QML.read_text(encoding="utf-8")
+        runtime = LIVE2D_CHARACTER_RUNTIME_JS.read_text(encoding="utf-8")
+        pane_runtime = pane + runtime
         shell = CHAT_SHELL_PAGE_QML.read_text(encoding="utf-8")
+        shell_content = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/ChatShellContent.qml").read_text(
+            encoding="utf-8"
+        )
+        shell_sources = shell + shell_content
 
         self.assertRegex(pane, r"\bsignal\s+petPreviewRequested\s*\(\s*var\s+petAssetSettings\s*\)")
         self.assertRegex(pane, r"\bfunction\s+requestPetPreview\s*\(")
@@ -779,10 +920,10 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("onClicked: root.requestPetPreview()", pane)
 
         self.assertRegex(shell, r"\bsignal\s+petPreviewRequested\s*\(\s*var\s+petAssetSettings\s*\)")
-        self.assertIn("Live2DCharacterPane", shell)
-        self.assertIn("onPetPreviewRequested: function(petAssetSettings)", shell)
-        self.assertIn("root.petPreviewRequested(petAssetSettings)", shell)
-        self.assertIn("ready_for_gpt_sovits", pane)
+        self.assertIn("Live2DCharacterPane", shell_sources)
+        self.assertIn("onPetPreviewRequested: function(petAssetSettings)", shell_sources)
+        self.assertIn("root.petPreviewRequested(petAssetSettings)", shell_sources)
+        self.assertIn("ready_for_gpt_sovits", pane_runtime)
 
         for path in (SHARED_MAIN_QML, LINUX_MAIN_QML):
             source = path.read_text(encoding="utf-8")
@@ -790,20 +931,28 @@ class PetQmlContractTests(unittest.TestCase):
             self.assertIn("function ensurePetWindow(petAssetSettings)", source)
             self.assertIn("win.openPet()", source)
             self.assertIn("startupPetTimer", source)
-            self.assertIn('\"petAssetSettings\": settings', source)
-            self.assertIn('\"agentController\": controller.agentController', source)
+            self.assertIn('"petAssetSettings": settings', source)
+            self.assertIn('"agentController": controller.agentController', source)
             self.assertIn("petWindowRef.petAssetSettings = settings", source)
             self.assertIn("onPetPreviewRequested: function(petAssetSettings)", source)
             self.assertIn("root.openPetWindow(petAssetSettings)", source)
 
     def test_pet_autostart_is_disabled_by_default_and_only_starts_from_saved_setting(self):
         pane = CHARACTER_PANE_QML.read_text(encoding="utf-8")
+        runtime = LIVE2D_CHARACTER_RUNTIME_JS.read_text(encoding="utf-8")
+        pane_runtime = pane + runtime
+        behavior_panel = LIVE2D_BEHAVIOR_MEMORY_PANEL_QML.read_text(encoding="utf-8")
 
         self.assertRegex(pane, r"\bproperty\s+bool\s+autoStartPetOnClientStart\s*:\s*false\b")
-        self.assertIn("autoStartPetOnClientStart = petAssetSettings.autoStartPetOnClientStart", pane)
-        self.assertIn("petAssetSettings.autoStartPetOnClientStart = autoStartPetOnClientStart", pane)
-        self.assertIn('title: "打开客户端自启"', pane)
-        self.assertIn("checked: root.autoStartPetOnClientStart", pane)
+        self.assertIn("autoStartPetOnClientStart = settings.autoStartPetOnClientStart", pane_runtime)
+        self.assertIn("settings.autoStartPetOnClientStart = source.autoStartPetOnClientStart", pane_runtime)
+        self.assertIn("Live2DBehaviorMemoryPanel", pane)
+        self.assertIn("autoStartPetOnClientStart: root.autoStartPetOnClientStart", pane)
+        self.assertIn(
+            "onAutoStartPetOnClientStartEdited: function(checked) { root.autoStartPetOnClientStart = checked }", pane
+        )
+        self.assertIn('title: "打开客户端自启"', behavior_panel)
+        self.assertIn("checked: root.autoStartPetOnClientStart", behavior_panel)
 
         for path in (SHARED_MAIN_QML, LINUX_MAIN_QML):
             with self.subTest(path=path):
@@ -825,6 +974,11 @@ class PetQmlContractTests(unittest.TestCase):
 
     def test_live2d_resource_path_buttons_open_native_file_pickers(self):
         pane = CHARACTER_PANE_QML.read_text(encoding="utf-8")
+        character_preview = LIVE2D_CHARACTER_PREVIEW_PANEL_QML.read_text(encoding="utf-8")
+        resource_voice = LIVE2D_RESOURCE_VOICE_PANEL_QML.read_text(encoding="utf-8")
+        resource_bundle = read_texts(
+            CHARACTER_PANE_QML, LIVE2D_CHARACTER_PREVIEW_PANEL_QML, LIVE2D_RESOURCE_VOICE_PANEL_QML
+        )
 
         for function_name in (
             "pickModelJson",
@@ -839,19 +993,56 @@ class PetQmlContractTests(unittest.TestCase):
         for token in (
             "petAssetSettings.pickLocalFilePath",
             "petAssetSettings.pickLocalDirectoryPath",
-            "onClicked: root.pickModelJson()",
-            "onClicked: root.pickModelRootDirectory()",
-            "onClicked: root.pickMotionDirectory()",
-            "onClicked: root.pickExpressionDirectory()",
-            "onClicked: root.pickVoiceDirectory()",
-            "onClicked: root.pickDefaultVoice()",
         ):
             self.assertIn(token, pane)
 
+        for token in (
+            "onModelJsonPickRequested: root.pickModelJson()",
+            "onModelRootPickRequested: root.pickModelRootDirectory()",
+            "onMotionDirectoryPickRequested: root.pickMotionDirectory()",
+            "onExpressionDirectoryPickRequested: root.pickExpressionDirectory()",
+            "onVoiceDirectoryPickRequested: root.pickVoiceDirectory()",
+            "onDefaultVoicePickRequested: root.pickDefaultVoice()",
+        ):
+            self.assertIn(token, pane)
+
+        for token in (
+            "signal modelJsonPickRequested()",
+            "signal modelRootPickRequested()",
+            "onClicked: root.modelJsonPickRequested()",
+            "onClicked: root.modelRootPickRequested()",
+        ):
+            self.assertIn(token, character_preview)
+
+        for token in (
+            "signal motionDirectoryPickRequested()",
+            "signal expressionDirectoryPickRequested()",
+            "signal voiceDirectoryPickRequested()",
+            "signal defaultVoicePickRequested()",
+            "onClicked: root.motionDirectoryPickRequested()",
+            "onClicked: root.expressionDirectoryPickRequested()",
+            "onClicked: root.voiceDirectoryPickRequested()",
+            "onClicked: root.defaultVoicePickRequested()",
+        ):
+            self.assertIn(token, resource_voice)
+
+        for token in (
+            "root.pickModelJson()",
+            "root.pickModelRootDirectory()",
+            "root.pickMotionDirectory()",
+            "root.pickExpressionDirectory()",
+            "root.pickVoiceDirectory()",
+            "root.pickDefaultVoice()",
+        ):
+            self.assertIn(token, resource_bundle)
+
     def test_pet_controller_exposes_voice_training_submission_contract(self):
         header = PET_CONTROLLER_H.read_text(encoding="utf-8")
-        source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
+        source = read_texts(PET_CONTROLLER_CPP, PET_CONTROLLER_NETWORK_CPP, PET_CONTROLLER_VOICE_TRAINING_CPP)
         shell = CHAT_SHELL_PAGE_QML.read_text(encoding="utf-8")
+        shell_content = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/ChatShellContent.qml").read_text(
+            encoding="utf-8"
+        )
 
         for token in (
             "voiceTrainingBusy",
@@ -879,7 +1070,7 @@ class PetQmlContractTests(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
-        self.assertIn("petController: controller.petController", shell)
+        self.assertIn("petController: controller.petController", shell + shell_content)
 
 
 if __name__ == "__main__":

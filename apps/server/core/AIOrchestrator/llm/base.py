@@ -1,6 +1,7 @@
 """
 LLM 抽象基类 — 所有 LLM 实现统一接口
 """
+
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
