@@ -3,7 +3,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 QML_ROOT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml"
-QML_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml.qrc"
+QRC_ROOT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/resources/qrc"
+QML_QRCS = (
+    QRC_ROOT / "qml-chat.qrc",
+    QRC_ROOT / "qml-agent.qrc",
+    QRC_ROOT / "qml-pet.qrc",
+    QRC_ROOT / "qml-r18.qrc",
+)
 
 LIVE2D_CHARACTER_PANE = QML_ROOT / "pet/Live2DCharacterPane.qml"
 LIVE2D_ASSET_COLUMN = QML_ROOT / "pet/Live2DCharacterAssetColumn.qml"
@@ -13,6 +19,11 @@ AGENT_GAME_PANE = QML_ROOT / "agent/AgentGamePane.qml"
 AGENT_GAME_SETUP_PANE = QML_ROOT / "agent/AgentGameSetupPane.qml"
 AGENT_GAME_ROOM_PANE = QML_ROOT / "agent/AgentGameRoomPane.qml"
 AGENT_GAME_TEMPLATE_PANE = QML_ROOT / "agent/AgentGameTemplatePane.qml"
+AGENT_GAME_AGENT_CARD = QML_ROOT / "agent/AgentGameAgentCard.qml"
+AGENT_GAME_OPTION_COMBO = QML_ROOT / "agent/AgentGameOptionCombo.qml"
+AGENT_MARKDOWN_TEXT = QML_ROOT / "agent/AgentMarkdownText.qml"
+AGENT_MARKDOWN_RUNTIME = QML_ROOT / "agent/AgentMarkdownRuntime.js"
+AGENT_MARKDOWN_CODE_BLOCK = QML_ROOT / "agent/AgentMarkdownCodeBlock.qml"
 R18_SOURCE_MANAGER_PANE = QML_ROOT / "r18/R18SourceManagerPane.qml"
 R18_SOURCE_IMPORT_PANE = QML_ROOT / "r18/R18SourceImportPane.qml"
 R18_OFFICIAL_SOURCE_CATALOG_PANE = QML_ROOT / "r18/R18OfficialSourceCatalogPane.qml"
@@ -31,8 +42,11 @@ class LargePaneBoundaryTests(unittest.TestCase):
     def read(self, path):
         return path.read_text(encoding="utf-8")
 
+    def qrc_text(self):
+        return "\n".join(self.read(path) for path in QML_QRCS)
+
     def test_live2d_character_columns_exist_and_are_registered(self):
-        qrc = self.read(QML_QRC)
+        qrc = self.qrc_text()
         for path in (LIVE2D_ASSET_COLUMN, LIVE2D_BEHAVIOR_COLUMN, LIVE2D_PROMPT_COLUMN):
             with self.subTest(path=path):
                 self.assertTrue(path.is_file())
@@ -69,7 +83,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
         self.assertIn("Live2DPromptPreviewPanel", prompt)
 
     def test_agent_game_panes_exist_and_are_registered(self):
-        qrc = self.read(QML_QRC)
+        qrc = self.qrc_text()
         for path in (AGENT_GAME_SETUP_PANE, AGENT_GAME_ROOM_PANE, AGENT_GAME_TEMPLATE_PANE):
             with self.subTest(path=path):
                 self.assertTrue(path.is_file())
@@ -113,8 +127,47 @@ class LargePaneBoundaryTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, template)
 
+    def test_agent_game_option_combo_boundary(self):
+        qrc = self.qrc_text()
+        card = self.read(AGENT_GAME_AGENT_CARD)
+
+        self.assertTrue(AGENT_GAME_OPTION_COMBO.is_file())
+        self.assertIn("qml/agent/AgentGameOptionCombo.qml", qrc)
+        self.assertGreaterEqual(card.count("AgentGameOptionCombo"), 3)
+        self.assertNotIn("delegate: ItemDelegate", card)
+
+    def test_agent_game_option_combo_does_not_shadow_combobox_final_value(self):
+        combo = self.read(AGENT_GAME_OPTION_COMBO)
+        card = self.read(AGENT_GAME_AGENT_CARD)
+
+        self.assertIn("property var selectedValue", combo)
+        self.assertNotIn("property var currentValue", combo)
+        self.assertIn("selectedValue:", card)
+        self.assertNotIn("currentValue:", card)
+
+    def test_agent_markdown_runtime_and_code_block_boundaries(self):
+        qrc = self.qrc_text()
+        markdown = self.read(AGENT_MARKDOWN_TEXT)
+
+        for path in (AGENT_MARKDOWN_RUNTIME, AGENT_MARKDOWN_CODE_BLOCK):
+            with self.subTest(path=path):
+                self.assertTrue(path.is_file())
+                self.assertIn(f"qml/{path.relative_to(QML_ROOT).as_posix()}", qrc)
+
+        self.assertIn('import "AgentMarkdownRuntime.js" as AgentMarkdownRuntime', markdown)
+        self.assertIn("AgentMarkdownCodeBlock", markdown)
+
+        for token in (
+            "function highlightLine",
+            "function highlightedCode",
+            "function keywordSource",
+            "var cppWords",
+        ):
+            with self.subTest(token=token):
+                self.assertNotIn(token, markdown)
+
     def test_r18_source_manager_panes_exist_and_are_registered(self):
-        qrc = self.read(QML_QRC)
+        qrc = self.qrc_text()
         for path in (R18_SOURCE_IMPORT_PANE, R18_OFFICIAL_SOURCE_CATALOG_PANE, R18_SOURCE_LIST_PANE):
             with self.subTest(path=path):
                 self.assertTrue(path.is_file())
@@ -154,7 +207,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
         self.assertIn("importedSourceOpenRequested", list_pane)
 
     def test_r18_home_pane_exists_and_is_registered(self):
-        qrc = self.read(QML_QRC)
+        qrc = self.qrc_text()
 
         self.assertTrue(R18_HOME_PANE.is_file())
         self.assertIn("qml/r18/R18HomePane.qml", qrc)
@@ -185,7 +238,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
                 self.assertIn(token, home)
 
     def test_chat_message_status_badge_exists_and_is_registered(self):
-        qrc = self.read(QML_QRC)
+        qrc = self.qrc_text()
 
         self.assertTrue(CHAT_MESSAGE_STATUS_BADGE.is_file())
         self.assertIn("qml/chat/conversation/ChatMessageStatusBadge.qml", qrc)
@@ -206,7 +259,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
                 self.assertIn(token, badge)
 
     def test_chat_message_action_menu_exists_and_is_registered(self):
-        qrc = self.read(QML_QRC)
+        qrc = self.qrc_text()
 
         self.assertTrue(CHAT_MESSAGE_ACTION_MENU.is_file())
         self.assertIn("qml/chat/conversation/ChatMessageActionMenu.qml", qrc)
@@ -230,7 +283,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
                 self.assertIn(token, action_menu)
 
     def test_chat_smart_summary_popup_exists_and_is_registered(self):
-        qrc = self.read(QML_QRC)
+        qrc = self.qrc_text()
 
         self.assertTrue(CHAT_SMART_SUMMARY_POPUP.is_file())
         self.assertIn("qml/chat/conversation/ChatSmartSummaryPopup.qml", qrc)
@@ -247,7 +300,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
         self.assertIn("closeRequested", summary)
 
     def test_chat_smart_translate_popup_exists_and_is_registered(self):
-        qrc = self.read(QML_QRC)
+        qrc = self.qrc_text()
 
         self.assertTrue(CHAT_SMART_TRANSLATE_POPUP.is_file())
         self.assertIn("qml/chat/conversation/ChatSmartTranslatePopup.qml", qrc)

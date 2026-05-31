@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="web/livekit/index.html">../web/livekit/index.html</file>
+        <file alias="web/livekit/app.js">../web/livekit/app.js</file>
+    </qresource>
+</RCC>

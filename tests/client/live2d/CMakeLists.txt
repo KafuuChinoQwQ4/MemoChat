@@ -8,28 +8,28 @@ set(CMAKE_AUTOMOC ON)
 add_executable(live2d_asset_gtest
     main.cpp
     Live2DAssetTest.cpp
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAsset.cpp
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAssetActionFiles.cpp
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAssetModelFile.cpp
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAssetOptionalFiles.cpp
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAssetPaths.cpp
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAssetRequiredFiles.cpp
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAssetValidation.cpp
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAssetVoiceFiles.cpp
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DModelAssetParser.cpp
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DMotionCatalog.cpp
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DRenderPathResolver.cpp
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAsset.h
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAssetActionFiles.h
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAssetModelFile.h
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAssetOptionalFiles.h
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAssetPaths.h
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAssetRequiredFiles.h
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAssetValidation.h
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DAssetVoiceFiles.h
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DModelAssetParser.h
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DMotionCatalog.h
-    ../../../apps/client/desktop/MemoChat-qml/live2d/Live2DRenderPathResolver.h
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAsset.cpp
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAssetActionFiles.cpp
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAssetModelFile.cpp
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAssetOptionalFiles.cpp
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAssetPaths.cpp
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAssetRequiredFiles.cpp
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAssetValidation.cpp
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAssetVoiceFiles.cpp
+    ../../../apps/client/desktop/MemoChat-qml/live2d/model/Live2DModelAssetParser.cpp
+    ../../../apps/client/desktop/MemoChat-qml/live2d/model/Live2DMotionCatalog.cpp
+    ../../../apps/client/desktop/MemoChat-qml/live2d/rendering/Live2DRenderPathResolver.cpp
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAsset.h
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAssetActionFiles.h
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAssetModelFile.h
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAssetOptionalFiles.h
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAssetPaths.h
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAssetRequiredFiles.h
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAssetValidation.h
+    ../../../apps/client/desktop/MemoChat-qml/live2d/assets/Live2DAssetVoiceFiles.h
+    ../../../apps/client/desktop/MemoChat-qml/live2d/model/Live2DModelAssetParser.h
+    ../../../apps/client/desktop/MemoChat-qml/live2d/model/Live2DMotionCatalog.h
+    ../../../apps/client/desktop/MemoChat-qml/live2d/rendering/Live2DRenderPathResolver.h
 )
 
 target_link_libraries(live2d_asset_gtest PRIVATE
@@ -40,6 +40,9 @@ target_link_libraries(live2d_asset_gtest PRIVATE
 target_include_directories(live2d_asset_gtest PRIVATE
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/live2d
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/live2d/assets
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/live2d/model
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/live2d/rendering
 )
 
 target_compile_definitions(live2d_asset_gtest PRIVATE

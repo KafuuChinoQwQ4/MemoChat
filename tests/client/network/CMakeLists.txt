@@ -60,7 +60,7 @@ gtest_discover_tests(transport_endpoint_policy_gtest TEST_DISCOVERY_MODE POST_BU
 
 add_executable(app_chat_connection_policy_gtest
     AppChatConnectionPolicyTest.cpp
-    ../../../apps/client/desktop/MemoChat-qml/app/AppChatConnectionPolicy.cpp
+    ../../../apps/client/desktop/MemoChat-qml/app/connection/AppChatConnectionPolicy.cpp
 )
 set_target_properties(app_chat_connection_policy_gtest PROPERTIES
     CXX_STANDARD 23
@@ -78,6 +78,7 @@ target_link_libraries(app_chat_connection_policy_gtest PRIVATE
 
 target_include_directories(app_chat_connection_policy_gtest PRIVATE
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/app
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/app/connection
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core/common
 )
 

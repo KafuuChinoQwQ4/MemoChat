@@ -8,14 +8,18 @@ CHAT_MESSAGE_LIST_VIEW = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/
 CHAT_MESSAGE_DELEGATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/conversation/ChatMessageDelegate.qml"
 MOMENTS_FEED = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/moments/MomentsFeedPane.qml"
 MOMENTS_DELEGATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/moments/MomentsDelegate.qml"
-MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
+MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
 LOGIN_TOP_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/components/LoginTopBar.qml"
-MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/main.cpp"
-SESSION_AUTH_LOGIN_RESPONSE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/SessionAuthCoordinatorLoginResponse.cpp"
-APP_CONTROLLER_NAVIGATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerNavigation.cpp"
-APP_CONTROLLER_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppController.cpp"
-APP_CHAT_CONNECTION_COORDINATOR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppChatConnectionCoordinator.cpp"
+MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/bootstrap/main.cpp"
+SESSION_AUTH_LOGIN_RESPONSE = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/session/SessionAuthCoordinatorLoginResponse.cpp"
+)
+APP_CONTROLLER_NAVIGATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerNavigation.cpp"
+APP_CONTROLLER_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppController.cpp"
+APP_CHAT_CONNECTION_COORDINATOR = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/connection/AppChatConnectionCoordinator.cpp"
+)
 
 
 def extract_cpp_function(source: str, signature: str) -> str:
@@ -111,7 +115,7 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
             self.assertNotIn("Window.window.startSystemMove()", qml)
 
         login_top_bar = LOGIN_TOP_BAR_QML.read_text(encoding="utf-8")
-        login_page = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/LoginPage.qml").read_text(encoding="utf-8")
+        login_page = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/auth/LoginPage.qml").read_text(encoding="utf-8")
         self.assertIn("onPressed:", login_top_bar)
         self.assertIn("signal dragMoveRequested()", login_top_bar)
         self.assertIn("onDragMoveRequested:", login_page)

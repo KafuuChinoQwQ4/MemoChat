@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Window 2.15
 import "../components" as SharedComponents
+import "../components/LoginCredentialRuntime.js" as LoginCredentialRuntime
 import "components" as LinuxComponents
 
 Rectangle {
@@ -39,64 +40,67 @@ Rectangle {
         return Math.max(0, Math.min(1, (revealProgress - start) / span))
     }
 
+    function credentialCacheJson() {
+        return credentialProvider ? (credentialProvider.loginCredentialCacheJson || "[]") : "[]"
+    }
+
     function parseCredentialCache() {
-        try {
-            const cacheJson = credentialProvider ? (credentialProvider.loginCredentialCacheJson || "[]") : "[]"
-            const parsed = JSON.parse(cacheJson || "[]")
-            return Array.isArray(parsed) ? parsed : []
-        } catch (e) {
-            return []
+        return LoginCredentialRuntime.parseCredentialCache(credentialCacheJson(), maxCachedCredentials)
+    }
+
+    function replaceCredentialModel(records) {
+        credentialModel.clear()
+        for (let i = 0; i < records.length; ++i) {
+            credentialModel.append({ "email": records[i].email, "password": records[i].password })
         }
+    }
+
+    function credentialModelRecords() {
+        const records = []
+        for (let i = 0; i < credentialModel.count; ++i) {
+            records.push(credentialModel.get(i))
+        }
+        return records
     }
 
     function refreshCredentialModel() {
-        credentialModel.clear()
         const records = parseCredentialCache()
-        for (let i = 0; i < records.length; ++i) {
-            const email = String(records[i].email || "").trim()
-            const password = String(records[i].password || "")
-            if (email.length > 0) {
-                credentialModel.append({ "email": email, "password": password })
-            }
-        }
+        replaceCredentialModel(records)
+        return records
     }
 
     function loadLastCredential(fillOnlyEmpty) {
-        refreshCredentialModel()
-        if (credentialModel.count <= 0) {
+        const record = LoginCredentialRuntime.lastCredential(refreshCredentialModel())
+        if (!record) {
             return
         }
         if (fillOnlyEmpty && (emailField.text.length > 0 || pwdField.text.length > 0)) {
             return
         }
-        emailField.text = credentialModel.get(0).email
-        pwdField.text = credentialModel.get(0).password
+        emailField.text = record.email
+        pwdField.text = record.password
     }
 
     function saveCredential(email, password) {
-        const normalizedEmail = String(email || "").trim()
-        if (normalizedEmail.length <= 0 || String(password || "").length <= 0) {
+        const normalized = LoginCredentialRuntime.normalizeCredential(email, password)
+        if (!LoginCredentialRuntime.isSaveableCredential(normalized)) {
             return
         }
-        const records = parseCredentialCache().filter(function(item) {
-            return String(item.email || "").trim().toLowerCase() !== normalizedEmail.toLowerCase()
-        })
-        records.unshift({ "email": normalizedEmail, "password": String(password || "") })
+        const savedRecords = LoginCredentialRuntime.buildSavedCredentials(credentialCacheJson(),
+                                                                          normalized.email,
+                                                                          normalized.password,
+                                                                          maxCachedCredentials)
         if (credentialProvider) {
-            credentialProvider.saveLoginCredential(normalizedEmail, String(password || ""))
+            credentialProvider.saveLoginCredential(normalized.email, normalized.password)
         }
-        credentialModel.clear()
-        const savedRecords = records.slice(0, maxCachedCredentials)
-        for (let i = 0; i < savedRecords.length; ++i) {
-            credentialModel.append({ "email": savedRecords[i].email, "password": savedRecords[i].password })
-        }
+        replaceCredentialModel(savedRecords)
     }
 
     function applyCredential(index) {
-        if (index < 0 || index >= credentialModel.count) {
+        const record = LoginCredentialRuntime.credentialAt(credentialModelRecords(), index)
+        if (!record) {
             return
         }
-        const record = credentialModel.get(index)
         emailField.text = record.email
         pwdField.text = record.password
         credentialDropdownOpen = false

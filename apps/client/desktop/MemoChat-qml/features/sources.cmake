@@ -1,0 +1,12 @@
+set(MEMOCHAT_QML_FEATURE_SOURCES)
+set(MEMOCHAT_QML_FEATURE_HEADERS)
+
+include(${CMAKE_CURRENT_LIST_DIR}/auth/sources.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/call/sources.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/chat/sources.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/contact/sources.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/profile/sources.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/moments/sources.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/agent/sources.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/pet/sources.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/r18/sources.cmake)

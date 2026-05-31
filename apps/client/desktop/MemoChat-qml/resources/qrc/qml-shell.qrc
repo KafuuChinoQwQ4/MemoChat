@@ -1,0 +1,45 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="qml/Main.qml">../../qml/app/Main.qml</file>
+        <file alias="qml/app/Main.qml">../../qml/app/Main.qml</file>
+        <file alias="qml/linux/Main.qml">../../qml/linux/Main.qml</file>
+        <file alias="qml/AppWindowRuntime.js">../../qml/app/AppWindowRuntime.js</file>
+        <file alias="qml/app/AppWindowRuntime.js">../../qml/app/AppWindowRuntime.js</file>
+        <file alias="qml/LoginPage.qml">../../qml/auth/LoginPage.qml</file>
+        <file alias="qml/auth/LoginPage.qml">../../qml/auth/LoginPage.qml</file>
+        <file alias="qml/linux/LoginPage.qml">../../qml/linux/LoginPage.qml</file>
+        <file alias="qml/RegisterPage.qml">../../qml/auth/RegisterPage.qml</file>
+        <file alias="qml/auth/RegisterPage.qml">../../qml/auth/RegisterPage.qml</file>
+        <file alias="qml/ResetPage.qml">../../qml/auth/ResetPage.qml</file>
+        <file alias="qml/auth/ResetPage.qml">../../qml/auth/ResetPage.qml</file>
+        <file alias="qml/ChatShellRuntime.js">../../qml/app/ChatShellRuntime.js</file>
+        <file alias="qml/app/ChatShellRuntime.js">../../qml/app/ChatShellRuntime.js</file>
+        <file alias="qml/ChatShellPage.qml">../../qml/app/ChatShellPage.qml</file>
+        <file alias="qml/app/ChatShellPage.qml">../../qml/app/ChatShellPage.qml</file>
+        <file alias="qml/ChatShellContent.qml">../../qml/app/ChatShellContent.qml</file>
+        <file alias="qml/app/ChatShellContent.qml">../../qml/app/ChatShellContent.qml</file>
+        <file alias="qml/components/GlassBackdrop.qml">../../qml/components/GlassBackdrop.qml</file>
+        <file alias="qml/components/GlassSurface.qml">../../qml/components/GlassSurface.qml</file>
+        <file alias="qml/components/GlassTextField.qml">../../qml/components/GlassTextField.qml</file>
+        <file alias="qml/components/GlassButton.qml">../../qml/components/GlassButton.qml</file>
+        <file alias="qml/components/GlassScrollBar.qml">../../qml/components/GlassScrollBar.qml</file>
+        <file alias="qml/components/AppWindowControls.qml">../../qml/components/AppWindowControls.qml</file>
+        <file alias="qml/components/LoginCredentialDropdown.qml">../../qml/components/LoginCredentialDropdown.qml</file>
+        <file alias="qml/components/LoginCredentialRuntime.js">../../qml/components/LoginCredentialRuntime.js</file>
+        <file alias="qml/components/LoginIconButton.qml">../../qml/components/LoginIconButton.qml</file>
+        <file alias="qml/components/LoginTopBar.qml">../../qml/components/LoginTopBar.qml</file>
+        <file alias="qml/components/LoginAvatar.qml">../../qml/components/LoginAvatar.qml</file>
+        <file alias="qml/components/LoginAgreementRow.qml">../../qml/components/LoginAgreementRow.qml</file>
+        <file alias="qml/components/LoginSubmitButton.qml">../../qml/components/LoginSubmitButton.qml</file>
+        <file alias="qml/components/LoginFooterLinks.qml">../../qml/components/LoginFooterLinks.qml</file>
+        <file alias="qml/components/LoginMoreOptionsPopup.qml">../../qml/components/LoginMoreOptionsPopup.qml</file>
+        <file alias="qml/linux/components/GlassSurface.qml">../../qml/linux/components/GlassSurface.qml</file>
+        <file alias="qml/linux/components/GlassButton.qml">../../qml/linux/components/GlassButton.qml</file>
+        <file alias="qml/linux/components/GlassTextField.qml">../../qml/linux/components/GlassTextField.qml</file>
+        <file alias="qml/linux/components/LoginAvatar.qml">../../qml/linux/components/LoginAvatar.qml</file>
+        <file alias="qml/linux/components/LoginMoreOptionsPopup.qml">../../qml/linux/components/LoginMoreOptionsPopup.qml</file>
+        <file alias="qml/linux/components/LoginSubmitButton.qml">../../qml/linux/components/LoginSubmitButton.qml</file>
+        <file alias="qml/linux/components/WindowGlassShell.qml">../../qml/linux/components/WindowGlassShell.qml</file>
+        <file alias="qml/components/ContactProfilePopup.qml">../../qml/components/ContactProfilePopup.qml</file>
+    </qresource>
+</RCC>

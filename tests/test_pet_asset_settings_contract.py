@@ -5,27 +5,38 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 
-PET_ASSET_SETTINGS_H = CLIENT_DIR / "features/pet/PetAssetSettings.h"
-PET_ASSET_SETTINGS_CPP = CLIENT_DIR / "features/pet/PetAssetSettings.cpp"
-PET_ASSET_SETTINGS_PRIVATE_H = CLIENT_DIR / "features/pet/PetAssetSettingsPrivate.h"
-PET_ASSET_SETTINGS_AVATAR_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsAvatar.cpp"
-PET_AVATAR_RESOLVER_H = CLIENT_DIR / "features/pet/PetAvatarResolver.h"
-PET_AVATAR_RESOLVER_CPP = CLIENT_DIR / "features/pet/PetAvatarResolver.cpp"
-PET_ASSET_SETTINGS_PERSISTENCE_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsPersistence.cpp"
-PET_ASSET_SETTINGS_STATE_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsState.cpp"
-PET_ASSET_SETTINGS_VOICE_TRAINING_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsVoiceTraining.cpp"
+PET_ASSET_SETTINGS_H = CLIENT_DIR / "features/pet/assets/PetAssetSettings.h"
+PET_ASSET_SETTINGS_CPP = CLIENT_DIR / "features/pet/assets/PetAssetSettings.cpp"
+PET_ASSET_SETTINGS_PRIVATE_H = CLIENT_DIR / "features/pet/assets/PetAssetSettingsPrivate.h"
+PET_ASSET_SETTINGS_AVATAR_CPP = CLIENT_DIR / "features/pet/assets/PetAssetSettingsAvatar.cpp"
+PET_AVATAR_RESOLVER_H = CLIENT_DIR / "features/pet/assets/PetAvatarResolver.h"
+PET_AVATAR_RESOLVER_CPP = CLIENT_DIR / "features/pet/assets/PetAvatarResolver.cpp"
+PET_ASSET_SETTINGS_PERSISTENCE_CPP = CLIENT_DIR / "features/pet/assets/PetAssetSettingsPersistence.cpp"
+PET_ASSET_SETTINGS_STATE_CPP = CLIENT_DIR / "features/pet/assets/PetAssetSettingsState.cpp"
+PET_ASSET_SETTINGS_VOICE_TRAINING_CPP = CLIENT_DIR / "features/pet/assets/PetAssetSettingsVoiceTraining.cpp"
 CLIENT_CMAKE = CLIENT_DIR / "CMakeLists.txt"
-CLIENT_CMAKE_FRAGMENTS = (
-    CLIENT_DIR / "cmake/AppSources.cmake",
-    CLIENT_DIR / "cmake/FeatureSources.cmake",
-    CLIENT_DIR / "cmake/SharedSources.cmake",
-    CLIENT_DIR / "cmake/QmlResources.cmake",
+CLIENT_CMAKE_MANIFESTS = (
+    CLIENT_DIR / "app/sources.cmake",
+    CLIENT_DIR / "features/sources.cmake",
+    CLIENT_DIR / "features/agent/sources.cmake",
+    CLIENT_DIR / "features/auth/sources.cmake",
+    CLIENT_DIR / "features/call/sources.cmake",
+    CLIENT_DIR / "features/chat/sources.cmake",
+    CLIENT_DIR / "features/contact/sources.cmake",
+    CLIENT_DIR / "features/moments/sources.cmake",
+    CLIENT_DIR / "features/pet/sources.cmake",
+    CLIENT_DIR / "features/profile/sources.cmake",
+    CLIENT_DIR / "features/r18/sources.cmake",
+    CLIENT_DIR / "shared/sources.cmake",
+    CLIENT_DIR / "live2d/sources.cmake",
+    CLIENT_DIR / "resources/resources.cmake",
 )
-MAIN_CPP = CLIENT_DIR / "app/main.cpp"
-MAIN_QML_TYPE_REGISTRY_CPP = CLIENT_DIR / "app/MainQmlTypeRegistry.cpp"
+MAIN_CPP = CLIENT_DIR / "app/bootstrap/main.cpp"
+MAIN_QML_TYPE_REGISTRY_CPP = CLIENT_DIR / "app/bootstrap/MainQmlTypeRegistry.cpp"
 CHARACTER_PANE_QML = CLIENT_DIR / "qml/pet/Live2DCharacterPane.qml"
 RESOURCE_VOICE_PANEL_QML = CLIENT_DIR / "qml/pet/Live2DResourceVoicePanel.qml"
-QML_QRC = CLIENT_DIR / "qml.qrc"
+QRC_ROOT = CLIENT_DIR / "resources/qrc"
+QML_QRCS = tuple(sorted(QRC_ROOT.glob("*.qrc")))
 
 REQUIRED_PROPERTIES = (
     "characterName",
@@ -125,9 +136,15 @@ FORBIDDEN_LICENSED_ASSET_TOKENS = (
     "<file>src/KafuuChino",
 )
 
+DEFAULT_LIVE2D_RESOURCE_ROOT = "resources/live2d/KafuuChino"
+
 
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def qrc_text() -> str:
+    return "\n".join(read(path) for path in QML_QRCS)
 
 
 def read_texts(*paths: Path) -> str:
@@ -135,7 +152,7 @@ def read_texts(*paths: Path) -> str:
 
 
 def client_cmake_text() -> str:
-    return read_texts(CLIENT_CMAKE, *(fragment for fragment in CLIENT_CMAKE_FRAGMENTS if fragment.exists()))
+    return read_texts(CLIENT_CMAKE, *(manifest for manifest in CLIENT_CMAKE_MANIFESTS if manifest.exists()))
 
 
 def pet_asset_settings_source() -> str:
@@ -352,25 +369,57 @@ class PetAssetSettingsContractTests(unittest.TestCase):
 
         for token in (
             "MEMOCHAT_QML_SOURCE_DIR",
-            "src/KafuuChino/香风智乃live2D",
-            "src/KafuuChino/香风智乃live2D/香风智乃.model3.json",
-            "src/KafuuChino/香风智乃voice",
+            f"{DEFAULT_LIVE2D_RESOURCE_ROOT}/香风智乃live2D",
+            f"{DEFAULT_LIVE2D_RESOURCE_ROOT}/香风智乃live2D/香风智乃.model3.json",
+            f"{DEFAULT_LIVE2D_RESOURCE_ROOT}/香风智乃voice",
             "Kafuuchino-voice.mp3",
         ):
             self.assertContains(source, token)
 
         for token in (
-            "src/KafuuChino/香风智乃live2D",
-            "src/KafuuChino/香风智乃voice",
+            f"{DEFAULT_LIVE2D_RESOURCE_ROOT}/香风智乃live2D",
+            f"{DEFAULT_LIVE2D_RESOURCE_ROOT}/香风智乃voice",
             "Kafuuchino-voice.mp3",
         ):
             self.assertContains(qml, token)
 
+        self.assertNotIn("src/KafuuChino", source)
+        self.assertNotIn("src/KafuuChino", qml)
+
         self.assertContains(cmake, "MEMOCHAT_QML_SOURCE_DIR")
+
+    def test_pet_asset_settings_migrates_legacy_bundled_live2d_paths_on_load(self):
+        source = pet_asset_settings_source()
+        persistence = read(PET_ASSET_SETTINGS_PERSISTENCE_CPP)
+
+        for token in (
+            "migrateLegacyBundledLive2DPaths",
+            "migrateLegacyBundledLive2DPath",
+            "resources/live2d/KafuuChino",
+            "modelRoot",
+            "modelJson",
+            "motionDirectory",
+            "expressionDirectory",
+            "voiceDirectory",
+        ):
+            self.assertContains(source, token)
+
+        self.assertRegex(source, r"QDir::cleanPath\s*\(")
+        self.assertRegex(source, r"\.startsWith\s*\(")
+        self.assertRegex(
+            source,
+            r"applyObject\s*\([^;]+;\s*const\s+bool\s+migrated\s*=\s*migrateLegacyBundledLive2DPaths\s*\(",
+            "Loaded drafts should be migrated immediately after JSON values are applied",
+        )
+        self.assertRegex(
+            persistence,
+            r"if\s*\(\s*migrated\s*\)\s*\{[\s\S]*\bsave\s*\(",
+            "Migrated drafts should be persisted so stale deleted paths do not return next launch",
+        )
 
     def test_pet_asset_settings_does_not_bundle_licensed_live2d_resources(self):
         checked_sources = {
-            "qml.qrc": read(QML_QRC),
+            "resources/qrc/*.qrc": qrc_text(),
             "CMakeLists.txt": client_cmake_text(),
         }
 
@@ -456,7 +505,7 @@ class PetAssetSettingsContractTests(unittest.TestCase):
         ):
             self.assertContains(qml, token)
 
-        self.assertContains(qml, "src/KafuuChino/香风智乃voice")
+        self.assertContains(qml, f"{DEFAULT_LIVE2D_RESOURCE_ROOT}/香风智乃voice")
         self.assertContains(qml, "Kafuuchino-voice.mp3")
         self.assertNotIn("?.", qml, "QML should avoid optional chaining for Qt 6.8 compatibility")
 

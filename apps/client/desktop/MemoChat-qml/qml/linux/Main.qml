@@ -4,8 +4,9 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Window 2.15
 import MemoChat 1.0
-import "../AppWindowRuntime.js" as AppWindowRuntime
-import "../" as SharedPages
+import "../app" as SharedApp
+import "../app/AppWindowRuntime.js" as AppWindowRuntime
+import "../auth" as SharedAuth
 import "../components" as SharedComponents
 import "components" as LinuxComponents
 import "../pet"
@@ -347,17 +348,17 @@ Item {
 
     Component {
         id: registerPageComponent
-        SharedPages.RegisterPage { }
+        SharedAuth.RegisterPage { }
     }
 
     Component {
         id: resetPageComponent
-        SharedPages.ResetPage { }
+        SharedAuth.ResetPage { }
     }
 
     Component {
         id: chatShellPageComponent
-        SharedPages.ChatShellPage {
+        SharedApp.ChatShellPage {
             topInset: 24
             onPetPreviewRequested: function(petAssetSettings) {
                 root.openPetWindow(petAssetSettings)

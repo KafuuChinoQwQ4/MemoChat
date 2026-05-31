@@ -1,0 +1,34 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="qml/agent/AgentPane.qml">../../qml/agent/AgentPane.qml</file>
+        <file alias="qml/agent/AgentPaneRuntime.js">../../qml/agent/AgentPaneRuntime.js</file>
+        <file alias="qml/agent/AgentPaneHeader.qml">../../qml/agent/AgentPaneHeader.qml</file>
+        <file alias="qml/agent/AgentModelControlBar.qml">../../qml/agent/AgentModelControlBar.qml</file>
+        <file alias="qml/agent/AgentStatusOverlay.qml">../../qml/agent/AgentStatusOverlay.qml</file>
+        <file alias="qml/agent/AgentGameOverlay.qml">../../qml/agent/AgentGameOverlay.qml</file>
+        <file alias="qml/agent/AgentGamePane.qml">../../qml/agent/AgentGamePane.qml</file>
+        <file alias="qml/agent/AgentGameSetupPane.qml">../../qml/agent/AgentGameSetupPane.qml</file>
+        <file alias="qml/agent/AgentGameRoomPane.qml">../../qml/agent/AgentGameRoomPane.qml</file>
+        <file alias="qml/agent/AgentGameTemplatePane.qml">../../qml/agent/AgentGameTemplatePane.qml</file>
+        <file alias="qml/agent/AgentGameRuntime.js">../../qml/agent/AgentGameRuntime.js</file>
+        <file alias="qml/agent/AgentGameSetupHeader.qml">../../qml/agent/AgentGameSetupHeader.qml</file>
+        <file alias="qml/agent/AgentGameAgentCard.qml">../../qml/agent/AgentGameAgentCard.qml</file>
+        <file alias="qml/agent/AgentGameOptionCombo.qml">../../qml/agent/AgentGameOptionCombo.qml</file>
+        <file alias="qml/agent/AgentGamePlayPane.qml">../../qml/agent/AgentGamePlayPane.qml</file>
+        <file alias="qml/agent/AgentMultiAiChatPane.qml">../../qml/agent/AgentMultiAiChatPane.qml</file>
+        <file alias="qml/agent/AgentMultiAiSessionPanel.qml">../../qml/agent/AgentMultiAiSessionPanel.qml</file>
+        <file alias="qml/agent/AgentMultiAiControls.qml">../../qml/agent/AgentMultiAiControls.qml</file>
+        <file alias="qml/agent/AgentMultiAiParticipantEditor.qml">../../qml/agent/AgentMultiAiParticipantEditor.qml</file>
+        <file alias="qml/agent/AgentConversationPane.qml">../../qml/agent/AgentConversationPane.qml</file>
+        <file alias="qml/agent/AgentMessageDelegate.qml">../../qml/agent/AgentMessageDelegate.qml</file>
+        <file alias="qml/agent/AgentMarkdownText.qml">../../qml/agent/AgentMarkdownText.qml</file>
+        <file alias="qml/agent/AgentMarkdownRuntime.js">../../qml/agent/AgentMarkdownRuntime.js</file>
+        <file alias="qml/agent/AgentMarkdownCodeBlock.qml">../../qml/agent/AgentMarkdownCodeBlock.qml</file>
+        <file alias="qml/agent/AgentComposerBar.qml">../../qml/agent/AgentComposerBar.qml</file>
+        <file alias="qml/agent/SmartFeatureBar.qml">../../qml/agent/SmartFeatureBar.qml</file>
+        <file alias="qml/agent/KnowledgeBasePane.qml">../../qml/agent/KnowledgeBasePane.qml</file>
+        <file alias="qml/agent/AgentMemoryPane.qml">../../qml/agent/AgentMemoryPane.qml</file>
+        <file alias="qml/agent/AgentTaskPane.qml">../../qml/agent/AgentTaskPane.qml</file>
+        <file alias="qml/agent/AgentTracePane.qml">../../qml/agent/AgentTracePane.qml</file>
+    </qresource>
+</RCC>

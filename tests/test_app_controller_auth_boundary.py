@@ -4,13 +4,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app"
-APP_CONTROLLER_HEADER = APP_DIR / "AppController.h"
-APP_CONTROLLER_AUTH = APP_DIR / "AppControllerAuth.cpp"
-APP_CONTROLLER_AUTH_RESPONSES = APP_DIR / "AppControllerAuthResponses.cpp"
-CALL_COORDINATOR = APP_DIR / "CallCoordinator.cpp"
-SESSION_AUTH_RESPONSES = APP_DIR / "SessionAuthCoordinatorAuthResponses.cpp"
-SESSION_AUTH_COMMANDS = APP_DIR / "SessionAuthCoordinatorCommands.cpp"
-SESSION_AUTH_LOGIN_RESPONSE = APP_DIR / "SessionAuthCoordinatorLoginResponse.cpp"
+APP_CONTROLLER_HEADER = APP_DIR / "controller/AppController.h"
+APP_CONTROLLER_AUTH = APP_DIR / "controller/AppControllerAuth.cpp"
+APP_CONTROLLER_AUTH_RESPONSES = APP_DIR / "controller/AppControllerAuthResponses.cpp"
+CALL_COORDINATOR = APP_DIR / "coordinators/CallCoordinator.cpp"
+SESSION_AUTH_RESPONSES = APP_DIR / "session/SessionAuthCoordinatorAuthResponses.cpp"
+SESSION_AUTH_COMMANDS = APP_DIR / "session/SessionAuthCoordinatorCommands.cpp"
+SESSION_AUTH_LOGIN_RESPONSE = APP_DIR / "session/SessionAuthCoordinatorLoginResponse.cpp"
 
 
 def read(path: Path) -> str:
@@ -51,7 +51,7 @@ class AppControllerAuthBoundaryTests(unittest.TestCase):
         self.assertNotIn("bool AppController::parseJson", source)
 
     def test_session_auth_coordinator_owns_validation_boundary(self):
-        header = read(APP_DIR / "AppCoordinators.h")
+        header = read(APP_DIR / "coordinators/AppCoordinators.h")
         source = read(SESSION_AUTH_COMMANDS)
 
         expected_helpers = (
