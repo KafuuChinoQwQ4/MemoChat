@@ -4,13 +4,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app"
-APP_CONTROLLER_HEADER = APP_DIR / "AppController.h"
-APP_CONTROLLER_CPP = APP_DIR / "AppController.cpp"
-APP_CONTROLLER_NAVIGATION = APP_DIR / "AppControllerNavigation.cpp"
-APP_SOURCES_CMAKE = APP_DIR.parent / "cmake/AppSources.cmake"
-SESSION_AUTH_LOGIN_RESPONSE = APP_DIR / "SessionAuthCoordinatorLoginResponse.cpp"
-SESSION_CHAT_ENTRY = APP_DIR / "SessionChatEntryCoordinator.cpp"
-CONNECTION_COORDINATOR = APP_DIR / "AppChatConnectionCoordinator.cpp"
+APP_CONTROLLER_HEADER = APP_DIR / "controller/AppController.h"
+APP_CONTROLLER_CPP = APP_DIR / "controller/AppController.cpp"
+APP_CONTROLLER_NAVIGATION = APP_DIR / "controller/AppControllerNavigation.cpp"
+APP_SOURCES_CMAKE = APP_DIR / "sources.cmake"
+SESSION_AUTH_LOGIN_RESPONSE = APP_DIR / "session/SessionAuthCoordinatorLoginResponse.cpp"
+SESSION_CHAT_ENTRY = APP_DIR / "session/SessionChatEntryCoordinator.cpp"
+CONNECTION_COORDINATOR = APP_DIR / "connection/AppChatConnectionCoordinator.cpp"
 
 
 def read(path: Path) -> str:

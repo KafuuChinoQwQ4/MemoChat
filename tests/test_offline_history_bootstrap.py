@@ -2,18 +2,28 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-APP_CONTROLLER_DIALOG_LIST_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerDialogListEvents.cpp"
+APP_CONTROLLER_DIALOG_LIST_EVENTS = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerDialogListEvents.cpp"
+)
 APP_CONTROLLER_PRIVATE_HISTORY_RESPONSES = (
-    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerPrivateHistoryResponses.cpp"
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerPrivateHistoryResponses.cpp"
 )
-APP_CONTROLLER_GROUP_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerGroupEvents.cpp"
-APP_CONTROLLER_GROUP_RESPONSES = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerGroupResponses.cpp"
+APP_CONTROLLER_GROUP_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerGroupEvents.cpp"
+APP_CONTROLLER_GROUP_RESPONSES = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerGroupResponses.cpp"
+)
 APP_CONTROLLER_GROUP_HISTORY_RESPONSES = (
-    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerGroupHistoryResponses.cpp"
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerGroupHistoryResponses.cpp"
 )
-APP_CONTROLLER_DIALOG_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerDialogSelection.cpp"
-APP_CONTROLLER_GROUP_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerGroupSelection.cpp"
-APP_CONTROLLER_GROUP_COMMANDS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerGroupCommands.cpp"
+APP_CONTROLLER_DIALOG_SELECTION = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerDialogSelection.cpp"
+)
+APP_CONTROLLER_GROUP_SELECTION = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerGroupSelection.cpp"
+)
+APP_CONTROLLER_GROUP_COMMANDS = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerGroupCommands.cpp"
+)
 USER_MGR_GROUP_LIST = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/session/UserMgrGroupList.cpp"
 CHATSERVER_CONFIGS = [REPO_ROOT / f"apps/server/core/ChatServer/chatserver{i}.ini" for i in range(1, 7)]
 

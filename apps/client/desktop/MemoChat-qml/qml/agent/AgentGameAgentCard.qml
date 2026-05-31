@@ -41,20 +41,8 @@ Rectangle {
         return AgentGameRuntime.optionIndex(options, value, fallbackValue)
     }
 
-    function optionText(options, index) {
-        return AgentGameRuntime.optionText(
-                    options, index,
-                    [root.customRoleValue, root.customSkillValue, root.customStrategyValue])
-    }
-
     function isCustomStoredValue(options, value) {
         return AgentGameRuntime.isCustomStoredValue(options, value)
-    }
-
-    function comboBackground(combo) {
-        return combo.pressed ? Qt.rgba(0.88, 0.93, 1.0, 0.72)
-                             : combo.hovered ? Qt.rgba(1, 1, 1, 0.62)
-                                             : Qt.rgba(1, 1, 1, 0.46)
     }
 
     function fallbackWerewolfRoles() {
@@ -146,80 +134,23 @@ Rectangle {
             Layout.fillWidth: true
             spacing: 8
 
-            ComboBox {
+            AgentGameOptionCombo {
                 id: roleCombo
                 Layout.preferredWidth: 168
                 Layout.preferredHeight: 30
                 visible: root.showRoleControls
-                textRole: "label"
-                valueRole: "value"
-                model: root.roleOptions
-                currentIndex: root.optionIndex(root.roleOptions, root.agentData.role_key || "", "")
-                displayText: root.optionText(root.roleOptions, currentIndex)
-                onActivated: {
-                    var value = root.roleOptions[currentIndex].value
+                optionModel: root.roleOptions
+                selectedValue: root.agentData.role_key || ""
+                fallbackValue: ""
+                customValues: [root.customRoleValue, root.customSkillValue, root.customStrategyValue]
+                placeholderWidth: 280
+                onOptionActivated: function(option) {
+                    var value = option.value || ""
                     if (value === root.customRoleValue) {
                         customRoleField.forceActiveFocus()
                     } else {
                         root.fieldChanged(root.agentIndex, "role_key", value)
                     }
-                }
-
-                delegate: ItemDelegate {
-                    id: roleOptionDelegate
-                    width: ListView.view ? ListView.view.width : 280
-                    height: 46
-                    highlighted: roleCombo.highlightedIndex === index
-
-                    required property int index
-                    required property var modelData
-
-                    contentItem: Column {
-                        spacing: 1
-                        Text {
-                            width: parent.width
-                            text: root.optionText(root.roleOptions, roleOptionDelegate.index)
-                            color: "#243145"
-                            font.pixelSize: 12
-                            font.bold: true
-                            elide: Text.ElideRight
-                        }
-                        Text {
-                            width: parent.width
-                            text: roleOptionDelegate.modelData.hint
-                            color: "#6c7a8e"
-                            font.pixelSize: 10
-                            elide: Text.ElideRight
-                        }
-                    }
-                    background: Rectangle {
-                        color: roleOptionDelegate.highlighted ? Qt.rgba(0.35, 0.61, 0.90, 0.16) : "transparent"
-                        radius: 6
-                    }
-                }
-                background: Rectangle {
-                    radius: 7
-                    color: root.comboBackground(roleCombo)
-                    border.color: roleCombo.hovered || roleCombo.pressed ? Qt.rgba(0.35, 0.61, 0.90, 0.42) : Qt.rgba(1, 1, 1, 0.38)
-                }
-                contentItem: Text {
-                    leftPadding: 10
-                    rightPadding: 28
-                    text: roleCombo.displayText
-                    color: "#243145"
-                    font.pixelSize: 12
-                    verticalAlignment: Text.AlignVCenter
-                    elide: Text.ElideRight
-                }
-                indicator: Image {
-                    x: roleCombo.width - width - 9
-                    y: (roleCombo.height - height) / 2
-                    width: 12
-                    height: 12
-                    source: "qrc:/icons/dropdown.png"
-                    fillMode: Image.PreserveAspectFit
-                    rotation: roleCombo.popup.visible ? 180 : 0
-                    opacity: roleCombo.enabled ? 0.78 : 0.38
                 }
             }
 
@@ -290,155 +221,41 @@ Rectangle {
             columnSpacing: 8
             rowSpacing: 7
 
-            ComboBox {
+            AgentGameOptionCombo {
                 id: skillCombo
                 Layout.fillWidth: true
                 Layout.preferredHeight: 30
-                textRole: "label"
-                valueRole: "value"
-                model: root.skillOptions
-                currentIndex: root.optionIndex(root.skillOptions, root.agentData.skill_name || "", "writer")
-                displayText: root.optionText(root.skillOptions, currentIndex)
-                onActivated: {
-                    var value = root.skillOptions[currentIndex].value
+                optionModel: root.skillOptions
+                selectedValue: root.agentData.skill_name || ""
+                fallbackValue: "writer"
+                customValues: [root.customRoleValue, root.customSkillValue, root.customStrategyValue]
+                placeholderWidth: 260
+                onOptionActivated: function(option) {
+                    var value = option.value || ""
                     if (value === root.customSkillValue) {
                         customSkillField.forceActiveFocus()
                     } else {
                         root.fieldChanged(root.agentIndex, "skill_name", value)
                     }
                 }
-
-                delegate: ItemDelegate {
-                    id: skillOptionDelegate
-                    width: ListView.view ? ListView.view.width : 260
-                    height: 42
-                    highlighted: skillCombo.highlightedIndex === index
-
-                    required property int index
-                    required property var modelData
-
-                    contentItem: Column {
-                        spacing: 1
-                        Text {
-                            width: parent.width
-                            text: root.optionText(root.skillOptions, skillOptionDelegate.index)
-                            color: "#243145"
-                            font.pixelSize: 12
-                            font.bold: true
-                            elide: Text.ElideRight
-                        }
-                        Text {
-                            width: parent.width
-                            text: skillOptionDelegate.modelData.hint
-                            color: "#6c7a8e"
-                            font.pixelSize: 10
-                            elide: Text.ElideRight
-                        }
-                    }
-                    background: Rectangle {
-                        color: skillOptionDelegate.highlighted ? Qt.rgba(0.35, 0.61, 0.90, 0.16) : "transparent"
-                        radius: 6
-                    }
-                }
-                background: Rectangle {
-                    radius: 7
-                    color: root.comboBackground(skillCombo)
-                    border.color: skillCombo.hovered || skillCombo.pressed ? Qt.rgba(0.35, 0.61, 0.90, 0.42) : Qt.rgba(1, 1, 1, 0.38)
-                }
-                contentItem: Text {
-                    leftPadding: 10
-                    rightPadding: 28
-                    text: skillCombo.displayText
-                    color: "#243145"
-                    font.pixelSize: 12
-                    verticalAlignment: Text.AlignVCenter
-                    elide: Text.ElideRight
-                }
-                indicator: Image {
-                    x: skillCombo.width - width - 9
-                    y: (skillCombo.height - height) / 2
-                    width: 12
-                    height: 12
-                    source: "qrc:/icons/dropdown.png"
-                    fillMode: Image.PreserveAspectFit
-                    rotation: skillCombo.popup.visible ? 180 : 0
-                    opacity: skillCombo.enabled ? 0.78 : 0.38
-                }
             }
 
-            ComboBox {
+            AgentGameOptionCombo {
                 id: strategyCombo
                 Layout.fillWidth: true
                 Layout.preferredHeight: 30
-                textRole: "label"
-                valueRole: "value"
-                model: root.strategyOptions
-                currentIndex: root.optionIndex(root.strategyOptions, root.agentData.strategy || "", root.showRoleControls ? "roleplay" : "group_chat")
-                displayText: root.optionText(root.strategyOptions, currentIndex)
-                onActivated: {
-                    var value = root.strategyOptions[currentIndex].value
+                optionModel: root.strategyOptions
+                selectedValue: root.agentData.strategy || ""
+                fallbackValue: root.showRoleControls ? "roleplay" : "group_chat"
+                customValues: [root.customRoleValue, root.customSkillValue, root.customStrategyValue]
+                placeholderWidth: 260
+                onOptionActivated: function(option) {
+                    var value = option.value || ""
                     if (value === root.customStrategyValue) {
                         customStrategyField.forceActiveFocus()
                     } else {
                         root.fieldChanged(root.agentIndex, "strategy", value)
                     }
-                }
-
-                delegate: ItemDelegate {
-                    id: strategyOptionDelegate
-                    width: ListView.view ? ListView.view.width : 260
-                    height: 42
-                    highlighted: strategyCombo.highlightedIndex === index
-
-                    required property int index
-                    required property var modelData
-
-                    contentItem: Column {
-                        spacing: 1
-                        Text {
-                            width: parent.width
-                            text: root.optionText(root.strategyOptions, strategyOptionDelegate.index)
-                            color: "#243145"
-                            font.pixelSize: 12
-                            font.bold: true
-                            elide: Text.ElideRight
-                        }
-                        Text {
-                            width: parent.width
-                            text: strategyOptionDelegate.modelData.hint
-                            color: "#6c7a8e"
-                            font.pixelSize: 10
-                            elide: Text.ElideRight
-                        }
-                    }
-                    background: Rectangle {
-                        color: strategyOptionDelegate.highlighted ? Qt.rgba(0.35, 0.61, 0.90, 0.16) : "transparent"
-                        radius: 6
-                    }
-                }
-                background: Rectangle {
-                    radius: 7
-                    color: root.comboBackground(strategyCombo)
-                    border.color: strategyCombo.hovered || strategyCombo.pressed ? Qt.rgba(0.35, 0.61, 0.90, 0.42) : Qt.rgba(1, 1, 1, 0.38)
-                }
-                contentItem: Text {
-                    leftPadding: 10
-                    rightPadding: 28
-                    text: strategyCombo.displayText
-                    color: "#243145"
-                    font.pixelSize: 12
-                    verticalAlignment: Text.AlignVCenter
-                    elide: Text.ElideRight
-                }
-                indicator: Image {
-                    x: strategyCombo.width - width - 9
-                    y: (strategyCombo.height - height) / 2
-                    width: 12
-                    height: 12
-                    source: "qrc:/icons/dropdown.png"
-                    fillMode: Image.PreserveAspectFit
-                    rotation: strategyCombo.popup.visible ? 180 : 0
-                    opacity: strategyCombo.enabled ? 0.78 : 0.38
                 }
             }
 

@@ -11,21 +11,114 @@ CLIENT_MOMENTS_TEST_CMAKE = REPO_ROOT / "tests/client/moments/CMakeLists.txt"
 CLIENT_NETWORK_TEST_CMAKE = REPO_ROOT / "tests/client/network/CMakeLists.txt"
 QML_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 QML_CMAKE_DIR = QML_DIR / "cmake"
-QML_CMAKE_FRAGMENTS = (
+RESOURCE_DIR = QML_DIR / "resources"
+RESOURCE_QRC_DIR = RESOURCE_DIR / "qrc"
+OLD_QML_CMAKE_FRAGMENTS = (
     QML_CMAKE_DIR / "AppSources.cmake",
     QML_CMAKE_DIR / "FeatureSources.cmake",
     QML_CMAKE_DIR / "SharedSources.cmake",
     QML_CMAKE_DIR / "QmlResources.cmake",
 )
+QML_CMAKE_MANIFESTS = (
+    QML_DIR / "app/sources.cmake",
+    QML_DIR / "features/sources.cmake",
+    QML_DIR / "features/auth/sources.cmake",
+    QML_DIR / "features/call/sources.cmake",
+    QML_DIR / "features/chat/sources.cmake",
+    QML_DIR / "features/contact/sources.cmake",
+    QML_DIR / "features/profile/sources.cmake",
+    QML_DIR / "features/moments/sources.cmake",
+    QML_DIR / "features/agent/sources.cmake",
+    QML_DIR / "features/pet/sources.cmake",
+    QML_DIR / "features/r18/sources.cmake",
+    QML_DIR / "shared/sources.cmake",
+    QML_DIR / "live2d/sources.cmake",
+    QML_DIR / "resources/resources.cmake",
+)
 CORE_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core"
 CORE_CMAKE = CORE_DIR / "CMakeLists.txt"
 OLD_SHARED_DIR = REPO_ROOT / "apps/client/desktop/MemoChatShared"
-CORE_QRC = CORE_DIR / "rc.qrc"
-MOMENTS_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/moments/MomentsController.h"
+APP_CORE_QRC = RESOURCE_QRC_DIR / "app-core.qrc"
+MOMENTS_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/moments/controller/MomentsController.h"
+MOMENTS_RESPONSE_FAMILIES = {
+    "feed": QML_DIR / "features/moments/controller/MomentsControllerFeedResponses.cpp",
+    "post": QML_DIR / "features/moments/controller/MomentsControllerPostResponses.cpp",
+    "comment": QML_DIR / "features/moments/controller/MomentsControllerCommentResponses.cpp",
+}
 QML_QRC = QML_DIR / "qml.qrc"
+LEGACY_QRC_FILES = (
+    QML_QRC,
+    CORE_DIR / "rc.qrc",
+)
+DIRECTORY_MANIFESTS = (
+    "app/sources.cmake",
+    "features/sources.cmake",
+    "shared/sources.cmake",
+    "live2d/sources.cmake",
+    "resources/resources.cmake",
+)
+RESOURCE_QRC_FILES = (
+    "app-core.qrc",
+    "qml-shell.qrc",
+    "qml-chat.qrc",
+    "qml-moments.qrc",
+    "qml-agent.qrc",
+    "qml-pet.qrc",
+    "qml-r18.qrc",
+    "icons.qrc",
+    "web.qrc",
+)
+
+
+def qml_cmake_text() -> str:
+    return (
+        QML_CMAKE.read_text(encoding="utf-8")
+        + "\n"
+        + "\n".join(manifest.read_text(encoding="utf-8") for manifest in QML_CMAKE_MANIFESTS if manifest.exists())
+    )
 
 
 class MemoChatQmlCoreLayoutTests(unittest.TestCase):
+    def test_client_cmake_uses_directory_owned_source_manifests(self):
+        root = QML_CMAKE.read_text(encoding="utf-8")
+
+        for rel_path in DIRECTORY_MANIFESTS:
+            with self.subTest(manifest=rel_path):
+                self.assertTrue((QML_DIR / rel_path).is_file())
+                self.assertIn(f"include({rel_path})", root)
+
+        for old_fragment in OLD_QML_CMAKE_FRAGMENTS:
+            with self.subTest(old_fragment=old_fragment.name):
+                self.assertNotIn(f"include(cmake/{old_fragment.name})", root)
+                self.assertFalse(old_fragment.exists())
+
+    def test_resource_qrc_files_are_split_by_domain_with_stable_aliases(self):
+        resources = QML_DIR / "resources/resources.cmake"
+        self.assertTrue(resources.is_file())
+
+        qrc_text = ""
+        for name in RESOURCE_QRC_FILES:
+            path = RESOURCE_QRC_DIR / name
+            with self.subTest(qrc=name):
+                self.assertTrue(path.is_file())
+            qrc_text += path.read_text(encoding="utf-8") if path.exists() else ""
+
+        for token in (
+            'alias="qml/Main.qml"',
+            'alias="qml/linux/Main.qml"',
+            'alias="qml/LoginPage.qml"',
+            'alias="icons/dropdown.png"',
+            'alias="res/head_1.png"',
+            'alias="res/head_1.jpg"',
+            'alias="web/livekit/index.html"',
+        ):
+            with self.subTest(alias=token):
+                self.assertIn(token, qrc_text)
+
+        for legacy_qrc in LEGACY_QRC_FILES:
+            with self.subTest(legacy_qrc=legacy_qrc.name):
+                self.assertFalse(legacy_qrc.exists())
+
     def test_core_lives_under_memochat_qml_and_legacy_shared_module_is_removed(self):
         self.assertTrue(CORE_DIR.is_dir())
         self.assertTrue((CORE_DIR / "CMakeLists.txt").is_file())
@@ -55,113 +148,115 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
 
     def test_qml_cpp_sources_are_grouped_by_responsibility(self):
         expected_files = (
-            "app/main.cpp",
-            "app/MainPlatformBootstrap.cpp",
-            "app/MainQmlTypeRegistry.cpp",
-            "app/MainQmlEngineSetup.cpp",
-            "app/MainQmlWindowLoader.cpp",
-            "app/MainRuntimeConfig.cpp",
-            "app/MainWindowHooks.cpp",
-            "app/AppController.cpp",
-            "app/AppControllerConnectionState.h",
-            "app/AppControllerDialogStateData.h",
-            "app/AppControllerGroupState.h",
-            "app/AppControllerPendingSendState.h",
-            "app/AppControllerRuntimeState.h",
-            "app/AppControllerUserState.h",
-            "app/AppSessionCoordinator.cpp",
-            "app/SessionAuthCoordinator.cpp",
-            "app/SessionAuthCoordinatorCommands.cpp",
-            "app/SessionAuthCoordinatorLoginResponse.cpp",
-            "app/SessionAuthCoordinatorAuthResponses.cpp",
-            "app/SessionChatEntryCoordinator.cpp",
-            "app/SessionRelationBootstrap.cpp",
-            "app/RegisterCountdownController.cpp",
-            "app/CallCoordinator.cpp",
-            "app/ContactCoordinatorShell.cpp",
-            "app/GroupCoordinator.cpp",
-            "app/MediaCoordinator.cpp",
-            "app/ProfileCoordinator.cpp",
-            "app/AppControllerGroupEvents.cpp",
-            "app/AppControllerGroupManagement.cpp",
-            "app/AppControllerGroupResponses.cpp",
-            "app/AppControllerGroupResponseErrors.cpp",
-            "app/AppControllerGroupManagementResponses.cpp",
-            "app/AppControllerGroupHistoryResponses.cpp",
-            "app/AppControllerGroupMessageResponses.cpp",
-            "app/AppControllerPrivateMessageResponses.cpp",
-            "app/AppControllerDialogMetaResponses.cpp",
-            "app/AppControllerDialogModels.cpp",
-            "app/AppControllerPrivateHistory.cpp",
-            "app/AppControllerReadAcks.cpp",
-            "app/AppControllerPrivateSelection.cpp",
-            "app/AppControllerContactSelection.cpp",
-            "app/AppControllerGroupSelection.cpp",
-            "app/AppControllerDialogSelection.cpp",
-            "app/AppControllerPagination.cpp",
-            "app/AppControllerUiProperties.cpp",
-            "app/AppControllerUserProperties.cpp",
-            "app/AppControllerGroupProperties.cpp",
-            "app/AppControllerModelProperties.cpp",
-            "app/AppControllerContactState.cpp",
-            "app/AppControllerStatusState.cpp",
-            "app/AppControllerLoadingState.cpp",
-            "app/AppControllerDialogRuntimeState.cpp",
-            "app/AppControllerProfileState.cpp",
-            "app/AppControllerBootstrapState.cpp",
-            "app/AppChatConnectionCoordinator.cpp",
-            "app/AppChatConnectionCoordinator.h",
-            "app/AppChatConnectionPolicy.cpp",
-            "app/AppChatConnectionPolicy.h",
-            "app/AppControllerChatBootstrap.cpp",
-            "app/AppControllerRelationBootstrap.cpp",
-            "app/AppControllerPendingAttachments.cpp",
-            "app/AppControllerMediaUploadQueue.cpp",
-            "app/AppControllerMessageDispatch.cpp",
-            "app/AppControllerMessageStatus.cpp",
-            "app/AppControllerPrivateHistoryResponses.cpp",
-            "app/AppControllerPrivateMessageEvents.cpp",
-            "app/AppControllerPrivateReadEvents.cpp",
-            "features/agent/AgentControllerChat.cpp",
-            "features/agent/AgentController.cpp",
-            "features/agent/AgentControllerGameNetwork.cpp",
-            "features/agent/AgentControllerGameResponses.cpp",
-            "features/agent/AgentControllerGameRooms.cpp",
-            "features/agent/AgentControllerGameTemplates.cpp",
-            "features/agent/AgentControllerAgentTasks.cpp",
-            "features/agent/AgentControllerKnowledge.cpp",
-            "features/agent/AgentControllerMemory.cpp",
+            "app/bootstrap/main.cpp",
+            "app/bootstrap/MainPlatformBootstrap.cpp",
+            "app/bootstrap/MainQmlTypeRegistry.cpp",
+            "app/bootstrap/MainQmlEngineSetup.cpp",
+            "app/bootstrap/MainQmlWindowLoader.cpp",
+            "app/bootstrap/MainRuntimeConfig.cpp",
+            "app/window/MainWindowHooks.cpp",
+            "app/controller/AppController.cpp",
+            "app/connection/AppControllerConnectionState.h",
+            "app/controller/AppControllerDialogStateData.h",
+            "app/controller/AppControllerGroupState.h",
+            "app/controller/AppControllerPendingSendState.h",
+            "app/controller/AppControllerRuntimeState.h",
+            "app/controller/AppControllerUserState.h",
+            "app/session/AppSessionCoordinator.cpp",
+            "app/session/SessionAuthCoordinator.cpp",
+            "app/session/SessionAuthCoordinatorCommands.cpp",
+            "app/session/SessionAuthCoordinatorLoginResponse.cpp",
+            "app/session/SessionAuthCoordinatorAuthResponses.cpp",
+            "app/session/SessionChatEntryCoordinator.cpp",
+            "app/session/SessionRelationBootstrap.cpp",
+            "app/coordinators/RegisterCountdownController.cpp",
+            "app/coordinators/CallCoordinator.cpp",
+            "app/coordinators/ContactCoordinatorShell.cpp",
+            "app/coordinators/GroupCoordinator.cpp",
+            "app/coordinators/MediaCoordinator.cpp",
+            "app/coordinators/ProfileCoordinator.cpp",
+            "app/controller/AppControllerGroupEvents.cpp",
+            "app/controller/AppControllerGroupManagement.cpp",
+            "app/controller/AppControllerGroupResponses.cpp",
+            "app/controller/AppControllerGroupResponseErrors.cpp",
+            "app/controller/AppControllerGroupManagementResponses.cpp",
+            "app/controller/AppControllerGroupHistoryResponses.cpp",
+            "app/controller/AppControllerGroupMessageResponses.cpp",
+            "app/controller/AppControllerPrivateMessageResponses.cpp",
+            "app/controller/AppControllerDialogMetaResponses.cpp",
+            "app/controller/AppControllerDialogModels.cpp",
+            "app/controller/AppControllerPrivateHistory.cpp",
+            "app/controller/AppControllerReadAcks.cpp",
+            "app/controller/AppControllerPrivateSelection.cpp",
+            "app/controller/AppControllerContactSelection.cpp",
+            "app/controller/AppControllerGroupSelection.cpp",
+            "app/controller/AppControllerDialogSelection.cpp",
+            "app/controller/AppControllerPagination.cpp",
+            "app/controller/AppControllerUiProperties.cpp",
+            "app/controller/AppControllerUserProperties.cpp",
+            "app/controller/AppControllerGroupProperties.cpp",
+            "app/controller/AppControllerModelProperties.cpp",
+            "app/controller/AppControllerContactState.cpp",
+            "app/controller/AppControllerStatusState.cpp",
+            "app/controller/AppControllerLoadingState.cpp",
+            "app/controller/AppControllerDialogRuntimeState.cpp",
+            "app/controller/AppControllerProfileState.cpp",
+            "app/controller/AppControllerBootstrapState.cpp",
+            "app/connection/AppChatConnectionCoordinator.cpp",
+            "app/connection/AppChatConnectionCoordinator.h",
+            "app/connection/AppChatConnectionPolicy.cpp",
+            "app/connection/AppChatConnectionPolicy.h",
+            "app/connection/AppControllerChatBootstrap.cpp",
+            "app/controller/AppControllerRelationBootstrap.cpp",
+            "app/controller/AppControllerPendingAttachments.cpp",
+            "app/controller/AppControllerMediaUploadQueue.cpp",
+            "app/controller/AppControllerMessageDispatch.cpp",
+            "app/controller/AppControllerMessageStatus.cpp",
+            "app/controller/AppControllerPrivateHistoryResponses.cpp",
+            "app/controller/AppControllerPrivateMessageEvents.cpp",
+            "app/controller/AppControllerPrivateReadEvents.cpp",
+            "features/agent/controller/AgentControllerChat.cpp",
+            "features/agent/controller/AgentController.cpp",
+            "features/agent/game/AgentControllerGameNetwork.cpp",
+            "features/agent/game/AgentControllerGameResponses.cpp",
+            "features/agent/game/AgentControllerGameRooms.cpp",
+            "features/agent/game/AgentControllerGameTemplates.cpp",
+            "features/agent/controller/AgentControllerAgentTasks.cpp",
+            "features/agent/controller/AgentControllerKnowledge.cpp",
+            "features/agent/controller/AgentControllerMemory.cpp",
             "features/auth/AuthController.cpp",
-            "features/chat/ChatCacheMessageCodec.cpp",
-            "features/chat/ChatMessageModelContent.cpp",
-            "features/chat/ChatMessageModel.cpp",
-            "features/chat/ChatMessageModelMutations.cpp",
-            "features/chat/ChatMessageModelPresentation.cpp",
-            "features/chat/ChatMessageModelQueries.cpp",
-            "features/chat/DialogListEntryBuilder.cpp",
-            "features/chat/PrivateChatCacheStore.cpp",
-            "features/contact/FriendListModel.cpp",
-            "features/contact/FriendListModelMutations.cpp",
-            "features/contact/FriendListModelState.cpp",
-            "features/contact/FriendListModelQueries.cpp",
-            "features/moments/MomentsEntryParser.cpp",
-            "features/moments/MomentsControllerParsing.cpp",
-            "features/moments/MomentsControllerPublish.cpp",
-            "features/moments/MomentsControllerRequests.cpp",
-            "features/moments/MomentsControllerResponses.cpp",
-            "features/r18/R18Controller.cpp",
-            "features/moments/MomentsModel.cpp",
-            "features/moments/MomentsModelMutations.cpp",
-            "features/moments/MomentsModelQueries.cpp",
-            "features/r18/R18ControllerNetwork.cpp",
-            "features/r18/R18ControllerResponses.cpp",
-            "features/r18/R18ControllerSources.cpp",
-            "features/r18/R18ControllerState.cpp",
-            "features/pet/PetController.cpp",
-            "features/pet/PetControllerSession.cpp",
-            "features/pet/PetControllerState.cpp",
-            "features/pet/PetControllerVoiceRuntime.cpp",
-            "features/pet/PetControllerVoiceTraining.cpp",
+            "features/chat/cache/ChatCacheMessageCodec.cpp",
+            "features/chat/model/ChatMessageModelContent.cpp",
+            "features/chat/model/ChatMessageModel.cpp",
+            "features/chat/model/ChatMessageModelMutations.cpp",
+            "features/chat/model/ChatMessageModelPresentation.cpp",
+            "features/chat/model/ChatMessageModelQueries.cpp",
+            "features/chat/services/DialogListEntryBuilder.cpp",
+            "features/chat/cache/PrivateChatCacheStore.cpp",
+            "features/contact/model/FriendListModel.cpp",
+            "features/contact/model/FriendListModelMutations.cpp",
+            "features/contact/model/FriendListModelState.cpp",
+            "features/contact/model/FriendListModelQueries.cpp",
+            "features/moments/parsing/MomentsEntryParser.cpp",
+            "features/moments/parsing/MomentsControllerParsing.cpp",
+            "features/moments/controller/MomentsControllerPublish.cpp",
+            "features/moments/controller/MomentsControllerRequests.cpp",
+            "features/moments/controller/MomentsControllerFeedResponses.cpp",
+            "features/moments/controller/MomentsControllerPostResponses.cpp",
+            "features/moments/controller/MomentsControllerCommentResponses.cpp",
+            "features/r18/controller/R18Controller.cpp",
+            "features/moments/model/MomentsModel.cpp",
+            "features/moments/model/MomentsModelMutations.cpp",
+            "features/moments/model/MomentsModelQueries.cpp",
+            "features/r18/controller/R18ControllerNetwork.cpp",
+            "features/r18/controller/R18ControllerResponses.cpp",
+            "features/r18/controller/R18ControllerSources.cpp",
+            "features/r18/controller/R18ControllerState.cpp",
+            "features/pet/controller/PetController.cpp",
+            "features/pet/controller/PetControllerSession.cpp",
+            "features/pet/controller/PetControllerState.cpp",
+            "features/pet/speech/PetControllerVoiceRuntime.cpp",
+            "features/pet/speech/PetControllerVoiceTraining.cpp",
             "shared/gateway/ClientGateway.cpp",
             "shared/gateway/TransportEndpointPolicy.cpp",
             "shared/media/LocalFilePickerService.cpp",
@@ -175,7 +270,7 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
             "shared/media/MediaUploadServiceUploads.cpp",
             "shared/utils/IconPathUtils.h",
             "platform/windows/ClientWinCompat.h",
-            "live2d/Live2DRenderItem.cpp",
+            "live2d/rendering/Live2DRenderItem.cpp",
         )
 
         for rel_path in expected_files:
@@ -203,11 +298,7 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
     def test_cmake_adds_core_from_qml_module_without_desktop_shared_entry(self):
         desktop_cmake = DESKTOP_CMAKE.read_text(encoding="utf-8")
         qml_cmake_root = QML_CMAKE.read_text(encoding="utf-8")
-        qml_cmake = (
-            qml_cmake_root
-            + "\n"
-            + "\n".join(fragment.read_text(encoding="utf-8") for fragment in QML_CMAKE_FRAGMENTS if fragment.exists())
-        )
+        qml_cmake = qml_cmake_text()
         core_cmake = CORE_CMAKE.read_text(encoding="utf-8")
         client_cache_test_cmake = CLIENT_CACHE_TEST_CMAKE.read_text(encoding="utf-8")
         client_dialog_test_cmake = CLIENT_DIALOG_TEST_CMAKE.read_text(encoding="utf-8")
@@ -242,131 +333,134 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("set(MEMOCHAT_QML_CORE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/core)", qml_cmake)
         self.assertIn("set(MEMOCHAT_QML_FEATURE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features)", qml_cmake)
         self.assertIn("set(MEMOCHAT_QML_SHARED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shared)", qml_cmake)
-        self.assertIn("app/AppController.cpp", qml_cmake)
+        self.assertIn("app/controller/AppController.cpp", qml_cmake)
         self.assertNotIn("app/MainQmlBootstrap.cpp", qml_cmake)
-        self.assertIn("app/MainQmlTypeRegistry.cpp", qml_cmake)
-        self.assertIn("app/MainQmlEngineSetup.cpp", qml_cmake)
-        self.assertIn("app/MainQmlWindowLoader.cpp", qml_cmake)
-        self.assertIn("app/MainRuntimeConfig.cpp", qml_cmake)
-        self.assertIn("app/AppControllerConnectionState.h", qml_cmake)
-        self.assertIn("app/AppControllerDialogStateData.h", qml_cmake)
-        self.assertIn("app/AppControllerGroupState.h", qml_cmake)
-        self.assertIn("app/AppControllerPendingSendState.h", qml_cmake)
-        self.assertIn("app/AppControllerRuntimeState.h", qml_cmake)
-        self.assertIn("app/AppControllerUserState.h", qml_cmake)
-        self.assertIn("app/AppSessionCoordinator.cpp", qml_cmake)
-        self.assertIn("app/SessionAuthCoordinator.cpp", qml_cmake)
-        self.assertIn("app/SessionAuthCoordinatorCommands.cpp", qml_cmake)
-        self.assertIn("app/SessionAuthCoordinatorLoginResponse.cpp", qml_cmake)
-        self.assertIn("app/SessionAuthCoordinatorAuthResponses.cpp", qml_cmake)
-        self.assertIn("app/SessionChatEntryCoordinator.cpp", qml_cmake)
-        self.assertIn("app/SessionRelationBootstrap.cpp", qml_cmake)
-        self.assertIn("app/RegisterCountdownController.cpp", qml_cmake)
-        self.assertIn("app/CallCoordinator.cpp", qml_cmake)
-        self.assertIn("app/ContactCoordinatorShell.cpp", qml_cmake)
-        self.assertIn("app/GroupCoordinator.cpp", qml_cmake)
-        self.assertIn("app/MediaCoordinator.cpp", qml_cmake)
-        self.assertIn("app/ProfileCoordinator.cpp", qml_cmake)
-        self.assertIn("app/AppControllerGroupEvents.cpp", qml_cmake)
-        self.assertIn("app/AppControllerGroupManagement.cpp", qml_cmake)
-        self.assertIn("app/AppControllerGroupResponses.cpp", qml_cmake)
-        self.assertIn("app/AppControllerGroupResponseErrors.cpp", qml_cmake)
-        self.assertIn("app/AppControllerGroupManagementResponses.cpp", qml_cmake)
-        self.assertIn("app/AppControllerGroupHistoryResponses.cpp", qml_cmake)
-        self.assertIn("app/AppControllerGroupMessageResponses.cpp", qml_cmake)
-        self.assertIn("app/AppControllerPrivateMessageResponses.cpp", qml_cmake)
-        self.assertIn("app/AppControllerDialogMetaResponses.cpp", qml_cmake)
-        self.assertIn("app/AppControllerDialogModels.cpp", qml_cmake)
-        self.assertIn("app/AppControllerPrivateHistory.cpp", qml_cmake)
-        self.assertIn("app/AppControllerReadAcks.cpp", qml_cmake)
-        self.assertIn("app/AppControllerPrivateSelection.cpp", qml_cmake)
-        self.assertIn("app/AppControllerContactSelection.cpp", qml_cmake)
-        self.assertIn("app/AppControllerGroupSelection.cpp", qml_cmake)
-        self.assertIn("app/AppControllerDialogSelection.cpp", qml_cmake)
-        self.assertIn("app/AppControllerPagination.cpp", qml_cmake)
+        self.assertIn("app/bootstrap/MainQmlTypeRegistry.cpp", qml_cmake)
+        self.assertIn("app/bootstrap/MainQmlEngineSetup.cpp", qml_cmake)
+        self.assertIn("app/bootstrap/MainQmlWindowLoader.cpp", qml_cmake)
+        self.assertIn("app/bootstrap/MainRuntimeConfig.cpp", qml_cmake)
+        self.assertIn("app/connection/AppControllerConnectionState.h", qml_cmake)
+        self.assertIn("app/controller/AppControllerDialogStateData.h", qml_cmake)
+        self.assertIn("app/controller/AppControllerGroupState.h", qml_cmake)
+        self.assertIn("app/controller/AppControllerPendingSendState.h", qml_cmake)
+        self.assertIn("app/controller/AppControllerRuntimeState.h", qml_cmake)
+        self.assertIn("app/controller/AppControllerUserState.h", qml_cmake)
+        self.assertIn("app/session/AppSessionCoordinator.cpp", qml_cmake)
+        self.assertIn("app/session/SessionAuthCoordinator.cpp", qml_cmake)
+        self.assertIn("app/session/SessionAuthCoordinatorCommands.cpp", qml_cmake)
+        self.assertIn("app/session/SessionAuthCoordinatorLoginResponse.cpp", qml_cmake)
+        self.assertIn("app/session/SessionAuthCoordinatorAuthResponses.cpp", qml_cmake)
+        self.assertIn("app/session/SessionChatEntryCoordinator.cpp", qml_cmake)
+        self.assertIn("app/session/SessionRelationBootstrap.cpp", qml_cmake)
+        self.assertIn("app/coordinators/RegisterCountdownController.cpp", qml_cmake)
+        self.assertIn("app/coordinators/CallCoordinator.cpp", qml_cmake)
+        self.assertIn("app/coordinators/ContactCoordinatorShell.cpp", qml_cmake)
+        self.assertIn("app/coordinators/GroupCoordinator.cpp", qml_cmake)
+        self.assertIn("app/coordinators/MediaCoordinator.cpp", qml_cmake)
+        self.assertIn("app/coordinators/ProfileCoordinator.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerGroupEvents.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerGroupManagement.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerGroupResponses.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerGroupResponseErrors.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerGroupManagementResponses.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerGroupHistoryResponses.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerGroupMessageResponses.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerPrivateMessageResponses.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerDialogMetaResponses.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerDialogModels.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerPrivateHistory.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerReadAcks.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerPrivateSelection.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerContactSelection.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerGroupSelection.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerDialogSelection.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerPagination.cpp", qml_cmake)
         self.assertNotIn("app/AppControllerSelection.cpp", qml_cmake)
-        self.assertIn("app/AppControllerUiProperties.cpp", qml_cmake)
-        self.assertIn("app/AppControllerUserProperties.cpp", qml_cmake)
-        self.assertIn("app/AppControllerGroupProperties.cpp", qml_cmake)
-        self.assertIn("app/AppControllerModelProperties.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerUiProperties.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerUserProperties.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerGroupProperties.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerModelProperties.cpp", qml_cmake)
         self.assertNotIn("app/AppControllerProperties.cpp", qml_cmake)
-        self.assertIn("app/AppControllerContactState.cpp", qml_cmake)
-        self.assertIn("app/AppControllerStatusState.cpp", qml_cmake)
-        self.assertIn("app/AppControllerLoadingState.cpp", qml_cmake)
-        self.assertIn("app/AppControllerDialogRuntimeState.cpp", qml_cmake)
-        self.assertIn("app/AppControllerProfileState.cpp", qml_cmake)
-        self.assertIn("app/AppControllerBootstrapState.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerContactState.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerStatusState.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerLoadingState.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerDialogRuntimeState.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerProfileState.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerBootstrapState.cpp", qml_cmake)
         self.assertNotIn("app/AppControllerState.cpp", qml_cmake)
         self.assertNotIn("app/AppControllerConnectionLogin.cpp", qml_cmake)
         self.assertNotIn("app/AppControllerHeartbeat.cpp", qml_cmake)
         self.assertNotIn("app/AppControllerReconnect.cpp", qml_cmake)
-        self.assertIn("app/AppChatConnectionCoordinator.cpp", qml_cmake)
-        self.assertIn("app/AppChatConnectionPolicy.cpp", qml_cmake)
+        self.assertIn("app/connection/AppChatConnectionCoordinator.cpp", qml_cmake)
+        self.assertIn("app/connection/AppChatConnectionPolicy.cpp", qml_cmake)
         self.assertNotIn("app/AppControllerConnection.cpp", qml_cmake)
         self.assertNotIn("app/AppControllerLoginSession.cpp", qml_cmake)
-        self.assertIn("app/AppControllerChatBootstrap.cpp", qml_cmake)
-        self.assertIn("app/AppControllerRelationBootstrap.cpp", qml_cmake)
+        self.assertIn("app/connection/AppControllerChatBootstrap.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerRelationBootstrap.cpp", qml_cmake)
         self.assertNotIn("app/AppControllerRegisterCountdown.cpp", qml_cmake)
         self.assertNotIn("app/AppControllerSession.cpp", qml_cmake)
-        self.assertIn("app/AppControllerPendingAttachments.cpp", qml_cmake)
-        self.assertIn("app/AppControllerMediaUploadQueue.cpp", qml_cmake)
-        self.assertIn("app/AppControllerMessageDispatch.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerPendingAttachments.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerMediaUploadQueue.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerMessageDispatch.cpp", qml_cmake)
         self.assertNotIn("app/AppControllerCallTarget.cpp", qml_cmake)
-        self.assertIn("app/AppControllerMessageStatus.cpp", qml_cmake)
-        self.assertIn("app/AppControllerPrivateHistoryResponses.cpp", qml_cmake)
-        self.assertIn("app/AppControllerPrivateMessageEvents.cpp", qml_cmake)
-        self.assertIn("app/AppControllerPrivateReadEvents.cpp", qml_cmake)
-        self.assertIn("features/agent/AgentControllerChat.cpp", qml_cmake)
-        self.assertIn("features/agent/AgentController.cpp", qml_cmake)
-        self.assertIn("features/agent/AgentControllerGameNetwork.cpp", qml_cmake)
-        self.assertIn("features/agent/AgentControllerGameResponses.cpp", qml_cmake)
-        self.assertIn("features/agent/AgentControllerGameRooms.cpp", qml_cmake)
-        self.assertIn("features/agent/AgentControllerGameTemplates.cpp", qml_cmake)
-        self.assertIn("features/agent/AgentControllerAgentTasks.cpp", qml_cmake)
-        self.assertIn("features/agent/AgentControllerKnowledge.cpp", qml_cmake)
-        self.assertIn("features/agent/AgentControllerMemory.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerMessageStatus.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerPrivateHistoryResponses.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerPrivateMessageEvents.cpp", qml_cmake)
+        self.assertIn("app/controller/AppControllerPrivateReadEvents.cpp", qml_cmake)
+        self.assertIn("features/agent/controller/AgentControllerChat.cpp", qml_cmake)
+        self.assertIn("features/agent/controller/AgentController.cpp", qml_cmake)
+        self.assertIn("features/agent/game/AgentControllerGameNetwork.cpp", qml_cmake)
+        self.assertIn("features/agent/game/AgentControllerGameResponses.cpp", qml_cmake)
+        self.assertIn("features/agent/game/AgentControllerGameRooms.cpp", qml_cmake)
+        self.assertIn("features/agent/game/AgentControllerGameTemplates.cpp", qml_cmake)
+        self.assertIn("features/agent/controller/AgentControllerAgentTasks.cpp", qml_cmake)
+        self.assertIn("features/agent/controller/AgentControllerKnowledge.cpp", qml_cmake)
+        self.assertIn("features/agent/controller/AgentControllerMemory.cpp", qml_cmake)
         self.assertNotIn("features/agent/AgentControllerGame.cpp", qml_cmake)
-        self.assertIn("features/agent/AgentControllerModels.cpp", qml_cmake)
-        self.assertIn("features/agent/AgentControllerSessions.cpp", qml_cmake)
-        self.assertIn("features/agent/AgentControllerState.cpp", qml_cmake)
-        self.assertIn("features/chat/ChatMessageModelContent.cpp", qml_cmake)
-        self.assertIn("features/chat/ChatMessageModel.cpp", qml_cmake)
-        self.assertIn("features/chat/ChatCacheMessageCodec.cpp", qml_cmake)
-        self.assertIn("features/chat/ChatCacheMessageCodec.h", qml_cmake)
+        self.assertIn("features/agent/controller/AgentControllerModels.cpp", qml_cmake)
+        self.assertIn("features/agent/controller/AgentControllerSessions.cpp", qml_cmake)
+        self.assertIn("features/agent/controller/AgentControllerState.cpp", qml_cmake)
+        self.assertIn("features/chat/model/ChatMessageModelContent.cpp", qml_cmake)
+        self.assertIn("features/chat/model/ChatMessageModel.cpp", qml_cmake)
+        self.assertIn("features/chat/cache/ChatCacheMessageCodec.cpp", qml_cmake)
+        self.assertIn("features/chat/cache/ChatCacheMessageCodec.h", qml_cmake)
         self.assertIn("ChatCacheMessageCodec.cpp", client_cache_test_cmake)
         self.assertIn("chat_cache_message_codec_gtest", client_cache_test_cmake)
-        self.assertIn("features/chat/ChatMessageModelMutations.cpp", qml_cmake)
-        self.assertIn("features/chat/ChatMessageModelPresentation.cpp", qml_cmake)
-        self.assertIn("features/chat/ChatMessageModelQueries.cpp", qml_cmake)
-        self.assertIn("features/chat/DialogListEntryBuilder.cpp", qml_cmake)
-        self.assertIn("features/chat/DialogListEntryBuilder.h", qml_cmake)
-        self.assertIn("features/chat/DialogListTypes.h", qml_cmake)
+        self.assertIn("features/chat/model/ChatMessageModelMutations.cpp", qml_cmake)
+        self.assertIn("features/chat/model/ChatMessageModelPresentation.cpp", qml_cmake)
+        self.assertIn("features/chat/model/ChatMessageModelQueries.cpp", qml_cmake)
+        self.assertIn("features/chat/services/DialogListEntryBuilder.cpp", qml_cmake)
+        self.assertIn("features/chat/services/DialogListEntryBuilder.h", qml_cmake)
+        self.assertIn("features/chat/services/DialogListTypes.h", qml_cmake)
         self.assertIn("DialogListEntryBuilder.cpp", client_dialog_test_cmake)
-        self.assertIn("features/chat/PrivateChatCacheStore.cpp", qml_cmake)
-        self.assertIn("features/contact/FriendListModelMutations.cpp", qml_cmake)
-        self.assertIn("features/contact/FriendListModelState.cpp", qml_cmake)
-        self.assertIn("features/contact/FriendListModelQueries.cpp", qml_cmake)
+        self.assertIn("features/chat/cache/PrivateChatCacheStore.cpp", qml_cmake)
+        self.assertIn("features/contact/model/FriendListModelMutations.cpp", qml_cmake)
+        self.assertIn("features/contact/model/FriendListModelState.cpp", qml_cmake)
+        self.assertIn("features/contact/model/FriendListModelQueries.cpp", qml_cmake)
         self.assertIn("FriendListModelMutations.cpp", client_dialog_test_cmake)
         self.assertIn("FriendListModelState.cpp", client_dialog_test_cmake)
         self.assertIn("FriendListModelQueries.cpp", client_dialog_test_cmake)
-        self.assertIn("features/moments/MomentsEntryParser.cpp", qml_cmake)
-        self.assertIn("features/moments/MomentsEntryParser.h", qml_cmake)
+        self.assertIn("features/moments/parsing/MomentsEntryParser.cpp", qml_cmake)
+        self.assertIn("features/moments/parsing/MomentsEntryParser.h", qml_cmake)
         self.assertIn("MomentsEntryParser.cpp", client_moments_test_cmake)
         self.assertIn("moments_entry_parser_gtest", client_moments_test_cmake)
-        self.assertIn("features/moments/MomentsControllerParsing.cpp", qml_cmake)
-        self.assertIn("features/moments/MomentsControllerPublish.cpp", qml_cmake)
-        self.assertIn("features/moments/MomentsControllerRequests.cpp", qml_cmake)
-        self.assertIn("features/moments/MomentsControllerResponses.cpp", qml_cmake)
-        self.assertIn("features/moments/MomentsModelMutations.cpp", qml_cmake)
-        self.assertIn("features/moments/MomentsModelQueries.cpp", qml_cmake)
-        self.assertIn("features/r18/R18ControllerNetwork.cpp", qml_cmake)
-        self.assertIn("features/r18/R18ControllerResponses.cpp", qml_cmake)
-        self.assertIn("features/r18/R18ControllerSources.cpp", qml_cmake)
-        self.assertIn("features/r18/R18ControllerState.cpp", qml_cmake)
-        self.assertIn("features/pet/PetControllerSession.cpp", qml_cmake)
-        self.assertIn("features/pet/PetControllerState.cpp", qml_cmake)
-        self.assertIn("features/pet/PetControllerVoiceRuntime.cpp", qml_cmake)
-        self.assertIn("features/pet/PetControllerVoiceTraining.cpp", qml_cmake)
+        self.assertIn("features/moments/parsing/MomentsControllerParsing.cpp", qml_cmake)
+        self.assertIn("features/moments/controller/MomentsControllerPublish.cpp", qml_cmake)
+        self.assertIn("features/moments/controller/MomentsControllerRequests.cpp", qml_cmake)
+        self.assertIn("features/moments/controller/MomentsControllerFeedResponses.cpp", qml_cmake)
+        self.assertIn("features/moments/controller/MomentsControllerPostResponses.cpp", qml_cmake)
+        self.assertIn("features/moments/controller/MomentsControllerCommentResponses.cpp", qml_cmake)
+        self.assertNotIn("features/moments/MomentsControllerResponses.cpp", qml_cmake)
+        self.assertIn("features/moments/model/MomentsModelMutations.cpp", qml_cmake)
+        self.assertIn("features/moments/model/MomentsModelQueries.cpp", qml_cmake)
+        self.assertIn("features/r18/controller/R18ControllerNetwork.cpp", qml_cmake)
+        self.assertIn("features/r18/controller/R18ControllerResponses.cpp", qml_cmake)
+        self.assertIn("features/r18/controller/R18ControllerSources.cpp", qml_cmake)
+        self.assertIn("features/r18/controller/R18ControllerState.cpp", qml_cmake)
+        self.assertIn("features/pet/controller/PetControllerSession.cpp", qml_cmake)
+        self.assertIn("features/pet/controller/PetControllerState.cpp", qml_cmake)
+        self.assertIn("features/pet/speech/PetControllerVoiceRuntime.cpp", qml_cmake)
+        self.assertIn("features/pet/speech/PetControllerVoiceTraining.cpp", qml_cmake)
         self.assertIn("shared/gateway/ClientGateway.cpp", qml_cmake)
         self.assertIn("shared/gateway/TransportEndpointPolicy.cpp", qml_cmake)
         self.assertIn("shared/gateway/TransportEndpointPolicy.h", qml_cmake)
@@ -375,12 +469,12 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("shared/media/MediaUploadServiceHelpers.cpp", qml_cmake)
         self.assertIn("shared/media/MediaUploadServiceNetwork.cpp", qml_cmake)
         self.assertIn("shared/media/MediaUploadServiceUploads.cpp", qml_cmake)
-        self.assertIn("live2d/Live2DRenderItem.cpp", qml_cmake)
+        self.assertIn("live2d/rendering/Live2DRenderItem.cpp", qml_cmake)
         self.assertIn("${MEMOCHAT_QML_FEATURE_DIR}/agent", qml_cmake)
         self.assertIn("${MEMOCHAT_QML_FEATURE_DIR}/chat", qml_cmake)
         self.assertIn("${MEMOCHAT_QML_SHARED_DIR}/gateway", qml_cmake)
         self.assertIn("${MEMOCHAT_QML_SHARED_DIR}/media", qml_cmake)
-        self.assertIn("${MEMOCHAT_QML_CORE_DIR}/rc.qrc", qml_cmake)
+        self.assertIn("resources/qrc/app-core.qrc", qml_cmake)
         self.assertIn("${MEMOCHAT_QML_CORE_DIR}/config.ini", qml_cmake)
         self.assertNotIn("${CMAKE_CURRENT_SOURCE_DIR}/controllers", qml_cmake)
         self.assertNotIn("${CMAKE_CURRENT_SOURCE_DIR}/models", qml_cmake)
@@ -392,44 +486,49 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
 
     def test_qml_cmake_source_lists_are_split_into_grouped_fragments(self):
         root = QML_CMAKE.read_text(encoding="utf-8")
-        for fragment in QML_CMAKE_FRAGMENTS:
-            with self.subTest(fragment=fragment.name):
-                self.assertTrue(fragment.is_file())
-                self.assertIn(f"include(cmake/{fragment.name})", root)
+        for rel_path in DIRECTORY_MANIFESTS:
+            with self.subTest(manifest=rel_path):
+                self.assertIn(f"include({rel_path})", root)
 
-        app = (QML_CMAKE_DIR / "AppSources.cmake").read_text(encoding="utf-8")
-        features = (QML_CMAKE_DIR / "FeatureSources.cmake").read_text(encoding="utf-8")
-        shared = (QML_CMAKE_DIR / "SharedSources.cmake").read_text(encoding="utf-8")
-        resources = (QML_CMAKE_DIR / "QmlResources.cmake").read_text(encoding="utf-8")
-        combined = "\n".join((root, app, features, shared, resources))
+        app = (QML_DIR / "app/sources.cmake").read_text(encoding="utf-8")
+        features = (QML_DIR / "features/sources.cmake").read_text(encoding="utf-8")
+        agent = (QML_DIR / "features/agent/sources.cmake").read_text(encoding="utf-8")
+        pet = (QML_DIR / "features/pet/sources.cmake").read_text(encoding="utf-8")
+        shared = (QML_DIR / "shared/sources.cmake").read_text(encoding="utf-8")
+        live2d = (QML_DIR / "live2d/sources.cmake").read_text(encoding="utf-8")
+        resources = (QML_DIR / "resources/resources.cmake").read_text(encoding="utf-8")
+        combined = "\n".join((root, app, features, agent, pet, shared, live2d, resources))
 
         self.assertNotIn("file(GLOB", combined)
         self.assertIn("set(MEMOCHAT_QML_APP_SOURCES", app)
         self.assertIn("set(MEMOCHAT_QML_APP_HEADERS", app)
-        self.assertIn("app/AppController.cpp", app)
-        self.assertIn("app/AppChatConnectionCoordinator.cpp", app)
+        self.assertIn("app/controller/AppController.cpp", app)
+        self.assertIn("app/connection/AppChatConnectionCoordinator.cpp", app)
         self.assertIn("set(MEMOCHAT_QML_FEATURE_SOURCES", features)
         self.assertIn("set(MEMOCHAT_QML_FEATURE_HEADERS", features)
-        self.assertIn("features/agent/AgentController.cpp", features)
-        self.assertIn("features/pet/PetController.cpp", features)
+        self.assertIn("features/agent/controller/AgentController.cpp", agent)
+        self.assertIn("features/pet/controller/PetController.cpp", pet)
         self.assertIn("set(MEMOCHAT_QML_SHARED_SOURCES", shared)
         self.assertIn("set(MEMOCHAT_QML_SHARED_HEADERS", shared)
         self.assertIn("shared/media/MediaUploadService.cpp", shared)
-        self.assertIn("live2d/Live2DRenderItem.cpp", shared)
+        self.assertIn("set(MEMOCHAT_QML_LIVE2D_SOURCES", live2d)
+        self.assertIn("set(MEMOCHAT_QML_LIVE2D_HEADERS", live2d)
+        self.assertIn("live2d/rendering/Live2DRenderItem.cpp", live2d)
         self.assertIn("platform/windows/ClientWinCompat.h", shared)
         self.assertIn("set(MEMOCHAT_QML_RESOURCES", resources)
-        self.assertIn("qml.qrc", resources)
-        self.assertIn("${MEMOCHAT_QML_CORE_DIR}/rc.qrc", resources)
+        self.assertIn("resources/qrc/qml-shell.qrc", resources)
+        self.assertIn("resources/qrc/app-core.qrc", resources)
         self.assertIn("${MEMOCHAT_QML_APP_SOURCES}", root)
         self.assertIn("${MEMOCHAT_QML_FEATURE_SOURCES}", root)
         self.assertIn("${MEMOCHAT_QML_SHARED_SOURCES}", root)
+        self.assertIn("${MEMOCHAT_QML_LIVE2D_SOURCES}", root)
         self.assertIn("${MEMOCHAT_QML_RESOURCES}", root)
 
     def test_startup_qml_bootstrap_concerns_are_split(self):
-        bootstrap = (QML_DIR / "app/MainQmlBootstrap.h").read_text(encoding="utf-8")
-        registry = (QML_DIR / "app/MainQmlTypeRegistry.cpp").read_text(encoding="utf-8")
-        engine = (QML_DIR / "app/MainQmlEngineSetup.cpp").read_text(encoding="utf-8")
-        loader = (QML_DIR / "app/MainQmlWindowLoader.cpp").read_text(encoding="utf-8")
+        bootstrap = (QML_DIR / "app/bootstrap/MainQmlBootstrap.h").read_text(encoding="utf-8")
+        registry = (QML_DIR / "app/bootstrap/MainQmlTypeRegistry.cpp").read_text(encoding="utf-8")
+        engine = (QML_DIR / "app/bootstrap/MainQmlEngineSetup.cpp").read_text(encoding="utf-8")
+        loader = (QML_DIR / "app/bootstrap/MainQmlWindowLoader.cpp").read_text(encoding="utf-8")
 
         self.assertFalse((QML_DIR / "app/MainQmlBootstrap.cpp").exists())
         self.assertIn("void registerMemoChatQmlTypes();", bootstrap)
@@ -450,7 +549,11 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLessEqual(len(bootstrap.splitlines()), 16)
 
     def test_qml_shell_runtime_helpers_are_registered(self):
-        qrc = QML_QRC.read_text(encoding="utf-8")
+        qrc = (
+            (RESOURCE_QRC_DIR / "qml-r18.qrc").read_text(encoding="utf-8")
+            + "\n"
+            + (RESOURCE_QRC_DIR / "qml-agent.qrc").read_text(encoding="utf-8")
+        )
         r18_shell = (QML_DIR / "qml/r18/R18ShellPane.qml").read_text(encoding="utf-8")
         r18_runtime = (QML_DIR / "qml/r18/R18ShellRuntime.js").read_text(encoding="utf-8")
         agent_pane = (QML_DIR / "qml/agent/AgentPane.qml").read_text(encoding="utf-8")
@@ -469,12 +572,12 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("function skillModeHint", agent_runtime)
 
     def test_heavy_moments_controller_concerns_are_split(self):
-        controller = (QML_DIR / "features/moments/MomentsController.cpp").read_text(encoding="utf-8")
-        parsing = (QML_DIR / "features/moments/MomentsControllerParsing.cpp").read_text(encoding="utf-8")
-        publish = (QML_DIR / "features/moments/MomentsControllerPublish.cpp").read_text(encoding="utf-8")
-        requests = (QML_DIR / "features/moments/MomentsControllerRequests.cpp").read_text(encoding="utf-8")
-        responses = (QML_DIR / "features/moments/MomentsControllerResponses.cpp").read_text(encoding="utf-8")
-        parser = (QML_DIR / "features/moments/MomentsEntryParser.cpp").read_text(encoding="utf-8")
+        controller = (QML_DIR / "features/moments/controller/MomentsController.cpp").read_text(encoding="utf-8")
+        parsing = (QML_DIR / "features/moments/parsing/MomentsControllerParsing.cpp").read_text(encoding="utf-8")
+        publish = (QML_DIR / "features/moments/controller/MomentsControllerPublish.cpp").read_text(encoding="utf-8")
+        requests = (QML_DIR / "features/moments/controller/MomentsControllerRequests.cpp").read_text(encoding="utf-8")
+        feed_responses = MOMENTS_RESPONSE_FAMILIES["feed"].read_text(encoding="utf-8")
+        parser = (QML_DIR / "features/moments/parsing/MomentsEntryParser.cpp").read_text(encoding="utf-8")
 
         self.assertIn("MomentEntry MomentsController::parseMomentEntry", parsing)
         self.assertIn("parseMomentEntryFromJson", parsing)
@@ -482,17 +585,57 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("QVector<MomentComment> parseMomentComments", parser)
         self.assertIn("void MomentsController::publishDraftMoment", publish)
         self.assertIn("void MomentsController::toggleLike", requests)
-        self.assertIn("void MomentsController::onLoadFeedRsp", responses)
+        self.assertIn("void MomentsController::onLoadFeedRsp", feed_responses)
         self.assertNotIn("void MomentsController::publishDraftMoment", controller)
         self.assertNotIn("void MomentsController::onLoadFeedRsp", controller)
         self.assertLess(len(controller.splitlines()), 180)
 
+    def test_moments_response_handlers_are_split_by_family(self):
+        feature_cmake = qml_cmake_text()
+        legacy = (QML_DIR / "features/moments/controller/MomentsControllerResponses.cpp").read_text(encoding="utf-8")
+
+        for path in MOMENTS_RESPONSE_FAMILIES.values():
+            with self.subTest(path=path.name):
+                self.assertTrue(path.is_file())
+                rel_path = path.relative_to(QML_DIR).as_posix()
+                self.assertIn(rel_path, feature_cmake)
+
+        feed = MOMENTS_RESPONSE_FAMILIES["feed"].read_text(encoding="utf-8")
+        post = MOMENTS_RESPONSE_FAMILIES["post"].read_text(encoding="utf-8")
+        comment = MOMENTS_RESPONSE_FAMILIES["comment"].read_text(encoding="utf-8")
+
+        for token in (
+            "void MomentsController::onLoadFeedRsp",
+            "void MomentsController::onDetailRsp",
+            "void MomentsController::onCommentListRsp",
+        ):
+            with self.subTest(feed=token):
+                self.assertIn(token, feed)
+                self.assertNotIn(token, legacy)
+
+        for token in (
+            "void MomentsController::onPublishRsp",
+            "void MomentsController::onDeleteRsp",
+            "void MomentsController::onLikeRsp",
+        ):
+            with self.subTest(post=token):
+                self.assertIn(token, post)
+                self.assertNotIn(token, legacy)
+
+        for token in (
+            "void MomentsController::onCommentRsp",
+            "void MomentsController::onCommentLikeRsp",
+        ):
+            with self.subTest(comment=token):
+                self.assertIn(token, comment)
+                self.assertNotIn(token, legacy)
+
     def test_heavy_agent_controller_concerns_are_split(self):
-        controller = (QML_DIR / "features/agent/AgentController.cpp").read_text(encoding="utf-8")
-        chat = (QML_DIR / "features/agent/AgentControllerChat.cpp").read_text(encoding="utf-8")
-        models = (QML_DIR / "features/agent/AgentControllerModels.cpp").read_text(encoding="utf-8")
-        sessions = (QML_DIR / "features/agent/AgentControllerSessions.cpp").read_text(encoding="utf-8")
-        state = (QML_DIR / "features/agent/AgentControllerState.cpp").read_text(encoding="utf-8")
+        controller = (QML_DIR / "features/agent/controller/AgentController.cpp").read_text(encoding="utf-8")
+        chat = (QML_DIR / "features/agent/controller/AgentControllerChat.cpp").read_text(encoding="utf-8")
+        models = (QML_DIR / "features/agent/controller/AgentControllerModels.cpp").read_text(encoding="utf-8")
+        sessions = (QML_DIR / "features/agent/controller/AgentControllerSessions.cpp").read_text(encoding="utf-8")
+        state = (QML_DIR / "features/agent/controller/AgentControllerState.cpp").read_text(encoding="utf-8")
 
         self.assertIn("void AgentController::onHttpFinish", controller)
         self.assertIn("void AgentController::sendMessage", chat)
@@ -508,9 +651,9 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(controller.splitlines()), 220)
 
     def test_heavy_agent_knowledge_concerns_are_split(self):
-        knowledge = (QML_DIR / "features/agent/AgentControllerKnowledge.cpp").read_text(encoding="utf-8")
-        memory = (QML_DIR / "features/agent/AgentControllerMemory.cpp").read_text(encoding="utf-8")
-        tasks = (QML_DIR / "features/agent/AgentControllerAgentTasks.cpp").read_text(encoding="utf-8")
+        knowledge = (QML_DIR / "features/agent/controller/AgentControllerKnowledge.cpp").read_text(encoding="utf-8")
+        memory = (QML_DIR / "features/agent/controller/AgentControllerMemory.cpp").read_text(encoding="utf-8")
+        tasks = (QML_DIR / "features/agent/controller/AgentControllerAgentTasks.cpp").read_text(encoding="utf-8")
 
         self.assertIn("void AgentController::uploadDocument", knowledge)
         self.assertIn("void AgentController::handleKbRsp", knowledge)
@@ -523,10 +666,10 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(knowledge.splitlines()), 260)
 
     def test_heavy_agent_game_controller_concerns_are_split(self):
-        network = (QML_DIR / "features/agent/AgentControllerGameNetwork.cpp").read_text(encoding="utf-8")
-        responses = (QML_DIR / "features/agent/AgentControllerGameResponses.cpp").read_text(encoding="utf-8")
-        rooms = (QML_DIR / "features/agent/AgentControllerGameRooms.cpp").read_text(encoding="utf-8")
-        templates = (QML_DIR / "features/agent/AgentControllerGameTemplates.cpp").read_text(encoding="utf-8")
+        network = (QML_DIR / "features/agent/game/AgentControllerGameNetwork.cpp").read_text(encoding="utf-8")
+        responses = (QML_DIR / "features/agent/game/AgentControllerGameResponses.cpp").read_text(encoding="utf-8")
+        rooms = (QML_DIR / "features/agent/game/AgentControllerGameRooms.cpp").read_text(encoding="utf-8")
+        templates = (QML_DIR / "features/agent/game/AgentControllerGameTemplates.cpp").read_text(encoding="utf-8")
 
         self.assertFalse((QML_DIR / "features/agent/AgentControllerGame.cpp").exists())
         self.assertIn("void AgentController::sendGameGet", network)
@@ -541,11 +684,11 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(rooms.splitlines()), 260)
 
     def test_heavy_chat_message_model_concerns_are_split(self):
-        model = (QML_DIR / "features/chat/ChatMessageModel.cpp").read_text(encoding="utf-8")
-        content = (QML_DIR / "features/chat/ChatMessageModelContent.cpp").read_text(encoding="utf-8")
-        mutations = (QML_DIR / "features/chat/ChatMessageModelMutations.cpp").read_text(encoding="utf-8")
-        presentation = (QML_DIR / "features/chat/ChatMessageModelPresentation.cpp").read_text(encoding="utf-8")
-        queries = (QML_DIR / "features/chat/ChatMessageModelQueries.cpp").read_text(encoding="utf-8")
+        model = (QML_DIR / "features/chat/model/ChatMessageModel.cpp").read_text(encoding="utf-8")
+        content = (QML_DIR / "features/chat/model/ChatMessageModelContent.cpp").read_text(encoding="utf-8")
+        mutations = (QML_DIR / "features/chat/model/ChatMessageModelMutations.cpp").read_text(encoding="utf-8")
+        presentation = (QML_DIR / "features/chat/model/ChatMessageModelPresentation.cpp").read_text(encoding="utf-8")
+        queries = (QML_DIR / "features/chat/model/ChatMessageModelQueries.cpp").read_text(encoding="utf-8")
 
         self.assertIn("QVariant ChatMessageModel::data", model)
         self.assertIn("ChatMessageModel::MessageEntry ChatMessageModel::toEntry", content)
@@ -560,14 +703,16 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(model.splitlines()), 190)
 
     def test_heavy_group_event_response_concerns_are_split(self):
-        events = (QML_DIR / "app/AppControllerGroupEvents.cpp").read_text(encoding="utf-8")
-        responses = (QML_DIR / "app/AppControllerGroupResponses.cpp").read_text(encoding="utf-8")
-        errors = (QML_DIR / "app/AppControllerGroupResponseErrors.cpp").read_text(encoding="utf-8")
-        management = (QML_DIR / "app/AppControllerGroupManagementResponses.cpp").read_text(encoding="utf-8")
-        history = (QML_DIR / "app/AppControllerGroupHistoryResponses.cpp").read_text(encoding="utf-8")
-        group_messages = (QML_DIR / "app/AppControllerGroupMessageResponses.cpp").read_text(encoding="utf-8")
-        private_messages = (QML_DIR / "app/AppControllerPrivateMessageResponses.cpp").read_text(encoding="utf-8")
-        dialog_meta = (QML_DIR / "app/AppControllerDialogMetaResponses.cpp").read_text(encoding="utf-8")
+        events = (QML_DIR / "app/controller/AppControllerGroupEvents.cpp").read_text(encoding="utf-8")
+        responses = (QML_DIR / "app/controller/AppControllerGroupResponses.cpp").read_text(encoding="utf-8")
+        errors = (QML_DIR / "app/controller/AppControllerGroupResponseErrors.cpp").read_text(encoding="utf-8")
+        management = (QML_DIR / "app/controller/AppControllerGroupManagementResponses.cpp").read_text(encoding="utf-8")
+        history = (QML_DIR / "app/controller/AppControllerGroupHistoryResponses.cpp").read_text(encoding="utf-8")
+        group_messages = (QML_DIR / "app/controller/AppControllerGroupMessageResponses.cpp").read_text(encoding="utf-8")
+        private_messages = (QML_DIR / "app/controller/AppControllerPrivateMessageResponses.cpp").read_text(
+            encoding="utf-8"
+        )
+        dialog_meta = (QML_DIR / "app/controller/AppControllerDialogMetaResponses.cpp").read_text(encoding="utf-8")
 
         self.assertIn("void AppController::onGroupChatMsg", events)
         self.assertIn("void AppController::onGroupRsp", responses)
@@ -590,8 +735,8 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(responses.splitlines()), 180)
 
     def test_heavy_group_command_management_concerns_are_split(self):
-        commands = (QML_DIR / "app/AppControllerGroupCommands.cpp").read_text(encoding="utf-8")
-        management = (QML_DIR / "app/AppControllerGroupManagement.cpp").read_text(encoding="utf-8")
+        commands = (QML_DIR / "app/controller/AppControllerGroupCommands.cpp").read_text(encoding="utf-8")
+        management = (QML_DIR / "app/controller/AppControllerGroupManagement.cpp").read_text(encoding="utf-8")
 
         self.assertIn("void AppController::loadGroupHistory", commands)
         self.assertIn("void AppController::requestGroupHistoryForBootstrap", commands)
@@ -606,22 +751,26 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(commands.splitlines()), 360)
 
     def test_heavy_app_coordinator_concerns_are_split(self):
-        session = (QML_DIR / "app/AppSessionCoordinator.cpp").read_text(encoding="utf-8")
-        session_auth = (QML_DIR / "app/SessionAuthCoordinator.cpp").read_text(encoding="utf-8")
-        session_auth_commands = (QML_DIR / "app/SessionAuthCoordinatorCommands.cpp").read_text(encoding="utf-8")
-        session_auth_login = (QML_DIR / "app/SessionAuthCoordinatorLoginResponse.cpp").read_text(encoding="utf-8")
-        session_auth_responses = (QML_DIR / "app/SessionAuthCoordinatorAuthResponses.cpp").read_text(encoding="utf-8")
-        session_chat = (QML_DIR / "app/SessionChatEntryCoordinator.cpp").read_text(encoding="utf-8")
-        session_relation = (QML_DIR / "app/SessionRelationBootstrap.cpp").read_text(encoding="utf-8")
-        session_countdown = (QML_DIR / "app/RegisterCountdownController.cpp").read_text(encoding="utf-8")
-        contact = (QML_DIR / "app/ContactCoordinatorShell.cpp").read_text(encoding="utf-8")
-        coordinators = (QML_DIR / "app/AppCoordinators.h").read_text(encoding="utf-8")
-        call = (QML_DIR / "app/CallCoordinator.cpp").read_text(encoding="utf-8")
-        app_controller = (QML_DIR / "app/AppController.cpp").read_text(encoding="utf-8")
-        app_header = (QML_DIR / "app/AppController.h").read_text(encoding="utf-8")
-        profile = (QML_DIR / "app/ProfileCoordinator.cpp").read_text(encoding="utf-8")
-        group = (QML_DIR / "app/GroupCoordinator.cpp").read_text(encoding="utf-8")
-        media = (QML_DIR / "app/MediaCoordinator.cpp").read_text(encoding="utf-8")
+        session = (QML_DIR / "app/session/AppSessionCoordinator.cpp").read_text(encoding="utf-8")
+        session_auth = (QML_DIR / "app/session/SessionAuthCoordinator.cpp").read_text(encoding="utf-8")
+        session_auth_commands = (QML_DIR / "app/session/SessionAuthCoordinatorCommands.cpp").read_text(encoding="utf-8")
+        session_auth_login = (QML_DIR / "app/session/SessionAuthCoordinatorLoginResponse.cpp").read_text(
+            encoding="utf-8"
+        )
+        session_auth_responses = (QML_DIR / "app/session/SessionAuthCoordinatorAuthResponses.cpp").read_text(
+            encoding="utf-8"
+        )
+        session_chat = (QML_DIR / "app/session/SessionChatEntryCoordinator.cpp").read_text(encoding="utf-8")
+        session_relation = (QML_DIR / "app/session/SessionRelationBootstrap.cpp").read_text(encoding="utf-8")
+        session_countdown = (QML_DIR / "app/coordinators/RegisterCountdownController.cpp").read_text(encoding="utf-8")
+        contact = (QML_DIR / "app/coordinators/ContactCoordinatorShell.cpp").read_text(encoding="utf-8")
+        coordinators = (QML_DIR / "app/coordinators/AppCoordinators.h").read_text(encoding="utf-8")
+        call = (QML_DIR / "app/coordinators/CallCoordinator.cpp").read_text(encoding="utf-8")
+        app_controller = (QML_DIR / "app/controller/AppController.cpp").read_text(encoding="utf-8")
+        app_header = (QML_DIR / "app/controller/AppController.h").read_text(encoding="utf-8")
+        profile = (QML_DIR / "app/coordinators/ProfileCoordinator.cpp").read_text(encoding="utf-8")
+        group = (QML_DIR / "app/coordinators/GroupCoordinator.cpp").read_text(encoding="utf-8")
+        media = (QML_DIR / "app/coordinators/MediaCoordinator.cpp").read_text(encoding="utf-8")
 
         self.assertFalse((QML_DIR / "app/AppCoordinators.cpp").exists())
         self.assertIn("AppSessionCoordinator::AppSessionCoordinator", session)
@@ -678,11 +827,11 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(session.splitlines()), 90)
 
     def test_heavy_app_controller_model_concerns_are_split(self):
-        models = (QML_DIR / "app/AppControllerModels.cpp").read_text(encoding="utf-8")
-        dialogs = (QML_DIR / "app/AppControllerDialogModels.cpp").read_text(encoding="utf-8")
-        history = (QML_DIR / "app/AppControllerPrivateHistory.cpp").read_text(encoding="utf-8")
-        read_acks = (QML_DIR / "app/AppControllerReadAcks.cpp").read_text(encoding="utf-8")
-        private_selection = (QML_DIR / "app/AppControllerPrivateSelection.cpp").read_text(encoding="utf-8")
+        models = (QML_DIR / "app/controller/AppControllerModels.cpp").read_text(encoding="utf-8")
+        dialogs = (QML_DIR / "app/controller/AppControllerDialogModels.cpp").read_text(encoding="utf-8")
+        history = (QML_DIR / "app/controller/AppControllerPrivateHistory.cpp").read_text(encoding="utf-8")
+        read_acks = (QML_DIR / "app/controller/AppControllerReadAcks.cpp").read_text(encoding="utf-8")
+        private_selection = (QML_DIR / "app/controller/AppControllerPrivateSelection.cpp").read_text(encoding="utf-8")
 
         self.assertIn("void AppController::bootstrapDialogs", models)
         self.assertIn("void AppController::refreshGroupModel", models)
@@ -699,11 +848,11 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(models.splitlines()), 180)
 
     def test_heavy_app_controller_selection_concerns_are_split(self):
-        private_selection = (QML_DIR / "app/AppControllerPrivateSelection.cpp").read_text(encoding="utf-8")
-        contact_selection = (QML_DIR / "app/AppControllerContactSelection.cpp").read_text(encoding="utf-8")
-        group_selection = (QML_DIR / "app/AppControllerGroupSelection.cpp").read_text(encoding="utf-8")
-        dialog_selection = (QML_DIR / "app/AppControllerDialogSelection.cpp").read_text(encoding="utf-8")
-        pagination = (QML_DIR / "app/AppControllerPagination.cpp").read_text(encoding="utf-8")
+        private_selection = (QML_DIR / "app/controller/AppControllerPrivateSelection.cpp").read_text(encoding="utf-8")
+        contact_selection = (QML_DIR / "app/controller/AppControllerContactSelection.cpp").read_text(encoding="utf-8")
+        group_selection = (QML_DIR / "app/controller/AppControllerGroupSelection.cpp").read_text(encoding="utf-8")
+        dialog_selection = (QML_DIR / "app/controller/AppControllerDialogSelection.cpp").read_text(encoding="utf-8")
+        pagination = (QML_DIR / "app/controller/AppControllerPagination.cpp").read_text(encoding="utf-8")
 
         self.assertFalse((QML_DIR / "app/AppControllerSelection.cpp").exists())
         self.assertIn("void AppController::selectChatIndex", private_selection)
@@ -725,10 +874,10 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(group_selection.splitlines()), 260)
 
     def test_heavy_app_controller_property_concerns_are_split(self):
-        ui_props = (QML_DIR / "app/AppControllerUiProperties.cpp").read_text(encoding="utf-8")
-        user_props = (QML_DIR / "app/AppControllerUserProperties.cpp").read_text(encoding="utf-8")
-        group_props = (QML_DIR / "app/AppControllerGroupProperties.cpp").read_text(encoding="utf-8")
-        model_props = (QML_DIR / "app/AppControllerModelProperties.cpp").read_text(encoding="utf-8")
+        ui_props = (QML_DIR / "app/controller/AppControllerUiProperties.cpp").read_text(encoding="utf-8")
+        user_props = (QML_DIR / "app/controller/AppControllerUserProperties.cpp").read_text(encoding="utf-8")
+        group_props = (QML_DIR / "app/controller/AppControllerGroupProperties.cpp").read_text(encoding="utf-8")
+        model_props = (QML_DIR / "app/controller/AppControllerModelProperties.cpp").read_text(encoding="utf-8")
 
         self.assertFalse((QML_DIR / "app/AppControllerProperties.cpp").exists())
         self.assertIn("QString AppController::tipText", ui_props)
@@ -746,16 +895,18 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(model_props.splitlines()), 130)
 
     def test_heavy_app_controller_state_concerns_are_split(self):
-        header = (QML_DIR / "app/AppController.h").read_text(encoding="utf-8")
-        connection_state_header = (QML_DIR / "app/AppControllerConnectionState.h").read_text(encoding="utf-8")
-        runtime_state_header = (QML_DIR / "app/AppControllerRuntimeState.h").read_text(encoding="utf-8")
-        user_state_header = (QML_DIR / "app/AppControllerUserState.h").read_text(encoding="utf-8")
-        contact_state = (QML_DIR / "app/AppControllerContactState.cpp").read_text(encoding="utf-8")
-        status_state = (QML_DIR / "app/AppControllerStatusState.cpp").read_text(encoding="utf-8")
-        loading_state = (QML_DIR / "app/AppControllerLoadingState.cpp").read_text(encoding="utf-8")
-        dialog_state = (QML_DIR / "app/AppControllerDialogRuntimeState.cpp").read_text(encoding="utf-8")
-        profile_state = (QML_DIR / "app/AppControllerProfileState.cpp").read_text(encoding="utf-8")
-        bootstrap_state = (QML_DIR / "app/AppControllerBootstrapState.cpp").read_text(encoding="utf-8")
+        header = (QML_DIR / "app/controller/AppController.h").read_text(encoding="utf-8")
+        connection_state_header = (QML_DIR / "app/connection/AppControllerConnectionState.h").read_text(
+            encoding="utf-8"
+        )
+        runtime_state_header = (QML_DIR / "app/controller/AppControllerRuntimeState.h").read_text(encoding="utf-8")
+        user_state_header = (QML_DIR / "app/controller/AppControllerUserState.h").read_text(encoding="utf-8")
+        contact_state = (QML_DIR / "app/controller/AppControllerContactState.cpp").read_text(encoding="utf-8")
+        status_state = (QML_DIR / "app/controller/AppControllerStatusState.cpp").read_text(encoding="utf-8")
+        loading_state = (QML_DIR / "app/controller/AppControllerLoadingState.cpp").read_text(encoding="utf-8")
+        dialog_state = (QML_DIR / "app/controller/AppControllerDialogRuntimeState.cpp").read_text(encoding="utf-8")
+        profile_state = (QML_DIR / "app/controller/AppControllerProfileState.cpp").read_text(encoding="utf-8")
+        bootstrap_state = (QML_DIR / "app/controller/AppControllerBootstrapState.cpp").read_text(encoding="utf-8")
 
         self.assertFalse((QML_DIR / "app/AppControllerState.cpp").exists())
         self.assertIn("struct AppPendingLoginState", connection_state_header)
@@ -815,10 +966,10 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(profile_state.splitlines()), 110)
 
     def test_heavy_app_controller_connection_concerns_are_split(self):
-        app_controller = (QML_DIR / "app/AppController.cpp").read_text(encoding="utf-8")
-        app_header = (QML_DIR / "app/AppController.h").read_text(encoding="utf-8")
-        coordinator = (QML_DIR / "app/AppChatConnectionCoordinator.cpp").read_text(encoding="utf-8")
-        policy = (QML_DIR / "app/AppChatConnectionPolicy.cpp").read_text(encoding="utf-8")
+        app_controller = (QML_DIR / "app/controller/AppController.cpp").read_text(encoding="utf-8")
+        app_header = (QML_DIR / "app/controller/AppController.h").read_text(encoding="utf-8")
+        coordinator = (QML_DIR / "app/connection/AppChatConnectionCoordinator.cpp").read_text(encoding="utf-8")
+        policy = (QML_DIR / "app/connection/AppChatConnectionPolicy.cpp").read_text(encoding="utf-8")
 
         self.assertFalse((QML_DIR / "app/AppControllerConnection.cpp").exists())
         self.assertFalse((QML_DIR / "app/AppControllerConnectionLogin.cpp").exists())
@@ -858,17 +1009,17 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(coordinator.splitlines()), 380)
 
     def test_heavy_app_controller_session_concerns_are_split(self):
-        coordinator = (QML_DIR / "app/AppSessionCoordinator.cpp").read_text(encoding="utf-8")
-        auth_coordinator = (QML_DIR / "app/SessionAuthCoordinator.cpp").read_text(encoding="utf-8")
-        auth_commands = (QML_DIR / "app/SessionAuthCoordinatorCommands.cpp").read_text(encoding="utf-8")
-        auth_login = (QML_DIR / "app/SessionAuthCoordinatorLoginResponse.cpp").read_text(encoding="utf-8")
-        auth_responses = (QML_DIR / "app/SessionAuthCoordinatorAuthResponses.cpp").read_text(encoding="utf-8")
-        chat_entry = (QML_DIR / "app/SessionChatEntryCoordinator.cpp").read_text(encoding="utf-8")
-        relation = (QML_DIR / "app/SessionRelationBootstrap.cpp").read_text(encoding="utf-8")
-        countdown = (QML_DIR / "app/RegisterCountdownController.cpp").read_text(encoding="utf-8")
-        app_auth_responses = (QML_DIR / "app/AppControllerAuthResponses.cpp").read_text(encoding="utf-8")
-        chat_bootstrap = (QML_DIR / "app/AppControllerChatBootstrap.cpp").read_text(encoding="utf-8")
-        relation_bootstrap = (QML_DIR / "app/AppControllerRelationBootstrap.cpp").read_text(encoding="utf-8")
+        coordinator = (QML_DIR / "app/session/AppSessionCoordinator.cpp").read_text(encoding="utf-8")
+        auth_coordinator = (QML_DIR / "app/session/SessionAuthCoordinator.cpp").read_text(encoding="utf-8")
+        auth_commands = (QML_DIR / "app/session/SessionAuthCoordinatorCommands.cpp").read_text(encoding="utf-8")
+        auth_login = (QML_DIR / "app/session/SessionAuthCoordinatorLoginResponse.cpp").read_text(encoding="utf-8")
+        auth_responses = (QML_DIR / "app/session/SessionAuthCoordinatorAuthResponses.cpp").read_text(encoding="utf-8")
+        chat_entry = (QML_DIR / "app/session/SessionChatEntryCoordinator.cpp").read_text(encoding="utf-8")
+        relation = (QML_DIR / "app/session/SessionRelationBootstrap.cpp").read_text(encoding="utf-8")
+        countdown = (QML_DIR / "app/coordinators/RegisterCountdownController.cpp").read_text(encoding="utf-8")
+        app_auth_responses = (QML_DIR / "app/controller/AppControllerAuthResponses.cpp").read_text(encoding="utf-8")
+        chat_bootstrap = (QML_DIR / "app/connection/AppControllerChatBootstrap.cpp").read_text(encoding="utf-8")
+        relation_bootstrap = (QML_DIR / "app/controller/AppControllerRelationBootstrap.cpp").read_text(encoding="utf-8")
 
         self.assertFalse((QML_DIR / "app/AppControllerSession.cpp").exists())
         self.assertFalse((QML_DIR / "app/AppControllerLoginSession.cpp").exists())
@@ -912,17 +1063,17 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(app_auth_responses.splitlines()), 90)
 
     def test_session_auth_workflow_is_owned_by_session_coordinator(self):
-        coordinator = (QML_DIR / "app/AppSessionCoordinator.cpp").read_text(encoding="utf-8")
-        auth_coordinator = (QML_DIR / "app/SessionAuthCoordinator.cpp").read_text(encoding="utf-8")
-        auth_commands = (QML_DIR / "app/SessionAuthCoordinatorCommands.cpp").read_text(encoding="utf-8")
-        auth_login = (QML_DIR / "app/SessionAuthCoordinatorLoginResponse.cpp").read_text(encoding="utf-8")
-        auth_responses = (QML_DIR / "app/SessionAuthCoordinatorAuthResponses.cpp").read_text(encoding="utf-8")
-        chat_entry = (QML_DIR / "app/SessionChatEntryCoordinator.cpp").read_text(encoding="utf-8")
-        relation = (QML_DIR / "app/SessionRelationBootstrap.cpp").read_text(encoding="utf-8")
-        countdown = (QML_DIR / "app/RegisterCountdownController.cpp").read_text(encoding="utf-8")
-        app_auth_responses = (QML_DIR / "app/AppControllerAuthResponses.cpp").read_text(encoding="utf-8")
-        chat_bootstrap = (QML_DIR / "app/AppControllerChatBootstrap.cpp").read_text(encoding="utf-8")
-        relation_bootstrap = (QML_DIR / "app/AppControllerRelationBootstrap.cpp").read_text(encoding="utf-8")
+        coordinator = (QML_DIR / "app/session/AppSessionCoordinator.cpp").read_text(encoding="utf-8")
+        auth_coordinator = (QML_DIR / "app/session/SessionAuthCoordinator.cpp").read_text(encoding="utf-8")
+        auth_commands = (QML_DIR / "app/session/SessionAuthCoordinatorCommands.cpp").read_text(encoding="utf-8")
+        auth_login = (QML_DIR / "app/session/SessionAuthCoordinatorLoginResponse.cpp").read_text(encoding="utf-8")
+        auth_responses = (QML_DIR / "app/session/SessionAuthCoordinatorAuthResponses.cpp").read_text(encoding="utf-8")
+        chat_entry = (QML_DIR / "app/session/SessionChatEntryCoordinator.cpp").read_text(encoding="utf-8")
+        relation = (QML_DIR / "app/session/SessionRelationBootstrap.cpp").read_text(encoding="utf-8")
+        countdown = (QML_DIR / "app/coordinators/RegisterCountdownController.cpp").read_text(encoding="utf-8")
+        app_auth_responses = (QML_DIR / "app/controller/AppControllerAuthResponses.cpp").read_text(encoding="utf-8")
+        chat_bootstrap = (QML_DIR / "app/connection/AppControllerChatBootstrap.cpp").read_text(encoding="utf-8")
+        relation_bootstrap = (QML_DIR / "app/controller/AppControllerRelationBootstrap.cpp").read_text(encoding="utf-8")
 
         self.assertFalse((QML_DIR / "app/AppControllerLoginSession.cpp").exists())
         self.assertFalse((QML_DIR / "app/AppControllerRegisterCountdown.cpp").exists())
@@ -958,10 +1109,10 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertNotIn("GetFriendListSnapshot", relation_bootstrap)
 
     def test_heavy_friend_list_model_concerns_are_split(self):
-        model = (QML_DIR / "features/contact/FriendListModel.cpp").read_text(encoding="utf-8")
-        mutations = (QML_DIR / "features/contact/FriendListModelMutations.cpp").read_text(encoding="utf-8")
-        state = (QML_DIR / "features/contact/FriendListModelState.cpp").read_text(encoding="utf-8")
-        queries = (QML_DIR / "features/contact/FriendListModelQueries.cpp").read_text(encoding="utf-8")
+        model = (QML_DIR / "features/contact/model/FriendListModel.cpp").read_text(encoding="utf-8")
+        mutations = (QML_DIR / "features/contact/model/FriendListModelMutations.cpp").read_text(encoding="utf-8")
+        state = (QML_DIR / "features/contact/model/FriendListModelState.cpp").read_text(encoding="utf-8")
+        queries = (QML_DIR / "features/contact/model/FriendListModelQueries.cpp").read_text(encoding="utf-8")
 
         self.assertIn("QVariant FriendListModel::data", model)
         self.assertIn("QHash<int, QByteArray> FriendListModel::roleNames", model)
@@ -979,15 +1130,15 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(model.splitlines()), 150)
 
     def test_heavy_app_controller_media_concerns_are_split(self):
-        media = (QML_DIR / "app/AppControllerMedia.cpp").read_text(encoding="utf-8")
-        attachments = (QML_DIR / "app/AppControllerPendingAttachments.cpp").read_text(encoding="utf-8")
-        upload_queue = (QML_DIR / "app/AppControllerMediaUploadQueue.cpp").read_text(encoding="utf-8")
-        dispatch = (QML_DIR / "app/AppControllerMessageDispatch.cpp").read_text(encoding="utf-8")
-        call = (QML_DIR / "app/CallCoordinator.cpp").read_text(encoding="utf-8")
-        call_payload = (QML_DIR / "app/CallCoordinatorPayloadPolicy.cpp").read_text(encoding="utf-8")
-        call_payload_header = (QML_DIR / "app/CallCoordinatorPayloadPolicy.h").read_text(encoding="utf-8")
-        header = (QML_DIR / "app/AppController.h").read_text(encoding="utf-8")
-        qml_cmake = (QML_DIR / "cmake/AppSources.cmake").read_text(encoding="utf-8")
+        media = (QML_DIR / "app/controller/AppControllerMedia.cpp").read_text(encoding="utf-8")
+        attachments = (QML_DIR / "app/controller/AppControllerPendingAttachments.cpp").read_text(encoding="utf-8")
+        upload_queue = (QML_DIR / "app/controller/AppControllerMediaUploadQueue.cpp").read_text(encoding="utf-8")
+        dispatch = (QML_DIR / "app/controller/AppControllerMessageDispatch.cpp").read_text(encoding="utf-8")
+        call = (QML_DIR / "app/coordinators/CallCoordinator.cpp").read_text(encoding="utf-8")
+        call_payload = (QML_DIR / "app/coordinators/CallCoordinatorPayloadPolicy.cpp").read_text(encoding="utf-8")
+        call_payload_header = (QML_DIR / "app/coordinators/CallCoordinatorPayloadPolicy.h").read_text(encoding="utf-8")
+        header = (QML_DIR / "app/controller/AppController.h").read_text(encoding="utf-8")
+        qml_cmake = qml_cmake_text()
 
         self.assertIn("void AppController::sendTextMessage", media)
         self.assertIn("void AppController::sendCurrentComposerPayload", media)
@@ -1007,7 +1158,7 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("void CallCoordinator::onLivekitMediaError", call)
         self.assertIn("_app._call_controller.startCall", call)
         self.assertIn("_app._auth_controller.parseJson(res, obj)", call)
-        self.assertIn("app/CallCoordinatorPayloadPolicy.cpp", qml_cmake)
+        self.assertIn("app/coordinators/CallCoordinatorPayloadPolicy.cpp", qml_cmake)
         self.assertIn("QString mapCallError", call_payload_header)
         self.assertIn("QString callStateText", call_payload_header)
         self.assertIn("QJsonObject buildLivekitMetadata", call_payload_header)
@@ -1036,11 +1187,11 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(media.splitlines()), 90)
 
     def test_heavy_private_event_concerns_are_split(self):
-        events = (QML_DIR / "app/AppControllerPrivateEvents.cpp").read_text(encoding="utf-8")
-        status = (QML_DIR / "app/AppControllerMessageStatus.cpp").read_text(encoding="utf-8")
-        history = (QML_DIR / "app/AppControllerPrivateHistoryResponses.cpp").read_text(encoding="utf-8")
-        message_events = (QML_DIR / "app/AppControllerPrivateMessageEvents.cpp").read_text(encoding="utf-8")
-        read_events = (QML_DIR / "app/AppControllerPrivateReadEvents.cpp").read_text(encoding="utf-8")
+        events = (QML_DIR / "app/controller/AppControllerPrivateEvents.cpp").read_text(encoding="utf-8")
+        status = (QML_DIR / "app/controller/AppControllerMessageStatus.cpp").read_text(encoding="utf-8")
+        history = (QML_DIR / "app/controller/AppControllerPrivateHistoryResponses.cpp").read_text(encoding="utf-8")
+        message_events = (QML_DIR / "app/controller/AppControllerPrivateMessageEvents.cpp").read_text(encoding="utf-8")
+        read_events = (QML_DIR / "app/controller/AppControllerPrivateReadEvents.cpp").read_text(encoding="utf-8")
 
         self.assertIn("void AppController::onTextChatMsg", events)
         self.assertIn("void AppController::onMessageStatus", status)
@@ -1054,11 +1205,11 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(events.splitlines()), 130)
 
     def test_heavy_r18_controller_concerns_are_split(self):
-        controller = (QML_DIR / "features/r18/R18Controller.cpp").read_text(encoding="utf-8")
-        network = (QML_DIR / "features/r18/R18ControllerNetwork.cpp").read_text(encoding="utf-8")
-        responses = (QML_DIR / "features/r18/R18ControllerResponses.cpp").read_text(encoding="utf-8")
-        sources = (QML_DIR / "features/r18/R18ControllerSources.cpp").read_text(encoding="utf-8")
-        state = (QML_DIR / "features/r18/R18ControllerState.cpp").read_text(encoding="utf-8")
+        controller = (QML_DIR / "features/r18/controller/R18Controller.cpp").read_text(encoding="utf-8")
+        network = (QML_DIR / "features/r18/controller/R18ControllerNetwork.cpp").read_text(encoding="utf-8")
+        responses = (QML_DIR / "features/r18/controller/R18ControllerResponses.cpp").read_text(encoding="utf-8")
+        sources = (QML_DIR / "features/r18/controller/R18ControllerSources.cpp").read_text(encoding="utf-8")
+        state = (QML_DIR / "features/r18/controller/R18ControllerState.cpp").read_text(encoding="utf-8")
 
         self.assertIn("void R18Controller::refreshSources", controller)
         self.assertIn("void R18Controller::search", controller)
@@ -1075,11 +1226,11 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(controller.splitlines()), 260)
 
     def test_heavy_pet_controller_concerns_are_split(self):
-        controller = (QML_DIR / "features/pet/PetController.cpp").read_text(encoding="utf-8")
-        session = (QML_DIR / "features/pet/PetControllerSession.cpp").read_text(encoding="utf-8")
-        state = (QML_DIR / "features/pet/PetControllerState.cpp").read_text(encoding="utf-8")
-        runtime = (QML_DIR / "features/pet/PetControllerVoiceRuntime.cpp").read_text(encoding="utf-8")
-        training = (QML_DIR / "features/pet/PetControllerVoiceTraining.cpp").read_text(encoding="utf-8")
+        controller = (QML_DIR / "features/pet/controller/PetController.cpp").read_text(encoding="utf-8")
+        session = (QML_DIR / "features/pet/controller/PetControllerSession.cpp").read_text(encoding="utf-8")
+        state = (QML_DIR / "features/pet/controller/PetControllerState.cpp").read_text(encoding="utf-8")
+        runtime = (QML_DIR / "features/pet/speech/PetControllerVoiceRuntime.cpp").read_text(encoding="utf-8")
+        training = (QML_DIR / "features/pet/speech/PetControllerVoiceTraining.cpp").read_text(encoding="utf-8")
 
         self.assertIn("QString PetController::audioUrl", controller)
         self.assertIn("void PetController::startSession", session)
@@ -1147,9 +1298,9 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(service.splitlines()), 120)
 
     def test_heavy_moments_model_concerns_are_split(self):
-        model = (QML_DIR / "features/moments/MomentsModel.cpp").read_text(encoding="utf-8")
-        mutations = (QML_DIR / "features/moments/MomentsModelMutations.cpp").read_text(encoding="utf-8")
-        queries = (QML_DIR / "features/moments/MomentsModelQueries.cpp").read_text(encoding="utf-8")
+        model = (QML_DIR / "features/moments/model/MomentsModel.cpp").read_text(encoding="utf-8")
+        mutations = (QML_DIR / "features/moments/model/MomentsModelMutations.cpp").read_text(encoding="utf-8")
+        queries = (QML_DIR / "features/moments/model/MomentsModelQueries.cpp").read_text(encoding="utf-8")
 
         self.assertIn("QVariant MomentsModel::data", model)
         self.assertIn("QHash<int, QByteArray> MomentsModel::roleNames", model)
@@ -1183,12 +1334,12 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(service.splitlines()), 60)
 
     def test_core_resource_aliases_reference_qml_app_assets(self):
-        qrc = CORE_QRC.read_text(encoding="utf-8")
+        qrc = APP_CORE_QRC.read_text(encoding="utf-8")
 
-        self.assertIn('<file alias="app/icon.ico">icon.ico</file>', qrc)
-        self.assertIn("<file>style/stylesheet.qss</file>", qrc)
-        self.assertIn('<file alias="res/head_1.png">../src/head_1.png</file>', qrc)
-        self.assertIn('<file alias="res/head_1.jpg">../src/head_1.png</file>', qrc)
+        self.assertIn('<file alias="app/icon.ico">../app/icon.ico</file>', qrc)
+        self.assertIn('<file alias="style/stylesheet.qss">../app/style/stylesheet.qss</file>', qrc)
+        self.assertIn('<file alias="res/head_1.png">../icons/head_1.png</file>', qrc)
+        self.assertIn('<file alias="res/head_1.jpg">../icons/head_1.png</file>', qrc)
         self.assertNotIn("../MemoChat-qml/src", qrc)
 
     def test_qml_controllers_include_core_headers_through_target_include_path(self):

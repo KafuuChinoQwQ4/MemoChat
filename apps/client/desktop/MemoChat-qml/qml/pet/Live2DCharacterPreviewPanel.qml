@@ -111,7 +111,7 @@ Live2DSectionPanel {
                 backdrop: root.backdrop
                 title: "模型根目录"
                 text: root.modelRoot
-                placeholderText: "src/KafuuChino/香风智乃live2D"
+                placeholderText: "resources/live2d/KafuuChino/香风智乃live2D"
                 onTextChanged: root.modelRootEdited(text)
             }
 

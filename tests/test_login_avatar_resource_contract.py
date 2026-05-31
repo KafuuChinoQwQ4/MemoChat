@@ -3,24 +3,30 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LOGIN_TOP_BAR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/components/LoginTopBar.qml"
-CORE_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/rc.qrc"
-SHARED_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
+APP_CORE_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/resources/qrc/app-core.qrc"
+SHARED_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
 ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/shared/utils/IconPathUtils.h"
-APP_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppController.cpp"
-APP_CONTROLLER_USER_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerUserState.h"
-APP_CONTROLLER_NAVIGATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerNavigation.cpp"
-APP_CONTROLLER_PRIVATE_HISTORY = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerPrivateHistory.cpp"
-APP_CONTROLLER_PRIVATE_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerPrivateSelection.cpp"
-APP_CONTROLLER_PROFILE_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerProfileState.cpp"
-SESSION_CHAT_ENTRY = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/SessionChatEntryCoordinator.cpp"
+APP_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppController.cpp"
+APP_CONTROLLER_USER_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerUserState.h"
+APP_CONTROLLER_NAVIGATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerNavigation.cpp"
+APP_CONTROLLER_PRIVATE_HISTORY = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerPrivateHistory.cpp"
+)
+APP_CONTROLLER_PRIVATE_SELECTION = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerPrivateSelection.cpp"
+)
+APP_CONTROLLER_PROFILE_STATE = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerProfileState.cpp"
+)
+SESSION_CHAT_ENTRY = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/session/SessionChatEntryCoordinator.cpp"
 AUTH_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/AuthController.cpp"
 
 
 class LoginAvatarResourceContractTests(unittest.TestCase):
     def test_login_top_bar_exposes_long_press_window_move(self):
         source = LOGIN_TOP_BAR.read_text(encoding="utf-8")
-        login_page = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/LoginPage.qml").read_text(encoding="utf-8")
+        login_page = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/auth/LoginPage.qml").read_text(encoding="utf-8")
 
         self.assertIn("import QtQuick.Window 2.15", source)
         self.assertIn("MouseArea", source)
@@ -32,10 +38,10 @@ class LoginAvatarResourceContractTests(unittest.TestCase):
         self.assertIn("settingsClicked()", source)
 
     def test_default_avatar_is_registered_as_png_backed_resource(self):
-        source = CORE_QRC.read_text(encoding="utf-8")
+        source = APP_CORE_QRC.read_text(encoding="utf-8")
 
-        self.assertIn('<file alias="res/head_1.png">../src/head_1.png</file>', source)
-        self.assertIn('<file alias="res/head_1.jpg">../src/head_1.png</file>', source)
+        self.assertIn('<file alias="res/head_1.png">../icons/head_1.png</file>', source)
+        self.assertIn('<file alias="res/head_1.jpg">../icons/head_1.png</file>', source)
 
         icon_utils = ICON_PATH_UTILS.read_text(encoding="utf-8")
         self.assertIn('QStringLiteral("qrc:/res/head_1.png")', icon_utils)

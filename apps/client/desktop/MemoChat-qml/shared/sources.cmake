@@ -1,0 +1,28 @@
+set(MEMOCHAT_QML_SHARED_SOURCES
+    shared/gateway/ClientGateway.cpp
+    shared/gateway/TransportEndpointPolicy.cpp
+    shared/gateway/TransportSelector.cpp
+    shared/media/LocalFilePickerService.cpp
+    shared/media/LocalFilePickerServiceAttachments.cpp
+    shared/media/LocalFilePickerServiceAvatar.cpp
+    shared/media/MediaUploadService.cpp
+    shared/media/MediaUploadServiceHelpers.cpp
+    shared/media/MediaUploadServiceNetwork.cpp
+    shared/media/MediaUploadServiceUploads.cpp
+    shared/ui/WindowShapeService.cpp
+)
+
+set(MEMOCHAT_QML_SHARED_HEADERS
+    platform/windows/ClientWinCompat.h
+    shared/gateway/ClientGateway.h
+    shared/gateway/TransportEndpointPolicy.h
+    shared/gateway/TransportSelector.h
+    shared/media/LocalFilePickerService.h
+    shared/media/LocalFilePickerServicePrivate.h
+    shared/media/MediaUploadRequest.h
+    shared/media/MediaUploadResult.h
+    shared/media/MediaUploadService.h
+    shared/media/MediaUploadServicePrivate.h
+    shared/ui/WindowShapeService.h
+    shared/utils/IconPathUtils.h
+)

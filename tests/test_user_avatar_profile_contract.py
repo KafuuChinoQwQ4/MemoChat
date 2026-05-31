@@ -32,9 +32,9 @@ def extract_function(source: str, signature: str) -> str:
 
 class UserAvatarProfileContractTests(unittest.TestCase):
     def test_http_login_profile_icon_seeds_current_user_before_pet_window_sync(self):
-        auth_session = read(CLIENT_QML / "app/SessionAuthCoordinatorLoginResponse.cpp")
-        chat_entry = read(CLIENT_QML / "app/SessionChatEntryCoordinator.cpp")
-        state = read(CLIENT_QML / "app/AppControllerProfileState.cpp")
+        auth_session = read(CLIENT_QML / "app/session/SessionAuthCoordinatorLoginResponse.cpp")
+        chat_entry = read(CLIENT_QML / "app/session/SessionChatEntryCoordinator.cpp")
+        state = read(CLIENT_QML / "app/controller/AppControllerProfileState.cpp")
 
         login = extract_function(auth_session, "void SessionAuthCoordinator::onLoginHttpFinished")
         self.assertIn(
@@ -77,7 +77,7 @@ class UserAvatarProfileContractTests(unittest.TestCase):
         self.assertNotIn("UserMgr::GetInstance()->SetUserInfo(user_info);", else_branch)
 
     def test_post_login_bootstrap_waits_for_authenticated_chat_transport(self):
-        session = read(CLIENT_QML / "app/SessionChatEntryCoordinator.cpp")
+        session = read(CLIENT_QML / "app/session/SessionChatEntryCoordinator.cpp")
 
         switch = extract_function(session, "void SessionChatEntryCoordinator::onSwitchToChat")
         self.assertIn("beginPostLoginBootstrap();", switch)
