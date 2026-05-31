@@ -1,0 +1,33 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="icons/emoji.png">../icons/表情.png</file>
+        <file alias="icons/file.png">../icons/文件.png</file>
+        <file alias="icons/settings.png">../icons/设置.png</file>
+        <file alias="icons/minimize.png">../icons/reduce.png</file>
+        <file alias="icons/maximize.png">../icons/square.png</file>
+        <file alias="icons/close.png">../icons/关闭.png</file>
+        <file alias="icons/r18.png">../icons/一般兑换.png</file>
+        <file alias="icons/r18.svg">../icons/r18.svg</file>
+        <file alias="icons/user.png">../icons/user.png</file>
+        <file alias="icons/team.png">../icons/team.png</file>
+        <file alias="icons/dropdown.png">../icons/下拉.png</file>
+        <file alias="icons/image.png">../icons/图片.png</file>
+        <file alias="icons/phone.png">../icons/电话.png</file>
+        <file alias="icons/video.png">../icons/视频.png</file>
+        <file alias="icons/contact_message.png">../icons/消息.png</file>
+        <file alias="icons/gender_male.png">../icons/性别_男.png</file>
+        <file alias="icons/gender_female.png">../icons/性别女.png</file>
+        <file alias="icons/gender_unknown.png">../icons/无性别.png</file>
+        <file alias="icons/add.png">../icons/team.png</file>
+        <file alias="icons/moments.png">../icons/朋友圈.png</file>
+        <file alias="icons/ai.png">../icons/ai.png</file>
+        <file alias="icons/modelive2d.png">../icons/modelive2d.png</file>
+        <file alias="icons/like.png">../icons/爱心.png</file>
+        <file alias="icons/like_active.png">../icons/爱心-2.png</file>
+        <file alias="icons/comment.png">../icons/评论.png</file>
+        <file alias="icons/r18_home.png">../icons/主页.png</file>
+        <file alias="icons/r18_local.png">../icons/本地素材备份.png</file>
+        <file alias="icons/r18_navigation.png">../icons/导航.png</file>
+        <file alias="icons/r18_datasource.png">../icons/源数据分析.png</file>
+    </qresource>
+</RCC>

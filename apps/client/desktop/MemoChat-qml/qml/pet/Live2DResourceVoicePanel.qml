@@ -152,7 +152,7 @@ Live2DSectionPanel {
             backdrop: root.backdrop
             title: "语音目录"
             text: root.voiceDirectory
-            placeholderText: "src/KafuuChino/香风智乃voice"
+            placeholderText: "resources/live2d/KafuuChino/香风智乃voice"
             onTextChanged: root.voiceDirectoryEdited(text)
         }
 

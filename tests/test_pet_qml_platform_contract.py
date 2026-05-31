@@ -4,11 +4,16 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
-QML_QRC = CLIENT_DIR / "qml.qrc"
+QRC_ROOT = CLIENT_DIR / "resources/qrc"
+QML_QRCS = (
+    QRC_ROOT / "qml-shell.qrc",
+    QRC_ROOT / "qml-pet.qrc",
+    QRC_ROOT / "icons.qrc",
+)
 PET_WINDOW_QML = CLIENT_DIR / "qml/pet/PetWindow.qml"
 PET_WINDOW_RUNTIME_JS = CLIENT_DIR / "qml/pet/PetWindowRuntime.js"
 PET_SCENE_QML = CLIENT_DIR / "qml/pet/PetScene.qml"
-SHARED_MAIN_QML = CLIENT_DIR / "qml/Main.qml"
+SHARED_MAIN_QML = CLIENT_DIR / "qml/app/Main.qml"
 LINUX_MAIN_QML = CLIENT_DIR / "qml/linux/Main.qml"
 LINUX_GLASS_SURFACE_QML = CLIENT_DIR / "qml/linux/components/GlassSurface.qml"
 SHARED_GLASS_SURFACE_QML = CLIENT_DIR / "qml/components/GlassSurface.qml"
@@ -16,6 +21,10 @@ SHARED_GLASS_SURFACE_QML = CLIENT_DIR / "qml/components/GlassSurface.qml"
 
 def read(path):
     return path.read_text(encoding="utf-8")
+
+
+def qrc_text():
+    return "\n".join(read(path) for path in QML_QRCS)
 
 
 def function_body(source, name):
@@ -37,7 +46,7 @@ def function_body(source, name):
 
 class PetQmlPlatformContractTests(unittest.TestCase):
     def test_qrc_registers_linux_and_pet_platform_resources(self):
-        qrc = read(QML_QRC)
+        qrc = qrc_text()
 
         for token in (
             "qml/linux/Main.qml",

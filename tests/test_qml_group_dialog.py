@@ -4,8 +4,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CREATE_GROUP_DIALOG = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/group/CreateGroupDialog.qml"
-CHAT_SHELL_PAGE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/ChatShellPage.qml"
-CHAT_SHELL_CONTENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/ChatShellContent.qml"
+CHAT_SHELL_PAGE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/ChatShellPage.qml"
+CHAT_SHELL_CONTENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/ChatShellContent.qml"
 CHAT_NORMAL_FACE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatNormalFace.qml"
 CHAT_MODAL_LAYER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatModalLayer.qml"
 CHAT_LEFT_PANEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatLeftPanel.qml"
@@ -17,13 +17,15 @@ CHAT_CONVERSATION_HEADER = (
 GROUP_MANAGEMENT_PANEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/group/GroupManagementPanel.qml"
 GROUP_APPLY_REVIEW_PANE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/group/GroupApplyReviewPane.qml"
 CHAT_CONVERSATION_PANE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatConversationPane.qml"
-APP_CONTROLLER_GROUP_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerGroupEvents.cpp"
-APP_CONTROLLER_GROUP_RESPONSES = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerGroupResponses.cpp"
+APP_CONTROLLER_GROUP_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerGroupEvents.cpp"
+APP_CONTROLLER_GROUP_RESPONSES = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerGroupResponses.cpp"
+)
 APP_CONTROLLER_GROUP_MESSAGE_RESPONSES = (
-    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerGroupMessageResponses.cpp"
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerGroupMessageResponses.cpp"
 )
 APP_CONTROLLER_DIALOG_META_RESPONSES = (
-    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerDialogMetaResponses.cpp"
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerDialogMetaResponses.cpp"
 )
 
 

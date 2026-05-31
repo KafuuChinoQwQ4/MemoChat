@@ -3,8 +3,8 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import MemoChat 1.0
 import "../components"
-import ".."
-import "../ChatShellRuntime.js" as ChatShellRuntime
+import "../app"
+import "../app/ChatShellRuntime.js" as ChatShellRuntime
 
 RowLayout {
     id: root

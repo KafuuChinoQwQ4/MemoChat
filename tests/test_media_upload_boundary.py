@@ -6,6 +6,28 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 QML_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 MEDIA_DIR = QML_DIR / "shared/media"
 APP_DIR = QML_DIR / "app"
+CLIENT_CMAKE = QML_DIR / "CMakeLists.txt"
+CLIENT_CMAKE_MANIFESTS = (
+    QML_DIR / "app/sources.cmake",
+    QML_DIR / "features/sources.cmake",
+    QML_DIR / "features/auth/sources.cmake",
+    QML_DIR / "features/call/sources.cmake",
+    QML_DIR / "features/chat/sources.cmake",
+    QML_DIR / "features/contact/sources.cmake",
+    QML_DIR / "features/moments/sources.cmake",
+    QML_DIR / "features/pet/sources.cmake",
+    QML_DIR / "features/profile/sources.cmake",
+    QML_DIR / "features/r18/sources.cmake",
+    QML_DIR / "shared/sources.cmake",
+    QML_DIR / "live2d/sources.cmake",
+    QML_DIR / "resources/resources.cmake",
+)
+
+
+def client_cmake_text() -> str:
+    return "\n".join(
+        path.read_text(encoding="utf-8") for path in (CLIENT_CMAKE, *CLIENT_CMAKE_MANIFESTS) if path.exists()
+    )
 
 
 class MediaUploadBoundaryTests(unittest.TestCase):
@@ -13,12 +35,15 @@ class MediaUploadBoundaryTests(unittest.TestCase):
         request_header = MEDIA_DIR / "MediaUploadRequest.h"
         result_header = MEDIA_DIR / "MediaUploadResult.h"
         service_header = MEDIA_DIR / "MediaUploadService.h"
-        cmake = (QML_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
+        cmake = client_cmake_text()
+        shared_manifest = (QML_DIR / "shared/sources.cmake").read_text(encoding="utf-8")
 
         self.assertTrue(request_header.exists())
         self.assertTrue(result_header.exists())
         self.assertIn("shared/media/MediaUploadRequest.h", cmake)
         self.assertIn("shared/media/MediaUploadResult.h", cmake)
+        self.assertIn("shared/media/MediaUploadRequest.h", shared_manifest)
+        self.assertIn("shared/media/MediaUploadResult.h", shared_manifest)
 
         request = request_header.read_text(encoding="utf-8")
         result = result_header.read_text(encoding="utf-8")
@@ -58,7 +83,7 @@ class MediaUploadBoundaryTests(unittest.TestCase):
         )
 
     def test_attachment_queue_uses_request_result_and_keeps_progress_callback(self):
-        queue = (APP_DIR / "AppControllerMediaUploadQueue.cpp").read_text(encoding="utf-8")
+        queue = (APP_DIR / "controller/AppControllerMediaUploadQueue.cpp").read_text(encoding="utf-8")
 
         self.assertIn("MediaUploadRequest request", queue)
         self.assertRegex(

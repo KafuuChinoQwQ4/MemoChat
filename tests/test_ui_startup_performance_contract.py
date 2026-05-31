@@ -4,22 +4,23 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
-MAIN_CPP = CLIENT_DIR / "app/main.cpp"
-MAIN_PLATFORM_BOOTSTRAP_CPP = CLIENT_DIR / "app/MainPlatformBootstrap.cpp"
-MAIN_WINDOW_HOOKS_CPP = CLIENT_DIR / "app/MainWindowHooks.cpp"
-SHARED_MAIN_QML = CLIENT_DIR / "qml/Main.qml"
+MAIN_CPP = CLIENT_DIR / "app/bootstrap/main.cpp"
+MAIN_PLATFORM_BOOTSTRAP_CPP = CLIENT_DIR / "app/bootstrap/MainPlatformBootstrap.cpp"
+MAIN_WINDOW_HOOKS_CPP = CLIENT_DIR / "app/window/MainWindowHooks.cpp"
+SHARED_MAIN_QML = CLIENT_DIR / "qml/app/Main.qml"
 LINUX_MAIN_QML = CLIENT_DIR / "qml/linux/Main.qml"
-LIVE2D_CPP = CLIENT_DIR / "live2d/Live2DRenderItem.cpp"
-LIVE2D_H = CLIENT_DIR / "live2d/Live2DRenderItem.h"
-LIVE2D_RENDERER_H = CLIENT_DIR / "live2d/Live2DRenderer.h"
-LIVE2D_CORE_CPP = CLIENT_DIR / "live2d/Live2DCoreRenderer.cpp"
-LIVE2D_CORE_H = CLIENT_DIR / "live2d/Live2DCoreRenderer.h"
-LIVE2D_OFFICIAL_CPP = CLIENT_DIR / "live2d/Live2DOfficialOpenGLRenderer.cpp"
-LIVE2D_OFFICIAL_H = CLIENT_DIR / "live2d/Live2DOfficialOpenGLRenderer.h"
-LIVE2D_PLACEHOLDER_CPP = CLIENT_DIR / "live2d/Live2DPlaceholderRenderer.cpp"
-LIVE2D_PLACEHOLDER_H = CLIENT_DIR / "live2d/Live2DPlaceholderRenderer.h"
+LIVE2D_CPP = CLIENT_DIR / "live2d/rendering/Live2DRenderItem.cpp"
+LIVE2D_H = CLIENT_DIR / "live2d/rendering/Live2DRenderItem.h"
+LIVE2D_RENDERER_H = CLIENT_DIR / "live2d/rendering/Live2DRenderer.h"
+LIVE2D_CORE_CPP = CLIENT_DIR / "live2d/rendering/Live2DCoreRenderer.cpp"
+LIVE2D_CORE_H = CLIENT_DIR / "live2d/rendering/Live2DCoreRenderer.h"
+LIVE2D_OFFICIAL_CPP = CLIENT_DIR / "live2d/rendering/Live2DOfficialOpenGLRenderer.cpp"
+LIVE2D_OFFICIAL_H = CLIENT_DIR / "live2d/rendering/Live2DOfficialOpenGLRenderer.h"
+LIVE2D_PLACEHOLDER_CPP = CLIENT_DIR / "live2d/rendering/Live2DPlaceholderRenderer.cpp"
+LIVE2D_PLACEHOLDER_H = CLIENT_DIR / "live2d/rendering/Live2DPlaceholderRenderer.h"
 CLIENT_CMAKE = CLIENT_DIR / "CMakeLists.txt"
-SESSION_CHAT_ENTRY_CPP = CLIENT_DIR / "app/SessionChatEntryCoordinator.cpp"
+LIVE2D_SOURCES_CMAKE = CLIENT_DIR / "live2d/sources.cmake"
+SESSION_CHAT_ENTRY_CPP = CLIENT_DIR / "app/session/SessionChatEntryCoordinator.cpp"
 
 
 def read(path):
@@ -115,7 +116,7 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
                     "showWindowCentered",
                     "requestWindowCenter",
                     "logWindowState",
-                    "availableGeometry",
+                    "AppWindowRuntime.availableScreenGeometry",
                     "Component.onCompleted",
                     "onPageChanged",
                 ):
@@ -177,7 +178,7 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
         core_source = read(LIVE2D_CORE_CPP) + "\n" + read(LIVE2D_CORE_H)
         official_source = read(LIVE2D_OFFICIAL_CPP) + "\n" + read(LIVE2D_OFFICIAL_H)
         placeholder_source = read(LIVE2D_PLACEHOLDER_CPP) + "\n" + read(LIVE2D_PLACEHOLDER_H)
-        cmake = read(CLIENT_CMAKE)
+        cmake = read(CLIENT_CMAKE) + "\n" + read(LIVE2D_SOURCES_CMAKE)
 
         for token in (
             "struct Live2DVisualState",

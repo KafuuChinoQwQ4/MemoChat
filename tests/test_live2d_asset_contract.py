@@ -5,22 +5,39 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 
-LIVE2D_ASSET_H = CLIENT_DIR / "live2d/Live2DAsset.h"
-LIVE2D_ASSET_CPP = CLIENT_DIR / "live2d/Live2DAsset.cpp"
-LIVE2D_MODEL_ASSET_PARSER_H = CLIENT_DIR / "live2d/Live2DModelAssetParser.h"
-LIVE2D_MODEL_ASSET_PARSER_CPP = CLIENT_DIR / "live2d/Live2DModelAssetParser.cpp"
-LIVE2D_MOTION_CATALOG_H = CLIENT_DIR / "live2d/Live2DMotionCatalog.h"
-LIVE2D_MOTION_CATALOG_CPP = CLIENT_DIR / "live2d/Live2DMotionCatalog.cpp"
+LIVE2D_ASSET_H = CLIENT_DIR / "live2d/assets/Live2DAsset.h"
+LIVE2D_ASSET_CPP = CLIENT_DIR / "live2d/assets/Live2DAsset.cpp"
+LIVE2D_ASSET_ACTION_FILES_CPP = CLIENT_DIR / "live2d/assets/Live2DAssetActionFiles.cpp"
+LIVE2D_ASSET_MODEL_FILE_CPP = CLIENT_DIR / "live2d/assets/Live2DAssetModelFile.cpp"
+LIVE2D_ASSET_OPTIONAL_FILES_CPP = CLIENT_DIR / "live2d/assets/Live2DAssetOptionalFiles.cpp"
+LIVE2D_ASSET_PATHS_CPP = CLIENT_DIR / "live2d/assets/Live2DAssetPaths.cpp"
+LIVE2D_ASSET_REQUIRED_FILES_CPP = CLIENT_DIR / "live2d/assets/Live2DAssetRequiredFiles.cpp"
+LIVE2D_ASSET_VALIDATION_CPP = CLIENT_DIR / "live2d/assets/Live2DAssetValidation.cpp"
+LIVE2D_ASSET_VOICE_FILES_CPP = CLIENT_DIR / "live2d/assets/Live2DAssetVoiceFiles.cpp"
+LIVE2D_MODEL_ASSET_PARSER_H = CLIENT_DIR / "live2d/model/Live2DModelAssetParser.h"
+LIVE2D_MODEL_ASSET_PARSER_CPP = CLIENT_DIR / "live2d/model/Live2DModelAssetParser.cpp"
+LIVE2D_MOTION_CATALOG_H = CLIENT_DIR / "live2d/model/Live2DMotionCatalog.h"
+LIVE2D_MOTION_CATALOG_CPP = CLIENT_DIR / "live2d/model/Live2DMotionCatalog.cpp"
 CLIENT_CMAKE = CLIENT_DIR / "CMakeLists.txt"
-CLIENT_CMAKE_FRAGMENTS = (
-    CLIENT_DIR / "cmake/AppSources.cmake",
-    CLIENT_DIR / "cmake/FeatureSources.cmake",
-    CLIENT_DIR / "cmake/SharedSources.cmake",
-    CLIENT_DIR / "cmake/QmlResources.cmake",
+CLIENT_CMAKE_MANIFESTS = (
+    CLIENT_DIR / "app/sources.cmake",
+    CLIENT_DIR / "features/sources.cmake",
+    CLIENT_DIR / "features/agent/sources.cmake",
+    CLIENT_DIR / "features/auth/sources.cmake",
+    CLIENT_DIR / "features/call/sources.cmake",
+    CLIENT_DIR / "features/chat/sources.cmake",
+    CLIENT_DIR / "features/contact/sources.cmake",
+    CLIENT_DIR / "features/moments/sources.cmake",
+    CLIENT_DIR / "features/pet/sources.cmake",
+    CLIENT_DIR / "features/profile/sources.cmake",
+    CLIENT_DIR / "features/r18/sources.cmake",
+    CLIENT_DIR / "shared/sources.cmake",
+    CLIENT_DIR / "live2d/sources.cmake",
+    CLIENT_DIR / "resources/resources.cmake",
 )
-MAIN_QML_TYPE_REGISTRY_CPP = CLIENT_DIR / "app/MainQmlTypeRegistry.cpp"
+MAIN_QML_TYPE_REGISTRY_CPP = CLIENT_DIR / "app/bootstrap/MainQmlTypeRegistry.cpp"
 CHARACTER_PANE_QML = CLIENT_DIR / "qml/pet/Live2DCharacterPane.qml"
-QML_QRC = CLIENT_DIR / "qml.qrc"
+QML_QRC = CLIENT_DIR / "resources/qrc/qml-pet.qrc"
 LIVE2D_FIXTURE_DIR = REPO_ROOT / "tests/fixtures/live2d/minimal_model"
 LIVE2D_FIXTURE_MODEL = LIVE2D_FIXTURE_DIR / "minimal.model3.json"
 LIVE2D_POLICY_DOC = CLIENT_DIR / "docs/live2d-desktop-pet-assets.md"
@@ -81,11 +98,22 @@ def read_texts(*paths: Path) -> str:
 
 
 def client_cmake_text() -> str:
-    return read_texts(CLIENT_CMAKE, *(fragment for fragment in CLIENT_CMAKE_FRAGMENTS if fragment.exists()))
+    return read_texts(CLIENT_CMAKE, *(manifest for manifest in CLIENT_CMAKE_MANIFESTS if manifest.exists()))
 
 
 def live2d_asset_validation_source() -> str:
-    return read_texts(LIVE2D_ASSET_CPP, LIVE2D_MODEL_ASSET_PARSER_CPP, LIVE2D_MOTION_CATALOG_CPP)
+    return read_texts(
+        LIVE2D_ASSET_CPP,
+        LIVE2D_ASSET_ACTION_FILES_CPP,
+        LIVE2D_ASSET_MODEL_FILE_CPP,
+        LIVE2D_ASSET_OPTIONAL_FILES_CPP,
+        LIVE2D_ASSET_PATHS_CPP,
+        LIVE2D_ASSET_REQUIRED_FILES_CPP,
+        LIVE2D_ASSET_VALIDATION_CPP,
+        LIVE2D_ASSET_VOICE_FILES_CPP,
+        LIVE2D_MODEL_ASSET_PARSER_CPP,
+        LIVE2D_MOTION_CATALOG_CPP,
+    )
 
 
 class Live2DAssetContractTests(unittest.TestCase):

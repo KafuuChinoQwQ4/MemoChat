@@ -80,7 +80,7 @@ Item {
 
                 Label {
                     Layout.fillWidth: true
-                    text: "src/KafuuChino/香风智乃live2D"
+                    text: "resources/live2d/KafuuChino/香风智乃live2D"
                     color: "#6a7b92"
                     font.pixelSize: 11
                     elide: Text.ElideMiddle

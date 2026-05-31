@@ -5,7 +5,7 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core)
 
 add_executable(chat_cache_message_codec_gtest
     ChatCacheMessageCodecTest.cpp
-    ../../../apps/client/desktop/MemoChat-qml/features/chat/ChatCacheMessageCodec.cpp
+    ../../../apps/client/desktop/MemoChat-qml/features/chat/cache/ChatCacheMessageCodec.cpp
 )
 set_target_properties(chat_cache_message_codec_gtest PROPERTIES
     CXX_STANDARD 23
@@ -21,6 +21,7 @@ target_link_libraries(chat_cache_message_codec_gtest PRIVATE
 target_include_directories(chat_cache_message_codec_gtest PRIVATE
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/cache
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core/common
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core/session

@@ -66,10 +66,11 @@ set(MEMOCHAT_QML_FEATURE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features)
 set(MEMOCHAT_QML_SHARED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shared)
 add_subdirectory(core)
 
-include(cmake/AppSources.cmake)
-include(cmake/FeatureSources.cmake)
-include(cmake/SharedSources.cmake)
-include(cmake/QmlResources.cmake)
+include(app/sources.cmake)
+include(features/sources.cmake)
+include(shared/sources.cmake)
+include(live2d/sources.cmake)
+include(resources/resources.cmake)
 
 set_source_files_properties(
     ${MEMOCHAT_QML_CORE_DIR}/media/imagecropperlabel.h
@@ -80,9 +81,11 @@ add_executable(MemoChatQml WIN32 MACOSX_BUNDLE
     ${MEMOCHAT_QML_APP_SOURCES}
     ${MEMOCHAT_QML_FEATURE_SOURCES}
     ${MEMOCHAT_QML_SHARED_SOURCES}
+    ${MEMOCHAT_QML_LIVE2D_SOURCES}
     ${MEMOCHAT_QML_APP_HEADERS}
     ${MEMOCHAT_QML_FEATURE_HEADERS}
     ${MEMOCHAT_QML_SHARED_HEADERS}
+    ${MEMOCHAT_QML_LIVE2D_HEADERS}
     ${MEMOCHAT_QML_RESOURCES}
 )
 set_target_properties(MemoChatQml PROPERTIES
@@ -94,24 +97,58 @@ set_target_properties(MemoChatQml PROPERTIES
 target_include_directories(MemoChatQml PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/app
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/bootstrap
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/window
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/connection
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/session
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/coordinators
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/controller
     ${CMAKE_CURRENT_SOURCE_DIR}/platform
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/windows
     ${MEMOCHAT_QML_FEATURE_DIR}
     ${MEMOCHAT_QML_FEATURE_DIR}/auth
     ${MEMOCHAT_QML_FEATURE_DIR}/call
+    ${MEMOCHAT_QML_FEATURE_DIR}/call/bridge
+    ${MEMOCHAT_QML_FEATURE_DIR}/call/controller
+    ${MEMOCHAT_QML_FEATURE_DIR}/call/model
     ${MEMOCHAT_QML_FEATURE_DIR}/chat
+    ${MEMOCHAT_QML_FEATURE_DIR}/chat/cache
+    ${MEMOCHAT_QML_FEATURE_DIR}/chat/controller
+    ${MEMOCHAT_QML_FEATURE_DIR}/chat/model
+    ${MEMOCHAT_QML_FEATURE_DIR}/chat/services
     ${MEMOCHAT_QML_FEATURE_DIR}/contact
+    ${MEMOCHAT_QML_FEATURE_DIR}/contact/controller
+    ${MEMOCHAT_QML_FEATURE_DIR}/contact/model
     ${MEMOCHAT_QML_FEATURE_DIR}/profile
+    ${MEMOCHAT_QML_FEATURE_DIR}/profile/controller
     ${MEMOCHAT_QML_FEATURE_DIR}/moments
+    ${MEMOCHAT_QML_FEATURE_DIR}/moments/controller
+    ${MEMOCHAT_QML_FEATURE_DIR}/moments/model
+    ${MEMOCHAT_QML_FEATURE_DIR}/moments/parsing
     ${MEMOCHAT_QML_FEATURE_DIR}/agent
+    ${MEMOCHAT_QML_FEATURE_DIR}/agent/controller
+    ${MEMOCHAT_QML_FEATURE_DIR}/agent/game
+    ${MEMOCHAT_QML_FEATURE_DIR}/agent/model
+    ${MEMOCHAT_QML_FEATURE_DIR}/agent/transport
     ${MEMOCHAT_QML_FEATURE_DIR}/pet
+    ${MEMOCHAT_QML_FEATURE_DIR}/pet/assets
+    ${MEMOCHAT_QML_FEATURE_DIR}/pet/controller
+    ${MEMOCHAT_QML_FEATURE_DIR}/pet/model
+    ${MEMOCHAT_QML_FEATURE_DIR}/pet/platform
+    ${MEMOCHAT_QML_FEATURE_DIR}/pet/speech
+    ${MEMOCHAT_QML_FEATURE_DIR}/pet/vision
     ${MEMOCHAT_QML_FEATURE_DIR}/r18
+    ${MEMOCHAT_QML_FEATURE_DIR}/r18/controller
+    ${MEMOCHAT_QML_FEATURE_DIR}/r18/model
     ${MEMOCHAT_QML_SHARED_DIR}
     ${MEMOCHAT_QML_SHARED_DIR}/gateway
     ${MEMOCHAT_QML_SHARED_DIR}/media
     ${MEMOCHAT_QML_SHARED_DIR}/ui
     ${MEMOCHAT_QML_SHARED_DIR}/utils
     ${CMAKE_CURRENT_SOURCE_DIR}/live2d
+    ${CMAKE_CURRENT_SOURCE_DIR}/live2d/assets
+    ${CMAKE_CURRENT_SOURCE_DIR}/live2d/model
+    ${CMAKE_CURRENT_SOURCE_DIR}/live2d/rendering
     ${MEMOCHAT_QML_CORE_DIR}
     ${MEMOCHAT_QML_CORE_DIR}/common
     ${MEMOCHAT_QML_CORE_DIR}/media

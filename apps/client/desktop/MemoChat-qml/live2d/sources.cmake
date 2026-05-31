@@ -1,0 +1,38 @@
+set(MEMOCHAT_QML_LIVE2D_SOURCES
+    live2d/assets/Live2DAsset.cpp
+    live2d/assets/Live2DAssetActionFiles.cpp
+    live2d/assets/Live2DAssetModelFile.cpp
+    live2d/assets/Live2DAssetOptionalFiles.cpp
+    live2d/assets/Live2DAssetPaths.cpp
+    live2d/assets/Live2DAssetRequiredFiles.cpp
+    live2d/assets/Live2DAssetValidation.cpp
+    live2d/assets/Live2DAssetVoiceFiles.cpp
+    live2d/model/Live2DModelAssetParser.cpp
+    live2d/model/Live2DMotionCatalog.cpp
+    live2d/rendering/Live2DAvatarOpenGLRenderer.cpp
+    live2d/rendering/Live2DCoreRenderer.cpp
+    live2d/rendering/Live2DOfficialOpenGLRenderer.cpp
+    live2d/rendering/Live2DPlaceholderRenderer.cpp
+    live2d/rendering/Live2DRenderItem.cpp
+    live2d/rendering/Live2DRenderPathResolver.cpp
+)
+
+set(MEMOCHAT_QML_LIVE2D_HEADERS
+    live2d/assets/Live2DAsset.h
+    live2d/assets/Live2DAssetActionFiles.h
+    live2d/assets/Live2DAssetModelFile.h
+    live2d/assets/Live2DAssetOptionalFiles.h
+    live2d/assets/Live2DAssetPaths.h
+    live2d/assets/Live2DAssetRequiredFiles.h
+    live2d/assets/Live2DAssetValidation.h
+    live2d/assets/Live2DAssetVoiceFiles.h
+    live2d/model/Live2DModelAssetParser.h
+    live2d/model/Live2DMotionCatalog.h
+    live2d/rendering/Live2DAvatarOpenGLRenderer.h
+    live2d/rendering/Live2DCoreRenderer.h
+    live2d/rendering/Live2DOfficialOpenGLRenderer.h
+    live2d/rendering/Live2DPlaceholderRenderer.h
+    live2d/rendering/Live2DRenderItem.h
+    live2d/rendering/Live2DRenderPathResolver.h
+    live2d/rendering/Live2DRenderer.h
+)

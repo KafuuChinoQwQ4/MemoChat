@@ -7,13 +7,21 @@ PRIVATE_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/PrivateMessag
 CHAT_MESSAGE_DISPATCHER_GROUP = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/network/ChatMessageDispatcherGroup.cpp"
 )
-CHAT_MESSAGE_MODEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/ChatMessageModel.cpp"
-CHAT_MESSAGE_MODEL_CONTENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/ChatMessageModelContent.cpp"
+CHAT_MESSAGE_MODEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModel.cpp"
+CHAT_MESSAGE_MODEL_CONTENT = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelContent.cpp"
+)
 ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/shared/utils/IconPathUtils.h"
-APP_CONTROLLER_GROUP_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerGroupSelection.cpp"
-APP_CONTROLLER_PRIVATE_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerPrivateEvents.cpp"
-APP_CONTROLLER_DIALOG_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerDialogState.cpp"
-CONVERSATION_SYNC_SERVICE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/ConversationSyncService.cpp"
+APP_CONTROLLER_GROUP_SELECTION = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerGroupSelection.cpp"
+)
+APP_CONTROLLER_PRIVATE_EVENTS = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerPrivateEvents.cpp"
+)
+APP_CONTROLLER_DIALOG_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerDialogState.cpp"
+CONVERSATION_SYNC_SERVICE = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/services/ConversationSyncService.cpp"
+)
 
 
 def extract_function(source: str, signature: str) -> str:

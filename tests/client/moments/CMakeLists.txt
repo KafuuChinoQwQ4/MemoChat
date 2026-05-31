@@ -5,7 +5,7 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core)
 
 add_executable(moments_entry_parser_gtest
     MomentsEntryParserTest.cpp
-    ../../../apps/client/desktop/MemoChat-qml/features/moments/MomentsEntryParser.cpp
+    ../../../apps/client/desktop/MemoChat-qml/features/moments/parsing/MomentsEntryParser.cpp
 )
 set_target_properties(moments_entry_parser_gtest PROPERTIES
     CXX_STANDARD 23
@@ -21,6 +21,8 @@ target_link_libraries(moments_entry_parser_gtest PRIVATE
 target_include_directories(moments_entry_parser_gtest PRIVATE
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/moments
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/moments/model
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/moments/parsing
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/shared/utils
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core/common

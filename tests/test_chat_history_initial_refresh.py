@@ -3,8 +3,12 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-APP_CONTROLLER_PRIVATE_HISTORY = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerPrivateHistory.cpp"
-APP_CONTROLLER_GROUP_SELECTION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerGroupSelection.cpp"
+APP_CONTROLLER_PRIVATE_HISTORY = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerPrivateHistory.cpp"
+)
+APP_CONTROLLER_GROUP_SELECTION = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerGroupSelection.cpp"
+)
 
 
 def extract_function(source: str, signature: str) -> str:

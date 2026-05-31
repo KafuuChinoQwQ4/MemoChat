@@ -1,16 +1,16 @@
-﻿cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.16)
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core)
 
 add_executable(dialog_list_service_gtest
     DialogListServiceTest.cpp
-    ../../../apps/client/desktop/MemoChat-qml/features/chat/DialogListEntryBuilder.cpp
-    ../../../apps/client/desktop/MemoChat-qml/features/chat/DialogListService.cpp
-    ../../../apps/client/desktop/MemoChat-qml/features/contact/FriendListModel.cpp
-    ../../../apps/client/desktop/MemoChat-qml/features/contact/FriendListModelMutations.cpp
-    ../../../apps/client/desktop/MemoChat-qml/features/contact/FriendListModelState.cpp
-    ../../../apps/client/desktop/MemoChat-qml/features/contact/FriendListModelQueries.cpp
+    ../../../apps/client/desktop/MemoChat-qml/features/chat/services/DialogListEntryBuilder.cpp
+    ../../../apps/client/desktop/MemoChat-qml/features/chat/services/DialogListService.cpp
+    ../../../apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.cpp
+    ../../../apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelMutations.cpp
+    ../../../apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelState.cpp
+    ../../../apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelQueries.cpp
 )
 set_target_properties(dialog_list_service_gtest PROPERTIES AUTOMOC ON)
 
@@ -22,7 +22,9 @@ target_link_libraries(dialog_list_service_gtest PRIVATE
 target_include_directories(dialog_list_service_gtest PRIVATE
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/services
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/shared/utils
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core/common
