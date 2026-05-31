@@ -26,10 +26,19 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Network Qml Quic
 set(SOURCES
     main.cpp
     OpsApiClient.cpp
+    OpsApiClientAdmin.cpp
+    OpsApiClientLoadtests.cpp
+    OpsApiClientLogs.cpp
+    OpsApiClientMetrics.cpp
+    OpsApiClientOverview.cpp
+    OpsApiTransport.cpp
+    OpsLogQueryBuilder.cpp
 )
 
 set(HEADERS
     OpsApiClient.h
+    OpsApiTransport.h
+    OpsLogQueryBuilder.h
 )
 
 set(RESOURCES

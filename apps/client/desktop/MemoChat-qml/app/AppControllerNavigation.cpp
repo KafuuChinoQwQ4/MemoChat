@@ -1,4 +1,5 @@
 #include "AppController.h"
+#include "AppChatConnectionCoordinator.h"
 #include "IconPathUtils.h"
 #include "IChatTransport.h"
 #include "httpmgr.h"
@@ -32,8 +33,8 @@ void AppController::switchToLogin()
     _chat_endpoint_state.endpointIndex = -1;
     _pending_login_state.loginTicket.clear();
     _chat_recovery_state.loginTcpFallbackAttempted = false;
-    resetReconnectState();
-    resetHeartbeatTracking();
+    _chat_connection_coordinator->resetReconnectState();
+    _chat_connection_coordinator->resetHeartbeatTracking();
     _gateway.chatTransport()->CloseConnection();
     if (auto http = _gateway.httpMgr())
     {
@@ -136,7 +137,7 @@ void AppController::switchToRegister()
 {
     _register_countdown_timer.stop();
     _heartbeat_timer.stop();
-    resetHeartbeatTracking();
+    _chat_connection_coordinator->resetHeartbeatTracking();
     if (_shell_state.registerSuccessPage)
     {
         _shell_state.registerSuccessPage = false;
@@ -150,7 +151,7 @@ void AppController::switchToReset()
 {
     _register_countdown_timer.stop();
     _heartbeat_timer.stop();
-    resetHeartbeatTracking();
+    _chat_connection_coordinator->resetHeartbeatTracking();
     if (_shell_state.registerSuccessPage)
     {
         _shell_state.registerSuccessPage = false;

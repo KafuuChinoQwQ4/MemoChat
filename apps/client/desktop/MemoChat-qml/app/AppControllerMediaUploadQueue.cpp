@@ -11,16 +11,6 @@
 #include <QUuid>
 #include <QtConcurrent>
 
-namespace
-{
-struct MediaUploadTaskResult
-{
-    bool ok = false;
-    UploadedMediaInfo uploaded;
-    QString errorText;
-};
-} // namespace
-
 void AppController::processPendingAttachmentQueue()
 {
     if (_pending_send_state.queue.isEmpty())
@@ -54,10 +44,11 @@ void AppController::processPendingAttachmentQueue()
     const int attachmentIndex = qMax(1, _pending_send_state.totalCount - _pending_send_state.queue.size() + 1);
     const QString uploadType = currentAttachment.value(QStringLiteral("type")).toString();
     const QString uploadFileUrl = currentAttachment.value(QStringLiteral("fileUrl")).toString();
+    const QString uploadFallbackName = currentAttachment.value(QStringLiteral("fileName")).toString();
     setMediaUploadProgressText(
         QString("正在发送附件 %1/%2").arg(attachmentIndex).arg(qMax(1, _pending_send_state.totalCount)));
 
-    auto* watcher = new QFutureWatcher<MediaUploadTaskResult>(this);
+    auto* watcher = new QFutureWatcher<MediaUploadResult>(this);
     const int uploadUid = selfInfo->_uid;
     const QString token = _pending_login_state.token;
     const int targetDialogUid = _pending_send_state.dialogUid;
@@ -65,16 +56,17 @@ void AppController::processPendingAttachmentQueue()
     const int targetChatUid = _pending_send_state.chatUid;
 
     const auto future = QtConcurrent::run(
-        [this, uploadFileUrl, uploadType, uploadUid, token, attachmentIndex]()
+        [this, uploadFileUrl, uploadType, uploadFallbackName, uploadUid, token, attachmentIndex]()
         {
-            MediaUploadTaskResult result;
-            result.ok = MediaUploadService::uploadLocalFile(
-                uploadFileUrl,
-                uploadType,
-                uploadUid,
-                token,
-                &result.uploaded,
-                &result.errorText,
+            MediaUploadRequest request;
+            request.localFileUrl = uploadFileUrl;
+            request.mediaType = uploadType;
+            request.uid = uploadUid;
+            request.token = token;
+            request.fallbackName = uploadFallbackName;
+
+            MediaUploadResult result = MediaUploadService::uploadLocalFile(
+                request,
                 [this, attachmentIndex](int percent, const QString& stage)
                 {
                     QMetaObject::invokeMethod(
@@ -94,11 +86,11 @@ void AppController::processPendingAttachmentQueue()
         });
 
     connect(watcher,
-            &QFutureWatcher<MediaUploadTaskResult>::finished,
+            &QFutureWatcher<MediaUploadResult>::finished,
             this,
             [this, watcher, currentAttachment, uploadType, targetDialogUid, targetGroupId, targetChatUid]()
             {
-                const MediaUploadTaskResult result = watcher->result();
+                const MediaUploadResult result = watcher->result();
                 watcher->deleteLater();
 
                 if (!result.ok)
@@ -113,7 +105,7 @@ void AppController::processPendingAttachmentQueue()
                 }
 
                 if (!sendUploadedAttachmentToDialog(currentAttachment,
-                                                    result.uploaded,
+                                                    result.info,
                                                     targetDialogUid,
                                                     targetChatUid,
                                                     targetGroupId))

@@ -6,6 +6,83 @@
 #include <QFileInfo>
 #include <QMimeDatabase>
 
+MediaUploadResult MediaUploadService::uploadLocalFile(const MediaUploadRequest& request,
+                                                      const UploadProgressCallback& progress)
+{
+    using namespace MediaUploadServicePrivate;
+
+    MediaUploadResult result;
+    if (request.uid <= 0 || request.token.trimmed().isEmpty())
+    {
+        result.errorText = "登录态失效，请重新登录";
+        return result;
+    }
+
+    const QString localPath = resolveLocalPath(request.localFileUrl);
+    QFile file(localPath);
+    if (!file.exists())
+    {
+        result.errorText = "文件不存在";
+        return result;
+    }
+
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        result.errorText = "文件读取失败";
+        return result;
+    }
+
+    const QFileInfo fileInfo(localPath);
+    const qint64 fileSize = fileInfo.size();
+    if (fileSize <= 0)
+    {
+        result.errorText = "文件内容为空";
+        return result;
+    }
+
+    const ClientMediaConfig mediaCfg = loadMediaConfig();
+    const qint64 limit = (request.mediaType == "image") ? mediaCfg.maxImageBytes : mediaCfg.maxFileBytes;
+    if (fileSize > limit)
+    {
+        result.errorText = QString("文件过大，请控制在 %1MB 以内").arg(limit / (1024 * 1024));
+        return result;
+    }
+
+    const QMimeDatabase mimeDb;
+    const QString mimeType = mimeDb.mimeTypeForFile(fileInfo).name();
+    if (request.mediaType.compare(QStringLiteral("avatar"), Qt::CaseInsensitive) == 0)
+    {
+        result.ok = uploadAvatarFile(file,
+                                     fileInfo,
+                                     request.mediaType,
+                                     mimeType,
+                                     request.uid,
+                                     request.token,
+                                     &result.info,
+                                     &result.errorText,
+                                     progress);
+    }
+    else
+    {
+        result.ok = uploadChunkedFile(file,
+                                      fileInfo,
+                                      request.mediaType,
+                                      mimeType,
+                                      fileSize,
+                                      mediaCfg,
+                                      request.uid,
+                                      request.token,
+                                      &result.info,
+                                      &result.errorText,
+                                      progress);
+    }
+    if (result.ok && result.info.fileName.isEmpty() && !request.fallbackName.trimmed().isEmpty())
+    {
+        result.info.fileName = request.fallbackName.trimmed();
+    }
+    return result;
+}
+
 bool MediaUploadService::uploadLocalFile(const QString& localFileUrl,
                                          const QString& mediaType,
                                          int uid,
@@ -14,75 +91,20 @@ bool MediaUploadService::uploadLocalFile(const QString& localFileUrl,
                                          QString* errorText,
                                          const UploadProgressCallback& progress)
 {
-    using namespace MediaUploadServicePrivate;
+    MediaUploadRequest request;
+    request.localFileUrl = localFileUrl;
+    request.mediaType = mediaType;
+    request.uid = uid;
+    request.token = token;
 
-    if (uid <= 0 || token.trimmed().isEmpty())
+    const MediaUploadResult result = uploadLocalFile(request, progress);
+    if (outInfo)
     {
-        if (errorText)
-        {
-            *errorText = "登录态失效，请重新登录";
-        }
-        return false;
+        *outInfo = result.info;
     }
-
-    const QString localPath = resolveLocalPath(localFileUrl);
-    QFile file(localPath);
-    if (!file.exists())
+    if (errorText)
     {
-        if (errorText)
-        {
-            *errorText = "文件不存在";
-        }
-        return false;
+        *errorText = result.errorText;
     }
-
-    if (!file.open(QIODevice::ReadOnly))
-    {
-        if (errorText)
-        {
-            *errorText = "文件读取失败";
-        }
-        return false;
-    }
-
-    const QFileInfo fileInfo(localPath);
-    const qint64 fileSize = fileInfo.size();
-    if (fileSize <= 0)
-    {
-        if (errorText)
-        {
-            *errorText = "文件内容为空";
-        }
-        return false;
-    }
-
-    const ClientMediaConfig mediaCfg = loadMediaConfig();
-    const qint64 limit = (mediaType == "image") ? mediaCfg.maxImageBytes : mediaCfg.maxFileBytes;
-    if (fileSize > limit)
-    {
-        if (errorText)
-        {
-            *errorText = QString("文件过大，请控制在 %1MB 以内").arg(limit / (1024 * 1024));
-        }
-        return false;
-    }
-
-    const QMimeDatabase mimeDb;
-    const QString mimeType = mimeDb.mimeTypeForFile(fileInfo).name();
-    if (mediaType.compare(QStringLiteral("avatar"), Qt::CaseInsensitive) == 0)
-    {
-        return uploadAvatarFile(file, fileInfo, mediaType, mimeType, uid, token, outInfo, errorText, progress);
-    }
-
-    return uploadChunkedFile(file,
-                             fileInfo,
-                             mediaType,
-                             mimeType,
-                             fileSize,
-                             mediaCfg,
-                             uid,
-                             token,
-                             outInfo,
-                             errorText,
-                             progress);
+    return result.ok;
 }

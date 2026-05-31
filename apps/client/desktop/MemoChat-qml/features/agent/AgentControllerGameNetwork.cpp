@@ -1,39 +1,11 @@
 #include "AgentController.h"
 
+#include "AgentGameClient.h"
 #include "ClientGateway.h"
 #include "usermgr.h"
 
-#include <QJsonDocument>
 #include <QJsonObject>
-#include <QNetworkReply>
-#include <QNetworkRequest>
-#include <QSslConfiguration>
-#include <QSslSocket>
 #include <QUrl>
-#include <QtGlobal>
-
-namespace
-{
-QString gameBaseUrl()
-{
-    return gate_url_prefix + QStringLiteral("/ai/games");
-}
-
-void applyLocalGateRequestOptions(QNetworkRequest& request)
-{
-    const QUrl url = request.url();
-    const QString scheme = url.scheme().toLower();
-    if (scheme == QLatin1String("https"))
-    {
-        QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
-        sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
-        request.setSslConfiguration(sslConfig);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 9, 0)
-        request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);
-#endif
-    }
-}
-} // namespace
 
 int AgentController::currentUid() const
 {
@@ -75,37 +47,7 @@ void AgentController::sendGameGet(const QUrl& url, const QString& op, const QStr
 {
     clearGameError();
     setGameBusy(true, statusText);
-
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-    applyLocalGateRequestOptions(request);
-    QNetworkReply* reply = _gameNetwork->get(request);
-    connect(reply,
-            &QNetworkReply::finished,
-            this,
-            [this, reply, op]()
-            {
-                const QByteArray body = reply->readAll();
-                const QString networkError =
-                    reply->error() == QNetworkReply::NoError ? QString() : reply->errorString();
-                reply->deleteLater();
-
-                if (!networkError.isEmpty())
-                {
-                    setGameBusy(false, QStringLiteral("请求失败"));
-                    setGameError(QStringLiteral("Game 服务请求失败: %1").arg(networkError));
-                    return;
-                }
-
-                const QJsonDocument doc = QJsonDocument::fromJson(body);
-                if (!doc.isObject())
-                {
-                    setGameBusy(false, QStringLiteral("响应格式错误"));
-                    setGameError(QStringLiteral("Game 服务响应格式错误"));
-                    return;
-                }
-                handleGameResponse(op, doc.object());
-            });
+    _gameClient->get(url, op, statusText);
 }
 
 void AgentController::sendGamePost(const QUrl& url,
@@ -115,80 +57,32 @@ void AgentController::sendGamePost(const QUrl& url,
 {
     clearGameError();
     setGameBusy(true, statusText);
-
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-    applyLocalGateRequestOptions(request);
-    QNetworkReply* reply = _gameNetwork->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
-    connect(reply,
-            &QNetworkReply::finished,
-            this,
-            [this, reply, op]()
-            {
-                const QByteArray body = reply->readAll();
-                const QString networkError =
-                    reply->error() == QNetworkReply::NoError ? QString() : reply->errorString();
-                reply->deleteLater();
-
-                if (!networkError.isEmpty())
-                {
-                    if (op == QStringLiteral("delete_room"))
-                    {
-                        _pendingDeleteGameRoomId.clear();
-                    }
-                    setGameBusy(false, QStringLiteral("请求失败"));
-                    setGameError(QStringLiteral("Game 服务请求失败: %1").arg(networkError));
-                    return;
-                }
-
-                const QJsonDocument doc = QJsonDocument::fromJson(body);
-                if (!doc.isObject())
-                {
-                    if (op == QStringLiteral("delete_room"))
-                    {
-                        _pendingDeleteGameRoomId.clear();
-                    }
-                    setGameBusy(false, QStringLiteral("响应格式错误"));
-                    setGameError(QStringLiteral("Game 服务响应格式错误"));
-                    return;
-                }
-                handleGameResponse(op, doc.object());
-            });
+    _gameClient->post(url, payload, op, statusText);
 }
 
 void AgentController::sendGameDelete(const QUrl& url, const QString& op, const QString& statusText)
 {
     clearGameError();
     setGameBusy(true, statusText);
+    _gameClient->deleteResource(url, op, statusText);
+}
 
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-    applyLocalGateRequestOptions(request);
-    QNetworkReply* reply = _gameNetwork->deleteResource(request);
-    connect(reply,
-            &QNetworkReply::finished,
-            this,
-            [this, reply, op]()
-            {
-                const QByteArray body = reply->readAll();
-                const QString networkError =
-                    reply->error() == QNetworkReply::NoError ? QString() : reply->errorString();
-                reply->deleteLater();
+void AgentController::handleGameNetworkError(const QString& op, const QString& errorText)
+{
+    if (op == QStringLiteral("delete_room"))
+    {
+        _pendingDeleteGameRoomId.clear();
+    }
+    setGameBusy(false, QStringLiteral("请求失败"));
+    setGameError(QStringLiteral("Game 服务请求失败: %1").arg(errorText));
+}
 
-                if (!networkError.isEmpty())
-                {
-                    setGameBusy(false, QStringLiteral("请求失败"));
-                    setGameError(QStringLiteral("Game 服务请求失败: %1").arg(networkError));
-                    return;
-                }
-
-                const QJsonDocument doc = QJsonDocument::fromJson(body);
-                if (!doc.isObject())
-                {
-                    setGameBusy(false, QStringLiteral("响应格式错误"));
-                    setGameError(QStringLiteral("Game 服务响应格式错误"));
-                    return;
-                }
-                handleGameResponse(op, doc.object());
-            });
+void AgentController::handleGameFormatError(const QString& op)
+{
+    if (op == QStringLiteral("delete_room"))
+    {
+        _pendingDeleteGameRoomId.clear();
+    }
+    setGameBusy(false, QStringLiteral("响应格式错误"));
+    setGameError(QStringLiteral("Game 服务响应格式错误"));
 }

@@ -31,7 +31,10 @@ endif()
 set(CORE_SOURCES
     common/global.cpp
     media/ImageCropperGeometry.cpp
+    media/ImageCropperCursorPolicy.cpp
+    media/ImageCropperHitTest.cpp
     media/ImageCropperInteraction.cpp
+    media/ImageCropperInteractionState.cpp
     media/ImageCropperPaint.cpp
     media/imagecropperlabel.cpp
     media/ScreenCaptureWidget.cpp
@@ -43,6 +46,8 @@ set(CORE_SOURCES
     network/ChatMessageDispatcherContacts.cpp
     network/ChatMessageDispatcherPrivate.cpp
     network/ChatMessageDispatcherGroup.cpp
+    network/ChatMessageDispatcherGroupHistory.cpp
+    network/ChatMessageDispatcherGroupPayload.cpp
     network/ChatMessageDispatcherSystem.cpp
     network/HttpMgrRequestUtils.cpp
     network/httpmgr.cpp
@@ -63,13 +68,19 @@ set(CORE_HEADERS
     common/global.h
     common/singleton.h
     media/ImageCropperGeometry.h
+    media/ImageCropperCursorPolicy.h
+    media/ImageCropperHitTest.h
     media/imagecropperdialog.h
     media/imagecropperlabel.h
+    media/ImageCropperTypes.h
+    media/ImageCropperInteractionState.h
     media/ScreenCaptureWidget.h
     media/ScreenCaptureService.h
     media/WebcamCaptureDialog.h
     network/ChatFrameCodec.h
     network/ChatMessageDispatcher.h
+    network/ChatMessageDispatcherGroupHistory.h
+    network/ChatMessageDispatcherGroupPayload.h
     network/HttpMgrRequestUtils.h
     network/httpmgr.h
     network/IChatTransport.h

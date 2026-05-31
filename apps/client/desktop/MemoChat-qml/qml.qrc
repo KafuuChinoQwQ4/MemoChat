@@ -2,10 +2,12 @@
     <qresource prefix="/">
         <file>qml/Main.qml</file>
         <file>qml/linux/Main.qml</file>
+        <file>qml/AppWindowRuntime.js</file>
         <file>qml/LoginPage.qml</file>
         <file>qml/linux/LoginPage.qml</file>
         <file>qml/RegisterPage.qml</file>
         <file>qml/ResetPage.qml</file>
+        <file>qml/ChatShellRuntime.js</file>
         <file>qml/ChatShellPage.qml</file>
         <file>qml/ChatShellContent.qml</file>
         <file>qml/components/GlassBackdrop.qml</file>
@@ -31,6 +33,8 @@
         <file>qml/linux/components/WindowGlassShell.qml</file>
         <file>qml/components/ContactProfilePopup.qml</file>
         <file>qml/chat/ChatSideBar.qml</file>
+        <file>qml/chat/ChatNormalFace.qml</file>
+        <file>qml/chat/ChatModalLayer.qml</file>
         <file>qml/chat/ChatLeftPanel.qml</file>
         <file>qml/chat/ChatLeftHeader.qml</file>
         <file>qml/chat/ChatFindFriendPopup.qml</file>
@@ -45,6 +49,8 @@
         <file>qml/chat/ChatSettingsPane.qml</file>
         <file>qml/call/CallOverlay.qml</file>
         <file>qml/chat/conversation/ChatMessageDelegate.qml</file>
+        <file>qml/chat/conversation/ChatMessageActionMenu.qml</file>
+        <file>qml/chat/conversation/ChatMessageStatusBadge.qml</file>
         <file>qml/chat/conversation/ChatMessageTextBody.qml</file>
         <file>qml/chat/conversation/ChatMessageImageBody.qml</file>
         <file>qml/chat/conversation/ChatMessageFileBody.qml</file>
@@ -54,6 +60,8 @@
         <file>qml/chat/conversation/ChatConversationHeader.qml</file>
         <file>qml/chat/conversation/ChatMessageListView.qml</file>
         <file>qml/chat/conversation/ChatSmartActionPopups.qml</file>
+        <file>qml/chat/conversation/ChatSmartSummaryPopup.qml</file>
+        <file>qml/chat/conversation/ChatSmartTranslatePopup.qml</file>
         <file>qml/chat/conversation/ComposerIconButton.qml</file>
         <file>qml/chat/conversation/MessageAvatar.qml</file>
         <file>qml/chat/contact/ApplyRequestDelegate.qml</file>
@@ -125,7 +133,11 @@
         <file>qml/agent/AgentPaneHeader.qml</file>
         <file>qml/agent/AgentModelControlBar.qml</file>
         <file>qml/agent/AgentStatusOverlay.qml</file>
+        <file>qml/agent/AgentGameOverlay.qml</file>
         <file>qml/agent/AgentGamePane.qml</file>
+        <file>qml/agent/AgentGameSetupPane.qml</file>
+        <file>qml/agent/AgentGameRoomPane.qml</file>
+        <file>qml/agent/AgentGameTemplatePane.qml</file>
         <file>qml/agent/AgentGameRuntime.js</file>
         <file>qml/agent/AgentGameSetupHeader.qml</file>
         <file>qml/agent/AgentGameAgentCard.qml</file>
@@ -159,6 +171,9 @@
         <file>qml/pet/PetCameraCapture.qml</file>
         <file>qml/pet/Live2DCharacterPane.qml</file>
         <file>qml/pet/Live2DCharacterRuntime.js</file>
+        <file>qml/pet/Live2DCharacterAssetColumn.qml</file>
+        <file>qml/pet/Live2DCharacterBehaviorColumn.qml</file>
+        <file>qml/pet/Live2DCharacterPromptColumn.qml</file>
         <file>qml/pet/Live2DBehaviorMemoryPanel.qml</file>
         <file>qml/pet/Live2DCharacterPreviewPanel.qml</file>
         <file>qml/pet/Live2DAvatarPreviewImage.qml</file>
@@ -177,11 +192,16 @@
         <file>qml/pet/PetControlHeader.qml</file>
         <file>qml/pet/PetVisionPrivacyCard.qml</file>
         <file>qml/r18/R18ShellPane.qml</file>
+        <file>qml/r18/R18FlipFace.qml</file>
         <file>qml/r18/R18ShellRuntime.js</file>
         <file>qml/r18/R18SourceManagerPane.qml</file>
+        <file>qml/r18/R18SourceImportPane.qml</file>
+        <file>qml/r18/R18OfficialSourceCatalogPane.qml</file>
+        <file>qml/r18/R18SourceListPane.qml</file>
         <file>qml/r18/R18SearchPane.qml</file>
         <file>qml/r18/R18DetailPane.qml</file>
         <file>qml/r18/R18ReaderPane.qml</file>
+        <file>qml/r18/R18HomePane.qml</file>
         <file>qml/r18/R18HomeCard.qml</file>
         <file>qml/r18/R18ReaderChrome.qml</file>
         <file>qml/r18/R18StatusBanner.qml</file>

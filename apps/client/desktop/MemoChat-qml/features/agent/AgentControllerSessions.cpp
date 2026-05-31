@@ -29,7 +29,7 @@ void AgentController::loadSessions()
 {
     auto uid = _gateway->userMgr()->GetUid();
     ReqId reqId = ID_AI_SESSION_LIST;
-    _pending_requests[reqId] = "list_sessions";
+    _pending_requests.track(reqId, AgentRequestKind::ListSessions);
     QUrl url(gate_url_prefix + "/ai/session/list");
     QUrlQuery query;
     query.addQueryItem("uid", QString::number(uid));
@@ -54,7 +54,7 @@ void AgentController::createSession()
     payload["model_name"] = _current_model_name;
 
     ReqId reqId = ID_AI_SESSION_CREATE;
-    _pending_requests[reqId] = "create_session";
+    _pending_requests.track(reqId, AgentRequestKind::CreateSession);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/session"),
                                         payload,
                                         reqId,
@@ -89,7 +89,7 @@ void AgentController::deleteSession(const QString& sessionId)
     payload["session_id"] = sessionId;
 
     ReqId reqId = ID_AI_SESSION_DELETE;
-    _pending_requests[reqId] = "delete_session";
+    _pending_requests.track(reqId, AgentRequestKind::DeleteSession);
     _pendingDeleteSessionId = sessionId;
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/session/delete"),
                                         payload,
@@ -110,20 +110,20 @@ void AgentController::loadHistory(const QString& sessionId)
     url.setQuery(query);
 
     ReqId reqId = ID_AI_HISTORY;
-    _pending_requests[reqId] = "history";
+    _pending_requests.track(reqId, AgentRequestKind::History);
     _model->clear();
 
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
-void AgentController::handleSessionRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType)
+void AgentController::handleSessionRsp(ReqId id, const QString& res, ErrorCodes err, AgentRequestKind kind)
 {
     Q_UNUSED(id);
     Q_UNUSED(err);
     QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8());
     QJsonObject root = doc.object();
 
-    if (reqType == "list_sessions")
+    if (kind == AgentRequestKind::ListSessions)
     {
         QJsonArray sessions = root["sessions"].toArray();
         _sessions.clear();
@@ -153,7 +153,7 @@ void AgentController::handleSessionRsp(ReqId id, const QString& res, ErrorCodes 
         }
         _selectNewestSessionAfterList = false;
     }
-    else if (reqType == "create_session")
+    else if (kind == AgentRequestKind::CreateSession)
     {
         QJsonObject sess = root["session"].toObject();
         QString newId = sess["session_id"].toString();
@@ -170,7 +170,7 @@ void AgentController::handleSessionRsp(ReqId id, const QString& res, ErrorCodes 
         }
         loadSessions();
     }
-    else if (reqType == "delete_session")
+    else if (kind == AgentRequestKind::DeleteSession)
     {
         if (!_pendingDeleteSessionId.isEmpty() && _pendingDeleteSessionId == _current_session_id)
         {

@@ -6,6 +6,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CREATE_GROUP_DIALOG = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/group/CreateGroupDialog.qml"
 CHAT_SHELL_PAGE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/ChatShellPage.qml"
 CHAT_SHELL_CONTENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/ChatShellContent.qml"
+CHAT_NORMAL_FACE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatNormalFace.qml"
+CHAT_MODAL_LAYER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatModalLayer.qml"
 CHAT_LEFT_PANEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatLeftPanel.qml"
 CHAT_LEFT_HEADER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatLeftHeader.qml"
 CHAT_JOIN_GROUP_POPUP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatJoinGroupPopup.qml"
@@ -30,13 +32,14 @@ class CreateGroupDialogQmlTests(unittest.TestCase):
         dialog = CREATE_GROUP_DIALOG.read_text(encoding="utf-8")
         shell = CHAT_SHELL_PAGE.read_text(encoding="utf-8")
         shell_content = CHAT_SHELL_CONTENT.read_text(encoding="utf-8")
+        modal_layer = CHAT_MODAL_LAYER.read_text(encoding="utf-8")
 
         self.assertIn("property var friendModel", dialog)
         self.assertIn("ListView", dialog)
         self.assertIn("model: root.friendModel", dialog)
         self.assertIn("selectedUserIds", dialog)
         self.assertRegex(dialog, re.compile(r"selectedUserIds\[[^\]]*userId[^\]]*\]"))
-        self.assertIn("friendModel: controller.contactListModel", shell + shell_content)
+        self.assertIn("friendModel: controller.contactListModel", shell + shell_content + modal_layer)
 
     def test_create_group_dialog_keeps_manual_user_id_fallback(self):
         dialog = CREATE_GROUP_DIALOG.read_text(encoding="utf-8")
@@ -49,6 +52,7 @@ class CreateGroupDialogQmlTests(unittest.TestCase):
         left_header = CHAT_LEFT_HEADER.read_text(encoding="utf-8")
         join_group_popup = CHAT_JOIN_GROUP_POPUP.read_text(encoding="utf-8")
         shell = CHAT_SHELL_PAGE.read_text(encoding="utf-8")
+        normal_face = CHAT_NORMAL_FACE.read_text(encoding="utf-8")
 
         self.assertIn("signal applyJoinGroupRequested(string groupCode, string reason)", left_panel)
         self.assertIn("ChatJoinGroupPopup", left_panel)
@@ -61,7 +65,7 @@ class CreateGroupDialogQmlTests(unittest.TestCase):
         self.assertIn("root.applyJoinGroupRequested(groupCode, reason)", left_panel)
         self.assertIn(
             "onApplyJoinGroupRequested: function(groupCode, reason) { controller.applyJoinGroup(groupCode, reason) }",
-            shell,
+            shell + normal_face,
         )
 
     def test_group_management_only_reviews_current_group_applications(self):
@@ -103,6 +107,7 @@ class CreateGroupDialogQmlTests(unittest.TestCase):
     def test_chat_page_initializes_groups_for_all_sessions(self):
         left_panel = CHAT_LEFT_PANEL.read_text(encoding="utf-8")
         shell = CHAT_SHELL_PAGE.read_text(encoding="utf-8")
+        normal_face = CHAT_NORMAL_FACE.read_text(encoding="utf-8")
 
         self.assertIn("function ensureCurrentSessionSource()", left_panel)
         self.assertIn("controller.ensureGroupsInitialized()", left_panel)
@@ -111,7 +116,7 @@ class CreateGroupDialogQmlTests(unittest.TestCase):
             re.compile(r"Component\.onCompleted:\s*\{[^}]*root\.ensureCurrentSessionSource\(\)", re.S),
         )
         self.assertIn("root.ensureCurrentSessionSource()", left_panel)
-        self.assertIn("controller.ensureGroupsInitialized()", shell)
+        self.assertIn("controller.ensureGroupsInitialized()", shell + normal_face)
 
     def test_group_header_actions_wrap_and_group_info_uses_implicit_height(self):
         conversation = CHAT_CONVERSATION_PANE.read_text(encoding="utf-8")
@@ -163,7 +168,8 @@ class CreateGroupDialogQmlTests(unittest.TestCase):
         )
         shell = CHAT_SHELL_PAGE.read_text(encoding="utf-8")
         shell_content = CHAT_SHELL_CONTENT.read_text(encoding="utf-8")
-        shell_sources = shell + shell_content
+        normal_face = CHAT_NORMAL_FACE.read_text(encoding="utf-8")
+        shell_sources = shell + shell_content + normal_face
 
         self.assertIn("property bool currentDialogPinned", panel)
         self.assertIn("property bool currentDialogMuted", panel)

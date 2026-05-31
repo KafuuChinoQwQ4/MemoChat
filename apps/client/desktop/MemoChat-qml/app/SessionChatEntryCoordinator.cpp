@@ -1,5 +1,6 @@
 #include "AppCoordinators.h"
 
+#include "AppChatConnectionCoordinator.h"
 #include "AppController.h"
 #include "IconPathUtils.h"
 #include "usermgr.h"
@@ -41,8 +42,8 @@ void SessionChatEntryCoordinator::onSwitchToChat()
             << "server:" << _app._chat_endpoint_state.serverName;
     _app._chat_recovery_state.ignoreNextLoginDisconnect = false;
     _app._chat_login_timeout_timer.stop();
-    _app.resetReconnectState();
-    _app.resetHeartbeatTracking();
+    _app._chat_connection_coordinator->resetReconnectState();
+    _app._chat_connection_coordinator->resetHeartbeatTracking();
     _app._chat_recovery_state.lastHeartbeatAckMs = QDateTime::currentMSecsSinceEpoch();
     _app.setPage(AppController::ChatPage);
     _app.setBusy(false);
@@ -146,7 +147,7 @@ void SessionChatEntryCoordinator::runPostLoginBootstrap()
                            _app.bootstrapApplies();
                            _app.requestRelationBootstrap();
                            _app._heartbeat_timer.start(kHeartbeatIntervalMs);
-                           _app.onHeartbeatTimeout();
+                           _app._chat_connection_coordinator->onHeartbeatTimeout();
                        });
 
     QTimer::singleShot(kPostLoginBootstrapDelayMs,
