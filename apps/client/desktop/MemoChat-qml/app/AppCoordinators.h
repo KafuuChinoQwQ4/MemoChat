@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QJsonObject>
 #include <QString>
 #include <QVariantList>
 #include <memory>
@@ -28,6 +29,11 @@ public:
     void onResetHttpFinished(ReqId id, QString res, ErrorCodes err);
 
 private:
+    bool checkEmailValid(const QString& email);
+    bool checkPasswordValid(const QString& password);
+    bool checkUserValid(const QString& user);
+    bool checkVerifyCodeValid(const QString& code);
+
     AppController& _app;
 };
 
@@ -122,8 +128,17 @@ public:
     void acceptIncomingCall();
     void rejectIncomingCall();
     void endCurrentCall();
+    void finalizeEndedCall(const QString& statusText);
     void toggleCallMuted();
     void toggleCallCamera();
+    void onCallHttpFinished(ReqId id, QString res, ErrorCodes err);
+    void onCallEvent(QJsonObject payload);
+    void onLivekitRoomJoined();
+    void onLivekitRemoteTrackReady();
+    void onLivekitRoomDisconnected(const QString& reason, bool recoverable);
+    void onLivekitPermissionError(const QString& deviceType, const QString& message);
+    void onLivekitMediaError(const QString& message);
+    void onLivekitReconnecting(const QString& message);
 
 private:
     bool ensureCallTargetFromCurrentChat();

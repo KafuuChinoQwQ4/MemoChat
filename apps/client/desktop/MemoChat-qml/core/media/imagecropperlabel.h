@@ -7,34 +7,11 @@
 #ifndef IMAGECROPPERLABEL_H
 #define IMAGECROPPERLABEL_H
 
+#include "ImageCropperTypes.h"
+
 #include <QLabel>
 #include <QPixmap>
 #include <QPen>
-
-enum class CropperShape
-{
-    UNDEFINED = 0,
-    RECT = 1,
-    SQUARE = 2,
-    FIXED_RECT = 3,
-    ELLIPSE = 4,
-    CIRCLE = 5,
-    FIXED_ELLIPSE = 6
-};
-
-enum class OutputShape
-{
-    RECT = 0,
-    ELLIPSE = 1
-};
-
-enum class SizeType
-{
-    fixedSize = 0,
-    fitToMaxWidth = 1,
-    fitToMaxHeight = 2,
-    fitToMaxWidthHeight = 3,
-};
 
 class ImageCropperLabel : public QLabel
 {

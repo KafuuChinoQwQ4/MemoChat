@@ -1,5 +1,4 @@
 import QtQuick 2.15
-import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "../components"
 import "R18ShellRuntime.js" as R18ShellRuntime
@@ -314,85 +313,45 @@ Item {
                     anchors.fill: parent
                     currentIndex: root.viewMode
 
-                    Item {
-                        ColumnLayout {
-                            anchors.fill: parent
-                            spacing: 12
-
-                            TextField {
-                                id: homeSearchField
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 56
-                                placeholderText: "搜索"
-                                placeholderTextColor: root.placeholderColor
-                                color: root.textPrimaryColor
-                                text: root.keyword
-                                selectByMouse: true
-                                leftPadding: 50
-                                rightPadding: 18
-                                font.pixelSize: 16
-                                background: Rectangle {
-                                    radius: 28
-                                    color: root.homeFieldFillColor
-                                    border.color: root.homeFieldStrokeColor
+                    R18HomePane {
+                        keyword: root.keyword
+                        historyCount: root.modelCount(root.r18Controller ? root.r18Controller.historyModel : null)
+                        localCount: 0
+                        followCount: root.modelCount(root.r18Controller ? root.r18Controller.comicModel : null)
+                        sourceCount: root.modelCount(root.r18Controller ? root.r18Controller.sourceModel : null)
+                        favoriteCount: root.r18Controller && root.r18Controller.currentFavorite ? 1 : 0
+                        homeFieldFillColor: root.homeFieldFillColor
+                        homeFieldStrokeColor: root.homeFieldStrokeColor
+                        homeCardFillColor: root.homeCardFillColor
+                        homeCardStrokeColor: root.homeCardStrokeColor
+                        homeBadgeFillColor: root.homeBadgeFillColor
+                        homeBadgeTextColor: root.homeBadgeTextColor
+                        homeArrowColor: root.homeArrowColor
+                        homeImportButtonColor: root.homeImportButtonColor
+                        homeImportButtonHoverColor: root.homeImportButtonHoverColor
+                        homeImportButtonPressedColor: root.homeImportButtonPressedColor
+                        textPrimaryColor: root.textPrimaryColor
+                        textMutedColor: root.textMutedColor
+                        placeholderColor: root.placeholderColor
+                        onKeywordEdited: function(keyword) { root.keyword = keyword }
+                        onSearchRequested: function(keyword) {
+                            root.keyword = keyword
+                            root.searchNow()
+                        }
+                        onEntryActivated: function(action, modeValue) {
+                            if (action === "import") {
+                                root.importChosenSourcePackage()
+                            } else if (action === "favorite") {
+                                if (root.currentComicId().length > 0) {
+                                    root.viewMode = 2
+                                } else {
+                                    root.activateMode(1)
                                 }
-                                onTextEdited: root.keyword = text
-                                onAccepted: root.searchNow()
-
-                                Text {
-                                    anchors.left: parent.left
-                                    anchors.leftMargin: 18
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: "⌕"
-                                    color: root.textMutedColor
-                                    font.pixelSize: 24
-                                }
-                            }
-
-                            ListView {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                clip: true
-                                spacing: 12
-                                model: [
-                                    { "title": "历史", "count": root.modelCount(root.r18Controller ? root.r18Controller.historyModel : null), "mode": 5, "action": "mode" },
-                                    { "title": "本地", "count": 0, "mode": 4, "action": "import" },
-                                    { "title": "追更", "count": root.modelCount(root.r18Controller ? root.r18Controller.comicModel : null), "mode": 1, "action": "mode" },
-                                    { "title": "漫画源", "count": root.modelCount(root.r18Controller ? root.r18Controller.sourceModel : null), "mode": 4, "action": "mode" },
-                                    { "title": "图片收藏", "count": root.r18Controller && root.r18Controller.currentFavorite ? 1 : 0, "mode": 1, "action": "favorite" }
-                                ]
-                                ScrollBar.vertical: GlassScrollBar {}
-                                delegate: R18HomeCard {
-                                    title: modelData.title
-                                    count: modelData.count
-                                    modeValue: modelData.mode
-                                    entryAction: modelData.action
-                                    textPrimaryColor: root.textPrimaryColor
-                                    cardFillColor: root.homeCardFillColor
-                                    cardStrokeColor: root.homeCardStrokeColor
-                                    badgeFillColor: root.homeBadgeFillColor
-                                    badgeTextColor: root.homeBadgeTextColor
-                                    arrowColor: root.homeArrowColor
-                                    importButtonColor: root.homeImportButtonColor
-                                    importButtonHoverColor: root.homeImportButtonHoverColor
-                                    importButtonPressedColor: root.homeImportButtonPressedColor
-                                    onActivated: function(action, modeValue) {
-                                        if (action === "import") {
-                                            root.importChosenSourcePackage()
-                                        } else if (action === "favorite") {
-                                            if (root.currentComicId().length > 0) {
-                                                root.viewMode = 2
-                                            } else {
-                                                root.activateMode(1)
-                                            }
-                                        } else {
-                                            root.activateMode(modeValue)
-                                        }
-                                    }
-                                    onImportRequested: root.importChosenSourcePackage()
-                                }
+                            } else {
+                                root.activateMode(modeValue)
                             }
                         }
+                        onImportRequested: root.importChosenSourcePackage()
                     }
 
                     R18SearchPane {

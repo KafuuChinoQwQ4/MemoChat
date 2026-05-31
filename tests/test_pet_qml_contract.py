@@ -33,7 +33,11 @@ LIVE2D_CHARACTER_PREVIEW_PANEL_QML = (
 )
 LIVE2D_RESOURCE_VOICE_PANEL_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DResourceVoicePanel.qml"
 LIVE2D_BEHAVIOR_MEMORY_PANEL_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DBehaviorMemoryPanel.qml"
+LIVE2D_CHARACTER_BEHAVIOR_COLUMN_QML = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DCharacterBehaviorColumn.qml"
+)
 CHAT_SHELL_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/ChatShellPage.qml"
+CHAT_NORMAL_FACE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatNormalFace.qml"
 SHARED_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
 PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetController.h"
@@ -51,7 +55,14 @@ PET_CONTROLLER_VISION_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/featur
 PET_CONTROLLER_WINDOWS_BRIDGE_CPP = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/PetControllerWindowsBridge.cpp"
 )
-CLIENT_CMAKE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/CMakeLists.txt"
+CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
+CLIENT_CMAKE = CLIENT_DIR / "CMakeLists.txt"
+CLIENT_CMAKE_FRAGMENTS = (
+    CLIENT_DIR / "cmake/AppSources.cmake",
+    CLIENT_DIR / "cmake/FeatureSources.cmake",
+    CLIENT_DIR / "cmake/SharedSources.cmake",
+    CLIENT_DIR / "cmake/QmlResources.cmake",
+)
 QML_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml.qrc"
 PET_CAMERA_CAPTURE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetCameraCapture.qml"
 MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/main.cpp"
@@ -64,6 +75,10 @@ PET_CONTROLLER_VOICE_TRAINING_CPP = (
 
 def read_texts(*paths):
     return "\n".join(path.read_text(encoding="utf-8") for path in paths)
+
+
+def client_cmake_text() -> str:
+    return read_texts(CLIENT_CMAKE, *(fragment for fragment in CLIENT_CMAKE_FRAGMENTS if fragment.exists()))
 
 
 def compact_ws(source: str) -> str:
@@ -154,7 +169,7 @@ class PetQmlContractTests(unittest.TestCase):
 
     def test_pet_audio_player_resource_declares_qt_multimedia(self):
         qrc = QML_QRC.read_text(encoding="utf-8")
-        cmake = CLIENT_CMAKE.read_text(encoding="utf-8")
+        cmake = client_cmake_text()
         audio_player = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetAudioPlayer.qml").read_text(
             encoding="utf-8"
         )
@@ -219,7 +234,7 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("configurePetRequest(request);", source)
 
     def test_pet_controller_large_concerns_stay_split_from_main_controller_file(self):
-        cmake = CLIENT_CMAKE.read_text(encoding="utf-8")
+        cmake = client_cmake_text()
         source = PET_CONTROLLER_CPP.read_text(encoding="utf-8")
 
         for token in (
@@ -245,7 +260,7 @@ class PetQmlContractTests(unittest.TestCase):
             self.assertNotIn(token, source)
 
     def test_pet_vision_frame_encoding_is_split_from_controller_state(self):
-        cmake = CLIENT_CMAKE.read_text(encoding="utf-8")
+        cmake = client_cmake_text()
         vision = PET_CONTROLLER_VISION_CPP.read_text(encoding="utf-8")
         encoder = read_texts(PET_CONTROLLER_VISION_ENCODER_H, PET_CONTROLLER_VISION_ENCODER_CPP)
 
@@ -532,7 +547,7 @@ class PetQmlContractTests(unittest.TestCase):
 
     def test_pet_camera_capture_upload_contract_uses_qt_multimedia(self):
         qrc = QML_QRC.read_text(encoding="utf-8")
-        cmake = CLIENT_CMAKE.read_text(encoding="utf-8")
+        cmake = client_cmake_text()
         header = PET_CONTROLLER_H.read_text(encoding="utf-8")
         source = read_texts(
             PET_CONTROLLER_PRIVATE_H,
@@ -907,10 +922,11 @@ class PetQmlContractTests(unittest.TestCase):
         runtime = LIVE2D_CHARACTER_RUNTIME_JS.read_text(encoding="utf-8")
         pane_runtime = pane + runtime
         shell = CHAT_SHELL_PAGE_QML.read_text(encoding="utf-8")
+        normal_face = CHAT_NORMAL_FACE_QML.read_text(encoding="utf-8")
         shell_content = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/ChatShellContent.qml").read_text(
             encoding="utf-8"
         )
-        shell_sources = shell + shell_content
+        shell_sources = shell + normal_face + shell_content
 
         self.assertRegex(pane, r"\bsignal\s+petPreviewRequested\s*\(\s*var\s+petAssetSettings\s*\)")
         self.assertRegex(pane, r"\bfunction\s+requestPetPreview\s*\(")
@@ -942,11 +958,12 @@ class PetQmlContractTests(unittest.TestCase):
         runtime = LIVE2D_CHARACTER_RUNTIME_JS.read_text(encoding="utf-8")
         pane_runtime = pane + runtime
         behavior_panel = LIVE2D_BEHAVIOR_MEMORY_PANEL_QML.read_text(encoding="utf-8")
+        behavior_column = LIVE2D_CHARACTER_BEHAVIOR_COLUMN_QML.read_text(encoding="utf-8")
 
         self.assertRegex(pane, r"\bproperty\s+bool\s+autoStartPetOnClientStart\s*:\s*false\b")
         self.assertIn("autoStartPetOnClientStart = settings.autoStartPetOnClientStart", pane_runtime)
         self.assertIn("settings.autoStartPetOnClientStart = source.autoStartPetOnClientStart", pane_runtime)
-        self.assertIn("Live2DBehaviorMemoryPanel", pane)
+        self.assertIn("Live2DBehaviorMemoryPanel", pane + behavior_column)
         self.assertIn("autoStartPetOnClientStart: root.autoStartPetOnClientStart", pane)
         self.assertIn(
             "onAutoStartPetOnClientStartEdited: function(checked) { root.autoStartPetOnClientStart = checked }", pane
@@ -1040,6 +1057,7 @@ class PetQmlContractTests(unittest.TestCase):
         header = PET_CONTROLLER_H.read_text(encoding="utf-8")
         source = read_texts(PET_CONTROLLER_CPP, PET_CONTROLLER_NETWORK_CPP, PET_CONTROLLER_VOICE_TRAINING_CPP)
         shell = CHAT_SHELL_PAGE_QML.read_text(encoding="utf-8")
+        normal_face = CHAT_NORMAL_FACE_QML.read_text(encoding="utf-8")
         shell_content = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/ChatShellContent.qml").read_text(
             encoding="utf-8"
         )
@@ -1070,7 +1088,7 @@ class PetQmlContractTests(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
-        self.assertIn("petController: controller.petController", shell + shell_content)
+        self.assertIn("petController: controller.petController", shell + normal_face + shell_content)
 
 
 if __name__ == "__main__":

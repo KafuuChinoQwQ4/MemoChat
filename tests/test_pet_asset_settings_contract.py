@@ -13,7 +13,14 @@ PET_AVATAR_RESOLVER_H = CLIENT_DIR / "features/pet/PetAvatarResolver.h"
 PET_AVATAR_RESOLVER_CPP = CLIENT_DIR / "features/pet/PetAvatarResolver.cpp"
 PET_ASSET_SETTINGS_PERSISTENCE_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsPersistence.cpp"
 PET_ASSET_SETTINGS_STATE_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsState.cpp"
+PET_ASSET_SETTINGS_VOICE_TRAINING_CPP = CLIENT_DIR / "features/pet/PetAssetSettingsVoiceTraining.cpp"
 CLIENT_CMAKE = CLIENT_DIR / "CMakeLists.txt"
+CLIENT_CMAKE_FRAGMENTS = (
+    CLIENT_DIR / "cmake/AppSources.cmake",
+    CLIENT_DIR / "cmake/FeatureSources.cmake",
+    CLIENT_DIR / "cmake/SharedSources.cmake",
+    CLIENT_DIR / "cmake/QmlResources.cmake",
+)
 MAIN_CPP = CLIENT_DIR / "app/main.cpp"
 MAIN_QML_TYPE_REGISTRY_CPP = CLIENT_DIR / "app/MainQmlTypeRegistry.cpp"
 CHARACTER_PANE_QML = CLIENT_DIR / "qml/pet/Live2DCharacterPane.qml"
@@ -123,18 +130,24 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def read_texts(*paths: Path) -> str:
+    return "\n".join(read(path) for path in paths)
+
+
+def client_cmake_text() -> str:
+    return read_texts(CLIENT_CMAKE, *(fragment for fragment in CLIENT_CMAKE_FRAGMENTS if fragment.exists()))
+
+
 def pet_asset_settings_source() -> str:
-    return "\n".join(
-        read(path)
-        for path in (
-            PET_ASSET_SETTINGS_CPP,
-            PET_ASSET_SETTINGS_PRIVATE_H,
-            PET_ASSET_SETTINGS_AVATAR_CPP,
-            PET_AVATAR_RESOLVER_H,
-            PET_AVATAR_RESOLVER_CPP,
-            PET_ASSET_SETTINGS_PERSISTENCE_CPP,
-            PET_ASSET_SETTINGS_STATE_CPP,
-        )
+    return read_texts(
+        PET_ASSET_SETTINGS_CPP,
+        PET_ASSET_SETTINGS_PRIVATE_H,
+        PET_ASSET_SETTINGS_AVATAR_CPP,
+        PET_AVATAR_RESOLVER_H,
+        PET_AVATAR_RESOLVER_CPP,
+        PET_ASSET_SETTINGS_PERSISTENCE_CPP,
+        PET_ASSET_SETTINGS_STATE_CPP,
+        PET_ASSET_SETTINGS_VOICE_TRAINING_CPP,
     )
 
 
@@ -173,13 +186,15 @@ class PetAssetSettingsContractTests(unittest.TestCase):
         self.assertFileExists(PET_AVATAR_RESOLVER_CPP)
         self.assertFileExists(PET_ASSET_SETTINGS_PERSISTENCE_CPP)
         self.assertFileExists(PET_ASSET_SETTINGS_STATE_CPP)
+        self.assertFileExists(PET_ASSET_SETTINGS_VOICE_TRAINING_CPP)
 
-        cmake = read(CLIENT_CMAKE)
+        cmake = client_cmake_text()
         self.assertRegex(cmake, r"\bPetAssetSettings\.cpp\b")
         self.assertRegex(cmake, r"\bPetAssetSettingsAvatar\.cpp\b")
         self.assertRegex(cmake, r"\bPetAvatarResolver\.cpp\b")
         self.assertRegex(cmake, r"\bPetAssetSettingsPersistence\.cpp\b")
         self.assertRegex(cmake, r"\bPetAssetSettingsState\.cpp\b")
+        self.assertRegex(cmake, r"\bPetAssetSettingsVoiceTraining\.cpp\b")
         self.assertRegex(cmake, r"\bPetAssetSettings\.h\b")
         self.assertRegex(cmake, r"\bPetAssetSettingsPrivate\.h\b")
         self.assertRegex(cmake, r"\bPetAvatarResolver\.h\b")
@@ -190,6 +205,7 @@ class PetAssetSettingsContractTests(unittest.TestCase):
         avatar_resolver = read(PET_AVATAR_RESOLVER_CPP)
         persistence = read(PET_ASSET_SETTINGS_PERSISTENCE_CPP)
         state = read(PET_ASSET_SETTINGS_STATE_CPP)
+        voice_training = read(PET_ASSET_SETTINGS_VOICE_TRAINING_CPP)
 
         self.assertIn("QString PetAssetSettings::resolveLive2DAvatarUrl", avatar)
         self.assertIn("QString resolveLive2DAvatarCacheUrl", avatar_resolver)
@@ -197,10 +213,13 @@ class PetAssetSettingsContractTests(unittest.TestCase):
         self.assertIn("QVariantMap PetAssetSettings::toVariantMap() const", persistence)
         self.assertIn("void PetAssetSettings::applyDefaults", state)
         self.assertIn("void PetAssetSettings::setCharacterName", state)
+        self.assertIn("void PetAssetSettings::setVoiceTrainingConsent", voice_training)
+        self.assertIn("void PetAssetSettings::normalizeVoiceTrainingState", voice_training)
         self.assertNotIn("resolveLive2DAvatarUrl", main)
         self.assertNotIn("modelTexturePaths", avatar)
         self.assertNotIn("packageImageCandidates", avatar)
         self.assertNotIn("QVariantMap PetAssetSettings::toVariantMap", main)
+        self.assertNotIn("normalizeVoiceTrainingState", state)
         self.assertLess(len(main.splitlines()), 120)
 
     def test_pet_asset_settings_qobject_contract_is_exposed(self):
@@ -329,7 +348,7 @@ class PetAssetSettingsContractTests(unittest.TestCase):
     def test_pet_asset_settings_defaults_to_user_requested_src_character_assets(self):
         source = pet_asset_settings_source()
         qml = read(CHARACTER_PANE_QML)
-        cmake = read(CLIENT_CMAKE)
+        cmake = client_cmake_text()
 
         for token in (
             "MEMOCHAT_QML_SOURCE_DIR",
@@ -352,7 +371,7 @@ class PetAssetSettingsContractTests(unittest.TestCase):
     def test_pet_asset_settings_does_not_bundle_licensed_live2d_resources(self):
         checked_sources = {
             "qml.qrc": read(QML_QRC),
-            "CMakeLists.txt": read(CLIENT_CMAKE),
+            "CMakeLists.txt": client_cmake_text(),
         }
 
         for label, text in checked_sources.items():

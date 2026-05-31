@@ -1,11 +1,11 @@
 #include "ChatMessageDispatcher.h"
 
-#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonValue>
 
+#include "ChatMessageDispatcherGroupHistory.h"
+#include "ChatMessageDispatcherGroupPayload.h"
 #include "usermgr.h"
 
 bool ChatMessageDispatcher::parseGroupResponse(ReqId reqId,
@@ -30,19 +30,6 @@ bool ChatMessageDispatcher::parseGroupResponse(ReqId reqId,
         emit sig_group_rsp(reqId, err, jsonObj);
     }
     return err == ErrorCodes::SUCCESS;
-}
-
-qint64 ChatMessageDispatcher::normalizeGroupCreatedAt(qint64 createdAt)
-{
-    if (createdAt <= 0)
-    {
-        return QDateTime::currentMSecsSinceEpoch();
-    }
-    if (createdAt < 100000000000LL)
-    {
-        return createdAt * 1000;
-    }
-    return createdAt;
 }
 
 void ChatMessageDispatcher::registerGroupHandlers()
@@ -114,83 +101,34 @@ void ChatMessageDispatcher::registerGroupHandlers()
                          parseGroupResponse(id, data, jsonObj);
                      });
 
-    _handlers.insert(
-        ID_GROUP_HISTORY_RSP,
-        [this](ReqId id, int len, QByteArray data)
-        {
-            Q_UNUSED(len);
-            QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
-            if (jsonDoc.isNull() || !jsonDoc.isObject())
-            {
-                emit sig_group_rsp(id, ErrorCodes::ERR_JSON, QJsonObject());
-                return;
-            }
-            const QJsonObject jsonObj = jsonDoc.object();
-            const int err = jsonObj.value("error").toInt(ErrorCodes::ERR_JSON);
-            if (err != ErrorCodes::SUCCESS)
-            {
-                emit sig_group_rsp(id, err, jsonObj);
-                return;
-            }
+    _handlers.insert(ID_GROUP_HISTORY_RSP,
+                     [this](ReqId id, int len, QByteArray data)
+                     {
+                         Q_UNUSED(len);
+                         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+                         if (jsonDoc.isNull() || !jsonDoc.isObject())
+                         {
+                             emit sig_group_rsp(id, ErrorCodes::ERR_JSON, QJsonObject());
+                             return;
+                         }
+                         const QJsonObject jsonObj = jsonDoc.object();
+                         const int err = jsonObj.value("error").toInt(ErrorCodes::ERR_JSON);
+                         if (err != ErrorCodes::SUCCESS)
+                         {
+                             emit sig_group_rsp(id, err, jsonObj);
+                             return;
+                         }
 
-            const qint64 groupId = jsonObj.value("groupid").toVariant().toLongLong();
-            const QJsonArray messages = jsonObj.value("messages").toArray();
-            for (int i = messages.size() - 1; i >= 0; --i)
-            {
-                const QJsonObject one = messages.at(i).toObject();
-                const QString fromName = one.value("from_nick").toString(one.value("from_name").toString());
-                const QString fromIcon = one.value("from_icon").toString();
-                const qint64 createdAt = normalizeGroupCreatedAt(one.value("created_at").toVariant().toLongLong());
-                const qint64 serverMsgId = one.value("server_msg_id").toVariant().toLongLong();
-                const qint64 groupSeq = one.value("group_seq").toVariant().toLongLong();
-                const qint64 replyToServerMsgId = one.value("reply_to_server_msg_id").toVariant().toLongLong();
-                QString forwardMetaJson;
-                const QJsonValue forwardMetaValue = one.value("forward_meta");
-                if (forwardMetaValue.isObject())
-                {
-                    forwardMetaJson =
-                        QString::fromUtf8(QJsonDocument(forwardMetaValue.toObject()).toJson(QJsonDocument::Compact));
-                }
-                else if (forwardMetaValue.isArray())
-                {
-                    forwardMetaJson =
-                        QString::fromUtf8(QJsonDocument(forwardMetaValue.toArray()).toJson(QJsonDocument::Compact));
-                }
-                else if (forwardMetaValue.isString())
-                {
-                    forwardMetaJson = forwardMetaValue.toString();
-                }
-                const qint64 editedAtMs = one.value("edited_at_ms").toVariant().toLongLong();
-                const qint64 deletedAtMs = one.value("deleted_at_ms").toVariant().toLongLong();
-                QString state = QStringLiteral("sent");
-                if (deletedAtMs > 0 ||
-                    one.value("msgtype").toString() == QStringLiteral("revoke") || one.value("content").toString() ==
-                                                                                       QStringLiteral("[消息已撤回]"))
-                {
-                    state = QStringLiteral("deleted");
-                }
-                else if (editedAtMs > 0)
-                {
-                    state = QStringLiteral("edited");
-                }
-                auto msg = std::make_shared<TextChatData>(one.value("msgid").toString(),
-                                                          one.value("content").toString(),
-                                                          one.value("fromuid").toInt(),
-                                                          0,
-                                                          fromName,
-                                                          createdAt,
-                                                          fromIcon,
-                                                          state,
-                                                          serverMsgId,
-                                                          groupSeq,
-                                                          replyToServerMsgId,
-                                                          forwardMetaJson,
-                                                          editedAtMs,
-                                                          deletedAtMs);
-                UserMgr::GetInstance()->UpsertGroupChatMsg(groupId, msg);
-            }
-            emit sig_group_rsp(id, err, jsonObj);
-        });
+                         const qint64 groupId = jsonObj.value("groupid").toVariant().toLongLong();
+                         const QJsonArray messages = jsonObj.value("messages").toArray();
+                         for (int i = messages.size() - 1; i >= 0; --i)
+                         {
+                             const QJsonObject one = messages.at(i).toObject();
+                             const auto msg = ChatMessageDispatcherGroupHistory::buildHistoryTextMessage(one);
+                             UserMgr::GetInstance()->UpsertGroupChatMsg(groupId, msg);
+                         }
+                         emit sig_group_rsp(id, err, jsonObj);
+                     });
 
     _handlers.insert(ID_UPDATE_GROUP_ANNOUNCEMENT_RSP,
                      [this](ReqId id, int len, QByteArray data)
@@ -323,61 +261,28 @@ void ChatMessageDispatcher::registerGroupHandlers()
                          emit sig_group_member_changed(jsonObj);
                      });
 
-    _handlers.insert(
-        ID_NOTIFY_GROUP_CHAT_MSG_REQ,
-        [this](ReqId id, int len, QByteArray data)
-        {
-            Q_UNUSED(id);
-            Q_UNUSED(len);
-            QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
-            if (jsonDoc.isNull() || !jsonDoc.isObject())
-            {
-                return;
-            }
-            const QJsonObject jsonObj = jsonDoc.object();
-            if (jsonObj.value("error").toInt(ErrorCodes::ERR_JSON) != ErrorCodes::SUCCESS)
-            {
-                return;
-            }
-            const qint64 groupId = jsonObj.value("groupid").toVariant().toLongLong();
-            const int fromUid = jsonObj.value("fromuid").toInt();
-            QJsonObject msgObj = jsonObj.value("msg").toObject();
-            const qint64 topCreatedAt = normalizeGroupCreatedAt(jsonObj.value("created_at").toVariant().toLongLong());
-            const qint64 msgCreatedAt = msgObj.value("created_at").toVariant().toLongLong();
-            msgObj["created_at"] = normalizeGroupCreatedAt(msgCreatedAt <= 0 ? topCreatedAt : msgCreatedAt);
-            const qint64 topServerMsgId = jsonObj.value("server_msg_id").toVariant().toLongLong();
-            if (!msgObj.contains("server_msg_id") || msgObj.value("server_msg_id").toVariant().toLongLong() <= 0)
-            {
-                msgObj["server_msg_id"] = topServerMsgId;
-            }
-            const qint64 topGroupSeq = jsonObj.value("group_seq").toVariant().toLongLong();
-            if (!msgObj.contains("group_seq") || msgObj.value("group_seq").toVariant().toLongLong() <= 0)
-            {
-                msgObj["group_seq"] = topGroupSeq;
-            }
-            if (!msgObj.contains("reply_to_server_msg_id"))
-            {
-                const qint64 topReplyToServerMsgId = jsonObj.value("reply_to_server_msg_id").toVariant().toLongLong();
-                if (topReplyToServerMsgId > 0)
-                {
-                    msgObj["reply_to_server_msg_id"] = topReplyToServerMsgId;
-                }
-            }
-            if (!msgObj.contains("forward_meta") && jsonObj.contains("forward_meta"))
-            {
-                msgObj["forward_meta"] = jsonObj.value("forward_meta");
-            }
-            if (!msgObj.contains("edited_at_ms") && jsonObj.contains("edited_at_ms"))
-            {
-                msgObj["edited_at_ms"] = jsonObj.value("edited_at_ms");
-            }
-            if (!msgObj.contains("deleted_at_ms") && jsonObj.contains("deleted_at_ms"))
-            {
-                msgObj["deleted_at_ms"] = jsonObj.value("deleted_at_ms");
-            }
-            const QString fromName = jsonObj.value("from_nick").toString(jsonObj.value("from_name").toString());
-            const QString fromIcon = jsonObj.value("from_icon").toString();
-            auto groupMsg = std::make_shared<GroupChatMsg>(groupId, fromUid, msgObj, fromName, fromIcon);
-            emit sig_group_chat_msg(groupMsg);
-        });
+    _handlers.insert(ID_NOTIFY_GROUP_CHAT_MSG_REQ,
+                     [this](ReqId id, int len, QByteArray data)
+                     {
+                         Q_UNUSED(id);
+                         Q_UNUSED(len);
+                         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+                         if (jsonDoc.isNull() || !jsonDoc.isObject())
+                         {
+                             return;
+                         }
+                         const QJsonObject jsonObj = jsonDoc.object();
+                         if (jsonObj.value("error").toInt(ErrorCodes::ERR_JSON) != ErrorCodes::SUCCESS)
+                         {
+                             return;
+                         }
+                         const qint64 groupId = jsonObj.value("groupid").toVariant().toLongLong();
+                         const int fromUid = jsonObj.value("fromuid").toInt();
+                         const QJsonObject msgObj = ChatMessageDispatcherGroupPayload::normalizedNotifyMessage(jsonObj);
+                         const QString fromName =
+                             jsonObj.value("from_nick").toString(jsonObj.value("from_name").toString());
+                         const QString fromIcon = jsonObj.value("from_icon").toString();
+                         auto groupMsg = std::make_shared<GroupChatMsg>(groupId, fromUid, msgObj, fromName, fromIcon);
+                         emit sig_group_chat_msg(groupMsg);
+                     });
 }

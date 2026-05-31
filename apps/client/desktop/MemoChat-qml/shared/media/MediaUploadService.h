@@ -1,22 +1,19 @@
 #ifndef MEDIAUPLOADSERVICE_H
 #define MEDIAUPLOADSERVICE_H
 
+#include "MediaUploadRequest.h"
+#include "MediaUploadResult.h"
+
 #include <QString>
 #include <functional>
-
-struct UploadedMediaInfo
-{
-    QString mediaKey;
-    QString remoteUrl;
-    QString fileName;
-    QString mimeType;
-    qint64 sizeBytes = 0;
-};
 
 class MediaUploadService
 {
 public:
     using UploadProgressCallback = std::function<void(int, const QString&)>;
+
+    static MediaUploadResult uploadLocalFile(const MediaUploadRequest& request,
+                                             const UploadProgressCallback& progress = UploadProgressCallback());
 
     static bool uploadLocalFile(const QString& localFileUrl,
                                 const QString& mediaType,

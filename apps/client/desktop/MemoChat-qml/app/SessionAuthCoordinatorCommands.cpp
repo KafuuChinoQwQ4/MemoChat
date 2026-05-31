@@ -5,9 +5,53 @@
 
 #include <QDateTime>
 
+bool SessionAuthCoordinator::checkEmailValid(const QString& email)
+{
+    QString errorText;
+    if (!_app._auth_controller.checkEmail(email, &errorText))
+    {
+        _app.setTip(errorText, true);
+        return false;
+    }
+    return true;
+}
+
+bool SessionAuthCoordinator::checkPasswordValid(const QString& password)
+{
+    QString errorText;
+    if (!_app._auth_controller.checkPassword(password, &errorText))
+    {
+        _app.setTip(errorText, true);
+        return false;
+    }
+    return true;
+}
+
+bool SessionAuthCoordinator::checkUserValid(const QString& user)
+{
+    QString errorText;
+    if (!_app._auth_controller.checkUser(user, &errorText))
+    {
+        _app.setTip(errorText, true);
+        return false;
+    }
+    return true;
+}
+
+bool SessionAuthCoordinator::checkVerifyCodeValid(const QString& code)
+{
+    QString errorText;
+    if (!_app._auth_controller.checkVerifyCode(code, &errorText))
+    {
+        _app.setTip(errorText, true);
+        return false;
+    }
+    return true;
+}
+
 void SessionAuthCoordinator::login(const QString& email, const QString& password)
 {
-    if (!_app.checkEmailValid(email) || !_app.checkPwdValid(password))
+    if (!checkEmailValid(email) || !checkPasswordValid(password))
     {
         return;
     }
@@ -33,7 +77,7 @@ void SessionAuthCoordinator::login(const QString& email, const QString& password
 
 void SessionAuthCoordinator::requestRegisterCode(const QString& email)
 {
-    if (!_app.checkEmailValid(email))
+    if (!checkEmailValid(email))
     {
         return;
     }
@@ -47,7 +91,7 @@ void SessionAuthCoordinator::registerUser(const QString& user,
                                           const QString& confirm,
                                           const QString& verifyCode)
 {
-    if (!_app.checkUserValid(user) || !_app.checkEmailValid(email) || !_app.checkPwdValid(password))
+    if (!checkUserValid(user) || !checkEmailValid(email) || !checkPasswordValid(password))
     {
         return;
     }
@@ -56,7 +100,7 @@ void SessionAuthCoordinator::registerUser(const QString& user,
         _app.setTip("密码和确认密码不匹配", true);
         return;
     }
-    if (!_app.checkVerifyCodeValid(verifyCode))
+    if (!checkVerifyCodeValid(verifyCode))
     {
         return;
     }
@@ -66,7 +110,7 @@ void SessionAuthCoordinator::registerUser(const QString& user,
 
 void SessionAuthCoordinator::requestResetCode(const QString& email)
 {
-    if (!_app.checkEmailValid(email))
+    if (!checkEmailValid(email))
     {
         return;
     }
@@ -79,8 +123,8 @@ void SessionAuthCoordinator::resetPassword(const QString& user,
                                            const QString& password,
                                            const QString& verifyCode)
 {
-    if (!_app.checkUserValid(user) || !_app.checkEmailValid(email) || !_app.checkPwdValid(password) ||
-        !_app.checkVerifyCodeValid(verifyCode))
+    if (!checkUserValid(user) || !checkEmailValid(email) || !checkPasswordValid(password) ||
+        !checkVerifyCodeValid(verifyCode))
     {
         return;
     }

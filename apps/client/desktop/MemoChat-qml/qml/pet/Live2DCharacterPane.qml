@@ -532,29 +532,18 @@ Rectangle {
                 width: Math.max(0, scrollArea.width - 28)
                 spacing: 12
 
-                Live2DCharacterPreviewPanel {
+                Live2DCharacterAssetColumn {
                     backdrop: root.backdrop
-                    accentColor: root.accentBlue
+                    petController: root.petController
+                    accentBlue: root.accentBlue
+                    accentGreen: root.accentGreen
+                    accentRose: root.accentRose
                     characterName: root.characterName
                     roleIdentity: root.roleIdentity
                     modelRoot: root.modelRoot
                     modelJson: root.modelJson
                     characterAvatarSource: root.characterAvatarSource
                     characterAvatarFallback: root.characterAvatarFallback
-                    textPrimaryColor: root.textPrimaryColor
-                    textMutedColor: root.textMutedColor
-                    onCharacterNameEdited: function(text) { root.characterName = text }
-                    onRoleIdentityEdited: function(text) { root.roleIdentity = text }
-                    onModelRootEdited: function(text) { root.modelRoot = text }
-                    onModelJsonEdited: function(text) { root.modelJson = text }
-                    onModelJsonPickRequested: root.pickModelJson()
-                    onModelRootPickRequested: root.pickModelRootDirectory()
-                }
-
-                Live2DResourceVoicePanel {
-                    backdrop: root.backdrop
-                    petController: root.petController
-                    accentColor: root.accentGreen
                     motionDirectory: root.motionDirectory
                     expressionDirectory: root.expressionDirectory
                     voiceDirectory: root.voiceDirectory
@@ -597,9 +586,12 @@ Rectangle {
                     textPrimaryColor: root.textPrimaryColor
                     textSecondaryColor: root.textSecondaryColor
                     textMutedColor: root.textMutedColor
-                    accentBlue: root.accentBlue
-                    accentGreen: root.accentGreen
-                    accentRose: root.accentRose
+                    onCharacterNameEdited: function(text) { root.characterName = text }
+                    onRoleIdentityEdited: function(text) { root.roleIdentity = text }
+                    onModelRootEdited: function(text) { root.modelRoot = text }
+                    onModelJsonEdited: function(text) { root.modelJson = text }
+                    onModelJsonPickRequested: root.pickModelJson()
+                    onModelRootPickRequested: root.pickModelRootDirectory()
                     onValidateRequested: root.runAssetValidation()
                     onMotionDirectoryEdited: function(text) { root.motionDirectory = text }
                     onMotionDirectoryPickRequested: root.pickMotionDirectory()
@@ -621,36 +613,22 @@ Rectangle {
                     onVoiceTrainingRefreshRequested: root.refreshVoiceTraining()
                 }
 
-                Live2DPersonaPanel {
+                Live2DCharacterBehaviorColumn {
                     backdrop: root.backdrop
-                    accentColor: root.accentRose
+                    toneCombo: toneCombo
+                    responseLengthCombo: responseLengthCombo
+                    languageCombo: languageCombo
+                    accentBlue: root.accentBlue
+                    accentGreen: root.accentGreen
+                    accentRose: root.accentRose
                     relationshipStyle: root.relationshipStyle
                     personalityTags: root.personalityTags
                     worldSetting: root.worldSetting
                     forbiddenRules: root.forbiddenRules
-                    onRelationshipStyleEdited: function(text) { root.relationshipStyle = text }
-                    onPersonalityTagsEdited: function(text) { root.personalityTags = text }
-                    onWorldSettingEdited: function(text) { root.worldSetting = text }
-                    onForbiddenRulesEdited: function(text) { root.forbiddenRules = text }
-                }
-
-                Live2DSpeechStylePanel {
-                    accentColor: root.accentBlue
-                    toneCombo: toneCombo
-                    responseLengthCombo: responseLengthCombo
-                    languageCombo: languageCombo
                     emotionLevel: root.emotionLevel
                     creativityLevel: root.creativityLevel
                     speechRules: root.speechRules
                     catchphrases: root.catchphrases
-                    onEmotionLevelEdited: function(value) { root.emotionLevel = value }
-                    onCreativityLevelEdited: function(value) { root.creativityLevel = value }
-                    onSpeechRulesEdited: function(text) { root.speechRules = text }
-                    onCatchphrasesEdited: function(text) { root.catchphrases = text }
-                }
-
-                Live2DBehaviorMemoryPanel {
-                    accentColor: root.accentGreen
                     autoStartPetOnClientStart: root.autoStartPetOnClientStart
                     idleMotionEnabled: root.idleMotionEnabled
                     gazeFollowEnabled: root.gazeFollowEnabled
@@ -658,6 +636,14 @@ Rectangle {
                     interruptEnabled: root.interruptEnabled
                     cameraEnabled: root.cameraEnabled
                     cloudVisionEnabled: root.cloudVisionEnabled
+                    onRelationshipStyleEdited: function(text) { root.relationshipStyle = text }
+                    onPersonalityTagsEdited: function(text) { root.personalityTags = text }
+                    onWorldSettingEdited: function(text) { root.worldSetting = text }
+                    onForbiddenRulesEdited: function(text) { root.forbiddenRules = text }
+                    onEmotionLevelEdited: function(value) { root.emotionLevel = value }
+                    onCreativityLevelEdited: function(value) { root.creativityLevel = value }
+                    onSpeechRulesEdited: function(text) { root.speechRules = text }
+                    onCatchphrasesEdited: function(text) { root.catchphrases = text }
                     onAutoStartPetOnClientStartEdited: function(checked) { root.autoStartPetOnClientStart = checked }
                     onIdleMotionEnabledEdited: function(checked) { root.idleMotionEnabled = checked }
                     onGazeFollowEnabledEdited: function(checked) { root.gazeFollowEnabled = checked }
@@ -667,8 +653,8 @@ Rectangle {
                     onCloudVisionEnabledEdited: function(checked) { root.cloudVisionEnabled = checked }
                 }
 
-                Live2DPromptPreviewPanel {
-                    accentColor: root.accentRose
+                Live2DCharacterPromptColumn {
+                    accentRose: root.accentRose
                     promptText: root.promptPreview()
                     textPrimaryColor: root.textPrimaryColor
                 }

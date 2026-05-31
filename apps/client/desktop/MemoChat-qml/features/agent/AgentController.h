@@ -6,12 +6,14 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QVariantList>
-#include <QNetworkReply>
-#include <QNetworkAccessManager>
+#include <QUrl>
 #include "global.h"
 #include "AgentMessageModel.h"
+#include "AgentRequestTracker.h"
 
 class ClientGateway;
+class AgentGameClient;
+class AgentStreamClient;
 
 class AgentController : public QObject
 {
@@ -215,18 +217,16 @@ signals:
 
 private slots:
     void onHttpFinish(ReqId id, const QString& res, ErrorCodes err, Modules mod);
-    void onStreamReadyRead();
-    void onStreamFinished();
 
 private:
     void handleChatRsp(ReqId id, const QString& res, ErrorCodes err, const QString& msgId);
-    void handleSmartRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType);
-    void handleSessionRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType);
+    void handleSmartRsp(ReqId id, const QString& res, ErrorCodes err, AgentRequestKind kind);
+    void handleSessionRsp(ReqId id, const QString& res, ErrorCodes err, AgentRequestKind kind);
     void handleHistoryRsp(ReqId id, const QString& res, ErrorCodes err);
     void handleModelListRsp(ReqId id, const QString& res, ErrorCodes err);
-    void handleKbRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType);
-    void handleMemoryRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType);
-    void handleAgentTaskRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType);
+    void handleKbRsp(ReqId id, const QString& res, ErrorCodes err, AgentRequestKind kind);
+    void handleMemoryRsp(ReqId id, const QString& res, ErrorCodes err, AgentRequestKind kind);
+    void handleAgentTaskRsp(ReqId id, const QString& res, ErrorCodes err, AgentRequestKind kind);
     void clearTrace();
     void updateTraceFromResponse(const QJsonObject& root);
     void setErrorState(const QString& error);
@@ -257,10 +257,13 @@ private:
     void sendGamePost(const QUrl& url, const QJsonObject& payload, const QString& op, const QString& statusText);
     void sendGameDelete(const QUrl& url, const QString& op, const QString& statusText);
     void handleGameResponse(const QString& op, const QJsonObject& root);
+    void handleGameNetworkError(const QString& op, const QString& errorText);
+    void handleGameFormatError(const QString& op);
     int currentUid() const;
 
     // SSE 流式处理辅助
-    void parseSSEChunk(const QString& line);
+    void handleStreamChunk(const QJsonObject& chunk);
+    void handleStreamFinished(int networkError, const QString& errorString);
     void finishStream(const QString& msgId, const QString& finalContent);
 
     ClientGateway* _gateway;
@@ -296,13 +299,10 @@ private:
     QString _agent_skill_mode = QStringLiteral("auto");
     QVariantList _trace_events;
     QVariantList _trace_observations;
-    QMap<ReqId, QString> _pending_requests;
+    AgentRequestTracker _pending_requests;
 
-    // SSE 流式相关
-    QNetworkAccessManager* _streamManager = nullptr;
-    QNetworkAccessManager* _gameNetwork = nullptr;
-    QNetworkReply* _currentStreamReply = nullptr;
-    QString _streamBuffer;
+    AgentStreamClient* _streamClient = nullptr;
+    AgentGameClient* _gameClient = nullptr;
     QString _currentStreamMsgId;
     QString _accumulatedContent;
     bool _streamFinalReceived = false;

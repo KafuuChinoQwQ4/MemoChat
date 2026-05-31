@@ -1,0 +1,61 @@
+set(MEMOCHAT_QML_SHARED_SOURCES
+    shared/gateway/ClientGateway.cpp
+    shared/gateway/TransportEndpointPolicy.cpp
+    shared/gateway/TransportSelector.cpp
+    shared/media/LocalFilePickerService.cpp
+    shared/media/LocalFilePickerServiceAttachments.cpp
+    shared/media/LocalFilePickerServiceAvatar.cpp
+    shared/media/MediaUploadService.cpp
+    shared/media/MediaUploadServiceHelpers.cpp
+    shared/media/MediaUploadServiceNetwork.cpp
+    shared/media/MediaUploadServiceUploads.cpp
+    shared/ui/WindowShapeService.cpp
+    live2d/Live2DAvatarOpenGLRenderer.cpp
+    live2d/Live2DAsset.cpp
+    live2d/Live2DAssetActionFiles.cpp
+    live2d/Live2DAssetModelFile.cpp
+    live2d/Live2DAssetOptionalFiles.cpp
+    live2d/Live2DAssetPaths.cpp
+    live2d/Live2DAssetRequiredFiles.cpp
+    live2d/Live2DAssetValidation.cpp
+    live2d/Live2DAssetVoiceFiles.cpp
+    live2d/Live2DModelAssetParser.cpp
+    live2d/Live2DMotionCatalog.cpp
+    live2d/Live2DCoreRenderer.cpp
+    live2d/Live2DOfficialOpenGLRenderer.cpp
+    live2d/Live2DPlaceholderRenderer.cpp
+    live2d/Live2DRenderItem.cpp
+    live2d/Live2DRenderPathResolver.cpp
+)
+
+set(MEMOCHAT_QML_SHARED_HEADERS
+    platform/windows/ClientWinCompat.h
+    shared/gateway/ClientGateway.h
+    shared/gateway/TransportEndpointPolicy.h
+    shared/gateway/TransportSelector.h
+    shared/media/LocalFilePickerService.h
+    shared/media/LocalFilePickerServicePrivate.h
+    shared/media/MediaUploadRequest.h
+    shared/media/MediaUploadResult.h
+    shared/media/MediaUploadService.h
+    shared/media/MediaUploadServicePrivate.h
+    shared/ui/WindowShapeService.h
+    shared/utils/IconPathUtils.h
+    live2d/Live2DAvatarOpenGLRenderer.h
+    live2d/Live2DAsset.h
+    live2d/Live2DAssetActionFiles.h
+    live2d/Live2DAssetModelFile.h
+    live2d/Live2DAssetOptionalFiles.h
+    live2d/Live2DAssetPaths.h
+    live2d/Live2DAssetRequiredFiles.h
+    live2d/Live2DAssetValidation.h
+    live2d/Live2DAssetVoiceFiles.h
+    live2d/Live2DModelAssetParser.h
+    live2d/Live2DMotionCatalog.h
+    live2d/Live2DRenderer.h
+    live2d/Live2DCoreRenderer.h
+    live2d/Live2DOfficialOpenGLRenderer.h
+    live2d/Live2DPlaceholderRenderer.h
+    live2d/Live2DRenderItem.h
+    live2d/Live2DRenderPathResolver.h
+)

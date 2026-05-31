@@ -3,10 +3,8 @@
 #include <QObject>
 #include <QJsonArray>
 #include <QJsonObject>
-#include <QNetworkAccessManager>
-#include <QUrlQuery>
-#include <functional>
 
+class OpsApiTransport;
 class QTimer;
 
 class OpsApiClient : public QObject
@@ -132,31 +130,13 @@ signals:
     void lastErrorChanged();
 
 private:
-    void getJson(const QString& path, const std::function<void(const QJsonObject&)>& onObject);
-    void postJson(const QString& path, const std::function<void(const QJsonObject&)>& onObject);
-    void postJsonWithQuery(const QString& path,
-                           const QUrlQuery& query,
-                           const std::function<void(const QJsonObject&)>& onObject);
-    QJsonObject buildLogFilterState(const QString& service,
-                                    const QString& instance,
-                                    const QString& level,
-                                    const QString& event,
-                                    const QString& traceId,
-                                    const QString& requestId,
-                                    const QString& keyword,
-                                    const QString& fromUtc,
-                                    const QString& toUtc,
-                                    int page,
-                                    int pageSize,
-                                    const QString& sort) const;
-    QUrlQuery buildLogQuery(const QJsonObject& filters, bool includePaging) const;
     void applyLogFilterState(const QJsonObject& filters);
     void refreshSelectedLogs();
     void setBusy(bool value);
     void setLastError(const QString& message);
 
     QString m_baseUrl;
-    QNetworkAccessManager m_network;
+    OpsApiTransport* m_transport = nullptr;
     QJsonObject m_overview;
     QJsonObject m_overviewKpis;
     QJsonArray m_runs;

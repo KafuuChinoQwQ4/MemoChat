@@ -110,7 +110,7 @@ void AgentController::uploadDocument(const QString& filePath)
     setKnowledgeBusy(true, QString("正在上传 %1...").arg(fileName));
 
     ReqId reqId = ID_AI_KB_UPLOAD;
-    _pending_requests[reqId] = "kb_upload";
+    _pending_requests.track(reqId, AgentRequestKind::KnowledgeUpload);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/kb/upload"),
                                         payload,
                                         reqId,
@@ -151,7 +151,7 @@ void AgentController::searchKnowledgeBase(const QString& query)
     payload["top_k"] = 5;
 
     ReqId reqId = ID_AI_KB_SEARCH;
-    _pending_requests[reqId] = "kb_search";
+    _pending_requests.track(reqId, AgentRequestKind::KnowledgeSearch);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/kb/search"),
                                         payload,
                                         reqId,
@@ -171,7 +171,7 @@ void AgentController::listKnowledgeBases()
     url.setQuery(query);
 
     ReqId reqId = ID_AI_KB_LIST;
-    _pending_requests[reqId] = "kb_list";
+    _pending_requests.track(reqId, AgentRequestKind::KnowledgeList);
 
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
@@ -188,7 +188,7 @@ void AgentController::deleteKnowledgeBase(const QString& kbId)
     payload["kb_id"] = kbId;
 
     ReqId reqId = ID_AI_KB_DELETE;
-    _pending_requests[reqId] = "kb_delete";
+    _pending_requests.track(reqId, AgentRequestKind::KnowledgeDelete);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/kb/delete"),
                                         payload,
                                         reqId,
@@ -196,14 +196,14 @@ void AgentController::deleteKnowledgeBase(const QString& kbId)
                                         aiHttpModule());
 }
 
-void AgentController::handleKbRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType)
+void AgentController::handleKbRsp(ReqId id, const QString& res, ErrorCodes err, AgentRequestKind kind)
 {
     Q_UNUSED(id);
     Q_UNUSED(err);
     QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8());
     QJsonObject root = doc.object();
 
-    if (reqType == "kb_upload")
+    if (kind == AgentRequestKind::KnowledgeUpload)
     {
         Q_UNUSED(root["chunks"].toInt());
         emit kbUploadProgress(100);
@@ -213,7 +213,7 @@ void AgentController::handleKbRsp(ReqId id, const QString& res, ErrorCodes err, 
         emit knowledgeBasesChanged();
         listKnowledgeBases();
     }
-    else if (reqType == "kb_list")
+    else if (kind == AgentRequestKind::KnowledgeList)
     {
         QJsonArray bases = root["knowledge_bases"].toArray();
         _knowledge_bases.clear();
@@ -228,7 +228,7 @@ void AgentController::handleKbRsp(ReqId id, const QString& res, ErrorCodes err, 
         clearKnowledgeError();
         emit knowledgeBasesChanged();
     }
-    else if (reqType == "kb_search")
+    else if (kind == AgentRequestKind::KnowledgeSearch)
     {
         QJsonArray chunks = root["chunks"].toArray();
         QString summary;
@@ -246,7 +246,7 @@ void AgentController::handleKbRsp(ReqId id, const QString& res, ErrorCodes err, 
         emit knowledgeSearchResultChanged();
         emit aiResponseReceived(summary);
     }
-    else if (reqType == "kb_delete")
+    else if (kind == AgentRequestKind::KnowledgeDelete)
     {
         clearErrorState();
         setKnowledgeBusy(false, "知识库已删除，正在刷新列表...");

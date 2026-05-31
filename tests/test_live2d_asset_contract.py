@@ -7,7 +7,17 @@ CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 
 LIVE2D_ASSET_H = CLIENT_DIR / "live2d/Live2DAsset.h"
 LIVE2D_ASSET_CPP = CLIENT_DIR / "live2d/Live2DAsset.cpp"
+LIVE2D_MODEL_ASSET_PARSER_H = CLIENT_DIR / "live2d/Live2DModelAssetParser.h"
+LIVE2D_MODEL_ASSET_PARSER_CPP = CLIENT_DIR / "live2d/Live2DModelAssetParser.cpp"
+LIVE2D_MOTION_CATALOG_H = CLIENT_DIR / "live2d/Live2DMotionCatalog.h"
+LIVE2D_MOTION_CATALOG_CPP = CLIENT_DIR / "live2d/Live2DMotionCatalog.cpp"
 CLIENT_CMAKE = CLIENT_DIR / "CMakeLists.txt"
+CLIENT_CMAKE_FRAGMENTS = (
+    CLIENT_DIR / "cmake/AppSources.cmake",
+    CLIENT_DIR / "cmake/FeatureSources.cmake",
+    CLIENT_DIR / "cmake/SharedSources.cmake",
+    CLIENT_DIR / "cmake/QmlResources.cmake",
+)
 MAIN_QML_TYPE_REGISTRY_CPP = CLIENT_DIR / "app/MainQmlTypeRegistry.cpp"
 CHARACTER_PANE_QML = CLIENT_DIR / "qml/pet/Live2DCharacterPane.qml"
 QML_QRC = CLIENT_DIR / "qml.qrc"
@@ -66,6 +76,18 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def read_texts(*paths: Path) -> str:
+    return "\n".join(read(path) for path in paths)
+
+
+def client_cmake_text() -> str:
+    return read_texts(CLIENT_CMAKE, *(fragment for fragment in CLIENT_CMAKE_FRAGMENTS if fragment.exists()))
+
+
+def live2d_asset_validation_source() -> str:
+    return read_texts(LIVE2D_ASSET_CPP, LIVE2D_MODEL_ASSET_PARSER_CPP, LIVE2D_MOTION_CATALOG_CPP)
+
+
 class Live2DAssetContractTests(unittest.TestCase):
     def assertFileExists(self, path: Path) -> None:
         self.assertTrue(path.exists(), f"{path.relative_to(REPO_ROOT)} should exist")
@@ -77,10 +99,18 @@ class Live2DAssetContractTests(unittest.TestCase):
     def test_live2d_asset_files_exist_and_are_added_to_client_cmake(self):
         self.assertFileExists(LIVE2D_ASSET_H)
         self.assertFileExists(LIVE2D_ASSET_CPP)
+        self.assertFileExists(LIVE2D_MODEL_ASSET_PARSER_H)
+        self.assertFileExists(LIVE2D_MODEL_ASSET_PARSER_CPP)
+        self.assertFileExists(LIVE2D_MOTION_CATALOG_H)
+        self.assertFileExists(LIVE2D_MOTION_CATALOG_CPP)
 
-        cmake = read(CLIENT_CMAKE)
+        cmake = client_cmake_text()
         self.assertRegex(cmake, r"\bLive2DAsset\.cpp\b")
         self.assertRegex(cmake, r"\bLive2DAsset\.h\b")
+        self.assertRegex(cmake, r"\bLive2DModelAssetParser\.cpp\b")
+        self.assertRegex(cmake, r"\bLive2DModelAssetParser\.h\b")
+        self.assertRegex(cmake, r"\bLive2DMotionCatalog\.cpp\b")
+        self.assertRegex(cmake, r"\bLive2DMotionCatalog\.h\b")
 
     def test_live2d_asset_qobject_contract_is_exposed(self):
         self.assertFileExists(LIVE2D_ASSET_H)
@@ -100,7 +130,7 @@ class Live2DAssetContractTests(unittest.TestCase):
 
     def test_live2d_asset_uses_qt_json_model3_validation_apis(self):
         self.assertFileExists(LIVE2D_ASSET_CPP)
-        source = read(LIVE2D_ASSET_CPP)
+        source = live2d_asset_validation_source()
 
         for token in ("QJsonDocument", "QJsonObject", "QJsonArray"):
             self.assertContains(source, token)
@@ -123,7 +153,7 @@ class Live2DAssetContractTests(unittest.TestCase):
 
     def test_live2d_asset_computes_deterministic_sha256_package_checksum(self):
         self.assertFileExists(LIVE2D_ASSET_CPP)
-        source = read(LIVE2D_ASSET_CPP)
+        source = live2d_asset_validation_source()
 
         self.assertContains(source, "QCryptographicHash")
         self.assertRegex(source, r"QCryptographicHash\b[^\n;]*\bSha256\b")
@@ -236,7 +266,7 @@ class Live2DAssetContractTests(unittest.TestCase):
 
     def test_live2d_policy_keeps_licensed_assets_out_of_repo_defaults(self):
         doc = read(LIVE2D_POLICY_DOC)
-        cmake = read(CLIENT_CMAKE)
+        cmake = client_cmake_text()
 
         self.assertIn("Repo-owned test fixtures", doc)
         self.assertIn("tests/fixtures/live2d", doc)

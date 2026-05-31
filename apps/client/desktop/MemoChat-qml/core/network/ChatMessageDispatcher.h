@@ -55,7 +55,6 @@ private:
     void registerSystemHandlers();
 
     bool parseGroupResponse(ReqId reqId, const QByteArray& data, QJsonObject& jsonObj, bool emitResponse = true);
-    static qint64 normalizeGroupCreatedAt(qint64 createdAt);
 
     QMap<ReqId, std::function<void(ReqId id, int len, QByteArray data)>> _handlers;
 };

@@ -1,6 +1,11 @@
 #include "AppController.h"
 #include "AppCoordinators.h"
 
+void AppController::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
+{
+    _session_coordinator->onLoginHttpFinished(id, res, err);
+}
+
 void AppController::onRegisterHttpFinished(ReqId id, QString res, ErrorCodes err)
 {
     _session_coordinator->onRegisterHttpFinished(id, res, err);
@@ -9,6 +14,11 @@ void AppController::onRegisterHttpFinished(ReqId id, QString res, ErrorCodes err
 void AppController::onResetHttpFinished(ReqId id, QString res, ErrorCodes err)
 {
     _session_coordinator->onResetHttpFinished(id, res, err);
+}
+
+void AppController::onRegisterCountdownTimeout()
+{
+    _session_coordinator->onRegisterCountdownTimeout();
 }
 
 void AppController::onSettingsHttpFinished(ReqId id, QString res, ErrorCodes err)
@@ -25,7 +35,7 @@ void AppController::onSettingsHttpFinished(ReqId id, QString res, ErrorCodes err
     }
 
     QJsonObject obj;
-    if (!parseJson(res, obj))
+    if (!_auth_controller.parseJson(res, obj))
     {
         setSettingsStatus("资料同步失败：响应解析错误", true);
         return;

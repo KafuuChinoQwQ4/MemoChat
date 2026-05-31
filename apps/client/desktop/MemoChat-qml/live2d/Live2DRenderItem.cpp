@@ -1,10 +1,9 @@
 #include "Live2DRenderItem.h"
 
 #include "Live2DOfficialOpenGLRenderer.h"
+#include "Live2DRenderPathResolver.h"
 
-#include <QDir>
 #include <QEvent>
-#include <QFileInfo>
 #include <QMetaObject>
 #include <QOpenGLContext>
 #include <QOpenGLFramebufferObject>
@@ -12,8 +11,6 @@
 #include <QPointer>
 #include <QQuickOpenGLUtils>
 #include <QQuickWindow>
-#include <QStringList>
-#include <QUrl>
 #include <QVariant>
 #include <QtMath>
 #include <memory>
@@ -185,49 +182,6 @@ private:
     bool _native_attempted = false;
     std::unique_ptr<Live2DOfficialOpenGLRenderer> _official_renderer;
 };
-
-QString resolveModelPath(const QString& modelRoot, const QString& modelJson)
-{
-    const QString cleaned = modelJson.trimmed();
-    if (cleaned.isEmpty())
-    {
-        return Live2DOfficialOpenGLRenderer::defaultModelPath();
-    }
-    if (cleaned.startsWith(QStringLiteral("qrc:/")))
-    {
-        return QStringLiteral(":") + QUrl(cleaned).path();
-    }
-    if (cleaned.startsWith(QStringLiteral(":/")))
-    {
-        return QDir::cleanPath(cleaned);
-    }
-
-    const QUrl url(cleaned);
-    if (url.isLocalFile())
-    {
-        return QDir::cleanPath(url.toLocalFile());
-    }
-    if (QDir::isAbsolutePath(cleaned))
-    {
-        return QDir::cleanPath(cleaned);
-    }
-
-    QStringList candidates;
-    const QString root = modelRoot.trimmed();
-    if (!root.isEmpty())
-    {
-        candidates << QDir(root).absoluteFilePath(cleaned);
-    }
-    candidates << QDir::current().absoluteFilePath(cleaned);
-    for (const QString& candidate : candidates)
-    {
-        if (QFileInfo::exists(candidate))
-        {
-            return QDir::cleanPath(candidate);
-        }
-    }
-    return QDir::cleanPath(candidates.value(0, QDir::current().absoluteFilePath(cleaned)));
-}
 } // namespace
 
 Live2DRenderItem::Live2DRenderItem(QQuickItem* parent)
@@ -458,14 +412,11 @@ qreal Live2DRenderItem::boundedUnit(qreal value, qreal fallback)
     return qBound(0.0, value, 1.0);
 }
 
-QString Live2DRenderItem::resolveModelPath(const QString& modelRoot, const QString& modelJson)
-{
-    return ::resolveModelPath(modelRoot, modelJson);
-}
-
 QString Live2DRenderItem::resolvedModelPath() const
 {
-    return resolveModelPath(_model_root, _model_json);
+    return Live2DRenderPathResolver::resolveModelPath(_model_root,
+                                                      _model_json,
+                                                      Live2DOfficialOpenGLRenderer::defaultModelPath());
 }
 
 Live2DVisualState Live2DRenderItem::visualState() const
