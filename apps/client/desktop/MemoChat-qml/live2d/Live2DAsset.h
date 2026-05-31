@@ -2,7 +2,6 @@
 #define LIVE2DASSET_H
 
 #include <QObject>
-#include <QJsonValue>
 #include <QString>
 #include <QStringList>
 #include <QVariantList>
@@ -139,11 +138,6 @@ signals:
 
 private:
     static bool assignIfChanged(QString& target, const QString& value);
-    static QString cleanedInput(const QString& value);
-    static QString resolveInputPath(const QString& value, const QString& baseDirectory = QString());
-    static QString resolveModelReference(const QString& modelDirectory, const QString& reference);
-    static int countFilesWithSuffixes(const QString& directoryPath, const QStringList& suffixes);
-    static QStringList jsonStringArray(const QJsonValue& value);
 
     void publishResult(const QString& status,
                        const QString& statusText,

@@ -1,5 +1,6 @@
 #include "AppCoordinators.h"
 
+#include "AppChatConnectionCoordinator.h"
 #include "AppController.h"
 #include "IconPathUtils.h"
 #include "IChatTransport.h"
@@ -43,7 +44,7 @@ void SessionAuthCoordinator::onLoginHttpFinished(ReqId id, QString res, ErrorCod
     }
 
     QJsonObject obj;
-    if (!_app.parseJson(res, obj))
+    if (!_app._auth_controller.parseJson(res, obj))
     {
         _app._chat_recovery_state.ignoreNextLoginDisconnect = false;
         _app.setBusy(false);
@@ -148,7 +149,7 @@ void SessionAuthCoordinator::onLoginHttpFinished(ReqId id, QString res, ErrorCod
     _app._chat_endpoint_state.host = _app._chat_endpoint_state.endpoints.front().host;
     _app._chat_endpoint_state.port = _app._chat_endpoint_state.endpoints.front().port;
     _app._chat_endpoint_state.serverName = _app._chat_endpoint_state.endpoints.front().serverName;
-    _app.resetReconnectState();
+    _app._chat_connection_coordinator->resetReconnectState();
     _app.setPage(AppController::ChatPage);
     qInfo() << "HTTP login succeeded, connecting chat server host:" << _app._chat_endpoint_state.host
             << "port:" << _app._chat_endpoint_state.port << "uid:" << _app._pending_login_state.uid << "http_login_ms:"

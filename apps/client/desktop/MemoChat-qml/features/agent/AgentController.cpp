@@ -1,11 +1,14 @@
 #include "AgentController.h"
+#include "AgentGameClient.h"
 #include "AgentMessageModel.h"
+#include "AgentStreamClient.h"
 #include "httpmgr.h"
 
 #include <QDebug>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <optional>
 
 AgentController::AgentController(ClientGateway* gateway, QObject* parent)
     : QObject(parent)
@@ -13,12 +16,17 @@ AgentController::AgentController(ClientGateway* gateway, QObject* parent)
     , _model(new AgentMessageModel(this))
     , _current_model_backend("")
     , _current_model_name("")
-    , _streamManager(new QNetworkAccessManager(this))
-    , _gameNetwork(new QNetworkAccessManager(this))
+    , _streamClient(new AgentStreamClient(this))
+    , _gameClient(new AgentGameClient(this))
 {
     loadPersistedModelSelection();
 
     connect(HttpMgr::GetInstance().get(), &HttpMgr::sig_http_finish, this, &AgentController::onHttpFinish);
+    connect(_streamClient, &AgentStreamClient::chunkReceived, this, &AgentController::handleStreamChunk);
+    connect(_streamClient, &AgentStreamClient::finished, this, &AgentController::handleStreamFinished);
+    connect(_gameClient, &AgentGameClient::responseReady, this, &AgentController::handleGameResponse);
+    connect(_gameClient, &AgentGameClient::networkError, this, &AgentController::handleGameNetworkError);
+    connect(_gameClient, &AgentGameClient::formatError, this, &AgentController::handleGameFormatError);
 
     connect(this,
             &AgentController::errorOccurred,
@@ -31,99 +39,74 @@ AgentController::AgentController(ClientGateway* gateway, QObject* parent)
 
 AgentController::~AgentController()
 {
-    if (_currentStreamReply)
-    {
-        QNetworkReply* reply = _currentStreamReply;
-        _currentStreamReply = nullptr;
-        reply->disconnect(this);
-        reply->abort();
-        reply->deleteLater();
-    }
 }
 
 void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err, Modules mod)
 {
-    auto it = _pending_requests.find(id);
-    if (it == _pending_requests.end())
-        return;
-    QString reqType = it.value();
-    _pending_requests.erase(it);
-
-    if (err != ErrorCodes::SUCCESS)
+    Q_UNUSED(mod);
+    std::optional<AgentRequestRecord> pending = _pending_requests.take(id);
+    if (!pending.has_value())
     {
-        const QString errorText = QString("请求失败: error=%1").arg(static_cast<int>(err));
-        if (reqType == "model_list")
+        return;
+    }
+    const AgentRequestRecord record = pending.value();
+
+    auto resetFeatureBusyForError = [this, &record](const QString& errorText)
+    {
+        switch (record.kind)
         {
-            setModelRefreshBusy(false);
+            case AgentRequestKind::ModelList:
+                setModelRefreshBusy(false);
+                break;
+            case AgentRequestKind::ApiProviderRegister:
+            case AgentRequestKind::ApiProviderDelete:
+                setApiProviderBusy(false, errorText);
+                break;
+            case AgentRequestKind::KnowledgeUpload:
+            case AgentRequestKind::KnowledgeSearch:
+            case AgentRequestKind::KnowledgeList:
+            case AgentRequestKind::KnowledgeDelete:
+                setKnowledgeBusy(false);
+                setKnowledgeError(errorText);
+                break;
+            case AgentRequestKind::MemoryList:
+            case AgentRequestKind::MemoryCreate:
+            case AgentRequestKind::MemoryDelete:
+                setMemoryBusy(false);
+                setMemoryError(errorText);
+                break;
+            case AgentRequestKind::TaskList:
+            case AgentRequestKind::TaskCreate:
+            case AgentRequestKind::TaskCancel:
+            case AgentRequestKind::TaskResume:
+                setAgentTaskBusy(false);
+                setAgentTaskError(errorText);
+                break;
+            default:
+                break;
         }
-        else if (reqType == "api_provider_register")
-        {
-            setApiProviderBusy(false, errorText);
-        }
-        else if (reqType == "api_provider_delete")
-        {
-            setApiProviderBusy(false, errorText);
-        }
-        else if (reqType == "kb_upload" || reqType == "kb_search" || reqType == "kb_list" || reqType == "kb_delete")
-        {
-            setKnowledgeBusy(false);
-            setKnowledgeError(errorText);
-        }
-        else if (reqType == "memory_list" || reqType == "memory_create" || reqType == "memory_delete")
-        {
-            setMemoryBusy(false);
-            setMemoryError(errorText);
-        }
-        else if (reqType == "task_list" || reqType == "task_create" || reqType == "task_cancel" ||
-                 reqType == "task_resume")
-        {
-            setAgentTaskBusy(false);
-            setAgentTaskError(errorText);
-        }
+    };
+
+    auto finishWithError = [this, &resetFeatureBusyForError](const QString& errorText)
+    {
+        resetFeatureBusyForError(errorText);
         setErrorState(errorText);
         _loading = false;
         _streaming = false;
         emit loadingChanged();
         emit streamingChanged();
+    };
+
+    if (err != ErrorCodes::SUCCESS)
+    {
+        finishWithError(QString("请求失败: error=%1").arg(static_cast<int>(err)));
         return;
     }
 
     const QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8());
     if (doc.isNull() || !doc.isObject())
     {
-        if (reqType == "model_list")
-        {
-            setModelRefreshBusy(false);
-        }
-        else if (reqType == "api_provider_register")
-        {
-            setApiProviderBusy(false, "响应格式错误");
-        }
-        else if (reqType == "api_provider_delete")
-        {
-            setApiProviderBusy(false, "响应格式错误");
-        }
-        else if (reqType == "kb_upload" || reqType == "kb_search" || reqType == "kb_list" || reqType == "kb_delete")
-        {
-            setKnowledgeBusy(false);
-            setKnowledgeError("响应格式错误");
-        }
-        else if (reqType == "memory_list" || reqType == "memory_create" || reqType == "memory_delete")
-        {
-            setMemoryBusy(false);
-            setMemoryError("响应格式错误");
-        }
-        else if (reqType == "task_list" || reqType == "task_create" || reqType == "task_cancel" ||
-                 reqType == "task_resume")
-        {
-            setAgentTaskBusy(false);
-            setAgentTaskError("响应格式错误");
-        }
-        setErrorState("响应格式错误");
-        _loading = false;
-        _streaming = false;
-        emit loadingChanged();
-        emit streamingChanged();
+        finishWithError("响应格式错误");
         return;
     }
 
@@ -132,86 +115,58 @@ void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err,
     if (code != 0)
     {
         QString msg = root["message"].toString();
-        const QString errorText = QString("AI服务错误: %1").arg(msg);
-        if (reqType == "model_list")
-        {
-            setModelRefreshBusy(false);
-        }
-        else if (reqType == "api_provider_register")
-        {
-            setApiProviderBusy(false, errorText);
-        }
-        else if (reqType == "api_provider_delete")
-        {
-            setApiProviderBusy(false, errorText);
-        }
-        else if (reqType == "kb_upload" || reqType == "kb_search" || reqType == "kb_list" || reqType == "kb_delete")
-        {
-            setKnowledgeBusy(false);
-            setKnowledgeError(errorText);
-        }
-        else if (reqType == "memory_list" || reqType == "memory_create" || reqType == "memory_delete")
-        {
-            setMemoryBusy(false);
-            setMemoryError(errorText);
-        }
-        else if (reqType == "task_list" || reqType == "task_create" || reqType == "task_cancel" ||
-                 reqType == "task_resume")
-        {
-            setAgentTaskBusy(false);
-            setAgentTaskError(errorText);
-        }
-        setErrorState(errorText);
-        _loading = false;
-        _streaming = false;
-        emit loadingChanged();
-        emit streamingChanged();
+        finishWithError(QString("AI服务错误: %1").arg(msg));
         return;
     }
 
-    if (reqType == "list_sessions" || reqType == "create_session" || reqType == "delete_session")
+    switch (record.kind)
     {
-        handleSessionRsp(id, res, err, reqType);
-    }
-    else if (reqType == "history")
-    {
-        handleHistoryRsp(id, res, err);
-    }
-    else if (reqType == "model_list")
-    {
-        handleModelListRsp(id, res, err);
-    }
-    else if (reqType == "api_provider_register")
-    {
-        QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8());
-        QJsonObject root = doc.object();
-        const int modelCount = root["models"].toArray().size();
-        setApiProviderBusy(false, QString("已接入 API，解析到 %1 个模型。").arg(modelCount));
-        refreshModelList();
-    }
-    else if (reqType == "api_provider_delete")
-    {
-        setApiProviderBusy(false, "API 模型已删除。");
-        refreshModelList();
-    }
-    else if (reqType == "summary" || reqType == "suggest" || reqType == "translate")
-    {
-        handleSmartRsp(id, res, err, reqType);
-    }
-    else if (reqType == "kb_upload" || reqType == "kb_search" || reqType == "kb_list" || reqType == "kb_delete")
-    {
-        handleKbRsp(id, res, err, reqType);
-    }
-    else if (reqType == "memory_list" || reqType == "memory_create" || reqType == "memory_delete")
-    {
-        handleMemoryRsp(id, res, err, reqType);
-    }
-    else if (reqType == "task_list" || reqType == "task_create" || reqType == "task_cancel" || reqType == "task_resume")
-    {
-        handleAgentTaskRsp(id, res, err, reqType);
-    }
-    else
-    {
-        handleChatRsp(id, res, err, reqType);
+        case AgentRequestKind::ListSessions:
+        case AgentRequestKind::CreateSession:
+        case AgentRequestKind::DeleteSession:
+            handleSessionRsp(id, res, err, record.kind);
+            break;
+        case AgentRequestKind::History:
+            handleHistoryRsp(id, res, err);
+            break;
+        case AgentRequestKind::ModelList:
+            handleModelListRsp(id, res, err);
+            break;
+        case AgentRequestKind::ApiProviderRegister:
+        {
+            const int modelCount = root["models"].toArray().size();
+            setApiProviderBusy(false, QString("已接入 API，解析到 %1 个模型。").arg(modelCount));
+            refreshModelList();
+            break;
+        }
+        case AgentRequestKind::ApiProviderDelete:
+            setApiProviderBusy(false, "API 模型已删除。");
+            refreshModelList();
+            break;
+        case AgentRequestKind::Summary:
+        case AgentRequestKind::Suggest:
+        case AgentRequestKind::Translate:
+            handleSmartRsp(id, res, err, record.kind);
+            break;
+        case AgentRequestKind::KnowledgeUpload:
+        case AgentRequestKind::KnowledgeSearch:
+        case AgentRequestKind::KnowledgeList:
+        case AgentRequestKind::KnowledgeDelete:
+            handleKbRsp(id, res, err, record.kind);
+            break;
+        case AgentRequestKind::MemoryList:
+        case AgentRequestKind::MemoryCreate:
+        case AgentRequestKind::MemoryDelete:
+            handleMemoryRsp(id, res, err, record.kind);
+            break;
+        case AgentRequestKind::TaskList:
+        case AgentRequestKind::TaskCreate:
+        case AgentRequestKind::TaskCancel:
+        case AgentRequestKind::TaskResume:
+            handleAgentTaskRsp(id, res, err, record.kind);
+            break;
+        case AgentRequestKind::ChatMessage:
+            handleChatRsp(id, res, err, record.messageId);
+            break;
     }
 }

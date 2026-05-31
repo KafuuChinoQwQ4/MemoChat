@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick 2.15
-import QtQuick.Controls 2.15
 import "../../components"
 
 Item {
@@ -94,10 +93,8 @@ Item {
         Math.max(120, translationTextMeasure.implicitWidth + 22))
     readonly property real messageHeight: Math.max(bubble.implicitHeight, showAvatar ? avatarSize : 0)
     readonly property int translationHeight: translationText.length > 0 ? (translationBubble.implicitHeight + 6) : 0
-    readonly property bool showStateLabel: (root.outgoing && root.messageState !== "sent")
-                                           || (!root.outgoing && (root.messageState === "edited" || root.messageState === "deleted"))
     readonly property int timeDividerHeight: root.showTimeDivider ? 32 : 0
-    readonly property int stateLabelHeight: showStateLabel ? 16 : 0
+    readonly property int stateLabelHeight: stateBadge.active ? 16 : 0
 
     height: timeDividerHeight + topSpacing + messageHeight + translationHeight + stateLabelHeight + bottomSpacing
 
@@ -279,9 +276,7 @@ Item {
                 if (!root.enableContextMenu) {
                     return
                 }
-                menu.x = Math.max(0, Math.min(root.width - menu.width, eventPoint.position.x))
-                menu.y = Math.max(0, Math.min(root.height - menu.height, eventPoint.position.y))
-                menu.open()
+                actionMenu.openAt(eventPoint.position.x, eventPoint.position.y, root.width, root.height)
             }
         }
     }
@@ -337,51 +332,13 @@ Item {
         }
     }
 
-    Text {
-        visible: root.showStateLabel
+    ChatMessageStatusBadge {
+        id: stateBadge
+        outgoing: root.outgoing
+        messageState: root.messageState
         anchors.right: bubble.right
         anchors.top: root.translationText.length > 0 ? translationBubble.bottom : bubble.bottom
         anchors.topMargin: 3
-        text: {
-            if (root.messageState === "sending") {
-                return "发送中..."
-            }
-            if (root.messageState === "failed") {
-                return "发送失败"
-            }
-            if (root.messageState === "accepted") {
-                return "已受理"
-            }
-            if (root.messageState === "queued_retry") {
-                return "排队重试"
-            }
-            if (root.messageState === "offline_pending") {
-                return "离线待补投"
-            }
-            if (root.messageState === "read") {
-                return "已读"
-            }
-            if (root.messageState === "edited") {
-                return "已编辑"
-            }
-            if (root.messageState === "deleted") {
-                return "已撤回"
-            }
-            return ""
-        }
-        color: {
-            if (root.messageState === "sending") {
-                return "#6c7d92"
-            }
-            if (root.messageState === "failed") {
-                return "#c74747"
-            }
-            if (root.messageState === "queued_retry" || root.messageState === "offline_pending") {
-                return "#856404"
-            }
-            return "#6c7d92"
-        }
-        font.pixelSize: 11
     }
 
     Component {
@@ -448,40 +405,24 @@ Item {
         }
     }
 
-    Menu {
-        id: menu
+    ChatMessageActionMenu {
+        id: actionMenu
         parent: bubble
-        transformOrigin: Item.TopLeft
-
-        MenuItem {
-            visible: root.canReply
-            text: "回复"
-            onTriggered: root.replyRequested(root.msgId, root.senderName, root.previewForReply)
-        }
-        MenuItem {
-            visible: root.canMention
-            text: "@Ta"
-            onTriggered: root.mentionRequested("@" + root.senderName + " ")
-        }
-        MenuItem {
-            visible: root.canForward
-            text: "转发"
-            onTriggered: root.forwardRequested(root.msgId)
-        }
-        MenuItem {
-            visible: root.canEdit
-            text: "编辑"
-            onTriggered: root.editRequested(root.msgId, root.content)
-        }
-        MenuItem {
-            visible: root.msgType === "text" && root.content.length > 0
-            text: "翻译"
-            onTriggered: root.translateRequested(root.msgId, root.content)
-        }
-        MenuItem {
-            visible: root.canRevoke
-            text: "撤回"
-            onTriggered: root.revokeRequested(root.msgId)
-        }
+        msgId: root.msgId
+        msgType: root.msgType
+        content: root.content
+        senderName: root.senderName
+        previewText: root.previewForReply
+        canReply: root.canReply
+        canMention: root.canMention
+        canForward: root.canForward
+        canEdit: root.canEdit
+        canRevoke: root.canRevoke
+        onReplyRequested: function(msgId, senderName, previewText) { root.replyRequested(msgId, senderName, previewText) }
+        onMentionRequested: function(mentionText) { root.mentionRequested(mentionText) }
+        onForwardRequested: function(msgId) { root.forwardRequested(msgId) }
+        onEditRequested: function(msgId, text) { root.editRequested(msgId, text) }
+        onRevokeRequested: function(msgId) { root.revokeRequested(msgId) }
+        onTranslateRequested: function(msgId, text) { root.translateRequested(msgId, text) }
     }
 }

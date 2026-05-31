@@ -4,6 +4,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Window 2.15
 import MemoChat 1.0
+import "AppWindowRuntime.js" as AppWindowRuntime
 import "components"
 import "pet"
 
@@ -35,23 +36,13 @@ Item {
         }
         const targetWidth = size ? size.width : win.width
         const targetHeight = size ? size.height : win.height
-        const screenObj = win.screen || (Qt.application.screens && Qt.application.screens.length > 0
-                                         ? Qt.application.screens[0]
-                                         : null)
-        if (!screenObj || !screenObj.availableGeometry) {
+        const area = AppWindowRuntime.availableScreenGeometry(win)
+        const position = AppWindowRuntime.clampedWindowPosition(area, targetWidth, targetHeight)
+        if (!position) {
             return false
         }
-        const area = screenObj.availableGeometry
-        if (area.x === undefined || area.y === undefined
-                || area.width === undefined || area.height === undefined) {
-            return false
-        }
-        const centeredX = area.x + Math.round((area.width - targetWidth) / 2)
-        const centeredY = area.y + Math.round((area.height - targetHeight) / 2)
-        const maxX = area.x + Math.max(0, area.width - targetWidth)
-        const maxY = area.y + Math.max(0, area.height - targetHeight)
-        win.x = Math.max(area.x, Math.min(centeredX, maxX))
-        win.y = Math.max(area.y, Math.min(centeredY, maxY))
+        win.x = position.x
+        win.y = position.y
         return true
     }
 
@@ -103,7 +94,7 @@ Item {
     }
 
     function targetWindowSize() {
-        return chatPageActive ? chatWindowSize : loginWindowSize
+        return AppWindowRuntime.targetWindowSize(chatPageActive, loginWindowSize, chatWindowSize)
     }
 
     function ensureAppWindow() {
@@ -200,12 +191,10 @@ Item {
         }
         const token = ++appWindowSwitchToken
         const targetSize = targetWindowSize()
-        const sizeChanged = win.visible
-                && win.visibility !== Window.Maximized
+        const sizeChanged = win.visibility !== Window.Maximized
                 && win.visibility !== Window.FullScreen
                 && win.visibility !== Window.Minimized
-                && (Math.round(win.width) !== Math.round(targetSize.width)
-                    || Math.round(win.height) !== Math.round(targetSize.height))
+                && AppWindowRuntime.shouldHideResize(win, targetSize.width, targetSize.height)
         if (sizeChanged) {
             win.opacity = 0
             win.visible = false

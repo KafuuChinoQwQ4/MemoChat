@@ -44,6 +44,7 @@ class GroupCoordinator;
 class MediaCoordinator;
 class CallCoordinator;
 class ProfileCoordinator;
+class AppChatConnectionCoordinator;
 
 class AppController : public QObject
 {
@@ -375,22 +376,15 @@ private slots:
     void onRegisterHttpFinished(ReqId id, QString res, ErrorCodes err);
     void onResetHttpFinished(ReqId id, QString res, ErrorCodes err);
     void onSettingsHttpFinished(ReqId id, QString res, ErrorCodes err);
-    void onCallHttpFinished(ReqId id, QString res, ErrorCodes err);
-    void onTcpConnectFinished(bool success);
-    void onChatLoginFailed(int err);
     void onSwitchToChat();
     void onRelationBootstrapUpdated();
     void onRegisterCountdownTimeout();
-    void onHeartbeatTimeout();
-    void onHeartbeatAck(qint64 ackAtMs);
     void onAddAuthFriend(std::shared_ptr<AuthInfo> authInfo);
     void onDeleteFriendRsp(int error, int friendUid);
     void onAuthRsp(std::shared_ptr<AuthRsp> authRsp);
     void onTextChatMsg(std::shared_ptr<TextChatMsg> msg);
     void onUserSearch(std::shared_ptr<SearchInfo> searchInfo);
     void onFriendApply(std::shared_ptr<AddFriendApply> applyInfo);
-    void onNotifyOffline();
-    void onConnectionClosed();
     void onGroupListUpdated();
     void onGroupInvite(qint64 groupId, QString groupCode, QString groupName, int operatorUid);
     void onGroupApply(qint64 groupId, int applicantUid, QString applicantUserId, QString reason);
@@ -402,13 +396,6 @@ private slots:
     void onPrivateMsgChanged(QJsonObject payload);
     void onPrivateReadAck(QJsonObject payload);
     void onMessageStatus(QJsonObject payload);
-    void onCallEvent(QJsonObject payload);
-    void onLivekitRoomJoined();
-    void onLivekitRemoteTrackReady();
-    void onLivekitRoomDisconnected(const QString& reason, bool recoverable);
-    void onLivekitPermissionError(const QString& deviceType, const QString& message);
-    void onLivekitMediaError(const QString& message);
-    void onLivekitReconnecting(const QString& message);
 
 private:
     friend class AppSessionCoordinator;
@@ -421,12 +408,8 @@ private:
     friend class MediaCoordinator;
     friend class CallCoordinator;
     friend class ProfileCoordinator;
+    friend class AppChatConnectionCoordinator;
 
-    bool parseJson(const QString& res, QJsonObject& obj);
-    bool checkEmailValid(const QString& email);
-    bool checkPwdValid(const QString& password);
-    bool checkUserValid(const QString& user);
-    bool checkVerifyCodeValid(const QString& code);
     bool isChatTransportReady() const;
     bool dispatchChatContent(const QString& content, const QString& previewText);
     bool dispatchGroupChatContent(const QString& content, const QString& previewText);
@@ -440,10 +423,6 @@ private:
                                         int dialogUid,
                                         int chatUid,
                                         qint64 groupId);
-    void sendCallInvite(const QString& callType);
-    bool ensureCallTargetFromCurrentChat();
-    void startCallFlow(const QString& callType);
-    void finalizeEndedCall(const QString& statusText);
     void setTip(const QString& tip, bool isError);
     void setBusy(bool value);
     void setPage(Page newPage);
@@ -522,12 +501,6 @@ private:
     void syncCurrentPendingAttachments();
     void sendGroupReadAck(qint64 groupId, qint64 readTs = 0);
     void sendPrivateReadAck(int peerUid, qint64 readTs = 0);
-    bool tryReconnectChat();
-    void handleChatConnectFailureDuringRecovery();
-    bool tryLoginFallbackToTcp(const QString& reason);
-    void resetReconnectState();
-    void resetHeartbeatTracking();
-    bool isHeartbeatLikelyTimeout() const;
     void runPostLoginBootstrap();
     bool handleGroupRspError(ReqId reqId, int error, const QJsonObject& payload);
     void handleGroupManagementRsp(ReqId reqId, const QJsonObject& payload);
@@ -591,6 +564,7 @@ private:
     std::unique_ptr<MediaCoordinator> _media_coordinator;
     std::unique_ptr<CallCoordinator> _call_coordinator;
     std::unique_ptr<ProfileCoordinator> _profile_coordinator;
+    std::unique_ptr<AppChatConnectionCoordinator> _chat_connection_coordinator;
 };
 
 #endif // APPCONTROLLER_H

@@ -65,7 +65,7 @@ void AgentController::refreshModelList()
     clearErrorState();
     setModelRefreshBusy(true);
     ReqId reqId = ID_AI_MODEL_LIST;
-    _pending_requests[reqId] = "model_list";
+    _pending_requests.track(reqId, AgentRequestKind::ModelList);
 
     HttpMgr::GetInstance()->GetHttpReq(QUrl(gate_url_prefix + "/ai/model/list"),
                                        reqId,
@@ -93,7 +93,7 @@ void AgentController::registerApiProvider(const QString& providerName, const QSt
     payload["adapter"] = QStringLiteral("openai_compatible");
 
     ReqId reqId = ID_AI_MODEL_API_REGISTER;
-    _pending_requests[reqId] = "api_provider_register";
+    _pending_requests.track(reqId, AgentRequestKind::ApiProviderRegister);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/model/api/register"),
                                         payload,
                                         reqId,
@@ -116,7 +116,7 @@ void AgentController::deleteApiProvider(const QString& providerId)
     payload["provider_id"] = trimmedProviderId;
 
     ReqId reqId = ID_AI_MODEL_API_DELETE;
-    _pending_requests[reqId] = "api_provider_delete";
+    _pending_requests.track(reqId, AgentRequestKind::ApiProviderDelete);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/model/api/delete"),
                                         payload,
                                         reqId,

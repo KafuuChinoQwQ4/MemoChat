@@ -51,7 +51,7 @@ void SessionAuthCoordinator::onRegisterHttpFinished(ReqId id, QString res, Error
     }
 
     QJsonObject obj;
-    if (!_app.parseJson(res, obj))
+    if (!_app._auth_controller.parseJson(res, obj))
     {
         _app.setBusy(false);
         _app.setTip("json解析错误", true);
@@ -99,7 +99,7 @@ void SessionAuthCoordinator::onResetHttpFinished(ReqId id, QString res, ErrorCod
     }
 
     QJsonObject obj;
-    if (!_app.parseJson(res, obj))
+    if (!_app._auth_controller.parseJson(res, obj))
     {
         _app.setBusy(false);
         _app.setTip("json解析错误", true);

@@ -1,5 +1,6 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick 2.15
-import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "../components"
 
@@ -60,18 +61,6 @@ Item {
 
     function modelCount(model) {
         return model && model.count !== undefined ? model.count : 0
-    }
-
-    function sourceStatusText(status, format) {
-        var statusText = status || "ok"
-        var formatText = format || "native"
-        if (statusText === "staged-js") {
-            return formatText + " · 已导入，等待 MemoChat JS 源运行适配"
-        }
-        if (statusText === "staged") {
-            return formatText + " · 已暂存"
-        }
-        return formatText + " · " + statusText
     }
 
     ColumnLayout {
@@ -140,6 +129,8 @@ Item {
                 ]
 
                 delegate: GlassButton {
+                    required property var modelData
+
                     Layout.preferredWidth: modelData.width
                     Layout.preferredHeight: 34
                     text: modelData.title
@@ -176,354 +167,76 @@ Item {
                     anchors.rightMargin: 2
                     spacing: 18
 
-                    ColumnLayout {
+                    R18SourceImportPane {
                         Layout.fillWidth: true
-                        spacing: 22
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 12
-
-                            Image {
-                                Layout.preferredWidth: 30
-                                Layout.preferredHeight: 30
-                                source: "qrc:/icons/r18_datasource.png"
-                                fillMode: Image.PreserveAspectFit
-                                opacity: 0.88
-                                mipmap: true
-                            }
-
-                            Text {
-                                Layout.fillWidth: true
-                                text: "添加漫画源"
-                                color: root.textPrimaryColor
-                                font.pixelSize: 18
-                                elide: Text.ElideRight
-                            }
-                        }
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 6
-
-                            Text {
-                                Layout.fillWidth: true
-                                text: "URL"
-                                color: root.textPrimaryColor
-                                font.pixelSize: 15
-                                elide: Text.ElideRight
-                            }
-
-                            TextField {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 34
-                                text: root.sourceCatalogInput
-                                color: root.textPrimaryColor
-                                selectByMouse: true
-                                leftPadding: 14
-                                rightPadding: 14
-                                font.pixelSize: 15
-                                background: Rectangle {
-                                    color: "transparent"
-                                    border.color: "transparent"
-                                }
-                                onTextEdited: root.sourceCatalogInputEdited(text)
-                                onAccepted: root.officialCatalogRefreshRequested()
-                            }
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 1
-                                color: root.homeFieldStrokeColor
-                            }
-                        }
+                        sourceCatalogInput: root.sourceCatalogInput
+                        sourceHelpVisible: root.sourceHelpVisible
+                        homeFieldStrokeColor: root.homeFieldStrokeColor
+                        textPrimaryColor: root.textPrimaryColor
+                        textSecondaryColor: root.textSecondaryColor
+                        textMutedColor: root.textMutedColor
+                        secondaryButtonColor: root.secondaryButtonColor
+                        secondaryButtonHoverColor: root.secondaryButtonHoverColor
+                        secondaryButtonPressedColor: root.secondaryButtonPressedColor
+                        onSourceCatalogInputEdited: function(text) { root.sourceCatalogInputEdited(text) }
+                        onOfficialCatalogRequested: root.officialCatalogRequested()
+                        onSourceCatalogPathRequested: root.sourceCatalogPathRequested()
+                        onSourceHelpToggled: root.sourceHelpToggled()
+                        onOfficialCatalogRefreshRequested: root.officialCatalogRefreshRequested()
                     }
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 10
-
-                        GlassButton {
-                            Layout.preferredWidth: 168
-                            Layout.preferredHeight: 40
-                            text: "漫画源列表"
-                            textPixelSize: 14
-                            textColor: root.textSecondaryColor
-                            cornerRadius: 20
-                            normalColor: root.secondaryButtonColor
-                            hoverColor: root.secondaryButtonHoverColor
-                            pressedColor: root.secondaryButtonPressedColor
-                            onClicked: root.officialCatalogRequested()
-                        }
-
-                        GlassButton {
-                            Layout.preferredWidth: 174
-                            Layout.preferredHeight: 40
-                            text: "使用配置文件"
-                            textPixelSize: 14
-                            textColor: root.textSecondaryColor
-                            cornerRadius: 20
-                            normalColor: root.secondaryButtonColor
-                            hoverColor: root.secondaryButtonHoverColor
-                            pressedColor: root.secondaryButtonPressedColor
-                            onClicked: root.sourceCatalogPathRequested()
-                        }
-
-                        GlassButton {
-                            Layout.preferredWidth: 118
-                            Layout.preferredHeight: 40
-                            text: "帮助"
-                            textPixelSize: 14
-                            textColor: root.textSecondaryColor
-                            cornerRadius: 20
-                            normalColor: root.secondaryButtonColor
-                            hoverColor: root.secondaryButtonHoverColor
-                            pressedColor: root.secondaryButtonPressedColor
-                            onClicked: root.sourceHelpToggled()
-                        }
-
-                        GlassButton {
-                            Layout.preferredWidth: 150
-                            Layout.preferredHeight: 40
-                            text: "检查更新"
-                            textPixelSize: 14
-                            textColor: root.textSecondaryColor
-                            cornerRadius: 20
-                            normalColor: root.secondaryButtonColor
-                            hoverColor: root.secondaryButtonHoverColor
-                            pressedColor: root.secondaryButtonPressedColor
-                            onClicked: root.officialCatalogRefreshRequested()
-                        }
-
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        visible: root.sourceHelpVisible
-                        text: "该地址应指向 index.json；也可以输入本地目录，例如 D:\\Venera，刷新时会自动读取目录下的 index.json。"
-                        color: root.textMutedColor
-                        font.pixelSize: 13
-                        wrapMode: Text.WordWrap
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        text: "已导入漫画源"
-                        color: root.textPrimaryColor
-                        font.pixelSize: 18
-                        font.bold: true
-                        elide: Text.ElideRight
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        visible: root.modelCount(root.r18Controller ? root.r18Controller.sourceModel : null) === 0
-                                 && !root.loading
-                        text: "暂无已导入漫画源，导入后会显示在这里"
-                        color: root.textMutedColor
-                        font.pixelSize: 13
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-
-                    ListView {
+                    R18SourceListPane {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        clip: true
-                        spacing: 8
-                        model: root.r18Controller ? root.r18Controller.sourceModel : null
-                        ScrollBar.vertical: GlassScrollBar {}
-
-                        delegate: R18ImportedSourceRow {
-                            sourceId: model.sourceId || ""
-                            title: model.title || ""
-                            itemId: model.itemId || ""
-                            statusText: root.sourceStatusText(model.status, model.format)
-                            sourceUrl: model.sourceUrl || model.url || model.message || ""
-                            enabledState: model.enabled === undefined ? true : model.enabled
-                            hasEnabledState: model.enabled !== undefined
-                            selected: root.currentSourceId === model.sourceId
-                            itemFillColor: root.itemFillColor
-                            itemHoverFillColor: root.itemHoverFillColor
-                            itemSelectedFillColor: root.itemSelectedFillColor
-                            fieldStrokeColor: root.fieldStrokeColor
-                            textPrimaryColor: root.textPrimaryColor
-                            textSecondaryColor: root.textSecondaryColor
-                            textMutedColor: root.textMutedColor
-                            secondaryButtonColor: root.secondaryButtonColor
-                            secondaryButtonHoverColor: root.secondaryButtonHoverColor
-                            secondaryButtonPressedColor: root.secondaryButtonPressedColor
-                            importButtonColor: root.homeImportButtonColor
-                            importButtonHoverColor: root.homeImportButtonHoverColor
-                            importButtonPressedColor: root.homeImportButtonPressedColor
-                            onEnableToggled: function(sourceId, enabled) {
-                                root.sourceEnabledChanged(sourceId, enabled)
-                            }
-                            onOpenRequested: function(sourceId) {
-                                root.importedSourceOpenRequested(sourceId)
-                            }
+                        sourceModel: root.r18Controller ? root.r18Controller.sourceModel : null
+                        currentSourceId: root.currentSourceId
+                        loading: root.loading
+                        itemFillColor: root.itemFillColor
+                        itemHoverFillColor: root.itemHoverFillColor
+                        itemSelectedFillColor: root.itemSelectedFillColor
+                        fieldStrokeColor: root.fieldStrokeColor
+                        textPrimaryColor: root.textPrimaryColor
+                        textSecondaryColor: root.textSecondaryColor
+                        textMutedColor: root.textMutedColor
+                        secondaryButtonColor: root.secondaryButtonColor
+                        secondaryButtonHoverColor: root.secondaryButtonHoverColor
+                        secondaryButtonPressedColor: root.secondaryButtonPressedColor
+                        importButtonColor: root.homeImportButtonColor
+                        importButtonHoverColor: root.homeImportButtonHoverColor
+                        importButtonPressedColor: root.homeImportButtonPressedColor
+                        onSourceEnabledChanged: function(sourceId, enabled) {
+                            root.sourceEnabledChanged(sourceId, enabled)
+                        }
+                        onImportedSourceOpenRequested: function(sourceId) {
+                            root.importedSourceOpenRequested(sourceId)
                         }
                     }
                 }
             }
 
-            Item {
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 14
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: root.sourceHelpVisible ? 232 : 184
-                        radius: 8
-                        color: root.homeCardFillColor
-                        border.color: root.homeCardStrokeColor
-                        antialiasing: true
-
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 18
-                            anchors.rightMargin: 18
-                            anchors.topMargin: 16
-                            anchors.bottomMargin: 14
-                            spacing: 10
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 12
-
-                                Image {
-                                    Layout.preferredWidth: 26
-                                    Layout.preferredHeight: 26
-                                    source: "qrc:/icons/file.png"
-                                    fillMode: Image.PreserveAspectFit
-                                    opacity: 0.82
-                                    mipmap: true
-                                }
-
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: "仓库地址"
-                                    color: root.textPrimaryColor
-                                    font.pixelSize: 18
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            TextField {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 38
-                                text: root.sourceCatalogInput
-                                placeholderText: "https://.../index.json 或 D:\\Venera"
-                                placeholderTextColor: root.placeholderColor
-                                color: root.textPrimaryColor
-                                selectByMouse: true
-                                leftPadding: 14
-                                rightPadding: 14
-                                font.pixelSize: 15
-                                background: Rectangle {
-                                    color: "transparent"
-                                    border.color: "transparent"
-                                }
-                                onTextEdited: root.sourceCatalogInputEdited(text)
-                                onAccepted: root.officialCatalogRefreshRequested()
-                            }
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 1
-                                color: root.homeFieldStrokeColor
-                            }
-
-                            Text {
-                                Layout.fillWidth: true
-                                visible: root.sourceHelpVisible
-                                text: "该地址应指向 index.json；也可以选择本地目录，例如 D:\\Venera，刷新后会读取目录中的 index.json。"
-                                color: root.textSecondaryColor
-                                font.pixelSize: 13
-                                lineHeight: 1.2
-                                wrapMode: Text.WordWrap
-                            }
-
-                            Text {
-                                Layout.fillWidth: true
-                                visible: root.sourceHelpVisible
-                                text: "不会默认填入或加载任何仓库地址；需要由用户手动输入或选择目录。"
-                                color: root.textMutedColor
-                                font.pixelSize: 12
-                                wrapMode: Text.WordWrap
-                            }
-
-                            Item { Layout.fillHeight: true }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 12
-
-                                Item { Layout.fillWidth: true }
-
-                                GlassButton {
-                                    Layout.preferredWidth: 84
-                                    Layout.preferredHeight: 38
-                                    text: "帮助"
-                                    textPixelSize: 14
-                                    textColor: "#0c4f92"
-                                    cornerRadius: 19
-                                    normalColor: "transparent"
-                                    hoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.18)
-                                    pressedColor: Qt.rgba(0.54, 0.70, 0.93, 0.26)
-                                    onClicked: root.sourceHelpToggled()
-                                }
-
-                                GlassButton {
-                                    Layout.preferredWidth: 96
-                                    Layout.preferredHeight: 38
-                                    text: "刷新"
-                                    textPixelSize: 14
-                                    textColor: root.textSecondaryColor
-                                    cornerRadius: 19
-                                    normalColor: root.secondaryButtonColor
-                                    hoverColor: root.secondaryButtonHoverColor
-                                    pressedColor: root.secondaryButtonPressedColor
-                                    onClicked: root.officialCatalogRefreshRequested()
-                                }
-                            }
-                        }
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        visible: root.modelCount(root.r18Controller ? root.r18Controller.officialSourceModel : null) === 0
-                                 && !root.loading
-                        text: "暂无漫画源，刷新仓库地址后会出现在这里"
-                        color: root.textMutedColor
-                        font.pixelSize: 13
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-
-                    ListView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        clip: true
-                        spacing: 8
-                        model: root.r18Controller ? root.r18Controller.officialSourceModel : null
-                        ScrollBar.vertical: GlassScrollBar {}
-
-                        delegate: R18OfficialSourceRow {
-                            sourceIndex: index
-                            title: model.title || ""
-                            itemId: model.itemId || ""
-                            statusText: model.status || model.message || model.url || ""
-                            textPrimaryColor: root.textPrimaryColor
-                            textSecondaryColor: root.textSecondaryColor
-                            importButtonColor: root.homeImportButtonColor
-                            importButtonHoverColor: root.homeImportButtonHoverColor
-                            importButtonPressedColor: root.homeImportButtonPressedColor
-                            onImportRequested: function(sourceIndex) {
-                                root.officialSourceImportRequested(sourceIndex)
-                            }
-                        }
-                    }
+            R18OfficialSourceCatalogPane {
+                officialSourceModel: root.r18Controller ? root.r18Controller.officialSourceModel : null
+                sourceCatalogInput: root.sourceCatalogInput
+                sourceHelpVisible: root.sourceHelpVisible
+                loading: root.loading
+                homeCardFillColor: root.homeCardFillColor
+                homeCardStrokeColor: root.homeCardStrokeColor
+                homeFieldStrokeColor: root.homeFieldStrokeColor
+                textPrimaryColor: root.textPrimaryColor
+                textSecondaryColor: root.textSecondaryColor
+                textMutedColor: root.textMutedColor
+                placeholderColor: root.placeholderColor
+                secondaryButtonColor: root.secondaryButtonColor
+                secondaryButtonHoverColor: root.secondaryButtonHoverColor
+                secondaryButtonPressedColor: root.secondaryButtonPressedColor
+                importButtonColor: root.homeImportButtonColor
+                importButtonHoverColor: root.homeImportButtonHoverColor
+                importButtonPressedColor: root.homeImportButtonPressedColor
+                onSourceCatalogInputEdited: function(text) { root.sourceCatalogInputEdited(text) }
+                onOfficialCatalogRefreshRequested: root.officialCatalogRefreshRequested()
+                onSourceHelpToggled: root.sourceHelpToggled()
+                onOfficialSourceImportRequested: function(sourceIndex) {
+                    root.officialSourceImportRequested(sourceIndex)
                 }
             }
 

@@ -62,7 +62,7 @@ void AgentController::listMemories()
     url.setQuery(query);
 
     ReqId reqId = ID_AI_MEMORY_LIST;
-    _pending_requests[reqId] = "memory_list";
+    _pending_requests.track(reqId, AgentRequestKind::MemoryList);
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
@@ -83,7 +83,7 @@ void AgentController::createMemory(const QString& content)
     payload["content"] = trimmed;
 
     ReqId reqId = ID_AI_MEMORY_CREATE;
-    _pending_requests[reqId] = "memory_create";
+    _pending_requests.track(reqId, AgentRequestKind::MemoryCreate);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/memory"),
                                         payload,
                                         reqId,
@@ -108,7 +108,7 @@ void AgentController::deleteMemory(const QString& memoryId)
     payload["memory_id"] = trimmed;
 
     ReqId reqId = ID_AI_MEMORY_DELETE;
-    _pending_requests[reqId] = "memory_delete";
+    _pending_requests.track(reqId, AgentRequestKind::MemoryDelete);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/memory/delete"),
                                         payload,
                                         reqId,
@@ -116,14 +116,14 @@ void AgentController::deleteMemory(const QString& memoryId)
                                         aiHttpModule());
 }
 
-void AgentController::handleMemoryRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType)
+void AgentController::handleMemoryRsp(ReqId id, const QString& res, ErrorCodes err, AgentRequestKind kind)
 {
     Q_UNUSED(id);
     Q_UNUSED(err);
     QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8());
     QJsonObject root = doc.object();
 
-    if (reqType == "memory_list")
+    if (kind == AgentRequestKind::MemoryList)
     {
         QJsonArray memories = root["memories"].toArray();
         _memories.clear();
@@ -141,14 +141,14 @@ void AgentController::handleMemoryRsp(ReqId id, const QString& res, ErrorCodes e
                                           : QString("已加载 %1 条记忆。").arg(_memories.size()));
         emit memoriesChanged();
     }
-    else if (reqType == "memory_create")
+    else if (kind == AgentRequestKind::MemoryCreate)
     {
         clearErrorState();
         clearMemoryError();
         setMemoryBusy(false, "记忆已保存，正在刷新...");
         listMemories();
     }
-    else if (reqType == "memory_delete")
+    else if (kind == AgentRequestKind::MemoryDelete)
     {
         clearErrorState();
         clearMemoryError();

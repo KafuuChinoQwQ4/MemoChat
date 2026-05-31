@@ -57,3 +57,86 @@ target_include_directories(transport_endpoint_policy_gtest PRIVATE
 add_dependencies(gtest_tests transport_endpoint_policy_gtest)
 
 gtest_discover_tests(transport_endpoint_policy_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
+add_executable(app_chat_connection_policy_gtest
+    AppChatConnectionPolicyTest.cpp
+    ../../../apps/client/desktop/MemoChat-qml/app/AppChatConnectionPolicy.cpp
+)
+set_target_properties(app_chat_connection_policy_gtest PROPERTIES
+    CXX_STANDARD 23
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+
+target_link_libraries(app_chat_connection_policy_gtest PRIVATE
+    GTest_TestLib
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Gui
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Network
+)
+
+target_include_directories(app_chat_connection_policy_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/app
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core/common
+)
+
+add_dependencies(gtest_tests app_chat_connection_policy_gtest)
+
+gtest_discover_tests(app_chat_connection_policy_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
+add_executable(chat_message_dispatcher_group_payload_gtest
+    ChatMessageDispatcherGroupPayloadTest.cpp
+    ../../../apps/client/desktop/MemoChat-qml/core/network/ChatMessageDispatcherGroupPayload.cpp
+)
+set_target_properties(chat_message_dispatcher_group_payload_gtest PROPERTIES
+    CXX_STANDARD 23
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+
+target_link_libraries(chat_message_dispatcher_group_payload_gtest PRIVATE
+    GTest_TestLib
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Gui
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Network
+)
+
+target_include_directories(chat_message_dispatcher_group_payload_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core/network
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core/common
+)
+
+add_dependencies(gtest_tests chat_message_dispatcher_group_payload_gtest)
+
+gtest_discover_tests(chat_message_dispatcher_group_payload_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
+add_executable(chat_message_dispatcher_group_history_gtest
+    ChatMessageDispatcherGroupHistoryTest.cpp
+    ../../../apps/client/desktop/MemoChat-qml/core/network/ChatMessageDispatcherGroupHistory.cpp
+    ../../../apps/client/desktop/MemoChat-qml/core/network/ChatMessageDispatcherGroupPayload.cpp
+)
+set_target_properties(chat_message_dispatcher_group_history_gtest PROPERTIES
+    CXX_STANDARD 23
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+
+target_link_libraries(chat_message_dispatcher_group_history_gtest PRIVATE
+    GTest_TestLib
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Gui
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Network
+)
+
+target_include_directories(chat_message_dispatcher_group_history_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core/network
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core/common
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core/session
+)
+
+add_dependencies(gtest_tests chat_message_dispatcher_group_history_gtest)
+
+gtest_discover_tests(chat_message_dispatcher_group_history_gtest TEST_DISCOVERY_MODE POST_BUILD)

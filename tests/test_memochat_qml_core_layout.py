@@ -10,6 +10,13 @@ CLIENT_CACHE_TEST_CMAKE = REPO_ROOT / "tests/client/cache/CMakeLists.txt"
 CLIENT_MOMENTS_TEST_CMAKE = REPO_ROOT / "tests/client/moments/CMakeLists.txt"
 CLIENT_NETWORK_TEST_CMAKE = REPO_ROOT / "tests/client/network/CMakeLists.txt"
 QML_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
+QML_CMAKE_DIR = QML_DIR / "cmake"
+QML_CMAKE_FRAGMENTS = (
+    QML_CMAKE_DIR / "AppSources.cmake",
+    QML_CMAKE_DIR / "FeatureSources.cmake",
+    QML_CMAKE_DIR / "SharedSources.cmake",
+    QML_CMAKE_DIR / "QmlResources.cmake",
+)
 CORE_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core"
 CORE_CMAKE = CORE_DIR / "CMakeLists.txt"
 OLD_SHARED_DIR = REPO_ROOT / "apps/client/desktop/MemoChatShared"
@@ -50,7 +57,6 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         expected_files = (
             "app/main.cpp",
             "app/MainPlatformBootstrap.cpp",
-            "app/MainQmlBootstrap.cpp",
             "app/MainQmlTypeRegistry.cpp",
             "app/MainQmlEngineSetup.cpp",
             "app/MainQmlWindowLoader.cpp",
@@ -103,17 +109,15 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
             "app/AppControllerDialogRuntimeState.cpp",
             "app/AppControllerProfileState.cpp",
             "app/AppControllerBootstrapState.cpp",
-            "app/AppControllerConnectionLogin.cpp",
-            "app/AppControllerHeartbeat.cpp",
-            "app/AppControllerReconnect.cpp",
-            "app/AppControllerLoginSession.cpp",
+            "app/AppChatConnectionCoordinator.cpp",
+            "app/AppChatConnectionCoordinator.h",
+            "app/AppChatConnectionPolicy.cpp",
+            "app/AppChatConnectionPolicy.h",
             "app/AppControllerChatBootstrap.cpp",
             "app/AppControllerRelationBootstrap.cpp",
-            "app/AppControllerRegisterCountdown.cpp",
             "app/AppControllerPendingAttachments.cpp",
             "app/AppControllerMediaUploadQueue.cpp",
             "app/AppControllerMessageDispatch.cpp",
-            "app/AppControllerCallTarget.cpp",
             "app/AppControllerMessageStatus.cpp",
             "app/AppControllerPrivateHistoryResponses.cpp",
             "app/AppControllerPrivateMessageEvents.cpp",
@@ -178,6 +182,16 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
             with self.subTest(path=rel_path):
                 self.assertTrue((QML_DIR / rel_path).is_file())
 
+        over_split_cpp_files = (
+            "app/AppCoordinators.cpp",
+            "app/MainQmlBootstrap.cpp",
+            "app/AppControllerLoginSession.cpp",
+            "app/AppControllerRegisterCountdown.cpp",
+        )
+        for rel_path in over_split_cpp_files:
+            with self.subTest(over_split=rel_path):
+                self.assertFalse((QML_DIR / rel_path).exists())
+
         root_cpp_or_h = [path for path in QML_DIR.iterdir() if path.is_file() and path.suffix in {".cpp", ".h"}]
         self.assertEqual([], root_cpp_or_h)
 
@@ -188,7 +202,12 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
 
     def test_cmake_adds_core_from_qml_module_without_desktop_shared_entry(self):
         desktop_cmake = DESKTOP_CMAKE.read_text(encoding="utf-8")
-        qml_cmake = QML_CMAKE.read_text(encoding="utf-8")
+        qml_cmake_root = QML_CMAKE.read_text(encoding="utf-8")
+        qml_cmake = (
+            qml_cmake_root
+            + "\n"
+            + "\n".join(fragment.read_text(encoding="utf-8") for fragment in QML_CMAKE_FRAGMENTS if fragment.exists())
+        )
         core_cmake = CORE_CMAKE.read_text(encoding="utf-8")
         client_cache_test_cmake = CLIENT_CACHE_TEST_CMAKE.read_text(encoding="utf-8")
         client_dialog_test_cmake = CLIENT_DIALOG_TEST_CMAKE.read_text(encoding="utf-8")
@@ -197,7 +216,7 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
 
         self.assertNotIn("add_subdirectory(MemoChatShared)", desktop_cmake)
         self.assertIn("add_subdirectory(MemoChat-qml)", desktop_cmake)
-        self.assertIn("add_subdirectory(core)", qml_cmake)
+        self.assertIn("add_subdirectory(core)", qml_cmake_root)
         self.assertIn("session/UserMgrApply.cpp", core_cmake)
         self.assertIn("session/UserMgrFriends.cpp", core_cmake)
         self.assertIn("session/UserMgrGroupList.cpp", core_cmake)
@@ -224,7 +243,7 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("set(MEMOCHAT_QML_FEATURE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features)", qml_cmake)
         self.assertIn("set(MEMOCHAT_QML_SHARED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shared)", qml_cmake)
         self.assertIn("app/AppController.cpp", qml_cmake)
-        self.assertIn("app/MainQmlBootstrap.cpp", qml_cmake)
+        self.assertNotIn("app/MainQmlBootstrap.cpp", qml_cmake)
         self.assertIn("app/MainQmlTypeRegistry.cpp", qml_cmake)
         self.assertIn("app/MainQmlEngineSetup.cpp", qml_cmake)
         self.assertIn("app/MainQmlWindowLoader.cpp", qml_cmake)
@@ -278,19 +297,21 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("app/AppControllerProfileState.cpp", qml_cmake)
         self.assertIn("app/AppControllerBootstrapState.cpp", qml_cmake)
         self.assertNotIn("app/AppControllerState.cpp", qml_cmake)
-        self.assertIn("app/AppControllerConnectionLogin.cpp", qml_cmake)
-        self.assertIn("app/AppControllerHeartbeat.cpp", qml_cmake)
-        self.assertIn("app/AppControllerReconnect.cpp", qml_cmake)
+        self.assertNotIn("app/AppControllerConnectionLogin.cpp", qml_cmake)
+        self.assertNotIn("app/AppControllerHeartbeat.cpp", qml_cmake)
+        self.assertNotIn("app/AppControllerReconnect.cpp", qml_cmake)
+        self.assertIn("app/AppChatConnectionCoordinator.cpp", qml_cmake)
+        self.assertIn("app/AppChatConnectionPolicy.cpp", qml_cmake)
         self.assertNotIn("app/AppControllerConnection.cpp", qml_cmake)
-        self.assertIn("app/AppControllerLoginSession.cpp", qml_cmake)
+        self.assertNotIn("app/AppControllerLoginSession.cpp", qml_cmake)
         self.assertIn("app/AppControllerChatBootstrap.cpp", qml_cmake)
         self.assertIn("app/AppControllerRelationBootstrap.cpp", qml_cmake)
-        self.assertIn("app/AppControllerRegisterCountdown.cpp", qml_cmake)
+        self.assertNotIn("app/AppControllerRegisterCountdown.cpp", qml_cmake)
         self.assertNotIn("app/AppControllerSession.cpp", qml_cmake)
         self.assertIn("app/AppControllerPendingAttachments.cpp", qml_cmake)
         self.assertIn("app/AppControllerMediaUploadQueue.cpp", qml_cmake)
         self.assertIn("app/AppControllerMessageDispatch.cpp", qml_cmake)
-        self.assertIn("app/AppControllerCallTarget.cpp", qml_cmake)
+        self.assertNotIn("app/AppControllerCallTarget.cpp", qml_cmake)
         self.assertIn("app/AppControllerMessageStatus.cpp", qml_cmake)
         self.assertIn("app/AppControllerPrivateHistoryResponses.cpp", qml_cmake)
         self.assertIn("app/AppControllerPrivateMessageEvents.cpp", qml_cmake)
@@ -369,12 +390,52 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertNotIn("SHARED_CLIENT_DIR", qml_cmake)
         self.assertNotIn("../MemoChatShared", qml_cmake)
 
+    def test_qml_cmake_source_lists_are_split_into_grouped_fragments(self):
+        root = QML_CMAKE.read_text(encoding="utf-8")
+        for fragment in QML_CMAKE_FRAGMENTS:
+            with self.subTest(fragment=fragment.name):
+                self.assertTrue(fragment.is_file())
+                self.assertIn(f"include(cmake/{fragment.name})", root)
+
+        app = (QML_CMAKE_DIR / "AppSources.cmake").read_text(encoding="utf-8")
+        features = (QML_CMAKE_DIR / "FeatureSources.cmake").read_text(encoding="utf-8")
+        shared = (QML_CMAKE_DIR / "SharedSources.cmake").read_text(encoding="utf-8")
+        resources = (QML_CMAKE_DIR / "QmlResources.cmake").read_text(encoding="utf-8")
+        combined = "\n".join((root, app, features, shared, resources))
+
+        self.assertNotIn("file(GLOB", combined)
+        self.assertIn("set(MEMOCHAT_QML_APP_SOURCES", app)
+        self.assertIn("set(MEMOCHAT_QML_APP_HEADERS", app)
+        self.assertIn("app/AppController.cpp", app)
+        self.assertIn("app/AppChatConnectionCoordinator.cpp", app)
+        self.assertIn("set(MEMOCHAT_QML_FEATURE_SOURCES", features)
+        self.assertIn("set(MEMOCHAT_QML_FEATURE_HEADERS", features)
+        self.assertIn("features/agent/AgentController.cpp", features)
+        self.assertIn("features/pet/PetController.cpp", features)
+        self.assertIn("set(MEMOCHAT_QML_SHARED_SOURCES", shared)
+        self.assertIn("set(MEMOCHAT_QML_SHARED_HEADERS", shared)
+        self.assertIn("shared/media/MediaUploadService.cpp", shared)
+        self.assertIn("live2d/Live2DRenderItem.cpp", shared)
+        self.assertIn("platform/windows/ClientWinCompat.h", shared)
+        self.assertIn("set(MEMOCHAT_QML_RESOURCES", resources)
+        self.assertIn("qml.qrc", resources)
+        self.assertIn("${MEMOCHAT_QML_CORE_DIR}/rc.qrc", resources)
+        self.assertIn("${MEMOCHAT_QML_APP_SOURCES}", root)
+        self.assertIn("${MEMOCHAT_QML_FEATURE_SOURCES}", root)
+        self.assertIn("${MEMOCHAT_QML_SHARED_SOURCES}", root)
+        self.assertIn("${MEMOCHAT_QML_RESOURCES}", root)
+
     def test_startup_qml_bootstrap_concerns_are_split(self):
-        bootstrap = (QML_DIR / "app/MainQmlBootstrap.cpp").read_text(encoding="utf-8")
+        bootstrap = (QML_DIR / "app/MainQmlBootstrap.h").read_text(encoding="utf-8")
         registry = (QML_DIR / "app/MainQmlTypeRegistry.cpp").read_text(encoding="utf-8")
         engine = (QML_DIR / "app/MainQmlEngineSetup.cpp").read_text(encoding="utf-8")
         loader = (QML_DIR / "app/MainQmlWindowLoader.cpp").read_text(encoding="utf-8")
 
+        self.assertFalse((QML_DIR / "app/MainQmlBootstrap.cpp").exists())
+        self.assertIn("void registerMemoChatQmlTypes();", bootstrap)
+        self.assertIn("QUrl memoChatMainQmlUrl();", bootstrap)
+        self.assertIn("void configureMemoChatEngine", bootstrap)
+        self.assertIn("bool loadMemoChatMainWindow", bootstrap)
         self.assertIn("void registerMemoChatQmlTypes()", registry)
         self.assertIn("qmlRegisterUncreatableType<AppController>", registry)
         self.assertIn("void configureMemoChatEngine", engine)
@@ -383,10 +444,10 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("bool loadMemoChatMainWindow", loader)
         self.assertIn("ensureInitialCenteringHook(window)", loader)
         self.assertIn("scheduleTopLevelQuickWindowHookRetries(&app)", loader)
-        self.assertNotIn("void registerMemoChatQmlTypes()", bootstrap)
-        self.assertNotIn("void configureMemoChatEngine", bootstrap)
-        self.assertNotIn("bool loadMemoChatMainWindow", bootstrap)
-        self.assertLessEqual(len(bootstrap.splitlines()), 12)
+        self.assertNotIn("qmlRegisterUncreatableType", bootstrap)
+        self.assertNotIn("setContextProperty", bootstrap)
+        self.assertNotIn("engine.load", bootstrap)
+        self.assertLessEqual(len(bootstrap.splitlines()), 16)
 
     def test_qml_shell_runtime_helpers_are_registered(self):
         qrc = QML_QRC.read_text(encoding="utf-8")
@@ -545,7 +606,6 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(commands.splitlines()), 360)
 
     def test_heavy_app_coordinator_concerns_are_split(self):
-        shell = (QML_DIR / "app/AppCoordinators.cpp").read_text(encoding="utf-8")
         session = (QML_DIR / "app/AppSessionCoordinator.cpp").read_text(encoding="utf-8")
         session_auth = (QML_DIR / "app/SessionAuthCoordinator.cpp").read_text(encoding="utf-8")
         session_auth_commands = (QML_DIR / "app/SessionAuthCoordinatorCommands.cpp").read_text(encoding="utf-8")
@@ -555,11 +615,15 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         session_relation = (QML_DIR / "app/SessionRelationBootstrap.cpp").read_text(encoding="utf-8")
         session_countdown = (QML_DIR / "app/RegisterCountdownController.cpp").read_text(encoding="utf-8")
         contact = (QML_DIR / "app/ContactCoordinatorShell.cpp").read_text(encoding="utf-8")
+        coordinators = (QML_DIR / "app/AppCoordinators.h").read_text(encoding="utf-8")
         call = (QML_DIR / "app/CallCoordinator.cpp").read_text(encoding="utf-8")
+        app_controller = (QML_DIR / "app/AppController.cpp").read_text(encoding="utf-8")
+        app_header = (QML_DIR / "app/AppController.h").read_text(encoding="utf-8")
         profile = (QML_DIR / "app/ProfileCoordinator.cpp").read_text(encoding="utf-8")
         group = (QML_DIR / "app/GroupCoordinator.cpp").read_text(encoding="utf-8")
         media = (QML_DIR / "app/MediaCoordinator.cpp").read_text(encoding="utf-8")
 
+        self.assertFalse((QML_DIR / "app/AppCoordinators.cpp").exists())
         self.assertIn("AppSessionCoordinator::AppSessionCoordinator", session)
         self.assertIn("void AppSessionCoordinator::login", session)
         self.assertIn("SessionAuthCoordinator::SessionAuthCoordinator", session_auth)
@@ -582,16 +646,36 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("void ContactCoordinatorShell::approveFriend", contact)
         self.assertIn("CallCoordinator::CallCoordinator", call)
         self.assertIn("void CallCoordinator::endCurrentCall", call)
+        self.assertIn("void CallCoordinator::finalizeEndedCall", call)
+        self.assertIn("bool CallCoordinator::ensureCallTargetFromCurrentChat", call)
+        self.assertIn("void CallCoordinator::startCallFlow", call)
+        self.assertIn("void CallCoordinator::onCallHttpFinished", call)
+        self.assertIn("void CallCoordinator::onCallEvent", call)
+        self.assertIn("void CallCoordinator::onLivekitRoomJoined", call)
+        self.assertIn("void CallCoordinator::onLivekitRoomDisconnected", call)
+        self.assertIn("_app._livekit_bridge.leaveRoom();", call)
+        self.assertIn("_app._call_session_model.markEnded(statusText);", call)
+        self.assertIn("_app.setAuthStatus(statusText, false);", call)
+        self.assertIn("QTimer::singleShot(1800", call)
+        self.assertIn("_app._call_controller.startCall", call)
+        self.assertIn("void finalizeEndedCall(const QString& statusText);", coordinators)
+        self.assertNotIn("_app.startCallFlow", call)
+        self.assertIn("_call_coordinator->onCallHttpFinished", app_controller)
+        self.assertIn("_call_coordinator->onCallEvent", app_controller)
+        self.assertIn("_call_coordinator->onLivekitRoomDisconnected", app_controller)
+        self.assertNotIn("&AppController::onCallHttpFinished", app_controller)
+        self.assertNotIn("&AppController::onCallEvent", app_controller)
+        self.assertNotIn("&AppController::onLivekitRoomDisconnected", app_controller)
+        self.assertNotIn("void onCallHttpFinished(ReqId id, QString res, ErrorCodes err);", app_header)
+        self.assertNotIn("void onCallEvent(QJsonObject payload);", app_header)
+        self.assertNotIn("void onLivekitRoomDisconnected(const QString& reason, bool recoverable);", app_header)
         self.assertIn("ProfileCoordinator::ProfileCoordinator", profile)
         self.assertIn("void ProfileCoordinator::chooseAvatar", profile)
         self.assertIn("GroupCoordinator::GroupCoordinator", group)
         self.assertIn("void GroupCoordinator::createGroup", group)
         self.assertIn("MediaCoordinator::MediaCoordinator", media)
         self.assertIn("void MediaCoordinator::sendCurrentComposerPayload", media)
-        self.assertNotIn("void MediaCoordinator::sendTextMessage", shell)
-        self.assertNotIn("void GroupCoordinator::createGroup", shell)
         self.assertLess(len(session.splitlines()), 90)
-        self.assertLess(len(shell.splitlines()), 40)
 
     def test_heavy_app_controller_model_concerns_are_split(self):
         models = (QML_DIR / "app/AppControllerModels.cpp").read_text(encoding="utf-8")
@@ -731,24 +815,47 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertLess(len(profile_state.splitlines()), 110)
 
     def test_heavy_app_controller_connection_concerns_are_split(self):
-        login = (QML_DIR / "app/AppControllerConnectionLogin.cpp").read_text(encoding="utf-8")
-        heartbeat = (QML_DIR / "app/AppControllerHeartbeat.cpp").read_text(encoding="utf-8")
-        reconnect = (QML_DIR / "app/AppControllerReconnect.cpp").read_text(encoding="utf-8")
+        app_controller = (QML_DIR / "app/AppController.cpp").read_text(encoding="utf-8")
+        app_header = (QML_DIR / "app/AppController.h").read_text(encoding="utf-8")
+        coordinator = (QML_DIR / "app/AppChatConnectionCoordinator.cpp").read_text(encoding="utf-8")
+        policy = (QML_DIR / "app/AppChatConnectionPolicy.cpp").read_text(encoding="utf-8")
 
         self.assertFalse((QML_DIR / "app/AppControllerConnection.cpp").exists())
-        self.assertIn("void AppController::onTcpConnectFinished", login)
-        self.assertIn("void AppController::onChatLoginFailed", login)
-        self.assertIn("void AppController::onHeartbeatTimeout", heartbeat)
-        self.assertIn("void AppController::onHeartbeatAck", heartbeat)
-        self.assertIn("void AppController::onNotifyOffline", heartbeat)
-        self.assertIn("void AppController::onConnectionClosed", reconnect)
-        self.assertIn("bool AppController::tryLoginFallbackToTcp", reconnect)
-        self.assertIn("bool AppController::tryReconnectChat", reconnect)
-        self.assertIn("void AppController::resetHeartbeatTracking", reconnect)
-        self.assertNotIn("tryReconnectChat", login)
-        self.assertNotIn("onTcpConnectFinished", heartbeat)
-        self.assertLess(len(login.splitlines()), 120)
-        self.assertLess(len(heartbeat.splitlines()), 110)
+        self.assertFalse((QML_DIR / "app/AppControllerConnectionLogin.cpp").exists())
+        self.assertFalse((QML_DIR / "app/AppControllerHeartbeat.cpp").exists())
+        self.assertFalse((QML_DIR / "app/AppControllerReconnect.cpp").exists())
+        self.assertIn("_chat_connection_coordinator->onTcpConnectFinished(success);", app_controller)
+        self.assertIn("_chat_connection_coordinator->onChatLoginFailed(err);", app_controller)
+        self.assertIn("_chat_connection_coordinator->onHeartbeatTimeout();", app_controller)
+        self.assertIn("_chat_connection_coordinator->onHeartbeatAck(ackAtMs);", app_controller)
+        self.assertIn("_chat_connection_coordinator->onNotifyOffline();", app_controller)
+        self.assertIn("_chat_connection_coordinator->onConnectionClosed();", app_controller)
+        self.assertNotIn("&AppController::onTcpConnectFinished", app_controller)
+        self.assertNotIn("&AppController::onChatLoginFailed", app_controller)
+        self.assertNotIn("&AppController::onHeartbeatTimeout", app_controller)
+        self.assertNotIn("&AppController::onHeartbeatAck", app_controller)
+        self.assertNotIn("&AppController::onNotifyOffline", app_controller)
+        self.assertNotIn("&AppController::onConnectionClosed", app_controller)
+        self.assertNotIn("void onTcpConnectFinished(bool success);", app_header)
+        self.assertNotIn("void onChatLoginFailed(int err);", app_header)
+        self.assertNotIn("void onHeartbeatTimeout();", app_header)
+        self.assertNotIn("void onHeartbeatAck(qint64 ackAtMs);", app_header)
+        self.assertNotIn("void onNotifyOffline();", app_header)
+        self.assertNotIn("void onConnectionClosed();", app_header)
+        self.assertNotIn("bool tryLoginFallbackToTcp(const QString& reason);", app_header)
+        self.assertNotIn("bool tryReconnectChat();", app_header)
+        self.assertNotIn("void resetHeartbeatTracking();", app_header)
+        self.assertIn("void AppChatConnectionCoordinator::onTcpConnectFinished", coordinator)
+        self.assertIn("void AppChatConnectionCoordinator::onHeartbeatTimeout", coordinator)
+        self.assertIn("void AppChatConnectionCoordinator::onHeartbeatAck", coordinator)
+        self.assertIn("void AppChatConnectionCoordinator::onNotifyOffline", coordinator)
+        self.assertIn("void AppChatConnectionCoordinator::onConnectionClosed", coordinator)
+        self.assertIn("bool AppChatConnectionCoordinator::tryReconnectChat", coordinator)
+        self.assertIn("AppChatConnectionPolicy::evaluateLoginTcpFallback", coordinator)
+        self.assertIn("AppChatConnectionPolicy::evaluateReconnect", coordinator)
+        self.assertIn("evaluateLoginTcpFallback", policy)
+        self.assertIn("evaluateReconnect", policy)
+        self.assertLess(len(coordinator.splitlines()), 380)
 
     def test_heavy_app_controller_session_concerns_are_split(self):
         coordinator = (QML_DIR / "app/AppSessionCoordinator.cpp").read_text(encoding="utf-8")
@@ -759,12 +866,13 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         chat_entry = (QML_DIR / "app/SessionChatEntryCoordinator.cpp").read_text(encoding="utf-8")
         relation = (QML_DIR / "app/SessionRelationBootstrap.cpp").read_text(encoding="utf-8")
         countdown = (QML_DIR / "app/RegisterCountdownController.cpp").read_text(encoding="utf-8")
-        login = (QML_DIR / "app/AppControllerLoginSession.cpp").read_text(encoding="utf-8")
+        app_auth_responses = (QML_DIR / "app/AppControllerAuthResponses.cpp").read_text(encoding="utf-8")
         chat_bootstrap = (QML_DIR / "app/AppControllerChatBootstrap.cpp").read_text(encoding="utf-8")
         relation_bootstrap = (QML_DIR / "app/AppControllerRelationBootstrap.cpp").read_text(encoding="utf-8")
-        register_countdown = (QML_DIR / "app/AppControllerRegisterCountdown.cpp").read_text(encoding="utf-8")
 
         self.assertFalse((QML_DIR / "app/AppControllerSession.cpp").exists())
+        self.assertFalse((QML_DIR / "app/AppControllerLoginSession.cpp").exists())
+        self.assertFalse((QML_DIR / "app/AppControllerRegisterCountdown.cpp").exists())
         self.assertIn("void AppSessionCoordinator::onLoginHttpFinished", coordinator)
         self.assertIn("SessionAuthCoordinator::SessionAuthCoordinator", auth_coordinator)
         self.assertIn("void SessionAuthCoordinator::login", auth_commands)
@@ -777,32 +885,31 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("void SessionRelationBootstrap::requestRelationBootstrap", relation)
         self.assertIn("void SessionRelationBootstrap::onRelationBootstrapUpdated", relation)
         self.assertIn("void RegisterCountdownController::onRegisterCountdownTimeout", countdown)
-        self.assertIn("void AppController::onLoginHttpFinished", login)
+        self.assertIn("void AppController::onLoginHttpFinished", app_auth_responses)
         self.assertIn("void AppController::onSwitchToChat", chat_bootstrap)
         self.assertIn("void AppController::runPostLoginBootstrap", chat_bootstrap)
         self.assertIn("void AppController::requestRelationBootstrap", relation_bootstrap)
         self.assertIn("void AppController::onRelationBootstrapUpdated", relation_bootstrap)
-        self.assertIn("void AppController::onRegisterCountdownTimeout", register_countdown)
-        self.assertIn("_session_coordinator->onLoginHttpFinished", login)
+        self.assertIn("void AppController::onRegisterCountdownTimeout", app_auth_responses)
+        self.assertIn("_session_coordinator->onLoginHttpFinished", app_auth_responses)
         self.assertIn("_session_coordinator->onSwitchToChat", chat_bootstrap)
         self.assertIn("_session_coordinator->runPostLoginBootstrap", chat_bootstrap)
         self.assertIn("_session_coordinator->requestRelationBootstrap", relation_bootstrap)
-        self.assertIn("_session_coordinator->onRegisterCountdownTimeout", register_countdown)
+        self.assertIn("_session_coordinator->onRegisterCountdownTimeout", app_auth_responses)
         self.assertIn("_auth->onLoginHttpFinished", coordinator)
         self.assertIn("_chat_entry->onSwitchToChat", coordinator)
         self.assertIn("_relation_bootstrap->requestRelationBootstrap", coordinator)
         self.assertIn("_register_countdown->onRegisterCountdownTimeout", coordinator)
         self.assertNotIn("parseTransportKind", coordinator)
-        self.assertNotIn("parseTransportKind", login)
+        self.assertNotIn("parseTransportKind", app_auth_responses)
         self.assertNotIn("parseTransportKind", auth_coordinator)
         self.assertNotIn("gateAuthBusinessErrorTip", auth_coordinator)
         self.assertNotIn("QTimer::singleShot", chat_bootstrap)
         self.assertNotIn("GetFriendListSnapshot", relation_bootstrap)
-        self.assertNotIn("onRelationBootstrapUpdated", login)
+        self.assertNotIn("onRelationBootstrapUpdated", app_auth_responses)
         self.assertNotIn("onLoginHttpFinished", chat_bootstrap)
-        self.assertLess(len(login.splitlines()), 12)
         self.assertLess(len(chat_bootstrap.splitlines()), 20)
-        self.assertLess(len(register_countdown.splitlines()), 40)
+        self.assertLess(len(app_auth_responses.splitlines()), 90)
 
     def test_session_auth_workflow_is_owned_by_session_coordinator(self):
         coordinator = (QML_DIR / "app/AppSessionCoordinator.cpp").read_text(encoding="utf-8")
@@ -813,12 +920,12 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         chat_entry = (QML_DIR / "app/SessionChatEntryCoordinator.cpp").read_text(encoding="utf-8")
         relation = (QML_DIR / "app/SessionRelationBootstrap.cpp").read_text(encoding="utf-8")
         countdown = (QML_DIR / "app/RegisterCountdownController.cpp").read_text(encoding="utf-8")
-        login = (QML_DIR / "app/AppControllerLoginSession.cpp").read_text(encoding="utf-8")
         app_auth_responses = (QML_DIR / "app/AppControllerAuthResponses.cpp").read_text(encoding="utf-8")
         chat_bootstrap = (QML_DIR / "app/AppControllerChatBootstrap.cpp").read_text(encoding="utf-8")
         relation_bootstrap = (QML_DIR / "app/AppControllerRelationBootstrap.cpp").read_text(encoding="utf-8")
-        register_countdown = (QML_DIR / "app/AppControllerRegisterCountdown.cpp").read_text(encoding="utf-8")
 
+        self.assertFalse((QML_DIR / "app/AppControllerLoginSession.cpp").exists())
+        self.assertFalse((QML_DIR / "app/AppControllerRegisterCountdown.cpp").exists())
         self.assertIn("void AppSessionCoordinator::onLoginHttpFinished", coordinator)
         self.assertIn("SessionAuthCoordinator::SessionAuthCoordinator", auth_coordinator)
         self.assertIn("void SessionAuthCoordinator::onRegisterHttpFinished", auth_responses)
@@ -835,21 +942,20 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertNotIn("parseTransportKind", auth_coordinator)
         self.assertNotIn("gateAuthBusinessErrorTip", auth_coordinator)
 
-        self.assertIn("_session_coordinator->onLoginHttpFinished", login)
+        self.assertIn("_session_coordinator->onLoginHttpFinished", app_auth_responses)
         self.assertIn("_session_coordinator->onRegisterHttpFinished", app_auth_responses)
         self.assertIn("_session_coordinator->onResetHttpFinished", app_auth_responses)
         self.assertIn("_session_coordinator->onSwitchToChat", chat_bootstrap)
         self.assertIn("_session_coordinator->requestRelationBootstrap", relation_bootstrap)
         self.assertIn("_session_coordinator->onRelationBootstrapUpdated", relation_bootstrap)
-        self.assertIn("_session_coordinator->onRegisterCountdownTimeout", register_countdown)
+        self.assertIn("_session_coordinator->onRegisterCountdownTimeout", app_auth_responses)
 
-        self.assertNotIn("_auth_controller.sendLogin", login)
+        self.assertNotIn("_auth_controller.sendLogin", app_auth_responses)
         self.assertNotIn("_register_countdown_timer.start(1000)", app_auth_responses)
         self.assertNotIn("_auth_controller.sendLogin", coordinator)
         self.assertNotIn("gateAuthBusinessErrorTip", coordinator)
         self.assertNotIn("QTimer::singleShot", chat_bootstrap)
         self.assertNotIn("GetFriendListSnapshot", relation_bootstrap)
-        self.assertLess(len(register_countdown.splitlines()), 20)
 
     def test_heavy_friend_list_model_concerns_are_split(self):
         model = (QML_DIR / "features/contact/FriendListModel.cpp").read_text(encoding="utf-8")
@@ -877,7 +983,11 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         attachments = (QML_DIR / "app/AppControllerPendingAttachments.cpp").read_text(encoding="utf-8")
         upload_queue = (QML_DIR / "app/AppControllerMediaUploadQueue.cpp").read_text(encoding="utf-8")
         dispatch = (QML_DIR / "app/AppControllerMessageDispatch.cpp").read_text(encoding="utf-8")
-        call_target = (QML_DIR / "app/AppControllerCallTarget.cpp").read_text(encoding="utf-8")
+        call = (QML_DIR / "app/CallCoordinator.cpp").read_text(encoding="utf-8")
+        call_payload = (QML_DIR / "app/CallCoordinatorPayloadPolicy.cpp").read_text(encoding="utf-8")
+        call_payload_header = (QML_DIR / "app/CallCoordinatorPayloadPolicy.h").read_text(encoding="utf-8")
+        header = (QML_DIR / "app/AppController.h").read_text(encoding="utf-8")
+        qml_cmake = (QML_DIR / "cmake/AppSources.cmake").read_text(encoding="utf-8")
 
         self.assertIn("void AppController::sendTextMessage", media)
         self.assertIn("void AppController::sendCurrentComposerPayload", media)
@@ -889,8 +999,37 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("bool AppController::sendUploadedAttachmentToDialog", upload_queue)
         self.assertIn("bool AppController::dispatchChatContent", dispatch)
         self.assertIn("bool AppController::dispatchGroupChatContent", dispatch)
-        self.assertIn("bool AppController::ensureCallTargetFromCurrentChat", call_target)
-        self.assertIn("void AppController::sendCallInvite", call_target)
+        self.assertFalse((QML_DIR / "app/AppControllerCallTarget.cpp").exists())
+        self.assertIn("bool CallCoordinator::ensureCallTargetFromCurrentChat", call)
+        self.assertIn("void CallCoordinator::startCallFlow", call)
+        self.assertIn("void CallCoordinator::finalizeEndedCall", call)
+        self.assertIn("void CallCoordinator::onCallHttpFinished", call)
+        self.assertIn("void CallCoordinator::onLivekitMediaError", call)
+        self.assertIn("_app._call_controller.startCall", call)
+        self.assertIn("_app._auth_controller.parseJson(res, obj)", call)
+        self.assertIn("app/CallCoordinatorPayloadPolicy.cpp", qml_cmake)
+        self.assertIn("QString mapCallError", call_payload_header)
+        self.assertIn("QString callStateText", call_payload_header)
+        self.assertIn("QJsonObject buildLivekitMetadata", call_payload_header)
+        self.assertIn("QJsonObject buildLivekitLaunchPayload", call_payload_header)
+        self.assertIn("CallEventPeer resolveCallEventPeer", call_payload_header)
+        self.assertIn("QString mapCallError(int errorCode)", call_payload)
+        self.assertIn("QString callStateText(const QString& eventType)", call_payload)
+        self.assertIn("QJsonObject buildLivekitMetadata", call_payload)
+        self.assertIn("QJsonObject buildLivekitLaunchPayload", call_payload)
+        self.assertIn("CallEventPeer resolveCallEventPeer", call_payload)
+        self.assertNotIn("QString mapCallError", call)
+        self.assertNotIn("QString callStateText", call)
+        self.assertNotIn("QJsonObject metadata;", call)
+        self.assertNotIn('metadata["callId"]', call)
+        self.assertFalse((QML_DIR / "app/AppControllerCall.cpp").exists())
+        self.assertNotIn("app/AppControllerCall.cpp", qml_cmake)
+        self.assertNotIn("_app.startCallFlow", call)
+        self.assertNotIn("void sendCallInvite(const QString& callType);", header)
+        self.assertNotIn("bool ensureCallTargetFromCurrentChat();", header)
+        self.assertNotIn("void startCallFlow(const QString& callType);", header)
+        self.assertNotIn("void finalizeEndedCall(const QString& statusText);", header)
+        self.assertNotIn("void onLivekitMediaError(const QString& message);", header)
         self.assertNotIn("void AppController::processPendingAttachmentQueue", media)
         self.assertNotIn("bool AppController::dispatchGroupChatContent", media)
         self.assertNotIn("bool AppController::ensureCallTargetFromCurrentChat", media)

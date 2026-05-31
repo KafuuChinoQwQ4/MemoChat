@@ -58,7 +58,7 @@ void AgentController::sendMessage(const QString& content)
 
     QString msgId = makeUuid();
     ReqId reqId = ID_AI_CHAT;
-    _pending_requests[reqId] = msgId;
+    _pending_requests.track(reqId, AgentRequestKind::ChatMessage, msgId);
     _model->appendAIMessage(msgId, _current_model_name);
 
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/chat"),
@@ -85,7 +85,7 @@ void AgentController::summarizeChat(const QString& dialogUid, const QString& cha
     payload["context_json"] = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
 
     ReqId reqId = ID_AI_SMART;
-    _pending_requests[reqId] = "summary";
+    _pending_requests.track(reqId, AgentRequestKind::Summary);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/smart"),
                                         payload,
                                         reqId,
@@ -110,7 +110,7 @@ void AgentController::suggestReply(const QString& dialogUid, const QString& chat
     payload["context_json"] = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
 
     ReqId reqId = ID_AI_SMART;
-    _pending_requests[reqId] = "suggest";
+    _pending_requests.track(reqId, AgentRequestKind::Suggest);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/smart"),
                                         payload,
                                         reqId,
@@ -142,7 +142,7 @@ void AgentController::translateMessageWithSource(const QString& msgContent,
     payload["context_json"] = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
 
     ReqId reqId = ID_AI_SMART;
-    _pending_requests[reqId] = "translate";
+    _pending_requests.track(reqId, AgentRequestKind::Translate);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/smart"),
                                         payload,
                                         reqId,
@@ -189,7 +189,7 @@ void AgentController::handleChatRsp(ReqId id, const QString& res, ErrorCodes err
     emit aiResponseReceived(content);
 }
 
-void AgentController::handleSmartRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType)
+void AgentController::handleSmartRsp(ReqId id, const QString& res, ErrorCodes err, AgentRequestKind kind)
 {
     Q_UNUSED(id);
     Q_UNUSED(err);
@@ -197,7 +197,7 @@ void AgentController::handleSmartRsp(ReqId id, const QString& res, ErrorCodes er
     QJsonObject root = doc.object();
     QString result = root["result"].toString();
 
-    emit smartResultReady(reqType, result);
+    emit smartResultReady(agentRequestFeatureType(kind), result);
 }
 
 void AgentController::clearTrace()

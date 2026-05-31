@@ -14,7 +14,8 @@ LOGIN_TOP_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/components
 MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/main.cpp"
 SESSION_AUTH_LOGIN_RESPONSE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/SessionAuthCoordinatorLoginResponse.cpp"
 APP_CONTROLLER_NAVIGATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerNavigation.cpp"
-APP_CONTROLLER_RECONNECT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppControllerReconnect.cpp"
+APP_CONTROLLER_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppController.cpp"
+APP_CHAT_CONNECTION_COORDINATOR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/AppChatConnectionCoordinator.cpp"
 
 
 def extract_cpp_function(source: str, signature: str) -> str:
@@ -154,7 +155,7 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
             self.assertIn("win.maximumHeight = maximumSize.height", configure_window)
 
             self.assertIn("const targetSize = targetWindowSize()", sync_windows)
-            self.assertIn("const sizeChanged = win.visible", sync_windows)
+            self.assertIn("AppWindowRuntime.shouldHideResize(win, targetSize.width, targetSize.height)", sync_windows)
             self.assertLess(
                 sync_windows.index("win.visible = false"),
                 sync_windows.index("configureAppWindowForPage(win)"),
@@ -187,18 +188,23 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
         )
 
     def test_stale_account_switch_disconnect_is_ignored_before_chat_page_reconnect(self):
-        source = APP_CONTROLLER_RECONNECT.read_text(encoding="utf-8")
-        body = extract_cpp_function(source, "void AppController::onConnectionClosed")
+        app_controller = APP_CONTROLLER_CPP.read_text(encoding="utf-8")
+        self.assertIn("_chat_connection_coordinator->onConnectionClosed();", app_controller)
+        self.assertNotIn("&AppController::onConnectionClosed", app_controller)
 
-        ignore_index = body.index("if (_chat_recovery_state.ignoreNextLoginDisconnect)")
-        page_branch_index = body.index("if (_page != ChatPage)")
-        chat_reconnect_index = body.index("if (_call_session_model.visible())")
+        source = APP_CHAT_CONNECTION_COORDINATOR.read_text(encoding="utf-8")
+        body = extract_cpp_function(source, "void AppChatConnectionCoordinator::onConnectionClosed")
+
+        ignore_index = body.index("if (_app._chat_recovery_state.ignoreNextLoginDisconnect)")
+        page_branch_index = body.index("if (_app._page != AppController::ChatPage)")
+        chat_reconnect_index = body.index("if (_app._call_session_model.visible())")
 
         self.assertLess(ignore_index, page_branch_index)
         self.assertLess(ignore_index, chat_reconnect_index)
         ignored_block = body[ignore_index:page_branch_index]
-        self.assertIn("_chat_recovery_state.ignoreNextLoginDisconnect = false;", ignored_block)
+        self.assertIn("_app._chat_recovery_state.ignoreNextLoginDisconnect = false;", ignored_block)
         self.assertIn("resetReconnectState();", ignored_block)
+        self.assertIn("resetHeartbeatTracking();", ignored_block)
         self.assertIn("return;", ignored_block)
 
 

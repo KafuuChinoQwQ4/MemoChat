@@ -63,7 +63,7 @@ void AgentController::listAgentTasks()
     url.setQuery(query);
 
     ReqId reqId = ID_AI_TASK_LIST;
-    _pending_requests[reqId] = "task_list";
+    _pending_requests.track(reqId, AgentRequestKind::TaskList);
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
@@ -94,7 +94,7 @@ void AgentController::createAgentTask(const QString& content, const QString& tit
     payload["metadata"] = buildChatMetadata();
 
     ReqId reqId = ID_AI_TASK_CREATE;
-    _pending_requests[reqId] = "task_create";
+    _pending_requests.track(reqId, AgentRequestKind::TaskCreate);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/tasks"),
                                         payload,
                                         reqId,
@@ -117,7 +117,7 @@ void AgentController::cancelAgentTask(const QString& taskId)
     payload["task_id"] = trimmed;
 
     ReqId reqId = ID_AI_TASK_CANCEL;
-    _pending_requests[reqId] = "task_cancel";
+    _pending_requests.track(reqId, AgentRequestKind::TaskCancel);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/tasks/cancel"),
                                         payload,
                                         reqId,
@@ -140,7 +140,7 @@ void AgentController::resumeAgentTask(const QString& taskId)
     payload["task_id"] = trimmed;
 
     ReqId reqId = ID_AI_TASK_RESUME;
-    _pending_requests[reqId] = "task_resume";
+    _pending_requests.track(reqId, AgentRequestKind::TaskResume);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/tasks/resume"),
                                         payload,
                                         reqId,
@@ -148,14 +148,14 @@ void AgentController::resumeAgentTask(const QString& taskId)
                                         aiHttpModule());
 }
 
-void AgentController::handleAgentTaskRsp(ReqId id, const QString& res, ErrorCodes err, const QString& reqType)
+void AgentController::handleAgentTaskRsp(ReqId id, const QString& res, ErrorCodes err, AgentRequestKind kind)
 {
     Q_UNUSED(id);
     Q_UNUSED(err);
     QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8());
     QJsonObject root = doc.object();
 
-    if (reqType == "task_list")
+    if (kind == AgentRequestKind::TaskList)
     {
         QJsonArray tasks = root["tasks"].toArray();
         _agent_tasks.clear();
@@ -173,21 +173,21 @@ void AgentController::handleAgentTaskRsp(ReqId id, const QString& res, ErrorCode
                                                 : QString("已加载 %1 个后台任务。").arg(_agent_tasks.size()));
         emit agentTasksChanged();
     }
-    else if (reqType == "task_create")
+    else if (kind == AgentRequestKind::TaskCreate)
     {
         clearErrorState();
         clearAgentTaskError();
         setAgentTaskBusy(false, "任务已创建，正在刷新...");
         listAgentTasks();
     }
-    else if (reqType == "task_cancel")
+    else if (kind == AgentRequestKind::TaskCancel)
     {
         clearErrorState();
         clearAgentTaskError();
         setAgentTaskBusy(false, "任务已取消，正在刷新...");
         listAgentTasks();
     }
-    else if (reqType == "task_resume")
+    else if (kind == AgentRequestKind::TaskResume)
     {
         clearErrorState();
         clearAgentTaskError();

@@ -129,7 +129,6 @@ signals:
 
 private:
     static qreal boundedUnit(qreal value, qreal fallback = 0.0);
-    static QString resolveModelPath(const QString& modelRoot, const QString& modelJson);
     void updateVisual();
     void updateFrameTimer();
 
