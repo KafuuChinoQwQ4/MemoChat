@@ -21,12 +21,12 @@ description: Use when implementing a MemoChat change that needs CI-retained test
 - 并发安全测试：覆盖重复点击、并发请求、重连、重复消息、并发读写、幂等和竞态风险。
 - 数据驱动测试：用参数化用例、fixtures、表格数据或小型样本集覆盖协议 payload、schema、模型字段和多类型输入。
 
-代码测试必须落在 `tests/` 下并接入现有构建/测试入口：
+代码测试必须落在仓库根 `tests/` 下，按语言优先再镜像主项目路径，并接入现有构建/测试入口：
 
-- C++ 测试使用 GTest 编写，文件放入 `tests/` 的相关子目录，注册到对应 `CMakeLists.txt`，并能通过 `ctest --preset linux-full-gcc16 --output-on-failure` 运行。
-- Python 测试放入 `tests/`，优先用 `pytest`；也可以沿用项目已有 `unittest`/其他 runner，但必须有明确命令并能被 CI 调用。
+- C++ 测试使用 GTest 编写，文件放入 `tests/cpp/<主项目相对路径>/...`，注册到对应 `CMakeLists.txt`，并能通过 `ctest --preset linux-full-gcc16 --output-on-failure` 运行；不要在 `apps/**/tests` 或其他业务模块内新增 GTest。
+- Python 测试放入 `tests/python/<主项目相对路径>/...`，优先用 `pytest`；也可以沿用项目已有 `unittest`/其他 runner，但必须有明确命令并能被 CI 调用。
 - 压力、smoke 或运行时探针可以复用 `tools/` 下现有脚本，但不能替代 `tests/` 下持久化测试；需要新增脚本时要同时保留可被 CI 调用的测试入口或文档化命令。
-- 不要把测试文件放在临时目录、构建目录、`.ai` 或日志目录中；`.ai` 只记录计划、命令、结果和无法覆盖的理由。
+- 不要把测试文件放在临时目录、构建目录、`.ai`、日志目录或业务模块本地 `tests` 目录中；共享测试数据放 `tests/fixtures/...`；`.ai` 只记录计划、命令、结果和无法覆盖的理由。
 
 ## 阶段 1：实现
 

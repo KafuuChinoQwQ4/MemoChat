@@ -15,11 +15,12 @@ try {
 
 # Step 2: Poll Redis for the code
 Write-Host "Polling Redis..."
+$dockerCli = Join-Path $PSScriptRoot "docker\arch-docker.ps1"
 for ($i = 0; $i -lt 10; $i++) {
     Start-Sleep -Milliseconds 300
-    $result = cmd /c "set NODE_PATH=D:\MemoChat-Qml\server\VarifyServer\node_modules && node D:\MemoChat-Qml\scripts\read_verify.js $email 2>nul"
-    if ($result -match "Verify code: (\w+)") {
-        $code = $matches[1]
+    $result = & $dockerCli exec -e REDISCLI_AUTH=123456 memochat-redis redis-cli GET "code_$email" 2>$null
+    if ($LASTEXITCODE -eq 0 -and $result -and $result -ne "(nil)") {
+        $code = [string]$result
         Write-Host "FOUND CODE: $code"
         break
     }

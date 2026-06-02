@@ -1,18 +1,18 @@
-// Get verify code from Redis
-const Redis = require('D:/MemoChat-Qml-Drogon/server/VarifyServer/node_modules/ioredis');
+const { spawnSync } = require('child_process');
+const path = require('path');
 
-const cli = new Redis({
-    host: '127.0.0.1',
-    port: 6379,
-    password: '123456',
-});
+const email = process.argv[2] || 'testuser123@loadtest.local';
+const dockerCli = path.join(__dirname, 'docker', 'arch-docker.cmd');
+const result = spawnSync(
+    dockerCli,
+    ['exec', '-e', 'REDISCLI_AUTH=123456', 'memochat-redis', 'redis-cli', 'GET', `code_${email}`],
+    { encoding: 'utf8' }
+);
 
-async function main() {
-    const email = process.argv[2] || 'testuser123@loadtest.local';
-    const key = 'code_' + email;
-    console.log('Looking up key:', key);
-    const code = await cli.get(key);
-    console.log('Verify code:', code);
-    await cli.quit();
+if (result.status !== 0) {
+    process.stderr.write(result.stderr || 'redis-cli failed\n');
+    process.exit(result.status ?? 1);
 }
-main().catch(e => { console.error(e); process.exit(1); });
+
+const code = result.stdout.trim();
+console.log('Verify code:', code === '(nil)' ? '' : code);

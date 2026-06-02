@@ -10,16 +10,19 @@ add_custom_target(gtest_tests)
 
 # --- Register test groups ---
 # Each subdirectory creates an executable and calls add_dependencies(gtest_tests ...).
-add_subdirectory(../apps/server/core/common/proto/tests   ${CMAKE_CURRENT_BINARY_DIR}/proto)
-add_subdirectory(../apps/server/core/common/logging/tests ${CMAKE_CURRENT_BINARY_DIR}/logging)
-add_subdirectory(../apps/server/core/common/json/tests    ${CMAKE_CURRENT_BINARY_DIR}/json)
-add_subdirectory(../apps/server/core/AIServer/tests       ${CMAKE_CURRENT_BINARY_DIR}/aiserver)
-add_subdirectory(client/cache                          ${CMAKE_CURRENT_BINARY_DIR}/client_cache)
-add_subdirectory(client/live2d                         ${CMAKE_CURRENT_BINARY_DIR}/client_live2d)
-add_subdirectory(client/media                          ${CMAKE_CURRENT_BINARY_DIR}/client_media)
-add_subdirectory(client/dialog                         ${CMAKE_CURRENT_BINARY_DIR}/client_dialog)
-add_subdirectory(client/moments                        ${CMAKE_CURRENT_BINARY_DIR}/client_moments)
-add_subdirectory(client/network                        ${CMAKE_CURRENT_BINARY_DIR}/client_network)
+add_subdirectory(cpp/apps/server/core/common/proto                         ${CMAKE_CURRENT_BINARY_DIR}/proto)
+add_subdirectory(cpp/apps/server/core/common/logging                       ${CMAKE_CURRENT_BINARY_DIR}/logging)
+add_subdirectory(cpp/apps/server/core/common/json                          ${CMAKE_CURRENT_BINARY_DIR}/json)
+add_subdirectory(cpp/apps/server/core/AIServer                             ${CMAKE_CURRENT_BINARY_DIR}/aiserver)
+add_subdirectory(cpp/apps/server/core/VarifyServer                         ${CMAKE_CURRENT_BINARY_DIR}/varifyserver)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/chat/cache   ${CMAKE_CURRENT_BINARY_DIR}/client_cache)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/live2d                ${CMAKE_CURRENT_BINARY_DIR}/client_live2d)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/core/media            ${CMAKE_CURRENT_BINARY_DIR}/client_media)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/chat/services ${CMAKE_CURRENT_BINARY_DIR}/client_dialog)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/moments/parsing ${CMAKE_CURRENT_BINARY_DIR}/client_moments)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/core/network          ${CMAKE_CURRENT_BINARY_DIR}/client_network)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/shared/gateway        ${CMAKE_CURRENT_BINARY_DIR}/client_gateway)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/app/connection        ${CMAKE_CURRENT_BINARY_DIR}/client_connection)
 
 # Hook into CTest so "ctest" / "RUN_TESTS" discovers everything.
 # Discovery is handled in each subdirectory's CMakeLists.txt via

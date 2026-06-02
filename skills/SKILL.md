@@ -77,7 +77,7 @@ wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat-Qml-Drogon-linux && source 
   `GateServer`、`GateServerCore`、`ChatServer`、`StatusServer`、`VarifyServer`、`AIServer`、`AIOrchestrator`、`common`。
 - QML/客户端工作读取 `apps/client/desktop/*` 和 `infra/Memo_ops/client/*`。
 - 运行时/数据库工作读取 `apps/server/config`、`apps/server/migrations/postgresql`、`infra/deploy/local` 和 `tools/scripts`。
-- 现有相似代码路径、测试、脚本和配置。
+- 现有相似代码路径、测试、脚本和配置。新增或迁移持久化测试必须写入仓库根 `tests/` 的语言分区：C++ 放 `tests/cpp/<主项目相对路径>/...`，Python 放 `tests/python/<主项目相对路径>/...`，共享 fixture 放 `tests/fixtures/...`；历史 `apps/**/tests` 目录只能作为上下文读取，迁移时移入该结构。
 
 写入：
 
