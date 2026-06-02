@@ -2,6 +2,7 @@
 
 #include <grpcpp/grpcpp.h>
 #include "common/proto/message.grpc.pb.h"
+#include "const.h"
 #include <atomic>
 #include <mutex>
 #include <memory>
@@ -11,13 +12,6 @@
 namespace varifyservice
 {
 
-inline bool IsSyntheticLoadtestEmail(const std::string& email)
-{
-    if (email.size() < 14)
-        return false;
-    return email.compare(email.size() - 14, 14, "@loadtest.local") == 0;
-}
-
 enum class VarifyError
 {
     Success = 0,
@@ -25,6 +19,7 @@ enum class VarifyError
     Exception = 2,
     RateLimited = 3,
     InvalidEmail = 4,
+    EmailSendFailed = ErrorCodes::EmailSendFailed,
 };
 
 struct VarifyMetrics

@@ -248,66 +248,66 @@ data:
     ExportMetrics=false
     ServiceName=ChatServer
     ServiceNamespace=memochat
-  varify.config.json: |
-    {
-      "email": {
-        "host": "{{ .Values.externalServices.smtp.host }}",
-        "port": {{ .Values.externalServices.smtp.port }},
-        "secure": {{ .Values.externalServices.smtp.secure }},
-        "user": "{{ .Values.externalServices.smtp.user }}",
-        "pass": "",
-        "from": "{{ .Values.externalServices.smtp.from }}"
-      },
-      "mysql": {
-        "host": "{{ .Values.externalServices.mysql.host }}",
-        "port": {{ .Values.externalServices.mysql.port }},
-        "passwd": "",
-        "schema": "{{ .Values.externalServices.mysql.schema }}"
-      },
-      "redis": {
-        "host": "{{ .Values.externalServices.redis.host }}",
-        "port": {{ .Values.externalServices.redis.port }},
-        "passwd": ""
-      },
-      "rabbitmq": {
-        "host": "{{ .Values.externalServices.rabbitmq.host }}",
-        "port": {{ .Values.externalServices.rabbitmq.port }},
-        "username": "{{ .Values.externalServices.rabbitmq.username }}",
-        "password": "",
-        "vhost": "{{ .Values.externalServices.rabbitmq.vhost }}",
-        "prefetchCount": 8,
-        "exchangeDirect": "memochat.direct",
-        "exchangeDlx": "memochat.dlx",
-        "verifyDeliveryRoutingKey": "verify.email.delivery",
-        "retryRoutingKey": "verify.email.delivery.retry",
-        "dlqRoutingKey": "verify.email.delivery.dlq",
-        "queueVerifyDelivery": "verify.email.delivery.q",
-        "queueVerifyDeliveryRetry": "verify.email.delivery.retry.q",
-        "queueVerifyDeliveryDlq": "verify.email.delivery.dlq.q",
-        "retryDelayMs": 5000,
-        "maxRetries": 5
-      },
-      "log": {
-        "level": "info",
-        "dir": "/var/log/memochat/varify",
-        "toConsole": true,
-        "env": "k8s"
-      },
-      "telemetry": {
-        "enabled": true,
-        "otlpEndpoint": "http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces",
-        "protocol": "otlp-http",
-        "sampleRatio": 1.0,
-        "exportLogs": true,
-        "exportTraces": true,
-        "exportMetrics": false,
-        "serviceName": "VarifyServer",
-        "serviceNamespace": "memochat"
-      },
-      "featureFlags": {
-        "verify_async_outbox": true
-      }
-    }
+  varify.ini: |
+    [VarifyServer]
+    Host=0.0.0.0
+    Port={{ .Values.varify.service.grpcPort }}
+    HealthPort={{ .Values.varify.service.healthPort }}
+    [Redis]
+    Host={{ .Values.externalServices.redis.host }}
+    Port={{ .Values.externalServices.redis.port }}
+    Passwd=
+    [Email]
+    SMTPHost={{ .Values.externalServices.smtp.host }}
+    SMTPPort={{ .Values.externalServices.smtp.port }}
+    SMTPUser={{ .Values.externalServices.smtp.user }}
+    SMTPPass=
+    From={{ .Values.externalServices.smtp.from }}
+    [RateLimit]
+    EmailWindowSec=60
+    EmailMaxRequests=3
+    IpWindowSec=60
+    IpMaxRequests=10
+    [VerifyCode]
+    TTLSeconds=600
+    CodeLength=6
+    [Log]
+    Level=info
+    Dir=/var/log/memochat/varify
+    Format=json
+    ToConsole=true
+    RotateMode=daily
+    MaxFiles=14
+    MaxSizeMB=100
+    Redact=true
+    Env=k8s
+    [Telemetry]
+    Enabled=true
+    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
+    Protocol=otlp-http
+    SampleRatio=1.0
+    ExportLogs=true
+    ExportTraces=true
+    ExportMetrics=false
+    ServiceName=VarifyServer
+    ServiceNamespace=memochat
+    [RabbitMQ]
+    Host={{ .Values.externalServices.rabbitmq.host }}
+    Port={{ .Values.externalServices.rabbitmq.port }}
+    Username={{ .Values.externalServices.rabbitmq.username }}
+    Password=
+    VHost={{ .Values.externalServices.rabbitmq.vhost }}
+    PrefetchCount=8
+    ExchangeDirect=memochat.direct
+    ExchangeDlx=memochat.dlx
+    VerifyDeliveryRoutingKey=verify.email.delivery
+    VerifyDeliveryQueue=verify.email.delivery.q
+    VerifyDeliveryRetryQueue=verify.email.delivery.retry.q
+    VerifyDeliveryDlqQueue=verify.email.delivery.dlq.q
+    RetryRoutingKey=verify.email.delivery.retry
+    DlqRoutingKey=verify.email.delivery.dlq
+    RetryDelayMs=5000
+    MaxRetries=5
 ---
 apiVersion: v1
 kind: ConfigMap

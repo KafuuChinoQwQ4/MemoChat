@@ -9,6 +9,8 @@ struct AppShellRuntimeState
     bool busy = false;
     bool registerSuccessPage = false;
     int registerCountdown = 5;
+    int registerCodeCooldownSeconds = 0;
+    bool registerCodeRequestPending = false;
 };
 
 struct AppSearchRuntimeState

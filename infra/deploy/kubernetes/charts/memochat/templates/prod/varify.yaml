@@ -27,9 +27,7 @@ spec:
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
             - name: MEMOCHAT_RABBITMQ_PASSWORD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
-            - name: MEMOCHAT_MYSQL_PASSWORD
-              valueFrom: { secretKeyRef: { name: memochat-secrets, key: mysql-password } }
-            - name: MEMOCHAT_EMAIL_PASS
+            - name: MEMOCHAT_EMAIL_SMTPPASS
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: smtp-pass } }
             - name: MEMOCHAT_VARIFYSERVER_PORT
               value: {{ .Values.varify.service.grpcPort | quote }}
@@ -42,8 +40,8 @@ spec:
               containerPort: {{ .Values.varify.service.healthPort }}
           volumeMounts:
             - name: config
-              mountPath: /app/config.json
-              subPath: varify.config.json
+              mountPath: /app/config.ini
+              subPath: varify.ini
           livenessProbe:
             httpGet: { path: /healthz, port: health }
           readinessProbe:

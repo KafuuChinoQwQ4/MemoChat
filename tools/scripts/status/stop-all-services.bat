@@ -7,8 +7,7 @@ REM
 REM  停止顺序 (大致逆序):
 REM    Tier 5: QML 客户端
 REM    Tier 4: MemoOps 平台 (Python)
-REM    Tier 3: VarifyServer (Node.js)
-REM    Tier 2: C++ 后端服务
+REM    Tier 3: C++ 后端服务
 REM
 REM  用法:
 REM    stop-all-services.bat  停止 exe 进程和 Envoy Gateway
@@ -51,17 +50,11 @@ if exist "!OPS_STOP!" (
 )
 
 REM ============================================================
-REM Tier 3: VarifyServer (Node.js)
-REM ============================================================
-echo.
-echo [STEP] Stop VarifyServer (Node.js)
-powershell -NoProfile -Command "$ports = @(50051,48083,8083,8087); $pids = @(); foreach ($port in $ports) { $pids += Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess }; $pids = $pids | Where-Object { $_ } | Sort-Object -Unique; if ($pids) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Write-Host '  [OK] VarifyServer Node instances stopped' } else { Write-Host '  [-] VarifyServer Node instances not running' }" 2>nul
-
-REM ============================================================
-REM Tier 2: C++ 后端服务
+REM Tier 3: C++ 后端服务
 REM ============================================================
 echo.
 echo [STEP] Stop C++ backend services
+powershell -NoProfile -Command "$ports = @(50051,48083,8083,8087); $pids = @(); foreach ($port in $ports) { $pids += Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess }; $pids = $pids | Where-Object { $_ } | Sort-Object -Unique; if ($pids) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Write-Host '  [OK] VarifyServer ports released' } else { Write-Host '  [-] VarifyServer ports not listening' }" 2>nul
 
 REM 按启动顺序逆序停止
 call :kill_by_name "StatusServer.exe"       "StatusServer"
@@ -69,6 +62,7 @@ call :kill_by_name "GateServerHttp1.1.exe"  "GateServerHttp1.1"
 call :kill_by_name "GateServer.exe"         "GateServer1/GateServer2"
 call :kill_by_name "AIServer.exe"           "AIServer"
 call :kill_by_name "ChatServer.exe"         "ChatServer all instances"
+call :kill_by_name "VarifyServer.exe"       "VarifyServer"
 powershell -NoProfile -Command "$self = $PID; Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $self -and $_.CommandLine -like '*run-service-console.ps1*MemoChat-Qml-Drogon*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Write-Host '  [OK] service runner windows closed'"
 
 REM ============================================================
@@ -86,6 +80,7 @@ call :check "GateServer.exe"          "GateServer1/GateServer2"
 call :check "AIServer.exe"            "AIServer"
 call :check "ChatServer.exe"           "ChatServer"
 call :check "StatusServer.exe"         "StatusServer"
+call :check "VarifyServer.exe"         "VarifyServer"
 
 echo.
 echo [STEP] Stop Docker Envoy Gateway

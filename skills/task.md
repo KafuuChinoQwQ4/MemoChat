@@ -35,7 +35,7 @@ description: Use when implementing a normal MemoChat feature, bugfix, refactor, 
 - 数据库迁移：`apps/server/migrations/postgresql`。
 - 本地 Docker：`infra/deploy/local/docker-compose.yml` 以及 `infra/deploy/local/compose` 下的 compose 片段。
 - 脚本：`tools/scripts` 和 `tools/scripts/status`。
-- 测试/负载工具：`tests`、`apps/server/core/common/*/tests`、`tools/loadtest/python-loadtest`。
+- 测试/负载工具：根 `tests` 是新增和迁移持久化测试的唯一代码位置；C++ 放 `tests/cpp/<主项目相对路径>/...`，Python 放 `tests/python/<主项目相对路径>/...`，共享 fixture 放 `tests/fixtures/...`；`apps/**/tests` 只作为历史上下文读取，迁移时移动到根 `tests` 的语言分区；负载工具在 `tools/loadtest/python-loadtest`。
 
 ## 工作区隔离
 

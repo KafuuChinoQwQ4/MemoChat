@@ -25,6 +25,16 @@ int AppController::registerCountdown() const
     return _shell_state.registerCountdown;
 }
 
+int AppController::registerCodeCooldownSeconds() const
+{
+    return _shell_state.registerCodeCooldownSeconds;
+}
+
+bool AppController::registerCodeRequestPending() const
+{
+    return _shell_state.registerCodeRequestPending;
+}
+
 AppController::ChatTab AppController::chatTab() const
 {
     return _chat_tab;

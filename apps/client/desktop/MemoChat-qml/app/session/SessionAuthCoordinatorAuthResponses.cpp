@@ -35,17 +35,31 @@ QString gateAuthBusinessErrorTip(int errorCode, const QJsonObject& obj)
             const QString minVersion = obj.value(QStringLiteral("min_version")).toString(QStringLiteral("2.0.0"));
             return QStringLiteral("客户端版本过低，请升级到 %1 或以上").arg(minVersion);
         }
+        case 1022:
+            return QStringLiteral("邮件发送失败，请检查邮箱地址或稍后重试");
         default:
             return QStringLiteral("操作失败（错误码 %1）").arg(errorCode);
     }
 }
+
 } // namespace
+
+void SessionAuthCoordinator::clearRegisterCodeRequestCooldown()
+{
+    _app.setRegisterCodeRequestPending(false);
+    _app.setRegisterCodeCooldownSeconds(0);
+    _app._register_code_cooldown_timer.stop();
+}
 
 void SessionAuthCoordinator::onRegisterHttpFinished(ReqId id, QString res, ErrorCodes err)
 {
     if (err != ErrorCodes::SUCCESS)
     {
         _app.setBusy(false);
+        if (id == ReqId::ID_GET_VARIFY_CODE)
+        {
+            clearRegisterCodeRequestCooldown();
+        }
         _app.setTip("网络请求错误", true);
         return;
     }
@@ -54,6 +68,10 @@ void SessionAuthCoordinator::onRegisterHttpFinished(ReqId id, QString res, Error
     if (!_app._auth_controller.parseJson(res, obj))
     {
         _app.setBusy(false);
+        if (id == ReqId::ID_GET_VARIFY_CODE)
+        {
+            clearRegisterCodeRequestCooldown();
+        }
         _app.setTip("json解析错误", true);
         return;
     }
@@ -62,6 +80,10 @@ void SessionAuthCoordinator::onRegisterHttpFinished(ReqId id, QString res, Error
     if (error != ErrorCodes::SUCCESS)
     {
         _app.setBusy(false);
+        if (id == ReqId::ID_GET_VARIFY_CODE)
+        {
+            clearRegisterCodeRequestCooldown();
+        }
         _app.setTip(gateAuthBusinessErrorTip(error, obj), true);
         return;
     }
@@ -69,6 +91,7 @@ void SessionAuthCoordinator::onRegisterHttpFinished(ReqId id, QString res, Error
     if (id == ReqId::ID_GET_VARIFY_CODE)
     {
         _app.setBusy(false);
+        _app.setRegisterCodeRequestPending(false);
         _app.setTip("验证码已发送到邮箱，注意查收", false);
         return;
     }

@@ -87,8 +87,7 @@ $requiredFiles = @(
     "server/GateServer/config.ini",
     "server/StatusServer/config.ini",
     "server/ChatServer/config.ini",
-    "server/VarifyServer/config.json",
-    "server/VarifyServer/package.json"
+    "server/VarifyServer/config.ini"
 )
 
 foreach ($node in $clusterNodes) {
@@ -98,7 +97,8 @@ foreach ($node in $clusterNodes) {
 $requiredBinaries = @(
     "GateServer.exe",
     "StatusServer.exe",
-    "ChatServer.exe"
+    "ChatServer.exe",
+    "VarifyServer.exe"
 )
 
 $missing = New-Object System.Collections.Generic.List[string]
@@ -116,7 +116,7 @@ foreach ($name in $requiredBinaries) {
     }
 }
 
-foreach ($cmd in @("node", "npm", "python")) {
+foreach ($cmd in @("python")) {
     if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
         $missing.Add("Missing command in PATH: $cmd")
     }

@@ -21,6 +21,11 @@ void AppController::onRegisterCountdownTimeout()
     _session_coordinator->onRegisterCountdownTimeout();
 }
 
+void AppController::onRegisterCodeCooldownTimeout()
+{
+    _session_coordinator->onRegisterCodeCooldownTimeout();
+}
+
 void AppController::onSettingsHttpFinished(ReqId id, QString res, ErrorCodes err)
 {
     if (id != ReqId::ID_UPDATE_PROFILE)

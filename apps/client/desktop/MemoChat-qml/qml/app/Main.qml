@@ -17,12 +17,19 @@ Item {
     property size chatWindowSize: Qt.size(900, 640)
     readonly property size chatWindowMinimumSize: Qt.size(800, 600)
     readonly property size unboundedWindowSize: Qt.size(100000, 100000)
-    property var appWindowRef: null
+    property var loginWindowRef: null
+    property var chatWindowRef: null
     property var petWindowRef: null
     property var pendingCenterWindowRef: null
     property int pendingCenterPasses: 0
-    property int appWindowSwitchToken: 0
+    property int windowSwitchToken: 0
+    property bool handoffRetiredWindowPending: false
+    property int handoffPasses: 0
+    property int handoffTargetPage: AppController.LoginPage
+    property int handoffToken: 0
     property bool memochatStartupCenter: true
+    readonly property int handoffMinimumPasses: 24
+    readonly property int windowHandoffIntervalMs: 42
     readonly property bool chatPageActive: controller.page === AppController.ChatPage
 
     PetAssetSettings {
@@ -52,6 +59,9 @@ Item {
     }
 
     function showWindowCentered(win) {
+        if (!win) {
+            return
+        }
         centerWindow(win)
         win.opacity = 1
         if (win.visibility === Window.Maximized
@@ -79,6 +89,27 @@ Item {
         centerWindowTimer.restart()
     }
 
+    function clearPendingCenterForWindow(win) {
+        if (pendingCenterWindowRef !== win) {
+            return
+        }
+        pendingCenterWindowRef = null
+        pendingCenterPasses = 0
+        centerWindowTimer.stop()
+    }
+
+    function retireWindow(win) {
+        if (!win) {
+            return
+        }
+        clearPendingCenterForWindow(win)
+        win.retiring = true
+        win.opacity = 0
+        win.visible = false
+        win.hide()
+        win.destroy()
+    }
+
     function logWindowState(label, win) {
         if (!win) {
             console.info(label + " window=null")
@@ -94,42 +125,81 @@ Item {
                      + " page=" + controller.page)
     }
 
-    function targetWindowSize() {
-        return AppWindowRuntime.targetWindowSize(chatPageActive, loginWindowSize, chatWindowSize)
-    }
-
-    function ensureAppWindow() {
-        if (appWindowRef) {
-            return appWindowRef
-        }
-        appWindowRef = appWindowComponent.createObject(null)
-        if (!appWindowRef) {
-            console.warn("Failed to create app window")
-        }
-        return appWindowRef
-    }
-
-    function configureAppWindowForPage(win) {
+    function configureLoginWindow(win) {
         if (!win) {
             return
         }
-        const loginMode = !chatPageActive
-        const size = targetWindowSize()
-        const minimumSize = loginMode ? root.loginWindowSize : root.chatWindowMinimumSize
-        const maximumSize = loginMode ? root.loginWindowSize : root.unboundedWindowSize
         win.maximumWidth = root.unboundedWindowSize.width
         win.maximumHeight = root.unboundedWindowSize.height
-        win.minimumWidth = minimumSize.width
-        win.minimumHeight = minimumSize.height
-        centerWindowForSize(win, size)
-        win.width = size.width
-        win.height = size.height
-        win.maximumWidth = maximumSize.width
-        win.maximumHeight = maximumSize.height
+        win.minimumWidth = root.loginWindowSize.width
+        win.minimumHeight = root.loginWindowSize.height
+        centerWindowForSize(win, root.loginWindowSize)
+        win.width = root.loginWindowSize.width
+        win.height = root.loginWindowSize.height
+        win.maximumWidth = root.loginWindowSize.width
+        win.maximumHeight = root.loginWindowSize.height
         requestWindowCenter(win)
     }
 
-    function finishAppWindowShown() {
+    function configureChatWindow(win) {
+        if (!win) {
+            return
+        }
+        win.maximumWidth = root.unboundedWindowSize.width
+        win.maximumHeight = root.unboundedWindowSize.height
+        win.minimumWidth = root.chatWindowMinimumSize.width
+        win.minimumHeight = root.chatWindowMinimumSize.height
+        centerWindowForSize(win, root.chatWindowSize)
+        win.width = root.chatWindowSize.width
+        win.height = root.chatWindowSize.height
+        win.maximumWidth = root.unboundedWindowSize.width
+        win.maximumHeight = root.unboundedWindowSize.height
+        requestWindowCenter(win)
+    }
+
+    function ensureLoginWindow() {
+        if (loginWindowRef) {
+            return loginWindowRef
+        }
+        loginWindowRef = loginWindowComponent.createObject(null)
+        if (!loginWindowRef) {
+            console.warn("Failed to create login window")
+        }
+        return loginWindowRef
+    }
+
+    function ensureChatWindow() {
+        if (chatWindowRef) {
+            return chatWindowRef
+        }
+        chatWindowRef = chatWindowComponent.createObject(null)
+        if (!chatWindowRef) {
+            console.warn("Failed to create chat window")
+        }
+        return chatWindowRef
+    }
+
+    function destroyLoginWindow() {
+        const win = root.loginWindowRef
+        if (!win) {
+            return false
+        }
+        root.loginWindowRef = null
+        retireWindow(win)
+        return true
+    }
+
+    function destroyChatWindow() {
+        const win = root.chatWindowRef
+        if (!win) {
+            return false
+        }
+        root.chatWindowRef = null
+        retireWindow(win)
+        return true
+    }
+
+    function finishChatWindowShown() {
         if (!chatPageActive) {
             return
         }
@@ -141,6 +211,77 @@ Item {
         if (startupPetSettings.autoStartPetOnClientStart) {
             startupPetTimer.start()
         }
+    }
+
+    function showLoginWindow() {
+        const win = ensureLoginWindow()
+        if (!win) {
+            return
+        }
+        configureLoginWindow(win)
+        showWindowCentered(win)
+        win.raise()
+        win.requestActivate()
+        logWindowState("login-window sync", win)
+    }
+
+    function showChatWindow() {
+        const win = ensureChatWindow()
+        if (!win) {
+            return
+        }
+        configureChatWindow(win)
+        showWindowCentered(win)
+        win.raise()
+        win.requestActivate()
+        logWindowState("chat-window sync", win)
+        finishChatWindowShown()
+    }
+
+    function handoffTargetIsCurrent(targetPage) {
+        if (targetPage === AppController.ChatPage) {
+            return root.chatPageActive
+        }
+        return controller.page === targetPage && !root.chatPageActive
+    }
+
+    function showWindowForHandoffTarget(targetPage) {
+        if (targetPage === AppController.ChatPage) {
+            showChatWindow()
+            return
+        }
+        showLoginWindow()
+    }
+
+    function scheduleWindowHandoff(retiredWindowPending, token, targetPage) {
+        windowHandoffTimer.stop()
+        root.handoffRetiredWindowPending = retiredWindowPending
+        root.handoffToken = token
+        root.handoffTargetPage = targetPage
+        root.handoffPasses = 0
+        windowHandoffTimer.interval = root.handoffRetiredWindowPending ? root.windowHandoffIntervalMs : 0
+        windowHandoffTimer.restart()
+    }
+
+    function continueWindowHandoff() {
+        if (root.handoffToken !== root.windowSwitchToken
+                || !handoffTargetIsCurrent(root.handoffTargetPage)) {
+            root.handoffRetiredWindowPending = false
+            root.handoffPasses = 0
+            return
+        }
+
+        root.handoffPasses += 1
+        if (root.handoffRetiredWindowPending
+                && root.handoffPasses < root.handoffMinimumPasses) {
+            windowHandoffTimer.interval = root.windowHandoffIntervalMs
+            windowHandoffTimer.restart()
+            return
+        }
+
+        root.handoffRetiredWindowPending = false
+        root.handoffPasses = 0
+        showWindowForHandoffTarget(root.handoffTargetPage)
     }
 
     function ensurePetWindow(petAssetSettings) {
@@ -186,49 +327,24 @@ Item {
     }
 
     function syncWindowsByPage() {
-        const win = ensureAppWindow()
-        if (!win) {
+        const token = ++windowSwitchToken
+        if (chatPageActive) {
+            const retiredWindowPending = destroyLoginWindow()
+            scheduleWindowHandoff(retiredWindowPending, token, AppController.ChatPage)
             return
         }
-        const token = ++appWindowSwitchToken
-        const targetSize = targetWindowSize()
-        const sizeChanged = win.visibility !== Window.Maximized
-                && win.visibility !== Window.FullScreen
-                && win.visibility !== Window.Minimized
-                && AppWindowRuntime.shouldHideResize(win, targetSize.width, targetSize.height)
-        if (sizeChanged) {
-            win.opacity = 0
-            win.visible = false
-            configureAppWindowForPage(win)
-            Qt.callLater(function() {
-                if (token !== root.appWindowSwitchToken) {
-                    return
-                }
-                showWindowCentered(win)
-                win.raise()
-                win.requestActivate()
-                logWindowState("app-window hidden-resize sync", win)
-                finishAppWindowShown()
-            })
-            return
-        }
-        configureAppWindowForPage(win)
-        showWindowCentered(win)
-        win.raise()
-        win.requestActivate()
-        logWindowState("app-window sync", win)
-        finishAppWindowShown()
+        const retiredWindowPending = destroyChatWindow()
+        scheduleWindowHandoff(retiredWindowPending, token, controller.page)
     }
 
     Component.onCompleted: {
         startupPetSettings.load()
         syncWindowsByPage()
     }
+
     Component.onDestruction: {
-        if (appWindowRef) {
-            appWindowRef.destroy()
-            appWindowRef = null
-        }
+        destroyLoginWindow()
+        destroyChatWindow()
         if (petWindowRef) {
             petWindowRef.destroy()
             petWindowRef = null
@@ -252,6 +368,13 @@ Item {
         interval: 160
         repeat: false
         onTriggered: root.openPetWindow()
+    }
+
+    Timer {
+        id: windowHandoffTimer
+        interval: root.windowHandoffIntervalMs
+        repeat: false
+        onTriggered: root.continueWindowHandoff()
     }
 
     Timer {
@@ -313,12 +436,13 @@ Item {
     }
 
     Component {
-        id: appWindowComponent
+        id: loginWindowComponent
         ApplicationWindow {
-            id: appWindow
+            id: loginWindow
             visible: false
             title: root.appTitle
             property bool memochatStartupCenter: true
+            property bool retiring: false
             flags: Qt.Window | Qt.FramelessWindowHint
             color: "transparent"
             width: root.loginWindowSize.width
@@ -332,26 +456,26 @@ Item {
             onClosing: Qt.quit()
 
             MouseArea {
-                id: headerDragArea
+                id: loginHeaderDragArea
                 z: 150
                 x: 56
-                y: root.chatPageActive ? 4 : 0
-                width: Math.max(0, parent.width - x - windowControls.width - 70)
+                y: 0
+                width: Math.max(0, parent.width - x - loginWindowControls.width - 70)
                 height: 64
                 acceptedButtons: Qt.LeftButton
                 cursorShape: Qt.SizeAllCursor
                 onPressed: function(mouse) {
-                    appWindow.startSystemMove()
+                    loginWindow.startSystemMove()
                     mouse.accepted = true
                 }
             }
 
             Rectangle {
-                id: appShell
+                id: loginShell
                 anchors.fill: parent
-                radius: appWindow.windowRadius
-                antialiasing: !appWindow.isMaximized
-                clip: !appWindow.isMaximized
+                radius: loginWindow.windowRadius
+                antialiasing: !loginWindow.isMaximized
+                clip: !loginWindow.isMaximized
                 color: "transparent"
 
                 Loader {
@@ -377,18 +501,10 @@ Item {
                     asynchronous: true
                     sourceComponent: resetPageComponent
                 }
-
-                Loader {
-                    anchors.fill: parent
-                    active: root.chatPageActive
-                    visible: active
-                    asynchronous: true
-                    sourceComponent: chatShellPageComponent
-                }
             }
 
             AppWindowControls {
-                id: windowControls
+                id: loginWindowControls
                 z: 200
                 anchors.top: parent.top
                 anchors.right: parent.right
@@ -396,14 +512,90 @@ Item {
                 anchors.rightMargin: 14
                 width: implicitWidth
                 height: implicitHeight
-                chatPageActive: root.chatPageActive
+                chatPageActive: false
                 onPetRequested: root.togglePetWindow()
-                onMinimizeRequested: appWindow.showMinimized()
+                onMinimizeRequested: loginWindow.showMinimized()
                 onMaximizeRequested: {
-                    if (appWindow.visibility === Window.Maximized) {
-                        appWindow.showNormal()
+                    if (loginWindow.visibility === Window.Maximized) {
+                        loginWindow.showNormal()
                     } else {
-                        appWindow.showMaximized()
+                        loginWindow.showMaximized()
+                    }
+                }
+                onCloseRequested: Qt.quit()
+            }
+        }
+    }
+
+    Component {
+        id: chatWindowComponent
+        ApplicationWindow {
+            id: chatWindow
+            visible: false
+            title: root.appTitle
+            property bool memochatStartupCenter: true
+            property bool retiring: false
+            flags: Qt.Window | Qt.FramelessWindowHint
+            color: "transparent"
+            width: root.chatWindowSize.width
+            height: root.chatWindowSize.height
+            minimumWidth: root.chatWindowMinimumSize.width
+            minimumHeight: root.chatWindowMinimumSize.height
+            maximumWidth: root.unboundedWindowSize.width
+            maximumHeight: root.unboundedWindowSize.height
+            readonly property bool isMaximized: visibility === Window.Maximized
+            readonly property int windowRadius: isMaximized ? 0 : 20
+            onClosing: Qt.quit()
+
+            MouseArea {
+                id: chatHeaderDragArea
+                z: 150
+                x: 56
+                y: 4
+                width: Math.max(0, parent.width - x - chatWindowControls.width - 70)
+                height: 64
+                acceptedButtons: Qt.LeftButton
+                cursorShape: Qt.SizeAllCursor
+                onPressed: function(mouse) {
+                    chatWindow.startSystemMove()
+                    mouse.accepted = true
+                }
+            }
+
+            Rectangle {
+                id: chatShell
+                anchors.fill: parent
+                radius: chatWindow.windowRadius
+                antialiasing: !chatWindow.isMaximized
+                clip: !chatWindow.isMaximized
+                color: "transparent"
+
+                Loader {
+                    anchors.fill: parent
+                    active: true
+                    visible: true
+                    asynchronous: true
+                    sourceComponent: chatShellPageComponent
+                }
+            }
+
+            AppWindowControls {
+                id: chatWindowControls
+                z: 200
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.topMargin: 20
+                anchors.rightMargin: 14
+                width: implicitWidth
+                height: implicitHeight
+                chatPageActive: true
+                onPetRequested: root.togglePetWindow()
+                onMinimizeRequested: chatWindow.showMinimized()
+                onMaximizeRequested: {
+                    if (chatWindow.visibility === Window.Maximized) {
+                        chatWindow.showNormal()
+                    } else {
+                        chatWindow.showMaximized()
                     }
                 }
                 onCloseRequested: Qt.quit()

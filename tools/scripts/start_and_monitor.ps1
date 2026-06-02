@@ -6,7 +6,7 @@ New-Item -ItemType Directory -Force -Path $diagDir | Out-Null
 
 # === 1. 清理残留进程 ===
 Write-Host "=== 清理残留进程 ==="
-$svcExes = @("GateServer","StatusServer","ChatServer")
+$svcExes = @("GateServer","StatusServer","ChatServer","VarifyServer")
 foreach ($exe in $svcExes) {
     Get-Process -Name $exe -ErrorAction SilentlyContinue | ForEach-Object {
         Write-Host "  Killing old $($_.Name) PID=$($_.Id)"
@@ -22,10 +22,8 @@ Get-ChildItem $diagDir -Filter "*.log" -ErrorAction SilentlyContinue | ForEach-O
 Write-Host "=== 启动所有服务 ==="
 
 # === 3. 启动 VarifyServer ===
-$env:MEMOCHAT_HEALTH_PORT = "8082"
-$env:MEMOCHAT_ENABLE_KAFKA = "1"
-$env:MEMOCHAT_ENABLE_RABBITMQ = "1"
-$varifyProc = Start-Process -FilePath "node" -ArgumentList "server.js" -WorkingDirectory "$ProjectRoot\server\VarifyServer" -PassThru -RedirectStandardOutput "$diagDir\varify_out.log" -RedirectStandardError "$diagDir\varify_err.log" -WindowStyle Hidden
+$varifyDir = "$ProjectRoot\infra\Memo_ops\runtime\services\VarifyServer1"
+$varifyProc = Start-Process -FilePath "$varifyDir\VarifyServer.exe" -ArgumentList "--config","config.ini" -WorkingDirectory $varifyDir -PassThru -RedirectStandardOutput "$diagDir\varify_out.log" -RedirectStandardError "$diagDir\varify_err.log" -WindowStyle Hidden
 Write-Host "[VarifyServer] PID: $($varifyProc.Id)"
 Start-Sleep -Seconds 3
 

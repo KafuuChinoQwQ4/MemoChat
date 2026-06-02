@@ -187,6 +187,7 @@ AppController::AppController(QObject* parent)
             &AppController::pendingApplyChanged);
 
     connect(&_register_countdown_timer, &QTimer::timeout, this, &AppController::onRegisterCountdownTimeout);
+    connect(&_register_code_cooldown_timer, &QTimer::timeout, this, &AppController::onRegisterCodeCooldownTimeout);
     connect(&_heartbeat_timer,
             &QTimer::timeout,
             this,
