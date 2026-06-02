@@ -5,6 +5,11 @@
 
 #include <QDateTime>
 
+namespace
+{
+constexpr int kRegisterCodeCooldownSeconds = 60;
+}
+
 bool SessionAuthCoordinator::checkEmailValid(const QString& email)
 {
     QString errorText;
@@ -77,10 +82,18 @@ void SessionAuthCoordinator::login(const QString& email, const QString& password
 
 void SessionAuthCoordinator::requestRegisterCode(const QString& email)
 {
+    if (_app._shell_state.registerCodeRequestPending || _app._shell_state.registerCodeCooldownSeconds > 0)
+    {
+        return;
+    }
+
     if (!checkEmailValid(email))
     {
         return;
     }
+    _app.setRegisterCodeRequestPending(true);
+    _app.setRegisterCodeCooldownSeconds(kRegisterCodeCooldownSeconds);
+    _app._register_code_cooldown_timer.start(1000);
     _app.setBusy(true);
     _app._auth_controller.sendVerifyCode(email, Modules::REGISTERMOD);
 }
@@ -116,6 +129,21 @@ void SessionAuthCoordinator::requestResetCode(const QString& email)
     }
     _app.setBusy(true);
     _app._auth_controller.sendVerifyCode(email, Modules::RESETMOD);
+}
+
+void SessionAuthCoordinator::onRegisterCodeCooldownTimeout()
+{
+    if (_app._shell_state.registerCodeCooldownSeconds <= 0)
+    {
+        _app._register_code_cooldown_timer.stop();
+        return;
+    }
+
+    _app.setRegisterCodeCooldownSeconds(_app._shell_state.registerCodeCooldownSeconds - 1);
+    if (_app._shell_state.registerCodeCooldownSeconds <= 0)
+    {
+        _app._register_code_cooldown_timer.stop();
+    }
 }
 
 void SessionAuthCoordinator::resetPassword(const QString& user,

@@ -87,3 +87,8 @@ void AppSessionCoordinator::onRegisterCountdownTimeout()
 {
     _register_countdown->onRegisterCountdownTimeout();
 }
+
+void AppSessionCoordinator::onRegisterCodeCooldownTimeout()
+{
+    _auth->onRegisterCodeCooldownTimeout();
+}

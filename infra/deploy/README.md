@@ -23,7 +23,7 @@ Build images:
 docker build -f deploy/images/services/cpp-service.Dockerfile --build-arg TARGET=GateServer -t memochat/gateserver:latest .
 docker build -f deploy/images/services/cpp-service.Dockerfile --build-arg TARGET=StatusServer -t memochat/statusserver:latest .
 docker build -f deploy/images/services/cpp-service.Dockerfile --build-arg TARGET=ChatServer -t memochat/chatserver:latest .
-docker build -f deploy/images/services/varifyserver.Dockerfile -t memochat/varifyserver:latest .
+docker build -f deploy/images/services/cpp-service.Dockerfile --build-arg TARGET=VarifyServer -t memochat/varifyserver:latest .
 docker build -f deploy/images/services/memo-ops.Dockerfile -t memochat/memo-ops:latest .
 ```
 

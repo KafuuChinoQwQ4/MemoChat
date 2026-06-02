@@ -1,3 +1,13 @@
+add_library(VarifyServerCore STATIC
+    VerifyCodePolicy.cpp
+    EmailDeliveryTaskCodec.cpp
+)
+target_compile_features(VarifyServerCore PUBLIC cxx_std_23)
+target_include_directories(VarifyServerCore PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(VarifyServerCore PUBLIC memochat_server_deps)
+
 add_executable(VarifyServer
     VarifyServer.cpp
     VarifyServiceImpl.cpp
@@ -9,7 +19,7 @@ add_executable(VarifyServer
 
 set_target_properties(VarifyServer PROPERTIES FOLDER "Server")
 memochat_configure_server_target(VarifyServer)
-target_link_libraries(VarifyServer PRIVATE memochat_boost_stubs GateServerCore)
+target_link_libraries(VarifyServer PRIVATE VarifyServerCore memochat_boost_stubs GateServerCore)
 
 if(WIN32)
     # Environment variables: WINSDK_LIB_UM, WINSDK_LIB_UCRT, VC_TOOLS_LIB

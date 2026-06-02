@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/">
+        <!-- Keep legacy aliases first during migration. -->
+        <file alias="qml/auth/LoginPage.qml">../view/LoginPage.qml</file>
+        <file alias="qml/LoginPage.qml">../view/LoginPage.qml</file>
+
+        <!-- New feature-first aliases. -->
+        <file alias="features/auth/view/LoginPage.qml">../view/LoginPage.qml</file>
+    </qresource>
+</RCC>
+

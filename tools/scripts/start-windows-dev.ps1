@@ -3,7 +3,7 @@
     MemoChat Windows 原生方案一键启动脚本
 .DESCRIPTION
     启动所有基础设施 + 后端服务 + QML 客户端
-    依赖: Arch Linux native Docker, CMake, Qt6, Node.js
+    依赖: Arch Linux native Docker, CMake, Qt6
 .PARAMETER SkipBuild
     跳过 C++ 编译 (使用已有的 exe)
 .PARAMETER SkipClient
@@ -104,6 +104,8 @@ if (-not $SkipBuild) {
 Write-Step "启动后端服务..."
 
 $services = @(
+    @{ Name = "VarifyServer-1";   Exe = "VarifyServer.exe"; Config = "$ServicesDir\VarifyServer1\config.ini" },
+    @{ Name = "VarifyServer-2";   Exe = "VarifyServer.exe"; Config = "$ServicesDir\VarifyServer2\config.ini" },
     @{ Name = "GateServer";       Exe = "GateServer.exe";   Config = "$ServicesDir\GateServer\config.ini" },
     @{ Name = "StatusServer";     Exe = "StatusServer.exe"; Config = "$ServicesDir\StatusServer\config.ini" },
     @{ Name = "ChatServer-1";      Exe = "ChatServer.exe";   Config = "$ServicesDir\chatserver1\config.ini" },
@@ -122,24 +124,6 @@ foreach ($svc in $services) {
         Write-Host "  ✓ $($svc.Name) 启动" -ForegroundColor Green
     } else {
         Write-Warn "  ✗ $($svc.Name) 未找到: $exePath"
-    }
-}
-
-# 启动 VarifyServer (Node.js)
-Write-Step "启动 VarifyServer..."
-$vsDir = "$ProjectRoot\server\VarifyServer"
-if (Test-Path $vsDir) {
-    $pkgJson = "$vsDir\package.json"
-    if (Test-Path $pkgJson) {
-        Push-Location $vsDir
-        if (-not (Test-Path "node_modules")) {
-            Write-Step "安装 Node.js 依赖..."
-            npm install
-        }
-        $env:MEMOCHAT_HEALTH_PORT = "8082"
-        Start-Process -FilePath "node" -ArgumentList "server.js" -WindowStyle Hidden
-        Pop-Location
-        Write-Success "VarifyServer 启动"
     }
 }
 

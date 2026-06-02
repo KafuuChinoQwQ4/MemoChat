@@ -1,4 +1,5 @@
 #include "EmailTaskBus.h"
+#include "EmailDeliveryTaskCodec.h"
 #include "EmailSender.h"
 #include "VarifyServiceImpl.h"
 #include "ConfigMgr.h"
@@ -32,59 +33,6 @@ std::string BytesToString(amqp_bytes_t bytes)
     return std::string(static_cast<const char*>(bytes.bytes), bytes.len);
 }
 #endif
-
-std::string
-SerializeEmailTask(const std::string& email, const std::string& code, const std::string& trace_id, int retry_count)
-{
-    return "{\"email\":\"" + email + "\",\"code\":\"" + code + "\",\"trace_id\":\"" + trace_id +
-           "\",\"retry_count\":" + std::to_string(retry_count) + "}";
-}
-
-bool ParseEmailTask(const std::string& body,
-                    std::string* out_email,
-                    std::string* out_code,
-                    std::string* out_trace_id,
-                    int* out_retry_count)
-{
-    if (!out_email || !out_code || !out_trace_id || !out_retry_count)
-        return false;
-    if (body.size() < 10)
-        return false;
-
-    auto find_field = [](const std::string& s, const std::string& key) -> std::string
-    {
-        std::string pattern = "\"" + key + "\":\"";
-        auto pos = s.find(pattern);
-        if (pos == std::string::npos)
-            return "";
-        pos += pattern.size();
-        auto end = s.find('"', pos);
-        if (end == std::string::npos)
-            return "";
-        return s.substr(pos, end - pos);
-    };
-
-    auto find_int = [](const std::string& s, const std::string& key) -> int
-    {
-        std::string pattern = "\"" + key + "\":";
-        auto pos = s.find(pattern);
-        if (pos == std::string::npos)
-            return 0;
-        pos += pattern.size();
-        auto end = pos;
-        while (end < s.size() && (std::isdigit(static_cast<unsigned char>(s[end])) || s[end] == '-'))
-            ++end;
-        if (end == pos)
-            return 0;
-        return std::stoi(s.substr(pos, end - pos));
-    };
-
-    *out_email = find_field(body, "email");
-    *out_code = find_field(body, "code");
-    *out_trace_id = find_field(body, "trace_id");
-    *out_retry_count = find_int(body, "retry_count");
-    return !out_email->empty() && !out_code->empty();
-}
 
 } // anonymous namespace
 
@@ -323,7 +271,7 @@ bool EmailTaskBus::PublishVerifyDeliveryTask(const std::string& email,
                                              const std::string& code,
                                              const std::string& trace_id)
 {
-    std::string body = SerializeEmailTask(email, code, trace_id, 0);
+    std::string body = SerializeEmailTask(EmailDeliveryTaskPayload{email, code, trace_id, 0});
     bool ok = PublishToQueue(config_exchange_direct_, config_verify_delivery_routing_key_, body);
 
     if (!ok)
@@ -452,9 +400,8 @@ bool EmailTaskBus::ConsumeOnce(EmailDeliveryTask& task)
     std::string routing_key = BytesToString(envelope->routing_key);
     bool from_retry = (routing_key == config_retry_routing_key_);
 
-    std::string email, code, trace_id;
-    int retry_count = 0;
-    if (!ParseEmailTask(body, &email, &code, &trace_id, &retry_count))
+    EmailDeliveryTaskPayload parsed;
+    if (!ParseEmailTask(body, &parsed))
     {
         amqp_basic_ack(conn, 1, envelope->delivery_tag, false);
         amqp_destroy_envelope(envelope);
@@ -464,10 +411,10 @@ bool EmailTaskBus::ConsumeOnce(EmailDeliveryTask& task)
 
     if (from_retry)
     {
-        retry_count++;
+        parsed.retry_count++;
     }
 
-    task = EmailDeliveryTask{email, code, trace_id, retry_count};
+    task = EmailDeliveryTask{parsed.email, parsed.code, parsed.trace_id, parsed.retry_count};
 
     ClearLastConsumed();
     last_envelope_ = envelope;
@@ -551,7 +498,8 @@ void EmailTaskBus::WorkerLoop(EmailSender* /*sender*/)
                                   {"max_retries", std::to_string(config_max_retries_)}});
                 if (task.retry_count < config_max_retries_)
                 {
-                    std::string body = SerializeEmailTask(task.email, task.code, task.trace_id, task.retry_count + 1);
+                    std::string body = SerializeEmailTask(
+                        EmailDeliveryTaskPayload{task.email, task.code, task.trace_id, task.retry_count + 1});
                     PublishToQueue(config_exchange_direct_, config_retry_routing_key_, body);
                     memolog::LogInfo("varify.emailtaskbus.requeued",
                                      "task requeued for retry",
@@ -559,7 +507,8 @@ void EmailTaskBus::WorkerLoop(EmailSender* /*sender*/)
                 }
                 else
                 {
-                    std::string dlq_body = SerializeEmailTask(task.email, task.code, task.trace_id, task.retry_count);
+                    std::string dlq_body = SerializeEmailTask(
+                        EmailDeliveryTaskPayload{task.email, task.code, task.trace_id, task.retry_count});
                     PublishToQueue(config_exchange_dlx_, config_dlq_routing_key_, dlq_body);
                     memolog::LogError("varify.emailtaskbus.dlq",
                                       "task moved to DLQ after max retries",

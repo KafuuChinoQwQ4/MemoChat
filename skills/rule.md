@@ -13,6 +13,7 @@
 - Docker 容器必须保持稳定的发布端口。
 - 项目工作必须使用 Docker 容器作为数据库、队列、对象存储、可观测性以及 AI/RAG 依赖。
 - 修改代码、检查 MCP 或查看数据库时，先查找相关 Docker 容器或已配置的 MCP 工具。
+- 新增或迁移的持久化测试统一放在仓库根 `tests/` 下，并按语言优先组织：C++ GTest 放 `tests/cpp/<主项目相对路径>/...`，Python pytest/unittest 放 `tests/python/<主项目相对路径>/...`，共享测试数据放 `tests/fixtures/...`。不要在 `apps/**/tests` 或其他业务模块内新增测试目录；历史服务内测试只能作为上下文读取，迁移时移动到上述结构。
 - 默认项目工作现在面向 WSL/Linux，路径为 `/root/code/MemoChat-Qml-Drogon-linux`。
 - Linux 依赖、缓存、模型以及大型生成产物优先下载到 `/data`。
 - Arch 原生 Docker 是默认运行时。Docker 绑定数据使用 `/data/docker-data/memochat`。

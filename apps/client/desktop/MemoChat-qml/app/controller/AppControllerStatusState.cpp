@@ -85,6 +85,27 @@ void AppController::setBusy(bool value)
     emit busyChanged();
 }
 
+void AppController::setRegisterCodeCooldownSeconds(int seconds)
+{
+    const int normalized = qMax(0, seconds);
+    if (_shell_state.registerCodeCooldownSeconds == normalized)
+    {
+        return;
+    }
+    _shell_state.registerCodeCooldownSeconds = normalized;
+    emit registerCodeCooldownChanged();
+}
+
+void AppController::setRegisterCodeRequestPending(bool pending)
+{
+    if (_shell_state.registerCodeRequestPending == pending)
+    {
+        return;
+    }
+    _shell_state.registerCodeRequestPending = pending;
+    emit registerCodeCooldownChanged();
+}
+
 void AppController::setPage(Page newPage)
 {
     if (_page == newPage)

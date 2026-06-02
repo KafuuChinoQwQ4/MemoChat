@@ -27,12 +27,14 @@ public:
     void onLoginHttpFinished(ReqId id, QString res, ErrorCodes err);
     void onRegisterHttpFinished(ReqId id, QString res, ErrorCodes err);
     void onResetHttpFinished(ReqId id, QString res, ErrorCodes err);
+    void onRegisterCodeCooldownTimeout();
 
 private:
     bool checkEmailValid(const QString& email);
     bool checkPasswordValid(const QString& password);
     bool checkUserValid(const QString& user);
     bool checkVerifyCodeValid(const QString& code);
+    void clearRegisterCodeRequestCooldown();
 
     AppController& _app;
 };
@@ -96,6 +98,7 @@ public:
     void requestRelationBootstrap();
     void onRelationBootstrapUpdated();
     void onRegisterCountdownTimeout();
+    void onRegisterCodeCooldownTimeout();
 
 private:
     AppController& _app;

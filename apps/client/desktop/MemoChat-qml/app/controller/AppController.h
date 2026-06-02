@@ -55,6 +55,8 @@ class AppController : public QObject
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(bool registerSuccessPage READ registerSuccessPage NOTIFY registerSuccessPageChanged)
     Q_PROPERTY(int registerCountdown READ registerCountdown NOTIFY registerCountdownChanged)
+    Q_PROPERTY(int registerCodeCooldownSeconds READ registerCodeCooldownSeconds NOTIFY registerCodeCooldownChanged)
+    Q_PROPERTY(bool registerCodeRequestPending READ registerCodeRequestPending NOTIFY registerCodeCooldownChanged)
     Q_PROPERTY(QString loginCredentialCacheJson READ loginCredentialCacheJson NOTIFY loginCredentialCacheChanged)
     Q_PROPERTY(ChatTab chatTab READ chatTab NOTIFY chatTabChanged)
     Q_PROPERTY(QString currentUserName READ currentUserName NOTIFY currentUserChanged)
@@ -172,6 +174,8 @@ public:
     bool busy() const;
     bool registerSuccessPage() const;
     int registerCountdown() const;
+    int registerCodeCooldownSeconds() const;
+    bool registerCodeRequestPending() const;
     ChatTab chatTab() const;
     ContactPane contactPane() const;
     QString currentUserName() const;
@@ -342,6 +346,7 @@ signals:
     void busyChanged();
     void registerSuccessPageChanged();
     void registerCountdownChanged();
+    void registerCodeCooldownChanged();
     void loginCredentialCacheChanged();
     void chatTabChanged();
     void contactPaneChanged();
@@ -379,6 +384,7 @@ private slots:
     void onSwitchToChat();
     void onRelationBootstrapUpdated();
     void onRegisterCountdownTimeout();
+    void onRegisterCodeCooldownTimeout();
     void onAddAuthFriend(std::shared_ptr<AuthInfo> authInfo);
     void onDeleteFriendRsp(int error, int friendUid);
     void onAuthRsp(std::shared_ptr<AuthRsp> authRsp);
@@ -425,6 +431,8 @@ private:
                                         qint64 groupId);
     void setTip(const QString& tip, bool isError);
     void setBusy(bool value);
+    void setRegisterCodeCooldownSeconds(int seconds);
+    void setRegisterCodeRequestPending(bool pending);
     void setPage(Page newPage);
     QString normalizeIconPath(QString icon) const;
     void applyCurrentUserProfile(const QJsonObject& profile, bool preserveExistingIcon);
@@ -554,6 +562,7 @@ private:
     PrivateChatCacheStore _private_cache_store;
     GroupChatCacheStore _group_cache_store;
     QTimer _register_countdown_timer;
+    QTimer _register_code_cooldown_timer;
     QTimer _heartbeat_timer;
     QTimer _chat_login_timeout_timer;
     AppPendingSendQueueState _pending_send_state;

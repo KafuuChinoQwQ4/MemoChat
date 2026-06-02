@@ -11,6 +11,17 @@ Rectangle {
     color: "transparent"
     property bool pwdVisible: false
     property bool confirmVisible: false
+    property bool registerCodeCoolingDown: controller.registerCodeCooldownSeconds > 0
+    property bool registerCodeUnavailable: controller.busy
+                                           || controller.registerCodeRequestPending
+                                           || registerCodeCoolingDown
+
+    function requestRegisterCode() {
+        if (registerRoot.registerCodeUnavailable) {
+            return
+        }
+        controller.requestRegisterCode(emailField.text)
+    }
 
     RegularExpressionValidator {
         id: emailInputValidator
@@ -276,12 +287,14 @@ Rectangle {
 
                     GlassButton {
                         id: registerCodeBtn
-                        Layout.preferredWidth: 58
+                        Layout.preferredWidth: 72
                         Layout.preferredHeight: 38
-                        enabled: !controller.busy
-                        text: "获取"
+                        enabled: !registerRoot.registerCodeUnavailable
+                        text: registerRoot.registerCodeCoolingDown
+                              ? controller.registerCodeCooldownSeconds + "s"
+                              : "获取"
                         textPixelSize: 14
-                        onClicked: controller.requestRegisterCode(emailField.text)
+                        onClicked: registerRoot.requestRegisterCode()
                     }
                 }
 
