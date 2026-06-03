@@ -21,3 +21,7 @@ list(APPEND MEMOCHAT_QML_FEATURE_HEADERS
     features/moments/parsing/MomentsResponseParser.h
     features/moments/model/MomentsModel.h
 )
+
+list(APPEND MEMOCHAT_QML_FEATURE_RESOURCES
+    features/moments/resources/moments.qrc
+)

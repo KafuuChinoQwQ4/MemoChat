@@ -2,9 +2,9 @@ import QtQuick 2.15
 import QtQuick.Window 2.15
 import MemoChat 1.0
 import "../components"
-import "../chat"
-import "../agent"
-import "../r18"
+import "qrc:/features/chat/view"
+import "qrc:/features/agent/view"
+import "qrc:/features/r18/view"
 import "ChatShellRuntime.js" as ChatShellRuntime
 
 Rectangle {
@@ -14,7 +14,7 @@ Rectangle {
     property int topInset: 0
     property real revealProgress: 1.0
     property int viewMode: 0 // 0 = main tabs, 1 = profile center
-    property int lastMainTab: controller.chatTab
+    property int lastMainTab: shell.chatTab
     property bool groupCreationDialogActivated: false
     property bool groupManagementPanelActive: false
     property int momentsSelectedUid: 0
@@ -36,16 +36,16 @@ Rectangle {
     signal petPreviewRequested(var petAssetSettings)
 
     Connections {
-        target: controller
+        target: group
         function onCurrentGroupChanged() {
-            if (!controller.hasCurrentGroup) {
+            if (!group.hasCurrentGroup) {
                 groupManagementPanelActive = false
             }
         }
 
         function onGroupCreated(groupId) {
             root.viewMode = 0
-            controller.switchChatTab(AppController.ChatTabPage)
+            shell.switchChatTab(AppController.ChatTabPage)
         }
     }
 
@@ -91,7 +91,7 @@ Rectangle {
 
     function switchAccountToLogin() {
         Qt.callLater(function() {
-            controller.switchToLogin()
+            shell.switchToLogin()
         })
     }
 
@@ -104,18 +104,18 @@ Rectangle {
         root.agentGameSetupKind = ChatShellRuntime.defaultAgentGameSetupKind(kind)
         root.agentGameSetupToken += 1
         root.agentGameActive = true
-        if (controller.agentController) {
-            controller.agentController.refreshModelList()
-            controller.agentController.listGameRooms()
-            controller.agentController.listGameRulesets()
-            controller.agentController.listGameTemplates()
+        if (agent) {
+            agent.refreshModelList()
+            agent.listGameRooms()
+            agent.listGameRulesets()
+            agent.listGameTemplates()
         }
     }
 
     function createAgentChatSession() {
         root.agentGameActive = false
-        if (controller.agentController) {
-            controller.agentController.createSession()
+        if (agent) {
+            agent.createSession()
         }
     }
 
@@ -183,8 +183,8 @@ Rectangle {
             onMomentFriendSelected: function(uid, displayName) {
                 root.momentsSelectedUid = uid
                 root.momentsSelectedName = displayName || ""
-                if (controller.momentsController) {
-                    controller.momentsController.loadFeedForAuthor(uid)
+                if (moments) {
+                    moments.loadFeedForAuthor(uid)
                 }
             }
             onGroupManagementPanelActiveChangedByUser: function(active) {
@@ -218,7 +218,7 @@ Rectangle {
             r18PaneWarm: root.r18PaneWarm
             r18ViewMode: root.r18ViewMode
             r18NavigationItems: root.r18NavigationItems
-            r18Controller: controller.r18Controller
+            r18Controller: r18
             onViewModeChangedByUser: function(mode) { root.r18ViewMode = mode }
             onReturnToChatRequested: root.toggleR18Mode()
             onPendingFlipReady: root.finishPendingR18Flip()
@@ -231,14 +231,15 @@ Rectangle {
         anchors.fill: parent
         backdrop: backdropLayer
         groupCreationDialogActivated: root.groupCreationDialogActivated
-        friendModel: controller.contactListModel
-        callSession: controller.callSession
-        appController: controller
-        onCreateGroupSubmitted: function(name, memberUserIds) { controller.createGroup(name, memberUserIds) }
-        onAcceptRequested: controller.acceptIncomingCall()
-        onRejectRequested: controller.rejectIncomingCall()
-        onEndRequested: controller.endCurrentCall()
-        onMuteToggled: controller.toggleCallMuted()
-        onCameraToggled: controller.toggleCallCamera()
+        friendModel: contact.contactListModel
+        callSession: call.callSession
+        livekitBridge: call.livekitBridge
+        contactController: contact
+        onCreateGroupSubmitted: function(name, memberUserIds) { group.createGroup(name, memberUserIds) }
+        onAcceptRequested: call.acceptIncomingCall()
+        onRejectRequested: call.rejectIncomingCall()
+        onEndRequested: call.endCurrentCall()
+        onMuteToggled: call.toggleCallMuted()
+        onCameraToggled: call.toggleCallCamera()
     }
 }

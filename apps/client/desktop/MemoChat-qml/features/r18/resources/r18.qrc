@@ -1,0 +1,24 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="features/r18/view/R18ComicTile.qml">../view/R18ComicTile.qml</file>
+        <file alias="features/r18/view/R18DetailPane.qml">../view/R18DetailPane.qml</file>
+        <file alias="features/r18/view/R18FlipFace.qml">../view/R18FlipFace.qml</file>
+        <file alias="features/r18/view/R18HistoryPane.qml">../view/R18HistoryPane.qml</file>
+        <file alias="features/r18/view/R18HomeCard.qml">../view/R18HomeCard.qml</file>
+        <file alias="features/r18/view/R18HomePane.qml">../view/R18HomePane.qml</file>
+        <file alias="features/r18/view/R18ImportedSourceRow.qml">../view/R18ImportedSourceRow.qml</file>
+        <file alias="features/r18/view/R18OfficialSourceCatalogPane.qml">../view/R18OfficialSourceCatalogPane.qml</file>
+        <file alias="features/r18/view/R18OfficialSourceRow.qml">../view/R18OfficialSourceRow.qml</file>
+        <file alias="features/r18/view/R18ReaderChrome.qml">../view/R18ReaderChrome.qml</file>
+        <file alias="features/r18/view/R18ReaderPane.qml">../view/R18ReaderPane.qml</file>
+        <file alias="features/r18/view/R18SearchPane.qml">../view/R18SearchPane.qml</file>
+        <file alias="features/r18/view/R18ShellPane.qml">../view/R18ShellPane.qml</file>
+        <file alias="features/r18/view/R18ShellRuntime.js">../view/R18ShellRuntime.js</file>
+        <file alias="features/r18/view/R18SourceFeedPane.qml">../view/R18SourceFeedPane.qml</file>
+        <file alias="features/r18/view/R18SourceImportPane.qml">../view/R18SourceImportPane.qml</file>
+        <file alias="features/r18/view/R18SourceListPane.qml">../view/R18SourceListPane.qml</file>
+        <file alias="features/r18/view/R18SourceManagerPane.qml">../view/R18SourceManagerPane.qml</file>
+        <file alias="features/r18/view/R18StatusBanner.qml">../view/R18StatusBanner.qml</file>
+        <file alias="features/r18/view/R18TagPane.qml">../view/R18TagPane.qml</file>
+    </qresource>
+</RCC>

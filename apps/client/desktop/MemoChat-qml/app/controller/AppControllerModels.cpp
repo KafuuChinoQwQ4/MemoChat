@@ -100,4 +100,5 @@ void AppController::refreshGroupModel()
     }
 
     _group_list_model.setFriends(converted);
+    syncGroupControllerState();
 }

@@ -1,0 +1,40 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="features/pet/view/Live2DAssetSummaryPanel.qml">../view/Live2DAssetSummaryPanel.qml</file>
+        <file alias="features/pet/view/Live2DAvatarPreviewImage.qml">../view/Live2DAvatarPreviewImage.qml</file>
+        <file alias="features/pet/view/Live2DBehaviorMemoryPanel.qml">../view/Live2DBehaviorMemoryPanel.qml</file>
+        <file alias="features/pet/view/Live2DCharacterAssetColumn.qml">../view/Live2DCharacterAssetColumn.qml</file>
+        <file alias="features/pet/view/Live2DCharacterBehaviorColumn.qml">../view/Live2DCharacterBehaviorColumn.qml</file>
+        <file alias="features/pet/view/Live2DCharacterPane.qml">../view/Live2DCharacterPane.qml</file>
+        <file alias="features/pet/view/Live2DCharacterPreviewPanel.qml">../view/Live2DCharacterPreviewPanel.qml</file>
+        <file alias="features/pet/view/Live2DCharacterPromptColumn.qml">../view/Live2DCharacterPromptColumn.qml</file>
+        <file alias="features/pet/view/Live2DCharacterRuntime.js">../view/Live2DCharacterRuntime.js</file>
+        <file alias="features/pet/view/Live2DComboBlock.qml">../view/Live2DComboBlock.qml</file>
+        <file alias="features/pet/view/Live2DFormFieldBlock.qml">../view/Live2DFormFieldBlock.qml</file>
+        <file alias="features/pet/view/Live2DPersonaPanel.qml">../view/Live2DPersonaPanel.qml</file>
+        <file alias="features/pet/view/Live2DPromptPreviewPanel.qml">../view/Live2DPromptPreviewPanel.qml</file>
+        <file alias="features/pet/view/Live2DResourceVoicePanel.qml">../view/Live2DResourceVoicePanel.qml</file>
+        <file alias="features/pet/view/Live2DSectionPanel.qml">../view/Live2DSectionPanel.qml</file>
+        <file alias="features/pet/view/Live2DSliderBlock.qml">../view/Live2DSliderBlock.qml</file>
+        <file alias="features/pet/view/Live2DSpeechStylePanel.qml">../view/Live2DSpeechStylePanel.qml</file>
+        <file alias="features/pet/view/Live2DStatusChip.qml">../view/Live2DStatusChip.qml</file>
+        <file alias="features/pet/view/Live2DTextAreaBlock.qml">../view/Live2DTextAreaBlock.qml</file>
+        <file alias="features/pet/view/Live2DToggleRow.qml">../view/Live2DToggleRow.qml</file>
+        <file alias="features/pet/view/PetAudioPlayer.qml">../view/PetAudioPlayer.qml</file>
+        <file alias="features/pet/view/PetCameraCapture.qml">../view/PetCameraCapture.qml</file>
+        <file alias="features/pet/view/PetChatComposer.qml">../view/PetChatComposer.qml</file>
+        <file alias="features/pet/view/PetChatHeader.qml">../view/PetChatHeader.qml</file>
+        <file alias="features/pet/view/PetChatMessageList.qml">../view/PetChatMessageList.qml</file>
+        <file alias="features/pet/view/PetChatRuntime.js">../view/PetChatRuntime.js</file>
+        <file alias="features/pet/view/PetChatWindow.qml">../view/PetChatWindow.qml</file>
+        <file alias="features/pet/view/PetControlApiProviderPanel.qml">../view/PetControlApiProviderPanel.qml</file>
+        <file alias="features/pet/view/PetControlHeader.qml">../view/PetControlHeader.qml</file>
+        <file alias="features/pet/view/PetControlLive2DActionPanel.qml">../view/PetControlLive2DActionPanel.qml</file>
+        <file alias="features/pet/view/PetControlRuntime.js">../view/PetControlRuntime.js</file>
+        <file alias="features/pet/view/PetControlWindow.qml">../view/PetControlWindow.qml</file>
+        <file alias="features/pet/view/PetScene.qml">../view/PetScene.qml</file>
+        <file alias="features/pet/view/PetVisionPrivacyCard.qml">../view/PetVisionPrivacyCard.qml</file>
+        <file alias="features/pet/view/PetWindow.qml">../view/PetWindow.qml</file>
+        <file alias="features/pet/view/PetWindowRuntime.js">../view/PetWindowRuntime.js</file>
+    </qresource>
+</RCC>

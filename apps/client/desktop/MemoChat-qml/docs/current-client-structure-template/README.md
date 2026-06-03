@@ -49,51 +49,59 @@ apps/client/desktop/MemoChat-qml/
     app/
       Main.qml
       ChatShellPage.qml
-      ChatShellContent.qml
       AppWindowRuntime.js
       ChatShellRuntime.js
-    auth/
-      LoginPage.qml
-      RegisterPage.qml
-      ResetPage.qml
-    chat/
-      ChatSideBar.qml
-      ChatLeftPanel.qml
-      ChatConversationPane.qml
-      ChatContactPane.qml
-      ChatMorePane.qml
-      ChatSettingsPane.qml
-      contact/
-      conversation/
-      group/
-      settings/
-    agent/
-    call/
     components/
-    moments/
-    pet/
-    r18/
+      Glass*.qml
+      AppWindowControls.qml
+      ContactProfilePopup.qml
+      LoginIconButton.qml
   features/
     auth/
       AuthController.h
       AuthController.cpp
+      view/
+        LoginPage.qml
+        RegisterPage.qml
+        ResetPage.qml
+        components/
       sources.cmake
     chat/
       controller/
       model/
       services/
       cache/
+      view/
+        ChatShellContent.qml
+        ChatLeftPanel.qml
+        ChatConversationPane.qml
+        conversation/
+        group/
+        sidebar/
       sources.cmake
     contact/
       controller/
       model/
+      view/
+        ContactPane.qml
+        ContactListPane.qml
       sources.cmake
     call/
     profile/
+      view/
+        ProfileCenterPane.qml
+    settings/
+      view/
+        MorePane.qml
+        SettingsPane.qml
     moments/
+      view/
     agent/
+      view/
     pet/
+      view/
     r18/
+      view/
     sources.cmake
   core/
     common/
@@ -131,11 +139,6 @@ apps/client/desktop/MemoChat-qml/
     qrc/
       app-core.qrc
       qml-shell.qrc
-      qml-chat.qrc
-      qml-agent.qrc
-      qml-moments.qrc
-      qml-pet.qrc
-      qml-r18.qrc
       icons.qrc
       web.qrc
     icons/
@@ -176,7 +179,7 @@ Important files:
 qml/
 ```
 
-UI pages and visual components. Most files bind to the global `controller` object. The shell is split between `qml/linux/Main.qml` for Linux/WSLg window behavior and `qml/app/*` for shared app page composition.
+Shell, shared visual components, and platform-specific QML. Business views now live under `features/*/view`. The shell is split between `qml/linux/Main.qml` for Linux/WSLg window behavior and `qml/app/*` for shared app page composition.
 
 ```text
 app/controller/
@@ -229,7 +232,7 @@ For a newcomer, use this order:
    - `qml/linux/Main.qml`
    - `qml/app/Main.qml`
    - `qml/app/ChatShellPage.qml`
-   - `qml/app/ChatShellContent.qml`
+   - `features/chat/view/ChatShellContent.qml`
 
 4. Main controller contract:
    - `app/controller/AppController.h`
@@ -249,14 +252,14 @@ For a newcomer, use this order:
    - `shared/gateway/ClientGateway.*`
    - `core/network/*`
    - `resources/qrc/qml-shell.qrc`
-   - `resources/qrc/qml-chat.qrc`
+   - `features/*/resources/*.qrc`
 
 ## Current Business Chains
 
 ### Login
 
 ```text
-qml/auth/LoginPage.qml
+features/auth/view/LoginPage.qml
   -> controller.login(...)
   -> app/controller/AppControllerAuth.cpp
   -> features/auth/AuthController.cpp
@@ -270,8 +273,8 @@ qml/auth/LoginPage.qml
 ### Chat Message
 
 ```text
-qml/chat/conversation/ChatComposerBar.qml
-  -> qml/app/ChatShellContent.qml
+features/chat/view/conversation/ChatComposerBar.qml
+  -> features/chat/view/ChatShellContent.qml
   -> controller.sendCurrentComposerPayload(...)
   -> app/controller/AppControllerMedia.cpp
   -> app/controller/AppControllerMessageDispatch.cpp
@@ -283,7 +286,7 @@ qml/chat/conversation/ChatComposerBar.qml
 ### Agent
 
 ```text
-qml/agent/AgentPane.qml
+features/agent/view/AgentPane.qml
   -> controller.agentController
   -> features/agent/controller/AgentController*.cpp
   -> features/agent/transport/AgentStreamClient.cpp
@@ -293,8 +296,7 @@ qml/agent/AgentPane.qml
 ## Notes For Future Refactor
 
 - `AppController` is currently the central facade. It is convenient for QML but too broad for long-term feature ownership.
-- `qml/` and `features/` are currently separated by file type/layer more than by feature ownership.
+- `qml/` now owns shell/shared/platform QML. Business QML belongs to `features/*/view`.
 - Platform-specific Linux QML is important. Do not remove `qml/linux` or QRC aliases during refactor.
-- Move QML files slower than C++ files. Keep old QRC aliases while changing implementation paths.
-- Use one pilot module first, usually `auth`, before moving `chat` or `agent`.
-
+- Feature qrc files own business aliases under `features/<name>/view/...`.
+- Keep platform-specific Linux QML in `qml/linux`; add feature imports instead of moving Linux-only wrappers into shared feature files.

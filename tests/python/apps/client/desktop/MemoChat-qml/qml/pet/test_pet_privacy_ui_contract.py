@@ -5,8 +5,8 @@ from pathlib import Path
 from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
-PET_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetWindow.qml"
-PET_SCENE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetScene.qml"
+PET_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetWindow.qml"
+PET_SCENE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetScene.qml"
 
 PRIVACY_PROPERTIES = (
     "localOnlyMode",

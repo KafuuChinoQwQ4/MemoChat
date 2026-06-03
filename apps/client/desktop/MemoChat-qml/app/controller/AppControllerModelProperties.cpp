@@ -20,6 +20,26 @@ FriendListModel* AppController::contactListModel()
     return &_contact_list_model;
 }
 
+ContactController* AppController::contact()
+{
+    return &_contact_controller;
+}
+
+ContactController* AppController::contactController()
+{
+    return &_contact_controller;
+}
+
+GroupController* AppController::group()
+{
+    return &_group_controller;
+}
+
+GroupController* AppController::groupController()
+{
+    return &_group_controller;
+}
+
 ChatMessageModel* AppController::messageModel()
 {
     return &_message_model;
@@ -63,4 +83,24 @@ PetController* AppController::petController() const
 R18Controller* AppController::r18Controller() const
 {
     return const_cast<R18Controller*>(&_r18_controller);
+}
+
+ProfileController* AppController::profile()
+{
+    return &_profile_controller;
+}
+
+ProfileController* AppController::profileController()
+{
+    return &_profile_controller;
+}
+
+CallController* AppController::call()
+{
+    return &_call_controller;
+}
+
+CallController* AppController::callController()
+{
+    return &_call_controller;
 }

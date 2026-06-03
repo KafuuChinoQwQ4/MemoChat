@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="features/profile/view/ProfileCenterPane.qml">../view/ProfileCenterPane.qml</file>
+    </qresource>
+</RCC>

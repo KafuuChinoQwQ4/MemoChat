@@ -14,3 +14,7 @@ list(APPEND MEMOCHAT_QML_FEATURE_HEADERS
     features/contact/model/FriendListModel.h
     features/contact/model/SearchResultModel.h
 )
+
+list(APPEND MEMOCHAT_QML_FEATURE_RESOURCES
+    features/contact/resources/contact.qrc
+)

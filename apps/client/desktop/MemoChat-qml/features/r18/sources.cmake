@@ -12,3 +12,7 @@ list(APPEND MEMOCHAT_QML_FEATURE_HEADERS
     features/r18/controller/R18ControllerPrivate.h
     features/r18/model/R18ListModel.h
 )
+
+list(APPEND MEMOCHAT_QML_FEATURE_RESOURCES
+    features/r18/resources/r18.qrc
+)

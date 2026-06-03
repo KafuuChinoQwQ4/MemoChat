@@ -35,10 +35,10 @@ CLIENT_CMAKE_MANIFESTS = (
 )
 MAIN_CPP = CLIENT_DIR / "app/bootstrap/main.cpp"
 MAIN_QML_TYPE_REGISTRY_CPP = CLIENT_DIR / "app/bootstrap/MainQmlTypeRegistry.cpp"
-CHARACTER_PANE_QML = CLIENT_DIR / "qml/pet/Live2DCharacterPane.qml"
-RESOURCE_VOICE_PANEL_QML = CLIENT_DIR / "qml/pet/Live2DResourceVoicePanel.qml"
+CHARACTER_PANE_QML = CLIENT_DIR / "features/pet/view/Live2DCharacterPane.qml"
+RESOURCE_VOICE_PANEL_QML = CLIENT_DIR / "features/pet/view/Live2DResourceVoicePanel.qml"
 QRC_ROOT = CLIENT_DIR / "resources/qrc"
-QML_QRCS = tuple(sorted(QRC_ROOT.glob("*.qrc")))
+QML_QRCS = tuple(sorted(QRC_ROOT.glob("*.qrc"))) + (CLIENT_DIR / "features/pet/resources/pet.qrc",)
 
 REQUIRED_PROPERTIES = (
     "characterName",

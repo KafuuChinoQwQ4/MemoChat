@@ -5,17 +5,17 @@ from pathlib import Path
 from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
-PET_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetWindow.qml"
-PET_WINDOW_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetWindowRuntime.js"
-PET_SCENE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetScene.qml"
-PET_CONTROL_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlWindow.qml"
-PET_CONTROL_HEADER_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlHeader.qml"
+PET_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetWindow.qml"
+PET_WINDOW_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetWindowRuntime.js"
+PET_SCENE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetScene.qml"
+PET_CONTROL_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetControlWindow.qml"
+PET_CONTROL_HEADER_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetControlHeader.qml"
 PET_CONTROL_API_PROVIDER_PANEL_QML = (
-    REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlApiProviderPanel.qml"
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetControlApiProviderPanel.qml"
 )
-PET_CHAT_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatWindow.qml"
-PET_CHAT_MESSAGE_LIST_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatMessageList.qml"
-PET_CHAT_COMPOSER_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatComposer.qml"
+PET_CHAT_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetChatWindow.qml"
+PET_CHAT_MESSAGE_LIST_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetChatMessageList.qml"
+PET_CHAT_COMPOSER_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetChatComposer.qml"
 
 WINDOW_CONTROL_PROPERTIES = (
     "alwaysOnTop",

@@ -27,3 +27,7 @@ list(APPEND MEMOCHAT_QML_FEATURE_HEADERS
     features/agent/transport/AgentRequestTracker.h
     features/agent/transport/AgentStreamClient.h
 )
+
+list(APPEND MEMOCHAT_QML_FEATURE_RESOURCES
+    features/agent/resources/agent.qrc
+)

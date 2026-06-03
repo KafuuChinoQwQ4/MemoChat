@@ -65,13 +65,27 @@ DIRECTORY_MANIFESTS = (
 RESOURCE_QRC_FILES = (
     "app-core.qrc",
     "qml-shell.qrc",
+    "icons.qrc",
+    "web.qrc",
+)
+LEGACY_BUSINESS_QRC_FILES = (
     "qml-chat.qrc",
     "qml-moments.qrc",
     "qml-agent.qrc",
     "qml-pet.qrc",
     "qml-r18.qrc",
-    "icons.qrc",
-    "web.qrc",
+)
+FEATURE_QRC_FILES = (
+    QML_DIR / "features/auth/resources/auth.qrc",
+    QML_DIR / "features/call/resources/call.qrc",
+    QML_DIR / "features/chat/resources/chat.qrc",
+    QML_DIR / "features/contact/resources/contact.qrc",
+    QML_DIR / "features/profile/resources/profile.qrc",
+    QML_DIR / "features/settings/resources/settings.qrc",
+    QML_DIR / "features/moments/resources/moments.qrc",
+    QML_DIR / "features/agent/resources/agent.qrc",
+    QML_DIR / "features/pet/resources/pet.qrc",
+    QML_DIR / "features/r18/resources/r18.qrc",
 )
 
 
@@ -107,11 +121,21 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
             with self.subTest(qrc=name):
                 self.assertTrue(path.is_file())
             qrc_text += path.read_text(encoding="utf-8") if path.exists() else ""
+        for path in FEATURE_QRC_FILES:
+            with self.subTest(qrc=path.relative_to(QML_DIR)):
+                self.assertTrue(path.is_file())
+            qrc_text += path.read_text(encoding="utf-8") if path.exists() else ""
 
         for token in (
             'alias="qml/Main.qml"',
             'alias="qml/linux/Main.qml"',
-            'alias="qml/LoginPage.qml"',
+            'alias="features/auth/view/LoginPage.qml"',
+            'alias="features/call/view/CallOverlay.qml"',
+            'alias="features/chat/view/ChatShellContent.qml"',
+            'alias="features/moments/view/MomentsFeedPane.qml"',
+            'alias="features/agent/view/AgentPane.qml"',
+            'alias="features/pet/view/PetWindow.qml"',
+            'alias="features/r18/view/R18ShellPane.qml"',
             'alias="icons/dropdown.png"',
             'alias="res/head_1.png"',
             'alias="res/head_1.jpg"',
@@ -123,6 +147,12 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         for legacy_qrc in LEGACY_QRC_FILES:
             with self.subTest(legacy_qrc=legacy_qrc.name):
                 self.assertFalse(legacy_qrc.exists())
+
+        resources_cmake = resources.read_text(encoding="utf-8")
+        for legacy_qrc_name in LEGACY_BUSINESS_QRC_FILES:
+            with self.subTest(legacy_business_qrc=legacy_qrc_name):
+                self.assertFalse((RESOURCE_QRC_DIR / legacy_qrc_name).exists())
+                self.assertNotIn(f"resources/qrc/{legacy_qrc_name}", resources_cmake)
 
     def test_core_lives_under_memochat_qml_and_legacy_shared_module_is_removed(self):
         self.assertTrue(CORE_DIR.is_dir())
@@ -547,7 +577,8 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("void registerMemoChatQmlTypes()", registry)
         self.assertIn("qmlRegisterUncreatableType<AppController>", registry)
         self.assertIn("void configureMemoChatEngine", engine)
-        self.assertIn('setContextProperty("controller"', engine)
+        self.assertIn('setContextProperty("shell"', engine)
+        self.assertNotIn('setContextProperty("controller"', engine)
         self.assertIn("QUrl memoChatMainQmlUrl()", loader)
         self.assertIn("bool loadMemoChatMainWindow", loader)
         self.assertIn("ensureInitialCenteringHook(window)", loader)
@@ -559,17 +590,17 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
 
     def test_qml_shell_runtime_helpers_are_registered(self):
         qrc = (
-            (RESOURCE_QRC_DIR / "qml-r18.qrc").read_text(encoding="utf-8")
+            (QML_DIR / "features/r18/resources/r18.qrc").read_text(encoding="utf-8")
             + "\n"
-            + (RESOURCE_QRC_DIR / "qml-agent.qrc").read_text(encoding="utf-8")
+            + (QML_DIR / "features/agent/resources/agent.qrc").read_text(encoding="utf-8")
         )
-        r18_shell = (QML_DIR / "qml/r18/R18ShellPane.qml").read_text(encoding="utf-8")
-        r18_runtime = (QML_DIR / "qml/r18/R18ShellRuntime.js").read_text(encoding="utf-8")
-        agent_pane = (QML_DIR / "qml/agent/AgentPane.qml").read_text(encoding="utf-8")
-        agent_runtime = (QML_DIR / "qml/agent/AgentPaneRuntime.js").read_text(encoding="utf-8")
+        r18_shell = (QML_DIR / "features/r18/view/R18ShellPane.qml").read_text(encoding="utf-8")
+        r18_runtime = (QML_DIR / "features/r18/view/R18ShellRuntime.js").read_text(encoding="utf-8")
+        agent_pane = (QML_DIR / "features/agent/view/AgentPane.qml").read_text(encoding="utf-8")
+        agent_runtime = (QML_DIR / "features/agent/view/AgentPaneRuntime.js").read_text(encoding="utf-8")
 
-        self.assertIn("qml/r18/R18ShellRuntime.js", qrc)
-        self.assertIn("qml/agent/AgentPaneRuntime.js", qrc)
+        self.assertIn("features/r18/view/R18ShellRuntime.js", qrc)
+        self.assertIn("features/agent/view/AgentPaneRuntime.js", qrc)
         self.assertIn('import "R18ShellRuntime.js" as R18ShellRuntime', r18_shell)
         self.assertIn("R18ShellRuntime.buildSourceTagBuckets", r18_shell)
         self.assertIn("function buildSourceTagBuckets", r18_runtime)

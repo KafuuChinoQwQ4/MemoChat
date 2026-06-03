@@ -23,6 +23,7 @@ void AppController::handleGroupManagementRsp(ReqId reqId, const QJsonObject& pay
                 {
                     selectDialogByUid(dialogUid);
                 }
+                _group_controller.notifyGroupCreated(groupId);
                 emit groupCreated(groupId);
             }
             refreshGroupList();

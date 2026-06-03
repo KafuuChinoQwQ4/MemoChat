@@ -1,0 +1,21 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="features/moments/view/MomentsActionBar.qml">../view/MomentsActionBar.qml</file>
+        <file alias="features/moments/view/MomentsAttachmentStrip.qml">../view/MomentsAttachmentStrip.qml</file>
+        <file alias="features/moments/view/MomentsCommentComposer.qml">../view/MomentsCommentComposer.qml</file>
+        <file alias="features/moments/view/MomentsCommentList.qml">../view/MomentsCommentList.qml</file>
+        <file alias="features/moments/view/MomentsDelegate.qml">../view/MomentsDelegate.qml</file>
+        <file alias="features/moments/view/MomentsDetailAuthorRow.qml">../view/MomentsDetailAuthorRow.qml</file>
+        <file alias="features/moments/view/MomentsDetailHeader.qml">../view/MomentsDetailHeader.qml</file>
+        <file alias="features/moments/view/MomentsDetailMediaGrid.qml">../view/MomentsDetailMediaGrid.qml</file>
+        <file alias="features/moments/view/MomentsDetailPopup.qml">../view/MomentsDetailPopup.qml</file>
+        <file alias="features/moments/view/MomentsFeedPane.qml">../view/MomentsFeedPane.qml</file>
+        <file alias="features/moments/view/MomentsFriendSidePane.qml">../view/MomentsFriendSidePane.qml</file>
+        <file alias="features/moments/view/MomentsHeader.qml">../view/MomentsHeader.qml</file>
+        <file alias="features/moments/view/MomentsImagePreviewPopup.qml">../view/MomentsImagePreviewPopup.qml</file>
+        <file alias="features/moments/view/MomentsPostComposer.qml">../view/MomentsPostComposer.qml</file>
+        <file alias="features/moments/view/MomentsPublishHeader.qml">../view/MomentsPublishHeader.qml</file>
+        <file alias="features/moments/view/MomentsPublishPage.qml">../view/MomentsPublishPage.qml</file>
+        <file alias="features/moments/view/MomentsVisibilitySelector.qml">../view/MomentsVisibilitySelector.qml</file>
+    </qresource>
+</RCC>

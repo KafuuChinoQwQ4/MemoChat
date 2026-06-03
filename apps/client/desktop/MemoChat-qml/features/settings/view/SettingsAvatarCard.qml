@@ -1,0 +1,97 @@
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
+import "qrc:/qml/components"
+
+Item {
+    id: root
+    property Item backdrop: null
+    property string iconSource: "qrc:/res/head_1.jpg"
+    signal chooseAvatarRequested(int source)
+
+    implicitWidth: 260
+    implicitHeight: 190
+
+    GlassSurface {
+        anchors.fill: parent
+        backdrop: root.backdrop !== null ? root.backdrop : root
+        cornerRadius: 10
+        blurRadius: 30
+        fillColor: Qt.rgba(1, 1, 1, 0.22)
+        strokeColor: Qt.rgba(1, 1, 1, 0.46)
+        glowTopColor: Qt.rgba(1, 1, 1, 0.22)
+        glowBottomColor: Qt.rgba(1, 1, 1, 0.03)
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+
+            Label {
+                text: "头像"
+                color: "#28364a"
+                font.pixelSize: 16
+                font.bold: true
+            }
+
+            Rectangle {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: 96
+                Layout.preferredHeight: 96
+                radius: 8
+                clip: true
+                color: Qt.rgba(0.74, 0.83, 0.93, 0.54)
+
+                Image {
+                    anchors.fill: parent
+                    property string baseSource: root.iconSource.length > 0 ? root.iconSource : "qrc:/res/head_1.jpg"
+                    property bool loadFailed: false
+                    source: loadFailed ? "qrc:/res/head_1.jpg" : baseSource
+                    fillMode: Image.PreserveAspectCrop
+                    cache: true
+                    asynchronous: true
+                    opacity: (status === Image.Ready) ? 1.0 : 0.0
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                    onBaseSourceChanged: loadFailed = false
+                    onStatusChanged: {
+                        if (status === Image.Error) {
+                            loadFailed = true
+                        }
+                    }
+                }
+            }
+
+            GlassButton {
+                id: avatarBtn
+                Layout.alignment: Qt.AlignHCenter
+                text: "更换头像"
+                textPixelSize: 13
+                cornerRadius: 9
+                normalColor: Qt.rgba(0.54, 0.70, 0.93, 0.20)
+                hoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.30)
+                pressedColor: Qt.rgba(0.54, 0.70, 0.93, 0.38)
+                disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                onClicked: avatarMenu.open()
+            }
+        }
+    }
+
+    Menu {
+        id: avatarMenu
+        y: avatarBtn.y + avatarBtn.height + 4
+        x: avatarBtn.x + (avatarBtn.width - width) / 2
+        width: 160
+        MenuItem {
+            text: "从相册选择"
+            onClicked: root.chooseAvatarRequested(0)
+        }
+        MenuItem {
+            text: "屏幕截图"
+            onClicked: root.chooseAvatarRequested(1)
+        }
+        MenuItem {
+            text: "拍照上传"
+            onClicked: root.chooseAvatarRequested(2)
+        }
+    }
+}

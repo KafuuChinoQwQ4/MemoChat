@@ -5,9 +5,9 @@ import QtQuick.Controls 2.15
 import QtQuick.Window 2.15
 import MemoChat 1.0
 import "AppWindowRuntime.js" as AppWindowRuntime
-import "../auth"
+import "qrc:/features/auth/view"
 import "../components"
-import "../pet"
+import "qrc:/features/pet/view"
 
 Item {
     id: root
@@ -30,7 +30,7 @@ Item {
     property bool memochatStartupCenter: true
     readonly property int handoffMinimumPasses: 24
     readonly property int windowHandoffIntervalMs: 42
-    readonly property bool chatPageActive: controller.page === AppController.ChatPage
+    readonly property bool chatPageActive: shell.page === AppController.ChatPage
 
     PetAssetSettings {
         id: startupPetSettings
@@ -122,7 +122,7 @@ Item {
                      + " y=" + win.y
                      + " w=" + win.width
                      + " h=" + win.height
-                     + " page=" + controller.page)
+                     + " page=" + shell.page)
     }
 
     function configureLoginWindow(win) {
@@ -205,7 +205,7 @@ Item {
         }
         Qt.callLater(function() {
             if (chatPageActive) {
-                controller.beginPostLoginBootstrap()
+                shell.beginPostLoginBootstrap()
             }
         })
         if (startupPetSettings.autoStartPetOnClientStart) {
@@ -242,7 +242,7 @@ Item {
         if (targetPage === AppController.ChatPage) {
             return root.chatPageActive
         }
-        return controller.page === targetPage && !root.chatPageActive
+        return shell.page === targetPage && !root.chatPageActive
     }
 
     function showWindowForHandoffTarget(targetPage) {
@@ -288,14 +288,14 @@ Item {
         const settings = petAssetSettings || startupPetSettings
         if (petWindowRef) {
             petWindowRef.petAssetSettings = settings
-            petWindowRef.selfAvatar = controller.currentUserIcon
+            petWindowRef.selfAvatar = shell.currentUserIcon
             return petWindowRef
         }
         petWindowRef = petWindowComponent.createObject(null, {
-            "petController": controller.petController,
-            "agentController": controller.agentController,
+            "petController": pet,
+            "agentController": agent,
             "petAssetSettings": settings,
-            "selfAvatar": controller.currentUserIcon
+            "selfAvatar": shell.currentUserIcon
         })
         return petWindowRef
     }
@@ -334,7 +334,7 @@ Item {
             return
         }
         const retiredWindowPending = destroyChatWindow()
-        scheduleWindowHandoff(retiredWindowPending, token, controller.page)
+        scheduleWindowHandoff(retiredWindowPending, token, shell.page)
     }
 
     Component.onCompleted: {
@@ -352,13 +352,13 @@ Item {
     }
 
     Connections {
-        target: controller
+        target: shell
         function onPageChanged() {
             syncWindowsByPage()
         }
         function onCurrentUserChanged() {
             if (petWindowRef) {
-                petWindowRef.selfAvatar = controller.currentUserIcon
+                petWindowRef.selfAvatar = shell.currentUserIcon
             }
         }
     }
@@ -401,16 +401,16 @@ Item {
     Component {
         id: loginPageComponent
         LoginPage {
-            credentialProvider: controller
-            tipText: controller.tipText
-            tipError: controller.tipError
-            busy: controller.busy
+            credentialProvider: auth
+            tipText: auth.tipText
+            tipError: auth.tipError
+            busy: auth.busy
 
-            onClearTipRequested: controller.clearTip()
-            onSwitchToRegisterRequested: controller.switchToRegister()
-            onSwitchToResetRequested: controller.switchToReset()
+            onClearTipRequested: auth.clearTip()
+            onSwitchToRegisterRequested: shell.switchToRegister()
+            onSwitchToResetRequested: shell.switchToReset()
             onLoginRequested: function(email, password) {
-                controller.login(email, password)
+                auth.login(email, password)
             }
         }
     }
@@ -480,7 +480,7 @@ Item {
 
                 Loader {
                     anchors.fill: parent
-                    visible: controller.page === AppController.LoginPage
+                    visible: shell.page === AppController.LoginPage
                     active: visible
                     asynchronous: true
                     sourceComponent: loginPageComponent
@@ -488,7 +488,7 @@ Item {
 
                 Loader {
                     anchors.fill: parent
-                    visible: controller.page === AppController.RegisterPage
+                    visible: shell.page === AppController.RegisterPage
                     active: visible
                     asynchronous: true
                     sourceComponent: registerPageComponent
@@ -496,7 +496,7 @@ Item {
 
                 Loader {
                     anchors.fill: parent
-                    visible: controller.page === AppController.ResetPage
+                    visible: shell.page === AppController.ResetPage
                     active: visible
                     asynchronous: true
                     sourceComponent: resetPageComponent

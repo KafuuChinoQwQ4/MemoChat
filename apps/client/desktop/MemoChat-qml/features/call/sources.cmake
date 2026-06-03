@@ -9,3 +9,7 @@ list(APPEND MEMOCHAT_QML_FEATURE_HEADERS
     features/call/model/CallSessionModel.h
     features/call/bridge/LivekitBridge.h
 )
+
+list(APPEND MEMOCHAT_QML_FEATURE_RESOURCES
+    features/call/resources/call.qrc
+)

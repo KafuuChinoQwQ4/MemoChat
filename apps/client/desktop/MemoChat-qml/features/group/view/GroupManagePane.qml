@@ -1,0 +1,324 @@
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
+import "qrc:/qml/components"
+
+GlassSurface {
+    id: root
+
+    property bool canInviteUsers: false
+    property bool canUpdateAnnouncement: false
+    property bool canDeleteMessages: false
+    property bool canManageAdmins: false
+    property bool canPinMessages: false
+    property bool canBanUsers: false
+    property bool canManageTopics: false
+    property var friendModel: null
+    property string selectedFriendUserId: ""
+    readonly property bool hasManageActions: canInviteUsers || canManageAdmins || canBanUsers
+
+    signal inviteRequested(string userId, string reason)
+    signal setAdminRequested(string userId, bool isAdmin, int permissionBits)
+    signal muteRequested(string userId, int muteSeconds)
+    signal kickRequested(string userId)
+
+    function syncTargetFromFriend(indexValue) {
+        if (!friendModel || indexValue < 0 || !friendModel.get) {
+            return
+        }
+        const item = friendModel.get(indexValue)
+        if (!item || !item.userId || item.userId.length === 0) {
+            return
+        }
+        selectedFriendUserId = item.userId
+        uidInput.text = item.userId
+    }
+
+    function composePermissionBits() {
+        let bits = 0
+        for (let i = 0; i < permissionRepeater.count; ++i) {
+            const item = permissionRepeater.itemAt(i)
+            if (item && item.permissionChecked) {
+                bits |= item.permissionBit
+            }
+        }
+        return bits
+    }
+
+    function availablePermissionModel() {
+        const items = []
+        if (canUpdateAnnouncement) items.push({ label: "群资料", bit: 1, checked: true })
+        if (canDeleteMessages) items.push({ label: "删消息", bit: 2, checked: true })
+        if (canInviteUsers) items.push({ label: "邀成员", bit: 4, checked: true })
+        if (canManageAdmins) items.push({ label: "管理员", bit: 8, checked: false })
+        if (canPinMessages) items.push({ label: "置顶", bit: 16, checked: true })
+        if (canBanUsers) items.push({ label: "禁言踢人", bit: 32, checked: true })
+        if (canManageTopics) items.push({ label: "话题", bit: 64, checked: false })
+        return items
+    }
+
+    component PermissionPill: CheckBox {
+        id: control
+        property int permissionBit: 0
+        property bool permissionChecked: checked
+
+        hoverEnabled: true
+        leftPadding: 8
+        rightPadding: 8
+        topPadding: 0
+        bottomPadding: 0
+        spacing: 5
+        implicitWidth: Math.max(78, contentItem.implicitWidth + 32)
+        implicitHeight: 28
+
+        indicator: Rectangle {
+            implicitWidth: 10
+            implicitHeight: 10
+            radius: 5
+            x: control.leftPadding
+            y: (control.height - height) / 2
+            border.width: 1
+            border.color: control.down ? Qt.rgba(0.44, 0.59, 0.80, 0.86)
+                                       : control.hovered ? Qt.rgba(0.51, 0.66, 0.86, 0.82)
+                                                         : Qt.rgba(0.56, 0.66, 0.78, 0.72)
+            color: {
+                if (!control.enabled) {
+                    return control.checked ? Qt.rgba(0.45, 0.58, 0.74, 0.30) : Qt.rgba(1, 1, 1, 0.08)
+                }
+                if (control.checked) {
+                    if (control.down) {
+                        return Qt.rgba(0.31, 0.62, 0.90, 0.72)
+                    }
+                    if (control.hovered) {
+                        return Qt.rgba(0.35, 0.67, 0.94, 0.66)
+                    }
+                    return Qt.rgba(0.33, 0.64, 0.92, 0.60)
+                }
+                if (control.down) {
+                    return Qt.rgba(0.33, 0.64, 0.92, 0.30)
+                }
+                if (control.hovered) {
+                    return Qt.rgba(0.33, 0.64, 0.92, 0.16)
+                }
+                return Qt.rgba(1, 1, 1, 0.08)
+            }
+            scale: control.down ? 0.96 : (control.hovered ? 1.02 : 1.0)
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 110
+                    easing.type: Easing.OutQuad
+                }
+            }
+            Behavior on scale {
+                NumberAnimation {
+                    duration: 110
+                    easing.type: Easing.OutQuad
+                }
+            }
+        }
+
+        contentItem: Text {
+            leftPadding: 16
+            text: control.text
+            color: control.enabled ? "#32465f" : "#8b96a5"
+            font.pixelSize: 12
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+
+        background: Rectangle {
+            radius: 7
+            color: control.checked ? Qt.rgba(0.38, 0.61, 0.85, 0.14)
+                                   : Qt.rgba(1, 1, 1, 0.10)
+            border.width: 1
+            border.color: control.checked ? Qt.rgba(0.42, 0.62, 0.84, 0.34)
+                                          : Qt.rgba(1, 1, 1, 0.28)
+        }
+
+        HoverHandler {
+            cursorShape: control.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+        }
+    }
+
+    cornerRadius: 10
+    blurRadius: 26
+    implicitHeight: manageColumn.implicitHeight + 20
+    fillColor: Qt.rgba(1, 1, 1, 0.20)
+    strokeColor: Qt.rgba(1, 1, 1, 0.42)
+
+    ColumnLayout {
+        id: manageColumn
+        anchors.fill: parent
+        anchors.margins: 10
+        spacing: 8
+
+        Label {
+            text: "群管理"
+            color: "#2a3649"
+            font.bold: true
+            font.pixelSize: 14
+        }
+
+        Label {
+            Layout.fillWidth: true
+            visible: !root.hasManageActions
+            text: "暂无可用管理权限"
+            color: "#8b96a5"
+            font.pixelSize: 12
+        }
+
+        ComboBox {
+            id: friendCombo
+            Layout.fillWidth: true
+            Layout.preferredHeight: 34
+            visible: root.hasManageActions
+            model: root.friendModel
+            textRole: "nick"
+            valueRole: "userId"
+            enabled: root.friendModel && root.friendModel.count > 0
+            currentIndex: -1
+            displayText: currentIndex >= 0 ? currentText : "选择好友"
+            onActivated: root.syncTargetFromFriend(index)
+
+            background: Rectangle {
+                radius: 9
+                color: friendCombo.enabled ? Qt.rgba(1, 1, 1, 0.18) : Qt.rgba(0.52, 0.57, 0.64, 0.12)
+                border.color: friendCombo.hovered ? Qt.rgba(0.35, 0.61, 0.90, 0.48) : Qt.rgba(1, 1, 1, 0.34)
+            }
+            contentItem: Text {
+                leftPadding: 10
+                rightPadding: 28
+                text: friendCombo.displayText
+                color: friendCombo.enabled ? "#2a3649" : "#8b96a5"
+                font.pixelSize: 13
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+            }
+        }
+
+        GlassTextField {
+            id: uidInput
+            Layout.fillWidth: true
+            Layout.preferredHeight: 32
+            visible: root.hasManageActions
+            backdrop: root.backdrop
+            placeholderText: "目标用户ID（可手动补充）"
+        }
+
+        GlassTextField {
+            id: reasonInput
+            Layout.fillWidth: true
+            Layout.preferredHeight: 32
+            visible: root.canInviteUsers
+            backdrop: root.backdrop
+            placeholderText: "理由（可选）"
+        }
+
+        GlassTextField {
+            id: muteInput
+            Layout.fillWidth: true
+            Layout.preferredHeight: 32
+            visible: root.canBanUsers
+            backdrop: root.backdrop
+            placeholderText: "禁言秒数（0=解禁）"
+        }
+
+        Flow {
+            Layout.fillWidth: true
+            visible: root.canManageAdmins
+            spacing: 6
+
+            Repeater {
+                id: permissionRepeater
+                model: root.availablePermissionModel()
+
+                PermissionPill {
+                    text: modelData.label
+                    permissionBit: modelData.bit
+                    checked: modelData.checked
+                    enabled: root.canManageAdmins
+                }
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            visible: inviteBtn.visible || setAdminBtn.visible
+            spacing: 6
+
+            GlassButton {
+                id: inviteBtn
+                Layout.fillWidth: true
+                visible: root.canInviteUsers
+                text: "邀请"
+                implicitHeight: 30
+                cornerRadius: 8
+                normalColor: Qt.rgba(0.28, 0.70, 0.58, 0.24)
+                hoverColor: Qt.rgba(0.28, 0.70, 0.58, 0.34)
+                pressedColor: Qt.rgba(0.28, 0.70, 0.58, 0.42)
+                disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                onClicked: root.inviteRequested(uidInput.text.trim(), reasonInput.text)
+            }
+            GlassButton {
+                id: setAdminBtn
+                Layout.fillWidth: true
+                visible: root.canManageAdmins
+                text: "设管理员"
+                implicitHeight: 30
+                cornerRadius: 8
+                normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
+                hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
+                pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
+                disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                onClicked: root.setAdminRequested(uidInput.text.trim(), true, root.composePermissionBits())
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            visible: unsetAdminBtn.visible || muteBtn.visible
+            spacing: 6
+
+            GlassButton {
+                id: unsetAdminBtn
+                Layout.fillWidth: true
+                visible: root.canManageAdmins
+                text: "撤管理员"
+                implicitHeight: 30
+                cornerRadius: 8
+                normalColor: Qt.rgba(0.48, 0.56, 0.66, 0.20)
+                hoverColor: Qt.rgba(0.48, 0.56, 0.66, 0.30)
+                pressedColor: Qt.rgba(0.48, 0.56, 0.66, 0.38)
+                disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                onClicked: root.setAdminRequested(uidInput.text.trim(), false, 0)
+            }
+            GlassButton {
+                id: muteBtn
+                Layout.fillWidth: true
+                visible: root.canBanUsers
+                text: "禁言"
+                implicitHeight: 30
+                cornerRadius: 8
+                normalColor: Qt.rgba(0.83, 0.61, 0.24, 0.24)
+                hoverColor: Qt.rgba(0.83, 0.61, 0.24, 0.34)
+                pressedColor: Qt.rgba(0.83, 0.61, 0.24, 0.42)
+                disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+                onClicked: root.muteRequested(uidInput.text.trim(), parseInt(muteInput.text))
+            }
+        }
+
+        GlassButton {
+            Layout.fillWidth: true
+            visible: root.canBanUsers
+            text: "踢出群聊"
+            implicitHeight: 30
+            cornerRadius: 8
+            normalColor: Qt.rgba(0.82, 0.38, 0.38, 0.22)
+            hoverColor: Qt.rgba(0.82, 0.38, 0.38, 0.32)
+            pressedColor: Qt.rgba(0.82, 0.38, 0.38, 0.40)
+            disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+            onClicked: root.kickRequested(uidInput.text.trim())
+        }
+    }
+}

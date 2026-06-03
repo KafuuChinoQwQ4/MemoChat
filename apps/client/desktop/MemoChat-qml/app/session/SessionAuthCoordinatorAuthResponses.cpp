@@ -100,14 +100,8 @@ void SessionAuthCoordinator::onRegisterHttpFinished(ReqId id, QString res, Error
     {
         _app.setBusy(false);
         _app.setTip("用户注册成功", false);
-        if (!_app._shell_state.registerSuccessPage)
-        {
-            _app._shell_state.registerSuccessPage = true;
-            emit _app.registerSuccessPageChanged();
-        }
-
-        _app._shell_state.registerCountdown = 5;
-        emit _app.registerCountdownChanged();
+        _app.setRegisterSuccessPage(true);
+        _app.setRegisterCountdown(5);
         _app._register_countdown_timer.start(1000);
     }
 }

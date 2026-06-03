@@ -7,7 +7,8 @@ from tests.python.support.paths import repo_root
 REPO_ROOT = repo_root()
 CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 APP_DIR = CLIENT_DIR / "app"
-REGISTER_PAGE = CLIENT_DIR / "qml/auth/RegisterPage.qml"
+AUTH_VIEWMODEL_HEADER = CLIENT_DIR / "features/auth/viewmodel/AuthViewModel.h"
+REGISTER_PAGE = CLIENT_DIR / "features/auth/view/RegisterPage.qml"
 APP_CONTROLLER_HEADER = APP_DIR / "controller/AppController.h"
 APP_CONTROLLER_STATE = APP_DIR / "controller/AppControllerRuntimeState.h"
 APP_CONTROLLER_PROPERTIES = APP_DIR / "controller/AppControllerUiProperties.cpp"
@@ -23,7 +24,8 @@ def read(path: Path) -> str:
 
 
 class RegisterCodeCooldownContractTests(unittest.TestCase):
-    def test_app_controller_exposes_register_code_cooldown_state_to_qml(self):
+    def test_auth_viewmodel_exposes_register_code_cooldown_state_to_qml(self):
+        auth_header = read(AUTH_VIEWMODEL_HEADER)
         header = read(APP_CONTROLLER_HEADER)
         state = read(APP_CONTROLLER_STATE)
         properties = read(APP_CONTROLLER_PROPERTIES)
@@ -32,12 +34,12 @@ class RegisterCodeCooldownContractTests(unittest.TestCase):
         coordinators = read(COORDINATORS_HEADER)
 
         self.assertIn(
-            "Q_PROPERTY(int registerCodeCooldownSeconds READ registerCodeCooldownSeconds NOTIFY registerCodeCooldownChanged)",
-            header,
+            "Q_PROPERTY(int registerCodeCooldownSeconds READ registerCodeCooldownSeconds NOTIFY stateChanged)",
+            auth_header,
         )
         self.assertIn(
-            "Q_PROPERTY(bool registerCodeRequestPending READ registerCodeRequestPending NOTIFY registerCodeCooldownChanged)",
-            header,
+            "Q_PROPERTY(bool registerCodeRequestPending READ registerCodeRequestPending NOTIFY stateChanged)",
+            auth_header,
         )
         self.assertIn("int registerCodeCooldownSeconds() const;", header)
         self.assertIn("bool registerCodeRequestPending() const;", header)
@@ -101,16 +103,16 @@ class RegisterCodeCooldownContractTests(unittest.TestCase):
         code_section = qml.split("id: registerCodeBtn", 1)[1].split("id: registerSubmitBtn", 1)[0]
 
         self.assertIn("property bool registerCodeCoolingDown", qml)
-        self.assertIn("controller.registerCodeCooldownSeconds > 0", qml)
+        self.assertIn("auth.registerCodeCooldownSeconds > 0", qml)
         self.assertIn("property bool registerCodeUnavailable", qml)
-        self.assertIn("controller.registerCodeRequestPending", qml)
+        self.assertIn("auth.registerCodeRequestPending", qml)
         self.assertIn("registerRoot.registerCodeUnavailable", code_section)
-        self.assertIn('controller.registerCodeCooldownSeconds + "s"', code_section)
+        self.assertIn('auth.registerCodeCooldownSeconds + "s"', code_section)
         self.assertIn("registerRoot.requestRegisterCode()", qml)
         self.assertIn("if (registerRoot.registerCodeUnavailable)", qml)
-        self.assertIn("controller.requestRegisterCode(emailField.text)", qml)
+        self.assertIn("auth.requestRegisterCode(emailField.text)", qml)
         self.assertIn("onClicked: registerRoot.requestRegisterCode()", code_section)
-        self.assertNotRegex(code_section, r"onClicked:\s*controller\.requestRegisterCode\s*\(")
+        self.assertNotRegex(code_section, r"onClicked:\s*auth\.requestRegisterCode\s*\(")
 
         width_match = re.search(r"Layout\.preferredWidth:\s*(\d+)", code_section)
         self.assertIsNotNone(width_match)
