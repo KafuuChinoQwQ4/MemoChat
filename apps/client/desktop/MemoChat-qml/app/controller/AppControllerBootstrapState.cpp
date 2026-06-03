@@ -17,6 +17,7 @@ void AppController::setContactsReady(bool ready)
         return;
     }
     _bootstrap_state.contactsReady = ready;
+    syncContactControllerState();
     emit lazyBootstrapStateChanged();
 }
 
@@ -27,6 +28,7 @@ void AppController::setGroupsReady(bool ready)
         return;
     }
     _bootstrap_state.groupsReady = ready;
+    syncGroupControllerState();
     emit lazyBootstrapStateChanged();
 }
 

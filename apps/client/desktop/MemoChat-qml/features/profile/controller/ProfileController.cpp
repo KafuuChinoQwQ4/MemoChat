@@ -5,9 +5,35 @@
 #include <QJsonObject>
 #include <QUrl>
 
-ProfileController::ProfileController(ClientGateway* gateway)
-    : _gateway(gateway)
+ProfileController::ProfileController(ClientGateway* gateway, QObject* parent)
+    : QObject(parent)
+    , _gateway(gateway)
 {
+}
+
+QString ProfileController::statusText() const
+{
+    return _status_text;
+}
+
+bool ProfileController::statusError() const
+{
+    return _status_error;
+}
+
+void ProfileController::chooseAvatar(int source)
+{
+    emit chooseAvatarRequested(source);
+}
+
+void ProfileController::saveProfile(const QString& nick, const QString& desc)
+{
+    emit saveProfileRequested(nick, desc);
+}
+
+void ProfileController::clearStatus()
+{
+    emit clearStatusRequested();
 }
 
 bool ProfileController::validateProfile(const QString& nick, const QString& desc, QString* errorText) const
@@ -58,4 +84,16 @@ void ProfileController::sendSaveProfile(int uid,
                                      ReqId::ID_UPDATE_PROFILE,
                                      Modules::SETTINGSMOD,
                                      QStringLiteral("profile"));
+}
+
+void ProfileController::syncStatus(const QString& text, bool isError)
+{
+    if (_status_text == text && _status_error == isError)
+    {
+        return;
+    }
+
+    _status_text = text;
+    _status_error = isError;
+    emit statusChanged();
 }

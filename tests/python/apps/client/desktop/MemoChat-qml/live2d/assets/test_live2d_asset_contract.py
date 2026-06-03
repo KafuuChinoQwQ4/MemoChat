@@ -38,8 +38,8 @@ CLIENT_CMAKE_MANIFESTS = (
     CLIENT_DIR / "resources/resources.cmake",
 )
 MAIN_QML_TYPE_REGISTRY_CPP = CLIENT_DIR / "app/bootstrap/MainQmlTypeRegistry.cpp"
-CHARACTER_PANE_QML = CLIENT_DIR / "qml/pet/Live2DCharacterPane.qml"
-QML_QRC = CLIENT_DIR / "resources/qrc/qml-pet.qrc"
+CHARACTER_PANE_QML = CLIENT_DIR / "features/pet/view/Live2DCharacterPane.qml"
+QML_QRC = CLIENT_DIR / "features/pet/resources/pet.qrc"
 LIVE2D_FIXTURE_DIR = REPO_ROOT / "tests/fixtures/live2d/minimal_model"
 LIVE2D_FIXTURE_MODEL = LIVE2D_FIXTURE_DIR / "minimal.model3.json"
 LIVE2D_POLICY_DOC = CLIENT_DIR / "docs/live2d-desktop-pet-assets.md"
@@ -272,9 +272,9 @@ class Live2DAssetContractTests(unittest.TestCase):
         qrc = read(QML_QRC)
 
         for token in (
-            "qml/pet/PetWindow.qml",
-            "qml/pet/PetScene.qml",
-            "qml/pet/Live2DCharacterPane.qml",
+            "features/pet/view/PetWindow.qml",
+            "features/pet/view/PetScene.qml",
+            "features/pet/view/Live2DCharacterPane.qml",
         ):
             self.assertContains(qrc, token)
 

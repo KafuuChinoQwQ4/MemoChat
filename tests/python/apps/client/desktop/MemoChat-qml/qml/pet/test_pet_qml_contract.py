@@ -8,38 +8,49 @@ REPO_ROOT = repo_root()
 PET_MODEL_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/model/PetModel.h"
 PET_MODEL_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/model/PetModel.cpp"
 PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/controller/PetController.h"
-PET_SCENE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetScene.qml"
-PET_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetWindow.qml"
-PET_WINDOW_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetWindowRuntime.js"
-PET_CHAT_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatWindow.qml"
-PET_CHAT_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatRuntime.js"
-PET_CHAT_MESSAGE_LIST_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatMessageList.qml"
-PET_CHAT_COMPOSER_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetChatComposer.qml"
-CHAT_COMPOSER_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/conversation/ChatComposerBar.qml"
-CHAT_MESSAGE_DELEGATE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/conversation/ChatMessageDelegate.qml"
-CHAT_MESSAGE_AVATAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/conversation/MessageAvatar.qml"
-PET_CONTROL_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlWindow.qml"
-PET_CONTROL_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlRuntime.js"
+PET_SCENE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetScene.qml"
+PET_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetWindow.qml"
+PET_WINDOW_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetWindowRuntime.js"
+PET_CHAT_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetChatWindow.qml"
+PET_CHAT_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetChatRuntime.js"
+PET_CHAT_MESSAGE_LIST_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetChatMessageList.qml"
+PET_CHAT_COMPOSER_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetChatComposer.qml"
+CHAT_COMPOSER_BAR_QML = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/view/conversation/ChatComposerBar.qml"
+)
+CHAT_MESSAGE_DELEGATE_QML = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/view/conversation/ChatMessageDelegate.qml"
+)
+CHAT_MESSAGE_AVATAR_QML = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/view/conversation/MessageAvatar.qml"
+)
+PET_CONTROL_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetControlWindow.qml"
+PET_CONTROL_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetControlRuntime.js"
 PET_CONTROL_LIVE2D_ACTION_PANEL_QML = (
-    REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlLive2DActionPanel.qml"
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetControlLive2DActionPanel.qml"
 )
 PET_CONTROL_API_PROVIDER_PANEL_QML = (
-    REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlApiProviderPanel.qml"
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetControlApiProviderPanel.qml"
 )
-PET_CONTROL_HEADER_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetControlHeader.qml"
-PET_VISION_PRIVACY_CARD_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetVisionPrivacyCard.qml"
-CHARACTER_PANE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DCharacterPane.qml"
-LIVE2D_CHARACTER_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DCharacterRuntime.js"
+PET_CONTROL_HEADER_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetControlHeader.qml"
+PET_VISION_PRIVACY_CARD_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetVisionPrivacyCard.qml"
+CHARACTER_PANE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/Live2DCharacterPane.qml"
+LIVE2D_CHARACTER_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/Live2DCharacterRuntime.js"
 LIVE2D_CHARACTER_PREVIEW_PANEL_QML = (
-    REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DCharacterPreviewPanel.qml"
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/Live2DCharacterPreviewPanel.qml"
 )
-LIVE2D_RESOURCE_VOICE_PANEL_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DResourceVoicePanel.qml"
-LIVE2D_BEHAVIOR_MEMORY_PANEL_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DBehaviorMemoryPanel.qml"
+LIVE2D_RESOURCE_VOICE_PANEL_QML = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/Live2DResourceVoicePanel.qml"
+)
+LIVE2D_BEHAVIOR_MEMORY_PANEL_QML = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/Live2DBehaviorMemoryPanel.qml"
+)
 LIVE2D_CHARACTER_BEHAVIOR_COLUMN_QML = (
-    REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/Live2DCharacterBehaviorColumn.qml"
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/Live2DCharacterBehaviorColumn.qml"
 )
 CHAT_SHELL_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/ChatShellPage.qml"
-CHAT_NORMAL_FACE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatNormalFace.qml"
+CHAT_SHELL_CONTENT_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/view/ChatShellContent.qml"
+CHAT_NORMAL_FACE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/view/ChatNormalFace.qml"
 SHARED_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
 PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/controller/PetController.h"
@@ -83,9 +94,9 @@ CLIENT_CMAKE_MANIFESTS = (
     CLIENT_DIR / "live2d/sources.cmake",
     CLIENT_DIR / "resources/resources.cmake",
 )
-QML_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/resources/qrc/qml-pet.qrc"
+QML_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/resources/pet.qrc"
 ICONS_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/resources/qrc/icons.qrc"
-PET_CAMERA_CAPTURE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetCameraCapture.qml"
+PET_CAMERA_CAPTURE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetCameraCapture.qml"
 MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/bootstrap/main.cpp"
 MAIN_PLATFORM_BOOTSTRAP_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/bootstrap/MainPlatformBootstrap.cpp"
 PET_CONTROLLER_SESSION_CPP = (
@@ -197,11 +208,11 @@ class PetQmlContractTests(unittest.TestCase):
     def test_pet_audio_player_resource_declares_qt_multimedia(self):
         qrc = qrc_text(QML_QRC, ICONS_QRC)
         cmake = client_cmake_text()
-        audio_player = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetAudioPlayer.qml").read_text(
+        audio_player = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetAudioPlayer.qml").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn("qml/pet/PetAudioPlayer.qml", qrc)
+        self.assertIn("features/pet/view/PetAudioPlayer.qml", qrc)
         self.assertIn("find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS Multimedia)", cmake)
         self.assertIn("Qt${QT_VERSION_MAJOR}::Multimedia", cmake)
         self.assertNotIn("TextToSpeech", cmake)
@@ -524,7 +535,7 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertNotIn('text: "中"', composer)
 
     def test_pet_audio_player_skips_text_to_speech_fallback(self):
-        audio_player = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/pet/PetAudioPlayer.qml").read_text(
+        audio_player = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetAudioPlayer.qml").read_text(
             encoding="utf-8"
         )
 
@@ -587,7 +598,7 @@ class PetQmlContractTests(unittest.TestCase):
         scene = PET_SCENE_QML.read_text(encoding="utf-8")
         camera_capture = PET_CAMERA_CAPTURE_QML.read_text(encoding="utf-8")
 
-        self.assertIn("qml/pet/PetCameraCapture.qml", qrc)
+        self.assertIn("features/pet/view/PetCameraCapture.qml", qrc)
         self.assertIn("Qt${QT_VERSION_MAJOR}::Multimedia", cmake)
         for token in (
             "Q_INVOKABLE void captureVisionFrame",
@@ -809,16 +820,16 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertNotIn("id: topControls", scene)
         self.assertNotIn("id: dockControls", scene)
         self.assertNotIn("Popup", scene)
-        self.assertIn("qml/pet/PetWindow.qml", qrc)
-        self.assertIn("qml/pet/PetWindowRuntime.js", qrc)
-        self.assertIn("qml/pet/PetScene.qml", qrc)
-        self.assertIn("qml/pet/PetControlWindow.qml", qrc)
-        self.assertIn("qml/pet/PetControlRuntime.js", qrc)
-        self.assertIn("qml/pet/PetControlLive2DActionPanel.qml", qrc)
-        self.assertIn("qml/pet/PetControlApiProviderPanel.qml", qrc)
-        self.assertIn("qml/pet/PetChatWindow.qml", qrc)
-        self.assertIn("qml/pet/PetAudioPlayer.qml", qrc)
-        self.assertIn("qml/pet/Live2DCharacterPane.qml", qrc)
+        self.assertIn("features/pet/view/PetWindow.qml", qrc)
+        self.assertIn("features/pet/view/PetWindowRuntime.js", qrc)
+        self.assertIn("features/pet/view/PetScene.qml", qrc)
+        self.assertIn("features/pet/view/PetControlWindow.qml", qrc)
+        self.assertIn("features/pet/view/PetControlRuntime.js", qrc)
+        self.assertIn("features/pet/view/PetControlLive2DActionPanel.qml", qrc)
+        self.assertIn("features/pet/view/PetControlApiProviderPanel.qml", qrc)
+        self.assertIn("features/pet/view/PetChatWindow.qml", qrc)
+        self.assertIn("features/pet/view/PetAudioPlayer.qml", qrc)
+        self.assertIn("features/pet/view/Live2DCharacterPane.qml", qrc)
         self.assertIn('alias="icons/modelive2d.png"', qrc)
 
     def test_pet_control_window_contains_api_access_controls(self):
@@ -888,6 +899,8 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("root.petController.setReplyLanguage", chat)
         self.assertIn("root.petController.setSpeechRules", chat)
         self.assertIn("root.petController.setVoiceRuntimeSettings", chat)
+        self.assertIn('import "qrc:/features/chat/view/conversation"', chat)
+        self.assertNotIn('import "../../features/chat/view/conversation"', chat)
         self.assertIn("function syncVoiceRuntimeSettings", chat)
         self.assertIn("referenceAudioPath", chat)
         self.assertIn("voiceTrainingArtifactPath", chat)
@@ -951,9 +964,7 @@ class PetQmlContractTests(unittest.TestCase):
         pane_runtime = pane + runtime
         shell = CHAT_SHELL_PAGE_QML.read_text(encoding="utf-8")
         normal_face = CHAT_NORMAL_FACE_QML.read_text(encoding="utf-8")
-        shell_content = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/ChatShellContent.qml").read_text(
-            encoding="utf-8"
-        )
+        shell_content = CHAT_SHELL_CONTENT_QML.read_text(encoding="utf-8")
         shell_sources = shell + normal_face + shell_content
 
         self.assertRegex(pane, r"\bsignal\s+petPreviewRequested\s*\(\s*var\s+petAssetSettings\s*\)")
@@ -976,7 +987,7 @@ class PetQmlContractTests(unittest.TestCase):
             self.assertIn("win.openPet()", source)
             self.assertIn("startupPetTimer", source)
             self.assertIn('"petAssetSettings": settings', source)
-            self.assertIn('"agentController": controller.agentController', source)
+            self.assertIn('"agentController": agent', source)
             self.assertIn("petWindowRef.petAssetSettings = settings", source)
             self.assertIn("onPetPreviewRequested: function(petAssetSettings)", source)
             self.assertIn("root.openPetWindow(petAssetSettings)", source)
@@ -1004,8 +1015,8 @@ class PetQmlContractTests(unittest.TestCase):
                 source = path.read_text(encoding="utf-8")
                 self.assertIn("PetAssetSettings", source)
                 self.assertIn("startupPetSettings.load()", source)
-                shown_start = source.index("function finishAppWindowShown()")
-                shown_end = source.index("function ensurePetWindow(petAssetSettings)")
+                shown_start = source.index("function finishChatWindowShown()")
+                shown_end = source.index("function showLoginWindow()")
                 shown_block = source[shown_start:shown_end]
                 completed_start = source.index("Component.onCompleted:")
                 completed_end = source.index("Component.onDestruction:")
@@ -1086,9 +1097,7 @@ class PetQmlContractTests(unittest.TestCase):
         source = read_texts(PET_CONTROLLER_CPP, PET_CONTROLLER_NETWORK_CPP, PET_CONTROLLER_VOICE_TRAINING_CPP)
         shell = CHAT_SHELL_PAGE_QML.read_text(encoding="utf-8")
         normal_face = CHAT_NORMAL_FACE_QML.read_text(encoding="utf-8")
-        shell_content = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/ChatShellContent.qml").read_text(
-            encoding="utf-8"
-        )
+        shell_content = CHAT_SHELL_CONTENT_QML.read_text(encoding="utf-8")
 
         for token in (
             "voiceTrainingBusy",
@@ -1116,7 +1125,7 @@ class PetQmlContractTests(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
-        self.assertIn("petController: controller.petController", shell + normal_face + shell_content)
+        self.assertIn("petController: pet", shell + normal_face + shell_content)
 
 
 if __name__ == "__main__":

@@ -47,6 +47,7 @@ void ProfileCoordinator::chooseAvatar(int source)
     if (_app._user_state.icon != normalized)
     {
         _app._user_state.icon = normalized;
+        _app.syncShellViewModelState();
         emit _app.currentUserChanged();
     }
     _app.setSettingsStatus("已选择新头像，点击保存后同步", false);

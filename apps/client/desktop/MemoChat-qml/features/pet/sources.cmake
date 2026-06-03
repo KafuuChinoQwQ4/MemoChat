@@ -33,3 +33,7 @@ list(APPEND MEMOCHAT_QML_FEATURE_HEADERS
     features/pet/platform/PetWindowsBridgeUtils.h
     features/pet/model/PetModel.h
 )
+
+list(APPEND MEMOCHAT_QML_FEATURE_RESOURCES
+    features/pet/resources/pet.qrc
+)

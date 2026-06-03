@@ -4,20 +4,23 @@ import unittest
 from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
-CREATE_GROUP_DIALOG = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/group/CreateGroupDialog.qml"
+CHAT_FEATURE_GROUP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/group/view"
+CHAT_FEATURE_SIDEBAR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/view/sidebar"
+CREATE_GROUP_DIALOG = CHAT_FEATURE_GROUP / "CreateGroupDialog.qml"
 CHAT_SHELL_PAGE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/ChatShellPage.qml"
-CHAT_SHELL_CONTENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/ChatShellContent.qml"
-CHAT_NORMAL_FACE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatNormalFace.qml"
-CHAT_MODAL_LAYER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatModalLayer.qml"
-CHAT_LEFT_PANEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatLeftPanel.qml"
-CHAT_LEFT_HEADER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatLeftHeader.qml"
-CHAT_JOIN_GROUP_POPUP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatJoinGroupPopup.qml"
+CHAT_SHELL_CONTENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/view/ChatShellContent.qml"
+CHAT_NORMAL_FACE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/view/ChatNormalFace.qml"
+CHAT_MODAL_LAYER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/view/ChatModalLayer.qml"
+CHAT_LEFT_PANEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/view/ChatLeftPanel.qml"
+CHAT_LEFT_HEADER = CHAT_FEATURE_SIDEBAR / "ChatLeftHeader.qml"
+CHAT_JOIN_GROUP_POPUP = CHAT_FEATURE_SIDEBAR / "ChatJoinGroupPopup.qml"
 CHAT_CONVERSATION_HEADER = (
-    REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/conversation/ChatConversationHeader.qml"
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/view/conversation/ChatConversationHeader.qml"
 )
-GROUP_MANAGEMENT_PANEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/group/GroupManagementPanel.qml"
-GROUP_APPLY_REVIEW_PANE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/group/GroupApplyReviewPane.qml"
-CHAT_CONVERSATION_PANE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatConversationPane.qml"
+GROUP_MANAGEMENT_PANEL = CHAT_FEATURE_GROUP / "GroupManagementPanel.qml"
+GROUP_APPLY_REVIEW_PANE = CHAT_FEATURE_GROUP / "GroupApplyReviewPane.qml"
+GROUP_INFO_PANE = CHAT_FEATURE_GROUP / "GroupInfoPane.qml"
+CHAT_CONVERSATION_PANE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/view/ChatConversationPane.qml"
 APP_CONTROLLER_GROUP_EVENTS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerGroupEvents.cpp"
 APP_CONTROLLER_GROUP_RESPONSES = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerGroupResponses.cpp"
@@ -42,7 +45,7 @@ class CreateGroupDialogQmlTests(unittest.TestCase):
         self.assertIn("model: root.friendModel", dialog)
         self.assertIn("selectedUserIds", dialog)
         self.assertRegex(dialog, re.compile(r"selectedUserIds\[[^\]]*userId[^\]]*\]"))
-        self.assertIn("friendModel: controller.contactListModel", shell + shell_content + modal_layer)
+        self.assertIn("friendModel: contact.contactListModel", shell + shell_content + modal_layer)
 
     def test_create_group_dialog_keeps_manual_user_id_fallback(self):
         dialog = CREATE_GROUP_DIALOG.read_text(encoding="utf-8")
@@ -67,15 +70,17 @@ class CreateGroupDialogQmlTests(unittest.TestCase):
         )
         self.assertIn("root.applyJoinGroupRequested(groupCode, reason)", left_panel)
         self.assertIn(
-            "onApplyJoinGroupRequested: function(groupCode, reason) { controller.applyJoinGroup(groupCode, reason) }",
+            "onApplyJoinGroupRequested: function(groupCode, reason) { group.applyJoinGroup(groupCode, reason) }",
             shell + normal_face,
+        )
+        self.assertIn(
+            "onCreateGroupSubmitted: function(name, memberUserIds) { group.createGroup(name, memberUserIds) }",
+            shell,
         )
 
     def test_group_management_only_reviews_current_group_applications(self):
         panel = GROUP_MANAGEMENT_PANEL.read_text(encoding="utf-8")
-        info = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/group/GroupInfoPane.qml").read_text(
-            encoding="utf-8"
-        )
+        info = GROUP_INFO_PANE.read_text(encoding="utf-8")
         review = GROUP_APPLY_REVIEW_PANE.read_text(encoding="utf-8")
 
         self.assertNotIn("signal applyJoinRequested", panel)
@@ -113,13 +118,15 @@ class CreateGroupDialogQmlTests(unittest.TestCase):
         normal_face = CHAT_NORMAL_FACE.read_text(encoding="utf-8")
 
         self.assertIn("function ensureCurrentSessionSource()", left_panel)
-        self.assertIn("controller.ensureGroupsInitialized()", left_panel)
+        self.assertIn("property var chatViewModel: null", left_panel)
+        self.assertIn("root.chatViewModel.ensureGroupsInitialized()", left_panel)
         self.assertRegex(
             left_panel,
             re.compile(r"Component\.onCompleted:\s*\{[^}]*root\.ensureCurrentSessionSource\(\)", re.S),
         )
         self.assertIn("root.ensureCurrentSessionSource()", left_panel)
-        self.assertIn("controller.ensureGroupsInitialized()", shell + normal_face)
+        self.assertIn("chatViewModel: root.chatViewModel", normal_face)
+        self.assertIn("root.chatViewModel.ensureGroupsInitialized()", shell + normal_face)
 
     def test_group_header_actions_wrap_and_group_info_uses_implicit_height(self):
         conversation = CHAT_CONVERSATION_PANE.read_text(encoding="utf-8")
@@ -166,9 +173,7 @@ class CreateGroupDialogQmlTests(unittest.TestCase):
 
     def test_group_settings_contains_dialog_pin_and_mute(self):
         panel = GROUP_MANAGEMENT_PANEL.read_text(encoding="utf-8")
-        info = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/group/GroupInfoPane.qml").read_text(
-            encoding="utf-8"
-        )
+        info = GROUP_INFO_PANE.read_text(encoding="utf-8")
         shell = CHAT_SHELL_PAGE.read_text(encoding="utf-8")
         shell_content = CHAT_SHELL_CONTENT.read_text(encoding="utf-8")
         normal_face = CHAT_NORMAL_FACE.read_text(encoding="utf-8")
@@ -184,8 +189,8 @@ class CreateGroupDialogQmlTests(unittest.TestCase):
         self.assertIn("onToggleDialogMuted: root.toggleDialogMuted()", panel)
         self.assertIn('text: root.currentDialogPinned ? "取消置顶" : "置顶会话"', info)
         self.assertIn('text: root.currentDialogMuted ? "取消静音" : "静音会话"', info)
-        self.assertIn("currentDialogPinned: controller.currentDialogPinned", shell_sources)
-        self.assertIn("currentDialogMuted: controller.currentDialogMuted", shell_sources)
+        self.assertIn("currentDialogPinned: chat.currentDialogPinned", shell_sources)
+        self.assertIn("currentDialogMuted: chat.currentDialogMuted", shell_sources)
 
 
 if __name__ == "__main__":

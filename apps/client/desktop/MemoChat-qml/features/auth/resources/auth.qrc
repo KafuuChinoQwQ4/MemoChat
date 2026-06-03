@@ -1,0 +1,15 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="features/auth/view/LoginPage.qml">../view/LoginPage.qml</file>
+        <file alias="features/auth/view/RegisterPage.qml">../view/RegisterPage.qml</file>
+        <file alias="features/auth/view/ResetPage.qml">../view/ResetPage.qml</file>
+        <file alias="features/auth/view/components/LoginAgreementRow.qml">../view/components/LoginAgreementRow.qml</file>
+        <file alias="features/auth/view/components/LoginAvatar.qml">../view/components/LoginAvatar.qml</file>
+        <file alias="features/auth/view/components/LoginCredentialDropdown.qml">../view/components/LoginCredentialDropdown.qml</file>
+        <file alias="features/auth/view/components/LoginCredentialRuntime.js">../view/components/LoginCredentialRuntime.js</file>
+        <file alias="features/auth/view/components/LoginFooterLinks.qml">../view/components/LoginFooterLinks.qml</file>
+        <file alias="features/auth/view/components/LoginMoreOptionsPopup.qml">../view/components/LoginMoreOptionsPopup.qml</file>
+        <file alias="features/auth/view/components/LoginSubmitButton.qml">../view/components/LoginSubmitButton.qml</file>
+        <file alias="features/auth/view/components/LoginTopBar.qml">../view/components/LoginTopBar.qml</file>
+    </qresource>
+</RCC>

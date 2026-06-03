@@ -1,0 +1,6 @@
+CompileFlags:
+  CompilationDatabase: build-linux-full-gcc16
+
+Diagnostics:
+  UnusedIncludes: None
+  MissingIncludes: None

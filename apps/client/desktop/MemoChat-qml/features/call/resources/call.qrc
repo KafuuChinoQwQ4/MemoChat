@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="features/call/view/CallOverlay.qml">../view/CallOverlay.qml</file>
+    </qresource>
+</RCC>

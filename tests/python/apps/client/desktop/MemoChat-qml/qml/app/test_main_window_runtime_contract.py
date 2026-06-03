@@ -37,6 +37,15 @@ class MainWindowRuntimeContractTests(unittest.TestCase):
                 self.assertIn("function configureLoginWindow", text)
                 self.assertIn("function configureChatWindow", text)
 
+    def test_main_files_import_auth_from_feature_view(self):
+        shared_text = SHARED_MAIN.read_text(encoding="utf-8")
+        linux_text = LINUX_MAIN.read_text(encoding="utf-8")
+
+        self.assertIn('import "qrc:/features/auth/view"', shared_text)
+        self.assertIn('import "qrc:/features/auth/view" as SharedAuth', linux_text)
+        self.assertNotIn('import "../auth"', shared_text)
+        self.assertNotIn('import "../auth" as SharedAuth', linux_text)
+
     def test_centering_retry_and_platform_shell_are_preserved(self):
         for qml_path in (SHARED_MAIN, LINUX_MAIN):
             text = qml_path.read_text(encoding="utf-8")
@@ -50,7 +59,7 @@ class MainWindowRuntimeContractTests(unittest.TestCase):
         page_bound_patterns = (
             r"\b(?:x|y|width|height)\s*:\s*root\.chatPageActive",
             r"\b(?:x|y|width|height)\s*:\s*root\.targetWindowSize\s*\(",
-            r"\b(?:x|y|width|height)\s*:\s*controller\.page",
+            r"\b(?:x|y|width|height)\s*:\s*shell\.page",
         )
         for qml_path in (SHARED_MAIN, LINUX_MAIN):
             direct_window_geometry = "\n".join(
@@ -76,14 +85,15 @@ class MainWindowRuntimeContractTests(unittest.TestCase):
                 self.assertIn("const token = ++windowSwitchToken", sync_body)
                 self.assertIn("destroyLoginWindow()", sync_body)
                 self.assertIn("destroyChatWindow()", sync_body)
-                self.assertIn("Qt.callLater(function() {", sync_body)
-                self.assertIn("showChatWindow()", sync_body)
-                self.assertIn("showLoginWindow()", sync_body)
-                self.assertLess(sync_body.index("destroyLoginWindow()"), sync_body.index("showChatWindow()"))
-                self.assertLess(sync_body.index("destroyChatWindow()"), sync_body.index("showLoginWindow()"))
+                self.assertIn("scheduleWindowHandoff", sync_body)
+                self.assertNotIn("Qt.callLater(function() {", sync_body)
+                self.assertNotIn("showChatWindow()", sync_body)
+                self.assertNotIn("showLoginWindow()", sync_body)
+                self.assertLess(sync_body.index("destroyLoginWindow()"), sync_body.index("scheduleWindowHandoff"))
+                self.assertLess(sync_body.index("destroyChatWindow()"), sync_body.rindex("scheduleWindowHandoff"))
 
                 for page in ("LoginPage", "RegisterPage", "ResetPage"):
-                    self.assertIn(f"controller.page === AppController.{page}", text)
+                    self.assertIn(f"shell.page === AppController.{page}", text)
 
                 self.assertNotIn("property int displayedPage", text)
                 self.assertNotIn("readonly property int noDisplayedPage: -1", text)

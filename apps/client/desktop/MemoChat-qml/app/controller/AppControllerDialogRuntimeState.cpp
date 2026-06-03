@@ -13,6 +13,7 @@ void AppController::setCurrentGroup(qint64 groupId, const QString& name, const Q
     _group_state.currentId = groupId;
     _group_state.currentName = normalizedName;
     _group_state.currentCode = normalizedCode;
+    syncGroupControllerState();
     emit currentGroupChanged();
 }
 
