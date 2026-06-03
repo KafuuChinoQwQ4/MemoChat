@@ -11,15 +11,13 @@ void RegisterCountdownController::onRegisterCountdownTimeout()
 {
     if (_app._shell_state.registerCountdown > 0)
     {
-        --_app._shell_state.registerCountdown;
-        emit _app.registerCountdownChanged();
+        _app.setRegisterCountdown(_app._shell_state.registerCountdown - 1);
     }
 
     if (_app._shell_state.registerCountdown <= 0)
     {
         _app._register_countdown_timer.stop();
-        _app._shell_state.registerSuccessPage = false;
-        emit _app.registerSuccessPageChanged();
+        _app.setRegisterSuccessPage(false);
         _app.switchToLogin();
     }
 }

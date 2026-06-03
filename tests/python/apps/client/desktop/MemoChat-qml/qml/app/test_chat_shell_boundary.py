@@ -4,21 +4,25 @@ from pathlib import Path
 from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
+CLIENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 QML_ROOT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml"
+CHAT_FEATURE_VIEW = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/view"
+AGENT_FEATURE_VIEW = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/agent/view"
+R18_FEATURE_VIEW = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/r18/view"
 QRC_ROOT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/resources/qrc"
 QML_QRCS = (
     QRC_ROOT / "qml-shell.qrc",
-    QRC_ROOT / "qml-chat.qrc",
-    QRC_ROOT / "qml-agent.qrc",
-    QRC_ROOT / "qml-r18.qrc",
+    CLIENT / "features/chat/resources/chat.qrc",
+    CLIENT / "features/agent/resources/agent.qrc",
+    CLIENT / "features/r18/resources/r18.qrc",
 )
 
 CHAT_SHELL_PAGE = QML_ROOT / "app/ChatShellPage.qml"
 CHAT_SHELL_RUNTIME = QML_ROOT / "app/ChatShellRuntime.js"
-CHAT_NORMAL_FACE = QML_ROOT / "chat/ChatNormalFace.qml"
-CHAT_MODAL_LAYER = QML_ROOT / "chat/ChatModalLayer.qml"
-R18_FLIP_FACE = QML_ROOT / "r18/R18FlipFace.qml"
-AGENT_GAME_OVERLAY = QML_ROOT / "agent/AgentGameOverlay.qml"
+CHAT_NORMAL_FACE = CHAT_FEATURE_VIEW / "ChatNormalFace.qml"
+CHAT_MODAL_LAYER = CHAT_FEATURE_VIEW / "ChatModalLayer.qml"
+R18_FLIP_FACE = R18_FEATURE_VIEW / "R18FlipFace.qml"
+AGENT_GAME_OVERLAY = AGENT_FEATURE_VIEW / "AgentGameOverlay.qml"
 
 
 class ChatShellBoundaryTests(unittest.TestCase):
@@ -27,9 +31,12 @@ class ChatShellBoundaryTests(unittest.TestCase):
 
     def qml_references(self, token):
         matches = []
-        for path in QML_ROOT.rglob("*.qml"):
+        for path in (CLIENT / "qml").rglob("*.qml"):
             if token in self.read(path):
-                matches.append(path.relative_to(QML_ROOT).as_posix())
+                matches.append(path.relative_to(CLIENT).as_posix())
+        for path in (CLIENT / "features").rglob("*.qml"):
+            if token in self.read(path):
+                matches.append(path.relative_to(CLIENT).as_posix())
         return sorted(matches)
 
     def qrc_text(self):
@@ -38,17 +45,17 @@ class ChatShellBoundaryTests(unittest.TestCase):
     def test_extracted_shell_files_exist_and_are_registered(self):
         qrc = self.qrc_text()
         expected_files = (
-            CHAT_SHELL_RUNTIME,
-            CHAT_NORMAL_FACE,
-            CHAT_MODAL_LAYER,
-            R18_FLIP_FACE,
-            AGENT_GAME_OVERLAY,
+            (CHAT_SHELL_RUNTIME, f"qml/{CHAT_SHELL_RUNTIME.relative_to(QML_ROOT).as_posix()}"),
+            (CHAT_NORMAL_FACE, "features/chat/view/ChatNormalFace.qml"),
+            (CHAT_MODAL_LAYER, "features/chat/view/ChatModalLayer.qml"),
+            (R18_FLIP_FACE, "features/r18/view/R18FlipFace.qml"),
+            (AGENT_GAME_OVERLAY, "features/agent/view/AgentGameOverlay.qml"),
         )
 
-        for path in expected_files:
+        for path, alias in expected_files:
             with self.subTest(path=path):
                 self.assertTrue(path.is_file())
-                self.assertIn(f"qml/{path.relative_to(QML_ROOT).as_posix()}", qrc)
+                self.assertIn(alias, qrc)
 
     def test_chat_shell_page_is_a_coordinator(self):
         shell = self.read(CHAT_SHELL_PAGE)
@@ -79,8 +86,8 @@ class ChatShellBoundaryTests(unittest.TestCase):
         self.assertIn("function defaultAgentGameSetupKind", runtime)
 
     def test_heavy_faces_are_owned_by_boundary_components(self):
-        self.assertEqual(["r18/R18FlipFace.qml"], self.qml_references("R18ShellPane"))
-        self.assertEqual(["agent/AgentGameOverlay.qml"], self.qml_references("AgentGamePane"))
+        self.assertEqual(["features/r18/view/R18FlipFace.qml"], self.qml_references("R18ShellPane"))
+        self.assertEqual(["features/agent/view/AgentGameOverlay.qml"], self.qml_references("AgentGamePane"))
 
         modal = self.read(CHAT_MODAL_LAYER)
         self.assertIn("CreateGroupDialog", modal)

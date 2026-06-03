@@ -4,40 +4,44 @@ from pathlib import Path
 from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
-QML_ROOT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml"
-QRC_ROOT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/resources/qrc"
+CLIENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
+QML_ROOT = CLIENT / "qml"
+CHAT_FEATURE_CONVERSATION = CLIENT / "features/chat/view/conversation"
+PET_FEATURE_VIEW = CLIENT / "features/pet/view"
+AGENT_FEATURE_VIEW = CLIENT / "features/agent/view"
+R18_FEATURE_VIEW = CLIENT / "features/r18/view"
 QML_QRCS = (
-    QRC_ROOT / "qml-chat.qrc",
-    QRC_ROOT / "qml-agent.qrc",
-    QRC_ROOT / "qml-pet.qrc",
-    QRC_ROOT / "qml-r18.qrc",
+    CLIENT / "features/chat/resources/chat.qrc",
+    CLIENT / "features/agent/resources/agent.qrc",
+    CLIENT / "features/pet/resources/pet.qrc",
+    CLIENT / "features/r18/resources/r18.qrc",
 )
 
-LIVE2D_CHARACTER_PANE = QML_ROOT / "pet/Live2DCharacterPane.qml"
-LIVE2D_ASSET_COLUMN = QML_ROOT / "pet/Live2DCharacterAssetColumn.qml"
-LIVE2D_BEHAVIOR_COLUMN = QML_ROOT / "pet/Live2DCharacterBehaviorColumn.qml"
-LIVE2D_PROMPT_COLUMN = QML_ROOT / "pet/Live2DCharacterPromptColumn.qml"
-AGENT_GAME_PANE = QML_ROOT / "agent/AgentGamePane.qml"
-AGENT_GAME_SETUP_PANE = QML_ROOT / "agent/AgentGameSetupPane.qml"
-AGENT_GAME_ROOM_PANE = QML_ROOT / "agent/AgentGameRoomPane.qml"
-AGENT_GAME_TEMPLATE_PANE = QML_ROOT / "agent/AgentGameTemplatePane.qml"
-AGENT_GAME_AGENT_CARD = QML_ROOT / "agent/AgentGameAgentCard.qml"
-AGENT_GAME_OPTION_COMBO = QML_ROOT / "agent/AgentGameOptionCombo.qml"
-AGENT_MARKDOWN_TEXT = QML_ROOT / "agent/AgentMarkdownText.qml"
-AGENT_MARKDOWN_RUNTIME = QML_ROOT / "agent/AgentMarkdownRuntime.js"
-AGENT_MARKDOWN_CODE_BLOCK = QML_ROOT / "agent/AgentMarkdownCodeBlock.qml"
-R18_SOURCE_MANAGER_PANE = QML_ROOT / "r18/R18SourceManagerPane.qml"
-R18_SOURCE_IMPORT_PANE = QML_ROOT / "r18/R18SourceImportPane.qml"
-R18_OFFICIAL_SOURCE_CATALOG_PANE = QML_ROOT / "r18/R18OfficialSourceCatalogPane.qml"
-R18_SOURCE_LIST_PANE = QML_ROOT / "r18/R18SourceListPane.qml"
-R18_SHELL_PANE = QML_ROOT / "r18/R18ShellPane.qml"
-R18_HOME_PANE = QML_ROOT / "r18/R18HomePane.qml"
-CHAT_MESSAGE_DELEGATE = QML_ROOT / "chat/conversation/ChatMessageDelegate.qml"
-CHAT_MESSAGE_STATUS_BADGE = QML_ROOT / "chat/conversation/ChatMessageStatusBadge.qml"
-CHAT_MESSAGE_ACTION_MENU = QML_ROOT / "chat/conversation/ChatMessageActionMenu.qml"
-CHAT_SMART_ACTION_POPUPS = QML_ROOT / "chat/conversation/ChatSmartActionPopups.qml"
-CHAT_SMART_SUMMARY_POPUP = QML_ROOT / "chat/conversation/ChatSmartSummaryPopup.qml"
-CHAT_SMART_TRANSLATE_POPUP = QML_ROOT / "chat/conversation/ChatSmartTranslatePopup.qml"
+LIVE2D_CHARACTER_PANE = PET_FEATURE_VIEW / "Live2DCharacterPane.qml"
+LIVE2D_ASSET_COLUMN = PET_FEATURE_VIEW / "Live2DCharacterAssetColumn.qml"
+LIVE2D_BEHAVIOR_COLUMN = PET_FEATURE_VIEW / "Live2DCharacterBehaviorColumn.qml"
+LIVE2D_PROMPT_COLUMN = PET_FEATURE_VIEW / "Live2DCharacterPromptColumn.qml"
+AGENT_GAME_PANE = AGENT_FEATURE_VIEW / "AgentGamePane.qml"
+AGENT_GAME_SETUP_PANE = AGENT_FEATURE_VIEW / "AgentGameSetupPane.qml"
+AGENT_GAME_ROOM_PANE = AGENT_FEATURE_VIEW / "AgentGameRoomPane.qml"
+AGENT_GAME_TEMPLATE_PANE = AGENT_FEATURE_VIEW / "AgentGameTemplatePane.qml"
+AGENT_GAME_AGENT_CARD = AGENT_FEATURE_VIEW / "AgentGameAgentCard.qml"
+AGENT_GAME_OPTION_COMBO = AGENT_FEATURE_VIEW / "AgentGameOptionCombo.qml"
+AGENT_MARKDOWN_TEXT = AGENT_FEATURE_VIEW / "AgentMarkdownText.qml"
+AGENT_MARKDOWN_RUNTIME = AGENT_FEATURE_VIEW / "AgentMarkdownRuntime.js"
+AGENT_MARKDOWN_CODE_BLOCK = AGENT_FEATURE_VIEW / "AgentMarkdownCodeBlock.qml"
+R18_SOURCE_MANAGER_PANE = R18_FEATURE_VIEW / "R18SourceManagerPane.qml"
+R18_SOURCE_IMPORT_PANE = R18_FEATURE_VIEW / "R18SourceImportPane.qml"
+R18_OFFICIAL_SOURCE_CATALOG_PANE = R18_FEATURE_VIEW / "R18OfficialSourceCatalogPane.qml"
+R18_SOURCE_LIST_PANE = R18_FEATURE_VIEW / "R18SourceListPane.qml"
+R18_SHELL_PANE = R18_FEATURE_VIEW / "R18ShellPane.qml"
+R18_HOME_PANE = R18_FEATURE_VIEW / "R18HomePane.qml"
+CHAT_MESSAGE_DELEGATE = CHAT_FEATURE_CONVERSATION / "ChatMessageDelegate.qml"
+CHAT_MESSAGE_STATUS_BADGE = CHAT_FEATURE_CONVERSATION / "ChatMessageStatusBadge.qml"
+CHAT_MESSAGE_ACTION_MENU = CHAT_FEATURE_CONVERSATION / "ChatMessageActionMenu.qml"
+CHAT_SMART_ACTION_POPUPS = CHAT_FEATURE_CONVERSATION / "ChatSmartActionPopups.qml"
+CHAT_SMART_SUMMARY_POPUP = CHAT_FEATURE_CONVERSATION / "ChatSmartSummaryPopup.qml"
+CHAT_SMART_TRANSLATE_POPUP = CHAT_FEATURE_CONVERSATION / "ChatSmartTranslatePopup.qml"
 
 
 class LargePaneBoundaryTests(unittest.TestCase):
@@ -47,12 +51,15 @@ class LargePaneBoundaryTests(unittest.TestCase):
     def qrc_text(self):
         return "\n".join(self.read(path) for path in QML_QRCS)
 
+    def feature_alias(self, path):
+        return path.relative_to(CLIENT).as_posix()
+
     def test_live2d_character_columns_exist_and_are_registered(self):
         qrc = self.qrc_text()
         for path in (LIVE2D_ASSET_COLUMN, LIVE2D_BEHAVIOR_COLUMN, LIVE2D_PROMPT_COLUMN):
             with self.subTest(path=path):
                 self.assertTrue(path.is_file())
-                self.assertIn(f"qml/{path.relative_to(QML_ROOT).as_posix()}", qrc)
+                self.assertIn(self.feature_alias(path), qrc)
 
     def test_live2d_character_pane_uses_column_boundaries(self):
         pane = self.read(LIVE2D_CHARACTER_PANE)
@@ -89,7 +96,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
         for path in (AGENT_GAME_SETUP_PANE, AGENT_GAME_ROOM_PANE, AGENT_GAME_TEMPLATE_PANE):
             with self.subTest(path=path):
                 self.assertTrue(path.is_file())
-                self.assertIn(f"qml/{path.relative_to(QML_ROOT).as_posix()}", qrc)
+                self.assertIn(self.feature_alias(path), qrc)
 
     def test_agent_game_pane_uses_setup_boundary(self):
         pane = self.read(AGENT_GAME_PANE)
@@ -134,7 +141,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
         card = self.read(AGENT_GAME_AGENT_CARD)
 
         self.assertTrue(AGENT_GAME_OPTION_COMBO.is_file())
-        self.assertIn("qml/agent/AgentGameOptionCombo.qml", qrc)
+        self.assertIn("features/agent/view/AgentGameOptionCombo.qml", qrc)
         self.assertGreaterEqual(card.count("AgentGameOptionCombo"), 3)
         self.assertNotIn("delegate: ItemDelegate", card)
 
@@ -154,7 +161,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
         for path in (AGENT_MARKDOWN_RUNTIME, AGENT_MARKDOWN_CODE_BLOCK):
             with self.subTest(path=path):
                 self.assertTrue(path.is_file())
-                self.assertIn(f"qml/{path.relative_to(QML_ROOT).as_posix()}", qrc)
+                self.assertIn(self.feature_alias(path), qrc)
 
         self.assertIn('import "AgentMarkdownRuntime.js" as AgentMarkdownRuntime', markdown)
         self.assertIn("AgentMarkdownCodeBlock", markdown)
@@ -173,7 +180,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
         for path in (R18_SOURCE_IMPORT_PANE, R18_OFFICIAL_SOURCE_CATALOG_PANE, R18_SOURCE_LIST_PANE):
             with self.subTest(path=path):
                 self.assertTrue(path.is_file())
-                self.assertIn(f"qml/{path.relative_to(QML_ROOT).as_posix()}", qrc)
+                self.assertIn(self.feature_alias(path), qrc)
 
     def test_r18_source_manager_uses_child_boundaries(self):
         pane = self.read(R18_SOURCE_MANAGER_PANE)
@@ -212,7 +219,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
         qrc = self.qrc_text()
 
         self.assertTrue(R18_HOME_PANE.is_file())
-        self.assertIn("qml/r18/R18HomePane.qml", qrc)
+        self.assertIn("features/r18/view/R18HomePane.qml", qrc)
 
     def test_r18_shell_uses_home_boundary(self):
         shell = self.read(R18_SHELL_PANE)
@@ -243,7 +250,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
         qrc = self.qrc_text()
 
         self.assertTrue(CHAT_MESSAGE_STATUS_BADGE.is_file())
-        self.assertIn("qml/chat/conversation/ChatMessageStatusBadge.qml", qrc)
+        self.assertIn("features/chat/view/conversation/ChatMessageStatusBadge.qml", qrc)
 
     def test_chat_message_delegate_uses_status_badge_boundary(self):
         delegate = self.read(CHAT_MESSAGE_DELEGATE)
@@ -264,7 +271,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
         qrc = self.qrc_text()
 
         self.assertTrue(CHAT_MESSAGE_ACTION_MENU.is_file())
-        self.assertIn("qml/chat/conversation/ChatMessageActionMenu.qml", qrc)
+        self.assertIn("features/chat/view/conversation/ChatMessageActionMenu.qml", qrc)
 
     def test_chat_message_delegate_uses_action_menu_boundary(self):
         delegate = self.read(CHAT_MESSAGE_DELEGATE)
@@ -288,7 +295,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
         qrc = self.qrc_text()
 
         self.assertTrue(CHAT_SMART_SUMMARY_POPUP.is_file())
-        self.assertIn("qml/chat/conversation/ChatSmartSummaryPopup.qml", qrc)
+        self.assertIn("features/chat/view/conversation/ChatSmartSummaryPopup.qml", qrc)
 
     def test_chat_smart_action_popups_uses_summary_boundary(self):
         popups = self.read(CHAT_SMART_ACTION_POPUPS)
@@ -305,7 +312,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
         qrc = self.qrc_text()
 
         self.assertTrue(CHAT_SMART_TRANSLATE_POPUP.is_file())
-        self.assertIn("qml/chat/conversation/ChatSmartTranslatePopup.qml", qrc)
+        self.assertIn("features/chat/view/conversation/ChatSmartTranslatePopup.qml", qrc)
 
     def test_chat_smart_action_popups_uses_translate_boundary(self):
         popups = self.read(CHAT_SMART_ACTION_POPUPS)

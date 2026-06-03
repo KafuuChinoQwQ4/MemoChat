@@ -6,6 +6,7 @@ set(MEMOCHAT_QML_APP_SOURCES
     app/bootstrap/MainQmlEngineSetup.cpp
     app/bootstrap/MainQmlWindowLoader.cpp
     app/bootstrap/MainRuntimeConfig.cpp
+    app/shell/ShellViewModel.cpp
     app/window/MainWindowEffects.cpp
     app/window/MainWindowHooks.cpp
     app/controller/AppController.cpp
@@ -81,6 +82,7 @@ set(MEMOCHAT_QML_APP_HEADERS
     app/bootstrap/MainPlatformBootstrap.h
     app/bootstrap/MainQmlBootstrap.h
     app/bootstrap/MainRuntimeConfig.h
+    app/shell/ShellViewModel.h
     app/window/MainWindowEffects.h
     app/window/MainWindowHooks.h
     app/controller/AppController.h

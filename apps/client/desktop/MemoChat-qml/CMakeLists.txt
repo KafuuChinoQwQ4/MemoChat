@@ -98,6 +98,7 @@ target_include_directories(MemoChatQml PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/app
     ${CMAKE_CURRENT_SOURCE_DIR}/app/bootstrap
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/shell
     ${CMAKE_CURRENT_SOURCE_DIR}/app/window
     ${CMAKE_CURRENT_SOURCE_DIR}/app/connection
     ${CMAKE_CURRENT_SOURCE_DIR}/app/session
@@ -107,6 +108,9 @@ target_include_directories(MemoChatQml PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/windows
     ${MEMOCHAT_QML_FEATURE_DIR}
     ${MEMOCHAT_QML_FEATURE_DIR}/auth
+    ${MEMOCHAT_QML_FEATURE_DIR}/auth/model
+    ${MEMOCHAT_QML_FEATURE_DIR}/auth/service
+    ${MEMOCHAT_QML_FEATURE_DIR}/auth/viewmodel
     ${MEMOCHAT_QML_FEATURE_DIR}/call
     ${MEMOCHAT_QML_FEATURE_DIR}/call/bridge
     ${MEMOCHAT_QML_FEATURE_DIR}/call/controller
@@ -116,9 +120,12 @@ target_include_directories(MemoChatQml PRIVATE
     ${MEMOCHAT_QML_FEATURE_DIR}/chat/controller
     ${MEMOCHAT_QML_FEATURE_DIR}/chat/model
     ${MEMOCHAT_QML_FEATURE_DIR}/chat/services
+    ${MEMOCHAT_QML_FEATURE_DIR}/chat/viewmodel
     ${MEMOCHAT_QML_FEATURE_DIR}/contact
     ${MEMOCHAT_QML_FEATURE_DIR}/contact/controller
     ${MEMOCHAT_QML_FEATURE_DIR}/contact/model
+    ${MEMOCHAT_QML_FEATURE_DIR}/group
+    ${MEMOCHAT_QML_FEATURE_DIR}/group/controller
     ${MEMOCHAT_QML_FEATURE_DIR}/profile
     ${MEMOCHAT_QML_FEATURE_DIR}/profile/controller
     ${MEMOCHAT_QML_FEATURE_DIR}/moments

@@ -9,11 +9,14 @@ SESSION_AUTH_LOGIN_RESPONSE = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/session/SessionAuthCoordinatorLoginResponse.cpp"
 )
 MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/Main.qml"
-LOGIN_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/auth/LoginPage.qml"
+LOGIN_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/view/LoginPage.qml"
 LINUX_LOGIN_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/LoginPage.qml"
-LOGIN_TOP_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/components/LoginTopBar.qml"
-LOGIN_CREDENTIAL_RUNTIME = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/components/LoginCredentialRuntime.js"
-QML_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/resources/qrc/qml-shell.qrc"
+LOGIN_TOP_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/view/components/LoginTopBar.qml"
+LOGIN_CREDENTIAL_RUNTIME = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/view/components/LoginCredentialRuntime.js"
+)
+QML_SHELL_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/resources/qrc/qml-shell.qrc"
+AUTH_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/resources/auth.qrc"
 
 
 def extract_cpp_function(source: str, signature: str) -> str:
@@ -32,7 +35,7 @@ def extract_cpp_function(source: str, signature: str) -> str:
 
 
 def extract_qml_function(source: str, name: str) -> str:
-    return extract_cpp_function(source, f"function {name}")
+    return extract_cpp_function(source, f"function {name}(")
 
 
 class LoginAvatarWindowTests(unittest.TestCase):
@@ -82,8 +85,9 @@ class LoginAvatarWindowTests(unittest.TestCase):
         self.assertIn("sourceComponent: loginPageComponent", source)
         self.assertIn("destroyLoginWindow()", sync_windows)
         self.assertIn("destroyChatWindow()", sync_windows)
-        self.assertIn("showChatWindow()", sync_windows)
-        self.assertIn("showLoginWindow()", sync_windows)
+        self.assertIn("scheduleWindowHandoff", sync_windows)
+        self.assertNotIn("showChatWindow()", sync_windows)
+        self.assertNotIn("showLoginWindow()", sync_windows)
         self.assertIn("centerWindowForSize(win, root.loginWindowSize)", configure_login)
         self.assertIn("requestWindowCenter(win)", configure_login)
         self.assertIn("centerWindowForSize(win, root.chatWindowSize)", configure_chat)
@@ -104,14 +108,17 @@ class LoginAvatarWindowTests(unittest.TestCase):
         self.assertIn("Window.window.startSystemMove()", login_page)
 
     def test_login_credential_runtime_owns_cache_helpers(self):
-        qrc = QML_QRC.read_text(encoding="utf-8")
+        qrc = QML_SHELL_QRC.read_text(encoding="utf-8") + "\n" + AUTH_QRC.read_text(encoding="utf-8")
         login_page = LOGIN_PAGE_QML.read_text(encoding="utf-8")
         linux_login_page = LINUX_LOGIN_PAGE_QML.read_text(encoding="utf-8")
 
         self.assertTrue(LOGIN_CREDENTIAL_RUNTIME.is_file())
-        self.assertIn("qml/components/LoginCredentialRuntime.js", qrc)
-        self.assertIn('import "../components/LoginCredentialRuntime.js" as LoginCredentialRuntime', login_page)
-        self.assertIn('import "../components/LoginCredentialRuntime.js" as LoginCredentialRuntime', linux_login_page)
+        self.assertIn("features/auth/view/components/LoginCredentialRuntime.js", qrc)
+        self.assertIn('import "components/LoginCredentialRuntime.js" as LoginCredentialRuntime', login_page)
+        self.assertIn(
+            'import "qrc:/features/auth/view/components/LoginCredentialRuntime.js" as LoginCredentialRuntime',
+            linux_login_page,
+        )
 
         for page in (login_page, linux_login_page):
             with self.subTest(page=page[:32]):

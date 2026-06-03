@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="features/group/view/CreateGroupDialog.qml">../view/CreateGroupDialog.qml</file>
+        <file alias="features/group/view/GroupApplyReviewPane.qml">../view/GroupApplyReviewPane.qml</file>
+        <file alias="features/group/view/GroupInfoPane.qml">../view/GroupInfoPane.qml</file>
+        <file alias="features/group/view/GroupManagePane.qml">../view/GroupManagePane.qml</file>
+        <file alias="features/group/view/GroupManagementPanel.qml">../view/GroupManagementPanel.qml</file>
+    </qresource>
+</RCC>

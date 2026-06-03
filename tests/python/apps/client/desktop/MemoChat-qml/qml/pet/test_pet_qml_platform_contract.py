@@ -9,12 +9,12 @@ CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 QRC_ROOT = CLIENT_DIR / "resources/qrc"
 QML_QRCS = (
     QRC_ROOT / "qml-shell.qrc",
-    QRC_ROOT / "qml-pet.qrc",
+    CLIENT_DIR / "features/pet/resources/pet.qrc",
     QRC_ROOT / "icons.qrc",
 )
-PET_WINDOW_QML = CLIENT_DIR / "qml/pet/PetWindow.qml"
-PET_WINDOW_RUNTIME_JS = CLIENT_DIR / "qml/pet/PetWindowRuntime.js"
-PET_SCENE_QML = CLIENT_DIR / "qml/pet/PetScene.qml"
+PET_WINDOW_QML = CLIENT_DIR / "features/pet/view/PetWindow.qml"
+PET_WINDOW_RUNTIME_JS = CLIENT_DIR / "features/pet/view/PetWindowRuntime.js"
+PET_SCENE_QML = CLIENT_DIR / "features/pet/view/PetScene.qml"
 SHARED_MAIN_QML = CLIENT_DIR / "qml/app/Main.qml"
 LINUX_MAIN_QML = CLIENT_DIR / "qml/linux/Main.qml"
 LINUX_GLASS_SURFACE_QML = CLIENT_DIR / "qml/linux/components/GlassSurface.qml"
@@ -54,9 +54,9 @@ class PetQmlPlatformContractTests(unittest.TestCase):
             "qml/linux/Main.qml",
             "qml/linux/components/WindowGlassShell.qml",
             "qml/linux/components/GlassSurface.qml",
-            "qml/pet/PetWindow.qml",
-            "qml/pet/PetScene.qml",
-            "qml/pet/Live2DCharacterPane.qml",
+            "features/pet/view/PetWindow.qml",
+            "features/pet/view/PetScene.qml",
+            "features/pet/view/Live2DCharacterPane.qml",
             'alias="icons/modelive2d.png"',
         ):
             self.assertIn(token, qrc)
@@ -88,11 +88,11 @@ class PetQmlPlatformContractTests(unittest.TestCase):
     def test_shared_and_linux_entry_points_create_the_same_pet_window_contract(self):
         for path in (SHARED_MAIN_QML, LINUX_MAIN_QML):
             source = read(path)
-            self.assertRegex(source, r'import\s+"(?:\.\./)?pet"')
+            self.assertIn('import "qrc:/features/pet/view"', source)
             self.assertIn("function ensurePetWindow(petAssetSettings)", source)
             self.assertIn("function openPetWindow(petAssetSettings)", source)
             self.assertIn("petWindowComponent.createObject", source)
-            self.assertIn('"petController": controller.petController', source)
+            self.assertIn('"petController": pet', source)
             self.assertIn('"petAssetSettings": settings', source)
             self.assertIn("PetWindow { }", source)
 

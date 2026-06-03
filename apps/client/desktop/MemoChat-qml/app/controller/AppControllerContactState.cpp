@@ -8,6 +8,7 @@ void AppController::setContactPane(ContactPane pane)
     }
 
     _contact_pane = pane;
+    syncContactControllerState();
     emit contactPaneChanged();
 }
 
@@ -34,6 +35,7 @@ void AppController::setCurrentContact(int uid,
     _contact_state.back = back;
     _contact_state.sex = sex;
     _contact_state.userId = userId;
+    syncContactControllerState();
     emit currentContactChanged();
 }
 

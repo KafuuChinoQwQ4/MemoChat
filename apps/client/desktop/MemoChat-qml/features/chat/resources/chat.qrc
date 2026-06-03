@@ -1,0 +1,32 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="features/chat/view/ChatAgentSidePane.qml">../view/ChatAgentSidePane.qml</file>
+        <file alias="features/chat/view/ChatConversationPane.qml">../view/ChatConversationPane.qml</file>
+        <file alias="features/chat/view/ChatLeftPanel.qml">../view/ChatLeftPanel.qml</file>
+        <file alias="features/chat/view/ChatLive2DEntryPane.qml">../view/ChatLive2DEntryPane.qml</file>
+        <file alias="features/chat/view/ChatModalLayer.qml">../view/ChatModalLayer.qml</file>
+        <file alias="features/chat/view/ChatNormalFace.qml">../view/ChatNormalFace.qml</file>
+        <file alias="features/chat/view/ChatShellContent.qml">../view/ChatShellContent.qml</file>
+        <file alias="features/chat/view/conversation/ChatComposerAttachmentStrip.qml">../view/conversation/ChatComposerAttachmentStrip.qml</file>
+        <file alias="features/chat/view/conversation/ChatComposerBar.qml">../view/conversation/ChatComposerBar.qml</file>
+        <file alias="features/chat/view/conversation/ChatComposerReplyBar.qml">../view/conversation/ChatComposerReplyBar.qml</file>
+        <file alias="features/chat/view/conversation/ChatConversationHeader.qml">../view/conversation/ChatConversationHeader.qml</file>
+        <file alias="features/chat/view/conversation/ChatMessageActionMenu.qml">../view/conversation/ChatMessageActionMenu.qml</file>
+        <file alias="features/chat/view/conversation/ChatMessageDelegate.qml">../view/conversation/ChatMessageDelegate.qml</file>
+        <file alias="features/chat/view/conversation/ChatMessageFileBody.qml">../view/conversation/ChatMessageFileBody.qml</file>
+        <file alias="features/chat/view/conversation/ChatMessageImageBody.qml">../view/conversation/ChatMessageImageBody.qml</file>
+        <file alias="features/chat/view/conversation/ChatMessageListView.qml">../view/conversation/ChatMessageListView.qml</file>
+        <file alias="features/chat/view/conversation/ChatMessageStatusBadge.qml">../view/conversation/ChatMessageStatusBadge.qml</file>
+        <file alias="features/chat/view/conversation/ChatMessageTextBody.qml">../view/conversation/ChatMessageTextBody.qml</file>
+        <file alias="features/chat/view/conversation/ChatSmartActionPopups.qml">../view/conversation/ChatSmartActionPopups.qml</file>
+        <file alias="features/chat/view/conversation/ChatSmartSummaryPopup.qml">../view/conversation/ChatSmartSummaryPopup.qml</file>
+        <file alias="features/chat/view/conversation/ChatSmartTranslatePopup.qml">../view/conversation/ChatSmartTranslatePopup.qml</file>
+        <file alias="features/chat/view/conversation/ComposerIconButton.qml">../view/conversation/ComposerIconButton.qml</file>
+        <file alias="features/chat/view/conversation/MessageAvatar.qml">../view/conversation/MessageAvatar.qml</file>
+        <file alias="features/chat/view/sidebar/ChatDialogRow.qml">../view/sidebar/ChatDialogRow.qml</file>
+        <file alias="features/chat/view/sidebar/ChatFindFriendPopup.qml">../view/sidebar/ChatFindFriendPopup.qml</file>
+        <file alias="features/chat/view/sidebar/ChatJoinGroupPopup.qml">../view/sidebar/ChatJoinGroupPopup.qml</file>
+        <file alias="features/chat/view/sidebar/ChatLeftHeader.qml">../view/sidebar/ChatLeftHeader.qml</file>
+        <file alias="features/chat/view/sidebar/ChatSideBar.qml">../view/sidebar/ChatSideBar.qml</file>
+    </qresource>
+</RCC>

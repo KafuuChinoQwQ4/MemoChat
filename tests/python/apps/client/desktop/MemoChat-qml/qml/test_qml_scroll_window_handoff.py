@@ -4,15 +4,17 @@ from pathlib import Path
 from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
-CHAT_LEFT_PANEL = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatLeftPanel.qml"
-CHAT_CONVERSATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/ChatConversationPane.qml"
-CHAT_MESSAGE_LIST_VIEW = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/conversation/ChatMessageListView.qml"
-CHAT_MESSAGE_DELEGATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/chat/conversation/ChatMessageDelegate.qml"
-MOMENTS_FEED = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/moments/MomentsFeedPane.qml"
-MOMENTS_DELEGATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/moments/MomentsDelegate.qml"
+CHAT_FEATURE_VIEW = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/view"
+CHAT_LEFT_PANEL = CHAT_FEATURE_VIEW / "ChatLeftPanel.qml"
+CHAT_CONVERSATION = CHAT_FEATURE_VIEW / "ChatConversationPane.qml"
+CHAT_MESSAGE_LIST_VIEW = CHAT_FEATURE_VIEW / "conversation/ChatMessageListView.qml"
+CHAT_MESSAGE_DELEGATE = CHAT_FEATURE_VIEW / "conversation/ChatMessageDelegate.qml"
+MOMENTS_FEED = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/moments/view/MomentsFeedPane.qml"
+MOMENTS_DELEGATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/moments/view/MomentsDelegate.qml"
 MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
-LOGIN_TOP_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/components/LoginTopBar.qml"
+LOGIN_TOP_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/view/components/LoginTopBar.qml"
+FEATURE_AUTH_VIEW = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/view"
 MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/bootstrap/main.cpp"
 SESSION_AUTH_LOGIN_RESPONSE = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/session/SessionAuthCoordinatorLoginResponse.cpp"
@@ -116,14 +118,14 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
                 sync_windows.index("destroyChatWindow()"),
                 sync_windows.rindex("scheduleWindowHandoff"),
             )
-            self.assertIn("visible: controller.page === AppController.LoginPage", qml)
-            self.assertIn("visible: controller.page === AppController.RegisterPage", qml)
-            self.assertIn("visible: controller.page === AppController.ResetPage", qml)
+            self.assertIn("visible: shell.page === AppController.LoginPage", qml)
+            self.assertIn("visible: shell.page === AppController.RegisterPage", qml)
+            self.assertIn("visible: shell.page === AppController.ResetPage", qml)
             self.assertIn("Component {\n        id: chatWindowComponent", qml)
             self.assertIn("sourceComponent: chatShellPageComponent", qml)
             self.assertIn("onClosing: Qt.quit()", qml)
             self.assertNotIn("StackLayout", qml)
-            self.assertNotIn("controller.page === AppController.ChatPage ? 3 : 0", qml)
+            self.assertNotIn("shell.page === AppController.ChatPage ? 3 : 0", qml)
             self.assertNotIn("property var appWindowRef: null", qml)
             self.assertNotIn("function ensureAppWindow()", qml)
             self.assertNotIn("function configureAppWindowForPage(win)", qml)
@@ -133,7 +135,7 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
             self.assertNotIn("Window.window.startSystemMove()", qml)
 
         login_top_bar = LOGIN_TOP_BAR_QML.read_text(encoding="utf-8")
-        login_page = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/auth/LoginPage.qml").read_text(encoding="utf-8")
+        login_page = (FEATURE_AUTH_VIEW / "LoginPage.qml").read_text(encoding="utf-8")
         self.assertIn("onPressed:", login_top_bar)
         self.assertIn("signal dragMoveRequested()", login_top_bar)
         self.assertIn("onDragMoveRequested:", login_page)
@@ -211,7 +213,7 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
             self.assertIn("const retiredWindowPending = destroyLoginWindow()", sync_windows)
             self.assertIn("scheduleWindowHandoff(retiredWindowPending, token, AppController.ChatPage)", sync_windows)
             self.assertIn("const retiredWindowPending = destroyChatWindow()", sync_windows)
-            self.assertIn("scheduleWindowHandoff(retiredWindowPending, token, controller.page)", sync_windows)
+            self.assertIn("scheduleWindowHandoff(retiredWindowPending, token, shell.page)", sync_windows)
             self.assertNotIn("Qt.callLater(function() {", sync_windows)
 
     def test_separate_login_and_chat_windows_use_their_own_size_constraints(self):

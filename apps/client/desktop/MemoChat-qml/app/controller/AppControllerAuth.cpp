@@ -66,7 +66,31 @@ void AppController::saveLoginCredential(const QString& email, const QString& pas
                       QString::fromUtf8(QJsonDocument(next).toJson(QJsonDocument::Compact)));
     settings.endGroup();
     settings.sync();
+    _auth_view_model.syncLoginCredentialCacheJson(loginCredentialCacheJson());
     emit loginCredentialCacheChanged();
+}
+
+void AppController::setRegisterSuccessPage(bool success)
+{
+    if (_shell_state.registerSuccessPage == success)
+    {
+        return;
+    }
+    _shell_state.registerSuccessPage = success;
+    _auth_view_model.syncRegisterSuccessPage(success);
+    emit registerSuccessPageChanged();
+}
+
+void AppController::setRegisterCountdown(int seconds)
+{
+    const int normalized = qMax(0, seconds);
+    if (_shell_state.registerCountdown == normalized)
+    {
+        return;
+    }
+    _shell_state.registerCountdown = normalized;
+    _auth_view_model.syncRegisterCountdown(normalized);
+    emit registerCountdownChanged();
 }
 
 void AppController::login(const QString& email, const QString& password)

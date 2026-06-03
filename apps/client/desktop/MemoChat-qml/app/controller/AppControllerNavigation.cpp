@@ -13,6 +13,7 @@ void AppController::switchToLogin()
     qInfo() << "Switching to login page, current page:" << _page << "pending uid:" << _pending_login_state.uid
             << "chat connected:" << _gateway.chatTransport()->isConnected();
     const bool already_on_login_page = _page == LoginPage;
+    const int previous_user_uid = currentUserUid();
     _register_countdown_timer.stop();
     _heartbeat_timer.stop();
     _chat_login_timeout_timer.stop();
@@ -43,11 +44,7 @@ void AppController::switchToLogin()
     _private_cache_store.close();
     _group_cache_store.close();
     _gateway.userMgr()->ResetSession();
-    if (_shell_state.registerSuccessPage)
-    {
-        _shell_state.registerSuccessPage = false;
-        emit registerSuccessPageChanged();
-    }
+    setRegisterSuccessPage(false);
     setBusy(false);
     setTip(QString(), false);
     _chat_list_model.clear();
@@ -85,12 +82,14 @@ void AppController::switchToLogin()
     _loading_state.canLoadMoreChats = false;
     emit canLoadMoreChatsChanged();
     _loading_state.canLoadMoreContacts = false;
+    syncContactControllerState();
     emit canLoadMoreContactsChanged();
     setCurrentContact(0, QString(), QString(), QStringLiteral("qrc:/res/head_1.png"), QString(), 0);
     _chat_state.uid = 0;
     _group_state.currentId = 0;
     _group_state.currentName.clear();
     _group_state.currentCode.clear();
+    syncGroupControllerState();
     emit currentGroupChanged();
     emitCurrentDialogUidChangedIfNeeded();
     _group_state.dialogUidMap.clear();
@@ -108,7 +107,7 @@ void AppController::switchToLogin()
     setPendingReplyContext(QString(), QString(), QString());
     setCurrentChatPeerName(QString());
     setCurrentChatPeerIcon(QStringLiteral("qrc:/res/head_1.png"));
-    const bool userChanged = !_user_state.name.isEmpty() || !_user_state.nick.isEmpty() ||
+    const bool userChanged = previous_user_uid != 0 || !_user_state.name.isEmpty() || !_user_state.nick.isEmpty() ||
                              _user_state.icon != QStringLiteral("qrc:/res/head_1.png") ||
                                                                 !_user_state.userId.isEmpty() ||
                                                                 !_user_state.desc.isEmpty();
@@ -119,6 +118,7 @@ void AppController::switchToLogin()
     _user_state.desc.clear();
     if (userChanged)
     {
+        syncShellViewModelState();
         emit currentUserChanged();
     }
     _pending_login_state.uid = 0;
@@ -138,11 +138,7 @@ void AppController::switchToRegister()
     _register_countdown_timer.stop();
     _heartbeat_timer.stop();
     _chat_connection_coordinator->resetHeartbeatTracking();
-    if (_shell_state.registerSuccessPage)
-    {
-        _shell_state.registerSuccessPage = false;
-        emit registerSuccessPageChanged();
-    }
+    setRegisterSuccessPage(false);
     setPage(RegisterPage);
     setTip(QString(), false);
 }
@@ -152,11 +148,7 @@ void AppController::switchToReset()
     _register_countdown_timer.stop();
     _heartbeat_timer.stop();
     _chat_connection_coordinator->resetHeartbeatTracking();
-    if (_shell_state.registerSuccessPage)
-    {
-        _shell_state.registerSuccessPage = false;
-        emit registerSuccessPageChanged();
-    }
+    setRegisterSuccessPage(false);
     setPage(ResetPage);
     setTip(QString(), false);
 }
@@ -170,6 +162,7 @@ void AppController::switchChatTab(int tab)
         return;
     }
     _chat_tab = target;
+    _shell_view_model.syncChatTab(static_cast<int>(_chat_tab));
     if (target == ContactTabPage)
     {
         ensureContactsInitialized();

@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="features/settings/view/MorePane.qml">../view/MorePane.qml</file>
+        <file alias="features/settings/view/SettingsPane.qml">../view/SettingsPane.qml</file>
+        <file alias="features/settings/view/SettingsAvatarCard.qml">../view/SettingsAvatarCard.qml</file>
+        <file alias="features/settings/view/SettingsProfileForm.qml">../view/SettingsProfileForm.qml</file>
+    </qresource>
+</RCC>

@@ -1,8 +1,9 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Window 2.15
+import "qrc:/features/auth/view/components" as AuthComponents
+import "qrc:/features/auth/view/components/LoginCredentialRuntime.js" as LoginCredentialRuntime
 import "../components" as SharedComponents
-import "../components/LoginCredentialRuntime.js" as LoginCredentialRuntime
 import "components" as LinuxComponents
 
 Rectangle {
@@ -159,7 +160,7 @@ Rectangle {
         onResetClicked: loginRoot.switchToResetRequested()
     }
 
-    SharedComponents.LoginCredentialDropdown {
+    AuthComponents.LoginCredentialDropdown {
         id: credentialDropdown
         hostItem: loginRoot
         anchorItem: emailInputBox
@@ -188,7 +189,7 @@ Rectangle {
         }
         spacing: 14
 
-        SharedComponents.LoginTopBar {
+        AuthComponents.LoginTopBar {
             id: topBar
             width: parent.width
             opacity: loginRoot.stageValue(0.02, 0.16)
@@ -444,7 +445,7 @@ Rectangle {
             }
         }
 
-        SharedComponents.LoginAgreementRow {
+        AuthComponents.LoginAgreementRow {
             id: termsRow
             width: parent.width
             opacity: loginRoot.stageValue(0.36, 0.18)
@@ -480,7 +481,7 @@ Rectangle {
 
         Item { width: parent.width; height: 18 }
 
-        SharedComponents.LoginFooterLinks {
+        AuthComponents.LoginFooterLinks {
             id: footerLinks
             anchors.horizontalCenter: parent.horizontalCenter
             opacity: loginRoot.stageValue(0.54, 0.18)

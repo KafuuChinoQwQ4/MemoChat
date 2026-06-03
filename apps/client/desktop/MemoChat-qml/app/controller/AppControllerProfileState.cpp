@@ -93,6 +93,7 @@ void AppController::applyCurrentUserProfile(int uid,
 
     if (changed)
     {
+        syncShellViewModelState();
         emit currentUserChanged();
     }
 }

@@ -14,11 +14,13 @@ list(APPEND MEMOCHAT_QML_FEATURE_SOURCES
     features/chat/cache/ChatCacheMessageCodec.cpp
     features/chat/cache/GroupChatCacheStore.cpp
     features/chat/cache/PrivateChatCacheStore.cpp
+    features/chat/viewmodel/ChatViewModel.cpp
 )
 
 list(APPEND MEMOCHAT_QML_FEATURE_HEADERS
     features/chat/controller/ChatController.h
     features/chat/model/ChatMessageModel.h
+    features/chat/model/ChatUiState.h
     features/chat/services/ChatDispatchService.h
     features/chat/services/ConversationSyncService.h
     features/chat/services/DialogListEntryBuilder.h
@@ -29,4 +31,9 @@ list(APPEND MEMOCHAT_QML_FEATURE_HEADERS
     features/chat/cache/ChatCacheMessageCodec.h
     features/chat/cache/GroupChatCacheStore.h
     features/chat/cache/PrivateChatCacheStore.h
+    features/chat/viewmodel/ChatViewModel.h
+)
+
+list(APPEND MEMOCHAT_QML_FEATURE_RESOURCES
+    features/chat/resources/chat.qrc
 )

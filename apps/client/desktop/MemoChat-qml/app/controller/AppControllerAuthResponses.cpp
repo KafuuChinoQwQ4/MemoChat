@@ -79,6 +79,7 @@ void AppController::onSettingsHttpFinished(ReqId id, QString res, ErrorCodes err
 
     if (changed)
     {
+        syncShellViewModelState();
         emit currentUserChanged();
     }
     setSettingsStatus("资料已同步", false);

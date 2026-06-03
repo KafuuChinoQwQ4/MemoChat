@@ -15,12 +15,10 @@ void AppSessionCoordinator::login(const QString& email, const QString& password)
 {
     _auth->login(email, password);
 }
-
 void AppSessionCoordinator::requestRegisterCode(const QString& email)
 {
     _auth->requestRegisterCode(email);
 }
-
 void AppSessionCoordinator::registerUser(const QString& user,
                                          const QString& email,
                                          const QString& password,
@@ -29,12 +27,10 @@ void AppSessionCoordinator::registerUser(const QString& user,
 {
     _auth->registerUser(user, email, password, confirm, verifyCode);
 }
-
 void AppSessionCoordinator::requestResetCode(const QString& email)
 {
     _auth->requestResetCode(email);
 }
-
 void AppSessionCoordinator::resetPassword(const QString& user,
                                           const QString& email,
                                           const QString& password,
@@ -42,17 +38,14 @@ void AppSessionCoordinator::resetPassword(const QString& user,
 {
     _auth->resetPassword(user, email, password, verifyCode);
 }
-
 void AppSessionCoordinator::onLoginHttpFinished(ReqId id, QString res, ErrorCodes err)
 {
     _auth->onLoginHttpFinished(id, res, err);
 }
-
 void AppSessionCoordinator::onRegisterHttpFinished(ReqId id, QString res, ErrorCodes err)
 {
     _auth->onRegisterHttpFinished(id, res, err);
 }
-
 void AppSessionCoordinator::onResetHttpFinished(ReqId id, QString res, ErrorCodes err)
 {
     _auth->onResetHttpFinished(id, res, err);

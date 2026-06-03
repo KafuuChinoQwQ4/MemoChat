@@ -4,7 +4,7 @@ from pathlib import Path
 from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
-LOGIN_TOP_BAR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/components/LoginTopBar.qml"
+LOGIN_TOP_BAR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/view/components/LoginTopBar.qml"
 APP_CORE_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/resources/qrc/app-core.qrc"
 SHARED_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/Main.qml"
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
@@ -23,12 +23,13 @@ APP_CONTROLLER_PROFILE_STATE = (
 )
 SESSION_CHAT_ENTRY = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/session/SessionChatEntryCoordinator.cpp"
 AUTH_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/AuthController.cpp"
+FEATURE_AUTH_VIEW = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/view"
 
 
 class LoginAvatarResourceContractTests(unittest.TestCase):
     def test_login_top_bar_exposes_long_press_window_move(self):
         source = LOGIN_TOP_BAR.read_text(encoding="utf-8")
-        login_page = (REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/auth/LoginPage.qml").read_text(encoding="utf-8")
+        login_page = (FEATURE_AUTH_VIEW / "LoginPage.qml").read_text(encoding="utf-8")
 
         self.assertIn("import QtQuick.Window 2.15", source)
         self.assertIn("MouseArea", source)

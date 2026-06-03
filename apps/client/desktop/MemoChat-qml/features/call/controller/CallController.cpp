@@ -1,13 +1,61 @@
 #include "CallController.h"
 
+#include "CallSessionModel.h"
 #include "ClientGateway.h"
+#include "LivekitBridge.h"
 #include "httpmgr.h"
 #include "global.h"
 #include <QJsonObject>
 
-CallController::CallController(ClientGateway* gateway)
-    : _gateway(gateway)
+CallController::CallController(ClientGateway* gateway, QObject* parent)
+    : QObject(parent)
+    , _gateway(gateway)
 {
+}
+
+CallSessionModel* CallController::callSession() const
+{
+    return _call_session;
+}
+
+LivekitBridge* CallController::livekitBridge() const
+{
+    return _livekit_bridge;
+}
+
+void CallController::startVoiceChat()
+{
+    emit startVoiceChatRequested();
+}
+
+void CallController::startVideoChat()
+{
+    emit startVideoChatRequested();
+}
+
+void CallController::acceptIncomingCall()
+{
+    emit acceptIncomingCallRequested();
+}
+
+void CallController::rejectIncomingCall()
+{
+    emit rejectIncomingCallRequested();
+}
+
+void CallController::endCurrentCall()
+{
+    emit endCurrentCallRequested();
+}
+
+void CallController::toggleCallMuted()
+{
+    emit toggleCallMutedRequested();
+}
+
+void CallController::toggleCallCamera()
+{
+    emit toggleCallCameraRequested();
 }
 
 void CallController::startCall(int uid, const QString& token, int peerUid, const QString& callType) const
@@ -64,6 +112,18 @@ void CallController::fetchToken(int uid, const QString& token, const QString& ca
     payload["call_id"] = callId;
     payload["role"] = role;
     post(QStringLiteral("/api/call/token"), payload, ReqId::ID_CALL_GET_TOKEN);
+}
+
+void CallController::syncSurface(CallSessionModel* callSession, LivekitBridge* livekitBridge)
+{
+    if (_call_session == callSession && _livekit_bridge == livekitBridge)
+    {
+        return;
+    }
+
+    _call_session = callSession;
+    _livekit_bridge = livekitBridge;
+    emit callSurfaceChanged();
 }
 
 void CallController::post(const QString& path, const QJsonObject& payload, ReqId reqId) const

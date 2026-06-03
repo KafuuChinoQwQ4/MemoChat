@@ -1,0 +1,14 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="features/contact/view/ContactPane.qml">../view/ContactPane.qml</file>
+        <file alias="features/contact/view/ContactProfilePopup.qml">../view/ContactProfilePopup.qml</file>
+        <file alias="features/contact/view/AddFriendDialog.qml">../view/AddFriendDialog.qml</file>
+        <file alias="features/contact/view/ApplyRequestDelegate.qml">../view/ApplyRequestDelegate.qml</file>
+        <file alias="features/contact/view/ApplyRequestList.qml">../view/ApplyRequestList.qml</file>
+        <file alias="features/contact/view/AuthFriendDialog.qml">../view/AuthFriendDialog.qml</file>
+        <file alias="features/contact/view/FriendInfoPane.qml">../view/FriendInfoPane.qml</file>
+        <file alias="features/contact/view/ContactActionIconButton.qml">../view/ContactActionIconButton.qml</file>
+        <file alias="features/contact/view/ContactListPane.qml">../view/ContactListPane.qml</file>
+        <file alias="features/contact/view/TagEditor.qml">../view/TagEditor.qml</file>
+    </qresource>
+</RCC>

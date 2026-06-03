@@ -40,6 +40,7 @@ void AppController::setContactLoadingMore(bool loading)
     }
 
     _loading_state.contactLoadingMore = loading;
+    syncContactControllerState();
     emit contactLoadingMoreChanged();
 }
 
@@ -64,5 +65,6 @@ void AppController::refreshContactLoadMoreState()
     }
 
     _loading_state.canLoadMoreContacts = canLoad;
+    syncContactControllerState();
     emit canLoadMoreContactsChanged();
 }

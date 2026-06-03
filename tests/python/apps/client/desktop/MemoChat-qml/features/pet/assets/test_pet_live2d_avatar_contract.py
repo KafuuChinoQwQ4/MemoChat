@@ -18,12 +18,12 @@ PET_ASSET_SETTINGS_PERSISTENCE_CPP = CLIENT_DIR / "features/pet/assets/PetAssetS
 PET_ASSET_SETTINGS_STATE_CPP = CLIENT_DIR / "features/pet/assets/PetAssetSettingsState.cpp"
 LIVE2D_AVATAR_OPENGL_RENDERER_H = CLIENT_DIR / "live2d/rendering/Live2DAvatarOpenGLRenderer.h"
 LIVE2D_AVATAR_OPENGL_RENDERER_CPP = CLIENT_DIR / "live2d/rendering/Live2DAvatarOpenGLRenderer.cpp"
-PET_CHAT_WINDOW_QML = CLIENT_DIR / "qml/pet/PetChatWindow.qml"
-PET_CHAT_MESSAGE_LIST_QML = CLIENT_DIR / "qml/pet/PetChatMessageList.qml"
-PET_WINDOW_QML = CLIENT_DIR / "qml/pet/PetWindow.qml"
+PET_CHAT_WINDOW_QML = CLIENT_DIR / "features/pet/view/PetChatWindow.qml"
+PET_CHAT_MESSAGE_LIST_QML = CLIENT_DIR / "features/pet/view/PetChatMessageList.qml"
+PET_WINDOW_QML = CLIENT_DIR / "features/pet/view/PetWindow.qml"
 MAIN_QML = CLIENT_DIR / "qml/app/Main.qml"
 LINUX_MAIN_QML = CLIENT_DIR / "qml/linux/Main.qml"
-CHARACTER_PANE_QML = CLIENT_DIR / "qml/pet/Live2DCharacterPane.qml"
+CHARACTER_PANE_QML = CLIENT_DIR / "features/pet/view/Live2DCharacterPane.qml"
 MAIN_CPP = CLIENT_DIR / "app/bootstrap/main.cpp"
 
 
@@ -102,8 +102,8 @@ class PetLive2DAvatarContractTests(unittest.TestCase):
         self.assertIn('"selfAvatar": root.selfAvatar', window)
         self.assertIn("petChatWindowRef.selfAvatar = root.selfAvatar", window)
         for source in (main, linux_main):
-            self.assertIn('"selfAvatar": controller.currentUserIcon', source)
-            self.assertIn("petWindowRef.selfAvatar = controller.currentUserIcon", source)
+            self.assertIn('"selfAvatar": shell.currentUserIcon', source)
+            self.assertIn("petWindowRef.selfAvatar = shell.currentUserIcon", source)
             self.assertIn("function onCurrentUserChanged()", source)
 
     def test_live2d_character_pane_uses_package_avatar_in_initialization_ui(self):

@@ -1,11 +1,7 @@
 set(MEMOCHAT_QML_RESOURCES
     resources/qrc/app-core.qrc
     resources/qrc/qml-shell.qrc
-    resources/qrc/qml-chat.qrc
-    resources/qrc/qml-moments.qrc
-    resources/qrc/qml-agent.qrc
-    resources/qrc/qml-pet.qrc
-    resources/qrc/qml-r18.qrc
+    ${MEMOCHAT_QML_FEATURE_RESOURCES}
     resources/qrc/icons.qrc
     resources/qrc/web.qrc
 )

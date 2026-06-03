@@ -11,6 +11,8 @@
 #include <QSet>
 #include "global.h"
 #include "AuthController.h"
+#include "AuthService.h"
+#include "AuthViewModel.h"
 #include "AppControllerConnectionState.h"
 #include "AppControllerDialogStateData.h"
 #include "AppControllerGroupState.h"
@@ -20,8 +22,10 @@
 #include "CallController.h"
 #include "CallSessionModel.h"
 #include "ChatController.h"
+#include "ChatViewModel.h"
 #include "ClientGateway.h"
 #include "ContactController.h"
+#include "GroupController.h"
 #include "FriendListModel.h"
 #include "ChatMessageModel.h"
 #include "SearchResultModel.h"
@@ -37,6 +41,7 @@
 #include "GroupChatCacheStore.h"
 #include "LivekitBridge.h"
 #include "MediaUploadService.h"
+#include "ShellViewModel.h"
 
 class AppSessionCoordinator;
 class ContactCoordinatorShell;
@@ -49,93 +54,6 @@ class AppChatConnectionCoordinator;
 class AppController : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(Page page READ page NOTIFY pageChanged)
-    Q_PROPERTY(QString tipText READ tipText NOTIFY tipChanged)
-    Q_PROPERTY(bool tipError READ tipError NOTIFY tipChanged)
-    Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
-    Q_PROPERTY(bool registerSuccessPage READ registerSuccessPage NOTIFY registerSuccessPageChanged)
-    Q_PROPERTY(int registerCountdown READ registerCountdown NOTIFY registerCountdownChanged)
-    Q_PROPERTY(int registerCodeCooldownSeconds READ registerCodeCooldownSeconds NOTIFY registerCodeCooldownChanged)
-    Q_PROPERTY(bool registerCodeRequestPending READ registerCodeRequestPending NOTIFY registerCodeCooldownChanged)
-    Q_PROPERTY(QString loginCredentialCacheJson READ loginCredentialCacheJson NOTIFY loginCredentialCacheChanged)
-    Q_PROPERTY(ChatTab chatTab READ chatTab NOTIFY chatTabChanged)
-    Q_PROPERTY(QString currentUserName READ currentUserName NOTIFY currentUserChanged)
-    Q_PROPERTY(QString currentUserNick READ currentUserNick NOTIFY currentUserChanged)
-    Q_PROPERTY(QString currentUserIcon READ currentUserIcon NOTIFY currentUserChanged)
-    Q_PROPERTY(QString currentUserDesc READ currentUserDesc NOTIFY currentUserChanged)
-    Q_PROPERTY(QString currentUserId READ currentUserId NOTIFY currentUserChanged)
-    Q_PROPERTY(int currentUserUid READ currentUserUid NOTIFY currentUserChanged)
-    Q_PROPERTY(ContactPane contactPane READ contactPane NOTIFY contactPaneChanged)
-    Q_PROPERTY(QString currentContactName READ currentContactName NOTIFY currentContactChanged)
-    Q_PROPERTY(QString currentContactNick READ currentContactNick NOTIFY currentContactChanged)
-    Q_PROPERTY(QString currentContactIcon READ currentContactIcon NOTIFY currentContactChanged)
-    Q_PROPERTY(QString currentContactBack READ currentContactBack NOTIFY currentContactChanged)
-    Q_PROPERTY(int currentContactSex READ currentContactSex NOTIFY currentContactChanged)
-    Q_PROPERTY(QString currentContactUserId READ currentContactUserId NOTIFY currentContactChanged)
-    Q_PROPERTY(int currentContactUid READ currentContactUid NOTIFY currentContactChanged)
-    Q_PROPERTY(bool hasCurrentContact READ hasCurrentContact NOTIFY currentContactChanged)
-    Q_PROPERTY(QString currentChatPeerName READ currentChatPeerName NOTIFY currentChatPeerChanged)
-    Q_PROPERTY(QString currentChatPeerIcon READ currentChatPeerIcon NOTIFY currentChatPeerChanged)
-    Q_PROPERTY(bool hasCurrentChat READ hasCurrentChat NOTIFY currentChatPeerChanged)
-    Q_PROPERTY(int currentDialogUid READ currentDialogUid NOTIFY currentDialogUidChanged)
-    Q_PROPERTY(bool hasCurrentGroup READ hasCurrentGroup NOTIFY currentGroupChanged)
-    Q_PROPERTY(int currentGroupRole READ currentGroupRole NOTIFY currentGroupChanged)
-    Q_PROPERTY(QString currentGroupName READ currentGroupName NOTIFY currentGroupChanged)
-    Q_PROPERTY(QString currentGroupCode READ currentGroupCode NOTIFY currentGroupChanged)
-    Q_PROPERTY(bool currentGroupCanChangeInfo READ currentGroupCanChangeInfo NOTIFY currentGroupChanged)
-    Q_PROPERTY(bool currentGroupCanDeleteMessages READ currentGroupCanDeleteMessages NOTIFY currentGroupChanged)
-    Q_PROPERTY(bool currentGroupCanInviteUsers READ currentGroupCanInviteUsers NOTIFY currentGroupChanged)
-    Q_PROPERTY(bool currentGroupCanManageAdmins READ currentGroupCanManageAdmins NOTIFY currentGroupChanged)
-    Q_PROPERTY(bool currentGroupCanPinMessages READ currentGroupCanPinMessages NOTIFY currentGroupChanged)
-    Q_PROPERTY(bool currentGroupCanBanUsers READ currentGroupCanBanUsers NOTIFY currentGroupChanged)
-    Q_PROPERTY(bool currentGroupCanManageTopics READ currentGroupCanManageTopics NOTIFY currentGroupChanged)
-    Q_PROPERTY(FriendListModel* dialogListModel READ dialogListModel CONSTANT)
-    Q_PROPERTY(FriendListModel* chatListModel READ chatListModel CONSTANT)
-    Q_PROPERTY(FriendListModel* groupListModel READ groupListModel CONSTANT)
-    Q_PROPERTY(FriendListModel* contactListModel READ contactListModel CONSTANT)
-    Q_PROPERTY(ChatMessageModel* messageModel READ messageModel CONSTANT)
-    Q_PROPERTY(SearchResultModel* searchResultModel READ searchResultModel CONSTANT)
-    Q_PROPERTY(ApplyRequestModel* applyRequestModel READ applyRequestModel CONSTANT)
-    Q_PROPERTY(MomentsModel* momentsModel READ momentsModel CONSTANT)
-    Q_PROPERTY(MomentsController* momentsController READ momentsController CONSTANT)
-    Q_PROPERTY(AgentController* agentController READ agentController CONSTANT)
-    Q_PROPERTY(AgentMessageModel* agentMessageModel READ agentMessageModel CONSTANT)
-    Q_PROPERTY(PetController* petController READ petController CONSTANT)
-    Q_PROPERTY(R18Controller* r18Controller READ r18Controller CONSTANT)
-    Q_PROPERTY(bool searchPending READ searchPending NOTIFY searchPendingChanged)
-    Q_PROPERTY(QString searchStatusText READ searchStatusText NOTIFY searchStatusChanged)
-    Q_PROPERTY(bool searchStatusError READ searchStatusError NOTIFY searchStatusChanged)
-    Q_PROPERTY(bool hasPendingApply READ hasPendingApply NOTIFY pendingApplyChanged)
-    Q_PROPERTY(bool chatLoadingMore READ chatLoadingMore NOTIFY chatLoadingMoreChanged)
-    Q_PROPERTY(bool canLoadMoreChats READ canLoadMoreChats NOTIFY canLoadMoreChatsChanged)
-    Q_PROPERTY(bool privateHistoryLoading READ privateHistoryLoading NOTIFY privateHistoryLoadingChanged)
-    Q_PROPERTY(bool canLoadMorePrivateHistory READ canLoadMorePrivateHistory NOTIFY canLoadMorePrivateHistoryChanged)
-    Q_PROPERTY(bool contactLoadingMore READ contactLoadingMore NOTIFY contactLoadingMoreChanged)
-    Q_PROPERTY(bool canLoadMoreContacts READ canLoadMoreContacts NOTIFY canLoadMoreContactsChanged)
-    Q_PROPERTY(QString authStatusText READ authStatusText NOTIFY authStatusChanged)
-    Q_PROPERTY(bool authStatusError READ authStatusError NOTIFY authStatusChanged)
-    Q_PROPERTY(QString settingsStatusText READ settingsStatusText NOTIFY settingsStatusChanged)
-    Q_PROPERTY(bool settingsStatusError READ settingsStatusError NOTIFY settingsStatusChanged)
-    Q_PROPERTY(QString groupStatusText READ groupStatusText NOTIFY groupStatusChanged)
-    Q_PROPERTY(bool groupStatusError READ groupStatusError NOTIFY groupStatusChanged)
-    Q_PROPERTY(bool mediaUploadInProgress READ mediaUploadInProgress NOTIFY mediaUploadStateChanged)
-    Q_PROPERTY(QString mediaUploadProgressText READ mediaUploadProgressText NOTIFY mediaUploadStateChanged)
-    Q_PROPERTY(CallSessionModel* callSession READ callSession CONSTANT)
-    Q_PROPERTY(LivekitBridge* livekitBridge READ livekitBridge CONSTANT)
-    Q_PROPERTY(QString currentDraftText READ currentDraftText NOTIFY currentDraftTextChanged)
-    Q_PROPERTY(
-        QVariantList currentPendingAttachments READ currentPendingAttachments NOTIFY currentPendingAttachmentsChanged)
-    Q_PROPERTY(bool hasPendingAttachments READ hasPendingAttachments NOTIFY currentPendingAttachmentsChanged)
-    Q_PROPERTY(bool currentDialogPinned READ currentDialogPinned NOTIFY currentDialogPinnedChanged)
-    Q_PROPERTY(bool currentDialogMuted READ currentDialogMuted NOTIFY currentDialogMutedChanged)
-    Q_PROPERTY(bool hasPendingReply READ hasPendingReply NOTIFY pendingReplyChanged)
-    Q_PROPERTY(QString replyTargetName READ replyTargetName NOTIFY pendingReplyChanged)
-    Q_PROPERTY(QString replyPreviewText READ replyPreviewText NOTIFY pendingReplyChanged)
-    Q_PROPERTY(bool dialogsReady READ dialogsReady NOTIFY lazyBootstrapStateChanged)
-    Q_PROPERTY(bool contactsReady READ contactsReady NOTIFY lazyBootstrapStateChanged)
-    Q_PROPERTY(bool groupsReady READ groupsReady NOTIFY lazyBootstrapStateChanged)
-    Q_PROPERTY(bool applyReady READ applyReady NOTIFY lazyBootstrapStateChanged)
-    Q_PROPERTY(bool chatShellBusy READ chatShellBusy NOTIFY lazyBootstrapStateChanged)
 
 public:
     enum Page
@@ -219,6 +137,20 @@ public:
     AgentMessageModel* agentMessageModel() const;
     PetController* petController() const;
     R18Controller* r18Controller() const;
+    ShellViewModel* shell();
+    ShellViewModel* shellViewModel();
+    AuthViewModel* auth();
+    AuthViewModel* authViewModel();
+    ChatViewModel* chat();
+    ChatViewModel* chatViewModel();
+    ContactController* contact();
+    ContactController* contactController();
+    GroupController* group();
+    GroupController* groupController();
+    ProfileController* profile();
+    ProfileController* profileController();
+    CallController* call();
+    CallController* callController();
     bool searchPending() const;
     QString searchStatusText() const;
     bool searchStatusError() const;
@@ -253,92 +185,91 @@ public:
     bool applyReady() const;
     bool chatShellBusy() const;
 
-    Q_INVOKABLE void switchToLogin();
-    Q_INVOKABLE void switchToRegister();
-    Q_INVOKABLE void switchToReset();
-    Q_INVOKABLE void switchChatTab(int tab);
-    Q_INVOKABLE void ensureContactsInitialized();
-    Q_INVOKABLE void ensureGroupsInitialized();
-    Q_INVOKABLE void ensureApplyInitialized();
-    Q_INVOKABLE void ensureChatListInitialized();
-    Q_INVOKABLE void clearTip();
-    Q_INVOKABLE void selectChatIndex(int index);
-    Q_INVOKABLE void selectGroupIndex(int index);
-    Q_INVOKABLE void selectDialogByUid(int uid);
-    Q_INVOKABLE void selectContactIndex(int index);
-    Q_INVOKABLE QVariantMap contactProfileByUid(int uid) const;
-    Q_INVOKABLE void deleteFriend(int uid);
-    Q_INVOKABLE void showApplyRequests();
-    Q_INVOKABLE void jumpChatWithCurrentContact();
-    Q_INVOKABLE void loadMoreChats();
-    Q_INVOKABLE void loadMorePrivateHistory();
-    Q_INVOKABLE void loadMoreContacts();
-    Q_INVOKABLE void sendTextMessage(const QString& text);
-    Q_INVOKABLE void sendCurrentComposerPayload(const QString& text);
-    Q_INVOKABLE void sendImageMessage();
-    Q_INVOKABLE void sendFileMessage();
-    Q_INVOKABLE void removePendingAttachment(const QString& attachmentId);
-    Q_INVOKABLE void clearPendingAttachments();
-    Q_INVOKABLE void openExternalResource(const QString& url);
-    Q_INVOKABLE void searchUser(const QString& uidText);
-    Q_INVOKABLE void clearSearchState();
-    Q_INVOKABLE void requestAddFriend(int uid, const QString& bakName, const QVariantList& labels = QVariantList());
-    Q_INVOKABLE void approveFriend(int uid, const QString& backName, const QVariantList& labels = QVariantList());
-    Q_INVOKABLE void clearAuthStatus();
-    Q_INVOKABLE void startVoiceChat();
-    Q_INVOKABLE void startVideoChat();
-    Q_INVOKABLE void acceptIncomingCall();
-    Q_INVOKABLE void rejectIncomingCall();
-    Q_INVOKABLE void endCurrentCall();
-    Q_INVOKABLE void toggleCallMuted();
-    Q_INVOKABLE void toggleCallCamera();
-    Q_INVOKABLE void chooseAvatar(int source = 0);
-    Q_INVOKABLE void saveProfile(const QString& nick, const QString& desc);
-    Q_INVOKABLE void clearSettingsStatus();
-    Q_INVOKABLE void refreshGroupList();
-    Q_INVOKABLE void createGroup(const QString& name, const QVariantList& memberUserIdList = QVariantList());
-    Q_INVOKABLE void inviteGroupMember(const QString& userId, const QString& reason = QString());
-    Q_INVOKABLE void applyJoinGroup(const QString& groupCode, const QString& reason = QString());
-    Q_INVOKABLE void reviewGroupApply(qint64 applyId, bool agree);
-    Q_INVOKABLE void sendGroupTextMessage(const QString& text);
-    Q_INVOKABLE void sendGroupImageMessage();
-    Q_INVOKABLE void sendGroupFileMessage();
-    Q_INVOKABLE void editGroupMessage(const QString& msgId, const QString& text);
-    Q_INVOKABLE void revokeGroupMessage(const QString& msgId);
-    Q_INVOKABLE void forwardGroupMessage(const QString& msgId);
-    Q_INVOKABLE void loadGroupHistory();
-    Q_INVOKABLE void updateGroupAnnouncement(const QString& announcement);
-    Q_INVOKABLE void updateGroupIcon(int source = 0);
-    Q_INVOKABLE void setGroupAdmin(const QString& userId, bool isAdmin, qint64 permissionBits = 0);
-    Q_INVOKABLE void muteGroupMember(const QString& userId, int muteSeconds);
-    Q_INVOKABLE void kickGroupMember(const QString& userId);
-    Q_INVOKABLE void quitCurrentGroup();
-    Q_INVOKABLE void dissolveCurrentGroup();
-    Q_INVOKABLE void clearGroupStatus();
-    Q_INVOKABLE void updateCurrentDraft(const QString& text);
-    Q_INVOKABLE void toggleCurrentDialogPinned();
-    Q_INVOKABLE void toggleCurrentDialogMuted();
-    Q_INVOKABLE void toggleDialogPinnedByUid(int dialogUid);
-    Q_INVOKABLE void toggleDialogMutedByUid(int dialogUid);
-    Q_INVOKABLE void markDialogReadByUid(int dialogUid);
-    Q_INVOKABLE void clearDialogDraftByUid(int dialogUid);
-    Q_INVOKABLE void beginReplyMessage(const QString& msgId, const QString& senderName, const QString& previewText);
-    Q_INVOKABLE void cancelReplyMessage();
+    void switchToLogin();
+    void switchToRegister();
+    void switchToReset();
+    void switchChatTab(int tab);
+    void ensureContactsInitialized();
+    void ensureGroupsInitialized();
+    void ensureApplyInitialized();
+    void ensureChatListInitialized();
+    void clearTip();
+    void selectChatIndex(int index);
+    void selectGroupIndex(int index);
+    void selectDialogByUid(int uid);
+    void selectContactIndex(int index);
+    QVariantMap contactProfileByUid(int uid) const;
+    void deleteFriend(int uid);
+    void showApplyRequests();
+    void jumpChatWithCurrentContact();
+    void loadMoreChats();
+    void loadMorePrivateHistory();
+    void loadMoreContacts();
+    void sendTextMessage(const QString& text);
+    void sendCurrentComposerPayload(const QString& text);
+    void sendImageMessage();
+    void sendFileMessage();
+    void removePendingAttachment(const QString& attachmentId);
+    void clearPendingAttachments();
+    void openExternalResource(const QString& url);
+    void searchUser(const QString& uidText);
+    void clearSearchState();
+    void requestAddFriend(int uid, const QString& bakName, const QVariantList& labels = QVariantList());
+    void approveFriend(int uid, const QString& backName, const QVariantList& labels = QVariantList());
+    void clearAuthStatus();
+    void startVoiceChat();
+    void startVideoChat();
+    void acceptIncomingCall();
+    void rejectIncomingCall();
+    void endCurrentCall();
+    void toggleCallMuted();
+    void toggleCallCamera();
+    void chooseAvatar(int source = 0);
+    void saveProfile(const QString& nick, const QString& desc);
+    void clearSettingsStatus();
+    void refreshGroupList();
+    void createGroup(const QString& name, const QVariantList& memberUserIdList = QVariantList());
+    void inviteGroupMember(const QString& userId, const QString& reason = QString());
+    void applyJoinGroup(const QString& groupCode, const QString& reason = QString());
+    void reviewGroupApply(qint64 applyId, bool agree);
+    void sendGroupTextMessage(const QString& text);
+    void sendGroupImageMessage();
+    void sendGroupFileMessage();
+    void editGroupMessage(const QString& msgId, const QString& text);
+    void revokeGroupMessage(const QString& msgId);
+    void forwardGroupMessage(const QString& msgId);
+    void loadGroupHistory();
+    void updateGroupAnnouncement(const QString& announcement);
+    void updateGroupIcon(int source = 0);
+    void setGroupAdmin(const QString& userId, bool isAdmin, qint64 permissionBits = 0);
+    void muteGroupMember(const QString& userId, int muteSeconds);
+    void kickGroupMember(const QString& userId);
+    void quitCurrentGroup();
+    void dissolveCurrentGroup();
+    void clearGroupStatus();
+    void updateCurrentDraft(const QString& text);
+    void toggleCurrentDialogPinned();
+    void toggleCurrentDialogMuted();
+    void toggleDialogPinnedByUid(int dialogUid);
+    void toggleDialogMutedByUid(int dialogUid);
+    void markDialogReadByUid(int dialogUid);
+    void clearDialogDraftByUid(int dialogUid);
+    void beginReplyMessage(const QString& msgId, const QString& senderName, const QString& previewText);
+    void cancelReplyMessage();
 
-    Q_INVOKABLE QString loginCredentialCacheJson() const;
-    Q_INVOKABLE void saveLoginCredential(const QString& email, const QString& password);
+    QString loginCredentialCacheJson() const;
+    void saveLoginCredential(const QString& email, const QString& password);
 
-    Q_INVOKABLE void login(const QString& email, const QString& password);
-    Q_INVOKABLE void beginPostLoginBootstrap();
-    Q_INVOKABLE void requestRegisterCode(const QString& email);
-    Q_INVOKABLE void registerUser(const QString& user,
-                                  const QString& email,
-                                  const QString& password,
-                                  const QString& confirm,
-                                  const QString& verifyCode);
-    Q_INVOKABLE void requestResetCode(const QString& email);
-    Q_INVOKABLE void
-    resetPassword(const QString& user, const QString& email, const QString& password, const QString& verifyCode);
+    void login(const QString& email, const QString& password);
+    void beginPostLoginBootstrap();
+    void requestRegisterCode(const QString& email);
+    void registerUser(const QString& user,
+                      const QString& email,
+                      const QString& password,
+                      const QString& confirm,
+                      const QString& verifyCode);
+    void requestResetCode(const QString& email);
+    void resetPassword(const QString& user, const QString& email, const QString& password, const QString& verifyCode);
 
 signals:
     void pageChanged();
@@ -431,6 +362,8 @@ private:
                                         qint64 groupId);
     void setTip(const QString& tip, bool isError);
     void setBusy(bool value);
+    void setRegisterSuccessPage(bool success);
+    void setRegisterCountdown(int seconds);
     void setRegisterCodeCooldownSeconds(int seconds);
     void setRegisterCodeRequestPending(bool pending);
     void setPage(Page newPage);
@@ -518,6 +451,11 @@ private:
     void handlePrivateMessageMutationRsp(ReqId reqId, const QJsonObject& payload);
     void handlePrivateForwardRsp(const QJsonObject& payload);
     void handleDialogMetaRsp(ReqId reqId, const QJsonObject& payload);
+    void syncChatViewModelState();
+    void syncContactControllerState();
+    void syncGroupControllerState();
+    void syncCallControllerState();
+    void syncShellViewModelState();
 
     Page _page;
     ChatTab _chat_tab;
@@ -548,12 +486,17 @@ private:
     AppPrivateHistoryState _private_history_state;
 
     ClientGateway _gateway;
+    ShellViewModel _shell_view_model;
     AuthController _auth_controller;
+    AuthService _auth_service;
+    AuthViewModel _auth_view_model;
     CallController _call_controller;
     CallSessionModel _call_session_model;
     LivekitBridge _livekit_bridge;
     ChatController _chat_controller;
+    ChatViewModel _chat_view_model;
     ContactController _contact_controller;
+    GroupController _group_controller;
     ProfileController _profile_controller;
     MomentsController _moments_controller;
     AgentController _agent_controller;
