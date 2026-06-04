@@ -87,7 +87,7 @@ int HeartbeatRouteRefreshSecLocal()
 
 int LoginOfflinePushDelayMsLocal()
 {
-    static const int value = ConfigIntLocal("LogicSystem", "LoginOfflinePushDelayMs", 1000, 0, 60000);
+    static const int value = ConfigIntLocal("LogicSystem", "LoginOfflinePushDelayMs", 0, 0, 60000);
     return value;
 }
 

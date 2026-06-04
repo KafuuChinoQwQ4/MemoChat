@@ -13,6 +13,7 @@ void AppController::onDialogListRsp(QJsonObject payload)
     const bool bootstrappingDialog = _bootstrap_state.dialogBootstrapLoading;
     _bootstrap_state.dialogBootstrapLoading = false;
     setDialogsReady(true);
+    _bootstrap_state.chatListInitialized = true;
 
     if (!payload.contains("dialogs"))
     {
@@ -20,6 +21,7 @@ void AppController::onDialogListRsp(QJsonObject payload)
         {
             selectChatIndex(0);
         }
+        flushPendingIncomingMessages();
         return;
     }
     const int error = payload.value("error").toInt(ErrorCodes::ERR_JSON);
@@ -29,6 +31,7 @@ void AppController::onDialogListRsp(QJsonObject payload)
         {
             selectChatIndex(0);
         }
+        flushPendingIncomingMessages();
         return;
     }
 
@@ -84,7 +87,6 @@ void AppController::onDialogListRsp(QJsonObject payload)
             auto item = DialogListService::buildDialogEntry(seed, decorationState);
             merged.push_back(item);
             _chat_list_model.upsertFriend(item);
-            _bootstrap_state.chatListInitialized = true;
             continue;
         }
 
@@ -184,6 +186,7 @@ void AppController::onDialogListRsp(QJsonObject payload)
                 }
             }
         }
+        flushPendingIncomingMessages();
         return;
     }
 
@@ -260,4 +263,5 @@ void AppController::onDialogListRsp(QJsonObject payload)
             }
         }
     }
+    flushPendingIncomingMessages();
 }

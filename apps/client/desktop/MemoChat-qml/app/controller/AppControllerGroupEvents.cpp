@@ -1,5 +1,6 @@
 #include "AppController.h"
 #include "ConversationSyncService.h"
+#include "DialogListService.h"
 #include "IChatTransport.h"
 #include "MessagePayloadService.h"
 #include "MessageContentCodec.h"
@@ -171,6 +172,15 @@ void AppController::onGroupMemberChanged(QJsonObject payload)
 
 void AppController::onGroupChatMsg(std::shared_ptr<GroupChatMsg> msg)
 {
+    if (bufferIncomingGroupMessage(msg))
+    {
+        return;
+    }
+    applyGroupChatMsg(msg);
+}
+
+void AppController::applyGroupChatMsg(std::shared_ptr<GroupChatMsg> msg)
+{
     if (!msg || !msg->_msg)
     {
         return;
@@ -180,6 +190,38 @@ void AppController::onGroupChatMsg(std::shared_ptr<GroupChatMsg> msg)
     if (!textMsg)
     {
         return;
+    }
+    auto groupInfo = _gateway.userMgr()->GetGroupById(msg->_group_id);
+    if (!groupInfo)
+    {
+        const int pseudoUid = ConversationSyncService::resolveGroupDialogUid(_group_state.dialogUidMap, msg->_group_id);
+        const QString groupName = QString("群聊%1").arg(msg->_group_id);
+        const QString groupIcon =
+            msg->_from_icon.trimmed().isEmpty() ? QStringLiteral("qrc:/res/chat_icon.png") : msg->_from_icon;
+        groupInfo = std::make_shared<GroupInfoData>();
+        groupInfo->_group_id = msg->_group_id;
+        groupInfo->_name = groupName;
+        groupInfo->_icon = groupIcon;
+        _gateway.userMgr()->UpsertGroup(groupInfo);
+        if (pseudoUid != 0)
+        {
+            DialogEntrySeed seed;
+            seed.dialogUid = pseudoUid;
+            seed.dialogType = QStringLiteral("group");
+            seed.name = groupName;
+            seed.nick = groupName;
+            seed.icon = groupIcon;
+            seed.previewText = MessageContentCodec::toPreviewText(msg->_msg->_msg_content);
+            seed.lastMsgTs = msg->_msg->_created_at;
+            const DialogDecorationState decorationState{&_dialog_state.draftMap,
+                                                        &_dialog_state.mentionMap,
+                                                        &_dialog_state.serverPinnedMap,
+                                                        &_dialog_state.serverMuteMap,
+                                                        &_dialog_state.localPinnedSet};
+            auto item = DialogListService::buildDialogEntry(seed, decorationState);
+            _group_list_model.upsertFriend(item);
+            _dialog_list_model.upsertFriend(item);
+        }
     }
     _gateway.userMgr()->UpsertGroupChatMsg(msg->_group_id, textMsg);
     auto selfInfo = _gateway.userMgr()->GetUserInfo();

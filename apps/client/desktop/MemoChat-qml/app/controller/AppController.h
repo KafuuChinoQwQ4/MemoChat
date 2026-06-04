@@ -442,6 +442,13 @@ private:
     void syncCurrentPendingAttachments();
     void sendGroupReadAck(qint64 groupId, qint64 readTs = 0);
     void sendPrivateReadAck(int peerUid, qint64 readTs = 0);
+    bool shouldBufferIncomingMessages() const;
+    bool bufferIncomingPrivateMessage(std::shared_ptr<TextChatMsg> msg);
+    bool bufferIncomingGroupMessage(std::shared_ptr<GroupChatMsg> msg);
+    void flushPendingIncomingMessages();
+    void clearPendingIncomingMessages();
+    void applyTextChatMsg(std::shared_ptr<TextChatMsg> msg);
+    void applyGroupChatMsg(std::shared_ptr<GroupChatMsg> msg);
     void runPostLoginBootstrap();
     bool handleGroupRspError(ReqId reqId, int error, const QJsonObject& payload);
     void handleGroupManagementRsp(ReqId reqId, const QJsonObject& payload);
@@ -484,6 +491,7 @@ private:
     ApplyRequestModel _apply_request_model;
     AppDialogRuntimeState _dialog_state;
     AppPrivateHistoryState _private_history_state;
+    AppIncomingMessageBufferState _incoming_buffer_state;
 
     ClientGateway _gateway;
     ShellViewModel _shell_view_model;

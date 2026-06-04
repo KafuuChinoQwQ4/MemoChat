@@ -53,6 +53,7 @@ set(MEMOCHAT_QML_APP_SOURCES
     app/controller/AppControllerStatusState.cpp
     app/controller/AppControllerLoadingState.cpp
     app/controller/AppControllerDialogRuntimeState.cpp
+    app/controller/AppControllerIncomingBuffer.cpp
     app/controller/AppControllerProfileState.cpp
     app/controller/AppControllerBootstrapState.cpp
     app/controller/AppControllerProfileCommands.cpp
