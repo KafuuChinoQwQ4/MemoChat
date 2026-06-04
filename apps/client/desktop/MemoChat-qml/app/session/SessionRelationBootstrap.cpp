@@ -81,6 +81,7 @@ void SessionRelationBootstrap::onRelationBootstrapUpdated()
 
     // 增量更新会话列表
     _app.refreshDialogModelIncremental();
+    _app.flushPendingIncomingMessages();
     if (_app._chat_state.uid > 0 && _app._group_state.currentId <= 0)
     {
         const auto friendInfo = _app._gateway.userMgr()->GetFriendById(_app._chat_state.uid);

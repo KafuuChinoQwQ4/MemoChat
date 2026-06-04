@@ -124,6 +124,7 @@ void AppController::switchToLogin()
     _pending_login_state.uid = 0;
     _pending_login_state.token.clear();
     _pending_login_state.traceId.clear();
+    clearPendingIncomingMessages();
     _pending_send_state.reset();
     setMediaUploadInProgress(false);
     setMediaUploadProgressText(QString());
@@ -223,4 +224,5 @@ void AppController::ensureChatListInitialized()
     _gateway.userMgr()->UpdateChatLoadedCount();
     _bootstrap_state.chatListInitialized = true;
     refreshChatLoadMoreState();
+    flushPendingIncomingMessages();
 }
