@@ -28,7 +28,7 @@ Item {
     property int handoffTargetPage: AppController.LoginPage
     property int handoffToken: 0
     property bool memochatStartupCenter: true
-    readonly property int handoffMinimumPasses: 24
+    readonly property int handoffMinimumPasses: 2
     readonly property int windowHandoffIntervalMs: 42
     readonly property bool chatPageActive: shell.page === AppController.ChatPage
 
@@ -574,7 +574,7 @@ Item {
                     anchors.fill: parent
                     active: true
                     visible: true
-                    asynchronous: true
+                    asynchronous: false
                     sourceComponent: chatShellPageComponent
                 }
             }
