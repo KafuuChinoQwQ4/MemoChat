@@ -20,6 +20,15 @@ std::shared_ptr<AuthInfo> buildDialogPlaceholder(const FriendListModel& dialogLi
 
 void AppController::onTextChatMsg(std::shared_ptr<TextChatMsg> msg)
 {
+    if (bufferIncomingPrivateMessage(msg))
+    {
+        return;
+    }
+    applyTextChatMsg(msg);
+}
+
+void AppController::applyTextChatMsg(std::shared_ptr<TextChatMsg> msg)
+{
     if (!msg || msg->_chat_msgs.empty())
     {
         return;

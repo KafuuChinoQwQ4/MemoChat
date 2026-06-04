@@ -78,6 +78,7 @@ void SessionChatEntryCoordinator::onSwitchToChat()
     _app.setContactPane(AppController::ApplyRequestPane);
     _app.setCurrentContact(0, "", "", "qrc:/res/head_1.png", "", 0);
     _app._bootstrap_state.postLoginBootstrapStarted = false;
+    _app.clearPendingIncomingMessages();
 
     auto user_info = _app._gateway.userMgr()->GetUserInfo();
     if (user_info)
