@@ -67,6 +67,42 @@ def cpp_function_body(source, name):
     return source[open_brace + 1 : index - 1]
 
 
+def extract_qml_block(source, marker):
+    start = source.index(marker)
+    open_brace = source.index("{", start)
+    depth = 0
+    for index in range(open_brace, len(source)):
+        char = source[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start : index + 1]
+    raise AssertionError(f"QML block not found for {marker}")
+
+
+def extract_qml_block_before(source, block_name, required_token):
+    search_start = 0
+    while True:
+        start = source.find(block_name, search_start)
+        if start < 0:
+            raise AssertionError(f"QML block not found before token: {required_token}")
+        block = extract_qml_block(source[start:], block_name)
+        if required_token in block:
+            return block
+        search_start = start + len(block_name)
+
+
+def qml_int_property(source, name):
+    match = re.search(r"\bproperty\s+int\s+" + re.escape(name) + r"\s*:\s*(\d+)", source)
+    if not match:
+        match = re.search(r"\breadonly\s+property\s+int\s+" + re.escape(name) + r"\s*:\s*(\d+)", source)
+    if not match:
+        raise AssertionError(f"QML int property not found: {name}")
+    return int(match.group(1))
+
+
 class UiStartupPerformanceContractTests(unittest.TestCase):
     def test_main_cpp_defines_top_level_centering_retry_contract(self):
         source = read(MAIN_WINDOW_HOOKS_CPP)
@@ -158,6 +194,30 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
                 self.assertTrue(show_target_body, f"{path} must define showWindowForHandoffTarget()")
                 self.assertIn("showChatWindow()", show_target_body)
                 self.assertIn("showLoginWindow()", show_target_body)
+
+    def test_login_to_chat_handoff_stays_within_first_paint_budget(self):
+        for path in (SHARED_MAIN_QML, LINUX_MAIN_QML):
+            with self.subTest(path=path):
+                source = read(path)
+                passes = qml_int_property(source, "handoffMinimumPasses")
+                interval_ms = qml_int_property(source, "windowHandoffIntervalMs")
+                self.assertLessEqual(
+                    passes * interval_ms,
+                    120,
+                    "login-to-chat handoff must not add a fixed user-visible delay",
+                )
+
+                chat_window = extract_qml_block(source, "id: chatWindowComponent")
+                chat_loader = extract_qml_block_before(
+                    chat_window,
+                    "Loader",
+                    "sourceComponent: chatShellPageComponent",
+                )
+                self.assertIn(
+                    "asynchronous: false",
+                    chat_loader,
+                    "chat shell should be created before the chat window is shown",
+                )
 
     def test_live2d_render_item_uses_precise_throttled_timer_and_fbo_target(self):
         source = read(LIVE2D_CPP) + "\n" + read(LIVE2D_H)
