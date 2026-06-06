@@ -5,102 +5,62 @@ description: Use when implementing a normal MemoChat feature, bugfix, refactor, 
 
 # MemoChat 任务
 
-用于 `/root/code/MemoChat-Qml-Drogon-linux` 中的常规实现工作。除非用户明确要求 Windows 工作，否则将 `D:\MemoChat-Qml-Drogon` 视为旧版 Windows 检出目录。
+用于普通实现工作。先读 `skills/SKILL.md` 和 `skills/rule.md`，再按领域加载聚焦 skill。实现类任务的并发决策归 `skills/parallel-agents.md`。
 
-实现类任务的并发与 Controller 责任以 `parallel-agents.md` 为准。这里不重复并发细则，只要求任务按该 skill 的工作流收集上下文、计划、实现、验证和复审。
+## .ai 产物
 
-## 调用方式
+创建或复用：
 
-将 `$ARGUMENTS` 视为任务。如果它以现有 `.ai/<name>/about.md` 开头，将第一个 token 视为后续项目名，剩余文本作为新任务。
-
-## 必需工作流
-
-1. 创建 `.ai/<project>/<letter>/`。
-2. 将上下文收集到 `context.md`。
-3. 对新功能、跨服务契约、数据库/RAG schema、QML 大改、部署或稳定端口风险，先写轻量设计段：目标/非目标、契约、兼容性边界、验证和回滚/阻塞条件。
-4. 编写并评估 `plan.md`；计划必须包含具体文件、函数/模块范围、验证命令和可执行小步骤，不能留下 `TBD`、`TODO` 或空泛占位。
-5. 默认按 `parallel-agents.md` 的 Controller 主导并行模型执行；若并发被阻塞、不可用或不划算，先记录原因再继续本地单人。
-6. 一次实现一个计划阶段。
-7. 用最窄的相关构建/测试/运行时命令验证，并按“红绿测试 -> 基本功能测试 -> 冒烟测试 -> 边界/异常测试”的梯度形成闭环。
-8. 复审 diff 并修复重要问题；收到 review 反馈时先验证反馈是否符合当前代码和 MemoChat 约束。
-9. 以简洁状态摘要收尾。
-
-## MemoChat 上下文清单
-
-始终考虑相关层：
-
-- C++ 服务：`apps/server/core`。
-- QML 客户端：`apps/client/desktop` 和 `infra/Memo_ops/client`。
-- 运行时配置：`apps/server/config`、`infra/Memo_ops/config`、运行时服务目录下的已部署配置。
-- 数据库迁移：`apps/server/migrations/postgresql`。
-- 本地 Docker：`infra/deploy/local/docker-compose.yml` 以及 `infra/deploy/local/compose` 下的 compose 片段。
-- 脚本：`tools/scripts` 和 `tools/scripts/status`。
-- 测试/负载工具：根 `tests` 是新增和迁移持久化测试的唯一代码位置；C++ 放 `tests/cpp/<主项目相对路径>/...`，Python 放 `tests/python/<主项目相对路径>/...`，共享 fixture 放 `tests/fixtures/...`；`apps/**/tests` 只作为历史上下文读取，迁移时移动到根 `tests` 的语言分区；负载工具在 `tools/loadtest/python-loadtest`。
-
-## 工作区隔离
-
-- 开始大改、实验性改动或跨模块重构前，用 `git status --short` 识别已有脏文件，并在 `context.md` 记录哪些看起来与本任务无关。
-- 若任务风险高且用户允许，建议使用 git worktree 或独立检出；保持 MemoChat 的 WSL 路径、Docker 数据路径和 `/data` 规则不变。
-- 不允许为了隔离执行 `git reset --hard`、`git checkout --`、`git clean` 或 revert 用户改动。
-- 在当前脏工作区继续时，只触碰任务相关文件；同文件已有用户改动时先读懂再增量编辑。
-
-## Docker 和 MCP 规则
-
-- 容器是基础设施的事实来源。
-- 不要在 Docker 外安装或启动本地 Redis/Postgres/Mongo/RabbitMQ/Redpanda 等服务。
-- 除非明确要求，否则不要改变稳定端口映射。
-- 使用 `docker ps` 和 MCP 工具检查状态。
-- 默认 Linux 环境是 WSL 发行版 `archlinux`，仓库路径是 `/root/code/MemoChat-Qml-Drogon-linux`。从 Windows 调用时使用：
-
-```powershell
-wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat-Qml-Drogon-linux && source /root/.memochat-linux-env && <command>'
+```text
+.ai/<project>/
+  about.md
+  <letter>/
+    context.md
+    plan.md
+    review1.md
+    logs/
+      phase-setup.result.md
+      phase-verify.result.md
 ```
 
-- 直接检查时优先使用 Docker 命令：
+如果请求第一个 token 匹配 `.ai/<token>/about.md`，用该项目继续；否则创建简短 kebab-case 项目名和下一个任务字母。
 
-```bash
-docker exec memochat-redis redis-cli -a 123456 ping
-docker exec memochat-postgres psql -U memochat -d memo_pg -c "select 1;"
-docker exec memochat-mongo mongosh -u root -p 123456 --authenticationDatabase admin --quiet --eval "db.adminCommand({ ping: 1 })"
-docker exec memochat-rabbitmq rabbitmq-diagnostics -q ping
-docker exec memochat-redpanda rpk cluster info --brokers 127.0.0.1:19092
-```
+## 工作流
 
-将任何影响推理的查询记录到 `context.md` 或验证日志。
+1. `git status --short`，记录会影响任务的已有脏文件；不要回退用户改动。
+2. 收集上下文到 `context.md`：任务、相关文件、服务/数据依赖、Docker/MCP 查询、构建/测试命令和风险。
+3. 涉及新功能、跨服务契约、数据库/RAG schema、QML 大改、部署或端口风险时，在 `context.md` 或 `plan.md` 写轻量设计：目标/非目标、契约、兼容性边界、验证和回滚/阻塞条件。
+4. 编写 `plan.md`：具体文件、函数/模块范围、验证命令、小步骤、并发决策；禁止 `TBD`、`TODO`、泛化占位。
+5. 读取 `skills/parallel-agents.md`，决定 Controller + worker 或本地单人；本地单人必须写明原因。
+6. 一次实现一个计划阶段；手工编辑使用 `apply_patch`，避免无关格式化。
+7. 遇到 bug、测试失败、构建失败或连续修复无效，切到 `skills/debugging.md`。
+8. 按改动风险运行最窄验证；需要持久测试或运行时测试循环时读取 `skills/withtest.md`。
+9. 完成前读取 `skills/review.md`，检查实际 diff、验证证据和剩余风险。
 
-## 构建选择
+## 相关区域
 
-将要在 `archlinux` WSL 中部署或运行时测试的代码变更，统一使用 Linux full preset。`deploy_services.sh` 默认从 `build-linux-full-gcc16/bin` 复制服务和客户端产物。
+- C++ 服务：`apps/server/core/**`
+- QML 客户端：`apps/client/desktop/**`、`infra/Memo_ops/client/**`
+- 运行时配置：`apps/server/config/**`、`infra/Memo_ops/config/**`、`infra/deploy/local/**`
+- 数据库迁移：`apps/server/migrations/postgresql/**`
+- 脚本：`tools/scripts/**`、`tools/scripts/status/**`
+- 测试：根 `tests/`，负载工具在 `tools/loadtest/python-loadtest`
+
+## Docker 和构建
+
+- 容器是基础设施事实来源；使用 Docker 或 MCP 检查数据库、队列、对象存储、观测和 AI/RAG 依赖。
+- 不要修改稳定端口，除非任务明确要求并说明影响。
+- Postgres 主机端口通常是 `15432` 到容器 `5432`；Redis 本地开发密码为 `123456`。
+- Linux 部署/运行时验证统一使用 `linux-full-gcc16`：
 
 ```bash
 source /root/.memochat-linux-env
 cmake --preset linux-full-gcc16
 cmake --build --preset linux-full-gcc16 --parallel 12
-```
-
-仅测试检查时，从完整构建树运行测试：
-
-```bash
 ctest --preset linux-full-gcc16 --output-on-failure
 ```
 
-Windows 全量检查使用 `msvc2022-full`；Linux 全量检查使用 `linux-full-gcc16`。
-
-## 功能完成后的测试闭环
-
-每次写完功能都必须测，不能只停在“能编译”：
-
-1. 红绿测试：为新增行为或修复点补最窄自动化测试，先看它因目标行为缺失而失败，再实现到通过。
-2. 基本功能测试：验证正常路径、状态更新、协议/配置契约和必要的数据落库或 UI 反馈。
-3. 冒烟测试：运行本次改动相关的最小服务启动、脚本探针或端到端入口检查。
-4. 边界/异常测试：按改动风险覆盖空值、非法值、重复请求、权限、依赖不可用、超时、并发或平台差异。
-5. 任一层失败时，回到实现修复，重新编译，并从受影响的最窄测试开始继续重跑相关梯度，直到没有已知失败。
-6. 如果环境限制导致某类测试无法执行，记录原因、替代验证和剩余风险；不要把跳过写成通过。
-7. 如果同一阶段、同一命令或同一环境依赖连续重复失败/卡住，不要无限循环。通常同类问题重试或修复后仍连续出现 2 次就停止自动尝试，记录卡住位置、最后命令、关键输出、已尝试次数、疑似原因和需要用户处理的动作，并向用户返回。
-
-## 运行时脚本
-
-使用现有脚本，不要发明新的编排：
+运行时脚本优先使用：
 
 ```bash
 tools/scripts/status/deploy_services.sh
@@ -108,29 +68,8 @@ tools/scripts/status/start-all-services.sh
 tools/scripts/status/stop-all-services.sh
 ```
 
-`.bat`/`.ps1` 脚本仅用于旧版 Windows 运行时/客户端检查。Linux 服务运行后，现有 PowerShell smoke 探针仍可从 Windows 使用。
+`.bat`/`.ps1` 脚本仅用于旧版 Windows 运行时/客户端检查，或 Linux 服务运行后从 Windows 发起的既有 smoke 探针。
 
-## 实现规则
+## 完成报告
 
-- 优先使用现有 helper 和模块边界。
-- 遇到 bug、测试失败、构建失败、异常行为或连续修复无效时，读取 `debugging.md`，先定位根因和验证单一假设，再修复。
-- 保持服务端/客户端协议和配置变更同步。
-- 当持久化 schema 变更必需时，添加迁移或初始化变更。
-- Linux 生成/下载的大文件放在 `/data`；Arch Docker 绑定数据放在 `/data/docker-data/memochat`；只有操作旧版 Windows/Docker Desktop 数据时才使用 `D:`。
-- 不要回退用户工作。
-- 避免大范围格式化噪音。
-
-## 完成
-
-报告：
-
-- 修改的文件
-- 默认使用的并发工作线，或准确的本地单人/阻塞原因
-- 验证命令和结果
-- 红绿、基本功能、冒烟、边界/异常测试覆盖情况；以及失败后是否已修复、重编译并重测
-- 重复失败或卡死时的阻塞点、最后成功步骤、最后失败命令、尝试次数和用户需要处理的事项
-- 执行过的 Docker/MCP 检查
-- 已知阻塞点或剩余风险
-- 后续任务可用的 `.ai` 项目名
-
-完成前不要用“应该通过”“看起来好了”替代证据。必须基于本轮实际运行的命令、diff 复审或明确无法执行的原因来描述状态。
+最终回复必须基于本轮实际证据，包含：修改文件、并发决策、验证命令和结果、测试层覆盖或无法执行原因、Docker/MCP 检查、阻塞点/剩余风险，以及后续任务可用的 `.ai` 项目名。不要用“应该通过”“看起来好了”替代证据。

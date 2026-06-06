@@ -4,6 +4,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 ENV_FILE="${MEMOCHAT_ENV_FILE:-/root/.memochat-linux-env}"
+TOPOLOGY_FILE="${SCRIPT_DIR}/runtime_topology.sh"
 
 if [[ -f "$ENV_FILE" ]]; then
     # shellcheck disable=SC1090
@@ -60,6 +61,9 @@ done
 
 STOP_ENVOY="${STOP_ENVOY_OVERRIDE:-${MEMOCHAT_STOP_ENVOY:-1}}"
 STOP_GPT_SOVITS="${STOP_GPT_SOVITS_OVERRIDE:-${MEMOCHAT_STOP_GPT_SOVITS:-1}}"
+
+# shellcheck source=tools/scripts/status/runtime_topology.sh
+source "$TOPOLOGY_FILE"
 
 is_truthy() {
     case "${1,,}" in
@@ -206,7 +210,12 @@ stop_by_name_under_runtime() {
         if [[ "$cwd" == "${RUNTIME_DIR}"/* ]]; then
             stop_pid "$pid" "$label"
         fi
-    done < <(pgrep -x "$exe_name" 2>/dev/null || true)
+    done < <(
+        {
+            pgrep -x "$exe_name" 2>/dev/null || true
+            pgrep -f "(^|[[:space:]/])${exe_name}([[:space:]]|$)" 2>/dev/null || true
+        } | sort -u
+    )
 }
 
 stop_by_ports() {
@@ -248,6 +257,70 @@ stop_by_udp_ports() {
             seen+="${pid} "
             stop_pid "$pid" "${label}:udp/${port}"
         done < <(udp_port_pids "$port")
+    done
+}
+
+collect_group_stop_ports() {
+    local wanted_group="$1"
+    local kind="$2"
+    local seen=" "
+    local row group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace
+    local ports port
+    for row in "${MEMOCHAT_RUNTIME_SERVICE_TOPOLOGY[@]}"; do
+        IFS='|' read -r group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace <<<"$row"
+        [[ "$group" == "$wanted_group" ]] || continue
+        if [[ "$kind" == "udp" ]]; then
+            ports="$stop_udp_ports"
+        else
+            ports="$stop_tcp_ports"
+        fi
+        for port in $ports; do
+            if [[ "$seen" == *" ${port} "* ]]; then
+                continue
+            fi
+            seen+="${port} "
+            printf '%s\n' "$port"
+        done
+    done
+}
+
+stop_group_tcp_ports() {
+    local label="$1"
+    local group="$2"
+    local ports=()
+    mapfile -t ports < <(collect_group_stop_ports "$group" "tcp")
+    if ((${#ports[@]})); then
+        stop_by_ports "$label" "${ports[@]}"
+    fi
+}
+
+stop_group_udp_ports() {
+    local label="$1"
+    local group="$2"
+    local ports=()
+    mapfile -t ports < <(collect_group_stop_ports "$group" "udp")
+    if ((${#ports[@]})); then
+        stop_by_udp_ports "$label" "${ports[@]}"
+    fi
+}
+
+stop_topology_port_groups() {
+    local row group label protocols protocol
+    for row in "${MEMOCHAT_STOP_PORT_GROUP_ORDER[@]}"; do
+        IFS='|' read -r group label protocols <<<"$row"
+        for protocol in $protocols; do
+            case "$protocol" in
+                tcp)
+                    stop_group_tcp_ports "$label" "$group"
+                    ;;
+                udp)
+                    stop_group_udp_ports "$label" "$group"
+                    ;;
+                *)
+                    echo "  [WARN] Unknown stop protocol '${protocol}' for topology group '${group}'"
+                    ;;
+            esac
+        done
     done
 }
 
@@ -319,33 +392,19 @@ stop_gpt_sovits
 echo
 
 echo "[STEP] Stop services by PID files"
-for name in \
-    GateServer-2 GateServer-1 \
-    AIServer \
-    ChatServer-6 ChatServer-5 ChatServer-4 ChatServer-3 ChatServer-2 ChatServer-1 \
-    StatusServer-2 StatusServer-1 \
-    VarifyServer-2 VarifyServer-1
-do
+for name in "${MEMOCHAT_STOP_PID_ORDER[@]}"; do
     stop_pid_file "${PID_DIR}/${name}.pid" "$name"
 done
 
 echo
 echo "[STEP] Stop remaining listeners on MemoChat service ports"
-stop_by_ports "GateServer" 8080 8082 8084
-stop_by_udp_ports "GateServer" 8081 8085
-stop_by_ports "AIServer" 8095
-stop_by_ports "ChatServer" 8090 8091 8092 8093 8094 8097 50055 50056 50057 50058 50059 50581
-stop_by_udp_ports "ChatServer" 8190 8191 8192 8193 8194 8195
-stop_by_ports "StatusServer" 50052 50582
-stop_by_ports "VarifyServer" 50051 48083 8083 8087
+stop_topology_port_groups
 
 echo
 echo "[STEP] Stop remaining runtime processes by executable name"
-stop_by_name_under_runtime "GateServer" "GateServer"
-stop_by_name_under_runtime "AIServer" "AIServer"
-stop_by_name_under_runtime "ChatServer" "ChatServer"
-stop_by_name_under_runtime "StatusServer" "StatusServer"
-stop_by_name_under_runtime "VarifyServer" "VarifyServer"
+for exe_name in "${MEMOCHAT_STOP_EXECUTABLE_ORDER[@]}"; do
+    stop_by_name_under_runtime "$exe_name" "$exe_name"
+done
 
 echo
 echo "[STEP] Stop Docker Envoy Gateway"

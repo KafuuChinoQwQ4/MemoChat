@@ -9,10 +9,10 @@ RESUME = REPO_ROOT / "docs/resume/memochat_resume.typ"
 
 class LoginOfflinePushDelayContractTest(unittest.TestCase):
     def test_code_default_and_configs_use_immediate_post_login_offline_push(self):
-        source = (CHAT_SERVER_DIR / "ChatSessionService.cpp").read_text(encoding="utf-8")
+        source = (CHAT_SERVER_DIR / "config/ChatSessionConfig.cpp").read_text(encoding="utf-8")
         self.assertRegex(
             source,
-            r'ConfigIntLocal\("LogicSystem",\s*"LoginOfflinePushDelayMs",\s*0,\s*0,\s*60000\)',
+            r'ConfigInt\("LogicSystem",\s*"LoginOfflinePushDelayMs",\s*0,\s*0,\s*60000\)',
         )
 
         config_paths = [CHAT_SERVER_DIR / "config.ini"]

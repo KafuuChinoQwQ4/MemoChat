@@ -5,7 +5,11 @@ description: Use when MemoChat has a bug, test failure, build failure, unexpecte
 
 # MemoChat 系统调试
 
-核心原则：先找根因，再修复。没有证据的“看起来是”不能进入实现。
+这个 skill 是 MemoChat 的调试适配层，不重复通用调试方法。
+
+- 默认先读取 `skills/superpowers/systematic-debugging/SKILL.md`，按其根因调查流程执行。
+- 用户明确点名 Matt Pocock `/diagnose` 时，再读取 `skills/mattpocock/engineering/diagnose/SKILL.md`。
+- 本文件只补充 MemoChat 项目必须保留的证据、边界和记录要求。
 
 ## 使用场景
 
@@ -14,25 +18,13 @@ description: Use when MemoChat has a bug, test failure, build failure, unexpecte
 - 已经尝试过修复但问题仍然存在。
 - 错误跨越多组件，例如客户端 -> GateServer -> ChatServer -> Postgres。
 
-## 四阶段流程
+## MemoChat 必查证据
 
-1. 根因调查：
-   - 完整读取错误、堆栈、日志和 exit code。
-   - 记录可复现步骤；不可复现时先补证据，不猜。
-   - 检查最近 diff、配置、环境和 Docker 容器状态。
-   - 跨组件问题要在边界处验证输入、输出、配置和状态传播。
-2. 模式对比：
-   - 查找仓库中相似且正常工作的实现。
-   - 对比 broken path 和 working path 的所有差异。
-   - 确认依赖、端口、schema、配置和生命周期假设。
-3. 单一假设：
-   - 写清楚“我认为根因是 X，因为证据 Y”。
-   - 用最小命令、日志、查询或代码改动验证一个变量。
-   - 假设不成立时回到调查，不叠加多个修复。
-4. 根因修复：
-   - 能自动化时先写最窄失败测试或复现脚本。
-   - 只修根因，不顺手重构。
-   - 运行受影响的最窄验证，再按任务要求继续构建、smoke 和边界测试。
+- 最近 diff、配置和 `.ai/<project>/<letter>/plan.md` 是否改变了服务契约、QML 属性、schema、端口或脚本。
+- Docker 容器状态和重启历史；不要在 Docker 外安装或启动 Redis/Postgres/Mongo/RabbitMQ/Redpanda 等依赖。
+- 相关 MCP 查询结果，尤其是 Postgres、Redis、MongoDB、Neo4j、Qdrant、Redpanda 和对象存储状态。
+- 客户端 -> GateServer -> ChatServer -> 数据库/队列这类跨组件路径，在每个边界验证输入、输出、配置和状态传播。
+- QML/UI 问题要区分共享路径和平台专用路径，保留已经正常的平台表现。
 
 ## 停止信号
 
@@ -46,6 +38,13 @@ description: Use when MemoChat has a bug, test failure, build failure, unexpecte
 - 每次修复都暴露新的共享状态、生命周期或架构问题。
 
 如果同类问题连续 3 次修复仍失败，暂停继续打补丁，重新评估架构、契约或测试环境，并向用户说明证据和选择。
+
+## 修复边界
+
+- 能自动化时先写最窄失败测试或复现脚本，再修复。
+- 只修根因，不顺手重构；需要架构调整时先说明证据和影响面。
+- 运行受影响的最窄验证，再按任务要求继续构建、smoke 和边界/异常测试。
+- 触及运行时部署或 Linux 服务行为时，使用 `linux-full-gcc16` 构建路径和现有 `tools/scripts/status/*` 脚本。
 
 ## 记录要求
 

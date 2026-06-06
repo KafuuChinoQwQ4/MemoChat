@@ -9,9 +9,10 @@ description: Use when creating, updating, pruning, or reviewing MemoChat project
 
 ## 适用范围
 
-- 新增或修改 `skills/*.md`。
+- 新增或修改 `skills/*.md`，以及项目本地 skill 快照入口或适配文件，例如 `skills/superpowers/**`、`skills/mattpocock/**`。
 - 调整 `AGENTS.md` 中的 skill 触发说明。
 - 从外部流程迁移规则到 MemoChat 项目 skill。
+- 导入外部 skill 快照时，默认保留上游原文，把 MemoChat 触发、优先级和冲突处理写在快照目录入口。
 - 复审 skill 是否冗余、过长、不可触发或与项目规则冲突。
 
 ## 编写规则
