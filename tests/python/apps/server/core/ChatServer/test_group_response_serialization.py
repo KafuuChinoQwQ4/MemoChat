@@ -3,8 +3,8 @@ import unittest
 from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
-GROUP_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/GroupMessageService.cpp"
-PRIVATE_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/PrivateMessageService.cpp"
+GROUP_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/domain/GroupMessageService.cpp"
+PRIVATE_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/domain/PrivateMessageService.cpp"
 CHAT_MESSAGE_DISPATCHER_GROUP = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/network/ChatMessageDispatcherGroup.cpp"
 )

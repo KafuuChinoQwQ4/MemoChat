@@ -4,7 +4,7 @@
 
 在处理本项目之前，先读取项目 skills：
 
-1. 始终先读取 `skills/SKILL.md`和`skills/rule.md`，了解 MemoChat 主任务工作流和基本的规则。
+1. 始终先读取 `skills/SKILL.md` 和 `skills/rule.md`，了解 MemoChat skill 路由和基本规则。
 2. 然后只读取相关的聚焦 skill 文件：
    - `skills/docker-diagnose.md`：用于 Docker、固定端口、健康状态或 MCP 启动问题。
    - `skills/debugging.md`：用于 bug、测试失败、构建失败、异常行为或连续修复无效的问题，先定位根因再修复。
@@ -20,8 +20,10 @@
    - `skills/planner.md`：用于可复用的 `.ai/<name>/prompt.md` 和 `tasks.json` 自动化计划。
    - `skills/parallel-agents.md`：用于每个实现任务的默认 Controller 主导并发工作流，只要安全的并行工作能加速交付就使用。Controller agent 必须负责架构、计划、契约、派发、集成和最终验收；worker agents 负责互不重叠的实现、反馈和运行时工作线。
    - `skills/review.md`：用于接收代码审查、外部 AI review、用户反馈清单，或在完成前复审实际 diff。
+   - `skills/superpowers/SKILL.md`：用于需要应用项目内 Superpowers 工作流快照时；先读该入口，再只读取相关的 `skills/superpowers/<name>/SKILL.md` 子 skill，不要全量加载目录。
+   - `skills/mattpocock/SKILL.md`：用于需要应用项目内 Matt Pocock skills 快照时，尤其是 Superpowers 没覆盖的架构防腐化、领域语言 grilling、zoom-out 代码地图、原型、PRD/issue 切片或 handoff；先读该入口，再只读取相关子 skill。
    - `skills/reflect.md`：用于从用户纠正中学习。
-   - `skills/skill-authoring.md`：用于创建、更新或复审本项目 `skills/*.md`。
+   - `skills/skill-authoring.md`：用于创建、更新、裁剪或复审本项目 skills 和外部 skill 快照入口。
    - `skills/release.md`：用于发布准备和验证。
    - `skills/icon.md`：用于 SVG/图标资产工作。
 3. 只有在构造委派式或基于产物的阶段提示词时，才使用 `skills/PROMPTS.md`。

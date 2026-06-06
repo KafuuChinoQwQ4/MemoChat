@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
+TOPOLOGY_FILE="${SCRIPT_DIR}/runtime_topology.sh"
 RUNTIME_DIR="${MEMOCHAT_RUNTIME_DIR:-${PROJECT_ROOT}/infra/Memo_ops/runtime/services}"
 LOG_DIR="${MEMOCHAT_LOG_DIR:-${PROJECT_ROOT}/infra/Memo_ops/artifacts/logs/services}"
 PID_DIR="${MEMOCHAT_PID_DIR:-${PROJECT_ROOT}/infra/Memo_ops/runtime/pids}"
@@ -10,6 +11,11 @@ ENV_FILE="${MEMOCHAT_ENV_FILE:-/root/.memochat-linux-env}"
 LOCAL_COMPOSE_FILE="${MEMOCHAT_LOCAL_COMPOSE_FILE:-${PROJECT_ROOT}/infra/deploy/local/docker-compose.yml}"
 WAIT_SECONDS=16
 AUTO_DEPLOY=1
+START_CORE_SERVICES_OVERRIDE=""
+START_CHAT_DELIVERY_WORKER_OVERRIDE=""
+START_RELATION_QUERY_SERVICE_OVERRIDE=""
+START_RELATION_SERVICE_WORKER_OVERRIDE=""
+START_MESSAGE_SERVICE_OVERRIDE=""
 START_ENVOY_OVERRIDE=""
 START_DOCKER_DEPS_OVERRIDE=""
 START_GPT_SOVITS_OVERRIDE=""
@@ -17,7 +23,7 @@ GPT_SOVITS_WAIT_SECONDS_OVERRIDE=""
 
 usage() {
     cat <<USAGE
-Usage: $0 [--no-deploy] [--wait-seconds N] [--skip-docker-deps] [--skip-envoy] [--skip-gpt-sovits] [--gpt-sovits-wait-seconds N]
+Usage: $0 [--no-deploy] [--wait-seconds N] [--skip-docker-deps] [--skip-envoy] [--skip-gpt-sovits] [--gpt-sovits-wait-seconds N] [--start-chat-delivery-worker] [--start-relation-query-service] [--skip-relation-query-service] [--start-relation-service-worker] [--skip-relation-service-worker] [--start-message-service] [--skip-message-service] [--skip-core-services]
 
 Start Linux MemoChat backend services from:
   ${RUNTIME_DIR}
@@ -62,6 +68,38 @@ while [[ $# -gt 0 ]]; do
             START_GPT_SOVITS_OVERRIDE=0
             shift
             ;;
+        --start-chat-delivery-worker)
+            START_CHAT_DELIVERY_WORKER_OVERRIDE=1
+            shift
+            ;;
+        --start-relation-query-service)
+            START_RELATION_QUERY_SERVICE_OVERRIDE=1
+            shift
+            ;;
+        --skip-relation-query-service)
+            START_RELATION_QUERY_SERVICE_OVERRIDE=0
+            shift
+            ;;
+        --start-relation-service-worker)
+            START_RELATION_SERVICE_WORKER_OVERRIDE=1
+            shift
+            ;;
+        --skip-relation-service-worker)
+            START_RELATION_SERVICE_WORKER_OVERRIDE=0
+            shift
+            ;;
+        --start-message-service)
+            START_MESSAGE_SERVICE_OVERRIDE=1
+            shift
+            ;;
+        --skip-message-service)
+            START_MESSAGE_SERVICE_OVERRIDE=0
+            shift
+            ;;
+        --skip-core-services)
+            START_CORE_SERVICES_OVERRIDE=0
+            shift
+            ;;
         --gpt-sovits-wait-seconds)
             GPT_SOVITS_WAIT_SECONDS_OVERRIDE="$2"
             shift 2
@@ -86,6 +124,11 @@ fi
 export MEMOCHAT_ENABLE_KAFKA="${MEMOCHAT_ENABLE_KAFKA:-1}"
 export MEMOCHAT_ENABLE_RABBITMQ="${MEMOCHAT_ENABLE_RABBITMQ:-1}"
 export MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-1}"
+START_CORE_SERVICES="${START_CORE_SERVICES_OVERRIDE:-${MEMOCHAT_START_CORE_SERVICES:-1}}"
+START_CHAT_DELIVERY_WORKER="${START_CHAT_DELIVERY_WORKER_OVERRIDE:-${MEMOCHAT_START_CHAT_DELIVERY_WORKER:-0}}"
+START_RELATION_QUERY_SERVICE="${START_RELATION_QUERY_SERVICE_OVERRIDE:-${MEMOCHAT_START_RELATION_QUERY_SERVICE:-1}}"
+START_RELATION_SERVICE_WORKER="${START_RELATION_SERVICE_WORKER_OVERRIDE:-${MEMOCHAT_START_RELATION_SERVICE_WORKER:-1}}"
+START_MESSAGE_SERVICE="${START_MESSAGE_SERVICE_OVERRIDE:-${MEMOCHAT_START_MESSAGE_SERVICE:-1}}"
 START_DOCKER_DEPS="${START_DOCKER_DEPS_OVERRIDE:-${MEMOCHAT_START_DOCKER_DEPS:-1}}"
 START_ENVOY="${START_ENVOY_OVERRIDE:-${MEMOCHAT_START_ENVOY:-1}}"
 START_GPT_SOVITS="${START_GPT_SOVITS_OVERRIDE:-${MEMOCHAT_START_GPT_SOVITS:-1}}"
@@ -98,6 +141,9 @@ GPT_SOVITS_WAIT_SECONDS="${GPT_SOVITS_WAIT_SECONDS_OVERRIDE:-${MEMOCHAT_GPT_SOVI
 GPT_SOVITS_PID_FILE="${PID_DIR}/GPT-SoVITS.pid"
 GPT_SOVITS_LOG_FILE="${GPT_SOVITS_LOG_FILE:-${LOG_DIR}/GPT-SoVITS_api.log}"
 GPT_SOVITS_LOG_DIR="${GPT_SOVITS_LOG_DIR:-$(dirname -- "$GPT_SOVITS_LOG_FILE")}"
+
+# shellcheck source=tools/scripts/status/runtime_topology.sh
+source "$TOPOLOGY_FILE"
 
 mkdir -p -- "$LOG_DIR" "$PID_DIR" "$GPT_SOVITS_LOG_DIR"
 
@@ -319,7 +365,23 @@ pid_running() {
 }
 
 ensure_runtime() {
-    if [[ -x "${RUNTIME_DIR}/GateServer1/GateServer" && -x "${RUNTIME_DIR}/AIServer/AIServer" ]]; then
+    local missing=0
+    if is_truthy "$START_CORE_SERVICES"; then
+        [[ -x "$(runtime_executable_path "GateServer1")" && -x "$(runtime_executable_path "AIServer")" ]] || missing=1
+    fi
+    if is_truthy "$START_CHAT_DELIVERY_WORKER"; then
+        [[ -x "$(runtime_executable_path "ChatDeliveryWorker1")" ]] || missing=1
+    fi
+    if is_truthy "$START_RELATION_QUERY_SERVICE"; then
+        [[ -x "$(runtime_executable_path "ChatRelationQueryService1")" ]] || missing=1
+    fi
+    if is_truthy "$START_RELATION_SERVICE_WORKER"; then
+        [[ -x "$(runtime_executable_path "ChatRelationServiceWorker1")" ]] || missing=1
+    fi
+    if is_truthy "$START_MESSAGE_SERVICE"; then
+        [[ -x "$(runtime_executable_path "ChatMessageService1")" ]] || missing=1
+    fi
+    if [[ "$missing" -eq 0 ]]; then
         return 0
     fi
     if [[ "$AUTO_DEPLOY" -eq 0 ]]; then
@@ -329,6 +391,41 @@ ensure_runtime() {
     fi
     echo "[WARN] C++ runtime missing, deploying services..."
     "${SCRIPT_DIR}/deploy_services.sh"
+}
+
+runtime_executable_path() {
+    local wanted_name="$1"
+    local row group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace
+    for row in "${MEMOCHAT_RUNTIME_SERVICE_TOPOLOGY[@]}"; do
+        IFS='|' read -r group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace <<<"$row"
+        [[ "$name" == "$wanted_name" ]] || continue
+        printf '%s/%s/%s\n' "$RUNTIME_DIR" "$name" "$exe"
+        return 0
+    done
+    printf '%s/%s\n' "$RUNTIME_DIR" "$wanted_name"
+}
+
+config_value() {
+    local config_file="$1"
+    local section="$2"
+    local key="$3"
+    awk -F= -v section="$section" -v key="$key" '
+        BEGIN { in_section = 0 }
+        /^[[:space:]]*\[/ {
+            current = $0
+            sub(/^[[:space:]]*\[/, "", current)
+            sub(/\][[:space:]]*$/, "", current)
+            in_section = (current == section)
+            next
+        }
+        in_section && $1 == key {
+            value = $2
+            sub(/^[[:space:]]*/, "", value)
+            sub(/[[:space:]]*$/, "", value)
+            print value
+            exit
+        }
+    ' "$config_file" 2>/dev/null || true
 }
 
 wait_for_port() {
@@ -361,6 +458,27 @@ wait_for_udp_port() {
     done
     echo "  [WARN] ${service_name} did not bind UDP port ${port} yet; check logs"
     return 0
+}
+
+verify_started_pid() {
+    local pid="$1"
+    local svc_name="$2"
+    local pid_file="$3"
+    local out_log="$4"
+    local err_log="$5"
+
+    sleep 1
+    if kill -0 "$pid" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    echo "  [FAIL] ${svc_name}: process exited early" >&2
+    echo "         stdout: ${out_log}" >&2
+    sed -n '1,80p' "$out_log" >&2 2>/dev/null || true
+    echo "         stderr: ${err_log}" >&2
+    sed -n '1,80p' "$err_log" >&2 2>/dev/null || true
+    rm -f -- "$pid_file"
+    return 1
 }
 
 gpt_sovits_ready() {
@@ -475,6 +593,7 @@ launch_svc() {
     local exe_name="$2"
     local svc_name="$3"
     local port="$4"
+    local instance_name="${5:-}"
     local exe_path="${svc_dir}/${exe_name}"
     local safe_name
     safe_name="$(sanitize_name "$svc_name")"
@@ -497,6 +616,13 @@ launch_svc() {
         return 0
     fi
 
+    if [[ -z "$instance_name" ]]; then
+        instance_name="$(config_value "${svc_dir}/config.ini" "SelfServer" "Name")"
+    fi
+    if [[ -z "$instance_name" ]]; then
+        instance_name="$safe_name"
+    fi
+
     : > "$out_log"
     : > "$err_log"
 
@@ -507,6 +633,7 @@ launch_svc() {
             MEMOCHAT_ENABLE_KAFKA="$MEMOCHAT_ENABLE_KAFKA" \
             MEMOCHAT_ENABLE_RABBITMQ="$MEMOCHAT_ENABLE_RABBITMQ" \
             MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-1}" \
+            MEMOCHAT_INSTANCE_NAME="$instance_name" \
             "./${exe_name}"
     ) >>"$out_log" 2>>"$err_log" </dev/null &
 
@@ -516,7 +643,74 @@ launch_svc() {
 
     if [[ -n "$port" ]]; then
         wait_for_port "$svc_name" "$port"
+    else
+        verify_started_pid "$pid" "$svc_name" "$pid_file" "$out_log" "$err_log"
     fi
+}
+
+launch_topology_group() {
+    local wanted_group="$1"
+    local row group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace
+    for row in "${MEMOCHAT_RUNTIME_SERVICE_TOPOLOGY[@]}"; do
+        IFS='|' read -r group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace <<<"$row"
+        [[ "$group" == "$wanted_group" ]] || continue
+        launch_svc "${RUNTIME_DIR}/${name}" "$exe" "$display_name" "$tcp_wait_port" "$instance_name"
+    done
+}
+
+ensure_quic_certs_for_group() {
+    local wanted_group="$1"
+    local row group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace
+    for row in "${MEMOCHAT_RUNTIME_SERVICE_TOPOLOGY[@]}"; do
+        IFS='|' read -r group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace <<<"$row"
+        [[ "$group" == "$wanted_group" ]] || continue
+        ensure_quic_cert "${RUNTIME_DIR}/${name}"
+    done
+}
+
+wait_for_topology_group_udp_ports() {
+    local wanted_group="$1"
+    local suffix="$2"
+    local row group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace
+    local port
+    for row in "${MEMOCHAT_RUNTIME_SERVICE_TOPOLOGY[@]}"; do
+        IFS='|' read -r group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace <<<"$row"
+        [[ "$group" == "$wanted_group" ]] || continue
+        for port in $udp_wait_ports; do
+            wait_for_udp_port "${display_name} ${suffix}" "$port"
+        done
+    done
+}
+
+start_topology_core_group() {
+    local group="$1"
+    local label
+    label="$(memochat_topology_group_label "$group")"
+
+    if [[ "$group" == "$MEMOCHAT_TOPOLOGY_GROUP_CHAT" ]]; then
+        echo "[STEP] Prepare ChatServer QUIC certificates"
+        ensure_quic_certs_for_group "$MEMOCHAT_TOPOLOGY_GROUP_CHAT"
+        echo
+    fi
+
+    echo "[STEP] Start ${label}"
+    launch_topology_group "$group"
+
+    if [[ "$group" == "$MEMOCHAT_TOPOLOGY_GROUP_CHAT" ]] && is_truthy "$MEMOCHAT_ENABLE_QUIC"; then
+        wait_for_topology_group_udp_ports "$MEMOCHAT_TOPOLOGY_GROUP_CHAT" "QUIC"
+    fi
+
+    if [[ "$group" == "$MEMOCHAT_TOPOLOGY_GROUP_GATE" ]]; then
+        echo "  [INFO] Client HTTP traffic enters through Docker Envoy on 80 and 8443/tcp+udp"
+    fi
+    echo
+}
+
+start_topology_core_groups() {
+    local group
+    for group in "${MEMOCHAT_CORE_START_GROUPS[@]}"; do
+        start_topology_core_group "$group"
+    done
 }
 
 ensure_quic_cert() {
@@ -571,51 +765,45 @@ echo
 
 ensure_runtime
 
-echo "[STEP] Prepare ChatServer QUIC certificates"
-ensure_quic_cert "${RUNTIME_DIR}/chatserver1"
-ensure_quic_cert "${RUNTIME_DIR}/chatserver2"
-ensure_quic_cert "${RUNTIME_DIR}/chatserver3"
-ensure_quic_cert "${RUNTIME_DIR}/chatserver4"
-ensure_quic_cert "${RUNTIME_DIR}/chatserver5"
-ensure_quic_cert "${RUNTIME_DIR}/chatserver6"
-echo
-
-echo "[STEP] Start VarifyServer"
-launch_svc "${RUNTIME_DIR}/VarifyServer1" "VarifyServer" "VarifyServer-1" "50051"
-launch_svc "${RUNTIME_DIR}/VarifyServer2" "VarifyServer" "VarifyServer-2" "48083"
-echo
-
-echo "[STEP] Start StatusServer"
-launch_svc "${RUNTIME_DIR}/StatusServer1" "StatusServer" "StatusServer-1" "50052"
-launch_svc "${RUNTIME_DIR}/StatusServer2" "StatusServer" "StatusServer-2" "50582"
-echo
-
-echo "[STEP] Start ChatServer"
-launch_svc "${RUNTIME_DIR}/chatserver1" "ChatServer" "ChatServer-1" "8090"
-launch_svc "${RUNTIME_DIR}/chatserver2" "ChatServer" "ChatServer-2" "8091"
-launch_svc "${RUNTIME_DIR}/chatserver3" "ChatServer" "ChatServer-3" "8092"
-launch_svc "${RUNTIME_DIR}/chatserver4" "ChatServer" "ChatServer-4" "8093"
-launch_svc "${RUNTIME_DIR}/chatserver5" "ChatServer" "ChatServer-5" "8094"
-launch_svc "${RUNTIME_DIR}/chatserver6" "ChatServer" "ChatServer-6" "8097"
-if is_truthy "$MEMOCHAT_ENABLE_QUIC"; then
-    wait_for_udp_port "ChatServer-1 QUIC" "8190"
-    wait_for_udp_port "ChatServer-2 QUIC" "8191"
-    wait_for_udp_port "ChatServer-3 QUIC" "8192"
-    wait_for_udp_port "ChatServer-4 QUIC" "8193"
-    wait_for_udp_port "ChatServer-5 QUIC" "8194"
-    wait_for_udp_port "ChatServer-6 QUIC" "8195"
+echo "[STEP] Start ChatDeliveryWorker"
+if is_truthy "$START_CHAT_DELIVERY_WORKER"; then
+    launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_WORKER"
+else
+    echo "  [SKIP] ChatDeliveryWorker startup disabled"
 fi
 echo
 
-echo "[STEP] Start AIServer"
-launch_svc "${RUNTIME_DIR}/AIServer" "AIServer" "AIServer" "8095"
+echo "[STEP] Start ChatRelationQueryService"
+if is_truthy "$START_RELATION_QUERY_SERVICE"; then
+    launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_RELATION_QUERY"
+else
+    echo "  [SKIP] ChatRelationQueryService startup disabled"
+fi
 echo
 
-echo "[STEP] Start GateServer"
-launch_svc "${RUNTIME_DIR}/GateServer1" "GateServer" "GateServer-1" "8080"
-launch_svc "${RUNTIME_DIR}/GateServer2" "GateServer" "GateServer-2" "8084"
-echo "  [INFO] Client HTTP traffic enters through Docker Envoy on 80 and 8443/tcp+udp"
+echo "[STEP] Start ChatRelationServiceWorker"
+if is_truthy "$START_RELATION_SERVICE_WORKER"; then
+    launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_RELATION_SERVICE"
+else
+    echo "  [SKIP] ChatRelationServiceWorker startup disabled"
+fi
 echo
+
+echo "[STEP] Start ChatMessageService"
+if is_truthy "$START_MESSAGE_SERVICE"; then
+    launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_MESSAGE_SERVICE"
+else
+    echo "  [SKIP] ChatMessageService startup disabled"
+fi
+echo
+
+if is_truthy "$START_CORE_SERVICES"; then
+    start_topology_core_groups
+else
+    echo "[STEP] Start core services"
+    echo "  [SKIP] Core service startup disabled"
+    echo
+fi
 
 echo "Startup command completed. Logs are under:"
 echo "  ${LOG_DIR}"

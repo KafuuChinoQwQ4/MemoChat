@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package chatinternal;
+
+message SessionContext {
+  int32 uid = 1;
+  string session_id = 2;
+  string server_name = 3;
+  string trace_id = 4;
+}
+
+message DeliveryCommand {
+  int32 tcp_msg_id = 1;
+  string payload_json = 2;
+  repeated int32 target_uids = 3;
+  string route_hint = 4;
+  bool require_offline_push = 5;
+}
+
+message EventCommand {
+  string topic = 1;
+  string key = 2;
+  string payload_json = 3;
+}
+
+message JsonPayloadRequest {
+  SessionContext session = 1;
+  int32 tcp_msg_id = 2;
+  string payload_json = 3;
+}
+
+message JsonPayloadResponse {
+  int32 error = 1;
+  int32 tcp_msg_id = 2;
+  string payload_json = 3;
+  repeated DeliveryCommand delivery_commands = 4;
+  repeated EventCommand event_commands = 5;
+}
+
+message BootstrapRequest {
+  int32 uid = 1;
+  string trace_id = 2;
+}
+
+message BootstrapResponse {
+  int32 error = 1;
+  string payload_json = 2;
+}
+
+service ChatRelationInternalService {
+  rpc AppendRelationBootstrap(BootstrapRequest) returns (BootstrapResponse) {}
+  rpc BuildDialogList(BootstrapRequest) returns (BootstrapResponse) {}
+  rpc SearchUser(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc AddFriendApply(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc AuthFriendApply(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc DeleteFriend(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc GetDialogList(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc SyncDraft(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc PinDialog(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+}
+
+service ChatPrivateMessageInternalService {
+  rpc SendTextChatMessage(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc ForwardPrivateMessage(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc PrivateReadAck(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc EditPrivateMessage(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc RevokePrivateMessage(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc PrivateHistory(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+}
+
+service ChatGroupMessageInternalService {
+  rpc BuildGroupList(BootstrapRequest) returns (BootstrapResponse) {}
+  rpc CreateGroup(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc GetGroupList(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc InviteGroupMember(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc ApplyJoinGroup(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc ReviewGroupApply(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc GroupChatMessage(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc GroupHistory(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc EditGroupMessage(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc RevokeGroupMessage(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc ForwardGroupMessage(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc GroupReadAck(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc UpdateGroupAnnouncement(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc UpdateGroupIcon(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc SetGroupAdmin(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc MuteGroupMember(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc KickGroupMember(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc QuitGroup(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  rpc DissolveGroup(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+}

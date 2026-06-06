@@ -1,0 +1,350 @@
+﻿#include "MessageDeliveryService.h"
+
+#include "ChatGrpcClient.h"
+#include "ChatRuntime.h"
+#include "CSession.h"
+#include "logging/Logger.h"
+
+#include "json/GlazeCompat.h"
+#include <unordered_map>
+#include <unordered_set>
+
+namespace
+{
+enum class OnlineRouteKind
+{
+    Offline,
+    Local,
+    Remote,
+    Stale
+};
+
+struct OnlineRouteDecision
+{
+    OnlineRouteKind kind = OnlineRouteKind::Offline;
+    std::shared_ptr<CSession> session;
+    std::string redis_server;
+    bool local_session_found = false;
+};
+
+OnlineRouteDecision
+ResolveOnlineRouteDelivery(int uid, ISessionRegistry* session_registry, IOnlineRouteStore* online_route_store)
+{
+    OnlineRouteDecision route;
+    if (uid <= 0 || !session_registry || !online_route_store)
+    {
+        return route;
+    }
+
+    const auto self_name = online_route_store->SelfServerName();
+    auto session = session_registry->FindSession(uid);
+    if (session)
+    {
+        route.kind = OnlineRouteKind::Local;
+        route.session = session;
+        route.redis_server = self_name;
+        route.local_session_found = true;
+        online_route_store->RepairOnlineRoute(uid, session);
+        return route;
+    }
+
+    auto redis_server = online_route_store->FindUserServer(uid);
+    if (redis_server.empty())
+    {
+        redis_server = online_route_store->ResolveServerFromOnlineSets(uid);
+        if (redis_server.empty())
+        {
+            return route;
+        }
+    }
+    route.redis_server = redis_server;
+    if (redis_server != self_name)
+    {
+        route.kind = OnlineRouteKind::Remote;
+        return route;
+    }
+
+    auto reloaded_server = online_route_store->FindUserServer(uid);
+    if (!reloaded_server.empty())
+    {
+        route.redis_server = reloaded_server;
+        if (reloaded_server != self_name)
+        {
+            route.kind = OnlineRouteKind::Remote;
+            return route;
+        }
+    }
+
+    route.kind = OnlineRouteKind::Stale;
+    online_route_store->ClearTrackedOnlineRoute(uid, self_name);
+    return route;
+}
+
+enum class DeliveryAttemptResult
+{
+    Delivered,
+    Offline,
+    RetryableFailure
+};
+
+memochat::json::JsonValue BuildDeliveryTaskPayload(int recipient_uid,
+                                                   short msgid,
+                                                   const memochat::json::JsonValue& payload,
+                                                   int exclude_uid,
+                                                   const char* reason)
+{
+    memochat::json::JsonValue task(memochat::json::object_t{});
+    task["recipient_uid"] = recipient_uid;
+    task["msgid"] = msgid;
+    task["exclude_uid"] = exclude_uid;
+    task["reason"] = reason;
+    task["payload"] = payload;
+    return task;
+}
+} // namespace
+
+MessageDeliveryService::MessageDeliveryService(IDeliveryTaskPublisher* task_publisher,
+                                               ISessionRegistry* session_registry,
+                                               IOnlineRouteStore* online_route_store)
+    : _task_publisher(task_publisher)
+    , _session_registry(session_registry)
+    , _online_route_store(online_route_store)
+{
+}
+
+void MessageDeliveryService::SetTaskPublisher(IDeliveryTaskPublisher* task_publisher)
+{
+    _task_publisher = task_publisher;
+}
+
+void MessageDeliveryService::SetRouteDependencies(ISessionRegistry* session_registry,
+                                                  IOnlineRouteStore* online_route_store)
+{
+    _session_registry = session_registry;
+    _online_route_store = online_route_store;
+}
+
+void MessageDeliveryService::PushPayload(const std::vector<int>& recipients,
+                                         short msgid,
+                                         const memochat::json::JsonValue& payload,
+                                         int exclude_uid)
+{
+    TryPushPayload(recipients, msgid, payload, exclude_uid, true);
+}
+
+bool MessageDeliveryService::TryPushPayload(const std::vector<int>& recipients,
+                                            short msgid,
+                                            const memochat::json::JsonValue& payload,
+                                            int exclude_uid,
+                                            bool enqueue_on_failure)
+{
+    if (recipients.empty())
+    {
+        return true;
+    }
+
+    std::unordered_set<int> uniq;
+    for (int uid : recipients)
+    {
+        if (uid <= 0 || uid == exclude_uid)
+        {
+            continue;
+        }
+        uniq.insert(uid);
+    }
+    if (uniq.empty())
+    {
+        return true;
+    }
+
+    const std::string payload_str = payload
+                                        .and_then(
+                                            [](auto&& v)
+                                            {
+                                                return glz::write_json(v);
+                                            })
+                                        .value_or("{}");
+    std::unordered_map<std::string, std::vector<int>> remote_server_uids;
+    bool all_delivered = true;
+
+    if (msgid == ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ)
+    {
+        for (int uid : uniq)
+        {
+            auto route = ResolveOnlineRouteDelivery(uid, _session_registry, _online_route_store);
+            if (route.kind == OnlineRouteKind::Local && route.session)
+            {
+                route.session->Send(payload_str, msgid);
+                continue;
+            }
+
+            std::string target_server;
+            if (route.kind == OnlineRouteKind::Remote)
+            {
+                target_server = route.redis_server;
+            }
+            if (target_server.empty())
+            {
+                target_server =
+                    _online_route_store ? _online_route_store->ResolveServerFromOnlineSets(uid) : std::string();
+            }
+            if (target_server.empty())
+            {
+                all_delivered = false;
+                if (enqueue_on_failure && _task_publisher)
+                {
+                    std::string error;
+                    _task_publisher->PublishDeliveryTask(
+                        "offline_notify",
+                        memochat::chatruntime::TaskRoutingOfflineNotify(),
+                        BuildDeliveryTaskPayload(uid, msgid, payload, exclude_uid, "offline"),
+                        memochat::chatruntime::TaskRetryDelayMs(),
+                        memochat::chatruntime::TaskMaxRetries(),
+                        &error);
+                }
+                continue;
+            }
+
+            GroupMemberBatchReq req;
+            req.set_tcp_msgid(msgid);
+            req.set_payload_json(payload_str);
+            req.add_touids(uid);
+            auto rsp = ChatGrpcClient::GetInstance()->NotifyGroupMemberBatch(target_server, req);
+            if (rsp.error() == ErrorCodes::Success && rsp.delivered() > 0)
+            {
+                if (_online_route_store)
+                {
+                    _online_route_store->SetUserServer(uid, target_server);
+                }
+                continue;
+            }
+
+            const auto fallback_server =
+                _online_route_store ? _online_route_store->ResolveServerFromOnlineSets(uid) : std::string();
+            if (fallback_server.empty() || fallback_server == target_server)
+            {
+                continue;
+            }
+
+            auto fallback_rsp = ChatGrpcClient::GetInstance()->NotifyGroupMemberBatch(fallback_server, req);
+            if (fallback_rsp.error() == ErrorCodes::Success && fallback_rsp.delivered() > 0)
+            {
+                if (_online_route_store)
+                {
+                    _online_route_store->SetUserServer(uid, fallback_server);
+                }
+                continue;
+            }
+
+            all_delivered = false;
+            if (enqueue_on_failure && _task_publisher)
+            {
+                std::string error;
+                _task_publisher->PublishDeliveryTask(
+                    "message_delivery_retry",
+                    memochat::chatruntime::TaskRoutingDeliveryRetry(),
+                    BuildDeliveryTaskPayload(uid, msgid, payload, exclude_uid, "rpc_failed"),
+                    memochat::chatruntime::TaskRetryDelayMs(),
+                    memochat::chatruntime::TaskMaxRetries(),
+                    &error);
+            }
+        }
+        return all_delivered;
+    }
+
+    for (int uid : uniq)
+    {
+        const auto route = ResolveOnlineRouteDelivery(uid, _session_registry, _online_route_store);
+        if (route.kind == OnlineRouteKind::Local && route.session)
+        {
+            route.session->Send(payload_str, msgid);
+            continue;
+        }
+        if (route.kind == OnlineRouteKind::Remote)
+        {
+            remote_server_uids[route.redis_server].push_back(uid);
+            continue;
+        }
+        all_delivered = false;
+        if (enqueue_on_failure && _task_publisher)
+        {
+            std::string error;
+            _task_publisher->PublishDeliveryTask("offline_notify",
+                                                 memochat::chatruntime::TaskRoutingOfflineNotify(),
+                                                 BuildDeliveryTaskPayload(uid, msgid, payload, exclude_uid, "offline"),
+                                                 memochat::chatruntime::TaskRetryDelayMs(),
+                                                 memochat::chatruntime::TaskMaxRetries(),
+                                                 &error);
+        }
+    }
+
+    for (auto& entry : remote_server_uids)
+    {
+        auto& server_name = entry.first;
+        auto& uids = entry.second;
+        if (uids.empty())
+        {
+            continue;
+        }
+
+        if (msgid == ID_NOTIFY_GROUP_CHAT_MSG_REQ)
+        {
+            GroupMessageNotifyReq req;
+            req.set_tcp_msgid(msgid);
+            req.set_payload_json(payload_str);
+            for (int uid : uids)
+            {
+                req.add_touids(uid);
+            }
+            const auto rsp = ChatGrpcClient::GetInstance()->NotifyGroupMessage(server_name, req);
+            if (rsp.error() != ErrorCodes::Success || rsp.delivered() <= 0)
+            {
+                all_delivered = false;
+                if (enqueue_on_failure && _task_publisher)
+                {
+                    for (int uid : uids)
+                    {
+                        std::string error;
+                        _task_publisher->PublishDeliveryTask(
+                            "message_delivery_retry",
+                            memochat::chatruntime::TaskRoutingDeliveryRetry(),
+                            BuildDeliveryTaskPayload(uid, msgid, payload, exclude_uid, "rpc_failed"),
+                            memochat::chatruntime::TaskRetryDelayMs(),
+                            memochat::chatruntime::TaskMaxRetries(),
+                            &error);
+                    }
+                }
+            }
+            continue;
+        }
+
+        GroupEventNotifyReq req;
+        req.set_tcp_msgid(msgid);
+        req.set_payload_json(payload_str);
+        for (int uid : uids)
+        {
+            req.add_touids(uid);
+        }
+        const auto rsp = ChatGrpcClient::GetInstance()->NotifyGroupEvent(server_name, req);
+        if (rsp.error() != ErrorCodes::Success || rsp.delivered() <= 0)
+        {
+            all_delivered = false;
+            if (enqueue_on_failure && _task_publisher)
+            {
+                for (int uid : uids)
+                {
+                    std::string error;
+                    _task_publisher->PublishDeliveryTask(
+                        "message_delivery_retry",
+                        memochat::chatruntime::TaskRoutingDeliveryRetry(),
+                        BuildDeliveryTaskPayload(uid, msgid, payload, exclude_uid, "rpc_failed"),
+                        memochat::chatruntime::TaskRetryDelayMs(),
+                        memochat::chatruntime::TaskMaxRetries(),
+                        &error);
+                }
+            }
+        }
+    }
+
+    return all_delivered;
+}

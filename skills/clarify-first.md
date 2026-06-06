@@ -29,3 +29,10 @@ description: Use when a task has one or more unresolved decisions that must be s
 - 如果已经能按仓库现有规则直接推进，只是还缺少局部实现细节，不要滥用这个 skill，改走 `task.md`、`debugging.md` 或 `parallel-agents.md`。
 - 如果用户已经给出明确方向，就不要为了提问而提问，直接执行。
 - 对于高风险、跨模块、跨服务、数据契约、UI 交互或运行时行为变更，默认先收集更多信息。
+
+## 与外部 skills 的边界
+
+- 本 skill 只处理“缺关键决策会导致实现不安全”的情况。
+- 新功能或行为设计需要完整方案探索时，使用 `skills/superpowers/brainstorming/SKILL.md`。
+- 需要围绕领域语言、`CONTEXT.md` 或 ADR 压力测试方案时，使用 `skills/mattpocock/engineering/grill-with-docs/SKILL.md`。
+- 如果代码和项目规则已经给出单一安全路径，不要为了套用外部流程而停下来提问。

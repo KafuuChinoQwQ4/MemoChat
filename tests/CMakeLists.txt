@@ -15,6 +15,7 @@ add_subdirectory(cpp/apps/server/core/common/logging                       ${CMA
 add_subdirectory(cpp/apps/server/core/common/json                          ${CMAKE_CURRENT_BINARY_DIR}/json)
 add_subdirectory(cpp/apps/server/core/AIServer                             ${CMAKE_CURRENT_BINARY_DIR}/aiserver)
 add_subdirectory(cpp/apps/server/core/VarifyServer                         ${CMAKE_CURRENT_BINARY_DIR}/varifyserver)
+add_subdirectory(cpp/apps/server/core/ChatServer                           ${CMAKE_CURRENT_BINARY_DIR}/chatserver)
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/chat/cache   ${CMAKE_CURRENT_BINARY_DIR}/client_cache)
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/live2d                ${CMAKE_CURRENT_BINARY_DIR}/client_live2d)
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/core/media            ${CMAKE_CURRENT_BINARY_DIR}/client_media)

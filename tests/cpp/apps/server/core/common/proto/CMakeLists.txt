@@ -7,6 +7,7 @@ cmake_minimum_required(VERSION 3.16)
 
 add_executable(proto_gtest_proto_test
     main.cpp
+    ChatInternalProtoTest.cpp
     ProtoMessageTest.cpp
 )
 target_link_libraries(proto_gtest_proto_test PRIVATE
