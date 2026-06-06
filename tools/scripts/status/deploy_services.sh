@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
+TOPOLOGY_FILE="${SCRIPT_DIR}/runtime_topology.sh"
 BUILD_BIN="${MEMOCHAT_BUILD_BIN:-${PROJECT_ROOT}/build-linux-full-gcc16/bin}"
 if [[ -n "${MEMOCHAT_CLIENT_BUILD_BIN:-}" ]]; then
     CLIENT_BUILD_BIN="${MEMOCHAT_CLIENT_BUILD_BIN}"
@@ -19,6 +20,9 @@ GPT_SOVITS_ENV="${GPT_SOVITS_ENV:-/data/micromamba/envs/gpt-sovits}"
 GPT_SOVITS_HOST_DATA_DIR="${MEMOCHAT_PET_SOVITS_HOST_DATA_DIR:-/data/gpt-sovits}"
 GPT_SOVITS_REF_AUDIO="${MEMOCHAT_PET_SOVITS_REFERENCE_AUDIO:-${GPT_SOVITS_HOST_DATA_DIR}/refs/kafuu-chino-ref.wav}"
 GPT_SOVITS_PROMPT_TEXT_FILE="${MEMOCHAT_PET_SOVITS_PROMPT_TEXT_FILE:-${GPT_SOVITS_HOST_DATA_DIR}/refs/kafuu-chino-ref.ja.txt}"
+
+# shellcheck source=tools/scripts/status/runtime_topology.sh
+source "$TOPOLOGY_FILE"
 
 usage() {
     cat <<USAGE
@@ -254,6 +258,35 @@ deploy_service() {
     copy_required_file "${SOURCE_ROOT}/${config}" "${svc_dir}/config.ini"
 }
 
+require_service_binaries() {
+    local seen=" "
+    local row group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace
+    for row in "${MEMOCHAT_RUNTIME_SERVICE_TOPOLOGY[@]}"; do
+        IFS='|' read -r group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace <<<"$row"
+        if [[ "$seen" == *" ${source_exe} "* ]]; then
+            continue
+        fi
+        seen+="${source_exe} "
+        require_file "${BUILD_BIN}/${source_exe}"
+    done
+}
+
+deploy_topology_services() {
+    local row group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace
+    for row in "${MEMOCHAT_RUNTIME_SERVICE_TOPOLOGY[@]}"; do
+        IFS='|' read -r group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace <<<"$row"
+        deploy_service "$name" "$exe" "$source_exe" "$config"
+    done
+}
+
+required_runtime_files() {
+    local row group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace
+    for row in "${MEMOCHAT_RUNTIME_SERVICE_TOPOLOGY[@]}"; do
+        IFS='|' read -r group name exe source_exe config display_name tcp_wait_port udp_wait_ports instance_name stop_tcp_ports stop_udp_ports log_dir telemetry_service_name telemetry_namespace <<<"$row"
+        printf '%s\n' "${name}/${exe}" "${name}/config.ini"
+    done
+}
+
 echo "============================================================"
 echo "  Deploy Linux services to runtime directory"
 echo "  PROJECT_ROOT: ${PROJECT_ROOT}"
@@ -262,27 +295,11 @@ echo "  CLIENT_BUILD: ${CLIENT_BUILD_BIN}"
 echo "  RUNTIME_DIR:  ${RUNTIME_DIR}"
 echo "============================================================"
 
-require_file "${BUILD_BIN}/GateServer"
-require_file "${BUILD_BIN}/StatusServer"
-require_file "${BUILD_BIN}/ChatServer"
-require_file "${BUILD_BIN}/AIServer"
-require_file "${BUILD_BIN}/VarifyServer"
+require_service_binaries
 
 [[ "$CHECK_ONLY" -eq 0 ]] && mkdir -p -- "$RUNTIME_DIR"
 
-deploy_service "GateServer1" "GateServer" "GateServer" "GateServer/config.ini"
-deploy_service "GateServer2" "GateServer" "GateServer" "GateServer/gate2.ini"
-deploy_service "StatusServer1" "StatusServer" "StatusServer" "StatusServer/config.ini"
-deploy_service "StatusServer2" "StatusServer" "StatusServer" "StatusServer/status2.ini"
-deploy_service "chatserver1" "ChatServer" "ChatServer" "ChatServer/chatserver1.ini"
-deploy_service "chatserver2" "ChatServer" "ChatServer" "ChatServer/chatserver2.ini"
-deploy_service "chatserver3" "ChatServer" "ChatServer" "ChatServer/chatserver3.ini"
-deploy_service "chatserver4" "ChatServer" "ChatServer" "ChatServer/chatserver4.ini"
-deploy_service "chatserver5" "ChatServer" "ChatServer" "ChatServer/chatserver5.ini"
-deploy_service "chatserver6" "ChatServer" "ChatServer" "ChatServer/chatserver6.ini"
-deploy_service "AIServer" "AIServer" "AIServer" "AIServer/config.ini"
-deploy_service "VarifyServer1" "VarifyServer" "VarifyServer" "VarifyServer/config.ini"
-deploy_service "VarifyServer2" "VarifyServer" "VarifyServer" "VarifyServer/varify2.ini"
+deploy_topology_services
 
 copy_memochat_qml_from_candidates "${RUNTIME_DIR}/MemoChatQml/MemoChatQml" \
     "${CLIENT_BUILD_BIN}/MemoChatQml" \
@@ -306,34 +323,7 @@ if [[ -d "${BUILD_BIN}/r18-plugins" ]]; then
 fi
 
 missing=0
-required_runtime=(
-    "GateServer1/GateServer"
-    "GateServer2/GateServer"
-    "StatusServer1/StatusServer"
-    "StatusServer2/StatusServer"
-    "VarifyServer1/VarifyServer"
-    "VarifyServer2/VarifyServer"
-    "chatserver1/ChatServer"
-    "chatserver2/ChatServer"
-    "chatserver3/ChatServer"
-    "chatserver4/ChatServer"
-    "chatserver5/ChatServer"
-    "chatserver6/ChatServer"
-    "AIServer/AIServer"
-    "GateServer1/config.ini"
-    "GateServer2/config.ini"
-    "StatusServer1/config.ini"
-    "StatusServer2/config.ini"
-    "VarifyServer1/config.ini"
-    "VarifyServer2/config.ini"
-    "chatserver1/config.ini"
-    "chatserver2/config.ini"
-    "chatserver3/config.ini"
-    "chatserver4/config.ini"
-    "chatserver5/config.ini"
-    "chatserver6/config.ini"
-    "AIServer/config.ini"
-)
+mapfile -t required_runtime < <(required_runtime_files)
 
 if [[ "$CHECK_ONLY" -eq 0 ]]; then
     for relative in "${required_runtime[@]}"; do

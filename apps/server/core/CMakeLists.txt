@@ -212,6 +212,7 @@ target_link_libraries(memochat_runtime PUBLIC
 set(MEMOCHAT_PROTO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 set(MEMOCHAT_PROTO_SRC "${CMAKE_CURRENT_SOURCE_DIR}/common/proto/message.proto")
 set(MEMOCHAT_PROTO_AI_SRC "${CMAKE_CURRENT_SOURCE_DIR}/common/proto/ai_message.proto")
+set(MEMOCHAT_PROTO_CHAT_INTERNAL_SRC "${CMAKE_CURRENT_SOURCE_DIR}/common/proto/chat_internal.proto")
 set(MEMOCHAT_PROTO_GEN_DIR "${CMAKE_BINARY_DIR}/generated")
 set(MEMOCHAT_PROTO_CC "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/message.pb.cc")
 set(MEMOCHAT_PROTO_H "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/message.pb.h")
@@ -221,6 +222,10 @@ set(MEMOCHAT_PROTO_AI_CC "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/ai_message.pb.c
 set(MEMOCHAT_PROTO_AI_H "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/ai_message.pb.h")
 set(MEMOCHAT_GRPC_AI_CC "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/ai_message.grpc.pb.cc")
 set(MEMOCHAT_GRPC_AI_H "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/ai_message.grpc.pb.h")
+set(MEMOCHAT_PROTO_CHAT_INTERNAL_CC "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/chat_internal.pb.cc")
+set(MEMOCHAT_PROTO_CHAT_INTERNAL_H "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/chat_internal.pb.h")
+set(MEMOCHAT_GRPC_CHAT_INTERNAL_CC "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/chat_internal.grpc.pb.cc")
+set(MEMOCHAT_GRPC_CHAT_INTERNAL_H "${MEMOCHAT_PROTO_GEN_DIR}/common/proto/chat_internal.grpc.pb.h")
 
 add_custom_command(
     OUTPUT
@@ -232,14 +237,21 @@ add_custom_command(
         "${MEMOCHAT_PROTO_AI_H}"
         "${MEMOCHAT_GRPC_AI_CC}"
         "${MEMOCHAT_GRPC_AI_H}"
+        "${MEMOCHAT_PROTO_CHAT_INTERNAL_CC}"
+        "${MEMOCHAT_PROTO_CHAT_INTERNAL_H}"
+        "${MEMOCHAT_GRPC_CHAT_INTERNAL_CC}"
+        "${MEMOCHAT_GRPC_CHAT_INTERNAL_H}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${MEMOCHAT_PROTO_GEN_DIR}/common/proto"
     COMMAND $<TARGET_FILE:protobuf::protoc> --proto_path=${MEMOCHAT_PROTO_ROOT} --cpp_out=${MEMOCHAT_PROTO_GEN_DIR} ${MEMOCHAT_PROTO_SRC}
     COMMAND $<TARGET_FILE:protobuf::protoc> --proto_path=${MEMOCHAT_PROTO_ROOT} --cpp_out=${MEMOCHAT_PROTO_GEN_DIR} ${MEMOCHAT_PROTO_AI_SRC}
+    COMMAND $<TARGET_FILE:protobuf::protoc> --proto_path=${MEMOCHAT_PROTO_ROOT} --cpp_out=${MEMOCHAT_PROTO_GEN_DIR} ${MEMOCHAT_PROTO_CHAT_INTERNAL_SRC}
     COMMAND $<TARGET_FILE:protobuf::protoc> --proto_path=${MEMOCHAT_PROTO_ROOT} --grpc_out=${MEMOCHAT_PROTO_GEN_DIR} --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin> ${MEMOCHAT_PROTO_SRC}
     COMMAND $<TARGET_FILE:protobuf::protoc> --proto_path=${MEMOCHAT_PROTO_ROOT} --grpc_out=${MEMOCHAT_PROTO_GEN_DIR} --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin> ${MEMOCHAT_PROTO_AI_SRC}
+    COMMAND $<TARGET_FILE:protobuf::protoc> --proto_path=${MEMOCHAT_PROTO_ROOT} --grpc_out=${MEMOCHAT_PROTO_GEN_DIR} --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin> ${MEMOCHAT_PROTO_CHAT_INTERNAL_SRC}
     DEPENDS
         "${MEMOCHAT_PROTO_SRC}"
         "${MEMOCHAT_PROTO_AI_SRC}"
+        "${MEMOCHAT_PROTO_CHAT_INTERNAL_SRC}"
         protobuf::protoc
         gRPC::grpc_cpp_plugin
     VERBATIM
@@ -254,6 +266,10 @@ add_library(memochat_proto STATIC
     "${MEMOCHAT_PROTO_AI_H}"
     "${MEMOCHAT_GRPC_AI_CC}"
     "${MEMOCHAT_GRPC_AI_H}"
+    "${MEMOCHAT_PROTO_CHAT_INTERNAL_CC}"
+    "${MEMOCHAT_PROTO_CHAT_INTERNAL_H}"
+    "${MEMOCHAT_GRPC_CHAT_INTERNAL_CC}"
+    "${MEMOCHAT_GRPC_CHAT_INTERNAL_H}"
 )
 target_compile_features(memochat_proto PUBLIC cxx_std_23)
 target_include_directories(memochat_proto PUBLIC

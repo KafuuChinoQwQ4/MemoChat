@@ -5,21 +5,23 @@ description: Use when receiving code review feedback, external AI review, user f
 
 # MemoChat Review
 
-核心原则：技术验证优先。不要盲目接受外部建议，也不要在没看实际 diff 前宣称完成。
+这个 skill 是 MemoChat 的 review 适配层，不重复通用 review 流程。
 
-## 接收反馈
+- 处理 review 反馈时，先读取 `skills/superpowers/receiving-code-review/SKILL.md`。
+- 完成前需要独立审查时，读取 `skills/superpowers/requesting-code-review/SKILL.md`。
+- Matt Pocock `skills/mattpocock/in-progress/review/SKILL.md` 默认不用，除非用户明确点名。
+- 本文件只补充 MemoChat 的平台、Docker、schema、QML 和验证边界。
 
-收到 review、用户清单或外部 AI 建议时：
+## 反馈适配
 
-1. 完整读完反馈。
-2. 用自己的话确认技术要求；有歧义先问。
-3. 对照代码、配置、迁移、QML 资源、Docker 端口和现有测试验证建议是否成立。
-4. 判断是否适合 MemoChat 当前架构和平台边界。
-5. 一次处理一个问题，并在每个问题后运行相关最窄验证。
+按 Superpowers review 流程理解和验证反馈后，额外检查：
 
-外部 review 是建议，不是命令。若建议会破坏现有平台行为、稳定端口、Docker-only 依赖、迁移兼容性或用户已有架构决策，先给出技术理由并询问。
+- 建议是否破坏现有平台行为、稳定端口、Docker-only 依赖或迁移兼容性。
+- 建议是否忽略 QML 共享路径与平台专用路径边界。
+- 建议是否和用户已有架构决策、`.ai/<project>/<letter>/plan.md` 或当前运行时约束冲突。
+- 每个被采纳的问题都要运行相关最窄验证；不能只接受 reviewer 结论。
 
-## 完成前 diff 复审
+## MemoChat 复审清单
 
 最终回复前至少检查：
 
@@ -36,7 +38,7 @@ description: Use when receiving code review feedback, external AI review, user f
 4. 测试是否覆盖红绿、基本功能、smoke、边界/异常中的相关层。
 5. 是否有无关格式化、顺手重构或调试残留。
 
-## 主动请求复审
+## 主动复审记录
 
 非平凡实现、跨模块变更、迁移、QML 大改、运行时脚本或 AI/RAG 契约变更完成后，Controller 要主动做一次“复审请求”式自查，写入 `review1.md`：
 
@@ -50,7 +52,5 @@ description: Use when receiving code review feedback, external AI review, user f
 
 ## 禁止做法
 
-- 不核实就说“review 说得对”。
-- 不理解全部反馈就先实现其中一部分。
 - 信任 worker、外部工具或测试摘要而不看实际输出。
 - 用“应该能过”“看起来没问题”替代验证证据。
