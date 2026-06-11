@@ -1,144 +1,108 @@
 #include "AppController.h"
 #include "DialogListService.h"
 #include "IChatTransport.h"
+#include "PrivateHistoryDependenciesFactory.h"
+#include "PrivateChatHistoryRequestService.h"
 #include "usermgr.h"
 
 #include <QDebug>
-#include <QJsonDocument>
-#include <QJsonObject>
+#include <utility>
 
 void AppController::loadCurrentChatMessages()
 {
-    if (_chat_state.uid <= 0)
-    {
-        _message_model.clear();
-        _private_history_state.beforeTs = 0;
-        _private_history_state.beforeMsgId.clear();
-        _private_history_state.pendingBeforeTs = 0;
-        _private_history_state.pendingBeforeMsgId.clear();
-        _private_history_state.pendingPeerUid = 0;
-        _group_state.historyBeforeSeq = 0;
-        _group_state.historyHasMore = true;
-        _loading_state.groupHistoryLoading = false;
-        setPrivateHistoryLoading(false);
-        setCanLoadMorePrivateHistory(false);
-        return;
-    }
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
 
     auto friendInfo = _gateway.userMgr()->GetFriendById(_chat_state.uid);
-    auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!friendInfo || !selfInfo)
+    qInfo() << "Loading current private chat, peer uid:" << _chat_state.uid << "existing friend msg count:"
+            << (friendInfo ? static_cast<qlonglong>(friendInfo->_chat_msgs.size()) : 0LL);
+
+    PrivateHistoryLoadCurrentRequest request;
+    request.currentPeerUid = _chat_state.uid;
+    request.selfUid = selfInfo ? selfInfo->_uid : 0;
+    const PrivateHistoryLoadCurrentResult result = _features.chatFeatureController.loadCurrentPrivateHistory(
+        request,
+        memochat::app::makePrivateHistoryLoadCurrentDependencies(
+            _features.chatFeatureController,
+            _gateway.userMgr(),
+            [this](const QString& name)
+            {
+                setCurrentChatPeerName(name);
+            },
+            [this](const QString& icon)
+            {
+                setCurrentChatPeerIcon(icon);
+            },
+            [this](bool loading)
+            {
+                setPrivateHistoryLoading(loading);
+            },
+            [this](bool canLoad)
+            {
+                setCanLoadMorePrivateHistory(canLoad);
+            },
+            [this](int peerUid, qint64 readTs)
+            {
+                _features.chatFeatureController.sendPrivateReadAckForPeer(peerUid, readTs);
+            }));
+    if (!result.success)
     {
-        _message_model.clear();
-        _private_history_state.beforeTs = 0;
-        _private_history_state.beforeMsgId.clear();
-        _private_history_state.pendingBeforeTs = 0;
-        _private_history_state.pendingBeforeMsgId.clear();
-        _private_history_state.pendingPeerUid = 0;
-        _group_state.historyBeforeSeq = 0;
-        _group_state.historyHasMore = true;
-        setPrivateHistoryLoading(false);
-        setCanLoadMorePrivateHistory(false);
+        resetGroupConversationFeatureState();
+        _shell_state.loadingState().groupHistoryLoading = false;
         return;
     }
 
-    qInfo() << "Loading current private chat, peer uid:" << _chat_state.uid
-            << "existing friend msg count:" << static_cast<qlonglong>(friendInfo->_chat_msgs.size());
-    setCurrentChatPeerName(DialogListService::privateDisplayName(friendInfo));
-    setCurrentChatPeerIcon(friendInfo->_icon.trimmed().isEmpty() ? QStringLiteral("qrc:/res/head_1.png")
-                                                                 : friendInfo->_icon);
-
-    const auto localMessages = _private_cache_store.loadRecentMessages(selfInfo->_uid, _chat_state.uid, 20);
-    if (!localMessages.empty())
+    if (result.localCacheCount > 0)
     {
-        _gateway.userMgr()->AppendFriendChatMsg(_chat_state.uid, localMessages);
-        qInfo() << "Merged local private cache, peer uid:" << _chat_state.uid
-                << "cache count:" << static_cast<qlonglong>(localMessages.size());
+        qInfo() << "Merged local private cache, peer uid:" << result.peerUid
+                << "cache count:" << result.localCacheCount;
     }
-    friendInfo = _gateway.userMgr()->GetFriendById(_chat_state.uid);
-    if (!friendInfo)
+    qInfo() << "Private chat loaded, peer uid:" << _chat_state.uid << "friend msg count:" << result.friendMessageCount
+            << "message model count:" << _features.chatFeatureController.messageCount()
+            << "earliest created at:" << result.beforeTs << "earliest msg id:" << result.beforeMsgId;
+    if (result.shouldRequestInitialHistory)
     {
-        _message_model.clear();
-        setCanLoadMorePrivateHistory(false);
-        return;
+        requestPrivateHistory(_chat_state.uid, 0, QString());
     }
-    _message_model.setMessages(friendInfo->_chat_msgs, selfInfo->_uid);
-    qint64 latestPeerTs = 0;
-    for (const auto& one : friendInfo->_chat_msgs)
-    {
-        if (one && one->_from_uid == _chat_state.uid)
-        {
-            latestPeerTs = qMax(latestPeerTs, one->_created_at);
-        }
-    }
-    if (latestPeerTs > 0)
-    {
-        sendPrivateReadAck(_chat_state.uid, latestPeerTs);
-    }
-    _private_history_state.beforeTs = _message_model.earliestCreatedAt();
-    _private_history_state.beforeMsgId = _message_model.earliestMsgId();
-    _private_history_state.pendingBeforeTs = 0;
-    _private_history_state.pendingBeforeMsgId.clear();
-    _private_history_state.pendingPeerUid = 0;
-    setPrivateHistoryLoading(false);
-    setCanLoadMorePrivateHistory(true);
-    qInfo() << "Private chat loaded, peer uid:" << _chat_state.uid
-            << "friend msg count:" << static_cast<qlonglong>(friendInfo->_chat_msgs.size())
-            << "message model count:" << _message_model.rowCount()
-            << "earliest created at:" << _private_history_state.beforeTs
-            << "earliest msg id:" << _private_history_state.beforeMsgId;
-    requestPrivateHistory(_chat_state.uid, 0, QString());
 }
 
 void AppController::requestPrivateHistory(int peerUid, qint64 beforeTs, const QString& beforeMsgId)
 {
-    if (_loading_state.privateHistoryLoading || peerUid <= 0)
-    {
-        return;
-    }
-
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo)
-    {
-        return;
-    }
-
-    QJsonObject payloadObj;
-    payloadObj["fromuid"] = selfInfo->_uid;
-    payloadObj["peer_uid"] = peerUid;
-    payloadObj["before_ts"] = static_cast<qint64>(beforeTs);
-    if (!beforeMsgId.trimmed().isEmpty())
-    {
-        payloadObj["before_msg_id"] = beforeMsgId.trimmed();
-    }
-    payloadObj["limit"] = 20;
-    const QByteArray payload = QJsonDocument(payloadObj).toJson(QJsonDocument::Compact);
-
-    _private_history_state.pendingPeerUid = peerUid;
-    _private_history_state.pendingBeforeTs = beforeTs;
-    _private_history_state.pendingBeforeMsgId = beforeMsgId.trimmed();
-    setPrivateHistoryLoading(true);
-    _gateway.chatTransport()->slot_send_data(ReqId::ID_PRIVATE_HISTORY_REQ, payload);
+    PrivateHistoryRequestBuildRequest request;
+    request.peerUid = peerUid;
+    request.selfUid = selfInfo ? selfInfo->_uid : 0;
+    request.beforeTs = beforeTs;
+    request.beforeMsgId = beforeMsgId;
+    request.privateHistoryLoading = _shell_state.loadingState().privateHistoryLoading;
+    _features.chatFeatureController.buildPrivateHistoryRequest(
+        request,
+        memochat::app::makePrivateHistoryRequestBuildDependencies(
+            [this](bool loading)
+            {
+                setPrivateHistoryLoading(loading);
+            },
+            [this](int reqId, const QByteArray& payload)
+            {
+                if (const auto transport = _gateway.chatTransport())
+                {
+                    transport->slot_send_data(static_cast<ReqId>(reqId), payload);
+                }
+            }));
 }
 
 void AppController::requestPrivateHistoryForBootstrap(int peerUid)
 {
-    if (peerUid <= 0)
-    {
-        return;
-    }
-
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo)
+    PrivateHistoryBootstrapRequest request;
+    request.peerUid = peerUid;
+    request.selfUid = selfInfo ? selfInfo->_uid : 0;
+    PrivateHistoryBootstrapDependencies dependencies;
+    dependencies.dispatchPayload = [this](int reqId, const QByteArray& payload)
     {
-        return;
-    }
-
-    QJsonObject payloadObj;
-    payloadObj["fromuid"] = selfInfo->_uid;
-    payloadObj["peer_uid"] = peerUid;
-    payloadObj["before_ts"] = static_cast<qint64>(0);
-    payloadObj["limit"] = 20;
-    const QByteArray payload = QJsonDocument(payloadObj).toJson(QJsonDocument::Compact);
-    _gateway.chatTransport()->slot_send_data(ReqId::ID_PRIVATE_HISTORY_REQ, payload);
+        if (const auto transport = _gateway.chatTransport())
+        {
+            transport->slot_send_data(static_cast<ReqId>(reqId), payload);
+        }
+    };
+    _features.chatFeatureController.buildPrivateHistoryBootstrapRequest(request, dependencies);
 }

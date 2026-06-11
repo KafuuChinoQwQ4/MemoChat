@@ -1,14 +1,22 @@
 #include "AppCoordinators.h"
 
-#include "AppController.h"
+#include <utility>
 
-AppSessionCoordinator::AppSessionCoordinator(AppController& controller)
-    : _app(controller)
-    , _auth(std::make_unique<SessionAuthCoordinator>(controller))
-    , _chat_entry(std::make_unique<SessionChatEntryCoordinator>(controller))
-    , _relation_bootstrap(std::make_unique<SessionRelationBootstrap>(controller))
-    , _register_countdown(std::make_unique<RegisterCountdownController>(controller))
+AppSessionCoordinator::AppSessionCoordinator(SessionAuthPort authPort,
+                                             PostLoginBootstrapPort chatEntryPort,
+                                             RelationBootstrapPort relationBootstrapPort,
+                                             RegisterCountdownPort registerCountdownPort,
+                                             SessionLogoutPort logoutPort)
+    : _logout_port(std::move(logoutPort))
 {
+    _register_countdown = std::make_unique<RegisterCountdownController>(std::move(registerCountdownPort));
+    authPort.startRegisterCountdown = [this]()
+    {
+        _register_countdown->startTimer();
+    };
+    _auth = std::make_unique<SessionAuthCoordinator>(std::move(authPort));
+    _chat_entry = std::make_unique<SessionChatEntryCoordinator>(std::move(chatEntryPort));
+    _relation_bootstrap = std::make_unique<SessionRelationBootstrap>(std::move(relationBootstrapPort));
 }
 
 void AppSessionCoordinator::login(const QString& email, const QString& password)
@@ -74,14 +82,4 @@ void AppSessionCoordinator::requestRelationBootstrap()
 void AppSessionCoordinator::onRelationBootstrapUpdated()
 {
     _relation_bootstrap->onRelationBootstrapUpdated();
-}
-
-void AppSessionCoordinator::onRegisterCountdownTimeout()
-{
-    _register_countdown->onRegisterCountdownTimeout();
-}
-
-void AppSessionCoordinator::onRegisterCodeCooldownTimeout()
-{
-    _auth->onRegisterCodeCooldownTimeout();
 }

@@ -7,17 +7,48 @@ from tests.python.support.paths import repo_root
 REPO_ROOT = repo_root()
 CLIENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 APP = CLIENT / "app"
+APP_FEATURE_REGISTRY_H = APP / "composition/AppFeatureRegistry.h"
 FEATURES = CLIENT / "features"
 QML_ROOT = CLIENT / "qml"
 SHELL_DIR = APP / "shell"
+SESSION_LOGOUT = APP / "session/AppSessionCoordinatorLogout.cpp"
 
 
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def app_owned_reset_text() -> str:
+    roots = (
+        APP / "controller",
+        APP / "session",
+        APP / "coordinators",
+    )
+    sources: list[str] = []
+    for root in roots:
+        for path in sorted(root.rglob("*")):
+            if path.suffix in {".cpp", ".h", ".hpp", ".cc", ".cxx"}:
+                sources.append(read(path))
+    return "\n".join(sources)
+
+
 def normalized(source: str) -> str:
     return " ".join(source.split())
+
+
+def extract_cpp_function(source: str, signature: str) -> str:
+    start = source.index(signature)
+    open_brace = source.index("{", start)
+    depth = 0
+    for index in range(open_brace, len(source)):
+        char = source[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start : index + 1]
+    raise AssertionError(f"Function not found: {signature}")
 
 
 def qml_sources() -> dict[str, str]:
@@ -27,6 +58,16 @@ def qml_sources() -> dict[str, str]:
             if path.suffix in {".qml", ".js"}:
                 sources[path.relative_to(CLIENT).as_posix()] = read(path)
     return sources
+
+
+def appcontroller_public_section() -> str:
+    header = read(APP / "controller/AppController.h")
+    return header[header.index("public:") : header.index("signals:")]
+
+
+def appcontroller_private_section() -> str:
+    header = read(APP / "controller/AppController.h")
+    return header[header.index("private:") :]
 
 
 class ShellViewModelContractTests(unittest.TestCase):
@@ -109,21 +150,29 @@ class ShellViewModelContractTests(unittest.TestCase):
                 self.assertIn(token, compact_source)
 
     def test_engine_exposes_shell_context_and_removes_controller_context(self):
+        composition = read(APP / "composition/AppComposition.cpp")
         engine = read(APP / "bootstrap/MainQmlEngineSetup.cpp")
 
-        self.assertIn('setContextProperty("shell", controller.shellViewModel())', engine)
+        self.assertIn('context.setContextProperty("shell", shell())', composition)
+        self.assertIn("composition.configureQmlContext(*engine.rootContext());", engine)
         self.assertNotIn('setContextProperty("controller"', engine)
 
-    def test_appcontroller_owns_shell_facade_without_shell_qml_compatibility(self):
+    def test_appcontroller_owns_shell_facade_without_shell_qml_or_public_command_compatibility(self):
         header = read(APP / "controller/AppController.h")
+        registry = read(APP_FEATURE_REGISTRY_H)
         controller = normalized(read(APP / "controller/AppController.cpp"))
+        signal_binder = normalized(read(APP / "composition/AppShellSignalBinder.cpp"))
+        public = appcontroller_public_section()
+        private = appcontroller_private_section()
 
-        self.assertIn('#include "ShellViewModel.h"', header)
+        self.assertIn('#include "AppFeatureRegistry.h"', header)
+        self.assertIn('#include "ShellViewModel.h"', registry)
         self.assertNotIn("Q_PROPERTY(ShellViewModel* shell READ shell CONSTANT)", header)
-        self.assertIn("ShellViewModel* shell();", header)
-        self.assertIn("ShellViewModel* shellViewModel();", header)
-        self.assertIn("ShellViewModel _shell_view_model;", header)
-        self.assertIn("void syncShellViewModelState();", header)
+        self.assertNotIn("ShellViewModel* shell();", header)
+        self.assertIn("ShellViewModel* shellViewModel();", public)
+        self.assertIn("AppFeatureRegistry _features", header)
+        self.assertIn("ShellViewModel shellViewModel;", registry)
+        self.assertIn("void syncShellViewModelState();", private)
 
         pruned_properties = (
             "Q_PROPERTY(Page page READ page NOTIFY pageChanged)",
@@ -146,30 +195,35 @@ class ShellViewModelContractTests(unittest.TestCase):
             "void switchChatTab(int tab);",
             "void beginPostLoginBootstrap();",
             "void openExternalResource(const QString& url);",
-            "QVariantMap contactProfileByUid(int uid) const;",
         )
         for token in plain_methods:
             with self.subTest(token=token):
                 self.assertIn(token, header)
+                self.assertIn(token, private)
+                self.assertNotIn(token, public)
                 self.assertNotIn(f"Q_INVOKABLE {token}", header)
 
         expected_connections = (
-            "connect(&_shell_view_model, &ShellViewModel::switchToLoginRequested, this, &AppController::switchToLogin);",
-            "connect(&_shell_view_model, &ShellViewModel::switchToRegisterRequested, this, &AppController::switchToRegister);",
-            "connect(&_shell_view_model, &ShellViewModel::switchToResetRequested, this, &AppController::switchToReset);",
-            "connect(&_shell_view_model, &ShellViewModel::switchChatTabRequested, this, &AppController::switchChatTab);",
-            "connect(&_shell_view_model, &ShellViewModel::beginPostLoginBootstrapRequested, this, &AppController::beginPostLoginBootstrap);",
-            "connect(&_shell_view_model, &ShellViewModel::openExternalResourceRequested, this, &AppController::openExternalResource);",
+            "connect(&_features.shellViewModel, &ShellViewModel::switchToLoginRequested, this, &AppController::switchToLogin);",
+            "connect(&_features.shellViewModel, &ShellViewModel::switchToRegisterRequested, this, &AppController::switchToRegister);",
+            "connect(&_features.shellViewModel, &ShellViewModel::switchToResetRequested, this, &AppController::switchToReset);",
+            "connect(&_features.shellViewModel, &ShellViewModel::switchChatTabRequested, this, &AppController::switchChatTab);",
+            "connect(&_features.shellViewModel, &ShellViewModel::beginPostLoginBootstrapRequested, this, &AppController::beginPostLoginBootstrap);",
+            "connect(&_features.shellViewModel, &ShellViewModel::openExternalResourceRequested, this, &AppController::openExternalResource);",
         )
         for token in expected_connections:
             with self.subTest(token=token):
-                self.assertIn(token, controller)
+                self.assertIn(token, signal_binder)
+                self.assertNotIn(token, controller)
+
+        self.assertIn("void bindAppControllerSignals();", private)
+        self.assertIn("bindAppControllerSignals();", controller)
 
         sync_tokens = (
             "void AppController::syncShellViewModelState()",
-            "_shell_view_model.syncPage(static_cast<int>(_page));",
-            "_shell_view_model.syncChatTab(static_cast<int>(_chat_tab));",
-            "_shell_view_model.syncCurrentUser(currentUserName(), currentUserNick(), currentUserIcon(), "
+            "_features.shellViewModel.syncPage(_shell_state.page());",
+            "_features.shellViewModel.syncChatTab(_shell_state.chatTab());",
+            "_features.shellViewModel.syncCurrentUser(currentUserName(), currentUserNick(), currentUserIcon(), "
             "currentUserDesc(), currentUserId(), currentUserUid());",
         )
         for token in sync_tokens:
@@ -212,17 +266,31 @@ class ShellViewModelContractTests(unittest.TestCase):
         self.assertIn("currentUserUid: shell.currentUserUid", shell_content)
 
     def test_switch_to_login_syncs_shell_when_only_user_uid_changes(self):
-        navigation = normalized(read(APP / "controller/AppControllerNavigation.cpp"))
+        reset_owner = normalized(
+            extract_cpp_function(read(SESSION_LOGOUT), "void AppSessionCoordinator::resetForLogout")
+        )
+        app_controller = normalized(read(APP / "controller/AppController.cpp"))
+        app_reset_ports = normalized(read(APP / "composition/AppSessionLogoutPortBinder.cpp"))
 
-        self.assertIn("const int previous_user_uid = currentUserUid();", navigation)
-        self.assertIn("const bool userChanged = previous_user_uid != 0 ||", navigation)
+        self.assertIn(
+            "const int previousUserUid = _logout_port.currentUserUid ? _logout_port.currentUserUid() : 0;",
+            reset_owner,
+        )
+        self.assertIn("_shell_state.resetCurrentUser(previousUserUid)", app_reset_ports)
+        self.assertNotIn("const bool userChanged = previousUserUid != 0 ||", app_controller)
         self.assertLess(
-            navigation.index("const int previous_user_uid = currentUserUid();"),
-            navigation.index("_gateway.userMgr()->ResetSession();"),
+            reset_owner.index(
+                "const int previousUserUid = _logout_port.currentUserUid ? _logout_port.currentUserUid() : 0;"
+            ),
+            reset_owner.index("invokeIfSet(_logout_port.closeNetworkResources);"),
         )
         self.assertLess(
-            navigation.index("const bool userChanged = previous_user_uid != 0 ||"),
-            navigation.index("syncShellViewModelState(); emit currentUserChanged();"),
+            reset_owner.index("invokeIfSet(_logout_port.closeNetworkResources);"),
+            reset_owner.index("invokeIfSet(_logout_port.clearCurrentUserState, previousUserUid);"),
+        )
+        self.assertLess(
+            app_reset_ports.index("_shell_state.resetCurrentUser(previousUserUid)"),
+            app_reset_ports.index("syncShellViewModelState(); emit currentUserChanged();"),
         )
 
     def test_qml_uses_shell_context_for_shell_and_user_surface(self):
@@ -244,22 +312,22 @@ class ShellViewModelContractTests(unittest.TestCase):
 
         expected_shell_tokens = {
             "qml/app/Main.qml": (
-                "readonly property bool chatPageActive: shell.page === AppController.ChatPage",
+                "readonly property bool chatPageActive: shell.page === ShellViewModel.ChatPage",
                 "shell.beginPostLoginBootstrap()",
                 '"selfAvatar": shell.currentUserIcon',
                 "shell.switchToRegister()",
-                "visible: shell.page === AppController.LoginPage",
+                "visible: shell.page === ShellViewModel.LoginPage",
             ),
             "qml/linux/Main.qml": (
-                "readonly property bool chatPageActive: shell.page === AppController.ChatPage",
+                "readonly property bool chatPageActive: shell.page === ShellViewModel.ChatPage",
                 "shell.beginPostLoginBootstrap()",
                 '"selfAvatar": shell.currentUserIcon',
                 "shell.switchToReset()",
-                "visible: shell.page === AppController.ResetPage",
+                "visible: shell.page === ShellViewModel.ResetPage",
             ),
             "qml/app/ChatShellPage.qml": (
                 "property int lastMainTab: shell.chatTab",
-                "shell.switchChatTab(AppController.ChatTabPage)",
+                "shell.switchChatTab(ShellViewModel.ChatTabPage)",
                 "shell.switchToLogin()",
             ),
             "features/chat/view/ChatNormalFace.qml": (
@@ -269,14 +337,14 @@ class ShellViewModelContractTests(unittest.TestCase):
                 "userId: shell.currentUserId",
             ),
             "features/chat/view/ChatShellContent.qml": (
-                "shell.chatTab === AppController.ChatTabPage",
+                "shell.chatTab === ShellViewModel.ChatTabPage",
                 "selfName: shell.currentUserNick",
                 "selfAvatar: shell.currentUserIcon",
                 "shell.openExternalResource(url)",
-                "shell.chatTab === AppController.ContactTabPage",
+                "shell.chatTab === ShellViewModel.ContactTabPage",
             ),
             "features/agent/view/AgentGameOverlay.qml": (
-                "shell.chatTab === AppController.AgentTabPage",
+                "shell.chatTab === ShellViewModel.AgentTabPage",
                 "humanDisplayName: shell.currentUserNick",
             ),
             "features/auth/view/RegisterPage.qml": ("shell.switchToLogin()",),
@@ -292,12 +360,55 @@ class ShellViewModelContractTests(unittest.TestCase):
 
         self.assertNotIn("chat.chatTab", sources["features/chat/view/ChatShellContent.qml"])
 
-    def test_appcontroller_enum_registration_remains_for_qml_constants(self):
+    def test_shell_viewmodel_exposes_qml_enums_and_appcontroller_keeps_compatibility_boundary(self):
+        shell_header = read(SHELL_DIR / "ShellViewModel.h")
+        appcontroller_header = read(APP / "controller/AppController.h")
         registry = read(APP / "bootstrap/MainQmlTypeRegistry.cpp")
 
-        self.assertIn(
-            'qmlRegisterUncreatableType<AppController>("MemoChat", 1, 0, "AppController", "Enum only")', registry
+        enum_tokens = (
+            "enum Page",
+            "LoginPage = 0",
+            "RegisterPage = 1",
+            "ResetPage = 2",
+            "ChatPage = 3",
+            "Q_ENUM(Page)",
+            "enum ChatTab",
+            "ChatTabPage = 0",
+            "ContactTabPage = 1",
+            "SettingsTabPage = 2",
+            "MomentsTabPage = 3",
+            "AgentTabPage = 4",
+            "Live2DTabPage = 5",
+            "Q_ENUM(ChatTab)",
         )
+        for token in enum_tokens:
+            with self.subTest(token=token):
+                self.assertIn(token, shell_header)
+
+        self.assertIn(
+            'qmlRegisterUncreatableType<ShellViewModel>("MemoChat", 1, 0, "ShellViewModel", "Enum only")',
+            registry,
+        )
+        self.assertNotIn('qmlRegisterUncreatableType<AppController>("MemoChat", 1, 0, "AppController"', registry)
+
+        self.assertIn("enum Page", appcontroller_header)
+        self.assertIn("enum ChatTab", appcontroller_header)
+        self.assertNotIn("Q_PROPERTY(Page page READ page NOTIFY pageChanged)", appcontroller_header)
+        self.assertNotIn("Q_PROPERTY(ChatTab chatTab READ chatTab NOTIFY chatTabChanged)", appcontroller_header)
+
+    def test_main_qml_entries_do_not_depend_on_appcontroller_enums(self):
+        sources = qml_sources()
+        failures = []
+        for name in ("qml/app/Main.qml", "qml/linux/Main.qml"):
+            source = sources[name]
+            if "AppController." in source:
+                failures.append(f"{name}: AppController enum reference")
+            if "ShellViewModel." not in source:
+                failures.append(f"{name}: missing ShellViewModel enum reference")
+            if "shell." not in source and "shellViewModel." not in source:
+                failures.append(f"{name}: missing shell view-model context")
+
+        self.assertEqual([], failures)
 
 
 if __name__ == "__main__":

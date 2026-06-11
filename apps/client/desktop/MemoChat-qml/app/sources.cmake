@@ -6,11 +6,60 @@ set(MEMOCHAT_QML_APP_SOURCES
     app/bootstrap/MainQmlEngineSetup.cpp
     app/bootstrap/MainQmlWindowLoader.cpp
     app/bootstrap/MainRuntimeConfig.cpp
+    app/composition/AppFeatureRegistry.cpp
+    app/composition/AppComposition.cpp
+    app/composition/AppPortRegistry.cpp
+    app/composition/AppPortBinder.cpp
+    app/composition/AppSessionPortBinder.cpp
+    app/composition/AppSessionAuthPortBinder.cpp
+    app/composition/AppPostLoginBootstrapPortBinder.cpp
+    app/composition/AppRelationBootstrapPortBinder.cpp
+    app/composition/AppRegisterCountdownPortBinder.cpp
+    app/composition/AppSessionLogoutPortBinder.cpp
+    app/composition/AppMediaPortBinder.cpp
+    app/composition/AppCallPortBinder.cpp
+    app/composition/AppFeaturePortBinder.cpp
+    app/composition/AppAuthFeaturePortBinder.cpp
+    app/composition/AppContactFeaturePortBinder.cpp
+    app/composition/AppGroupFeaturePortBinder.cpp
+    app/composition/AppProfileFeaturePortBinder.cpp
+    app/composition/AppConnectionPortBinder.cpp
+    app/composition/AppSignalBinder.cpp
+    app/composition/AppHttpSignalBinder.cpp
+    app/composition/AppChatTransportSignalBinder.cpp
+    app/composition/AppChatDispatcherSignalBinder.cpp
+    app/composition/AppChatDispatcherSignalRoutes.cpp
+    app/composition/AppChatDispatcherRouterFactory.cpp
+    app/composition/AppCallSignalBinder.cpp
+    app/composition/AppFeatureFacadeSignalBinder.cpp
+    app/composition/AppShellSignalBinder.cpp
+    app/composition/AppChatProjectionSignalBinder.cpp
+    app/composition/AppTimerSignalBinder.cpp
+    app/events/AppChatDispatcherEventRouter.cpp
+    app/events/AppHttpEventRouter.cpp
+    app/shell/AppShellStateController.cpp
     app/shell/ShellViewModel.cpp
     app/window/MainWindowEffects.cpp
     app/window/MainWindowHooks.cpp
     app/controller/AppController.cpp
+    app/controller/AppControllerChatFeatureBinding.cpp
+    app/controller/AppChatProjectionBinding.cpp
+    app/controller/AppChatSendBinding.cpp
+    app/controller/AppChatDialogBinding.cpp
+    app/controller/AppChatHistoryBinding.cpp
+    app/controller/AppChatGroupBinding.cpp
+    app/controller/AppChatMediaBinding.cpp
+    app/controller/AppChatReadMutationBinding.cpp
+    app/controller/ChatEventDependenciesFactory.cpp
+    app/controller/ChatDialogSelectionPortFactory.cpp
+    app/controller/ContactEventDependenciesFactory.cpp
+    app/controller/GroupManagementEffectPortFactory.cpp
+    app/controller/IncomingMessageRouterFactory.cpp
+    app/controller/PrivateHistoryDependenciesFactory.cpp
     app/session/AppSessionCoordinator.cpp
+    app/session/AppSessionCoordinatorAuthTimers.cpp
+    app/session/AppSessionCoordinatorConnectionState.cpp
+    app/session/AppSessionCoordinatorLogout.cpp
     app/session/SessionAuthCoordinator.cpp
     app/session/SessionAuthCoordinatorCommands.cpp
     app/session/SessionAuthCoordinatorLoginResponse.cpp
@@ -18,29 +67,24 @@ set(MEMOCHAT_QML_APP_SOURCES
     app/session/SessionChatEntryCoordinator.cpp
     app/session/SessionRelationBootstrap.cpp
     app/coordinators/RegisterCountdownController.cpp
-    app/controller/AppControllerAuth.cpp
-    app/controller/AppControllerAuthResponses.cpp
     app/coordinators/CallCoordinator.cpp
+    app/coordinators/CallCoordinatorCommands.cpp
+    app/coordinators/CallCoordinatorEvents.cpp
+    app/coordinators/CallCoordinatorHttp.cpp
+    app/coordinators/CallCoordinatorLivekit.cpp
     app/coordinators/CallCoordinatorPayloadPolicy.cpp
     app/connection/AppChatConnectionCoordinator.cpp
     app/connection/AppChatConnectionPolicy.cpp
-    app/coordinators/ContactCoordinatorShell.cpp
     app/controller/AppControllerContactEvents.cpp
-    app/controller/AppControllerDialogListEvents.cpp
+    app/controller/AppControllerDialogListPorts.cpp
     app/controller/AppControllerDialogState.cpp
-    app/controller/AppControllerDialogCommands.cpp
-    app/coordinators/GroupCoordinator.cpp
     app/coordinators/MediaCoordinator.cpp
-    app/coordinators/ProfileCoordinator.cpp
+    app/coordinators/MediaPendingAttachmentRunner.cpp
     app/controller/AppControllerGroupCommands.cpp
-    app/controller/AppControllerGroupPayloads.cpp
-    app/controller/AppControllerGroupManagement.cpp
     app/controller/AppControllerModels.cpp
     app/controller/AppControllerDialogModels.cpp
     app/controller/AppControllerPrivateHistory.cpp
-    app/controller/AppControllerReadAcks.cpp
     app/controller/AppControllerPrivateSelection.cpp
-    app/controller/AppControllerContactSelection.cpp
     app/controller/AppControllerGroupSelection.cpp
     app/controller/AppControllerDialogSelection.cpp
     app/controller/AppControllerPagination.cpp
@@ -56,7 +100,6 @@ set(MEMOCHAT_QML_APP_SOURCES
     app/controller/AppControllerIncomingBuffer.cpp
     app/controller/AppControllerProfileState.cpp
     app/controller/AppControllerBootstrapState.cpp
-    app/controller/AppControllerProfileCommands.cpp
     app/controller/AppControllerGroupEvents.cpp
     app/controller/AppControllerGroupResponses.cpp
     app/controller/AppControllerGroupResponseErrors.cpp
@@ -65,15 +108,10 @@ set(MEMOCHAT_QML_APP_SOURCES
     app/controller/AppControllerGroupMessageResponses.cpp
     app/controller/AppControllerPrivateMessageResponses.cpp
     app/controller/AppControllerDialogMetaResponses.cpp
-    app/controller/AppControllerMedia.cpp
     app/controller/AppControllerPendingAttachments.cpp
     app/controller/AppControllerMediaUploadQueue.cpp
     app/controller/AppControllerMessageDispatch.cpp
     app/controller/AppControllerPrivateEvents.cpp
-    app/controller/AppControllerMessageStatus.cpp
-    app/controller/AppControllerPrivateHistoryResponses.cpp
-    app/controller/AppControllerPrivateMessageEvents.cpp
-    app/controller/AppControllerPrivateReadEvents.cpp
     app/connection/AppControllerChatBootstrap.cpp
     app/controller/AppControllerRelationBootstrap.cpp
 )
@@ -83,18 +121,33 @@ set(MEMOCHAT_QML_APP_HEADERS
     app/bootstrap/MainPlatformBootstrap.h
     app/bootstrap/MainQmlBootstrap.h
     app/bootstrap/MainRuntimeConfig.h
+    app/composition/AppFeatureRegistry.h
+    app/composition/AppComposition.h
+    app/composition/AppPortRegistry.h
+    app/composition/AppChatDispatcherRouterFactory.h
+    app/composition/AppChatDispatcherSignalRoutes.h
+    app/composition/AppPortBinder.h
+    app/composition/AppSignalBinder.h
+    app/events/AppChatDispatcherEventRouter.h
+    app/events/AppChatDispatcherGroupResponseHandlers.h
+    app/events/AppHttpEventRouter.h
+    app/shell/AppShellStateController.h
     app/shell/ShellViewModel.h
     app/window/MainWindowEffects.h
     app/window/MainWindowHooks.h
     app/controller/AppController.h
     app/connection/AppControllerConnectionState.h
+    app/connection/AppChatConnectionCoordinator.h
     app/connection/AppChatConnectionPolicy.h
     app/coordinators/CallCoordinatorPayloadPolicy.h
-    app/controller/AppControllerDialogStateData.h
-    app/controller/AppControllerGroupState.h
-    app/controller/AppControllerGroupPayloads.h
-    app/controller/AppControllerPendingSendState.h
+    app/coordinators/MediaPendingAttachmentRunner.h
     app/controller/AppControllerRuntimeState.h
     app/controller/AppControllerUserState.h
+    app/controller/ChatEventDependenciesFactory.h
+    app/controller/ChatDialogSelectionPortFactory.h
+    app/controller/ContactEventDependenciesFactory.h
+    app/controller/GroupManagementEffectPortFactory.h
+    app/controller/IncomingMessageRouterFactory.h
+    app/controller/PrivateHistoryDependenciesFactory.h
     app/coordinators/AppCoordinators.h
 )

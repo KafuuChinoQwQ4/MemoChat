@@ -17,6 +17,33 @@ class ShellViewModel : public QObject
     Q_PROPERTY(int currentUserUid READ currentUserUid NOTIFY currentUserChanged)
 
 public:
+    enum Page
+    {
+        LoginPage = 0,
+        RegisterPage = 1,
+        ResetPage = 2,
+        ChatPage = 3
+    };
+    Q_ENUM(Page)
+
+    enum ChatTab
+    {
+        ChatTabPage = 0,
+        ContactTabPage = 1,
+        SettingsTabPage = 2,
+        MomentsTabPage = 3,
+        AgentTabPage = 4,
+        Live2DTabPage = 5
+    };
+    Q_ENUM(ChatTab)
+
+    enum ContactPane
+    {
+        ApplyRequestPane = 0,
+        FriendInfoPane = 1
+    };
+    Q_ENUM(ContactPane)
+
     explicit ShellViewModel(QObject* parent = nullptr);
 
     int page() const;

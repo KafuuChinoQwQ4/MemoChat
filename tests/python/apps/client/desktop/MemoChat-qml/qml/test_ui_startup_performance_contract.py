@@ -354,8 +354,9 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
         self.assertRegex(source, r"constexpr\s+int\s+kPostLoginBootstrapDelayMs\s*=\s*100\s*;")
         self.assertRegex(
             source,
-            r"QTimer::singleShot\s*\(\s*kPostLoginBootstrapDelayMs\s*,\s*&_app\s*,\s*\[this\]",
+            r"_port\.runDelayed\s*\(\s*kPostLoginBootstrapDelayMs\s*,\s*\[this\]",
         )
+        self.assertNotIn("QTimer::singleShot(kPostLoginBootstrapDelayMs, &_app", source)
 
 
 if __name__ == "__main__":

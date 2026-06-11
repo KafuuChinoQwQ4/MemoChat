@@ -1,7 +1,6 @@
 #include "AppController.h"
-#include "ConversationSyncService.h"
-#include "MessageContentCodec.h"
-#include "MessagePayloadService.h"
+#include "ChatEventDependenciesFactory.h"
+#include "PrivateChatEventService.h"
 #include "usermgr.h"
 
 #include <QJsonObject>
@@ -13,45 +12,28 @@ void AppController::handlePrivateMessageMutationRsp(ReqId reqId, const QJsonObje
     {
         return;
     }
-    const int peerUid = payload.value("peer_uid").toInt();
-    const MessageUpdateFields updateFields =
-        MessagePayloadService::parseMessageUpdateFields(payload,
-                                                        reqId == ID_REVOKE_PRIVATE_MSG_RSP
-                                                        ? QStringLiteral("private_msg_revoked")
-                                                        : QStringLiteral("private_msg_edited"));
-    if (peerUid > 0 && !updateFields.msgId.isEmpty() && !updateFields.content.isEmpty())
-    {
-        _gateway.userMgr()->UpdatePrivateChatMsgContent(peerUid,
-                                                        updateFields.msgId,
-                                                        updateFields.content,
-                                                        updateFields.state,
-                                                        updateFields.editedAtMs,
-                                                        updateFields.deletedAtMs);
-        auto friendInfo = _gateway.userMgr()->GetFriendById(peerUid);
-        if (friendInfo && _private_cache_store.isReady())
-        {
-            _private_cache_store.upsertMessages(selfInfo->_uid, peerUid, friendInfo->_chat_msgs);
-            if (!friendInfo->_chat_msgs.empty() && friendInfo->_chat_msgs.back())
+
+    PrivateMessageMutationResponseRequest request;
+    request.context = privateChatEventContext(selfInfo->_uid);
+    request.reqId = reqId;
+    request.payload = payload;
+    const PrivateMessageChangedResult result = _features.chatFeatureController.handlePrivateMessageMutationResponse(
+        request,
+        memochat::app::makePrivateChatEventDependencies(
+            _features.chatFeatureController,
+            _gateway.userMgr(),
+            [this](std::shared_ptr<AuthInfo> authInfo)
             {
-                const QString preview = MessageContentCodec::toPreviewText(friendInfo->_chat_msgs.back()->_msg_content);
-                const qint64 lastTs = friendInfo->_chat_msgs.back()->_created_at;
-                ConversationSyncService::updatePrivatePreview(_chat_list_model,
-                                                              _dialog_list_model,
-                                                              peerUid,
-                                                              preview,
-                                                              lastTs);
-            }
-        }
-        if (peerUid == _chat_state.uid)
-        {
-            _message_model.patchMessageContent(updateFields.msgId,
-                                               updateFields.content,
-                                               updateFields.state,
-                                               updateFields.editedAtMs,
-                                               updateFields.deletedAtMs);
-        }
+                _features.contactController.upsertContact(std::move(authInfo));
+            },
+            [this](int peerUid, qint64 readTs)
+            {
+                _features.chatFeatureController.sendPrivateReadAckForPeer(peerUid, readTs);
+            }));
+    if (!result.statusText.isEmpty())
+    {
+        setTip(result.statusText, result.statusIsError);
     }
-    setTip(reqId == ID_EDIT_PRIVATE_MSG_RSP ? "私聊消息已编辑" : "私聊消息已撤回", false);
 }
 
 void AppController::handlePrivateForwardRsp(const QJsonObject& payload)
@@ -61,31 +43,23 @@ void AppController::handlePrivateForwardRsp(const QJsonObject& payload)
     {
         return;
     }
-    const int peerUid = payload.value("peer_uid").toInt();
-    const QJsonObject msgObj = payload.value("msg").toObject();
-    auto forwardedMsg = MessagePayloadService::buildPrivateForwardedMessage(payload, msgObj, selfInfo->_uid);
-    if (peerUid > 0 && forwardedMsg && !forwardedMsg->_msg_id.isEmpty())
-    {
-        _gateway.userMgr()->AppendFriendChatMsg(peerUid, {forwardedMsg});
-        if (_private_cache_store.isReady())
-        {
-            _private_cache_store.upsertMessages(selfInfo->_uid, peerUid, {forwardedMsg});
-        }
-        auto friendInfo = _gateway.userMgr()->GetFriendById(peerUid);
-        if (friendInfo && !friendInfo->_chat_msgs.empty() && friendInfo->_chat_msgs.back())
-        {
-            const QString preview = MessageContentCodec::toPreviewText(friendInfo->_chat_msgs.back()->_msg_content);
-            const qint64 lastTs = friendInfo->_chat_msgs.back()->_created_at;
-            ConversationSyncService::updatePrivatePreview(_chat_list_model,
-                                                          _dialog_list_model,
-                                                          peerUid,
-                                                          preview,
-                                                          lastTs);
-        }
-        if (_group_state.currentId <= 0 && peerUid == _chat_state.uid)
-        {
-            _message_model.upsertMessage(forwardedMsg, selfInfo->_uid);
-        }
-    }
-    setTip("消息已转发", false);
+
+    PrivateForwardResponseRequest request;
+    request.context = privateChatEventContext(selfInfo->_uid);
+    request.payload = payload;
+    const PrivateForwardResponseResult result = _features.chatFeatureController.handlePrivateForwardResponse(
+        request,
+        memochat::app::makePrivateChatEventDependencies(
+            _features.chatFeatureController,
+            _gateway.userMgr(),
+            [this](std::shared_ptr<AuthInfo> authInfo)
+            {
+                _features.contactController.upsertContact(std::move(authInfo));
+            },
+            [this](int peerUid, qint64 readTs)
+            {
+                _features.chatFeatureController.sendPrivateReadAckForPeer(peerUid, readTs);
+            }));
+
+    setTip(result.statusText, result.isError);
 }

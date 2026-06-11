@@ -1,23 +1,40 @@
 #include "AppCoordinators.h"
 
-#include "AppController.h"
+#include <QObject>
+#include <utility>
 
-RegisterCountdownController::RegisterCountdownController(AppController& controller)
-    : _app(controller)
+RegisterCountdownController::RegisterCountdownController(RegisterCountdownPort port)
+    : _port(std::move(port))
 {
+    QObject::connect(&_timer,
+                     &QTimer::timeout,
+                     [this]()
+                     {
+                         onRegisterCountdownTimeout();
+                     });
 }
 
 void RegisterCountdownController::onRegisterCountdownTimeout()
 {
-    if (_app._shell_state.registerCountdown > 0)
+    if (_port.countdownSeconds() > 0)
     {
-        _app.setRegisterCountdown(_app._shell_state.registerCountdown - 1);
+        _port.setCountdownSeconds(_port.countdownSeconds() - 1);
     }
 
-    if (_app._shell_state.registerCountdown <= 0)
+    if (_port.countdownSeconds() <= 0)
     {
-        _app._register_countdown_timer.stop();
-        _app.setRegisterSuccessPage(false);
-        _app.switchToLogin();
+        stopTimer();
+        _port.setRegisterSuccessPage(false);
+        _port.switchToLogin();
     }
+}
+
+void RegisterCountdownController::startTimer()
+{
+    _timer.start(1000);
+}
+
+void RegisterCountdownController::stopTimer()
+{
+    _timer.stop();
 }

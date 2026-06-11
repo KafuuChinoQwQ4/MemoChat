@@ -1,16 +1,46 @@
 list(APPEND MEMOCHAT_QML_FEATURE_SOURCES
     features/chat/controller/ChatController.cpp
+    features/chat/controller/ChatFeatureController.cpp
+    features/chat/controller/ChatFeatureControllerDialogDecorations.cpp
+    features/chat/controller/ChatFeatureControllerDialogDraftCommands.cpp
+    features/chat/controller/ChatFeatureControllerDialogList.cpp
+    features/chat/controller/ChatFeatureControllerDialogMeta.cpp
+    features/chat/controller/ChatFeatureControllerDialogReadCommands.cpp
+    features/chat/controller/ChatFeatureControllerDialogRuntime.cpp
+    features/chat/controller/ChatFeatureControllerGroupConversation.cpp
+    features/chat/controller/ChatFeatureControllerIncoming.cpp
+    features/chat/controller/ChatFeatureControllerPendingSend.cpp
+    features/chat/controller/ChatFeatureControllerPrivateConversation.cpp
+    features/chat/controller/ChatFeatureControllerPrivateHistory.cpp
+    features/chat/controller/ChatFeatureControllerPrivateSend.cpp
     features/chat/model/ChatMessageModelContent.cpp
     features/chat/model/ChatMessageModel.cpp
     features/chat/model/ChatMessageModelMutations.cpp
     features/chat/model/ChatMessageModelPresentation.cpp
     features/chat/model/ChatMessageModelQueries.cpp
     features/chat/services/ChatDispatchService.cpp
+    features/chat/services/ChatDialogSelectionService.cpp
+    features/chat/services/ChatDialogListResponseService.cpp
+    features/chat/services/ChatProtocolRouter.cpp
     features/chat/services/ConversationSyncService.cpp
     features/chat/services/DialogListEntryBuilder.cpp
     features/chat/services/DialogListService.cpp
+    features/chat/services/GroupConversationAckService.cpp
+    features/chat/services/GroupConversationHistoryService.cpp
+    features/chat/services/GroupConversationIncomingService.cpp
+    features/chat/services/GroupConversationMutationService.cpp
+    features/chat/services/GroupConversationService.cpp
+    features/chat/services/IncomingMessageRouter.cpp
     features/chat/services/MessageContentCodec.cpp
+    features/chat/services/MessageMutationCommandService.cpp
     features/chat/services/MessagePayloadService.cpp
+    features/chat/services/PrivateChatEventService.cpp
+    features/chat/services/PrivateChatHistoryRequestService.cpp
+    features/chat/services/PrivateChatHistoryService.cpp
+    features/chat/services/PrivateChatReadStatusService.cpp
+    features/chat/services/PrivateChatResponseService.cpp
+    features/chat/services/PrivateChatSendService.cpp
+    features/chat/services/UploadedAttachmentDispatchService.cpp
     features/chat/cache/ChatCacheMessageCodec.cpp
     features/chat/cache/GroupChatCacheStore.cpp
     features/chat/cache/PrivateChatCacheStore.cpp
@@ -19,15 +49,33 @@ list(APPEND MEMOCHAT_QML_FEATURE_SOURCES
 
 list(APPEND MEMOCHAT_QML_FEATURE_HEADERS
     features/chat/controller/ChatController.h
+    features/chat/controller/ChatDialogRuntimeState.h
+    features/chat/controller/ChatFeatureController.h
+    features/chat/controller/ChatFeatureControllerDialogRuntimeInternal.h
+    features/chat/controller/ChatPendingSendQueueState.h
+    features/chat/controller/ChatReadAckCommand.h
     features/chat/model/ChatMessageModel.h
     features/chat/model/ChatUiState.h
     features/chat/services/ChatDispatchService.h
+    features/chat/services/ChatDialogSelectionService.h
+    features/chat/services/ChatDialogListResponseService.h
+    features/chat/services/ChatProtocolRouter.h
     features/chat/services/ConversationSyncService.h
     features/chat/services/DialogListEntryBuilder.h
     features/chat/services/DialogListService.h
     features/chat/services/DialogListTypes.h
+    features/chat/services/GroupConversationService.h
+    features/chat/services/GroupConversationServiceInternal.h
+    features/chat/services/IncomingMessageRouter.h
     features/chat/services/MessageContentCodec.h
+    features/chat/services/MessageMutationCommandService.h
     features/chat/services/MessagePayloadService.h
+    features/chat/services/PrivateChatEventService.h
+    features/chat/services/PrivateChatEventServiceInternal.h
+    features/chat/services/PrivateChatHistoryRequestService.h
+    features/chat/services/PrivateChatHistoryService.h
+    features/chat/services/PrivateChatSendService.h
+    features/chat/services/UploadedAttachmentDispatchService.h
     features/chat/cache/ChatCacheMessageCodec.h
     features/chat/cache/GroupChatCacheStore.h
     features/chat/cache/PrivateChatCacheStore.h

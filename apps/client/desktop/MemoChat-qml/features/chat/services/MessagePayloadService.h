@@ -25,6 +25,7 @@ public:
                                        qint64 editedAtMs,
                                        qint64 deletedAtMs,
                                        const QString& msgType = QString());
+    static QString resolveMessageStatusState(const QJsonObject& payload);
     static MessageUpdateFields parseMessageUpdateFields(const QJsonObject& payload,
                                                         const QString& event = QString(),
                                                         bool allowEmptyContent = false);

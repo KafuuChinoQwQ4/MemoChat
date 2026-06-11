@@ -2244,8 +2244,8 @@ using memochat::json::newCharReader;
 using memochat::json::reader_parse;
 using memochat::json::writeString;
 
-inline JsonValue objectValue{};
-inline JsonValue arrayValue{};
+inline JsonValue objectValue{JsonValue::ObjectValueTag{}};
+inline JsonValue arrayValue{memochat::json::array_t{}};
 
 class Reader
 {

@@ -106,6 +106,7 @@ set(CHATSERVER_RELATION_SOURCES
 set(CHATSERVER_MESSAGE_SOURCES
     domain/message/ChatMessageInternalGrpcService.cpp
     domain/message/GroupMessageService.cpp
+    domain/message/MessageDeliveryPayload.cpp
     domain/message/MessageServiceFactory.cpp
     domain/message/MessageDeliveryService.cpp
     domain/message/PrivateMessageService.cpp

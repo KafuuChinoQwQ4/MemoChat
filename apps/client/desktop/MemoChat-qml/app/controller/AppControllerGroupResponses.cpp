@@ -1,58 +1,43 @@
 #include "AppController.h"
 
+#include "AppChatDispatcherGroupResponseHandlers.h"
+
 #include <QJsonObject>
 
-void AppController::onGroupRsp(ReqId reqId, int error, QJsonObject payload)
+memochat::app::AppChatDispatcherGroupResponseHandlers AppController::groupResponseHandlers()
 {
-    if (error != ErrorCodes::SUCCESS)
+    memochat::app::AppChatDispatcherGroupResponseHandlers handlers;
+    handlers.handleError = [this](ReqId reqId, int error, const QJsonObject& payload)
     {
-        handleGroupRspError(reqId, error, payload);
-        return;
-    }
-
-    switch (reqId)
+        return handleGroupRspError(reqId, error, payload);
+    };
+    handlers.handleManagement = [this](ReqId reqId, const QJsonObject& payload)
     {
-        case ID_CREATE_GROUP_RSP:
-        case ID_INVITE_GROUP_MEMBER_RSP:
-        case ID_APPLY_JOIN_GROUP_RSP:
-        case ID_REVIEW_GROUP_APPLY_RSP:
-            handleGroupManagementRsp(reqId, payload);
-            break;
-        case ID_GROUP_HISTORY_RSP:
-            handleGroupHistoryRsp(payload);
-            break;
-        case ID_EDIT_GROUP_MSG_RSP:
-        case ID_REVOKE_GROUP_MSG_RSP:
-            handleGroupMessageMutationRsp(reqId, payload);
-            break;
-        case ID_EDIT_PRIVATE_MSG_RSP:
-        case ID_REVOKE_PRIVATE_MSG_RSP:
-            handlePrivateMessageMutationRsp(reqId, payload);
-            break;
-        case ID_FORWARD_PRIVATE_MSG_RSP:
-            handlePrivateForwardRsp(payload);
-            break;
-        case ID_UPDATE_GROUP_ANNOUNCEMENT_RSP:
-        case ID_UPDATE_GROUP_ICON_RSP:
-        case ID_MUTE_GROUP_MEMBER_RSP:
-        case ID_SET_GROUP_ADMIN_RSP:
-        case ID_KICK_GROUP_MEMBER_RSP:
-        case ID_QUIT_GROUP_RSP:
-        case ID_DISSOLVE_GROUP_RSP:
-            handleGroupManagementRsp(reqId, payload);
-            break;
-        case ID_GROUP_CHAT_MSG_RSP:
-        case ID_FORWARD_GROUP_MSG_RSP:
-            handleGroupMessageAckRsp(reqId, payload);
-            break;
-        case ID_SYNC_DRAFT_RSP:
-            handleDialogMetaRsp(reqId, payload);
-            break;
-        case ID_PIN_DIALOG_RSP:
-            handleDialogMetaRsp(reqId, payload);
-            break;
-        case ID_GET_GROUP_LIST_RSP:
-        default:
-            break;
-    }
+        handleGroupManagementRsp(reqId, payload);
+    };
+    handlers.handleHistory = [this](const QJsonObject& payload)
+    {
+        handleGroupHistoryRsp(payload);
+    };
+    handlers.handleGroupMessageMutation = [this](ReqId reqId, const QJsonObject& payload)
+    {
+        handleGroupMessageMutationRsp(reqId, payload);
+    };
+    handlers.handlePrivateMessageMutation = [this](ReqId reqId, const QJsonObject& payload)
+    {
+        handlePrivateMessageMutationRsp(reqId, payload);
+    };
+    handlers.handlePrivateForward = [this](const QJsonObject& payload)
+    {
+        handlePrivateForwardRsp(payload);
+    };
+    handlers.handleGroupMessageAck = [this](ReqId reqId, const QJsonObject& payload)
+    {
+        handleGroupMessageAckRsp(reqId, payload);
+    };
+    handlers.handleDialogMeta = [this](ReqId reqId, const QJsonObject& payload)
+    {
+        handleDialogMetaRsp(reqId, payload);
+    };
+    return handlers;
 }

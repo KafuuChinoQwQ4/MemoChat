@@ -45,7 +45,7 @@ Rectangle {
 
         function onGroupCreated(groupId) {
             root.viewMode = 0
-            shell.switchChatTab(AppController.ChatTabPage)
+            shell.switchChatTab(ShellViewModel.ChatTabPage)
         }
     }
 

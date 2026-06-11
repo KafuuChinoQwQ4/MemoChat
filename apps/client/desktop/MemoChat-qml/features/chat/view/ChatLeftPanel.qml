@@ -89,24 +89,24 @@ Rectangle {
         root.live2dAvatarSource = nextAvatar && nextAvatar.length > 0 ? nextAvatar : root.live2dAvatarFallback
     }
     function contextualTitle() {
-        if (currentTab === AppController.MomentsTabPage) {
+        if (currentTab === ShellViewModel.MomentsTabPage) {
             return "朋友圈"
         }
-        if (currentTab === AppController.AgentTabPage) {
+        if (currentTab === ShellViewModel.AgentTabPage) {
             return "AI 助手"
         }
-        if (currentTab === AppController.Live2DTabPage) {
+        if (currentTab === ShellViewModel.Live2DTabPage) {
             return "Live2D 角色"
         }
         return "更多"
     }
     function contextualSubtitle() {
-        if (currentTab === AppController.MomentsTabPage) {
+        if (currentTab === ShellViewModel.MomentsTabPage) {
             return momentsSelectedUid > 0
                    ? ((momentsSelectedName.length > 0 ? momentsSelectedName : "好友") + " 的朋友圈")
                    : "按好友查看朋友圈动态。"
         }
-        if (currentTab === AppController.AgentTabPage) {
+        if (currentTab === ShellViewModel.AgentTabPage) {
             var sessionCount = agentSessions ? agentSessions.length : 0
             var roomCount = agentGameRooms ? agentGameRooms.length : 0
             if (agentCurrentGameRoomId.length > 0) {
@@ -117,7 +117,7 @@ Rectangle {
             }
             return "会话 " + sessionCount + " · 对话房间 " + roomCount
         }
-        if (currentTab === AppController.Live2DTabPage) {
+        if (currentTab === ShellViewModel.Live2DTabPage) {
             return "模型、语音、人设和说话风格配置。"
         }
         return "在这里管理账户信息和应用设置。"
@@ -127,14 +127,14 @@ Rectangle {
         target: live2dPetSettings
         ignoreUnknownSignals: true
         function onSettingsChanged() {
-            if (root.currentTab === AppController.Live2DTabPage) {
+            if (root.currentTab === ShellViewModel.Live2DTabPage) {
                 root.refreshLive2DEntryAvatar()
             }
         }
     }
 
     function ensureCurrentSessionSource() {
-        if (currentTab !== AppController.ChatTabPage) {
+        if (currentTab !== ShellViewModel.ChatTabPage) {
             return
         }
         if (!root.chatViewModel) {
@@ -168,22 +168,22 @@ Rectangle {
     }
 
     onCurrentTabChanged: {
-        if (currentTab === AppController.ChatTabPage) {
+        if (currentTab === ShellViewModel.ChatTabPage) {
             root.ensureCurrentSessionSource()
         }
 
-        if (currentTab === AppController.AgentTabPage) {
+        if (currentTab === ShellViewModel.AgentTabPage) {
             agentRefreshRequested()
         }
 
-        if (currentTab === AppController.Live2DTabPage) {
+        if (currentTab === ShellViewModel.Live2DTabPage) {
             live2dPetSettings.load()
         }
     }
     onCurrentDialogUidChanged: syncCurrentSelection()
     Component.onCompleted: {
         root.ensureCurrentSessionSource()
-        if (currentTab === AppController.Live2DTabPage) {
+        if (currentTab === ShellViewModel.Live2DTabPage) {
             live2dPetSettings.load()
         }
     }
@@ -194,7 +194,7 @@ Rectangle {
 
         ChatLeftHeader {
             Layout.fillWidth: true
-            Layout.preferredHeight: root.currentTab === AppController.ChatTabPage ? 42 : 84
+            Layout.preferredHeight: root.currentTab === ShellViewModel.ChatTabPage ? 42 : 84
             backdrop: root.backdrop !== null ? root.backdrop : root
             currentTab: root.currentTab
             title: root.contextualTitle()
@@ -215,35 +215,35 @@ Rectangle {
             Loader {
                 id: sessionPaneLoader
                 anchors.fill: parent
-                active: currentTab === AppController.ChatTabPage
+                active: currentTab === ShellViewModel.ChatTabPage
                 asynchronous: true
                 sourceComponent: sessionPaneComponent
             }
 
             Loader {
                 anchors.fill: parent
-                active: currentTab === AppController.ContactTabPage
+                active: currentTab === ShellViewModel.ContactTabPage
                 asynchronous: true
                 sourceComponent: contactPaneComponent
             }
 
             Loader {
                 anchors.fill: parent
-                active: currentTab === AppController.MomentsTabPage
+                active: currentTab === ShellViewModel.MomentsTabPage
                 asynchronous: true
                 sourceComponent: momentsPaneComponent
             }
 
             Loader {
                 anchors.fill: parent
-                active: currentTab === AppController.AgentTabPage
+                active: currentTab === ShellViewModel.AgentTabPage
                 asynchronous: true
                 sourceComponent: agentPaneComponent
             }
 
             Loader {
                 anchors.fill: parent
-                active: currentTab === AppController.Live2DTabPage
+                active: currentTab === ShellViewModel.Live2DTabPage
                 asynchronous: true
                 sourceComponent: live2dPaneComponent
             }

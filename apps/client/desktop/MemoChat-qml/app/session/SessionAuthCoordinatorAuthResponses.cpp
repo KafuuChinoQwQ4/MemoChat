@@ -1,7 +1,5 @@
 #include "AppCoordinators.h"
 
-#include "AppController.h"
-
 #include <QJsonObject>
 
 namespace
@@ -46,63 +44,63 @@ QString gateAuthBusinessErrorTip(int errorCode, const QJsonObject& obj)
 
 void SessionAuthCoordinator::clearRegisterCodeRequestCooldown()
 {
-    _app.setRegisterCodeRequestPending(false);
-    _app.setRegisterCodeCooldownSeconds(0);
-    _app._register_code_cooldown_timer.stop();
+    _port.setRegisterCodeRequestPending(false);
+    _port.setRegisterCodeCooldownSeconds(0);
+    stopRegisterCodeCooldownTimer();
 }
 
 void SessionAuthCoordinator::onRegisterHttpFinished(ReqId id, QString res, ErrorCodes err)
 {
     if (err != ErrorCodes::SUCCESS)
     {
-        _app.setBusy(false);
+        _port.setBusy(false);
         if (id == ReqId::ID_GET_VARIFY_CODE)
         {
             clearRegisterCodeRequestCooldown();
         }
-        _app.setTip("网络请求错误", true);
+        _port.setTip("网络请求错误", true);
         return;
     }
 
     QJsonObject obj;
-    if (!_app._auth_controller.parseJson(res, obj))
+    if (!_port.parseJson(res, obj))
     {
-        _app.setBusy(false);
+        _port.setBusy(false);
         if (id == ReqId::ID_GET_VARIFY_CODE)
         {
             clearRegisterCodeRequestCooldown();
         }
-        _app.setTip("json解析错误", true);
+        _port.setTip("json解析错误", true);
         return;
     }
 
     const int error = obj.value("error").toInt(ErrorCodes::ERR_JSON);
     if (error != ErrorCodes::SUCCESS)
     {
-        _app.setBusy(false);
+        _port.setBusy(false);
         if (id == ReqId::ID_GET_VARIFY_CODE)
         {
             clearRegisterCodeRequestCooldown();
         }
-        _app.setTip(gateAuthBusinessErrorTip(error, obj), true);
+        _port.setTip(gateAuthBusinessErrorTip(error, obj), true);
         return;
     }
 
     if (id == ReqId::ID_GET_VARIFY_CODE)
     {
-        _app.setBusy(false);
-        _app.setRegisterCodeRequestPending(false);
-        _app.setTip("验证码已发送到邮箱，注意查收", false);
+        _port.setBusy(false);
+        _port.setRegisterCodeRequestPending(false);
+        _port.setTip("验证码已发送到邮箱，注意查收", false);
         return;
     }
 
     if (id == ReqId::ID_REG_USER)
     {
-        _app.setBusy(false);
-        _app.setTip("用户注册成功", false);
-        _app.setRegisterSuccessPage(true);
-        _app.setRegisterCountdown(5);
-        _app._register_countdown_timer.start(1000);
+        _port.setBusy(false);
+        _port.setTip("用户注册成功", false);
+        _port.setRegisterSuccessPage(true);
+        _port.setRegisterCountdown(5);
+        _port.startRegisterCountdown();
     }
 }
 
@@ -110,36 +108,36 @@ void SessionAuthCoordinator::onResetHttpFinished(ReqId id, QString res, ErrorCod
 {
     if (err != ErrorCodes::SUCCESS)
     {
-        _app.setBusy(false);
-        _app.setTip("网络请求错误", true);
+        _port.setBusy(false);
+        _port.setTip("网络请求错误", true);
         return;
     }
 
     QJsonObject obj;
-    if (!_app._auth_controller.parseJson(res, obj))
+    if (!_port.parseJson(res, obj))
     {
-        _app.setBusy(false);
-        _app.setTip("json解析错误", true);
+        _port.setBusy(false);
+        _port.setTip("json解析错误", true);
         return;
     }
 
     const int error = obj.value("error").toInt(ErrorCodes::ERR_JSON);
     if (error != ErrorCodes::SUCCESS)
     {
-        _app.setBusy(false);
-        _app.setTip(gateAuthBusinessErrorTip(error, obj), true);
+        _port.setBusy(false);
+        _port.setTip(gateAuthBusinessErrorTip(error, obj), true);
         return;
     }
 
-    _app.setBusy(false);
+    _port.setBusy(false);
     if (id == ReqId::ID_GET_VARIFY_CODE)
     {
-        _app.setTip("验证码已发送到邮箱，注意查收", false);
+        _port.setTip("验证码已发送到邮箱，注意查收", false);
         return;
     }
 
     if (id == ReqId::ID_RESET_PWD)
     {
-        _app.setTip("重置成功, 点击返回登录", false);
+        _port.setTip("重置成功, 点击返回登录", false);
     }
 }

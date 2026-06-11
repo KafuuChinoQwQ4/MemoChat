@@ -25,7 +25,7 @@ Rectangle {
         anchors.fill: parent
         anchors.margins: 6
         spacing: 8
-        visible: root.currentTab === AppController.ChatTabPage
+        visible: root.currentTab === ShellViewModel.ChatTabPage
 
         GlassButton {
             id: addMenuButton
@@ -145,7 +145,7 @@ Rectangle {
         anchors.fill: parent
         anchors.margins: 12
         spacing: 4
-        visible: root.currentTab !== AppController.ChatTabPage
+        visible: root.currentTab !== ShellViewModel.ChatTabPage
 
         RowLayout {
             Layout.fillWidth: true
@@ -163,7 +163,7 @@ Rectangle {
                 Layout.preferredWidth: busyLabel.implicitWidth + 14
                 radius: 11
                 color: Qt.rgba(0.36, 0.62, 0.92, 0.16)
-                visible: root.currentTab === AppController.AgentTabPage && root.agentBusy
+                visible: root.currentTab === ShellViewModel.AgentTabPage && root.agentBusy
 
                 Label {
                     id: busyLabel

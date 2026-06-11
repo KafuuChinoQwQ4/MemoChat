@@ -3,68 +3,54 @@
 
 void AppController::setChatLoadingMore(bool loading)
 {
-    if (_loading_state.chatLoadingMore == loading)
+    if (_shell_state.loadingState().chatLoadingMore == loading)
     {
         return;
     }
 
-    _loading_state.chatLoadingMore = loading;
+    _shell_state.loadingState().chatLoadingMore = loading;
     emit chatLoadingMoreChanged();
 }
 
 void AppController::setPrivateHistoryLoading(bool loading)
 {
-    if (_loading_state.privateHistoryLoading == loading)
+    if (_shell_state.loadingState().privateHistoryLoading == loading)
     {
         return;
     }
-    _loading_state.privateHistoryLoading = loading;
+    _shell_state.loadingState().privateHistoryLoading = loading;
     emit privateHistoryLoadingChanged();
 }
 
 void AppController::setCanLoadMorePrivateHistory(bool canLoad)
 {
-    if (_loading_state.canLoadMorePrivateHistory == canLoad)
+    if (_shell_state.loadingState().canLoadMorePrivateHistory == canLoad)
     {
         return;
     }
-    _loading_state.canLoadMorePrivateHistory = canLoad;
+    _shell_state.loadingState().canLoadMorePrivateHistory = canLoad;
     emit canLoadMorePrivateHistoryChanged();
 }
 
 void AppController::setContactLoadingMore(bool loading)
 {
-    if (_loading_state.contactLoadingMore == loading)
-    {
-        return;
-    }
-
-    _loading_state.contactLoadingMore = loading;
-    syncContactControllerState();
-    emit contactLoadingMoreChanged();
+    _features.contactController.setContactLoadingMore(loading);
 }
 
 void AppController::refreshChatLoadMoreState()
 {
     const bool canLoad = !_gateway.userMgr()->IsLoadChatFin();
-    if (_loading_state.canLoadMoreChats == canLoad)
+    if (_shell_state.loadingState().canLoadMoreChats == canLoad)
     {
         return;
     }
 
-    _loading_state.canLoadMoreChats = canLoad;
+    _shell_state.loadingState().canLoadMoreChats = canLoad;
     emit canLoadMoreChatsChanged();
 }
 
 void AppController::refreshContactLoadMoreState()
 {
     const bool canLoad = !_gateway.userMgr()->IsLoadConFin();
-    if (_loading_state.canLoadMoreContacts == canLoad)
-    {
-        return;
-    }
-
-    _loading_state.canLoadMoreContacts = canLoad;
-    syncContactControllerState();
-    emit canLoadMoreContactsChanged();
+    _features.contactController.setCanLoadMoreContacts(canLoad);
 }

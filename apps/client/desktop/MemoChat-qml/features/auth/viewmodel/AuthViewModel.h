@@ -1,12 +1,24 @@
 #ifndef AUTHVIEWMODEL_H
 #define AUTHVIEWMODEL_H
 
+#include "AuthCredentialStore.h"
 #include "AuthState.h"
 
 #include <QObject>
 #include <QString>
+#include <functional>
 
 class AuthService;
+
+struct AuthCommandPort
+{
+    std::function<void()> clearTip;
+    std::function<void(const QString&, const QString&)> login;
+    std::function<void(const QString&)> requestRegisterCode;
+    std::function<void(const QString&, const QString&, const QString&, const QString&, const QString&)> registerUser;
+    std::function<void(const QString&)> requestResetCode;
+    std::function<void(const QString&, const QString&, const QString&, const QString&)> resetPassword;
+};
 
 class AuthViewModel : public QObject
 {
@@ -39,6 +51,7 @@ public:
     void syncRegisterCodeCooldownSeconds(int seconds);
     void syncRegisterCodeRequestPending(bool pending);
     void syncLoginCredentialCacheJson(const QString& json);
+    void setCommandPort(AuthCommandPort port);
 
     Q_INVOKABLE void clearTip();
     Q_INVOKABLE void saveLoginCredential(const QString& email, const QString& password);
@@ -56,17 +69,12 @@ public:
 signals:
     void stateChanged();
     void loginCredentialCacheChanged();
-    void clearTipRequested();
-    void saveLoginCredentialRequested(QString email, QString password);
-    void loginRequested(QString email, QString password);
-    void registerCodeRequested(QString email);
-    void registerUserRequested(QString user, QString email, QString password, QString confirm, QString verifyCode);
-    void resetCodeRequested(QString email);
-    void resetPasswordRequested(QString user, QString email, QString password, QString verifyCode);
 
 private:
     AuthService* _service = nullptr;
+    AuthCommandPort _command_port;
     AuthState _state;
+    AuthCredentialStore _credentialStore;
     QString _loginCredentialCacheJson = QStringLiteral("[]");
 };
 

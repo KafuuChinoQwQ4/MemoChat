@@ -73,6 +73,29 @@ add_dependencies(gtest_tests chatserver_message_grpc_client_gtest)
 
 gtest_discover_tests(chatserver_message_grpc_client_gtest TEST_DISCOVERY_MODE POST_BUILD)
 
+add_executable(chatserver_message_delivery_payload_gtest
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/domain/message/MessageDeliveryPayload.cpp
+    main.cpp
+    MessageDeliveryPayloadTest.cpp
+)
+
+target_link_libraries(chatserver_message_delivery_payload_gtest PRIVATE
+    GTest_TestLib
+    memochat_proto
+    memochat_server_deps
+)
+
+target_include_directories(chatserver_message_delivery_payload_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/domain
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/domain/message
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/infrastructure
+)
+
+add_dependencies(gtest_tests chatserver_message_delivery_payload_gtest)
+
+gtest_discover_tests(chatserver_message_delivery_payload_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
 add_executable(chatserver_message_grpc_service_adapter_gtest
     main.cpp
     MessageGrpcServiceAdapterTest.cpp
