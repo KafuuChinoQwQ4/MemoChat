@@ -11,7 +11,10 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
+import math
+import os
 import socket
 import struct
 import subprocess
@@ -111,6 +114,100 @@ def redis_del(container: str, keys: list[str], timeout: float = 8.0) -> None:
     run_command(["docker", "exec", container, "redis-cli", "-a", "123456", "DEL", *keys], timeout=timeout)
 
 
+def media_asset_row(args: argparse.Namespace, media_key: str) -> dict[str, Any]:
+    sql = f"""
+SET search_path TO memo, public;
+SELECT media_key, owner_uid, media_type, origin_file_name, mime, size_bytes,
+       storage_provider, storage_path, status
+FROM chat_media_asset
+WHERE media_key = {sql_quote(media_key)}
+LIMIT 1;
+"""
+    output = psql(args.postgres_container, sql, timeout=args.timeout)
+    rows = [line.strip() for line in output.splitlines() if line.strip() and "|" in line]
+    if not rows:
+        raise RuntimeError(f"media asset metadata missing in postgres for {media_key}: {output!r}")
+    parts = rows[-1].split("|")
+    if len(parts) != 9:
+        raise RuntimeError(f"unexpected media asset metadata shape for {media_key}: {rows[-1]!r}")
+    return {
+        "media_key": parts[0],
+        "owner_uid": int(parts[1]),
+        "media_type": parts[2],
+        "file_name": parts[3],
+        "mime": parts[4],
+        "size": int(parts[5]),
+        "storage_provider": parts[6],
+        "storage_path": parts[7],
+        "status": int(parts[8]),
+    }
+
+
+def ensure_minio_alias(args: argparse.Namespace) -> None:
+    run_command(
+        [
+            "docker",
+            "exec",
+            args.minio_container,
+            "mc",
+            "alias",
+            "set",
+            "local",
+            args.minio_endpoint,
+            args.minio_access_key,
+            args.minio_secret_key,
+        ],
+        timeout=args.timeout,
+    )
+
+
+def minio_object_size(args: argparse.Namespace, storage_path: str) -> int:
+    output = run_command(
+        ["docker", "exec", args.minio_container, "mc", "stat", "--json", f"local/{storage_path}"],
+        timeout=args.timeout,
+    )
+    stat = json.loads(output)
+    return int(stat.get("size", -1))
+
+
+def verify_uploaded_storage(
+    args: argparse.Namespace,
+    *,
+    owner: ChatSession,
+    uploaded: dict[str, Any],
+    expected_type: str,
+    expected_payload_size: int,
+    expected_file_name: str,
+    expected_mime: str,
+) -> dict[str, Any]:
+    media_key = str(uploaded.get("media_key", ""))
+    row = media_asset_row(args, media_key)
+    if row["media_key"] != media_key:
+        raise RuntimeError(f"postgres media_key mismatch for {media_key}: {row}")
+    if row["owner_uid"] != owner.account.uid:
+        raise RuntimeError(f"postgres owner mismatch for {media_key}: {row}")
+    if row["media_type"] != expected_type:
+        raise RuntimeError(f"postgres media_type mismatch for {media_key}: {row}")
+    if row["file_name"] != expected_file_name:
+        raise RuntimeError(f"postgres file name mismatch for {media_key}: {row}")
+    if row["mime"] != expected_mime:
+        raise RuntimeError(f"postgres mime mismatch for {media_key}: {row}")
+    if row["size"] != expected_payload_size or int(uploaded.get("size", 0)) != expected_payload_size:
+        raise RuntimeError(f"media size mismatch for {media_key}: row={row} uploaded={uploaded}")
+    if row["status"] != 1 or row["storage_provider"] != "s3":
+        raise RuntimeError(f"media storage metadata mismatch for {media_key}: {row}")
+    object_size = minio_object_size(args, row["storage_path"])
+    if object_size != expected_payload_size:
+        raise RuntimeError(
+            f"minio object size mismatch for {media_key}: storage_path={row['storage_path']} "
+            f"size={object_size} expected={expected_payload_size}"
+        )
+    return {
+        "postgres": row,
+        "minio_object_size": object_size,
+    }
+
+
 def prepare_data(args: argparse.Namespace, accounts: tuple[Account, Account]) -> int:
     a, b = accounts
     password_hash = xor_encode(a.raw_password)
@@ -207,6 +304,32 @@ def get_bytes(url: str, timeout: float) -> tuple[int, bytes, str]:
             return response.status, response.read(), response.headers.get("Content-Type", "")
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read(), exc.headers.get("Content-Type", "")
+
+
+def get_json(url: str, timeout: float) -> dict[str, Any]:
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            text = response.read().decode("utf-8", errors="replace")
+            return json.loads(text) if text else {}
+    except urllib.error.HTTPError as exc:
+        text = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"GET {url} failed http={exc.code} body={text}") from exc
+
+
+def post_binary(url: str, payload: bytes, headers: dict[str, str], timeout: float) -> dict[str, Any]:
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/octet-stream", **headers},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            text = response.read().decode("utf-8", errors="replace")
+            return json.loads(text) if text else {}
+    except urllib.error.HTTPError as exc:
+        text = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"POST {url} failed http={exc.code} body={text}") from exc
 
 
 def encode_frame(msg_id: int, payload: dict[str, Any]) -> bytes:
@@ -514,7 +637,126 @@ def upload_media(args: argparse.Namespace, owner: ChatSession, run_id: str) -> d
         )
     response["absolute_url"] = args.gate_url.rstrip("/") + relative_url
     response["download_content_type"] = content_type
+    response["size"] = len(PNG_1X1)
     return response
+
+
+def deterministic_payload(label: str, size: int) -> bytes:
+    seed = label.encode("utf-8")
+    out = bytearray()
+    counter = 0
+    while len(out) < size:
+        out.extend(hashlib.sha256(seed + counter.to_bytes(4, "big")).digest())
+        counter += 1
+    return bytes(out[:size])
+
+
+def upload_chunked_media_file(
+    args: argparse.Namespace,
+    owner: ChatSession,
+    *,
+    file_name: str,
+    mime: str,
+    payload: bytes,
+) -> dict[str, Any]:
+    init = post_json(
+        args.gate_url.rstrip("/") + "/upload_media_init",
+        {
+            "uid": owner.account.uid,
+            "token": owner.token,
+            "media_type": "file",
+            "file_name": file_name,
+            "mime": mime,
+            "file_size": len(payload),
+        },
+        args.timeout,
+    )
+    if int(init.get("error", -1)) != 0:
+        raise RuntimeError(f"media chunk init failed for {file_name}: {init}")
+    upload_id = str(init.get("upload_id", ""))
+    chunk_size = int(init.get("chunk_size", 0))
+    total_chunks = int(init.get("total_chunks", 0))
+    if not upload_id or chunk_size <= 0 or total_chunks != math.ceil(len(payload) / chunk_size):
+        raise RuntimeError(f"media chunk init returned invalid session for {file_name}: {init}")
+
+    uploaded_sizes: list[int] = []
+    for index in range(total_chunks):
+        start = index * chunk_size
+        chunk = payload[start : start + chunk_size]
+        chunk_rsp = post_binary(
+            args.gate_url.rstrip("/") + "/upload_media_chunk",
+            chunk,
+            {
+                "X-Uid": str(owner.account.uid),
+                "X-Token": owner.token,
+                "X-Upload-Id": upload_id,
+                "X-Chunk-Index": str(index),
+            },
+            args.timeout,
+        )
+        if int(chunk_rsp.get("error", -1)) != 0:
+            raise RuntimeError(f"media chunk upload failed for {file_name} index={index}: {chunk_rsp}")
+        uploaded_sizes.append(len(chunk))
+
+    status_url = (
+        args.gate_url.rstrip("/")
+        + "/upload_media_status?"
+        + urllib.parse.urlencode({"uid": owner.account.uid, "token": owner.token, "upload_id": upload_id})
+    )
+    status = get_json(status_url, args.timeout)
+    if int(status.get("error", -1)) != 0:
+        raise RuntimeError(f"media status failed for {file_name}: {status}")
+    uploaded_indexes = sorted(int(v) for v in status.get("uploaded_chunks", []) or [])
+    if uploaded_indexes != list(range(total_chunks)):
+        raise RuntimeError(f"media status missing chunks for {file_name}: {status}")
+
+    complete = post_json(
+        args.gate_url.rstrip("/") + "/upload_media_complete",
+        {"uid": owner.account.uid, "token": owner.token, "upload_id": upload_id},
+        args.timeout,
+    )
+    if int(complete.get("error", -1)) != 0:
+        raise RuntimeError(f"media complete failed for {file_name}: {complete}")
+    relative_url = str(complete.get("url", ""))
+    media_key = str(complete.get("media_key", ""))
+    if not media_key or not relative_url:
+        raise RuntimeError(f"media complete response missing key/url for {file_name}: {complete}")
+
+    download_url = (
+        args.gate_url.rstrip("/")
+        + relative_url
+        + "&"
+        + urllib.parse.urlencode({"uid": owner.account.uid, "token": owner.token})
+    )
+    status_code, downloaded, content_type = get_bytes(download_url, args.timeout)
+    if status_code != 200 or downloaded != payload:
+        raise RuntimeError(
+            f"media download mismatch for {file_name}: status={status_code} "
+            f"content_type={content_type} size={len(downloaded)} expected={len(payload)}"
+        )
+    return {
+        "media_key": media_key,
+        "media_type": complete.get("media_type"),
+        "file_name": complete.get("file_name"),
+        "mime": complete.get("mime"),
+        "size": int(complete.get("size", 0)),
+        "url": relative_url,
+        "absolute_url": args.gate_url.rstrip("/") + relative_url,
+        "chunk_size": chunk_size,
+        "total_chunks": total_chunks,
+        "uploaded_chunk_sizes": uploaded_sizes,
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "download_content_type": content_type,
+    }
+
+
+def encode_file_marker(url: str, file_name: str, mime: str, size: int) -> str:
+    payload = json.dumps(
+        {"url": url, "name": file_name, "mime": mime, "size": size},
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return "__memochat_file__:json:" + base64.b64encode(payload).decode("ascii")
 
 
 def main(argv: list[str]) -> int:
@@ -522,6 +764,10 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--gate-url", default="http://127.0.0.1:8080")
     parser.add_argument("--postgres-container", default="memochat-postgres")
     parser.add_argument("--redis-container", default="memochat-redis")
+    parser.add_argument("--minio-container", default="memochat-minio")
+    parser.add_argument("--minio-endpoint", default="http://127.0.0.1:9000")
+    parser.add_argument("--minio-access-key", default=os.environ.get("MEMOCHAT_MINIO_ACCESS_KEY", "memochat_admin"))
+    parser.add_argument("--minio-secret-key", default=os.environ.get("MEMOCHAT_MINIO_SECRET_KEY", "MinioPass2026!"))
     parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument("--group-code", default="smkfull01")
     args = parser.parse_args(argv)
@@ -542,8 +788,10 @@ def main(argv: list[str]) -> int:
     }
     try:
         group_id = prepare_data(args, accounts)
+        ensure_minio_alias(args)
         summary["group_id"] = group_id
         summary["checks"]["data_setup"] = "PASS"
+        summary["checks"]["minio_alias"] = "PASS"
 
         session_a = open_chat_session(args, accounts[0])
         session_b = open_chat_session(args, accounts[1])
@@ -575,11 +823,21 @@ def main(argv: list[str]) -> int:
         )
 
         media = upload_media(args, session_a, run_id)
+        media_storage = verify_uploaded_storage(
+            args,
+            owner=session_a,
+            uploaded=media,
+            expected_type="image",
+            expected_payload_size=len(PNG_1X1),
+            expected_file_name=f"smoke-{run_id}.png",
+            expected_mime="image/png",
+        )
         summary["checks"]["media_upload_download"] = {
             "status": "PASS",
             "media_key": media.get("media_key"),
             "size": media.get("size"),
             "content_type": media.get("download_content_type"),
+            "storage": media_storage,
         }
 
         media_content = "__memochat_img__:" + str(media["absolute_url"])
@@ -592,6 +850,74 @@ def main(argv: list[str]) -> int:
         summary["checks"]["group_media"] = send_group(
             session_a, session_b, group_id, media_content, group_media_id, args.timeout
         )
+
+        file_specs = [
+            (
+                f"smoke-{run_id}.zip",
+                "application/zip",
+                deterministic_payload(f"{run_id}:zip", 393_537),
+            ),
+            (
+                f"smoke-{run_id}.pdf",
+                "application/pdf",
+                deterministic_payload(f"{run_id}:pdf", 263_187),
+            ),
+            (
+                f"smoke-{run_id}.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                deterministic_payload(f"{run_id}:docx", 340_999),
+            ),
+            (
+                f"smoke-{run_id}-multichunk.zip",
+                "application/zip",
+                deterministic_payload(f"{run_id}:multichunk", 5_243_213),
+            ),
+        ]
+        summary["checks"]["file_upload_download"] = []
+        summary["checks"]["private_file_messages"] = []
+        for index, (file_name, mime, payload) in enumerate(file_specs):
+            uploaded = upload_chunked_media_file(args, session_a, file_name=file_name, mime=mime, payload=payload)
+            storage = verify_uploaded_storage(
+                args,
+                owner=session_a,
+                uploaded=uploaded,
+                expected_type="file",
+                expected_payload_size=len(payload),
+                expected_file_name=file_name,
+                expected_mime=mime,
+            )
+            summary["checks"]["file_upload_download"].append(
+                {
+                    "status": "PASS",
+                    "media_key": uploaded["media_key"],
+                    "file_name": uploaded["file_name"],
+                    "mime": uploaded["mime"],
+                    "size": uploaded["size"],
+                    "chunk_size": uploaded["chunk_size"],
+                    "total_chunks": uploaded["total_chunks"],
+                    "uploaded_chunk_sizes": uploaded["uploaded_chunk_sizes"],
+                    "sha256": uploaded["sha256"],
+                    "content_type": uploaded["download_content_type"],
+                    "storage": storage,
+                }
+            )
+            file_marker = encode_file_marker(
+                str(uploaded["absolute_url"]),
+                str(uploaded["file_name"]),
+                str(uploaded["mime"]),
+                int(uploaded["size"]),
+            )
+            file_msg_id = f"smoke-private-file-{index}-{run_id}"
+            delivered = send_private(session_a, session_b, file_marker, file_msg_id, args.timeout)
+            summary["checks"]["private_file_messages"].append(
+                {
+                    "status": "PASS",
+                    "msg_id": file_msg_id,
+                    "media_key": uploaded["media_key"],
+                    "file_name": uploaded["file_name"],
+                    "history_count": delivered["history_count"],
+                }
+            )
 
         summary["status"] = "PASS"
         summary["elapsed_sec"] = round(time.time() - started, 3)

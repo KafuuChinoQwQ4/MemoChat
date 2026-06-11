@@ -174,6 +174,47 @@ Window {
         root.chatStatusText = "发送失败，可重试"
     }
 
+    function finalizePendingAssistantMessageFromController() {
+        if (!root.petController || root.pendingAssistantIndex < 0) {
+            return false
+        }
+        const controllerSnapshot = PetChatRuntime.assistantControllerSnapshot(root.petController)
+        if (!controllerSnapshot.speechFinal) {
+            return false
+        }
+        const current = messageModel.get(root.pendingAssistantIndex) || {}
+        const turnKey = root.stringValue(current.turnId) || root.pendingAssistantTurnId
+        const nextDisplay = root.hasText(controllerSnapshot.text)
+                ? controllerSnapshot.text
+                : root.stringValue(current.content)
+        const finalTranslation = root.hasText(controllerSnapshot.translation)
+                ? controllerSnapshot.translation
+                : root.stringValue(current.translationText)
+        const finalAudioUrl = root.hasText(controllerSnapshot.audioUrl)
+                ? controllerSnapshot.audioUrl
+                : root.stringValue(current.audioUrl)
+        const finalAudioState = root.hasText(controllerSnapshot.audioState)
+                ? controllerSnapshot.audioState
+                : root.stringValue(current.audioState || "idle")
+        if (root.hasText(nextDisplay)) {
+            messageModel.setProperty(root.pendingAssistantIndex, "content", nextDisplay)
+            messageModel.setProperty(root.pendingAssistantIndex, "rawContent", nextDisplay)
+        }
+        messageModel.setProperty(root.pendingAssistantIndex, "translationText", finalTranslation)
+        messageModel.setProperty(root.pendingAssistantIndex, "audioUrl", finalAudioUrl)
+        messageModel.setProperty(root.pendingAssistantIndex, "audioState", finalAudioState)
+        messageModel.setProperty(root.pendingAssistantIndex, "messageState", "sent")
+        if (turnKey.length > 0) {
+            root.rememberCompletedAssistantTurn(turnKey)
+        }
+        root.pendingAssistantIndex = -1
+        root.pendingAssistantTurnId = ""
+        root.chatStatusText = PetChatRuntime.assistantFinalStatus(finalAudioUrl,
+                                                                  root.voiceCallActive)
+        messageListPane.positionViewAtEnd()
+        return true
+    }
+
     function refreshLive2DAvatar() {
         var nextAvatar = ""
         if (root.petAssetSettings && root.petAssetSettings.resolveLive2DAvatarUrl) {
@@ -502,6 +543,7 @@ Window {
                 root.sendPendingText()
             }
             root.handleControllerError()
+            root.finalizePendingAssistantMessageFromController()
             root.syncContext()
         }
 

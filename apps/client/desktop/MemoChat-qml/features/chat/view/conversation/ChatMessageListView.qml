@@ -23,6 +23,9 @@ Item {
     property var translationByMsgId: ({})
     property alias count: messageList.count
     property alias contentY: messageList.contentY
+    readonly property int modelMessageCount: root.messageModel && root.messageModel.count !== undefined
+                                             ? root.messageModel.count
+                                             : 0
 
     signal scrollStateChanged(bool followTail, bool topLoadArmed, bool stickToBottom)
     signal loadMoreHistoryRequested()
@@ -156,7 +159,7 @@ Item {
         anchors.centerIn: parent
         width: 210
         height: 86
-        visible: messageList.count === 0
+        visible: root.hasCurrentChat && root.modelMessageCount === 0 && !root.privateHistoryLoading
         backdrop: root.backdrop !== null ? root.backdrop : root
         cornerRadius: 10
         blurRadius: 16

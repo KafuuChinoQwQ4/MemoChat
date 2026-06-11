@@ -184,7 +184,7 @@ bool SaveJsonFileLocal(const std::filesystem::path& path, const memochat::json::
     std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
     if (!ofs.is_open())
         return false;
-    ofs << memochat::json::glaze_stringify(root);
+    ofs << memochat::json::writeString(root);
     return ofs.good();
 }
 
@@ -195,8 +195,27 @@ bool LoadJsonFileLocal(const std::filesystem::path& path, memochat::json::JsonVa
     std::ifstream ifs(path, std::ios::binary);
     if (!ifs.is_open())
         return false;
-    std::string json((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-    return memochat::json::glaze_parse(root, json);
+    const std::string json((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+    if (!memochat::json::glaze_parse(root, json))
+    {
+        return false;
+    }
+    if (memochat::json::glaze_is_object(root))
+    {
+        return true;
+    }
+    if (!root.isString())
+    {
+        return false;
+    }
+
+    memochat::json::JsonValue decoded;
+    if (!memochat::json::glaze_parse(decoded, root.asString()) || !memochat::json::glaze_is_object(decoded))
+    {
+        return false;
+    }
+    root = decoded;
+    return true;
 }
 
 IMediaStorage& MediaStorageForLocal(const std::string& provider)
@@ -257,6 +276,11 @@ MediaConfigLocal LoadMediaConfigLocal()
     cfg.max_file_bytes = ParseConfigInt64Local(media["MaxFileMB"], 20480) * 1024 * 1024;
     cfg.chunk_size_bytes = ParseConfigIntLocal(media["ChunkSizeKB"], 4096) * 1024;
     cfg.session_expire_sec = ParseConfigIntLocal(media["SessionExpireSec"], 86400);
+    const std::string provider = media["StorageProvider"];
+    if (!provider.empty())
+    {
+        cfg.storage_provider = provider;
+    }
     cfg.chunk_size_bytes = std::clamp(cfg.chunk_size_bytes, 256 * 1024, 4 * 1024 * 1024);
     return cfg;
 }
@@ -361,8 +385,34 @@ MediaResult HandleUploadMediaChunk(int uid,
                                    int index,
                                    const std::string& chunk_data_base64)
 {
+    if (chunk_data_base64.empty())
+    {
+        MediaResult result;
+        result.error = ErrorCodes::TokenInvalid;
+        result.message = "token invalid or params invalid";
+        return result;
+    }
+
+    std::string binary = DecodeBase64Local(chunk_data_base64);
+    if (binary.empty())
+    {
+        MediaResult result;
+        result.error = ErrorCodes::Error_Json;
+        result.message = "base64 decode failed or empty";
+        return result;
+    }
+
+    return HandleUploadMediaChunkBytes(uid, token, upload_id, index, binary);
+}
+
+MediaResult HandleUploadMediaChunkBytes(int uid,
+                                        const std::string& token,
+                                        const std::string& upload_id,
+                                        int index,
+                                        std::string_view chunk_data)
+{
     MediaResult result;
-    if (uid <= 0 || upload_id.empty() || index < 0 || chunk_data_base64.empty() || !ValidateUserTokenLocal(uid, token))
+    if (uid <= 0 || upload_id.empty() || index < 0 || chunk_data.empty() || !ValidateUserTokenLocal(uid, token))
     {
         result.error = ErrorCodes::TokenInvalid;
         result.message = "token invalid or params invalid";
@@ -399,8 +449,7 @@ MediaResult HandleUploadMediaChunk(int uid,
         return result;
     }
 
-    std::string binary = DecodeBase64Local(chunk_data_base64);
-    if (static_cast<int>(binary.size()) > chunk_size)
+    if (static_cast<int>(chunk_data.size()) > chunk_size)
     {
         result.error = ErrorCodes::MediaUploadFailed;
         result.message = "invalid chunk size";
@@ -425,13 +474,13 @@ MediaResult HandleUploadMediaChunk(int uid,
         result.message = "write chunk failed";
         return result;
     }
-    ofs.write(binary.data(), static_cast<std::streamsize>(binary.size()));
+    ofs.write(chunk_data.data(), static_cast<std::streamsize>(chunk_data.size()));
     ofs.close();
 
     result.error = ErrorCodes::Success;
     result.data["upload_id"] = upload_id;
     result.data["index"] = index;
-    result.data["size"] = static_cast<int64_t>(binary.size());
+    result.data["size"] = static_cast<int64_t>(chunk_data.size());
     return result;
 }
 

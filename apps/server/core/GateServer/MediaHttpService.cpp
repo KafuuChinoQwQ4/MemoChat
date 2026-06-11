@@ -311,12 +311,7 @@ bool SaveJsonFileLocal(const std::filesystem::path& path, const memochat::json::
     {
         return false;
     }
-    ofs << root.and_then(
-                   [](auto&& v)
-                   {
-                       return glz::write_json(v);
-                   })
-               .value_or("{}");
+    ofs << memochat::json::writeString(root);
     return ofs.good();
 }
 
@@ -331,9 +326,28 @@ bool LoadJsonFileLocal(const std::filesystem::path& path, memochat::json::JsonVa
     {
         return false;
     }
-    std::string json((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+    const std::string json((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
     memochat::json::JsonReader reader;
-    return reader.parse(json, root);
+    if (!reader.parse(json, root))
+    {
+        return false;
+    }
+    if (root.isObject())
+    {
+        return true;
+    }
+    if (!root.isString())
+    {
+        return false;
+    }
+
+    memochat::json::JsonValue decoded;
+    if (!reader.parse(root.asString(), decoded) || !decoded.isObject())
+    {
+        return false;
+    }
+    root = decoded;
+    return true;
 }
 
 bool ValidateUserTokenLocal(int uid, const std::string& token)

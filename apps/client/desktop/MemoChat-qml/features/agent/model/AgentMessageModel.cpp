@@ -130,14 +130,29 @@ QHash<int, QByteArray> AgentMessageModel::roleNames() const
     };
 }
 
+bool AgentMessageModel::hasStreamingMessage() const
+{
+    return std::any_of(_items.cbegin(),
+                       _items.cend(),
+                       [](const MessageEntry& entry)
+                       {
+                           return entry.isStreaming;
+                       });
+}
+
 void AgentMessageModel::clear()
 {
     if (_items.isEmpty())
         return;
+    const bool hadStreamingMessage = hasStreamingMessage();
     beginResetModel();
     _items.clear();
     endResetModel();
     emit countChanged();
+    if (hadStreamingMessage)
+    {
+        emit streamingStateChanged();
+    }
 }
 
 void AgentMessageModel::appendUserMessage(const QString& content)
@@ -170,6 +185,7 @@ void AgentMessageModel::appendAIMessage(const QString& msgId, const QString& mod
     _items.append(entry);
     endInsertRows();
     emit countChanged();
+    emit streamingStateChanged();
 }
 
 void AgentMessageModel::updateStreamingContent(const QString& msgId, const QString& chunk)
@@ -195,11 +211,47 @@ void AgentMessageModel::finalizeAIMessage(const QString& msgId)
         return;
 
     MessageEntry* entry = &_items[row];
+    const bool wasStreaming = entry->isStreaming;
     entry->content = entry->streamingContent;
     entry->isStreaming = false;
 
     QModelIndex idx = index(row, 0);
     emit dataChanged(idx, idx, {ContentRole, IsStreamingRole, StreamingContentRole, ThinkingContentRole});
+    if (wasStreaming)
+    {
+        emit streamingStateChanged();
+    }
+}
+
+void AgentMessageModel::finalizeAllStreamingMessages()
+{
+    int firstChanged = -1;
+    int lastChanged = -1;
+    for (int row = 0; row < _items.size(); ++row)
+    {
+        MessageEntry& entry = _items[row];
+        if (!entry.isStreaming)
+        {
+            continue;
+        }
+        entry.content = entry.streamingContent;
+        entry.isStreaming = false;
+        if (firstChanged < 0)
+        {
+            firstChanged = row;
+        }
+        lastChanged = row;
+    }
+
+    if (firstChanged < 0)
+    {
+        return;
+    }
+
+    const QModelIndex top = index(firstChanged, 0);
+    const QModelIndex bottom = index(lastChanged, 0);
+    emit dataChanged(top, bottom, {ContentRole, IsStreamingRole, StreamingContentRole, ThinkingContentRole});
+    emit streamingStateChanged();
 }
 
 void AgentMessageModel::setError(const QString& msgId, const QString& error)
@@ -209,11 +261,16 @@ void AgentMessageModel::setError(const QString& msgId, const QString& error)
         return;
 
     MessageEntry* entry = &_items[row];
+    const bool wasStreaming = entry->isStreaming;
     entry->errorMessage = error;
     entry->isStreaming = false;
 
     QModelIndex idx = index(row, 0);
     emit dataChanged(idx, idx, {ErrorMessageRole, IsStreamingRole});
+    if (wasStreaming)
+    {
+        emit streamingStateChanged();
+    }
 }
 
 void AgentMessageModel::setSources(const QString& msgId, const QString& sourcesJson)

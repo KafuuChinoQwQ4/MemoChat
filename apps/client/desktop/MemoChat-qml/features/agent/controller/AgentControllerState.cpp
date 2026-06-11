@@ -41,6 +41,11 @@ bool AgentController::streaming() const
     return _streaming;
 }
 
+QString AgentController::currentGeneratingMsgId() const
+{
+    return _currentStreamMsgId;
+}
+
 QVariantList AgentController::sessions() const
 {
     return _sessions;
@@ -214,6 +219,16 @@ void AgentController::clearErrorState()
     }
     _error.clear();
     emit errorOccurred(QString());
+}
+
+void AgentController::setCurrentGeneratingMsgId(const QString& msgId)
+{
+    if (_currentStreamMsgId == msgId)
+    {
+        return;
+    }
+    _currentStreamMsgId = msgId;
+    emit currentGeneratingMsgIdChanged();
 }
 
 void AgentController::setModelRefreshBusy(bool busy)

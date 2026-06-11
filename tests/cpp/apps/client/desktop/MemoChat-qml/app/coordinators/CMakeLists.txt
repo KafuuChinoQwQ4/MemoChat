@@ -10,8 +10,8 @@ if(NOT EXISTS "${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/app/coordi
     get_filename_component(MEMOCHAT_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../../../../.." ABSOLUTE)
 endif()
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Concurrent)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Concurrent)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Concurrent Network Widgets)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Concurrent Network Widgets)
 
 if(NOT TARGET GTest_TestLib)
     find_package(GTest CONFIG REQUIRED)
@@ -47,6 +47,7 @@ target_link_libraries(media_pending_attachment_runner_gtest PRIVATE
 
 target_include_directories(media_pending_attachment_runner_gtest PRIVATE
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/app/connection
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/app/coordinators
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/controller
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services
@@ -57,3 +58,37 @@ add_dependencies(gtest_tests media_pending_attachment_runner_gtest)
 
 include(GoogleTest)
 gtest_discover_tests(media_pending_attachment_runner_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
+add_executable(media_coordinator_gtest
+    MediaCoordinatorTest.cpp
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/app/coordinators/MediaCoordinator.cpp
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/app/coordinators/AppCoordinators.h
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/MessageContentCodec.cpp
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/MessageContentCodec.h
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/shared/media/LocalFilePickerService.h
+)
+set_target_properties(media_coordinator_gtest PROPERTIES AUTOMOC ON)
+set_target_properties(media_coordinator_gtest PROPERTIES
+    CXX_STANDARD 23
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+
+target_link_libraries(media_coordinator_gtest PRIVATE
+    GTest_TestLib
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Network
+    Qt${QT_VERSION_MAJOR}::Widgets
+)
+
+target_include_directories(media_coordinator_gtest PRIVATE
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/app/connection
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/app/coordinators
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/core/common
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/shared/media
+)
+
+add_dependencies(gtest_tests media_coordinator_gtest)
+gtest_discover_tests(media_coordinator_gtest TEST_DISCOVERY_MODE POST_BUILD)

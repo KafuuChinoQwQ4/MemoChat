@@ -16,6 +16,17 @@ ColumnLayout {
     property string selfAvatar: "qrc:/res/head_1.jpg"
     property bool stickToBottom: true
     property bool detailsExpanded: false
+    readonly property var displayEventRows: root.displayEvents()
+    readonly property int chatMessageCount: {
+        var rows = root.displayEventRows || []
+        var count = 0
+        for (var i = 0; i < rows.length; ++i) {
+            if (root.isChatEvent(rows[i] || {})) {
+                ++count
+            }
+        }
+        return count
+    }
 
     function roomObject() {
         return gameState && gameState.room ? gameState.room : ({})
@@ -227,7 +238,7 @@ ColumnLayout {
             anchors.margins: 12
             clip: true
             spacing: 6
-            model: root.displayEvents()
+            model: root.displayEventRows
             ScrollBar.vertical: GlassScrollBar { }
 
             delegate: Item {
@@ -365,7 +376,7 @@ ColumnLayout {
             font.pixelSize: 13
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
-            visible: messageListView.count === 0
+            visible: root.chatMessageCount === 0
         }
     }
 
