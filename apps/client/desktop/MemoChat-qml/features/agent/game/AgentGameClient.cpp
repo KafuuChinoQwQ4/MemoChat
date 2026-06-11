@@ -11,25 +11,29 @@ AgentGameClient::AgentGameClient(QObject* parent)
 {
 }
 
-void AgentGameClient::get(const QUrl& url, const QString& op, const QString& statusText)
+void AgentGameClient::get(const QUrl& url, const QString& op, const QString& statusText, int uid)
 {
     Q_UNUSED(statusText);
-    send(Verb::Get, url, QJsonObject(), op);
+    send(Verb::Get, url, QJsonObject(), op, uid);
 }
 
-void AgentGameClient::post(const QUrl& url, const QJsonObject& payload, const QString& op, const QString& statusText)
+void AgentGameClient::post(const QUrl& url,
+                           const QJsonObject& payload,
+                           const QString& op,
+                           const QString& statusText,
+                           int uid)
 {
     Q_UNUSED(statusText);
-    send(Verb::Post, url, payload, op);
+    send(Verb::Post, url, payload, op, uid);
 }
 
-void AgentGameClient::deleteResource(const QUrl& url, const QString& op, const QString& statusText)
+void AgentGameClient::deleteResource(const QUrl& url, const QString& op, const QString& statusText, int uid)
 {
     Q_UNUSED(statusText);
-    send(Verb::Delete, url, QJsonObject(), op);
+    send(Verb::Delete, url, QJsonObject(), op, uid);
 }
 
-void AgentGameClient::send(Verb verb, const QUrl& url, const QJsonObject& payload, const QString& op)
+void AgentGameClient::send(Verb verb, const QUrl& url, const QJsonObject& payload, const QString& op, int uid)
 {
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
@@ -52,13 +56,13 @@ void AgentGameClient::send(Verb verb, const QUrl& url, const QJsonObject& payloa
     connect(reply,
             &QNetworkReply::finished,
             this,
-            [this, reply, op]()
+            [this, reply, op, uid]()
             {
-                handleReply(reply, op);
+                handleReply(reply, op, uid);
             });
 }
 
-void AgentGameClient::handleReply(QNetworkReply* reply, const QString& op)
+void AgentGameClient::handleReply(QNetworkReply* reply, const QString& op, int uid)
 {
     const QByteArray body = reply->readAll();
     const QString errorText = reply->error() == QNetworkReply::NoError ? QString() : reply->errorString();
@@ -66,16 +70,16 @@ void AgentGameClient::handleReply(QNetworkReply* reply, const QString& op)
 
     if (!errorText.isEmpty())
     {
-        emit networkError(op, errorText);
+        emit networkError(op, errorText, uid);
         return;
     }
 
     const QJsonDocument doc = QJsonDocument::fromJson(body);
     if (!doc.isObject())
     {
-        emit formatError(op);
+        emit formatError(op, uid);
         return;
     }
 
-    emit responseReady(op, doc.object());
+    emit responseReady(op, doc.object(), uid);
 }

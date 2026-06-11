@@ -28,7 +28,6 @@ void AppController::setSettingsStatus(const QString& text, bool isError)
     }
 
     _features.profileController.syncStatus(text, isError);
-    emit settingsStatusChanged();
 }
 
 void AppController::setGroupStatus(const QString& text, bool isError)
@@ -39,7 +38,6 @@ void AppController::setGroupStatus(const QString& text, bool isError)
     }
 
     _features.groupController.syncGroupStatus(text, isError);
-    emit groupStatusChanged();
 }
 
 void AppController::setTip(const QString& tip, bool isError)
@@ -49,7 +47,6 @@ void AppController::setTip(const QString& tip, bool isError)
         return;
     }
     _features.authViewModel.syncTip(tip, isError);
-    emit tipChanged();
 }
 
 void AppController::setBusy(bool value)
@@ -59,7 +56,6 @@ void AppController::setBusy(bool value)
         return;
     }
     _features.authViewModel.syncBusy(value);
-    emit busyChanged();
 }
 
 void AppController::setPage(Page newPage)
@@ -69,5 +65,4 @@ void AppController::setPage(Page newPage)
         return;
     }
     _features.shellViewModel.syncPage(_shell_state.page());
-    emit pageChanged();
 }

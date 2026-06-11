@@ -31,9 +31,7 @@ set(MEMOCHAT_QML_APP_SOURCES
     app/composition/AppChatDispatcherSignalRoutes.cpp
     app/composition/AppChatDispatcherRouterFactory.cpp
     app/composition/AppCallSignalBinder.cpp
-    app/composition/AppFeatureFacadeSignalBinder.cpp
     app/composition/AppShellSignalBinder.cpp
-    app/composition/AppChatProjectionSignalBinder.cpp
     app/composition/AppTimerSignalBinder.cpp
     app/events/AppChatDispatcherEventRouter.cpp
     app/events/AppHttpEventRouter.cpp

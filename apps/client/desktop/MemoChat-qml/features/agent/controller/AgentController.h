@@ -113,6 +113,7 @@ public:
 
     Q_INVOKABLE void sendMessage(const QString& content);
     Q_INVOKABLE void sendStreamMessage(const QString& content);
+    Q_INVOKABLE void resetForLogout();
     Q_INVOKABLE void createSession();
     Q_INVOKABLE void switchSession(const QString& sessionId);
     Q_INVOKABLE void deleteSession(const QString& sessionId);
@@ -256,10 +257,13 @@ private:
     void sendGameGet(const QUrl& url, const QString& op, const QString& statusText);
     void sendGamePost(const QUrl& url, const QJsonObject& payload, const QString& op, const QString& statusText);
     void sendGameDelete(const QUrl& url, const QString& op, const QString& statusText);
-    void handleGameResponse(const QString& op, const QJsonObject& root);
-    void handleGameNetworkError(const QString& op, const QString& errorText);
-    void handleGameFormatError(const QString& op);
+    void handleGameResponse(const QString& op, const QJsonObject& root, int uid);
+    void handleGameNetworkError(const QString& op, const QString& errorText, int uid);
+    void handleGameFormatError(const QString& op, int uid);
     int currentUid() const;
+    int scopedUid();
+    void ensureUserScope();
+    void resetUserScopedRuntime();
 
     // SSE 流式处理辅助
     void handleStreamChunk(const QJsonObject& chunk);
@@ -269,6 +273,7 @@ private:
     ClientGateway* _gateway;
     AgentMessageModel* _model;
     QString _current_session_id;
+    int _scoped_uid = 0;
     QString _current_model_backend;
     QString _current_model_name;
     bool _loading = false;
@@ -304,6 +309,7 @@ private:
     AgentStreamClient* _streamClient = nullptr;
     AgentGameClient* _gameClient = nullptr;
     QString _currentStreamMsgId;
+    int _currentStreamUid = 0;
     QString _accumulatedContent;
     bool _streamFinalReceived = false;
     QString _pendingDeleteSessionId;

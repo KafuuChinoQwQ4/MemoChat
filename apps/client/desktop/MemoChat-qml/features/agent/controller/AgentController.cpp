@@ -50,6 +50,10 @@ void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err,
         return;
     }
     const AgentRequestRecord record = pending.value();
+    if (record.uid != 0 && record.uid != currentUid())
+    {
+        return;
+    }
 
     auto resetFeatureBusyForError = [this, &record](const QString& errorText)
     {

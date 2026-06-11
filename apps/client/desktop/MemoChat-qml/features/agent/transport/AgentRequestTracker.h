@@ -10,7 +10,7 @@
 class AgentRequestTracker
 {
 public:
-    void track(ReqId id, AgentRequestKind kind, const QString& messageId = QString());
+    void track(ReqId id, AgentRequestKind kind, const QString& messageId = QString(), int uid = 0);
     std::optional<AgentRequestRecord> take(ReqId id);
     bool contains(ReqId id) const;
     void clear();

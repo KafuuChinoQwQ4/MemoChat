@@ -6,7 +6,6 @@ AppPortRegistry::AppPortRegistry(AppPortRegistryContext context)
     : _constants(context.constants)
     , _queries(std::move(context.queries))
     , _actions(std::move(context.actions))
-    , _events(std::move(context.events))
     , _async_receiver(context.refs.asyncReceiver)
     , _shell_state(context.refs.shellState)
     , _media_upload_state(context.refs.mediaUploadState)
@@ -375,24 +374,4 @@ void AppPortRegistry::syncShellViewModelState()
 void AppPortRegistry::emitCurrentDialogUidChangedIfNeeded()
 {
     _actions.emitCurrentDialogUidChangedIfNeeded();
-}
-
-void AppPortRegistry::pendingApplyChanged()
-{
-    _events.pendingApplyChanged();
-}
-
-void AppPortRegistry::canLoadMoreChatsChanged()
-{
-    _events.canLoadMoreChatsChanged();
-}
-
-void AppPortRegistry::currentGroupChanged()
-{
-    _events.currentGroupChanged();
-}
-
-void AppPortRegistry::currentUserChanged()
-{
-    _events.currentUserChanged();
 }

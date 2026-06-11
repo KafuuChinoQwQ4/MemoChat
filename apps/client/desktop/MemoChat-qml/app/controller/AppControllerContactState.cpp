@@ -25,7 +25,7 @@ void AppController::setCurrentChatPeerName(const QString& name)
     }
 
     _chat_state.peerName = name;
-    emit currentChatPeerChanged();
+    syncChatViewModelState();
 }
 
 void AppController::setCurrentChatPeerIcon(const QString& icon)
@@ -37,5 +37,5 @@ void AppController::setCurrentChatPeerIcon(const QString& icon)
     }
 
     _chat_state.peerIcon = normalizedIcon;
-    emit currentChatPeerChanged();
+    syncChatViewModelState();
 }

@@ -33,6 +33,5 @@ void AppController::syncCurrentUserProfileState(const ProfileAppliedUserState& u
     if (_shell_state.syncCurrentUser(user))
     {
         syncShellViewModelState();
-        emit currentUserChanged();
     }
 }

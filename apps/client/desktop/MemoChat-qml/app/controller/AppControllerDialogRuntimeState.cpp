@@ -32,7 +32,7 @@ void AppController::setCurrentGroup(qint64 groupId, const QString& name, const Q
     }
 
     _features.groupController.setCurrentGroup(groupId, role, normalizedName, normalizedCode, permissionBits);
-    emit currentGroupChanged();
+    syncChatViewModelState();
 }
 
 void AppController::setMediaUploadInProgress(bool inProgress)
@@ -42,7 +42,7 @@ void AppController::setMediaUploadInProgress(bool inProgress)
         return;
     }
     _media_upload_state.inProgress = inProgress;
-    emit mediaUploadStateChanged();
+    syncChatViewModelState();
 }
 
 void AppController::setMediaUploadProgressText(const QString& text)
@@ -52,7 +52,7 @@ void AppController::setMediaUploadProgressText(const QString& text)
         return;
     }
     _media_upload_state.progressText = text;
-    emit mediaUploadStateChanged();
+    syncChatViewModelState();
 }
 
 void AppController::setCurrentDraftText(const QString& text)
@@ -61,7 +61,7 @@ void AppController::setCurrentDraftText(const QString& text)
     {
         return;
     }
-    emit currentDraftTextChanged();
+    syncChatViewModelState();
 }
 
 void AppController::setCurrentDialogPinned(bool pinned)
@@ -70,7 +70,7 @@ void AppController::setCurrentDialogPinned(bool pinned)
     {
         return;
     }
-    emit currentDialogPinnedChanged();
+    syncChatViewModelState();
 }
 
 void AppController::setCurrentDialogMuted(bool muted)
@@ -79,7 +79,7 @@ void AppController::setCurrentDialogMuted(bool muted)
     {
         return;
     }
-    emit currentDialogMutedChanged();
+    syncChatViewModelState();
 }
 
 void AppController::setPendingReplyContext(const QString& msgId, const QString& senderName, const QString& previewText)
@@ -88,5 +88,5 @@ void AppController::setPendingReplyContext(const QString& msgId, const QString& 
     {
         return;
     }
-    emit pendingReplyChanged();
+    syncChatViewModelState();
 }

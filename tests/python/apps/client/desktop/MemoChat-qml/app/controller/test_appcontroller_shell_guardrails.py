@@ -40,9 +40,7 @@ APP_SIGNAL_BINDER_FILES = (
     APP / "composition/AppChatTransportSignalBinder.cpp",
     APP / "composition/AppChatDispatcherSignalBinder.cpp",
     APP / "composition/AppCallSignalBinder.cpp",
-    APP / "composition/AppFeatureFacadeSignalBinder.cpp",
     APP / "composition/AppShellSignalBinder.cpp",
-    APP / "composition/AppChatProjectionSignalBinder.cpp",
     APP / "composition/AppTimerSignalBinder.cpp",
 )
 APP_CONTROLLER_CHAT_BINDING = APP / "controller/AppControllerChatFeatureBinding.cpp"
@@ -81,6 +79,10 @@ QML_SUFFIXES = {".qml", ".js"}
 
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def normalized(source: str) -> str:
+    return " ".join(source.split())
 
 
 def extract_function(source: str, signature: str) -> str:
@@ -392,13 +394,13 @@ class AppControllerShellGuardrailTests(unittest.TestCase):
             "bindAppChatTransportSignals();",
             "bindAppChatDispatcherSignals();",
             "bindAppCallSignals();",
-            "bindAppFeatureFacadeSignals();",
             "bindAppShellSignals();",
-            "bindAppChatProjectionSignals();",
             "bindAppTimerSignals();",
         ):
             with self.subTest(signal_helper=helper):
                 self.assertIn(helper, signal_binder)
+        self.assertNotIn("bindAppFeatureFacadeSignals", signal_binder + read(APP_CONTROLLER_H))
+        self.assertNotIn("bindAppChatProjectionSignals", signal_binder + read(APP_CONTROLLER_H))
 
     def test_appcontroller_constructor_does_not_reown_port_assembly(self):
         app_controller = read(APP_CONTROLLER_CPP)
@@ -583,12 +585,12 @@ class AppControllerShellGuardrailTests(unittest.TestCase):
             "struct AppPortRegistryConstants",
             "struct AppPortRegistryQueries",
             "struct AppPortRegistryActions",
-            "struct AppPortRegistryEvents",
             "struct AppPortRegistryContext",
             "explicit AppPortRegistry(AppPortRegistryContext context);",
         ):
             with self.subTest(contract_type=contract_type):
                 self.assertIn(contract_type, header)
+        self.assertNotIn("struct AppPortRegistryEvents", header)
 
         forbidden_root_controller_tokens = (
             '#include "AppController.h"',
@@ -1356,10 +1358,9 @@ class AppControllerShellGuardrailTests(unittest.TestCase):
         self.assertIn("GroupController::applyGroupManagementResponseEffect", group_controller)
         self.assertIn("GroupManagementEffectApplier::apply(effect, port);", group_controller)
         self.assertNotIn("AppController", group_controller_header + group_controller)
-        self.assertIn(
-            "connect(&_features.groupController, &GroupController::groupCreated",
-            read(APP / "composition/AppFeatureFacadeSignalBinder.cpp"),
-        )
+        self.assertFalse((APP / "composition/AppFeatureFacadeSignalBinder.cpp").exists())
+        self.assertIn("Connections {", read(QML_ROOT / "app/ChatShellPage.qml"))
+        self.assertIn("target: group", read(QML_ROOT / "app/ChatShellPage.qml"))
         self.assertNotIn("connect(&_features.groupController, &GroupController::groupCreated", read(APP_CONTROLLER_CPP))
         self.assertNotIn("QJsonDocument(", events + chat_dispatcher_router + management)
 
@@ -1666,7 +1667,10 @@ class AppControllerShellGuardrailTests(unittest.TestCase):
         self.assertIn("_features.chatFeatureController,", body)
         self.assertIn("_gateway.userMgr(),", body)
         self.assertIn("_features.groupController.groupListModel(),", body)
-        self.assertIn("transport->slot_send_data(static_cast<ReqId>(reqId), payload);", body)
+        self.assertIn(
+            "transport->slot_send_data(static_cast<ReqId>(reqId), payload);",
+            normalized(body),
+        )
         self.assertIn("port.setGroupHistoryLoading", body)
         self.assertIn("port.setPrivateHistoryLoading", body)
         self.assertIn("port.setCanLoadMorePrivateHistory", body)
@@ -1882,7 +1886,10 @@ class AppControllerShellGuardrailTests(unittest.TestCase):
         )
         self.assertIn("std::function<void(int, const QByteArray&)> dispatchPayload;", request_service_header)
         self.assertIn("constexpr int kPrivateHistoryRequestId = 1059;", request_service)
-        self.assertIn("dispatchIfAvailable(kPrivateHistoryRequestId, result.compactPayload", request_service)
+        self.assertIn(
+            "dispatchIfAvailable(kPrivateHistoryRequestId, result.compactPayload",
+            normalized(request_service),
+        )
         self.assertNotIn("PrivateChatHistoryRequestService::", events + history + pagination)
 
     def test_read_ack_send_adapters_delegate_payload_policy_to_chat_feature(self):

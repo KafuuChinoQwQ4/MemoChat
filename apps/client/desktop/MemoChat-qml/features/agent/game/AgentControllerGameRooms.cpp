@@ -35,6 +35,7 @@ QJsonObject hostConfigFromVariant(const QVariantMap& host)
 
 void AgentController::loadGameRoom(const QString& roomId)
 {
+    ensureUserScope();
     const QString trimmedRoomId = roomId.trimmed();
     if (trimmedRoomId.isEmpty())
     {
@@ -55,6 +56,7 @@ void AgentController::loadGameRoom(const QString& roomId)
 
 void AgentController::deleteGameRoom(const QString& roomId)
 {
+    ensureUserScope();
     const QString trimmedRoomId = roomId.trimmed();
     if (trimmedRoomId.isEmpty())
     {
@@ -74,6 +76,7 @@ void AgentController::createGameRoom(const QString& title,
                                      const QVariantMap& host,
                                      const QString& displayName)
 {
+    ensureUserScope();
     const QString trimmedRuleset =
         rulesetId.trimmed().isEmpty() ? QStringLiteral("werewolf.basic") : rulesetId.trimmed();
     const QString trimmedDisplayName = displayName.trimmed();
@@ -130,6 +133,7 @@ void AgentController::createGameRoomFromTemplate(const QString& templateId,
                                                  const QString& title,
                                                  const QString& displayName)
 {
+    ensureUserScope();
     const QString trimmedTemplateId = templateId.trimmed();
     if (trimmedTemplateId.isEmpty())
     {
@@ -150,6 +154,7 @@ void AgentController::createGameRoomFromTemplate(const QString& templateId,
 
 void AgentController::startGameRoom(const QString& roomId)
 {
+    ensureUserScope();
     const QString trimmedRoomId = roomId.trimmed();
     if (trimmedRoomId.isEmpty())
     {
@@ -163,6 +168,7 @@ void AgentController::startGameRoom(const QString& roomId)
 
 void AgentController::restartGameRoom(const QString& roomId)
 {
+    ensureUserScope();
     const QString trimmedRoomId = roomId.trimmed();
     if (trimmedRoomId.isEmpty())
     {
@@ -176,6 +182,7 @@ void AgentController::restartGameRoom(const QString& roomId)
 
 void AgentController::tickGameRoom(const QString& roomId)
 {
+    ensureUserScope();
     const QString trimmedRoomId = roomId.trimmed();
     if (trimmedRoomId.isEmpty())
     {
@@ -189,6 +196,7 @@ void AgentController::tickGameRoom(const QString& roomId)
 
 void AgentController::autoTickGameRoom(const QString& roomId, int maxSteps)
 {
+    ensureUserScope();
     const QString trimmedRoomId = roomId.trimmed();
     if (trimmedRoomId.isEmpty())
     {
@@ -207,6 +215,7 @@ void AgentController::submitGameAction(const QString& roomId,
                                        const QString& targetId,
                                        const QString& content)
 {
+    ensureUserScope();
     const QString trimmedRoomId = roomId.trimmed();
     if (trimmedRoomId.isEmpty())
     {
@@ -231,6 +240,7 @@ void AgentController::updateGameParticipant(const QString& roomId,
                                             const QString& strategy,
                                             const QString& skillName)
 {
+    ensureUserScope();
     const QString trimmedRoomId = roomId.trimmed();
     const QString trimmedParticipantId = participantId.trimmed();
     if (trimmedRoomId.isEmpty() || trimmedParticipantId.isEmpty())

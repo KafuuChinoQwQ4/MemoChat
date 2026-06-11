@@ -100,7 +100,7 @@ void AppController::emitCurrentDialogUidChangedIfNeeded()
     {
         return;
     }
-    emit currentDialogUidChanged();
+    syncChatViewModelState();
 }
 
 qint64 AppController::groupIdForDialogUid(int dialogUid) const

@@ -136,7 +136,6 @@ struct RelationBootstrapPort
     std::function<std::shared_ptr<FriendInfo>(int)> friendById;
     std::function<void(const QString&)> setCurrentChatPeerName;
     std::function<void(const QString&)> setCurrentChatPeerIcon;
-    std::function<void()> notifyPendingApplyChanged;
 };
 
 struct MediaSendSnapshot

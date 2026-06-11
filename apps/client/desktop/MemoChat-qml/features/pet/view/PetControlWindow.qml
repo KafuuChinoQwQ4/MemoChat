@@ -350,7 +350,7 @@ Window {
                             id: scaleSlider
                             Layout.fillWidth: true
                             from: 0.65
-                            to: 2.2
+                            to: 3.2
                             value: root.scaleFactor
                             live: false
                             onPressedChanged: {

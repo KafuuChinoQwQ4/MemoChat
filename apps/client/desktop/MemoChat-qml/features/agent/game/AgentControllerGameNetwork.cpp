@@ -45,9 +45,10 @@ void AgentController::clearGameError()
 
 void AgentController::sendGameGet(const QUrl& url, const QString& op, const QString& statusText)
 {
+    const int uid = scopedUid();
     clearGameError();
     setGameBusy(true, statusText);
-    _gameClient->get(url, op, statusText);
+    _gameClient->get(url, op, statusText, uid);
 }
 
 void AgentController::sendGamePost(const QUrl& url,
@@ -55,20 +56,26 @@ void AgentController::sendGamePost(const QUrl& url,
                                    const QString& op,
                                    const QString& statusText)
 {
+    const int uid = scopedUid();
     clearGameError();
     setGameBusy(true, statusText);
-    _gameClient->post(url, payload, op, statusText);
+    _gameClient->post(url, payload, op, statusText, uid);
 }
 
 void AgentController::sendGameDelete(const QUrl& url, const QString& op, const QString& statusText)
 {
+    const int uid = scopedUid();
     clearGameError();
     setGameBusy(true, statusText);
-    _gameClient->deleteResource(url, op, statusText);
+    _gameClient->deleteResource(url, op, statusText, uid);
 }
 
-void AgentController::handleGameNetworkError(const QString& op, const QString& errorText)
+void AgentController::handleGameNetworkError(const QString& op, const QString& errorText, int uid)
 {
+    if (uid != 0 && uid != currentUid())
+    {
+        return;
+    }
     if (op == QStringLiteral("delete_room"))
     {
         _pendingDeleteGameRoomId.clear();
@@ -77,8 +84,12 @@ void AgentController::handleGameNetworkError(const QString& op, const QString& e
     setGameError(QStringLiteral("Game 服务请求失败: %1").arg(errorText));
 }
 
-void AgentController::handleGameFormatError(const QString& op)
+void AgentController::handleGameFormatError(const QString& op, int uid)
 {
+    if (uid != 0 && uid != currentUid())
+    {
+        return;
+    }
     if (op == QStringLiteral("delete_room"))
     {
         _pendingDeleteGameRoomId.clear();

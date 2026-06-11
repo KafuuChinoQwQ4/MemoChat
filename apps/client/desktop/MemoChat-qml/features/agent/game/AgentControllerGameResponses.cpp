@@ -18,8 +18,13 @@ QJsonObject jsonObjectFromVariant(const QVariant& value)
 }
 } // namespace
 
-void AgentController::handleGameResponse(const QString& op, const QJsonObject& root)
+void AgentController::handleGameResponse(const QString& op, const QJsonObject& root, int uid)
 {
+    if (uid != 0 && uid != currentUid())
+    {
+        return;
+    }
+
     const int code = root.contains(QStringLiteral("error")) ? root.value(QStringLiteral("error")).toInt()
                                                             : root.value(QStringLiteral("code")).toInt();
     if (code != 0)

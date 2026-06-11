@@ -1,5 +1,6 @@
 #include "AgentController.h"
 
+#include "AgentStreamClient.h"
 #include "AgentMessageModel.h"
 #include "ClientGateway.h"
 #include "httpmgr.h"
@@ -27,9 +28,10 @@ QString aiHttpModule()
 
 void AgentController::loadSessions()
 {
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     ReqId reqId = ID_AI_SESSION_LIST;
-    _pending_requests.track(reqId, AgentRequestKind::ListSessions);
+    _pending_requests.track(reqId, AgentRequestKind::ListSessions, QString(), uid);
     QUrl url(gate_url_prefix + "/ai/session/list");
     QUrlQuery query;
     query.addQueryItem("uid", QString::number(uid));
@@ -41,6 +43,7 @@ void AgentController::loadSessions()
 
 void AgentController::createSession()
 {
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     if (!_current_game_room_id.isEmpty())
     {
@@ -54,7 +57,7 @@ void AgentController::createSession()
     payload["model_name"] = _current_model_name;
 
     ReqId reqId = ID_AI_SESSION_CREATE;
-    _pending_requests.track(reqId, AgentRequestKind::CreateSession);
+    _pending_requests.track(reqId, AgentRequestKind::CreateSession, QString(), uid);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/session"),
                                         payload,
                                         reqId,
@@ -64,6 +67,7 @@ void AgentController::createSession()
 
 void AgentController::switchSession(const QString& sessionId)
 {
+    ensureUserScope();
     if (_current_session_id == sessionId)
         return;
     if (!_current_game_room_id.isEmpty())
@@ -79,6 +83,7 @@ void AgentController::switchSession(const QString& sessionId)
 
 void AgentController::deleteSession(const QString& sessionId)
 {
+    ensureUserScope();
     if (sessionId.trimmed().isEmpty())
     {
         return;
@@ -89,7 +94,7 @@ void AgentController::deleteSession(const QString& sessionId)
     payload["session_id"] = sessionId;
 
     ReqId reqId = ID_AI_SESSION_DELETE;
-    _pending_requests.track(reqId, AgentRequestKind::DeleteSession);
+    _pending_requests.track(reqId, AgentRequestKind::DeleteSession, QString(), uid);
     _pendingDeleteSessionId = sessionId;
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/session/delete"),
                                         payload,
@@ -100,6 +105,7 @@ void AgentController::deleteSession(const QString& sessionId)
 
 void AgentController::loadHistory(const QString& sessionId)
 {
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     QUrl url(gate_url_prefix + "/ai/history");
     QUrlQuery query;
@@ -110,7 +116,7 @@ void AgentController::loadHistory(const QString& sessionId)
     url.setQuery(query);
 
     ReqId reqId = ID_AI_HISTORY;
-    _pending_requests.track(reqId, AgentRequestKind::History);
+    _pending_requests.track(reqId, AgentRequestKind::History, QString(), uid);
     _model->clear();
 
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
@@ -222,4 +228,114 @@ void AgentController::clearCurrentSession()
     {
         _model->clear();
     }
+}
+
+void AgentController::resetForLogout()
+{
+    resetUserScopedRuntime();
+    _scoped_uid = currentUid();
+}
+
+int AgentController::scopedUid()
+{
+    ensureUserScope();
+    return _scoped_uid;
+}
+
+void AgentController::ensureUserScope()
+{
+    const int uid = currentUid();
+    if (_scoped_uid == uid)
+    {
+        return;
+    }
+    resetUserScopedRuntime();
+    _scoped_uid = uid;
+}
+
+void AgentController::resetUserScopedRuntime()
+{
+    if (_streaming)
+    {
+        _streamClient->cancel();
+    }
+
+    const bool sessionChangedNeeded = !_current_session_id.isEmpty();
+    _current_session_id.clear();
+    _sessions.clear();
+    _pendingDeleteSessionId.clear();
+    _selectNewestSessionAfterList = false;
+    if (_model)
+    {
+        _model->clear();
+    }
+
+    _loading = false;
+    _streaming = false;
+    _pending_requests.clear();
+    _currentStreamMsgId.clear();
+    _currentStreamUid = 0;
+    _accumulatedContent.clear();
+    _streamFinalReceived = false;
+    _error.clear();
+    clearTrace();
+
+    _available_models.clear();
+    _model_refresh_busy = false;
+    _api_provider_busy = false;
+    _api_provider_status.clear();
+    _thinking_enabled = false;
+
+    _knowledge_bases.clear();
+    _knowledge_search_result.clear();
+    _knowledge_busy = false;
+    _knowledge_status_text.clear();
+    _knowledge_error.clear();
+
+    _memories.clear();
+    _memory_busy = false;
+    _memory_status_text.clear();
+    _memory_error.clear();
+
+    _agent_tasks.clear();
+    _agent_task_busy = false;
+    _agent_task_status_text.clear();
+    _agent_task_error.clear();
+
+    _pendingDeleteGameRoomId.clear();
+    _current_game_room_id.clear();
+    _game_rooms.clear();
+    _game_templates.clear();
+    _game_template_presets.clear();
+    _game_state.clear();
+    _game_rulesets.clear();
+    _game_role_presets.clear();
+    _game_busy = false;
+    _game_status_text.clear();
+    _game_error.clear();
+
+    if (sessionChangedNeeded)
+    {
+        emit sessionChanged();
+    }
+    emit sessionsChanged();
+    emit loadingChanged();
+    emit streamingChanged();
+    emit errorOccurred(QString());
+    emit modelsChanged();
+    emit modelStateChanged();
+    emit thinkingChanged();
+    emit knowledgeBasesChanged();
+    emit knowledgeSearchResultChanged();
+    emit knowledgeStateChanged();
+    emit memoriesChanged();
+    emit memoryStateChanged();
+    emit agentTasksChanged();
+    emit agentTaskStateChanged();
+    emit gameRoomsChanged();
+    emit gameTemplatesChanged();
+    emit gameTemplatePresetsChanged();
+    emit gameRulesetsChanged();
+    emit gameRolePresetsChanged();
+    emit gameStateChanged();
 }

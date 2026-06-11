@@ -306,24 +306,6 @@ AppController::AppController(QObject* parent)
         emitCurrentDialogUidChangedIfNeeded();
     };
 
-    AppPortRegistryEvents events;
-    events.pendingApplyChanged = [this]()
-    {
-        emit pendingApplyChanged();
-    };
-    events.canLoadMoreChatsChanged = [this]()
-    {
-        emit canLoadMoreChatsChanged();
-    };
-    events.currentGroupChanged = [this]()
-    {
-        emit currentGroupChanged();
-    };
-    events.currentUserChanged = [this]()
-    {
-        emit currentUserChanged();
-    };
-
     AppPortRegistryContext context{AppPortRegistryRefs{*this,
                                                        _shell_state,
                                                        _media_upload_state,
@@ -338,8 +320,7 @@ AppController::AppController(QObject* parent)
                                                        _chat_connection_coordinator},
                                    AppPortRegistryConstants{LoginPage, ChatPage, ApplyRequestPane},
                                    std::move(queries),
-                                   std::move(actions),
-                                   std::move(events)};
+                                   std::move(actions)};
     _port_registry = std::make_unique<AppPortRegistry>(std::move(context));
     bindAppControllerPorts();
 

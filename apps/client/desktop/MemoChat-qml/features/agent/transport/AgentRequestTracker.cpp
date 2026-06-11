@@ -1,8 +1,8 @@
 #include "AgentRequestTracker.h"
 
-void AgentRequestTracker::track(ReqId id, AgentRequestKind kind, const QString& messageId)
+void AgentRequestTracker::track(ReqId id, AgentRequestKind kind, const QString& messageId, int uid)
 {
-    _records.insert(static_cast<int>(id), AgentRequestRecord{kind, messageId});
+    _records.insert(static_cast<int>(id), AgentRequestRecord{kind, messageId, uid});
 }
 
 std::optional<AgentRequestRecord> AgentRequestTracker::take(ReqId id)

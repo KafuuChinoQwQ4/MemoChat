@@ -250,8 +250,7 @@ def recv_matching(
             msg_id, payload = recv_frame(sock)
         except socket.timeout as exc:
             raise TimeoutError(
-                f"{stage}: socket timed out waiting for ids={sorted(expected_ids)}, "
-                f"skipped={skipped[-5:]}"
+                f"{stage}: socket timed out waiting for ids={sorted(expected_ids)}, skipped={skipped[-5:]}"
             ) from exc
         if msg_id in expected_ids and predicate(msg_id, payload):
             return msg_id, payload, skipped
@@ -414,9 +413,11 @@ def send_private(
     recv_matching(
         receiver.sock,
         {ID_NOTIFY_TEXT_CHAT_MSG_REQ},
-        lambda _msg_id, body: int(body.get("fromuid", 0)) == sender.account.uid
-        and int(body.get("touid", 0)) == receiver.account.uid
-        and text_array_has(body, msg_id, content),
+        lambda _msg_id, body: (
+            int(body.get("fromuid", 0)) == sender.account.uid
+            and int(body.get("touid", 0)) == receiver.account.uid
+            and text_array_has(body, msg_id, content)
+        ),
         timeout,
         f"private_notify:{msg_id}",
     )
