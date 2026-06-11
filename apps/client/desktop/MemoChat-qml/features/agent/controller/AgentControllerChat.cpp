@@ -61,6 +61,7 @@ void AgentController::sendMessage(const QString& content)
     ReqId reqId = ID_AI_CHAT;
     _pending_requests.track(reqId, AgentRequestKind::ChatMessage, msgId, uid);
     _model->appendAIMessage(msgId, _current_model_name);
+    setCurrentGeneratingMsgId(msgId);
 
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/chat"),
                                         payload,
@@ -189,7 +190,9 @@ void AgentController::handleChatRsp(ReqId id, const QString& res, ErrorCodes err
         {
             _model->finalizeAIMessage(msgId);
         }
+        setCurrentGeneratingMsgId(QString());
     }
+    _model->finalizeAllStreamingMessages();
     emit aiResponseReceived(content);
 }
 

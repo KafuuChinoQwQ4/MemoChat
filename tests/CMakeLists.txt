@@ -24,6 +24,7 @@ add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/group/controller 
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/call/controller ${CMAKE_CURRENT_BINARY_DIR}/client_call_controller)
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/profile/controller ${CMAKE_CURRENT_BINARY_DIR}/client_profile_controller)
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/auth/viewmodel ${CMAKE_CURRENT_BINARY_DIR}/client_auth_viewmodel)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/agent/model   ${CMAKE_CURRENT_BINARY_DIR}/client_agent_model)
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/live2d                ${CMAKE_CURRENT_BINARY_DIR}/client_live2d)
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/core/media            ${CMAKE_CURRENT_BINARY_DIR}/client_media)
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/chat/services ${CMAKE_CURRENT_BINARY_DIR}/client_dialog)

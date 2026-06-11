@@ -39,9 +39,7 @@ int PostgresDao::RegUser(const std::string& name, const std::string& email, cons
             return -1;
         }
         pqxx::work txn(*con->_con);
-        const auto exists = txn.exec1("SELECT COUNT(1) FROM \"user\" WHERE name = " + txn.quote(name) +
-                                      " OR email = " + txn.quote(email))[0]
-                                .as<int>();
+        const auto exists = txn.exec1("SELECT COUNT(1) FROM \"user\" WHERE email = " + txn.quote(email))[0].as<int>();
         if (exists > 0)
         {
             txn.commit();

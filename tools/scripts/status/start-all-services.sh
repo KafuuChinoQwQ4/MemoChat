@@ -643,9 +643,8 @@ launch_svc() {
 
     if [[ -n "$port" ]]; then
         wait_for_port "$svc_name" "$port"
-    else
-        verify_started_pid "$pid" "$svc_name" "$pid_file" "$out_log" "$err_log"
     fi
+    verify_started_pid "$pid" "$svc_name" "$pid_file" "$out_log" "$err_log"
 }
 
 launch_topology_group() {

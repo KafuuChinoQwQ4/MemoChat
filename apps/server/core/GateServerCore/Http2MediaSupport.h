@@ -31,6 +31,12 @@ MediaResult HandleUploadMediaChunk(int uid,
                                    int index,
                                    const std::string& chunk_data_base64);
 
+MediaResult HandleUploadMediaChunkBytes(int uid,
+                                        const std::string& token,
+                                        const std::string& upload_id,
+                                        int index,
+                                        std::string_view chunk_data);
+
 MediaResult HandleUploadMediaStatus(int uid, const std::string& token, const std::string& upload_id);
 
 MediaResult HandleUploadMediaComplete(int uid, const std::string& token, const std::string& upload_id);

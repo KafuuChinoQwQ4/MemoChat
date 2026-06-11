@@ -14,6 +14,7 @@ APP_CONTROLLER_HEADER = APP_CONTROLLER_DIR / "AppController.h"
 MEDIA_COORDINATOR = APP_DIR / "coordinators/MediaCoordinator.cpp"
 MEDIA_RUNNER = APP_DIR / "coordinators/MediaPendingAttachmentRunner.cpp"
 MEDIA_RUNNER_HEADER = APP_DIR / "coordinators/MediaPendingAttachmentRunner.h"
+CHAT_VIEW_DIR = QML_DIR / "features/chat/view"
 CLIENT_CMAKE = QML_DIR / "CMakeLists.txt"
 CLIENT_CMAKE_MANIFESTS = (
     QML_DIR / "app/sources.cmake",
@@ -293,7 +294,7 @@ class MediaUploadBoundaryTests(unittest.TestCase):
 
     def test_media_send_behaviour_preserves_composer_picker_and_guard_paths(self):
         media = MEDIA_COORDINATOR.read_text(encoding="utf-8")
-        send_text = extract_function(media, "void MediaCoordinator::sendTextMessage(const QString& text)")
+        send_text = extract_function(media, "bool MediaCoordinator::dispatchTextMessage(const QString& text)")
         send_composer = extract_function(
             media, "void MediaCoordinator::sendCurrentComposerPayload(const QString& text)"
         )
@@ -311,7 +312,11 @@ class MediaUploadBoundaryTests(unittest.TestCase):
         self.assertIn("_port.beginPendingAttachmentSend", send_composer)
         self.assertIn("_port.startPendingAttachmentRunner", send_composer)
         self.assertNotIn("_port.processPendingAttachmentQueue", send_composer)
-        self.assertIn("sendTextMessage(text)", send_composer)
+        self.assertIn("!text.trimmed().isEmpty() && !dispatchTextMessage(text)", send_composer)
+        self.assertIn("return;", send_composer)
+        self.assertLess(
+            send_composer.index("dispatchTextMessage(text)"), send_composer.index("_port.beginPendingAttachmentSend")
+        )
 
         self.assertIn("trimmed().isEmpty()", send_text)
         self.assertIn("content.size() > 1024", send_text)
@@ -334,6 +339,36 @@ class MediaUploadBoundaryTests(unittest.TestCase):
         self.assertIn("snapshot.currentDialogUid", clear_attachments)
         self.assertIn("_port.clearPendingAttachmentsForDialog", clear_attachments)
         self.assertIn("_port.setCurrentPendingAttachments(QVariantList())", clear_attachments)
+
+    def test_chat_composer_renders_pending_image_and_file_attachments(self):
+        conversation = (CHAT_VIEW_DIR / "ChatConversationPane.qml").read_text(encoding="utf-8")
+        composer = (CHAT_VIEW_DIR / "conversation/ChatComposerBar.qml").read_text(encoding="utf-8")
+        strip = (CHAT_VIEW_DIR / "conversation/ChatComposerAttachmentStrip.qml").read_text(encoding="utf-8")
+
+        self.assertIn("property var currentPendingAttachments: []", conversation)
+        self.assertIn("root.currentPendingAttachments && root.currentPendingAttachments.length > 0", conversation)
+        self.assertIn("pendingAttachments: root.currentPendingAttachments", conversation)
+        self.assertIn(
+            "onRemovePendingAttachment: function(attachmentId) { root.removePendingAttachment(attachmentId) }",
+            conversation,
+        )
+
+        self.assertIn("property var pendingAttachments: []", composer)
+        self.assertIn("readonly property bool hasPendingAttachmentItems:", composer)
+        self.assertIn("ChatComposerAttachmentStrip", composer)
+        self.assertIn("pendingAttachments: root.pendingAttachments", composer)
+        self.assertIn("mediaUploadInProgress: root.mediaUploadInProgress", composer)
+        self.assertIn(
+            "onRemoveRequested: function(attachmentId) { root.removePendingAttachment(attachmentId) }", composer
+        )
+
+        self.assertIn("visible: root.hasPendingAttachmentItems", strip)
+        self.assertIn("Layout.preferredHeight: root.hasPendingAttachmentItems ? 76 : 0", strip)
+        self.assertIn("model: root.pendingAttachments", strip)
+        self.assertIn('modelData.type === "image" ? modelData.previewUrl : "qrc:/icons/file.png"', strip)
+        self.assertIn('modelData.type === "image" ? "图片待发送" : "文件待发送"', strip)
+        self.assertIn("enabled: !root.mediaUploadInProgress", strip)
+        self.assertIn("onClicked: root.removeRequested(modelData.attachmentId)", strip)
 
 
 if __name__ == "__main__":

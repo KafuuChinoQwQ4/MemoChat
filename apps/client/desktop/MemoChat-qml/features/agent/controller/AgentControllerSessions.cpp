@@ -117,7 +117,13 @@ void AgentController::loadHistory(const QString& sessionId)
 
     ReqId reqId = ID_AI_HISTORY;
     _pending_requests.track(reqId, AgentRequestKind::History, QString(), uid);
+    setCurrentGeneratingMsgId(QString());
+    _loading = true;
+    _streaming = false;
+    _model->finalizeAllStreamingMessages();
     _model->clear();
+    emit loadingChanged();
+    emit streamingChanged();
 
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
@@ -189,6 +195,8 @@ void AgentController::handleSessionRsp(ReqId id, const QString& res, ErrorCodes 
 
 void AgentController::handleHistoryRsp(ReqId id, const QString& res, ErrorCodes err)
 {
+    Q_UNUSED(id);
+    Q_UNUSED(err);
     QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8());
     QJsonObject root = doc.object();
     QJsonArray messages = root["messages"].toArray();
@@ -214,7 +222,12 @@ void AgentController::handleHistoryRsp(ReqId id, const QString& res, ErrorCodes 
         }
     }
 
+    _loading = false;
+    _streaming = false;
+    setCurrentGeneratingMsgId(QString());
+    _model->finalizeAllStreamingMessages();
     emit loadingChanged();
+    emit streamingChanged();
 }
 
 void AgentController::clearCurrentSession()
@@ -226,6 +239,7 @@ void AgentController::clearCurrentSession()
     }
     if (_model)
     {
+        _model->finalizeAllStreamingMessages();
         _model->clear();
     }
 }
@@ -267,13 +281,14 @@ void AgentController::resetUserScopedRuntime()
     _selectNewestSessionAfterList = false;
     if (_model)
     {
+        _model->finalizeAllStreamingMessages();
         _model->clear();
     }
 
     _loading = false;
     _streaming = false;
     _pending_requests.clear();
-    _currentStreamMsgId.clear();
+    setCurrentGeneratingMsgId(QString());
     _currentStreamUid = 0;
     _accumulatedContent.clear();
     _streamFinalReceived = false;

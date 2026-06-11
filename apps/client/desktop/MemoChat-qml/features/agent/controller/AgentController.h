@@ -61,6 +61,7 @@ class AgentController : public QObject
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
     Q_PROPERTY(QString error READ error NOTIFY errorOccurred)
     Q_PROPERTY(bool streaming READ streaming NOTIFY streamingChanged)
+    Q_PROPERTY(QString currentGeneratingMsgId READ currentGeneratingMsgId NOTIFY currentGeneratingMsgIdChanged)
 
 public:
     explicit AgentController(ClientGateway* gateway, QObject* parent = nullptr);
@@ -110,6 +111,7 @@ public:
     bool loading() const;
     QString error() const;
     bool streaming() const;
+    QString currentGeneratingMsgId() const;
 
     Q_INVOKABLE void sendMessage(const QString& content);
     Q_INVOKABLE void sendStreamMessage(const QString& content);
@@ -192,6 +194,7 @@ signals:
     void modelsChanged();
     void loadingChanged();
     void streamingChanged();
+    void currentGeneratingMsgIdChanged();
     void errorOccurred(const QString& error);
     void aiResponseReceived(const QString& content);
     void streamingChunkReceived(const QString& msgId, const QString& chunk);
@@ -264,6 +267,7 @@ private:
     int scopedUid();
     void ensureUserScope();
     void resetUserScopedRuntime();
+    void setCurrentGeneratingMsgId(const QString& msgId);
 
     // SSE 流式处理辅助
     void handleStreamChunk(const QJsonObject& chunk);

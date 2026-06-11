@@ -14,6 +14,9 @@ Rectangle {
     property string selfAvatar: "qrc:/res/head_1.jpg"
     property string live2dAvatarSource: "qrc:/icons/modelive2d.png"
     property string live2dAvatarFallback: "qrc:/icons/modelive2d.png"
+    readonly property int modelMessageCount: root.messageModel && root.messageModel.count !== undefined
+                                             ? root.messageModel.count
+                                             : 0
 
     Layout.fillWidth: true
     Layout.fillHeight: true
@@ -136,7 +139,7 @@ Rectangle {
             height: 74
             radius: 12
             antialiasing: true
-            visible: messageList.count === 0
+            visible: root.modelMessageCount === 0
             color: Qt.rgba(1, 1, 1, 0.34)
             border.color: Qt.rgba(1, 1, 1, 0.48)
 

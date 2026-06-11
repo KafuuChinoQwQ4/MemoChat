@@ -20,6 +20,9 @@
 
 #include "json/GlazeCompat.h"
 #include <chrono>
+#include <cctype>
+#include <cstdlib>
+#include <string_view>
 
 namespace GateHttp3ServiceImpl
 {
@@ -72,6 +75,60 @@ void FillCommentLikeJson(int viewer_uid, int64_t comment_id, memochat::json::Jso
     }
     json["like_names"] = like_names;
     json["likes"] = likes_arr;
+}
+
+std::string HeaderValue(const std::unordered_map<std::string, std::string>& headers, std::string_view name)
+{
+    const std::string key(name);
+    auto it = headers.find(key);
+    if (it != headers.end())
+    {
+        return it->second;
+    }
+
+    std::string lower_key;
+    lower_key.reserve(name.size());
+    for (char c : name)
+    {
+        lower_key.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    }
+    it = headers.find(lower_key);
+    return it == headers.end() ? std::string() : it->second;
+}
+
+int HeaderIntValue(const std::unordered_map<std::string, std::string>& headers, std::string_view name, int fallback = 0)
+{
+    const std::string value = HeaderValue(headers, name);
+    if (value.empty())
+    {
+        return fallback;
+    }
+    try
+    {
+        return std::stoi(value);
+    }
+    catch (...)
+    {
+        return fallback;
+    }
+}
+
+memochat::json::JsonValue MediaResponseJson(const Http2MediaSupport::MediaResult& result)
+{
+    memochat::json::JsonValue root = memochat::json::glaze_empty_object();
+    if (memochat::json::glaze_is_object(result.data))
+    {
+        for (const auto& key : memochat::json::getMemberNames(result.data))
+        {
+            root[key] = memochat::json::glaze_get(result.data, key);
+        }
+    }
+    root["error"] = result.error;
+    if (!result.message.empty())
+    {
+        root["message"] = result.message;
+    }
+    return root;
 }
 
 } // namespace
@@ -543,10 +600,7 @@ void RegisterRoutes(LogicSystem& logic)
                     const int64_t file_size = src_root.get("file_size", 0).asInt64();
                     auto result =
                         Http2MediaSupport::HandleUploadMediaInit(uid, token, media_type, file_name, mime, file_size);
-                    root = result.data;
-                    root["error"] = result.error;
-                    if (!result.message.empty())
-                        root["message"] = result.message;
+                    root = MediaResponseJson(result);
                     return result.error == 0;
                 });
         });
@@ -555,23 +609,33 @@ void RegisterRoutes(LogicSystem& logic)
         "/upload_media_chunk",
         [](std::shared_ptr<GateHttp3Connection> connection)
         {
-            return GateHttp3JsonSupport::HandleJsonPost(
-                connection,
-                [](const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string&)
-                {
-                    const int uid = src_root.get("uid", 0).asInt();
-                    const std::string token = src_root.get("token", "").asString();
-                    const std::string upload_id = src_root.get("upload_id", "").asString();
-                    const int index = src_root.get("index", -1).asInt();
-                    const std::string chunk_data_base64 = src_root.get("data_base64", "").asString();
-                    auto result =
-                        Http2MediaSupport::HandleUploadMediaChunk(uid, token, upload_id, index, chunk_data_base64);
-                    root = result.data;
-                    root["error"] = result.error;
-                    if (!result.message.empty())
-                        root["message"] = result.message;
-                    return result.error == 0;
-                });
+            const std::string body = connection->GetRequestBody();
+            memochat::json::JsonValue src_root;
+            Http2MediaSupport::MediaResult result;
+            if (memochat::json::glaze_parse(src_root, body) && memochat::json::glaze_is_object(src_root))
+            {
+                const int uid = src_root.get("uid", 0).asInt();
+                const std::string token = src_root.get("token", "").asString();
+                const std::string upload_id = src_root.get("upload_id", "").asString();
+                const int index = src_root.get("index", -1).asInt();
+                const std::string chunk_data_base64 = src_root.get("data_base64", "").asString();
+                result = Http2MediaSupport::HandleUploadMediaChunk(uid, token, upload_id, index, chunk_data_base64);
+            }
+            else
+            {
+                const auto headers = connection->GetRequestHeaders();
+                const int uid = HeaderIntValue(headers, "X-Uid");
+                const std::string token = HeaderValue(headers, "X-Token");
+                const std::string upload_id = HeaderValue(headers, "X-Upload-Id");
+                const int index = HeaderIntValue(headers, "X-Chunk-Index", -1);
+                result = Http2MediaSupport::HandleUploadMediaChunkBytes(uid, token, upload_id, index, body);
+            }
+
+            const memochat::json::JsonValue root = MediaResponseJson(result);
+            connection->SendResponse(result.error == 0 ? 200 : 400,
+                                     memochat::json::writeString(root),
+                                     "application/json");
+            return true;
         });
 
     logic.RegPost(
@@ -586,10 +650,7 @@ void RegisterRoutes(LogicSystem& logic)
                     const std::string token = src_root.get("token", "").asString();
                     const std::string upload_id = src_root.get("upload_id", "").asString();
                     auto result = Http2MediaSupport::HandleUploadMediaComplete(uid, token, upload_id);
-                    root = result.data;
-                    root["error"] = result.error;
-                    if (!result.message.empty())
-                        root["message"] = result.message;
+                    root = MediaResponseJson(result);
                     return result.error == 0;
                 });
         });
@@ -614,10 +675,7 @@ void RegisterRoutes(LogicSystem& logic)
                                                                              file_name,
                                                                              mime,
                                                                              data_base64);
-                    root = result.data;
-                    root["error"] = result.error;
-                    if (!result.message.empty())
-                        root["message"] = result.message;
+                    root = MediaResponseJson(result);
                     return result.error == 0;
                 });
         });
@@ -651,10 +709,7 @@ void RegisterRoutes(LogicSystem& logic)
                          }
                      }
                      auto result = Http2MediaSupport::HandleUploadMediaStatus(uid, token, upload_id);
-                     memochat::json::JsonValue root = result.data;
-                     root["error"] = result.error;
-                     if (!result.message.empty())
-                         root["message"] = result.message;
+                     memochat::json::JsonValue root = MediaResponseJson(result);
                      connection->SendResponse(result.error == 0 ? 200 : 400, root.toStyledString(), "application/json");
                      return true;
                  });
@@ -681,10 +736,7 @@ void RegisterRoutes(LogicSystem& logic)
                      auto result = Http2MediaSupport::HandleMediaDownloadInfo(uid, token, media_key);
                      if (result.error != 0)
                      {
-                         memochat::json::JsonValue root = result.data;
-                         root["error"] = result.error;
-                         if (!result.message.empty())
-                             root["message"] = result.message;
+                         memochat::json::JsonValue root = MediaResponseJson(result);
                          connection->SendResponse(400, root.toStyledString(), "application/json");
                          return true;
                      }

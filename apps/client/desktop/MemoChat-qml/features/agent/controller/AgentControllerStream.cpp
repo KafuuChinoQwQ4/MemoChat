@@ -37,7 +37,7 @@ void AgentController::sendStreamMessage(const QString& content)
     QString msgId = makeUuid();
     _model->appendAIMessage(msgId, _current_model_name);
     _streaming = true;
-    _currentStreamMsgId = msgId;
+    setCurrentGeneratingMsgId(msgId);
     _currentStreamUid = uid;
     _accumulatedContent.clear();
     _streamFinalReceived = false;
@@ -86,10 +86,11 @@ void AgentController::cancelStream()
     }
 
     _streaming = false;
-    _currentStreamMsgId.clear();
+    setCurrentGeneratingMsgId(QString());
     _currentStreamUid = 0;
     _accumulatedContent.clear();
     _streamFinalReceived = false;
+    _model->finalizeAllStreamingMessages();
     clearErrorState();
     emit streamingChanged();
 }
@@ -143,6 +144,7 @@ void AgentController::handleStreamFinished(int networkError, const QString& erro
     }
 
     const bool normalStreamClose = hasUsefulContent && err == QNetworkReply::RemoteHostClosedError;
+    bool currentMessageFinalized = false;
     if (err != QNetworkReply::NoError && err != QNetworkReply::OperationCanceledError && !normalStreamClose)
     {
         qWarning() << "[AgentController] Stream error:" << err << errorString;
@@ -151,15 +153,23 @@ void AgentController::handleStreamFinished(int networkError, const QString& erro
             _model->setError(_currentStreamMsgId, errorString);
             _model->finalizeAIMessage(_currentStreamMsgId);
             emit streamingFinished(_currentStreamMsgId);
+            currentMessageFinalized = true;
         }
         setErrorState(errorString);
     }
 
+    if (!_currentStreamMsgId.isEmpty() && !currentMessageFinalized)
+    {
+        _model->finalizeAIMessage(_currentStreamMsgId);
+        emit streamingFinished(_currentStreamMsgId);
+    }
+
     _streaming = false;
-    _currentStreamMsgId.clear();
+    setCurrentGeneratingMsgId(QString());
     _currentStreamUid = 0;
     _accumulatedContent.clear();
     _streamFinalReceived = false;
+    _model->finalizeAllStreamingMessages();
     emit streamingChanged();
 }
 
@@ -180,6 +190,8 @@ void AgentController::finishStream(const QString& msgId, const QString& finalCon
     emit aiResponseReceived(finalContent);
 
     _streaming = false;
+    setCurrentGeneratingMsgId(QString());
+    _model->finalizeAllStreamingMessages();
     if (_current_session_id.isEmpty())
     {
         _selectNewestSessionAfterList = true;

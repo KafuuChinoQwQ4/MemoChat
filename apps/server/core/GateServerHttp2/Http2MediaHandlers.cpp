@@ -83,9 +83,11 @@ void Http2MediaHandlers::HandleUploadMediaChunk(const Http2Request& req, Http2Re
     std::string upload_id;
     int index = -1;
     std::string chunk_data_base64;
+    bool json_chunk = false;
 
     if (Http2MediaSupport::ParseJsonBody(body_str, root))
     {
+        json_chunk = true;
         uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
         token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
         upload_id = memochat::json::glaze_safe_get<std::string>(root, "upload_id", "");
@@ -102,10 +104,11 @@ void Http2MediaHandlers::HandleUploadMediaChunk(const Http2Request& req, Http2Re
         if (it != req.headers.end())
             upload_id = it->second;
         index = ExtractIntHeader(req, "X-Chunk-Index");
-        chunk_data_base64 = body_str;
     }
 
-    auto result = Http2MediaSupport::HandleUploadMediaChunk(uid, token, upload_id, index, chunk_data_base64);
+    auto result = json_chunk
+                      ? Http2MediaSupport::HandleUploadMediaChunk(uid, token, upload_id, index, chunk_data_base64)
+                      : Http2MediaSupport::HandleUploadMediaChunkBytes(uid, token, upload_id, index, body_str);
     memochat::json::JsonValue out = MakeMediaResponse(result);
     resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }

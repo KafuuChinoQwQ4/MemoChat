@@ -12,6 +12,7 @@ class AgentMessageModel : public QAbstractListModel
 {
     Q_OBJECT
     Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
+    Q_PROPERTY(bool hasStreamingMessage READ hasStreamingMessage NOTIFY streamingStateChanged)
 
 public:
     enum Roles
@@ -36,6 +37,7 @@ public:
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
     QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
+    bool hasStreamingMessage() const;
 
     void clear();
 
@@ -43,11 +45,13 @@ public:
     void appendAIMessage(const QString& msgId, const QString& model);
     void updateStreamingContent(const QString& msgId, const QString& chunk);
     void finalizeAIMessage(const QString& msgId);
+    void finalizeAllStreamingMessages();
     void setError(const QString& msgId, const QString& error);
     void setSources(const QString& msgId, const QString& sourcesJson);
 
 signals:
     void countChanged();
+    void streamingStateChanged();
 
 private:
     struct MessageEntry

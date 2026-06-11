@@ -91,12 +91,26 @@ void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err,
         }
     };
 
-    auto finishWithError = [this, &resetFeatureBusyForError](const QString& errorText)
+    auto finishWithError = [this, &resetFeatureBusyForError, &record](const QString& errorText)
     {
         resetFeatureBusyForError(errorText);
+        if (record.kind == AgentRequestKind::ChatMessage && !record.messageId.isEmpty() && _model)
+        {
+            _model->setError(record.messageId, errorText);
+            _model->finalizeAIMessage(record.messageId);
+            emit streamingFinished(record.messageId);
+            if (record.messageId == _currentStreamMsgId)
+            {
+                setCurrentGeneratingMsgId(QString());
+            }
+        }
         setErrorState(errorText);
         _loading = false;
         _streaming = false;
+        if (_model)
+        {
+            _model->finalizeAllStreamingMessages();
+        }
         emit loadingChanged();
         emit streamingChanged();
     };
