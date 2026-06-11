@@ -8,6 +8,9 @@ REPO_ROOT = repo_root()
 CLIENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 CALL = CLIENT / "features/call"
 APP = CLIENT / "app"
+APP_FEATURE_REGISTRY_H = APP / "composition/AppFeatureRegistry.h"
+APP_FEATURE_REGISTRY_CPP = APP / "composition/AppFeatureRegistry.cpp"
+APP_CALL_PORT_BINDER = APP / "composition/AppCallPortBinder.cpp"
 CHAT_VIEW = CLIENT / "features/chat/view"
 SHELL_PAGE = CLIENT / "qml/app/ChatShellPage.qml"
 
@@ -41,14 +44,11 @@ class CallFacadeContractTests(unittest.TestCase):
             "Q_INVOKABLE void toggleCallMuted();",
             "Q_INVOKABLE void toggleCallCamera();",
             "void syncSurface(CallSessionModel* callSession, LivekitBridge* livekitBridge);",
+            "void setCommandPort(CallCommandPort port);",
+            "struct CallCommandPort",
+            "std::function<void()> startVoiceChat;",
+            "std::function<void()> toggleCallCamera;",
             "void callSurfaceChanged();",
-            "void startVoiceChatRequested();",
-            "void startVideoChatRequested();",
-            "void acceptIncomingCallRequested();",
-            "void rejectIncomingCallRequested();",
-            "void endCurrentCallRequested();",
-            "void toggleCallMutedRequested();",
-            "void toggleCallCameraRequested();",
         )
         for token in expected_tokens:
             with self.subTest(token=token):
@@ -66,59 +66,64 @@ class CallFacadeContractTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, header)
 
-    def test_call_controller_invokables_only_emit_request_signals(self):
+    def test_call_controller_invokables_use_command_port(self):
         controller = read(CALL / "controller/CallController.cpp")
         compact = normalized(controller)
 
         expected_pairs = (
-            ("CallController::startVoiceChat()", "emit startVoiceChatRequested();"),
-            ("CallController::startVideoChat()", "emit startVideoChatRequested();"),
-            ("CallController::acceptIncomingCall()", "emit acceptIncomingCallRequested();"),
-            ("CallController::rejectIncomingCall()", "emit rejectIncomingCallRequested();"),
-            ("CallController::endCurrentCall()", "emit endCurrentCallRequested();"),
-            ("CallController::toggleCallMuted()", "emit toggleCallMutedRequested();"),
-            ("CallController::toggleCallCamera()", "emit toggleCallCameraRequested();"),
+            ("CallController::startVoiceChat()", "_command_port.startVoiceChat();"),
+            ("CallController::startVideoChat()", "_command_port.startVideoChat();"),
+            ("CallController::acceptIncomingCall()", "_command_port.acceptIncomingCall();"),
+            ("CallController::rejectIncomingCall()", "_command_port.rejectIncomingCall();"),
+            ("CallController::endCurrentCall()", "_command_port.endCurrentCall();"),
+            ("CallController::toggleCallMuted()", "_command_port.toggleCallMuted();"),
+            ("CallController::toggleCallCamera()", "_command_port.toggleCallCamera();"),
         )
-        for method, emitted in expected_pairs:
+        for method, invoked in expected_pairs:
             with self.subTest(method=method):
-                pattern = re.escape(method) + r"\s*\{[^{}]*" + re.escape(emitted)
+                pattern = re.escape(method) + r".*?" + re.escape(invoked)
                 self.assertRegex(compact, pattern)
+        self.assertNotIn("Requested();", controller)
 
-    def test_appcontroller_exposes_additive_call_surface(self):
+    def test_appcontroller_exposes_additive_call_composition_surface(self):
         header = read(APP / "controller/AppController.h")
+        registry = read(APP_FEATURE_REGISTRY_H)
+        registry_constructor = read(APP_FEATURE_REGISTRY_CPP)
         controller = read(APP / "controller/AppController.cpp")
+        port_binder = read(APP_CALL_PORT_BINDER)
         model_props = read(APP / "controller/AppControllerModelProperties.cpp")
+        composition = read(APP / "composition/AppComposition.cpp")
         engine = read(APP / "bootstrap/MainQmlEngineSetup.cpp")
         compact_controller = normalized(controller)
+        compact_port_binder = normalized(port_binder)
+        public = header[header.index("public:") : header.index("signals:")]
+        private = header[header.index("private:") :]
 
         self.assertNotIn("Q_PROPERTY(CallController* call READ call CONSTANT)", header)
-        self.assertIn("CallController* call();", header)
-        self.assertIn("CallController* callController();", header)
-        self.assertIn("CallController _call_controller;", header)
-        self.assertIn("void syncCallControllerState();", header)
+        self.assertNotIn("CallController* call();", header)
+        self.assertIn("CallController* callController();", public)
+        self.assertIn("AppFeatureRegistry _features", header)
+        self.assertIn("CallController callController;", registry)
+        self.assertIn("void syncCallControllerState();", private)
 
-        self.assertIn(", _call_controller(&_gateway, this)", controller)
-        self.assertIn("CallController* AppController::call()", model_props)
+        self.assertIn(", _features(_gateway, this)", controller)
+        self.assertIn(", callController(&gateway, parent)", registry_constructor)
+        self.assertNotIn("CallController* AppController::call()", model_props)
         self.assertIn("CallController* AppController::callController()", model_props)
-        self.assertIn("return &_call_controller;", model_props)
+        self.assertIn("return &_features.callController;", model_props)
+        self.assertNotIn("CallSessionModel* AppController::callSession()", controller)
+        self.assertNotIn("LivekitBridge* AppController::livekitBridge()", controller)
+        self.assertNotIn("CallSessionModel _call_session_model;", header)
+        self.assertNotIn("LivekitBridge _livekit_bridge;", header)
 
-        expected_connections = (
-            "connect(&_call_controller, &CallController::startVoiceChatRequested, this, &AppController::startVoiceChat);",
-            "connect(&_call_controller, &CallController::startVideoChatRequested, this, &AppController::startVideoChat);",
-            "connect(&_call_controller, &CallController::acceptIncomingCallRequested, this, &AppController::acceptIncomingCall);",
-            "connect(&_call_controller, &CallController::rejectIncomingCallRequested, this, &AppController::rejectIncomingCall);",
-            "connect(&_call_controller, &CallController::endCurrentCallRequested, this, &AppController::endCurrentCall);",
-            "connect(&_call_controller, &CallController::toggleCallMutedRequested, this, &AppController::toggleCallMuted);",
-            "connect(&_call_controller, &CallController::toggleCallCameraRequested, this, &AppController::toggleCallCamera);",
-        )
-        for token in expected_connections:
-            with self.subTest(token=token):
-                self.assertIn(token, compact_controller)
+        self.assertIn("_features.callController.setCommandPort(CallCommandPort{", compact_port_binder)
+        self.assertNotIn("_features.callController.setCommandPort(CallCommandPort{", compact_controller)
+        self.assertNotIn("CallController::startVoiceChatRequested", compact_controller + compact_port_binder)
+        self.assertNotIn("CallController::toggleCallCameraRequested", compact_controller + compact_port_binder)
 
         self.assertIn("void AppController::syncCallControllerState()", controller)
-        self.assertIn("_call_controller.syncSurface(&_call_session_model, &_livekit_bridge);", controller)
         self.assertIn("syncCallControllerState();", controller)
-        self.assertIn('setContextProperty("call", controller.callController())', engine)
+        self.assertIn('context.setContextProperty("call", call())', composition)
         self.assertNotIn('setContextProperty("livekitBridge"', engine)
 
     def test_qml_uses_call_facade_for_call_actions_and_state(self):
@@ -181,7 +186,7 @@ class CallFacadeContractTests(unittest.TestCase):
             "CallOverlay should use root.livekitBridge instead of implicit global livekitBridge lookups.",
         )
 
-    def test_appcontroller_prunes_legacy_call_qml_surface_but_keeps_cpp_targets(self):
+    def test_appcontroller_prunes_legacy_call_qml_surface_and_cpp_wrappers(self):
         header = read(APP / "controller/AppController.h")
 
         legacy_qml_tokens = (
@@ -194,12 +199,14 @@ class CallFacadeContractTests(unittest.TestCase):
             "Q_INVOKABLE void endCurrentCall();",
             "Q_INVOKABLE void toggleCallMuted();",
             "Q_INVOKABLE void toggleCallCamera();",
+            "CallSessionModel* callSession();",
+            "LivekitBridge* livekitBridge();",
         )
         for token in legacy_qml_tokens:
             with self.subTest(token=token):
                 self.assertNotIn(token, header)
 
-        cpp_targets = (
+        removed_cpp_targets = (
             "void startVoiceChat();",
             "void startVideoChat();",
             "void acceptIncomingCall();",
@@ -207,12 +214,10 @@ class CallFacadeContractTests(unittest.TestCase):
             "void endCurrentCall();",
             "void toggleCallMuted();",
             "void toggleCallCamera();",
-            "CallSessionModel* callSession();",
-            "LivekitBridge* livekitBridge();",
         )
-        for token in cpp_targets:
+        for token in removed_cpp_targets:
             with self.subTest(token=token):
-                self.assertIn(token, header)
+                self.assertNotIn(token, header)
 
 
 if __name__ == "__main__":

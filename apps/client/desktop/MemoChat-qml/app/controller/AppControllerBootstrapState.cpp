@@ -2,42 +2,31 @@
 
 void AppController::setDialogsReady(bool ready)
 {
-    if (_bootstrap_state.dialogsReady == ready)
+    if (_shell_state.bootstrapState().dialogsReady == ready)
     {
         return;
     }
-    _bootstrap_state.dialogsReady = ready;
+    _shell_state.bootstrapState().dialogsReady = ready;
     emit lazyBootstrapStateChanged();
 }
 
 void AppController::setContactsReady(bool ready)
 {
-    if (_bootstrap_state.contactsReady == ready)
-    {
-        return;
-    }
-    _bootstrap_state.contactsReady = ready;
-    syncContactControllerState();
-    emit lazyBootstrapStateChanged();
+    _features.contactController.setContactsReady(ready);
 }
 
 void AppController::setGroupsReady(bool ready)
 {
-    if (_bootstrap_state.groupsReady == ready)
+    if (_shell_state.bootstrapState().groupsReady == ready)
     {
         return;
     }
-    _bootstrap_state.groupsReady = ready;
+    _shell_state.bootstrapState().groupsReady = ready;
     syncGroupControllerState();
     emit lazyBootstrapStateChanged();
 }
 
 void AppController::setApplyReady(bool ready)
 {
-    if (_bootstrap_state.applyReady == ready)
-    {
-        return;
-    }
-    _bootstrap_state.applyReady = ready;
-    emit lazyBootstrapStateChanged();
+    _features.contactController.setApplyReady(ready);
 }

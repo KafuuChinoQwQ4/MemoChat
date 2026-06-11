@@ -1,17 +1,17 @@
 #include "AppCoordinators.h"
 
-#include "AppController.h"
 #include "LocalFilePickerService.h"
 #include "MessageContentCodec.h"
 
-MediaCoordinator::MediaCoordinator(AppController& controller)
-    : _app(controller)
+MediaCoordinator::MediaCoordinator(MediaSendPort port)
+    : _port(std::move(port))
 {
 }
 
 void MediaCoordinator::sendTextMessage(const QString& text)
 {
-    if (_app._chat_state.uid <= 0 && _app._group_state.currentId <= 0)
+    const MediaSendSnapshot snapshot = _port.snapshot();
+    if (snapshot.currentChatUid <= 0 && snapshot.currentGroupId <= 0)
     {
         return;
     }
@@ -23,55 +23,55 @@ void MediaCoordinator::sendTextMessage(const QString& text)
     }
     if (content.size() > 1024)
     {
-        _app.setTip("单条消息不能超过1024字符", true);
+        _port.setTip("单条消息不能超过1024字符", true);
         return;
     }
 
-    if (_app._group_state.currentId > 0)
+    if (snapshot.currentGroupId > 0)
     {
-        if (!_app._dialog_state.replyToMsgId.isEmpty())
+        if (!snapshot.replyToMsgId.isEmpty())
         {
             content = MessageContentCodec::encodeReplyText(content,
-                                                           _app._dialog_state.replyToMsgId,
-                                                           _app._dialog_state.replyTargetName,
-                                                           _app._dialog_state.replyPreviewText);
+                                                           snapshot.replyToMsgId,
+                                                           snapshot.replyTargetName,
+                                                           snapshot.replyPreviewText);
         }
-        if (!_app.dispatchGroupChatContent(content, QString()))
+        if (!_port.dispatchGroupContent(content, QString()))
         {
-            _app.setTip("群消息发送失败", true);
+            _port.setTip("群消息发送失败", true);
         }
         else
         {
-            _app.cancelReplyMessage();
+            _port.cancelReply();
         }
         return;
     }
 
-    if (!_app.dispatchChatContent(content, content))
+    if (!_port.dispatchPrivateContent(content, content))
     {
-        _app.setTip("消息发送失败", true);
+        _port.setTip("消息发送失败", true);
     }
 }
 
 void MediaCoordinator::sendCurrentComposerPayload(const QString& text)
 {
-    if (_app._chat_state.uid <= 0 && _app._group_state.currentId <= 0)
+    const MediaSendSnapshot snapshot = _port.snapshot();
+    if (snapshot.currentChatUid <= 0 && snapshot.currentGroupId <= 0)
     {
         return;
     }
-    if (_app._media_upload_state.inProgress)
+    if (snapshot.uploadInProgress)
     {
-        _app.setTip("已有文件上传中，请稍后", true);
+        _port.setTip("已有文件上传中，请稍后", true);
         return;
     }
-    if (!_app._dialog_state.currentPendingAttachments.isEmpty())
+    if (!snapshot.pendingAttachments.isEmpty())
     {
-        _app._pending_send_state.dialogUid = _app.currentDialogUid();
-        _app._pending_send_state.chatUid = _app._chat_state.uid;
-        _app._pending_send_state.groupId = _app._group_state.currentId;
-        _app._pending_send_state.queue = _app._dialog_state.currentPendingAttachments;
-        _app._pending_send_state.totalCount = _app._pending_send_state.queue.size();
-        _app.processPendingAttachmentQueue();
+        _port.beginPendingAttachmentSend(snapshot.currentDialogUid,
+                                         snapshot.currentChatUid,
+                                         snapshot.currentGroupId,
+                                         snapshot.pendingAttachments);
+        _port.startPendingAttachmentRunner();
         return;
     }
     sendTextMessage(text);
@@ -79,13 +79,14 @@ void MediaCoordinator::sendCurrentComposerPayload(const QString& text)
 
 void MediaCoordinator::sendImageMessage()
 {
-    if (_app._chat_state.uid <= 0 && _app._group_state.currentId <= 0)
+    const MediaSendSnapshot snapshot = _port.snapshot();
+    if (snapshot.currentChatUid <= 0 && snapshot.currentGroupId <= 0)
     {
         return;
     }
-    if (_app._media_upload_state.inProgress)
+    if (snapshot.uploadInProgress)
     {
-        _app.setTip("已有文件上传中，请稍后", true);
+        _port.setTip("已有文件上传中，请稍后", true);
         return;
     }
     QVariantList attachments;
@@ -94,22 +95,23 @@ void MediaCoordinator::sendImageMessage()
     {
         if (!errorText.isEmpty())
         {
-            _app.setTip(errorText, true);
+            _port.setTip(errorText, true);
         }
         return;
     }
-    _app.addPendingAttachments(attachments);
+    _port.addPendingAttachments(attachments);
 }
 
 void MediaCoordinator::sendFileMessage()
 {
-    if (_app._chat_state.uid <= 0 && _app._group_state.currentId <= 0)
+    const MediaSendSnapshot snapshot = _port.snapshot();
+    if (snapshot.currentChatUid <= 0 && snapshot.currentGroupId <= 0)
     {
         return;
     }
-    if (_app._media_upload_state.inProgress)
+    if (snapshot.uploadInProgress)
     {
-        _app.setTip("已有文件上传中，请稍后", true);
+        _port.setTip("已有文件上传中，请稍后", true);
         return;
     }
     QVariantList attachments;
@@ -118,33 +120,34 @@ void MediaCoordinator::sendFileMessage()
     {
         if (!errorText.isEmpty())
         {
-            _app.setTip(errorText, true);
+            _port.setTip(errorText, true);
         }
         return;
     }
-    _app.addPendingAttachments(attachments);
+    _port.addPendingAttachments(attachments);
 }
 
 void MediaCoordinator::removePendingAttachment(const QString& attachmentId)
 {
-    if (_app._media_upload_state.inProgress)
+    if (_port.snapshot().uploadInProgress)
     {
         return;
     }
-    _app.removePendingAttachmentById(attachmentId);
+    _port.removePendingAttachmentById(attachmentId);
 }
 
 void MediaCoordinator::clearPendingAttachments()
 {
-    if (_app._media_upload_state.inProgress)
+    const MediaSendSnapshot snapshot = _port.snapshot();
+    if (snapshot.uploadInProgress)
     {
         return;
     }
-    const int dialogUid = _app.currentDialogUid();
+    const int dialogUid = snapshot.currentDialogUid;
     if (dialogUid == 0)
     {
         return;
     }
-    _app._dialog_state.pendingAttachmentMap.remove(dialogUid);
-    _app.setCurrentPendingAttachments(QVariantList());
+    _port.clearPendingAttachmentsForDialog(dialogUid);
+    _port.setCurrentPendingAttachments(QVariantList());
 }

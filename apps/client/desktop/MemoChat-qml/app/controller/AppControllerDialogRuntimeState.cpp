@@ -1,19 +1,37 @@
 #include "AppController.h"
 
+namespace
+{
+constexpr qint64 kDefaultAdminPermBits = (1LL << 0) | (1LL << 1) | (1LL << 2) | (1LL << 4) | (1LL << 5);
+constexpr qint64 kOwnerPermBits = kDefaultAdminPermBits | (1LL << 3) | (1LL << 6);
+} // namespace
+
 void AppController::setCurrentGroup(qint64 groupId, const QString& name, const QString& groupCode)
 {
     const QString normalizedName = (groupId > 0) ? name : QString();
     const QString normalizedCode = (groupId > 0) ? groupCode : QString();
-    if (_group_state.currentId == groupId && _group_state.currentName == normalizedName &&
-        _group_state.currentCode == normalizedCode)
+    auto groupInfo = groupId > 0 ? _gateway.userMgr()->GetGroupById(groupId) : nullptr;
+    int role = groupInfo ? groupInfo->_role : 0;
+    qint64 permissionBits = 0;
+    if (groupInfo)
+    {
+        permissionBits = groupInfo->_permission_bits;
+        if (role >= 3)
+        {
+            permissionBits = kOwnerPermBits;
+        }
+        else if (role == 2 && permissionBits <= 0)
+        {
+            permissionBits = kDefaultAdminPermBits;
+        }
+    }
+    if (currentGroupId() == groupId && currentGroupName() == normalizedName && currentGroupCode() == normalizedCode &&
+        currentGroupRole() == role && currentGroupPermissionBitsRaw() == permissionBits)
     {
         return;
     }
 
-    _group_state.currentId = groupId;
-    _group_state.currentName = normalizedName;
-    _group_state.currentCode = normalizedCode;
-    syncGroupControllerState();
+    _features.groupController.setCurrentGroup(groupId, role, normalizedName, normalizedCode, permissionBits);
     emit currentGroupChanged();
 }
 
@@ -39,50 +57,36 @@ void AppController::setMediaUploadProgressText(const QString& text)
 
 void AppController::setCurrentDraftText(const QString& text)
 {
-    if (_dialog_state.currentDraftText == text)
+    if (!_features.chatFeatureController.setCurrentDraftText(text))
     {
         return;
     }
-    _dialog_state.currentDraftText = text;
     emit currentDraftTextChanged();
 }
 
 void AppController::setCurrentDialogPinned(bool pinned)
 {
-    if (_dialog_state.currentPinned == pinned)
+    if (!_features.chatFeatureController.setCurrentDialogPinned(pinned))
     {
         return;
     }
-    _dialog_state.currentPinned = pinned;
     emit currentDialogPinnedChanged();
 }
 
 void AppController::setCurrentDialogMuted(bool muted)
 {
-    if (_dialog_state.currentMuted == muted)
+    if (!_features.chatFeatureController.setCurrentDialogMuted(muted))
     {
         return;
     }
-    _dialog_state.currentMuted = muted;
     emit currentDialogMutedChanged();
 }
 
 void AppController::setPendingReplyContext(const QString& msgId, const QString& senderName, const QString& previewText)
 {
-    const QString normalizedMsgId = msgId.trimmed();
-    const QString normalizedSender = senderName.trimmed();
-    QString normalizedPreview = previewText.trimmed();
-    if (normalizedPreview.length() > 120)
-    {
-        normalizedPreview = normalizedPreview.left(120);
-    }
-    if (_dialog_state.replyToMsgId == normalizedMsgId && _dialog_state.replyTargetName == normalizedSender &&
-        _dialog_state.replyPreviewText == normalizedPreview)
+    if (!_features.chatFeatureController.setPendingReplyContext(msgId, senderName, previewText))
     {
         return;
     }
-    _dialog_state.replyToMsgId = normalizedMsgId;
-    _dialog_state.replyTargetName = normalizedSender;
-    _dialog_state.replyPreviewText = normalizedPreview;
     emit pendingReplyChanged();
 }

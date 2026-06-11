@@ -2,6 +2,7 @@ list(APPEND MEMOCHAT_QML_FEATURE_SOURCES
     features/moments/controller/MomentsController.cpp
     features/moments/controller/MomentsControllerPublish.cpp
     features/moments/controller/MomentsControllerRequests.cpp
+    features/moments/controller/MomentsControllerResponses.cpp
     features/moments/controller/MomentsControllerFeedResponses.cpp
     features/moments/controller/MomentsControllerPostResponses.cpp
     features/moments/controller/MomentsControllerCommentResponses.cpp

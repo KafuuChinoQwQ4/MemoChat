@@ -5,11 +5,38 @@
 #include <QVariantList>
 #include <QVariantMap>
 #include <QString>
+#include <functional>
+#include <memory>
+#include <vector>
 
+class AddFriendApply;
 class ApplyRequestModel;
+class ApplyInfo;
+class AuthInfo;
+class AuthRsp;
 class ClientGateway;
 class FriendListModel;
+class FriendInfo;
+class SearchInfo;
 class SearchResultModel;
+
+struct ContactCommandPort
+{
+    std::function<void()> openCurrentContactChat;
+};
+
+struct ContactBootstrapPort
+{
+    std::function<void()> ensureChatListInitialized;
+    std::function<std::vector<std::shared_ptr<FriendInfo>>()> nextPage;
+    std::function<void()> markPageLoaded;
+    std::function<bool()> loadFinished;
+};
+
+struct ContactApplyBootstrapPort
+{
+    std::function<std::vector<std::shared_ptr<ApplyInfo>>()> applySnapshot;
+};
 
 class ContactController : public QObject
 {
@@ -35,6 +62,7 @@ class ContactController : public QObject
     Q_PROPERTY(bool contactLoadingMore READ contactLoadingMore NOTIFY contactLoadingMoreChanged)
     Q_PROPERTY(bool canLoadMoreContacts READ canLoadMoreContacts NOTIFY canLoadMoreContactsChanged)
     Q_PROPERTY(bool contactsReady READ contactsReady NOTIFY contactsReadyChanged)
+    Q_PROPERTY(bool applyReady READ applyReady NOTIFY applyReadyChanged)
 
 public:
     explicit ContactController(ClientGateway* gateway, QObject* parent = nullptr);
@@ -60,6 +88,7 @@ public:
     bool contactLoadingMore() const;
     bool canLoadMoreContacts() const;
     bool contactsReady() const;
+    bool applyReady() const;
 
     Q_INVOKABLE void ensureContactsInitialized();
     Q_INVOKABLE void ensureApplyInitialized();
@@ -82,6 +111,42 @@ public:
                        const QString& bakName,
                        const QVariantList& labels) const;
     void sendApproveFriend(int selfUid, int targetUid, const QString& remark, const QVariantList& labels) const;
+    void sendDeleteFriend(int selfUid, int friendUid) const;
+    void setCommandPort(ContactCommandPort port);
+    void setBootstrapPort(ContactBootstrapPort port);
+    void setApplyBootstrapPort(ContactApplyBootstrapPort port);
+    void refreshApplySnapshot();
+
+    void resetContactFeature();
+    void setContactPane(int pane);
+    void clearCurrentContact();
+    void setCurrentContact(int uid,
+                           const QString& name,
+                           const QString& nick,
+                           const QString& icon,
+                           const QString& back,
+                           int sex,
+                           const QString& userId);
+    void setContacts(const std::vector<std::shared_ptr<FriendInfo>>& contacts);
+    void appendContacts(const std::vector<std::shared_ptr<FriendInfo>>& contacts);
+    void upsertContact(const std::shared_ptr<FriendInfo>& friendInfo);
+    void upsertContact(const std::shared_ptr<AuthInfo>& authInfo);
+    void upsertContact(const std::shared_ptr<AuthRsp>& authRsp);
+    void removeContactByUid(int uid);
+    void setApplies(const std::vector<std::shared_ptr<ApplyInfo>>& applies);
+    void upsertApply(const std::shared_ptr<ApplyInfo>& apply);
+    void upsertApply(const std::shared_ptr<AddFriendApply>& apply);
+    void markApplyApproved(int uid);
+    void setApplyPending(int uid, bool pending);
+    void clearSearchResultOnly();
+    void setSearchResult(const std::shared_ptr<SearchInfo>& searchInfo);
+    void setSearchPending(bool pending);
+    void setSearchStatus(const QString& text, bool isError);
+    void setAuthStatus(const QString& text, bool isError);
+    void setContactLoadingMore(bool loading);
+    void setCanLoadMoreContacts(bool canLoad);
+    void setContactsReady(bool ready);
+    void setApplyReady(bool ready);
 
     void syncModels(FriendListModel* contactListModel,
                     SearchResultModel* searchResultModel,
@@ -101,6 +166,7 @@ public:
     void syncContactLoadingMore(bool loading);
     void syncCanLoadMoreContacts(bool canLoad);
     void syncContactsReady(bool ready);
+    void syncApplyReady(bool ready);
 
 signals:
     void contactPaneChanged();
@@ -113,22 +179,14 @@ signals:
     void contactLoadingMoreChanged();
     void canLoadMoreContactsChanged();
     void contactsReadyChanged();
-
-    void ensureContactsInitializedRequested();
-    void ensureApplyInitializedRequested();
-    void selectContactIndexRequested(int index);
-    void searchUserRequested(const QString& uidText);
-    void clearSearchStateRequested();
-    void requestAddFriendRequested(int uid, const QString& bakName, const QVariantList& labels);
-    void approveFriendRequested(int uid, const QString& backName, const QVariantList& labels);
-    void deleteFriendRequested(int uid);
-    void showApplyRequestsRequested();
-    void jumpChatWithCurrentContactRequested();
-    void loadMoreContactsRequested();
-    void clearAuthStatusRequested();
+    void applyReadyChanged();
+    void currentContactSelected(int uid);
 
 private:
     ClientGateway* _gateway;
+    ContactCommandPort _command_port;
+    ContactBootstrapPort _bootstrap_port;
+    ContactApplyBootstrapPort _apply_bootstrap_port;
     FriendListModel* _contact_list_model = nullptr;
     SearchResultModel* _search_result_model = nullptr;
     ApplyRequestModel* _apply_request_model = nullptr;
@@ -149,6 +207,10 @@ private:
     bool _contact_loading_more = false;
     bool _can_load_more_contacts = false;
     bool _contacts_ready = false;
+    bool _apply_ready = false;
+
+    void setHasPendingApply(bool hasPending);
+    void refreshContactLoadMoreState();
 };
 
 #endif // CONTACTCONTROLLER_H

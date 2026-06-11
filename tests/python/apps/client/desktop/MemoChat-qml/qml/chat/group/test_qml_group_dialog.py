@@ -31,6 +31,32 @@ APP_CONTROLLER_GROUP_MESSAGE_RESPONSES = (
 APP_CONTROLLER_DIALOG_META_RESPONSES = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerDialogMetaResponses.cpp"
 )
+CHAT_CONTROLLER_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/controller"
+CHAT_SERVICE_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/services"
+
+
+def chat_dialog_runtime_source() -> str:
+    files = (
+        "ChatFeatureControllerDialogRuntimeInternal.h",
+        "ChatFeatureControllerDialogRuntime.cpp",
+        "ChatFeatureControllerDialogDecorations.cpp",
+        "ChatFeatureControllerDialogDraftCommands.cpp",
+        "ChatFeatureControllerDialogReadCommands.cpp",
+        "ChatFeatureControllerDialogMeta.cpp",
+    )
+    return "\n".join((CHAT_CONTROLLER_DIR / name).read_text(encoding="utf-8") for name in files)
+
+
+def group_conversation_service_source() -> str:
+    files = (
+        "GroupConversationServiceInternal.h",
+        "GroupConversationService.cpp",
+        "GroupConversationAckService.cpp",
+        "GroupConversationHistoryService.cpp",
+        "GroupConversationIncomingService.cpp",
+        "GroupConversationMutationService.cpp",
+    )
+    return "\n".join((CHAT_SERVICE_DIR / name).read_text(encoding="utf-8") for name in files)
 
 
 class CreateGroupDialogQmlTests(unittest.TestCase):
@@ -94,23 +120,30 @@ class CreateGroupDialogQmlTests(unittest.TestCase):
 
     def test_group_ack_upserts_payload_before_accepting_state(self):
         branch = APP_CONTROLLER_GROUP_MESSAGE_RESPONSES.read_text(encoding="utf-8")
+        service = group_conversation_service_source()
 
         self.assertIn("void AppController::handleGroupMessageAckRsp", branch)
-        self.assertIn("MessagePayloadService::buildGroupAckMessage", branch)
-        self.assertIn("_message_model.upsertMessage(correctedMsg", branch)
+        self.assertIn("_features.chatFeatureController.handleGroupMessageAck", branch)
+        self.assertIn("MessagePayloadService::buildGroupAckMessage", service)
+        self.assertIn("dependencies.messageModel->upsertMessage(correctedMsg", service)
         self.assertNotRegex(
-            branch,
+            service,
             re.compile(r'if\s*\(\s*ackStatus\s*==\s*QStringLiteral\("accepted"\).*?break;', re.S),
         )
 
     def test_dialog_meta_responses_keep_draft_and_pin_persistence(self):
         source = APP_CONTROLLER_DIALOG_META_RESPONSES.read_text(encoding="utf-8")
+        runtime = chat_dialog_runtime_source()
 
         self.assertIn("void AppController::handleDialogMetaRsp", source)
-        self.assertIn("ID_SYNC_DRAFT_RSP", source)
-        self.assertIn("ID_PIN_DIALOG_RSP", source)
-        self.assertIn("applyDraftToDialogModel(dialogUid, draftText)", source)
-        self.assertIn("saveDraftStore(ownerUid)", source)
+        self.assertIn("_features.chatFeatureController.handleDialogMetaResponse(request, dependencies);", source)
+        self.assertNotIn("ID_SYNC_DRAFT_RSP", source)
+        self.assertNotIn("ID_PIN_DIALOG_RSP", source)
+        self.assertNotIn("applyDraftToDialogModel(dialogUid, draftText)", source)
+        self.assertNotIn("_features.chatFeatureController.applyRemoteDraftMeta", source)
+        self.assertIn("constexpr int kSyncDraftResponseId = 1073;", runtime)
+        self.assertIn("constexpr int kPinDialogResponseId = 1075;", runtime)
+        self.assertIn("savePersistentDialogStore", runtime)
 
     def test_chat_page_initializes_groups_for_all_sessions(self):
         left_panel = CHAT_LEFT_PANEL.read_text(encoding="utf-8")

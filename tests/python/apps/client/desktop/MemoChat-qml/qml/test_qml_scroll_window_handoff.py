@@ -19,8 +19,19 @@ MAIN_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/bootstrap/main.cpp"
 SESSION_AUTH_LOGIN_RESPONSE = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/session/SessionAuthCoordinatorLoginResponse.cpp"
 )
+APP_SESSION_LOGOUT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/session/AppSessionCoordinatorLogout.cpp"
 APP_CONTROLLER_NAVIGATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerNavigation.cpp"
 APP_CONTROLLER_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppController.cpp"
+APP_SESSION_AUTH_PORT_BINDER = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/composition/AppSessionAuthPortBinder.cpp"
+)
+APP_SESSION_LOGOUT_PORT_BINDER = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/composition/AppSessionLogoutPortBinder.cpp"
+)
+APP_SIGNAL_BINDER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/composition/AppSignalBinder.cpp"
+APP_CHAT_TRANSPORT_SIGNAL_BINDER = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/composition/AppChatTransportSignalBinder.cpp"
+)
 APP_CHAT_CONNECTION_COORDINATOR = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/connection/AppChatConnectionCoordinator.cpp"
 )
@@ -118,14 +129,14 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
                 sync_windows.index("destroyChatWindow()"),
                 sync_windows.rindex("scheduleWindowHandoff"),
             )
-            self.assertIn("visible: shell.page === AppController.LoginPage", qml)
-            self.assertIn("visible: shell.page === AppController.RegisterPage", qml)
-            self.assertIn("visible: shell.page === AppController.ResetPage", qml)
+            self.assertIn("visible: shell.page === ShellViewModel.LoginPage", qml)
+            self.assertIn("visible: shell.page === ShellViewModel.RegisterPage", qml)
+            self.assertIn("visible: shell.page === ShellViewModel.ResetPage", qml)
             self.assertIn("Component {\n        id: chatWindowComponent", qml)
             self.assertIn("sourceComponent: chatShellPageComponent", qml)
             self.assertIn("onClosing: Qt.quit()", qml)
             self.assertNotIn("StackLayout", qml)
-            self.assertNotIn("shell.page === AppController.ChatPage ? 3 : 0", qml)
+            self.assertNotIn("shell.page === ShellViewModel.ChatPage ? 3 : 0", qml)
             self.assertNotIn("property var appWindowRef: null", qml)
             self.assertNotIn("function ensureAppWindow()", qml)
             self.assertNotIn("function configureAppWindowForPage(win)", qml)
@@ -211,7 +222,7 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
             self.assertIn("showLoginWindow()", show_target)
 
             self.assertIn("const retiredWindowPending = destroyLoginWindow()", sync_windows)
-            self.assertIn("scheduleWindowHandoff(retiredWindowPending, token, AppController.ChatPage)", sync_windows)
+            self.assertIn("scheduleWindowHandoff(retiredWindowPending, token, ShellViewModel.ChatPage)", sync_windows)
             self.assertIn("const retiredWindowPending = destroyChatWindow()", sync_windows)
             self.assertIn("scheduleWindowHandoff(retiredWindowPending, token, shell.page)", sync_windows)
             self.assertNotIn("Qt.callLater(function() {", sync_windows)
@@ -250,12 +261,19 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
 
     def test_login_and_logout_switch_pages_before_transport_teardown(self):
         source = SESSION_AUTH_LOGIN_RESPONSE.read_text(encoding="utf-8")
+        app_controller = APP_CONTROLLER_CPP.read_text(encoding="utf-8")
+        login_port_binder = APP_SESSION_AUTH_PORT_BINDER.read_text(encoding="utf-8")
+        logout_port_binder = APP_SESSION_LOGOUT_PORT_BINDER.read_text(encoding="utf-8")
 
         login_block = extract_cpp_function(source, "void SessionAuthCoordinator::onLoginHttpFinished")
-        self.assertIn("setPage(AppController::ChatPage);", login_block)
+        self.assertIn("_port.applyLoginSuccess(server_info, obj);", login_block)
+        self.assertNotIn("setPage(AppController::ChatPage);", login_block)
+        self.assertIn("setPage(_constants.chatPage);", login_port_binder)
+        self.assertNotIn("setPage(AppController::ChatPage);", login_port_binder)
+        self.assertNotIn("setPage(AppController::ChatPage);", app_controller)
         self.assertLess(
-            login_block.index("setPage(AppController::ChatPage);"),
-            login_block.index("_gateway.chatTransport()->connectToServer(server_info);"),
+            login_port_binder.index("setPage(_constants.chatPage);"),
+            login_port_binder.index("_gateway.chatTransport()->connectToServer(serverInfo);"),
         )
 
         navigation_source = APP_CONTROLLER_NAVIGATION.read_text(encoding="utf-8")
@@ -265,28 +283,38 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
         self.assertIn("setPage(LoginPage);", logout_block)
         self.assertLess(
             logout_block.index("setPage(LoginPage);"),
-            logout_block.index("_gateway.chatTransport()->CloseConnection();"),
+            logout_block.index("_session_coordinator->resetForLogout();"),
         )
+        reset_block = extract_cpp_function(
+            APP_SESSION_LOGOUT.read_text(encoding="utf-8"), "void AppSessionCoordinator::resetForLogout"
+        )
+        self.assertIn("invokeIfSet(_logout_port.closeNetworkResources);", reset_block)
+        self.assertIn("if (const auto transport = _gateway.chatTransport())", logout_port_binder)
+        self.assertIn("transport->CloseConnection();", logout_port_binder)
+        self.assertNotIn("_gateway.chatTransport()->CloseConnection();", app_controller)
 
     def test_stale_account_switch_disconnect_is_ignored_before_chat_page_reconnect(self):
         app_controller = APP_CONTROLLER_CPP.read_text(encoding="utf-8")
-        self.assertIn("_chat_connection_coordinator->onConnectionClosed();", app_controller)
-        self.assertNotIn("&AppController::onConnectionClosed", app_controller)
+        signal_binder = APP_CHAT_TRANSPORT_SIGNAL_BINDER.read_text(encoding="utf-8")
+        self.assertIn("_chat_connection_coordinator->onConnectionClosed();", signal_binder)
+        self.assertNotIn("_chat_connection_coordinator->onConnectionClosed();", app_controller)
+        self.assertNotIn("&AppController::onConnectionClosed", app_controller + signal_binder)
 
         source = APP_CHAT_CONNECTION_COORDINATOR.read_text(encoding="utf-8")
         body = extract_cpp_function(source, "void AppChatConnectionCoordinator::onConnectionClosed")
 
-        ignore_index = body.index("if (_app._chat_recovery_state.ignoreNextLoginDisconnect)")
-        page_branch_index = body.index("if (_app._page != AppController::ChatPage)")
-        chat_reconnect_index = body.index("if (_app._call_session_model.visible())")
+        ignore_index = body.index("if (snapshot.ignoreNextLoginDisconnect)")
+        page_branch_index = body.index("if (!snapshot.isChatPage)")
+        chat_reconnect_index = body.index("if (_port.callVisible())")
 
         self.assertLess(ignore_index, page_branch_index)
         self.assertLess(ignore_index, chat_reconnect_index)
         ignored_block = body[ignore_index:page_branch_index]
-        self.assertIn("_app._chat_recovery_state.ignoreNextLoginDisconnect = false;", ignored_block)
+        self.assertIn("_port.setIgnoreNextLoginDisconnect(false);", ignored_block)
         self.assertIn("resetReconnectState();", ignored_block)
         self.assertIn("resetHeartbeatTracking();", ignored_block)
         self.assertIn("return;", ignored_block)
+        self.assertNotIn("_app.", body)
 
 
 if __name__ == "__main__":

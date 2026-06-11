@@ -93,7 +93,7 @@ class MainWindowRuntimeContractTests(unittest.TestCase):
                 self.assertLess(sync_body.index("destroyChatWindow()"), sync_body.rindex("scheduleWindowHandoff"))
 
                 for page in ("LoginPage", "RegisterPage", "ResetPage"):
-                    self.assertIn(f"shell.page === AppController.{page}", text)
+                    self.assertIn(f"shell.page === ShellViewModel.{page}", text)
 
                 self.assertNotIn("property int displayedPage", text)
                 self.assertNotIn("readonly property int noDisplayedPage: -1", text)

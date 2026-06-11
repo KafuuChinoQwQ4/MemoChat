@@ -8,15 +8,38 @@ REPO_ROOT = repo_root()
 APP_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app"
 APP_CONTROLLER_HEADER = APP_DIR / "controller/AppController.h"
 APP_CONTROLLER_CPP = APP_DIR / "controller/AppController.cpp"
+APP_CONNECTION_PORT_BINDER = APP_DIR / "composition/AppConnectionPortBinder.cpp"
+APP_POST_LOGIN_PORT_BINDER = APP_DIR / "composition/AppPostLoginBootstrapPortBinder.cpp"
+APP_SESSION_LOGOUT_PORT_BINDER = APP_DIR / "composition/AppSessionLogoutPortBinder.cpp"
+APP_SIGNAL_BINDER = APP_DIR / "composition/AppSignalBinder.cpp"
+APP_CHAT_TRANSPORT_SIGNAL_BINDER = APP_DIR / "composition/AppChatTransportSignalBinder.cpp"
+APP_CHAT_DISPATCHER_SIGNAL_BINDER = APP_DIR / "composition/AppChatDispatcherSignalBinder.cpp"
+APP_TIMER_SIGNAL_BINDER = APP_DIR / "composition/AppTimerSignalBinder.cpp"
+APP_CHAT_DISPATCHER_EVENT_ROUTER = APP_DIR / "events/AppChatDispatcherEventRouter.cpp"
 APP_CONTROLLER_NAVIGATION = APP_DIR / "controller/AppControllerNavigation.cpp"
+SESSION_LOGOUT = APP_DIR / "session/AppSessionCoordinatorLogout.cpp"
 APP_SOURCES_CMAKE = APP_DIR / "sources.cmake"
 SESSION_AUTH_LOGIN_RESPONSE = APP_DIR / "session/SessionAuthCoordinatorLoginResponse.cpp"
 SESSION_CHAT_ENTRY = APP_DIR / "session/SessionChatEntryCoordinator.cpp"
 CONNECTION_COORDINATOR = APP_DIR / "connection/AppChatConnectionCoordinator.cpp"
+CONNECTION_COORDINATOR_HEADER = APP_DIR / "connection/AppChatConnectionCoordinator.h"
 
 
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def signal_binding_text() -> str:
+    return "\n".join(
+        read(path)
+        for path in (
+            APP_SIGNAL_BINDER,
+            APP_CHAT_TRANSPORT_SIGNAL_BINDER,
+            APP_CHAT_DISPATCHER_SIGNAL_BINDER,
+            APP_CHAT_DISPATCHER_EVENT_ROUTER,
+            APP_TIMER_SIGNAL_BINDER,
+        )
+    )
 
 
 def extract_cpp_function(source: str, signature: str) -> str:
@@ -39,6 +62,8 @@ class AppControllerConnectionBoundaryTests(unittest.TestCase):
         header = read(APP_CONTROLLER_HEADER)
         private_start = header.index("private:")
         private_header = header[private_start:]
+
+        self.assertNotIn("friend class AppChatConnectionCoordinator;", header)
 
         forbidden_declarations = (
             "bool tryReconnectChat();",
@@ -64,6 +89,27 @@ class AppControllerConnectionBoundaryTests(unittest.TestCase):
             with self.subTest(slot=slot):
                 self.assertNotIn(slot, header)
 
+    def test_connection_coordinator_uses_chat_connection_port_not_app_controller(self):
+        header = read(CONNECTION_COORDINATOR_HEADER)
+        source = read(CONNECTION_COORDINATOR)
+        combined = header + "\n" + source
+
+        self.assertIn("ChatConnectionPort", header)
+        self.assertNotIn('#include "AppController.h"', combined)
+        self.assertNotIn("#include <AppController.h>", combined)
+        self.assertNotIn("class AppController;", header)
+
+        forbidden_controller_links = (
+            "AppController&",
+            "AppController *",
+            "AppController*",
+            "AppController::",
+            "_app.",
+        )
+        for token in forbidden_controller_links:
+            with self.subTest(token=token):
+                self.assertNotIn(token, combined)
+
     def test_connection_slot_forwarder_files_are_removed_from_sources(self):
         cmake_text = read(APP_SOURCES_CMAKE)
         removed_files = (
@@ -78,36 +124,48 @@ class AppControllerConnectionBoundaryTests(unittest.TestCase):
 
     def test_internal_callers_use_connection_coordinator_directly(self):
         app_controller = read(APP_CONTROLLER_CPP)
-        login_timeout_block = app_controller[
-            app_controller.index("connect(&_chat_login_timeout_timer") : app_controller.index(
-                "AppController::Page AppController::page"
-            )
-        ]
-        self.assertIn(
+        connection_binder = read(APP_CONNECTION_PORT_BINDER)
+        session_connection_ports = read(APP_POST_LOGIN_PORT_BINDER) + "\n" + read(APP_SESSION_LOGOUT_PORT_BINDER)
+        signal_binder = read(APP_TIMER_SIGNAL_BINDER)
+        login_timeout_block = signal_binder[signal_binder.index("connect(&_chat_login_timeout_timer") :]
+        self.assertIn("_chat_connection_coordinator->onLoginTimeout();", login_timeout_block)
+        self.assertNotIn(
             '_chat_connection_coordinator->tryLoginFallbackToTcp(QStringLiteral("login_timeout"))', login_timeout_block
         )
+        self.assertNotIn("loginTcpFallbackAttempted", login_timeout_block)
         self.assertNotIn('if (tryLoginFallbackToTcp(QStringLiteral("login_timeout")))', login_timeout_block)
 
         navigation = read(APP_CONTROLLER_NAVIGATION)
-        self.assertIn("_chat_connection_coordinator->resetReconnectState();", navigation)
-        self.assertIn("_chat_connection_coordinator->resetHeartbeatTracking();", navigation)
+        logout = read(SESSION_LOGOUT)
+        self.assertIn("_session_coordinator->resetForLogout();", navigation)
+        self.assertIn("invokeIfSet(_logout_port.resetConnectionRuntime);", logout)
+        self.assertNotIn("invokeIfSet(_logout_port.resetReconnectState);", logout)
+        self.assertNotIn("invokeIfSet(_logout_port.resetHeartbeatTracking);", logout)
+        self.assertIn("_chat_connection_coordinator->resetReconnectState();", session_connection_ports)
+        self.assertIn("_chat_connection_coordinator->resetHeartbeatTracking();", session_connection_ports)
+        self.assertNotIn("_chat_connection_coordinator->resetReconnectState();", app_controller)
+        self.assertNotIn("_chat_connection_coordinator->resetHeartbeatTracking();", app_controller)
         self.assertNotRegex(navigation, r"(?<!->)\bresetReconnectState\(\);")
         self.assertNotRegex(navigation, r"(?<!->)\bresetHeartbeatTracking\(\);")
 
         auth_response = read(SESSION_AUTH_LOGIN_RESPONSE)
-        self.assertIn("_app._chat_connection_coordinator->resetReconnectState();", auth_response)
+        self.assertNotIn("_app._chat_connection_coordinator->resetReconnectState();", auth_response)
         self.assertNotIn("_app.resetReconnectState();", auth_response)
+        self.assertIn("_chat_connection_coordinator->resetReconnectState();", session_connection_ports)
+        self.assertIn("std::make_unique<AppChatConnectionCoordinator>", connection_binder)
 
         chat_entry = read(SESSION_CHAT_ENTRY)
-        self.assertIn("_app._chat_connection_coordinator->resetReconnectState();", chat_entry)
-        self.assertIn("_app._chat_connection_coordinator->resetHeartbeatTracking();", chat_entry)
-        self.assertIn("_app._chat_connection_coordinator->onHeartbeatTimeout();", chat_entry)
+        self.assertIn("_port.resetReconnectState();", chat_entry)
+        self.assertIn("_port.resetHeartbeatTracking();", chat_entry)
+        self.assertIn("_port.startHeartbeatTimer(kHeartbeatIntervalMs);", chat_entry)
         self.assertNotIn("_app.resetReconnectState();", chat_entry)
         self.assertNotIn("_app.resetHeartbeatTracking();", chat_entry)
         self.assertNotIn("_app.onHeartbeatTimeout();", chat_entry)
+        self.assertNotIn("_app._chat_connection_coordinator", chat_entry)
 
     def test_app_controller_connects_connection_events_to_coordinator_lambdas(self):
-        source = read(APP_CONTROLLER_CPP)
+        source = signal_binding_text()
+        app_controller = read(APP_CONTROLLER_CPP)
 
         expected_connections = (
             (
@@ -116,11 +174,11 @@ class AppControllerConnectionBoundaryTests(unittest.TestCase):
             ),
             (
                 "&ChatMessageDispatcher::sig_login_failed",
-                "_chat_connection_coordinator->onChatLoginFailed(err);",
+                "_connection_coordinator.onChatLoginFailed(err);",
             ),
             (
                 "&ChatMessageDispatcher::sig_notify_offline",
-                "_chat_connection_coordinator->onNotifyOffline();",
+                "_connection_coordinator.onNotifyOffline();",
             ),
             (
                 "&IChatTransport::sig_connection_closed",
@@ -128,7 +186,7 @@ class AppControllerConnectionBoundaryTests(unittest.TestCase):
             ),
             (
                 "&ChatMessageDispatcher::sig_heartbeat_ack",
-                "_chat_connection_coordinator->onHeartbeatAck(ackAtMs);",
+                "_connection_coordinator.onHeartbeatAck(ackAtMs);",
             ),
             (
                 "connect(&_heartbeat_timer",
@@ -153,19 +211,24 @@ class AppControllerConnectionBoundaryTests(unittest.TestCase):
         for slot_target in forbidden_slot_targets:
             with self.subTest(slot_target=slot_target):
                 self.assertNotIn(slot_target, source)
+                self.assertNotIn(slot_target, app_controller)
+
+        self.assertIn("bindAppControllerSignals();", app_controller)
+        self.assertNotIn("&IChatTransport::sig_con_success", app_controller)
+        self.assertNotIn("connect(&_heartbeat_timer", app_controller)
 
     def test_connection_coordinator_owns_stale_disconnect_recovery_order(self):
         source = read(CONNECTION_COORDINATOR)
         body = extract_cpp_function(source, "void AppChatConnectionCoordinator::onConnectionClosed")
 
-        ignore_index = body.index("if (_app._chat_recovery_state.ignoreNextLoginDisconnect)")
-        page_branch_index = body.index("if (_app._page != AppController::ChatPage)")
-        chat_reconnect_index = body.index("if (_app._call_session_model.visible())")
+        ignore_index = body.index("ignoreNextLoginDisconnect")
+        page_branch_index = body.index("isChatPage")
+        chat_reconnect_index = body.index("callVisible")
 
         self.assertLess(ignore_index, page_branch_index)
         self.assertLess(ignore_index, chat_reconnect_index)
         ignored_block = body[ignore_index:page_branch_index]
-        self.assertIn("_app._chat_recovery_state.ignoreNextLoginDisconnect = false;", ignored_block)
+        self.assertIn("setIgnoreNextLoginDisconnect(false)", ignored_block)
         self.assertIn("resetReconnectState();", ignored_block)
         self.assertIn("resetHeartbeatTracking();", ignored_block)
         self.assertIn("return;", ignored_block)
@@ -174,12 +237,12 @@ class AppControllerConnectionBoundaryTests(unittest.TestCase):
         source = read(CONNECTION_COORDINATOR)
         body = extract_cpp_function(source, "void AppChatConnectionCoordinator::onConnectionClosed")
 
-        self.assertIn("_app._call_session_model.visible()", body)
+        self.assertIn("callVisible", body)
         self.assertIn(
-            '_app._call_coordinator->finalizeEndedCall(QStringLiteral("通话链路已断开"));',
+            'finalizeEndedCall(QStringLiteral("通话链路已断开"));',
             body,
         )
-        self.assertNotIn("_app.finalizeEndedCall", body)
+        self.assertNotIn("_app.", body)
 
 
 if __name__ == "__main__":

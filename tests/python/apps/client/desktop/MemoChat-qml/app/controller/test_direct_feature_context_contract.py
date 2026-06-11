@@ -31,30 +31,44 @@ def qml_sources() -> dict[str, str]:
     return sources
 
 
+def appcontroller_public_section() -> str:
+    header = read(APP / "controller/AppController.h")
+    return header[header.index("public:") : header.index("signals:")]
+
+
+def appcontroller_private_section() -> str:
+    header = read(APP / "controller/AppController.h")
+    return header[header.index("private:") :]
+
+
 class DirectFeatureContextContractTests(unittest.TestCase):
     def test_engine_exposes_direct_feature_contexts(self):
+        composition = read(APP / "composition/AppComposition.cpp")
         engine = read(APP / "bootstrap/MainQmlEngineSetup.cpp")
 
         expected = (
-            'setContextProperty("auth", controller.authViewModel())',
-            'setContextProperty("agent", controller.agentController())',
-            'setContextProperty("agentMessages", controller.agentMessageModel())',
-            'setContextProperty("moments", controller.momentsController())',
-            'setContextProperty("momentsModel", controller.momentsModel())',
-            'setContextProperty("pet", controller.petController())',
-            'setContextProperty("r18", controller.r18Controller())',
+            'context.setContextProperty("auth", auth())',
+            'context.setContextProperty("agent", agent())',
+            'context.setContextProperty("agentMessages", agentMessages())',
+            'context.setContextProperty("moments", moments())',
+            'context.setContextProperty("momentsModel", momentsModel())',
+            'context.setContextProperty("pet", pet())',
+            'context.setContextProperty("r18", r18())',
         )
         for token in expected:
             with self.subTest(token=token):
-                self.assertIn(token, engine)
+                self.assertIn(token, composition)
+        self.assertIn("composition.configureQmlContext(*engine.rootContext());", engine)
 
-    def test_appcontroller_prunes_auth_qml_compatibility_but_keeps_auth_facade_and_cpp_targets(self):
+    def test_appcontroller_prunes_auth_qml_compatibility_but_keeps_auth_composition_getter_and_private_targets(self):
         header = read(APP / "controller/AppController.h")
         normalized_header = normalized(header)
+        public = appcontroller_public_section()
+        private = appcontroller_private_section()
 
         self.assertNotIn("Q_PROPERTY(AuthViewModel* auth READ auth CONSTANT)", header)
-        self.assertIn("AuthViewModel* auth();", header)
-        self.assertIn("AuthViewModel* authViewModel();", header)
+        self.assertNotIn("AuthViewModel* auth();", header)
+        self.assertIn("AuthViewModel* authViewModel();", public)
 
         pruned_auth_properties = (
             "Q_PROPERTY(QString tipText READ tipText NOTIFY tipChanged)",
@@ -70,8 +84,15 @@ class DirectFeatureContextContractTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertNotIn(token, header)
 
-        plain_methods = (
-            "void clearTip();",
+        shell_methods = ("void clearTip();",)
+        for token in shell_methods:
+            with self.subTest(token=token):
+                self.assertIn(token, normalized_header)
+                self.assertIn(token, normalized(private))
+                self.assertNotIn(token, normalized(public))
+                self.assertNotIn(f"Q_INVOKABLE {token}", normalized_header)
+
+        pruned_auth_command_methods = (
             "QString loginCredentialCacheJson() const;",
             "void saveLoginCredential(const QString& email, const QString& password);",
             "void login(const QString& email, const QString& password);",
@@ -82,21 +103,28 @@ class DirectFeatureContextContractTests(unittest.TestCase):
             "void resetPassword(const QString& user, const QString& email, const QString& password, "
             "const QString& verifyCode);",
         )
-        for token in plain_methods:
+        for token in pruned_auth_command_methods:
             with self.subTest(token=token):
-                self.assertIn(token, normalized_header)
-                self.assertNotIn(f"Q_INVOKABLE {token}", normalized_header)
+                self.assertNotIn(token, normalized(private))
+                self.assertNotIn(token, normalized(public))
 
         controller = normalized(read(APP / "controller/AppController.cpp"))
-        expected_connections = (
-            "connect(&_auth_view_model, &AuthViewModel::clearTipRequested, this, &AppController::clearTip);",
-            "connect(&_auth_view_model, &AuthViewModel::loginRequested, this, &AppController::login);",
-            "connect(&_auth_view_model, &AuthViewModel::registerCodeRequested, this, &AppController::requestRegisterCode);",
-            "connect(&_auth_view_model, &AuthViewModel::resetPasswordRequested, this, &AppController::resetPassword);",
+        port_binder = normalized(read(APP / "composition/AppAuthFeaturePortBinder.cpp"))
+        forbidden_connections = (
+            "connect(&_features.authViewModel, &AuthViewModel::clearTipRequested, this, &AppController::clearTip);",
+            "connect(&_features.authViewModel, &AuthViewModel::loginRequested, this, &AppController::login);",
+            "connect(&_features.authViewModel, &AuthViewModel::registerCodeRequested, this, &AppController::requestRegisterCode);",
+            "connect(&_features.authViewModel, &AuthViewModel::resetPasswordRequested, this, &AppController::resetPassword);",
         )
-        for token in expected_connections:
+        for token in forbidden_connections:
             with self.subTest(token=token):
-                self.assertIn(token, controller)
+                self.assertNotIn(token, controller)
+        self.assertIn("_features.authViewModel.setCommandPort(AuthCommandPort{", port_binder)
+        self.assertNotIn("_features.authViewModel.setCommandPort(AuthCommandPort{", controller)
+        self.assertNotIn("_auth_credential_store", controller)
+
+        auth_viewmodel = normalized(read(FEATURES / "auth/viewmodel/AuthViewModel.cpp"))
+        self.assertIn("_credentialStore.saveLoginCredential(email, password);", auth_viewmodel)
 
     def test_appcontroller_prunes_feature_object_qml_properties_but_keeps_cpp_getters(self):
         header = read(APP / "controller/AppController.h")

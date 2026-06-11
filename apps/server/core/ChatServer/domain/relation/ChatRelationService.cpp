@@ -9,6 +9,7 @@
 #include <chrono>
 #include "json/GlazeCompat.h"
 #include <unordered_map>
+#include <unordered_set>
 
 namespace
 {
@@ -177,6 +178,7 @@ void ChatRelationService::AppendRelationBootstrapJson(int uid, Json::Value& out)
 
 void ChatRelationService::BuildDialogListJson(int uid, Json::Value& out)
 {
+    out["dialogs"] = Json::Value(Json::arrayValue);
     _relation_repository->RefreshDialogsForOwner(uid);
 
     std::unordered_map<int, std::shared_ptr<DialogMetaInfo>> private_meta;
@@ -201,6 +203,9 @@ void ChatRelationService::BuildDialogListJson(int uid, Json::Value& out)
             }
         }
     }
+
+    std::unordered_set<int> appended_private_uids;
+    std::unordered_set<int64_t> appended_group_ids;
 
     std::vector<std::shared_ptr<UserInfo>> friend_list;
     chatusersupport::GetFriendList(uid, friend_list);
@@ -229,6 +234,7 @@ void ChatRelationService::BuildDialogListJson(int uid, Json::Value& out)
         one["draft_text"] = (meta_it == private_meta.end()) ? "" : meta_it->second->draft_text;
         one["mute_state"] = (meta_it == private_meta.end()) ? 0 : meta_it->second->mute_state;
         out["dialogs"].append(one);
+        appended_private_uids.insert(peer->uid);
     }
 
     std::vector<std::shared_ptr<GroupInfo>> groups;
@@ -258,6 +264,73 @@ void ChatRelationService::BuildDialogListJson(int uid, Json::Value& out)
         one["draft_text"] = (meta_it == group_meta.end()) ? "" : meta_it->second->draft_text;
         one["mute_state"] = (meta_it == group_meta.end()) ? 0 : meta_it->second->mute_state;
         out["dialogs"].append(one);
+        appended_group_ids.insert(group->group_id);
+    }
+
+    for (const auto& meta : meta_list)
+    {
+        if (!meta)
+        {
+            continue;
+        }
+        if (meta->dialog_type == "private" && meta->peer_uid > 0 &&
+            appended_private_uids.find(meta->peer_uid) == appended_private_uids.end())
+        {
+            auto peer = _relation_repository->GetUserByUid(meta->peer_uid);
+            Json::Value one;
+            one["dialog_id"] = std::string("u_") + std::to_string(meta->peer_uid);
+            one["dialog_type"] = "private";
+            one["peer_uid"] = meta->peer_uid;
+            if (peer)
+            {
+                one["title"] = peer->nick.empty() ? peer->name : peer->nick;
+                one["avatar"] = peer->icon;
+            }
+            else
+            {
+                one["title"] = std::string("用户") + std::to_string(meta->peer_uid);
+                one["avatar"] = "";
+            }
+            DialogRuntimeInfo runtime;
+            if (!_relation_repository->GetPrivateDialogRuntime(uid, meta->peer_uid, runtime))
+            {
+                runtime = DialogRuntimeInfo();
+            }
+            one["last_msg_preview"] = runtime.last_msg_preview;
+            one["last_msg_ts"] = static_cast<Json::Int64>(runtime.last_msg_ts);
+            one["unread_count"] = runtime.unread_count;
+            one["pinned_rank"] = meta->pinned_rank;
+            one["draft_text"] = meta->draft_text;
+            one["mute_state"] = meta->mute_state;
+            out["dialogs"].append(one);
+            appended_private_uids.insert(meta->peer_uid);
+            continue;
+        }
+        if (meta->dialog_type == "group" && meta->group_id > 0 &&
+            appended_group_ids.find(meta->group_id) == appended_group_ids.end())
+        {
+            std::shared_ptr<GroupInfo> group;
+            _relation_repository->GetGroupById(meta->group_id, group);
+            Json::Value one;
+            one["dialog_id"] = std::string("g_") + std::to_string(meta->group_id);
+            one["dialog_type"] = "group";
+            one["group_id"] = static_cast<Json::Int64>(meta->group_id);
+            one["title"] = group ? group->name : (std::string("群聊") + std::to_string(meta->group_id));
+            one["avatar"] = group ? group->icon : "";
+            DialogRuntimeInfo runtime;
+            if (!_relation_repository->GetGroupDialogRuntime(uid, meta->group_id, runtime))
+            {
+                runtime = DialogRuntimeInfo();
+            }
+            one["last_msg_preview"] = runtime.last_msg_preview;
+            one["last_msg_ts"] = static_cast<Json::Int64>(runtime.last_msg_ts);
+            one["unread_count"] = runtime.unread_count;
+            one["pinned_rank"] = meta->pinned_rank;
+            one["draft_text"] = meta->draft_text;
+            one["mute_state"] = meta->mute_state;
+            out["dialogs"].append(one);
+            appended_group_ids.insert(meta->group_id);
+        }
     }
 }
 

@@ -3,6 +3,7 @@
 #include "ChatGrpcClient.h"
 #include "ChatRuntime.h"
 #include "CSession.h"
+#include "MessageDeliveryPayload.h"
 #include "logging/Logger.h"
 
 #include "json/GlazeCompat.h"
@@ -157,13 +158,7 @@ bool MessageDeliveryService::TryPushPayload(const std::vector<int>& recipients,
         return true;
     }
 
-    const std::string payload_str = payload
-                                        .and_then(
-                                            [](auto&& v)
-                                            {
-                                                return glz::write_json(v);
-                                            })
-                                        .value_or("{}");
+    const std::string payload_str = memochat::chat::delivery::SerializeDeliveryPayloadForWire(payload);
     std::unordered_map<std::string, std::vector<int>> remote_server_uids;
     bool all_delivered = true;
 
@@ -313,6 +308,50 @@ bool MessageDeliveryService::TryPushPayload(const std::vector<int>& recipients,
                             memochat::chatruntime::TaskMaxRetries(),
                             &error);
                     }
+                }
+            }
+            continue;
+        }
+
+        if (msgid == ID_NOTIFY_TEXT_CHAT_MSG_REQ)
+        {
+            for (int uid : uids)
+            {
+                message::TextChatMsgReq req;
+                if (!memochat::chat::delivery::BuildPrivateTextNotifyRequest(uid, payload, &req))
+                {
+                    all_delivered = false;
+                    if (enqueue_on_failure && _task_publisher)
+                    {
+                        std::string error;
+                        _task_publisher->PublishDeliveryTask(
+                            "message_delivery_retry",
+                            memochat::chatruntime::TaskRoutingDeliveryRetry(),
+                            BuildDeliveryTaskPayload(uid, msgid, payload, exclude_uid, "invalid_private_notify"),
+                            memochat::chatruntime::TaskRetryDelayMs(),
+                            memochat::chatruntime::TaskMaxRetries(),
+                            &error);
+                    }
+                    continue;
+                }
+
+                const auto rsp = ChatGrpcClient::GetInstance()->NotifyTextChatMsg(server_name, req, payload);
+                if (rsp.error() == ErrorCodes::Success)
+                {
+                    continue;
+                }
+
+                all_delivered = false;
+                if (enqueue_on_failure && _task_publisher)
+                {
+                    std::string error;
+                    _task_publisher->PublishDeliveryTask(
+                        "message_delivery_retry",
+                        memochat::chatruntime::TaskRoutingDeliveryRetry(),
+                        BuildDeliveryTaskPayload(uid, msgid, payload, exclude_uid, "rpc_failed"),
+                        memochat::chatruntime::TaskRetryDelayMs(),
+                        memochat::chatruntime::TaskMaxRetries(),
+                        &error);
                 }
             }
             continue;

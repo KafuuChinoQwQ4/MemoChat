@@ -5,11 +5,11 @@
 
 class QApplication;
 class QQmlApplicationEngine;
-class AppController;
+class AppComposition;
 
 void registerMemoChatQmlTypes();
 QUrl memoChatMainQmlUrl();
-void configureMemoChatEngine(QQmlApplicationEngine& engine, AppController& controller);
-bool loadMemoChatMainWindow(QQmlApplicationEngine& engine, QApplication& app, AppController& controller);
+void configureMemoChatEngine(QQmlApplicationEngine& engine, AppComposition& composition);
+bool loadMemoChatMainWindow(QQmlApplicationEngine& engine, QApplication& app, AppComposition& composition);
 
 #endif // MAINQMLBOOTSTRAP_H

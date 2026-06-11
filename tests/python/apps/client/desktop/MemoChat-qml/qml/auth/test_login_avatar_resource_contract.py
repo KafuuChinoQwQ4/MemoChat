@@ -10,16 +10,29 @@ SHARED_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/Main.qml
 LINUX_MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/Main.qml"
 ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/shared/utils/IconPathUtils.h"
 APP_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppController.cpp"
+APP_SESSION_AUTH_PORT_BINDER = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/composition/AppSessionAuthPortBinder.cpp"
+)
+APP_SESSION_LOGOUT_PORT_BINDER = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/composition/AppSessionLogoutPortBinder.cpp"
+)
 APP_CONTROLLER_USER_STATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerUserState.h"
-APP_CONTROLLER_NAVIGATION = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerNavigation.cpp"
+SESSION_LOGOUT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/session/AppSessionCoordinatorLogout.cpp"
 APP_CONTROLLER_PRIVATE_HISTORY = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerPrivateHistory.cpp"
 )
 APP_CONTROLLER_PRIVATE_SELECTION = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerPrivateSelection.cpp"
 )
-APP_CONTROLLER_PROFILE_STATE = (
-    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppControllerProfileState.cpp"
+PRIVATE_HISTORY_REQUEST_SERVICE = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/services/PrivateChatHistoryRequestService.cpp"
+)
+CHAT_DIALOG_SELECTION_SERVICE = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/services/ChatDialogSelectionService.cpp"
+)
+PROFILE_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/profile/controller/ProfileController.cpp"
+PROFILE_CONTROLLER_HEADER = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/profile/controller/ProfileController.h"
 )
 SESSION_CHAT_ENTRY = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/session/SessionChatEntryCoordinator.cpp"
 AUTH_CONTROLLER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/AuthController.cpp"
@@ -54,24 +67,32 @@ class LoginAvatarResourceContractTests(unittest.TestCase):
         self.assertIn('QString icon = QStringLiteral("qrc:/res/head_1.png");', state_header)
         self.assertIn('QString peerIcon = QStringLiteral("qrc:/res/head_1.png");', state_header)
 
-        profile_state = APP_CONTROLLER_PROFILE_STATE.read_text(encoding="utf-8")
-        self.assertIn('QStringLiteral("qrc:/res/head_1.png")', profile_state)
+        profile_header = PROFILE_CONTROLLER_HEADER.read_text(encoding="utf-8")
+        self.assertGreaterEqual(profile_header.count('QString icon = QStringLiteral("qrc:/res/head_1.png");'), 2)
+
+        profile_controller = PROFILE_CONTROLLER.read_text(encoding="utf-8")
+        self.assertIn('QStringLiteral("qrc:/res/head_1.png")', profile_controller)
 
         auth = AUTH_CONTROLLER.read_text(encoding="utf-8")
         self.assertIn('payload["icon"] = ":/res/head_1.png";', auth)
 
     def test_cpp_default_user_avatar_fallbacks_use_png_canonical_resource(self):
         for path in (
-            APP_CONTROLLER_NAVIGATION,
-            SESSION_CHAT_ENTRY,
-            APP_CONTROLLER_PRIVATE_HISTORY,
-            APP_CONTROLLER_PRIVATE_SELECTION,
+            SESSION_LOGOUT,
+            APP_SESSION_AUTH_PORT_BINDER,
+            APP_SESSION_LOGOUT_PORT_BINDER,
+            CHAT_DIALOG_SELECTION_SERVICE,
+            PRIVATE_HISTORY_REQUEST_SERVICE,
         ):
             with self.subTest(path=path.name):
                 source = path.read_text(encoding="utf-8")
                 self.assertNotIn('QStringLiteral("qrc:/res/head_1.jpg")', source)
                 self.assertNotIn('"qrc:/res/head_1.jpg"', source)
-                self.assertIn("qrc:/res/head_1.png", source)
+                if path == SESSION_LOGOUT:
+                    self.assertIn("invokeIfSet(_logout_port.clearCurrentUserState, previousUserUid);", source)
+                elif path != APP_SESSION_AUTH_PORT_BINDER:
+                    self.assertIn("qrc:/res/head_1.png", source)
+        self.assertNotIn("qrc:/res/head_1.jpg", APP_CONTROLLER.read_text(encoding="utf-8"))
 
     def test_login_windows_no_longer_depend_on_immediate_drag_handler(self):
         for path in (SHARED_MAIN_QML, LINUX_MAIN_QML):

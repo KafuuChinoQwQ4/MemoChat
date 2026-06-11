@@ -4,7 +4,7 @@
 #include <QSurfaceFormat>
 #include <QQuickStyle>
 #include <QIcon>
-#include "AppController.h"
+#include "AppComposition.h"
 #include "MainLogging.h"
 #include "MainPlatformBootstrap.h"
 #include "MainQmlBootstrap.h"
@@ -39,10 +39,10 @@ int main(int argc, char* argv[])
     configureGateUrlPrefixes(configPathForAppPath(QCoreApplication::applicationDirPath()));
     registerMemoChatQmlTypes();
 
-    AppController controller;
+    AppComposition composition;
     QQmlApplicationEngine engine;
-    configureMemoChatEngine(engine, controller);
-    if (!loadMemoChatMainWindow(engine, app, controller))
+    configureMemoChatEngine(engine, composition);
+    if (!loadMemoChatMainWindow(engine, app, composition))
     {
         return -1;
     }

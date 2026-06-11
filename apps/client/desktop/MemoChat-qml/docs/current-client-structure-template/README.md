@@ -265,7 +265,7 @@ features/auth/view/LoginPage.qml
   -> features/auth/AuthController.cpp
   -> shared/gateway/ClientGateway
   -> core/network/httpmgr.*
-  -> app/controller/AppControllerAuthResponses.cpp
+  -> app/events/AppHttpEventRouter.cpp
   -> app/session/SessionAuthCoordinator*.cpp
   -> controller.page = AppController.ChatPage
 ```

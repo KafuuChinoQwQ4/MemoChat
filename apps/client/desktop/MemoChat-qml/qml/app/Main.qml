@@ -25,12 +25,12 @@ Item {
     property int windowSwitchToken: 0
     property bool handoffRetiredWindowPending: false
     property int handoffPasses: 0
-    property int handoffTargetPage: AppController.LoginPage
+    property int handoffTargetPage: ShellViewModel.LoginPage
     property int handoffToken: 0
     property bool memochatStartupCenter: true
     readonly property int handoffMinimumPasses: 2
     readonly property int windowHandoffIntervalMs: 42
-    readonly property bool chatPageActive: shell.page === AppController.ChatPage
+    readonly property bool chatPageActive: shell.page === ShellViewModel.ChatPage
 
     PetAssetSettings {
         id: startupPetSettings
@@ -239,14 +239,14 @@ Item {
     }
 
     function handoffTargetIsCurrent(targetPage) {
-        if (targetPage === AppController.ChatPage) {
+        if (targetPage === ShellViewModel.ChatPage) {
             return root.chatPageActive
         }
         return shell.page === targetPage && !root.chatPageActive
     }
 
     function showWindowForHandoffTarget(targetPage) {
-        if (targetPage === AppController.ChatPage) {
+        if (targetPage === ShellViewModel.ChatPage) {
             showChatWindow()
             return
         }
@@ -330,7 +330,7 @@ Item {
         const token = ++windowSwitchToken
         if (chatPageActive) {
             const retiredWindowPending = destroyLoginWindow()
-            scheduleWindowHandoff(retiredWindowPending, token, AppController.ChatPage)
+            scheduleWindowHandoff(retiredWindowPending, token, ShellViewModel.ChatPage)
             return
         }
         const retiredWindowPending = destroyChatWindow()
@@ -480,7 +480,7 @@ Item {
 
                 Loader {
                     anchors.fill: parent
-                    visible: shell.page === AppController.LoginPage
+                    visible: shell.page === ShellViewModel.LoginPage
                     active: visible
                     asynchronous: true
                     sourceComponent: loginPageComponent
@@ -488,7 +488,7 @@ Item {
 
                 Loader {
                     anchors.fill: parent
-                    visible: shell.page === AppController.RegisterPage
+                    visible: shell.page === ShellViewModel.RegisterPage
                     active: visible
                     asynchronous: true
                     sourceComponent: registerPageComponent
@@ -496,7 +496,7 @@ Item {
 
                 Loader {
                     anchors.fill: parent
-                    visible: shell.page === AppController.ResetPage
+                    visible: shell.page === ShellViewModel.ResetPage
                     active: visible
                     asynchronous: true
                     sourceComponent: resetPageComponent

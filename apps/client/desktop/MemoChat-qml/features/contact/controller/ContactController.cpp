@@ -1,35 +1,31 @@
 #include "ContactController.h"
+#include "ApplyRequestModel.h"
 #include "ClientGateway.h"
+#include "ContactRequestPayloads.h"
+#include "FriendListModel.h"
 #include "IChatTransport.h"
 #include "IconPathUtils.h"
+#include "SearchResultModel.h"
 #include "global.h"
 #include "usermgr.h"
-#include <QJsonArray>
 #include <QJsonDocument>
-#include <QJsonObject>
-#include <QRegularExpression>
 
-namespace
-{
-QJsonArray buildLabelsArray(const QVariantList& labels)
-{
-    QJsonArray labelsArray;
-    for (const auto& labelVar : labels)
-    {
-        const QString label = labelVar.toString().trimmed();
-        if (!label.isEmpty())
-        {
-            labelsArray.append(label);
-        }
-    }
-    return labelsArray;
-}
-} // namespace
+#include <utility>
 
 ContactController::ContactController(ClientGateway* gateway, QObject* parent)
     : QObject(parent)
     , _gateway(gateway)
+    , _contact_list_model(new FriendListModel(this))
+    , _search_result_model(new SearchResultModel(this))
+    , _apply_request_model(new ApplyRequestModel(this))
 {
+    connect(_apply_request_model,
+            &ApplyRequestModel::unapprovedCountChanged,
+            this,
+            [this]()
+            {
+                setHasPendingApply(_apply_request_model->hasUnapproved());
+            });
 }
 
 int ContactController::contactPane() const
@@ -137,39 +133,163 @@ bool ContactController::contactsReady() const
     return _contacts_ready;
 }
 
+bool ContactController::applyReady() const
+{
+    return _apply_ready;
+}
+
 void ContactController::ensureContactsInitialized()
 {
-    emit ensureContactsInitializedRequested();
+    if (_contacts_ready)
+    {
+        return;
+    }
+
+    if (_bootstrap_port.ensureChatListInitialized)
+    {
+        _bootstrap_port.ensureChatListInitialized();
+    }
+    const std::vector<std::shared_ptr<FriendInfo>> contacts =
+        _bootstrap_port.nextPage ? _bootstrap_port.nextPage() : std::vector<std::shared_ptr<FriendInfo>>{};
+    setContacts(contacts);
+    if (_bootstrap_port.markPageLoaded)
+    {
+        _bootstrap_port.markPageLoaded();
+    }
+    if (_bootstrap_port.loadFinished)
+    {
+        setCanLoadMoreContacts(!_bootstrap_port.loadFinished());
+    }
+    setContactsReady(true);
 }
 
 void ContactController::ensureApplyInitialized()
 {
-    emit ensureApplyInitializedRequested();
+    if (_apply_ready)
+    {
+        return;
+    }
+    refreshApplySnapshot();
+}
+
+void ContactController::refreshApplySnapshot()
+{
+    const std::vector<std::shared_ptr<ApplyInfo>> applies = _apply_bootstrap_port.applySnapshot
+                                                                ? _apply_bootstrap_port.applySnapshot()
+                                                                : std::vector<std::shared_ptr<ApplyInfo>>{};
+    setApplies(applies);
+    setApplyReady(true);
 }
 
 void ContactController::selectContactIndex(int index)
 {
-    emit selectContactIndexRequested(index);
+    ensureContactsInitialized();
+    const QVariantMap contact = _contact_list_model ? _contact_list_model->get(index) : QVariantMap();
+    const int uid = contact.value(QStringLiteral("uid")).toInt();
+    if (uid > 0)
+    {
+        const QString name = contact.value(QStringLiteral("name")).toString();
+        const QString nick = contact.value(QStringLiteral("nick")).toString();
+        const QString icon = contact.value(QStringLiteral("icon")).toString();
+        const QString back = contact.value(QStringLiteral("back")).toString();
+        const int sex = contact.value(QStringLiteral("sex")).toInt();
+        const QString userId = contact.value(QStringLiteral("userId")).toString();
+        setCurrentContact(uid, name, nick, icon, back, sex, userId);
+        setContactPane(1);
+        emit currentContactSelected(uid);
+    }
 }
 
 void ContactController::searchUser(const QString& uidText)
 {
-    emit searchUserRequested(uidText);
+    QString errorText;
+    if (!sendSearchUser(uidText, &errorText))
+    {
+        clearSearchResultOnly();
+        setSearchStatus(errorText, true);
+        return;
+    }
+
+    clearSearchResultOnly();
+    setSearchPending(true);
+    setSearchStatus("搜索中...", false);
 }
 
 void ContactController::clearSearchState()
 {
-    emit clearSearchStateRequested();
+    clearSearchResultOnly();
+    setSearchPending(false);
+    setSearchStatus(QString(), false);
 }
 
 void ContactController::requestAddFriend(int uid, const QString& bakName, const QVariantList& labels)
 {
-    emit requestAddFriendRequested(uid, bakName, labels);
+    if (!_gateway || !_gateway->userMgr())
+    {
+        setSearchStatus("用户状态异常，请重新登录", true);
+        return;
+    }
+
+    const auto selfInfo = _gateway->userMgr()->GetUserInfo();
+    if (!selfInfo)
+    {
+        setSearchStatus("用户状态异常，请重新登录", true);
+        return;
+    }
+    if (uid == selfInfo->_uid)
+    {
+        setSearchStatus("不能添加自己", true);
+        return;
+    }
+    if (_gateway->userMgr()->CheckFriendById(uid))
+    {
+        setSearchStatus("已是好友，无需重复申请", false);
+        return;
+    }
+
+    sendAddFriend(selfInfo->_uid, selfInfo->_name, uid, bakName, labels);
+    setSearchStatus("好友申请已发送", false);
 }
 
 void ContactController::approveFriend(int uid, const QString& backName, const QVariantList& labels)
 {
-    emit approveFriendRequested(uid, backName, labels);
+    if (uid <= 0)
+    {
+        setAuthStatus("非法好友申请", true);
+        return;
+    }
+    if (!_gateway || !_gateway->userMgr())
+    {
+        setAuthStatus("用户状态异常，请重新登录", true);
+        return;
+    }
+
+    const auto selfInfo = _gateway->userMgr()->GetUserInfo();
+    if (!selfInfo)
+    {
+        setAuthStatus("用户状态异常，请重新登录", true);
+        return;
+    }
+    if (_gateway->userMgr()->CheckFriendById(uid))
+    {
+        markApplyApproved(uid);
+        setAuthStatus("已是好友", false);
+        return;
+    }
+
+    QString remark = backName.trimmed();
+    if (remark.isEmpty())
+    {
+        remark = _apply_request_model->nameByUid(uid);
+    }
+    if (remark.isEmpty())
+    {
+        remark = "MemoChat好友";
+    }
+
+    sendApproveFriend(selfInfo->_uid, uid, remark, labels);
+    setApplyPending(uid, true);
+    setAuthStatus("好友认证请求已发送", false);
 }
 
 QVariantMap ContactController::contactProfileByUid(int uid) const
@@ -197,34 +317,82 @@ QVariantMap ContactController::contactProfileByUid(int uid) const
 
 void ContactController::deleteFriend(int uid)
 {
-    emit deleteFriendRequested(uid);
+    if (!_gateway || !_gateway->userMgr() || !_gateway->chatTransport())
+    {
+        setAuthStatus("联系人状态异常，无法删除", true);
+        return;
+    }
+
+    const auto selfInfo = _gateway->userMgr()->GetUserInfo();
+    if (!selfInfo || selfInfo->_uid <= 0 || uid <= 0 || uid == selfInfo->_uid)
+    {
+        setAuthStatus("联系人状态异常，无法删除", true);
+        return;
+    }
+
+    sendDeleteFriend(selfInfo->_uid, uid);
+    setAuthStatus("正在删除联系人...", false);
 }
 
 void ContactController::showApplyRequests()
 {
-    emit showApplyRequestsRequested();
+    ensureApplyInitialized();
+    setContactPane(0);
+    setAuthStatus(QString(), false);
 }
 
 void ContactController::jumpChatWithCurrentContact()
 {
-    emit jumpChatWithCurrentContactRequested();
+    if (_command_port.openCurrentContactChat)
+    {
+        _command_port.openCurrentContactChat();
+    }
 }
 
 void ContactController::loadMoreContacts()
 {
-    emit loadMoreContactsRequested();
+    ensureContactsInitialized();
+    if (_contact_loading_more)
+    {
+        return;
+    }
+    if (!_gateway || !_gateway->userMgr())
+    {
+        setAuthStatus("用户状态异常，请重新登录", true);
+        return;
+    }
+
+    if (_gateway->userMgr()->IsLoadConFin())
+    {
+        refreshContactLoadMoreState();
+        return;
+    }
+
+    setContactLoadingMore(true);
+    const auto contactList = _gateway->userMgr()->GetConListPerPage();
+    appendContacts(contactList);
+    _gateway->userMgr()->UpdateContactLoadedCount();
+    setContactLoadingMore(false);
+    refreshContactLoadMoreState();
 }
 
 void ContactController::clearAuthStatus()
 {
-    emit clearAuthStatusRequested();
+    setAuthStatus(QString(), false);
 }
 
 bool ContactController::sendSearchUser(const QString& uidText, QString* errorText) const
 {
-    static const QRegularExpression kUserIdPattern("^u[1-9][0-9]{8}$");
-    const QString userId = uidText.trimmed();
-    if (!kUserIdPattern.match(userId).hasMatch())
+    if (!_gateway || !_gateway->chatTransport())
+    {
+        if (errorText)
+        {
+            *errorText = "聊天连接未就绪";
+        }
+        return false;
+    }
+
+    if (!memochat::contact_payload::isValidUserId(uidText))
     {
         if (errorText)
         {
@@ -233,8 +401,7 @@ bool ContactController::sendSearchUser(const QString& uidText, QString* errorTex
         return false;
     }
 
-    QJsonObject jsonObj;
-    jsonObj["user_id"] = userId;
+    const QJsonObject jsonObj = memochat::contact_payload::buildSearchUserPayload(uidText);
     const QByteArray jsonData = QJsonDocument(jsonObj).toJson(QJsonDocument::Compact);
     _gateway->chatTransport()->slot_send_data(ReqId::ID_SEARCH_USER_REQ, jsonData);
     return true;
@@ -246,13 +413,8 @@ void ContactController::sendAddFriend(int selfUid,
                                       const QString& bakName,
                                       const QVariantList& labels) const
 {
-    QJsonObject jsonObj;
-    jsonObj["uid"] = selfUid;
-    jsonObj["applyname"] = selfName;
-    jsonObj["bakname"] = bakName.trimmed().isEmpty() ? selfName : bakName.trimmed();
-    jsonObj["touid"] = targetUid;
-    jsonObj["labels"] = buildLabelsArray(labels);
-
+    const QJsonObject jsonObj =
+        memochat::contact_payload::buildAddFriendPayload(selfUid, selfName, targetUid, bakName, labels);
     const QByteArray jsonData = QJsonDocument(jsonObj).toJson(QJsonDocument::Compact);
     _gateway->chatTransport()->slot_send_data(ReqId::ID_ADD_FRIEND_REQ, jsonData);
 }
@@ -262,33 +424,117 @@ void ContactController::sendApproveFriend(int selfUid,
                                           const QString& remark,
                                           const QVariantList& labels) const
 {
-    QJsonObject jsonObj;
-    jsonObj["fromuid"] = selfUid;
-    jsonObj["touid"] = targetUid;
-    jsonObj["back"] = remark;
-    jsonObj["labels"] = buildLabelsArray(labels);
-
+    const QJsonObject jsonObj =
+        memochat::contact_payload::buildApproveFriendPayload(selfUid, targetUid, remark, labels);
     const QByteArray jsonData = QJsonDocument(jsonObj).toJson(QJsonDocument::Compact);
     _gateway->chatTransport()->slot_send_data(ReqId::ID_AUTH_FRIEND_REQ, jsonData);
+}
+
+void ContactController::sendDeleteFriend(int selfUid, int friendUid) const
+{
+    const QJsonObject jsonObj = memochat::contact_payload::buildDeleteFriendPayload(selfUid, friendUid);
+    const QByteArray jsonData = QJsonDocument(jsonObj).toJson(QJsonDocument::Compact);
+    _gateway->chatTransport()->slot_send_data(ReqId::ID_DELETE_FRIEND_REQ, jsonData);
+}
+
+void ContactController::setCommandPort(ContactCommandPort port)
+{
+    _command_port = std::move(port);
+}
+
+void ContactController::setBootstrapPort(ContactBootstrapPort port)
+{
+    _bootstrap_port = std::move(port);
+}
+
+void ContactController::setApplyBootstrapPort(ContactApplyBootstrapPort port)
+{
+    _apply_bootstrap_port = std::move(port);
 }
 
 void ContactController::syncModels(FriendListModel* contactListModel,
                                    SearchResultModel* searchResultModel,
                                    ApplyRequestModel* applyRequestModel)
 {
-    if (_contact_list_model == contactListModel && _search_result_model == searchResultModel &&
-        _apply_request_model == applyRequestModel)
-    {
-        return;
-    }
-
-    _contact_list_model = contactListModel;
-    _search_result_model = searchResultModel;
-    _apply_request_model = applyRequestModel;
-    emit modelChanged();
+    Q_UNUSED(contactListModel)
+    Q_UNUSED(searchResultModel)
+    Q_UNUSED(applyRequestModel)
 }
 
 void ContactController::syncContactPane(int pane)
+{
+    setContactPane(pane);
+}
+
+void ContactController::syncCurrentContact(int uid,
+                                           const QString& name,
+                                           const QString& nick,
+                                           const QString& icon,
+                                           const QString& back,
+                                           int sex,
+                                           const QString& userId)
+{
+    setCurrentContact(uid, name, nick, icon, back, sex, userId);
+}
+
+void ContactController::syncSearchPending(bool pending)
+{
+    setSearchPending(pending);
+}
+
+void ContactController::syncSearchStatus(const QString& text, bool isError)
+{
+    setSearchStatus(text, isError);
+}
+
+void ContactController::syncAuthStatus(const QString& text, bool isError)
+{
+    setAuthStatus(text, isError);
+}
+
+void ContactController::syncHasPendingApply(bool hasPending)
+{
+    setHasPendingApply(hasPending);
+}
+
+void ContactController::syncContactLoadingMore(bool loading)
+{
+    setContactLoadingMore(loading);
+}
+
+void ContactController::syncCanLoadMoreContacts(bool canLoad)
+{
+    setCanLoadMoreContacts(canLoad);
+}
+
+void ContactController::syncContactsReady(bool ready)
+{
+    setContactsReady(ready);
+}
+
+void ContactController::syncApplyReady(bool ready)
+{
+    setApplyReady(ready);
+}
+
+void ContactController::resetContactFeature()
+{
+    _contact_list_model->clear();
+    _search_result_model->clear();
+    _apply_request_model->clear();
+    setContactPane(0);
+    clearCurrentContact();
+    setSearchPending(false);
+    setSearchStatus(QString(), false);
+    setAuthStatus(QString(), false);
+    setHasPendingApply(false);
+    setContactLoadingMore(false);
+    setCanLoadMoreContacts(false);
+    setContactsReady(false);
+    setApplyReady(false);
+}
+
+void ContactController::setContactPane(int pane)
 {
     if (_contact_pane == pane)
     {
@@ -299,13 +545,18 @@ void ContactController::syncContactPane(int pane)
     emit contactPaneChanged();
 }
 
-void ContactController::syncCurrentContact(int uid,
-                                           const QString& name,
-                                           const QString& nick,
-                                           const QString& icon,
-                                           const QString& back,
-                                           int sex,
-                                           const QString& userId)
+void ContactController::clearCurrentContact()
+{
+    setCurrentContact(0, QString(), QString(), QStringLiteral("qrc:/res/head_1.jpg"), QString(), 0, QString());
+}
+
+void ContactController::setCurrentContact(int uid,
+                                          const QString& name,
+                                          const QString& nick,
+                                          const QString& icon,
+                                          const QString& back,
+                                          int sex,
+                                          const QString& userId)
 {
     if (_current_contact_uid == uid && _current_contact_name == name && _current_contact_nick == nick &&
         _current_contact_icon == icon && _current_contact_back == back && _current_contact_sex == sex &&
@@ -317,14 +568,83 @@ void ContactController::syncCurrentContact(int uid,
     _current_contact_uid = uid;
     _current_contact_name = name;
     _current_contact_nick = nick;
-    _current_contact_icon = icon;
+    _current_contact_icon = icon.isEmpty() ? QStringLiteral("qrc:/res/head_1.jpg") : icon;
     _current_contact_back = back;
     _current_contact_sex = sex;
     _current_contact_user_id = userId;
     emit currentContactChanged();
 }
 
-void ContactController::syncSearchPending(bool pending)
+void ContactController::setContacts(const std::vector<std::shared_ptr<FriendInfo>>& contacts)
+{
+    _contact_list_model->setFriends(contacts);
+}
+
+void ContactController::appendContacts(const std::vector<std::shared_ptr<FriendInfo>>& contacts)
+{
+    _contact_list_model->appendFriends(contacts);
+}
+
+void ContactController::upsertContact(const std::shared_ptr<FriendInfo>& friendInfo)
+{
+    _contact_list_model->upsertFriend(friendInfo);
+}
+
+void ContactController::upsertContact(const std::shared_ptr<AuthInfo>& authInfo)
+{
+    _contact_list_model->upsertFriend(authInfo);
+}
+
+void ContactController::upsertContact(const std::shared_ptr<AuthRsp>& authRsp)
+{
+    _contact_list_model->upsertFriend(authRsp);
+}
+
+void ContactController::removeContactByUid(int uid)
+{
+    _contact_list_model->removeByUid(uid);
+    if (_current_contact_uid == uid)
+    {
+        clearCurrentContact();
+    }
+}
+
+void ContactController::setApplies(const std::vector<std::shared_ptr<ApplyInfo>>& applies)
+{
+    _apply_request_model->setApplies(applies);
+}
+
+void ContactController::upsertApply(const std::shared_ptr<ApplyInfo>& apply)
+{
+    _apply_request_model->upsertApply(apply);
+}
+
+void ContactController::upsertApply(const std::shared_ptr<AddFriendApply>& apply)
+{
+    _apply_request_model->upsertApply(apply);
+}
+
+void ContactController::markApplyApproved(int uid)
+{
+    _apply_request_model->markApproved(uid);
+}
+
+void ContactController::setApplyPending(int uid, bool pending)
+{
+    _apply_request_model->setPending(uid, pending);
+}
+
+void ContactController::clearSearchResultOnly()
+{
+    _search_result_model->clear();
+}
+
+void ContactController::setSearchResult(const std::shared_ptr<SearchInfo>& searchInfo)
+{
+    _search_result_model->setResult(searchInfo);
+}
+
+void ContactController::setSearchPending(bool pending)
 {
     if (_search_pending == pending)
     {
@@ -335,7 +655,7 @@ void ContactController::syncSearchPending(bool pending)
     emit searchPendingChanged();
 }
 
-void ContactController::syncSearchStatus(const QString& text, bool isError)
+void ContactController::setSearchStatus(const QString& text, bool isError)
 {
     if (_search_status_text == text && _search_status_error == isError)
     {
@@ -347,7 +667,7 @@ void ContactController::syncSearchStatus(const QString& text, bool isError)
     emit searchStatusChanged();
 }
 
-void ContactController::syncAuthStatus(const QString& text, bool isError)
+void ContactController::setAuthStatus(const QString& text, bool isError)
 {
     if (_auth_status_text == text && _auth_status_error == isError)
     {
@@ -359,18 +679,7 @@ void ContactController::syncAuthStatus(const QString& text, bool isError)
     emit authStatusChanged();
 }
 
-void ContactController::syncHasPendingApply(bool hasPending)
-{
-    if (_has_pending_apply == hasPending)
-    {
-        return;
-    }
-
-    _has_pending_apply = hasPending;
-    emit pendingApplyChanged();
-}
-
-void ContactController::syncContactLoadingMore(bool loading)
+void ContactController::setContactLoadingMore(bool loading)
 {
     if (_contact_loading_more == loading)
     {
@@ -381,7 +690,7 @@ void ContactController::syncContactLoadingMore(bool loading)
     emit contactLoadingMoreChanged();
 }
 
-void ContactController::syncCanLoadMoreContacts(bool canLoad)
+void ContactController::setCanLoadMoreContacts(bool canLoad)
 {
     if (_can_load_more_contacts == canLoad)
     {
@@ -392,7 +701,7 @@ void ContactController::syncCanLoadMoreContacts(bool canLoad)
     emit canLoadMoreContactsChanged();
 }
 
-void ContactController::syncContactsReady(bool ready)
+void ContactController::setContactsReady(bool ready)
 {
     if (_contacts_ready == ready)
     {
@@ -401,4 +710,36 @@ void ContactController::syncContactsReady(bool ready)
 
     _contacts_ready = ready;
     emit contactsReadyChanged();
+}
+
+void ContactController::setApplyReady(bool ready)
+{
+    if (_apply_ready == ready)
+    {
+        return;
+    }
+
+    _apply_ready = ready;
+    emit applyReadyChanged();
+}
+
+void ContactController::setHasPendingApply(bool hasPending)
+{
+    if (_has_pending_apply == hasPending)
+    {
+        return;
+    }
+
+    _has_pending_apply = hasPending;
+    emit pendingApplyChanged();
+}
+
+void ContactController::refreshContactLoadMoreState()
+{
+    if (!_gateway || !_gateway->userMgr())
+    {
+        setCanLoadMoreContacts(false);
+        return;
+    }
+    setCanLoadMoreContacts(!_gateway->userMgr()->IsLoadConFin());
 }

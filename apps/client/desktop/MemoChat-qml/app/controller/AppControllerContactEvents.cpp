@@ -1,157 +1,111 @@
 #include "AppController.h"
+
+#include "ContactEventDependenciesFactory.h"
 #include "usermgr.h"
 
-void AppController::onAddAuthFriend(std::shared_ptr<AuthInfo> authInfo)
+memochat::app::ContactEventActions AppController::contactEventActions()
 {
-    if (authInfo)
+    memochat::app::ContactEventActions actions;
+    actions.addAuthFriendToStore = [this](std::shared_ptr<AuthInfo> authInfo)
     {
         _gateway.userMgr()->AddFriend(authInfo);
-    }
-    _chat_list_model.upsertFriend(authInfo);
-    _contact_list_model.upsertFriend(authInfo);
-    refreshDialogModel();
-    refreshChatLoadMoreState();
-    refreshContactLoadMoreState();
-    if (authInfo)
-    {
-        _gateway.userMgr()->MarkApplyStatus(authInfo->_uid, 1);
-        _apply_request_model.markApproved(authInfo->_uid);
-        if (_contact_state.uid == authInfo->_uid)
-        {
-            setCurrentContact(authInfo->_uid,
-                              authInfo->_name,
-                              authInfo->_nick,
-                              authInfo->_icon,
-                              authInfo->_nick,
-                              authInfo->_sex,
-                              authInfo->_user_id);
-        }
-    }
-}
-
-void AppController::onAuthRsp(std::shared_ptr<AuthRsp> authRsp)
-{
-    if (authRsp)
+    };
+    actions.addAuthRspToStore = [this](std::shared_ptr<AuthRsp> authRsp)
     {
         _gateway.userMgr()->AddFriend(authRsp);
-    }
-    _chat_list_model.upsertFriend(authRsp);
-    _contact_list_model.upsertFriend(authRsp);
-    refreshDialogModel();
-    refreshChatLoadMoreState();
-    refreshContactLoadMoreState();
-    if (authRsp)
+    };
+    actions.removeFriendFromStore = [this](int friendUid)
     {
-        _gateway.userMgr()->MarkApplyStatus(authRsp->_uid, 1);
-        _apply_request_model.markApproved(authRsp->_uid);
-        setAuthStatus("好友添加成功", false);
-        if (_contact_state.uid == authRsp->_uid)
+        _gateway.userMgr()->RemoveFriend(friendUid);
+    };
+    actions.currentUser = [this]()
+    {
+        return _gateway.userMgr()->GetUserInfo();
+    };
+    actions.isFriend = [this](int uid)
+    {
+        return _gateway.userMgr()->CheckFriendById(uid);
+    };
+    actions.alreadyApplied = [this](int uid)
+    {
+        return _gateway.userMgr()->AlreadyApply(uid);
+    };
+    actions.markApplyApprovedInStore = [this](int uid)
+    {
+        _gateway.userMgr()->MarkApplyStatus(uid, 1);
+    };
+    actions.addApplyToStore = [this](std::shared_ptr<ApplyInfo> apply)
+    {
+        _gateway.userMgr()->AddApplyList(apply);
+    };
+    actions.upsertChatContactFromAuthInfo = [this](std::shared_ptr<AuthInfo> authInfo)
+    {
+        _features.chatFeatureController.upsertContactFromAuthInfo(authInfo);
+    };
+    actions.upsertChatContactFromAuthRsp = [this](std::shared_ptr<AuthRsp> authRsp)
+    {
+        _features.chatFeatureController.upsertContactFromAuthRsp(authRsp);
+    };
+    actions.removeChatContact = [this](int friendUid)
+    {
+        ChatPrivateConversationClearPort port;
+        port.currentPrivatePeerUid = [this]()
         {
-            setCurrentContact(authRsp->_uid,
-                              authRsp->_name,
-                              authRsp->_nick,
-                              authRsp->_icon,
-                              authRsp->_nick,
-                              authRsp->_sex,
-                              authRsp->_user_id);
-        }
-    }
-}
-
-void AppController::onDeleteFriendRsp(int error, int friendUid)
-{
-    if (error != ErrorCodes::SUCCESS || friendUid <= 0)
+            return _chat_state.uid;
+        };
+        port.setCurrentPrivatePeerUid = [this](int uid)
+        {
+            _chat_state.uid = uid;
+        };
+        port.clearMessageModel = [this]()
+        {
+            _features.chatFeatureController.clearMessageModel();
+        };
+        port.setCurrentPeerName = [this](const QString& name)
+        {
+            setCurrentChatPeerName(name);
+        };
+        port.setCurrentPeerIcon = [this](const QString& icon)
+        {
+            setCurrentChatPeerIcon(icon);
+        };
+        port.setCurrentDraftText = [this](const QString& text)
+        {
+            setCurrentDraftText(text);
+        };
+        port.setCurrentDialogPinned = [this](bool pinned)
+        {
+            setCurrentDialogPinned(pinned);
+        };
+        port.setCurrentDialogMuted = [this](bool muted)
+        {
+            setCurrentDialogMuted(muted);
+        };
+        port.emitCurrentDialogUidChangedIfNeeded = [this]()
+        {
+            emitCurrentDialogUidChangedIfNeeded();
+        };
+        _features.chatFeatureController.removeContactConversation(friendUid, port);
+    };
+    actions.openPrivateChat = [this](int uid)
     {
-        setAuthStatus(QString("删除联系人失败（错误码:%1）").arg(error), true);
-        return;
-    }
-
-    _gateway.userMgr()->RemoveFriend(friendUid);
-    _chat_list_model.removeByUid(friendUid);
-    _contact_list_model.removeByUid(friendUid);
-    _dialog_list_model.removeByUid(friendUid);
-    _dialog_state.draftMap.remove(friendUid);
-    _dialog_state.mentionMap.remove(friendUid);
-    _dialog_state.localPinnedSet.remove(friendUid);
-    _dialog_state.serverPinnedMap.remove(friendUid);
-    _dialog_state.serverMuteMap.remove(friendUid);
-
-    if (_chat_state.uid == friendUid)
+        selectChatByUid(uid);
+    };
+    actions.switchToChatTab = [this]()
     {
-        _chat_state.uid = 0;
-        _message_model.clear();
-        setCurrentChatPeerName(QString());
-        setCurrentChatPeerIcon(QStringLiteral("qrc:/res/head_1.png"));
-        setCurrentDraftText(QString());
-        setCurrentDialogPinned(false);
-        setCurrentDialogMuted(false);
-        emitCurrentDialogUidChangedIfNeeded();
-    }
-
-    if (_contact_state.uid == friendUid)
-    {
-        setCurrentContact(0, QString(), QString(), QStringLiteral("qrc:/res/head_1.png"), QString(), 0);
-        setContactPane(ApplyRequestPane);
-    }
-
-    refreshChatLoadMoreState();
-    refreshContactLoadMoreState();
-    setAuthStatus("联系人已删除", false);
-}
-
-void AppController::onUserSearch(std::shared_ptr<SearchInfo> searchInfo)
-{
-    setSearchPending(false);
-
-    if (!searchInfo)
-    {
-        clearSearchResultOnly();
-        setSearchStatus("未找到该用户", true);
-        return;
-    }
-
-    auto selfInfo = _gateway.userMgr()->GetUserInfo();
-    if (!selfInfo)
-    {
-        clearSearchResultOnly();
-        setSearchStatus("用户状态异常，请重新登录", true);
-        return;
-    }
-
-    if (searchInfo->_uid == selfInfo->_uid)
-    {
-        clearSearchResultOnly();
-        setSearchStatus("不能搜索自己", true);
-        return;
-    }
-
-    if (_gateway.userMgr()->CheckFriendById(searchInfo->_uid))
-    {
-        clearSearchResultOnly();
-        setSearchStatus("已是好友，已切换到会话", false);
-        selectChatByUid(searchInfo->_uid);
         switchChatTab(ChatTabPage);
-        return;
-    }
-
-    _search_result_model.setResult(searchInfo);
-    setSearchStatus("已找到用户", false);
-}
-
-void AppController::onFriendApply(std::shared_ptr<AddFriendApply> applyInfo)
-{
-    if (!applyInfo)
+    };
+    actions.refreshDialogModel = [this]()
     {
-        return;
-    }
-
-    if (_gateway.userMgr()->AlreadyApply(applyInfo->_from_uid))
+        refreshDialogModel();
+    };
+    actions.refreshChatLoadMoreState = [this]()
     {
-        return;
-    }
-
-    auto apply = std::make_shared<ApplyInfo>(applyInfo);
-    _gateway.userMgr()->AddApplyList(apply);
-    _apply_request_model.upsertApply(apply);
-    setAuthStatus(QString("收到来自 %1 的好友申请").arg(applyInfo->_name), false);
+        refreshChatLoadMoreState();
+    };
+    actions.refreshContactLoadMoreState = [this]()
+    {
+        refreshContactLoadMoreState();
+    };
+    return actions;
 }
