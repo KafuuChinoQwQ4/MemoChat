@@ -11,6 +11,7 @@ Window {
     readonly property int baseWindowHeight: 460
     readonly property int speechBubbleSafeHeight: 84
     readonly property int panelGap: 12
+    readonly property real initialScaleFactor: 1.6
 
     width: scaledWindowWidth()
     height: scaledWindowHeight()
@@ -29,7 +30,7 @@ Window {
     property bool clickThrough: false
     property bool decorativeMode: false
     property bool debugPanelVisible: false
-    property real scaleFactor: 1.0
+    property real scaleFactor: initialScaleFactor
     property bool micMuted: true
     property bool cameraEnabled: false
     property string cameraCaptureStatus: cameraEnabled ? "摄像头本地捕捉" : "摄像头关闭"
@@ -340,13 +341,13 @@ Window {
     }
 
     function resetPosition() {
-        scaleFactor = 1.0
+        scaleFactor = initialScaleFactor
         width = scaledWindowWidth()
         height = scaledWindowHeight()
         var availableWidth = Screen.desktopAvailableWidth > 0 ? Screen.desktopAvailableWidth : Screen.width
         var availableHeight = Screen.desktopAvailableHeight > 0 ? Screen.desktopAvailableHeight : Screen.height
         x = Math.max(24, Math.round(availableWidth - width - 48))
-        y = Math.max(24, Math.round((availableHeight - height) * 0.62))
+        y = Math.max(24, Math.round(availableHeight - height - 48))
         positionInitialized = true
         positionControlWindow()
         positionChatWindow()
@@ -360,7 +361,7 @@ Window {
     }
 
     function applyScale(value) {
-        var nextScale = PetWindowRuntime.clamp(value, 0.65, 2.2)
+        var nextScale = PetWindowRuntime.clamp(value, 0.65, 3.2)
         if (Math.abs(nextScale - root.scaleFactor) < 0.001) {
             return
         }

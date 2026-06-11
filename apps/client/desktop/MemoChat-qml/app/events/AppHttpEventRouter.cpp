@@ -3,16 +3,12 @@
 #include "AppCoordinators.h"
 #include "ProfileController.h"
 
-#include <utility>
-
 AppHttpEventRouter::AppHttpEventRouter(AppSessionCoordinator& sessionCoordinator,
                                        ProfileController& profileController,
-                                       std::function<void()> emitSettingsStatusChanged,
                                        QObject* parent)
     : QObject(parent)
     , _session_coordinator(sessionCoordinator)
     , _profile_controller(profileController)
-    , _emit_settings_status_changed(std::move(emitSettingsStatusChanged))
 {
 }
 
@@ -33,11 +29,5 @@ void AppHttpEventRouter::onResetHttpFinished(ReqId id, QString res, ErrorCodes e
 
 void AppHttpEventRouter::onSettingsHttpFinished(ReqId id, QString res, ErrorCodes err)
 {
-    const QString previousText = _profile_controller.statusText();
-    const bool previousError = _profile_controller.statusError();
     _profile_controller.handleSettingsHttpFinished(id, res, err);
-    if (_profile_controller.statusText() != previousText || _profile_controller.statusError() != previousError)
-    {
-        _emit_settings_status_changed();
-    }
 }

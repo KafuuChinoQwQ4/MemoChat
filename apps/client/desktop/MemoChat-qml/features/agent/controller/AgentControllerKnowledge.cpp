@@ -54,6 +54,7 @@ void AgentController::clearKnowledgeError()
 
 void AgentController::uploadDocument(const QString& filePath)
 {
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     clearErrorState();
     clearKnowledgeError();
@@ -110,7 +111,7 @@ void AgentController::uploadDocument(const QString& filePath)
     setKnowledgeBusy(true, QString("正在上传 %1...").arg(fileName));
 
     ReqId reqId = ID_AI_KB_UPLOAD;
-    _pending_requests.track(reqId, AgentRequestKind::KnowledgeUpload);
+    _pending_requests.track(reqId, AgentRequestKind::KnowledgeUpload, QString(), uid);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/kb/upload"),
                                         payload,
                                         reqId,
@@ -138,6 +139,7 @@ void AgentController::chooseAndUploadDocument()
 
 void AgentController::searchKnowledgeBase(const QString& query)
 {
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     clearErrorState();
     clearKnowledgeError();
@@ -151,7 +153,7 @@ void AgentController::searchKnowledgeBase(const QString& query)
     payload["top_k"] = 5;
 
     ReqId reqId = ID_AI_KB_SEARCH;
-    _pending_requests.track(reqId, AgentRequestKind::KnowledgeSearch);
+    _pending_requests.track(reqId, AgentRequestKind::KnowledgeSearch, QString(), uid);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/kb/search"),
                                         payload,
                                         reqId,
@@ -161,6 +163,7 @@ void AgentController::searchKnowledgeBase(const QString& query)
 
 void AgentController::listKnowledgeBases()
 {
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     clearErrorState();
     clearKnowledgeError();
@@ -171,13 +174,14 @@ void AgentController::listKnowledgeBases()
     url.setQuery(query);
 
     ReqId reqId = ID_AI_KB_LIST;
-    _pending_requests.track(reqId, AgentRequestKind::KnowledgeList);
+    _pending_requests.track(reqId, AgentRequestKind::KnowledgeList, QString(), uid);
 
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::deleteKnowledgeBase(const QString& kbId)
 {
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     clearErrorState();
     clearKnowledgeError();
@@ -188,7 +192,7 @@ void AgentController::deleteKnowledgeBase(const QString& kbId)
     payload["kb_id"] = kbId;
 
     ReqId reqId = ID_AI_KB_DELETE;
-    _pending_requests.track(reqId, AgentRequestKind::KnowledgeDelete);
+    _pending_requests.track(reqId, AgentRequestKind::KnowledgeDelete, QString(), uid);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/kb/delete"),
                                         payload,
                                         reqId,

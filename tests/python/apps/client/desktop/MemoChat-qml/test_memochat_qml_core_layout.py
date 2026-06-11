@@ -93,9 +93,7 @@ APP_SIGNAL_BINDER_FILES = (
     "app/composition/AppChatTransportSignalBinder.cpp",
     "app/composition/AppChatDispatcherSignalBinder.cpp",
     "app/composition/AppCallSignalBinder.cpp",
-    "app/composition/AppFeatureFacadeSignalBinder.cpp",
     "app/composition/AppShellSignalBinder.cpp",
-    "app/composition/AppChatProjectionSignalBinder.cpp",
     "app/composition/AppTimerSignalBinder.cpp",
 )
 APP_CHAT_BINDING_FILES = (
@@ -1505,12 +1503,12 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
             "struct AppPortRegistryConstants",
             "struct AppPortRegistryQueries",
             "struct AppPortRegistryActions",
-            "struct AppPortRegistryEvents",
             "struct AppPortRegistryContext",
             "explicit AppPortRegistry(AppPortRegistryContext context);",
         ):
             with self.subTest(port_registry_contract=contract_token):
                 self.assertIn(contract_token, port_registry)
+        self.assertNotIn("struct AppPortRegistryEvents", port_registry)
         self.assertNotIn("friend class AppPortRegistry;", app_header)
         for token in (
             '#include "AppController.h"',
@@ -1576,9 +1574,7 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
             "app/composition/AppChatTransportSignalBinder.cpp": 45,
             "app/composition/AppChatDispatcherSignalBinder.cpp": 95,
             "app/composition/AppCallSignalBinder.cpp": 85,
-            "app/composition/AppFeatureFacadeSignalBinder.cpp": 65,
             "app/composition/AppShellSignalBinder.cpp": 45,
-            "app/composition/AppChatProjectionSignalBinder.cpp": 45,
             "app/composition/AppTimerSignalBinder.cpp": 45,
             "app/composition/AppAuthFeaturePortBinder.cpp": 60,
             "app/composition/AppContactFeaturePortBinder.cpp": 80,

@@ -75,12 +75,11 @@ SessionLogoutPort AppPortRegistry::makeSessionLogoutPort()
         if (_shell_state.loadingState().canLoadMoreChats)
         {
             _shell_state.loadingState().canLoadMoreChats = false;
-            emit canLoadMoreChatsChanged();
         }
         _features.contactController.setCanLoadMoreContacts(false);
+        _features.agentController.resetForLogout();
         setCurrentContact(0, QString(), QString(), QStringLiteral("qrc:/res/head_1.png"), QString(), 0);
         _chat_state.uid = 0;
-        emit currentGroupChanged();
         emitCurrentDialogUidChangedIfNeeded();
         _features.chatFeatureController.resetRuntimeForLogout();
         setCurrentDraftText(QString());
@@ -90,13 +89,13 @@ SessionLogoutPort AppPortRegistry::makeSessionLogoutPort()
         setPendingReplyContext(QString(), QString(), QString());
         setCurrentChatPeerName(QString());
         setCurrentChatPeerIcon(QStringLiteral("qrc:/res/head_1.png"));
+        _features.chatFeatureController.syncViewModelState();
     };
     port.clearCurrentUserState = [this](int previousUserUid)
     {
         if (_shell_state.resetCurrentUser(previousUserUid))
         {
             syncShellViewModelState();
-            emit currentUserChanged();
         }
     };
     port.resetMediaRuntimeForLogout = [this]()

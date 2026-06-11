@@ -27,6 +27,7 @@ void AgentController::sendStreamMessage(const QString& content)
         return;
     }
 
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     QString sessionId = _current_session_id;
 
@@ -37,6 +38,7 @@ void AgentController::sendStreamMessage(const QString& content)
     _model->appendAIMessage(msgId, _current_model_name);
     _streaming = true;
     _currentStreamMsgId = msgId;
+    _currentStreamUid = uid;
     _accumulatedContent.clear();
     _streamFinalReceived = false;
     emit streamingChanged();
@@ -85,6 +87,7 @@ void AgentController::cancelStream()
 
     _streaming = false;
     _currentStreamMsgId.clear();
+    _currentStreamUid = 0;
     _accumulatedContent.clear();
     _streamFinalReceived = false;
     clearErrorState();
@@ -93,6 +96,12 @@ void AgentController::cancelStream()
 
 void AgentController::handleStreamChunk(const QJsonObject& chunk)
 {
+    if (_currentStreamUid != 0 && _currentStreamUid != currentUid())
+    {
+        ensureUserScope();
+        return;
+    }
+
     const QString chunkText = chunk["chunk"].toString();
     const bool isFinal = chunk["is_final"].toBool();
 
@@ -119,6 +128,12 @@ void AgentController::handleStreamChunk(const QJsonObject& chunk)
 
 void AgentController::handleStreamFinished(int networkError, const QString& errorString)
 {
+    if (_currentStreamUid != 0 && _currentStreamUid != currentUid())
+    {
+        ensureUserScope();
+        return;
+    }
+
     const auto err = static_cast<QNetworkReply::NetworkError>(networkError);
     const bool hasUsefulContent = _streamFinalReceived || !_accumulatedContent.isEmpty();
 
@@ -142,6 +157,7 @@ void AgentController::handleStreamFinished(int networkError, const QString& erro
 
     _streaming = false;
     _currentStreamMsgId.clear();
+    _currentStreamUid = 0;
     _accumulatedContent.clear();
     _streamFinalReceived = false;
     emit streamingChanged();

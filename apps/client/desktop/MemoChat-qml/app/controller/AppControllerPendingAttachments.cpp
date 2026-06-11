@@ -46,5 +46,5 @@ void AppController::setCurrentPendingAttachments(const QVariantList& attachments
     {
         return;
     }
-    emit currentPendingAttachmentsChanged();
+    syncChatViewModelState();
 }

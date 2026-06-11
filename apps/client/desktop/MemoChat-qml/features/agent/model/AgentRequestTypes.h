@@ -33,6 +33,7 @@ struct AgentRequestRecord
 {
     AgentRequestKind kind = AgentRequestKind::ChatMessage;
     QString messageId;
+    int uid = 0;
 };
 
 inline bool isKnowledgeRequest(AgentRequestKind kind)

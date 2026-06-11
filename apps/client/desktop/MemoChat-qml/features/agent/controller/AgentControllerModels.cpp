@@ -62,10 +62,11 @@ void AgentController::switchAgentSkillMode(const QString& mode)
 
 void AgentController::refreshModelList()
 {
+    ensureUserScope();
     clearErrorState();
     setModelRefreshBusy(true);
     ReqId reqId = ID_AI_MODEL_LIST;
-    _pending_requests.track(reqId, AgentRequestKind::ModelList);
+    _pending_requests.track(reqId, AgentRequestKind::ModelList, QString(), scopedUid());
 
     HttpMgr::GetInstance()->GetHttpReq(QUrl(gate_url_prefix + "/ai/model/list"),
                                        reqId,
@@ -75,6 +76,7 @@ void AgentController::refreshModelList()
 
 void AgentController::registerApiProvider(const QString& providerName, const QString& baseUrl, const QString& apiKey)
 {
+    ensureUserScope();
     const QString trimmedUrl = baseUrl.trimmed();
     const QString trimmedKey = apiKey.trimmed();
     if (trimmedUrl.isEmpty() || trimmedKey.isEmpty())
@@ -93,7 +95,7 @@ void AgentController::registerApiProvider(const QString& providerName, const QSt
     payload["adapter"] = QStringLiteral("openai_compatible");
 
     ReqId reqId = ID_AI_MODEL_API_REGISTER;
-    _pending_requests.track(reqId, AgentRequestKind::ApiProviderRegister);
+    _pending_requests.track(reqId, AgentRequestKind::ApiProviderRegister, QString(), scopedUid());
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/model/api/register"),
                                         payload,
                                         reqId,
@@ -103,6 +105,7 @@ void AgentController::registerApiProvider(const QString& providerName, const QSt
 
 void AgentController::deleteApiProvider(const QString& providerId)
 {
+    ensureUserScope();
     const QString trimmedProviderId = providerId.trimmed();
     if (trimmedProviderId.isEmpty() || !trimmedProviderId.startsWith(QStringLiteral("api-")))
     {
@@ -116,7 +119,7 @@ void AgentController::deleteApiProvider(const QString& providerId)
     payload["provider_id"] = trimmedProviderId;
 
     ReqId reqId = ID_AI_MODEL_API_DELETE;
-    _pending_requests.track(reqId, AgentRequestKind::ApiProviderDelete);
+    _pending_requests.track(reqId, AgentRequestKind::ApiProviderDelete, QString(), scopedUid());
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/model/api/delete"),
                                         payload,
                                         reqId,

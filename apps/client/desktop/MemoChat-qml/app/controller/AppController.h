@@ -112,36 +112,6 @@ public:
     CallController* callController();
 
 signals:
-    void pageChanged();
-    void tipChanged();
-    void busyChanged();
-    void chatTabChanged();
-    void contactPaneChanged();
-    void currentContactChanged();
-    void currentUserChanged();
-    void currentChatPeerChanged();
-    void currentDialogUidChanged();
-    void searchPendingChanged();
-    void searchStatusChanged();
-    void pendingApplyChanged();
-    void chatLoadingMoreChanged();
-    void canLoadMoreChatsChanged();
-    void privateHistoryLoadingChanged();
-    void canLoadMorePrivateHistoryChanged();
-    void contactLoadingMoreChanged();
-    void canLoadMoreContactsChanged();
-    void authStatusChanged();
-    void settingsStatusChanged();
-    void currentGroupChanged();
-    void groupStatusChanged();
-    void mediaUploadStateChanged();
-    void currentDraftTextChanged();
-    void currentPendingAttachmentsChanged();
-    void currentDialogPinnedChanged();
-    void currentDialogMutedChanged();
-    void pendingReplyChanged();
-    void lazyBootstrapStateChanged();
-    void groupCreated(qint64 groupId);
 
 private:
     Page page() const;
@@ -328,9 +298,7 @@ private:
     void bindAppChatTransportSignals();
     void bindAppChatDispatcherSignals();
     void bindAppCallSignals();
-    void bindAppFeatureFacadeSignals();
     void bindAppShellSignals();
-    void bindAppChatProjectionSignals();
     void bindAppTimerSignals();
     void bindChatFeatureController();
     void bindChatFeatureProjectionPort();

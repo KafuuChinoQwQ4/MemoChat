@@ -68,6 +68,27 @@ class AgentQmlPhysicalLayoutContractTests(unittest.TestCase):
     def test_agent_qrc_is_registered_by_feature_manifest(self):
         self.assertIn("features/agent/resources/agent.qrc", read(SOURCES))
 
+    def test_agent_conversation_empty_prompt_follows_visible_message_count(self):
+        pane = read(FEATURE_VIEW / "AgentConversationPane.qml")
+
+        self.assertIn(
+            "readonly property bool showEmptyPrompt: root.messageModel && messageListView.count === 0 && !root.loading && !root.streaming",
+            pane,
+        )
+        self.assertIn("visible: root.showEmptyPrompt", pane)
+        self.assertNotIn("rowCount() === 0", pane)
+
+    def test_agent_generation_status_is_tied_to_active_request_state(self):
+        pane = read(FEATURE_VIEW / "AgentConversationPane.qml")
+        delegate = read(FEATURE_VIEW / "AgentMessageDelegate.qml")
+
+        self.assertIn("isStreaming: (root.loading || root.streaming) && (model.isStreaming || false)", pane)
+        self.assertIn(
+            "readonly property bool showStreamingStatus: root.isStreaming && root.errorMessage.length === 0",
+            delegate,
+        )
+        self.assertIn("visible: root.showStreamingStatus", delegate)
+
 
 if __name__ == "__main__":
     unittest.main()

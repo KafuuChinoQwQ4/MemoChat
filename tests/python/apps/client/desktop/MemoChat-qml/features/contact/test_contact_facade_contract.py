@@ -147,8 +147,9 @@ class ContactFacadeContractTests(unittest.TestCase):
         self.assertNotIn("ContactController::deleteFriendRequested", controller)
         self.assertNotIn("ContactController::selectContactIndexRequested", controller)
         self.assertNotIn("ContactController::loadMoreContactsRequested", controller)
-        self.assertIn("_features.contactController.setBootstrapPort(ContactBootstrapPort{", port_binder)
-        self.assertIn("_features.contactController.setCommandPort(ContactCommandPort{", port_binder)
+        normalized_port_binder = normalized(port_binder)
+        self.assertIn("_features.contactController.setBootstrapPort( ContactBootstrapPort{", normalized_port_binder)
+        self.assertIn("_features.contactController.setCommandPort(ContactCommandPort{", normalized_port_binder)
         self.assertNotIn("_features.contactController.setBootstrapPort(ContactBootstrapPort{", controller)
         self.assertNotIn("_features.contactController.setCommandPort(ContactCommandPort{", controller)
         self.assertIn("void AppController::syncContactControllerState()", controller)
@@ -226,7 +227,10 @@ class ContactFacadeContractTests(unittest.TestCase):
         self.assertIn("_apply_bootstrap_port.applySnapshot", contact_refresh_body)
         self.assertIn("setApplies(applies);", contact_refresh_body)
         self.assertIn("setApplyReady(true);", contact_refresh_body)
-        self.assertIn("_features.contactController.setApplyBootstrapPort(ContactApplyBootstrapPort{", port_binder)
+        self.assertIn(
+            "_features.contactController.setApplyBootstrapPort( ContactApplyBootstrapPort{",
+            normalized(port_binder),
+        )
         self.assertIn("GetApplyListSnapshot();", port_binder)
         self.assertNotIn("_features.contactController.setApplyBootstrapPort(ContactApplyBootstrapPort{", app_controller)
         self.assertNotIn("std::function<void()> bootstrapApplies;", contact_header)
@@ -406,9 +410,10 @@ class ContactFacadeContractTests(unittest.TestCase):
             "                                           std::move(applyInfo),\n"
             "                                           _make_contact_event_dependencies());",
         )
+        normalized_router = normalized(chat_dispatcher_router)
         for token in expected_factory_calls:
             with self.subTest(factory_call=token.split("(", 1)[0]):
-                self.assertIn(token, chat_dispatcher_router)
+                self.assertIn(normalized(token), normalized_router)
 
         forbidden_event_logic = (
             'setSearchStatus("未找到该用户", true)',

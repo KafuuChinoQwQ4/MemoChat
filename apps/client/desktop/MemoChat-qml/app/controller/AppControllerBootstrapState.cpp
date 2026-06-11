@@ -7,7 +7,7 @@ void AppController::setDialogsReady(bool ready)
         return;
     }
     _shell_state.bootstrapState().dialogsReady = ready;
-    emit lazyBootstrapStateChanged();
+    syncChatViewModelState();
 }
 
 void AppController::setContactsReady(bool ready)
@@ -23,7 +23,7 @@ void AppController::setGroupsReady(bool ready)
     }
     _shell_state.bootstrapState().groupsReady = ready;
     syncGroupControllerState();
-    emit lazyBootstrapStateChanged();
+    syncChatViewModelState();
 }
 
 void AppController::setApplyReady(bool ready)

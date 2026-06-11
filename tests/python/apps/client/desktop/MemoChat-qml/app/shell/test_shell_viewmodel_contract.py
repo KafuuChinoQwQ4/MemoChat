@@ -290,8 +290,9 @@ class ShellViewModelContractTests(unittest.TestCase):
         )
         self.assertLess(
             app_reset_ports.index("_shell_state.resetCurrentUser(previousUserUid)"),
-            app_reset_ports.index("syncShellViewModelState(); emit currentUserChanged();"),
+            app_reset_ports.index("syncShellViewModelState();"),
         )
+        self.assertNotIn("emit currentUserChanged();", app_reset_ports)
 
     def test_qml_uses_shell_context_for_shell_and_user_surface(self):
         forbidden_pattern = re.compile(
