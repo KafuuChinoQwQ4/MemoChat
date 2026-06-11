@@ -8,6 +8,10 @@ ICON_PATH_UTILS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/shared/utils/Ico
 SESSION_AUTH_LOGIN_RESPONSE = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/session/SessionAuthCoordinatorLoginResponse.cpp"
 )
+APP_CONTROLLER_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/controller/AppController.cpp"
+APP_SESSION_AUTH_PORT_BINDER = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/composition/AppSessionAuthPortBinder.cpp"
+)
 MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/Main.qml"
 LOGIN_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/view/LoginPage.qml"
 LINUX_LOGIN_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/LoginPage.qml"
@@ -52,18 +56,24 @@ class LoginAvatarWindowTests(unittest.TestCase):
 
     def test_http_login_seeds_user_profile_icon_before_chat_login(self):
         source = SESSION_AUTH_LOGIN_RESPONSE.read_text(encoding="utf-8")
+        app_controller = APP_CONTROLLER_CPP.read_text(encoding="utf-8")
+        port_binder = APP_SESSION_AUTH_PORT_BINDER.read_text(encoding="utf-8")
         body = extract_cpp_function(source, "void SessionAuthCoordinator::onLoginHttpFinished")
 
+        self.assertIn("_port.applyLoginSuccess(server_info, obj);", body)
+        self.assertNotIn("_app.", body)
         self.assertIn(
-            '_app.applyCurrentUserProfile(obj.value(QStringLiteral("user_profile")).toObject(), false);', body
+            'applyCurrentUserProfile(obj.value(QStringLiteral("user_profile")).toObject(), false);', port_binder
+        )
+        self.assertNotIn(
+            'applyCurrentUserProfile(obj.value(QStringLiteral("user_profile")).toObject(), false);', app_controller
         )
         self.assertLess(
-            body.index('_app.applyCurrentUserProfile(obj.value(QStringLiteral("user_profile")).toObject(), false);'),
-            body.index("_gateway.chatTransport()->connectToServer(server_info);"),
+            port_binder.index('applyCurrentUserProfile(obj.value(QStringLiteral("user_profile")).toObject(), false);'),
+            port_binder.index("_gateway.chatTransport()->connectToServer(serverInfo);"),
         )
-        self.assertIn(
-            "setIconDownloadAuthContext(_app._pending_login_state.uid, _app._pending_login_state.token);", body
-        )
+        self.assertIn("const AppPendingLoginState& pending = _session_coordinator->pendingLoginState();", port_binder)
+        self.assertIn("setIconDownloadAuthContext(pending.uid, pending.token);", port_binder)
 
     def test_login_and_chat_use_mutually_exclusive_windows_and_center_on_show(self):
         source = MAIN_QML.read_text(encoding="utf-8")

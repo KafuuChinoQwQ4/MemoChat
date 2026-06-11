@@ -1,6 +1,6 @@
 #include "MainQmlBootstrap.h"
 
-#include "AppController.h"
+#include "AppComposition.h"
 #include "MainWindowEffects.h"
 #include "MainWindowHooks.h"
 
@@ -21,7 +21,7 @@ QUrl memoChatMainQmlUrl()
 #endif
 }
 
-bool loadMemoChatMainWindow(QQmlApplicationEngine& engine, QApplication& app, AppController&)
+bool loadMemoChatMainWindow(QQmlApplicationEngine& engine, QApplication& app, AppComposition&)
 {
     const QUrl mainUrl = memoChatMainQmlUrl();
     QObject::connect(

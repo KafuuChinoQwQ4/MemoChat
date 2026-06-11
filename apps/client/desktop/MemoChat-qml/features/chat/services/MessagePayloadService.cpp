@@ -5,6 +5,9 @@
 
 namespace
 {
+constexpr int kProtocolSuccess = 0;
+constexpr int kProtocolJsonError = 1;
+
 qint64
 pickLongLong(const QJsonObject& primary, const QJsonObject& secondary, const char* key, bool useNowWhenEmpty = false)
 {
@@ -14,6 +17,16 @@ pickLongLong(const QJsonObject& primary, const QJsonObject& secondary, const cha
         value = secondary.value(key).toVariant().toLongLong();
     }
     return MessagePayloadService::normalizeEpochMs(value, useNowWhenEmpty);
+}
+
+qint64 pickRawLongLong(const QJsonObject& primary, const QJsonObject& secondary, const char* key)
+{
+    qint64 value = primary.value(key).toVariant().toLongLong();
+    if (value <= 0)
+    {
+        value = secondary.value(key).toVariant().toLongLong();
+    }
+    return qMax<qint64>(0, value);
 }
 } // namespace
 
@@ -61,6 +74,33 @@ QString MessagePayloadService::resolveMessageState(const QString& content,
         return QStringLiteral("edited");
     }
     return QStringLiteral("sent");
+}
+
+QString MessagePayloadService::resolveMessageStatusState(const QJsonObject& payload)
+{
+    const int error = payload.value(QStringLiteral("error")).toInt(kProtocolJsonError);
+    const QString status = payload.value(QStringLiteral("status")).toString();
+    if (error != kProtocolSuccess)
+    {
+        return QStringLiteral("failed");
+    }
+    if (status == QStringLiteral("accepted"))
+    {
+        return QStringLiteral("accepted");
+    }
+    if (status == QStringLiteral("queued_retry"))
+    {
+        return QStringLiteral("queued_retry");
+    }
+    if (status == QStringLiteral("offline_pending"))
+    {
+        return QStringLiteral("offline_pending");
+    }
+    if (status == QStringLiteral("persisted") || status == QStringLiteral("delivered"))
+    {
+        return QStringLiteral("sent");
+    }
+    return status.isEmpty() ? QStringLiteral("sent") : status;
 }
 
 MessageUpdateFields MessagePayloadService::parseMessageUpdateFields(const QJsonObject& payload,
@@ -124,7 +164,7 @@ MessagePayloadService::buildPrivateForwardedMessage(const QJsonObject& payload, 
     }
     const QString content = msgObj.value(QStringLiteral("content")).toString();
     const qint64 createdAt = pickLongLong(payload, msgObj, "created_at", true);
-    const qint64 replyToServerMsgId = pickLongLong(payload, msgObj, "reply_to_server_msg_id");
+    const qint64 replyToServerMsgId = pickRawLongLong(payload, msgObj, "reply_to_server_msg_id");
     QString forwardMetaJson = extractForwardMetaJson(payload.value(QStringLiteral("forward_meta")));
     if (forwardMetaJson.isEmpty())
     {
@@ -161,9 +201,9 @@ std::shared_ptr<TextChatData> MessagePayloadService::buildGroupAckMessage(const 
     }
     const QString content = msgObj.value(QStringLiteral("content")).toString();
     const qint64 createdAt = pickLongLong(payload, msgObj, "created_at", true);
-    const qint64 serverMsgId = pickLongLong(payload, msgObj, "server_msg_id");
-    const qint64 groupSeq = pickLongLong(payload, msgObj, "group_seq");
-    const qint64 replyToServerMsgId = pickLongLong(payload, msgObj, "reply_to_server_msg_id");
+    const qint64 serverMsgId = pickRawLongLong(payload, msgObj, "server_msg_id");
+    const qint64 groupSeq = pickRawLongLong(payload, msgObj, "group_seq");
+    const qint64 replyToServerMsgId = pickRawLongLong(payload, msgObj, "reply_to_server_msg_id");
     QString forwardMetaJson = extractForwardMetaJson(payload.value(QStringLiteral("forward_meta")));
     if (forwardMetaJson.isEmpty())
     {

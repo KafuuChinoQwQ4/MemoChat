@@ -35,36 +35,49 @@ def extract_function(source: str, signature: str) -> str:
 class UserAvatarProfileContractTests(unittest.TestCase):
     def test_http_login_profile_icon_seeds_current_user_before_pet_window_sync(self):
         auth_session = read(CLIENT_QML / "app/session/SessionAuthCoordinatorLoginResponse.cpp")
+        app_controller = read(CLIENT_QML / "app/controller/AppController.cpp")
+        port_binder = read(CLIENT_QML / "app/composition/AppSessionAuthPortBinder.cpp")
         chat_entry = read(CLIENT_QML / "app/session/SessionChatEntryCoordinator.cpp")
         state = read(CLIENT_QML / "app/controller/AppControllerProfileState.cpp")
+        profile_controller = read(CLIENT_QML / "features/profile/controller/ProfileController.cpp")
 
         login = extract_function(auth_session, "void SessionAuthCoordinator::onLoginHttpFinished")
+        self.assertIn("_port.applyLoginSuccess(server_info, obj);", login)
+        self.assertNotIn("_app.", login)
+
+        self.assertIn("const AppPendingLoginState& pending = _session_coordinator->pendingLoginState();", port_binder)
+        self.assertIn("setIconDownloadAuthContext(pending.uid, pending.token);", port_binder)
         self.assertIn(
-            "setIconDownloadAuthContext(_app._pending_login_state.uid, _app._pending_login_state.token);", login
+            'applyCurrentUserProfile(obj.value(QStringLiteral("user_profile")).toObject(), false);', port_binder
         )
-        self.assertIn(
-            '_app.applyCurrentUserProfile(obj.value(QStringLiteral("user_profile")).toObject(), false);',
-            login,
+        self.assertNotIn(
+            'applyCurrentUserProfile(obj.value(QStringLiteral("user_profile")).toObject(), false);', app_controller
         )
         self.assertLess(
-            login.index('_app.applyCurrentUserProfile(obj.value(QStringLiteral("user_profile")).toObject(), false);'),
-            login.index("_app._gateway.chatTransport()->connectToServer(server_info);"),
+            port_binder.index('applyCurrentUserProfile(obj.value(QStringLiteral("user_profile")).toObject(), false);'),
+            port_binder.index("_gateway.chatTransport()->connectToServer(serverInfo);"),
         )
 
         switch = extract_function(chat_entry, "void SessionChatEntryCoordinator::onSwitchToChat")
-        self.assertIn("applyCurrentUserProfile(user_info->_uid", switch)
-        self.assertIn("user_info->_icon", switch)
-        self.assertIn("true);", switch)
+        self.assertIn("_port.applyLoggedInUserSession(userInfo, snapshot.pendingToken);", switch)
         self.assertNotIn("_user_state.icon = icon;", switch)
 
         profile_helper = extract_function(
             state,
             "void AppController::applyCurrentUserProfile(int uid,",
         )
-        self.assertIn("preserveExistingIcon && nextIcon == kDefaultIcon", profile_helper)
-        self.assertIn("_user_state.icon != kDefaultIcon", profile_helper)
-        self.assertIn("userInfo->_icon = nextIcon;", profile_helper)
-        self.assertIn("emit currentUserChanged();", profile_helper)
+        self.assertIn("_features.profileController.applyCurrentUserProfile", profile_helper)
+        self.assertNotIn("userInfo->_icon", profile_helper)
+        self.assertNotIn("_user_state.icon = ", profile_helper)
+
+        profile_apply = extract_function(
+            profile_controller,
+            "void ProfileController::applyCurrentUserProfile(int uid,",
+        )
+        self.assertIn("preserveExistingIcon && nextIcon == kDefaultIcon", profile_apply)
+        self.assertIn("snapshot.icon != kDefaultIcon", profile_apply)
+        self.assertIn("userInfo->_icon = nextIcon;", profile_apply)
+        self.assertIn("_state_port.syncCurrentUser", profile_apply)
 
     def test_chat_login_response_does_not_replace_seeded_icon_with_empty_value(self):
         dispatcher = read(CORE_CLIENT / "network/ChatMessageDispatcherAuth.cpp")
@@ -84,14 +97,14 @@ class UserAvatarProfileContractTests(unittest.TestCase):
         switch = extract_function(session, "void SessionChatEntryCoordinator::onSwitchToChat")
         self.assertIn("beginPostLoginBootstrap();", switch)
         self.assertLess(
-            switch.index("applyCurrentUserProfile(user_info->_uid"),
+            switch.index("_port.applyLoggedInUserSession(userInfo, snapshot.pendingToken);"),
             switch.index("beginPostLoginBootstrap();"),
         )
 
         bootstrap = extract_function(session, "void SessionChatEntryCoordinator::beginPostLoginBootstrap")
-        self.assertIn("!_app.isChatTransportReady()", bootstrap)
+        self.assertIn("!snapshot.chatTransportReady", bootstrap)
         self.assertLess(
-            bootstrap.index("!_app.isChatTransportReady()"),
+            bootstrap.index("!snapshot.chatTransportReady"),
             bootstrap.index("runPostLoginBootstrap();"),
         )
 

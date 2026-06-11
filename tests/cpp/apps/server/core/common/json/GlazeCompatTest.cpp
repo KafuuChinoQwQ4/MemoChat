@@ -28,3 +28,20 @@ TEST(GlazeCompatTest, AppendToObjectMemberProxyMutatesParentArray)
     ASSERT_EQ(messages.size(), 1);
     EXPECT_EQ(messages[0]["content"].asString(), "hello");
 }
+
+TEST(GlazeCompatTest, JsonNamespaceArrayAndObjectValuesMatchJsonCppShape)
+{
+    Json::Value array(Json::arrayValue);
+    Json::Value object(Json::objectValue);
+
+    ASSERT_TRUE(array.isArray());
+    ASSERT_TRUE(object.isObject());
+
+    object["items"] = array;
+    object["items"].append("one");
+
+    const auto items = object["items"].get<Json::Value>();
+    ASSERT_TRUE(items.isArray());
+    EXPECT_EQ(items.size(), 1);
+    EXPECT_EQ(items[0].asString(), "one");
+}

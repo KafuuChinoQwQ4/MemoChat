@@ -98,9 +98,11 @@ target_include_directories(MemoChatQml PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/app
     ${CMAKE_CURRENT_SOURCE_DIR}/app/bootstrap
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/composition
     ${CMAKE_CURRENT_SOURCE_DIR}/app/shell
     ${CMAKE_CURRENT_SOURCE_DIR}/app/window
     ${CMAKE_CURRENT_SOURCE_DIR}/app/connection
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/events
     ${CMAKE_CURRENT_SOURCE_DIR}/app/session
     ${CMAKE_CURRENT_SOURCE_DIR}/app/coordinators
     ${CMAKE_CURRENT_SOURCE_DIR}/app/controller

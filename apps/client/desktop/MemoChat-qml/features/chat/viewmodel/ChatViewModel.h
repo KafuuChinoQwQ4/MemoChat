@@ -1,14 +1,13 @@
 #ifndef CHATVIEWMODEL_H
 #define CHATVIEWMODEL_H
 
+#include "ChatMessageModel.h"
 #include "ChatUiState.h"
+#include "FriendListModel.h"
 
 #include <QObject>
 #include <QString>
 #include <QVariantList>
-
-class ChatMessageModel;
-class FriendListModel;
 
 class ChatViewModel : public QObject
 {

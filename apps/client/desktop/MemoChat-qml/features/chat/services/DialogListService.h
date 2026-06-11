@@ -31,6 +31,11 @@ public:
     static void appendExistingDialogs(std::vector<std::shared_ptr<FriendInfo>>& dialogs,
                                       const std::vector<QVariantMap>& existingDialogs,
                                       const DialogDecorationState& state);
+    static std::vector<std::shared_ptr<FriendInfo>>
+    buildSortedSnapshotDialogs(const std::vector<std::shared_ptr<FriendInfo>>& friends,
+                               const std::vector<std::shared_ptr<GroupInfoData>>& groups,
+                               QMap<int, qint64>& groupUidMap,
+                               const DialogDecorationState& state);
     static void sortDialogs(std::vector<std::shared_ptr<FriendInfo>>& dialogs);
 };
 

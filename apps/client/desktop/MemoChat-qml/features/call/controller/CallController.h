@@ -3,12 +3,24 @@
 
 #include <QObject>
 #include <QString>
+#include <functional>
 #include "global.h"
 
 class CallSessionModel;
 class ClientGateway;
 class LivekitBridge;
 class QJsonObject;
+
+struct CallCommandPort
+{
+    std::function<void()> startVoiceChat;
+    std::function<void()> startVideoChat;
+    std::function<void()> acceptIncomingCall;
+    std::function<void()> rejectIncomingCall;
+    std::function<void()> endCurrentCall;
+    std::function<void()> toggleCallMuted;
+    std::function<void()> toggleCallCamera;
+};
 
 class CallController : public QObject
 {
@@ -21,6 +33,16 @@ public:
 
     CallSessionModel* callSession() const;
     LivekitBridge* livekitBridge() const;
+    QString callId() const;
+    QString callType() const;
+    QString peerName() const;
+    QString peerIcon() const;
+    QString stateText() const;
+    bool callVisible() const;
+    bool callIncoming() const;
+    bool callActive() const;
+    bool muted() const;
+    bool cameraEnabled() const;
 
     Q_INVOKABLE void startVoiceChat();
     Q_INVOKABLE void startVideoChat();
@@ -37,17 +59,39 @@ public:
     void hangupCall(int uid, const QString& token, const QString& callId) const;
     void fetchToken(int uid, const QString& token, const QString& callId, const QString& role) const;
 
+    void resetCallSurface();
+    void startOutgoing(const QString& callId,
+                       const QString& callType,
+                       const QString& peerName,
+                       const QString& peerIcon,
+                       const QString& stateText,
+                       qint64 startedAtMs,
+                       qint64 expiresAtMs);
+    void startIncoming(const QString& callId,
+                       const QString& callType,
+                       const QString& peerName,
+                       const QString& peerIcon,
+                       const QString& stateText,
+                       qint64 startedAtMs,
+                       qint64 expiresAtMs);
+    void
+    markAccepted(const QString& stateText, const QString& roomName, const QString& livekitUrl, qint64 acceptedAtMs);
+    void markEnded(const QString& stateText);
+    void setMediaStatusText(const QString& mediaStatusText);
+    void markTokenReady(const QString& mediaStatusText);
+    void setMediaLaunchJson(const QString& mediaLaunchJson);
+    void setMuted(bool muted);
+    void setCameraEnabled(bool enabled);
+    void leaveRoom();
+    void toggleMic();
+    void toggleCamera();
+    void requestJoinRoom(const QString& wsUrl, const QString& token, const QString& metadataJson);
+
     void syncSurface(CallSessionModel* callSession, LivekitBridge* livekitBridge);
+    void setCommandPort(CallCommandPort port);
 
 signals:
     void callSurfaceChanged();
-    void startVoiceChatRequested();
-    void startVideoChatRequested();
-    void acceptIncomingCallRequested();
-    void rejectIncomingCallRequested();
-    void endCurrentCallRequested();
-    void toggleCallMutedRequested();
-    void toggleCallCameraRequested();
 
 private:
     void post(const QString& path, const QJsonObject& payload, ReqId reqId) const;
@@ -55,6 +99,7 @@ private:
     ClientGateway* _gateway = nullptr;
     CallSessionModel* _call_session = nullptr;
     LivekitBridge* _livekit_bridge = nullptr;
+    CallCommandPort _command_port;
 };
 
 #endif // CALLCONTROLLER_H

@@ -1,62 +1,92 @@
 #include "AppController.h"
-#include "AppControllerGroupPayloads.h"
+#include "ChatEventDependenciesFactory.h"
+#include "GroupManagementEffectPortFactory.h"
+#include "IChatTransport.h"
+#include "PrivateChatEventService.h"
+#include "GroupResponseErrorService.h"
 #include "usermgr.h"
 
 #include <QJsonObject>
+
+namespace
+{
+QString responseActionText(int reqId)
+{
+    const QString privateAction = PrivateChatEventService::privateMessageResponseActionText(static_cast<ReqId>(reqId));
+    if (!privateAction.isEmpty())
+    {
+        return privateAction;
+    }
+
+    const QString dialogMetaAction = ChatFeatureController::dialogMetaActionText(reqId);
+    if (!dialogMetaAction.isEmpty())
+    {
+        return dialogMetaAction;
+    }
+
+    return {};
+}
+} // namespace
 
 bool AppController::handleGroupRspError(ReqId reqId, int error, const QJsonObject& payload)
 {
     if (reqId == ID_GROUP_HISTORY_RSP)
     {
         const qint64 groupId = payload.value("groupid").toVariant().toLongLong();
-        if (groupId <= 0 || groupId == _group_state.currentId)
+        if (groupId <= 0 || groupId == currentGroupId())
         {
-            _loading_state.groupHistoryLoading = false;
+            _shell_state.loadingState().groupHistoryLoading = false;
             setPrivateHistoryLoading(false);
         }
     }
     if (reqId == ID_GROUP_CHAT_MSG_RSP)
     {
-        QString clientMsgId = payload.value("client_msg_id").toString();
-        if (clientMsgId.isEmpty())
+        GroupAckRequest request;
+        request.context = groupConversationContext(_gateway.userMgr()->GetUid());
+        request.reqId = reqId;
+        request.errorCode = error;
+        request.payload = payload;
+        const GroupAckResult result = _features.chatFeatureController.handleGroupMessageError(
+            request,
+            memochat::app::makeGroupConversationDependencies(
+                _features.chatFeatureController,
+                _gateway.userMgr(),
+                _features.groupController.groupListModel(),
+                [this](int dispatchReqId, const QByteArray& dispatchPayload)
+                {
+                    if (const auto transport = _gateway.chatTransport())
+                    {
+                        transport->slot_send_data(static_cast<ReqId>(dispatchReqId), dispatchPayload);
+                    }
+                }));
+        if (!result.statusText.isEmpty())
         {
-            clientMsgId = payload.value("msg").toObject().value("msgid").toString();
+            setGroupStatus(result.statusText, result.statusIsError);
         }
-        qint64 groupId = payload.value("groupid").toVariant().toLongLong();
-        if (groupId <= 0 && !clientMsgId.isEmpty())
-        {
-            groupId = _group_state.pendingMsgGroupMap.value(clientMsgId, 0);
-        }
-
-        if (groupId > 0 && !clientMsgId.isEmpty())
-        {
-            if (_gateway.userMgr()->UpdateGroupChatMsgState(groupId, clientMsgId, "failed") &&
-                groupId == _group_state.currentId)
-            {
-                _message_model.updateMessageState(clientMsgId, "failed");
-            }
-            _group_state.pendingMsgGroupMap.remove(clientMsgId);
-        }
+        return true;
     }
     if (reqId == ID_SYNC_DRAFT_RSP)
     {
         return true;
     }
-    if (reqId == ID_EDIT_PRIVATE_MSG_RSP || reqId == ID_REVOKE_PRIVATE_MSG_RSP || reqId == ID_FORWARD_PRIVATE_MSG_RSP)
+
+    const memochat::group::GroupResponseErrorDecision decision =
+        memochat::group::GroupResponseErrorService::reduce(reqId, error, payload, responseActionText);
+    switch (decision.target)
     {
-        setTip(QString("%1失败（错误码:%2）").arg(memochat::app_group_payloads::groupActionText(reqId)).arg(error),
-               true);
-    }
-    else
-    {
-        const QString serverMessage = payload.value("message").toString().trimmed();
-        setGroupStatus(
-            serverMessage.isEmpty()
-                ? QString("%1失败（错误码:%2）").arg(memochat::app_group_payloads::groupActionText(reqId)).arg(error)
-                : QString("%1失败：%2（错误码:%3）")
-                      .arg(memochat::app_group_payloads::groupActionText(reqId), serverMessage)
-                      .arg(error),
-            true);
+        case memochat::group::GroupResponseErrorTarget::Tip:
+            setTip(decision.statusText, decision.statusIsError);
+            break;
+        case memochat::group::GroupResponseErrorTarget::ManagementEffect:
+            _features.groupController.applyGroupManagementResponseEffect(
+                decision.managementEffect,
+                memochat::app::makeGroupManagementResponseEffectPort(groupManagementResponseEffectActions()));
+            break;
+        case memochat::group::GroupResponseErrorTarget::GroupStatus:
+            setGroupStatus(decision.statusText, decision.statusIsError);
+            break;
+        case memochat::group::GroupResponseErrorTarget::Ignore:
+            break;
     }
     return true;
 }

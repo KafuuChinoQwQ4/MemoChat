@@ -220,6 +220,20 @@ void DialogListService::appendExistingDialogs(std::vector<std::shared_ptr<Friend
     }
 }
 
+std::vector<std::shared_ptr<FriendInfo>>
+DialogListService::buildSortedSnapshotDialogs(const std::vector<std::shared_ptr<FriendInfo>>& friends,
+                                              const std::vector<std::shared_ptr<GroupInfoData>>& groups,
+                                              QMap<int, qint64>& groupUidMap,
+                                              const DialogDecorationState& state)
+{
+    std::vector<std::shared_ptr<FriendInfo>> dialogs;
+    dialogs.reserve(friends.size() + groups.size());
+    appendMissingPrivateDialogs(dialogs, friends, {}, state);
+    appendMissingGroupDialogs(dialogs, groups, groupUidMap, {}, state);
+    sortDialogs(dialogs);
+    return dialogs;
+}
+
 void DialogListService::sortDialogs(std::vector<std::shared_ptr<FriendInfo>>& dialogs)
 {
     std::stable_sort(dialogs.begin(),

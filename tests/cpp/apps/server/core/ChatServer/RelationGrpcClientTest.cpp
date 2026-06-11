@@ -130,6 +130,42 @@ void ExpectNoRemoteErrorPayload(const std::string& payload_json)
     EXPECT_FALSE(payload.isMember("relation_remote_status_code"));
     EXPECT_FALSE(payload.isMember("relation_remote_error_code"));
 }
+
+int EnvIntOrDefault(const char* name, int fallback)
+{
+    const std::string value = EnvValue(name);
+    if (value.empty())
+    {
+        return fallback;
+    }
+    return std::stoi(value);
+}
+
+bool HasPrivateDialog(const memochat::json::JsonValue& dialogs, int peer_uid)
+{
+    for (const auto& dialog : dialogs)
+    {
+        if (dialog.isObject() && dialog["dialog_type"].asString() == "private" &&
+            dialog["peer_uid"].asInt() == peer_uid)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool HasGroupDialog(const memochat::json::JsonValue& dialogs, int64_t group_id)
+{
+    for (const auto& dialog : dialogs)
+    {
+        if (dialog.isObject() && dialog["dialog_type"].asString() == "group" &&
+            dialog["group_id"].asInt64() == group_id)
+        {
+            return true;
+        }
+    }
+    return false;
+}
 } // namespace
 
 TEST(RelationGrpcClientTest, SearchUserRoundTripsCommandPayload)
@@ -208,4 +244,44 @@ TEST(RelationGrpcClientTest, RuntimeSmokeSearchUserUsesRealRelationServiceWorker
     ASSERT_TRUE(memochat::json::reader_parse(result.payload_json, payload)) << result.payload_json;
     ASSERT_TRUE(payload.isMember("error")) << result.payload_json;
     EXPECT_EQ(payload["error"].asInt(), ErrorCodes::Error_Json);
+}
+
+TEST(RelationGrpcClientTest, RuntimeSmokeGetDialogListUsesRealRelationServiceWorker)
+{
+    const std::string endpoint = EnvValue("MEMOCHAT_RELATION_SERVICE_SMOKE_ENDPOINT");
+    if (endpoint.empty())
+    {
+        GTEST_SKIP() << "MEMOCHAT_RELATION_SERVICE_SMOKE_ENDPOINT is not set";
+    }
+
+    const int uid = EnvIntOrDefault("MEMOCHAT_RELATION_SERVICE_SMOKE_UID", 910001);
+    const int peer_uid = EnvIntOrDefault("MEMOCHAT_RELATION_SERVICE_SMOKE_PEER_UID", 910002);
+    const int64_t group_id = EnvIntOrDefault("MEMOCHAT_RELATION_SERVICE_SMOKE_GROUP_ID", 0);
+
+    RelationGrpcClient client(endpoint, std::chrono::seconds(2));
+    RelationCommandRequest request;
+    request.request_msg_id = ID_GET_DIALOG_LIST_REQ;
+    request.payload_json = std::string(R"({"fromuid":)") + std::to_string(uid) + "}";
+    request.session_uid = uid;
+    request.session_id = "relation-service-smoke-dialogs";
+    request.server_name = "ChatServer-smoke";
+    request.trace_id = "relation-service-smoke-dialogs";
+
+    const auto result = client.GetDialogList(request);
+
+    EXPECT_EQ(result.response_msg_id, ID_GET_DIALOG_LIST_RSP);
+    ExpectNoRemoteErrorPayload(result.payload_json);
+
+    memochat::json::JsonValue payload(memochat::json::object_t{});
+    ASSERT_TRUE(memochat::json::reader_parse(result.payload_json, payload)) << result.payload_json;
+    ASSERT_TRUE(payload.isMember("error")) << result.payload_json;
+    EXPECT_EQ(payload["error"].asInt(), ErrorCodes::Success) << result.payload_json;
+    EXPECT_EQ(payload["uid"].asInt(), uid) << result.payload_json;
+    ASSERT_TRUE(payload.isMember("dialogs")) << result.payload_json;
+    ASSERT_TRUE(payload["dialogs"].isArray()) << result.payload_json;
+    EXPECT_TRUE(HasPrivateDialog(payload["dialogs"], peer_uid)) << result.payload_json;
+    if (group_id > 0)
+    {
+        EXPECT_TRUE(HasGroupDialog(payload["dialogs"], group_id)) << result.payload_json;
+    }
 }

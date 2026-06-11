@@ -4,7 +4,7 @@ import MemoChat 1.0
 Loader {
     id: root
     active: root.viewMode === 0
-            && shell.chatTab === AppController.AgentTabPage
+            && shell.chatTab === ShellViewModel.AgentTabPage
             && root.agentGameActive
     visible: active
     z: 50

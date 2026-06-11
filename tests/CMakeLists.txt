@@ -17,6 +17,13 @@ add_subdirectory(cpp/apps/server/core/AIServer                             ${CMA
 add_subdirectory(cpp/apps/server/core/VarifyServer                         ${CMAKE_CURRENT_BINARY_DIR}/varifyserver)
 add_subdirectory(cpp/apps/server/core/ChatServer                           ${CMAKE_CURRENT_BINARY_DIR}/chatserver)
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/chat/cache   ${CMAKE_CURRENT_BINARY_DIR}/client_cache)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/chat/viewmodel ${CMAKE_CURRENT_BINARY_DIR}/client_chat_viewmodel)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/chat/controller ${CMAKE_CURRENT_BINARY_DIR}/client_chat_controller)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/contact/controller ${CMAKE_CURRENT_BINARY_DIR}/client_contact_controller)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/group/controller ${CMAKE_CURRENT_BINARY_DIR}/client_group_controller)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/call/controller ${CMAKE_CURRENT_BINARY_DIR}/client_call_controller)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/profile/controller ${CMAKE_CURRENT_BINARY_DIR}/client_profile_controller)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/auth/viewmodel ${CMAKE_CURRENT_BINARY_DIR}/client_auth_viewmodel)
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/live2d                ${CMAKE_CURRENT_BINARY_DIR}/client_live2d)
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/core/media            ${CMAKE_CURRENT_BINARY_DIR}/client_media)
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/chat/services ${CMAKE_CURRENT_BINARY_DIR}/client_dialog)
@@ -24,6 +31,7 @@ add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/features/moments/parsing $
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/core/network          ${CMAKE_CURRENT_BINARY_DIR}/client_network)
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/shared/gateway        ${CMAKE_CURRENT_BINARY_DIR}/client_gateway)
 add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/app/connection        ${CMAKE_CURRENT_BINARY_DIR}/client_connection)
+add_subdirectory(cpp/apps/client/desktop/MemoChat-qml/app/coordinators      ${CMAKE_CURRENT_BINARY_DIR}/client_app_coordinators)
 
 # Hook into CTest so "ctest" / "RUN_TESTS" discovers everything.
 # Discovery is handled in each subdirectory's CMakeLists.txt via

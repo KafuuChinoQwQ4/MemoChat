@@ -29,7 +29,7 @@ Item {
 
     Loader {
         anchors.fill: parent
-        active: root.viewMode === 0 && shell.chatTab === AppController.ChatTabPage
+        active: root.viewMode === 0 && shell.chatTab === ShellViewModel.ChatTabPage
         asynchronous: true
         sourceComponent: Component {
             ChatConversationPane {
@@ -94,7 +94,7 @@ Item {
 
     Loader {
         anchors.fill: parent
-        active: root.viewMode === 0 && shell.chatTab === AppController.ContactTabPage
+        active: root.viewMode === 0 && shell.chatTab === ShellViewModel.ContactTabPage
         asynchronous: true
         sourceComponent: Component {
             ContactPane {
@@ -122,7 +122,7 @@ Item {
 
     Loader {
         anchors.fill: parent
-        active: root.viewMode === 0 && shell.chatTab === AppController.SettingsTabPage
+        active: root.viewMode === 0 && shell.chatTab === ShellViewModel.SettingsTabPage
         asynchronous: true
         sourceComponent: Component {
             MorePane {
@@ -135,7 +135,7 @@ Item {
 
     Loader {
         anchors.fill: parent
-        active: root.viewMode === 0 && shell.chatTab === AppController.AgentTabPage
+        active: root.viewMode === 0 && shell.chatTab === ShellViewModel.AgentTabPage
         asynchronous: true
         sourceComponent: Component {
             AgentPane {
@@ -170,7 +170,7 @@ Item {
 
     Loader {
         anchors.fill: parent
-        active: root.viewMode === 0 && shell.chatTab === AppController.Live2DTabPage
+        active: root.viewMode === 0 && shell.chatTab === ShellViewModel.Live2DTabPage
         asynchronous: true
         sourceComponent: Component {
             Live2DCharacterPane {
@@ -185,7 +185,7 @@ Item {
 
     Loader {
         anchors.fill: parent
-        active: root.viewMode === 0 && shell.chatTab === AppController.MomentsTabPage
+        active: root.viewMode === 0 && shell.chatTab === ShellViewModel.MomentsTabPage
         asynchronous: true
         sourceComponent: Component {
             MomentsFeedPane {
@@ -203,7 +203,7 @@ Item {
     Loader {
         anchors.fill: parent
         active: root.viewMode === 0
-                && shell.chatTab === AppController.ChatTabPage
+                && shell.chatTab === ShellViewModel.ChatTabPage
                 && root.groupManagementPanelActive
                 && chat.hasCurrentGroup
         visible: active

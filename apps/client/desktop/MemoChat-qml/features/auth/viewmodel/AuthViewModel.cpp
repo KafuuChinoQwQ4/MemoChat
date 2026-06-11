@@ -1,13 +1,14 @@
 #include "AuthViewModel.h"
 
-#include "AuthService.h"
-
 #include <QtGlobal>
+#include <utility>
 
 AuthViewModel::AuthViewModel(AuthService* service, QObject* parent)
     : QObject(parent)
     , _service(service)
+    , _credentialStore()
 {
+    syncLoginCredentialCacheJson(_credentialStore.credentialCacheJson());
 }
 
 QString AuthViewModel::tipText() const
@@ -123,25 +124,41 @@ void AuthViewModel::syncLoginCredentialCacheJson(const QString& json)
     emit loginCredentialCacheChanged();
 }
 
+void AuthViewModel::setCommandPort(AuthCommandPort port)
+{
+    _command_port = std::move(port);
+}
+
 void AuthViewModel::clearTip()
 {
-    emit clearTipRequested();
+    if (_command_port.clearTip)
+    {
+        _command_port.clearTip();
+    }
 }
 
 void AuthViewModel::saveLoginCredential(const QString& email, const QString& password)
 {
-    emit saveLoginCredentialRequested(email, password);
+    _credentialStore.saveLoginCredential(email, password);
+    syncLoginCredentialCacheJson(_credentialStore.credentialCacheJson());
 }
 
 void AuthViewModel::login(const QString& email, const QString& password)
 {
     Q_UNUSED(_service)
-    emit loginRequested(email, password);
+    saveLoginCredential(email, password);
+    if (_command_port.login)
+    {
+        _command_port.login(email, password);
+    }
 }
 
 void AuthViewModel::requestRegisterCode(const QString& email)
 {
-    emit registerCodeRequested(email);
+    if (_command_port.requestRegisterCode)
+    {
+        _command_port.requestRegisterCode(email);
+    }
 }
 
 void AuthViewModel::registerUser(const QString& user,
@@ -150,12 +167,18 @@ void AuthViewModel::registerUser(const QString& user,
                                  const QString& confirm,
                                  const QString& verifyCode)
 {
-    emit registerUserRequested(user, email, password, confirm, verifyCode);
+    if (_command_port.registerUser)
+    {
+        _command_port.registerUser(user, email, password, confirm, verifyCode);
+    }
 }
 
 void AuthViewModel::requestResetCode(const QString& email)
 {
-    emit resetCodeRequested(email);
+    if (_command_port.requestResetCode)
+    {
+        _command_port.requestResetCode(email);
+    }
 }
 
 void AuthViewModel::resetPassword(const QString& user,
@@ -163,5 +186,8 @@ void AuthViewModel::resetPassword(const QString& user,
                                   const QString& password,
                                   const QString& verifyCode)
 {
-    emit resetPasswordRequested(user, email, password, verifyCode);
+    if (_command_port.resetPassword)
+    {
+        _command_port.resetPassword(user, email, password, verifyCode);
+    }
 }

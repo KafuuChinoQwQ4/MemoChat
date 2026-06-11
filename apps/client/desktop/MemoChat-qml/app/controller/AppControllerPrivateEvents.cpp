@@ -1,123 +1,88 @@
 #include "AppController.h"
 
-#include "ConversationSyncService.h"
-#include "DialogListService.h"
-#include "MessageContentCodec.h"
+#include "ChatEventDependenciesFactory.h"
+#include "PrivateChatEventService.h"
 #include "usermgr.h"
 
-#include <QDateTime>
 #include <QDebug>
+#include <utility>
 
-namespace
+void AppController::clearPrivateHistoryFeatureState()
 {
-std::shared_ptr<AuthInfo> buildDialogPlaceholder(const FriendListModel& dialogListModel, int uid)
-{
-    const int dialogIndex = dialogListModel.indexOfUid(uid);
-    const QVariantMap dialogItem = dialogIndex >= 0 ? dialogListModel.get(dialogIndex) : QVariantMap();
-    return DialogListService::buildPlaceholderAuthInfo(uid, dialogItem, QStringLiteral("qrc:/res/head_1.png"));
+    _features.chatFeatureController.clearPrivateHistoryState();
 }
-} // namespace
 
-void AppController::onTextChatMsg(std::shared_ptr<TextChatMsg> msg)
+void AppController::resetGroupConversationFeatureState()
 {
-    if (bufferIncomingPrivateMessage(msg))
+    _features.chatFeatureController.resetGroupHistoryState();
+}
+
+PrivateChatEventContext AppController::privateChatEventContext(int selfUid) const
+{
+    PrivateChatEventContext context;
+    context.selfUid = selfUid;
+    context.currentPeerUid = _chat_state.uid;
+    context.currentGroupId = currentGroupId();
+    return context;
+}
+
+GroupConversationContext AppController::groupConversationContext(int selfUid) const
+{
+    GroupConversationContext context;
+    context.selfUid = selfUid;
+    context.currentGroupId = currentGroupId();
+    context.currentPrivatePeerUid = _chat_state.uid;
+    auto selfInfo = _gateway.userMgr()->GetUserInfo();
+    if (selfInfo)
     {
-        return;
+        context.selfName = selfInfo->_nick.isEmpty() ? selfInfo->_name : selfInfo->_nick;
+        context.selfIcon = selfInfo->_icon;
     }
-    applyTextChatMsg(msg);
+    return context;
 }
 
 void AppController::applyTextChatMsg(std::shared_ptr<TextChatMsg> msg)
 {
-    if (!msg || msg->_chat_msgs.empty())
-    {
-        return;
-    }
-
     auto selfInfo = _gateway.userMgr()->GetUserInfo();
     if (!selfInfo)
     {
         return;
     }
 
-    const int selfUid = selfInfo->_uid;
-    const bool fromSelf = (msg->_from_uid == selfUid);
-    const int peerUid = (msg->_from_uid == selfUid) ? msg->_to_uid : msg->_from_uid;
+    const bool fromSelf = msg && msg->_from_uid == selfInfo->_uid;
+    const int peerUid = msg ? (fromSelf ? msg->_to_uid : msg->_from_uid) : 0;
     qInfo() << "Private chat message received, peer uid:" << peerUid << "from self:" << fromSelf
-            << "current chat uid:" << _chat_state.uid << "current group id:" << _group_state.currentId
-            << "batch size:" << static_cast<int>(msg->_chat_msgs.size());
-    auto friendInfo = _gateway.userMgr()->GetFriendById(peerUid);
-    if (!friendInfo && peerUid > 0)
-    {
-        auto placeholder = buildDialogPlaceholder(_dialog_list_model, peerUid);
-        _gateway.userMgr()->AddFriend(placeholder);
-        _chat_list_model.upsertFriend(placeholder);
-        _contact_list_model.upsertFriend(placeholder);
-        _dialog_list_model.upsertFriend(placeholder);
-        friendInfo = _gateway.userMgr()->GetFriendById(peerUid);
-    }
-    qint64 latestPeerTs = 0;
-    for (const auto& one : msg->_chat_msgs)
-    {
-        if (one && (one->_deleted_at_ms > 0 || one->_msg_content == QStringLiteral("[消息已撤回]")))
-        {
-            one->_msg_state = QStringLiteral("deleted");
-        }
-        else if (one && one->_edited_at_ms > 0)
-        {
-            one->_msg_state = QStringLiteral("edited");
-        }
-        if (one && one->_from_uid == peerUid)
-        {
-            latestPeerTs = qMax(latestPeerTs, one->_created_at);
-        }
-    }
-    _gateway.userMgr()->AppendFriendChatMsg(peerUid, msg->_chat_msgs);
-    _private_cache_store.upsertMessages(selfUid, peerUid, msg->_chat_msgs);
-    friendInfo = _gateway.userMgr()->GetFriendById(peerUid);
-    QString preview;
-    if (friendInfo && !friendInfo->_chat_msgs.empty())
-    {
-        preview = MessageContentCodec::toPreviewText(friendInfo->_chat_msgs.back()->_msg_content);
-    }
-    else
-    {
-        preview = MessageContentCodec::toPreviewText(msg->_chat_msgs.back()->_msg_content);
-    }
-    qint64 lastTs = QDateTime::currentMSecsSinceEpoch();
-    if (!msg->_chat_msgs.empty() && msg->_chat_msgs.back())
-    {
-        lastTs = msg->_chat_msgs.back()->_created_at;
-    }
-    ConversationSyncService::updatePrivatePreview(_chat_list_model, _dialog_list_model, peerUid, preview, lastTs);
-    const bool isViewingCurrentPrivate = (_group_state.currentId <= 0 && peerUid == _chat_state.uid);
-    if (isViewingCurrentPrivate)
-    {
-        ConversationSyncService::clearPrivateUnread(_chat_list_model, _dialog_list_model, peerUid);
-        if (latestPeerTs > 0)
-        {
-            sendPrivateReadAck(peerUid, latestPeerTs);
-        }
-    }
-    else if (!fromSelf)
-    {
-        ConversationSyncService::incrementPrivateUnread(_dialog_list_model, peerUid);
-    }
+            << "current chat uid:" << _chat_state.uid << "current group id:" << currentGroupId()
+            << "batch size:" << (msg ? static_cast<int>(msg->_chat_msgs.size()) : 0);
 
-    if (peerUid != _chat_state.uid)
+    PrivateIncomingMessageRequest request;
+    request.context = privateChatEventContext(selfInfo->_uid);
+    request.message = std::move(msg);
+    const PrivateIncomingMessageResult result = _features.chatFeatureController.handlePrivateIncomingMessage(
+        request,
+        memochat::app::makePrivateChatEventDependencies(
+            _features.chatFeatureController,
+            _gateway.userMgr(),
+            [this](std::shared_ptr<AuthInfo> authInfo)
+            {
+                _features.contactController.upsertContact(std::move(authInfo));
+            },
+            [this](int peerUid, qint64 readTs)
+            {
+                _features.chatFeatureController.sendPrivateReadAckForPeer(peerUid, readTs);
+            }));
+
+    if (!result.success)
     {
-        qInfo() << "Private chat message stored for background dialog, peer uid:" << peerUid;
         return;
     }
-
-    for (const auto& chat : msg->_chat_msgs)
+    if (!result.currentDialog)
     {
-        _message_model.appendMessage(chat, selfUid);
+        qInfo() << "Private chat message stored for background dialog, peer uid:" << result.peerUid;
+        return;
     }
-    ConversationSyncService::syncHistoryCursor(_message_model,
-                                               _private_history_state.beforeTs,
-                                               _private_history_state.beforeMsgId);
-    qInfo() << "Private chat view refreshed from live message, peer uid:" << peerUid
+    auto friendInfo = _gateway.userMgr()->GetFriendById(result.peerUid);
+    qInfo() << "Private chat view refreshed from live message, peer uid:" << result.peerUid
             << "friend msg count:" << (friendInfo ? static_cast<qlonglong>(friendInfo->_chat_msgs.size()) : 0LL)
-            << "message model count:" << _message_model.rowCount();
+            << "message model count:" << _features.chatFeatureController.messageCount();
 }

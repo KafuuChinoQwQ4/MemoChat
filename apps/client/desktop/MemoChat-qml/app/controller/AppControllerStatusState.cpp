@@ -2,127 +2,72 @@
 
 void AppController::setSearchPending(bool pending)
 {
-    if (_search_state.pending == pending)
-    {
-        return;
-    }
-
-    _search_state.pending = pending;
-    syncContactControllerState();
-    emit searchPendingChanged();
+    _features.contactController.setSearchPending(pending);
 }
 
 void AppController::setSearchStatus(const QString& text, bool isError)
 {
-    if (_search_state.statusText == text && _search_state.statusError == isError)
-    {
-        return;
-    }
-
-    _search_state.statusText = text;
-    _search_state.statusError = isError;
-    syncContactControllerState();
-    emit searchStatusChanged();
+    _features.contactController.setSearchStatus(text, isError);
 }
 
 void AppController::clearSearchResultOnly()
 {
-    _search_result_model.clear();
-    syncContactControllerState();
+    _features.contactController.clearSearchResultOnly();
 }
 
 void AppController::setAuthStatus(const QString& text, bool isError)
 {
-    if (_feature_status_state.authText == text && _feature_status_state.authError == isError)
-    {
-        return;
-    }
-
-    _feature_status_state.authText = text;
-    _feature_status_state.authError = isError;
-    syncContactControllerState();
-    emit authStatusChanged();
+    _features.contactController.setAuthStatus(text, isError);
 }
 
 void AppController::setSettingsStatus(const QString& text, bool isError)
 {
-    if (_feature_status_state.settingsText == text && _feature_status_state.settingsError == isError)
+    if (_features.profileController.statusText() == text && _features.profileController.statusError() == isError)
     {
         return;
     }
 
-    _feature_status_state.settingsText = text;
-    _feature_status_state.settingsError = isError;
-    _profile_controller.syncStatus(text, isError);
+    _features.profileController.syncStatus(text, isError);
     emit settingsStatusChanged();
 }
 
 void AppController::setGroupStatus(const QString& text, bool isError)
 {
-    if (_feature_status_state.groupText == text && _feature_status_state.groupError == isError)
+    if (_features.groupController.groupStatusText() == text && _features.groupController.groupStatusError() == isError)
     {
         return;
     }
 
-    _feature_status_state.groupText = text;
-    _feature_status_state.groupError = isError;
-    syncGroupControllerState();
+    _features.groupController.syncGroupStatus(text, isError);
     emit groupStatusChanged();
 }
 
 void AppController::setTip(const QString& tip, bool isError)
 {
-    if (_shell_state.tipText == tip && _shell_state.tipError == isError)
+    if (_features.authViewModel.tipText() == tip && _features.authViewModel.tipError() == isError)
     {
         return;
     }
-    _shell_state.tipText = tip;
-    _shell_state.tipError = isError;
-    _auth_view_model.syncTip(tip, isError);
+    _features.authViewModel.syncTip(tip, isError);
     emit tipChanged();
 }
 
 void AppController::setBusy(bool value)
 {
-    if (_shell_state.busy == value)
+    if (_features.authViewModel.busy() == value)
     {
         return;
     }
-    _shell_state.busy = value;
-    _auth_view_model.syncBusy(value);
+    _features.authViewModel.syncBusy(value);
     emit busyChanged();
-}
-
-void AppController::setRegisterCodeCooldownSeconds(int seconds)
-{
-    const int normalized = qMax(0, seconds);
-    if (_shell_state.registerCodeCooldownSeconds == normalized)
-    {
-        return;
-    }
-    _shell_state.registerCodeCooldownSeconds = normalized;
-    _auth_view_model.syncRegisterCodeCooldownSeconds(normalized);
-    emit registerCodeCooldownChanged();
-}
-
-void AppController::setRegisterCodeRequestPending(bool pending)
-{
-    if (_shell_state.registerCodeRequestPending == pending)
-    {
-        return;
-    }
-    _shell_state.registerCodeRequestPending = pending;
-    _auth_view_model.syncRegisterCodeRequestPending(pending);
-    emit registerCodeCooldownChanged();
 }
 
 void AppController::setPage(Page newPage)
 {
-    if (_page == newPage)
+    if (!_shell_state.setPage(static_cast<int>(newPage)))
     {
         return;
     }
-    _page = newPage;
-    _shell_view_model.syncPage(static_cast<int>(_page));
+    _features.shellViewModel.syncPage(_shell_state.page());
     emit pageChanged();
 }
