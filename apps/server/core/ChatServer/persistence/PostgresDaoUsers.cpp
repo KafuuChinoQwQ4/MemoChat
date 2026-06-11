@@ -56,8 +56,7 @@ int PostgresDao::RegUser(const std::string& name, const std::string& email, cons
         {
             pqxx::connection conn(postgres_connection_string_);
             pqxx::work txn(conn);
-            const auto exists =
-                txn.exec_params("SELECT 1 FROM \"user\" WHERE email = $1 OR name = $2 LIMIT 1", email, name);
+            const auto exists = txn.exec_params("SELECT 1 FROM \"user\" WHERE email = $1 LIMIT 1", email);
             if (!exists.empty())
             {
                 txn.commit();

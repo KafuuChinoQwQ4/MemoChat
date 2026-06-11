@@ -149,12 +149,11 @@ int PostgresDao::RegUserTransaction(const std::string& name,
     try
     {
         pqxx::work txn(*con->_con);
-        const auto exists =
-            txn.exec_params("SELECT 1 FROM \"user\" WHERE email = $1 OR name = $2 LIMIT 1", email, name);
+        const auto exists = txn.exec_params("SELECT 1 FROM \"user\" WHERE email = $1 LIMIT 1", email);
         if (!exists.empty())
         {
             txn.commit();
-            std::cout << "user " << name << " or email " << email << " exist" << std::endl;
+            std::cout << "email " << email << " exists" << std::endl;
             return 0;
         }
 

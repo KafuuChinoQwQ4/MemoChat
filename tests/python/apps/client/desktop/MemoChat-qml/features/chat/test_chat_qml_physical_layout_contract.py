@@ -200,6 +200,17 @@ class ChatQmlPhysicalLayoutContractTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertNotIn(token, qrc)
 
+    def test_chat_empty_prompt_uses_model_count_for_real_message_state(self):
+        message_list = read_existing(FEATURE_VIEW / "conversation" / "ChatMessageListView.qml")
+
+        self.assertIn("readonly property int modelMessageCount:", message_list)
+        self.assertIn("root.messageModel.count", message_list)
+        self.assertIn(
+            "visible: root.hasCurrentChat && root.modelMessageCount === 0 && !root.privateHistoryLoading",
+            message_list,
+        )
+        self.assertNotIn("visible: root.hasCurrentChat && messageList.count === 0", message_list)
+
 
 if __name__ == "__main__":
     unittest.main()

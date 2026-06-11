@@ -16,7 +16,15 @@ Rectangle {
     property string currentSessionId: ""
     property string selfAvatar: "qrc:/res/head_1.jpg"
     property bool stickToBottom: true
-    readonly property bool showEmptyPrompt: root.messageModel && messageListView.count === 0 && !root.loading && !root.streaming
+    readonly property int modelMessageCount: root.messageModel && root.messageModel.count !== undefined ? root.messageModel.count : 0
+    readonly property bool modelHasStreamingMessage: root.messageModel && root.messageModel.hasStreamingMessage !== undefined
+                                                    ? root.messageModel.hasStreamingMessage
+                                                    : false
+    readonly property bool showEmptyPrompt: root.currentSessionId.length > 0
+                                            && root.modelMessageCount === 0
+                                            && !root.loading
+                                            && !root.streaming
+                                            && !root.modelHasStreamingMessage
 
     signal reloadSessions()
     signal switchSession(string sessionId)
@@ -68,7 +76,7 @@ Rectangle {
             role: model.role || "assistant"
             isUser: model.role === "user"
             isAssistant: model.role === "assistant"
-            isStreaming: (root.loading || root.streaming) && (model.isStreaming || false)
+            isStreaming: model.isStreaming || false
             streamingContent: model.streamingContent || model.content || ""
             thinkingContent: model.thinkingContent || ""
             errorMessage: model.errorMessage || ""

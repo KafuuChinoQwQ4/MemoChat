@@ -10,21 +10,26 @@ MediaCoordinator::MediaCoordinator(MediaSendPort port)
 
 void MediaCoordinator::sendTextMessage(const QString& text)
 {
+    dispatchTextMessage(text);
+}
+
+bool MediaCoordinator::dispatchTextMessage(const QString& text)
+{
     const MediaSendSnapshot snapshot = _port.snapshot();
     if (snapshot.currentChatUid <= 0 && snapshot.currentGroupId <= 0)
     {
-        return;
+        return false;
     }
 
     QString content = text;
     if (content.trimmed().isEmpty())
     {
-        return;
+        return false;
     }
     if (content.size() > 1024)
     {
         _port.setTip("单条消息不能超过1024字符", true);
-        return;
+        return false;
     }
 
     if (snapshot.currentGroupId > 0)
@@ -39,18 +44,21 @@ void MediaCoordinator::sendTextMessage(const QString& text)
         if (!_port.dispatchGroupContent(content, QString()))
         {
             _port.setTip("群消息发送失败", true);
+            return false;
         }
         else
         {
             _port.cancelReply();
         }
-        return;
+        return true;
     }
 
     if (!_port.dispatchPrivateContent(content, content))
     {
         _port.setTip("消息发送失败", true);
+        return false;
     }
+    return true;
 }
 
 void MediaCoordinator::sendCurrentComposerPayload(const QString& text)
@@ -67,6 +75,10 @@ void MediaCoordinator::sendCurrentComposerPayload(const QString& text)
     }
     if (!snapshot.pendingAttachments.isEmpty())
     {
+        if (!text.trimmed().isEmpty() && !dispatchTextMessage(text))
+        {
+            return;
+        }
         _port.beginPendingAttachmentSend(snapshot.currentDialogUid,
                                          snapshot.currentChatUid,
                                          snapshot.currentGroupId,

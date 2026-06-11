@@ -71,23 +71,38 @@ class AgentQmlPhysicalLayoutContractTests(unittest.TestCase):
     def test_agent_conversation_empty_prompt_follows_visible_message_count(self):
         pane = read(FEATURE_VIEW / "AgentConversationPane.qml")
 
-        self.assertIn(
-            "readonly property bool showEmptyPrompt: root.messageModel && messageListView.count === 0 && !root.loading && !root.streaming",
-            pane,
-        )
+        self.assertIn("readonly property int modelMessageCount:", pane)
+        self.assertIn("root.messageModel.count", pane)
+        self.assertIn("root.modelMessageCount === 0", pane)
+        self.assertIn("!root.modelHasStreamingMessage", pane)
         self.assertIn("visible: root.showEmptyPrompt", pane)
-        self.assertNotIn("rowCount() === 0", pane)
+        self.assertNotIn("messageListView.count === 0", pane)
 
-    def test_agent_generation_status_is_tied_to_active_request_state(self):
+    def test_agent_generation_status_follows_row_streaming_state(self):
         pane = read(FEATURE_VIEW / "AgentConversationPane.qml")
         delegate = read(FEATURE_VIEW / "AgentMessageDelegate.qml")
 
-        self.assertIn("isStreaming: (root.loading || root.streaming) && (model.isStreaming || false)", pane)
+        self.assertIn("isStreaming: model.isStreaming || false", pane)
+        self.assertNotIn("readonly property bool activeGenerating:", pane)
+        self.assertNotIn("currentGeneratingMsgId", pane)
+        self.assertNotIn("model.msgId === root.currentGeneratingMsgId", pane)
+        self.assertNotIn("&& (model.isStreaming || false)", pane)
+        self.assertNotIn("isStreaming: (root.loading || root.streaming) && (model.isStreaming || false)", pane)
         self.assertIn(
             "readonly property bool showStreamingStatus: root.isStreaming && root.errorMessage.length === 0",
             delegate,
         )
         self.assertIn("visible: root.showStreamingStatus", delegate)
+
+    def test_multi_ai_empty_prompt_follows_real_chat_message_count(self):
+        pane = read(FEATURE_VIEW / "AgentMultiAiChatPane.qml")
+
+        self.assertIn("readonly property var displayEventRows:", pane)
+        self.assertIn("readonly property int chatMessageCount:", pane)
+        self.assertIn("if (root.isChatEvent(rows[i] || {}))", pane)
+        self.assertIn("model: root.displayEventRows", pane)
+        self.assertIn("visible: root.chatMessageCount === 0", pane)
+        self.assertNotIn("visible: messageListView.count === 0", pane)
 
 
 if __name__ == "__main__":

@@ -366,5 +366,7 @@ public:
     void clearPendingAttachments();
 
 private:
+    bool dispatchTextMessage(const QString& text);
+
     MediaSendPort _port;
 };

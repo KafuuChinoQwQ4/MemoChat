@@ -10,6 +10,11 @@
 #include <map>
 #include <sstream>
 
+namespace
+{
+constexpr std::uint64_t kMediaRequestBodyLimitBytes = 64ULL * 1024ULL * 1024ULL;
+}
+
 HttpConnection::HttpConnection(boost::asio::io_context& ioc)
     : _socket(ioc)
 {
@@ -92,11 +97,13 @@ void HttpConnection::FinishStream()
 void HttpConnection::Start()
 {
     auto self = shared_from_this();
+    auto parser = std::make_shared<http::request_parser<http::dynamic_body>>();
+    parser->body_limit(kMediaRequestBodyLimitBytes);
     http::async_read(
         _socket,
         _buffer,
-        _request,
-        [self](beast::error_code ec, std::size_t bytes_transferred)
+        *parser,
+        [self, parser](beast::error_code ec, std::size_t bytes_transferred)
         {
             try
             {
@@ -107,6 +114,7 @@ void HttpConnection::Start()
                 }
 
                 boost::ignore_unused(bytes_transferred);
+                self->_request = parser->release();
                 auto trace_it = self->_request.find("X-Trace-Id");
                 if (trace_it != self->_request.end())
                 {
