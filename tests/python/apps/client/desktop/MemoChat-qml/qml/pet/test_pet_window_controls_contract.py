@@ -79,6 +79,16 @@ class PetWindowControlsContractTests(unittest.TestCase):
     def test_pet_window_exposes_control_state_and_helpers(self):
         window = read_qml(PET_WINDOW_QML)
 
+        self.assertIn("readonly property int baseWindowWidth: 320", window)
+        self.assertIn("readonly property int baseWindowHeight: 460", window)
+        self.assertIn("readonly property real initialScaleFactor: 1.6", window)
+        self.assertIn("property real scaleFactor: initialScaleFactor", window)
+        self.assertIn("scaleFactor = initialScaleFactor", window)
+        self.assertIn("width: scaledWindowWidth()", window)
+        self.assertIn("height: scaledWindowHeight()", window)
+        self.assertIn("x = Math.max(24, Math.round(availableWidth - width - 48))", window)
+        self.assertIn("y = Math.max(24, Math.round(availableHeight - height - 48))", window)
+
         for prop in WINDOW_CONTROL_PROPERTIES:
             self.assertRegex(window, r"\bproperty\s+\w+\s+" + re.escape(prop) + r"\b")
 
@@ -254,6 +264,7 @@ class PetWindowControlsContractTests(unittest.TestCase):
         self.assertIn("onCloseRequested: root.hide()", panel)
         self.assertIn("onClicked: root.closeRequested()", panel)
         self.assertIn("Slider", panel)
+        self.assertIn("to: 3.2", panel)
         self.assertIn("scaleInteractionStarted", panel)
         self.assertIn("scaleInteractionFinished", panel)
         self.assertIn("onPressedChanged", panel)

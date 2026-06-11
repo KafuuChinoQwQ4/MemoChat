@@ -88,9 +88,5 @@ RelationBootstrapPort AppPortRegistry::makeRelationBootstrapPort()
         [this](const QString& icon)
         {
             setCurrentChatPeerIcon(icon);
-        },
-        [this]()
-        {
-            emit pendingApplyChanged();
         }};
 }

@@ -29,6 +29,7 @@ Item {
     }
     readonly property bool hasThinking: root.thinkingContent.length > 0 && !root.isUser
     readonly property bool showThinkingBody: root.hasThinking && (root.isStreaming || root.manualThinkingExpanded)
+    readonly property bool showStreamingStatus: root.isStreaming && root.errorMessage.length === 0
     readonly property string answerText: root.displayText.length > 0 ? root.displayText : (root.isStreaming ? "正在生成" : "")
     readonly property bool answerVisible: root.answerText.length > 0 || root.thinkingContent.length === 0
     readonly property bool answerHasCodeBlock: root.answerText.indexOf("```") >= 0 || root.answerText.indexOf("~~~") >= 0
@@ -250,7 +251,7 @@ Item {
                     height: 22
                     radius: 11
                     color: Qt.rgba(1, 1, 1, root.isUser ? 0.16 : 0.48)
-                    visible: root.isStreaming && root.errorMessage.length === 0
+                    visible: root.showStreamingStatus
 
                     Label {
                         id: streamLabel

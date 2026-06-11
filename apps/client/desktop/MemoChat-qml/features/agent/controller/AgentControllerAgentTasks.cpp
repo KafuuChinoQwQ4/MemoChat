@@ -52,6 +52,7 @@ void AgentController::clearAgentTaskError()
 
 void AgentController::listAgentTasks()
 {
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     clearErrorState();
     clearAgentTaskError();
@@ -63,7 +64,7 @@ void AgentController::listAgentTasks()
     url.setQuery(query);
 
     ReqId reqId = ID_AI_TASK_LIST;
-    _pending_requests.track(reqId, AgentRequestKind::TaskList);
+    _pending_requests.track(reqId, AgentRequestKind::TaskList, QString(), uid);
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
@@ -74,6 +75,7 @@ void AgentController::createAgentTask(const QString& content, const QString& tit
     {
         return;
     }
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     clearErrorState();
     clearAgentTaskError();
@@ -94,7 +96,7 @@ void AgentController::createAgentTask(const QString& content, const QString& tit
     payload["metadata"] = buildChatMetadata();
 
     ReqId reqId = ID_AI_TASK_CREATE;
-    _pending_requests.track(reqId, AgentRequestKind::TaskCreate);
+    _pending_requests.track(reqId, AgentRequestKind::TaskCreate, QString(), uid);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/tasks"),
                                         payload,
                                         reqId,
@@ -109,6 +111,7 @@ void AgentController::cancelAgentTask(const QString& taskId)
     {
         return;
     }
+    ensureUserScope();
     clearErrorState();
     clearAgentTaskError();
     setAgentTaskBusy(true, "正在取消后台任务...");
@@ -117,7 +120,7 @@ void AgentController::cancelAgentTask(const QString& taskId)
     payload["task_id"] = trimmed;
 
     ReqId reqId = ID_AI_TASK_CANCEL;
-    _pending_requests.track(reqId, AgentRequestKind::TaskCancel);
+    _pending_requests.track(reqId, AgentRequestKind::TaskCancel, QString(), scopedUid());
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/tasks/cancel"),
                                         payload,
                                         reqId,
@@ -132,6 +135,7 @@ void AgentController::resumeAgentTask(const QString& taskId)
     {
         return;
     }
+    ensureUserScope();
     clearErrorState();
     clearAgentTaskError();
     setAgentTaskBusy(true, "正在恢复后台任务...");
@@ -140,7 +144,7 @@ void AgentController::resumeAgentTask(const QString& taskId)
     payload["task_id"] = trimmed;
 
     ReqId reqId = ID_AI_TASK_RESUME;
-    _pending_requests.track(reqId, AgentRequestKind::TaskResume);
+    _pending_requests.track(reqId, AgentRequestKind::TaskResume, QString(), scopedUid());
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/tasks/resume"),
                                         payload,
                                         reqId,

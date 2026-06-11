@@ -8,14 +8,7 @@
 
 void AppController::bindAppHttpSignals()
 {
-    _http_event_router = std::make_unique<AppHttpEventRouter>(
-        *_session_coordinator,
-        _features.profileController,
-        [this]()
-        {
-            emit settingsStatusChanged();
-        },
-        this);
+    _http_event_router = std::make_unique<AppHttpEventRouter>(*_session_coordinator, _features.profileController, this);
     connect(_gateway.httpMgr().get(),
             &HttpMgr::sig_login_mod_finish,
             _http_event_router.get(),

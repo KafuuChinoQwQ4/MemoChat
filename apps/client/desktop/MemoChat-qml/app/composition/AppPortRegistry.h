@@ -127,21 +127,12 @@ struct AppPortRegistryActions
     std::function<void()> emitCurrentDialogUidChangedIfNeeded;
 };
 
-struct AppPortRegistryEvents
-{
-    std::function<void()> pendingApplyChanged;
-    std::function<void()> canLoadMoreChatsChanged;
-    std::function<void()> currentGroupChanged;
-    std::function<void()> currentUserChanged;
-};
-
 struct AppPortRegistryContext
 {
     AppPortRegistryRefs refs;
     AppPortRegistryConstants constants;
     AppPortRegistryQueries queries;
     AppPortRegistryActions actions;
-    AppPortRegistryEvents events;
 };
 
 class AppPortRegistry
@@ -248,15 +239,10 @@ private:
     void selectGroupIndex(int index);
     void syncShellViewModelState();
     void emitCurrentDialogUidChangedIfNeeded();
-    void pendingApplyChanged();
-    void canLoadMoreChatsChanged();
-    void currentGroupChanged();
-    void currentUserChanged();
 
     AppPortRegistryConstants _constants;
     AppPortRegistryQueries _queries;
     AppPortRegistryActions _actions;
-    AppPortRegistryEvents _events;
     QObject& _async_receiver;
     AppShellStateController& _shell_state;
     AppMediaUploadRuntimeState& _media_upload_state;

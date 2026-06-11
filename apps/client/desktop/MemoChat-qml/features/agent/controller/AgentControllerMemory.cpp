@@ -52,6 +52,7 @@ void AgentController::clearMemoryError()
 
 void AgentController::listMemories()
 {
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     clearErrorState();
     clearMemoryError();
@@ -62,7 +63,7 @@ void AgentController::listMemories()
     url.setQuery(query);
 
     ReqId reqId = ID_AI_MEMORY_LIST;
-    _pending_requests.track(reqId, AgentRequestKind::MemoryList);
+    _pending_requests.track(reqId, AgentRequestKind::MemoryList, QString(), uid);
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
@@ -73,6 +74,7 @@ void AgentController::createMemory(const QString& content)
     {
         return;
     }
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     clearErrorState();
     clearMemoryError();
@@ -83,7 +85,7 @@ void AgentController::createMemory(const QString& content)
     payload["content"] = trimmed;
 
     ReqId reqId = ID_AI_MEMORY_CREATE;
-    _pending_requests.track(reqId, AgentRequestKind::MemoryCreate);
+    _pending_requests.track(reqId, AgentRequestKind::MemoryCreate, QString(), uid);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/memory"),
                                         payload,
                                         reqId,
@@ -98,6 +100,7 @@ void AgentController::deleteMemory(const QString& memoryId)
     {
         return;
     }
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     clearErrorState();
     clearMemoryError();
@@ -108,7 +111,7 @@ void AgentController::deleteMemory(const QString& memoryId)
     payload["memory_id"] = trimmed;
 
     ReqId reqId = ID_AI_MEMORY_DELETE;
-    _pending_requests.track(reqId, AgentRequestKind::MemoryDelete);
+    _pending_requests.track(reqId, AgentRequestKind::MemoryDelete, QString(), uid);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/memory/delete"),
                                         payload,
                                         reqId,

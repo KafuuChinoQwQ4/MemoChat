@@ -85,5 +85,4 @@ void SessionRelationBootstrap::onRelationBootstrapUpdated()
                                                                                : friendInfo->_icon);
         }
     }
-    _port.notifyPendingApplyChanged();
 }

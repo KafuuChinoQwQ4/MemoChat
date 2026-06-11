@@ -46,7 +46,7 @@ void AppController::bindChatFeatureDialogPorts()
             return;
         }
         _shell_state.loadingState().canLoadMoreChats = canLoadMore;
-        emit canLoadMoreChatsChanged();
+        syncChatViewModelState();
     };
     listPagingPort.flushIncomingMessages = [this]()
     {

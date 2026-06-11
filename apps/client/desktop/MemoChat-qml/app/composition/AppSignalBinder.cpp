@@ -6,8 +6,6 @@ void AppController::bindAppControllerSignals()
     bindAppChatTransportSignals();
     bindAppChatDispatcherSignals();
     bindAppCallSignals();
-    bindAppFeatureFacadeSignals();
     bindAppShellSignals();
-    bindAppChatProjectionSignals();
     bindAppTimerSignals();
 }

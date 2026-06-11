@@ -349,15 +349,16 @@ class IncomingMessageBufferContractTests(unittest.TestCase):
             "flushIncomingMessageRouter",
             "setCurrentChatPeerName",
             "setCurrentChatPeerIcon",
-            "notifyPendingApplyChanged",
         ):
             with self.subTest(relation_port=field):
                 self.assertIn(field, relation_port)
+        self.assertNotIn("notifyPendingApplyChanged", relation_port)
 
         self.assertIn("_port.ensureChatListInitialized();", relation_updated)
         self.assertIn("_port.refreshApplySnapshot();", relation_updated)
         self.assertIn("_port.refreshDialogModelIncremental();", relation_updated)
         self.assertIn("_port.flushIncomingMessageRouter();", relation_updated)
+        self.assertNotIn("_port.notifyPendingApplyChanged();", relation_updated)
         self.assertNotIn("_port.refreshApplyModel();", relation_updated)
         self.assertNotIn("_port.setApplyReady(true);", relation_updated)
 

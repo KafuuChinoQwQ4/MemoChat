@@ -14,12 +14,7 @@ void AppController::switchToLogin()
     qInfo() << "Switching to login page, current page:" << _shell_state.page()
             << "pending uid:" << _session_coordinator->pendingUid()
             << "chat connected:" << _gateway.chatTransport()->isConnected();
-    const bool already_on_login_page = page() == LoginPage;
     setPage(LoginPage);
-    if (already_on_login_page)
-    {
-        emit pageChanged();
-    }
     _session_coordinator->resetForLogout();
 }
 
@@ -69,7 +64,7 @@ void AppController::switchChatTab(int tab)
         _features.agentController.loadSessions();
         _features.agentController.refreshModelList();
     }
-    emit chatTabChanged();
+    syncChatViewModelState();
 }
 
 void AppController::ensureContactsInitialized()

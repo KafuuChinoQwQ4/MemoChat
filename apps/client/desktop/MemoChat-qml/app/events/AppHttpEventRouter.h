@@ -3,7 +3,6 @@
 
 #include <QObject>
 #include <QString>
-#include <functional>
 
 #include "global.h"
 
@@ -17,7 +16,6 @@ class AppHttpEventRouter : public QObject
 public:
     AppHttpEventRouter(AppSessionCoordinator& sessionCoordinator,
                        ProfileController& profileController,
-                       std::function<void()> emitSettingsStatusChanged,
                        QObject* parent = nullptr);
 
 public slots:
@@ -29,7 +27,6 @@ public slots:
 private:
     AppSessionCoordinator& _session_coordinator;
     ProfileController& _profile_controller;
-    std::function<void()> _emit_settings_status_changed;
 };
 
 #endif // APPHTTPEVENTROUTER_H

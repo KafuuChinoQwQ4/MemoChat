@@ -14,14 +14,14 @@ class AgentGameClient : public QObject
 public:
     explicit AgentGameClient(QObject* parent = nullptr);
 
-    void get(const QUrl& url, const QString& op, const QString& statusText);
-    void post(const QUrl& url, const QJsonObject& payload, const QString& op, const QString& statusText);
-    void deleteResource(const QUrl& url, const QString& op, const QString& statusText);
+    void get(const QUrl& url, const QString& op, const QString& statusText, int uid);
+    void post(const QUrl& url, const QJsonObject& payload, const QString& op, const QString& statusText, int uid);
+    void deleteResource(const QUrl& url, const QString& op, const QString& statusText, int uid);
 
 signals:
-    void responseReady(const QString& op, const QJsonObject& root);
-    void networkError(const QString& op, const QString& errorText);
-    void formatError(const QString& op);
+    void responseReady(const QString& op, const QJsonObject& root, int uid);
+    void networkError(const QString& op, const QString& errorText, int uid);
+    void formatError(const QString& op, int uid);
 
 private:
     enum class Verb
@@ -31,8 +31,8 @@ private:
         Delete
     };
 
-    void send(Verb verb, const QUrl& url, const QJsonObject& payload, const QString& op);
-    void handleReply(QNetworkReply* reply, const QString& op);
+    void send(Verb verb, const QUrl& url, const QJsonObject& payload, const QString& op, int uid);
+    void handleReply(QNetworkReply* reply, const QString& op, int uid);
 
     QNetworkAccessManager* _network = nullptr;
 };

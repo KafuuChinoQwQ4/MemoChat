@@ -88,12 +88,14 @@ QJsonObject hostConfigFromVariant(const QVariantMap& host)
 
 void AgentController::listGameRulesets()
 {
+    ensureUserScope();
     sendGameGet(QUrl(gameBaseUrl() + QStringLiteral("/rulesets")),
                      QStringLiteral("rulesets"), QStringLiteral("正在加载游戏规则..."));
 }
 
 void AgentController::loadGameRolePresets(const QString& rulesetId)
 {
+    ensureUserScope();
     QUrl url(gameBaseUrl() + QStringLiteral("/role-presets"));
     QUrlQuery query;
     const QString trimmedRuleset = rulesetId.trimmed();
@@ -107,6 +109,7 @@ void AgentController::loadGameRolePresets(const QString& rulesetId)
 
 void AgentController::listGameRooms()
 {
+    ensureUserScope();
     QUrl url(gameBaseUrl() + QStringLiteral("/rooms"));
     QUrlQuery query;
     query.addQueryItem(QStringLiteral("uid"), QString::number(currentUid()));
@@ -116,6 +119,7 @@ void AgentController::listGameRooms()
 
 void AgentController::listGameTemplates()
 {
+    ensureUserScope();
     QUrl url(gameBaseUrl() + QStringLiteral("/templates"));
     QUrlQuery query;
     query.addQueryItem(QStringLiteral("uid"), QString::number(currentUid()));
@@ -125,6 +129,7 @@ void AgentController::listGameTemplates()
 
 void AgentController::listGameTemplatePresets(const QString& rulesetId)
 {
+    ensureUserScope();
     QUrl url(gameBaseUrl() + QStringLiteral("/template-presets"));
     QUrlQuery query;
     const QString trimmedRuleset = rulesetId.trimmed();
@@ -142,6 +147,7 @@ void AgentController::saveGameTemplate(const QString& title,
                                        const QVariantList& agents,
                                        const QVariantMap& host)
 {
+    ensureUserScope();
     const QString trimmedRuleset =
         rulesetId.trimmed().isEmpty() ? QStringLiteral("werewolf.basic") : rulesetId.trimmed();
     const QString trimmedTitle = title.trimmed().isEmpty() ? QStringLiteral("MemoChat Game Template") : title.trimmed();
@@ -196,6 +202,7 @@ void AgentController::saveGameTemplate(const QString& title,
 
 void AgentController::deleteGameTemplate(const QString& templateId)
 {
+    ensureUserScope();
     const QString trimmedTemplateId = templateId.trimmed();
     if (trimmedTemplateId.isEmpty())
     {
@@ -210,6 +217,7 @@ void AgentController::deleteGameTemplate(const QString& templateId)
 
 void AgentController::cloneGameTemplatePreset(const QString& presetId, const QString& title)
 {
+    ensureUserScope();
     const QString trimmedPresetId = presetId.trimmed();
     if (trimmedPresetId.isEmpty())
     {
@@ -227,6 +235,7 @@ void AgentController::cloneGameTemplatePreset(const QString& presetId, const QSt
 
 QString AgentController::exportGameTemplate(const QString& templateId)
 {
+    ensureUserScope();
     const QString trimmedTemplateId = templateId.trimmed();
     if (trimmedTemplateId.isEmpty())
     {
@@ -270,6 +279,7 @@ QString AgentController::exportGameTemplate(const QString& templateId)
 
 bool AgentController::importGameTemplate(const QString& templateJson)
 {
+    ensureUserScope();
     const QString trimmedJson = templateJson.trimmed();
     if (trimmedJson.isEmpty())
     {

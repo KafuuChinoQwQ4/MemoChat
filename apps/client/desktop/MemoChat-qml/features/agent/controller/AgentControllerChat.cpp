@@ -29,6 +29,7 @@ void AgentController::sendMessage(const QString& content)
     if (content.trimmed().isEmpty())
         return;
 
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     QString sessionId = _current_session_id;
 
@@ -58,7 +59,7 @@ void AgentController::sendMessage(const QString& content)
 
     QString msgId = makeUuid();
     ReqId reqId = ID_AI_CHAT;
-    _pending_requests.track(reqId, AgentRequestKind::ChatMessage, msgId);
+    _pending_requests.track(reqId, AgentRequestKind::ChatMessage, msgId, uid);
     _model->appendAIMessage(msgId, _current_model_name);
 
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/chat"),
@@ -70,6 +71,7 @@ void AgentController::sendMessage(const QString& content)
 
 void AgentController::summarizeChat(const QString& dialogUid, const QString& chatHistoryJson)
 {
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     clearErrorState();
 
@@ -85,7 +87,7 @@ void AgentController::summarizeChat(const QString& dialogUid, const QString& cha
     payload["context_json"] = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
 
     ReqId reqId = ID_AI_SMART;
-    _pending_requests.track(reqId, AgentRequestKind::Summary);
+    _pending_requests.track(reqId, AgentRequestKind::Summary, QString(), uid);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/smart"),
                                         payload,
                                         reqId,
@@ -95,6 +97,7 @@ void AgentController::summarizeChat(const QString& dialogUid, const QString& cha
 
 void AgentController::suggestReply(const QString& dialogUid, const QString& chatHistoryJson)
 {
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     clearErrorState();
 
@@ -110,7 +113,7 @@ void AgentController::suggestReply(const QString& dialogUid, const QString& chat
     payload["context_json"] = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
 
     ReqId reqId = ID_AI_SMART;
-    _pending_requests.track(reqId, AgentRequestKind::Suggest);
+    _pending_requests.track(reqId, AgentRequestKind::Suggest, QString(), uid);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/smart"),
                                         payload,
                                         reqId,
@@ -127,6 +130,7 @@ void AgentController::translateMessageWithSource(const QString& msgContent,
                                                  const QString& sourceLang,
                                                  const QString& targetLang)
 {
+    ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
     clearErrorState();
 
@@ -142,7 +146,7 @@ void AgentController::translateMessageWithSource(const QString& msgContent,
     payload["context_json"] = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
 
     ReqId reqId = ID_AI_SMART;
-    _pending_requests.track(reqId, AgentRequestKind::Translate);
+    _pending_requests.track(reqId, AgentRequestKind::Translate, QString(), uid);
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/smart"),
                                         payload,
                                         reqId,

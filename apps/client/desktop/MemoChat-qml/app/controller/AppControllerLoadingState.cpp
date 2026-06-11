@@ -9,7 +9,7 @@ void AppController::setChatLoadingMore(bool loading)
     }
 
     _shell_state.loadingState().chatLoadingMore = loading;
-    emit chatLoadingMoreChanged();
+    syncChatViewModelState();
 }
 
 void AppController::setPrivateHistoryLoading(bool loading)
@@ -19,7 +19,7 @@ void AppController::setPrivateHistoryLoading(bool loading)
         return;
     }
     _shell_state.loadingState().privateHistoryLoading = loading;
-    emit privateHistoryLoadingChanged();
+    syncChatViewModelState();
 }
 
 void AppController::setCanLoadMorePrivateHistory(bool canLoad)
@@ -29,7 +29,7 @@ void AppController::setCanLoadMorePrivateHistory(bool canLoad)
         return;
     }
     _shell_state.loadingState().canLoadMorePrivateHistory = canLoad;
-    emit canLoadMorePrivateHistoryChanged();
+    syncChatViewModelState();
 }
 
 void AppController::setContactLoadingMore(bool loading)
@@ -46,7 +46,7 @@ void AppController::refreshChatLoadMoreState()
     }
 
     _shell_state.loadingState().canLoadMoreChats = canLoad;
-    emit canLoadMoreChatsChanged();
+    syncChatViewModelState();
 }
 
 void AppController::refreshContactLoadMoreState()
