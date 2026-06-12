@@ -58,6 +58,7 @@ public:
     Q_INVOKABLE void publishMoment(const QString& location, int visibility, const QVariantList& items);
     Q_INVOKABLE QVariantList pickMomentMedia();
     Q_INVOKABLE void publishDraftMoment(const QString& text, int visibility, const QVariantList& attachments);
+    Q_INVOKABLE void publishDraftMomentJson(const QString& text, int visibility, const QString& attachmentsJson);
     Q_INVOKABLE void deleteMoment(qint64 momentId);
     Q_INVOKABLE void toggleLike(qint64 momentId);
     Q_INVOKABLE void addComment(qint64 momentId, const QString& content, int replyUid = 0);
@@ -65,6 +66,7 @@ public:
     Q_INVOKABLE void toggleCommentLike(qint64 momentId, qint64 commentId, bool liked);
     Q_INVOKABLE void refreshMoment(qint64 momentId);
     Q_INVOKABLE void refreshComments(qint64 momentId);
+    Q_INVOKABLE QString mediaUrlForKey(const QString& mediaKey) const;
 
     static QVariantList buildTextItem(const QString& content);
     static QVariantList buildImageItem(const QString& mediaKey, const QString& thumbKey, int width, int height);

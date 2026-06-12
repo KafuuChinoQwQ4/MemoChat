@@ -48,7 +48,7 @@ rg -n "qml.qrc|resources|icons|assets" apps/client infra/Memo_ops/client
 
 ## 验证
 
-Linux 客户端检查也统一构建 full preset，确保 QML、服务端契约和运行时产物来自同一构建树。
+触及 QML/C++ 客户端产物、资源注册或客户端/服务端契约时，优先构建 full preset，确保 QML、服务端契约和运行时产物来自同一构建树。纯 SVG/文案/静态资源检查可先用最窄资源检查、`qmllint` 或读回验证，并记录为什么不需要 full preset。
 
 ```bash
 source /root/.memochat-linux-env
@@ -58,7 +58,7 @@ cmake --build --preset linux-full-gcc16 --parallel 12
 
 运行时 UI 检查中，如果屏幕需要后端数据，先启动必需的 Linux 服务。可行时使用截图。如果没有自动化 UI runner，记录准确的手工视觉检查。明确的 Windows 客户端检查使用旧版 `msvc2022-full` 和 `.bat/.ps1` 流程。
 
-视觉或布局改动不能只用“构建通过”作为完成证据。验证日志应包含至少一种证据：
+视觉或布局改动不能只用“构建通过”作为完成证据。验证日志应包含至少一种适用证据：
 
 - 截图路径，优先放在 `.ai/<project>/<letter>/screenshots/`。
 - `qmllint`、资源检查或客户端启动命令及输出。

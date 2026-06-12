@@ -67,6 +67,7 @@ int PostgresDao::RegUser(const std::string& name, const std::string& email, cons
 
 bool PostgresDao::CheckEmail(const std::string& name, const std::string& email)
 {
+    (void) name;
     auto con = pool_->getConnection();
     try
     {
@@ -75,15 +76,10 @@ bool PostgresDao::CheckEmail(const std::string& name, const std::string& email)
             return false;
         }
         pqxx::read_transaction txn(*con->_con);
-        auto rows = txn.exec_params("SELECT email FROM \"user\" WHERE name = $1 LIMIT 1", name);
-        if (rows.empty())
-        {
-            pool_->returnConnection(std::move(con));
-            return true;
-        }
-        const auto stored_email = rows[0]["email"].c_str() ? rows[0]["email"].c_str() : "";
+        auto rows = txn.exec_params("SELECT 1 FROM \"user\" WHERE email = $1 LIMIT 1", email);
+        const bool exists = !rows.empty();
         pool_->returnConnection(std::move(con));
-        return email == stored_email;
+        return exists;
     }
     catch (const std::exception& e)
     {
@@ -93,7 +89,7 @@ bool PostgresDao::CheckEmail(const std::string& name, const std::string& email)
     }
 }
 
-bool PostgresDao::UpdatePwd(const std::string& name, const std::string& newpwd)
+bool PostgresDao::UpdatePwd(const std::string& email, const std::string& newpwd)
 {
     auto con = pool_->getConnection();
     try
@@ -103,7 +99,7 @@ bool PostgresDao::UpdatePwd(const std::string& name, const std::string& newpwd)
             return false;
         }
         pqxx::work txn(*con->_con);
-        auto result = txn.exec_params("UPDATE \"user\" SET pwd = $1 WHERE name = $2", newpwd, name);
+        auto result = txn.exec_params("UPDATE \"user\" SET pwd = $1 WHERE email = $2", newpwd, email);
         const auto updateCount = result.affected_rows();
         txn.commit();
         pool_->returnConnection(std::move(con));

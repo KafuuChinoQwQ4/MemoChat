@@ -44,6 +44,10 @@ void AppController::bindChatFeatureReadMutationPorts()
     {
         return _features.chatFeatureController.containsMessage(messageId);
     };
+    mutationPort.canRevokeMessage = [this](const QString& messageId)
+    {
+        return _features.chatFeatureController.canRevokeMessage(messageId);
+    };
     mutationPort.setPrivateStatus = [this](const QString& status, bool isError)
     {
         setTip(status, isError);

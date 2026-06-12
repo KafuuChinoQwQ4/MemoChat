@@ -64,6 +64,7 @@ public:
     qint64 earliestCreatedAt() const;
     QString earliestMsgId() const;
     bool containsMessage(const QString& msgId) const;
+    bool canRevokeMessage(const QString& msgId, qint64 nowMs, qint64 revokeWindowMs) const;
     QString rawContentByMsgId(const QString& msgId) const;
     QString previewTextByMsgId(const QString& msgId) const;
     Q_INVOKABLE QString exportRecentText(int maxMessages = 80) const;

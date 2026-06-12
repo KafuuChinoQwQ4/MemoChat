@@ -7,7 +7,7 @@
 - 对于 WSLg/Linux 的玻璃效果和透明圆角窗口，避免使用未遮罩的 `ShaderEffectSource`/`MultiEffect`、整窗 `layer.*`、`QRegion` mask，以及依赖 `Rectangle.clip` 来裁剪圆角子元素。应使用 Linux 专用的抗锯齿 QML/Shape 外壳，带透明内边距，并且不要有方形背景板。
 
 ## 项目规则
-- 用最少的代码写逻辑和功能，能用300就绝不写1000行冗余的代码。
+- 保持实现简洁，优先复用现有模式和 helper；不要为任务范围外的抽象、兼容层或顺手重构显著增加代码量。
 - 代码风格语法尽可能现代，前面严格加上std::,不要使用using namespace std。
 - 所有基础设施容器都在 Docker 中。
 - Docker 容器必须保持稳定的发布端口。

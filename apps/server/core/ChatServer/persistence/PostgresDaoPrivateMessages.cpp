@@ -9,6 +9,8 @@
 
 namespace
 {
+constexpr int64_t kMessageRevokeWindowMsPostgresDao = 5 * 60 * 1000;
+
 int64_t NowMsPostgresDao()
 {
     return static_cast<int64_t>(
@@ -791,7 +793,9 @@ bool PostgresDao::RevokePrivateMessage(const int& uid,
             }
             const int conv_min = std::min(uid, peer_uid);
             const int conv_max = std::max(uid, peer_uid);
-            if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid)
+            if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid ||
+                message->deleted_at_ms > 0 || message->created_at <= 0 ||
+                deleted_at_ms - message->created_at > kMessageRevokeWindowMsPostgresDao)
             {
                 return false;
             }
@@ -800,11 +804,14 @@ bool PostgresDao::RevokePrivateMessage(const int& uid,
             pqxx::work txn(conn);
             const auto updated = txn.exec_params(
                 "UPDATE chat_private_msg SET content = '[消息已撤回]', deleted_at_ms = $1, edited_at_ms = 0 "
-                "WHERE msg_id = $2 AND conv_uid_min = $3 AND conv_uid_max = $4",
+                "WHERE msg_id = $2 AND conv_uid_min = $3 AND conv_uid_max = $4 AND from_uid = $5 "
+                "AND deleted_at_ms = 0 AND created_at >= $6",
                 deleted_at_ms,
                 msg_id,
                 conv_min,
-                conv_max);
+                conv_max,
+                uid,
+                deleted_at_ms - kMessageRevokeWindowMsPostgresDao);
             txn.commit();
             return updated.affected_rows() > 0;
         }
@@ -835,18 +842,23 @@ bool PostgresDao::RevokePrivateMessage(const int& uid,
         }
         const int conv_min = std::min(uid, peer_uid);
         const int conv_max = std::max(uid, peer_uid);
-        if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid)
+        if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid ||
+            message->deleted_at_ms > 0 || message->created_at <= 0 ||
+            deleted_at_ms - message->created_at > kMessageRevokeWindowMsPostgresDao)
         {
             return false;
         }
 
         std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement(
             "UPDATE chat_private_msg SET content = '[消息已撤回]', deleted_at_ms = ?, edited_at_ms = 0, "
-            "created_at = created_at WHERE msg_id = ? AND conv_uid_min = ? AND conv_uid_max = ?"));
+            "created_at = created_at WHERE msg_id = ? AND conv_uid_min = ? AND conv_uid_max = ? AND from_uid = ? "
+            "AND deleted_at_ms = 0 AND created_at >= ?"));
         pstmt->setInt64(1, deleted_at_ms);
         pstmt->setString(2, msg_id);
         pstmt->setInt(3, conv_min);
         pstmt->setInt(4, conv_max);
+        pstmt->setInt(5, uid);
+        pstmt->setInt64(6, deleted_at_ms - kMessageRevokeWindowMsPostgresDao);
         return pstmt->executeUpdate() > 0;
     }
     catch (sql::SQLException& e)

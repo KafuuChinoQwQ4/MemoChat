@@ -181,7 +181,7 @@ LoginResult HandleResetPwd(const memochat::json::JsonValue& req)
         result.message = "user email mismatch";
         return result;
     }
-    if (!PostgresMgr::GetInstance()->UpdatePwd(name, pwd))
+    if (!PostgresMgr::GetInstance()->UpdatePwd(email, pwd))
     {
         result.error = ErrorCodes::PasswdUpFailed;
         result.message = "password update failed";

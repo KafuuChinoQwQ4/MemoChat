@@ -67,7 +67,7 @@ void PostgresDao::WarmupRelationBootstrapQueries()
         {
             pqxx::connection conn(postgres_connection_string_);
             pqxx::read_transaction txn(conn);
-            txn.exec_params("SELECT a.from_uid, a.status, u.name, u.nick, u.sex, u.user_id "
+            txn.exec_params("SELECT a.from_uid, a.status, u.name, u.nick, u.sex, u.user_id, u.icon "
                             "FROM friend_apply AS a "
                             "JOIN \"user\" AS u ON a.from_uid = u.uid "
                             "WHERE a.to_uid = $1 AND a.id > $2 ORDER BY a.id ASC LIMIT $3",
@@ -108,7 +108,7 @@ void PostgresDao::WarmupRelationBootstrapQueries()
     {
         {
             std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement(
-                "select apply.from_uid, apply.status, user.name, user.nick, user.sex, user.user_id "
+                "select apply.from_uid, apply.status, user.name, user.nick, user.sex, user.user_id, user.icon "
                 "from friend_apply as apply join user on apply.from_uid = user.uid where apply.to_uid = ? "
                 "and apply.id > ? order by apply.id ASC LIMIT ? "));
             pstmt->setInt(1, -1);

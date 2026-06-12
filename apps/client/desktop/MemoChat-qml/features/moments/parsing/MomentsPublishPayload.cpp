@@ -13,6 +13,18 @@
 
 namespace memochat::moments
 {
+namespace
+{
+QString momentUploadMediaType(const QString& attachmentType)
+{
+    const QString normalized = attachmentType.trimmed().toLower();
+    if (normalized == QStringLiteral("video"))
+    {
+        return QStringLiteral("moment_video");
+    }
+    return QStringLiteral("moment_image");
+}
+} // namespace
 
 QVariantMap normalizeMomentAttachment(const QVariantMap& source)
 {
@@ -93,14 +105,15 @@ buildUploadedDraftMomentItems(const QString& text,
     for (int index = 0; index < normalizedAttachments.size(); ++index)
     {
         const QVariantMap attachment = normalizedAttachments.at(index).toMap();
-        const QString uploadType = attachment.value(QStringLiteral("type")).toString();
+        const QString attachmentType = attachment.value(QStringLiteral("type")).toString().trimmed().toLower();
+        const QString uploadMediaType = momentUploadMediaType(attachmentType);
         const QString fileUrl = attachment.value(QStringLiteral("fileUrl")).toString();
 
         UploadedMediaInfo uploaded;
         QString uploadError;
         const bool ok = MediaUploadService::uploadLocalFile(
             fileUrl,
-            uploadType,
+            uploadMediaType,
             uid,
             token,
             &uploaded,
@@ -133,7 +146,7 @@ buildUploadedDraftMomentItems(const QString& text,
 
         const int width = attachment.value(QStringLiteral("width")).toInt();
         const int height = attachment.value(QStringLiteral("height")).toInt();
-        if (uploadType == QStringLiteral("video"))
+        if (attachmentType == QStringLiteral("video"))
         {
             items += buildVideoMomentItem(mediaKey,
                                           QString(),

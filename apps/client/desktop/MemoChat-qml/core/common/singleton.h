@@ -6,7 +6,6 @@
 #include <iostream>
 #include "global.h"
 
-using namespace std;
 template <typename T> class Singleton
 {
 protected:
@@ -23,14 +22,14 @@ public:
         std::call_once(s_flag,
                        [&]()
                        {
-                           _instance = shared_ptr<T>(new T);
+                           _instance = std::shared_ptr<T>(new T);
                        });
 
         return _instance;
     }
     void PrintAddress()
     {
-        std::cout << _instance.get() << endl;
+        std::cout << _instance.get() << std::endl;
     }
     ~Singleton()
     {

@@ -2,7 +2,13 @@
 
 #include "FriendListModel.h"
 
+#include <QDateTime>
 #include <utility>
+
+namespace
+{
+constexpr qint64 kMessageRevokeWindowMs = 5 * 60 * 1000;
+}
 
 namespace
 {
@@ -110,6 +116,11 @@ int ChatFeatureController::messageCount() const
 bool ChatFeatureController::containsMessage(const QString& msgId) const
 {
     return _messageModel.containsMessage(msgId);
+}
+
+bool ChatFeatureController::canRevokeMessage(const QString& msgId) const
+{
+    return _messageModel.canRevokeMessage(msgId, QDateTime::currentMSecsSinceEpoch(), kMessageRevokeWindowMs);
 }
 
 void ChatFeatureController::setMessageDownloadAuthContext(int uid, const QString& token)

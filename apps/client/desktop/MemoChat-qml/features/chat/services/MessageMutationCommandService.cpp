@@ -121,6 +121,11 @@ MessageMutationCommandResult MessageMutationCommandService::run(const MessageMut
             return failed(request.command, dependencies, false, QStringLiteral("未找到要转发的消息"));
         }
     }
+    if (request.command == MessageMutationCommand::Revoke &&
+        (!dependencies.canRevokeMessage || !dependencies.canRevokeMessage(msgId)))
+    {
+        return failed(request.command, dependencies, useGroupStatus, QStringLiteral("只能撤回5分钟内自己发送的消息"));
+    }
     if (!dependencies.dispatchPayload)
     {
         return failed(request.command, dependencies, useGroupStatus, QStringLiteral("消息发送器不可用"));

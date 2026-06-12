@@ -75,12 +75,28 @@ Item {
         }
     }
 
-    function draftAttachments() {
+    function draftAttachmentObject(item) {
+        return {
+            "attachmentId": String(item.attachmentId || ""),
+            "type": String(item.type || ""),
+            "fileUrl": String(item.fileUrl || ""),
+            "fileName": String(item.fileName || ""),
+            "sizeBytes": Number(item.sizeBytes || 0),
+            "selectedAt": Number(item.selectedAt || 0),
+            "previewUrl": String(item.previewUrl || ""),
+            "width": Number(item.width || 0),
+            "height": Number(item.height || 0),
+            "durationMs": Number(item.durationMs || 0),
+            "mimeType": String(item.mimeType || "")
+        }
+    }
+
+    function draftAttachmentsJson() {
         var list = []
         for (var i = 0; i < attachmentsModel.count; ++i) {
-            list.push(attachmentsModel.get(i))
+            list.push(draftAttachmentObject(attachmentsModel.get(i)))
         }
-        return list
+        return JSON.stringify(list)
     }
 
     GlassSurface {
@@ -135,10 +151,10 @@ Item {
                     root.statusText = ""
                     root.statusIsError = false
                     if (root.controller) {
-                        root.controller.publishDraftMoment(
+                        root.controller.publishDraftMomentJson(
                             postInput.text,
                             visibilitySelector.currentIndex,
-                            root.draftAttachments())
+                            root.draftAttachmentsJson())
                     }
                 }
             }

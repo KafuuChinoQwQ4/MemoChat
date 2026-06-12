@@ -34,6 +34,7 @@ Item {
     property bool canForward: false
     property bool canEdit: false
     property bool canRevoke: false
+    property bool showRevokeExpiredHint: false
     signal openUrlRequested(string url)
     signal replyRequested(string msgId, string senderName, string previewText)
     signal mentionRequested(string mentionText)
@@ -98,6 +99,13 @@ Item {
     readonly property int stateLabelHeight: stateBadge.active ? 16 : 0
 
     height: timeDividerHeight + topSpacing + messageHeight + translationHeight + stateLabelHeight + bottomSpacing
+
+    function openActionMenuAtBubblePoint(pointX, pointY) {
+        const boundaryItem = ListView.view ? ListView.view : root
+        const listPoint = bubble.mapToItem(boundaryItem, pointX, pointY)
+        actionMenu.parent = boundaryItem
+        actionMenu.openAt(listPoint.x, listPoint.y, boundaryItem.width, boundaryItem.height)
+    }
 
     Text {
         id: textMeasure
@@ -277,7 +285,7 @@ Item {
                 if (!root.enableContextMenu) {
                     return
                 }
-                actionMenu.openAt(eventPoint.position.x, eventPoint.position.y, root.width, root.height)
+                root.openActionMenuAtBubblePoint(eventPoint.position.x, eventPoint.position.y)
             }
         }
     }
@@ -408,7 +416,7 @@ Item {
 
     ChatMessageActionMenu {
         id: actionMenu
-        parent: bubble
+        parent: root
         msgId: root.msgId
         msgType: root.msgType
         content: root.content
@@ -419,6 +427,7 @@ Item {
         canForward: root.canForward
         canEdit: root.canEdit
         canRevoke: root.canRevoke
+        showRevokeExpiredHint: root.showRevokeExpiredHint
         onReplyRequested: function(msgId, senderName, previewText) { root.replyRequested(msgId, senderName, previewText) }
         onMentionRequested: function(mentionText) { root.mentionRequested(mentionText) }
         onForwardRequested: function(msgId) { root.forwardRequested(msgId) }

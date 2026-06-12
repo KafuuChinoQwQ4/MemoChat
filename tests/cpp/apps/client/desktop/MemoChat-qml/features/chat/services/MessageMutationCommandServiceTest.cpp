@@ -14,6 +14,7 @@ constexpr int kEditGroupMsgReq = 1065;
 constexpr int kRevokeGroupMsgReq = 1067;
 constexpr int kForwardGroupMsgReq = 1069;
 constexpr int kEditPrivateMsgReq = 1077;
+constexpr int kRevokePrivateMsgReq = 1079;
 constexpr int kForwardPrivateMsgReq = 1083;
 
 QJsonObject objectFrom(const QByteArray& payload)
@@ -26,6 +27,9 @@ struct MutationHarness
     int privateMessageExistsCalls = 0;
     QString privateMessageExistsMsgId;
     bool privateMessageExistsResult = true;
+    int canRevokeMessageCalls = 0;
+    QString canRevokeMessageMsgId;
+    bool canRevokeMessageResult = true;
     int privateStatusCalls = 0;
     int groupStatusCalls = 0;
     QString statusText;
@@ -42,6 +46,12 @@ struct MutationHarness
             ++privateMessageExistsCalls;
             privateMessageExistsMsgId = msgId;
             return privateMessageExistsResult;
+        };
+        deps.canRevokeMessage = [this](const QString& msgId)
+        {
+            ++canRevokeMessageCalls;
+            canRevokeMessageMsgId = msgId;
+            return canRevokeMessageResult;
         };
         deps.setPrivateStatus = [this](const QString& text, bool isError)
         {
@@ -118,6 +128,8 @@ TEST(MessageMutationCommandServiceTest, GroupRevokeBuildsPayloadAndDispatchesGro
 
     EXPECT_TRUE(result.success);
     EXPECT_EQ(result.reqId, kRevokeGroupMsgReq);
+    EXPECT_EQ(harness.canRevokeMessageCalls, 1);
+    EXPECT_EQ(harness.canRevokeMessageMsgId, QStringLiteral("group-msg-1"));
     ASSERT_EQ(harness.dispatchCalls, 1);
 
     const QJsonObject payload = objectFrom(harness.dispatchedPayload);
@@ -125,6 +137,26 @@ TEST(MessageMutationCommandServiceTest, GroupRevokeBuildsPayloadAndDispatchesGro
     EXPECT_EQ(payload.value(QStringLiteral("msgid")).toString(), QStringLiteral("group-msg-1"));
     EXPECT_EQ(payload.value(QStringLiteral("groupid")).toVariant().toLongLong(), kGroupId);
     EXPECT_FALSE(payload.contains(QStringLiteral("peer_uid")));
+    EXPECT_FALSE(payload.contains(QStringLiteral("content")));
+}
+
+TEST(MessageMutationCommandServiceTest, PrivateRevokeBuildsPayloadAndDispatchesPrivateReqId)
+{
+    MutationHarness harness;
+    const MessageMutationCommandResult result =
+        MessageMutationCommandService::run(privateRequest(MessageMutationCommand::Revoke), harness.dependencies());
+
+    EXPECT_TRUE(result.success);
+    EXPECT_EQ(result.reqId, kRevokePrivateMsgReq);
+    EXPECT_EQ(harness.canRevokeMessageCalls, 1);
+    EXPECT_EQ(harness.canRevokeMessageMsgId, QStringLiteral("msg-1"));
+    ASSERT_EQ(harness.dispatchCalls, 1);
+
+    const QJsonObject payload = objectFrom(harness.dispatchedPayload);
+    EXPECT_EQ(payload.value(QStringLiteral("fromuid")).toInt(), kSelfUid);
+    EXPECT_EQ(payload.value(QStringLiteral("msgid")).toString(), QStringLiteral("msg-1"));
+    EXPECT_EQ(payload.value(QStringLiteral("peer_uid")).toInt(), kPeerUid);
+    EXPECT_FALSE(payload.contains(QStringLiteral("groupid")));
     EXPECT_FALSE(payload.contains(QStringLiteral("content")));
 }
 
@@ -207,6 +239,40 @@ TEST(MessageMutationCommandServiceTest, MissingPrivateForwardSourceMessageReject
     EXPECT_FALSE(result.success);
     EXPECT_EQ(result.errorText, QStringLiteral("未找到要转发的消息"));
     EXPECT_EQ(harness.privateMessageExistsCalls, 1);
+    EXPECT_EQ(harness.privateStatusCalls, 1);
+    EXPECT_EQ(harness.groupStatusCalls, 0);
+    EXPECT_EQ(harness.dispatchCalls, 0);
+}
+
+TEST(MessageMutationCommandServiceTest, GroupRevokeRejectsWhenMessageIsNotSelfOrExpired)
+{
+    MutationHarness harness;
+    harness.canRevokeMessageResult = false;
+
+    const MessageMutationCommandResult result =
+        MessageMutationCommandService::run(groupRequest(MessageMutationCommand::Revoke), harness.dependencies());
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.errorText, QStringLiteral("只能撤回5分钟内自己发送的消息"));
+    EXPECT_TRUE(result.errorIsGroup);
+    EXPECT_EQ(harness.canRevokeMessageCalls, 1);
+    EXPECT_EQ(harness.groupStatusCalls, 1);
+    EXPECT_EQ(harness.privateStatusCalls, 0);
+    EXPECT_EQ(harness.dispatchCalls, 0);
+}
+
+TEST(MessageMutationCommandServiceTest, PrivateRevokeRejectsWhenMessageIsNotSelfOrExpired)
+{
+    MutationHarness harness;
+    harness.canRevokeMessageResult = false;
+
+    const MessageMutationCommandResult result =
+        MessageMutationCommandService::run(privateRequest(MessageMutationCommand::Revoke), harness.dependencies());
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.errorText, QStringLiteral("只能撤回5分钟内自己发送的消息"));
+    EXPECT_FALSE(result.errorIsGroup);
+    EXPECT_EQ(harness.canRevokeMessageCalls, 1);
     EXPECT_EQ(harness.privateStatusCalls, 1);
     EXPECT_EQ(harness.groupStatusCalls, 0);
     EXPECT_EQ(harness.dispatchCalls, 0);

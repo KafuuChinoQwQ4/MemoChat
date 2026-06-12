@@ -9,7 +9,8 @@
 namespace
 {
 constexpr int64_t kPermDeleteMessages = 1LL << 1;
-}
+constexpr int64_t kMessageRevokeWindowMsPostgresDao = 5 * 60 * 1000;
+} // namespace
 bool PostgresDao::SaveGroupMessage(const GroupMessageInfo& msg,
                                    int64_t* out_server_msg_id,
                                    int64_t* out_group_seq,
@@ -385,17 +386,22 @@ bool PostgresDao::RevokeGroupMessage(const int64_t& group_id,
         {
             pqxx::connection conn(postgres_connection_string_);
             pqxx::work txn(conn);
-            const auto rows =
-                txn.exec_params("SELECT from_uid FROM chat_group_msg WHERE group_id = $1 AND msg_id = $2 LIMIT 1",
-                                group_id,
-                                msg_id);
+            const auto rows = txn.exec_params(
+                "SELECT from_uid, created_at, deleted_at_ms FROM chat_group_msg WHERE group_id = $1 AND msg_id = $2 "
+                "LIMIT 1",
+                group_id,
+                msg_id);
             if (rows.empty())
             {
                 txn.abort();
                 return false;
             }
             const int from_uid = rows[0]["from_uid"].as<int>();
-            if (from_uid != operator_uid && !HasGroupPermission(group_id, operator_uid, kPermDeleteMessages))
+            const int64_t created_at = rows[0]["created_at"].as<int64_t>();
+            const int64_t existing_deleted_at_ms =
+                rows[0]["deleted_at_ms"].is_null() ? 0 : rows[0]["deleted_at_ms"].as<int64_t>();
+            if (from_uid != operator_uid || existing_deleted_at_ms > 0 || created_at <= 0 ||
+                deleted_at_ms - created_at > kMessageRevokeWindowMsPostgresDao)
             {
                 txn.abort();
                 return false;
@@ -403,10 +409,13 @@ bool PostgresDao::RevokeGroupMessage(const int64_t& group_id,
 
             const auto updated = txn.exec_params(
                 "UPDATE chat_group_msg SET content = '[消息已撤回]', msg_type = 'revoke', mentions_json = '[]', "
-                "deleted_at_ms = $1, edited_at_ms = 0 WHERE group_id = $2 AND msg_id = $3",
+                "deleted_at_ms = $1, edited_at_ms = 0 WHERE group_id = $2 AND msg_id = $3 AND from_uid = $4 "
+                "AND deleted_at_ms = 0 AND created_at >= $5",
                 deleted_at_ms,
                 group_id,
-                msg_id);
+                msg_id,
+                operator_uid,
+                deleted_at_ms - kMessageRevokeWindowMsPostgresDao);
             if (updated.affected_rows() <= 0)
             {
                 txn.abort();
@@ -437,7 +446,8 @@ bool PostgresDao::RevokeGroupMessage(const int64_t& group_id,
     try
     {
         std::unique_ptr<sql::PreparedStatement> qmsg(con->_con->prepareStatement(
-            "SELECT from_uid FROM chat_group_msg WHERE group_id = ? AND msg_id = ? LIMIT 1"));
+            "SELECT from_uid, created_at, deleted_at_ms FROM chat_group_msg WHERE group_id = ? AND msg_id = ? "
+            "LIMIT 1"));
         qmsg->setInt64(1, group_id);
         qmsg->setString(2, msg_id);
         std::unique_ptr<sql::ResultSet> res(qmsg->executeQuery());
@@ -446,22 +456,25 @@ bool PostgresDao::RevokeGroupMessage(const int64_t& group_id,
             return false;
         }
         const int from_uid = res->getInt("from_uid");
+        const int64_t created_at = res->getInt64("created_at");
+        const int64_t existing_deleted_at_ms = res->getInt64("deleted_at_ms");
 
-        if (from_uid != operator_uid)
+        if (from_uid != operator_uid || existing_deleted_at_ms > 0 || created_at <= 0 ||
+            deleted_at_ms - created_at > kMessageRevokeWindowMsPostgresDao)
         {
-            if (!HasGroupPermission(group_id, operator_uid, kPermDeleteMessages))
-            {
-                return false;
-            }
+            return false;
         }
 
         con->_con->setAutoCommit(false);
         std::unique_ptr<sql::PreparedStatement> up(con->_con->prepareStatement(
             "UPDATE chat_group_msg SET content = '[消息已撤回]', msg_type = 'revoke', mentions_json = '[]', "
-            "deleted_at_ms = ?, edited_at_ms = 0 WHERE group_id = ? AND msg_id = ?"));
+            "deleted_at_ms = ?, edited_at_ms = 0 WHERE group_id = ? AND msg_id = ? AND from_uid = ? "
+            "AND deleted_at_ms = 0 AND created_at >= ?"));
         up->setInt64(1, deleted_at_ms);
         up->setInt64(2, group_id);
         up->setString(3, msg_id);
+        up->setInt(4, operator_uid);
+        up->setInt64(5, deleted_at_ms - kMessageRevokeWindowMsPostgresDao);
         if (up->executeUpdate() <= 0)
         {
             con->_con->rollback();

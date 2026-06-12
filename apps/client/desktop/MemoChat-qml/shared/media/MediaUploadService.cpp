@@ -6,6 +6,17 @@
 #include <QFileInfo>
 #include <QMimeDatabase>
 
+namespace
+{
+
+bool usesImageUploadLimit(const QString& mediaType)
+{
+    const QString normalized = mediaType.trimmed().toLower();
+    return normalized == QStringLiteral("image") || normalized == QStringLiteral("moment_image");
+}
+
+} // namespace
+
 MediaUploadResult MediaUploadService::uploadLocalFile(const MediaUploadRequest& request,
                                                       const UploadProgressCallback& progress)
 {
@@ -41,7 +52,7 @@ MediaUploadResult MediaUploadService::uploadLocalFile(const MediaUploadRequest& 
     }
 
     const ClientMediaConfig mediaCfg = loadMediaConfig();
-    const qint64 limit = (request.mediaType == "image") ? mediaCfg.maxImageBytes : mediaCfg.maxFileBytes;
+    const qint64 limit = usesImageUploadLimit(request.mediaType) ? mediaCfg.maxImageBytes : mediaCfg.maxFileBytes;
     if (fileSize > limit)
     {
         result.errorText = QString("文件过大，请控制在 %1MB 以内").arg(limit / (1024 * 1024));

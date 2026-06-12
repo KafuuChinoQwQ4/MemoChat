@@ -125,12 +125,13 @@ Rectangle {
 
                     delegate: Loader {
                         width: feedView.width
-                        height: item ? item.height : 0
+                        height: item ? item.implicitHeight : 0
                         asynchronous: true
                         sourceComponent: Component {
                             MomentsDelegate {
                                 width: feedView.width
                                 backdrop: root.backdrop
+                                controller: root.momentsController
                                 momentData: model
                                 listTextContent: model.textContent || ""
                                 canDelete: root.currentUserUid > 0

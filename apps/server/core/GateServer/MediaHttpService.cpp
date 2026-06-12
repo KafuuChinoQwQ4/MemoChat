@@ -415,7 +415,7 @@ IMediaStorage& MediaStorageForLocal(const std::string& provider)
 
 bool IsMediaTypeImageLocal(const std::string& media_type)
 {
-    return media_type == "image";
+    return media_type == "image" || media_type == "moment_image";
 }
 
 std::string NewIdStringLocal()

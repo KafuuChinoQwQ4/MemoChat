@@ -42,6 +42,7 @@ CHAT_MESSAGE_ACTION_MENU = CHAT_FEATURE_CONVERSATION / "ChatMessageActionMenu.qm
 CHAT_SMART_ACTION_POPUPS = CHAT_FEATURE_CONVERSATION / "ChatSmartActionPopups.qml"
 CHAT_SMART_SUMMARY_POPUP = CHAT_FEATURE_CONVERSATION / "ChatSmartSummaryPopup.qml"
 CHAT_SMART_TRANSLATE_POPUP = CHAT_FEATURE_CONVERSATION / "ChatSmartTranslatePopup.qml"
+AGENT_CONTROLLER_CHAT = CLIENT / "features/agent/controller/AgentControllerChat.cpp"
 
 
 class LargePaneBoundaryTests(unittest.TestCase):
@@ -280,7 +281,8 @@ class LargePaneBoundaryTests(unittest.TestCase):
         self.assertIn("ChatMessageActionMenu", delegate)
         self.assertNotIn("id: menu", delegate)
         for token in (
-            "MenuItem",
+            "Popup {",
+            "function actionRows()",
             "replyRequested",
             "mentionRequested",
             "forwardRequested",
@@ -290,6 +292,56 @@ class LargePaneBoundaryTests(unittest.TestCase):
         ):
             with self.subTest(token=token):
                 self.assertIn(token, action_menu)
+
+    def test_chat_message_action_menu_renders_only_available_action_rows(self):
+        action_menu = self.read(CHAT_MESSAGE_ACTION_MENU)
+
+        for token in (
+            'rows.push({ "type": "action", "key": "mention", "text": "@Ta", "enabled": true })',
+            'rows.push({ "type": "separator" })',
+            'rows.push({ "type": "action", "key": "revokeExpired", "text": "撤回 (已超过5分钟)", "enabled": false })',
+            "Repeater {",
+            "model: root.actionRows()",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, action_menu)
+
+        self.assertNotIn("MenuItem {", action_menu)
+        self.assertNotIn("MenuSeparator {", action_menu)
+        self.assertNotIn("visible: root.canMention", action_menu)
+
+    def test_chat_message_action_menu_repositions_inside_delegate_bounds(self):
+        action_menu = self.read(CHAT_MESSAGE_ACTION_MENU)
+        delegate = self.read(CHAT_MESSAGE_DELEGATE)
+
+        for token in (
+            "function bestPoint(",
+            "function clampedPoint(",
+            "pointX - menuWidth - margin",
+            "pointY - menuHeight - margin",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, action_menu)
+
+        self.assertIn("function openActionMenuAtBubblePoint(pointX, pointY)", delegate)
+        self.assertIn("const boundaryItem = ListView.view ? ListView.view : root", delegate)
+        self.assertIn("bubble.mapToItem(boundaryItem, pointX, pointY)", delegate)
+        self.assertIn("actionMenu.parent = boundaryItem", delegate)
+        self.assertIn("actionMenu.openAt(listPoint.x, listPoint.y, boundaryItem.width, boundaryItem.height)", delegate)
+        self.assertNotIn("parent: bubble", delegate)
+
+    def test_agent_smart_result_blocks_guardrail_output(self):
+        controller = self.read(AGENT_CONTROLLER_CHAT)
+        handle_smart = controller.split("void AgentController::handleSmartRsp", 1)[1]
+
+        self.assertIn("bool isGuardrailBlockedOutput(const QString& text)", controller)
+        self.assertIn('startsWith(QStringLiteral("Guardrail blocked"), Qt::CaseInsensitive)', controller)
+        self.assertIn("if (isGuardrailBlockedOutput(result))", handle_smart)
+        self.assertIn('setErrorState(QStringLiteral("AI 没有生成有效内容', handle_smart)
+        guardrail_branch = handle_smart.split("if (isGuardrailBlockedOutput(result))", 1)[1].split(
+            "emit smartResultReady", 1
+        )[0]
+        self.assertIn("return;", guardrail_branch)
 
     def test_chat_smart_summary_popup_exists_and_is_registered(self):
         qrc = self.qrc_text()
