@@ -78,7 +78,7 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
         self.assertIn("interactive: contentHeight > height", feed)
         self.assertIn("boundsBehavior: Flickable.StopAtBounds", feed)
         self.assertIn("ScrollBar.vertical: GlassScrollBar", feed)
-        self.assertIn("height: item ? item.height : 0", feed)
+        self.assertIn("height: item ? item.implicitHeight : 0", feed)
         self.assertIn("height: implicitHeight", delegate)
 
     def test_chat_bubbles_bind_actual_geometry(self):

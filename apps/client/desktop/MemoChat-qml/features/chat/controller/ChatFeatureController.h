@@ -259,6 +259,7 @@ struct ChatMessageMutationPort
 {
     std::function<ChatMessageMutationSnapshot()> snapshot;
     std::function<bool(const QString&)> privateMessageExists;
+    std::function<bool(const QString&)> canRevokeMessage;
     std::function<void(const QString&, bool)> setPrivateStatus;
     std::function<void(const QString&, bool)> setGroupStatus;
     std::function<void(int, const QByteArray&)> dispatchPayload;
@@ -322,6 +323,7 @@ public:
     void clearMessageModel();
     int messageCount() const;
     bool containsMessage(const QString& msgId) const;
+    bool canRevokeMessage(const QString& msgId) const;
     void setMessageDownloadAuthContext(int uid, const QString& token);
     void openCacheStoresForUser(int uid);
     void closeCacheStores();

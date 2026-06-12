@@ -41,6 +41,7 @@ struct MessageMutationCommandRequest
 struct MessageMutationCommandDependencies
 {
     std::function<bool(const QString&)> privateMessageExists;
+    std::function<bool(const QString&)> canRevokeMessage;
     std::function<void(const QString&, bool)> setPrivateStatus;
     std::function<void(const QString&, bool)> setGroupStatus;
     std::function<void(int, const QByteArray&)> dispatchPayload;

@@ -86,6 +86,11 @@ S3MediaStorage::S3MediaStorage()
     _bucket_file = minio["BucketFile"];
     _bucket_image = minio["BucketImage"];
     _bucket_video = minio["BucketVideo"];
+    _bucket_moments = minio["BucketMoments"];
+    if (_bucket_moments.empty())
+    {
+        _bucket_moments = "memochat-moments";
+    }
 
     const std::string enabled_str = minio["Enabled"];
     _enabled = (enabled_str == "true" || enabled_str == "1");
@@ -124,7 +129,7 @@ S3MediaStorage::S3MediaStorage()
     memolog::LogInfo("s3.init.ok",
                      "S3MediaStorage initialized, endpoint=" + minio["Endpoint"] + " bucket_avatar=" + _bucket_avatar +
                          " bucket_file=" + _bucket_file + " bucket_image=" + _bucket_image +
-                         " bucket_video=" + _bucket_video);
+                         " bucket_video=" + _bucket_video + " bucket_moments=" + _bucket_moments);
 }
 
 S3MediaStorage::~S3MediaStorage() = default;
@@ -139,6 +144,10 @@ bool S3MediaStorage::SelectBucket(const std::string& media_type,
     if (t == "avatar")
     {
         out_bucket = _bucket_avatar;
+    }
+    else if (t == "moment_image" || t == "moment_video")
+    {
+        out_bucket = _bucket_moments;
     }
     else if (t == "image")
     {
@@ -244,7 +253,8 @@ bool S3MediaStorage::StoragePathHasConfiguredBucketPrefix(const std::string& sto
         return false;
     }
     const std::string first = storage_path.substr(0, slash);
-    return first == _bucket_avatar || first == _bucket_file || first == _bucket_image || first == _bucket_video;
+    return first == _bucket_avatar || first == _bucket_file || first == _bucket_image || first == _bucket_video ||
+           first == _bucket_moments;
 }
 
 bool S3MediaStorage::ResolveReadPath(const std::string& storage_path, std::filesystem::path& out_path) const

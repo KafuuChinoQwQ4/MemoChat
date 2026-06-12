@@ -9,11 +9,13 @@ import "qrc:/qml/components"
 Rectangle {
     id: root
     color: "transparent"
+    clip: true
     // Loader 未设 height：用内容固有高度 + 上下边距，避免正文与点赞行重叠
-    implicitHeight: contentLayout.implicitHeight + 24
+    implicitHeight: Math.max(contentLayout.implicitHeight, contentLayout.childrenRect.height) + 24
     height: implicitHeight
 
     property var backdrop: null
+    property var controller: null
     property var momentData: null
     property int momentId: momentData ? momentData.momentId : 0
     property int uid: momentData ? momentData.uid : 0
@@ -66,7 +68,7 @@ Rectangle {
             onDeleteClicked: root.deleteClicked()
         }
 
-        // Content items (images / text) — Layout.* 仅对 Layout 容器的直接子项生效，故用 Item + 显式宽高
+        // Content items (images / text) — Layout.* 仅对 Layout 容器的直接子项生效，故媒体块用真实容器汇总高度
         Label {
             Layout.fillWidth: true
             visible: !root.hasRenderableContent
@@ -86,97 +88,115 @@ Rectangle {
             horizontalAlignment: Text.AlignLeft
         }
 
-        Repeater {
-            model: root.items
-            delegate: Item {
-                id: blockRoot
-                required property var modelData
-                Layout.fillWidth: true
-                Layout.preferredHeight: blockColumn.implicitHeight
+        Item {
+            id: mediaColumn
+            Layout.fillWidth: true
+            Layout.preferredHeight: root.mediaContentHeight(root.items)
+            Layout.minimumHeight: root.mediaContentHeight(root.items)
+            visible: root.hasMediaContent
+            implicitHeight: root.mediaContentHeight(root.items)
+            clip: true
 
-                Column {
-                    id: blockColumn
-                    width: parent.width
-                    spacing: 8
+            Column {
+                id: mediaStack
+                width: parent.width
+                spacing: 8
 
-                    Rectangle {
-                        id: imageBlock
-                        visible: root.itemType(blockRoot.modelData) === "image" && root.itemMediaKey(blockRoot.modelData).length > 0
-                        width: Math.min(blockRoot.width, root.imageMaxDim(blockRoot.modelData))
-                        height: visible ? root.imageHeight(blockRoot.modelData) : 0
-                        color: Qt.rgba(0.92, 0.94, 0.97, 1.0)
-                        radius: 8
-                        clip: true
-
-                        Image {
-                            anchors.fill: parent
-                            fillMode: Image.PreserveAspectCrop
-                            source: root.mediaUrl(root.itemMediaKey(blockRoot.modelData))
-                            cache: true
-                            asynchronous: true
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                imageViewerPopup.showImage(root.itemMediaKey(blockRoot.modelData))
-                            }
-                        }
-                    }
-
-                    Rectangle {
-                        id: videoBlock
-                        visible: root.itemType(blockRoot.modelData) === "video" && root.itemMediaKey(blockRoot.modelData).length > 0
-                        width: Math.min(blockRoot.width, 320)
-                        height: visible ? 188 : 0
-                        radius: 10
-                        clip: true
-                        color: "#202834"
-                        border.color: Qt.rgba(0.18, 0.22, 0.28, 0.85)
-
-                        Rectangle {
-                            anchors.fill: parent
-                            gradient: Gradient {
-                                GradientStop { position: 0.0; color: "#324257" }
-                                GradientStop { position: 1.0; color: "#131922" }
-                            }
-                        }
+                Repeater {
+                    model: root.items
+                    delegate: Item {
+                        id: blockRoot
+                        required property var modelData
+                        width: mediaStack.width
+                        implicitHeight: root.mediaItemHeight(blockRoot.modelData)
+                        height: visible ? root.mediaItemHeight(blockRoot.modelData) : 0
+                        visible: root.isMediaItem(blockRoot.modelData) && root.itemMediaKey(blockRoot.modelData).length > 0
 
                         Column {
-                            anchors.centerIn: parent
+                            id: blockColumn
+                            width: parent.width
                             spacing: 8
 
-                            Label {
-                                text: "▶"
-                                font.pixelSize: 34
-                                color: "#ffffff"
-                                horizontalAlignment: Text.AlignHCenter
-                                width: 120
+                            Rectangle {
+                                id: imageBlock
+                                visible: root.itemType(blockRoot.modelData) === "image"
+                                width: Math.min(blockRoot.width, root.imageMaxDim(blockRoot.modelData))
+                                height: visible ? blockRoot.height : 0
+                                color: Qt.rgba(0.92, 0.94, 0.97, 1.0)
+                                radius: 8
+                                clip: true
+
+                                Image {
+                                    anchors.fill: parent
+                                    fillMode: Image.PreserveAspectCrop
+                                    source: root.mediaUrl(root.itemMediaKey(blockRoot.modelData))
+                                    cache: true
+                                    asynchronous: true
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        imageViewerPopup.showImage(root.itemMediaKey(blockRoot.modelData))
+                                    }
+                                }
                             }
 
-                            Label {
-                                text: root.videoDurationText(blockRoot.modelData.duration_ms)
-                                font.pixelSize: 12
-                                color: "#dbe7f6"
-                                horizontalAlignment: Text.AlignHCenter
-                                width: 120
+                            Rectangle {
+                                id: videoBlock
+                                visible: root.itemType(blockRoot.modelData) === "video"
+                                width: Math.min(blockRoot.width, 320)
+                                height: visible ? blockRoot.height : 0
+                                radius: 10
+                                clip: true
+                                color: "#202834"
+                                border.color: Qt.rgba(0.18, 0.22, 0.28, 0.85)
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    gradient: Gradient {
+                                        GradientStop { position: 0.0; color: "#324257" }
+                                        GradientStop { position: 1.0; color: "#131922" }
+                                    }
+                                }
+
+                                Column {
+                                    anchors.centerIn: parent
+                                    spacing: 8
+
+                                    Label {
+                                        text: "▶"
+                                        font.pixelSize: 34
+                                        color: "#ffffff"
+                                        horizontalAlignment: Text.AlignHCenter
+                                        width: 120
+                                    }
+
+                                    Label {
+                                        text: root.videoDurationText(blockRoot.modelData.duration_ms)
+                                        font.pixelSize: 12
+                                        color: "#dbe7f6"
+                                        horizontalAlignment: Text.AlignHCenter
+                                        width: 120
+                                    }
+                                }
+
+                                Label {
+                                    anchors.left: parent.left
+                                    anchors.bottom: parent.bottom
+                                    anchors.margins: 12
+                                    text: "视频内容"
+                                    font.pixelSize: 12
+                                    color: "#dbe5f2"
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: Qt.openUrlExternally(root.mediaUrl(root.itemMediaKey(blockRoot.modelData)))
+                                }
                             }
-                        }
-
-                        Label {
-                            anchors.left: parent.left
-                            anchors.bottom: parent.bottom
-                            anchors.margins: 12
-                            text: "视频内容"
-                            font.pixelSize: 12
-                            color: "#dbe5f2"
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: Qt.openUrlExternally(root.mediaUrl(root.itemMediaKey(blockRoot.modelData)))
                         }
                     }
                 }
@@ -209,7 +229,7 @@ Rectangle {
 
     function mediaUrl(key) {
         if (!key) return ""
-        return gateMediaUrlPrefix + "/media/download?asset=" + key
+        return root.controller ? root.controller.mediaUrlForKey(key) : ""
     }
 
     function itemType(item) {
@@ -253,6 +273,31 @@ Rectangle {
     function isMediaItem(item) {
         var type = itemType(item)
         return type === "image" || type === "video"
+    }
+
+    function mediaItemHeight(item) {
+        if (!isMediaItem(item) || itemMediaKey(item).length === 0)
+            return 0
+        if (itemType(item) === "video")
+            return 188
+        return imageHeight(item)
+    }
+
+    function mediaContentHeight(items) {
+        if (!items || items.length === 0)
+            return 0
+        var total = 0
+        var count = 0
+        for (var i = 0; i < items.length; i++) {
+            var itemHeight = mediaItemHeight(items[i])
+            if (itemHeight <= 0)
+                continue
+            if (count > 0)
+                total += 8
+            total += itemHeight
+            count += 1
+        }
+        return total
     }
 
     function imageMaxDim(item) {

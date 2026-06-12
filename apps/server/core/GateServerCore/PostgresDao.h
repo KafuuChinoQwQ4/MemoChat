@@ -298,7 +298,7 @@ public:
                            const std::string& pwd,
                            const std::string& icon);
     bool CheckEmail(const std::string& name, const std::string& email);
-    bool UpdatePwd(const std::string& name, const std::string& newpwd);
+    bool UpdatePwd(const std::string& email, const std::string& newpwd);
     bool UpdateUserProfile(int uid, const std::string& nick, const std::string& desc, const std::string& icon);
     bool CheckPwd(const std::string& name, const std::string& pwd, UserInfo& userInfo);
     std::string GetUserPublicId(int uid);

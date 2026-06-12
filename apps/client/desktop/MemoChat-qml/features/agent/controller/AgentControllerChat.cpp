@@ -22,6 +22,11 @@ QString aiHttpModule()
 {
     return QStringLiteral("ai");
 }
+
+bool isGuardrailBlockedOutput(const QString& text)
+{
+    return text.trimmed().startsWith(QStringLiteral("Guardrail blocked"), Qt::CaseInsensitive);
+}
 } // namespace
 
 void AgentController::sendMessage(const QString& content)
@@ -203,6 +208,11 @@ void AgentController::handleSmartRsp(ReqId id, const QString& res, ErrorCodes er
     QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8());
     QJsonObject root = doc.object();
     QString result = root["result"].toString();
+    if (isGuardrailBlockedOutput(result))
+    {
+        setErrorState(QStringLiteral("AI 没有生成有效内容，请检查模型/API Key、额度或模型服务状态。"));
+        return;
+    }
 
     emit smartResultReady(agentRequestFeatureType(kind), result);
 }

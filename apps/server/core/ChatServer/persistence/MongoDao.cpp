@@ -28,6 +28,8 @@ using bsoncxx::builder::basic::make_document;
 using bsoncxx::builder::basic::sub_array;
 using bsoncxx::builder::basic::sub_document;
 
+constexpr int64_t kMessageRevokeWindowMsMongoDao = 5 * 60 * 1000;
+
 mongocxx::instance& MongoInstance()
 {
     static mongocxx::instance instance{};
@@ -420,7 +422,9 @@ bool MongoDao::RevokePrivateMessage(const int& uid,
     }
     const int conv_min = std::min(uid, peer_uid);
     const int conv_max = std::max(uid, peer_uid);
-    if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid)
+    if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid ||
+        message->deleted_at_ms > 0 || message->created_at <= 0 ||
+        deleted_at_ms - message->created_at > kMessageRevokeWindowMsMongoDao)
     {
         return false;
     }
@@ -433,7 +437,14 @@ bool MongoDao::RevokePrivateMessage(const int& uid,
                                         make_document(kvp("content", "[消息已撤回]"),
                                                       kvp("deleted_at_ms", deleted_at_ms),
                                                       kvp("edited_at_ms", static_cast<int64_t>(0)))));
-        auto result = collection.update_one(make_document(kvp("_id", msg_id)), update.view());
+        auto filter = make_document(
+            kvp("_id", msg_id),
+            kvp("conv_uid_min", conv_min),
+            kvp("conv_uid_max", conv_max),
+            kvp("from_uid", uid),
+            kvp("deleted_at_ms", static_cast<int64_t>(0)),
+            kvp("created_at", make_document(kvp("$gte", deleted_at_ms - kMessageRevokeWindowMsMongoDao))));
+        auto result = collection.update_one(filter.view(), update.view());
         return result && result->matched_count() > 0;
     }
     catch (const std::exception& e)
@@ -663,8 +674,7 @@ bool MongoDao::RevokeGroupMessage(const int64_t& group_id,
                                   const std::string& msg_id,
                                   int64_t deleted_at_ms)
 {
-    (void) operator_uid;
-    if (!Enabled() || group_id <= 0 || msg_id.empty())
+    if (!Enabled() || group_id <= 0 || operator_uid <= 0 || msg_id.empty())
     {
         return false;
     }
@@ -675,6 +685,17 @@ bool MongoDao::RevokeGroupMessage(const int64_t& group_id,
                 .count());
     }
 
+    std::shared_ptr<GroupMessageInfo> message;
+    if (!GetGroupMessageByMsgId(group_id, msg_id, message) || !message)
+    {
+        return false;
+    }
+    if (message->from_uid != operator_uid || message->deleted_at_ms > 0 || message->created_at <= 0 ||
+        deleted_at_ms - message->created_at > kMessageRevokeWindowMsMongoDao)
+    {
+        return false;
+    }
+
     try
     {
         auto client = pool_->acquire();
@@ -683,8 +704,13 @@ bool MongoDao::RevokeGroupMessage(const int64_t& group_id,
                                         make_document(kvp("content", "[消息已撤回]"),
                                                       kvp("deleted_at_ms", deleted_at_ms),
                                                       kvp("edited_at_ms", static_cast<int64_t>(0)))));
-        auto result =
-            collection.update_one(make_document(kvp("group_id", group_id), kvp("_id", msg_id)), update.view());
+        auto filter = make_document(
+            kvp("group_id", group_id),
+            kvp("_id", msg_id),
+            kvp("from_uid", operator_uid),
+            kvp("deleted_at_ms", static_cast<int64_t>(0)),
+            kvp("created_at", make_document(kvp("$gte", deleted_at_ms - kMessageRevokeWindowMsMongoDao))));
+        auto result = collection.update_one(filter.view(), update.view());
         return result && result->matched_count() > 0;
     }
     catch (const std::exception& e)

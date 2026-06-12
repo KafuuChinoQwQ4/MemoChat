@@ -4,7 +4,6 @@ from pathlib import Path
 
 from tests.python.support.paths import repo_root
 
-
 REPO_ROOT = repo_root()
 SERVER_CORE = REPO_ROOT / "apps/server/core"
 SCHEMA_FILES = (
@@ -28,7 +27,7 @@ def function_body(source: str, signature: str) -> str:
         elif char == "}":
             depth -= 1
             if depth == 0:
-                return source[brace + 1:index]
+                return source[brace + 1 : index]
     raise AssertionError(f"Could not parse function body for {signature}")
 
 
@@ -45,6 +44,20 @@ class RegistrationIdentityContractTests(unittest.TestCase):
         self.assertNotIn("OR name", body)
         self.assertNotRegex(body, r"WHERE\s+email\s*=\s*\$1\s+OR\s+name")
 
+    def test_gate_reset_password_uses_unique_email_not_nickname(self):
+        dao = read(SERVER_CORE / "GateServerCore/PostgresDao.cpp")
+        check_body = compact(function_body(dao, "bool PostgresDao::CheckEmail"))
+        update_body = compact(function_body(dao, "bool PostgresDao::UpdatePwd"))
+        h1 = read(SERVER_CORE / "GateServer/GateServerH1Routes.cpp")
+        h2 = read(SERVER_CORE / "GateServerHttp2/Http2AuthSupport.cpp")
+
+        self.assertIn('SELECT 1 FROM \\"user\\" WHERE email = $1 LIMIT 1', check_body)
+        self.assertNotIn("WHERE name = $1", check_body)
+        self.assertIn('UPDATE \\"user\\" SET pwd = $1 WHERE email = $2', update_body)
+        self.assertNotIn("SET pwd = $1 WHERE name = $2", update_body)
+        self.assertIn("UpdatePwd(email, pwd)", h1)
+        self.assertIn("UpdatePwd(email, pwd)", h2)
+
     def test_status_registration_checks_duplicate_email_only(self):
         source = read(SERVER_CORE / "StatusServer/PostgresDao.cpp")
         body = compact(function_body(source, "int PostgresDao::RegUser"))
@@ -53,6 +66,16 @@ class RegistrationIdentityContractTests(unittest.TestCase):
         self.assertIn("txn.quote(email)", body)
         self.assertNotIn("OR email", body)
         self.assertNotIn("WHERE name =", body)
+
+    def test_status_reset_password_uses_unique_email_not_nickname(self):
+        source = read(SERVER_CORE / "StatusServer/PostgresDao.cpp")
+        check_body = compact(function_body(source, "bool PostgresDao::CheckEmail"))
+        update_body = compact(function_body(source, "bool PostgresDao::UpdatePwd"))
+
+        self.assertIn('SELECT 1 FROM \\"user\\" WHERE email = $1 LIMIT 1', check_body)
+        self.assertNotIn("WHERE name = $1", check_body)
+        self.assertIn('UPDATE \\"user\\" SET pwd = $1 WHERE email = $2', update_body)
+        self.assertNotIn("SET pwd = $1 WHERE name = $2", update_body)
 
     def test_chatserver_postgres_registration_checks_duplicate_email_only(self):
         source = read(SERVER_CORE / "ChatServer/persistence/PostgresDaoUsers.cpp")
@@ -63,12 +86,24 @@ class RegistrationIdentityContractTests(unittest.TestCase):
         self.assertNotIn("OR name", postgres_branch)
         self.assertNotRegex(postgres_branch, r"WHERE\s+email\s*=\s*\$1\s+OR\s+name")
 
+    def test_chatserver_reset_password_uses_unique_email_not_nickname(self):
+        source = read(SERVER_CORE / "ChatServer/persistence/PostgresDaoUsers.cpp")
+        check_body = compact(function_body(source, "bool PostgresDao::CheckEmail"))
+        update_body = compact(function_body(source, "bool PostgresDao::UpdatePwd"))
+        postgres_check = check_body.split("auto con = pool_->getConnection()", 1)[0]
+        postgres_update = update_body.split("auto con = pool_->getConnection()", 1)[0]
+
+        self.assertIn('SELECT 1 FROM \\"user\\" WHERE email = $1 LIMIT 1', postgres_check)
+        self.assertNotIn("WHERE name = $1", postgres_check)
+        self.assertIn('UPDATE \\"user\\" SET pwd = $1 WHERE email = $2', postgres_update)
+        self.assertNotIn("SET pwd = $1 WHERE name = $2", postgres_update)
+
     def test_user_schema_keeps_email_unique_and_nickname_non_unique(self):
         for path in SCHEMA_FILES:
             with self.subTest(path=path.relative_to(REPO_ROOT)):
                 schema = read(path)
                 self.assertIn("CONSTRAINT uq_user_email UNIQUE (email)", schema)
-                self.assertIn("CREATE INDEX IF NOT EXISTS idx_user_name ON \"user\"(name);", schema)
+                self.assertIn('CREATE INDEX IF NOT EXISTS idx_user_name ON "user"(name);', schema)
                 self.assertNotRegex(schema, r"UNIQUE\s*\(\s*name\s*\)")
                 self.assertNotRegex(schema, r"UNIQUE\s*\(\s*nick\s*\)")
                 self.assertNotIn("uq_user_name", schema)
