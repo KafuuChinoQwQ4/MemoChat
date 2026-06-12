@@ -11,8 +11,8 @@ description: Use when validating MemoChat local runtime startup, Docker dependen
 
 ## 前置条件
 
-- 被测试服务的 `archlinux` WSL Linux 服务产物存在于 `build-linux-full-gcc16/bin`。
-- 任何新的 Linux 服务端或客户端代码变更，都先运行 `cmake --preset linux-full-gcc16` 和 `cmake --build --preset linux-full-gcc16 --parallel 12`；`deploy_services.sh` 默认从该构建输出复制。
+- 当 smoke 依赖本仓库 Linux 服务/客户端时，被测试产物应存在于 `build-linux-full-gcc16/bin`；只检查 Docker 依赖、端口或外部健康时不要求本仓库产物。
+- 触及会被部署脚本复制的 Linux 服务端/客户端产物时，先运行 `cmake --preset linux-full-gcc16` 和 `cmake --build --preset linux-full-gcc16 --parallel 12`；文档、脚本说明或无需新产物的定向探针可记录跳过原因。
 - Docker 依赖运行在 Arch 原生 Docker 下。compose 命令前加载 `/root/.memochat-linux-env`，使 `DOCKER_HOST` 取消设置。
 - 没有旧的 Linux 运行时服务进程仍绑定目标端口。
 - 从 Windows 调用 Linux smoke/build 时使用发行版名 `archlinux`，并显式进入 Linux 路径：
@@ -38,7 +38,7 @@ docker exec memochat-redpanda rpk cluster info --brokers 127.0.0.1:19092
 
 ## 部署和启动
 
-使用：
+需要刷新可部署产物时使用：
 
 ```bash
 source /root/.memochat-linux-env

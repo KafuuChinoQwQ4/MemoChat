@@ -6,6 +6,9 @@
 #include "usermgr.h"
 
 #include <QFutureWatcher>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonParseError>
 #include <QMetaObject>
 #include <QUrl>
 #include <QtConcurrent>
@@ -141,6 +144,38 @@ void MomentsController::publishDraftMoment(const QString& text, int visibility, 
                 submitPublishRequest(QString(), visibility, result.items, false);
             });
     watcher->setFuture(future);
+}
+
+void MomentsController::publishDraftMomentJson(const QString& text, int visibility, const QString& attachmentsJson)
+{
+    QVariantList attachments;
+    const QString trimmedJson = attachmentsJson.trimmed();
+    if (!trimmedJson.isEmpty())
+    {
+        QJsonParseError parseError;
+        const QJsonDocument doc = QJsonDocument::fromJson(trimmedJson.toUtf8(), &parseError);
+        if (parseError.error != QJsonParseError::NoError || !doc.isArray())
+        {
+            setErrorText(QStringLiteral("素材列表解析失败"));
+            emit publishError(_error_text);
+            return;
+        }
+
+        const QJsonArray array = doc.array();
+        attachments.reserve(array.size());
+        for (const QJsonValue& value : array)
+        {
+            if (!value.isObject())
+            {
+                setErrorText(QStringLiteral("素材列表解析失败"));
+                emit publishError(_error_text);
+                return;
+            }
+            attachments.push_back(value.toObject().toVariantMap());
+        }
+    }
+
+    publishDraftMoment(text, visibility, attachments);
 }
 
 void MomentsController::submitPublishRequest(const QString& location,

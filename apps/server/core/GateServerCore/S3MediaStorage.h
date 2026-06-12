@@ -56,5 +56,6 @@ private:
     std::string _bucket_file;
     std::string _bucket_image;
     std::string _bucket_video;
+    std::string _bucket_moments;
     bool _enabled = false;
 };

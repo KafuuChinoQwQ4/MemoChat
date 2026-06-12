@@ -220,7 +220,7 @@ Popup {
     }
 
     function imgUrl(key) {
-        return key ? (gateMediaUrlPrefix + "/media/download?asset=" + key) : ""
+        return key && root.controller ? root.controller.mediaUrlForKey(key) : ""
     }
 
     function applySnapshot() {
@@ -408,6 +408,6 @@ Popup {
 
     MomentsImagePreviewPopup {
         id: imagePreviewPopup
-        gatewayPrefix: gateMediaUrlPrefix
+        mediaUrlResolver: root.imgUrl
     }
 }

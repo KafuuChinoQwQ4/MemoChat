@@ -26,6 +26,7 @@ Item {
     readonly property int modelMessageCount: root.messageModel && root.messageModel.count !== undefined
                                              ? root.messageModel.count
                                              : 0
+    readonly property int revokeWindowMs: 5 * 60 * 1000
 
     signal scrollStateChanged(bool followTail, bool topLoadArmed, bool stickToBottom)
     signal loadMoreHistoryRequested()
@@ -70,6 +71,30 @@ Item {
             return ""
         }
         return root.translationByMsgId[msgId] || ""
+    }
+
+    function nowMs() {
+        return Date.now() + revokeClock.tick
+    }
+
+    function messageAgeMs(createdAt) {
+        const ts = Number(createdAt || 0)
+        if (ts <= 0) {
+            return root.revokeWindowMs + 1
+        }
+        return Math.max(0, root.nowMs() - ts)
+    }
+
+    function canRevokeMessage(outgoing, createdAt, deletedAtMs) {
+        return !!outgoing
+                && Number(deletedAtMs || 0) <= 0
+                && root.messageAgeMs(createdAt) <= root.revokeWindowMs
+    }
+
+    function shouldShowRevokeExpiredHint(outgoing, createdAt, deletedAtMs) {
+        return !!outgoing
+                && Number(deletedAtMs || 0) <= 0
+                && root.messageAgeMs(createdAt) > root.revokeWindowMs
     }
 
     ListView {
@@ -140,7 +165,10 @@ Item {
             canMention: root.isGroupChat && !model.outgoing && model.senderName && model.senderName.length > 0
             canForward: root.hasCurrentChat
             canEdit: model.outgoing && model.msgType === "text"
-            canRevoke: root.isGroupChat ? (model.outgoing || root.currentGroupRole >= 2) : model.outgoing
+            canRevoke: root.canRevokeMessage(model.outgoing, model.createdAt, model.deletedAtMs)
+            showRevokeExpiredHint: root.shouldShowRevokeExpiredHint(model.outgoing,
+                                                                    model.createdAt,
+                                                                    model.deletedAtMs)
             avatarSource: model.outgoing
                           ? root.selfAvatar
                           : ((model.senderIcon && model.senderIcon.length > 0) ? model.senderIcon : root.peerAvatar)
@@ -186,5 +214,14 @@ Item {
                 root.scrollStateChanged(true, root.topLoadArmed, true)
             }
         }
+    }
+
+    Timer {
+        id: revokeClock
+        property int tick: 0
+        interval: 30000
+        repeat: true
+        running: root.hasCurrentChat && root.modelMessageCount > 0
+        onTriggered: tick = tick === 0 ? 1 : 0
     }
 }

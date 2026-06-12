@@ -55,6 +55,29 @@ class MomentsQmlPhysicalLayoutContractTests(unittest.TestCase):
     def test_moments_qrc_is_registered_by_feature_manifest(self):
         self.assertIn("features/moments/resources/moments.qrc", read(SOURCES))
 
+    def test_feed_delegate_media_blocks_contribute_to_card_height(self):
+        delegate = read(FEATURE_VIEW / "MomentsDelegate.qml")
+        media_column_start = delegate.index("id: mediaColumn")
+        action_bar_start = delegate.index("MomentsActionBar", media_column_start)
+        media_column_block = delegate[media_column_start:action_bar_start]
+
+        self.assertIn("clip: true", delegate[delegate.index("id: root") : delegate.index("implicitHeight:")])
+        self.assertIn("Math.max(contentLayout.implicitHeight, contentLayout.childrenRect.height) + 24", delegate)
+        self.assertIn("Layout.preferredHeight: root.mediaContentHeight(root.items)", media_column_block)
+        self.assertIn("Layout.minimumHeight: root.mediaContentHeight(root.items)", media_column_block)
+        self.assertIn("visible: root.hasMediaContent", media_column_block)
+        self.assertIn("implicitHeight: root.mediaContentHeight(root.items)", media_column_block)
+        self.assertNotIn("height: visible ? root.mediaContentHeight(root.items) : 0", media_column_block)
+        self.assertIn("id: mediaStack", media_column_block)
+        self.assertIn("width: mediaStack.width", media_column_block)
+        self.assertIn("Repeater {", media_column_block)
+        self.assertIn("implicitHeight: root.mediaItemHeight(blockRoot.modelData)", media_column_block)
+        self.assertIn("height: visible ? root.mediaItemHeight(blockRoot.modelData) : 0", media_column_block)
+        self.assertNotIn("Layout.preferredHeight: blockColumn.implicitHeight", media_column_block)
+        self.assertNotIn("blockColumn.implicitHeight", media_column_block)
+        self.assertIn("function mediaItemHeight(item)", delegate)
+        self.assertIn("function mediaContentHeight(items)", delegate)
+
 
 if __name__ == "__main__":
     unittest.main()

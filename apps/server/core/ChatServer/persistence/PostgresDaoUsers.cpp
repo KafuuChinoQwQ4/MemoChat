@@ -142,19 +142,15 @@ int PostgresDao::RegUser(const std::string& name, const std::string& email, cons
 
 bool PostgresDao::CheckEmail(const std::string& name, const std::string& email)
 {
+    (void) name;
     if (use_postgres_)
     {
         try
         {
             pqxx::connection conn(postgres_connection_string_);
             pqxx::read_transaction txn(conn);
-            const auto rows = txn.exec_params("SELECT email FROM \"user\" WHERE name = $1 LIMIT 1", name);
-            if (rows.empty())
-            {
-                return false;
-            }
-            const auto stored_email = rows[0]["email"].is_null() ? "" : rows[0]["email"].c_str();
-            return stored_email == email;
+            const auto rows = txn.exec_params("SELECT 1 FROM \"user\" WHERE email = $1 LIMIT 1", email);
+            return !rows.empty();
         }
         catch (const std::exception& e)
         {
@@ -200,7 +196,7 @@ bool PostgresDao::CheckEmail(const std::string& name, const std::string& email)
     }
 }
 
-bool PostgresDao::UpdatePwd(const std::string& name, const std::string& newpwd)
+bool PostgresDao::UpdatePwd(const std::string& email, const std::string& newpwd)
 {
     if (use_postgres_)
     {
@@ -208,7 +204,7 @@ bool PostgresDao::UpdatePwd(const std::string& name, const std::string& newpwd)
         {
             pqxx::connection conn(postgres_connection_string_);
             pqxx::work txn(conn);
-            const auto updated = txn.exec_params("UPDATE \"user\" SET pwd = $1 WHERE name = $2", newpwd, name);
+            const auto updated = txn.exec_params("UPDATE \"user\" SET pwd = $1 WHERE email = $2", newpwd, email);
             txn.commit();
             return updated.affected_rows() > 0;
         }
@@ -227,9 +223,9 @@ bool PostgresDao::UpdatePwd(const std::string& name, const std::string& newpwd)
         }
 
         std::unique_ptr<sql::PreparedStatement> pstmt(
-            con->_con->prepareStatement("UPDATE user SET pwd = ? WHERE name = ?"));
+            con->_con->prepareStatement("UPDATE user SET pwd = ? WHERE email = ?"));
 
-        pstmt->setString(2, name);
+        pstmt->setString(2, email);
         pstmt->setString(1, newpwd);
 
         int updateCount = pstmt->executeUpdate();
@@ -1182,7 +1178,8 @@ bool PostgresDao::GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>
             std::vector<int> from_uids;
             std::unordered_map<int, std::shared_ptr<ApplyInfo>> apply_by_uid;
             const auto rows =
-                txn.exec_params("SELECT apply.from_uid, apply.status, usr.name, usr.nick, usr.sex, usr.user_id "
+                txn.exec_params("SELECT apply.from_uid, apply.status, usr.name, usr.nick, usr.sex, usr.user_id, "
+                                "usr.icon "
                                 "FROM friend_apply AS apply "
                                 "JOIN \"user\" AS usr ON apply.from_uid = usr.uid "
                                 "WHERE apply.to_uid = $1 AND apply.id > $2 "
@@ -1196,7 +1193,7 @@ bool PostgresDao::GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>
                 auto apply_ptr = std::make_shared<ApplyInfo>(uid,
                                                              row["name"].is_null() ? "" : row["name"].c_str(),
                                                              "",
-                                                             "",
+                                                             row["icon"].is_null() ? "" : row["icon"].c_str(),
                                                              row["nick"].is_null() ? "" : row["nick"].c_str(),
                                                              row["sex"].is_null() ? 0 : row["sex"].as<int>(),
                                                              row["status"].is_null() ? 0 : row["status"].as<int>(),
@@ -1262,7 +1259,8 @@ bool PostgresDao::GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>
 
         std::unique_ptr<sql::PreparedStatement> pstmt(
             con->_con->prepareStatement("select apply.from_uid, apply.status, user.name, "
-                                        "user.nick, user.sex, user.user_id from friend_apply as apply join user on "
+                                        "user.nick, user.sex, user.user_id, user.icon "
+                                        "from friend_apply as apply join user on "
                                         "apply.from_uid = user.uid where apply.to_uid = ? "
                                         "and apply.id > ? order by apply.id ASC LIMIT ? "));
 
@@ -1280,7 +1278,8 @@ bool PostgresDao::GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>
             auto nick = res->getString("nick");
             auto sex = res->getInt("sex");
             auto user_id = res->isNull("user_id") ? "" : res->getString("user_id");
-            auto apply_ptr = std::make_shared<ApplyInfo>(uid, name, "", "", nick, sex, status, user_id);
+            auto icon = res->isNull("icon") ? "" : res->getString("icon");
+            auto apply_ptr = std::make_shared<ApplyInfo>(uid, name, "", icon, nick, sex, status, user_id);
             applyList.push_back(apply_ptr);
             from_uids.push_back(uid);
             apply_by_uid.emplace(uid, apply_ptr);

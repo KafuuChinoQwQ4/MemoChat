@@ -208,7 +208,7 @@ void AuthHttpService::RegisterRoutes(LogicSystem& logic)
                 return true;
             }
 
-            if (!PostgresMgr::GetInstance()->UpdatePwd(name, pwd))
+            if (!PostgresMgr::GetInstance()->UpdatePwd(email, pwd))
             {
                 memolog::LogWarn("gate.reset_pwd.failed", "password update failed", {{"email", email}});
                 root["error"] = ErrorCodes::PasswdUpFailed;

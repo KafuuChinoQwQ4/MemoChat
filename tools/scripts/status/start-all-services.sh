@@ -159,6 +159,7 @@ wait_for_minio() {
     while (( waited < WAIT_SECONDS )); do
         if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1; then
             echo "  [OK] memochat-minio ready at http://127.0.0.1:9000"
+            "${SCRIPT_DIR}/ensure_minio_buckets.sh" || echo "  [WARN] failed to ensure MinIO buckets"
             return 0
         fi
         sleep 1

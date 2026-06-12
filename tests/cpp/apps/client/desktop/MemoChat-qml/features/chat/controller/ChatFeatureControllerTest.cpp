@@ -597,6 +597,8 @@ TEST(ChatFeatureControllerTest, CurrentMessageMutationFacadeUsesStoredPort)
     int snapshotCalls = 0;
     int privateExistsCalls = 0;
     QString privateExistsMsgId;
+    int canRevokeCalls = 0;
+    QString canRevokeMsgId;
     int privateStatusCalls = 0;
     int groupStatusCalls = 0;
     int dispatchCalls = 0;
@@ -613,6 +615,12 @@ TEST(ChatFeatureControllerTest, CurrentMessageMutationFacadeUsesStoredPort)
     {
         ++privateExistsCalls;
         privateExistsMsgId = msgId;
+        return true;
+    };
+    port.canRevokeMessage = [&canRevokeCalls, &canRevokeMsgId](const QString& msgId)
+    {
+        ++canRevokeCalls;
+        canRevokeMsgId = msgId;
         return true;
     };
     port.setPrivateStatus = [&privateStatusCalls](const QString&, bool)
@@ -657,6 +665,8 @@ TEST(ChatFeatureControllerTest, CurrentMessageMutationFacadeUsesStoredPort)
     EXPECT_TRUE(groupRevoke.dispatched);
     EXPECT_EQ(snapshotCalls, 2);
     EXPECT_EQ(privateExistsCalls, 1);
+    EXPECT_EQ(canRevokeCalls, 1);
+    EXPECT_EQ(canRevokeMsgId, QStringLiteral("group-msg-1"));
     EXPECT_EQ(dispatchCalls, 2);
     EXPECT_EQ(dispatchedReqId, 1067);
     payload = compactJsonObject(dispatchedPayload);

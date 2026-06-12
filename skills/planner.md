@@ -7,7 +7,7 @@ description: Use when creating reusable MemoChat automation plans under .ai/<nam
 
 用它为重复性的项目工作创建可复用自动化包。
 
-可复用计划默认应采用 `parallel-agents.md` 中的 Controller 主导并行模型，除非该自动化有意设计为单步骤。worker 任务前应包含一个 Controller 任务，用于架构、规划、契约、派发、集成和验收。
+可复用计划应先按 `parallel-agents.md` 评估 Controller 主导并行是否有价值。只有当任务能拆成互不重叠的实现、测试、调查或运行时工作线，且并行收益大于协调成本时，才把 worker 任务写进计划；否则明确记录本地单人或单步骤原因。worker 任务前应包含一个 Controller 任务，用于架构、规划、契约、派发、集成和验收。
 
 ## 输出
 
@@ -30,7 +30,7 @@ description: Use when creating reusable MemoChat automation plans under .ai/<nam
 - 准确构建/测试/运行时命令
 - 数据准备和清理规则
 - 失败处理，尤其是 `archlinux` WSL 端口冲突、Docker 集成和 Docker 健康状态
-- Controller 主导并发模型、工作线所有权和本地单人 fallback 规则
+- 并发决策：Controller 主导并发、工作线所有权，或本地单人 fallback 规则
 - 如果自动化会提交代码，包含 commit 指引
 
 ## tasks.json 格式
@@ -75,5 +75,5 @@ description: Use when creating reusable MemoChat automation plans under .ai/<nam
 - dependencies 无环
 - 命令匹配真实仓库路径
 - Docker/MCP 假设明确
-- Controller 和 worker dependencies 让并行关系清楚
+- 并发关系清楚：如果有 worker，dependencies 能表达并行关系；如果没有 worker，写明为什么单线更合适
 - `.ai/` 文件没有被包含进任何提交指令

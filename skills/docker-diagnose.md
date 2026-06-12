@@ -34,7 +34,7 @@ docker compose -f infra/deploy/local/docker-compose.yml ps
 
 如果 `archlinux` 中 Docker 不可用，检查 `systemctl is-active docker`，然后用 `systemctl enable --now docker` 启动。除非任务明确是旧版迁移或备份检查，否则不要切换到 Docker Desktop。
 
-预期固定主机端口：
+预期固定主机端口。若清单与 `infra/deploy/local/docker-compose.yml` 或当前 `docker ps` 不一致，以仓库配置和当前状态为准，并在报告中标记漂移：
 
 - Envoy Gateway：`memochat-envoy-gateway`，端口 `80`、`8443/tcp`、`8443/udp`
 - Redis `6379`
@@ -56,7 +56,7 @@ docker compose -f infra/deploy/local/docker-compose.yml ps
 - OTel `4317/4318/9411/9464`
 - cAdvisor `8088`
 
-当前本地容器名基线：
+当前本地容器名基线。缺失时先确认 compose profile、服务是否按需启用，以及任务是否真的依赖该容器：
 
 - `memochat-envoy-gateway`
 - `memochat-redis`

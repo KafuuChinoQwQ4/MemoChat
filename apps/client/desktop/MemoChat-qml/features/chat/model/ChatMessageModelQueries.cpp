@@ -27,6 +27,24 @@ bool ChatMessageModel::containsMessage(const QString& msgId) const
     return indexOfMessage(msgId) >= 0;
 }
 
+bool ChatMessageModel::canRevokeMessage(const QString& msgId, qint64 nowMs, qint64 revokeWindowMs) const
+{
+    if (msgId.isEmpty() || nowMs <= 0 || revokeWindowMs <= 0)
+    {
+        return false;
+    }
+    for (const auto& entry : _items)
+    {
+        if (entry.msgId != msgId)
+        {
+            continue;
+        }
+        return entry.outgoing && entry.deletedAtMs <= 0 && entry.createdAt > 0 &&
+               (nowMs - entry.createdAt) <= revokeWindowMs;
+    }
+    return false;
+}
+
 QString ChatMessageModel::rawContentByMsgId(const QString& msgId) const
 {
     if (msgId.isEmpty())

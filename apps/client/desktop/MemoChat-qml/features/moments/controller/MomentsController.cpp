@@ -1,4 +1,5 @@
 #include "MomentsController.h"
+#include "IconPathUtils.h"
 #include "httpmgr.h"
 #include "usermgr.h"
 
@@ -83,4 +84,14 @@ QJsonObject MomentsController::buildAuthJson() const
         obj["login_ticket"] = um->GetToken();
     }
     return obj;
+}
+
+QString MomentsController::mediaUrlForKey(const QString& mediaKey) const
+{
+    const QString trimmed = mediaKey.trimmed();
+    if (trimmed.isEmpty())
+    {
+        return QString();
+    }
+    return mediaKeyDownloadUrl(trimmed);
 }

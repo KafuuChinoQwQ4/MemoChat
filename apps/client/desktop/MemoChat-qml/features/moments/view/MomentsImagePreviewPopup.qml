@@ -6,7 +6,7 @@ import QtQuick.Controls 2.15
 Popup {
     id: root
 
-    property string gatewayPrefix: ""
+    property var mediaUrlResolver: null
     property string currentKey: ""
 
     modal: true
@@ -25,10 +25,14 @@ Popup {
         open()
     }
 
+    function mediaUrl(key) {
+        return key && mediaUrlResolver ? mediaUrlResolver(key) : ""
+    }
+
     Image {
         anchors.fill: parent
         fillMode: Image.PreserveAspectFit
-        source: root.gatewayPrefix + "/media/download?asset=" + root.currentKey
+        source: root.mediaUrl(root.currentKey)
         cache: false
     }
 

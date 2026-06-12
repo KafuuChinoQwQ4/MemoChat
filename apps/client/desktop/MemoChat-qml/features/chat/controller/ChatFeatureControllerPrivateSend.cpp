@@ -130,6 +130,7 @@ MessageMutationCommandResult ChatFeatureController::runCurrentMessageMutation(Me
 
     MessageMutationCommandDependencies dependencies;
     dependencies.privateMessageExists = _messageMutationPort.privateMessageExists;
+    dependencies.canRevokeMessage = _messageMutationPort.canRevokeMessage;
     dependencies.setPrivateStatus = _messageMutationPort.setPrivateStatus;
     dependencies.setGroupStatus = _messageMutationPort.setGroupStatus;
     dependencies.dispatchPayload = _messageMutationPort.dispatchPayload;
