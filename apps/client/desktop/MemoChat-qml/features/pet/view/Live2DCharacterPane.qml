@@ -5,7 +5,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import MemoChat 1.0
 import "qrc:/qml/components"
-import "Live2DCharacterRuntime.js" as Live2DCharacterRuntime
+import "../runtime/Live2DCharacterRuntime.js" as Live2DCharacterRuntime
 
 Rectangle {
     id: root

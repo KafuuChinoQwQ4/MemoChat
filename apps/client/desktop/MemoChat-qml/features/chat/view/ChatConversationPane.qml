@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import "conversation"
+import "../runtime/ChatConversationRuntime.js" as ChatConversationRuntime
 
 Rectangle {
     id: root
@@ -73,7 +74,7 @@ Rectangle {
     }
 
     function clampY(y) {
-        return Math.max(minContentY(), Math.min(maxContentY(), y))
+        return ChatConversationRuntime.clampValue(y, minContentY(), maxContentY())
     }
 
     function isAtBottom(epsilon) {
@@ -130,33 +131,7 @@ Rectangle {
     }
 
     function parseSuggestionOptions(result) {
-        let text = result || ""
-        const options = []
-        try {
-            const parsed = JSON.parse(text)
-            if (Array.isArray(parsed)) {
-                for (let i = 0; i < parsed.length && options.length < 3; ++i) {
-                    const item = String(parsed[i]).trim()
-                    if (item.length > 0) {
-                        options.push(item)
-                    }
-                }
-            }
-        } catch (e) {
-        }
-        if (options.length === 0) {
-            const lines = text.split(/\r?\n/)
-            for (let j = 0; j < lines.length && options.length < 3; ++j) {
-                let line = lines[j].replace(/^[\s\-*•\d.、)）]+/, "").trim()
-                if (line.length > 0) {
-                    options.push(line)
-                }
-            }
-        }
-        while (options.length < 3) {
-            options.push(options.length === 0 ? "好的，我看一下。" : (options.length === 1 ? "收到，我稍后回复。" : "可以，我们继续聊。"))
-        }
-        return options.slice(0, 3)
+        return ChatConversationRuntime.parseSuggestionOptions(result)
     }
 
     function openTranslateDialog(msgId, text) {

@@ -17,7 +17,7 @@ LOGIN_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/vie
 LINUX_LOGIN_PAGE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/linux/LoginPage.qml"
 LOGIN_TOP_BAR_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/view/components/LoginTopBar.qml"
 LOGIN_CREDENTIAL_RUNTIME = (
-    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/view/components/LoginCredentialRuntime.js"
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/runtime/LoginCredentialRuntime.js"
 )
 QML_SHELL_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/resources/qrc/qml-shell.qrc"
 AUTH_QRC = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/auth/resources/auth.qrc"
@@ -123,10 +123,10 @@ class LoginAvatarWindowTests(unittest.TestCase):
         linux_login_page = LINUX_LOGIN_PAGE_QML.read_text(encoding="utf-8")
 
         self.assertTrue(LOGIN_CREDENTIAL_RUNTIME.is_file())
-        self.assertIn("features/auth/view/components/LoginCredentialRuntime.js", qrc)
-        self.assertIn('import "components/LoginCredentialRuntime.js" as LoginCredentialRuntime', login_page)
+        self.assertIn("features/auth/runtime/LoginCredentialRuntime.js", qrc)
+        self.assertIn('import "../runtime/LoginCredentialRuntime.js" as LoginCredentialRuntime', login_page)
         self.assertIn(
-            'import "qrc:/features/auth/view/components/LoginCredentialRuntime.js" as LoginCredentialRuntime',
+            'import "qrc:/features/auth/runtime/LoginCredentialRuntime.js" as LoginCredentialRuntime',
             linux_login_page,
         )
 

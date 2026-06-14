@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
-import "PetChatRuntime.js" as PetChatRuntime
+import "../runtime/PetChatRuntime.js" as PetChatRuntime
 
 Window {
     id: root

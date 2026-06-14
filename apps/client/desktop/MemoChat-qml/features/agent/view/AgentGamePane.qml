@@ -1,7 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick 2.15
-import "AgentGameRuntime.js" as AgentGameRuntime
+import "../runtime/AgentGameRuntime.js" as AgentGameRuntime
 
 Rectangle {
     id: root

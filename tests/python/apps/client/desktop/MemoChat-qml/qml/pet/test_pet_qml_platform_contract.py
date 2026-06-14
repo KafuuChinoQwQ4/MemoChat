@@ -13,7 +13,7 @@ QML_QRCS = (
     QRC_ROOT / "icons.qrc",
 )
 PET_WINDOW_QML = CLIENT_DIR / "features/pet/view/PetWindow.qml"
-PET_WINDOW_RUNTIME_JS = CLIENT_DIR / "features/pet/view/PetWindowRuntime.js"
+PET_WINDOW_RUNTIME_JS = CLIENT_DIR / "features/pet/runtime/PetWindowRuntime.js"
 PET_SCENE_QML = CLIENT_DIR / "features/pet/view/PetScene.qml"
 SHARED_MAIN_QML = CLIENT_DIR / "qml/app/Main.qml"
 LINUX_MAIN_QML = CLIENT_DIR / "qml/linux/Main.qml"
