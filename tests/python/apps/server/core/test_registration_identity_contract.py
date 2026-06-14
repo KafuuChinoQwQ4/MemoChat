@@ -6,6 +6,8 @@ from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
 SERVER_CORE = REPO_ROOT / "apps/server/core"
+GATE_ACCOUNT_DAO = SERVER_CORE / "GateServer/core/persistence/PostgresDaoAccount.cpp"
+GATE_H2_SUPPORT = SERVER_CORE / "GateServer/transports/h2/support"
 SCHEMA_FILES = (
     REPO_ROOT / "apps/server/migrations/postgresql/business/001_baseline.sql",
     REPO_ROOT / "infra/deploy/local/init/postgresql/001-business.sql",
@@ -37,7 +39,8 @@ def compact(text: str) -> str:
 
 class RegistrationIdentityContractTests(unittest.TestCase):
     def test_gate_registration_checks_duplicate_email_only(self):
-        source = read(SERVER_CORE / "GateServerCore/PostgresDao.cpp")
+        self.assertTrue(GATE_ACCOUNT_DAO.exists(), "GateServerCore account DAO split source should exist")
+        source = read(GATE_ACCOUNT_DAO)
         body = compact(function_body(source, "int PostgresDao::RegUserTransaction"))
 
         self.assertIn('SELECT 1 FROM \\"user\\" WHERE email = $1 LIMIT 1', body)
@@ -45,17 +48,20 @@ class RegistrationIdentityContractTests(unittest.TestCase):
         self.assertNotRegex(body, r"WHERE\s+email\s*=\s*\$1\s+OR\s+name")
 
     def test_gate_reset_password_uses_unique_email_not_nickname(self):
-        dao = read(SERVER_CORE / "GateServerCore/PostgresDao.cpp")
+        self.assertTrue(GATE_ACCOUNT_DAO.exists(), "GateServerCore account DAO split source should exist")
+        dao = read(GATE_ACCOUNT_DAO)
         check_body = compact(function_body(dao, "bool PostgresDao::CheckEmail"))
         update_body = compact(function_body(dao, "bool PostgresDao::UpdatePwd"))
-        h1 = read(SERVER_CORE / "GateServer/GateServerH1Routes.cpp")
-        h2 = read(SERVER_CORE / "GateServerHttp2/Http2AuthSupport.cpp")
+        h1_auth = read(SERVER_CORE / "GateServer/services/auth/AuthService.cpp")
+        h1_account = read(SERVER_CORE / "GateServer/services/account/AccountPersistence.cpp")
+        h2 = read(GATE_H2_SUPPORT / "Http2AuthSupport.cpp")
 
         self.assertIn('SELECT 1 FROM \\"user\\" WHERE email = $1 LIMIT 1', check_body)
         self.assertNotIn("WHERE name = $1", check_body)
         self.assertIn('UPDATE \\"user\\" SET pwd = $1 WHERE email = $2', update_body)
         self.assertNotIn("SET pwd = $1 WHERE name = $2", update_body)
-        self.assertIn("UpdatePwd(email, pwd)", h1)
+        self.assertIn("UpdatePassword(email, pwd)", h1_auth)
+        self.assertIn("UpdatePwd(email, password)", h1_account)
         self.assertIn("UpdatePwd(email, pwd)", h2)
 
     def test_status_registration_checks_duplicate_email_only(self):

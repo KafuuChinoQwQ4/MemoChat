@@ -6,7 +6,7 @@ from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
 VARIFY_DIR = REPO_ROOT / "apps/server/core/VarifyServer"
-GATE_CONST = REPO_ROOT / "apps/server/core/GateServerCore/const.h"
+GATE_CONST = REPO_ROOT / "apps/server/core/GateServer/core/config/const.h"
 CLIENT_AUTH_RESPONSES = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/session/SessionAuthCoordinatorAuthResponses.cpp"
 )

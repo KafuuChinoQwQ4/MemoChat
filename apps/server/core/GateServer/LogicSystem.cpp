@@ -1,12 +1,21 @@
 #include "LogicSystem.h"
 #include "HttpConnection.h"
+#include "adapters/h1/H1RouteAdapter.h"
 #include "GateHttpJsonSupport.h"
 #include "PostgresMgr.h"
 #include "GateRouteModules.h"
 #include "MomentsRouteModules.h"
 #include "AIRouteModules.h"
-#include "../GateServerHttp3/GateHttp3Connection.h"
-#include "../GateServerHttp3/GateHttp3ServiceRoutes.h"
+#include "modules/ai/AIRouteModule.h"
+#include "modules/auth/AuthRouteModule.h"
+#include "modules/call/CallRouteModule.h"
+#include "modules/health/HealthRouteModule.h"
+#include "modules/media/MediaRouteModule.h"
+#include "modules/moments/MomentsRouteModule.h"
+#include "modules/profile/ProfileRouteModule.h"
+#include "modules/r18/R18RouteModule.h"
+#include "transports/h3/legacy_routes/GateHttp3ServiceRoutes.h"
+#include "transports/h3/listener/GateHttp3Connection.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
 #include <boost/beast/core.hpp>
@@ -29,33 +38,25 @@ bool MatchesRoutePrefix(const std::string& path, const std::string& prefix)
     const char next = path[prefix.size()];
     return next == '/' || next == '?';
 }
+
+void ApplyRouteTraceContext(const memochat::gate::routing::GateRequest& request)
+{
+    memolog::TraceContext::SetTraceId(request.trace_id);
+    memolog::TraceContext::SetRequestId(request.request_id);
+}
+
 } // namespace
 
 LogicSystem::LogicSystem()
 {
-    RegGet("/healthz",
-           [](std::shared_ptr<HttpConnection> connection)
-           {
-               memochat::json::JsonValue root;
-               root["status"] = "ok";
-               root["service"] = "GateServer";
-               connection->_response.result(http::status::ok);
-               connection->_response.set(http::field::content_type, "application/json");
-               beast::ostream(connection->_response.body()) << root.toStyledString();
-               return true;
-           });
-
-    RegGet("/readyz",
-           [](std::shared_ptr<HttpConnection> connection)
-           {
-               memochat::json::JsonValue root;
-               root["status"] = "ready";
-               root["service"] = "GateServer";
-               connection->_response.result(http::status::ok);
-               connection->_response.set(http::field::content_type, "application/json");
-               beast::ostream(connection->_response.body()) << root.toStyledString();
-               return true;
-           });
+    memochat::gate::modules::health::HealthRouteModule().RegisterRoutes(_route_registry);
+    memochat::gate::modules::auth::AuthRouteModule().RegisterRoutes(_route_registry);
+    memochat::gate::modules::profile::ProfileRouteModule().RegisterRoutes(_route_registry);
+    memochat::gate::modules::call::CallRouteModule().RegisterRoutes(_route_registry);
+    memochat::gate::modules::media::MediaRouteModule().RegisterRoutes(_route_registry);
+    memochat::gate::modules::ai::AIRouteModule().RegisterRoutes(_route_registry);
+    memochat::gate::modules::moments::MomentsRouteModule().RegisterRoutes(_route_registry);
+    memochat::gate::modules::r18::R18RouteModule().RegisterRoutes(_route_registry);
 
     RegGet("/get_test",
            [](std::shared_ptr<HttpConnection> connection)
@@ -116,11 +117,8 @@ LogicSystem::LogicSystem()
 
     // Register H1 routes
     AuthHttpService::RegisterRoutes(*this);
-    MediaHttpService::RegisterRoutes(*this);
     ProfileHttpService::RegisterRoutes(*this);
     CallHttpServiceRoutes::RegisterRoutes(*this);
-    MomentsHttpServiceRoutes::RegisterRoutes(*this);
-    R18HttpServiceRoutes::RegisterRoutes(*this);
 
     // Register AI routes
     AIHttpServiceRoutes::RegisterRoutes(*this);
@@ -181,6 +179,15 @@ bool LogicSystem::HandleGet(std::string path, std::shared_ptr<HttpConnection> co
         }
     }
 
+    memochat::gate::routing::GateResponse response;
+    const auto request = memochat::gate::adapters::h1::H1RouteAdapter::BuildGateRequest("GET", path, con);
+    ApplyRouteTraceContext(request);
+    if (_route_registry.Dispatch(request, response))
+    {
+        memochat::gate::adapters::h1::H1RouteAdapter::ApplyGateResponse(response, con);
+        return true;
+    }
+
     return false;
 }
 
@@ -206,6 +213,15 @@ bool LogicSystem::HandlePost(std::string path, std::shared_ptr<HttpConnection> c
             handler(con);
             return true;
         }
+    }
+
+    memochat::gate::routing::GateResponse response;
+    const auto request = memochat::gate::adapters::h1::H1RouteAdapter::BuildGateRequest("POST", path, con);
+    ApplyRouteTraceContext(request);
+    if (_route_registry.Dispatch(request, response))
+    {
+        memochat::gate::adapters::h1::H1RouteAdapter::ApplyGateResponse(response, con);
+        return true;
     }
 
     memolog::LogWarn("gate.http.post.not_found", "post route not found", {{"route", path}});
@@ -234,6 +250,15 @@ bool LogicSystem::HandleDelete(std::string path, std::shared_ptr<HttpConnection>
             handler(con);
             return true;
         }
+    }
+
+    memochat::gate::routing::GateResponse response;
+    const auto request = memochat::gate::adapters::h1::H1RouteAdapter::BuildGateRequest("DELETE", path, con);
+    ApplyRouteTraceContext(request);
+    if (_route_registry.Dispatch(request, response))
+    {
+        memochat::gate::adapters::h1::H1RouteAdapter::ApplyGateResponse(response, con);
+        return true;
     }
 
     memolog::LogWarn("gate.http.delete.not_found", "delete route not found", {{"route", path}});

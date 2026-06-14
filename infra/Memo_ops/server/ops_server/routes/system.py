@@ -18,8 +18,7 @@ from Memo_ops.server.ops_server.runtime import OpsServerRuntime
 def _service_meta(name: str, cfg_dir: Path) -> Dict[str, Any]:
     patterns = [
         cfg_dir / ".." / ".." / "server" / "GateServer" / "config.ini",
-        cfg_dir / ".." / ".." / "server" / "GateServerHttp1.1" / "config.ini",
-        cfg_dir / ".." / ".." / "server" / "GateServerHttp2" / "config.ini",
+        cfg_dir / ".." / ".." / "server" / "GateServer" / "transports" / "h2" / "config.ini",
         cfg_dir / ".." / ".." / "server" / "ChatServer" / "config.ini",
         cfg_dir / ".." / ".." / "server" / "StatusServer" / "config.ini",
         cfg_dir / ".." / ".." / "server" / "GateServer2" / "config.ini",
@@ -66,9 +65,7 @@ def _running_procs() -> Dict[str, List[Dict[str, Any]]]:
             info = proc.info
             cmdline = " ".join(info.get("cmdline") or [])
             if "GateServer" in cmdline or "ChatServer" in cmdline or "StatusServer" in cmdline:
-                match = re.search(
-                    r"(GateServer|ChatServer|StatusServer|GateServerHttp1|GateServerHttp2|GateServer2)", cmdline
-                )
+                match = re.search(r"\b(GateServerHttp2|GateServer2|GateServer|ChatServer|StatusServer)\b", cmdline)
                 if match:
                     svc = match.group(1)
                     by_service.setdefault(svc, []).append(
@@ -97,7 +94,6 @@ def _collect_system_metrics(runtime: OpsServerRuntime) -> List[Dict[str, Any]]:
 
     services = [
         "GateServer",
-        "GateServerHttp1.1",
         "GateServerHttp2",
         "GateServer2",
         "ChatServer",
