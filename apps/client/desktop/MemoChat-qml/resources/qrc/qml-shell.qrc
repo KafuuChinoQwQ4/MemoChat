@@ -3,11 +3,13 @@
         <file alias="qml/Main.qml">../../qml/app/Main.qml</file>
         <file alias="qml/app/Main.qml">../../qml/app/Main.qml</file>
         <file alias="qml/linux/Main.qml">../../qml/linux/Main.qml</file>
-        <file alias="qml/AppWindowRuntime.js">../../qml/app/AppWindowRuntime.js</file>
-        <file alias="qml/app/AppWindowRuntime.js">../../qml/app/AppWindowRuntime.js</file>
+        <file alias="qml/AppWindowRuntime.js">../../qml/runtime/AppWindowRuntime.js</file>
+        <file alias="qml/app/AppWindowRuntime.js">../../qml/runtime/AppWindowRuntime.js</file>
+        <file alias="qml/runtime/AppWindowRuntime.js">../../qml/runtime/AppWindowRuntime.js</file>
         <file alias="qml/linux/LoginPage.qml">../../qml/linux/LoginPage.qml</file>
-        <file alias="qml/ChatShellRuntime.js">../../qml/app/ChatShellRuntime.js</file>
-        <file alias="qml/app/ChatShellRuntime.js">../../qml/app/ChatShellRuntime.js</file>
+        <file alias="qml/ChatShellRuntime.js">../../qml/runtime/ChatShellRuntime.js</file>
+        <file alias="qml/app/ChatShellRuntime.js">../../qml/runtime/ChatShellRuntime.js</file>
+        <file alias="qml/runtime/ChatShellRuntime.js">../../qml/runtime/ChatShellRuntime.js</file>
         <file alias="qml/ChatShellPage.qml">../../qml/app/ChatShellPage.qml</file>
         <file alias="qml/app/ChatShellPage.qml">../../qml/app/ChatShellPage.qml</file>
         <file alias="qml/components/GlassBackdrop.qml">../../qml/components/GlassBackdrop.qml</file>

@@ -17,5 +17,6 @@
         <file alias="features/moments/view/MomentsPublishHeader.qml">../view/MomentsPublishHeader.qml</file>
         <file alias="features/moments/view/MomentsPublishPage.qml">../view/MomentsPublishPage.qml</file>
         <file alias="features/moments/view/MomentsVisibilitySelector.qml">../view/MomentsVisibilitySelector.qml</file>
+        <file alias="features/moments/runtime/MomentsRuntime.js">../runtime/MomentsRuntime.js</file>
     </qresource>
 </RCC>

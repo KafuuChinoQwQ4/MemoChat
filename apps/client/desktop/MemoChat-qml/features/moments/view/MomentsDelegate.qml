@@ -5,6 +5,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import MemoChat 1.0
 import "qrc:/qml/components"
+import "../runtime/MomentsRuntime.js" as MomentsRuntime
 
 Rectangle {
     id: root
@@ -217,14 +218,7 @@ Rectangle {
 
     // Helper functions
     function timeAgoText(ts) {
-        if (!ts) return ""
-        var nowSec = Math.floor(Date.now() / 1000)
-        var diff = nowSec - Math.floor(ts / 1000)
-        if (diff < 60) return "刚刚"
-        if (diff < 3600) return Math.floor(diff / 60) + "分钟前"
-        if (diff < 86400) return Math.floor(diff / 3600) + "小时前"
-        if (diff < 604800) return Math.floor(diff / 86400) + "天前"
-        return new Date(ts).toLocaleDateString()
+        return MomentsRuntime.timeAgo(ts)
     }
 
     function mediaUrl(key) {
@@ -233,94 +227,47 @@ Rectangle {
     }
 
     function itemType(item) {
-        return String((item && (item.media_type || item.mediaType || item.type)) || "").toLowerCase()
+        return MomentsRuntime.itemType(item)
     }
 
     function itemMediaKey(item) {
-        return String((item && (item.media_key || item.mediaKey || item.key)) || "")
+        return MomentsRuntime.itemMediaKey(item)
     }
 
     function itemContent(item) {
-        return String((item && item.content) || "")
+        return MomentsRuntime.itemContent(item)
     }
 
     function buildTextContent(items) {
-        if (!items || items.length === 0)
-            return ""
-        var parts = []
-        for (var i = 0; i < items.length; i++) {
-            var it = items[i]
-            var content = itemContent(it)
-            if (content.length > 0 && (!isMediaItem(it) || !itemMediaKey(it))) {
-                parts.push(content)
-            }
-        }
-        return parts.join("\n")
+        return MomentsRuntime.buildTextContent(items)
     }
 
     function containsMediaContent(items) {
-        if (!items || items.length === 0)
-            return false
-        for (var i = 0; i < items.length; i++) {
-            var it = items[i]
-            if (isMediaItem(it) && itemMediaKey(it).length > 0) {
-                return true
-            }
-        }
-        return false
+        return MomentsRuntime.containsMediaContent(items)
     }
 
     function isMediaItem(item) {
-        var type = itemType(item)
-        return type === "image" || type === "video"
+        return MomentsRuntime.isMediaItem(item)
     }
 
     function mediaItemHeight(item) {
-        if (!isMediaItem(item) || itemMediaKey(item).length === 0)
-            return 0
-        if (itemType(item) === "video")
-            return 188
-        return imageHeight(item)
+        return MomentsRuntime.mediaItemHeight(item)
     }
 
     function mediaContentHeight(items) {
-        if (!items || items.length === 0)
-            return 0
-        var total = 0
-        var count = 0
-        for (var i = 0; i < items.length; i++) {
-            var itemHeight = mediaItemHeight(items[i])
-            if (itemHeight <= 0)
-                continue
-            if (count > 0)
-                total += 8
-            total += itemHeight
-            count += 1
-        }
-        return total
+        return MomentsRuntime.mediaContentHeight(items)
     }
 
     function imageMaxDim(item) {
-        var w = item.width || 200
-        var h = item.height || 200
-        var aspect = w / (h || 1)
-        return Math.min(320, Math.max(80, 200 * aspect))
+        return MomentsRuntime.imageMaxDim(item)
     }
 
     function imageHeight(item) {
-        var w = item.width || 200
-        var h = item.height || 200
-        var aspect = h / (w || 1)
-        return Math.min(240, Math.max(60, 200 * aspect))
+        return MomentsRuntime.imageHeight(item)
     }
 
     function videoDurationText(durationMs) {
-        if (!durationMs || durationMs <= 0)
-            return "点击打开视频"
-        var totalSec = Math.floor(durationMs / 1000)
-        var minutes = Math.floor(totalSec / 60)
-        var seconds = totalSec % 60
-        return minutes + ":" + (seconds < 10 ? "0" + seconds : seconds)
+        return MomentsRuntime.videoDurationText(durationMs)
     }
 
     Popup {

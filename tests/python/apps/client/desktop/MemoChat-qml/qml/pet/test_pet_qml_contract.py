@@ -10,9 +10,9 @@ PET_MODEL_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/model
 PET_CONTROLLER_H = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/controller/PetController.h"
 PET_SCENE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetScene.qml"
 PET_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetWindow.qml"
-PET_WINDOW_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetWindowRuntime.js"
+PET_WINDOW_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/runtime/PetWindowRuntime.js"
 PET_CHAT_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetChatWindow.qml"
-PET_CHAT_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetChatRuntime.js"
+PET_CHAT_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/runtime/PetChatRuntime.js"
 PET_CHAT_MESSAGE_LIST_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetChatMessageList.qml"
 PET_CHAT_COMPOSER_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetChatComposer.qml"
 CHAT_COMPOSER_BAR_QML = (
@@ -25,7 +25,7 @@ CHAT_MESSAGE_AVATAR_QML = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/view/conversation/MessageAvatar.qml"
 )
 PET_CONTROL_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetControlWindow.qml"
-PET_CONTROL_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetControlRuntime.js"
+PET_CONTROL_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/runtime/PetControlRuntime.js"
 PET_CONTROL_LIVE2D_ACTION_PANEL_QML = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetControlLive2DActionPanel.qml"
 )
@@ -35,7 +35,9 @@ PET_CONTROL_API_PROVIDER_PANEL_QML = (
 PET_CONTROL_HEADER_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetControlHeader.qml"
 PET_VISION_PRIVACY_CARD_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetVisionPrivacyCard.qml"
 CHARACTER_PANE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/Live2DCharacterPane.qml"
-LIVE2D_CHARACTER_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/Live2DCharacterRuntime.js"
+LIVE2D_CHARACTER_RUNTIME_JS = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/runtime/Live2DCharacterRuntime.js"
+)
 LIVE2D_CHARACTER_PREVIEW_PANEL_QML = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/Live2DCharacterPreviewPanel.qml"
 )
@@ -746,7 +748,7 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("x = Math.max(24, Math.round(availableWidth - width - 48))", window)
         self.assertIn("y = Math.max(24, Math.round(availableHeight - height - 48))", window)
         self.assertIn("readonly property int speechBubbleSafeHeight: 84", window)
-        self.assertIn('import "PetWindowRuntime.js" as PetWindowRuntime', window)
+        self.assertIn('import "../runtime/PetWindowRuntime.js" as PetWindowRuntime', window)
         self.assertIn("function scaledWindowHeight", window_runtime)
         self.assertIn("return speechBubbleSafeHeight + Math.round(baseWindowHeight * scaleFactor)", window_runtime)
         self.assertIn("minimumHeight: speechBubbleSafeHeight + Math.round(baseWindowHeight * 0.65)", window)
@@ -829,10 +831,10 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertNotIn("id: dockControls", scene)
         self.assertNotIn("Popup", scene)
         self.assertIn("features/pet/view/PetWindow.qml", qrc)
-        self.assertIn("features/pet/view/PetWindowRuntime.js", qrc)
+        self.assertIn("features/pet/runtime/PetWindowRuntime.js", qrc)
         self.assertIn("features/pet/view/PetScene.qml", qrc)
         self.assertIn("features/pet/view/PetControlWindow.qml", qrc)
-        self.assertIn("features/pet/view/PetControlRuntime.js", qrc)
+        self.assertIn("features/pet/runtime/PetControlRuntime.js", qrc)
         self.assertIn("features/pet/view/PetControlLive2DActionPanel.qml", qrc)
         self.assertIn("features/pet/view/PetControlApiProviderPanel.qml", qrc)
         self.assertIn("features/pet/view/PetChatWindow.qml", qrc)

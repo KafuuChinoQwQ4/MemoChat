@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick 2.15
 import QtQuick.Window 2.15
 import MemoChat 1.0
-import "PetWindowRuntime.js" as PetWindowRuntime
+import "../runtime/PetWindowRuntime.js" as PetWindowRuntime
 
 Window {
     id: root

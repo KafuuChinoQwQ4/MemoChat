@@ -2,7 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Window 2.15
 import "qrc:/features/auth/view/components" as AuthComponents
-import "qrc:/features/auth/view/components/LoginCredentialRuntime.js" as LoginCredentialRuntime
+import "qrc:/features/auth/runtime/LoginCredentialRuntime.js" as LoginCredentialRuntime
 import "../components" as SharedComponents
 import "components" as LinuxComponents
 

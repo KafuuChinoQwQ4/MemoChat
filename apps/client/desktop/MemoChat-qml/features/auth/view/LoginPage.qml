@@ -3,7 +3,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Window 2.15
 import "components"
 import "qrc:/qml/components"
-import "components/LoginCredentialRuntime.js" as LoginCredentialRuntime
+import "../runtime/LoginCredentialRuntime.js" as LoginCredentialRuntime
 
 Rectangle {
     id: loginRoot

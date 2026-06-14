@@ -4,7 +4,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Window 2.15
 import MemoChat 1.0
-import "AppWindowRuntime.js" as AppWindowRuntime
+import "qrc:/qml/runtime/AppWindowRuntime.js" as AppWindowRuntime
 import "qrc:/features/auth/view"
 import "../components"
 import "qrc:/features/pet/view"

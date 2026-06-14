@@ -7,7 +7,7 @@ REPO_ROOT = repo_root()
 QML_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 SHARED_MAIN = QML_DIR / "qml/app/Main.qml"
 LINUX_MAIN = QML_DIR / "qml/linux/Main.qml"
-RUNTIME_JS = QML_DIR / "qml/app/AppWindowRuntime.js"
+RUNTIME_JS = QML_DIR / "qml/runtime/AppWindowRuntime.js"
 QML_QRC = QML_DIR / "resources/qrc/qml-shell.qrc"
 
 
@@ -25,14 +25,14 @@ class MainWindowRuntimeContractTests(unittest.TestCase):
                 self.assertRegex(runtime_text, rf"function\s+{function_name}\s*\(")
 
         qrc_text = QML_QRC.read_text(encoding="utf-8")
-        self.assertIn('alias="qml/AppWindowRuntime.js"', qrc_text)
-        self.assertIn('alias="qml/app/AppWindowRuntime.js"', qrc_text)
+        self.assertIn('alias="qml/runtime/AppWindowRuntime.js"', qrc_text)
+        self.assertIn("../../qml/runtime/AppWindowRuntime.js", qrc_text)
 
     def test_main_files_import_and_delegate_pure_runtime_logic(self):
         for qml_path in (SHARED_MAIN, LINUX_MAIN):
             text = qml_path.read_text(encoding="utf-8")
             with self.subTest(file=qml_path.name):
-                self.assertRegex(text, r'import\s+"(?:(?:\.\./)?app/)?AppWindowRuntime\.js"\s+as AppWindowRuntime')
+                self.assertRegex(text, r'import\s+"qrc:/qml/runtime/AppWindowRuntime\.js"\s+as AppWindowRuntime')
                 self.assertIn("AppWindowRuntime.clampedWindowPosition", text)
                 self.assertIn("function configureLoginWindow", text)
                 self.assertIn("function configureChatWindow", text)

@@ -8,12 +8,13 @@
         <file alias="features/agent/view/AgentGamePane.qml">../view/AgentGamePane.qml</file>
         <file alias="features/agent/view/AgentGamePlayPane.qml">../view/AgentGamePlayPane.qml</file>
         <file alias="features/agent/view/AgentGameRoomPane.qml">../view/AgentGameRoomPane.qml</file>
-        <file alias="features/agent/view/AgentGameRuntime.js">../view/AgentGameRuntime.js</file>
+        <file alias="features/agent/runtime/AgentGameRuntime.js">../runtime/AgentGameRuntime.js</file>
         <file alias="features/agent/view/AgentGameSetupHeader.qml">../view/AgentGameSetupHeader.qml</file>
         <file alias="features/agent/view/AgentGameSetupPane.qml">../view/AgentGameSetupPane.qml</file>
         <file alias="features/agent/view/AgentGameTemplatePane.qml">../view/AgentGameTemplatePane.qml</file>
         <file alias="features/agent/view/AgentMarkdownCodeBlock.qml">../view/AgentMarkdownCodeBlock.qml</file>
-        <file alias="features/agent/view/AgentMarkdownRuntime.js">../view/AgentMarkdownRuntime.js</file>
+        <file alias="features/agent/runtime/AgentMarkdownRuntime.js">../runtime/AgentMarkdownRuntime.js</file>
+        <file alias="features/agent/runtime/AgentMultiAiRuntime.js">../runtime/AgentMultiAiRuntime.js</file>
         <file alias="features/agent/view/AgentMarkdownText.qml">../view/AgentMarkdownText.qml</file>
         <file alias="features/agent/view/AgentMemoryPane.qml">../view/AgentMemoryPane.qml</file>
         <file alias="features/agent/view/AgentMessageDelegate.qml">../view/AgentMessageDelegate.qml</file>
@@ -24,7 +25,7 @@
         <file alias="features/agent/view/AgentMultiAiSessionPanel.qml">../view/AgentMultiAiSessionPanel.qml</file>
         <file alias="features/agent/view/AgentPane.qml">../view/AgentPane.qml</file>
         <file alias="features/agent/view/AgentPaneHeader.qml">../view/AgentPaneHeader.qml</file>
-        <file alias="features/agent/view/AgentPaneRuntime.js">../view/AgentPaneRuntime.js</file>
+        <file alias="features/agent/runtime/AgentPaneRuntime.js">../runtime/AgentPaneRuntime.js</file>
         <file alias="features/agent/view/AgentStatusOverlay.qml">../view/AgentStatusOverlay.qml</file>
         <file alias="features/agent/view/AgentTaskPane.qml">../view/AgentTaskPane.qml</file>
         <file alias="features/agent/view/AgentTracePane.qml">../view/AgentTracePane.qml</file>

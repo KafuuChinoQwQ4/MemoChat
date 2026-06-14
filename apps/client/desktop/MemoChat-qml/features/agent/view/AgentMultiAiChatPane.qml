@@ -4,6 +4,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "qrc:/qml/components"
+import "../runtime/AgentMultiAiRuntime.js" as AgentMultiAiRuntime
 
 ColumnLayout {
     id: root
@@ -110,7 +111,7 @@ ColumnLayout {
     }
 
     function isChatEvent(event) {
-        return (event.event_type || event.type || "") === "speak"
+        return AgentMultiAiRuntime.isChatEvent(event)
     }
 
     function eventLabel(event) {
@@ -124,52 +125,15 @@ ColumnLayout {
     }
 
     function normalizeEscapedMarkdown(value) {
-        var text = value || ""
-        if (text.indexOf("\\n```") >= 0 || text.indexOf("\\n~~~") >= 0) {
-            return text.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\t/g, "\t")
-        }
-        return text
+        return AgentMultiAiRuntime.normalizeEscapedMarkdown(value)
     }
 
     function textFromParsedPayload(payload) {
-        if (!payload || typeof payload !== "object") {
-            return ""
-        }
-        var keys = ["content", "message", "text", "reply"]
-        for (var i = 0; i < keys.length; ++i) {
-            var value = payload[keys[i]]
-            if (typeof value === "string" && value.length > 0) {
-                return root.normalizeEscapedMarkdown(value)
-            }
-        }
-        if (payload.payload && typeof payload.payload === "object") {
-            return root.textFromParsedPayload(payload.payload)
-        }
-        return ""
+        return AgentMultiAiRuntime.textFromParsedPayload(payload)
     }
 
     function readableEventText(value) {
-        if (value === undefined || value === null) {
-            return ""
-        }
-        if (typeof value !== "string") {
-            var parsedText = root.textFromParsedPayload(value)
-            return parsedText.length > 0 ? parsedText : JSON.stringify(value)
-        }
-        var text = value
-        var trimmed = text.trim()
-        if (trimmed.length > 0 && (trimmed.charAt(0) === "{" || trimmed.charAt(0) === "[")) {
-            try {
-                var parsed = JSON.parse(trimmed)
-                var extracted = root.textFromParsedPayload(parsed)
-                if (extracted.length > 0) {
-                    return extracted
-                }
-            } catch (error) {
-                // Keep the original text when it is not a complete JSON payload.
-            }
-        }
-        return root.normalizeEscapedMarkdown(text)
+        return AgentMultiAiRuntime.readableEventText(value)
     }
 
     function eventBody(event) {

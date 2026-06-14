@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import "AgentGameRuntime.js" as AgentGameRuntime
+import "../runtime/AgentGameRuntime.js" as AgentGameRuntime
 
 ColumnLayout {
     id: root

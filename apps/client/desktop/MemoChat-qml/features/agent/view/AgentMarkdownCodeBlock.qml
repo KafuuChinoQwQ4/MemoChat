@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick 2.15
 import QtQuick.Controls 2.15
-import "AgentMarkdownRuntime.js" as AgentMarkdownRuntime
+import "../runtime/AgentMarkdownRuntime.js" as AgentMarkdownRuntime
 
 Rectangle {
     id: root

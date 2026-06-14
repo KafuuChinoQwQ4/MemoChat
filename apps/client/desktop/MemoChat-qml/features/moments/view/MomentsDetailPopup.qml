@@ -5,6 +5,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import MemoChat 1.0
 import "qrc:/qml/components"
+import "../runtime/MomentsRuntime.js" as MomentsRuntime
 
 Popup {
     id: root
@@ -189,34 +190,19 @@ Popup {
 
     // ── Helpers ─────────────────────────────────────────
     function timeAgo(ts) {
-        if (!ts) return ""
-        var nowSec = Math.floor(Date.now() / 1000)
-        var diff = nowSec - Math.floor(ts / 1000)
-        if (diff < 60) return "刚刚"
-        if (diff < 3600) return Math.floor(diff / 60) + "分钟前"
-        if (diff < 86400) return Math.floor(diff / 3600) + "小时前"
-        if (diff < 604800) return Math.floor(diff / 86400) + "天前"
-        return new Date(ts).toLocaleDateString()
+        return MomentsRuntime.timeAgo(ts)
     }
 
     function imgHeight(item) {
-        var w = item.width || 200, h = item.height || 200
-        return Math.min(160, Math.max(72, 120 * (h / (w || 1))))
+        return MomentsRuntime.detailImgHeight(item)
     }
 
     function mediaTileHeight(item) {
-        if (item.type === "video")
-            return 124
-        return imgHeight(item)
+        return MomentsRuntime.detailMediaTileHeight(item)
     }
 
     function videoDuration(durationMs) {
-        if (!durationMs || durationMs <= 0)
-            return "点击打开视频"
-        var totalSec = Math.floor(durationMs / 1000)
-        var minutes = Math.floor(totalSec / 60)
-        var seconds = totalSec % 60
-        return minutes + ":" + (seconds < 10 ? "0" + seconds : seconds)
+        return MomentsRuntime.videoDurationText(durationMs)
     }
 
     function imgUrl(key) {

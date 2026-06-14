@@ -5,7 +5,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
 import MemoChat 1.0
-import "PetControlRuntime.js" as PetControlRuntime
+import "../runtime/PetControlRuntime.js" as PetControlRuntime
 
 Window {
     id: root

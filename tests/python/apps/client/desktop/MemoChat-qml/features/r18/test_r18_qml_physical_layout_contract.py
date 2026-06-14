@@ -6,6 +6,7 @@ from tests.python.support.paths import repo_root
 REPO_ROOT = repo_root()
 CLIENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 FEATURE_VIEW = CLIENT / "features/r18/view"
+FEATURE_RUNTIME = CLIENT / "features/r18/runtime"
 LEGACY_VIEW = CLIENT / "qml/r18"
 FEATURE_QRC = CLIENT / "features/r18/resources/r18.qrc"
 LEGACY_QRC = CLIENT / "resources/qrc/qml-r18.qrc"
@@ -25,7 +26,6 @@ FEATURE_FILES = (
     "R18ReaderPane.qml",
     "R18SearchPane.qml",
     "R18ShellPane.qml",
-    "R18ShellRuntime.js",
     "R18SourceFeedPane.qml",
     "R18SourceImportPane.qml",
     "R18SourceListPane.qml",
@@ -33,6 +33,9 @@ FEATURE_FILES = (
     "R18StatusBanner.qml",
     "R18TagPane.qml",
 )
+
+# Pure JavaScript runtime helpers live in a dedicated runtime/ folder, not view/.
+RUNTIME_FILES = ("R18ShellRuntime.js",)
 
 
 def read(path: Path) -> str:
@@ -46,6 +49,12 @@ class R18QmlPhysicalLayoutContractTests(unittest.TestCase):
                 self.assertTrue((FEATURE_VIEW / file_name).is_file())
                 self.assertFalse((LEGACY_VIEW / file_name).exists())
 
+    def test_r18_runtime_js_lives_under_feature_runtime(self):
+        for file_name in RUNTIME_FILES:
+            with self.subTest(file=file_name):
+                self.assertTrue((FEATURE_RUNTIME / file_name).is_file())
+                self.assertFalse((FEATURE_VIEW / file_name).exists())
+
     def test_r18_qrc_uses_feature_aliases_only(self):
         self.assertFalse(LEGACY_QRC.exists())
         feature_qrc = read(FEATURE_QRC)
@@ -54,6 +63,9 @@ class R18QmlPhysicalLayoutContractTests(unittest.TestCase):
             with self.subTest(file=file_name):
                 self.assertIn(f'alias="features/r18/view/{file_name}">../view/{file_name}</file>', feature_qrc)
                 self.assertNotIn(f'alias="qml/r18/{file_name}"', legacy_qrc)
+        for file_name in RUNTIME_FILES:
+            with self.subTest(file=file_name):
+                self.assertIn(f'alias="features/r18/runtime/{file_name}">../runtime/{file_name}</file>', feature_qrc)
 
     def test_r18_qrc_is_registered_by_feature_manifest(self):
         self.assertIn("features/r18/resources/r18.qrc", read(SOURCES))

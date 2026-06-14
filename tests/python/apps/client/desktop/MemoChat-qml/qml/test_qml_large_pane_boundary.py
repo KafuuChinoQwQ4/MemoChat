@@ -9,6 +9,7 @@ QML_ROOT = CLIENT / "qml"
 CHAT_FEATURE_CONVERSATION = CLIENT / "features/chat/view/conversation"
 PET_FEATURE_VIEW = CLIENT / "features/pet/view"
 AGENT_FEATURE_VIEW = CLIENT / "features/agent/view"
+AGENT_FEATURE_RUNTIME = CLIENT / "features/agent/runtime"
 R18_FEATURE_VIEW = CLIENT / "features/r18/view"
 QML_QRCS = (
     CLIENT / "features/chat/resources/chat.qrc",
@@ -28,7 +29,7 @@ AGENT_GAME_TEMPLATE_PANE = AGENT_FEATURE_VIEW / "AgentGameTemplatePane.qml"
 AGENT_GAME_AGENT_CARD = AGENT_FEATURE_VIEW / "AgentGameAgentCard.qml"
 AGENT_GAME_OPTION_COMBO = AGENT_FEATURE_VIEW / "AgentGameOptionCombo.qml"
 AGENT_MARKDOWN_TEXT = AGENT_FEATURE_VIEW / "AgentMarkdownText.qml"
-AGENT_MARKDOWN_RUNTIME = AGENT_FEATURE_VIEW / "AgentMarkdownRuntime.js"
+AGENT_MARKDOWN_RUNTIME = AGENT_FEATURE_RUNTIME / "AgentMarkdownRuntime.js"
 AGENT_MARKDOWN_CODE_BLOCK = AGENT_FEATURE_VIEW / "AgentMarkdownCodeBlock.qml"
 R18_SOURCE_MANAGER_PANE = R18_FEATURE_VIEW / "R18SourceManagerPane.qml"
 R18_SOURCE_IMPORT_PANE = R18_FEATURE_VIEW / "R18SourceImportPane.qml"
@@ -164,7 +165,7 @@ class LargePaneBoundaryTests(unittest.TestCase):
                 self.assertTrue(path.is_file())
                 self.assertIn(self.feature_alias(path), qrc)
 
-        self.assertIn('import "AgentMarkdownRuntime.js" as AgentMarkdownRuntime', markdown)
+        self.assertIn('import "../runtime/AgentMarkdownRuntime.js" as AgentMarkdownRuntime', markdown)
         self.assertIn("AgentMarkdownCodeBlock", markdown)
 
         for token in (
