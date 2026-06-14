@@ -6,7 +6,7 @@ from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
 PET_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetWindow.qml"
-PET_WINDOW_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetWindowRuntime.js"
+PET_WINDOW_RUNTIME_JS = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/runtime/PetWindowRuntime.js"
 PET_SCENE_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetScene.qml"
 PET_CONTROL_WINDOW_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetControlWindow.qml"
 PET_CONTROL_HEADER_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/view/PetControlHeader.qml"

@@ -28,5 +28,6 @@
         <file alias="features/chat/view/sidebar/ChatJoinGroupPopup.qml">../view/sidebar/ChatJoinGroupPopup.qml</file>
         <file alias="features/chat/view/sidebar/ChatLeftHeader.qml">../view/sidebar/ChatLeftHeader.qml</file>
         <file alias="features/chat/view/sidebar/ChatSideBar.qml">../view/sidebar/ChatSideBar.qml</file>
+        <file alias="features/chat/runtime/ChatConversationRuntime.js">../runtime/ChatConversationRuntime.js</file>
     </qresource>
 </RCC>

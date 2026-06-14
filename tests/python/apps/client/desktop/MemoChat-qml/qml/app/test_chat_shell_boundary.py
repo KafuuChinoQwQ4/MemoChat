@@ -18,7 +18,7 @@ QML_QRCS = (
 )
 
 CHAT_SHELL_PAGE = QML_ROOT / "app/ChatShellPage.qml"
-CHAT_SHELL_RUNTIME = QML_ROOT / "app/ChatShellRuntime.js"
+CHAT_SHELL_RUNTIME = QML_ROOT / "runtime/ChatShellRuntime.js"
 CHAT_NORMAL_FACE = CHAT_FEATURE_VIEW / "ChatNormalFace.qml"
 CHAT_MODAL_LAYER = CHAT_FEATURE_VIEW / "ChatModalLayer.qml"
 R18_FLIP_FACE = R18_FEATURE_VIEW / "R18FlipFace.qml"
@@ -61,7 +61,7 @@ class ChatShellBoundaryTests(unittest.TestCase):
         shell = self.read(CHAT_SHELL_PAGE)
 
         self.assertLessEqual(len(shell.splitlines()), 260)
-        self.assertIn('import "ChatShellRuntime.js" as ChatShellRuntime', shell)
+        self.assertIn('import "qrc:/qml/runtime/ChatShellRuntime.js" as ChatShellRuntime', shell)
         self.assertIn("ChatNormalFace", shell)
         self.assertIn("R18FlipFace", shell)
         self.assertIn("AgentGameOverlay", shell)

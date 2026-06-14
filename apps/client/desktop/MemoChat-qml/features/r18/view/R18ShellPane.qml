@@ -1,7 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import "qrc:/qml/components"
-import "R18ShellRuntime.js" as R18ShellRuntime
+import "../runtime/R18ShellRuntime.js" as R18ShellRuntime
 
 Item {
     id: root

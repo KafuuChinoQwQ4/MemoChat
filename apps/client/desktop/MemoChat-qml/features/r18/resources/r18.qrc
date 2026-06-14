@@ -13,7 +13,7 @@
         <file alias="features/r18/view/R18ReaderPane.qml">../view/R18ReaderPane.qml</file>
         <file alias="features/r18/view/R18SearchPane.qml">../view/R18SearchPane.qml</file>
         <file alias="features/r18/view/R18ShellPane.qml">../view/R18ShellPane.qml</file>
-        <file alias="features/r18/view/R18ShellRuntime.js">../view/R18ShellRuntime.js</file>
+        <file alias="features/r18/runtime/R18ShellRuntime.js">../runtime/R18ShellRuntime.js</file>
         <file alias="features/r18/view/R18SourceFeedPane.qml">../view/R18SourceFeedPane.qml</file>
         <file alias="features/r18/view/R18SourceImportPane.qml">../view/R18SourceImportPane.qml</file>
         <file alias="features/r18/view/R18SourceListPane.qml">../view/R18SourceListPane.qml</file>

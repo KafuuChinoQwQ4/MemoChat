@@ -4,7 +4,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "qrc:/qml/components"
-import "AgentGameRuntime.js" as AgentGameRuntime
+import "../runtime/AgentGameRuntime.js" as AgentGameRuntime
 
 Rectangle {
     id: root

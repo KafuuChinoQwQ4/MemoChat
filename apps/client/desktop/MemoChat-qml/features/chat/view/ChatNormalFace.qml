@@ -6,7 +6,7 @@ import "qrc:/features/chat/view"
 import "qrc:/features/profile/view"
 import "sidebar"
 import "qrc:/qml/components"
-import "qrc:/qml/app/ChatShellRuntime.js" as ChatShellRuntime
+import "qrc:/qml/runtime/ChatShellRuntime.js" as ChatShellRuntime
 
 RowLayout {
     id: root

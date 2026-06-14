@@ -6,6 +6,7 @@ from tests.python.support.paths import repo_root
 REPO_ROOT = repo_root()
 CLIENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 FEATURE_VIEW = CLIENT / "features/agent/view"
+FEATURE_RUNTIME = CLIENT / "features/agent/runtime"
 LEGACY_VIEW = CLIENT / "qml/agent"
 FEATURE_QRC = CLIENT / "features/agent/resources/agent.qrc"
 LEGACY_QRC = CLIENT / "resources/qrc/qml-agent.qrc"
@@ -20,12 +21,10 @@ FEATURE_FILES = (
     "AgentGamePane.qml",
     "AgentGamePlayPane.qml",
     "AgentGameRoomPane.qml",
-    "AgentGameRuntime.js",
     "AgentGameSetupHeader.qml",
     "AgentGameSetupPane.qml",
     "AgentGameTemplatePane.qml",
     "AgentMarkdownCodeBlock.qml",
-    "AgentMarkdownRuntime.js",
     "AgentMarkdownText.qml",
     "AgentMemoryPane.qml",
     "AgentMessageDelegate.qml",
@@ -36,12 +35,18 @@ FEATURE_FILES = (
     "AgentMultiAiSessionPanel.qml",
     "AgentPane.qml",
     "AgentPaneHeader.qml",
-    "AgentPaneRuntime.js",
     "AgentStatusOverlay.qml",
     "AgentTaskPane.qml",
     "AgentTracePane.qml",
     "KnowledgeBasePane.qml",
     "SmartFeatureBar.qml",
+)
+
+# Pure JavaScript runtime helpers live in a dedicated runtime/ folder, not view/.
+RUNTIME_FILES = (
+    "AgentGameRuntime.js",
+    "AgentMarkdownRuntime.js",
+    "AgentPaneRuntime.js",
 )
 
 
@@ -56,6 +61,12 @@ class AgentQmlPhysicalLayoutContractTests(unittest.TestCase):
                 self.assertTrue((FEATURE_VIEW / file_name).is_file())
                 self.assertFalse((LEGACY_VIEW / file_name).exists())
 
+    def test_agent_runtime_js_lives_under_feature_runtime(self):
+        for file_name in RUNTIME_FILES:
+            with self.subTest(file=file_name):
+                self.assertTrue((FEATURE_RUNTIME / file_name).is_file())
+                self.assertFalse((FEATURE_VIEW / file_name).exists())
+
     def test_agent_qrc_uses_feature_aliases_only(self):
         self.assertFalse(LEGACY_QRC.exists())
         feature_qrc = read(FEATURE_QRC)
@@ -64,6 +75,9 @@ class AgentQmlPhysicalLayoutContractTests(unittest.TestCase):
             with self.subTest(file=file_name):
                 self.assertIn(f'alias="features/agent/view/{file_name}">../view/{file_name}</file>', feature_qrc)
                 self.assertNotIn(f'alias="qml/agent/{file_name}"', legacy_qrc)
+        for file_name in RUNTIME_FILES:
+            with self.subTest(file=file_name):
+                self.assertIn(f'alias="features/agent/runtime/{file_name}">../runtime/{file_name}</file>', feature_qrc)
 
     def test_agent_qrc_is_registered_by_feature_manifest(self):
         self.assertIn("features/agent/resources/agent.qrc", read(SOURCES))

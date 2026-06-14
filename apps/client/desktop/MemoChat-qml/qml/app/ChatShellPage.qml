@@ -5,7 +5,7 @@ import "../components"
 import "qrc:/features/chat/view"
 import "qrc:/features/agent/view"
 import "qrc:/features/r18/view"
-import "ChatShellRuntime.js" as ChatShellRuntime
+import "qrc:/qml/runtime/ChatShellRuntime.js" as ChatShellRuntime
 
 Rectangle {
     id: root
