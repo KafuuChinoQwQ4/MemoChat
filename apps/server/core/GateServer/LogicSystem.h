@@ -4,6 +4,7 @@
 #include <map>
 #include <vector>
 #include "const.h"
+#include "routing/RouteRegistry.h"
 
 class HttpConnection;
 class GateHttp3Connection;
@@ -39,4 +40,5 @@ private:
     std::vector<std::pair<std::string, HttpHandler>> _delete_prefix_handlers;
     std::map<std::string, Http3Handler> _post3_handlers;
     std::map<std::string, Http3Handler> _get3_handlers;
+    memochat::gate::routing::RouteRegistry _route_registry;
 };

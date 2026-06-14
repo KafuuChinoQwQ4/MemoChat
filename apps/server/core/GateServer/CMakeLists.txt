@@ -1,3 +1,5 @@
+option(MEMOCHAT_BUILD_EMBEDDED_GATE_HTTP2 "Compile the legacy embedded HTTP/2 listener into GateServer" OFF)
+
 add_executable(GateServer
     GateServer.cpp
     CServer.cpp
@@ -7,6 +9,22 @@ add_executable(GateServer
     GateWorkerPool.cpp
     HttpConnection.cpp
     LogicSystem.cpp
+    adapters/h1/H1RouteAdapter.cpp
+    modules/ai/AIRouteModule.cpp
+    modules/auth/AuthRouteModule.cpp
+    modules/call/CallRouteModule.cpp
+    modules/health/HealthRouteModule.cpp
+    modules/media/MediaRouteModule.cpp
+    modules/moments/MomentsRouteModule.cpp
+    modules/profile/ProfileRouteModule.cpp
+    modules/r18/R18RouteModule.cpp
+    routing/RouteRegistry.cpp
+    services/ai/AIService.cpp
+    services/account/AccountPersistence.cpp
+    services/auth/AuthService.cpp
+    services/media/MediaService.cpp
+    services/moments/MomentsService.cpp
+    services/r18/R18Service.cpp
     MediaHttpService.cpp
     AIServiceClient.cpp
     MomentsRouteModules.cpp
@@ -14,35 +32,44 @@ add_executable(GateServer
     MomentsRouteModules.h
     GateRouteModules.h
     AIRouteModules.h
-    ../GateServerHttp3/GateHttp3ServiceRoutes.h
+    transports/h3/legacy_routes/GateHttp3ServiceRoutes.h
     CertUtil.cpp
     CertUtil.h
 )
 
-# When nghttp2 is available, embed NgHttp2Server (HTTP/2) directly inside GateServer.
+# The embedded HTTP/2 listener is legacy/experimental. Envoy owns production
+# HTTP/2 ingress, so this source block must stay behind an explicit opt-in.
 # NOTE: GateServer's CertUtil.cpp is already in the main target above; we do NOT
-# compile GateServerHttp2/CertUtil.cpp here to avoid duplicate symbol errors.
-if(MEMOCHAT_HAVE_NGHTTP2)
+# compile transports/h2/standalone/CertUtil.cpp here to avoid duplicate symbol errors.
+if(MEMOCHAT_BUILD_EMBEDDED_GATE_HTTP2 AND MEMOCHAT_HAVE_NGHTTP2)
     target_sources(GateServer PRIVATE
         NgHttp2Server.cpp
-        ../GateServerHttp2/Http2Routes.cpp
-        ../GateServerHttp2/Http2Handlers.cpp
-        ../GateServerHttp2/Http2AuthHandlers.cpp
-        ../GateServerHttp2/Http2AuthSupport.cpp
-        ../GateServerHttp2/Http2CallHandlers.cpp
-        ../GateServerHttp2/Http2CallSupport.cpp
-        ../GateServerHttp2/Http2MediaHandlers.cpp
-        ../GateServerHttp2/Http2ProfileHandlers.cpp
-        ../GateServerHttp2/Http2MomentsSupport.cpp
+        transports/h2/adapters/h2/H2RouteAdapter.cpp
+        transports/h2/routes/Http2Routes.cpp
+        transports/h2/handlers/Http2Handlers.cpp
+        transports/h2/handlers/Http2AuthHandlers.cpp
+        transports/h2/support/Http2AuthSupport.cpp
+        transports/h2/handlers/Http2CallHandlers.cpp
+        transports/h2/support/Http2CallSupport.cpp
+        transports/h2/handlers/Http2MediaHandlers.cpp
+        transports/h2/handlers/Http2ProfileHandlers.cpp
+        transports/h2/support/Http2MomentsSupport.cpp
     )
     # Header-only support modules
     target_sources(GateServer PRIVATE
-        ../GateServerHttp2/Http2MediaSupport.h
-        ../GateServerHttp2/Http2ProfileSupport.h
+        transports/h2/support/Http2MediaSupport.h
+        transports/h2/support/Http2ProfileSupport.h
     )
     target_include_directories(GateServer PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/../GateServerHttp2
+        ${CMAKE_CURRENT_SOURCE_DIR}/transports/h2
+        ${CMAKE_CURRENT_SOURCE_DIR}/transports/h2/adapters
+        ${CMAKE_CURRENT_SOURCE_DIR}/transports/h2/routes
+        ${CMAKE_CURRENT_SOURCE_DIR}/transports/h2/handlers
+        ${CMAKE_CURRENT_SOURCE_DIR}/transports/h2/support
+        ${CMAKE_CURRENT_SOURCE_DIR}/transports/h2/standalone
     )
+elseif(MEMOCHAT_BUILD_EMBEDDED_GATE_HTTP2)
+    message(WARNING "MEMOCHAT_BUILD_EMBEDDED_GATE_HTTP2=ON but nghttp2/OpenSSL support is unavailable; skipping embedded Gate HTTP/2 sources")
 endif()
 
 set_target_properties(GateServer PROPERTIES FOLDER "Server")
@@ -72,8 +99,10 @@ endif()
 
 target_include_directories(GateServer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../GateServerCore
-    ${CMAKE_CURRENT_SOURCE_DIR}/../GateServerHttp3
+    ${CMAKE_CURRENT_SOURCE_DIR}/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/transports/h3
+    ${CMAKE_CURRENT_SOURCE_DIR}/transports/h3/listener
+    ${CMAKE_CURRENT_SOURCE_DIR}/transports/h3/legacy_routes
 )
 
 if(WIN32 AND MEMOCHAT_ENABLE_HTTP3)

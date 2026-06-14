@@ -7,10 +7,10 @@ REPO_ROOT = repo_root()
 CLIENT_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 CORE_CLIENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core"
 SHARED_CLIENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/shared"
-GATE_CORE = REPO_ROOT / "apps/server/core/GateServerCore"
+GATE_CORE = REPO_ROOT / "apps/server/core/GateServer/core"
 GATE_H1 = REPO_ROOT / "apps/server/core/GateServer"
-GATE_H2 = REPO_ROOT / "apps/server/core/GateServerHttp2"
-GATE_H3 = REPO_ROOT / "apps/server/core/GateServerHttp3"
+GATE_H2_SUPPORT = REPO_ROOT / "apps/server/core/GateServer/transports/h2/support"
+GATE_H3_LEGACY_ROUTES = REPO_ROOT / "apps/server/core/GateServer/transports/h3/legacy_routes"
 
 
 def read(path: Path) -> str:
@@ -122,11 +122,11 @@ class UserAvatarProfileContractTests(unittest.TestCase):
         self.assertNotIn("port == 80 || port == 8443", icon_utils)
 
     def test_gate_login_cache_hit_refreshes_database_profile_before_ticket_issue(self):
-        support_h = read(GATE_CORE / "AuthLoginSupport.h")
-        support_cpp = read(GATE_CORE / "AuthLoginSupport.cpp")
-        h1 = read(GATE_H1 / "GateServerH1Routes.cpp")
-        h2 = read(GATE_H2 / "Http2AuthSupport.cpp")
-        h3 = read(GATE_H3 / "GateHttp3ServiceRoutes.cpp")
+        support_h = read(GATE_CORE / "support/AuthLoginSupport.h")
+        support_cpp = read(GATE_CORE / "support/AuthLoginSupport.cpp")
+        h1_auth_service = read(GATE_H1 / "services/auth/AuthService.cpp")
+        h2 = read(GATE_H2_SUPPORT / "Http2AuthSupport.cpp")
+        h3 = read(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp")
 
         self.assertIn("bool RefreshLoginProfileFromDb(const std::string& email, UserInfo& userInfo);", support_h)
         refresh = extract_function(support_cpp, "bool RefreshLoginProfileFromDb")
@@ -134,8 +134,9 @@ class UserAvatarProfileContractTests(unittest.TestCase):
         self.assertIn("userInfo.icon = dbUserInfo.icon;", refresh)
         self.assertIn("CacheLoginProfile(email, userInfo);", refresh)
 
-        for source in (h1, h2, h3):
+        for source in (h1_auth_service, h2):
             self.assertIn("gateauthsupport::RefreshLoginProfileFromDb(email, userInfo);", source)
+        self.assertIn("AuthService::HandleUserLogin", h3)
 
 
 if __name__ == "__main__":
