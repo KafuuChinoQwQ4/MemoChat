@@ -64,8 +64,8 @@ class MomentsMediaBucketContractTests(unittest.TestCase):
         self.assertNotIn("root.controller.publishDraftMoment(\n", publish_qml)
 
     def test_s3_storage_routes_moment_uploads_to_dedicated_bucket(self):
-        source = read(SERVER_CORE / "GateServerCore/S3MediaStorage.cpp")
-        header = read(SERVER_CORE / "GateServerCore/S3MediaStorage.h")
+        source = read(SERVER_CORE / "GateServer/core/storage/S3MediaStorage.cpp")
+        header = read(SERVER_CORE / "GateServer/core/storage/S3MediaStorage.h")
 
         self.assertIn('_bucket_moments = minio["BucketMoments"];', source)
         self.assertIn('_bucket_moments = "memochat-moments";', source)
@@ -79,8 +79,8 @@ class MomentsMediaBucketContractTests(unittest.TestCase):
         config_paths = [
             SERVER_CORE / "GateServer/config.ini",
             SERVER_CORE / "GateServer/gate2.ini",
-            SERVER_CORE / "GateServerHttp1.1/config.ini",
-            SERVER_CORE / "GateServerHttp2/config.ini",
+            SERVER_CORE / "GateServer/transports/h1/legacy_standalone/config.ini",
+            SERVER_CORE / "GateServer/transports/h2/config.ini",
             REPO_ROOT / "infra/Memo_ops/runtime/services/GateServer1/config.ini",
             REPO_ROOT / "infra/Memo_ops/runtime/services/GateServer2/config.ini",
         ]
@@ -101,8 +101,8 @@ class MomentsMediaBucketContractTests(unittest.TestCase):
 
     def test_moment_image_uses_image_upload_limit(self):
         client = read(CLIENT / "shared/media/MediaUploadService.cpp")
-        gate_h1 = read(SERVER_CORE / "GateServer/MediaHttpService.cpp")
-        gate_shared = read(SERVER_CORE / "GateServerCore/Http2MediaSupport.cpp")
+        gate_h1 = read(SERVER_CORE / "GateServer/services/media/MediaService.cpp")
+        gate_shared = read(SERVER_CORE / "GateServer/core/support/Http2MediaSupport.cpp")
 
         self.assertIn("usesImageUploadLimit", client)
         self.assertIn('normalized == QStringLiteral("moment_image")', client)

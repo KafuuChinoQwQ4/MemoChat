@@ -4,6 +4,7 @@ project(MemoChatServer LANGUAGES CXX)
 
 option(BUILD_SERVER_SERVICES "Build backend service executables" ON)
 option(MEMOCHAT_AUTO_DEPLOY_RUNTIME "Copy built server executables into infra/Memo_ops/runtime/services during build" OFF)
+option(MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE "Build the legacy standalone GateServerHttp2 executable" OFF)
 
 # Require C++23 for std::expected, std::unreachable, std::byteswap (glaze library requires C++23).
 # Must be set BEFORE any add_subdirectory() calls so it takes effect for all targets.
@@ -423,13 +424,18 @@ function(memochat_configure_server_target target_name)
         else()
             file(TO_CMAKE_PATH "${CMAKE_SOURCE_DIR}/infra/Memo_ops/runtime/services" RUNTIME_BASE_NATIVE)
         endif()
+        get_target_property(_memochat_target_source_dir ${target_name} SOURCE_DIR)
+        set(_memochat_target_config "${CMAKE_SOURCE_DIR}/apps/server/core/${target_name}/config.ini")
+        if(NOT EXISTS "${_memochat_target_config}" AND _memochat_target_source_dir)
+            set(_memochat_target_config "${_memochat_target_source_dir}/config.ini")
+        endif()
         add_custom_command(TARGET ${target_name} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory "${RUNTIME_BASE_NATIVE}/${target_name}"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "$<TARGET_FILE:${target_name}>"
                 "${RUNTIME_BASE_NATIVE}/${target_name}"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_SOURCE_DIR}/apps/server/core/${target_name}/config.ini"
+                "${_memochat_target_config}"
                 "${RUNTIME_BASE_NATIVE}/${target_name}"
             COMMENT "Auto-deploying ${target_name} -> ${RUNTIME_BASE_NATIVE}/${target_name}"
         )
@@ -445,11 +451,15 @@ endif()
 
 if(BUILD_SERVER_SERVICES)
     add_subdirectory(ChatServer)
-    add_subdirectory(GateServerCore)
-    add_subdirectory(GateServerHttp1.1)
-    add_subdirectory(GateServerHttp3)
-    if(libh2o_FOUND)
-        add_subdirectory(GateServerHttp2)
+    add_subdirectory(GateServer/core)
+    # Legacy H1.1 standalone transport remains opt-in; R18 plugin helpers stay default-buildable.
+    add_subdirectory(GateServer/transports/h1/legacy_standalone)
+    add_subdirectory(GateServer/plugins/r18)
+    add_subdirectory(GateServer/transports/h3)
+    if(MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE AND libh2o_FOUND)
+        add_subdirectory(GateServer/transports/h2)
+    elseif(MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE)
+        message(WARNING "MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE=ON but libh2o was not found; skipping GateServerHttp2")
     endif()
     add_subdirectory(GateServer)
     add_subdirectory(StatusServer)

@@ -35,6 +35,10 @@ public:
     {
         return _response;
     }
+    const http::request<http::dynamic_body>& GetRequest() const
+    {
+        return _request;
+    }
     const std::unordered_map<std::string, std::string>& GetParams() const
     {
         return _get_params;
