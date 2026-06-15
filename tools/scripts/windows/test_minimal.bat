@@ -20,7 +20,6 @@ set "SERVER_BIN_PRIMARY=%ROOT%\build-vcpkg-server\bin\Release"
 set "SERVER_BIN_FALLBACK=%ROOT%\build\bin\Release"
 set "BUILD_BIN=%SERVER_BIN_PRIMARY%"
 set "GATE_EXE="
-set "STATUS_EXE="
 set "CHAT_EXE="
 set "CLIENT_BIN=%ROOT%\build\bin\Release"
 set "OPS_ROOT=%ROOT%\Memo_ops"
@@ -29,7 +28,6 @@ set "ARTIFACT_ROOT=%OPS_ROOT%\artifacts"
 set "RUN_ROOT=%OPS_RUNTIME%\services"
 set "PID_ROOT=%ARTIFACT_ROOT%\runtime\pids"
 set "CONSOLE_CP=936"
-set "STATUS_CONFIG=%ROOT%\server\StatusServer\config.ini"
 
 echo [INFO] ROOT=%ROOT%
 echo [INFO] BUILD_BIN=%BUILD_BIN%

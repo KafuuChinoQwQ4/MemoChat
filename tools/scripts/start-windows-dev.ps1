@@ -107,11 +107,8 @@ $services = @(
     @{ Name = "VarifyServer-1";   Exe = "VarifyServer.exe"; Config = "$ServicesDir\VarifyServer1\config.ini" },
     @{ Name = "VarifyServer-2";   Exe = "VarifyServer.exe"; Config = "$ServicesDir\VarifyServer2\config.ini" },
     @{ Name = "GateServer";       Exe = "GateServer.exe";   Config = "$ServicesDir\GateServer\config.ini" },
-    @{ Name = "StatusServer";     Exe = "StatusServer.exe"; Config = "$ServicesDir\StatusServer\config.ini" },
     @{ Name = "ChatServer-1";      Exe = "ChatServer.exe";   Config = "$ServicesDir\chatserver1\config.ini" },
-    @{ Name = "ChatServer-2";      Exe = "ChatServer.exe";   Config = "$ServicesDir\chatserver2\config.ini" },
-    @{ Name = "ChatServer-3";      Exe = "ChatServer.exe";   Config = "$ServicesDir\chatserver3\config.ini" },
-    @{ Name = "ChatServer-4";      Exe = "ChatServer.exe";   Config = "$ServicesDir\chatserver4\config.ini" }
+    @{ Name = "ChatServer-2";      Exe = "ChatServer.exe";   Config = "$ServicesDir\chatserver2\config.ini" }
 )
 
 foreach ($svc in $services) {
@@ -163,7 +160,6 @@ Write-Host "服务端口:" -ForegroundColor Yellow
 $ports = @(
     "GateServer HTTP : 8080",
     "GateServer gRPC : 50054",
-    "StatusServer    : 50052",
     "VarifyServer    : 50051 / 8082",
     "ChatServer TCP  : 8090",
     "ChatServer QUIC : 8190",

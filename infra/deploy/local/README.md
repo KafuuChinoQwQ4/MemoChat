@@ -20,7 +20,7 @@ This folder holds the local Docker dependencies and init payloads used by MemoCh
   - LiveKit `7880`
   - TURN `3478`
 - `compose/envoy-lb.yml`
-  - containerized Gate/Chat cluster variant with Envoy LB `80` (HTTP), `8090-8094` and `8097` (TCP Stream)
+  - containerized Gate/Chat cluster variant with Envoy LB `80` (HTTP), `8090-8091` (TCP Stream)
   - do not use this fragment with the default Windows-process local runtime because ChatServer ports would collide
 - `compose/observability.yml`
   - Prometheus `9090` (短期存储)

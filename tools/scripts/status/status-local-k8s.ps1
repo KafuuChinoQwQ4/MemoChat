@@ -50,7 +50,6 @@ Write-Section "端口映射"
 $ports = @(
     @{ Name = "GateServer HTTP"; Port = "8080" },
     @{ Name = "GateServer gRPC"; Port = "50054" },
-    @{ Name = "StatusServer"; Port = "50052" },
     @{ Name = "VarifyServer gRPC"; Port = "50051" },
     @{ Name = "VarifyServer HTTP"; Port = "8081" },
     @{ Name = "ChatServer TCP"; Port = "8090" },

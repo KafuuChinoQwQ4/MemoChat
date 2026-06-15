@@ -345,6 +345,8 @@ public:
     bool HDel(const std::string& key, const std::string& field);
     bool Del(const std::string& key);
     bool ExistsKey(const std::string& key);
+    // SCARD: cardinality of a set; used for chat-server online-user load counts.
+    bool SCard(const std::string& key, int& count);
 
     // Pipeline operations for reduced RTT
     // MGET: fetch multiple keys in one round-trip (returns map of key->value)

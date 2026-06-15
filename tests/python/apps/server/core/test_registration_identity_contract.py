@@ -64,25 +64,6 @@ class RegistrationIdentityContractTests(unittest.TestCase):
         self.assertIn("UpdatePwd(email, password)", h1_account)
         self.assertIn("UpdatePwd(email, pwd)", h2)
 
-    def test_status_registration_checks_duplicate_email_only(self):
-        source = read(SERVER_CORE / "StatusServer/PostgresDao.cpp")
-        body = compact(function_body(source, "int PostgresDao::RegUser"))
-
-        self.assertIn('SELECT COUNT(1) FROM \\"user\\" WHERE email = ', body)
-        self.assertIn("txn.quote(email)", body)
-        self.assertNotIn("OR email", body)
-        self.assertNotIn("WHERE name =", body)
-
-    def test_status_reset_password_uses_unique_email_not_nickname(self):
-        source = read(SERVER_CORE / "StatusServer/PostgresDao.cpp")
-        check_body = compact(function_body(source, "bool PostgresDao::CheckEmail"))
-        update_body = compact(function_body(source, "bool PostgresDao::UpdatePwd"))
-
-        self.assertIn('SELECT 1 FROM \\"user\\" WHERE email = $1 LIMIT 1', check_body)
-        self.assertNotIn("WHERE name = $1", check_body)
-        self.assertIn('UPDATE \\"user\\" SET pwd = $1 WHERE email = $2', update_body)
-        self.assertNotIn("SET pwd = $1 WHERE name = $2", update_body)
-
     def test_chatserver_postgres_registration_checks_duplicate_email_only(self):
         source = read(SERVER_CORE / "ChatServer/persistence/PostgresDaoUsers.cpp")
         body = compact(function_body(source, "int PostgresDao::RegUser"))

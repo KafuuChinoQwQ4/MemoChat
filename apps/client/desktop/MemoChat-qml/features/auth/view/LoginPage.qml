@@ -165,9 +165,9 @@ Rectangle {
         anchorItem: emailInputBox
         backdrop: backdropLayer
         credentialModel: credentialModel
-        surfaceFillColor: Qt.rgba(0.985, 0.992, 1.0, 0.48)
+        surfaceFillColor: Qt.rgba(0.97, 0.985, 1.0, 0.93)
         surfaceStrokeColor: Qt.rgba(0.78, 0.86, 0.94, 0.66)
-        itemBaseColor: Qt.rgba(1, 1, 1, 0.24)
+        itemBaseColor: Qt.rgba(1, 1, 1, 0.62)
         onClosed: credentialDropdownOpen = false
         onCredentialSelected: function(index) {
             loginRoot.applyCredential(index)

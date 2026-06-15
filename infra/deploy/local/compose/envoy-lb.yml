@@ -7,10 +7,6 @@ services:
       - "80:80"
       - "8090:8090"
       - "8091:8091"
-      - "8092:8092"
-      - "8093:8093"
-      - "8094:8094"
-      - "8097:8097"
     volumes:
       - ./envoy-lb.yaml:/etc/envoy/envoy.yaml:ro
     entrypoint: ["envoy"]
@@ -29,7 +25,7 @@ services:
     container_name: memochat-gate-1
     environment:
       - GATESERVER_PORT=8080
-      - CLUSTER_NODES=chatserver1,chatserver2,chatserver3,chatserver4,chatserver5,chatserver6
+      - CLUSTER_NODES=chatserver1,chatserver2
       - REDIS_HOST=memochat-redis
       - POSTGRES_HOST=memochat-postgres
     networks:
@@ -40,7 +36,7 @@ services:
     container_name: memochat-gate-2
     environment:
       - GATESERVER_PORT=8080
-      - CLUSTER_NODES=chatserver1,chatserver2,chatserver3,chatserver4,chatserver5,chatserver6
+      - CLUSTER_NODES=chatserver1,chatserver2
       - REDIS_HOST=memochat-redis
       - POSTGRES_HOST=memochat-postgres
     networks:
@@ -54,7 +50,7 @@ services:
       - TCP_PORT=8090
       - QUIC_PORT=8190
       - RPC_PORT=50055
-      - CLUSTER_NODES=chatserver1,chatserver2,chatserver3,chatserver4,chatserver5,chatserver6
+      - CLUSTER_NODES=chatserver1,chatserver2
       - REDIS_HOST=memochat-redis
       - POSTGRES_HOST=memochat-postgres
     networks:
@@ -68,63 +64,7 @@ services:
       - TCP_PORT=8091
       - QUIC_PORT=8191
       - RPC_PORT=50056
-      - CLUSTER_NODES=chatserver1,chatserver2,chatserver3,chatserver4,chatserver5,chatserver6
-      - REDIS_HOST=memochat-redis
-      - POSTGRES_HOST=memochat-postgres
-    networks:
-      - memochat-net
-
-  chat-server-3:
-    image: memochat/chat-server:latest
-    container_name: memochat-chat-3
-    environment:
-      - SERVER_NAME=chatserver3
-      - TCP_PORT=8092
-      - QUIC_PORT=8192
-      - RPC_PORT=50057
-      - CLUSTER_NODES=chatserver1,chatserver2,chatserver3,chatserver4,chatserver5,chatserver6
-      - REDIS_HOST=memochat-redis
-      - POSTGRES_HOST=memochat-postgres
-    networks:
-      - memochat-net
-
-  chat-server-4:
-    image: memochat/chat-server:latest
-    container_name: memochat-chat-4
-    environment:
-      - SERVER_NAME=chatserver4
-      - TCP_PORT=8093
-      - QUIC_PORT=8193
-      - RPC_PORT=50058
-      - CLUSTER_NODES=chatserver1,chatserver2,chatserver3,chatserver4,chatserver5,chatserver6
-      - REDIS_HOST=memochat-redis
-      - POSTGRES_HOST=memochat-postgres
-    networks:
-      - memochat-net
-
-  chat-server-5:
-    image: memochat/chat-server:latest
-    container_name: memochat-chat-5
-    environment:
-      - SERVER_NAME=chatserver5
-      - TCP_PORT=8094
-      - QUIC_PORT=8194
-      - RPC_PORT=50059
-      - CLUSTER_NODES=chatserver1,chatserver2,chatserver3,chatserver4,chatserver5,chatserver6
-      - REDIS_HOST=memochat-redis
-      - POSTGRES_HOST=memochat-postgres
-    networks:
-      - memochat-net
-
-  chat-server-6:
-    image: memochat/chat-server:latest
-    container_name: memochat-chat-6
-    environment:
-      - SERVER_NAME=chatserver6
-      - TCP_PORT=8097
-      - QUIC_PORT=8195
-      - RPC_PORT=50381
-      - CLUSTER_NODES=chatserver1,chatserver2,chatserver3,chatserver4,chatserver5,chatserver6
+      - CLUSTER_NODES=chatserver1,chatserver2
       - REDIS_HOST=memochat-redis
       - POSTGRES_HOST=memochat-postgres
     networks:
