@@ -61,7 +61,6 @@ def _service_catalog(config: dict) -> list[ServiceDescriptor]:
     chat_nodes = load_cluster_nodes(cluster_path)
     descriptors = [
         ServiceDescriptor("GateServer", "gate-http", "GateServer", "127.0.0.1", 8080, "http"),
-        ServiceDescriptor("StatusServer", "status-grpc", "StatusServer", "127.0.0.1", 50052, "grpc"),
         ServiceDescriptor("VarifyServer", "varify-grpc", "VarifyServer", "127.0.0.1", 50051, "grpc"),
     ]
     for node in chat_nodes:

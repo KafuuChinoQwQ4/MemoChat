@@ -57,7 +57,6 @@ echo [STEP] Stop C++ backend services
 powershell -NoProfile -Command "$ports = @(50051,48083,8083,8087); $pids = @(); foreach ($port in $ports) { $pids += Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess }; $pids = $pids | Where-Object { $_ } | Sort-Object -Unique; if ($pids) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Write-Host '  [OK] VarifyServer ports released' } else { Write-Host '  [-] VarifyServer ports not listening' }" 2>nul
 
 REM 按启动顺序逆序停止
-call :kill_by_name "StatusServer.exe"       "StatusServer"
 call :kill_by_name "GateServer.exe"         "GateServer1/GateServer2"
 call :kill_by_name "AIServer.exe"           "AIServer"
 call :kill_by_name "ChatServer.exe"         "ChatServer all instances"
@@ -77,7 +76,6 @@ call :check "MemoOpsQml.exe"         "MemoOpsQml"
 call :check "GateServer.exe"          "GateServer1/GateServer2"
 call :check "AIServer.exe"            "AIServer"
 call :check "ChatServer.exe"           "ChatServer"
-call :check "StatusServer.exe"         "StatusServer"
 call :check "VarifyServer.exe"         "VarifyServer"
 
 echo.

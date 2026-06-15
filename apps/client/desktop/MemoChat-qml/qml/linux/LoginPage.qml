@@ -167,9 +167,9 @@ Rectangle {
         backdrop: backdropLayer
         credentialModel: credentialModel
         linuxStyle: true
-        surfaceFillColor: Qt.rgba(0.985, 0.992, 1.0, 0.46)
+        surfaceFillColor: Qt.rgba(0.97, 0.985, 1.0, 0.94)
         surfaceStrokeColor: Qt.rgba(0.86, 0.93, 1.0, 0.78)
-        itemBaseColor: Qt.rgba(1, 1, 1, 0.34)
+        itemBaseColor: Qt.rgba(1, 1, 1, 0.64)
         onClosed: credentialDropdownOpen = false
         onCredentialSelected: function(index) {
             loginRoot.applyCredential(index)

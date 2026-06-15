@@ -84,66 +84,6 @@ data:
                     idle_timeout: 3600s
                     hash_policy:
                       - source_ip: {}
-        - name: listener_chat_8092
-          address:
-            socket_address:
-              address: 0.0.0.0
-              port_value: 8092
-          filter_chains:
-            - filters:
-                - name: envoy.filters.network.tcp_proxy
-                  typed_config:
-                    "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
-                    stat_prefix: chat_tcp_8092
-                    cluster: chat_tcp_backend
-                    idle_timeout: 3600s
-                    hash_policy:
-                      - source_ip: {}
-        - name: listener_chat_8093
-          address:
-            socket_address:
-              address: 0.0.0.0
-              port_value: 8093
-          filter_chains:
-            - filters:
-                - name: envoy.filters.network.tcp_proxy
-                  typed_config:
-                    "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
-                    stat_prefix: chat_tcp_8093
-                    cluster: chat_tcp_backend
-                    idle_timeout: 3600s
-                    hash_policy:
-                      - source_ip: {}
-        - name: listener_chat_8094
-          address:
-            socket_address:
-              address: 0.0.0.0
-              port_value: 8094
-          filter_chains:
-            - filters:
-                - name: envoy.filters.network.tcp_proxy
-                  typed_config:
-                    "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
-                    stat_prefix: chat_tcp_8094
-                    cluster: chat_tcp_backend
-                    idle_timeout: 3600s
-                    hash_policy:
-                      - source_ip: {}
-        - name: listener_chat_8097
-          address:
-            socket_address:
-              address: 0.0.0.0
-              port_value: 8097
-          filter_chains:
-            - filters:
-                - name: envoy.filters.network.tcp_proxy
-                  typed_config:
-                    "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
-                    stat_prefix: chat_tcp_8097
-                    cluster: chat_tcp_backend
-                    idle_timeout: 3600s
-                    hash_policy:
-                      - source_ip: {}
       clusters:
         - name: gate_backend
           type: STRICT_DNS
@@ -215,18 +155,6 @@ spec:
             - name: chat-tcp-2
               containerPort: 8091
               protocol: TCP
-            - name: chat-tcp-3
-              containerPort: 8092
-              protocol: TCP
-            - name: chat-tcp-4
-              containerPort: 8093
-              protocol: TCP
-            - name: chat-tcp-5
-              containerPort: 8094
-              protocol: TCP
-            - name: chat-tcp-6
-              containerPort: 8097
-              protocol: TCP
             - name: admin
               containerPort: 9901
               protocol: TCP
@@ -280,20 +208,4 @@ spec:
     - name: chat-tcp-2
       port: 8091
       targetPort: 8091
-      protocol: TCP
-    - name: chat-tcp-3
-      port: 8092
-      targetPort: 8092
-      protocol: TCP
-    - name: chat-tcp-4
-      port: 8093
-      targetPort: 8093
-      protocol: TCP
-    - name: chat-tcp-5
-      port: 8094
-      targetPort: 8094
-      protocol: TCP
-    - name: chat-tcp-6
-      port: 8097
-      targetPort: 8097
       protocol: TCP

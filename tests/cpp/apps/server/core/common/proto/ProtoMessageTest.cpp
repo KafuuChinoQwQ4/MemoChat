@@ -59,90 +59,6 @@ TEST(ProtoMessageTest, GetVarifyRsp_ErrorCode)
 }
 
 // ---------------------------------------------------------------------------
-// GetChatServerReq / GetChatServerRsp round-trip
-// ---------------------------------------------------------------------------
-TEST(ProtoMessageTest, GetChatServerReq_RoundTrip)
-{
-    GetChatServerReq req;
-    req.set_uid(12345);
-
-    std::string bytes = req.SerializeAsString();
-
-    GetChatServerReq parsed;
-    ASSERT_TRUE(parsed.ParseFromString(bytes));
-    EXPECT_EQ(parsed.uid(), 12345);
-}
-
-TEST(ProtoMessageTest, GetChatServerRsp_WithToken)
-{
-    GetChatServerRsp rsp;
-    rsp.set_error(0);
-    rsp.set_host("192.168.1.100");
-    rsp.set_port("8888");
-    rsp.set_token("abc-token-xyz");
-    rsp.set_server_name("ChatServer1");
-    rsp.set_quic_host("192.168.1.100");
-    rsp.set_quic_port("9888");
-
-    std::string bytes = rsp.SerializeAsString();
-
-    GetChatServerRsp parsed;
-    ASSERT_TRUE(parsed.ParseFromString(bytes));
-    EXPECT_EQ(parsed.error(), 0);
-    EXPECT_EQ(parsed.host(), "192.168.1.100");
-    EXPECT_EQ(parsed.port(), "8888");
-    EXPECT_EQ(parsed.token(), "abc-token-xyz");
-    EXPECT_EQ(parsed.server_name(), "ChatServer1");
-    EXPECT_EQ(parsed.quic_host(), "192.168.1.100");
-    EXPECT_EQ(parsed.quic_port(), "9888");
-}
-
-// ---------------------------------------------------------------------------
-// LoginReq / LoginRsp round-trip
-// ---------------------------------------------------------------------------
-TEST(ProtoMessageTest, LoginReq_RoundTrip)
-{
-    LoginReq req;
-    req.set_uid(999);
-    req.set_token("secret-token");
-
-    std::string bytes = req.SerializeAsString();
-
-    LoginReq parsed;
-    ASSERT_TRUE(parsed.ParseFromString(bytes));
-    EXPECT_EQ(parsed.uid(), 999);
-    EXPECT_EQ(parsed.token(), "secret-token");
-}
-
-TEST(ProtoMessageTest, LoginRsp_SuccessAndFailure)
-{
-    // Success case
-    LoginRsp ok;
-    ok.set_error(0);
-    ok.set_uid(42);
-    ok.set_token("new-token");
-
-    std::string ok_bytes = ok.SerializeAsString();
-    LoginRsp ok_parsed;
-    ASSERT_TRUE(ok_parsed.ParseFromString(ok_bytes));
-    EXPECT_EQ(ok_parsed.error(), 0);
-    EXPECT_EQ(ok_parsed.uid(), 42);
-    EXPECT_EQ(ok_parsed.token(), "new-token");
-
-    // Failure case
-    LoginRsp fail;
-    fail.set_error(1001);
-    fail.set_uid(0);
-    fail.set_token("");
-
-    std::string fail_bytes = fail.SerializeAsString();
-    LoginRsp fail_parsed;
-    ASSERT_TRUE(fail_parsed.ParseFromString(fail_bytes));
-    EXPECT_EQ(fail_parsed.error(), 1001);
-    EXPECT_EQ(fail_parsed.uid(), 0);
-}
-
-// ---------------------------------------------------------------------------
 // TextChatMsgReq / TextChatMsgRsp round-trip (repeated fields)
 // ---------------------------------------------------------------------------
 TEST(ProtoMessageTest, TextChatMsgReq_SingleMessage)
@@ -378,9 +294,10 @@ TEST(ProtoMessageTest, DefaultValues_AreZeroOrEmpty)
     GetVarifyReq req;
     EXPECT_EQ(req.email(), "");
 
-    LoginReq login;
-    EXPECT_EQ(login.uid(), 0);
-    EXPECT_EQ(login.token(), "");
+    SendChatMsgReq send;
+    EXPECT_EQ(send.fromuid(), 0);
+    EXPECT_EQ(send.touid(), 0);
+    EXPECT_EQ(send.message(), "");
 
     TextChatMsgReq chat;
     EXPECT_EQ(chat.fromuid(), 0);

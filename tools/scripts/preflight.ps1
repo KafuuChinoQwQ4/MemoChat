@@ -52,29 +52,28 @@ function Get-IniData {
 }
 
 $root = Resolve-RepoRoot -InputRoot $RepoRoot
-$statusConfig = Join-Path $root "server/StatusServer/config.ini"
-if (-not (Test-Path $statusConfig)) {
-    throw "Missing required config: $statusConfig"
+$clusterConfig = Join-Path $root "server/GateServer/config.ini"
+if (-not (Test-Path $clusterConfig)) {
+    throw "Missing required config: $clusterConfig"
 }
 
-$statusIni = Get-IniData -Path $statusConfig
+$clusterIni = Get-IniData -Path $clusterConfig
 $clusterNodes = @()
-if ($statusIni.ContainsKey("Cluster") -and $statusIni["Cluster"].ContainsKey("Nodes")) {
+if ($clusterIni.ContainsKey("Cluster") -and $clusterIni["Cluster"].ContainsKey("Nodes")) {
     $clusterNodes = @(
-        ($statusIni["Cluster"]["Nodes"] -split ",") |
+        ($clusterIni["Cluster"]["Nodes"] -split ",") |
         ForEach-Object { $_.Trim() } |
         Where-Object { $_ }
     )
 }
 if ($clusterNodes.Count -eq 0) {
-    throw "No chat cluster nodes configured in server/StatusServer/config.ini"
+    throw "No chat cluster nodes configured in server/GateServer/config.ini"
 }
 
 $serverBinPrimary = Join-Path $root "build-vcpkg-server/bin/Release"
 $serverBinFallback = Join-Path $root "build/bin/Release"
 $binDir = if (
     (Test-Path (Join-Path $serverBinPrimary "GateServer.exe")) -and
-    (Test-Path (Join-Path $serverBinPrimary "StatusServer.exe")) -and
     (Test-Path (Join-Path $serverBinPrimary "ChatServer.exe"))
 ) {
     $serverBinPrimary
@@ -85,7 +84,6 @@ $binDir = if (
 $requiredFiles = @(
     "scripts/windows/start_test_services.bat",
     "server/GateServer/config.ini",
-    "server/StatusServer/config.ini",
     "server/ChatServer/config.ini",
     "server/VarifyServer/config.ini"
 )
@@ -96,7 +94,6 @@ foreach ($node in $clusterNodes) {
 
 $requiredBinaries = @(
     "GateServer.exe",
-    "StatusServer.exe",
     "ChatServer.exe",
     "VarifyServer.exe"
 )
@@ -137,11 +134,11 @@ if ($mongoEnabled) {
 }
 
 foreach ($node in $clusterNodes) {
-    if (-not $statusIni.ContainsKey($node)) {
-        $missing.Add("Missing [${node}] section in server/StatusServer/config.ini")
+    if (-not $clusterIni.ContainsKey($node)) {
+        $missing.Add("Missing [${node}] section in server/GateServer/config.ini")
         continue
     }
-    $nodeSection = $statusIni[$node]
+    $nodeSection = $clusterIni[$node]
     foreach ($field in @("TcpPort", "RpcPort")) {
         if (-not $nodeSection.ContainsKey($field)) {
             $missing.Add("Missing ${field} in [$node]")

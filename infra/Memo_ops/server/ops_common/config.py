@@ -59,7 +59,7 @@ def normalize_config(data: Dict[str, Any]) -> Dict[str, Any]:
     repo_cfg = data.setdefault("repo", {})
     cluster_cfg = data.setdefault("cluster", {})
     cluster_path = (
-        cluster_cfg.get("config") or repo_cfg.get("cluster_config_path") or "../../server/StatusServer/config.ini"
+        cluster_cfg.get("config") or repo_cfg.get("cluster_config_path") or "../../server/GateServer/config.ini"
     )
     data["cluster"] = {"config": str(resolve_path(data, cluster_path))}
 

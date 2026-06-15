@@ -9,11 +9,8 @@ Memo_ops/artifacts/
   logs/
     services/
       GateServer/
-      StatusServer/
       chatserver1/
       chatserver2/
-      chatserver3/
-      chatserver4/
       VarifyServer/
     manual-start/
   loadtest/

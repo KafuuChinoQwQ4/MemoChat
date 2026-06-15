@@ -12,9 +12,6 @@ data:
     [VarifyServer]
     Host=varifyserver
     Port=50051
-    [StatusServer]
-    Host=statusserver
-    Port=50052
     [Cluster]
     DiscoveryMode=k8s-statefulset
     ServiceName={{ .Values.chat.serviceName }}
@@ -90,74 +87,12 @@ data:
     VHost={{ .Values.externalServices.rabbitmq.vhost }}
     ExchangeDirect=memochat.direct
     ExchangeDlx=memochat.dlx
-  status.ini: |
-    [StatusServer]
-    Host=0.0.0.0
-    Port=50052
-    [Postgres]
-    Host={{ .Values.externalServices.postgres.host }}
-    Port={{ .Values.externalServices.postgres.port }}
-    User={{ .Values.externalServices.postgres.user }}
-    Passwd=
-    Database={{ .Values.externalServices.postgres.database }}
-    Schema={{ .Values.externalServices.postgres.schema }}
-    SslMode={{ .Values.externalServices.postgres.sslMode }}
-    [Redis]
-    Host={{ .Values.externalServices.redis.host }}
-    Port={{ .Values.externalServices.redis.port }}
-    Passwd=
-    [Cluster]
-    DiscoveryMode=k8s-statefulset
-    ServiceName={{ .Values.chat.serviceName }}
-    Namespace={{ .Values.namespaces.prod }}
-    Replicas={{ .Values.chat.replicaCount }}
-    TcpPort={{ .Values.chat.tcpPort }}
-    RpcPort={{ .Values.chat.rpcPort }}
-    Domain={{ .Values.global.clusterDomain }}
-    [Log]
-    Level=info
-    Dir=/var/log/memochat/status
-    Format=json
-    ToConsole=true
-    RotateMode=daily
-    MaxFiles=14
-    MaxSizeMB=100
-    Redact=true
-    Env=k8s
-    [Telemetry]
-    Enabled=true
-    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
-    Protocol=otlp-http
-    SampleRatio=1.0
-    ExportLogs=true
-    ExportTraces=true
-    ExportMetrics=false
-    ServiceName=StatusServer
-    ServiceNamespace=memochat
-    [Kafka]
-    Brokers={{ .Values.externalServices.kafka.brokers }}
-    ClientId=memochat-status
-    ConsumerGroup=memochat-status-audit
-    [RabbitMQ]
-    Host={{ .Values.externalServices.rabbitmq.host }}
-    Port={{ .Values.externalServices.rabbitmq.port }}
-    Username={{ .Values.externalServices.rabbitmq.username }}
-    Password=
-    VHost={{ .Values.externalServices.rabbitmq.vhost }}
-    PrefetchCount=10
-    ExchangeDirect=memochat.direct
-    ExchangeDlx=memochat.dlx
-    RetryDelayMs=5000
-    MaxRetries=5
   chat.ini: |
     [GateServer]
     Port=8080
     [VarifyServer]
     Host=varifyserver
     Port=50051
-    [StatusServer]
-    Host=statusserver
-    Port=50052
     [SelfServer]
     Name=
     [Runtime]

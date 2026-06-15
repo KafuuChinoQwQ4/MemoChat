@@ -25,9 +25,9 @@ Popup {
     property var credentialModel: null
     property bool linuxStyle: false
     property real popupScale: 1.0
-    property color surfaceFillColor: Qt.rgba(0.985, 0.992, 1.0, 0.48)
+    property color surfaceFillColor: Qt.rgba(0.97, 0.985, 1.0, 0.93)
     property color surfaceStrokeColor: Qt.rgba(0.78, 0.86, 0.94, 0.66)
-    property color itemBaseColor: Qt.rgba(1, 1, 1, 0.24)
+    property color itemBaseColor: Qt.rgba(1, 1, 1, 0.62)
 
     signal credentialSelected(int index)
 
@@ -36,7 +36,11 @@ Popup {
     }
 
     function panelHeight() {
-        const listHeight = Math.min(Math.max(credentialCount(), 1) * 56, 224)
+        if (credentialCount() <= 0) {
+            // Empty state: header (58) + centered title/subtitle block + bottom padding.
+            return 58 + 96 + 14
+        }
+        const listHeight = Math.min(credentialCount() * 56, 224)
         return 58 + listHeight + 14
     }
 
@@ -151,20 +155,23 @@ Popup {
             anchors.margins: 10
             height: 48
             radius: 14
-            color: Qt.rgba(1, 1, 1, 0.30)
+            color: Qt.rgba(1, 1, 1, 0.62)
             border.width: 1
             border.color: Qt.rgba(0.80, 0.87, 0.95, 0.58)
 
             Row {
                 anchors.left: parent.left
+                anchors.right: countBadge.left
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.leftMargin: 14
+                anchors.rightMargin: 10
                 spacing: 10
 
                 Rectangle {
                     width: 28
                     height: 28
                     radius: 14
+                    anchors.verticalCenter: parent.verticalCenter
                     color: Qt.rgba(0.35, 0.61, 0.90, 0.18)
                     border.width: 1
                     border.color: Qt.rgba(0.71, 0.86, 1.0, 0.42)
@@ -179,27 +186,33 @@ Popup {
                 }
 
                 Column {
+                    width: parent.width - 28 - parent.spacing
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 2
 
                     Text {
+                        width: parent.width
                         text: "最近登录"
                         color: "#233244"
                         font.pixelSize: 14
                         font.bold: true
+                        elide: Text.ElideRight
                     }
 
                     Text {
+                        width: parent.width
                         text: root.credentialCount() > 0
                               ? "选择一个历史账号快速填充"
                               : "登录成功后会自动保存在这里"
                         color: "#6a7d90"
                         font.pixelSize: 11
+                        elide: Text.ElideRight
                     }
                 }
             }
 
             Rectangle {
+                id: countBadge
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.rightMargin: 12
@@ -233,24 +246,6 @@ Popup {
                 width: parent.width - 28
                 spacing: 8
                 visible: root.credentialCount() <= 0
-
-                Rectangle {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    width: 54
-                    height: 54
-                    radius: 27
-                    color: Qt.rgba(0.35, 0.61, 0.90, 0.12)
-                    border.width: 1
-                    border.color: Qt.rgba(0.70, 0.84, 0.98, 0.34)
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "@"
-                        color: "#49708f"
-                        font.pixelSize: 22
-                        font.bold: true
-                    }
-                }
 
                 Text {
                     width: parent.width
@@ -297,7 +292,7 @@ Popup {
                         anchors.fill: parent
                         radius: 14
                         color: credentialMouse.containsMouse
-                               ? Qt.rgba(0.35, 0.61, 0.90, 0.16)
+                               ? Qt.rgba(0.82, 0.90, 0.99, 0.92)
                                : root.itemBaseColor
                         border.width: 1
                         border.color: credentialMouse.containsMouse
@@ -326,9 +321,9 @@ Popup {
                         width: 34
                         height: 34
                         radius: 17
-                        color: Qt.rgba(0.31, 0.55, 0.78, 0.14)
+                        color: Qt.rgba(0.82, 0.90, 0.98, 0.95)
                         border.width: 1
-                        border.color: Qt.rgba(0.71, 0.86, 1.0, 0.28)
+                        border.color: Qt.rgba(0.71, 0.86, 1.0, 0.55)
 
                         Text {
                             anchors.centerIn: parent

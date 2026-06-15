@@ -28,7 +28,6 @@ set(CHATSERVER_CLIENT_SOURCES
     clients/RelationGrpcServiceAdapter.cpp
     clients/RelationQueryGrpcClient.cpp
     clients/RelationQueryServiceFactory.cpp
-    clients/StatusGrpcClient.cpp
 )
 
 set(CHATSERVER_CONFIG_SOURCES

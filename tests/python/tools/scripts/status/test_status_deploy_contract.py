@@ -563,7 +563,7 @@ class StatusDeployContractTests(unittest.TestCase):
         stop = read(REPO_ROOT / "tools/scripts/status/stop-all-services.sh")
         rows = topology_rows()
 
-        self.assertEqual(17, len(rows))
+        self.assertEqual(11, len(rows))
 
         by_dir = {row["runtime_dir"]: row for row in rows}
         expected = {
@@ -593,32 +593,6 @@ class StatusDeployContractTests(unittest.TestCase):
                 "GateServer2",
                 "memochat",
             ),
-            "StatusServer1": (
-                "status",
-                "StatusServer",
-                "StatusServer/config.ini",
-                "StatusServer-1",
-                "50052",
-                "",
-                "50052",
-                "",
-                "../../artifacts/logs/services/StatusServer1",
-                "StatusServer1",
-                "memochat",
-            ),
-            "StatusServer2": (
-                "status",
-                "StatusServer",
-                "StatusServer/status2.ini",
-                "StatusServer-2",
-                "50582",
-                "",
-                "50582",
-                "",
-                "../../artifacts/logs/services/StatusServer2",
-                "StatusServer2",
-                "memochat",
-            ),
             "chatserver1": (
                 "chat",
                 "ChatServer",
@@ -642,58 +616,6 @@ class StatusDeployContractTests(unittest.TestCase):
                 "8091 50056",
                 "8191",
                 "../../artifacts/logs/services/chatserver2",
-                "ChatServer",
-                "memochat",
-            ),
-            "chatserver3": (
-                "chat",
-                "ChatServer",
-                "ChatServer/chatserver3.ini",
-                "ChatServer-3",
-                "8092",
-                "8192",
-                "8092 50057",
-                "8192",
-                "../../artifacts/logs/services/chatserver3",
-                "ChatServer",
-                "memochat",
-            ),
-            "chatserver4": (
-                "chat",
-                "ChatServer",
-                "ChatServer/chatserver4.ini",
-                "ChatServer-4",
-                "8093",
-                "8193",
-                "8093 50058",
-                "8193",
-                "../../artifacts/logs/services/chatserver4",
-                "ChatServer",
-                "memochat",
-            ),
-            "chatserver5": (
-                "chat",
-                "ChatServer",
-                "ChatServer/chatserver5.ini",
-                "ChatServer-5",
-                "8094",
-                "8194",
-                "8094 50059",
-                "8194",
-                "../../artifacts/logs/services/chatserver5",
-                "ChatServer",
-                "memochat",
-            ),
-            "chatserver6": (
-                "chat",
-                "ChatServer",
-                "ChatServer/chatserver6.ini",
-                "ChatServer-6",
-                "8097",
-                "8195",
-                "8097 50581",
-                "8195",
-                "../../artifacts/logs/services/chatserver6",
                 "ChatServer",
                 "memochat",
             ),
@@ -839,9 +761,7 @@ class StatusDeployContractTests(unittest.TestCase):
         stop = read(REPO_ROOT / "tools/scripts/status/stop-all-services.sh")
         rows = topology_rows()
 
-        self.assertEqual(
-            ["varify", "status", "chat", "ai", "gate"], topology_array_values("MEMOCHAT_CORE_START_GROUPS")
-        )
+        self.assertEqual(["varify", "chat", "ai", "gate"], topology_array_values("MEMOCHAT_CORE_START_GROUPS"))
         self.assertEqual(
             [
                 "gate|GateServer|tcp udp",
@@ -850,7 +770,6 @@ class StatusDeployContractTests(unittest.TestCase):
                 "relation_service|ChatRelationServiceWorker|tcp",
                 "relation_query|ChatRelationQueryService|tcp",
                 "chat|ChatServer|tcp udp",
-                "status|StatusServer|tcp",
                 "varify|VarifyServer|tcp",
             ],
             topology_array_values("MEMOCHAT_STOP_PORT_GROUP_ORDER"),
@@ -864,14 +783,8 @@ class StatusDeployContractTests(unittest.TestCase):
                 "ChatMessageService-1",
                 "ChatRelationServiceWorker-1",
                 "ChatRelationQueryService-1",
-                "ChatServer-6",
-                "ChatServer-5",
-                "ChatServer-4",
-                "ChatServer-3",
                 "ChatServer-2",
                 "ChatServer-1",
-                "StatusServer-2",
-                "StatusServer-1",
                 "VarifyServer-2",
                 "VarifyServer-1",
             ],
@@ -886,7 +799,6 @@ class StatusDeployContractTests(unittest.TestCase):
                 "ChatRelationServiceWorker",
                 "ChatRelationQueryService",
                 "ChatServer",
-                "StatusServer",
                 "VarifyServer",
             ],
             topology_array_values("MEMOCHAT_STOP_EXECUTABLE_ORDER"),
@@ -912,7 +824,6 @@ class StatusDeployContractTests(unittest.TestCase):
                         "ChatRelationServiceWorker",
                         "ChatRelationQueryService",
                         "ChatServer",
-                        "StatusServer",
                         "VarifyServer",
                     },
                 )
@@ -923,7 +834,6 @@ class StatusDeployContractTests(unittest.TestCase):
         self.assertIn('for group in "${MEMOCHAT_CORE_START_GROUPS[@]}"', start)
         self.assertIn('start_topology_core_group "$group"', start)
         self.assertNotIn('launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_VARIFY"', start)
-        self.assertNotIn('launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_STATUS"', start)
         self.assertNotIn('launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_AI"', start)
         self.assertNotIn('launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_GATE"', start)
 
@@ -931,7 +841,6 @@ class StatusDeployContractTests(unittest.TestCase):
         self.assertNotIn('stop_group_tcp_ports "GateServer" "$MEMOCHAT_TOPOLOGY_GROUP_GATE"', stop)
         self.assertNotIn('stop_group_tcp_ports "AIServer" "$MEMOCHAT_TOPOLOGY_GROUP_AI"', stop)
         self.assertNotIn('stop_group_tcp_ports "ChatServer" "$MEMOCHAT_TOPOLOGY_GROUP_CHAT"', stop)
-        self.assertNotIn('stop_group_tcp_ports "StatusServer" "$MEMOCHAT_TOPOLOGY_GROUP_STATUS"', stop)
         self.assertNotIn('stop_group_tcp_ports "VarifyServer" "$MEMOCHAT_TOPOLOGY_GROUP_VARIFY"', stop)
 
     def test_linux_runtime_topology_observability_labels_match_service_configs(self):

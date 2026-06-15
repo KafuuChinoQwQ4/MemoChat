@@ -123,7 +123,6 @@ if ($k8sEnabled) {
     Write-Host "`n=== 访问地址 ===" -ForegroundColor Yellow
     Write-Host "  GateServer HTTP:  http://localhost:8080" -ForegroundColor Green
     Write-Host "  GateServer gRPC:  localhost:50054" -ForegroundColor Green
-    Write-Host "  StatusServer:     localhost:50052" -ForegroundColor Green
     Write-Host "  VarifyServer:    localhost:50051 (gRPC), localhost:8081 (HTTP)" -ForegroundColor Green
     Write-Host "  etcd:            localhost:2379" -ForegroundColor Green
     Write-Host "  PostgreSQL:      localhost:5432" -ForegroundColor Green

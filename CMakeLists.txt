@@ -38,7 +38,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Options to control what gets built
 option(BUILD_CLIENT "Build MemoChat QML client" ON)
-option(BUILD_SERVER "Build all backend servers (GateServer, GateServerHttp2, StatusServer, ChatServer, VarifyServer)" ON)
+option(BUILD_SERVER "Build all backend servers (GateServer, GateServerHttp2, ChatServer, VarifyServer)" ON)
 option(BUILD_OPS "Build MemoOps monitoring platform" ON)
 option(BUILD_TESTS "Build unit tests with Google Test" ON)
 memochat_define_format_targets()
@@ -87,7 +87,6 @@ add_custom_target(build-all
 if(BUILD_SERVER)
     add_dependencies(build-all
         GateServer
-        StatusServer
         ChatServer
         VarifyServer
     )

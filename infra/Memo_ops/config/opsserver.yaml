@@ -9,7 +9,7 @@ repo:
   _package_root: Memo_ops
 
 cluster:
-  config: ../../server/StatusServer/config.ini
+  config: ../../server/GateServer/config.ini
 
 mysql:
   host: 127.0.0.1

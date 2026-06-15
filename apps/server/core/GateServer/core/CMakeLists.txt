@@ -19,8 +19,6 @@ add_library(GateServerCore STATIC
     clients/AuthVerifyClient.h
     clients/ChatGrpcClient.cpp
     clients/ChatGrpcClient.h
-    clients/StatusGrpcClient.cpp
-    clients/StatusGrpcClient.h
     clients/VerifyGrpcClient.cpp
     clients/VerifyGrpcClient.h
     config/ConfigMgr.cpp

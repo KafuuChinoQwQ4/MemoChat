@@ -24,16 +24,6 @@ patches:
       apiVersion: apps/v1
       kind: Deployment
       metadata:
-        name: memochat-statusserver
-      spec:
-        replicas: 1
-    target:
-      kind: Deployment
-      name: memochat-statusserver
-  - patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
         name: memochat-varifyserver
       spec:
         replicas: 1
@@ -60,8 +50,6 @@ configMapGenerator:
 
 images:
   - name: memochat/gateserver
-    newTag: dev-latest
-  - name: memochat/statusserver
     newTag: dev-latest
   - name: memochat/chatserver
     newTag: dev-latest

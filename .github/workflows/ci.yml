@@ -48,7 +48,6 @@ jobs:
           name: cpp-binaries
           path: |
             build/bin/Release/GateServer.exe
-            build/bin/Release/StatusServer.exe
             build/bin/Release/ChatServer.exe
 
   ai-agent-regression:
@@ -146,18 +145,6 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver:dev-latest
           build-args: |
             SERVICE=GateServer
-
-      - name: Build and push StatusServer
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: infra/docker/Dockerfile.server
-          push: false
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/statusserver:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/statusserver:dev-latest
-          build-args: |
-            SERVICE=StatusServer
 
       - name: Build and push ChatServer
         uses: docker/build-push-action@v5

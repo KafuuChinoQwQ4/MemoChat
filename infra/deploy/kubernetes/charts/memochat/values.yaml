@@ -30,10 +30,6 @@ images:
     repository: memochat/gateserver
     tag: latest
     pullPolicy: IfNotPresent
-  status:
-    repository: memochat/statusserver
-    tag: latest
-    pullPolicy: IfNotPresent
   chat:
     repository: memochat/chatserver
     tag: latest
@@ -123,21 +119,6 @@ gate:
     maxFileMB: 20480
     chunkSizeKB: 4096
     sessionExpireSec: 86400
-
-status:
-  replicaCount: 2
-  service:
-    port: 50052
-  autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 4
-    targetCPUUtilizationPercentage: 70
-  pdb:
-    enabled: true
-    minAvailable: 1
-  resources: {}
-  env: {}
 
 chat:
   replicaCount: 4

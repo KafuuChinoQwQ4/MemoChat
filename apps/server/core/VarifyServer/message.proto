@@ -16,36 +16,6 @@ message GetVarifyRsp {
   string code = 3;
 }
 
-message GetChatServerReq {
-  int32 uid = 1;
-}
-
-message GetChatServerRsp {
-  int32 error = 1;
-  string host = 2;
-  string port = 3;
-  string token = 4;
-  string server_name = 5;
-  string quic_host = 6;
-  string quic_port = 7;
-}
-
-message LoginReq{
-	int32 uid = 1;
-	string token= 2;
-}
-
-message LoginRsp {
-	int32 error = 1;
-	int32 uid = 2;
-	string token = 3;
-}
-
-service StatusService {
-	rpc GetChatServer (GetChatServerReq) returns (GetChatServerRsp) {}
-	rpc Login(LoginReq) returns(LoginRsp);
-}
-
 message AddFriendReq {
 	int32  applyuid = 1;
 	string name = 2;

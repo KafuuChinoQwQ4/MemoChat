@@ -57,7 +57,7 @@ Loki：
 ```text
 {service="GateServer"} |= "error"
 {service="ChatServer"} |= "warn"
-{service=~"GateServer|ChatServer|StatusServer|VarifyServer"}
+{service=~"GateServer|ChatServer|VarifyServer"}
 ```
 
 Tempo：

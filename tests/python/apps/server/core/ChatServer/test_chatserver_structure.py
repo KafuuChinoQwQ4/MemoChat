@@ -145,8 +145,6 @@ EXPECTED_GROUPS = {
         "RelationQueryGrpcClient.h",
         "RelationQueryServiceFactory.cpp",
         "RelationQueryServiceFactory.h",
-        "StatusGrpcClient.cpp",
-        "StatusGrpcClient.h",
     },
     "config": {
         "ChatSessionConfig.cpp",
@@ -180,10 +178,6 @@ ROOT_ALLOWLIST = {
     "config.ini",
     "chatserver1.ini",
     "chatserver2.ini",
-    "chatserver3.ini",
-    "chatserver4.ini",
-    "chatserver5.ini",
-    "chatserver6.ini",
     "chatdeliveryworker1.ini",
     "chatmessageservice1.ini",
     "chatrelationquery1.ini",
@@ -213,7 +207,6 @@ EXPECTED_MICROSERVICE_TARGETS = {
         "clients/RelationGrpcServiceAdapter.cpp",
         "clients/RelationQueryGrpcClient.cpp",
         "clients/RelationQueryServiceFactory.cpp",
-        "clients/StatusGrpcClient.cpp",
     },
     "ChatConfigCore": {
         "config/ChatSessionConfig.cpp",
@@ -1854,10 +1847,6 @@ class ChatServerStructureTests(unittest.TestCase):
         for cfg in (
             "chatserver1.ini",
             "chatserver2.ini",
-            "chatserver3.ini",
-            "chatserver4.ini",
-            "chatserver5.ini",
-            "chatserver6.ini",
         ):
             config_text = (CHATSERVER_DIR / cfg).read_text(encoding="utf-8")
             assert_ini_section_has(
@@ -2031,10 +2020,6 @@ class ChatServerStructureTests(unittest.TestCase):
             "config.ini",
             "chatserver1.ini",
             "chatserver2.ini",
-            "chatserver3.ini",
-            "chatserver4.ini",
-            "chatserver5.ini",
-            "chatserver6.ini",
         ):
             config_source = (CHATSERVER_DIR / config_name).read_text(encoding="utf-8-sig")
             assert_ini_section_has(
@@ -2190,10 +2175,6 @@ class ChatServerStructureTests(unittest.TestCase):
             "config.ini",
             "chatserver1.ini",
             "chatserver2.ini",
-            "chatserver3.ini",
-            "chatserver4.ini",
-            "chatserver5.ini",
-            "chatserver6.ini",
         ):
             config_source = (CHATSERVER_DIR / config_name).read_text(encoding="utf-8-sig")
             assert_ini_section_has(
@@ -2833,10 +2814,6 @@ class ChatServerStructureTests(unittest.TestCase):
             "config.ini",
             "chatserver1.ini",
             "chatserver2.ini",
-            "chatserver3.ini",
-            "chatserver4.ini",
-            "chatserver5.ini",
-            "chatserver6.ini",
         ):
             config_source = (CHATSERVER_DIR / config_name).read_text(encoding="utf-8-sig")
             assert_ini_section_has(
@@ -3240,10 +3217,6 @@ class ChatServerStructureTests(unittest.TestCase):
             "config.ini",
             "chatserver1.ini",
             "chatserver2.ini",
-            "chatserver3.ini",
-            "chatserver4.ini",
-            "chatserver5.ini",
-            "chatserver6.ini",
         ):
             config_source = (CHATSERVER_DIR / config_name).read_text(encoding="utf-8-sig")
             self.assertIn("[Runtime]", config_source)

@@ -34,14 +34,12 @@ jobs:
       - name: Load Docker images
         run: |
           docker load --input docker-images/gateserver.tar
-          docker load --input docker-images/statusserver.tar
           docker load --input docker-images/chatserver.tar
           docker load --input docker-images/varifyserver.tar
 
       - name: Tag images
         run: |
           docker tag memochat/gateserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver:dev-latest
-          docker tag memochat/statusserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/statusserver:dev-latest
           docker tag memochat/chatserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/chatserver:dev-latest
           docker tag memochat/varifyserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/varifyserver:dev-latest
 
@@ -55,7 +53,6 @@ jobs:
       - name: Push images
         run: |
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver:dev-latest
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/statusserver:dev-latest
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/chatserver:dev-latest
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/varifyserver:dev-latest
 
@@ -75,7 +72,6 @@ jobs:
         run: |
           kubectl rollout status deployment/memochat-gateserver -n memochat-dev --timeout=300s
           kubectl rollout status deployment/memochat-chatserver -n memochat-dev --timeout=300s
-          kubectl rollout status deployment/memochat-statusserver -n memochat-dev --timeout=300s
           kubectl rollout status deployment/memochat-varifyserver -n memochat-dev --timeout=300s
 
       - name: Verify deployment
@@ -109,7 +105,6 @@ jobs:
       - name: Load Docker images
         run: |
           docker load --input docker-images/gateserver.tar
-          docker load --input docker-images/statusserver.tar
           docker load --input docker-images/chatserver.tar
           docker load --input docker-images/varifyserver.tar
 
@@ -119,8 +114,6 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           docker tag memochat/gateserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver:latest
           docker tag memochat/gateserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver:$VERSION
-          docker tag memochat/statusserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/statusserver:latest
-          docker tag memochat/statusserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/statusserver:$VERSION
           docker tag memochat/chatserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/chatserver:latest
           docker tag memochat/chatserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/chatserver:$VERSION
           docker tag memochat/varifyserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/varifyserver:latest
@@ -137,8 +130,6 @@ jobs:
         run: |
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver:latest
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver:${{ env.VERSION }}
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/statusserver:latest
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/statusserver:${{ env.VERSION }}
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/chatserver:latest
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/chatserver:${{ env.VERSION }}
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/varifyserver:latest
@@ -162,8 +153,6 @@ jobs:
           kubectl rollout status deployment/memochat-gateserver -n memochat --timeout=600s
           echo "Waiting for ChatServer rollout..."
           kubectl rollout status statefulset/memochat-chatserver -n memochat --timeout=600s
-          echo "Waiting for StatusServer rollout..."
-          kubectl rollout status deployment/memochat-statusserver -n memochat --timeout=600s
           echo "Waiting for VarifyServer rollout..."
           kubectl rollout status deployment/memochat-varifyserver -n memochat --timeout=600s
 

@@ -6,7 +6,7 @@ New-Item -ItemType Directory -Force -Path $diagDir | Out-Null
 
 # === 1. 清理残留进程 ===
 Write-Host "=== 清理残留进程 ==="
-$svcExes = @("GateServer","StatusServer","ChatServer","VarifyServer")
+$svcExes = @("GateServer","ChatServer","VarifyServer")
 foreach ($exe in $svcExes) {
     Get-Process -Name $exe -ErrorAction SilentlyContinue | ForEach-Object {
         Write-Host "  Killing old $($_.Name) PID=$($_.Id)"
@@ -32,14 +32,9 @@ $gateProc = Start-Process -FilePath "$ProjectRoot\Memo_ops\runtime\services\Gate
 Write-Host "[GateServer] PID: $($gateProc.Id)"
 Start-Sleep -Seconds 2
 
-# === 5. 启动 StatusServer ===
-$statusProc = Start-Process -FilePath "$ProjectRoot\Memo_ops\runtime\services\StatusServer\StatusServer.exe" -ArgumentList "--config","config.ini" -WorkingDirectory "$ProjectRoot\Memo_ops\runtime\services\StatusServer" -PassThru -RedirectStandardOutput "$diagDir\status_out.log" -RedirectStandardError "$diagDir\status_err.log" -WindowStyle Hidden
-Write-Host "[StatusServer] PID: $($statusProc.Id)"
-Start-Sleep -Seconds 2
-
 # === 6. 启动 ChatServers ===
 $chatProcs = @()
-$chatNodes = @("chatserver1","chatserver2","chatserver3","chatserver4")
+$chatNodes = @("chatserver1","chatserver2")
 foreach ($node in $chatNodes) {
     $proc = Start-Process -FilePath "$ProjectRoot\Memo_ops\runtime\services\$node\ChatServer.exe" -ArgumentList "--config","config.ini" -WorkingDirectory "$ProjectRoot\Memo_ops\runtime\services\$node" -PassThru -RedirectStandardOutput "$diagDir\chat_$node.log" -RedirectStandardError "$diagDir\chat_${node}_err.log" -WindowStyle Hidden
     $chatProcs += $proc
@@ -54,7 +49,7 @@ Start-Sleep -Seconds 5
 # === 7. 验证端口 ===
 Write-Host ""
 Write-Host "=== Port Status ==="
-$ports = @(8080,50051,50052,8090,8091,8092,8093,50055,50056,50057,50058)
+$ports = @(8080,50051,8090,8091,50055,50056)
 foreach ($port in $ports) {
     $conn = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Where-Object { $_.State -eq "Listen" }
     if ($conn) {
@@ -67,7 +62,7 @@ foreach ($port in $ports) {
 # === 8. 持续监控进程存活 ===
 Write-Host ""
 Write-Host "=== 开始监控进程存活 ==="
-$allProcs = @($varifyProc,$gateProc,$statusProc) + $chatProcs
+$allProcs = @($varifyProc,$gateProc) + $chatProcs
 $checkCount = 0
 
 while ($true) {

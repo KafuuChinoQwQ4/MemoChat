@@ -20,7 +20,6 @@ def _service_meta(name: str, cfg_dir: Path) -> Dict[str, Any]:
         cfg_dir / ".." / ".." / "server" / "GateServer" / "config.ini",
         cfg_dir / ".." / ".." / "server" / "GateServer" / "transports" / "h2" / "config.ini",
         cfg_dir / ".." / ".." / "server" / "ChatServer" / "config.ini",
-        cfg_dir / ".." / ".." / "server" / "StatusServer" / "config.ini",
         cfg_dir / ".." / ".." / "server" / "GateServer2" / "config.ini",
         cfg_dir / ".." / ".." / "server" / name / "config.ini",
         cfg_dir / ".." / "server" / name / "config.ini",
@@ -64,8 +63,8 @@ def _running_procs() -> Dict[str, List[Dict[str, Any]]]:
         try:
             info = proc.info
             cmdline = " ".join(info.get("cmdline") or [])
-            if "GateServer" in cmdline or "ChatServer" in cmdline or "StatusServer" in cmdline:
-                match = re.search(r"\b(GateServerHttp2|GateServer2|GateServer|ChatServer|StatusServer)\b", cmdline)
+            if "GateServer" in cmdline or "ChatServer" in cmdline:
+                match = re.search(r"\b(GateServerHttp2|GateServer2|GateServer|ChatServer)\b", cmdline)
                 if match:
                     svc = match.group(1)
                     by_service.setdefault(svc, []).append(
@@ -97,7 +96,6 @@ def _collect_system_metrics(runtime: OpsServerRuntime) -> List[Dict[str, Any]]:
         "GateServerHttp2",
         "GateServer2",
         "ChatServer",
-        "StatusServer",
         "VarifyServer",
     ]
 
