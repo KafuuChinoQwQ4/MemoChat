@@ -781,12 +781,16 @@ class GateServerStructureTests(unittest.TestCase):
         self.assertTrue(account_dao_path.exists(), "GateServerCore account DAO split source should exist")
 
         cmake_source = strip_cmake_comments(read(GATE_CORE / "CMakeLists.txt"))
-        target_match = re.search(r"add_library\s*\(\s*GateServerCore\s+STATIC(?P<body>.*?)\)", cmake_source, re.S)
-        self.assertIsNotNone(target_match, "GateServerCore static library source list should be explicit")
-        target_sources = target_match.group("body")
+        # Phase 1 split: the whole Dao/Mgr persistence layer is a single shared
+        # unit in GateInfraCore (PostgresMgr forwards to all PostgresDao methods,
+        # and PostgresDao is one class split across two .cpp files). Both DAO
+        # sources therefore compile into GateInfraCore.
+        infra_match = re.search(r"add_library\s*\(\s*GateInfraCore\s+STATIC(?P<body>.*?)\)", cmake_source, re.S)
+        self.assertIsNotNone(infra_match, "GateInfraCore static library source list should be explicit")
+        infra_sources = infra_match.group("body")
 
-        self.assertIn("PostgresDao.cpp", target_sources)
-        self.assertIn("PostgresDaoAccount.cpp", target_sources)
+        self.assertIn("PostgresDao.cpp", infra_sources)
+        self.assertIn("PostgresDaoAccount.cpp", infra_sources)
 
     def test_gate_core_account_dao_methods_live_only_in_account_source(self):
         account_dao_path = GATE_CORE_PERSISTENCE / "PostgresDaoAccount.cpp"
@@ -1943,8 +1947,8 @@ class GateServerStructureTests(unittest.TestCase):
         self.assertTrue((GATE_CORE_CACHE / "AuthCache.cpp").exists(), "GateServerCore AuthCache source should exist")
 
         cmake_source = strip_cmake_comments(read(GATE_CORE / "CMakeLists.txt"))
-        target_match = re.search(r"add_library\s*\(\s*GateServerCore\s+STATIC(?P<body>.*?)\)", cmake_source, re.S)
-        self.assertIsNotNone(target_match, "GateServerCore static library source list should be explicit")
+        target_match = re.search(r"add_library\s*\(\s*GateAccountCore\s+STATIC(?P<body>.*?)\)", cmake_source, re.S)
+        self.assertIsNotNone(target_match, "GateAccountCore static library source list should be explicit")
         self.assertIn("cache/AuthCache.cpp", target_match.group("body"))
 
     def test_auth_cache_cpp_owns_h3_auth_redis_key_construction(self):
@@ -1973,8 +1977,8 @@ class GateServerStructureTests(unittest.TestCase):
         )
 
         cmake_source = strip_cmake_comments(read(GATE_CORE / "CMakeLists.txt"))
-        target_match = re.search(r"add_library\s*\(\s*GateServerCore\s+STATIC(?P<body>.*?)\)", cmake_source, re.S)
-        self.assertIsNotNone(target_match, "GateServerCore static library source list should be explicit")
+        target_match = re.search(r"add_library\s*\(\s*GateInfraCore\s+STATIC(?P<body>.*?)\)", cmake_source, re.S)
+        self.assertIsNotNone(target_match, "GateInfraCore static library source list should be explicit")
         self.assertIn("clients/AuthVerifyClient.cpp", target_match.group("body"))
 
     def test_auth_verify_client_public_header_is_narrow_verify_request_contract(self):
@@ -2290,7 +2294,9 @@ class GateServerStructureTests(unittest.TestCase):
         self.assertIn('#include "modules/health/HealthRouteModule.h"', source)
         self.assertIn('#include "modules/auth/AuthRouteModule.h"', source)
         self.assertIn("HealthRouteModule().RegisterRoutes(_route_registry)", source)
-        self.assertIn("AuthRouteModule().RegisterRoutes(_route_registry)", source)
+        # Phase 5 split: auth registers via granular register/login entry points.
+        self.assertIn("AuthRouteModule::RegisterRegisterRoutes(_route_registry)", source)
+        self.assertIn("AuthRouteModule::RegisterLoginRoutes(_route_registry)", source)
         self.assertIn("ApplyRouteTraceContext", source)
         self.assertIn("memolog::TraceContext::SetTraceId(request.trace_id)", source)
         self.assertIn("memolog::TraceContext::SetRequestId(request.request_id)", source)
@@ -2308,7 +2314,7 @@ class GateServerStructureTests(unittest.TestCase):
             "memochat::gate::modules::profile::ProfileRouteModule().RegisterRoutes(_route_registry)", logic_source
         )
         self.assertLess(
-            logic_source.index("AuthRouteModule().RegisterRoutes(_route_registry)"),
+            logic_source.index("AuthRouteModule::RegisterRegisterRoutes(_route_registry)"),
             logic_source.index("ProfileRouteModule().RegisterRoutes(_route_registry)"),
         )
         self.assertIsNone(re.search(r'\blogic\.RegPost\s*\(\s*"/user_update_profile"', legacy_h1_source))

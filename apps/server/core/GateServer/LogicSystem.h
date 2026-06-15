@@ -15,6 +15,29 @@ class LogicSystem : public Singleton<LogicSystem>
     friend class Singleton<LogicSystem>;
 
 public:
+    // Route profile selects which domain modules a process registers. Full is
+    // the default (GateServer monolith: every module). The focused profiles let
+    // a standalone process serve only one domain's routes (+ health), so each
+    // peeled microservice (gateserver split, Phase 3/4) registers exactly its
+    // own surface. SetRouteProfile must be called BEFORE the first Instance() so
+    // the constructor sees it; the default stays Full, keeping GateServer
+    // behavior unchanged.
+    enum class RouteProfile
+    {
+        Full,
+        AIGateway,
+        Media,
+        Moments,
+        Call,
+        R18,
+        Register,
+        Login,
+        Account,
+    };
+
+    static void SetRouteProfile(RouteProfile profile);
+    static RouteProfile GetRouteProfile();
+
     ~LogicSystem();
     bool HandleGet(std::string, std::shared_ptr<HttpConnection>);
     bool HandleGet(std::string, std::shared_ptr<GateHttp3Connection>);

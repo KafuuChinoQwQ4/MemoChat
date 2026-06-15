@@ -47,16 +47,71 @@ void ApplyRouteTraceContext(const memochat::gate::routing::GateRequest& request)
 
 } // namespace
 
+namespace
+{
+// Route profile is process-wide and read once by the LogicSystem constructor.
+// Default Full keeps GateServer registering every module unchanged.
+LogicSystem::RouteProfile g_route_profile = LogicSystem::RouteProfile::Full;
+} // namespace
+
+void LogicSystem::SetRouteProfile(RouteProfile profile)
+{
+    g_route_profile = profile;
+}
+
+LogicSystem::RouteProfile LogicSystem::GetRouteProfile()
+{
+    return g_route_profile;
+}
+
 LogicSystem::LogicSystem()
 {
+    const RouteProfile profile = g_route_profile;
+    const bool full = (profile == RouteProfile::Full);
+    const auto wants = [&](RouteProfile p)
+    {
+        return full || profile == p;
+    };
+
+    // Health is always registered (every process exposes /healthz, /readyz).
     memochat::gate::modules::health::HealthRouteModule().RegisterRoutes(_route_registry);
-    memochat::gate::modules::auth::AuthRouteModule().RegisterRoutes(_route_registry);
-    memochat::gate::modules::profile::ProfileRouteModule().RegisterRoutes(_route_registry);
-    memochat::gate::modules::call::CallRouteModule().RegisterRoutes(_route_registry);
-    memochat::gate::modules::media::MediaRouteModule().RegisterRoutes(_route_registry);
-    memochat::gate::modules::ai::AIRouteModule().RegisterRoutes(_route_registry);
-    memochat::gate::modules::moments::MomentsRouteModule().RegisterRoutes(_route_registry);
-    memochat::gate::modules::r18::R18RouteModule().RegisterRoutes(_route_registry);
+
+    if (wants(RouteProfile::AIGateway))
+    {
+        memochat::gate::modules::ai::AIRouteModule().RegisterRoutes(_route_registry);
+    }
+    if (wants(RouteProfile::Media))
+    {
+        memochat::gate::modules::media::MediaRouteModule().RegisterRoutes(_route_registry);
+    }
+    if (wants(RouteProfile::Moments))
+    {
+        memochat::gate::modules::moments::MomentsRouteModule().RegisterRoutes(_route_registry);
+    }
+    if (wants(RouteProfile::Call))
+    {
+        memochat::gate::modules::call::CallRouteModule().RegisterRoutes(_route_registry);
+    }
+    if (wants(RouteProfile::R18))
+    {
+        memochat::gate::modules::r18::R18RouteModule().RegisterRoutes(_route_registry);
+    }
+    // Account aggregate (D-ACCOUNT): RegisterService owns account creation +
+    // recovery, LoginService owns authentication, AccountService owns profile.
+    // All reach account data only via account-core (AccountPersistence). In Full
+    // the monolith registers them all.
+    if (full || profile == RouteProfile::Register)
+    {
+        memochat::gate::modules::auth::AuthRouteModule::RegisterRegisterRoutes(_route_registry);
+    }
+    if (full || profile == RouteProfile::Login)
+    {
+        memochat::gate::modules::auth::AuthRouteModule::RegisterLoginRoutes(_route_registry);
+    }
+    if (full || profile == RouteProfile::Account)
+    {
+        memochat::gate::modules::profile::ProfileRouteModule().RegisterRoutes(_route_registry);
+    }
 
     RegGet("/get_test",
            [](std::shared_ptr<HttpConnection> connection)

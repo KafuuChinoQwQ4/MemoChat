@@ -16,6 +16,14 @@ START_CHAT_DELIVERY_WORKER_OVERRIDE=""
 START_RELATION_QUERY_SERVICE_OVERRIDE=""
 START_RELATION_SERVICE_WORKER_OVERRIDE=""
 START_MESSAGE_SERVICE_OVERRIDE=""
+START_AIGATEWAY_OVERRIDE=""
+START_MEDIAGATEWAY_OVERRIDE=""
+START_MOMENTSGATEWAY_OVERRIDE=""
+START_CALLGATEWAY_OVERRIDE=""
+START_R18GATEWAY_OVERRIDE=""
+START_REGISTER_OVERRIDE=""
+START_LOGIN_OVERRIDE=""
+START_ACCOUNT_OVERRIDE=""
 START_ENVOY_OVERRIDE=""
 START_DOCKER_DEPS_OVERRIDE=""
 START_GPT_SOVITS_OVERRIDE=""
@@ -23,7 +31,7 @@ GPT_SOVITS_WAIT_SECONDS_OVERRIDE=""
 
 usage() {
     cat <<USAGE
-Usage: $0 [--no-deploy] [--wait-seconds N] [--skip-docker-deps] [--skip-envoy] [--skip-gpt-sovits] [--gpt-sovits-wait-seconds N] [--start-chat-delivery-worker] [--start-relation-query-service] [--skip-relation-query-service] [--start-relation-service-worker] [--skip-relation-service-worker] [--start-message-service] [--skip-message-service] [--skip-core-services]
+Usage: $0 [--no-deploy] [--wait-seconds N] [--skip-docker-deps] [--skip-envoy] [--skip-gpt-sovits] [--gpt-sovits-wait-seconds N] [--start-chat-delivery-worker] [--start-relation-query-service] [--skip-relation-query-service] [--start-relation-service-worker] [--skip-relation-service-worker] [--start-message-service] [--skip-message-service] [--start-aigateway] [--skip-aigateway] [--start-mediagateway] [--skip-mediagateway] [--start-momentsgateway] [--skip-momentsgateway] [--start-callgateway] [--skip-callgateway] [--start-r18gateway] [--skip-r18gateway] [--start-register] [--skip-register] [--start-login] [--skip-login] [--start-account] [--skip-account] [--skip-core-services]
 
 Start Linux MemoChat backend services from:
   ${RUNTIME_DIR}
@@ -96,6 +104,70 @@ while [[ $# -gt 0 ]]; do
             START_MESSAGE_SERVICE_OVERRIDE=0
             shift
             ;;
+        --start-aigateway)
+            START_AIGATEWAY_OVERRIDE=1
+            shift
+            ;;
+        --skip-aigateway)
+            START_AIGATEWAY_OVERRIDE=0
+            shift
+            ;;
+        --start-mediagateway)
+            START_MEDIAGATEWAY_OVERRIDE=1
+            shift
+            ;;
+        --skip-mediagateway)
+            START_MEDIAGATEWAY_OVERRIDE=0
+            shift
+            ;;
+        --start-momentsgateway)
+            START_MOMENTSGATEWAY_OVERRIDE=1
+            shift
+            ;;
+        --skip-momentsgateway)
+            START_MOMENTSGATEWAY_OVERRIDE=0
+            shift
+            ;;
+        --start-callgateway)
+            START_CALLGATEWAY_OVERRIDE=1
+            shift
+            ;;
+        --skip-callgateway)
+            START_CALLGATEWAY_OVERRIDE=0
+            shift
+            ;;
+        --start-r18gateway)
+            START_R18GATEWAY_OVERRIDE=1
+            shift
+            ;;
+        --skip-r18gateway)
+            START_R18GATEWAY_OVERRIDE=0
+            shift
+            ;;
+        --start-register)
+            START_REGISTER_OVERRIDE=1
+            shift
+            ;;
+        --skip-register)
+            START_REGISTER_OVERRIDE=0
+            shift
+            ;;
+        --start-login)
+            START_LOGIN_OVERRIDE=1
+            shift
+            ;;
+        --skip-login)
+            START_LOGIN_OVERRIDE=0
+            shift
+            ;;
+        --start-account)
+            START_ACCOUNT_OVERRIDE=1
+            shift
+            ;;
+        --skip-account)
+            START_ACCOUNT_OVERRIDE=0
+            shift
+            ;;
         --skip-core-services)
             START_CORE_SERVICES_OVERRIDE=0
             shift
@@ -129,6 +201,19 @@ START_CHAT_DELIVERY_WORKER="${START_CHAT_DELIVERY_WORKER_OVERRIDE:-${MEMOCHAT_ST
 START_RELATION_QUERY_SERVICE="${START_RELATION_QUERY_SERVICE_OVERRIDE:-${MEMOCHAT_START_RELATION_QUERY_SERVICE:-1}}"
 START_RELATION_SERVICE_WORKER="${START_RELATION_SERVICE_WORKER_OVERRIDE:-${MEMOCHAT_START_RELATION_SERVICE_WORKER:-1}}"
 START_MESSAGE_SERVICE="${START_MESSAGE_SERVICE_OVERRIDE:-${MEMOCHAT_START_MESSAGE_SERVICE:-1}}"
+# AIGateway (gateserver split Phase 3) now starts by default (Phase 6 cut-over:
+# Envoy routes /ai/* to it). Set MEMOCHAT_START_AIGATEWAY=0 / --skip-aigateway to
+# fall back to the GateServer monolith for this domain.
+START_AIGATEWAY="${START_AIGATEWAY_OVERRIDE:-${MEMOCHAT_START_AIGATEWAY:-1}}"
+# Phase 4 domain gateways (Media/Moments/Call/R18) — default ON in Phase 6.
+START_MEDIAGATEWAY="${START_MEDIAGATEWAY_OVERRIDE:-${MEMOCHAT_START_MEDIAGATEWAY:-1}}"
+START_MOMENTSGATEWAY="${START_MOMENTSGATEWAY_OVERRIDE:-${MEMOCHAT_START_MOMENTSGATEWAY:-1}}"
+START_CALLGATEWAY="${START_CALLGATEWAY_OVERRIDE:-${MEMOCHAT_START_CALLGATEWAY:-1}}"
+START_R18GATEWAY="${START_R18GATEWAY_OVERRIDE:-${MEMOCHAT_START_R18GATEWAY:-1}}"
+# Phase 5 account aggregate (Register/Login/Account) — default ON in Phase 6.
+START_REGISTER="${START_REGISTER_OVERRIDE:-${MEMOCHAT_START_REGISTER:-1}}"
+START_LOGIN="${START_LOGIN_OVERRIDE:-${MEMOCHAT_START_LOGIN:-1}}"
+START_ACCOUNT="${START_ACCOUNT_OVERRIDE:-${MEMOCHAT_START_ACCOUNT:-1}}"
 START_DOCKER_DEPS="${START_DOCKER_DEPS_OVERRIDE:-${MEMOCHAT_START_DOCKER_DEPS:-1}}"
 START_ENVOY="${START_ENVOY_OVERRIDE:-${MEMOCHAT_START_ENVOY:-1}}"
 START_GPT_SOVITS="${START_GPT_SOVITS_OVERRIDE:-${MEMOCHAT_START_GPT_SOVITS:-1}}"
@@ -794,6 +879,70 @@ if is_truthy "$START_MESSAGE_SERVICE"; then
     launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_MESSAGE_SERVICE"
 else
     echo "  [SKIP] ChatMessageService startup disabled"
+fi
+echo
+
+echo "[STEP] Start AIGatewayServer"
+if is_truthy "$START_AIGATEWAY"; then
+    launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_AIGATEWAY"
+else
+    echo "  [SKIP] AIGatewayServer startup disabled (opt-in: --start-aigateway)"
+fi
+echo
+
+echo "[STEP] Start MediaGatewayServer"
+if is_truthy "$START_MEDIAGATEWAY"; then
+    launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_MEDIAGATEWAY"
+else
+    echo "  [SKIP] MediaGatewayServer startup disabled (opt-in: --start-mediagateway)"
+fi
+echo
+
+echo "[STEP] Start MomentsGatewayServer"
+if is_truthy "$START_MOMENTSGATEWAY"; then
+    launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_MOMENTSGATEWAY"
+else
+    echo "  [SKIP] MomentsGatewayServer startup disabled (opt-in: --start-momentsgateway)"
+fi
+echo
+
+echo "[STEP] Start CallGatewayServer"
+if is_truthy "$START_CALLGATEWAY"; then
+    launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_CALLGATEWAY"
+else
+    echo "  [SKIP] CallGatewayServer startup disabled (opt-in: --start-callgateway)"
+fi
+echo
+
+echo "[STEP] Start R18GatewayServer"
+if is_truthy "$START_R18GATEWAY"; then
+    launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_R18GATEWAY"
+else
+    echo "  [SKIP] R18GatewayServer startup disabled (opt-in: --start-r18gateway)"
+fi
+echo
+
+echo "[STEP] Start RegisterServer"
+if is_truthy "$START_REGISTER"; then
+    launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_REGISTER"
+else
+    echo "  [SKIP] RegisterServer startup disabled (opt-in: --start-register)"
+fi
+echo
+
+echo "[STEP] Start LoginServer"
+if is_truthy "$START_LOGIN"; then
+    launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_LOGIN"
+else
+    echo "  [SKIP] LoginServer startup disabled (opt-in: --start-login)"
+fi
+echo
+
+echo "[STEP] Start AccountServer"
+if is_truthy "$START_ACCOUNT"; then
+    launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_ACCOUNT"
+else
+    echo "  [SKIP] AccountServer startup disabled (opt-in: --start-account)"
 fi
 echo
 
