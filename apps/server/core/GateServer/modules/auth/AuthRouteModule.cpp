@@ -8,6 +8,12 @@ namespace memochat::gate::modules::auth
 
 void AuthRouteModule::RegisterRoutes(memochat::gate::routing::RouteRegistry& registry)
 {
+    RegisterRegisterRoutes(registry);
+    RegisterLoginRoutes(registry);
+}
+
+void AuthRouteModule::RegisterRegisterRoutes(memochat::gate::routing::RouteRegistry& registry)
+{
     registry.Register(
         "POST",
         "/get_varifycode",
@@ -29,6 +35,10 @@ void AuthRouteModule::RegisterRoutes(memochat::gate::routing::RouteRegistry& reg
         {
             return memochat::gate::services::auth::AuthService::Instance().HandleResetPwd(request, response);
         });
+}
+
+void AuthRouteModule::RegisterLoginRoutes(memochat::gate::routing::RouteRegistry& registry)
+{
     registry.Register(
         "POST",
         "/user_login",

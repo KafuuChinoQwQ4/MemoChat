@@ -137,7 +137,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: POST
                           route:
-                            cluster: gate_backend
+                            cluster: register_backend
                             timeout: 60s
                             retry_policy:
                               retry_on: connect-failure,reset,5xx,gateway-error
@@ -173,7 +173,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: POST
                           route:
-                            cluster: gate_backend
+                            cluster: login_backend
                             timeout: 60s
                             retry_policy:
                               retry_on: connect-failure,reset,5xx,gateway-error
@@ -209,7 +209,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: POST
                           route:
-                            cluster: gate_backend
+                            cluster: register_backend
                             timeout: 60s
                             retry_policy:
                               retry_on: connect-failure,reset,5xx,gateway-error
@@ -245,7 +245,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: POST
                           route:
-                            cluster: gate_backend
+                            cluster: register_backend
                             timeout: 60s
                             retry_policy:
                               retry_on: connect-failure,reset,5xx,gateway-error
@@ -321,7 +321,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: POST
                           route:
-                            cluster: gate_backend
+                            cluster: aigateway_backend
                             timeout: 600s
                             retry_policy:
                               retry_on: connect-failure,reset,gateway-error
@@ -346,7 +346,7 @@ static_resources:
                           match:
                             prefix: /ai/
                           route:
-                            cluster: gate_backend
+                            cluster: aigateway_backend
                             timeout: 300s
                             retry_policy:
                               retry_on: connect-failure,reset,5xx,gateway-error
@@ -359,7 +359,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: GET
                           route:
-                            cluster: gate_backend
+                            cluster: mediagateway_backend
                             timeout: 600s
                             retry_policy:
                               retry_on: connect-failure,reset
@@ -372,7 +372,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: POST
                           route:
-                            cluster: gate_backend
+                            cluster: mediagateway_backend
                             timeout: 600s
                             retry_policy:
                               retry_on: connect-failure,reset
@@ -385,7 +385,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: GET
                           route:
-                            cluster: gate_backend
+                            cluster: mediagateway_backend
                             timeout: 600s
                             retry_policy:
                               retry_on: connect-failure,reset
@@ -401,6 +401,49 @@ static_resources:
                             status: 405
                             body:
                               inline_string: "Method Not Allowed\n"
+                        - name: moments
+                          match:
+                            prefix: /api/moments/
+                          route:
+                            cluster: momentsgateway_backend
+                            timeout: 120s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
+                        - name: call
+                          match:
+                            prefix: /api/call/
+                          route:
+                            cluster: callgateway_backend
+                            timeout: 120s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
+                        - name: r18
+                          match:
+                            prefix: /api/r18/
+                          route:
+                            cluster: r18gateway_backend
+                            timeout: 120s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
+                        - name: profile
+                          match:
+                            path: /user_update_profile
+                            headers:
+                              - name: ":method"
+                                exact_match: POST
+                          route:
+                            cluster: account_backend
+                            timeout: 120s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
                         - name: other
                           match:
                             prefix: /
@@ -555,7 +598,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: POST
                           route:
-                            cluster: gate_backend
+                            cluster: login_backend
                             timeout: 60s
                             retry_policy:
                               retry_on: connect-failure,reset,5xx,gateway-error
@@ -591,7 +634,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: POST
                           route:
-                            cluster: gate_backend
+                            cluster: register_backend
                             timeout: 60s
                             retry_policy:
                               retry_on: connect-failure,reset,5xx,gateway-error
@@ -627,7 +670,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: POST
                           route:
-                            cluster: gate_backend
+                            cluster: aigateway_backend
                             timeout: 600s
                             retry_policy:
                               retry_on: connect-failure,reset,gateway-error
@@ -652,7 +695,7 @@ static_resources:
                           match:
                             prefix: /ai/
                           route:
-                            cluster: gate_backend
+                            cluster: aigateway_backend
                             timeout: 300s
                             retry_policy:
                               retry_on: connect-failure,reset,5xx,gateway-error
@@ -665,7 +708,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: GET
                           route:
-                            cluster: gate_backend
+                            cluster: mediagateway_backend
                             timeout: 600s
                             retry_policy:
                               retry_on: connect-failure,reset
@@ -678,7 +721,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: POST
                           route:
-                            cluster: gate_backend
+                            cluster: mediagateway_backend
                             timeout: 600s
                             retry_policy:
                               retry_on: connect-failure,reset
@@ -691,7 +734,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: GET
                           route:
-                            cluster: gate_backend
+                            cluster: mediagateway_backend
                             timeout: 600s
                             retry_policy:
                               retry_on: connect-failure,reset
@@ -707,6 +750,49 @@ static_resources:
                             status: 405
                             body:
                               inline_string: "Method Not Allowed\n"
+                        - name: moments
+                          match:
+                            prefix: /api/moments/
+                          route:
+                            cluster: momentsgateway_backend
+                            timeout: 120s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
+                        - name: call
+                          match:
+                            prefix: /api/call/
+                          route:
+                            cluster: callgateway_backend
+                            timeout: 120s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
+                        - name: r18
+                          match:
+                            prefix: /api/r18/
+                          route:
+                            cluster: r18gateway_backend
+                            timeout: 120s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
+                        - name: profile
+                          match:
+                            path: /user_update_profile
+                            headers:
+                              - name: ":method"
+                                exact_match: POST
+                          route:
+                            cluster: account_backend
+                            timeout: 120s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
                         - name: other
                           match:
                             prefix: /
@@ -843,7 +929,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: POST
                           route:
-                            cluster: gate_backend
+                            cluster: login_backend
                             timeout: 60s
                             retry_policy:
                               retry_on: connect-failure,reset,5xx,gateway-error
@@ -879,7 +965,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: POST
                           route:
-                            cluster: gate_backend
+                            cluster: register_backend
                             timeout: 60s
                             retry_policy:
                               retry_on: connect-failure,reset,5xx,gateway-error
@@ -915,7 +1001,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: POST
                           route:
-                            cluster: gate_backend
+                            cluster: aigateway_backend
                             timeout: 600s
                             retry_policy:
                               retry_on: connect-failure,reset,gateway-error
@@ -930,7 +1016,7 @@ static_resources:
                           match:
                             prefix: /ai/
                           route:
-                            cluster: gate_backend
+                            cluster: aigateway_backend
                             timeout: 300s
                             retry_policy:
                               retry_on: connect-failure,reset,5xx,gateway-error
@@ -943,7 +1029,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: GET
                           route:
-                            cluster: gate_backend
+                            cluster: mediagateway_backend
                             timeout: 600s
                             retry_policy:
                               retry_on: connect-failure,reset
@@ -956,7 +1042,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: POST
                           route:
-                            cluster: gate_backend
+                            cluster: mediagateway_backend
                             timeout: 600s
                             retry_policy:
                               retry_on: connect-failure,reset
@@ -969,7 +1055,7 @@ static_resources:
                               - name: ":method"
                                 exact_match: GET
                           route:
-                            cluster: gate_backend
+                            cluster: mediagateway_backend
                             timeout: 600s
                             retry_policy:
                               retry_on: connect-failure,reset
@@ -985,6 +1071,49 @@ static_resources:
                             status: 405
                             body:
                               inline_string: "Method Not Allowed\n"
+                        - name: moments
+                          match:
+                            prefix: /api/moments/
+                          route:
+                            cluster: momentsgateway_backend
+                            timeout: 120s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
+                        - name: call
+                          match:
+                            prefix: /api/call/
+                          route:
+                            cluster: callgateway_backend
+                            timeout: 120s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
+                        - name: r18
+                          match:
+                            prefix: /api/r18/
+                          route:
+                            cluster: r18gateway_backend
+                            timeout: 120s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
+                        - name: profile
+                          match:
+                            path: /user_update_profile
+                            headers:
+                              - name: ":method"
+                                exact_match: POST
+                          route:
+                            cluster: account_backend
+                            timeout: 120s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
                         - name: other
                           match:
                             prefix: /
@@ -1054,3 +1183,97 @@ static_resources:
                     socket_address:
                       address: host.docker.internal
                       port_value: 8084
+    # ── gateserver microservice split Phase 6: per-service backends ──────────
+    # Each peeled gateway process (Phase 3/4/5) gets its own cluster. The route
+    # table sends each domain prefix to its backend instead of gate_backend. The
+    # gateways MUST be running (start-all-services.sh starts them by default in
+    # Phase 6); if a gateway is down the route returns 503 (Envoy does not fall
+    # back to gate_backend — that is the point of the cut-over).
+    - name: aigateway_backend
+      type: STRICT_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_ONLY
+      lb_policy: LEAST_REQUEST
+      load_assignment:
+        cluster_name: aigateway_backend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address: { socket_address: { address: host.docker.internal, port_value: 8093 } }
+    - name: mediagateway_backend
+      type: STRICT_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_ONLY
+      lb_policy: LEAST_REQUEST
+      load_assignment:
+        cluster_name: mediagateway_backend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address: { socket_address: { address: host.docker.internal, port_value: 8094 } }
+    - name: momentsgateway_backend
+      type: STRICT_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_ONLY
+      lb_policy: LEAST_REQUEST
+      load_assignment:
+        cluster_name: momentsgateway_backend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address: { socket_address: { address: host.docker.internal, port_value: 8099 } }
+    - name: callgateway_backend
+      type: STRICT_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_ONLY
+      lb_policy: LEAST_REQUEST
+      load_assignment:
+        cluster_name: callgateway_backend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address: { socket_address: { address: host.docker.internal, port_value: 8097 } }
+    - name: r18gateway_backend
+      type: STRICT_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_ONLY
+      lb_policy: LEAST_REQUEST
+      load_assignment:
+        cluster_name: r18gateway_backend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address: { socket_address: { address: host.docker.internal, port_value: 8098 } }
+    - name: register_backend
+      type: STRICT_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_ONLY
+      lb_policy: LEAST_REQUEST
+      load_assignment:
+        cluster_name: register_backend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address: { socket_address: { address: host.docker.internal, port_value: 8101 } }
+    - name: login_backend
+      type: STRICT_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_ONLY
+      lb_policy: LEAST_REQUEST
+      load_assignment:
+        cluster_name: login_backend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address: { socket_address: { address: host.docker.internal, port_value: 8102 } }
+    - name: account_backend
+      type: STRICT_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_ONLY
+      lb_policy: LEAST_REQUEST
+      load_assignment:
+        cluster_name: account_backend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address: { socket_address: { address: host.docker.internal, port_value: 8103 } }

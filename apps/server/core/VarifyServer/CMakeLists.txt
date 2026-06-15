@@ -15,11 +15,15 @@ add_executable(VarifyServer
     RateLimiter.cpp
     EmailSender.cpp
     EmailTaskBus.cpp
+    ConfigMgr.cpp
 )
 
 set_target_properties(VarifyServer PROPERTIES FOLDER "Server")
 memochat_configure_server_target(VarifyServer)
-target_link_libraries(VarifyServer PRIVATE VarifyServerCore memochat_boost_stubs GateServerCore)
+# VarifyServer owns its own thin ConfigMgr now, so it no longer links the whole
+# GateServerCore static lib (it only ever needed ConfigMgr from it). This is the
+# Phase 1 "sever VarifyServer -> GateServerCore" step of the gateserver split.
+target_link_libraries(VarifyServer PRIVATE VarifyServerCore memochat_boost_stubs)
 
 if(WIN32)
     # Environment variables: WINSDK_LIB_UM, WINSDK_LIB_UCRT, VC_TOOLS_LIB
