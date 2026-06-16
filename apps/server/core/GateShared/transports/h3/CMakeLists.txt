@@ -78,4 +78,4 @@ if(MEMOCHAT_ENABLE_HTTP3)
     endif()
 endif()
 
-set_target_properties(GateServerHttp3 PROPERTIES FOLDER "Server/GateServer")
+set_target_properties(GateServerHttp3 PROPERTIES FOLDER "Server/GateShared")

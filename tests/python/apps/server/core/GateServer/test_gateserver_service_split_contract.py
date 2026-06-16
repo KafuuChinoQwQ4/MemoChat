@@ -31,7 +31,7 @@ from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
 SERVER_CORE = REPO_ROOT / "apps" / "server" / "core"
-GATE_SERVER = SERVER_CORE / "GateServer"
+GATE_SERVER = SERVER_CORE / "GateShared"
 GATE_CORE = GATE_SERVER / "core"
 GATE_MODULES = GATE_SERVER / "modules"
 GATE_SERVICES = GATE_SERVER / "services"
@@ -237,9 +237,9 @@ class GateServerServiceSplitContractTests(unittest.TestCase):
     # ---- Phase 3: AIGateway pilot (first peeled microservice) ----------------
 
     def test_gate_app_core_library_holds_shared_h1_application_layer(self):
-        """Phase 3: GateServer's reusable H1 application layer is a GateAppCore
-        static library (so focused services can link it), and the GateServer
-        executable is just the entrypoint linking it."""
+        """The reusable H1 application layer is the GateAppCore static library that
+        every peeled microservice links. The GateServer monolith executable is
+        retired and deleted — this directory owns only the shared library."""
         cmake = strip_comments(read(GATE_SERVER / "CMakeLists.txt"))
         self.assertRegex(cmake, r"add_library\s*\(\s*GateAppCore\s+STATIC", "GateAppCore static lib should exist")
 
@@ -250,17 +250,10 @@ class GateServerServiceSplitContractTests(unittest.TestCase):
             with self.subTest(src=src):
                 self.assertIn(src, app_core, f"GateAppCore should compile {src}")
 
-        gate_exe_match = re.search(r"add_executable\s*\(\s*GateServer\b(?P<body>.*?)\)", cmake, re.S)
-        self.assertIsNotNone(gate_exe_match)
-        self.assertIn("GateServer.cpp", gate_exe_match.group("body"))
-        self.assertNotIn(
-            "LogicSystem.cpp", gate_exe_match.group("body"), "GateServer exe should only carry its entrypoint"
-        )
-        self.assertRegex(
-            cmake,
-            r"target_link_libraries\s*\(\s*GateServer\b[^)]*\bGateAppCore\b",
-            "GateServer must link GateAppCore",
-        )
+        # The retired monolith exe + its entrypoint must be gone.
+        self.assertNotIn("add_executable(GateServer", cmake, "GateServer monolith exe must be removed")
+        self.assertNotIn("GateServer.cpp", cmake)
+        self.assertFalse((GATE_SERVER / "GateServer.cpp").exists(), "monolith entrypoint must be deleted")
 
     def test_aigateway_server_executable_links_app_core_and_owns_only_entrypoint(self):
         """Phase 3/7: AIGatewayServer is a top-level executable reusing GateAppCore."""

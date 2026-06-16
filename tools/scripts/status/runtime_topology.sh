@@ -20,11 +20,8 @@ readonly MEMOCHAT_TOPOLOGY_GROUP_ACCOUNT="account"
 readonly MEMOCHAT_TOPOLOGY_GROUP_VARIFY="varify"
 readonly MEMOCHAT_TOPOLOGY_GROUP_CHAT="chat"
 readonly MEMOCHAT_TOPOLOGY_GROUP_AI="ai"
-readonly MEMOCHAT_TOPOLOGY_GROUP_GATE="gate"
 
 readonly -a MEMOCHAT_RUNTIME_SERVICE_TOPOLOGY=(
-    "gate|GateServer1|GateServer|GateServer|GateServer/config.ini|GateServer-1|8080|||8080 8082|8081|../../artifacts/logs/services/GateServer1|GateServer1|memochat"
-    "gate|GateServer2|GateServer|GateServer|GateServer/gate2.ini|GateServer-2|8084|||8084|8085|../../artifacts/logs/services/GateServer2|GateServer2|memochat"
     "chat|chatserver1|ChatServer|ChatServer|ChatServer/chatserver1.ini|ChatServer-1|8090|8190||8090 50055|8190|../../artifacts/logs/services/chatserver1|ChatServer|memochat"
     "chat|chatserver2|ChatServer|ChatServer|ChatServer/chatserver2.ini|ChatServer-2|8091|8191||8091 50056|8191|../../artifacts/logs/services/chatserver2|ChatServer|memochat"
     "worker|ChatDeliveryWorker1|ChatDeliveryWorker|ChatDeliveryWorker|ChatServer/chatdeliveryworker1.ini|ChatDeliveryWorker-1|||chatdeliveryworker1|||../../artifacts/logs/services/chatdeliveryworker1|ChatDeliveryWorker|memochat"
@@ -51,7 +48,6 @@ readonly -a MEMOCHAT_CORE_START_GROUPS=(
 )
 
 readonly -a MEMOCHAT_STOP_PORT_GROUP_ORDER=(
-    "gate|GateServer|tcp udp"
     "aigateway|AIGatewayServer|tcp"
     "mediagateway|MediaGatewayServer|tcp"
     "momentsgateway|MomentsGatewayServer|tcp"
@@ -69,8 +65,6 @@ readonly -a MEMOCHAT_STOP_PORT_GROUP_ORDER=(
 )
 
 readonly -a MEMOCHAT_STOP_PID_ORDER=(
-    "GateServer-2"
-    "GateServer-1"
     "AIGatewayService-1"
     "MediaGatewayService-1"
     "MomentsGatewayService-1"
@@ -91,7 +85,6 @@ readonly -a MEMOCHAT_STOP_PID_ORDER=(
 )
 
 readonly -a MEMOCHAT_STOP_EXECUTABLE_ORDER=(
-    "GateServer"
     "AIGatewayServer"
     "MediaGatewayServer"
     "MomentsGatewayServer"
@@ -119,9 +112,6 @@ memochat_topology_group_label() {
             ;;
         "$MEMOCHAT_TOPOLOGY_GROUP_AI")
             printf 'AIServer'
-            ;;
-        "$MEMOCHAT_TOPOLOGY_GROUP_GATE")
-            printf 'GateServer'
             ;;
         "$MEMOCHAT_TOPOLOGY_GROUP_WORKER")
             printf 'ChatDeliveryWorker'

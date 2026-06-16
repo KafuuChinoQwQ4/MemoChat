@@ -24,7 +24,6 @@ START_R18GATEWAY_OVERRIDE=""
 START_REGISTER_OVERRIDE=""
 START_LOGIN_OVERRIDE=""
 START_ACCOUNT_OVERRIDE=""
-START_GATE_OVERRIDE=""
 START_ENVOY_OVERRIDE=""
 START_DOCKER_DEPS_OVERRIDE=""
 START_GPT_SOVITS_OVERRIDE=""
@@ -169,14 +168,6 @@ while [[ $# -gt 0 ]]; do
             START_ACCOUNT_OVERRIDE=0
             shift
             ;;
-        --start-gate)
-            START_GATE_OVERRIDE=1
-            shift
-            ;;
-        --skip-gate)
-            START_GATE_OVERRIDE=0
-            shift
-            ;;
         --skip-core-services)
             START_CORE_SERVICES_OVERRIDE=0
             shift
@@ -222,10 +213,6 @@ START_R18GATEWAY="${START_R18GATEWAY_OVERRIDE:-${MEMOCHAT_START_R18GATEWAY:-1}}"
 START_REGISTER="${START_REGISTER_OVERRIDE:-${MEMOCHAT_START_REGISTER:-1}}"
 START_LOGIN="${START_LOGIN_OVERRIDE:-${MEMOCHAT_START_LOGIN:-1}}"
 START_ACCOUNT="${START_ACCOUNT_OVERRIDE:-${MEMOCHAT_START_ACCOUNT:-1}}"
-# GateServer monolith is RETIRED from default startup (gateserver split: Gate
-# dissolved — every domain is served by its own service + Envoy prefix routing).
-# Kept opt-in (--start-gate) purely as a rollback escape hatch.
-START_GATE="${START_GATE_OVERRIDE:-${MEMOCHAT_START_GATE:-0}}"
 START_DOCKER_DEPS="${START_DOCKER_DEPS_OVERRIDE:-${MEMOCHAT_START_DOCKER_DEPS:-1}}"
 START_ENVOY="${START_ENVOY_OVERRIDE:-${MEMOCHAT_START_ENVOY:-1}}"
 START_GPT_SOVITS="${START_GPT_SOVITS_OVERRIDE:-${MEMOCHAT_START_GPT_SOVITS:-1}}"
@@ -490,9 +477,6 @@ ensure_runtime() {
     fi
     if is_truthy "$START_ACCOUNT"; then
         [[ -x "$(runtime_executable_path "AccountService1")" ]] || missing=1
-    fi
-    if is_truthy "$START_GATE"; then
-        [[ -x "$(runtime_executable_path "GateServer1")" ]] || missing=1
     fi
     if is_truthy "$START_CHAT_DELIVERY_WORKER"; then
         [[ -x "$(runtime_executable_path "ChatDeliveryWorker1")" ]] || missing=1
@@ -823,10 +807,6 @@ start_topology_core_group() {
     if [[ "$group" == "$MEMOCHAT_TOPOLOGY_GROUP_CHAT" ]] && is_truthy "$MEMOCHAT_ENABLE_QUIC"; then
         wait_for_topology_group_udp_ports "$MEMOCHAT_TOPOLOGY_GROUP_CHAT" "QUIC"
     fi
-
-    if [[ "$group" == "$MEMOCHAT_TOPOLOGY_GROUP_GATE" ]]; then
-        echo "  [INFO] Client HTTP traffic enters through Docker Envoy on 80 and 8443/tcp+udp"
-    fi
     echo
 }
 
@@ -985,14 +965,6 @@ else
 fi
 echo
 
-echo "[STEP] Start GateServer (retired monolith — rollback escape hatch only)"
-if is_truthy "$START_GATE"; then
-    launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_GATE"
-    echo "  [INFO] GateServer monolith started (opt-in). Envoy routes business traffic to per-domain services."
-else
-    echo "  [SKIP] GateServer monolith retired; per-domain services serve all routes (opt-in: --start-gate)"
-fi
-echo
 
 if is_truthy "$START_CORE_SERVICES"; then
     start_topology_core_groups

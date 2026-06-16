@@ -85,8 +85,17 @@ add_custom_target(build-all
 )
 
 if(BUILD_SERVER)
+    # The GateServer monolith is retired; build the peeled per-domain services
+    # (each links the shared GateAppCore) plus the chat tier and varify.
     add_dependencies(build-all
-        GateServer
+        AIGatewayServer
+        MediaGatewayServer
+        MomentsGatewayServer
+        CallGatewayServer
+        R18GatewayServer
+        RegisterServer
+        LoginServer
+        AccountServer
         ChatServer
         VarifyServer
     )

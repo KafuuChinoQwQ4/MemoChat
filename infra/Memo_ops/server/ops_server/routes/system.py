@@ -17,10 +17,7 @@ from Memo_ops.server.ops_server.runtime import OpsServerRuntime
 
 def _service_meta(name: str, cfg_dir: Path) -> Dict[str, Any]:
     patterns = [
-        cfg_dir / ".." / ".." / "server" / "GateServer" / "config.ini",
-        cfg_dir / ".." / ".." / "server" / "GateServer" / "transports" / "h2" / "config.ini",
         cfg_dir / ".." / ".." / "server" / "ChatServer" / "config.ini",
-        cfg_dir / ".." / ".." / "server" / "GateServer2" / "config.ini",
         cfg_dir / ".." / ".." / "server" / name / "config.ini",
         cfg_dir / ".." / "server" / name / "config.ini",
     ]
@@ -38,12 +35,23 @@ def _service_meta(name: str, cfg_dir: Path) -> Dict[str, Any]:
                 except Exception:
                     pass
 
-            # HTTP port (GateServer variants)
-            if parser.has_section("GateServer"):
-                try:
-                    meta["http_port"] = parser.getint("GateServer", "HttpPort")
-                except Exception:
-                    pass
+            # HTTP listen port (focused gateway services share the [<Name>] port)
+            for sect in (
+                "AIGateway",
+                "MediaGateway",
+                "MomentsGateway",
+                "CallGateway",
+                "R18Gateway",
+                "Register",
+                "Login",
+                "Account",
+            ):
+                if parser.has_section(sect):
+                    try:
+                        meta["http_port"] = parser.getint(sect, "Port")
+                    except Exception:
+                        pass
+                    break
 
             # Log directory
             if parser.has_section("Log"):
@@ -63,8 +71,12 @@ def _running_procs() -> Dict[str, List[Dict[str, Any]]]:
         try:
             info = proc.info
             cmdline = " ".join(info.get("cmdline") or [])
-            if "GateServer" in cmdline or "ChatServer" in cmdline:
-                match = re.search(r"\b(GateServerHttp2|GateServer2|GateServer|ChatServer)\b", cmdline)
+            if re.search(r"GatewayServer|RegisterServer|LoginServer|AccountServer|ChatServer", cmdline):
+                match = re.search(
+                    r"\b(AIGatewayServer|MediaGatewayServer|MomentsGatewayServer|CallGatewayServer"
+                    r"|R18GatewayServer|RegisterServer|LoginServer|AccountServer|ChatServer)\b",
+                    cmdline,
+                )
                 if match:
                     svc = match.group(1)
                     by_service.setdefault(svc, []).append(
@@ -92,9 +104,14 @@ def _collect_system_metrics(runtime: OpsServerRuntime) -> List[Dict[str, Any]]:
     mem_avail_mb = vm.available / (1024 * 1024)
 
     services = [
-        "GateServer",
-        "GateServerHttp2",
-        "GateServer2",
+        "AIGatewayServer",
+        "MediaGatewayServer",
+        "MomentsGatewayServer",
+        "CallGatewayServer",
+        "R18GatewayServer",
+        "RegisterServer",
+        "LoginServer",
+        "AccountServer",
         "ChatServer",
         "VarifyServer",
     ]

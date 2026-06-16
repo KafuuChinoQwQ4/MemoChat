@@ -6,11 +6,11 @@ from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
 SERVER_CORE = REPO_ROOT / "apps" / "server" / "core"
-GATE_H3_LEGACY_ROUTES = SERVER_CORE / "GateServer" / "transports" / "h3" / "legacy_routes"
-GATE_H2 = SERVER_CORE / "GateServer" / "transports" / "h2"
+GATE_H3_LEGACY_ROUTES = SERVER_CORE / "GateShared" / "transports" / "h3" / "legacy_routes"
+GATE_H2 = SERVER_CORE / "GateShared" / "transports" / "h2"
 GATE_H2_ROUTES = GATE_H2 / "routes"
 GATE_H2_SUPPORT = GATE_H2 / "support"
-GATE_H1_LEGACY = SERVER_CORE / "GateServer" / "transports" / "h1" / "legacy_standalone"
+GATE_H1_LEGACY = SERVER_CORE / "GateShared" / "transports" / "h1" / "legacy_standalone"
 
 
 def read(path: Path) -> str:
@@ -85,20 +85,20 @@ def extract_h2_routes() -> set[tuple[str, str]]:
 
 
 MAIN_H1_FILES = (
-    SERVER_CORE / "GateServer" / "LogicSystem.cpp",
-    SERVER_CORE / "GateServer" / "modules" / "auth" / "AuthRouteModule.cpp",
-    SERVER_CORE / "GateServer" / "modules" / "ai" / "AIRouteModule.cpp",
-    SERVER_CORE / "GateServer" / "modules" / "call" / "CallRouteModule.cpp",
-    SERVER_CORE / "GateServer" / "modules" / "health" / "HealthRouteModule.cpp",
-    SERVER_CORE / "GateServer" / "modules" / "media" / "MediaRouteModule.cpp",
-    SERVER_CORE / "GateServer" / "modules" / "moments" / "MomentsRouteModule.cpp",
-    SERVER_CORE / "GateServer" / "modules" / "profile" / "ProfileRouteModule.cpp",
-    SERVER_CORE / "GateServer" / "modules" / "r18" / "R18RouteModule.cpp",
-    SERVER_CORE / "GateServer" / "GateServerH1Routes.cpp",
-    SERVER_CORE / "GateServer" / "MediaHttpService.cpp",
-    SERVER_CORE / "GateServer" / "MomentsRouteModules.cpp",
-    SERVER_CORE / "GateServer" / "AIRouteModules.cpp",
-    SERVER_CORE / "GateServer" / "GateR18Routes.cpp",
+    SERVER_CORE / "GateShared" / "LogicSystem.cpp",
+    SERVER_CORE / "GateShared" / "modules" / "auth" / "AuthRouteModule.cpp",
+    SERVER_CORE / "GateShared" / "modules" / "ai" / "AIRouteModule.cpp",
+    SERVER_CORE / "GateShared" / "modules" / "call" / "CallRouteModule.cpp",
+    SERVER_CORE / "GateShared" / "modules" / "health" / "HealthRouteModule.cpp",
+    SERVER_CORE / "GateShared" / "modules" / "media" / "MediaRouteModule.cpp",
+    SERVER_CORE / "GateShared" / "modules" / "moments" / "MomentsRouteModule.cpp",
+    SERVER_CORE / "GateShared" / "modules" / "profile" / "ProfileRouteModule.cpp",
+    SERVER_CORE / "GateShared" / "modules" / "r18" / "R18RouteModule.cpp",
+    SERVER_CORE / "GateShared" / "GateServerH1Routes.cpp",
+    SERVER_CORE / "GateShared" / "MediaHttpService.cpp",
+    SERVER_CORE / "GateShared" / "MomentsRouteModules.cpp",
+    SERVER_CORE / "GateShared" / "AIRouteModules.cpp",
+    SERVER_CORE / "GateShared" / "GateR18Routes.cpp",
 )
 
 H1_LEGACY_SOURCE_FILES = (
@@ -294,8 +294,8 @@ class GateServerRouteInventoryTests(unittest.TestCase):
             self.assertIn(route, routes)
 
     def test_main_h1_ai_inventory_scans_neutral_module_and_legacy_adapter(self):
-        ai_module_path = SERVER_CORE / "GateServer" / "modules" / "ai" / "AIRouteModule.cpp"
-        legacy_ai_path = SERVER_CORE / "GateServer" / "AIRouteModules.cpp"
+        ai_module_path = SERVER_CORE / "GateShared" / "modules" / "ai" / "AIRouteModule.cpp"
+        legacy_ai_path = SERVER_CORE / "GateShared" / "AIRouteModules.cpp"
 
         self.assertIn(ai_module_path, MAIN_H1_FILES)
         self.assertIn(legacy_ai_path, MAIN_H1_FILES)
@@ -321,8 +321,8 @@ class GateServerRouteInventoryTests(unittest.TestCase):
         self.assertFalse(missing_from_main, f"main H1 AI route inventory missing {sorted(missing_from_main)}")
 
     def test_main_h1_r18_inventory_scans_neutral_route_module_and_legacy_shim(self):
-        r18_module_path = SERVER_CORE / "GateServer" / "modules" / "r18" / "R18RouteModule.cpp"
-        legacy_r18_path = SERVER_CORE / "GateServer" / "GateR18Routes.cpp"
+        r18_module_path = SERVER_CORE / "GateShared" / "modules" / "r18" / "R18RouteModule.cpp"
+        legacy_r18_path = SERVER_CORE / "GateShared" / "GateR18Routes.cpp"
 
         self.assertIn(r18_module_path, MAIN_H1_FILES)
         self.assertIn(legacy_r18_path, MAIN_H1_FILES)
@@ -341,10 +341,10 @@ class GateServerRouteInventoryTests(unittest.TestCase):
         self.assertFalse(missing_from_main, f"main H1 R18 route inventory missing {sorted(missing_from_main)}")
 
     def test_main_h1_auth_migration_tracks_all_core_auth_routes_in_neutral_module(self):
-        auth_module_path = SERVER_CORE / "GateServer" / "modules" / "auth" / "AuthRouteModule.cpp"
+        auth_module_path = SERVER_CORE / "GateShared" / "modules" / "auth" / "AuthRouteModule.cpp"
         auth_module = read(auth_module_path)
         compact_auth_module = normalize_space(strip_comments(auth_module))
-        legacy_h1 = read(SERVER_CORE / "GateServer" / "GateServerH1Routes.cpp")
+        legacy_h1 = read(SERVER_CORE / "GateShared" / "GateServerH1Routes.cpp")
         registered_routes = extract_route_registry_routes(auth_module_path)
 
         for route in (
@@ -361,7 +361,7 @@ class GateServerRouteInventoryTests(unittest.TestCase):
         self.assertNotIn('logic.RegPost(\n        "/user_login"', legacy_h1)
 
     def test_main_h1_moments_inventory_scans_neutral_route_module(self):
-        moments_module_path = SERVER_CORE / "GateServer" / "modules" / "moments" / "MomentsRouteModule.cpp"
+        moments_module_path = SERVER_CORE / "GateShared" / "modules" / "moments" / "MomentsRouteModule.cpp"
 
         self.assertIn(moments_module_path, MAIN_H1_FILES)
         self.assertTrue(moments_module_path.exists())
@@ -505,8 +505,8 @@ class GateServerRouteInventoryTests(unittest.TestCase):
         self.assertIn("HandleResetPwd", reset_block)
         self.assertIn("AuthService", reset_block)
 
-        h1_auth_service = read(SERVER_CORE / "GateServer" / "services" / "auth" / "AuthService.cpp")
-        account_persistence = read(SERVER_CORE / "GateServer" / "services" / "account" / "AccountPersistence.cpp")
+        h1_auth_service = read(SERVER_CORE / "GateShared" / "services" / "auth" / "AuthService.cpp")
+        account_persistence = read(SERVER_CORE / "GateShared" / "services" / "account" / "AccountPersistence.cpp")
         h2 = read(GATE_H2_SUPPORT / "Http2AuthSupport.cpp")
         self.assertIn("UpdatePassword(email, pwd)", h1_auth_service)
         self.assertIn("PostgresMgr::GetInstance()->UpdatePwd(email, password)", account_persistence)

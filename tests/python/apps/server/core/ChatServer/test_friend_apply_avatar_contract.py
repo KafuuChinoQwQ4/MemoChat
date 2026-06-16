@@ -43,8 +43,9 @@ class FriendApplyAvatarContractTests(unittest.TestCase):
         # into the ApplyInfo for the bootstrap payload.
         self.assertIn("->icon", get_apply_list)
         self.assertIn("user_public_id", get_apply_list)
-        self.assertIn('std::make_shared<ApplyInfo>(ar.uid, name, "", icon, nick, sex, ar.status, user_public_id)',
-                      get_apply_list)
+        self.assertIn(
+            'std::make_shared<ApplyInfo>(ar.uid, name, "", icon, nick, sex, ar.status, user_public_id)', get_apply_list
+        )
 
     def test_apply_list_warmup_query_matches_icon_projection(self):
         source = POSTGRES_DAO.read_text(encoding="utf-8")
