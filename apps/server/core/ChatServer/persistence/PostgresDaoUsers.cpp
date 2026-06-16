@@ -54,7 +54,7 @@ int PostgresDao::RegUser(const std::string& name, const std::string& email, cons
     {
         try
         {
-            pqxx::connection conn(postgres_connection_string_);
+            pqxx::connection conn(account_connection_string_);
             pqxx::work txn(conn);
             const auto exists = txn.exec_params("SELECT 1 FROM \"user\" WHERE email = $1 LIMIT 1", email);
             if (!exists.empty())
@@ -147,7 +147,7 @@ bool PostgresDao::CheckEmail(const std::string& name, const std::string& email)
     {
         try
         {
-            pqxx::connection conn(postgres_connection_string_);
+            pqxx::connection conn(account_connection_string_);
             pqxx::read_transaction txn(conn);
             const auto rows = txn.exec_params("SELECT 1 FROM \"user\" WHERE email = $1 LIMIT 1", email);
             return !rows.empty();
@@ -202,7 +202,7 @@ bool PostgresDao::UpdatePwd(const std::string& email, const std::string& newpwd)
     {
         try
         {
-            pqxx::connection conn(postgres_connection_string_);
+            pqxx::connection conn(account_connection_string_);
             pqxx::work txn(conn);
             const auto updated = txn.exec_params("UPDATE \"user\" SET pwd = $1 WHERE email = $2", newpwd, email);
             txn.commit();
@@ -250,7 +250,7 @@ bool PostgresDao::CheckPwd(const std::string& name, const std::string& pwd, User
     {
         try
         {
-            pqxx::connection conn(postgres_connection_string_);
+            pqxx::connection conn(account_connection_string_);
             pqxx::read_transaction txn(conn);
             const auto rows = txn.exec_params("SELECT uid, name, email, pwd, user_id, nick, icon, \"desc\", sex "
                                               "FROM \"user\" WHERE name = $1 LIMIT 1",
@@ -948,7 +948,7 @@ std::shared_ptr<UserInfo> PostgresDao::GetUser(int uid)
     {
         try
         {
-            pqxx::connection conn(postgres_connection_string_);
+            pqxx::connection conn(account_connection_string_);
             pqxx::read_transaction txn(conn);
             const auto rows = txn.exec_params("SELECT pwd, email, name, nick, \"desc\", sex, icon, user_id, uid "
                                               "FROM \"user\" WHERE uid = $1 LIMIT 1",
@@ -1029,7 +1029,7 @@ std::shared_ptr<UserInfo> PostgresDao::GetUser(std::string name)
     {
         try
         {
-            pqxx::connection conn(postgres_connection_string_);
+            pqxx::connection conn(account_connection_string_);
             pqxx::read_transaction txn(conn);
             const auto rows = txn.exec_params("SELECT pwd, email, name, nick, \"desc\", sex, icon, user_id, uid "
                                               "FROM \"user\" WHERE name = $1 LIMIT 1",
@@ -1116,7 +1116,7 @@ bool PostgresDao::GetUidByUserId(const std::string& user_id, int& uid)
     {
         try
         {
-            pqxx::connection conn(postgres_connection_string_);
+            pqxx::connection conn(account_connection_string_);
             pqxx::read_transaction txn(conn);
             const auto rows = txn.exec_params("SELECT uid FROM \"user\" WHERE user_id = $1 LIMIT 1", user_id);
             if (rows.empty())
@@ -1177,30 +1177,40 @@ bool PostgresDao::GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>
             pqxx::read_transaction txn(conn);
             std::vector<int> from_uids;
             std::unordered_map<int, std::shared_ptr<ApplyInfo>> apply_by_uid;
-            const auto rows =
-                txn.exec_params("SELECT apply.from_uid, apply.status, usr.name, usr.nick, usr.sex, usr.user_id, "
-                                "usr.icon "
-                                "FROM friend_apply AS apply "
-                                "JOIN \"user\" AS usr ON apply.from_uid = usr.uid "
-                                "WHERE apply.to_uid = $1 AND apply.id > $2 "
-                                "ORDER BY apply.id ASC LIMIT $3",
-                                touid,
-                                begin,
-                                limit);
+            // Step 1: apply rows (from_uid + status), no JOIN to "user".
+            struct ApplyRow
+            {
+                int uid;
+                int status;
+            };
+            std::vector<ApplyRow> apply_rows;
+            const auto rows = txn.exec_params("SELECT apply.from_uid, apply.status "
+                                              "FROM friend_apply AS apply "
+                                              "WHERE apply.to_uid = $1 AND apply.id > $2 "
+                                              "ORDER BY apply.id ASC LIMIT $3",
+                                              touid,
+                                              begin,
+                                              limit);
             for (const auto& row : rows)
             {
-                const auto uid = row["from_uid"].as<int>();
-                auto apply_ptr = std::make_shared<ApplyInfo>(uid,
-                                                             row["name"].is_null() ? "" : row["name"].c_str(),
-                                                             "",
-                                                             row["icon"].is_null() ? "" : row["icon"].c_str(),
-                                                             row["nick"].is_null() ? "" : row["nick"].c_str(),
-                                                             row["sex"].is_null() ? 0 : row["sex"].as<int>(),
-                                                             row["status"].is_null() ? 0 : row["status"].as<int>(),
-                                                             row["user_id"].is_null() ? "" : row["user_id"].c_str());
+                apply_rows.push_back(
+                    {row["from_uid"].as<int>(), row["status"].is_null() ? 0 : row["status"].as<int>()});
+                from_uids.push_back(row["from_uid"].as<int>());
+            }
+            // Step 2: batch user base-info (account-data seam, replaces JOIN).
+            auto users = GetUsersByUids(from_uids);
+            for (const auto& ar : apply_rows)
+            {
+                const auto uit = users.find(ar.uid);
+                const std::string name = (uit != users.end() && uit->second) ? uit->second->name : "";
+                const std::string icon = (uit != users.end() && uit->second) ? uit->second->icon : "";
+                const std::string nick = (uit != users.end() && uit->second) ? uit->second->nick : "";
+                const int sex = (uit != users.end() && uit->second) ? uit->second->sex : 0;
+                const std::string user_public_id = (uit != users.end() && uit->second) ? uit->second->user_id : "";
+                auto apply_ptr =
+                    std::make_shared<ApplyInfo>(ar.uid, name, "", icon, nick, sex, ar.status, user_public_id);
                 applyList.push_back(apply_ptr);
-                from_uids.push_back(uid);
-                apply_by_uid.emplace(uid, apply_ptr);
+                apply_by_uid.emplace(ar.uid, apply_ptr);
             }
 
             if (!from_uids.empty())
@@ -1328,6 +1338,54 @@ bool PostgresDao::GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>
     }
 }
 
+std::unordered_map<int, std::shared_ptr<UserInfo>> PostgresDao::GetUsersByUids(const std::vector<int>& uids)
+{
+    std::unordered_map<int, std::shared_ptr<UserInfo>> result;
+    if (uids.empty() || !use_postgres_)
+    {
+        return result;
+    }
+    try
+    {
+        pqxx::connection conn(account_connection_string_);
+        pqxx::read_transaction txn(conn);
+        pqxx::params params;
+        std::string in_clause;
+        for (size_t i = 0; i < uids.size(); ++i)
+        {
+            if (i > 0)
+            {
+                in_clause += ", ";
+            }
+            in_clause += "$" + std::to_string(i + 1);
+            params.append(uids[i]);
+        }
+        // Single user-table read replacing per-query JOIN "user". When the user
+        // table moves to memo_account (Phase 2b), only this query relocates.
+        const auto rows = txn.exec("SELECT uid, name, nick, sex, user_id, \"desc\", icon "
+                                   "FROM \"user\" WHERE uid IN (" +
+                                       in_clause + ")",
+                                   params);
+        for (const auto& row : rows)
+        {
+            auto info = std::make_shared<UserInfo>();
+            info->uid = row["uid"].as<int>();
+            info->name = row["name"].is_null() ? "" : row["name"].c_str();
+            info->nick = row["nick"].is_null() ? "" : row["nick"].c_str();
+            info->sex = row["sex"].is_null() ? 0 : row["sex"].as<int>();
+            info->user_id = row["user_id"].is_null() ? "" : row["user_id"].c_str();
+            info->desc = row["desc"].is_null() ? "" : row["desc"].c_str();
+            info->icon = row["icon"].is_null() ? "" : row["icon"].c_str();
+            result.emplace(info->uid, info);
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "GetUsersByUids failed: " << e.what() << std::endl;
+    }
+    return result;
+}
+
 bool PostgresDao::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo>>& user_info_list)
 {
     if (use_postgres_)
@@ -1338,26 +1396,34 @@ bool PostgresDao::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInf
             pqxx::read_transaction txn(conn);
             std::vector<int> friend_ids;
             std::unordered_map<int, std::shared_ptr<UserInfo>> friend_by_id;
+            std::unordered_map<int, std::string> back_by_id;
+            // Step 1: relation rows (friend ids + back name) — no JOIN to "user".
             const auto rows =
-                txn.exec_params("SELECT f.friend_id, f.back, u.name, u.nick, u.sex, u.user_id, u.\"desc\", u.icon "
-                                "FROM friend AS f "
-                                "JOIN \"user\" AS u ON f.friend_id = u.uid "
-                                "WHERE f.self_id = $1",
-                                self_id);
+                txn.exec_params("SELECT f.friend_id, f.back FROM friend AS f WHERE f.self_id = $1", self_id);
             for (const auto& row : rows)
             {
                 const auto friend_id = row["friend_id"].as<int>();
+                friend_ids.push_back(friend_id);
+                back_by_id.emplace(friend_id, row["back"].is_null() ? "" : row["back"].c_str());
+            }
+            // Step 2: resolve user base-info in one batch read (account-data seam).
+            auto users = GetUsersByUids(friend_ids);
+            for (const auto friend_id : friend_ids)
+            {
                 auto user_info = std::make_shared<UserInfo>();
                 user_info->uid = friend_id;
-                user_info->name = row["name"].is_null() ? "" : row["name"].c_str();
-                user_info->nick = row["nick"].is_null() ? "" : row["nick"].c_str();
-                user_info->sex = row["sex"].is_null() ? 0 : row["sex"].as<int>();
-                user_info->user_id = row["user_id"].is_null() ? "" : row["user_id"].c_str();
-                user_info->desc = row["desc"].is_null() ? "" : row["desc"].c_str();
-                user_info->icon = row["icon"].is_null() ? "" : row["icon"].c_str();
-                user_info->back = row["back"].is_null() ? "" : row["back"].c_str();
+                const auto uit = users.find(friend_id);
+                if (uit != users.end() && uit->second)
+                {
+                    user_info->name = uit->second->name;
+                    user_info->nick = uit->second->nick;
+                    user_info->sex = uit->second->sex;
+                    user_info->user_id = uit->second->user_id;
+                    user_info->desc = uit->second->desc;
+                    user_info->icon = uit->second->icon;
+                }
+                user_info->back = back_by_id[friend_id];
                 user_info_list.push_back(user_info);
-                friend_ids.push_back(friend_id);
                 friend_by_id.emplace(friend_id, user_info);
             }
 

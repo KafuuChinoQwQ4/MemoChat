@@ -442,6 +442,34 @@ function(memochat_configure_server_target target_name)
     endif()
 endfunction()
 
+# Absolute path to apps/server/core, captured here so helper functions can build
+# include roots that do not depend on CMAKE_CURRENT_SOURCE_DIR (which, inside a
+# function(), is the calling subdirectory).
+set(MEMOCHAT_SERVER_CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+
+function(memochat_configure_gate_focused_service target_name)
+    set_target_properties(${target_name} PROPERTIES FOLDER "Server")
+    memochat_configure_server_target(${target_name})
+    target_link_libraries(${target_name} PRIVATE
+        GateAppCore
+        GateServerCore
+        GateServerHttp3
+        memochat_boost_stubs
+    )
+    # NOTE: inside a function() CMAKE_CURRENT_SOURCE_DIR resolves to the CALLER's
+    # subdirectory (the per-service dir), so the shared GateServer framework
+    # include roots must be anchored to MEMOCHAT_SERVER_CORE_DIR (server/core),
+    # captured at the top of this file.
+    target_include_directories(${target_name} PRIVATE
+        ${MEMOCHAT_SERVER_CORE_DIR}/GateServer
+        ${MEMOCHAT_SERVER_CORE_DIR}/GateServer/core
+        ${MEMOCHAT_SERVER_CORE_DIR}/GateServer/app
+        ${MEMOCHAT_SERVER_CORE_DIR}/GateServer/transports/h3
+        ${MEMOCHAT_SERVER_CORE_DIR}/GateServer/transports/h3/listener
+        ${MEMOCHAT_SERVER_CORE_DIR}/GateServer/transports/h3/legacy_routes
+    )
+endfunction()
+
 if(BUILD_TESTS)
     # GTest package is loaded and GTest_TestLib is defined in the root tests/CMakeLists.txt.
     # Test subdirectories are registered there (including the ones below).
@@ -462,6 +490,14 @@ if(BUILD_SERVER_SERVICES)
         message(WARNING "MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE=ON but libh2o was not found; skipping GateServerHttp2")
     endif()
     add_subdirectory(GateServer)
+    add_subdirectory(AIGatewayService)
+    add_subdirectory(MediaService)
+    add_subdirectory(MomentsService)
+    add_subdirectory(CallService)
+    add_subdirectory(R18Service)
+    add_subdirectory(RegisterService)
+    add_subdirectory(LoginService)
+    add_subdirectory(AccountService)
     add_subdirectory(VarifyServer)
     add_subdirectory(AIServer)
 endif()

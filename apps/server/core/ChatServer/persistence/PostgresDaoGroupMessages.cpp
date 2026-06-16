@@ -526,10 +526,9 @@ bool PostgresDao::GetGroupHistory(const int64_t& group_id,
                     "SELECT m.msg_id, m.server_msg_id, m.group_seq, m.group_id, m.from_uid, m.msg_type, m.content, "
                     "m.mentions_json, "
                     "m.reply_to_server_msg_id, m.forward_meta_json, m.edited_at_ms, m.deleted_at_ms, m.created_at, "
-                    "e.file_name, e.mime, e.size, u.name AS from_name, u.nick AS from_nick, u.icon AS from_icon "
+                    "e.file_name, e.mime, e.size "
                     "FROM chat_group_msg m "
                     "LEFT JOIN chat_group_msg_ext e ON m.msg_id = e.msg_id "
-                    "LEFT JOIN \"user\" u ON m.from_uid = u.uid "
                     "WHERE m.group_id = $1 AND m.group_seq < $2 "
                     "ORDER BY m.group_seq DESC, m.server_msg_id DESC LIMIT $3",
                     group_id,
@@ -542,10 +541,9 @@ bool PostgresDao::GetGroupHistory(const int64_t& group_id,
                     "SELECT m.msg_id, m.server_msg_id, m.group_seq, m.group_id, m.from_uid, m.msg_type, m.content, "
                     "m.mentions_json, "
                     "m.reply_to_server_msg_id, m.forward_meta_json, m.edited_at_ms, m.deleted_at_ms, m.created_at, "
-                    "e.file_name, e.mime, e.size, u.name AS from_name, u.nick AS from_nick, u.icon AS from_icon "
+                    "e.file_name, e.mime, e.size "
                     "FROM chat_group_msg m "
                     "LEFT JOIN chat_group_msg_ext e ON m.msg_id = e.msg_id "
-                    "LEFT JOIN \"user\" u ON m.from_uid = u.uid "
                     "WHERE m.group_id = $1 AND m.created_at < $2 "
                     "ORDER BY m.group_seq DESC, m.server_msg_id DESC LIMIT $3",
                     group_id,
@@ -558,10 +556,9 @@ bool PostgresDao::GetGroupHistory(const int64_t& group_id,
                     "SELECT m.msg_id, m.server_msg_id, m.group_seq, m.group_id, m.from_uid, m.msg_type, m.content, "
                     "m.mentions_json, "
                     "m.reply_to_server_msg_id, m.forward_meta_json, m.edited_at_ms, m.deleted_at_ms, m.created_at, "
-                    "e.file_name, e.mime, e.size, u.name AS from_name, u.nick AS from_nick, u.icon AS from_icon "
+                    "e.file_name, e.mime, e.size "
                     "FROM chat_group_msg m "
                     "LEFT JOIN chat_group_msg_ext e ON m.msg_id = e.msg_id "
-                    "LEFT JOIN \"user\" u ON m.from_uid = u.uid "
                     "WHERE m.group_id = $1 ORDER BY m.group_seq DESC, m.server_msg_id DESC LIMIT $2",
                     group_id,
                     final_limit + 1);
@@ -587,15 +584,39 @@ bool PostgresDao::GetGroupHistory(const int64_t& group_id,
                 info->file_name = row["file_name"].is_null() ? "" : row["file_name"].c_str();
                 info->mime = row["mime"].is_null() ? "" : row["mime"].c_str();
                 info->size = row["size"].is_null() ? 0 : row["size"].as<int>();
-                info->from_name = row["from_name"].is_null() ? "" : row["from_name"].c_str();
-                info->from_nick = row["from_nick"].is_null() ? "" : row["from_nick"].c_str();
-                info->from_icon = row["from_icon"].is_null() ? "" : row["from_icon"].c_str();
+                // Author base-info resolved in a batch below (account-data seam,
+                // replaces the former LEFT JOIN "user").
                 messages.push_back(info);
             }
             if (static_cast<int>(messages.size()) > final_limit)
             {
                 has_more = true;
                 messages.resize(final_limit);
+            }
+            // Step 2: batch-resolve author name/nick/icon (no cross-table JOIN).
+            std::vector<int> author_uids;
+            author_uids.reserve(messages.size());
+            for (const auto& m : messages)
+            {
+                if (m && m->from_uid != 0)
+                {
+                    author_uids.push_back(m->from_uid);
+                }
+            }
+            auto authors = GetUsersByUids(author_uids);
+            for (auto& m : messages)
+            {
+                if (!m)
+                {
+                    continue;
+                }
+                const auto it = authors.find(m->from_uid);
+                if (it != authors.end() && it->second)
+                {
+                    m->from_name = it->second->name;
+                    m->from_nick = it->second->nick;
+                    m->from_icon = it->second->icon;
+                }
             }
             return true;
         }

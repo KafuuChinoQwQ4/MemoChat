@@ -28,7 +28,7 @@
 // route profile, so it serves ONLY /healthz, /readyz and /ai/* and proxies to
 // AIServer/AIOrchestrator. It owns no database, so unlike GateServer it does not
 // initialize Postgres/Mongo/AWS — only the H1 listener + worker pool the AI
-// proxy + SSE streaming need. Defaults keep it OFF in the runtime topology.
+// proxy + SSE streaming need. It starts by default after Envoy cut-over.
 
 using namespace memolog;
 

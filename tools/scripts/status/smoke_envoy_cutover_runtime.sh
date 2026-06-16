@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Opt-in runtime smoke for the gateserver microservice split Phase 6 Envoy
-# cut-over. Starts the real local Envoy (compose/envoy.yaml) and proves each
-# domain prefix is routed to its OWN per-service backend cluster rather than the
-# GateServer monolith (gate_backend). With the gateway backends down, every cut
-# domain returns 503 (no fallback to gate_backend) — that is the cut-over proof.
-# Then it confirms a backend brought up on its port makes its route succeed.
+# Runtime smoke for the gateserver microservice split Envoy edge. Starts the
+# real local Envoy (compose/envoy.yaml) and proves each domain prefix has an
+# explicit per-service route, while unknown paths return Envoy 404 instead of
+# falling back to the retired GateServer monolith.
 #
 # This does not require the gateways or GateServer to be running; it validates
 # the EDGE routing table, which is the risky part of Phase 6. Safe + reversible:
@@ -36,11 +34,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Each cut domain prefix -> a probe path + method. Backends are down during this
-# smoke, so a correctly-cut route returns 503 (routed to the new backend), while
-# a route still pointing at gate_backend would (with GateServer down) also 503 —
-# so we ALSO assert the route is NOT served by a running GateServer by keeping
-# gate down. The distinguishing assertion is the access log route_family below.
+# Each cut domain prefix -> a probe path + method. Backends may be up or down in
+# a developer environment; the invariant here is that the edge route exists
+# (not 404). Unknown paths must return the direct-response 404 catch-all.
 declare -a PROBES=(
     "GET:/ai/model/list"
     "GET:/upload_media_status"
@@ -66,7 +62,7 @@ done
 [[ "$up" -eq 1 ]] || fail "Envoy did not answer /health"
 echo "  [OK] Envoy healthy on :80"
 
-echo "[STEP] Probe each cut domain prefix (backends down -> expect 503, i.e. routed off gate_backend)"
+echo "[STEP] Probe each cut domain prefix (expect any routed status except 404)"
 for probe in "${PROBES[@]}"; do
     method="${probe%%:*}"
     path="${probe#*:}"
@@ -80,9 +76,24 @@ for probe in "${PROBES[@]}"; do
     echo "  [OK] ${method} ${path} -> ${code} (has a route)"
 done
 
+echo "[STEP] Verify unknown paths return Envoy catch-all 404"
+unknown_code="$(curl -s -m 5 -o /dev/null -w "%{http_code}" http://127.0.0.1/__memochat_unknown_route__)"
+[[ "$unknown_code" == "404" ]] || fail "expected 404 for unknown route, got ${unknown_code}"
+echo "  [OK] unknown route -> 404"
+
+echo "[STEP] Verify GateServer is retired (legacy debug routes no longer proxied)"
+# After Gate dissolution the catch-all returns a direct 404 instead of proxying
+# unmapped paths (incl. the consumerless /get_test, /test_procedure debug stubs)
+# to the GateServer monolith.
+for retired in "/get_test" "/test_procedure"; do
+    code="$(curl -s -m 5 -o /dev/null -w "%{http_code}" "http://127.0.0.1${retired}")"
+    [[ "$code" == "404" ]] || fail "catch-all ${retired} -> ${code}, expected 404 (Gate not retired?)"
+    echo "  [OK] ${retired} -> 404 (not proxied to monolith)"
+done
+
 echo "[STEP] Verify misdirected-host protection still active"
 host_code="$(curl -s -m 5 -o /dev/null -w "%{http_code}" http://127.0.0.1/ai/model/list -H 'Host: evil.example')"
 [[ "$host_code" == "421" ]] || fail "expected 421 for unknown Host, got ${host_code}"
 echo "  [OK] unknown Host -> 421"
 
-echo "[SUCCESS] Phase 6 Envoy cut-over routing smoke passed"
+echo "[SUCCESS] Envoy microservice routing smoke passed"

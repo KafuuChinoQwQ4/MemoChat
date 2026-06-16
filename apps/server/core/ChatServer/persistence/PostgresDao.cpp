@@ -17,28 +17,44 @@
 
 namespace
 {
-std::string BuildPostgresConnectionString()
+std::string BuildPostgresConnectionStringFor(const std::string& section, const std::string& fallback_section)
 {
     auto& cfg = ConfigMgr::Inst();
-    const auto host = cfg["Postgres"]["Host"];
+    std::string sec = section;
+    if (cfg[section]["Host"].empty() && !fallback_section.empty())
+    {
+        sec = fallback_section; // section absent -> reuse fallback (behavior preserved)
+    }
+    const auto host = cfg[sec]["Host"];
     if (host.empty())
     {
         return "";
     }
-    const auto port = cfg["Postgres"]["Port"];
-    const auto pwd = cfg["Postgres"]["Passwd"];
-    const auto database = cfg["Postgres"]["Database"];
-    const auto schema = cfg["Postgres"]["Schema"];
-    const auto user = cfg["Postgres"]["User"];
-    const auto sslmode = cfg["Postgres"]["SslMode"];
+    const auto port = cfg[sec]["Port"];
+    const auto pwd = cfg[sec]["Passwd"];
+    const auto database = cfg[sec]["Database"];
+    const auto schema = cfg[sec]["Schema"];
+    const auto user = cfg[sec]["User"];
+    const auto sslmode = cfg[sec]["SslMode"];
     return "host=" + host + " port=" + port + " user=" + user + " password=" + pwd + " dbname=" + database +
            " sslmode=" + (sslmode.empty() ? "disable" : sslmode) +
            " options=-csearch_path=" + (schema.empty() ? "public" : schema) + ",public";
+}
+
+std::string BuildPostgresConnectionString()
+{
+    return BuildPostgresConnectionStringFor("Postgres", "");
 }
 } // namespace
 PostgresDao::PostgresDao()
 {
     postgres_connection_string_ = BuildPostgresConnectionString();
+    // Account-data (user/user_id) connection. Defaults to the same [Postgres]
+    // database when [AccountPostgres] is absent, so behavior is unchanged until
+    // the memo_account split config is set (gateserver split Phase 2b). When set,
+    // only the user/user_id queries follow this string; chat tables stay on
+    // [Postgres]. This is the DB-per-service seam for the account aggregate.
+    account_connection_string_ = BuildPostgresConnectionStringFor("AccountPostgres", "Postgres");
     use_postgres_ = !postgres_connection_string_.empty();
     if (!use_postgres_)
     {
@@ -67,9 +83,11 @@ void PostgresDao::WarmupRelationBootstrapQueries()
         {
             pqxx::connection conn(postgres_connection_string_);
             pqxx::read_transaction txn(conn);
-            txn.exec_params("SELECT a.from_uid, a.status, u.name, u.nick, u.sex, u.user_id, u.icon "
+            // Warm only relation tables; user base-info is resolved separately
+            // via GetUsersByUids (account-data seam), so no JOIN "user" here —
+            // keeps the warmup valid after the user table moves to memo_account.
+            txn.exec_params("SELECT a.from_uid, a.status "
                             "FROM friend_apply AS a "
-                            "JOIN \"user\" AS u ON a.from_uid = u.uid "
                             "WHERE a.to_uid = $1 AND a.id > $2 ORDER BY a.id ASC LIMIT $3",
                             -1,
                             0,
@@ -77,9 +95,8 @@ void PostgresDao::WarmupRelationBootstrapQueries()
             txn.exec_params("SELECT tag FROM friend_apply_tag WHERE to_uid = $1 AND from_uid = $2 ORDER BY id ASC",
                             -1,
                             -1);
-            txn.exec_params("SELECT f.friend_id, f.back, u.name, u.nick, u.sex, u.user_id, u.\"desc\", u.icon "
+            txn.exec_params("SELECT f.friend_id, f.back "
                             "FROM friend AS f "
-                            "JOIN \"user\" AS u ON f.friend_id = u.uid "
                             "WHERE f.self_id = $1 LIMIT 1",
                             -1);
             txn.exec_params("SELECT tag FROM friend_tag WHERE self_id = $1 AND friend_id = $2 ORDER BY id ASC", -1, -1);

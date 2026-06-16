@@ -5,7 +5,7 @@
 // account-core (AccountPersistence) per D-ACCOUNT; issues the HTTP session token
 // (Redis utoken_<uid>) + HMAC login ticket (common/auth, ChatAuth.HmacSecret) —
 // the D-TOKEN contract ChatServer validates locally. Emits audit side effects
-// (init_async=true). Opt-in in the runtime topology (default OFF).
+// (init_async=true). It starts by default after Envoy cut-over.
 int main()
 {
     return RunGateDomainServer(LogicSystem::RouteProfile::Login,

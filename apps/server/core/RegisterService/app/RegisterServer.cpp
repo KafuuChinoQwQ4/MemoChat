@@ -5,7 +5,7 @@
 // /user_register, /reset_pwd. Reaches account data only via account-core
 // (AccountPersistence), per D-ACCOUNT — it never touches the users table
 // directly. Emits audit + cache-invalidate side effects (init_async=true).
-// Opt-in in the runtime topology (default OFF).
+// It starts by default after Envoy cut-over.
 int main()
 {
     return RunGateDomainServer(LogicSystem::RouteProfile::Register,

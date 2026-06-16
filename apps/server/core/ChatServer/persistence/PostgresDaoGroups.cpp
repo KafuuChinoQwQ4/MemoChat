@@ -477,11 +477,12 @@ bool PostgresDao::GetGroupMemberList(const int64_t& group_id,
         {
             pqxx::connection conn(postgres_connection_string_);
             pqxx::read_transaction txn(conn);
-            const auto rows = txn.exec_params(
-                "SELECT m.group_id, m.uid, m.role, m.mute_until, m.status, u.name, u.nick, u.icon, u.user_id "
-                "FROM chat_group_member m LEFT JOIN \"user\" u ON m.uid = u.uid "
-                "WHERE m.group_id = $1 AND m.status = 1 ORDER BY m.role DESC, m.id ASC",
-                group_id);
+            // Step 1: membership rows only — no JOIN to "user".
+            const auto rows = txn.exec_params("SELECT m.group_id, m.uid, m.role, m.mute_until, m.status "
+                                              "FROM chat_group_member m "
+                                              "WHERE m.group_id = $1 AND m.status = 1 ORDER BY m.role DESC, m.id ASC",
+                                              group_id);
+            std::vector<int> member_uids;
             for (const auto& row : rows)
             {
                 auto info = std::make_shared<GroupMemberInfo>();
@@ -490,11 +491,24 @@ bool PostgresDao::GetGroupMemberList(const int64_t& group_id,
                 info->role = row["role"].is_null() ? 0 : row["role"].as<int>();
                 info->mute_until = row["mute_until"].is_null() ? 0 : row["mute_until"].as<int64_t>();
                 info->status = row["status"].is_null() ? 0 : row["status"].as<int>();
-                info->name = row["name"].is_null() ? "" : row["name"].c_str();
-                info->nick = row["nick"].is_null() ? "" : row["nick"].c_str();
-                info->icon = row["icon"].is_null() ? "" : row["icon"].c_str();
-                info->user_id = row["user_id"].is_null() ? "" : row["user_id"].c_str();
                 member_list.push_back(info);
+                if (info->uid != 0)
+                {
+                    member_uids.push_back(info->uid);
+                }
+            }
+            // Step 2: batch user base-info (account-data seam, replaces JOIN).
+            auto users = GetUsersByUids(member_uids);
+            for (auto& info : member_list)
+            {
+                const auto uit = users.find(info->uid);
+                if (uit != users.end() && uit->second)
+                {
+                    info->name = uit->second->name;
+                    info->nick = uit->second->nick;
+                    info->icon = uit->second->icon;
+                    info->user_id = uit->second->user_id;
+                }
             }
             return true;
         }

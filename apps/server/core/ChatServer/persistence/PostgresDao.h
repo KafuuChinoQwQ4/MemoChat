@@ -2,6 +2,9 @@
 #include "data.h"
 
 #include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 class PostgresPool;
 
@@ -24,6 +27,12 @@ public:
     std::vector<std::string> GetFriendTags(const int& self_id, const int& friend_id);
     std::shared_ptr<UserInfo> GetUser(int uid);
     std::shared_ptr<UserInfo> GetUser(std::string name);
+    // Batch user base-info fetch by uid. This is the single account-data read
+    // seam that replaces the cross-table `JOIN "user"` in friend/group/message
+    // queries (gateserver split Phase 2b: account-data decoupling). Keeping user
+    // reads behind one method lets the user table move to memo_account without
+    // touching every relation/message query. Returns uid -> UserInfo.
+    std::unordered_map<int, std::shared_ptr<UserInfo>> GetUsersByUids(const std::vector<int>& uids);
     bool GetUidByUserId(const std::string& user_id, int& uid);
     bool GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& applyList, int offset, int limit);
     bool GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo>>& user_info);
@@ -156,4 +165,8 @@ private:
     std::unique_ptr<PostgresPool> pool_;
     bool use_postgres_ = false;
     std::string postgres_connection_string_;
+    // Account-aggregate (user/user_id) connection string. Equals
+    // postgres_connection_string_ unless [AccountPostgres] config selects a
+    // separate database (memo_account) — gateserver split Phase 2b.
+    std::string account_connection_string_;
 };

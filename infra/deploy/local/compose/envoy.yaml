@@ -124,7 +124,7 @@ static_resources:
                           match:
                             path: /__envoy_failover_probe
                           route:
-                            cluster: gate_backend
+                            cluster: account_backend
                             timeout: 30s
                             retry_policy:
                               retry_on: connect-failure,reset,5xx,gateway-error
@@ -447,13 +447,10 @@ static_resources:
                         - name: other
                           match:
                             prefix: /
-                          route:
-                            cluster: gate_backend
-                            timeout: 120s
-                            retry_policy:
-                              retry_on: connect-failure,reset,5xx,gateway-error
-                              num_retries: 2
-                              per_try_timeout: 15s
+                          direct_response:
+                            status: 404
+                            body:
+                              inline_string: "Not Found\n"
                 http_filters:
                   - name: envoy.filters.http.lua
                     typed_config:
@@ -585,7 +582,7 @@ static_resources:
                           match:
                             path: /__envoy_failover_probe
                           route:
-                            cluster: gate_backend
+                            cluster: account_backend
                             timeout: 30s
                             retry_policy:
                               retry_on: connect-failure,reset,5xx,gateway-error
@@ -796,13 +793,10 @@ static_resources:
                         - name: other
                           match:
                             prefix: /
-                          route:
-                            cluster: gate_backend
-                            timeout: 120s
-                            retry_policy:
-                              retry_on: connect-failure,reset,5xx,gateway-error
-                              num_retries: 2
-                              per_try_timeout: 15s
+                          direct_response:
+                            status: 404
+                            body:
+                              inline_string: "Not Found\n"
                 http_filters:
                   - name: envoy.filters.http.lua
                     typed_config:
@@ -916,7 +910,7 @@ static_resources:
                           match:
                             path: /__envoy_failover_probe
                           route:
-                            cluster: gate_backend
+                            cluster: account_backend
                             timeout: 30s
                             retry_policy:
                               retry_on: connect-failure,reset,5xx,gateway-error
@@ -1117,13 +1111,10 @@ static_resources:
                         - name: other
                           match:
                             prefix: /
-                          route:
-                            cluster: gate_backend
-                            timeout: 120s
-                            retry_policy:
-                              retry_on: connect-failure,reset,5xx,gateway-error
-                              num_retries: 2
-                              per_try_timeout: 15s
+                          direct_response:
+                            status: 404
+                            body:
+                              inline_string: "Not Found\n"
                 http_filters:
                   - name: envoy.filters.http.lua
                     typed_config:
@@ -1164,31 +1155,9 @@ static_resources:
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
   clusters:
-    - name: gate_backend
-      type: STRICT_DNS
-      connect_timeout: 5s
-      dns_lookup_family: V4_ONLY
-      lb_policy: LEAST_REQUEST
-      load_assignment:
-        cluster_name: gate_backend
-        endpoints:
-          - lb_endpoints:
-              - endpoint:
-                  address:
-                    socket_address:
-                      address: host.docker.internal
-                      port_value: 8080
-              - endpoint:
-                  address:
-                    socket_address:
-                      address: host.docker.internal
-                      port_value: 8084
     # ── gateserver microservice split Phase 6: per-service backends ──────────
-    # Each peeled gateway process (Phase 3/4/5) gets its own cluster. The route
-    # table sends each domain prefix to its backend instead of gate_backend. The
-    # gateways MUST be running (start-all-services.sh starts them by default in
-    # Phase 6); if a gateway is down the route returns 503 (Envoy does not fall
-    # back to gate_backend — that is the point of the cut-over).
+    # Each peeled gateway process (Phase 3/4/5) gets its own cluster. The local
+    # edge no longer has a GateServer catch-all; unknown paths return 404.
     - name: aigateway_backend
       type: STRICT_DNS
       connect_timeout: 5s

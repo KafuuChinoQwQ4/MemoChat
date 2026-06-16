@@ -24,6 +24,7 @@ START_R18GATEWAY_OVERRIDE=""
 START_REGISTER_OVERRIDE=""
 START_LOGIN_OVERRIDE=""
 START_ACCOUNT_OVERRIDE=""
+START_GATE_OVERRIDE=""
 START_ENVOY_OVERRIDE=""
 START_DOCKER_DEPS_OVERRIDE=""
 START_GPT_SOVITS_OVERRIDE=""
@@ -168,6 +169,14 @@ while [[ $# -gt 0 ]]; do
             START_ACCOUNT_OVERRIDE=0
             shift
             ;;
+        --start-gate)
+            START_GATE_OVERRIDE=1
+            shift
+            ;;
+        --skip-gate)
+            START_GATE_OVERRIDE=0
+            shift
+            ;;
         --skip-core-services)
             START_CORE_SERVICES_OVERRIDE=0
             shift
@@ -201,9 +210,8 @@ START_CHAT_DELIVERY_WORKER="${START_CHAT_DELIVERY_WORKER_OVERRIDE:-${MEMOCHAT_ST
 START_RELATION_QUERY_SERVICE="${START_RELATION_QUERY_SERVICE_OVERRIDE:-${MEMOCHAT_START_RELATION_QUERY_SERVICE:-1}}"
 START_RELATION_SERVICE_WORKER="${START_RELATION_SERVICE_WORKER_OVERRIDE:-${MEMOCHAT_START_RELATION_SERVICE_WORKER:-1}}"
 START_MESSAGE_SERVICE="${START_MESSAGE_SERVICE_OVERRIDE:-${MEMOCHAT_START_MESSAGE_SERVICE:-1}}"
-# AIGateway (gateserver split Phase 3) now starts by default (Phase 6 cut-over:
-# Envoy routes /ai/* to it). Set MEMOCHAT_START_AIGATEWAY=0 / --skip-aigateway to
-# fall back to the GateServer monolith for this domain.
+# AIGateway (gateserver split Phase 3) now starts by default: Envoy routes
+# /ai/* to it and no longer has a GateServer catch-all fallback.
 START_AIGATEWAY="${START_AIGATEWAY_OVERRIDE:-${MEMOCHAT_START_AIGATEWAY:-1}}"
 # Phase 4 domain gateways (Media/Moments/Call/R18) — default ON in Phase 6.
 START_MEDIAGATEWAY="${START_MEDIAGATEWAY_OVERRIDE:-${MEMOCHAT_START_MEDIAGATEWAY:-1}}"
@@ -214,6 +222,10 @@ START_R18GATEWAY="${START_R18GATEWAY_OVERRIDE:-${MEMOCHAT_START_R18GATEWAY:-1}}"
 START_REGISTER="${START_REGISTER_OVERRIDE:-${MEMOCHAT_START_REGISTER:-1}}"
 START_LOGIN="${START_LOGIN_OVERRIDE:-${MEMOCHAT_START_LOGIN:-1}}"
 START_ACCOUNT="${START_ACCOUNT_OVERRIDE:-${MEMOCHAT_START_ACCOUNT:-1}}"
+# GateServer monolith is RETIRED from default startup (gateserver split: Gate
+# dissolved — every domain is served by its own service + Envoy prefix routing).
+# Kept opt-in (--start-gate) purely as a rollback escape hatch.
+START_GATE="${START_GATE_OVERRIDE:-${MEMOCHAT_START_GATE:-0}}"
 START_DOCKER_DEPS="${START_DOCKER_DEPS_OVERRIDE:-${MEMOCHAT_START_DOCKER_DEPS:-1}}"
 START_ENVOY="${START_ENVOY_OVERRIDE:-${MEMOCHAT_START_ENVOY:-1}}"
 START_GPT_SOVITS="${START_GPT_SOVITS_OVERRIDE:-${MEMOCHAT_START_GPT_SOVITS:-1}}"
@@ -310,7 +322,7 @@ ensure_envoy_gateway() {
     while (( waited < WAIT_SECONDS )); do
         if curl -fsS http://127.0.0.1/health >/dev/null 2>&1; then
             echo "  [OK] Envoy Gateway ready at http://127.0.0.1/health"
-            echo "  [INFO] Envoy listens on 80 and 8443/tcp+udp; upstream GateServer ports are 8080 and 8084"
+            echo "  [INFO] Envoy listens on 80 and 8443/tcp+udp; business routes go to per-domain services"
             return 0
         fi
         sleep 1
@@ -453,7 +465,34 @@ pid_running() {
 ensure_runtime() {
     local missing=0
     if is_truthy "$START_CORE_SERVICES"; then
-        [[ -x "$(runtime_executable_path "GateServer1")" && -x "$(runtime_executable_path "AIServer")" ]] || missing=1
+        [[ -x "$(runtime_executable_path "AIServer")" ]] || missing=1
+    fi
+    if is_truthy "$START_AIGATEWAY"; then
+        [[ -x "$(runtime_executable_path "AIGatewayService1")" ]] || missing=1
+    fi
+    if is_truthy "$START_MEDIAGATEWAY"; then
+        [[ -x "$(runtime_executable_path "MediaGatewayService1")" ]] || missing=1
+    fi
+    if is_truthy "$START_MOMENTSGATEWAY"; then
+        [[ -x "$(runtime_executable_path "MomentsGatewayService1")" ]] || missing=1
+    fi
+    if is_truthy "$START_CALLGATEWAY"; then
+        [[ -x "$(runtime_executable_path "CallGatewayService1")" ]] || missing=1
+    fi
+    if is_truthy "$START_R18GATEWAY"; then
+        [[ -x "$(runtime_executable_path "R18GatewayService1")" ]] || missing=1
+    fi
+    if is_truthy "$START_REGISTER"; then
+        [[ -x "$(runtime_executable_path "RegisterService1")" ]] || missing=1
+    fi
+    if is_truthy "$START_LOGIN"; then
+        [[ -x "$(runtime_executable_path "LoginService1")" ]] || missing=1
+    fi
+    if is_truthy "$START_ACCOUNT"; then
+        [[ -x "$(runtime_executable_path "AccountService1")" ]] || missing=1
+    fi
+    if is_truthy "$START_GATE"; then
+        [[ -x "$(runtime_executable_path "GateServer1")" ]] || missing=1
     fi
     if is_truthy "$START_CHAT_DELIVERY_WORKER"; then
         [[ -x "$(runtime_executable_path "ChatDeliveryWorker1")" ]] || missing=1
@@ -886,7 +925,7 @@ echo "[STEP] Start AIGatewayServer"
 if is_truthy "$START_AIGATEWAY"; then
     launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_AIGATEWAY"
 else
-    echo "  [SKIP] AIGatewayServer startup disabled (opt-in: --start-aigateway)"
+    echo "  [SKIP] AIGatewayServer startup disabled (re-enable: --start-aigateway)"
 fi
 echo
 
@@ -894,7 +933,7 @@ echo "[STEP] Start MediaGatewayServer"
 if is_truthy "$START_MEDIAGATEWAY"; then
     launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_MEDIAGATEWAY"
 else
-    echo "  [SKIP] MediaGatewayServer startup disabled (opt-in: --start-mediagateway)"
+    echo "  [SKIP] MediaGatewayServer startup disabled (re-enable: --start-mediagateway)"
 fi
 echo
 
@@ -902,7 +941,7 @@ echo "[STEP] Start MomentsGatewayServer"
 if is_truthy "$START_MOMENTSGATEWAY"; then
     launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_MOMENTSGATEWAY"
 else
-    echo "  [SKIP] MomentsGatewayServer startup disabled (opt-in: --start-momentsgateway)"
+    echo "  [SKIP] MomentsGatewayServer startup disabled (re-enable: --start-momentsgateway)"
 fi
 echo
 
@@ -910,7 +949,7 @@ echo "[STEP] Start CallGatewayServer"
 if is_truthy "$START_CALLGATEWAY"; then
     launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_CALLGATEWAY"
 else
-    echo "  [SKIP] CallGatewayServer startup disabled (opt-in: --start-callgateway)"
+    echo "  [SKIP] CallGatewayServer startup disabled (re-enable: --start-callgateway)"
 fi
 echo
 
@@ -918,7 +957,7 @@ echo "[STEP] Start R18GatewayServer"
 if is_truthy "$START_R18GATEWAY"; then
     launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_R18GATEWAY"
 else
-    echo "  [SKIP] R18GatewayServer startup disabled (opt-in: --start-r18gateway)"
+    echo "  [SKIP] R18GatewayServer startup disabled (re-enable: --start-r18gateway)"
 fi
 echo
 
@@ -926,7 +965,7 @@ echo "[STEP] Start RegisterServer"
 if is_truthy "$START_REGISTER"; then
     launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_REGISTER"
 else
-    echo "  [SKIP] RegisterServer startup disabled (opt-in: --start-register)"
+    echo "  [SKIP] RegisterServer startup disabled (re-enable: --start-register)"
 fi
 echo
 
@@ -934,7 +973,7 @@ echo "[STEP] Start LoginServer"
 if is_truthy "$START_LOGIN"; then
     launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_LOGIN"
 else
-    echo "  [SKIP] LoginServer startup disabled (opt-in: --start-login)"
+    echo "  [SKIP] LoginServer startup disabled (re-enable: --start-login)"
 fi
 echo
 
@@ -942,7 +981,16 @@ echo "[STEP] Start AccountServer"
 if is_truthy "$START_ACCOUNT"; then
     launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_ACCOUNT"
 else
-    echo "  [SKIP] AccountServer startup disabled (opt-in: --start-account)"
+    echo "  [SKIP] AccountServer startup disabled (re-enable: --start-account)"
+fi
+echo
+
+echo "[STEP] Start GateServer (retired monolith — rollback escape hatch only)"
+if is_truthy "$START_GATE"; then
+    launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_GATE"
+    echo "  [INFO] GateServer monolith started (opt-in). Envoy routes business traffic to per-domain services."
+else
+    echo "  [SKIP] GateServer monolith retired; per-domain services serve all routes (opt-in: --start-gate)"
 fi
 echo
 
