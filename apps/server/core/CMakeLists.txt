@@ -457,16 +457,16 @@ function(memochat_configure_gate_focused_service target_name)
         memochat_boost_stubs
     )
     # NOTE: inside a function() CMAKE_CURRENT_SOURCE_DIR resolves to the CALLER's
-    # subdirectory (the per-service dir), so the shared GateServer framework
+    # subdirectory (the per-service dir), so the shared gateway framework
     # include roots must be anchored to MEMOCHAT_SERVER_CORE_DIR (server/core),
     # captured at the top of this file.
     target_include_directories(${target_name} PRIVATE
-        ${MEMOCHAT_SERVER_CORE_DIR}/GateServer
-        ${MEMOCHAT_SERVER_CORE_DIR}/GateServer/core
-        ${MEMOCHAT_SERVER_CORE_DIR}/GateServer/app
-        ${MEMOCHAT_SERVER_CORE_DIR}/GateServer/transports/h3
-        ${MEMOCHAT_SERVER_CORE_DIR}/GateServer/transports/h3/listener
-        ${MEMOCHAT_SERVER_CORE_DIR}/GateServer/transports/h3/legacy_routes
+        ${MEMOCHAT_SERVER_CORE_DIR}/GateShared
+        ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/core
+        ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/app
+        ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/transports/h3
+        ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/transports/h3/listener
+        ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/transports/h3/legacy_routes
     )
 endfunction()
 
@@ -479,17 +479,17 @@ endif()
 
 if(BUILD_SERVER_SERVICES)
     add_subdirectory(ChatServer)
-    add_subdirectory(GateServer/core)
+    add_subdirectory(GateShared/core)
     # Legacy H1.1 standalone transport remains opt-in; R18 plugin helpers stay default-buildable.
-    add_subdirectory(GateServer/transports/h1/legacy_standalone)
-    add_subdirectory(GateServer/plugins/r18)
-    add_subdirectory(GateServer/transports/h3)
+    add_subdirectory(GateShared/transports/h1/legacy_standalone)
+    add_subdirectory(GateShared/plugins/r18)
+    add_subdirectory(GateShared/transports/h3)
     if(MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE AND libh2o_FOUND)
-        add_subdirectory(GateServer/transports/h2)
+        add_subdirectory(GateShared/transports/h2)
     elseif(MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE)
         message(WARNING "MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE=ON but libh2o was not found; skipping GateServerHttp2")
     endif()
-    add_subdirectory(GateServer)
+    add_subdirectory(GateShared)
     add_subdirectory(AIGatewayService)
     add_subdirectory(MediaService)
     add_subdirectory(MomentsService)

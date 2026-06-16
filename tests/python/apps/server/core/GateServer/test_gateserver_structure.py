@@ -10,7 +10,7 @@ from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
 SERVER_CORE = REPO_ROOT / "apps" / "server" / "core"
-GATE_SERVER = SERVER_CORE / "GateServer"
+GATE_SERVER = SERVER_CORE / "GateShared"
 GATE_CORE = GATE_SERVER / "core"
 GATE_CORE_CACHE = GATE_CORE / "cache"
 GATE_CORE_CLIENTS = GATE_CORE / "clients"
@@ -501,7 +501,7 @@ AUTH_REDIS_KEY_CONSTRUCTION_PATTERNS = {
 }
 
 AUTH_REDIS_KEY_CALLER_PATHS = (
-    SERVER_CORE / "GateServer" / "services" / "auth" / "AuthService.cpp",
+    SERVER_CORE / "GateShared" / "services" / "auth" / "AuthService.cpp",
     GATE_H2_SUPPORT / "Http2AuthSupport.cpp",
     GATE_CORE_SUPPORT / "AuthLoginSupport.cpp",
 )
@@ -515,17 +515,17 @@ class GateServerStructureTests(unittest.TestCase):
     def test_top_level_server_cmake_keeps_main_gate_as_default_primary_target(self):
         source = read(SERVER_CORE / "CMakeLists.txt")
 
-        self.assertIn("add_subdirectory(GateServer/core)", source)
-        self.assertIn("add_subdirectory(GateServer/transports/h1/legacy_standalone)", source)
-        self.assertIn("add_subdirectory(GateServer/plugins/r18)", source)
-        self.assertIn("add_subdirectory(GateServer/transports/h3)", source)
-        self.assertIn("add_subdirectory(GateServer)", source)
+        self.assertIn("add_subdirectory(GateShared/core)", source)
+        self.assertIn("add_subdirectory(GateShared/transports/h1/legacy_standalone)", source)
+        self.assertIn("add_subdirectory(GateShared/plugins/r18)", source)
+        self.assertIn("add_subdirectory(GateShared/transports/h3)", source)
+        self.assertIn("add_subdirectory(GateShared)", source)
         self.assertTrue(GATE_CORE.exists(), "GateServerCore implementation should now live under GateServer/core")
         self.assertTrue(
             GATE_H3.exists(), "GateServerHttp3 implementation should now live under GateServer/transports/h3"
         )
         self.assertTrue(
-            GATE_H2.exists(), "GateServerHttp2 implementation should now live under GateServer/transports/h2"
+            GATE_H2.exists(), "GateServerHttp2 implementation should now live under GateShared/transports/h2"
         )
         self.assertTrue(
             GATE_H1_LEGACY.exists(),
@@ -549,18 +549,18 @@ class GateServerStructureTests(unittest.TestCase):
             "GateServerHttp1.1 should not remain as a sibling physical module directory",
         )
         self.assertLess(
-            source.index("add_subdirectory(GateServer/core)"),
-            source.index("add_subdirectory(GateServer)"),
+            source.index("add_subdirectory(GateShared/core)"),
+            source.index("add_subdirectory(GateShared)"),
         )
         self.assertLess(
-            source.index("add_subdirectory(GateServer/transports/h1/legacy_standalone)"),
-            source.index("add_subdirectory(GateServer)"),
+            source.index("add_subdirectory(GateShared/transports/h1/legacy_standalone)"),
+            source.index("add_subdirectory(GateShared)"),
         )
         self.assertLess(
-            source.index("add_subdirectory(GateServer/plugins/r18)"), source.index("add_subdirectory(GateServer)")
+            source.index("add_subdirectory(GateShared/plugins/r18)"), source.index("add_subdirectory(GateShared)")
         )
         h1_subdir_window = extract_line_window(
-            source, "add_subdirectory(GateServer/transports/h1/legacy_standalone)", before=1, after=1
+            source, "add_subdirectory(GateShared/transports/h1/legacy_standalone)", before=1, after=1
         )
         self.assertIn("legacy", h1_subdir_window.lower())
         self.assertIn("plugin", h1_subdir_window.lower())
@@ -576,14 +576,14 @@ class GateServerStructureTests(unittest.TestCase):
             rf"option\s*\(\s*{LEGACY_GATE_HTTP2_OPTION}\b[^)]*\bOFF\s*\)",
         )
         legacy_h2_block = extract_cmake_if_block(source, f"{LEGACY_GATE_HTTP2_OPTION} AND libh2o_FOUND")
-        self.assertIn("add_subdirectory(GateServer/transports/h2)", legacy_h2_block)
+        self.assertIn("add_subdirectory(GateShared/transports/h2)", legacy_h2_block)
         self.assertIn(LEGACY_GATE_HTTP2_OPTION, legacy_h2_block)
         self.assertIn("libh2o_FOUND", legacy_h2_block)
 
         outside_legacy_h2_gate = strip_cmake_comments(source.replace(legacy_h2_block, ""))
         self.assertNotRegex(
             outside_legacy_h2_gate,
-            r"\badd_subdirectory\s*\(\s*GateServer/transports/h2\s*\)",
+            r"\badd_subdirectory\s*\(\s*GateShared/transports/h2\s*\)",
             "GateServerHttp2 must only be processed through the legacy standalone opt-in gate",
         )
         self.assertNotIn("FATAL_ERROR", legacy_h2_block)
@@ -638,18 +638,15 @@ class GateServerStructureTests(unittest.TestCase):
     def test_default_ops_surfaces_do_not_list_legacy_h1_standalone_service(self):
         source = read(REPO_ROOT / "infra" / "Memo_ops" / "server" / "ops_server" / "routes" / "system.py")
         services = extract_python_string_list_assignment(source, "services")
-        patterns = extract_re_search_patterns(source)
 
-        self.assertIn("GateServer", services)
+        # Gate dissolution: ops monitors the peeled per-domain services, not the
+        # retired GateServer monolith or any legacy H1 standalone.
+        self.assertNotIn("GateServer", services)
         self.assertNotIn("GateServerHttp1.1", services)
         self.assertNotIn("GateServerHttp1", services)
-        self.assertNotIn("GateServerHttp1.1", "\n".join(patterns))
-
-        gate_patterns = [pattern for pattern in patterns if "GateServer" in pattern]
-        self.assertTrue(gate_patterns, "Ops process scanner should still detect the primary GateServer")
-        for pattern in gate_patterns:
-            with self.subTest(pattern=pattern):
-                self.assertIsNone(re.search(pattern, "GateServerHttp1.1"))
+        for svc in ("AIGatewayServer", "MediaGatewayServer", "AccountServer", "ChatServer"):
+            with self.subTest(service=svc):
+                self.assertIn(svc, services, "ops should monitor the peeled microservices")
 
     def test_windows_stop_script_default_survival_check_omits_legacy_h1_standalone(self):
         source = read(REPO_ROOT / "tools" / "scripts" / "status" / "stop-all-services.bat")
@@ -673,56 +670,45 @@ class GateServerStructureTests(unittest.TestCase):
             "GateServerHttp1.1 should not be stopped as a default backend service",
         )
 
-    def test_main_gate_target_links_core_h3_and_conditionally_embeds_h2_sources(self):
-        source = read(SERVER_CORE / "GateServer" / "CMakeLists.txt")
+    def test_gate_app_core_library_holds_shared_application_sources(self):
+        # The GateServer monolith executable is RETIRED and deleted; its former
+        # source set now compiles into the shared GateAppCore library that every
+        # peeled microservice links. There is no longer an add_executable(GateServer).
+        source = read(SERVER_CORE / "GateShared" / "CMakeLists.txt")
 
-        self.assertIn("add_executable(GateServer", source)
-        self.assertIn("routing/RouteRegistry.cpp", source)
-        self.assertIn("modules/auth/AuthRouteModule.cpp", source)
-        self.assertIn("modules/call/CallRouteModule.cpp", source)
-        self.assertIn("services/auth/AuthService.cpp", source)
-        self.assertIn("modules/health/HealthRouteModule.cpp", source)
-        self.assertIn("modules/media/MediaRouteModule.cpp", source)
-        self.assertIn("modules/moments/MomentsRouteModule.cpp", source)
-        self.assertIn("modules/profile/ProfileRouteModule.cpp", source)
-        self.assertIn("modules/ai/AIRouteModule.cpp", source)
-        self.assertIn("modules/r18/R18RouteModule.cpp", source)
-        self.assertIn("services/media/MediaService.cpp", source)
-        self.assertIn("services/moments/MomentsService.cpp", source)
-        self.assertIn("services/ai/AIService.cpp", source)
-        self.assertIn("services/r18/R18Service.cpp", source)
-        self.assertIn("adapters/h1/H1RouteAdapter.cpp", source)
-        self.assertIn("GateServerH1Routes.cpp", source)
-        self.assertIn("LogicSystem.cpp", source)
-        self.assertIn("MediaHttpService.cpp", source)
-        self.assertIn("AIRouteModules.cpp", source)
-        self.assertIn("target_link_libraries(GateServer PRIVATE", source)
+        self.assertIn("add_library(GateAppCore STATIC", source)
+        self.assertNotIn("add_executable(GateServer", source)
+        self.assertNotIn("GateServer.cpp", source)
+        for shared_src in (
+            "routing/RouteRegistry.cpp",
+            "modules/auth/AuthRouteModule.cpp",
+            "modules/call/CallRouteModule.cpp",
+            "services/auth/AuthService.cpp",
+            "modules/health/HealthRouteModule.cpp",
+            "modules/media/MediaRouteModule.cpp",
+            "modules/moments/MomentsRouteModule.cpp",
+            "modules/profile/ProfileRouteModule.cpp",
+            "modules/ai/AIRouteModule.cpp",
+            "modules/r18/R18RouteModule.cpp",
+            "services/media/MediaService.cpp",
+            "services/moments/MomentsService.cpp",
+            "services/ai/AIService.cpp",
+            "services/r18/R18Service.cpp",
+            "adapters/h1/H1RouteAdapter.cpp",
+            "GateServerH1Routes.cpp",
+            "LogicSystem.cpp",
+            "MediaHttpService.cpp",
+            "AIRouteModules.cpp",
+            "app/GateDomainServer.cpp",
+        ):
+            with self.subTest(shared_src=shared_src):
+                self.assertIn(shared_src, source)
+        self.assertIn("target_link_libraries(GateAppCore PUBLIC", source)
         self.assertIn("GateServerCore", source)
         self.assertIn("GateServerHttp3", source)
 
-        compact = normalize_space(source)
-        self.assertRegex(
-            compact,
-            rf"option\s*\(\s*{EMBEDDED_GATE_HTTP2_OPTION}\b[^)]*\bOFF\s*\)",
-        )
-        embedded_h2_block = extract_cmake_if_block(
-            source,
-            f"{EMBEDDED_GATE_HTTP2_OPTION} AND MEMOCHAT_HAVE_NGHTTP2",
-        )
-        self.assertIn("target_sources(GateServer PRIVATE", embedded_h2_block)
-        self.assertIn("${CMAKE_CURRENT_SOURCE_DIR}/transports/h2", embedded_h2_block)
-        for h2_source in EMBEDDED_GATE_HTTP2_SOURCES:
-            with self.subTest(h2_source=h2_source):
-                self.assertIn(h2_source, embedded_h2_block)
-
-        outside_embedded_h2_gate = strip_cmake_comments(source.replace(embedded_h2_block, ""))
-        for h2_source in EMBEDDED_GATE_HTTP2_SOURCES:
-            with self.subTest(outside_h2_gate=h2_source):
-                self.assertNotIn(
-                    h2_source,
-                    outside_embedded_h2_gate,
-                    "embedded HTTP/2 sources must not be added solely because MEMOCHAT_HAVE_NGHTTP2 is true",
-                )
+        # The retired monolith must not leave an embedded HTTP/2 opt-in behind.
+        self.assertNotIn(EMBEDDED_GATE_HTTP2_OPTION, source)
 
     def test_standalone_h2_target_builds_adapter_and_shared_health_registry_sources(self):
         source = read(GATE_H2 / "CMakeLists.txt")
@@ -747,15 +733,14 @@ class GateServerStructureTests(unittest.TestCase):
         self.assertIn("legacy_routes/GateHttp3ServiceRoutes.cpp", source)
         self.assertIn("adapters/h3/H3RouteAdapter.cpp", source)
 
-    def test_main_gate_runtime_currently_starts_h1_and_keeps_h2_h3_edge_disabled(self):
-        source = read(SERVER_CORE / "GateServer" / "GateServer.cpp")
-
-        self.assertIn("std::make_shared<CServer>(ioc, gate_port)->Start();", source)
-        self.assertIn("GateServer listening", source)
-        self.assertIn("embedded HTTP/2 and HTTP/3 entrypoints are disabled", source)
-        self.assertIn("Envoy serves HTTP/2 and HTTP/3 on 8443", source)
-        self.assertNotIn("NgHttp2Server::GetInstance()->Run()", source)
-        self.assertNotIn("GateHttp3Listener", source)
+    def test_gate_monolith_entrypoint_is_deleted(self):
+        # Gate dissolution: the monolith entrypoint + its run config are gone.
+        self.assertFalse(
+            (SERVER_CORE / "GateShared" / "GateServer.cpp").exists(),
+            "retired GateServer monolith entrypoint should be deleted",
+        )
+        self.assertFalse((SERVER_CORE / "GateShared" / "config.ini").exists())
+        self.assertFalse((SERVER_CORE / "GateShared" / "gate2.ini").exists())
 
     def test_current_gate_tree_contains_large_files_to_split_later(self):
         large_file_thresholds = {
@@ -767,9 +752,9 @@ class GateServerStructureTests(unittest.TestCase):
                 line_count = len(read(path).splitlines())
                 self.assertGreaterEqual(line_count, minimum_lines)
 
-        media_shim = SERVER_CORE / "GateServer" / "MediaHttpService.cpp"
-        media_module = SERVER_CORE / "GateServer" / "modules" / "media" / "MediaRouteModule.cpp"
-        media_service = SERVER_CORE / "GateServer" / "services" / "media" / "MediaService.cpp"
+        media_shim = SERVER_CORE / "GateShared" / "MediaHttpService.cpp"
+        media_module = SERVER_CORE / "GateShared" / "modules" / "media" / "MediaRouteModule.cpp"
+        media_service = SERVER_CORE / "GateShared" / "services" / "media" / "MediaService.cpp"
         self.assertTrue(
             len(read(media_shim).splitlines()) < 900 or (media_module.exists() and media_service.exists()),
             "MediaHttpService should either shrink below the legacy large-file threshold or be split into media "
@@ -822,7 +807,7 @@ class GateServerStructureTests(unittest.TestCase):
                 )
 
     def test_h1_auth_route_file_is_shrinking_as_auth_routes_move_to_module(self):
-        source = read(SERVER_CORE / "GateServer" / "GateServerH1Routes.cpp")
+        source = read(SERVER_CORE / "GateShared" / "GateServerH1Routes.cpp")
         line_count = len(source.splitlines())
 
         self.assertLess(line_count, 500)
@@ -832,7 +817,7 @@ class GateServerStructureTests(unittest.TestCase):
         self.assertNotIn('logic.RegPost(\n        "/user_login"', source)
 
     def test_call_route_module_registers_h1_call_routes_neutrally(self):
-        call_dir = SERVER_CORE / "GateServer" / "modules" / "call"
+        call_dir = SERVER_CORE / "GateShared" / "modules" / "call"
         header_path = call_dir / "CallRouteModule.h"
         source_path = call_dir / "CallRouteModule.cpp"
 
@@ -882,8 +867,8 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, combined)
 
     def test_logic_system_registers_call_module_and_legacy_h1_does_not(self):
-        logic_source = read(SERVER_CORE / "GateServer" / "LogicSystem.cpp")
-        legacy_h1_source = strip_comments(read(SERVER_CORE / "GateServer" / "GateServerH1Routes.cpp"))
+        logic_source = read(SERVER_CORE / "GateShared" / "LogicSystem.cpp")
+        legacy_h1_source = strip_comments(read(SERVER_CORE / "GateShared" / "GateServerH1Routes.cpp"))
 
         self.assertIn('#include "modules/call/CallRouteModule.h"', logic_source)
         self.assertIn("memochat::gate::modules::call::CallRouteModule().RegisterRoutes(_route_registry)", logic_source)
@@ -894,7 +879,7 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertIsNone(re.search(rf'\blogic\.{register_name}\s*\(\s*"{re.escape(route)}"', legacy_h1_source))
 
     def test_media_route_module_registers_h1_media_routes_neutrally(self):
-        media_dir = SERVER_CORE / "GateServer" / "modules" / "media"
+        media_dir = SERVER_CORE / "GateShared" / "modules" / "media"
         header_path = media_dir / "MediaRouteModule.h"
         source_path = media_dir / "MediaRouteModule.cpp"
 
@@ -922,7 +907,7 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, combined)
 
     def test_media_service_facade_owns_h1_media_behavior_and_stays_transport_neutral(self):
-        service_dir = SERVER_CORE / "GateServer" / "services" / "media"
+        service_dir = SERVER_CORE / "GateShared" / "services" / "media"
         header_path = service_dir / "MediaService.h"
         source_path = service_dir / "MediaService.cpp"
 
@@ -964,8 +949,8 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, combined)
 
     def test_logic_system_registers_media_module_and_legacy_service_does_not(self):
-        logic_source = read(SERVER_CORE / "GateServer" / "LogicSystem.cpp")
-        legacy_media_source = strip_comments(read(SERVER_CORE / "GateServer" / "MediaHttpService.cpp"))
+        logic_source = read(SERVER_CORE / "GateShared" / "LogicSystem.cpp")
+        legacy_media_source = strip_comments(read(SERVER_CORE / "GateShared" / "MediaHttpService.cpp"))
 
         self.assertIn('#include "modules/media/MediaRouteModule.h"', logic_source)
         self.assertIn(
@@ -981,7 +966,7 @@ class GateServerStructureTests(unittest.TestCase):
                 )
 
     def test_moments_route_module_registers_h1_moments_routes_neutrally(self):
-        moments_dir = SERVER_CORE / "GateServer" / "modules" / "moments"
+        moments_dir = SERVER_CORE / "GateShared" / "modules" / "moments"
         header_path = moments_dir / "MomentsRouteModule.h"
         source_path = moments_dir / "MomentsRouteModule.cpp"
 
@@ -1015,7 +1000,7 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, combined)
 
     def test_moments_service_facade_owns_h1_behavior_and_stays_transport_neutral(self):
-        service_dir = SERVER_CORE / "GateServer" / "services" / "moments"
+        service_dir = SERVER_CORE / "GateShared" / "services" / "moments"
         header_path = service_dir / "MomentsService.h"
         source_path = service_dir / "MomentsService.cpp"
 
@@ -1065,8 +1050,8 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, combined)
 
     def test_logic_system_registers_moments_module_and_legacy_service_does_not(self):
-        logic_source = read(SERVER_CORE / "GateServer" / "LogicSystem.cpp")
-        legacy_moments_path = SERVER_CORE / "GateServer" / "MomentsRouteModules.cpp"
+        logic_source = read(SERVER_CORE / "GateShared" / "LogicSystem.cpp")
+        legacy_moments_path = SERVER_CORE / "GateShared" / "MomentsRouteModules.cpp"
         legacy_moments_source = strip_comments(read(legacy_moments_path)) if legacy_moments_path.exists() else ""
 
         self.assertIn('#include "modules/moments/MomentsRouteModule.h"', logic_source)
@@ -1083,7 +1068,7 @@ class GateServerStructureTests(unittest.TestCase):
                 )
 
     def test_ai_route_module_registers_exact_h1_ai_routes_neutrally(self):
-        ai_dir = SERVER_CORE / "GateServer" / "modules" / "ai"
+        ai_dir = SERVER_CORE / "GateShared" / "modules" / "ai"
         header_path = ai_dir / "AIRouteModule.h"
         source_path = ai_dir / "AIRouteModule.cpp"
 
@@ -1111,7 +1096,7 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, combined)
 
     def test_ai_service_facade_owns_exact_json_ai_behavior_and_stays_transport_neutral(self):
-        service_dir = SERVER_CORE / "GateServer" / "services" / "ai"
+        service_dir = SERVER_CORE / "GateShared" / "services" / "ai"
         header_path = service_dir / "AIService.h"
         source_path = service_dir / "AIService.cpp"
 
@@ -1149,14 +1134,14 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, combined)
 
     def test_logic_system_registers_ai_module_and_keeps_legacy_ai_adapter(self):
-        logic_source = read(SERVER_CORE / "GateServer" / "LogicSystem.cpp")
+        logic_source = read(SERVER_CORE / "GateShared" / "LogicSystem.cpp")
 
         self.assertIn('#include "modules/ai/AIRouteModule.h"', logic_source)
         self.assertIn("memochat::gate::modules::ai::AIRouteModule().RegisterRoutes(_route_registry)", logic_source)
         self.assertIn("AIHttpServiceRoutes::RegisterRoutes(*this)", logic_source)
 
     def test_legacy_ai_adapter_only_keeps_prefix_proxy_and_stream_routes(self):
-        legacy_source = strip_comments(read(SERVER_CORE / "GateServer" / "AIRouteModules.cpp"))
+        legacy_source = strip_comments(read(SERVER_CORE / "GateShared" / "AIRouteModules.cpp"))
         compact_legacy_source = normalize_space(legacy_source)
 
         for method, route, _ in AI_EXACT_ROUTES:
@@ -1184,7 +1169,7 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertIn(token, compact_legacy_source)
 
     def test_r18_route_module_registers_h1_r18_routes_neutrally(self):
-        r18_dir = SERVER_CORE / "GateServer" / "modules" / "r18"
+        r18_dir = SERVER_CORE / "GateShared" / "modules" / "r18"
         header_path = r18_dir / "R18RouteModule.h"
         source_path = r18_dir / "R18RouteModule.cpp"
 
@@ -1223,7 +1208,7 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, combined)
 
     def test_r18_service_facade_owns_h1_r18_behavior_and_stays_transport_neutral(self):
-        service_dir = SERVER_CORE / "GateServer" / "services" / "r18"
+        service_dir = SERVER_CORE / "GateShared" / "services" / "r18"
         header_path = service_dir / "R18Service.h"
         source_path = service_dir / "R18Service.cpp"
 
@@ -1275,8 +1260,8 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, combined)
 
     def test_logic_system_registers_r18_module_and_legacy_shim_does_not(self):
-        logic_source = read(SERVER_CORE / "GateServer" / "LogicSystem.cpp")
-        legacy_r18_source = strip_comments(read(SERVER_CORE / "GateServer" / "GateR18Routes.cpp"))
+        logic_source = read(SERVER_CORE / "GateShared" / "LogicSystem.cpp")
+        legacy_r18_source = strip_comments(read(SERVER_CORE / "GateShared" / "GateR18Routes.cpp"))
 
         self.assertIn('#include "modules/r18/R18RouteModule.h"', logic_source)
         self.assertIn("memochat::gate::modules::r18::R18RouteModule().RegisterRoutes(_route_registry)", logic_source)
@@ -1290,7 +1275,7 @@ class GateServerStructureTests(unittest.TestCase):
                 assert_no_logic_registration(self, legacy_r18_source, register_name, route)
 
     def test_h5_gate_tree_does_not_contain_stale_or_non_source_artifacts(self):
-        gate_dir = SERVER_CORE / "GateServer"
+        gate_dir = SERVER_CORE / "GateShared"
         for artifact in H5_STALE_GATE_ARTIFACTS:
             with self.subTest(artifact=artifact):
                 self.assertFalse(
@@ -1344,13 +1329,13 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertIn(f'"${{{variable}}}"', memochat_proto_sources)
 
     def test_gate_server_cmake_does_not_reference_h5_deleted_local_artifacts(self):
-        gate_cmake = strip_cmake_comments(read(SERVER_CORE / "GateServer" / "CMakeLists.txt"))
+        gate_cmake = strip_cmake_comments(read(SERVER_CORE / "GateShared" / "CMakeLists.txt"))
         for artifact in H5_STALE_GATE_ARTIFACTS:
             with self.subTest(artifact=artifact):
                 self.assertNotIn(artifact, gate_cmake)
 
     def test_route_registration_surfaces_are_still_transport_specific(self):
-        logic_header = read(SERVER_CORE / "GateServer" / "LogicSystem.h")
+        logic_header = read(SERVER_CORE / "GateShared" / "LogicSystem.h")
         h2_header = read(GATE_H2_ROUTES / "Http2Routes.h")
         h1_header = read(GATE_H1_LEGACY / "H1LogicSystem.h")
 
@@ -1360,7 +1345,7 @@ class GateServerStructureTests(unittest.TestCase):
         self.assertIn("std::shared_ptr<H1Connection>", h1_header)
 
     def test_neutral_routing_contract_files_exist_and_stay_transport_neutral(self):
-        routing_dir = SERVER_CORE / "GateServer" / "routing"
+        routing_dir = SERVER_CORE / "GateShared" / "routing"
         expected = (
             "GateRequest.h",
             "GateResponse.h",
@@ -1403,7 +1388,7 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, combined)
 
     def test_transport_adapter_contract_doc_exists_and_locks_g1_sections(self):
-        contract_path = SERVER_CORE / "GateServer" / "routing" / "TransportAdapterContract.md"
+        contract_path = SERVER_CORE / "GateShared" / "routing" / "TransportAdapterContract.md"
         self.assertTrue(contract_path.exists())
 
         source = read(contract_path)
@@ -1442,7 +1427,7 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertIn(token, source)
 
     def test_h1_logic_system_uses_adapter_after_legacy_handlers(self):
-        source = read(SERVER_CORE / "GateServer" / "LogicSystem.cpp")
+        source = read(SERVER_CORE / "GateShared" / "LogicSystem.cpp")
 
         for token in (
             '#include "adapters/h1/H1RouteAdapter.h"',
@@ -1781,7 +1766,7 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertIn(token, service_source)
 
     def test_gate_response_body_kind_supports_inline_and_file_without_transport_tokens(self):
-        response_header = strip_comments(read(SERVER_CORE / "GateServer" / "routing" / "GateResponse.h"))
+        response_header = strip_comments(read(SERVER_CORE / "GateShared" / "routing" / "GateResponse.h"))
         compact = normalize_space(response_header)
 
         enum_match = re.search(r"enum\s+class\s+GateResponseBodyKind\s*\{(?P<body>.*?)\};", response_header, re.S)
@@ -1810,7 +1795,7 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, response_header)
 
     def test_h1_route_adapter_owns_request_and_response_conversion(self):
-        adapter_dir = SERVER_CORE / "GateServer" / "adapters" / "h1"
+        adapter_dir = SERVER_CORE / "GateShared" / "adapters" / "h1"
         header_path = adapter_dir / "H1RouteAdapter.h"
         source_path = adapter_dir / "H1RouteAdapter.cpp"
 
@@ -1866,7 +1851,7 @@ class GateServerStructureTests(unittest.TestCase):
         self.assertIn("return", compact_apply[compact_apply.index("SetFileResponse") :])
 
     def test_profile_route_module_registers_h1_profile_update_neutrally(self):
-        profile_dir = SERVER_CORE / "GateServer" / "modules" / "profile"
+        profile_dir = SERVER_CORE / "GateShared" / "modules" / "profile"
         header_path = profile_dir / "ProfileRouteModule.h"
         source_path = profile_dir / "ProfileRouteModule.cpp"
 
@@ -1909,7 +1894,7 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, combined)
 
     def test_health_route_module_registers_neutral_health_routes(self):
-        health_dir = SERVER_CORE / "GateServer" / "modules" / "health"
+        health_dir = SERVER_CORE / "GateShared" / "modules" / "health"
         header = read(health_dir / "HealthRouteModule.h")
         source = read(health_dir / "HealthRouteModule.cpp")
         combined = header + "\n" + source
@@ -1931,14 +1916,14 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, combined)
 
     def test_auth_service_facade_files_exist_and_are_built_into_gate_server(self):
-        auth_service_dir = SERVER_CORE / "GateServer" / "services" / "auth"
-        account_service_dir = SERVER_CORE / "GateServer" / "services" / "account"
+        auth_service_dir = SERVER_CORE / "GateShared" / "services" / "auth"
+        account_service_dir = SERVER_CORE / "GateShared" / "services" / "account"
         self.assertTrue((auth_service_dir / "AuthService.h").exists())
         self.assertTrue((auth_service_dir / "AuthService.cpp").exists())
         self.assertTrue((account_service_dir / "AccountPersistence.h").exists())
         self.assertTrue((account_service_dir / "AccountPersistence.cpp").exists())
 
-        cmake_source = read(SERVER_CORE / "GateServer" / "CMakeLists.txt")
+        cmake_source = read(SERVER_CORE / "GateShared" / "CMakeLists.txt")
         self.assertIn("services/auth/AuthService.cpp", cmake_source)
         self.assertIn("services/account/AccountPersistence.cpp", cmake_source)
 
@@ -2012,7 +1997,7 @@ class GateServerStructureTests(unittest.TestCase):
 
     def test_auth_verify_client_callers_do_not_use_verify_grpc_directly(self):
         caller_paths = (
-            SERVER_CORE / "GateServer" / "services" / "auth" / "AuthService.cpp",
+            SERVER_CORE / "GateShared" / "services" / "auth" / "AuthService.cpp",
             GATE_H2_SUPPORT / "Http2AuthSupport.cpp",
         )
         forbidden_tokens = (
@@ -2058,7 +2043,7 @@ class GateServerStructureTests(unittest.TestCase):
                         self.assertNotIn(token, source)
 
     def test_account_persistence_public_header_is_narrow_account_contract(self):
-        header = strip_comments(read(SERVER_CORE / "GateServer" / "services" / "account" / "AccountPersistence.h"))
+        header = strip_comments(read(SERVER_CORE / "GateShared" / "services" / "account" / "AccountPersistence.h"))
 
         self.assertIn("struct AccountProfile", header)
         self.assertIn("class AccountPersistence", header)
@@ -2110,7 +2095,7 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, header)
 
     def test_account_persistence_cpp_adapts_h1_account_calls_to_postgres_mgr(self):
-        source = strip_comments(read(SERVER_CORE / "GateServer" / "services" / "account" / "AccountPersistence.cpp"))
+        source = strip_comments(read(SERVER_CORE / "GateShared" / "services" / "account" / "AccountPersistence.cpp"))
         compact_source = normalize_space(source)
 
         self.assertIn('#include "services/account/AccountPersistence.h"', source)
@@ -2146,7 +2131,7 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertIn(mapping, compact_source)
 
     def test_auth_route_module_registers_migrated_auth_routes_through_service_facade(self):
-        auth_dir = SERVER_CORE / "GateServer" / "modules" / "auth"
+        auth_dir = SERVER_CORE / "GateShared" / "modules" / "auth"
         header = read(auth_dir / "AuthRouteModule.h")
         source = strip_comments(read(auth_dir / "AuthRouteModule.cpp"))
         compact_source = normalize_space(source)
@@ -2188,8 +2173,8 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, combined)
 
     def test_auth_service_facade_owns_h1_auth_behavior_and_infrastructure_tokens(self):
-        service_source = strip_comments(read(SERVER_CORE / "GateServer" / "services" / "auth" / "AuthService.cpp"))
-        service_header = read(SERVER_CORE / "GateServer" / "services" / "auth" / "AuthService.h")
+        service_source = strip_comments(read(SERVER_CORE / "GateShared" / "services" / "auth" / "AuthService.cpp"))
+        service_header = read(SERVER_CORE / "GateShared" / "services" / "auth" / "AuthService.h")
 
         self.assertIn("class AuthService", service_header)
         self.assertIn("static AuthService& Instance()", service_header)
@@ -2282,8 +2267,8 @@ class GateServerStructureTests(unittest.TestCase):
                     self.assertNotIn(token, block)
 
     def test_logic_system_bridges_health_routes_through_neutral_registry(self):
-        header = read(SERVER_CORE / "GateServer" / "LogicSystem.h")
-        source = read(SERVER_CORE / "GateServer" / "LogicSystem.cpp")
+        header = read(SERVER_CORE / "GateShared" / "LogicSystem.h")
+        source = read(SERVER_CORE / "GateShared" / "LogicSystem.cpp")
 
         self.assertIn('#include "routing/RouteRegistry.h"', header)
         self.assertIn("memochat::gate::routing::RouteRegistry _route_registry", header)
@@ -2306,8 +2291,8 @@ class GateServerStructureTests(unittest.TestCase):
         self.assertIn("H1RouteAdapter::ApplyGateResponse(response, con)", source)
 
     def test_logic_system_registers_profile_module_and_legacy_h1_does_not(self):
-        logic_source = read(SERVER_CORE / "GateServer" / "LogicSystem.cpp")
-        legacy_h1_source = strip_comments(read(SERVER_CORE / "GateServer" / "GateServerH1Routes.cpp"))
+        logic_source = read(SERVER_CORE / "GateShared" / "LogicSystem.cpp")
+        legacy_h1_source = strip_comments(read(SERVER_CORE / "GateShared" / "GateServerH1Routes.cpp"))
 
         self.assertIn('#include "modules/profile/ProfileRouteModule.h"', logic_source)
         self.assertIn(
@@ -2324,7 +2309,7 @@ class GateServerStructureTests(unittest.TestCase):
         if compiler is None:
             self.skipTest("C++ compiler not available")
 
-        routing_dir = SERVER_CORE / "GateServer" / "routing"
+        routing_dir = SERVER_CORE / "GateShared" / "routing"
         source = r"""
 #include "routing/RouteRegistry.h"
 
@@ -2400,7 +2385,7 @@ int main()
                     compiler,
                     "-std=c++20",
                     "-I",
-                    str(SERVER_CORE / "GateServer"),
+                    str(SERVER_CORE / "GateShared"),
                     str(cpp_path),
                     str(routing_dir / "RouteRegistry.cpp"),
                     "-o",

@@ -564,36 +564,10 @@ class StatusDeployContractTests(unittest.TestCase):
         stop = read(REPO_ROOT / "tools/scripts/status/stop-all-services.sh")
         rows = topology_rows()
 
-        self.assertEqual(19, len(rows))
+        self.assertEqual(17, len(rows))
 
         by_dir = {row["runtime_dir"]: row for row in rows}
         expected = {
-            "GateServer1": (
-                "gate",
-                "GateServer",
-                "GateServer/config.ini",
-                "GateServer-1",
-                "8080",
-                "",
-                "8080 8082",
-                "8081",
-                "../../artifacts/logs/services/GateServer1",
-                "GateServer1",
-                "memochat",
-            ),
-            "GateServer2": (
-                "gate",
-                "GateServer",
-                "GateServer/gate2.ini",
-                "GateServer-2",
-                "8084",
-                "",
-                "8084",
-                "8085",
-                "../../artifacts/logs/services/GateServer2",
-                "GateServer2",
-                "memochat",
-            ),
             "chatserver1": (
                 "chat",
                 "ChatServer",
@@ -869,7 +843,6 @@ class StatusDeployContractTests(unittest.TestCase):
         self.assertEqual(["varify", "chat", "ai"], topology_array_values("MEMOCHAT_CORE_START_GROUPS"))
         self.assertEqual(
             [
-                "gate|GateServer|tcp udp",
                 "aigateway|AIGatewayServer|tcp",
                 "mediagateway|MediaGatewayServer|tcp",
                 "momentsgateway|MomentsGatewayServer|tcp",
@@ -889,8 +862,6 @@ class StatusDeployContractTests(unittest.TestCase):
         )
         self.assertEqual(
             [
-                "GateServer-2",
-                "GateServer-1",
                 "AIGatewayService-1",
                 "MediaGatewayService-1",
                 "MomentsGatewayService-1",
@@ -913,7 +884,6 @@ class StatusDeployContractTests(unittest.TestCase):
         )
         self.assertEqual(
             [
-                "GateServer",
                 "AIGatewayServer",
                 "MediaGatewayServer",
                 "MomentsGatewayServer",
@@ -972,9 +942,9 @@ class StatusDeployContractTests(unittest.TestCase):
         self.assertIn('start_topology_core_group "$group"', start)
         self.assertNotIn('launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_VARIFY"', start)
         self.assertNotIn('launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_AI"', start)
-        self.assertIn('START_GATE="${START_GATE_OVERRIDE:-${MEMOCHAT_START_GATE:-0}}"', start)
-        self.assertIn('launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_GATE"', start)
-        self.assertIn("--start-gate", start)
+        # GateServer monolith is fully retired: no START_GATE opt-in, no --start-gate.
+        self.assertNotIn("START_GATE", start)
+        self.assertNotIn("--start-gate", start)
 
         self.assertIn('for row in "${MEMOCHAT_STOP_PORT_GROUP_ORDER[@]}"', stop)
         self.assertNotIn('stop_group_tcp_ports "GateServer" "$MEMOCHAT_TOPOLOGY_GROUP_GATE"', stop)

@@ -20,7 +20,7 @@ from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
 SERVER_CORE = REPO_ROOT / "apps" / "server" / "core"
-GATE_SERVER = SERVER_CORE / "GateServer"
+GATE_SERVER = SERVER_CORE / "GateShared"
 MIG_DIR = REPO_ROOT / "apps" / "server" / "migrations" / "postgresql" / "business"
 MIGRATE_SCRIPT = REPO_ROOT / "tools" / "scripts" / "status" / "migrate_phase2_db_split.sh"
 

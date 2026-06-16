@@ -5,7 +5,7 @@ from pathlib import Path
 from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
-AI_ROUTE_MODULES = REPO_ROOT / "apps/server/core/GateServer/AIRouteModules.cpp"
+AI_ROUTE_MODULES = REPO_ROOT / "apps/server/core/GateShared/AIRouteModules.cpp"
 PET_SMOKE = REPO_ROOT / "tools/scripts/pet_smoke.ps1"
 
 

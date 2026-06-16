@@ -77,7 +77,7 @@ function(memochat_configure_gate_core_lib target_name)
             "/LIBPATH:${_WINSDK_LIB_UM}"
             "/LIBPATH:${_WINSDK_LIB_UCRT}")
     endif()
-    set_target_properties(${target_name} PROPERTIES FOLDER "Server/GateServer")
+    set_target_properties(${target_name} PROPERTIES FOLDER "Server/GateShared")
 endfunction()
 
 # --- GateInfraCore: shared base. Includes the whole persistence layer (broad +
