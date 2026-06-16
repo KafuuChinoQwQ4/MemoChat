@@ -2,7 +2,6 @@
 #include "HttpConnection.h"
 #include "adapters/h1/H1RouteAdapter.h"
 #include "GateHttpJsonSupport.h"
-#include "PostgresMgr.h"
 #include "GateRouteModules.h"
 #include "MomentsRouteModules.h"
 #include "AIRouteModules.h"
@@ -18,10 +17,6 @@
 #include "transports/h3/listener/GateHttp3Connection.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
-#include <boost/beast/core.hpp>
-#include <boost/beast/http.hpp>
-#include <iostream>
-#include "json/GlazeCompat.h"
 
 namespace
 {
@@ -113,73 +108,17 @@ LogicSystem::LogicSystem()
         memochat::gate::modules::profile::ProfileRouteModule().RegisterRoutes(_route_registry);
     }
 
-    RegGet("/get_test",
-           [](std::shared_ptr<HttpConnection> connection)
-           {
-               beast::ostream(connection->_response.body()) << "receive get_test req " << std::endl;
-               int i = 0;
-               for (auto& elem : connection->_get_params)
-               {
-                   i++;
-                   beast::ostream(connection->_response.body()) << "param" << i << " key is " << elem.first;
-                   beast::ostream(connection->_response.body()) << ", " << " value is " << elem.second << std::endl;
-               }
-
-               connection->_response.set(http::field::content_type, "text/plain");
-           });
-
-    RegPost("/test_procedure",
-            [](std::shared_ptr<HttpConnection> connection)
-            {
-                auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
-                std::cout << "receive body is " << body_str << std::endl;
-                connection->_response.set(http::field::content_type, "text/json");
-                memochat::json::JsonValue root;
-                memochat::json::JsonReader reader;
-                memochat::json::JsonValue src_root;
-                bool parse_success = reader.parse(body_str, src_root);
-                if (!parse_success)
-                {
-                    std::cout << "Failed to parse JSON data!" << std::endl;
-                    root["error"] = ErrorCodes::Error_Json;
-                    std::string jsonstr = root.toStyledString();
-                    beast::ostream(connection->_response.body()) << jsonstr;
-                    return true;
-                }
-
-                if (!isMember(src_root, "email"))
-                {
-                    std::cout << "Failed to parse JSON data!" << std::endl;
-                    root["error"] = ErrorCodes::Error_Json;
-                    std::string jsonstr = root.toStyledString();
-                    beast::ostream(connection->_response.body()) << jsonstr;
-                    return true;
-                }
-
-                auto email = src_root["email"].asString();
-                int uid = 0;
-                std::string name = "";
-                PostgresMgr::GetInstance()->TestProcedure(email, uid, name);
-                cout << "email is " << email << endl;
-                root["error"] = ErrorCodes::Success;
-                root["email"] = src_root["email"];
-                root["name"] = name;
-                root["uid"] = uid;
-                std::string jsonstr = root.toStyledString();
-                beast::ostream(connection->_response.body()) << jsonstr;
-                return true;
-            });
-
-    // Register H1 routes
-    AuthHttpService::RegisterRoutes(*this);
-    ProfileHttpService::RegisterRoutes(*this);
-    CallHttpServiceRoutes::RegisterRoutes(*this);
-
-    // Register AI routes
-    AIHttpServiceRoutes::RegisterRoutes(*this);
-
-    // Register H3 routes from GateServerHttp3
-    GateHttp3Service::RegisterRoutes(*this);
+    if (full)
+    {
+        // Legacy transport adapters are kept only for the retired GateServer
+        // monolith. Focused service profiles must not inherit catch-all routes
+        // from the old H1/H3 registration helpers.
+        AuthHttpService::RegisterRoutes(*this);
+        ProfileHttpService::RegisterRoutes(*this);
+        CallHttpServiceRoutes::RegisterRoutes(*this);
+        AIHttpServiceRoutes::RegisterRoutes(*this);
+        GateHttp3Service::RegisterRoutes(*this);
+    }
 }
 
 void LogicSystem::RegGet(std::string url, HttpHandler handler)

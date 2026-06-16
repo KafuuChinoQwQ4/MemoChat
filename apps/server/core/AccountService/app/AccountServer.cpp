@@ -5,7 +5,7 @@
 // (the profile aggregate). Register/Login go THROUGH account-core for account
 // data; AccountServer owns the profile write path + identity caches
 // (ubaseinfo_<uid>, nameinfo_<name>). Emits cache-invalidate side effects
-// (init_async=true). Opt-in in the runtime topology (default OFF).
+// (init_async=true). It starts by default after Envoy cut-over.
 int main()
 {
     return RunGateDomainServer(LogicSystem::RouteProfile::Account,

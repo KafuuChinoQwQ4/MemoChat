@@ -165,9 +165,11 @@ docker run --rm --network memochat_default curlimages/curl:8.10.1 -fsS http://me
 Invoke-WebRequest "http://127.0.0.1:9090/api/v1/query?query=envoy_server_live%7Bjob%3D%22envoy_gateway%22%7D" -UseBasicParsing
 ```
 
-## Envoy Upstream Failover Check
+## Envoy Upstream Routing Check
 
-The default local Envoy upstream sends client HTTP traffic to host GateServer instances on `8080` and `8084` using the `gate_backend` cluster. The non-destructive failover script checks those ports, sends bounded probes through port `80`, and prints recent upstream evidence from `/var/log/envoy/access.json` inside the container.
+The default Linux local Envoy edge routes each business prefix directly to its service backend (`login_backend`, `mediagateway_backend`, `momentsgateway_backend`, and so on). There is no local `gate_backend` catch-all; unknown paths return Envoy `404`.
+
+The old PowerShell failover script below is for the legacy Windows GateServer topology only.
 
 ```powershell
 tools\scripts\test_envoy_failover.ps1
@@ -179,7 +181,7 @@ Only use fault injection when the local service windows can be interrupted:
 tools\scripts\test_envoy_failover.ps1 -StopBackend -StopBackendPort 8080
 ```
 
-`-StopBackend` temporarily stops one local GateServer process so Envoy can route through the remaining backend. By default, the script restores only the stopped GateServer instance from `infra\Memo_ops\runtime\services\GateServer1` or `GateServer2`; pass `-RestoreScript tools/scripts/status/start-all-services.bat` only when you intentionally want the broader runtime startup script.
+`-StopBackend` temporarily stops one local GateServer process in that legacy topology so Envoy can route through the remaining backend. By default, the script restores only the stopped GateServer instance from `infra\Memo_ops\runtime\services\GateServer1` or `GateServer2`; pass `-RestoreScript tools/scripts/status/start-all-services.bat` only when you intentionally want the broader runtime startup script.
 
 ## Envoy Structured Log Correlation
 

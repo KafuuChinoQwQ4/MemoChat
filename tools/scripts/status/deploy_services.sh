@@ -311,15 +311,14 @@ copy_optional "${BUILD_BIN}/MemoOpsQml" "${RUNTIME_DIR}/MemoOpsQml/MemoOpsQml"
 copy_optional "${BUILD_BIN}/memoops-qml.ini" "${RUNTIME_DIR}/MemoOpsQml/memoops-qml.ini"
 
 if [[ -d "${BUILD_BIN}/r18-plugins" ]]; then
-    for gate_dir in "${RUNTIME_DIR}/GateServer1" "${RUNTIME_DIR}/GateServer2"; do
-        if [[ "$CHECK_ONLY" -eq 0 ]]; then
-            mkdir -p -- "$gate_dir"
-            cp -a -- "${BUILD_BIN}/r18-plugins" "$gate_dir/"
-            copy_optional "${BUILD_BIN}/R18PluginHost" "${gate_dir}/R18PluginHost"
-        else
-            echo "[OK] r18-plugins"
-        fi
-    done
+    r18_dir="${RUNTIME_DIR}/R18GatewayService1"
+    if [[ "$CHECK_ONLY" -eq 0 ]]; then
+        mkdir -p -- "$r18_dir"
+        cp -a -- "${BUILD_BIN}/r18-plugins" "$r18_dir/"
+        copy_optional "${BUILD_BIN}/R18PluginHost" "${r18_dir}/R18PluginHost"
+    else
+        echo "[OK] r18-plugins"
+    fi
 fi
 
 missing=0

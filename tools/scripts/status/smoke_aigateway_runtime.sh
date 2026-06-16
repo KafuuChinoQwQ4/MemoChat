@@ -13,7 +13,7 @@ set -Eeuo pipefail
 # This does NOT require AIServer/AIOrchestrator to be up: /ai/* returning a
 # proxy/unavailable response still proves the route is registered (we only
 # assert the route is NOT a 404 "route not found"). It changes no deployed
-# default — AIGatewayServer stays opt-in in the runtime topology.
+# default startup; this smoke still uses an isolated temporary runtime.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"

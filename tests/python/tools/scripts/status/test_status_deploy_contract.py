@@ -9,6 +9,7 @@ REPO_ROOT = repo_root()
 DEPLOY_SCRIPT = REPO_ROOT / "tools/scripts/status/deploy_services.sh"
 START_SERVICES_SCRIPT = REPO_ROOT / "tools/scripts/status/start-all-services.sh"
 TOPOLOGY_SCRIPT = REPO_ROOT / "tools/scripts/status/runtime_topology.sh"
+LOCAL_ENVOY_CONFIG = REPO_ROOT / "infra/deploy/local/compose/envoy.yaml"
 RELATION_QUERY_GRPC_SMOKE_SCRIPT = REPO_ROOT / "tools/scripts/status/smoke_relation_query_grpc_runtime.sh"
 RELATION_SERVICE_GRPC_SMOKE_SCRIPT = REPO_ROOT / "tools/scripts/status/smoke_relation_service_grpc_runtime.sh"
 MESSAGE_SERVICE_GRPC_SMOKE_SCRIPT = REPO_ROOT / "tools/scripts/status/smoke_message_service_grpc_runtime.sh"
@@ -674,7 +675,7 @@ class StatusDeployContractTests(unittest.TestCase):
             "AIGatewayService1": (
                 "aigateway",
                 "AIGatewayServer",
-                "GateServer/aigateway.ini",
+                "AIGatewayService/aigateway.ini",
                 "AIGatewayService-1",
                 "8093",
                 "",
@@ -687,7 +688,7 @@ class StatusDeployContractTests(unittest.TestCase):
             "MediaGatewayService1": (
                 "mediagateway",
                 "MediaGatewayServer",
-                "GateServer/mediagateway.ini",
+                "MediaService/mediagateway.ini",
                 "MediaGatewayService-1",
                 "8094",
                 "",
@@ -700,7 +701,7 @@ class StatusDeployContractTests(unittest.TestCase):
             "MomentsGatewayService1": (
                 "momentsgateway",
                 "MomentsGatewayServer",
-                "GateServer/momentsgateway.ini",
+                "MomentsService/momentsgateway.ini",
                 "MomentsGatewayService-1",
                 "8099",
                 "",
@@ -713,7 +714,7 @@ class StatusDeployContractTests(unittest.TestCase):
             "CallGatewayService1": (
                 "callgateway",
                 "CallGatewayServer",
-                "GateServer/callgateway.ini",
+                "CallService/callgateway.ini",
                 "CallGatewayService-1",
                 "8097",
                 "",
@@ -726,7 +727,7 @@ class StatusDeployContractTests(unittest.TestCase):
             "R18GatewayService1": (
                 "r18gateway",
                 "R18GatewayServer",
-                "GateServer/r18gateway.ini",
+                "R18Service/r18gateway.ini",
                 "R18GatewayService-1",
                 "8098",
                 "",
@@ -739,7 +740,7 @@ class StatusDeployContractTests(unittest.TestCase):
             "RegisterService1": (
                 "register",
                 "RegisterServer",
-                "GateServer/register.ini",
+                "RegisterService/register.ini",
                 "RegisterService-1",
                 "8101",
                 "",
@@ -752,7 +753,7 @@ class StatusDeployContractTests(unittest.TestCase):
             "LoginService1": (
                 "login",
                 "LoginServer",
-                "GateServer/login.ini",
+                "LoginService/login.ini",
                 "LoginService-1",
                 "8102",
                 "",
@@ -765,7 +766,7 @@ class StatusDeployContractTests(unittest.TestCase):
             "AccountService1": (
                 "account",
                 "AccountServer",
-                "GateServer/account.ini",
+                "AccountService/account.ini",
                 "AccountService-1",
                 "8103",
                 "",
@@ -865,7 +866,7 @@ class StatusDeployContractTests(unittest.TestCase):
         stop = read(REPO_ROOT / "tools/scripts/status/stop-all-services.sh")
         rows = topology_rows()
 
-        self.assertEqual(["varify", "chat", "ai", "gate"], topology_array_values("MEMOCHAT_CORE_START_GROUPS"))
+        self.assertEqual(["varify", "chat", "ai"], topology_array_values("MEMOCHAT_CORE_START_GROUPS"))
         self.assertEqual(
             [
                 "gate|GateServer|tcp udp",
@@ -971,13 +972,28 @@ class StatusDeployContractTests(unittest.TestCase):
         self.assertIn('start_topology_core_group "$group"', start)
         self.assertNotIn('launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_VARIFY"', start)
         self.assertNotIn('launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_AI"', start)
-        self.assertNotIn('launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_GATE"', start)
+        self.assertIn('START_GATE="${START_GATE_OVERRIDE:-${MEMOCHAT_START_GATE:-0}}"', start)
+        self.assertIn('launch_topology_group "$MEMOCHAT_TOPOLOGY_GROUP_GATE"', start)
+        self.assertIn("--start-gate", start)
 
         self.assertIn('for row in "${MEMOCHAT_STOP_PORT_GROUP_ORDER[@]}"', stop)
         self.assertNotIn('stop_group_tcp_ports "GateServer" "$MEMOCHAT_TOPOLOGY_GROUP_GATE"', stop)
         self.assertNotIn('stop_group_tcp_ports "AIServer" "$MEMOCHAT_TOPOLOGY_GROUP_AI"', stop)
         self.assertNotIn('stop_group_tcp_ports "ChatServer" "$MEMOCHAT_TOPOLOGY_GROUP_CHAT"', stop)
         self.assertNotIn('stop_group_tcp_ports "VarifyServer" "$MEMOCHAT_TOPOLOGY_GROUP_VARIFY"', stop)
+
+    def test_local_envoy_no_longer_depends_on_gateserver_backend(self):
+        source = read(LOCAL_ENVOY_CONFIG)
+
+        self.assertNotIn("name: gate_backend", source)
+        self.assertNotIn("cluster: gate_backend", source)
+        self.assertIn("cluster: account_backend", source)
+        self.assertIn("path: /__envoy_failover_probe", source)
+        self.assertRegex(
+            source,
+            r"name:\s+other\s+match:\s+prefix:\s+/\s+direct_response:\s+status:\s+404",
+            "local Envoy catch-all must return 404 instead of falling back to GateServer",
+        )
 
     def test_linux_runtime_topology_observability_labels_match_service_configs(self):
         for row in topology_rows():

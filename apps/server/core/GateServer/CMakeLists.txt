@@ -145,67 +145,7 @@ if(WIN32 AND MEMOCHAT_ENABLE_HTTP3)
     endif()
 endif()
 
-# ── AIGatewayServer: first peeled microservice (gateserver split Phase 3) ─────
-# A standalone process that reuses GateAppCore but selects the AIGateway route
-# profile, so it serves only /healthz, /readyz and /ai/* (a pure proxy to
-# AIServer/AIOrchestrator — no DB of its own). It is built by default but is NOT
-# part of the default runtime topology: it stays opt-in until runtime smoke
-# proves it, per the split guardrails. Its entrypoint is the only source unique
-# to it; all behavior comes from the shared GateAppCore.
-add_executable(AIGatewayServer
-    app/AIGatewayServer.cpp
-)
-set_target_properties(AIGatewayServer PROPERTIES FOLDER "Server")
-memochat_configure_server_target(AIGatewayServer)
-target_link_libraries(AIGatewayServer PRIVATE
-    GateAppCore
-    GateServerCore
-    GateServerHttp3
-    memochat_boost_stubs
-)
-target_include_directories(AIGatewayServer PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/core
-    ${CMAKE_CURRENT_SOURCE_DIR}/transports/h3
-    ${CMAKE_CURRENT_SOURCE_DIR}/transports/h3/listener
-    ${CMAKE_CURRENT_SOURCE_DIR}/transports/h3/legacy_routes
-)
-
-# ── Phase 4 domain gateways (Media/Moments/Call/R18) ─────────────────────────
-# Each is a standalone process reusing GateAppCore + a LogicSystem::RouteProfile,
-# serving only its own domain routes (+ health). All are built by default but are
-# opt-in in the runtime topology (NOT in MEMOCHAT_CORE_START_GROUPS) until their
-# runtime smoke + Envoy routing are flipped on. Entry points are the only sources
-# unique to each; all behavior comes from the shared GateAppCore.
-function(memochat_add_gate_domain_server target_name entry_src)
-    add_executable(${target_name} ${entry_src})
-    set_target_properties(${target_name} PROPERTIES FOLDER "Server")
-    memochat_configure_server_target(${target_name})
-    target_link_libraries(${target_name} PRIVATE
-        GateAppCore
-        GateServerCore
-        GateServerHttp3
-        memochat_boost_stubs
-    )
-    target_include_directories(${target_name} PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/core
-        ${CMAKE_CURRENT_SOURCE_DIR}/transports/h3
-        ${CMAKE_CURRENT_SOURCE_DIR}/transports/h3/listener
-        ${CMAKE_CURRENT_SOURCE_DIR}/transports/h3/legacy_routes
-    )
-endfunction()
-
-memochat_add_gate_domain_server(MediaGatewayServer app/MediaGatewayServer.cpp)
-memochat_add_gate_domain_server(MomentsGatewayServer app/MomentsGatewayServer.cpp)
-memochat_add_gate_domain_server(CallGatewayServer app/CallGatewayServer.cpp)
-memochat_add_gate_domain_server(R18GatewayServer app/R18GatewayServer.cpp)
-
-# ── Phase 5 account aggregate (Register/Login/Account) ───────────────────────
-# The memo_account aggregate split (D-ACCOUNT): RegisterServer + LoginServer are
-# separate processes but reach account data only via account-core
-# (AccountPersistence); AccountServer owns the profile write path. All opt-in
-# (default OFF) and reuse the same GateAppCore + RouteProfile template.
-memochat_add_gate_domain_server(RegisterServer app/RegisterServer.cpp)
-memochat_add_gate_domain_server(LoginServer app/LoginServer.cpp)
-memochat_add_gate_domain_server(AccountServer app/AccountServer.cpp)
+# Focused service executables now live in top-level service directories
+# (AIGatewayService, MediaService, RegisterService, ...). This directory owns
+# only the shared GateAppCore library and the retired GateServer monolith
+# rollback entrypoint.

@@ -36,6 +36,16 @@ GATE_CORE = GATE_SERVER / "core"
 GATE_MODULES = GATE_SERVER / "modules"
 GATE_SERVICES = GATE_SERVER / "services"
 VARIFY_SERVER = SERVER_CORE / "VarifyServer"
+FOCUSED_SERVICE_DIRS = {
+    "AIGateway": SERVER_CORE / "AIGatewayService",
+    "Media": SERVER_CORE / "MediaService",
+    "Moments": SERVER_CORE / "MomentsService",
+    "Call": SERVER_CORE / "CallService",
+    "R18": SERVER_CORE / "R18Service",
+    "Register": SERVER_CORE / "RegisterService",
+    "Login": SERVER_CORE / "LoginService",
+    "Account": SERVER_CORE / "AccountService",
+}
 
 
 def read(path: Path) -> str:
@@ -253,8 +263,9 @@ class GateServerServiceSplitContractTests(unittest.TestCase):
         )
 
     def test_aigateway_server_executable_links_app_core_and_owns_only_entrypoint(self):
-        """Phase 3: AIGatewayServer is a standalone executable reusing GateAppCore."""
-        entry = GATE_SERVER / "app" / "AIGatewayServer.cpp"
+        """Phase 3/7: AIGatewayServer is a top-level executable reusing GateAppCore."""
+        service_dir = FOCUSED_SERVICE_DIRS["AIGateway"]
+        entry = service_dir / "app" / "AIGatewayServer.cpp"
         self.assertTrue(entry.exists(), "AIGatewayServer entrypoint should exist")
         entry_src = read(entry)
         self.assertIn(
@@ -263,17 +274,16 @@ class GateServerServiceSplitContractTests(unittest.TestCase):
             "AIGatewayServer must select the AIGateway route profile before LogicSystem init",
         )
 
-        cmake = strip_comments(read(GATE_SERVER / "CMakeLists.txt"))
+        cmake = strip_comments(read(service_dir / "CMakeLists.txt"))
         exe_match = re.search(r"add_executable\s*\(\s*AIGatewayServer\b(?P<body>.*?)\)", cmake, re.S)
         self.assertIsNotNone(exe_match, "AIGatewayServer executable should be declared")
         self.assertIn("app/AIGatewayServer.cpp", exe_match.group("body"))
-        self.assertRegex(
-            cmake,
-            r"target_link_libraries\s*\(\s*AIGatewayServer\b[^)]*\bGateAppCore\b",
-            "AIGatewayServer must link GateAppCore",
-        )
+        self.assertIn("memochat_configure_gate_focused_service(AIGatewayServer)", cmake)
 
-        self.assertTrue((GATE_SERVER / "aigateway.ini").exists(), "AIGatewayServer config should exist")
+        root_cmake = strip_comments(read(SERVER_CORE / "CMakeLists.txt"))
+        self.assertIn("GateAppCore", root_cmake, "focused service helper must link GateAppCore")
+        self.assertIn("add_subdirectory(AIGatewayService)", root_cmake)
+        self.assertTrue((service_dir / "aigateway.ini").exists(), "AIGatewayServer config should exist")
 
     def test_logic_system_route_profile_seam_defaults_to_full(self):
         """The RouteProfile seam must default to Full so GateServer registers
@@ -297,7 +307,7 @@ class GateServerServiceSplitContractTests(unittest.TestCase):
 
     def test_aigateway_is_opt_in_in_runtime_topology(self):
         """AIGatewayServer must be a topology service but NOT in the default
-        core start groups (opt-in until Envoy flip)."""
+        core start groups; start-all-services starts it explicitly after Envoy cut-over."""
         topology = read(REPO_ROOT / "tools" / "scripts" / "status" / "runtime_topology.sh")
         start = read(REPO_ROOT / "tools" / "scripts" / "status" / "start-all-services.sh")
 
@@ -312,31 +322,35 @@ class GateServerServiceSplitContractTests(unittest.TestCase):
         )
         self.assertIn("--start-aigateway", start)
 
-    def test_phase4_domain_gateways_exist_and_are_opt_in(self):
+    def test_phase4_domain_gateways_exist_as_top_level_services(self):
         """Phase 4: Media/Moments/Call/R18 each peeled into a standalone gateway
-        exe reusing GateAppCore + its own RouteProfile, all opt-in (default OFF)."""
-        cmake = strip_comments(read(GATE_SERVER / "CMakeLists.txt"))
+        exe reusing GateAppCore + its own RouteProfile."""
         topology = read(REPO_ROOT / "tools" / "scripts" / "status" / "runtime_topology.sh")
         start = read(REPO_ROOT / "tools" / "scripts" / "status" / "start-all-services.sh")
         header = read(GATE_SERVER / "LogicSystem.h")
+        root_cmake = strip_comments(read(SERVER_CORE / "CMakeLists.txt"))
         core_match = re.search(r"MEMOCHAT_CORE_START_GROUPS=\(\n(?P<body>.*?)\n\)", topology, re.S)
         self.assertIsNotNone(core_match)
         core_groups = core_match.group("body")
 
         domains = {
-            "Media": ("MediaGatewayServer", "mediagateway", "MediaGatewayService1"),
-            "Moments": ("MomentsGatewayServer", "momentsgateway", "MomentsGatewayService1"),
-            "Call": ("CallGatewayServer", "callgateway", "CallGatewayService1"),
-            "R18": ("R18GatewayServer", "r18gateway", "R18GatewayService1"),
+            "Media": ("MediaGatewayServer", "mediagateway", "MediaGatewayService1", "MediaService"),
+            "Moments": ("MomentsGatewayServer", "momentsgateway", "MomentsGatewayService1", "MomentsService"),
+            "Call": ("CallGatewayServer", "callgateway", "CallGatewayService1", "CallService"),
+            "R18": ("R18GatewayServer", "r18gateway", "R18GatewayService1", "R18Service"),
         }
-        for profile, (exe, group, topo_dir) in domains.items():
+        for profile, (exe, group, topo_dir, service_dir_name) in domains.items():
             with self.subTest(domain=profile):
+                service_dir = SERVER_CORE / service_dir_name
+                cmake = strip_comments(read(service_dir / "CMakeLists.txt"))
                 self.assertRegex(header, rf"\b{profile}\b")
-                self.assertTrue((GATE_SERVER / "app" / f"{exe}.cpp").exists(), f"{exe}.cpp entry missing")
-                self.assertTrue((GATE_SERVER / f"{group}.ini").exists(), f"{group}.ini config missing")
-                entry = read(GATE_SERVER / "app" / f"{exe}.cpp")
+                self.assertTrue((service_dir / "app" / f"{exe}.cpp").exists(), f"{exe}.cpp entry missing")
+                self.assertTrue((service_dir / f"{group}.ini").exists(), f"{group}.ini config missing")
+                entry = read(service_dir / "app" / f"{exe}.cpp")
                 self.assertIn(f"RouteProfile::{profile}", entry)
-                self.assertIn(f"memochat_add_gate_domain_server({exe}", cmake)
+                self.assertRegex(cmake, rf"add_executable\s*\(\s*{exe}\b")
+                self.assertIn(f"memochat_configure_gate_focused_service({exe})", cmake)
+                self.assertIn(f"add_subdirectory({service_dir_name})", root_cmake)
                 self.assertIn(f"{group}|{topo_dir}|{exe}|{exe}", topology)
                 self.assertNotIn(group, core_groups, f"{group} must stay opt-in (not a core start group)")
                 upper = group.upper()
@@ -356,15 +370,15 @@ class GateServerServiceSplitContractTests(unittest.TestCase):
         self.assertIn("app/GateDomainServer.cpp", app_core_match.group("body"))
 
     def test_phase5_account_aggregate_split_register_login_account(self):
-        """Phase 5 (D-ACCOUNT): Register/Login/Account peeled into separate opt-in
+        """Phase 5/7 (D-ACCOUNT): Register/Login/Account peeled into separate
         processes. Register + Login reach account data only via account-core; the
         auth module exposes granular register/login registration so each process
         serves only its own routes."""
-        cmake = strip_comments(read(GATE_SERVER / "CMakeLists.txt"))
         topology = read(REPO_ROOT / "tools" / "scripts" / "status" / "runtime_topology.sh")
         start = read(REPO_ROOT / "tools" / "scripts" / "status" / "start-all-services.sh")
         header = read(GATE_SERVER / "LogicSystem.h")
         auth_header = read(GATE_MODULES / "auth" / "AuthRouteModule.h")
+        root_cmake = strip_comments(read(SERVER_CORE / "CMakeLists.txt"))
         core_match = re.search(r"MEMOCHAT_CORE_START_GROUPS=\(\n(?P<body>.*?)\n\)", topology, re.S)
         self.assertIsNotNone(core_match)
         core_groups = core_match.group("body")
@@ -374,18 +388,22 @@ class GateServerServiceSplitContractTests(unittest.TestCase):
         self.assertIn("RegisterLoginRoutes", auth_header)
 
         accounts = {
-            "Register": ("RegisterServer", "register", "RegisterService1"),
-            "Login": ("LoginServer", "login", "LoginService1"),
-            "Account": ("AccountServer", "account", "AccountService1"),
+            "Register": ("RegisterServer", "register", "RegisterService1", "RegisterService"),
+            "Login": ("LoginServer", "login", "LoginService1", "LoginService"),
+            "Account": ("AccountServer", "account", "AccountService1", "AccountService"),
         }
-        for profile, (exe, group, topo_dir) in accounts.items():
+        for profile, (exe, group, topo_dir, service_dir_name) in accounts.items():
             with self.subTest(service=profile):
+                service_dir = SERVER_CORE / service_dir_name
+                cmake = strip_comments(read(service_dir / "CMakeLists.txt"))
                 self.assertRegex(header, rf"\b{profile}\b")
-                self.assertTrue((GATE_SERVER / "app" / f"{exe}.cpp").exists(), f"{exe}.cpp entry missing")
-                self.assertTrue((GATE_SERVER / f"{group}.ini").exists(), f"{group}.ini config missing")
-                entry = read(GATE_SERVER / "app" / f"{exe}.cpp")
+                self.assertTrue((service_dir / "app" / f"{exe}.cpp").exists(), f"{exe}.cpp entry missing")
+                self.assertTrue((service_dir / f"{group}.ini").exists(), f"{group}.ini config missing")
+                entry = read(service_dir / "app" / f"{exe}.cpp")
                 self.assertIn(f"RouteProfile::{profile}", entry)
-                self.assertIn(f"memochat_add_gate_domain_server({exe}", cmake)
+                self.assertRegex(cmake, rf"add_executable\s*\(\s*{exe}\b")
+                self.assertIn(f"memochat_configure_gate_focused_service({exe})", cmake)
+                self.assertIn(f"add_subdirectory({service_dir_name})", root_cmake)
                 self.assertIn(f"{group}|{topo_dir}|{exe}|{exe}", topology)
                 self.assertNotIn(f'"{group}"', core_groups, f"{group} must stay opt-in")
                 upper = group.upper()
@@ -397,8 +415,12 @@ class GateServerServiceSplitContractTests(unittest.TestCase):
         # D-ACCOUNT: Register/Login entrypoints reach account data via account-core,
         # never PostgresMgr directly (that invariant is enforced on AuthService by
         # test_account_access_is_funnelled_through_account_persistence).
-        for exe in ("RegisterServer", "LoginServer", "AccountServer"):
-            entry = read(GATE_SERVER / "app" / f"{exe}.cpp")
+        for service_name, exe in (
+            ("RegisterService", "RegisterServer"),
+            ("LoginService", "LoginServer"),
+            ("AccountService", "AccountServer"),
+        ):
+            entry = read(SERVER_CORE / service_name / "app" / f"{exe}.cpp")
             self.assertNotIn("PostgresMgr", entry, f"{exe} entrypoint must not touch PostgresMgr directly")
 
 

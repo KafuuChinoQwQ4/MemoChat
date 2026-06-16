@@ -29,20 +29,37 @@ class FriendApplyAvatarContractTests(unittest.TestCase):
         source = POSTGRES_DAO_USERS.read_text(encoding="utf-8")
         get_apply_list = extract_function(source, "bool PostgresDao::GetApplyList")
 
-        self.assertIn("usr.user_id", get_apply_list)
-        self.assertIn("usr.icon", get_apply_list)
-        self.assertIn('row["icon"].is_null() ? "" : row["icon"].c_str()', get_apply_list)
-
-        self.assertIn("user.nick, user.sex, user.user_id, user.icon", get_apply_list)
-        self.assertIn('auto icon = res->isNull("icon") ? "" : res->getString("icon");', get_apply_list)
-        self.assertIn('std::make_shared<ApplyInfo>(uid, name, "", icon, nick, sex, status, user_id)', get_apply_list)
+        # gateserver split Phase 2b: the apply-list query no longer JOINs the
+        # "user" table (that table moved to memo_account). Sender identity is now
+        # resolved through the GetUsersByUids batch resolver (account-data seam),
+        # but the sender ICON must still reach the bootstrap ApplyInfo.
+        self.assertIn("GetUsersByUids(from_uids)", get_apply_list)
+        self.assertNotRegex(
+            get_apply_list,
+            r'txn\.exec[^;]*JOIN\s+"?user"?',
+            "GetApplyList must not pqxx-JOIN the user table after the account split",
+        )
+        # icon (and the rest of the sender identity) is carried from the resolver
+        # into the ApplyInfo for the bootstrap payload.
+        self.assertIn("->icon", get_apply_list)
+        self.assertIn("user_public_id", get_apply_list)
+        self.assertIn('std::make_shared<ApplyInfo>(ar.uid, name, "", icon, nick, sex, ar.status, user_public_id)',
+                      get_apply_list)
 
     def test_apply_list_warmup_query_matches_icon_projection(self):
         source = POSTGRES_DAO.read_text(encoding="utf-8")
         warmup = extract_function(source, "void PostgresDao::WarmupRelationBootstrapQueries")
 
-        self.assertRegex(warmup, r"SELECT\s+a\.from_uid, a\.status, u\.name, u\.nick, u\.sex, u\.user_id, u\.icon")
-        self.assertIn("user.nick, user.sex, user.user_id, user.icon", warmup)
+        # After the account split the warmup warms only relation tables; user
+        # base-info is resolved separately via GetUsersByUids, so the warmup must
+        # NOT JOIN "user" (it would break once user lives in memo_account).
+        self.assertNotRegex(
+            warmup,
+            r'txn\.exec[^;]*JOIN\s+"?user"?',
+            "warmup must not pqxx-JOIN the user table after the account split",
+        )
+        self.assertRegex(warmup, r"SELECT\s+a\.from_uid, a\.status\b")
+        self.assertIn("FROM friend_apply AS a", warmup)
 
     def test_relation_bootstrap_serializes_apply_icon_to_client(self):
         source = CHAT_RELATION_SERVICE.read_text(encoding="utf-8")
