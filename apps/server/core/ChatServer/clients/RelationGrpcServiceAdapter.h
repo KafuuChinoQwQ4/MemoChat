@@ -27,24 +27,8 @@ public:
     RelationCommandResult GetDialogList(const RelationCommandRequest& request) override;
     RelationCommandResult SyncDraft(const RelationCommandRequest& request) override;
     RelationCommandResult PinDialog(const RelationCommandRequest& request) override;
-
-    void HandleSearchUser(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void
-    HandleAddFriendApply(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void
-    HandleAuthFriendApply(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void
-    HandleDeleteFriend(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void
-    HandleGetDialogList(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void HandleSyncDraft(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void HandlePinDialog(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
+    RelationCommandResult FilterFriendUids(const RelationCommandRequest& request) override;
 
 private:
-    RelationCommandRequest BuildSessionCommandRequest(const std::shared_ptr<CSession>& session,
-                                                      short msg_id,
-                                                      const std::string& msg_data) const;
-    void SendSessionCommandResult(const std::shared_ptr<CSession>& session, const RelationCommandResult& result) const;
-
     RelationGrpcClient _client;
 };

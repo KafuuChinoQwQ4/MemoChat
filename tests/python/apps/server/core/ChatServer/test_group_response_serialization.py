@@ -3,8 +3,8 @@ import unittest
 from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
-GROUP_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/domain/GroupMessageService.cpp"
-PRIVATE_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/domain/PrivateMessageService.cpp"
+GROUP_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/domain/message/GroupMessageService.cpp"
+PRIVATE_MESSAGE_SERVICE = REPO_ROOT / "apps/server/core/ChatServer/domain/message/PrivateMessageService.cpp"
 CHAT_MESSAGE_DISPATCHER_GROUP = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/network/ChatMessageDispatcherGroup.cpp"
 )
@@ -70,9 +70,9 @@ class GroupResponseSerializationTests(unittest.TestCase):
     def test_group_history_response_initializes_messages_array(self):
         source = GROUP_MESSAGE_SERVICE.read_text(encoding="utf-8")
 
-        handler_start = source.index("void GroupMessageService::HandleGroupHistory")
-        handler_end = source.index("void GroupMessageService::HandleEditGroupMessage", handler_start)
-        handler = source[handler_start:handler_end]
+        # The transport HandleGroupHistory now delegates to the GroupHistory command method,
+        # where the response is actually built. Verify the invariant where it lives.
+        handler = extract_function(source, "MessageCommandResult GroupMessageService::GroupHistory")
 
         self.assertIn('rtvalue["messages"] = memochat::json::arrayValue;', handler)
         self.assertLess(
@@ -83,7 +83,9 @@ class GroupResponseSerializationTests(unittest.TestCase):
     def test_private_history_response_initializes_messages_array_and_uses_wire_json(self):
         source = PRIVATE_MESSAGE_SERVICE.read_text(encoding="utf-8")
 
-        handler = extract_function(source, "void PrivateMessageService::HandlePrivateHistory")
+        # HandlePrivateHistory delegates to the PrivateHistory command method; the response
+        # (array init + wire-json serialization) is built there.
+        handler = extract_function(source, "MessageCommandResult PrivateMessageService::PrivateHistory")
 
         self.assertIn('rtvalue["messages"] = memochat::json::arrayValue;', handler)
         self.assertLess(
@@ -119,7 +121,7 @@ class GroupResponseSerializationTests(unittest.TestCase):
         self.assertNotIn("-static_cast<int>(group->_group_id)", controller)
         self.assertNotIn("-static_cast<int>(groupId)", private_events)
         self.assertNotIn("-static_cast<int>(_current_group_id)", state)
-        self.assertIn("ConversationSyncService::makeGroupDialogUid(_group_state.currentId)", state)
+        self.assertIn("ConversationSyncService::makeGroupDialogUid(currentGroupId())", state)
 
     def test_group_message_sender_icons_are_normalized_before_qml(self):
         source = CHAT_MESSAGE_MODEL_CONTENT.read_text(encoding="utf-8")

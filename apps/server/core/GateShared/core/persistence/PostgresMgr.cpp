@@ -95,6 +95,16 @@ bool PostgresMgr::GetMomentsFeed(int viewer_uid,
     return _dao.GetMomentsFeed(viewer_uid, last_moment_id, limit, author_uid, moments, has_more);
 }
 
+bool PostgresMgr::GetMomentsFeedCandidates(int viewer_uid,
+                                           int64_t last_moment_id,
+                                           int limit,
+                                           int author_uid,
+                                           std::vector<MomentInfo>& moments,
+                                           bool& has_more)
+{
+    return _dao.GetMomentsFeedCandidates(viewer_uid, last_moment_id, limit, author_uid, moments, has_more);
+}
+
 bool PostgresMgr::CanViewMoment(int viewer_uid, const MomentInfo& moment)
 {
     return _dao.CanViewMoment(viewer_uid, moment);

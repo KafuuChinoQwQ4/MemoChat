@@ -70,21 +70,26 @@ Item {
     readonly property real bubbleContentMaxWidth: Math.max(72, bubbleMaxWidth - (bubbleHorizontalPadding * 2 + 2))
     readonly property real imageContentMaxWidth: Math.min(bubbleContentMaxWidth, 280)
     readonly property real imageContentMaxHeight: 240
+    // Single source of truth for how wide an image body may render. The bubble
+    // layout reserves this width (see bodyPreferredWidth), so the image body
+    // MUST use the same cap — otherwise a portrait image fits to the 240 height
+    // and a wider 280 cap, stretching the bubble taller/narrower than its box.
+    readonly property real imageContentRenderWidth: Math.min(imageContentMaxWidth, 180)
     readonly property real replyPreferredWidth: root.isReply
         ? Math.min(root.bubbleContentMaxWidth,
-                   Math.max(replySenderMeasure.implicitWidth, replyPreviewMeasure.implicitWidth) + 10)
+                   Math.max(replySenderMeasure.advanceWidth, replyPreviewMeasure.advanceWidth) + 10)
         : 0
     readonly property real bodyPreferredWidth: {
         if (root.msgType === "image") {
-            return Math.min(root.imageContentMaxWidth, 180)
+            return root.imageContentRenderWidth
         }
         if (root.msgType === "file") {
-            return Math.min(root.bubbleContentMaxWidth, fileMeasure.implicitWidth + 34)
+            return Math.min(root.bubbleContentMaxWidth, fileMeasure.advanceWidth + 34)
         }
         if (root.msgType === "call") {
             return Math.min(root.bubbleContentMaxWidth, 220)
         }
-        return Math.min(root.bubbleContentMaxWidth, textMeasure.implicitWidth)
+        return Math.min(root.bubbleContentMaxWidth, textMeasure.advanceWidth)
     }
     readonly property real bubblePreferredWidth: Math.min(
         root.bubbleMaxWidth,
@@ -92,7 +97,7 @@ Item {
                  Math.max(root.replyPreferredWidth, root.bodyPreferredWidth) + root.bubbleHorizontalPadding * 2))
     readonly property real translationPreferredWidth: Math.min(
         root.bubbleMaxWidth,
-        Math.max(120, translationTextMeasure.implicitWidth + 22))
+        Math.max(120, translationTextMeasure.advanceWidth + 22))
     readonly property real messageHeight: Math.max(bubble.implicitHeight, showAvatar ? avatarSize : 0)
     readonly property int translationHeight: translationText.length > 0 ? (translationBubble.implicitHeight + 6) : 0
     readonly property int timeDividerHeight: root.showTimeDivider ? 32 : 0
@@ -107,45 +112,41 @@ Item {
         actionMenu.openAt(listPoint.x, listPoint.y, boundaryItem.width, boundaryItem.height)
     }
 
-    Text {
+    // Text width measurers. TextMetrics computes width SYNCHRONOUSLY when text
+    // changes, unlike a hidden Text whose implicitWidth updates on a deferred
+    // scene-graph polish pass. With ListView reuseItems:true, fast scrolling
+    // rebinds a recycled delegate faster than a Text would re-layout, so a short
+    // message briefly sampled the previous (longer) message's stale implicitWidth
+    // and the bubble rendered stretched. TextMetrics has no such transient.
+    TextMetrics {
         id: textMeasure
-        visible: false
         text: root.content
         font.pixelSize: 14
-        wrapMode: Text.NoWrap
     }
 
-    Text {
+    TextMetrics {
         id: fileMeasure
-        visible: false
         text: "[FILE] " + (root.fileName.length > 0 ? root.fileName : "文件")
         font.pixelSize: 14
-        wrapMode: Text.NoWrap
     }
 
-    Text {
+    TextMetrics {
         id: replySenderMeasure
-        visible: false
         text: root.replySender.length > 0 ? ("回复 " + root.replySender) : "回复"
         font.pixelSize: 11
         font.bold: true
-        wrapMode: Text.NoWrap
     }
 
-    Text {
+    TextMetrics {
         id: replyPreviewMeasure
-        visible: false
         text: root.replyPreview
         font.pixelSize: 11
-        wrapMode: Text.NoWrap
     }
 
-    Text {
+    TextMetrics {
         id: translationTextMeasure
-        visible: false
         text: root.translationText
         font.pixelSize: 13
-        wrapMode: Text.NoWrap
     }
 
     Rectangle {
@@ -362,7 +363,7 @@ Item {
         id: imageComp
         ChatMessageImageBody {
             imageSource: root.content
-            maxWidth: root.imageContentMaxWidth
+            maxWidth: root.imageContentRenderWidth
             maxHeight: root.imageContentMaxHeight
         }
     }

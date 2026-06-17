@@ -12,8 +12,8 @@ description: Use when changing MemoChat Postgres, Redis, MongoDB, MinIO metadata
 相关位置：
 
 - `apps/server/migrations/postgresql`
-- 旧版 Windows 初始化 helper：`tools/scripts/init_postgresql_schema.ps1`
-- `tools/scripts/fix_postgresql_sequences.sql`
+- 旧版 Windows 初始化 helper：`tools/scripts/db/init_postgresql_schema.ps1`
+- `tools/scripts/db/fix_postgresql_sequences.sql`
 - `tools/scripts/pg_*.sql`
 - `apps/server/core/*`
 - `apps/server/config`
@@ -104,8 +104,8 @@ tools/scripts/status/start-all-services.sh
 有用时仍可从 Windows 运行旧版探针：
 
 ```powershell
-tools/scripts/test_register_login.ps1
-tools/scripts/test_login.ps1
+tools/scripts/verify/test_register_login.ps1
+tools/scripts/verify/test_login.ps1
 ```
 
 ## 报告

@@ -100,6 +100,11 @@ bool ChatRelationRepository::IsPrivateFriend(int self_id, int friend_id)
     return PostgresMgr::GetInstance()->IsFriend(self_id, friend_id);
 }
 
+std::vector<int> ChatRelationRepository::FilterFriendUids(int viewer_uid, const std::vector<int>& author_uids)
+{
+    return PostgresMgr::GetInstance()->FilterFriendUids(viewer_uid, author_uids);
+}
+
 bool ChatRelationRepository::IsGroupMember(int64_t group_id, int uid)
 {
     return PostgresMgr::GetInstance()->IsUserInGroup(group_id, uid);

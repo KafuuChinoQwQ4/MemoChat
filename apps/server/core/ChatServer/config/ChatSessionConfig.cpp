@@ -1,6 +1,8 @@
 #include "ChatSessionConfig.h"
 
 #include "ConfigMgr.h"
+#include "auth/AuthSecret.h"
+#include "logging/Logger.h"
 
 #include <algorithm>
 #include <cctype>
@@ -11,6 +13,17 @@ std::string ChatSessionConfig::ChatAuthSecret() const
     if (value.empty())
     {
         value = "memochat-dev-chat-secret";
+    }
+    if (memochat::auth::IsWellKnownDevHmacSecret(value))
+    {
+        static bool warned_dev_secret = false;
+        if (!warned_dev_secret)
+        {
+            warned_dev_secret = true;
+            memolog::LogWarn("chat.config.dev_hmac_secret",
+                             "ChatAuth HmacSecret is the well-known dev value; set env "
+                             "MEMOCHAT_CHATAUTH_HMACSECRET in production");
+        }
     }
     return value;
 }

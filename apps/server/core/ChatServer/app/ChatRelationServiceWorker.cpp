@@ -1,11 +1,18 @@
 #include "ChatRelationInternalGrpcService.h"
 #include "ChatRelationRepository.h"
 #include "ChatRelationService.h"
+#include "ChatRuntime.h"
 #include "ConfigMgr.h"
+#include "InlineTaskBus.h"
+#include "KafkaAsyncEventBus.h"
 #include "PostgresMgr.h"
+#include "RabbitMqTaskBus.h"
+#include "RedisAsyncEventBus.h"
 #include "RedisMgr.h"
 #include "RedisRelationBootstrapCache.h"
 #include "SnowflakeUtil.h"
+#include "TaskDispatcher.h"
+#include "ports/IEventPublisher.h"
 #include "logging/LogConfig.h"
 #include "logging/Logger.h"
 #include "logging/Telemetry.h"
@@ -104,6 +111,69 @@ std::string RelationServiceRpcAddress(ConfigMgr& cfg)
     const auto port = ConfigValueOrDefault(cfg, "RelationServiceRpc", "Port", "50091");
     return host + ":" + port;
 }
+
+// Thin IEventPublisher that forwards relation-state events straight to the async
+// event bus. The full AsyncEventDispatcher also CONSUMES events; this worker is a
+// pure producer (the main ChatServer runs the consumers), so it only needs the
+// publish side.
+class EventBusPublisher : public IEventPublisher
+{
+public:
+    explicit EventBusPublisher(std::shared_ptr<IAsyncEventBus> event_bus)
+        : _event_bus(std::move(event_bus))
+    {
+    }
+
+    bool PublishEvent(const std::string& topic,
+                      const memochat::json::JsonValue& payload,
+                      std::string* error = nullptr) override
+    {
+        if (!_event_bus)
+        {
+            if (error)
+            {
+                *error = "event_bus_unavailable";
+            }
+            return false;
+        }
+        return _event_bus->Publish(topic, payload, error);
+    }
+
+private:
+    std::shared_ptr<IAsyncEventBus> _event_bus;
+};
+
+std::shared_ptr<IAsyncTaskBus> BuildTaskBus()
+{
+    const auto backend = memochat::chatruntime::TaskBusBackend();
+    if (backend == "rabbitmq" && RabbitMqTaskBus::BuildAvailable())
+    {
+        return std::make_shared<RabbitMqTaskBus>();
+    }
+    if (backend == "rabbitmq")
+    {
+        memolog::LogWarn("relation_service.task_bus.rabbitmq_unavailable",
+                         "rabbitmq task bus unavailable in this build, falling back to inline",
+                         {{"configured_backend", backend}});
+    }
+    return std::make_shared<InlineTaskBus>();
+}
+
+std::shared_ptr<IAsyncEventBus> BuildAsyncEventBus()
+{
+    const auto backend = memochat::chatruntime::AsyncEventBusBackend();
+    if (backend == "kafka" && KafkaAsyncEventBus::BuildAvailable())
+    {
+        return std::make_shared<KafkaAsyncEventBus>();
+    }
+    if (backend == "kafka")
+    {
+        memolog::LogWarn("relation_service.event_bus.kafka_unavailable",
+                         "kafka async event bus unavailable in this build, falling back to redis",
+                         {{"configured_backend", backend}});
+    }
+    return std::make_shared<RedisAsyncEventBus>();
+}
 } // namespace
 
 int main(int argc, char** argv)
@@ -151,11 +221,26 @@ int main(int argc, char** argv)
 
         ChatRelationRepository relation_repository;
         RedisRelationBootstrapCache relation_bootstrap_cache;
+
+        // The accept/add-friend handlers must push a live notification to the
+        // online peer (clears the requester's "认证中" without a relogin) and
+        // publish a relation-state event for cross-node cache refresh. Before
+        // this, the worker passed nullptr publishers, so after the relation
+        // command split the peer push was silently dropped. Wire producer-only
+        // task + event publishers onto the same buses the main ChatServer
+        // consumes (TaskDispatcher handles "relation_notify",
+        // AsyncEventDispatcher handles TopicRelationState).
+        auto task_bus = BuildTaskBus();
+        auto async_event_bus = BuildAsyncEventBus();
+        TaskDispatcher task_publisher(
+            task_bus, []() { return false; }, nullptr, nullptr);
+        EventBusPublisher event_publisher(async_event_bus);
+
         ChatRelationService relation_service(&relation_repository,
                                              &relation_bootstrap_cache,
                                              nullptr,
-                                             nullptr,
-                                             nullptr);
+                                             &task_publisher,
+                                             &event_publisher);
         ChatRelationInternalGrpcService relation_grpc_service(&relation_service);
 
         const auto server_address = RelationServiceRpcAddress(cfg);

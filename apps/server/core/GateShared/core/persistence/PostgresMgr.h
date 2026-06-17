@@ -31,6 +31,12 @@ public:
                         int author_uid,
                         std::vector<MomentInfo>& moments,
                         bool& has_more);
+    bool GetMomentsFeedCandidates(int viewer_uid,
+                                  int64_t last_moment_id,
+                                  int limit,
+                                  int author_uid,
+                                  std::vector<MomentInfo>& moments,
+                                  bool& has_more);
     bool CanViewMoment(int viewer_uid, const MomentInfo& moment);
     bool GetMomentById(int64_t moment_id, MomentInfo& moment);
     bool DeleteMoment(int64_t moment_id, int uid);

@@ -26,6 +26,7 @@ public:
     bool ReplaceFriendTags(int self_id, int friend_id, const std::vector<std::string>& tags) override;
     bool DeleteFriend(int from, int to) override;
     bool IsPrivateFriend(int self_id, int friend_id) override;
+    std::vector<int> FilterFriendUids(int viewer_uid, const std::vector<int>& author_uids) override;
     bool IsGroupMember(int64_t group_id, int uid) override;
     bool CreateGroup(int owner_uid,
                      const std::string& name,

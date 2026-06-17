@@ -37,6 +37,8 @@ const char* CommandMethodName(RelationGrpcClient::CommandRpc rpc)
             return "SyncDraft";
         case RelationGrpcClient::CommandRpc::PinDialog:
             return "PinDialog";
+        case RelationGrpcClient::CommandRpc::FilterFriendUids:
+            return "FilterFriendUids";
     }
     return "unknown";
 }
@@ -157,6 +159,11 @@ RelationCommandResult RelationGrpcClient::PinDialog(const RelationCommandRequest
     return CallCommand(CommandRpc::PinDialog, request);
 }
 
+RelationCommandResult RelationGrpcClient::FilterFriendUids(const RelationCommandRequest& request)
+{
+    return CallCommand(CommandRpc::FilterFriendUids, request);
+}
+
 void RelationGrpcClient::CallQuery(QueryRpc rpc, int uid, memochat::json::JsonValue& out)
 {
     const char* method_name = QueryMethodName(rpc);
@@ -235,6 +242,9 @@ RelationCommandResult RelationGrpcClient::CallCommand(CommandRpc rpc, const Rela
             break;
         case CommandRpc::PinDialog:
             status = _stub->PinDialog(&context, grpc_request, &response);
+            break;
+        case CommandRpc::FilterFriendUids:
+            status = _stub->FilterFriendUids(&context, grpc_request, &response);
             break;
     }
 

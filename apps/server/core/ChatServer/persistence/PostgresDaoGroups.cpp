@@ -1,5 +1,6 @@
 #include "PostgresDao.h"
 #include "ConfigMgr.h"
+#include "PostgresDaoUtil.h"
 #include "db/PqxxCompat.h"
 #include "PostgresPool.h"
 #include "SnowflakeUtil.h"
@@ -37,42 +38,6 @@ bool IsValidGroupCode(const std::string& group_code)
     return true;
 }
 
-constexpr int64_t kPermChangeGroupInfo = 1LL << 0;
-constexpr int64_t kPermDeleteMessages = 1LL << 1;
-constexpr int64_t kPermInviteUsers = 1LL << 2;
-constexpr int64_t kPermManageAdmins = 1LL << 3;
-constexpr int64_t kPermPinMessages = 1LL << 4;
-constexpr int64_t kPermBanUsers = 1LL << 5;
-constexpr int64_t kPermManageTopics = 1LL << 6;
-constexpr int64_t kDefaultAdminPermBits =
-    kPermChangeGroupInfo | kPermDeleteMessages | kPermInviteUsers | kPermPinMessages | kPermBanUsers;
-constexpr int64_t kOwnerPermBits = kDefaultAdminPermBits | kPermManageAdmins | kPermManageTopics;
-
-std::string BuildPreviewText(const std::string& msg_type, const std::string& content)
-{
-    if (msg_type == "image" || content.rfind("__memochat_img__:", 0) == 0)
-    {
-        return "[图片]";
-    }
-    if (msg_type == "file" || content.rfind("__memochat_file__:", 0) == 0)
-    {
-        return "[文件]";
-    }
-    if (msg_type == "call" || content.rfind("__memochat_call__:", 0) == 0)
-    {
-        return "[通话邀请]";
-    }
-    if (content.rfind("__memochat_reply__:", 0) == 0)
-    {
-        return "[回复]";
-    }
-    if (content.size() <= 80)
-    {
-        return content;
-    }
-    return content.substr(0, 80);
-}
-
 void ExecuteIgnoreSql(sql::Statement* stmt, const std::string& sql_text)
 {
     if (stmt == nullptr)
@@ -86,13 +51,6 @@ void ExecuteIgnoreSql(sql::Statement* stmt, const std::string& sql_text)
     catch (const sql::SQLException&)
     {
     }
-}
-
-int64_t NowMsPostgresDao()
-{
-    return static_cast<int64_t>(
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-            .count());
 }
 } // namespace
 bool PostgresDao::CreateGroup(const int& owner_uid,

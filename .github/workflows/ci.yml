@@ -77,7 +77,7 @@ jobs:
       - name: Validate AI smoke script syntax
         shell: pwsh
         run: |
-          $null = [scriptblock]::Create((Get-Content tools/scripts/ai_agent_smoke.ps1 -Raw))
+          $null = [scriptblock]::Create((Get-Content tools/scripts/ai/ai_agent_smoke.ps1 -Raw))
 
       - name: Validate AI observability config
         shell: pwsh

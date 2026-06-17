@@ -2,6 +2,8 @@
 
 #include "ChatRuntime.h"
 #include "CSession.h"
+#include "GroupResponseFormatter.h"
+#include "MessageServiceUtil.h"
 #include "logging/Logger.h"
 
 #include <chrono>
@@ -11,28 +13,19 @@
 
 namespace
 {
-constexpr int64_t kPermChangeGroupInfoLocal = 1LL << 0;
-constexpr int64_t kPermDeleteMessagesLocal = 1LL << 1;
-constexpr int64_t kPermInviteUsersLocal = 1LL << 2;
-constexpr int64_t kPermManageAdminsLocal = 1LL << 3;
-constexpr int64_t kPermPinMessagesLocal = 1LL << 4;
-constexpr int64_t kPermBanUsersLocal = 1LL << 5;
-constexpr int64_t kPermManageTopicsLocal = 1LL << 6;
-constexpr int64_t kDefaultAdminPermBitsLocal = kPermChangeGroupInfoLocal | kPermDeleteMessagesLocal |
-                                               kPermInviteUsersLocal | kPermPinMessagesLocal | kPermBanUsersLocal;
+using memochat::chat::message::JsonToWireString;
+using memochat::chat::message::NowMs;
+using memochat::chat::message::NowSec;
+namespace GroupResponseFormatter = memochat::chat::message::GroupResponseFormatter;
 
-int64_t NowMsGroupLocal()
-{
-    return static_cast<int64_t>(
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-            .count());
-}
-
-int64_t NowSecGroupLocal()
-{
-    return static_cast<int64_t>(
-        std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-}
+constexpr int64_t kPermChangeGroupInfoLocal = GroupResponseFormatter::kPermChangeGroupInfo;
+constexpr int64_t kPermDeleteMessagesLocal = GroupResponseFormatter::kPermDeleteMessages;
+constexpr int64_t kPermInviteUsersLocal = GroupResponseFormatter::kPermInviteUsers;
+constexpr int64_t kPermManageAdminsLocal = GroupResponseFormatter::kPermManageAdmins;
+constexpr int64_t kPermPinMessagesLocal = GroupResponseFormatter::kPermPinMessages;
+constexpr int64_t kPermBanUsersLocal = GroupResponseFormatter::kPermBanUsers;
+constexpr int64_t kPermManageTopicsLocal = GroupResponseFormatter::kPermManageTopics;
+constexpr int64_t kDefaultAdminPermBitsLocal = GroupResponseFormatter::kDefaultAdminPermBits;
 
 bool ParseJsonObjectGroupLocal(const std::string& payload, memochat::json::JsonValue& root)
 {
@@ -40,14 +33,6 @@ bool ParseJsonObjectGroupLocal(const std::string& payload, memochat::json::JsonV
     std::unique_ptr<memochat::json::JsonCharReader> reader(builder.newCharReader());
     std::string errors;
     return reader->parse(payload.data(), payload.data() + payload.size(), &root, &errors) && root.is_object();
-}
-
-// Compact wire JSON for TCP/QUIC transport (Qt QJsonDocument is strict).
-std::string JsonToWireString(const memochat::json::JsonValue& v)
-{
-    memochat::json::JsonStreamWriterBuilder builder;
-    builder["indentation"] = "";
-    return memochat::json::writeString(builder, v);
 }
 
 bool KafkaBackendEnabledGroupLocal()
@@ -117,13 +102,7 @@ void GroupMessageService::BuildGroupListJson(int uid, memochat::json::JsonValue&
         one["is_all_muted"] = group->is_all_muted;
         one["role"] = group->role;
         one["permission_bits"] = static_cast<int64_t>(group->permission_bits);
-        one["can_change_group_info"] = (group->permission_bits & kPermChangeGroupInfoLocal) != 0;
-        one["can_delete_messages"] = (group->permission_bits & kPermDeleteMessagesLocal) != 0;
-        one["can_invite_users"] = (group->permission_bits & kPermInviteUsersLocal) != 0;
-        one["can_manage_admins"] = (group->permission_bits & kPermManageAdminsLocal) != 0;
-        one["can_pin_messages"] = (group->permission_bits & kPermPinMessagesLocal) != 0;
-        one["can_ban_users"] = (group->permission_bits & kPermBanUsersLocal) != 0;
-        one["can_manage_topics"] = (group->permission_bits & kPermManageTopicsLocal) != 0;
+        GroupResponseFormatter::ApplyPermissionFlags(one, group->permission_bits);
         out["group_list"].append(one);
     }
 
@@ -542,8 +521,8 @@ MessageCommandResult GroupMessageService::GroupChatMessage(const MessageCommandR
 
     std::vector<std::shared_ptr<GroupMemberInfo>> members;
     _relation_repository->GetGroupMemberList(group_id, members);
-    const auto now_sec = NowSecGroupLocal();
-    const auto now_ms = NowMsGroupLocal();
+    const auto now_sec = NowSec();
+    const auto now_ms = NowMs();
     for (const auto& member : members)
     {
         if (member && member->uid == from_uid && member->mute_until > now_sec)
@@ -591,7 +570,7 @@ MessageCommandResult GroupMessageService::GroupChatMessage(const MessageCommandR
         return result();
     }
 
-    const auto accept_ts = NowMsGroupLocal();
+    const auto accept_ts = NowMs();
     rtvalue["accept_node"] = memochat::chatruntime::SelfServerName();
     rtvalue["accept_ts"] = static_cast<int64_t>(accept_ts);
     rtvalue["status"] = kafka_primary ? "accepted" : "persisted";
@@ -763,62 +742,7 @@ MessageCommandResult GroupMessageService::GroupHistory(const MessageCommandReque
         {
             continue;
         }
-        memochat::json::JsonValue item;
-        item["msgid"] = one->msg_id;
-        item["groupid"] = static_cast<int64_t>(one->group_id);
-        item["fromuid"] = one->from_uid;
-        item["msgtype"] = one->msg_type;
-        item["content"] = one->content;
-        memochat::json::JsonValue mentions(memochat::json::array_t{});
-        if (!one->mentions_json.empty())
-        {
-            memochat::json::JsonReader mentions_reader;
-            memochat::json::JsonValue parsed_mentions;
-            if (mentions_reader.parse(one->mentions_json, parsed_mentions) && parsed_mentions.is_array())
-            {
-                mentions = parsed_mentions;
-            }
-        }
-        item["mentions"] = mentions;
-        if (!one->file_name.empty())
-        {
-            item["file_name"] = one->file_name;
-        }
-        if (!one->mime.empty())
-        {
-            item["mime"] = one->mime;
-        }
-        if (one->size > 0)
-        {
-            item["size"] = one->size;
-        }
-        item["created_at"] = static_cast<int64_t>(one->created_at);
-        item["server_msg_id"] = static_cast<int64_t>(one->server_msg_id);
-        item["group_seq"] = static_cast<int64_t>(one->group_seq);
-        if (one->reply_to_server_msg_id > 0)
-        {
-            item["reply_to_server_msg_id"] = static_cast<int64_t>(one->reply_to_server_msg_id);
-        }
-        if (!one->forward_meta_json.empty())
-        {
-            memochat::json::JsonReader forward_reader;
-            memochat::json::JsonValue forward_meta;
-            if (forward_reader.parse(one->forward_meta_json, forward_meta))
-            {
-                item["forward_meta"] = forward_meta;
-            }
-        }
-        if (one->edited_at_ms > 0)
-        {
-            item["edited_at_ms"] = static_cast<int64_t>(one->edited_at_ms);
-        }
-        if (one->deleted_at_ms > 0)
-        {
-            item["deleted_at_ms"] = static_cast<int64_t>(one->deleted_at_ms);
-        }
-        item["from_name"] = one->from_name;
-        item["from_nick"] = one->from_nick;
-        item["from_icon"] = one->from_icon;
+        memochat::json::JsonValue item = GroupResponseFormatter::SerializeHistoryMessage(*one);
         if ((one->from_name.empty() || one->from_nick.empty()) && one->from_uid > 0)
         {
             auto from_user = _relation_repository->GetUserByUid(one->from_uid);
@@ -842,7 +766,7 @@ MessageCommandResult GroupMessageService::GroupHistory(const MessageCommandReque
     }
     if (read_ts <= 0)
     {
-        read_ts = NowMsGroupLocal();
+        read_ts = NowMs();
     }
     _message_repository->UpsertGroupReadState(uid, group_id, read_ts);
     return result();
@@ -865,7 +789,7 @@ MessageCommandResult GroupMessageService::EditGroupMessage(const MessageCommandR
     const int64_t group_id = root["groupid"].asInt64();
     const std::string target_msg_id = root.get("msgid", "").asString();
     const std::string content = root.get("content", "").asString();
-    const int64_t now_ms = NowMsGroupLocal();
+    const int64_t now_ms = NowMs();
 
     memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
@@ -934,7 +858,7 @@ MessageCommandResult GroupMessageService::RevokeGroupMessage(const MessageComman
     const int uid = root["fromuid"].asInt();
     const int64_t group_id = root["groupid"].asInt64();
     const std::string target_msg_id = root.get("msgid", "").asString();
-    const int64_t now_ms = NowMsGroupLocal();
+    const int64_t now_ms = NowMs();
 
     memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
@@ -1036,7 +960,7 @@ MessageCommandResult GroupMessageService::ForwardGroupMessage(const MessageComma
         return result();
     }
 
-    const int64_t now_ms = NowMsGroupLocal();
+    const int64_t now_ms = NowMs();
     if (client_msg_id.empty())
     {
         client_msg_id = std::to_string(from_uid) + "_" + std::to_string(now_ms);
@@ -1206,7 +1130,7 @@ MessageCommandResult GroupMessageService::GroupReadAck(const MessageCommandReque
     }
     if (read_ts <= 0)
     {
-        read_ts = NowMsGroupLocal();
+        read_ts = NowMs();
     }
     _message_repository->UpsertGroupReadState(uid, group_id, read_ts);
 
@@ -1422,13 +1346,7 @@ MessageCommandResult GroupMessageService::SetGroupAdmin(const MessageCommandRequ
     rtvalue["target_user_id"] = target_user_id;
     rtvalue["is_admin"] = is_admin;
     rtvalue["permission_bits"] = static_cast<int64_t>(requested_permission_bits);
-    rtvalue["can_change_group_info"] = (requested_permission_bits & kPermChangeGroupInfoLocal) != 0;
-    rtvalue["can_delete_messages"] = (requested_permission_bits & kPermDeleteMessagesLocal) != 0;
-    rtvalue["can_invite_users"] = (requested_permission_bits & kPermInviteUsersLocal) != 0;
-    rtvalue["can_manage_admins"] = (requested_permission_bits & kPermManageAdminsLocal) != 0;
-    rtvalue["can_pin_messages"] = (requested_permission_bits & kPermPinMessagesLocal) != 0;
-    rtvalue["can_ban_users"] = (requested_permission_bits & kPermBanUsersLocal) != 0;
-    rtvalue["can_manage_topics"] = (requested_permission_bits & kPermManageTopicsLocal) != 0;
+    GroupResponseFormatter::ApplyPermissionFlags(rtvalue, requested_permission_bits);
     std::shared_ptr<GroupInfo> group_info;
     _relation_repository->GetGroupById(group_id, group_info);
     if (group_info)
@@ -1467,13 +1385,7 @@ MessageCommandResult GroupMessageService::SetGroupAdmin(const MessageCommandRequ
     notify["target_user_id"] = target_user_id;
     notify["is_admin"] = is_admin;
     notify["permission_bits"] = static_cast<int64_t>(requested_permission_bits);
-    notify["can_change_group_info"] = (requested_permission_bits & kPermChangeGroupInfoLocal) != 0;
-    notify["can_delete_messages"] = (requested_permission_bits & kPermDeleteMessagesLocal) != 0;
-    notify["can_invite_users"] = (requested_permission_bits & kPermInviteUsersLocal) != 0;
-    notify["can_manage_admins"] = (requested_permission_bits & kPermManageAdminsLocal) != 0;
-    notify["can_pin_messages"] = (requested_permission_bits & kPermPinMessagesLocal) != 0;
-    notify["can_ban_users"] = (requested_permission_bits & kPermBanUsersLocal) != 0;
-    notify["can_manage_topics"] = (requested_permission_bits & kPermManageTopicsLocal) != 0;
+    GroupResponseFormatter::ApplyPermissionFlags(notify, requested_permission_bits);
     _delivery_gateway->PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
     return result();
 }
@@ -1500,7 +1412,7 @@ MessageCommandResult GroupMessageService::MuteGroupMember(const MessageCommandRe
     {
         target_uid = 0;
     }
-    const int64_t mute_until = (mute_seconds > 0) ? NowSecGroupLocal() + mute_seconds : 0;
+    const int64_t mute_until = (mute_seconds > 0) ? NowSec() + mute_seconds : 0;
 
     memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;

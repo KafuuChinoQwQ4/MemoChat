@@ -3,6 +3,7 @@
 #include "ChatGrpcClient.h"
 #include "ChatRuntime.h"
 #include "CSession.h"
+#include "MessageServiceUtil.h"
 #include "logging/Logger.h"
 
 #include <algorithm>
@@ -13,6 +14,9 @@
 
 namespace
 {
+using memochat::chat::message::JsonToWireString;
+using memochat::chat::message::NowMs;
+
 enum class OnlineRouteKind
 {
     Offline,
@@ -28,14 +32,6 @@ struct OnlineRouteDecision
     std::string redis_server;
     bool local_session_found = false;
 };
-
-// Compact wire JSON for TCP/QUIC transport (Qt QJsonDocument is strict).
-std::string JsonToWireString(const memochat::json::JsonValue& v)
-{
-    memochat::json::JsonStreamWriterBuilder builder;
-    builder["indentation"] = "";
-    return memochat::json::writeString(builder, v);
-}
 
 OnlineRouteDecision
 ResolveOnlineRouteLocal(int uid, ISessionRegistry* session_registry, IOnlineRouteStore* online_route_store)
@@ -130,18 +126,9 @@ const char* RouteResultNameLocal(OnlineRouteKind kind)
     }
 }
 
-int64_t NowMsLocal()
-{
-    return static_cast<int64_t>(
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-            .count());
-}
-
 std::string JsonToCompactStringLocal(const memochat::json::JsonValue& value)
 {
-    memochat::json::JsonStreamWriterBuilder builder;
-    builder["indentation"] = "";
-    return memochat::json::writeString(builder, value);
+    return memochat::chat::message::JsonToWireString(value);
 }
 
 bool ParseJsonObjectLocal(const std::string& payload, memochat::json::JsonValue& root)
@@ -274,7 +261,7 @@ MessageCommandResult PrivateMessageService::TextChatMessage(const MessageCommand
         }
         if (msg.created_at <= 0)
         {
-            msg.created_at = NowMsLocal();
+            msg.created_at = NowMs();
         }
         if (msg.msg_id.empty() || msg.content.empty())
         {
@@ -314,7 +301,7 @@ MessageCommandResult PrivateMessageService::TextChatMessage(const MessageCommand
         append(normalized, element);
     }
 
-    const auto accept_ts = NowMsLocal();
+    const auto accept_ts = NowMs();
     rtvalue["client_msg_id"] = first_msg_id;
     rtvalue["accept_node"] = memochat::chatruntime::SelfServerName();
     rtvalue["accept_ts"] = static_cast<int64_t>(accept_ts);
@@ -452,7 +439,7 @@ MessageCommandResult PrivateMessageService::ForwardPrivateMessage(const MessageC
         return result();
     }
 
-    const int64_t now_ms = NowMsLocal();
+    const int64_t now_ms = NowMs();
     if (client_msg_id.empty())
     {
         client_msg_id = std::to_string(from_uid) + "_" + std::to_string(now_ms);
@@ -597,7 +584,7 @@ MessageCommandResult PrivateMessageService::PrivateReadAck(const MessageCommandR
     }
     if (read_ts <= 0)
     {
-        read_ts = NowMsLocal();
+        read_ts = NowMs();
     }
     _message_repository->UpsertPrivateReadState(uid, peer_uid, read_ts);
 
@@ -627,7 +614,7 @@ MessageCommandResult PrivateMessageService::EditPrivateMessage(const MessageComm
     const int peer_uid = root["peer_uid"].asInt();
     const std::string target_msg_id = root.get("msgid", "").asString();
     const std::string content = root.get("content", "").asString();
-    const int64_t now_ms = NowMsLocal();
+    const int64_t now_ms = NowMs();
 
     memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
@@ -692,7 +679,7 @@ MessageCommandResult PrivateMessageService::RevokePrivateMessage(const MessageCo
     const int uid = root["fromuid"].asInt();
     const int peer_uid = root["peer_uid"].asInt();
     const std::string target_msg_id = root.get("msgid", "").asString();
-    const int64_t now_ms = NowMsLocal();
+    const int64_t now_ms = NowMs();
 
     memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;

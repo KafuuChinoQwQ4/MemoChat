@@ -9,12 +9,18 @@
 
 class CSession;
 
+// Transport-role interface for in-process group message dispatch.
+//
+// The command/query surface (MessageCommandResult Xxx(request) + BuildGroupListJson) lives on the
+// base IGroupMessageCommandService and is consumed independently by the internal gRPC service
+// (server-to-server). This interface IS-A command service and adds ONLY the session-bound transport
+// handlers (HandleXxx) used by the in-process registrar dispatch. Keeping the two roles split lets
+// each consumer depend on the narrowest surface it needs (ISP).
 class IGroupMessageService : public IGroupMessageCommandService
 {
 public:
     virtual ~IGroupMessageService() = default;
 
-    virtual void BuildGroupListJson(int uid, memochat::json::JsonValue& out) = 0;
     virtual void
     HandleCreateGroup(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
     virtual void

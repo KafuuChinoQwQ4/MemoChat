@@ -40,6 +40,7 @@ class IRelationQueryService;
 class IRelationQueryServiceConfig;
 class IRelationServiceConfig;
 class IRelationService;
+class IRelationSessionService;
 class IPrivateMessageService;
 class IGroupMessageService;
 class IOnlineRouteStore;
@@ -109,6 +110,7 @@ private:
     std::shared_ptr<CServer> _p_server;
     std::unique_ptr<ChatSessionService> _chat_session_service;
     std::unique_ptr<IRelationService> _chat_relation_service;
+    std::unique_ptr<IRelationSessionService> _chat_relation_session_service;
     std::unique_ptr<IPrivateMessageService> _private_message_service;
     std::unique_ptr<IGroupMessageService> _group_message_service;
     std::unique_ptr<MessageDeliveryService> _message_delivery_service;

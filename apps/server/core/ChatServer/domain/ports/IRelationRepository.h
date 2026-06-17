@@ -32,6 +32,7 @@ public:
     virtual bool ReplaceFriendTags(int self_id, int friend_id, const std::vector<std::string>& tags) = 0;
     virtual bool DeleteFriend(int from, int to) = 0;
     virtual bool IsPrivateFriend(int self_id, int friend_id) = 0;
+    virtual std::vector<int> FilterFriendUids(int viewer_uid, const std::vector<int>& author_uids) = 0;
     virtual bool IsGroupMember(int64_t group_id, int uid) = 0;
     virtual bool CreateGroup(int owner_uid,
                              const std::string& name,

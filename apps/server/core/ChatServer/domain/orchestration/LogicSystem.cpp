@@ -21,6 +21,7 @@
 #include "RabbitMqTaskBus.h"
 #include "ChatDeliveryRuntime.h"
 #include "RelationServiceFactory.h"
+#include "ChatRelationSessionAdapter.h"
 #include "ChatSessionService.h"
 #include "MessageServiceFactory.h"
 #include "MessageDeliveryService.h"
@@ -213,6 +214,7 @@ LogicSystem::LogicSystem()
                                                    _message_delivery_service.get(),
                                                    _task_dispatcher.get(),
                                                    _async_event_dispatcher.get());
+    _chat_relation_session_service = std::make_unique<ChatRelationSessionAdapter>(_chat_relation_service.get());
     auto* relation_query_service = SelectRelationQueryService(*_relation_query_service_config,
                                                               _chat_relation_service.get(),
                                                               _relation_query_service_remote);

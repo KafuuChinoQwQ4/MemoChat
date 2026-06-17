@@ -1,0 +1,142 @@
+{{- if .Values.aiServer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.aiServer.serviceName }}
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    app.kubernetes.io/component: {{ .Values.aiServer.serviceName }}
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.aiServer.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: {{ .Values.aiServer.serviceName }}
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: {{ .Values.aiServer.serviceName }}
+        {{- include "memochat.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ .Values.aiServer.serviceName }}
+          image: "{{ .Values.images.aiServer.repository }}:{{ .Values.images.aiServer.tag }}"
+          imagePullPolicy: {{ .Values.images.aiServer.pullPolicy }}
+          env:
+            - name: TARGET_BIN
+              value: /app/AIServer
+            - name: RUN_WITH_CONFIG_ARG
+              value: "false"
+            - name: CONFIG_PATH
+              value: /app/config.ini
+            - name: MEMOCHAT_POSTGRES_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-password } }
+            - name: MEMOCHAT_REDIS_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.aiServer.service.grpcPort }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.ini
+              subPath: aiserver.ini
+          livenessProbe:
+            tcpSocket: { port: grpc }
+          readinessProbe:
+            tcpSocket: { port: grpc }
+          startupProbe:
+            tcpSocket: { port: grpc }
+            failureThreshold: 30
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.aiServer.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: memochat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.aiServer.serviceName }}
+  namespace: {{ .Values.namespaces.prod }}
+spec:
+  selector:
+    app.kubernetes.io/component: {{ .Values.aiServer.serviceName }}
+    {{- include "memochat.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: grpc
+      port: {{ .Values.aiServer.service.grpcPort }}
+      targetPort: grpc
+---
+{{- end }}
+{{- if .Values.aiOrchestrator.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.aiOrchestrator.serviceName }}
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    app.kubernetes.io/component: {{ .Values.aiOrchestrator.serviceName }}
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.aiOrchestrator.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: {{ .Values.aiOrchestrator.serviceName }}
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: {{ .Values.aiOrchestrator.serviceName }}
+        {{- include "memochat.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ .Values.aiOrchestrator.serviceName }}
+          image: "{{ .Values.images.aiOrchestrator.repository }}:{{ .Values.images.aiOrchestrator.tag }}"
+          imagePullPolicy: {{ .Values.images.aiOrchestrator.pullPolicy }}
+          env:
+            - name: MEMOCHAT_REDIS_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
+            - name: MEMOCHAT_RABBITMQ_PASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
+            {{- with .Values.aiOrchestrator.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.aiOrchestrator.service.port }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: ai-orchestrator.yaml
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            failureThreshold: 30
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.aiOrchestrator.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: memochat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.aiOrchestrator.serviceName }}
+  namespace: {{ .Values.namespaces.prod }}
+spec:
+  selector:
+    app.kubernetes.io/component: {{ .Values.aiOrchestrator.serviceName }}
+    {{- include "memochat.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.aiOrchestrator.service.port }}
+      targetPort: http
+{{- end }}

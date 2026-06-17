@@ -10,8 +10,10 @@
 #include "CServer.h"
 #include "ConfigMgr.h"
 #include "GateGlobals.h"
+#include "GateRouteProfileRegistrar.h"
 #include "GateWorkerPool.h"
 #include "LogicSystem.h"
+#include "domain/AIHttpServiceRoutes.h"
 #include "AsioIOServicePool.h"
 #include "logging/LogConfig.h"
 #include "logging/Logger.h"
@@ -53,7 +55,8 @@ int main(int argc, char* argv[])
     memolog::LogInfo("aigateway.start", "AIGatewayServer starting...");
 
     // Serve only health + /ai/* routes. MUST be set before LogicSystem::Instance().
-    LogicSystem::SetRouteProfile(LogicSystem::RouteProfile::AIGateway);
+    LogicSystem::ClearRouteProfileRegistrars();
+    LogicSystem::AddRouteProfileRegistrar(memochat::gate::profiles::RegisterAIGateway);
 
     std::string port_str = cfgMgr["AIGateway"]["Port"];
     unsigned short gate_port =
@@ -78,6 +81,15 @@ int main(int argc, char* argv[])
 
     // Force LogicSystem construction now (registers the AIGateway route profile).
     LogicSystem::GetInstance();
+
+    // The AIGateway route profile (RouteRegistry) covers /ai/chat, /ai/model/*,
+    // /ai/kb/*, etc., but the SSE streaming + pet + games proxies live in the
+    // legacy LogicSystem handler table (RegPost/RegGetPrefix) because they need
+    // direct HttpConnection access. The retired GateServer monolith wired these
+    // via AIHttpServiceRoutes::RegisterRoutes in its "full" profile block; the
+    // split dropped that call, orphaning /ai/chat/stream, /ai/pet and /ai/games.
+    // Re-register them here so the default client streaming path works.
+    AIHttpServiceRoutes::RegisterRoutes(*LogicSystem::GetInstance());
 
     net::io_context ioc{static_cast<int>(num_threads)};
     gateglobals::g_main_ioc = &ioc;

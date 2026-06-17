@@ -305,6 +305,41 @@ bool PostgresDao::GetUserInfo(int uid, UserInfo& user_info)
     {
         return false;
     }
+
+    // Account-owning services keep the user table in their pooled DB; services
+    // that bridge to memo_account (e.g. moments after the Phase 2 split) read it
+    // over a dedicated connection because "user" doesn't exist in their own DB.
+    if (!account_connection_string_.empty())
+    {
+        try
+        {
+            pqxx::connection conn(account_connection_string_);
+            pqxx::read_transaction txn(conn);
+            const auto rows = txn.exec_params("SELECT uid, name, email, user_id, nick, icon, \"desc\", sex "
+                                              "FROM \"user\" WHERE uid = $1 LIMIT 1",
+                                              uid);
+            if (rows.empty())
+            {
+                return false;
+            }
+            const auto& row = rows[0];
+            user_info.uid = row["uid"].as<int>();
+            user_info.name = row["name"].is_null() ? "" : row["name"].c_str();
+            user_info.email = row["email"].is_null() ? "" : row["email"].c_str();
+            user_info.user_id = row["user_id"].is_null() ? "" : row["user_id"].c_str();
+            user_info.nick = row["nick"].is_null() ? "" : row["nick"].c_str();
+            user_info.icon = row["icon"].is_null() ? "" : row["icon"].c_str();
+            user_info.desc = row["desc"].is_null() ? "" : row["desc"].c_str();
+            user_info.sex = row["sex"].is_null() ? 0 : row["sex"].as<int>();
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "GetUserInfo (account bridge) PostgreSQL exception: " << e.what() << std::endl;
+            return false;
+        }
+    }
+
     auto con = pool_->getConnection();
     if (con == nullptr)
     {

@@ -53,7 +53,7 @@ function(memochat_define_format_targets)
             endif()
             add_custom_target(format-cpp
                 COMMAND ${Python3_EXECUTABLE}
-                        "${PROJECT_SOURCE_DIR}/tools/scripts/format_sources.py"
+                        "${PROJECT_SOURCE_DIR}/tools/scripts/dev/format_sources.py"
                         --mode cpp
                         --clang-format "${MEMOCHAT_CLANG_FORMAT}"
                 WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
@@ -63,7 +63,7 @@ function(memochat_define_format_targets)
             list(APPEND MEMOCHAT_FORMAT_DEPENDENCIES format-cpp)
             add_custom_target(format-cpp-check
                 COMMAND ${Python3_EXECUTABLE}
-                        "${PROJECT_SOURCE_DIR}/tools/scripts/format_sources.py"
+                        "${PROJECT_SOURCE_DIR}/tools/scripts/dev/format_sources.py"
                         --mode cpp
                         --check
                         --clang-format "${MEMOCHAT_CLANG_FORMAT}"
@@ -90,7 +90,7 @@ function(memochat_define_format_targets)
             endif()
             add_custom_target(format-python
                 COMMAND ${Python3_EXECUTABLE}
-                        "${PROJECT_SOURCE_DIR}/tools/scripts/format_sources.py"
+                        "${PROJECT_SOURCE_DIR}/tools/scripts/dev/format_sources.py"
                         --mode python
                         --python "${Python3_EXECUTABLE}"
                 WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
@@ -100,7 +100,7 @@ function(memochat_define_format_targets)
             list(APPEND MEMOCHAT_FORMAT_DEPENDENCIES format-python)
             add_custom_target(format-python-check
                 COMMAND ${Python3_EXECUTABLE}
-                        "${PROJECT_SOURCE_DIR}/tools/scripts/format_sources.py"
+                        "${PROJECT_SOURCE_DIR}/tools/scripts/dev/format_sources.py"
                         --mode python
                         --check
                         --python "${Python3_EXECUTABLE}"

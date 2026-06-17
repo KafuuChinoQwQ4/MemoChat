@@ -1603,3 +1603,57 @@ bool PostgresDao::IsFriend(const int& self_id, const int& friend_id)
         return false;
     }
 }
+
+std::vector<int> PostgresDao::FilterFriendUids(int viewer_uid, const std::vector<int>& author_uids)
+{
+    // Returns the subset of author_uids visible to viewer_uid under the moments
+    // "friends-only" rule: a bidirectional `friend` row OR an accepted (status=1)
+    // friend_apply in either direction. Mirrors the EXISTS logic the moments feed
+    // used to embed inline, so visibility semantics are unchanged after the feed
+    // query stops touching the friend tables directly.
+    std::vector<int> result;
+    if (viewer_uid <= 0 || author_uids.empty() || !use_postgres_)
+    {
+        return result;
+    }
+    try
+    {
+        pqxx::connection conn(postgres_connection_string_);
+        pqxx::read_transaction txn(conn);
+        pqxx::params params;
+        params.append(viewer_uid);
+        std::string in_clause;
+        for (size_t i = 0; i < author_uids.size(); ++i)
+        {
+            if (i > 0)
+            {
+                in_clause += ", ";
+            }
+            in_clause += "$" + std::to_string(i + 2);
+            params.append(author_uids[i]);
+        }
+        const auto rows = txn.exec(
+            "SELECT a.uid FROM (SELECT unnest(ARRAY[" + in_clause + "]::int[]) AS uid) AS a "
+            "WHERE EXISTS ("
+            "    SELECT 1 FROM friend f "
+            "    WHERE ((f.self_id = a.uid AND f.friend_id = $1) OR (f.self_id = $1 AND f.friend_id = a.uid))"
+            ") "
+            "OR EXISTS ("
+            "    SELECT 1 FROM friend_apply fa "
+            "    WHERE fa.status = 1 "
+            "      AND ((fa.from_uid = a.uid AND fa.to_uid = $1) OR (fa.from_uid = $1 AND fa.to_uid = a.uid))"
+            ")",
+            params);
+        result.reserve(rows.size());
+        for (const auto& row : rows)
+        {
+            result.push_back(row["uid"].as<int>());
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "FilterFriendUids PostgreSQL exception: " << e.what() << std::endl;
+        result.clear();
+    }
+    return result;
+}

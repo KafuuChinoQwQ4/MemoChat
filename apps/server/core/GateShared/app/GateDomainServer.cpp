@@ -11,13 +11,15 @@
 
 #include "CServer.h"
 #include "ConfigMgr.h"
-#include "GateAsyncSideEffects.h"
 #include "GateGlobals.h"
 #include "GateWorkerPool.h"
+#include "LogicSystem.h"
 #include "SnowflakeUtil.h"
 #include "AsioIOServicePool.h"
 #include "logging/LogConfig.h"
 #include "logging/Logger.h"
+#include "logging/Telemetry.h"
+#include "logging/TelemetryConfig.h"
 #include <aws/core/Aws.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/signal_set.hpp>
@@ -27,12 +29,13 @@
 
 using namespace memolog;
 
-int RunGateDomainServer(LogicSystem::RouteProfile profile,
+int RunGateDomainServer(GateDomainRouteRegistrar registrar,
                         const std::string& service_name,
                         const std::string& config_section,
                         unsigned short default_port,
                         bool init_aws,
-                        bool init_async)
+                        GateDomainLifecycleHook on_start,
+                        GateDomainLifecycleHook on_stop)
 {
     Aws::SDKOptions aws_options;
     if (init_aws)
@@ -47,17 +50,22 @@ int RunGateDomainServer(LogicSystem::RouteProfile profile,
                               {
                                   return cfgMgr.GetValue(section, key);
                               }));
+    memolog::Telemetry::Init(service_name,
+                             memolog::TelemetryConfig::FromGetter(
+                                 [&cfgMgr](const std::string& section, const std::string& key)
+                                 {
+                                     return cfgMgr.GetValue(section, key);
+                                 }));
 
     memolog::LogInfo("gatedomain.start", service_name + " starting...");
 
-    // Select the domain route profile BEFORE the first LogicSystem::Instance().
-    LogicSystem::SetRouteProfile(profile);
+    // Register the domain route profile BEFORE the first LogicSystem::Instance().
+    LogicSystem::ClearRouteProfileRegistrars();
+    LogicSystem::AddRouteProfileRegistrar(registrar);
 
-    // Account services (register/login/account) emit audit + cache-invalidate
-    // side effects through GateAsyncSideEffects; start it when requested.
-    if (init_async)
+    if (on_start)
     {
-        GateAsyncSideEffects::Instance().Start();
+        on_start();
     }
 
     // Snowflake id generator (moments/media id paths use it; harmless otherwise).
@@ -106,15 +114,16 @@ int RunGateDomainServer(LogicSystem::RouteProfile profile,
     ioc.run();
 
     memolog::LogInfo("service.stop", service_name + " stopped");
-    if (init_async)
+    if (on_stop)
     {
-        GateAsyncSideEffects::Instance().Stop();
+        on_stop();
     }
     GateWorkerPool::GetInstance()->Stop();
     if (init_aws)
     {
         Aws::ShutdownAPI(aws_options);
     }
+    memolog::Telemetry::Shutdown();
     memolog::Logger::Shutdown();
     return 0;
 }

@@ -65,26 +65,10 @@ public:
         return {ID_PIN_DIALOG_RSP, R"({"error":0,"pinned_rank":10})"};
     }
 
-    void HandleSearchUser(const std::shared_ptr<CSession>&, short, const std::string&) override
+    RelationCommandResult FilterFriendUids(const RelationCommandRequest& request) override
     {
-    }
-    void HandleAddFriendApply(const std::shared_ptr<CSession>&, short, const std::string&) override
-    {
-    }
-    void HandleAuthFriendApply(const std::shared_ptr<CSession>&, short, const std::string&) override
-    {
-    }
-    void HandleDeleteFriend(const std::shared_ptr<CSession>&, short, const std::string&) override
-    {
-    }
-    void HandleGetDialogList(const std::shared_ptr<CSession>&, short, const std::string&) override
-    {
-    }
-    void HandleSyncDraft(const std::shared_ptr<CSession>&, short, const std::string&) override
-    {
-    }
-    void HandlePinDialog(const std::shared_ptr<CSession>&, short, const std::string&) override
-    {
+        last_request = request;
+        return {0, R"({"error":0,"friend_uids":[]})"};
     }
 
     RelationCommandRequest last_request;

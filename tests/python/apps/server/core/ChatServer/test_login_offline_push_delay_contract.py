@@ -15,9 +15,10 @@ class LoginOfflinePushDelayContractTest(unittest.TestCase):
             r'ConfigInt\("LogicSystem",\s*"LoginOfflinePushDelayMs",\s*0,\s*0,\s*60000\)',
         )
 
+        # Cluster reduced 6→2 nodes (chatserver1/2 only); iterate the real topology.
         config_paths = [CHAT_SERVER_DIR / "config.ini"]
-        config_paths.extend(CHAT_SERVER_DIR / f"chatserver{i}.ini" for i in range(1, 7))
-        config_paths.extend(RUNTIME_SERVICES_DIR / f"chatserver{i}/config.ini" for i in range(1, 7))
+        config_paths.extend(CHAT_SERVER_DIR / f"chatserver{i}.ini" for i in range(1, 3))
+        config_paths.extend(RUNTIME_SERVICES_DIR / f"chatserver{i}/config.ini" for i in range(1, 3))
 
         for path in config_paths:
             with self.subTest(path=str(path.relative_to(REPO_ROOT))):

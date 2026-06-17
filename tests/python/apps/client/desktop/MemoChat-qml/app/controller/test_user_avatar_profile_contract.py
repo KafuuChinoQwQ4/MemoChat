@@ -7,10 +7,12 @@ REPO_ROOT = repo_root()
 CLIENT_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 CORE_CLIENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core"
 SHARED_CLIENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/shared"
-GATE_CORE = REPO_ROOT / "apps/server/core/GateServer/core"
-GATE_H1 = REPO_ROOT / "apps/server/core/GateServer"
-GATE_H2_SUPPORT = REPO_ROOT / "apps/server/core/GateServer/transports/h2/support"
-GATE_H3_LEGACY_ROUTES = REPO_ROOT / "apps/server/core/GateServer/transports/h3/legacy_routes"
+# Auth login support + auth service moved into AccountShared when the GateServer monolith was
+# retired; the H2/H3 legacy transport compat shims live under GateShared.
+ACCOUNT_CORE = REPO_ROOT / "apps/server/core/AccountShared/core"
+ACCOUNT_DOMAIN = REPO_ROOT / "apps/server/core/AccountShared/domain"
+GATE_H2_SUPPORT = REPO_ROOT / "apps/server/core/GateShared/transports/h2/support"
+GATE_H3_LEGACY_ROUTES = REPO_ROOT / "apps/server/core/GateShared/transports/h3/legacy_routes"
 
 
 def read(path: Path) -> str:
@@ -122,9 +124,9 @@ class UserAvatarProfileContractTests(unittest.TestCase):
         self.assertNotIn("port == 80 || port == 8443", icon_utils)
 
     def test_gate_login_cache_hit_refreshes_database_profile_before_ticket_issue(self):
-        support_h = read(GATE_CORE / "support/AuthLoginSupport.h")
-        support_cpp = read(GATE_CORE / "support/AuthLoginSupport.cpp")
-        h1_auth_service = read(GATE_H1 / "services/auth/AuthService.cpp")
+        support_h = read(ACCOUNT_CORE / "support/AuthLoginSupport.h")
+        support_cpp = read(ACCOUNT_CORE / "support/AuthLoginSupport.cpp")
+        h1_auth_service = read(ACCOUNT_DOMAIN / "services/auth/AuthService.cpp")
         h2 = read(GATE_H2_SUPPORT / "Http2AuthSupport.cpp")
         h3 = read(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp")
 

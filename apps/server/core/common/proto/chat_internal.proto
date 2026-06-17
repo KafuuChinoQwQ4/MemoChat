@@ -57,6 +57,13 @@ service ChatRelationInternalService {
   rpc GetDialogList(JsonPayloadRequest) returns (JsonPayloadResponse) {}
   rpc SyncDraft(JsonPayloadRequest) returns (JsonPayloadResponse) {}
   rpc PinDialog(JsonPayloadRequest) returns (JsonPayloadResponse) {}
+  // Read-only friendship filter for cross-service visibility checks (e.g.
+  // MomentsService feed). payload_json in: {"viewer_uid":N,"author_uids":[...]},
+  // out: {"error":0,"friend_uids":[...]} — the subset of author_uids that are
+  // bidirectional friends of viewer_uid or have an accepted (status=1)
+  // friend_apply. Lets services that don't own the friend tables (in memo_pg)
+  // resolve visibility without a cross-database query.
+  rpc FilterFriendUids(JsonPayloadRequest) returns (JsonPayloadResponse) {}
 }
 
 service ChatPrivateMessageInternalService {

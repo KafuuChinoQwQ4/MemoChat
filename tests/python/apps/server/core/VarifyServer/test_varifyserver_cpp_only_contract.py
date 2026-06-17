@@ -5,10 +5,20 @@ from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
 VARIFY_SERVER_DIR = REPO_ROOT / "apps/server/core/VarifyServer"
+TOOLS_SCRIPTS_DIR = REPO_ROOT / "tools/scripts"
 
 
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def find_script(name: str) -> Path:
+    # tools/scripts was reorganized into category subdirectories; locate a script by name
+    # anywhere under tools/scripts/ so the contract is robust to relocation (the contract is
+    # "this script exists somewhere under tools/scripts and is C++-only", not its exact path).
+    hits = sorted(TOOLS_SCRIPTS_DIR.rglob(name))
+    assert len(hits) == 1, f"expected exactly one tools/scripts/**/{name}, found {hits}"
+    return hits[0]
 
 
 class VarifyServerCppOnlyContractTests(unittest.TestCase):
@@ -34,10 +44,11 @@ class VarifyServerCppOnlyContractTests(unittest.TestCase):
         self.assertEqual(existing, [], "VarifyServer must not keep Node.js runtime files")
 
     def test_readme_describes_varifyserver_as_cpp_service_not_nodejs(self):
+        # README was trimmed to a minimal project intro and no longer maintains a service list,
+        # so this is a negative-only regression guard: the README must never (re)introduce a
+        # Node.js description of VarifyServer (it is a C++ service after the Node→C++ migration).
         source = read(REPO_ROOT / "README.md")
 
-        self.assertIn("VarifyServer", source)
-        self.assertIn("**核心服务**", source)
         self.assertNotIn("VarifyServer 使用 Node.js", source)
         self.assertNotIn("@grpc/grpc-js", source)
         self.assertNotIn("@grpc/proto-loader", source)
@@ -64,22 +75,22 @@ class VarifyServerCppOnlyContractTests(unittest.TestCase):
         self.assertNotIn("VarifyServer Node", source)
 
     def test_legacy_varify_launcher_does_not_start_node(self):
-        for relative_path in (
-            "tools/scripts/start_varify.bat",
-            "tools/scripts/run_verifyserver.ps1",
+        for name in (
+            "start_varify.bat",
+            "run_verifyserver.ps1",
         ):
-            source = read(REPO_ROOT / relative_path)
+            source = read(find_script(name))
             self.assertIn("VarifyServer", source)
             self.assertNotIn("node server.js", source)
             self.assertNotIn("npm install", source)
             self.assertNotIn("node_modules", source)
 
     def test_legacy_scripts_do_not_start_node_varifyserver(self):
-        for relative_path in (
-            "tools/scripts/start_and_monitor.ps1",
-            "tools/scripts/start-windows-dev.ps1",
+        for name in (
+            "start_and_monitor.ps1",
+            "start-windows-dev.ps1",
         ):
-            source = read(REPO_ROOT / relative_path)
+            source = read(find_script(name))
             self.assertIn("VarifyServer", source)
             self.assertNotIn("VarifyServer (Node.js)", source)
             self.assertNotIn('Start-Process -FilePath "node"', source)
@@ -88,28 +99,48 @@ class VarifyServerCppOnlyContractTests(unittest.TestCase):
             self.assertNotIn("node_modules", source)
 
     def test_legacy_verify_code_helpers_do_not_import_varifyserver_node_dependencies(self):
-        for relative_path in (
-            "tools/scripts/node_test.js",
-            "tools/scripts/full_login_test.js",
-            "tools/scripts/read_verify.js",
-            "tools/scripts/poll_verify.js",
-            "tools/scripts/get_and_read_code.ps1",
+        for name in (
+            "node_test.js",
+            "full_login_test.js",
+            "read_verify.js",
+            "poll_verify.js",
+            "get_and_read_code.ps1",
         ):
-            source = read(REPO_ROOT / relative_path)
+            source = read(find_script(name))
             self.assertNotIn("server/VarifyServer/node_modules", source)
             self.assertNotIn("VarifyServer/node_modules", source)
             self.assertNotIn("ioredis", source)
             self.assertNotIn("NODE_PATH", source)
 
     def test_linux_runtime_scripts_still_deploy_and_start_cpp_binary(self):
+        # deploy/start were refactored to be data-driven: they source runtime_topology.sh and
+        # iterate MEMOCHAT_RUNTIME_SERVICE_TOPOLOGY instead of hardcoding each service. Verify the
+        # VarifyServer C++ deploy/start contract lives in that shared topology table and that both
+        # scripts consume it generically (require_file/deploy_service/launch_svc over the rows).
+        topology = read(REPO_ROOT / "tools/scripts/status/runtime_topology.sh")
         deploy = read(REPO_ROOT / "tools/scripts/status/deploy_services.sh")
         start = read(REPO_ROOT / "tools/scripts/status/start-all-services.sh")
 
-        self.assertIn('require_file "${BUILD_BIN}/VarifyServer"', deploy)
-        self.assertIn('deploy_service "VarifyServer1" "VarifyServer" "VarifyServer" "VarifyServer/config.ini"', deploy)
-        self.assertIn('deploy_service "VarifyServer2" "VarifyServer" "VarifyServer" "VarifyServer/varify2.ini"', deploy)
-        self.assertIn('launch_svc "${RUNTIME_DIR}/VarifyServer1" "VarifyServer" "VarifyServer-1" "50051"', start)
-        self.assertIn('launch_svc "${RUNTIME_DIR}/VarifyServer2" "VarifyServer" "VarifyServer-2" "48083"', start)
+        # VarifyServer is a C++ binary (executable == source_executable == "VarifyServer"), two
+        # instances, with their config files and TCP wait ports — encoded as topology rows.
+        self.assertIn(
+            "varify|VarifyServer1|VarifyServer|VarifyServer|VarifyServer/config.ini|VarifyServer-1|50051",
+            topology,
+        )
+        self.assertIn(
+            "varify|VarifyServer2|VarifyServer|VarifyServer|VarifyServer/varify2.ini|VarifyServer-2|48083",
+            topology,
+        )
+
+        # Both scripts source the shared topology and iterate it (no per-service hardcoding).
+        for source in (deploy, start):
+            self.assertIn("runtime_topology.sh", source)
+            self.assertIn('for row in "${MEMOCHAT_RUNTIME_SERVICE_TOPOLOGY[@]}"; do', source)
+        # deploy requires the built C++ binary and deploys each row's runtime dir + config.
+        self.assertIn('require_file "${BUILD_BIN}/${source_exe}"', deploy)
+        self.assertIn('deploy_service "$name" "$exe" "$source_exe" "$config"', deploy)
+        # start launches each row's runtime dir, waiting on its TCP port.
+        self.assertIn('launch_svc "${RUNTIME_DIR}/${name}" "$exe" "$display_name" "$tcp_wait_port"', start)
 
     def test_container_and_kubernetes_contracts_use_cpp_varifyserver(self):
         self.assertFalse(
@@ -147,7 +178,7 @@ class VarifyServerCppOnlyContractTests(unittest.TestCase):
         self.assertNotIn("varify.config.json", service_config)
 
     def test_preflight_checks_cpp_varifyserver_inputs(self):
-        source = read(REPO_ROOT / "tools/scripts/preflight.ps1")
+        source = read(find_script("preflight.ps1"))
 
         self.assertIn("server/VarifyServer/config.ini", source)
         self.assertIn('"VarifyServer.exe"', source)

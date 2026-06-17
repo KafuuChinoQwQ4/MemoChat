@@ -21,6 +21,32 @@ std::string BuildConnectionString()
     return conn;
 }
 
+// Builds a connection string for cross-domain account reads. Returns "" when
+// the section is absent so callers fall back to the pooled connection. After
+// the Phase 2 DB split, services that don't own the user table (e.g. moments)
+// set [AccountPostgres] -> memo_account so GetUserInfo reads the authoritative
+// user store instead of their own database (where "user" doesn't exist).
+std::string BuildAccountConnectionString()
+{
+    auto& cfg = ConfigMgr::Inst();
+    if (cfg["AccountPostgres"]["Host"].empty())
+    {
+        return "";
+    }
+    const auto host = cfg["AccountPostgres"]["Host"];
+    const auto port = cfg["AccountPostgres"]["Port"];
+    const auto pwd = cfg["AccountPostgres"]["Passwd"];
+    const auto database = cfg["AccountPostgres"]["Database"];
+    const auto schema = cfg["AccountPostgres"]["Schema"];
+    const auto user = cfg["AccountPostgres"]["User"];
+    const auto sslmode = cfg["AccountPostgres"]["SslMode"];
+    std::string conn = "host=" + host + " port=" + port + " user=" + user + " password=" + pwd + " dbname=" + database +
+                       " sslmode=" + (sslmode.empty() ? "disable" : sslmode) +
+                       " options=-csearch_path=" + (schema.empty() ? "public" : schema) + ",public" +
+                       " connect_timeout=3";
+    return conn;
+}
+
 std::string PostgresSchemaName()
 {
     auto& cfg = ConfigMgr::Inst();
@@ -43,6 +69,7 @@ int PostgresPoolSize()
 PostgresDao::PostgresDao()
 {
     pool_.reset(new PostgresPool(BuildConnectionString(), PostgresSchemaName(), PostgresPoolSize()));
+    account_connection_string_ = BuildAccountConnectionString();
     EnsureMomentsCommentLikeTable();
     WarmupAuthQueries();
 }
@@ -569,6 +596,108 @@ bool PostgresDao::GetMomentsFeed(int viewer_uid,
     catch (const std::exception& e)
     {
         std::cerr << "GetMomentsFeed PostgreSQL exception: " << e.what() << std::endl;
+        moments.clear();
+        return false;
+    }
+}
+
+bool PostgresDao::GetMomentsFeedCandidates(int viewer_uid,
+                                           int64_t last_moment_id,
+                                           int limit,
+                                           int author_uid,
+                                           std::vector<MomentInfo>& moments,
+                                           bool& has_more)
+{
+    // Like GetMomentsFeed but WITHOUT the friend/friend_apply EXISTS subquery,
+    // so it runs in a database that doesn't own the friend tables (memo_moments
+    // after the Phase 2 split). It returns every friends-only (visibility=1)
+    // moment as a candidate; the caller must drop authors that aren't friends
+    // of viewer_uid using the relation service (FilterFriendUids). Public
+    // (visibility=0) and own moments are already fully resolved here.
+    moments.clear();
+    has_more = false;
+    if (limit <= 0)
+    {
+        limit = 20;
+    }
+    limit = std::min(limit, 50);
+
+    auto con = pool_->getConnection();
+    if (con == nullptr)
+    {
+        return false;
+    }
+
+    Defer defer(
+        [this, &con]()
+        {
+            pool_->returnConnection(std::move(con));
+        });
+
+    try
+    {
+        pqxx::read_transaction txn(*con->_con);
+
+        pqxx::result rows;
+        if (last_moment_id <= 0)
+        {
+            rows = txn.exec_params(R"(
+                SELECT m.moment_id, m.uid, m.visibility, m.location, m.created_at,
+                       m.like_count, m.comment_count
+                FROM moments m
+                WHERE m.deleted_at = 0
+                  AND ($3 <= 0 OR m.uid = $3)
+                  AND (m.visibility = 0 OR m.uid = $1 OR m.visibility = 1)
+                ORDER BY m.created_at DESC, m.moment_id DESC
+                LIMIT $2
+            )",
+                                   viewer_uid,
+                                   limit + 1,
+                                   author_uid);
+        }
+        else
+        {
+            rows = txn.exec_params(R"(
+                SELECT m.moment_id, m.uid, m.visibility, m.location, m.created_at,
+                       m.like_count, m.comment_count
+                FROM moments m
+                WHERE m.deleted_at = 0
+                  AND m.moment_id < $2
+                  AND ($4 <= 0 OR m.uid = $4)
+                  AND (m.visibility = 0 OR m.uid = $1 OR m.visibility = 1)
+                ORDER BY m.created_at DESC, m.moment_id DESC
+                LIMIT $3
+            )",
+                                   viewer_uid,
+                                   last_moment_id,
+                                   limit + 1,
+                                   author_uid);
+        }
+
+        if (static_cast<int>(rows.size()) > limit)
+        {
+            has_more = true;
+        }
+
+        for (size_t i = 0; i < rows.size() && static_cast<int>(moments.size()) < limit; ++i)
+        {
+            const auto& row = rows[i];
+            MomentInfo info;
+            info.moment_id = row["moment_id"].as<int64_t>();
+            info.uid = row["uid"].as<int>();
+            info.visibility = row["visibility"].as<int>();
+            info.location = row["location"].is_null() ? "" : row["location"].c_str();
+            info.created_at = row["created_at"].as<int64_t>();
+            info.like_count = row["like_count"].as<int>();
+            info.comment_count = row["comment_count"].as<int>();
+            moments.push_back(info);
+        }
+
+        return true;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "GetMomentsFeedCandidates PostgreSQL exception: " << e.what() << std::endl;
         moments.clear();
         return false;
     }
