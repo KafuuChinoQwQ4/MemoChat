@@ -30,6 +30,7 @@ public:
         GetDialogList,
         SyncDraft,
         PinDialog,
+        FilterFriendUids,
     };
 
     explicit RelationGrpcClient(const std::string& endpoint,
@@ -47,6 +48,7 @@ public:
     RelationCommandResult GetDialogList(const RelationCommandRequest& request) override;
     RelationCommandResult SyncDraft(const RelationCommandRequest& request) override;
     RelationCommandResult PinDialog(const RelationCommandRequest& request) override;
+    RelationCommandResult FilterFriendUids(const RelationCommandRequest& request) override;
 
 private:
     void CallQuery(QueryRpc rpc, int uid, memochat::json::JsonValue& out);

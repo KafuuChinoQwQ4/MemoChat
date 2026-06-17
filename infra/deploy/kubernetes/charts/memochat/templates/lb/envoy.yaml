@@ -40,19 +40,173 @@ data:
                                 status: 200
                                 body:
                                   inline_string: "OK\n"
-                            # gateserver microservice split Phase 6: the LOCAL Envoy
-                            # (infra/deploy/local/compose/envoy.yaml) already routes
-                            # each domain prefix (/ai/, /upload_media, /api/moments/,
-                            # /api/call/, /api/r18/, /user_login, /get_varifycode|
-                            # /user_register|/reset_pwd, /user_update_profile) to its
-                            # per-service backend. The k8s cut-over additionally needs
-                            # one Deployment+Service per gateway (aigateway/media/
-                            # moments/call/r18/register/login/account) before per-prefix
-                            # clusters can be added here; until those exist, k8s keeps
-                            # routing everything to gate_backend (the monolith), which
-                            # still serves every route. Tracked as a follow-up infra
-                            # slice (needs a live cluster to validate).
-                            - name: gate
+                            {{- if .Values.focusedGateways.enabled }}
+                            - name: auth
+                              match:
+                                path: /get_varifycode
+                                headers:
+                                  - name: ":method"
+                                    exact_match: POST
+                              route:
+                                cluster: register_backend
+                                timeout: 60s
+                                retry_policy:
+                                  retry_on: connect-failure,reset,5xx,gateway-error
+                                  num_retries: 2
+                                  per_try_timeout: 15s
+                            - name: auth
+                              match:
+                                path: /get_varifycode
+                                headers:
+                                  - name: ":method"
+                                    exact_match: GET
+                              direct_response:
+                                status: 405
+                                body:
+                                  inline_string: "Method Not Allowed\n"
+                            - name: auth
+                              match:
+                                path: /user_register
+                                headers:
+                                  - name: ":method"
+                                    exact_match: POST
+                              route:
+                                cluster: register_backend
+                                timeout: 60s
+                                retry_policy:
+                                  retry_on: connect-failure,reset,5xx,gateway-error
+                                  num_retries: 2
+                                  per_try_timeout: 15s
+                            - name: auth
+                              match:
+                                path: /reset_pwd
+                                headers:
+                                  - name: ":method"
+                                    exact_match: POST
+                              route:
+                                cluster: register_backend
+                                timeout: 60s
+                                retry_policy:
+                                  retry_on: connect-failure,reset,5xx,gateway-error
+                                  num_retries: 2
+                                  per_try_timeout: 15s
+                            - name: auth
+                              match:
+                                path: /user_login
+                                headers:
+                                  - name: ":method"
+                                    exact_match: POST
+                              route:
+                                cluster: login_backend
+                                timeout: 60s
+                                retry_policy:
+                                  retry_on: connect-failure,reset,5xx,gateway-error
+                                  num_retries: 2
+                                  per_try_timeout: 15s
+                            - name: ai
+                              match:
+                                prefix: /ai/chat/stream
+                                headers:
+                                  - name: ":method"
+                                    exact_match: POST
+                              route:
+                                cluster: aigateway_backend
+                                timeout: 600s
+                                retry_policy:
+                                  retry_on: connect-failure,reset,gateway-error
+                                  num_retries: 1
+                                  per_try_timeout: 30s
+                              response_headers_to_add:
+                                - header:
+                                    key: X-Accel-Buffering
+                                    value: "no"
+                                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - name: ai
+                              match:
+                                prefix: /ai/chat/stream
+                                headers:
+                                  - name: ":method"
+                                    exact_match: GET
+                              direct_response:
+                                status: 405
+                                body:
+                                  inline_string: "Method Not Allowed\n"
+                            - name: ai
+                              match:
+                                prefix: /ai/
+                              route:
+                                cluster: aigateway_backend
+                                timeout: 300s
+                                retry_policy:
+                                  retry_on: connect-failure,reset,5xx,gateway-error
+                                  num_retries: 1
+                                  per_try_timeout: 30s
+                            - name: media
+                              match:
+                                prefix: /upload_media
+                              route:
+                                cluster: mediagateway_backend
+                                timeout: 600s
+                                retry_policy:
+                                  retry_on: connect-failure,reset
+                                  num_retries: 1
+                                  per_try_timeout: 30s
+                            - name: media
+                              match:
+                                prefix: /media/
+                              route:
+                                cluster: mediagateway_backend
+                                timeout: 600s
+                                retry_policy:
+                                  retry_on: connect-failure,reset
+                                  num_retries: 1
+                                  per_try_timeout: 30s
+                            - name: moments
+                              match:
+                                prefix: /api/moments/
+                              route:
+                                cluster: momentsgateway_backend
+                                timeout: 120s
+                                retry_policy:
+                                  retry_on: connect-failure,reset,5xx,gateway-error
+                                  num_retries: 2
+                                  per_try_timeout: 15s
+                            - name: call
+                              match:
+                                prefix: /api/call/
+                              route:
+                                cluster: callgateway_backend
+                                timeout: 120s
+                                retry_policy:
+                                  retry_on: connect-failure,reset,5xx,gateway-error
+                                  num_retries: 2
+                                  per_try_timeout: 15s
+                            - name: r18
+                              match:
+                                prefix: /api/r18/
+                              route:
+                                cluster: r18gateway_backend
+                                timeout: 120s
+                                retry_policy:
+                                  retry_on: connect-failure,reset,5xx,gateway-error
+                                  num_retries: 2
+                                  per_try_timeout: 15s
+                            - name: profile
+                              match:
+                                path: /user_update_profile
+                                headers:
+                                  - name: ":method"
+                                    exact_match: POST
+                              route:
+                                cluster: account_backend
+                                timeout: 120s
+                                retry_policy:
+                                  retry_on: connect-failure,reset,5xx,gateway-error
+                                  num_retries: 2
+                                  per_try_timeout: 15s
+                            {{- end }}
+                            {{- if .Values.legacyGate.enabled }}
+                            - name: gate_legacy
                               match:
                                 prefix: /
                               route:
@@ -62,6 +216,15 @@ data:
                                   retry_on: connect-failure,reset,5xx,gateway-error
                                   num_retries: 2
                                   per_try_timeout: 15s
+                            {{- else }}
+                            - name: other
+                              match:
+                                prefix: /
+                              direct_response:
+                                status: 404
+                                body:
+                                  inline_string: "Not Found\n"
+                            {{- end }}
                     http_filters:
                       - name: envoy.filters.http.router
                         typed_config:
@@ -97,6 +260,121 @@ data:
                     hash_policy:
                       - source_ip: {}
       clusters:
+        {{- if .Values.focusedGateways.enabled }}
+        - name: aigateway_backend
+          type: STRICT_DNS
+          connect_timeout: 5s
+          dns_lookup_family: V4_ONLY
+          lb_policy: LEAST_REQUEST
+          load_assignment:
+            cluster_name: aigateway_backend
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: {{ .Values.focusedGateways.services.aigateway.serviceName }}.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}
+                          port_value: {{ .Values.focusedGateways.services.aigateway.port }}
+        - name: mediagateway_backend
+          type: STRICT_DNS
+          connect_timeout: 5s
+          dns_lookup_family: V4_ONLY
+          lb_policy: LEAST_REQUEST
+          load_assignment:
+            cluster_name: mediagateway_backend
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: {{ .Values.focusedGateways.services.mediagateway.serviceName }}.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}
+                          port_value: {{ .Values.focusedGateways.services.mediagateway.port }}
+        - name: momentsgateway_backend
+          type: STRICT_DNS
+          connect_timeout: 5s
+          dns_lookup_family: V4_ONLY
+          lb_policy: LEAST_REQUEST
+          load_assignment:
+            cluster_name: momentsgateway_backend
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: {{ .Values.focusedGateways.services.momentsgateway.serviceName }}.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}
+                          port_value: {{ .Values.focusedGateways.services.momentsgateway.port }}
+        - name: callgateway_backend
+          type: STRICT_DNS
+          connect_timeout: 5s
+          dns_lookup_family: V4_ONLY
+          lb_policy: LEAST_REQUEST
+          load_assignment:
+            cluster_name: callgateway_backend
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: {{ .Values.focusedGateways.services.callgateway.serviceName }}.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}
+                          port_value: {{ .Values.focusedGateways.services.callgateway.port }}
+        - name: r18gateway_backend
+          type: STRICT_DNS
+          connect_timeout: 5s
+          dns_lookup_family: V4_ONLY
+          lb_policy: LEAST_REQUEST
+          load_assignment:
+            cluster_name: r18gateway_backend
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: {{ .Values.focusedGateways.services.r18gateway.serviceName }}.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}
+                          port_value: {{ .Values.focusedGateways.services.r18gateway.port }}
+        - name: register_backend
+          type: STRICT_DNS
+          connect_timeout: 5s
+          dns_lookup_family: V4_ONLY
+          lb_policy: LEAST_REQUEST
+          load_assignment:
+            cluster_name: register_backend
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: {{ .Values.focusedGateways.services.register.serviceName }}.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}
+                          port_value: {{ .Values.focusedGateways.services.register.port }}
+        - name: login_backend
+          type: STRICT_DNS
+          connect_timeout: 5s
+          dns_lookup_family: V4_ONLY
+          lb_policy: LEAST_REQUEST
+          load_assignment:
+            cluster_name: login_backend
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: {{ .Values.focusedGateways.services.login.serviceName }}.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}
+                          port_value: {{ .Values.focusedGateways.services.login.port }}
+        - name: account_backend
+          type: STRICT_DNS
+          connect_timeout: 5s
+          dns_lookup_family: V4_ONLY
+          lb_policy: LEAST_REQUEST
+          load_assignment:
+            cluster_name: account_backend
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: {{ .Values.focusedGateways.services.account.serviceName }}.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}
+                          port_value: {{ .Values.focusedGateways.services.account.port }}
+        {{- end }}
+        {{- if .Values.legacyGate.enabled }}
         - name: gate_backend
           type: STRICT_DNS
           connect_timeout: 5s
@@ -111,6 +389,7 @@ data:
                         socket_address:
                           address: gateserver.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}
                           port_value: {{ .Values.gate.service.port }}
+        {{- end }}
         - name: chat_tcp_backend
           type: STRICT_DNS
           connect_timeout: 5s

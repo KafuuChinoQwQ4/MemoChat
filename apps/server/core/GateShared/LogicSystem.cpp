@@ -2,18 +2,7 @@
 #include "HttpConnection.h"
 #include "adapters/h1/H1RouteAdapter.h"
 #include "GateHttpJsonSupport.h"
-#include "GateRouteModules.h"
-#include "MomentsRouteModules.h"
-#include "AIRouteModules.h"
-#include "modules/ai/AIRouteModule.h"
-#include "modules/auth/AuthRouteModule.h"
-#include "modules/call/CallRouteModule.h"
 #include "modules/health/HealthRouteModule.h"
-#include "modules/media/MediaRouteModule.h"
-#include "modules/moments/MomentsRouteModule.h"
-#include "modules/profile/ProfileRouteModule.h"
-#include "modules/r18/R18RouteModule.h"
-#include "transports/h3/legacy_routes/GateHttp3ServiceRoutes.h"
 #include "transports/h3/listener/GateHttp3Connection.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
@@ -44,80 +33,31 @@ void ApplyRouteTraceContext(const memochat::gate::routing::GateRequest& request)
 
 namespace
 {
-// Route profile is process-wide and read once by the LogicSystem constructor.
-// Default Full keeps GateServer registering every module unchanged.
-LogicSystem::RouteProfile g_route_profile = LogicSystem::RouteProfile::Full;
+std::vector<LogicSystem::RouteProfileRegistrar>& RouteProfileRegistrars()
+{
+    static std::vector<LogicSystem::RouteProfileRegistrar> registrars;
+    return registrars;
+}
 } // namespace
 
-void LogicSystem::SetRouteProfile(RouteProfile profile)
+void LogicSystem::AddRouteProfileRegistrar(RouteProfileRegistrar registrar)
 {
-    g_route_profile = profile;
+    RouteProfileRegistrars().push_back(std::move(registrar));
 }
 
-LogicSystem::RouteProfile LogicSystem::GetRouteProfile()
+void LogicSystem::ClearRouteProfileRegistrars()
 {
-    return g_route_profile;
+    RouteProfileRegistrars().clear();
 }
 
 LogicSystem::LogicSystem()
 {
-    const RouteProfile profile = g_route_profile;
-    const bool full = (profile == RouteProfile::Full);
-    const auto wants = [&](RouteProfile p)
-    {
-        return full || profile == p;
-    };
-
     // Health is always registered (every process exposes /healthz, /readyz).
     memochat::gate::modules::health::HealthRouteModule().RegisterRoutes(_route_registry);
 
-    if (wants(RouteProfile::AIGateway))
+    for (const auto& registrar : RouteProfileRegistrars())
     {
-        memochat::gate::modules::ai::AIRouteModule().RegisterRoutes(_route_registry);
-    }
-    if (wants(RouteProfile::Media))
-    {
-        memochat::gate::modules::media::MediaRouteModule().RegisterRoutes(_route_registry);
-    }
-    if (wants(RouteProfile::Moments))
-    {
-        memochat::gate::modules::moments::MomentsRouteModule().RegisterRoutes(_route_registry);
-    }
-    if (wants(RouteProfile::Call))
-    {
-        memochat::gate::modules::call::CallRouteModule().RegisterRoutes(_route_registry);
-    }
-    if (wants(RouteProfile::R18))
-    {
-        memochat::gate::modules::r18::R18RouteModule().RegisterRoutes(_route_registry);
-    }
-    // Account aggregate (D-ACCOUNT): RegisterService owns account creation +
-    // recovery, LoginService owns authentication, AccountService owns profile.
-    // All reach account data only via account-core (AccountPersistence). In Full
-    // the monolith registers them all.
-    if (full || profile == RouteProfile::Register)
-    {
-        memochat::gate::modules::auth::AuthRouteModule::RegisterRegisterRoutes(_route_registry);
-    }
-    if (full || profile == RouteProfile::Login)
-    {
-        memochat::gate::modules::auth::AuthRouteModule::RegisterLoginRoutes(_route_registry);
-    }
-    if (full || profile == RouteProfile::Account)
-    {
-        memochat::gate::modules::profile::ProfileRouteModule().RegisterRoutes(_route_registry);
-    }
-
-    if (full)
-    {
-        // Legacy transport adapters are kept only for the retired GateServer
-        // monolith. Focused service profiles must not inherit catch-all routes
-        // from the old H1/H3 registration helpers.
-        AuthHttpService::RegisterRoutes(*this);
-        ProfileHttpService::RegisterRoutes(*this);
-        CallHttpServiceRoutes::RegisterRoutes(*this);
-        AIHttpServiceRoutes::RegisterRoutes(*this);
-        GateHttp3Service::RegisterRoutes(*this);
+        registrar(_route_registry);
     }
 }
 

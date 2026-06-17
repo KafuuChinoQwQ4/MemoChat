@@ -30,4 +30,8 @@ public:
     virtual RelationCommandResult GetDialogList(const RelationCommandRequest& request) = 0;
     virtual RelationCommandResult SyncDraft(const RelationCommandRequest& request) = 0;
     virtual RelationCommandResult PinDialog(const RelationCommandRequest& request) = 0;
+    // Read-only friendship filter: payload {"viewer_uid":N,"author_uids":[...]}
+    // -> {"error":0,"friend_uids":[...]}. Used by services that don't own the
+    // friend tables (e.g. MomentsService) to resolve visibility via RPC.
+    virtual RelationCommandResult FilterFriendUids(const RelationCommandRequest& request) = 0;
 };

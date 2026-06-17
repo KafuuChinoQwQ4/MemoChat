@@ -47,7 +47,8 @@ CHAT_FEATURE_PRIVATE_HISTORY = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/chat/controller/ChatFeatureControllerPrivateHistory.cpp"
 )
 USER_MGR_GROUP_LIST = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/session/UserMgrGroupList.cpp"
-CHATSERVER_CONFIGS = [REPO_ROOT / f"apps/server/core/ChatServer/chatserver{i}.ini" for i in range(1, 7)]
+# Cluster reduced 6→2 nodes (chatserver1/2 only); iterate the real topology.
+CHATSERVER_CONFIGS = [REPO_ROOT / f"apps/server/core/ChatServer/chatserver{i}.ini" for i in range(1, 3)]
 
 
 def extract_function(source: str, signature: str) -> str:

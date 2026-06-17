@@ -41,3 +41,29 @@ spec:
           type: Utilization
           averageUtilization: {{ .Values.varify.autoscaling.targetCPUUtilizationPercentage }}
 {{- end }}
+{{- if and .Values.focusedGateways.enabled .Values.focusedGateways.autoscaling.enabled }}
+{{- $root := . }}
+{{- range $name := list "aigateway" "mediagateway" "momentsgateway" "callgateway" "r18gateway" "register" "login" "account" }}
+{{- $svc := index $root.Values.focusedGateways.services $name }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $svc.serviceName }}
+  namespace: {{ $root.Values.namespaces.prod }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $svc.serviceName }}
+  minReplicas: {{ $root.Values.focusedGateways.autoscaling.minReplicas }}
+  maxReplicas: {{ $root.Values.focusedGateways.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $root.Values.focusedGateways.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- end }}

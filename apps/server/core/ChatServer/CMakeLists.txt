@@ -92,8 +92,11 @@ set(CHATSERVER_ORCHESTRATION_SOURCES
 
 set(CHATSERVER_SESSION_SOURCES
     domain/session/ChatSessionService.cpp
-    domain/users/ChatUserSupport.cpp
     domain/users/UserMgr.cpp
+)
+
+set(CHATSERVER_USER_SUPPORT_SOURCES
+    domain/users/ChatUserSupport.cpp
 )
 
 set(CHATSERVER_RELATION_SOURCES
@@ -102,9 +105,14 @@ set(CHATSERVER_RELATION_SOURCES
     domain/relation/RelationServiceFactory.cpp
 )
 
+set(CHATSERVER_RELATION_SESSION_ADAPTER_SOURCES
+    domain/relation/ChatRelationSessionAdapter.cpp
+)
+
 set(CHATSERVER_MESSAGE_SOURCES
     domain/message/ChatMessageInternalGrpcService.cpp
     domain/message/GroupMessageService.cpp
+    domain/message/GroupResponseFormatter.cpp
     domain/message/MessageDeliveryPayload.cpp
     domain/message/MessageServiceFactory.cpp
     domain/message/MessageDeliveryService.cpp
@@ -196,6 +204,14 @@ add_library(ChatOrchestrationCore STATIC
 )
 chatserver_core_target(ChatOrchestrationCore)
 
+add_library(ChatUserSupportCore STATIC
+    ${CHATSERVER_USER_SUPPORT_SOURCES}
+)
+chatserver_core_target(ChatUserSupportCore)
+target_link_libraries(ChatUserSupportCore PUBLIC
+    ChatPersistenceCore
+)
+
 add_library(ChatSessionCore STATIC
     ${CHATSERVER_SESSION_SOURCES}
 )
@@ -203,9 +219,10 @@ chatserver_core_target(ChatSessionCore)
 target_link_libraries(ChatSessionCore PUBLIC
     ChatAppCore
     ChatConfigCore
-    ChatPersistenceCore
     ChatMessagingCore
+    ChatPersistenceCore
     ChatTransportCore
+    ChatUserSupportCore
 )
 
 add_library(ChatRelationCore STATIC
@@ -215,6 +232,15 @@ chatserver_core_target(ChatRelationCore)
 target_link_libraries(ChatRelationCore PUBLIC
     ChatAppCore
     ChatPersistenceCore
+    ChatUserSupportCore
+)
+
+add_library(ChatRelationSessionAdapterCore STATIC
+    ${CHATSERVER_RELATION_SESSION_ADAPTER_SOURCES}
+)
+chatserver_core_target(ChatRelationSessionAdapterCore)
+target_link_libraries(ChatRelationSessionAdapterCore PUBLIC
+    ChatRelationCore
     ChatTransportCore
 )
 
@@ -257,8 +283,10 @@ set(CHATSERVER_INTERNAL_CORE_TARGETS
     ChatOrchestrationCore
     ChatPersistenceCore
     ChatRelationCore
+    ChatRelationSessionAdapterCore
     ChatSessionCore
     ChatTransportCore
+    ChatUserSupportCore
 )
 if(CMAKE_LINK_GROUP_USING_RESCAN_SUPPORTED)
     string(JOIN "," CHATSERVER_INTERNAL_CORE_LINK_GROUP ${CHATSERVER_INTERNAL_CORE_TARGETS})
@@ -281,6 +309,18 @@ if(WIN32)
 endif()
 
 set_target_properties(ChatServerCore PROPERTIES FOLDER "Server/ChatServer")
+
+function(chatserver_link_microservice_cores target_name)
+    set(core_targets ${ARGN})
+    if(CMAKE_LINK_GROUP_USING_RESCAN_SUPPORTED)
+        string(JOIN "," core_link_group ${core_targets})
+        target_link_libraries(${target_name} PRIVATE
+            "$<LINK_GROUP:RESCAN,${core_link_group}>"
+        )
+    else()
+        target_link_libraries(${target_name} PRIVATE ${core_targets})
+    endif()
+endfunction()
 
 add_executable(ChatServer
     app/ChatServer.cpp
@@ -307,7 +347,22 @@ target_include_directories(ChatDeliveryWorker PRIVATE
 
 set_target_properties(ChatDeliveryWorker PROPERTIES FOLDER "Server")
 memochat_configure_server_target(ChatDeliveryWorker)
-target_link_libraries(ChatDeliveryWorker PRIVATE ChatServerCore)
+chatserver_link_microservice_cores(ChatDeliveryWorker
+    ChatAppCore
+    ChatClientCore
+    ChatConfigCore
+    ChatDeliveryCore
+    ChatInfrastructureCore
+    ChatMessageCore
+    ChatMessagingCore
+    ChatOrchestrationCore
+    ChatPersistenceCore
+    ChatRelationCore
+    ChatRelationSessionAdapterCore
+    ChatSessionCore
+    ChatTransportCore
+    ChatUserSupportCore
+)
 if(MSVC)
     target_compile_options(ChatDeliveryWorker PRIVATE /bigobj /Zm200)
 endif()
@@ -322,7 +377,16 @@ target_include_directories(ChatRelationQueryService PRIVATE
 
 set_target_properties(ChatRelationQueryService PROPERTIES FOLDER "Server")
 memochat_configure_server_target(ChatRelationQueryService)
-target_link_libraries(ChatRelationQueryService PRIVATE ChatServerCore)
+chatserver_link_microservice_cores(ChatRelationQueryService
+    ChatAppCore
+    ChatClientCore
+    ChatConfigCore
+    ChatInfrastructureCore
+    ChatMessagingCore
+    ChatPersistenceCore
+    ChatRelationCore
+    ChatUserSupportCore
+)
 if(MSVC)
     target_compile_options(ChatRelationQueryService PRIVATE /bigobj /Zm200)
 endif()
@@ -337,7 +401,17 @@ target_include_directories(ChatRelationServiceWorker PRIVATE
 
 set_target_properties(ChatRelationServiceWorker PROPERTIES FOLDER "Server")
 memochat_configure_server_target(ChatRelationServiceWorker)
-target_link_libraries(ChatRelationServiceWorker PRIVATE ChatServerCore)
+chatserver_link_microservice_cores(ChatRelationServiceWorker
+    ChatAppCore
+    ChatClientCore
+    ChatConfigCore
+    ChatDeliveryCore
+    ChatInfrastructureCore
+    ChatMessagingCore
+    ChatPersistenceCore
+    ChatRelationCore
+    ChatUserSupportCore
+)
 if(MSVC)
     target_compile_options(ChatRelationServiceWorker PRIVATE /bigobj /Zm200)
 endif()
@@ -352,7 +426,22 @@ target_include_directories(ChatMessageService PRIVATE
 
 set_target_properties(ChatMessageService PROPERTIES FOLDER "Server")
 memochat_configure_server_target(ChatMessageService)
-target_link_libraries(ChatMessageService PRIVATE ChatServerCore)
+chatserver_link_microservice_cores(ChatMessageService
+    ChatAppCore
+    ChatClientCore
+    ChatConfigCore
+    ChatDeliveryCore
+    ChatInfrastructureCore
+    ChatMessageCore
+    ChatMessagingCore
+    ChatOrchestrationCore
+    ChatPersistenceCore
+    ChatRelationCore
+    ChatRelationSessionAdapterCore
+    ChatSessionCore
+    ChatTransportCore
+    ChatUserSupportCore
+)
 if(MSVC)
     target_compile_options(ChatMessageService PRIVATE /bigobj /Zm200)
 endif()

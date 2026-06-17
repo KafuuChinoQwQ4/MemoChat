@@ -2,7 +2,7 @@
 #include "ChatSessionService.h"
 #include "ports/IGroupMessageService.h"
 #include "ports/IPrivateMessageService.h"
-#include "ports/IRelationService.h"
+#include "ports/IRelationSessionService.h"
 
 void ChatSessionServiceRegistrar::Register(LogicSystem& logic, std::map<short, FunCallBack>& callbacks) const
 {
@@ -25,38 +25,38 @@ void ChatSessionServiceRegistrar::Register(LogicSystem& logic, std::map<short, F
 
 void ChatRelationServiceRegistrar::Register(LogicSystem& logic, std::map<short, FunCallBack>& callbacks) const
 {
-    callbacks[ID_SEARCH_USER_REQ] = std::bind(&IRelationService::HandleSearchUser,
-                                              logic._chat_relation_service.get(),
+    callbacks[ID_SEARCH_USER_REQ] = std::bind(&IRelationSessionService::HandleSearchUser,
+                                              logic._chat_relation_session_service.get(),
                                               std::placeholders::_1,
                                               std::placeholders::_2,
                                               std::placeholders::_3);
-    callbacks[ID_ADD_FRIEND_REQ] = std::bind(&IRelationService::HandleAddFriendApply,
-                                             logic._chat_relation_service.get(),
+    callbacks[ID_ADD_FRIEND_REQ] = std::bind(&IRelationSessionService::HandleAddFriendApply,
+                                             logic._chat_relation_session_service.get(),
                                              std::placeholders::_1,
                                              std::placeholders::_2,
                                              std::placeholders::_3);
-    callbacks[ID_AUTH_FRIEND_REQ] = std::bind(&IRelationService::HandleAuthFriendApply,
-                                              logic._chat_relation_service.get(),
+    callbacks[ID_AUTH_FRIEND_REQ] = std::bind(&IRelationSessionService::HandleAuthFriendApply,
+                                              logic._chat_relation_session_service.get(),
                                               std::placeholders::_1,
                                               std::placeholders::_2,
                                               std::placeholders::_3);
-    callbacks[ID_DELETE_FRIEND_REQ] = std::bind(&IRelationService::HandleDeleteFriend,
-                                                logic._chat_relation_service.get(),
+    callbacks[ID_DELETE_FRIEND_REQ] = std::bind(&IRelationSessionService::HandleDeleteFriend,
+                                                logic._chat_relation_session_service.get(),
                                                 std::placeholders::_1,
                                                 std::placeholders::_2,
                                                 std::placeholders::_3);
-    callbacks[ID_GET_DIALOG_LIST_REQ] = std::bind(&IRelationService::HandleGetDialogList,
-                                                  logic._chat_relation_service.get(),
+    callbacks[ID_GET_DIALOG_LIST_REQ] = std::bind(&IRelationSessionService::HandleGetDialogList,
+                                                  logic._chat_relation_session_service.get(),
                                                   std::placeholders::_1,
                                                   std::placeholders::_2,
                                                   std::placeholders::_3);
-    callbacks[ID_SYNC_DRAFT_REQ] = std::bind(&IRelationService::HandleSyncDraft,
-                                             logic._chat_relation_service.get(),
+    callbacks[ID_SYNC_DRAFT_REQ] = std::bind(&IRelationSessionService::HandleSyncDraft,
+                                             logic._chat_relation_session_service.get(),
                                              std::placeholders::_1,
                                              std::placeholders::_2,
                                              std::placeholders::_3);
-    callbacks[ID_PIN_DIALOG_REQ] = std::bind(&IRelationService::HandlePinDialog,
-                                             logic._chat_relation_service.get(),
+    callbacks[ID_PIN_DIALOG_REQ] = std::bind(&IRelationSessionService::HandlePinDialog,
+                                             logic._chat_relation_session_service.get(),
                                              std::placeholders::_1,
                                              std::placeholders::_2,
                                              std::placeholders::_3);

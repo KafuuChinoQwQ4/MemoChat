@@ -72,9 +72,9 @@ tools/scripts/status/start-all-services.sh
 需要时仍可从 Windows 运行旧版 smoke 探针：
 
 ```powershell
-tools/scripts/test_register_login.ps1
-tools/scripts/test_login.ps1
-tools/scripts/full_flow_test.ps1
+tools/scripts/verify/test_register_login.ps1
+tools/scripts/verify/test_login.ps1
+tools/scripts/verify/full_flow_test.ps1
 ```
 
 遇到端口冲突或 Docker 依赖失败时停止，并报告占用进程/容器。

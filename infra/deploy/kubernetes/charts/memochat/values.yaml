@@ -30,8 +30,49 @@ images:
     repository: memochat/gateserver
     tag: latest
     pullPolicy: IfNotPresent
+  focusedGateways:
+    aigateway:
+      repository: memochat/aigateway
+      tag: latest
+      pullPolicy: IfNotPresent
+    mediagateway:
+      repository: memochat/mediagateway
+      tag: latest
+      pullPolicy: IfNotPresent
+    momentsgateway:
+      repository: memochat/momentsgateway
+      tag: latest
+      pullPolicy: IfNotPresent
+    callgateway:
+      repository: memochat/callgateway
+      tag: latest
+      pullPolicy: IfNotPresent
+    r18gateway:
+      repository: memochat/r18gateway
+      tag: latest
+      pullPolicy: IfNotPresent
+    register:
+      repository: memochat/register
+      tag: latest
+      pullPolicy: IfNotPresent
+    login:
+      repository: memochat/login
+      tag: latest
+      pullPolicy: IfNotPresent
+    account:
+      repository: memochat/account
+      tag: latest
+      pullPolicy: IfNotPresent
   chat:
     repository: memochat/chatserver
+    tag: latest
+    pullPolicy: IfNotPresent
+  aiServer:
+    repository: memochat/aiserver
+    tag: latest
+    pullPolicy: IfNotPresent
+  aiOrchestrator:
+    repository: memochat/ai-orchestrator
     tag: latest
     pullPolicy: IfNotPresent
   varify:
@@ -60,6 +101,11 @@ externalServices:
     database: memo_pg
     schema: memo
     sslMode: disable
+    roles:
+      media: memo_media_app
+      moments: memo_moments_app
+      call: memo_call_app
+      account: memo_account_app
   redis:
     host: redis.example.internal
     port: 6379
@@ -97,7 +143,7 @@ gate:
   service:
     port: 8080
   ingress:
-    enabled: true
+    enabled: false
     className: envoy
     annotations: {}
     tls: []
@@ -120,6 +166,79 @@ gate:
     chunkSizeKB: 4096
     sessionExpireSec: 86400
 
+legacyGate:
+  enabled: false
+
+focusedGateways:
+  enabled: true
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  pdb:
+    enabled: true
+    minAvailable: 1
+  resources: {}
+  env: {}
+  services:
+    aigateway:
+      serviceName: aigateway
+      target: AIGatewayServer
+      configKey: aigateway.ini
+      configSection: AIGateway
+      port: 8093
+      replicaCount: 2
+    mediagateway:
+      serviceName: mediagateway
+      target: MediaGatewayServer
+      configKey: mediagateway.ini
+      configSection: MediaGateway
+      port: 8094
+      replicaCount: 2
+    momentsgateway:
+      serviceName: momentsgateway
+      target: MomentsGatewayServer
+      configKey: momentsgateway.ini
+      configSection: MomentsGateway
+      port: 8099
+      replicaCount: 2
+    callgateway:
+      serviceName: callgateway
+      target: CallGatewayServer
+      configKey: callgateway.ini
+      configSection: CallGateway
+      port: 8097
+      replicaCount: 2
+    r18gateway:
+      serviceName: r18gateway
+      target: R18GatewayServer
+      configKey: r18gateway.ini
+      configSection: R18Gateway
+      port: 8098
+      replicaCount: 2
+    register:
+      serviceName: register
+      target: RegisterServer
+      configKey: register.ini
+      configSection: Register
+      port: 8101
+      replicaCount: 2
+    login:
+      serviceName: login
+      target: LoginServer
+      configKey: login.ini
+      configSection: Login
+      port: 8102
+      replicaCount: 2
+    account:
+      serviceName: account
+      target: AccountServer
+      configKey: account.ini
+      configSection: Account
+      port: 8103
+      replicaCount: 2
+
 chat:
   replicaCount: 4
   serviceName: chatserver
@@ -132,6 +251,34 @@ chat:
     minAvailable: 2
   resources: {}
   env: {}
+
+aiServer:
+  enabled: true
+  replicaCount: 2
+  serviceName: aiserver
+  service:
+    grpcPort: 8095
+  resources: {}
+  env: {}
+
+aiOrchestrator:
+  enabled: true
+  replicaCount: 2
+  serviceName: ai-orchestrator
+  service:
+    port: 8096
+  resources: {}
+  env: {}
+  dependencies:
+    ollamaHost: ollama.example.internal
+    ollamaPort: 11434
+    ollamaEnabled: false
+    qdrantHost: qdrant.example.internal
+    qdrantPort: 6333
+    qdrantGrpcPort: 6334
+    neo4jHost: neo4j.example.internal
+    neo4jPort: 7687
+    neo4jEnabled: false
 
 varify:
   replicaCount: 2

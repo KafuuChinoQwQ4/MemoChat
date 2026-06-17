@@ -87,6 +87,656 @@ data:
     VHost={{ .Values.externalServices.rabbitmq.vhost }}
     ExchangeDirect=memochat.direct
     ExchangeDlx=memochat.dlx
+  aigateway.ini: |
+    [AIGateway]
+    Port={{ .Values.focusedGateways.services.aigateway.port }}
+    WorkerThreads=12
+    [Snowflake]
+    DatacenterId=0
+    WorkerId=3
+    [AIServer]
+    Host={{ .Values.aiServer.serviceName }}
+    Port={{ .Values.aiServer.service.grpcPort }}
+    [AIOrchestrator]
+    Host={{ .Values.aiOrchestrator.serviceName }}
+    Port={{ .Values.aiOrchestrator.service.port }}
+    TimeoutSec=300
+    [Log]
+    Level=info
+    Dir=/var/log/memochat/aigateway
+    Format=json
+    ToConsole=true
+    RotateMode=daily
+    MaxFiles=14
+    MaxSizeMB=100
+    Redact=true
+    Env=k8s
+    [Telemetry]
+    Enabled=true
+    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
+    Protocol=otlp-http
+    SampleRatio=1.0
+    ExportLogs=true
+    ExportTraces=true
+    ExportMetrics=false
+    ServiceName=AIGatewayServer
+    ServiceNamespace=memochat
+  aiserver.ini: |
+    [AIServer]
+    Host=0.0.0.0
+    Port={{ .Values.aiServer.service.grpcPort }}
+    [AIOrchestrator]
+    Host={{ .Values.aiOrchestrator.serviceName }}
+    Port={{ .Values.aiOrchestrator.service.port }}
+    TimeoutSec=300
+    [AI]
+    DefaultBackend=ollama
+    DefaultModel=qwen3:4b
+    MaxContextMessages=20
+    MaxTokens=2048
+    [Ollama]
+    Host={{ .Values.aiOrchestrator.dependencies.ollamaHost }}
+    Port={{ .Values.aiOrchestrator.dependencies.ollamaPort }}
+    Enabled={{ .Values.aiOrchestrator.dependencies.ollamaEnabled }}
+    [OpenAI]
+    ApiKey=
+    BaseUrl=https://api.openai.com/v1
+    Enabled=false
+    [Claude]
+    ApiKey=
+    BaseUrl=https://api.anthropic.com/v1
+    Enabled=false
+    [Kimi]
+    ApiKey=
+    BaseUrl=https://api.moonshot.cn/v1
+    Enabled=false
+    [Qdrant]
+    Host={{ .Values.aiOrchestrator.dependencies.qdrantHost }}
+    Port={{ .Values.aiOrchestrator.dependencies.qdrantPort }}
+    GrpcPort={{ .Values.aiOrchestrator.dependencies.qdrantGrpcPort }}
+    Enabled=true
+    [Neo4j]
+    Host={{ .Values.aiOrchestrator.dependencies.neo4jHost }}
+    Port={{ .Values.aiOrchestrator.dependencies.neo4jPort }}
+    Username=neo4j
+    Password=password
+    Database=neo4j
+    Enabled=false
+    [Postgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.user }}
+    Passwd=
+    Database={{ .Values.externalServices.postgres.database }}
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    PoolSize=12
+    [Redis]
+    Host={{ .Values.externalServices.redis.host }}
+    Port={{ .Values.externalServices.redis.port }}
+    Passwd=
+    [Log]
+    Level=info
+    Dir=/var/log/memochat/aiserver
+    Format=json
+    ToConsole=true
+    RotateMode=daily
+    MaxFiles=14
+    MaxSizeMB=100
+    Redact=true
+    Env=k8s
+    [Telemetry]
+    Enabled=true
+    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
+    Protocol=otlp-http
+    SampleRatio=1.0
+    ExportLogs=true
+    ExportTraces=true
+    ExportMetrics=false
+    ServiceName=AIServer
+    ServiceNamespace=memochat
+  ai-orchestrator.yaml: |
+    service:
+      host: "0.0.0.0"
+      port: {{ .Values.aiOrchestrator.service.port }}
+    llm:
+      default_backend: "deepseek"
+      default_model: "deepseek-chat"
+      ollama:
+        base_url: "http://{{ .Values.aiOrchestrator.dependencies.ollamaHost }}:{{ .Values.aiOrchestrator.dependencies.ollamaPort }}"
+        timeout_sec: 300
+        models:
+          - name: "qwen3:4b"
+            display: "Qwen 3 4B"
+            context_window: 8192
+            supports_thinking: true
+        enabled: {{ .Values.aiOrchestrator.dependencies.ollamaEnabled }}
+      openai:
+        api_key: ""
+        base_url: "https://api.openai.com/v1"
+        models: []
+        enabled: false
+      anthropic:
+        api_key: ""
+        base_url: "https://api.anthropic.com/v1"
+        models: []
+        enabled: false
+      kimi:
+        api_key: ""
+        base_url: "https://api.moonshot.cn/v1"
+        models: []
+        enabled: false
+    embedding:
+      backend: "local"
+      local_model: "all-MiniLM-L6-v2"
+      ollama_model: "nomic-embed-text"
+      openai_model: "text-embedding-3-small"
+      dimension: 384
+    rag:
+      qdrant:
+        host: "{{ .Values.aiOrchestrator.dependencies.qdrantHost }}"
+        port: {{ .Values.aiOrchestrator.dependencies.qdrantPort }}
+        grpc_port: {{ .Values.aiOrchestrator.dependencies.qdrantGrpcPort }}
+        collection_prefix: "user_"
+      retrieval:
+        dense_top_k: 12
+        lexical_top_k: 12
+        candidate_pool_size: 24
+        rrf_k: 60
+        dense_weight: 1.0
+        lexical_weight: 1.0
+        rerank_enabled: true
+        rerank_model: "BAAI/bge-reranker-base"
+        rerank_batch_size: 8
+        rerank_candidate_limit: 16
+      chunk_size: 500
+      chunk_overlap: 50
+      top_k: 5
+      score_threshold: 0.7
+    agent_queue:
+      enabled: true
+      backend: "hybrid"
+      worker_concurrency: 4
+      fallback_to_local: true
+      resume_stale_on_start: true
+      rabbitmq:
+        enabled: true
+        host: "{{ .Values.externalServices.rabbitmq.host }}"
+        port: {{ .Values.externalServices.rabbitmq.port }}
+        username: "{{ .Values.externalServices.rabbitmq.username }}"
+        password: ""
+        vhost: "{{ .Values.externalServices.rabbitmq.vhost }}"
+        exchange: "memochat.direct"
+        dlx_exchange: "memochat.dlx"
+        task_queue: "ai.agent.tasks.q"
+        task_routing_key: "ai.agent.task.run"
+        prefetch_count: 16
+        publish_timeout_sec: 2.0
+      redpanda:
+        enabled: true
+        bootstrap_servers: "{{ .Values.externalServices.kafka.brokers }}"
+        proxy_url: ""
+        proxy_fallback_enabled: false
+        client_id: "memochat-ai-orchestrator"
+        task_events_topic: "ai.agent.task.events.v1"
+        publish_timeout_sec: 2.0
+    semantic_cache:
+      enabled: true
+      exact_match_enabled: true
+      redis:
+        host: "{{ .Values.externalServices.redis.host }}"
+        port: {{ .Values.externalServices.redis.port }}
+        username: ""
+        password: ""
+        db: 0
+        ssl: false
+        socket_timeout_sec: 2.0
+        connect_timeout_sec: 1.0
+      index_name: "memochat_ai_semantic_cache_v1"
+      key_prefix: "memochat:ai:semantic_cache:"
+      scope: "user"
+      similarity_threshold: 0.98
+      top_k: 1
+      ttl_sec: 604800
+      min_question_chars: 4
+      max_question_chars: 2000
+      max_answer_chars: 32000
+      dimension: 384
+      include_model_in_cache_key: true
+      cache_tool_results: false
+      persist_hits_to_memory: true
+      skip_volatile_inputs: true
+      non_cacheable_actions: []
+    neo4j:
+      host: "{{ .Values.aiOrchestrator.dependencies.neo4jHost }}"
+      port: {{ .Values.aiOrchestrator.dependencies.neo4jPort }}
+      username: "neo4j"
+      password: "password"
+      database: "neo4j"
+      vector_dimension: 384
+      enabled: {{ .Values.aiOrchestrator.dependencies.neo4jEnabled }}
+    observability:
+      enabled: false
+      backend: "langsmith"
+      prometheus_enabled: true
+      trace_llm_calls: true
+      trace_tool_calls: true
+      track_ttft: true
+    tools:
+      enabled:
+        - "duckduckgo_search"
+        - "knowledge_base"
+        - "calculator"
+        - "translator"
+      rate_limit_per_minute: 10
+    agent:
+      max_iterations: 10
+      timeout_per_step_sec: 30
+      timeout_total_sec: 300
+      fallback_on_error: true
+      max_tokens_per_response: 8192
+      temperature: 0.7
+      hitl_enabled: false
+      system_prompt: "You are a MemoChat AI assistant."
+    llm_fallback:
+      ollama: ["openai", "kimi"]
+      openai: ["kimi"]
+      claude: ["openai"]
+      kimi: ["openai"]
+      retry_count: 2
+      retry_delay_sec: 2
+    mcp:
+      enabled: false
+      servers: []
+    harness:
+      enabled: true
+      canonical_root: "server/AIOrchestrator/harness"
+  mediagateway.ini: |
+    [MediaGateway]
+    Port={{ .Values.focusedGateways.services.mediagateway.port }}
+    WorkerThreads=12
+    [Snowflake]
+    DatacenterId=0
+    WorkerId=4
+    [Postgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.roles.media }}
+    Passwd=
+    Database=memo_media
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    PoolSize=12
+    [Redis]
+    Host={{ .Values.externalServices.redis.host }}
+    Port={{ .Values.externalServices.redis.port }}
+    Passwd=
+    [Media]
+    MaxImageMB={{ .Values.gate.media.maxImageMB }}
+    MaxFileMB={{ .Values.gate.media.maxFileMB }}
+    ChunkSizeKB={{ .Values.gate.media.chunkSizeKB }}
+    SessionExpireSec={{ .Values.gate.media.sessionExpireSec }}
+    StorageProvider={{ .Values.gate.media.provider }}
+    [ChatAuth]
+    HmacSecret=
+    TicketTtlSec=20
+    [Log]
+    Level=info
+    Dir=/var/log/memochat/mediagateway
+    Format=json
+    ToConsole=true
+    RotateMode=daily
+    MaxFiles=14
+    MaxSizeMB=100
+    Redact=true
+    Env=k8s
+    [Telemetry]
+    Enabled=true
+    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
+    Protocol=otlp-http
+    SampleRatio=1.0
+    ExportLogs=true
+    ExportTraces=true
+    ExportMetrics=false
+    ServiceName=MediaGatewayServer
+    ServiceNamespace=memochat
+  momentsgateway.ini: |
+    [MomentsGateway]
+    Port={{ .Values.focusedGateways.services.momentsgateway.port }}
+    WorkerThreads=12
+    [Snowflake]
+    DatacenterId=0
+    WorkerId=5
+    [Postgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.roles.moments }}
+    Passwd=
+    Database=memo_moments
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    PoolSize=12
+    [Redis]
+    Host={{ .Values.externalServices.redis.host }}
+    Port={{ .Values.externalServices.redis.port }}
+    Passwd=
+    [ChatAuth]
+    HmacSecret=
+    TicketTtlSec=20
+    [Mongo]
+    Enabled=true
+    Uri={{ .Values.externalServices.mongodb.uri }}
+    Database={{ .Values.externalServices.mongodb.database }}
+    MomentsCollection=moments_content
+    [Log]
+    Level=info
+    Dir=/var/log/memochat/momentsgateway
+    Format=json
+    ToConsole=true
+    RotateMode=daily
+    MaxFiles=14
+    MaxSizeMB=100
+    Redact=true
+    Env=k8s
+    [Telemetry]
+    Enabled=true
+    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
+    Protocol=otlp-http
+    SampleRatio=1.0
+    ExportLogs=true
+    ExportTraces=true
+    ExportMetrics=false
+    ServiceName=MomentsGatewayServer
+    ServiceNamespace=memochat
+  callgateway.ini: |
+    [CallGateway]
+    Port={{ .Values.focusedGateways.services.callgateway.port }}
+    WorkerThreads=12
+    [Snowflake]
+    DatacenterId=0
+    WorkerId=6
+    [Postgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.roles.call }}
+    Passwd=
+    Database=memo_call
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    PoolSize=12
+    [Redis]
+    Host={{ .Values.externalServices.redis.host }}
+    Port={{ .Values.externalServices.redis.port }}
+    Passwd=
+    [ChatAuth]
+    HmacSecret=
+    TicketTtlSec=20
+    [Cluster]
+    DiscoveryMode=k8s-statefulset
+    ServiceName={{ .Values.chat.serviceName }}
+    Namespace={{ .Values.namespaces.prod }}
+    Replicas={{ .Values.chat.replicaCount }}
+    TcpPort={{ .Values.chat.tcpPort }}
+    RpcPort={{ .Values.chat.rpcPort }}
+    Domain={{ .Values.global.clusterDomain }}
+    [Call]
+    Enabled=true
+    BaseUrl=https://{{ .Values.global.domain }}
+    LiveKitUrl={{ .Values.externalServices.livekit.url }}
+    ApiKey=
+    ApiSecret=
+    RoomPrefix=memochat
+    RingTimeoutSec=45
+    BusyKeyTtlSec=50
+    TokenTtlSec=3600
+    [Log]
+    Level=info
+    Dir=/var/log/memochat/callgateway
+    Format=json
+    ToConsole=true
+    RotateMode=daily
+    MaxFiles=14
+    MaxSizeMB=100
+    Redact=true
+    Env=k8s
+    [Telemetry]
+    Enabled=true
+    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
+    Protocol=otlp-http
+    SampleRatio=1.0
+    ExportLogs=true
+    ExportTraces=true
+    ExportMetrics=false
+    ServiceName=CallGatewayServer
+    ServiceNamespace=memochat
+  r18gateway.ini: |
+    [R18Gateway]
+    Port={{ .Values.focusedGateways.services.r18gateway.port }}
+    WorkerThreads=12
+    [Snowflake]
+    DatacenterId=0
+    WorkerId=7
+    [Postgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.user }}
+    Passwd=
+    Database={{ .Values.externalServices.postgres.database }}
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    PoolSize=12
+    [Redis]
+    Host={{ .Values.externalServices.redis.host }}
+    Port={{ .Values.externalServices.redis.port }}
+    Passwd=
+    [ChatAuth]
+    HmacSecret=
+    TicketTtlSec=20
+    [Log]
+    Level=info
+    Dir=/var/log/memochat/r18gateway
+    Format=json
+    ToConsole=true
+    RotateMode=daily
+    MaxFiles=14
+    MaxSizeMB=100
+    Redact=true
+    Env=k8s
+    [Telemetry]
+    Enabled=true
+    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
+    Protocol=otlp-http
+    SampleRatio=1.0
+    ExportLogs=true
+    ExportTraces=true
+    ExportMetrics=false
+    ServiceName=R18GatewayServer
+    ServiceNamespace=memochat
+  register.ini: |
+    [Register]
+    Port={{ .Values.focusedGateways.services.register.port }}
+    WorkerThreads=12
+    [Snowflake]
+    DatacenterId=0
+    WorkerId=10
+    [VarifyServer]
+    Host=varifyserver
+    Port={{ .Values.varify.service.grpcPort }}
+    [Postgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.roles.account }}
+    Passwd=
+    Database=memo_account
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    PoolSize=12
+    [Redis]
+    Host={{ .Values.externalServices.redis.host }}
+    Port={{ .Values.externalServices.redis.port }}
+    Passwd=
+    [ChatAuth]
+    HmacSecret=
+    TicketTtlSec=20
+    [LoginCache]
+    TtlSec=3600
+    [Kafka]
+    Brokers={{ .Values.externalServices.kafka.brokers }}
+    ClientId=memochat-register
+    ConsumerGroup=memochat-register-sideeffects
+    [RabbitMQ]
+    Host={{ .Values.externalServices.rabbitmq.host }}
+    Port={{ .Values.externalServices.rabbitmq.port }}
+    Username={{ .Values.externalServices.rabbitmq.username }}
+    Password=
+    VHost={{ .Values.externalServices.rabbitmq.vhost }}
+    ExchangeDirect=memochat.direct
+    ExchangeDlx=memochat.dlx
+    PrefetchCount=10
+    [Log]
+    Level=info
+    Dir=/var/log/memochat/register
+    Format=json
+    ToConsole=true
+    RotateMode=daily
+    MaxFiles=14
+    MaxSizeMB=100
+    Redact=true
+    Env=k8s
+    [Telemetry]
+    Enabled=true
+    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
+    Protocol=otlp-http
+    SampleRatio=1.0
+    ExportLogs=true
+    ExportTraces=true
+    ExportMetrics=false
+    ServiceName=RegisterServer
+    ServiceNamespace=memochat
+  login.ini: |
+    [Login]
+    Port={{ .Values.focusedGateways.services.login.port }}
+    WorkerThreads=12
+    [Snowflake]
+    DatacenterId=0
+    WorkerId=11
+    [Cluster]
+    DiscoveryMode=k8s-statefulset
+    ServiceName={{ .Values.chat.serviceName }}
+    Namespace={{ .Values.namespaces.prod }}
+    Replicas={{ .Values.chat.replicaCount }}
+    TcpPort={{ .Values.chat.tcpPort }}
+    RpcPort={{ .Values.chat.rpcPort }}
+    Domain={{ .Values.global.clusterDomain }}
+    [Postgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.roles.account }}
+    Passwd=
+    Database=memo_account
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    PoolSize=12
+    [Redis]
+    Host={{ .Values.externalServices.redis.host }}
+    Port={{ .Values.externalServices.redis.port }}
+    Passwd=
+    [ChatAuth]
+    HmacSecret=
+    TicketTtlSec=20
+    [LoginCache]
+    TtlSec=3600
+    [Kafka]
+    Brokers={{ .Values.externalServices.kafka.brokers }}
+    ClientId=memochat-login
+    ConsumerGroup=memochat-login-sideeffects
+    [RabbitMQ]
+    Host={{ .Values.externalServices.rabbitmq.host }}
+    Port={{ .Values.externalServices.rabbitmq.port }}
+    Username={{ .Values.externalServices.rabbitmq.username }}
+    Password=
+    VHost={{ .Values.externalServices.rabbitmq.vhost }}
+    ExchangeDirect=memochat.direct
+    ExchangeDlx=memochat.dlx
+    PrefetchCount=10
+    [Log]
+    Level=info
+    Dir=/var/log/memochat/login
+    Format=json
+    ToConsole=true
+    RotateMode=daily
+    MaxFiles=14
+    MaxSizeMB=100
+    Redact=true
+    Env=k8s
+    [Telemetry]
+    Enabled=true
+    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
+    Protocol=otlp-http
+    SampleRatio=1.0
+    ExportLogs=true
+    ExportTraces=true
+    ExportMetrics=false
+    ServiceName=LoginServer
+    ServiceNamespace=memochat
+  account.ini: |
+    [Account]
+    Port={{ .Values.focusedGateways.services.account.port }}
+    WorkerThreads=12
+    [Snowflake]
+    DatacenterId=0
+    WorkerId=12
+    [Postgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.roles.account }}
+    Passwd=
+    Database=memo_account
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    PoolSize=12
+    [Redis]
+    Host={{ .Values.externalServices.redis.host }}
+    Port={{ .Values.externalServices.redis.port }}
+    Passwd=
+    [ChatAuth]
+    HmacSecret=
+    TicketTtlSec=20
+    [LoginCache]
+    TtlSec=3600
+    [Kafka]
+    Brokers={{ .Values.externalServices.kafka.brokers }}
+    ClientId=memochat-account
+    ConsumerGroup=memochat-account-sideeffects
+    [RabbitMQ]
+    Host={{ .Values.externalServices.rabbitmq.host }}
+    Port={{ .Values.externalServices.rabbitmq.port }}
+    Username={{ .Values.externalServices.rabbitmq.username }}
+    Password=
+    VHost={{ .Values.externalServices.rabbitmq.vhost }}
+    ExchangeDirect=memochat.direct
+    ExchangeDlx=memochat.dlx
+    PrefetchCount=10
+    [Log]
+    Level=info
+    Dir=/var/log/memochat/account
+    Format=json
+    ToConsole=true
+    RotateMode=daily
+    MaxFiles=14
+    MaxSizeMB=100
+    Redact=true
+    Env=k8s
+    [Telemetry]
+    Enabled=true
+    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
+    Protocol=otlp-http
+    SampleRatio=1.0
+    ExportLogs=true
+    ExportTraces=true
+    ExportMetrics=false
+    ServiceName=AccountServer
+    ServiceNamespace=memochat
   chat.ini: |
     [GateServer]
     Port=8080

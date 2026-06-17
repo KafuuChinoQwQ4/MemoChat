@@ -447,13 +447,110 @@ endfunction()
 # function(), is the calling subdirectory).
 set(MEMOCHAT_SERVER_CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
+# --------------------------------------------------------------------------
+# Shared Gate library helpers.
+#
+# Slice j of the gateserver split makes each microservice physically own its
+# domain code: the per-domain static libraries (Gate*Core / Gate*Domain) are
+# defined in their owning service directory (AIGatewayService/, MediaService/,
+# AccountShared/, ...) instead of all living under GateShared/. These two
+# helpers carry the common dependency + include wiring every such library
+# needs, so they are defined here at the server/core root (before any
+# add_subdirectory) and reused by every service CMakeLists.
+#
+# NOTE: inside a function() CMAKE_CURRENT_SOURCE_DIR is the CALLER's subdir, so
+# the shared GateShared framework/infra include roots are anchored to
+# MEMOCHAT_SERVER_CORE_DIR. Each domain library adds its own local domain/core
+# include roots on top in its own CMakeLists (where CMAKE_CURRENT_SOURCE_DIR is
+# that service dir).
+
+# Infra-tier include roots: the GateInfraCore persistence/cache/config/clients/
+# runtime layer that lives in GateShared/core plus shared common headers.
+set(MEMOCHAT_GATE_CORE_INCLUDE_DIRS
+    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/core
+    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/core/cache
+    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/core/clients
+    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/core/config
+    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/core/persistence
+    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/core/runtime
+    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/core/support
+    ${MEMOCHAT_SERVER_CORE_DIR}/common
+)
+
+# Apply the shared dependency/compile settings every gate *core* library (infra
+# base + per-domain support cores) needs. Mirrors the old gate-core helper.
+function(memochat_configure_gate_core_lib target_name)
+    target_compile_features(${target_name} PUBLIC cxx_std_23)
+    target_include_directories(${target_name} PUBLIC ${MEMOCHAT_GATE_CORE_INCLUDE_DIRS})
+    target_link_libraries(${target_name} PUBLIC memochat_server_deps)
+    target_link_libraries(${target_name} PRIVATE ${MEMOCHAT_PQXX_TARGET})
+    target_link_libraries(${target_name} PRIVATE ${MEMOCHAT_MONGOCXX_TARGET} ${MEMOCHAT_BSONCXX_TARGET})
+    target_link_libraries(${target_name} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    if(AWSSDK_FOUND)
+        target_link_libraries(${target_name} PUBLIC aws-cpp-sdk-s3)
+    endif()
+    if(MEMOCHAT_ENABLE_KAFKA)
+        target_link_libraries(${target_name} PRIVATE ${MEMOCHAT_CPPKAFKA_TARGET})
+    endif()
+    if(MEMOCHAT_ENABLE_RABBITMQ)
+        target_link_libraries(${target_name} PRIVATE ${MEMOCHAT_RABBITMQ_TARGET})
+    endif()
+    if(WIN32)
+        if(DEFINED ENV{WINSDK_LIB_UM} AND NOT "$ENV{WINSDK_LIB_UM}" STREQUAL "")
+            set(_WINSDK_LIB_UM "$ENV{WINSDK_LIB_UM}")
+        else()
+            set(_WINSDK_LIB_UM "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.28000.0/um/x64")
+        endif()
+        if(DEFINED ENV{WINSDK_LIB_UCRT} AND NOT "$ENV{WINSDK_LIB_UCRT}" STREQUAL "")
+            set(_WINSDK_LIB_UCRT "$ENV{WINSDK_LIB_UCRT}")
+        else()
+            set(_WINSDK_LIB_UCRT "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.28000.0/ucrt/x64")
+        endif()
+        target_link_libraries(${target_name} PRIVATE "${_WINSDK_LIB_UM}/bcrypt.lib")
+        target_link_options(${target_name} PRIVATE
+            "/LIBPATH:${_WINSDK_LIB_UM}"
+            "/LIBPATH:${_WINSDK_LIB_UCRT}")
+    endif()
+    set_target_properties(${target_name} PROPERTIES FOLDER "Server/GateShared")
+endfunction()
+
+# App-tier include roots: the GateRuntimeCore framework (LogicSystem, routing,
+# transports glue) that lives in GateShared.
+set(MEMOCHAT_GATE_APP_INCLUDE_DIRS
+    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared
+    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/app
+    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/core
+    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/transports/h3
+    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/transports/h3/listener
+    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/transports/h3/legacy_routes
+)
+
+# Apply the shared settings every gate *app/domain* library (the framework
+# runtime core + each Gate<X>Domain route library) needs.
+function(memochat_configure_gate_app_lib target_name)
+    set_target_properties(${target_name} PROPERTIES FOLDER "Server/GateShared")
+    memochat_configure_server_target(${target_name})
+    target_include_directories(${target_name} PUBLIC ${MEMOCHAT_GATE_APP_INCLUDE_DIRS})
+    target_link_libraries(${target_name} PUBLIC
+        GateInfraCore
+        memochat_boost_stubs
+    )
+endfunction()
+
 function(memochat_configure_gate_focused_service target_name)
+    set(options)
+    set(oneValueArgs)
+    set(multiValueArgs DOMAINS)
+    cmake_parse_arguments(MEMOCHAT_GATE_FOCUSED "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+    if(NOT MEMOCHAT_GATE_FOCUSED_DOMAINS)
+        message(FATAL_ERROR "memochat_configure_gate_focused_service(${target_name}) requires DOMAINS")
+    endif()
+
     set_target_properties(${target_name} PROPERTIES FOLDER "Server")
     memochat_configure_server_target(${target_name})
     target_link_libraries(${target_name} PRIVATE
-        GateAppCore
-        GateServerCore
-        GateServerHttp3
+        GateRuntimeCore
+        ${MEMOCHAT_GATE_FOCUSED_DOMAINS}
         memochat_boost_stubs
     )
     # NOTE: inside a function() CMAKE_CURRENT_SOURCE_DIR resolves to the CALLER's
@@ -479,17 +576,17 @@ endif()
 
 if(BUILD_SERVER_SERVICES)
     add_subdirectory(ChatServer)
+
+    # --- Shared gate infrastructure base (GateInfraCore + GateServerCore iface).
     add_subdirectory(GateShared/core)
-    # Legacy H1.1 standalone transport remains opt-in; R18 plugin helpers stay default-buildable.
-    add_subdirectory(GateShared/transports/h1/legacy_standalone)
-    add_subdirectory(GateShared/plugins/r18)
-    add_subdirectory(GateShared/transports/h3)
-    if(MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE AND libh2o_FOUND)
-        add_subdirectory(GateShared/transports/h2)
-    elseif(MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE)
-        message(WARNING "MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE=ON but libh2o was not found; skipping GateServerHttp2")
-    endif()
-    add_subdirectory(GateShared)
+
+    # --- Microservices: each owns its domain code (Gate<X>Domain) and, where it
+    # has domain-specific support, its own core library (Gate<X>Core). These are
+    # processed before the legacy transports / GateServerCore-aggregate consumers
+    # so every domain-core target name exists when those aggregates reference it.
+    # AccountShared holds the auth+account aggregate (GateAccountCore +
+    # GateAuthDomain + GateAccountDomain) that Register/Login/Account all link.
+    add_subdirectory(AccountShared)
     add_subdirectory(AIGatewayService)
     add_subdirectory(MediaService)
     add_subdirectory(MomentsService)
@@ -498,6 +595,21 @@ if(BUILD_SERVER_SERVICES)
     add_subdirectory(RegisterService)
     add_subdirectory(LoginService)
     add_subdirectory(AccountService)
+
+    # --- Shared gate runtime framework + legacy/compat transports. These depend
+    # on the domain-core/domain targets defined above (GateServerCore aggregate,
+    # GateAppCore compat). Default-buildable: GateRuntimeCore, GateServerHttp3,
+    # GateServerHttp1.1, R18 plugin helpers. Opt-in: GateServerHttp2.
+    add_subdirectory(GateShared)
+    add_subdirectory(GateShared/transports/h1/legacy_standalone)
+    add_subdirectory(GateShared/plugins/r18)
+    add_subdirectory(GateShared/transports/h3)
+    if(MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE AND libh2o_FOUND)
+        add_subdirectory(GateShared/transports/h2)
+    elseif(MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE)
+        message(WARNING "MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE=ON but libh2o was not found; skipping GateServerHttp2")
+    endif()
+
     add_subdirectory(VarifyServer)
     add_subdirectory(AIServer)
 endif()

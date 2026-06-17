@@ -161,9 +161,9 @@ tools/scripts/status/deploy_services.sh
 tools/scripts/status/start-all-services.sh
 
 需要从 Windows 运行旧版探针时：
-tools/scripts/test_register_login.ps1
-tools/scripts/test_login.ps1
-tools/scripts/full_flow_test.ps1
+tools/scripts/verify/test_register_login.ps1
+tools/scripts/verify/test_login.ps1
+tools/scripts/verify/full_flow_test.ps1
 
 如果出现端口冲突或 Docker 依赖失败，停止并报告占用进程/容器。
 将结果写入 .ai/<PROJECT>/<LETTER>/logs/phase-verify.result.md。

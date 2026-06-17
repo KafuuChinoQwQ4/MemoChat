@@ -92,6 +92,13 @@ grpc::Status ChatRelationInternalGrpcService::PinDialog(grpc::ServerContext*,
     return BuildCommandResponse(request, response, &IRelationCommandService::PinDialog);
 }
 
+grpc::Status ChatRelationInternalGrpcService::FilterFriendUids(grpc::ServerContext*,
+                                                               const chatinternal::JsonPayloadRequest* request,
+                                                               chatinternal::JsonPayloadResponse* response)
+{
+    return BuildCommandResponse(request, response, &IRelationCommandService::FilterFriendUids);
+}
+
 grpc::Status ChatRelationInternalGrpcService::BuildBootstrapResponse(
     const chatinternal::BootstrapRequest* request,
     chatinternal::BootstrapResponse* response,

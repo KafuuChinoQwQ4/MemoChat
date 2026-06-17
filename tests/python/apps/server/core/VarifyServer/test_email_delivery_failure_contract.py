@@ -6,7 +6,10 @@ from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
 VARIFY_DIR = REPO_ROOT / "apps/server/core/VarifyServer"
-GATE_CONST = REPO_ROOT / "apps/server/core/GateServer/core/config/const.h"
+# VarifyServer is a self-contained microservice with its own error-code const.h (it no longer
+# pulls the retired GateServer monolith's gate-core const.h; the shared value also lives in
+# GateShared/core/config/const.h). The VarifyServer-local copy is this service's contract.
+VARIFY_CONST = REPO_ROOT / "apps/server/core/VarifyServer/const.h"
 CLIENT_AUTH_RESPONSES = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/session/SessionAuthCoordinatorAuthResponses.cpp"
 )
@@ -59,7 +62,7 @@ class EmailDeliveryFailureContractTests(unittest.TestCase):
 
     def test_verify_code_request_reports_email_delivery_failure(self):
         source = read(VARIFY_DIR / "VarifyServiceImpl.cpp")
-        const_source = read(GATE_CONST)
+        const_source = read(VARIFY_CONST)
         client_source = read(CLIENT_AUTH_RESPONSES)
 
         self.assertIn("EmailSendFailed = 1022", const_source)

@@ -55,6 +55,7 @@ public:
     RevokePrivateMessage(const int& uid, const int& peer_uid, const std::string& msg_id, int64_t deleted_at_ms = 0);
     bool UpsertPrivateReadState(const int& uid, const int& peer_uid, const int64_t& read_ts);
     bool IsFriend(const int& self_id, const int& friend_id);
+    std::vector<int> FilterFriendUids(int viewer_uid, const std::vector<int>& author_uids);
     bool CreateGroup(const int& owner_uid,
                      const std::string& name,
                      const std::string& announcement,

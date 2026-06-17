@@ -319,6 +319,12 @@ public:
                         int author_uid,
                         std::vector<MomentInfo>& moments,
                         bool& has_more);
+    bool GetMomentsFeedCandidates(int viewer_uid,
+                                  int64_t last_moment_id,
+                                  int limit,
+                                  int author_uid,
+                                  std::vector<MomentInfo>& moments,
+                                  bool& has_more);
     bool CanViewMoment(int viewer_uid, const MomentInfo& moment);
     bool GetMomentById(int64_t moment_id, MomentInfo& moment);
     bool DeleteMoment(int64_t moment_id, int uid);
@@ -343,4 +349,9 @@ private:
     void WarmupAuthQueries();
     std::string GenerateUserPublicId();
     std::unique_ptr<PostgresPool> pool_;
+    // Optional dedicated connection to the account database (memo_account) for
+    // cross-domain user-info reads. Set from [AccountPostgres] when present;
+    // empty means "use the pooled connection" (monolith / account-owning
+    // services where the user table lives in the primary DB).
+    std::string account_connection_string_;
 };

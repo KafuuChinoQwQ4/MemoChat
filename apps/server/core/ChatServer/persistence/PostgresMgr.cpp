@@ -222,6 +222,12 @@ bool PostgresMgr::IsFriend(const int& self_id, const int& friend_id)
     return _dao->IsFriend(self_id, friend_id);
 }
 
+std::vector<int> PostgresMgr::FilterFriendUids(int viewer_uid, const std::vector<int>& author_uids)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->FilterFriendUids(viewer_uid, author_uids);
+}
+
 bool PostgresMgr::CreateGroup(const int& owner_uid,
                               const std::string& name,
                               const std::string& announcement,

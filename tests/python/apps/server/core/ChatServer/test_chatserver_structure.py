@@ -64,10 +64,13 @@ EXPECTED_GROUPS = {
         "orchestration/LogicSystem.h",
         "relation/ChatRelationInternalGrpcService.cpp",
         "relation/ChatRelationInternalGrpcService.h",
+        "relation/ChatRelationSessionAdapter.cpp",
+        "relation/ChatRelationSessionAdapter.h",
         "relation/ChatRelationService.cpp",
         "relation/ChatRelationService.h",
         "relation/RelationServiceFactory.cpp",
         "relation/RelationServiceFactory.h",
+        "ports/IRelationSessionService.h",
         "session/ChatSessionService.cpp",
         "session/ChatSessionService.h",
         "users/ChatUserSupport.cpp",
@@ -262,13 +265,18 @@ EXPECTED_MICROSERVICE_TARGETS = {
     },
     "ChatSessionCore": {
         "domain/session/ChatSessionService.cpp",
-        "domain/users/ChatUserSupport.cpp",
         "domain/users/UserMgr.cpp",
+    },
+    "ChatUserSupportCore": {
+        "domain/users/ChatUserSupport.cpp",
     },
     "ChatRelationCore": {
         "domain/relation/ChatRelationInternalGrpcService.cpp",
         "domain/relation/ChatRelationService.cpp",
         "domain/relation/RelationServiceFactory.cpp",
+    },
+    "ChatRelationSessionAdapterCore": {
+        "domain/relation/ChatRelationSessionAdapter.cpp",
     },
     "ChatMessageCore": {
         "domain/message/ChatMessageInternalGrpcService.cpp",
@@ -320,6 +328,26 @@ def text_between(text: str, start_marker: str, end_marker: str) -> str:
     return text[start:end]
 
 
+def extract_executable_link_block(cmake: str, target_name: str) -> str:
+    match = re.search(
+        rf"(?:target_link_libraries|chatserver_link_microservice_cores)\(\s*{re.escape(target_name)}\s+(?P<body>.*?)\)",
+        cmake,
+        re.S,
+    )
+    if not match:
+        raise AssertionError(f"link block missing for {target_name}")
+    return match.group("body")
+
+
+def assert_executable_links(
+    testcase: unittest.TestCase, cmake: str, target_name: str, expected_targets: set[str]
+) -> None:
+    block = extract_executable_link_block(cmake, target_name)
+    testcase.assertNotIn("ChatServerCore", block, f"{target_name} must not link the full ChatServerCore aggregate")
+    for expected in expected_targets:
+        testcase.assertIn(expected, block, f"{target_name} should link {expected}")
+
+
 def ini_section(text: str, section_name: str) -> str:
     marker = f"[{section_name}]"
     start = text.index(marker)
@@ -344,6 +372,24 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("app/ChatServer.cpp", cmake)
         self.assertIn("target_link_libraries(ChatServer PRIVATE ChatServerCore)", cmake)
 
+    def test_service_local_message_proto_copies_match_common_canonical_proto(self):
+        canonical_proto = COMMON_PROTO_DIR / "message.proto"
+        self.assertTrue(canonical_proto.is_file(), "canonical common/proto/message.proto is missing")
+        canonical_bytes = canonical_proto.read_bytes()
+
+        for local_proto in (
+            CHATSERVER_DIR / "message.proto",
+            SERVER_CORE_DIR / "VarifyServer" / "message.proto",
+        ):
+            with self.subTest(proto=local_proto.relative_to(REPO_ROOT)):
+                self.assertTrue(local_proto.is_file(), "legacy service-local proto copy is missing")
+                self.assertEqual(
+                    canonical_bytes,
+                    local_proto.read_bytes(),
+                    "service-local message.proto copies are compatibility artifacts and must stay byte-for-byte "
+                    "identical to apps/server/core/common/proto/message.proto",
+                )
+
     def test_chatserver_core_is_split_into_microservice_preparation_targets(self):
         cmake = read_cmake()
 
@@ -358,6 +404,10 @@ class ChatServerStructureTests(unittest.TestCase):
         aggregate_block = extract_target_block(cmake, "ChatServerCore")
         for target_name in EXPECTED_MICROSERVICE_TARGETS:
             self.assertIn(target_name, aggregate_block)
+
+        relation_core_block = extract_target_block(cmake, "ChatRelationCore")
+        self.assertNotIn("domain/relation/ChatRelationSessionAdapter.cpp", relation_core_block)
+        self.assertNotIn("ChatTransportCore", relation_core_block)
 
         self.assertNotIn("app/ChatServer.cpp", aggregate_block)
         self.assertNotIn("add_executable(ChatRelationService\n", cmake)
@@ -378,7 +428,23 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("add_executable(ChatDeliveryWorker", cmake)
         self.assertIn("app/ChatDeliveryWorker.cpp", cmake)
         self.assertIn("memochat_configure_server_target(ChatDeliveryWorker)", cmake)
-        self.assertIn("target_link_libraries(ChatDeliveryWorker PRIVATE ChatServerCore)", cmake)
+        assert_executable_links(
+            self,
+            cmake,
+            "ChatDeliveryWorker",
+            {
+                "ChatAppCore",
+                "ChatConfigCore",
+                "ChatDeliveryCore",
+                "ChatMessagingCore",
+                "ChatOrchestrationCore",
+                "ChatPersistenceCore",
+                "ChatRelationCore",
+                "ChatSessionCore",
+                "ChatTransportCore",
+                "ChatUserSupportCore",
+            },
+        )
 
     def test_chat_delivery_worker_runtime_config_is_worker_only(self):
         config_path = CHATSERVER_DIR / "chatdeliveryworker1.ini"
@@ -467,7 +533,19 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("add_executable(ChatRelationQueryService", cmake)
         self.assertIn("app/ChatRelationQueryService.cpp", cmake)
         self.assertIn("memochat_configure_server_target(ChatRelationQueryService)", cmake)
-        self.assertIn("target_link_libraries(ChatRelationQueryService PRIVATE ChatServerCore)", cmake)
+        assert_executable_links(
+            self,
+            cmake,
+            "ChatRelationQueryService",
+            {
+                "ChatAppCore",
+                "ChatConfigCore",
+                "ChatMessagingCore",
+                "ChatPersistenceCore",
+                "ChatRelationCore",
+                "ChatUserSupportCore",
+            },
+        )
 
         config = config_path.read_text(encoding="utf-8-sig")
         for token in (
@@ -551,7 +629,19 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("add_executable(ChatRelationServiceWorker", cmake)
         self.assertIn("app/ChatRelationServiceWorker.cpp", cmake)
         self.assertIn("memochat_configure_server_target(ChatRelationServiceWorker)", cmake)
-        self.assertIn("target_link_libraries(ChatRelationServiceWorker PRIVATE ChatServerCore)", cmake)
+        assert_executable_links(
+            self,
+            cmake,
+            "ChatRelationServiceWorker",
+            {
+                "ChatAppCore",
+                "ChatConfigCore",
+                "ChatMessagingCore",
+                "ChatPersistenceCore",
+                "ChatRelationCore",
+                "ChatUserSupportCore",
+            },
+        )
 
         config = config_path.read_text(encoding="utf-8-sig")
         for token in (
@@ -640,7 +730,24 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("add_executable(ChatMessageService", cmake)
         self.assertIn("app/ChatMessageService.cpp", cmake)
         self.assertIn("memochat_configure_server_target(ChatMessageService)", cmake)
-        self.assertIn("target_link_libraries(ChatMessageService PRIVATE ChatServerCore)", cmake)
+        assert_executable_links(
+            self,
+            cmake,
+            "ChatMessageService",
+            {
+                "ChatAppCore",
+                "ChatConfigCore",
+                "ChatDeliveryCore",
+                "ChatMessageCore",
+                "ChatOrchestrationCore",
+                "ChatPersistenceCore",
+                "ChatRelationCore",
+                "ChatRelationSessionAdapterCore",
+                "ChatSessionCore",
+                "ChatTransportCore",
+                "ChatUserSupportCore",
+            },
+        )
         self.assertIn(
             "add_executable(chatserver_message_remote_smoke_gtest",
             (REPO_ROOT / "tests" / "cpp" / "apps" / "server" / "core" / "ChatServer" / "CMakeLists.txt").read_text(
@@ -1681,7 +1788,9 @@ class ChatServerStructureTests(unittest.TestCase):
             )
 
         relation_service_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationService.h"
+        relation_session_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationSessionService.h"
         self.assertTrue(relation_service_port_path.is_file(), "relation service contract header is missing")
+        self.assertTrue(relation_session_port_path.is_file(), "relation session service contract header is missing")
 
         relation_service_port = relation_service_port_path.read_text(encoding="utf-8")
         self.assertIn("ports/IRelationQueryService.h", relation_service_port)
@@ -1691,6 +1800,12 @@ class ChatServerStructureTests(unittest.TestCase):
             r"class\s+IRelationService\s*:\s*public\s+IRelationQueryService\s*,\s*public\s+IRelationCommandService",
         )
         self.assertIn("virtual ~IRelationService() = default", relation_service_port)
+        self.assertNotIn("HandleSearchUser", relation_service_port)
+        self.assertNotIn("HandlePinDialog", relation_service_port)
+
+        relation_session_port = relation_session_port_path.read_text(encoding="utf-8")
+        self.assertIn("class IRelationSessionService", relation_session_port)
+        self.assertIn("virtual ~IRelationSessionService() = default", relation_session_port)
         for method in (
             "HandleSearchUser",
             "HandleAddFriendApply",
@@ -1700,7 +1815,7 @@ class ChatServerStructureTests(unittest.TestCase):
             "HandleSyncDraft",
             "HandlePinDialog",
         ):
-            self.assertRegex(relation_service_port, rf"virtual\s+void\s+{re.escape(method)}")
+            self.assertRegex(relation_session_port, rf"virtual\s+void\s+{re.escape(method)}")
 
         relation_header = (DOMAIN_RELATION_DIR / "ChatRelationService.h").read_text(encoding="utf-8")
         self.assertIn("ports/IRelationService.h", relation_header)
@@ -1721,18 +1836,43 @@ class ChatServerStructureTests(unittest.TestCase):
                 relation_header,
                 rf"RelationCommandResult\s+{re.escape(method)}\(const\s+RelationCommandRequest&\s+request\)\s+override",
             )
-        self.assertIn("HandleSearchUser(const std::shared_ptr<CSession>& session", relation_header)
-        self.assertIn("override", relation_header)
+        self.assertNotIn("HandleSearchUser(const std::shared_ptr<CSession>& session", relation_header)
+        self.assertNotIn("CSession", relation_header)
 
         relation_source = (DOMAIN_RELATION_DIR / "ChatRelationService.cpp").read_text(encoding="utf-8")
-        self.assertIn("BuildRelationCommandRequest(session, msg_id, msg_data)", relation_source)
-        self.assertIn("SendRelationCommandResult(session, SearchUser(", relation_source)
-        self.assertIn("SendRelationCommandResult(session, AddFriendApply(", relation_source)
-        self.assertIn("SendRelationCommandResult(session, AuthFriendApply(", relation_source)
-        self.assertIn("SendRelationCommandResult(session, DeleteFriend(", relation_source)
-        self.assertIn("SendRelationCommandResult(session, GetDialogList(", relation_source)
-        self.assertIn("SendRelationCommandResult(session, SyncDraft(", relation_source)
-        self.assertIn("SendRelationCommandResult(session, PinDialog(", relation_source)
+        self.assertNotIn('#include "CSession.h"', relation_source)
+        self.assertNotIn("SendRelationCommandResult", relation_source)
+
+        relation_session_header = (DOMAIN_RELATION_DIR / "ChatRelationSessionAdapter.h").read_text(encoding="utf-8")
+        self.assertIn("ports/IRelationSessionService.h", relation_session_header)
+        self.assertRegex(
+            relation_session_header,
+            r"class\s+ChatRelationSessionAdapter\s+final\s*:\s*public\s+IRelationSessionService",
+        )
+        self.assertIn("HandleSearchUser(const std::shared_ptr<CSession>& session", relation_session_header)
+
+        relation_session_adapter = (DOMAIN_RELATION_DIR / "ChatRelationSessionAdapter.cpp").read_text(encoding="utf-8")
+        self.assertIn("BuildRelationCommandRequest(session, msg_id, msg_data)", relation_session_adapter)
+        self.assertIn("SendRelationCommandResult", relation_session_adapter)
+        self.assertIn(
+            "_relation_service->SearchUser(BuildRelationCommandRequest(session, msg_id, msg_data))",
+            relation_session_adapter,
+        )
+        self.assertIn(
+            "_relation_service->PinDialog(BuildRelationCommandRequest(session, msg_id, msg_data))",
+            relation_session_adapter,
+        )
+        self.assertIn('#include "CSession.h"', relation_session_adapter)
+        self.assertIn("ChatRelationSessionAdapter::HandleSearchUser", relation_session_adapter)
+        self.assertNotIn("ChatRelationService::HandleSearchUser", relation_session_adapter)
+
+        self.assertNotIn("SendRelationCommandResult(session, SearchUser(", relation_source)
+        self.assertNotIn("SendRelationCommandResult(session, AddFriendApply(", relation_source)
+        self.assertNotIn("SendRelationCommandResult(session, AuthFriendApply(", relation_source)
+        self.assertNotIn("SendRelationCommandResult(session, DeleteFriend(", relation_source)
+        self.assertNotIn("SendRelationCommandResult(session, GetDialogList(", relation_source)
+        self.assertNotIn("SendRelationCommandResult(session, SyncDraft(", relation_source)
+        self.assertNotIn("SendRelationCommandResult(session, PinDialog(", relation_source)
 
     def test_relation_service_remote_backend_has_full_command_grpc_adapter(self):
         client_header_path = CHATSERVER_DIR / "clients" / "RelationGrpcClient.h"
@@ -1823,13 +1963,13 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn(
             "RelationCommandResult SearchUser(const RelationCommandRequest& request) override", service_adapter_header
         )
-        self.assertIn("void HandleSearchUser", service_adapter_header)
+        self.assertNotIn("void HandleSearchUser", service_adapter_header)
 
         service_adapter_source = service_adapter_source_path.read_text(encoding="utf-8")
-        self.assertIn('#include "transport/CSession.h"', service_adapter_source)
-        self.assertIn("BuildSessionCommandRequest(session, msg_id, msg_data)", service_adapter_source)
-        self.assertIn("SendSessionCommandResult(session, SearchUser(", service_adapter_source)
-        self.assertIn("session->Send(result.payload_json, result.response_msg_id)", service_adapter_source)
+        self.assertNotIn('#include "transport/CSession.h"', service_adapter_source)
+        self.assertNotIn("BuildSessionCommandRequest(session, msg_id, msg_data)", service_adapter_source)
+        self.assertNotIn("SendSessionCommandResult(session, SearchUser(", service_adapter_source)
+        self.assertNotIn("session->Send(result.payload_json, result.response_msg_id)", service_adapter_source)
 
         factory_source = factory_source_path.read_text(encoding="utf-8")
         self.assertIn('#include "RelationGrpcServiceAdapter.h"', factory_source)
@@ -1859,19 +1999,21 @@ class ChatServerStructureTests(unittest.TestCase):
 
         logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
         self.assertIn("class IRelationService;", logic_header)
+        self.assertIn("class IRelationSessionService;", logic_header)
         self.assertIn("std::unique_ptr<IRelationService> _chat_relation_service", logic_header)
+        self.assertIn("std::unique_ptr<IRelationSessionService> _chat_relation_session_service", logic_header)
         self.assertNotIn("std::unique_ptr<ChatRelationService> _chat_relation_service", logic_header)
 
         registrar_source = (DOMAIN_ORCHESTRATION_DIR / "ChatHandlerRegistrars.cpp").read_text(encoding="utf-8")
-        self.assertIn('#include "ports/IRelationService.h"', registrar_source)
+        self.assertIn('#include "ports/IRelationSessionService.h"', registrar_source)
         self.assertNotIn('#include "ChatRelationService.h"', registrar_source)
-        self.assertIn("&IRelationService::HandleSearchUser", registrar_source)
-        self.assertIn("&IRelationService::HandleAddFriendApply", registrar_source)
-        self.assertIn("&IRelationService::HandleAuthFriendApply", registrar_source)
-        self.assertIn("&IRelationService::HandleDeleteFriend", registrar_source)
-        self.assertIn("&IRelationService::HandleGetDialogList", registrar_source)
-        self.assertIn("&IRelationService::HandleSyncDraft", registrar_source)
-        self.assertIn("&IRelationService::HandlePinDialog", registrar_source)
+        self.assertIn("&IRelationSessionService::HandleSearchUser", registrar_source)
+        self.assertIn("&IRelationSessionService::HandleAddFriendApply", registrar_source)
+        self.assertIn("&IRelationSessionService::HandleAuthFriendApply", registrar_source)
+        self.assertIn("&IRelationSessionService::HandleDeleteFriend", registrar_source)
+        self.assertIn("&IRelationSessionService::HandleGetDialogList", registrar_source)
+        self.assertIn("&IRelationSessionService::HandleSyncDraft", registrar_source)
+        self.assertIn("&IRelationSessionService::HandlePinDialog", registrar_source)
         self.assertNotIn("&ChatRelationService::", registrar_source)
 
     def test_relation_service_construction_is_hidden_behind_factory(self):
@@ -2242,6 +2384,12 @@ class ChatServerStructureTests(unittest.TestCase):
             message_command_port,
             r"virtual\s+MessageCommandResult\s+GroupChatMessage\(const\s+MessageCommandRequest&\s+request\)",
         )
+        # BuildGroupListJson is the group query method; it lives on the command/query base, not the
+        # transport interface (which carries only HandleXxx).
+        self.assertRegex(
+            message_command_port,
+            r"virtual\s+void\s+BuildGroupListJson\(int\s+uid,\s+memochat::json::JsonValue&\s+out\)",
+        )
 
         private_port = private_port_path.read_text(encoding="utf-8")
         self.assertIn("ports/IMessageCommandService.h", private_port)
@@ -2263,8 +2411,9 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("class IGroupMessageService", group_port)
         self.assertRegex(group_port, r"class\s+IGroupMessageService\s*:\s*public\s+IGroupMessageCommandService")
         self.assertIn("virtual ~IGroupMessageService() = default", group_port)
+        # BuildGroupListJson is a query method on the IGroupMessageCommandService base (asserted
+        # below); the transport interface adds only the session-bound HandleXxx handlers.
         for method in (
-            "BuildGroupListJson",
             "HandleCreateGroup",
             "HandleGetGroupList",
             "HandleInviteGroupMember",
@@ -3089,7 +3238,7 @@ class ChatServerStructureTests(unittest.TestCase):
             "&ChatSessionService::HandleLogin",
             "&ChatSessionService::HandleRelationBootstrap",
             "&ChatSessionService::HandleHeartbeat",
-            "&IRelationService::HandleSearchUser",
+            "&IRelationSessionService::HandleSearchUser",
             "&IPrivateMessageService::HandleTextChatMessage",
             "&IGroupMessageService::HandleGroupChatMessage",
         ):

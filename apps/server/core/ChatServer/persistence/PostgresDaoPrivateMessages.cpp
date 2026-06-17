@@ -1,4 +1,5 @@
 #include "PostgresDao.h"
+#include "PostgresDaoUtil.h"
 #include "db/PqxxCompat.h"
 #include "PostgresPool.h"
 #include <pqxx/pqxx>
@@ -10,13 +11,6 @@
 namespace
 {
 constexpr int64_t kMessageRevokeWindowMsPostgresDao = 5 * 60 * 1000;
-
-int64_t NowMsPostgresDao()
-{
-    return static_cast<int64_t>(
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-            .count());
-}
 } // namespace
 bool PostgresDao::SavePrivateMessage(const PrivateMessageInfo& msg)
 {
@@ -525,7 +519,7 @@ bool PostgresDao::EnqueueChatOutboxEvent(const ChatOutboxEventInfo& event)
                          event.status,
                          event.retry_count,
                          event.next_retry_at,
-                         event.created_at > 0 ? event.created_at : NowMsPostgresDao(),
+                         event.created_at > 0 ? event.created_at : NowMs(),
                          event.published_at,
                          event.last_error);
         txn.commit();
@@ -549,7 +543,7 @@ bool PostgresDao::GetPendingChatOutboxEvents(int limit, std::vector<ChatOutboxEv
     {
         pqxx::connection conn(postgres_connection_string_);
         pqxx::work txn(conn);
-        const auto now_ms = NowMsPostgresDao();
+        const auto now_ms = NowMs();
         const auto rows =
             txn.exec_params("WITH picked AS ("
                             "    SELECT id FROM chat_event_outbox "
@@ -605,7 +599,7 @@ bool PostgresDao::MarkChatOutboxEventPublished(int64_t id, int64_t published_at_
         const auto rows =
             txn.exec_params("UPDATE chat_event_outbox SET status = 1, published_at = $2, last_error = '' WHERE id = $1",
                             id,
-                            published_at_ms > 0 ? published_at_ms : NowMsPostgresDao());
+                            published_at_ms > 0 ? published_at_ms : NowMs());
         txn.commit();
         return rows.affected_rows() > 0;
     }
@@ -660,7 +654,7 @@ bool PostgresDao::ExpediteChatOutboxEventRetry(int64_t id)
         const auto rows =
             txn.exec_params("UPDATE chat_event_outbox SET status = 0, next_retry_at = $2 WHERE id = $1 AND status <> 1",
                             id,
-                            NowMsPostgresDao());
+                            NowMs());
         txn.commit();
         return rows.affected_rows() > 0;
     }

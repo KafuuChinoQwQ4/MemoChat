@@ -1,0 +1,105 @@
+{{- if .Values.focusedGateways.enabled }}
+{{- $root := . }}
+{{- range $name := list "aigateway" "mediagateway" "momentsgateway" "callgateway" "r18gateway" "register" "login" "account" }}
+{{- $svc := index $root.Values.focusedGateways.services $name }}
+{{- $image := index $root.Values.images.focusedGateways $name }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $svc.serviceName }}
+  namespace: {{ $root.Values.namespaces.prod }}
+  labels:
+    app.kubernetes.io/component: {{ $svc.serviceName }}
+    {{- include "memochat.labels" $root | nindent 4 }}
+spec:
+  replicas: {{ $svc.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: {{ $svc.serviceName }}
+      {{- include "memochat.selectorLabels" $root | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: {{ $svc.serviceName }}
+        {{- include "memochat.selectorLabels" $root | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ $svc.serviceName }}
+          image: "{{ $image.repository }}:{{ $image.tag }}"
+          imagePullPolicy: {{ $image.pullPolicy }}
+          env:
+            - name: TARGET_BIN
+              value: /app/{{ $svc.target }}
+            - name: RUN_WITH_CONFIG_ARG
+              value: "false"
+            - name: CONFIG_PATH
+              value: /app/config.ini
+            - name: MEMOCHAT_POSTGRES_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-password } }
+            - name: MEMOCHAT_REDIS_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
+            - name: MEMOCHAT_CHATAUTH_HMACSECRET
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: chat-auth-secret } }
+            - name: MEMOCHAT_RABBITMQ_PASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
+            {{- if eq $name "callgateway" }}
+            - name: MEMOCHAT_CALL_APIKEY
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: livekit-api-key } }
+            - name: MEMOCHAT_CALL_APISECRET
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: livekit-api-secret } }
+            {{- end }}
+            {{- with $root.Values.focusedGateways.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ $svc.port }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.ini
+              subPath: {{ $svc.configKey }}
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            failureThreshold: 30
+            periodSeconds: 5
+          resources:
+            {{- toYaml $root.Values.focusedGateways.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: memochat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $svc.serviceName }}
+  namespace: {{ $root.Values.namespaces.prod }}
+spec:
+  selector:
+    app.kubernetes.io/component: {{ $svc.serviceName }}
+    {{- include "memochat.selectorLabels" $root | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $svc.port }}
+      targetPort: http
+---
+{{- if $root.Values.focusedGateways.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $svc.serviceName }}
+  namespace: {{ $root.Values.namespaces.prod }}
+spec:
+  minAvailable: {{ $root.Values.focusedGateways.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: {{ $svc.serviceName }}
+      {{- include "memochat.selectorLabels" $root | nindent 6 }}
+---
+{{- end }}
+{{- end }}
+{{- end }}

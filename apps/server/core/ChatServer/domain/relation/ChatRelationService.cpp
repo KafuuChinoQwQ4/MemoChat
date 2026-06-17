@@ -1,9 +1,8 @@
 #include "ChatRelationService.h"
 
-#include "ChatGrpcClient.h"
 #include "ChatRuntime.h"
-#include "CSession.h"
 #include "ChatUserSupport.h"
+#include "const.h"
 #include "logging/Logger.h"
 
 #include <chrono>
@@ -20,7 +19,6 @@ int64_t NowMsRelationLocal()
             .count());
 }
 
-// Compact wire JSON for TCP/QUIC transport (Qt QJsonDocument is strict).
 std::string JsonToWireString(const Json::Value& v)
 {
     Json::StreamWriterBuilder builder;
@@ -34,29 +32,6 @@ RelationCommandResult BuildRelationCommandResult(short response_msg_id, const Js
     result.response_msg_id = response_msg_id;
     result.payload_json = JsonToWireString(payload);
     return result;
-}
-
-RelationCommandRequest
-BuildRelationCommandRequest(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data)
-{
-    RelationCommandRequest request;
-    request.request_msg_id = msg_id;
-    request.payload_json = msg_data;
-    if (session)
-    {
-        request.session_uid = session->GetUserId();
-        request.session_id = session->GetSessionId();
-    }
-    return request;
-}
-
-void SendRelationCommandResult(const std::shared_ptr<CSession>& session, const RelationCommandResult& result)
-{
-    if (!session)
-    {
-        return;
-    }
-    session->Send(result.payload_json, result.response_msg_id);
 }
 
 void PublishRelationStateEventLocal(IEventPublisher* event_publisher,
@@ -354,6 +329,41 @@ RelationCommandResult ChatRelationService::SearchUser(const RelationCommandReque
     }
     chatusersupport::GetUserByUid(std::to_string(uid), rtvalue);
     return BuildRelationCommandResult(ID_SEARCH_USER_RSP, rtvalue);
+}
+
+RelationCommandResult ChatRelationService::FilterFriendUids(const RelationCommandRequest& request)
+{
+    Json::Reader reader;
+    Json::Value root;
+    reader.parse(request.payload_json, root);
+    Json::Value rtvalue;
+
+    const int viewer_uid = root.isMember("viewer_uid") ? root["viewer_uid"].asInt() : 0;
+    std::vector<int> author_uids;
+    if (root.isMember("author_uids") && root["author_uids"].isArray())
+    {
+        for (const auto& item : root["author_uids"])
+        {
+            const int author_uid = item.asInt();
+            if (author_uid > 0)
+            {
+                author_uids.push_back(author_uid);
+            }
+        }
+    }
+
+    rtvalue["error"] = ErrorCodes::Success;
+    Json::Value friend_uids(Json::arrayValue);
+    if (viewer_uid > 0 && !author_uids.empty())
+    {
+        for (int friend_uid : _relation_repository->FilterFriendUids(viewer_uid, author_uids))
+        {
+            friend_uids.append(friend_uid);
+        }
+    }
+    rtvalue["friend_uids"] = friend_uids;
+    // Internal read RPC: no client-facing TCP message id, so 0.
+    return BuildRelationCommandResult(0, rtvalue);
 }
 
 RelationCommandResult ChatRelationService::AddFriendApply(const RelationCommandRequest& request)
@@ -693,53 +703,4 @@ RelationCommandResult ChatRelationService::PinDialog(const RelationCommandReques
         rtvalue["error"] = ErrorCodes::RPCFailed;
     }
     return BuildRelationCommandResult(ID_PIN_DIALOG_RSP, rtvalue);
-}
-
-void ChatRelationService::HandleSearchUser(const std::shared_ptr<CSession>& session,
-                                           short msg_id,
-                                           const std::string& msg_data)
-{
-    SendRelationCommandResult(session, SearchUser(BuildRelationCommandRequest(session, msg_id, msg_data)));
-}
-
-void ChatRelationService::HandleAddFriendApply(const std::shared_ptr<CSession>& session,
-                                               short msg_id,
-                                               const std::string& msg_data)
-{
-    SendRelationCommandResult(session, AddFriendApply(BuildRelationCommandRequest(session, msg_id, msg_data)));
-}
-
-void ChatRelationService::HandleAuthFriendApply(const std::shared_ptr<CSession>& session,
-                                                short msg_id,
-                                                const std::string& msg_data)
-{
-    SendRelationCommandResult(session, AuthFriendApply(BuildRelationCommandRequest(session, msg_id, msg_data)));
-}
-
-void ChatRelationService::HandleDeleteFriend(const std::shared_ptr<CSession>& session,
-                                             short msg_id,
-                                             const std::string& msg_data)
-{
-    SendRelationCommandResult(session, DeleteFriend(BuildRelationCommandRequest(session, msg_id, msg_data)));
-}
-
-void ChatRelationService::HandleGetDialogList(const std::shared_ptr<CSession>& session,
-                                              short msg_id,
-                                              const std::string& msg_data)
-{
-    SendRelationCommandResult(session, GetDialogList(BuildRelationCommandRequest(session, msg_id, msg_data)));
-}
-
-void ChatRelationService::HandleSyncDraft(const std::shared_ptr<CSession>& session,
-                                          short msg_id,
-                                          const std::string& msg_data)
-{
-    SendRelationCommandResult(session, SyncDraft(BuildRelationCommandRequest(session, msg_id, msg_data)));
-}
-
-void ChatRelationService::HandlePinDialog(const std::shared_ptr<CSession>& session,
-                                          short msg_id,
-                                          const std::string& msg_data)
-{
-    SendRelationCommandResult(session, PinDialog(BuildRelationCommandRequest(session, msg_id, msg_data)));
 }

@@ -55,11 +55,11 @@ tools/scripts/status/start-all-services.sh
 选择相关测试：
 
 ```powershell
-tools/scripts/test_register_login.ps1
-tools/scripts/test_login.ps1
-tools/scripts/test_login2.ps1
-tools/scripts/test_login3.ps1
-tools/scripts/full_flow_test.ps1
+tools/scripts/verify/test_register_login.ps1
+tools/scripts/verify/test_login.ps1
+tools/scripts/verify/test_login2.ps1
+tools/scripts/verify/test_login3.ps1
+tools/scripts/verify/full_flow_test.ps1
 python tools/loadtest/python-loadtest/py_loadtest.py --config tools/loadtest/python-loadtest/config.json --scenario all --total 20 --concurrency 5
 ```
 

@@ -35,6 +35,9 @@ public:
     grpc::Status PinDialog(grpc::ServerContext* context,
                            const chatinternal::JsonPayloadRequest* request,
                            chatinternal::JsonPayloadResponse* response) override;
+    grpc::Status FilterFriendUids(grpc::ServerContext* context,
+                                  const chatinternal::JsonPayloadRequest* request,
+                                  chatinternal::JsonPayloadResponse* response) override;
 
 private:
     grpc::Status BuildBootstrapResponse(const chatinternal::BootstrapRequest* request,

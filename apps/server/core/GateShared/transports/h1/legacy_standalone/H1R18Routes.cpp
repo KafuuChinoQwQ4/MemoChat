@@ -7,6 +7,7 @@
 #include "const.h"
 #include "json/GlazeCompat.h"
 #include "r18/R18SourceService.h"
+#include "support/UserTokenValidator.h"
 
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
@@ -27,11 +28,7 @@ constexpr const char* kDefaultR18SourceId = "";
 
 bool ValidateUserToken(int uid, const std::string& token)
 {
-    if (uid <= 0 || token.empty())
-        return false;
-    std::string token_value;
-    return RedisMgr::GetInstance()->Get(std::string(USERTOKENPREFIX) + std::to_string(uid), token_value) &&
-           token_value == token;
+    return memochat::auth::ValidateUserToken(uid, token);
 }
 
 std::string

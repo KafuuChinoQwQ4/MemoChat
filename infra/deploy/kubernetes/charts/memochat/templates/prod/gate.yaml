@@ -85,7 +85,7 @@ spec:
       {{- include "memochat.selectorLabels" . | nindent 6 }}
 {{- end }}
 ---
-{{- if .Values.gate.ingress.enabled }}
+{{- if and .Values.legacyGate.enabled .Values.gate.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
