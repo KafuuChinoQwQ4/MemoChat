@@ -200,46 +200,56 @@ class MediaUploadContractTest(unittest.TestCase):
         self.assertIn("HandleUploadMediaChunkBytes", body)
         self.assertNotIn("chunk_data_base64 = body_str", body)
 
-    def test_h3_raw_binary_chunk_route_uses_bytes_helper(self):
+    def test_h3_media_routes_dispatch_to_shared_registry_adapter(self):
         source = read_text(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp")
-        chunk_route = re.search(
-            r'logic\.RegPost\(\s*"/upload_media_chunk".*?logic\.RegPost\(\s*"/upload_media_complete"',
-            source,
-            re.S,
-        )
-        self.assertIsNotNone(chunk_route)
-        body = chunk_route.group(0)
+        compact = normalize_space(strip_comments(source))
 
-        self.assertIn("GetRequestBody()", body)
-        self.assertIn("GetRequestHeaders()", body)
-        self.assertIn('HeaderValue(headers, "X-Upload-Id")', body)
-        self.assertIn("HandleUploadMediaChunkBytes", body)
-        self.assertIn("HandleUploadMediaChunk(uid, token, upload_id, index, chunk_data_base64)", body)
+        self.assertIn("RegisterMedia(registry)", source)
+        self.assertIn("H3RouteAdapter::Dispatch", source)
+        for route in (
+            "/upload_media_init",
+            "/upload_media_chunk",
+            "/upload_media_complete",
+            "/upload_media",
+            "/upload_media_status",
+            "/media/download",
+        ):
+            with self.subTest(route=route):
+                self.assertRegex(
+                    compact,
+                    rf'logic\.Reg(?:Post|Get)\s*\(\s*"{re.escape(route)}"\s*,\s*DispatchSharedRoute',
+                )
 
-    def test_h3_media_response_starts_from_object_not_result_data_variant(self):
+        for forbidden in (
+            "Http2MediaSupport",
+            "MediaResponseJson",
+            "HandleUploadMediaChunkBytes",
+            "HeaderValue",
+            "X-Upload-Id",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, source)
+
+    def test_h2_h3_media_download_file_responses_are_owned_by_adapters(self):
         source = read_text(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp")
-        response_func = re.search(
-            r"memochat::json::JsonValue MediaResponseJson\(const Http2MediaSupport::MediaResult& result\)"
-            r"(?P<body>.*?)\n\}",
-            source,
-            re.S,
+        h2_adapter = read_text(
+            SERVER_CORE / "GateShared" / "transports" / "h2" / "adapters" / "h2" / "H2RouteAdapter.cpp"
         )
-        self.assertIsNotNone(response_func)
-        body = response_func.group("body")
-
-        self.assertIn("memochat::json::glaze_empty_object()", body)
-        self.assertIn("memochat::json::glaze_is_object(result.data)", body)
-        self.assertIn("memochat::json::getMemberNames(result.data)", body)
-        self.assertNotIn("JsonValue root = result.data", body)
-
-        media_block = re.search(
-            r"// Media upload routes(?P<body>.*?)// User profile routes",
-            source,
-            re.S,
+        h3_adapter = read_text(
+            SERVER_CORE / "GateShared" / "transports" / "h3" / "adapters" / "h3" / "H3RouteAdapter.cpp"
         )
-        self.assertIsNotNone(media_block)
-        self.assertNotIn("root = result.data", media_block.group("body"))
-        self.assertNotIn("JsonValue root = result.data", media_block.group("body"))
+
+        self.assertNotIn("MediaResponseJson", source)
+        self.assertNotIn("Http2MediaSupport", source)
+        for adapter in (h2_adapter, h3_adapter):
+            with self.subTest(adapter=adapter[:80]):
+                self.assertIn("GateResponseBodyKind::File", adapter)
+                self.assertIn("ReadFileBody", adapter)
+                self.assertIn("route_response.file_path", adapter)
+                self.assertIn("application/octet-stream", adapter)
+                self.assertIn("404", adapter)
+                self.assertNotIn("file response limitation", adapter)
+                self.assertNotIn("not supported", adapter)
 
     def test_current_h1_media_upload_json_responses_remain_text_json(self):
         source = read_text(SERVER_CORE / "MediaService" / "domain" / "services" / "media" / "MediaService.cpp")

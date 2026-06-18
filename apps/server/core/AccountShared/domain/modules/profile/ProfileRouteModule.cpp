@@ -78,11 +78,58 @@ bool HandleUserUpdateProfile(const memochat::gate::routing::GateRequest& request
     return true;
 }
 
+bool HandleGetUserInfo(const memochat::gate::routing::GateRequest& request,
+                       memochat::gate::routing::GateResponse& response)
+{
+    memochat::json::JsonValue root;
+    memochat::json::JsonValue src_root;
+    memochat::json::JsonReader reader;
+    if (!reader.parse(request.body, src_root))
+    {
+        root["error"] = ErrorCodes::Error_Json;
+        WriteJson(response, root);
+        return true;
+    }
+
+    const int uid = src_root.get("uid", 0).asInt();
+    if (uid <= 0)
+    {
+        root["error"] = ErrorCodes::UidInvalid;
+        WriteJson(response, root);
+        return true;
+    }
+
+    UserInfo user_info;
+    if (!PostgresMgr::GetInstance()->GetUserInfo(uid, user_info))
+    {
+        root["error"] = ErrorCodes::RPCFailed;
+        WriteJson(response, root);
+        return true;
+    }
+
+    root["error"] = ErrorCodes::Success;
+    root["uid"] = user_info.uid;
+    root["user_id"] = user_info.user_id;
+    root["name"] = user_info.name;
+    root["email"] = user_info.email;
+    root["nick"] = user_info.nick;
+    root["icon"] = user_info.icon;
+    root["desc"] = user_info.desc;
+    root["sex"] = user_info.sex;
+    WriteJson(response, root);
+    return true;
+}
+
 } // namespace
 
 void ProfileRouteModule::RegisterRoutes(memochat::gate::routing::RouteRegistry& registry)
 {
     registry.Register("POST", "/user_update_profile", HandleUserUpdateProfile);
+}
+
+void ProfileRouteModule::RegisterUserInfoRoutes(memochat::gate::routing::RouteRegistry& registry)
+{
+    registry.Register("POST", "/get_user_info", HandleGetUserInfo);
 }
 
 } // namespace memochat::gate::modules::profile

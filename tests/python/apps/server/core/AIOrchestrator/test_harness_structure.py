@@ -54,7 +54,7 @@ from harness.runtime.message_bus import RedpandaTaskEventPublisher
 from harness.runtime.task_service import AgentTaskService
 from harness.skills.registry import SkillRegistry
 from harness.skills.specs import AgentSpecRegistry
-from llm.base import LLMResponse, LLMUsage
+from llm.base import LLMResponse, LLMStreamChunk, LLMUsage
 
 
 class FakePlanner:
@@ -315,6 +315,10 @@ class MultiRoundReactToolExecutor:
 class FakeLLM:
     async def complete(self, messages, prefer_backend="", model_name="", deployment_preference="any", **kwargs):
         return LLMResponse(content="answer", model="fake-model", usage=LLMUsage(total_tokens=2))
+
+    async def stream(self, messages, prefer_backend="", model_name="", deployment_preference="any", **kwargs):
+        yield LLMStreamChunk(content="ans", model="fake-model")
+        yield LLMStreamChunk(content="wer", model="fake-model", is_final=True)
 
 
 class RecordingLLM:
@@ -1289,6 +1293,47 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("memory", layers)
         self.assertIn("execution", layers)
         self.assertIn("feedback", layers)
+        self.assertEqual(guardrail_names, ["input", "tool_plan", "output"])
+
+    async def test_stream_turn_records_same_core_pipeline_events(self):
+        service = AgentHarnessService(
+            planner=FakePlanner(),
+            llm_registry=FakeLLM(),
+            tool_executor=FakeToolExecutor(),
+            memory_service=FakeMemory(),
+            trace_store=FakeTraceStore(),
+            feedback_evaluator=FakeFeedback(),
+            guardrail_service=GuardrailService(),
+        )
+        request = SimpleNamespace(
+            uid=1,
+            session_id="",
+            content="根据知识库回答",
+            model_type="",
+            model_name="",
+            deployment_preference="any",
+            target_lang="",
+            requested_tools=[],
+            tool_arguments={},
+        )
+
+        chunks = [payload async for payload in service.stream_turn(request)]
+        final = chunks[-1]
+        layers = [event["layer"] for event in final["events"]]
+        event_names = [event["name"] for event in final["events"]]
+        guardrail_names = [event["name"] for event in final["events"] if event["layer"] == "guardrails"]
+
+        self.assertEqual([chunk["chunk"] for chunk in chunks], ["ans", "wer", ""])
+        self.assertTrue(final["is_final"])
+        self.assertEqual(final["skill"], "knowledge_copilot")
+        self.assertIn("orchestration", layers)
+        self.assertIn("guardrails", layers)
+        self.assertIn("memory", layers)
+        self.assertIn("execution", layers)
+        self.assertIn("feedback", layers)
+        self.assertIn("plan", event_names)
+        self.assertIn("tool_execution", event_names)
+        self.assertIn("model_completion", event_names)
         self.assertEqual(guardrail_names, ["input", "tool_plan", "output"])
 
     async def test_semantic_cache_hit_returns_without_sync_memory_extraction(self):

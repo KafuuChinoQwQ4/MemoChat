@@ -1,12 +1,9 @@
 #include "WinCompat.h"
 #include "Http2Routes.h"
+#include "GateRouteProfileRegistrar.h"
 #include "adapters/h2/H2RouteAdapter.h"
 #include "Http2AuthHandlers.h"
-#include "Http2CallHandlers.h"
-#include "Http2MediaHandlers.h"
-#include "Http2ProfileHandlers.h"
 #include "Http2Handlers.h"
-#include "Http2MomentsSupport.h"
 #include "modules/health/HealthRouteModule.h"
 #include "routing/RouteRegistry.h"
 #include <iostream>
@@ -44,6 +41,11 @@ const memochat::gate::routing::RouteRegistry& SharedRouteRegistry()
     {
         memochat::gate::routing::RouteRegistry routes;
         memochat::gate::modules::health::HealthRouteModule("GateServerHttp2").RegisterRoutes(routes);
+        memochat::gate::profiles::RegisterAccount(routes);
+        memochat::gate::profiles::RegisterAccountUserInfo(routes);
+        memochat::gate::profiles::RegisterCall(routes);
+        memochat::gate::profiles::RegisterMedia(routes);
+        memochat::gate::profiles::RegisterMoments(routes);
         return routes;
     }();
     return registry;
@@ -85,18 +87,8 @@ void Http2Routes::HandleRequest(const Http2Request& req, Http2Response& resp)
 void Http2Routes::RegisterRoutes()
 {
     // Health check endpoints
-    RegisterHandler("GET",
-                    "/healthz",
-                    [](const Http2Request& req, Http2Response& resp)
-                    {
-                        DispatchSharedRoute(req, resp);
-                    });
-    RegisterHandler("GET",
-                    "/readyz",
-                    [](const Http2Request& req, Http2Response& resp)
-                    {
-                        DispatchSharedRoute(req, resp);
-                    });
+    RegisterHandler("GET", "/healthz", DispatchSharedRoute);
+    RegisterHandler("GET", "/readyz", DispatchSharedRoute);
 
     // Auth routes
     RegisterHandler("POST", "/get_varifycode", Http2AuthHandlers::HandleGetVarifyCode);
@@ -106,28 +98,35 @@ void Http2Routes::RegisterRoutes()
     RegisterHandler("POST", "/user_logout", Http2AuthHandlers::HandleUserLogout);
 
     // Profile routes
-    RegisterHandler("POST", "/user_update_profile", Http2ProfileHandlers::HandleUserUpdateProfile);
-    RegisterHandler("POST", "/get_user_info", Http2ProfileHandlers::HandleGetUserInfo);
+    RegisterHandler("POST", "/user_update_profile", DispatchSharedRoute);
+    RegisterHandler("POST", "/get_user_info", DispatchSharedRoute);
 
     // Call routes
-    RegisterHandler("POST", "/api/call/start", Http2CallHandlers::HandleCallStart);
-    RegisterHandler("POST", "/api/call/accept", Http2CallHandlers::HandleCallAccept);
-    RegisterHandler("POST", "/api/call/reject", Http2CallHandlers::HandleCallReject);
-    RegisterHandler("POST", "/api/call/cancel", Http2CallHandlers::HandleCallCancel);
-    RegisterHandler("POST", "/api/call/hangup", Http2CallHandlers::HandleCallHangup);
-    RegisterHandler("GET", "/api/call/token", Http2CallHandlers::HandleCallToken);
-    RegisterHandler("POST", "/api/call/token", Http2CallHandlers::HandleCallTokenPost);
+    RegisterHandler("POST", "/api/call/start", DispatchSharedRoute);
+    RegisterHandler("POST", "/api/call/accept", DispatchSharedRoute);
+    RegisterHandler("POST", "/api/call/reject", DispatchSharedRoute);
+    RegisterHandler("POST", "/api/call/cancel", DispatchSharedRoute);
+    RegisterHandler("POST", "/api/call/hangup", DispatchSharedRoute);
+    RegisterHandler("GET", "/api/call/token", DispatchSharedRoute);
+    RegisterHandler("POST", "/api/call/token", DispatchSharedRoute);
 
     // Media routes
-    RegisterHandler("POST", "/upload_media_init", Http2MediaHandlers::HandleUploadMediaInit);
-    RegisterHandler("POST", "/upload_media_chunk", Http2MediaHandlers::HandleUploadMediaChunk);
-    RegisterHandler("GET", "/upload_media_status", Http2MediaHandlers::HandleUploadMediaStatus);
-    RegisterHandler("POST", "/upload_media_complete", Http2MediaHandlers::HandleUploadMediaComplete);
-    RegisterHandler("POST", "/upload_media", Http2MediaHandlers::HandleUploadMedia);
-    RegisterHandler("GET", "/media/download", Http2MediaHandlers::HandleMediaDownload);
+    RegisterHandler("POST", "/upload_media_init", DispatchSharedRoute);
+    RegisterHandler("POST", "/upload_media_chunk", DispatchSharedRoute);
+    RegisterHandler("GET", "/upload_media_status", DispatchSharedRoute);
+    RegisterHandler("POST", "/upload_media_complete", DispatchSharedRoute);
+    RegisterHandler("POST", "/upload_media", DispatchSharedRoute);
+    RegisterHandler("GET", "/media/download", DispatchSharedRoute);
 
     // Moments routes
-    RegisterHttp2MomentsRoutes();
+    RegisterHandler("POST", "/api/moments/publish", DispatchSharedRoute);
+    RegisterHandler("POST", "/api/moments/list", DispatchSharedRoute);
+    RegisterHandler("POST", "/api/moments/detail", DispatchSharedRoute);
+    RegisterHandler("POST", "/api/moments/delete", DispatchSharedRoute);
+    RegisterHandler("POST", "/api/moments/like", DispatchSharedRoute);
+    RegisterHandler("POST", "/api/moments/comment", DispatchSharedRoute);
+    RegisterHandler("POST", "/api/moments/comment/list", DispatchSharedRoute);
+    RegisterHandler("POST", "/api/moments/comment/like", DispatchSharedRoute);
 
     std::cerr << "GateServerHttp2: all routes registered" << std::endl;
 }

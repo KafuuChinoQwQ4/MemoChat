@@ -745,6 +745,72 @@ class AppControllerShellGuardrailTests(unittest.TestCase):
 
         self.assertNotRegex(app_cmake, r"\b(?:file\s*\(\s*GLOB|GLOB_RECURSE|aux_source_directory)\b")
 
+    def test_chat_feature_binding_files_stay_adapter_only(self):
+        forbidden_patterns = {
+            "json parsing": re.compile(
+                r"\bQJson(?:Document|Object|Array|ParseError)\b|"
+                r"\bfromJson\s*\(|"
+                r"\.object\s*\(|"
+                r"\.value\s*\("
+            ),
+            "feature request payload builder": re.compile(
+                r"\b(?:QByteArray|QJsonObject)\s+build[A-Za-z0-9_]*(?:Payload|Request)\s*\(|"
+                r"\bmemochat::(?:call_request_payload|contact_payload|group_payload|profile_payload)"
+                r"::build[A-Za-z0-9_]*Payload\b"
+            ),
+            "chat feature service execution": re.compile(
+                r"\b(?:PrivateChat(?:Send|History|Event|ReadStatus|Response)Service|"
+                r"PrivateChatHistoryRequestService|"
+                r"GroupConversationService|"
+                r"MessageMutationCommandService|"
+                r"UploadedAttachmentDispatchService|"
+                r"IncomingMessageRouter|"
+                r"ChatDialogSelectionService|"
+                r"ChatDialogListResponseService)::"
+            ),
+            "chat model direct access": re.compile(
+                r"\bChatMessageModel\b|"
+                r"\bPrivateChatCacheStore\b|"
+                r"\bGroupChatCacheStore\b|"
+                r"\.chatListModel\s*\(|"
+                r"\.dialogListModel\s*\(|"
+                r"\.messageModel\s*\("
+            ),
+            "chat store mutation": re.compile(
+                r"\b(?:AppendFriendChatMsg|"
+                r"UpdatePrivateChatMsgContent|"
+                r"MarkPrivateOutgoingReadUntil|"
+                r"UpdatePrivateChatMsgState|"
+                r"UpsertGroupChatMsg|"
+                r"UpdateGroupChatMsgState|"
+                r"UpdateGroupChatMsgContent|"
+                r"MarkGroupOutgoingReadUntil|"
+                r"AddChatMsg)\b"
+            ),
+            "request id policy": re.compile(r"\bID_[A-Z0-9_]+_(?:REQ|RSP|ACK)\b"),
+        }
+        expected_adapter_tokens = (
+            "snapshot = [this]()",
+            "dispatchPayload = [this](int reqId, const QByteArray& payload)",
+            "_features.chatFeatureController.set",
+            "std::move(",
+        )
+
+        failures: list[str] = []
+        for path in APP_CHAT_BINDING_FILES:
+            source = read(path)
+            rel_path = path.relative_to(CLIENT).as_posix()
+            for label, pattern in forbidden_patterns.items():
+                if pattern.search(source):
+                    failures.append(f"{rel_path}: {label}")
+
+            if path.name != "AppControllerChatFeatureBinding.cpp" and not any(
+                token in source for token in expected_adapter_tokens
+            ):
+                failures.append(f"{rel_path}: no adapter token")
+
+        self.assertEqual([], failures)
+
         selection_adapter = read(APP_CONTROLLER_DIR / "AppControllerDialogSelection.cpp")
         app_header = read(APP_CONTROLLER_H)
         app_cmake = read(APP / "sources.cmake")

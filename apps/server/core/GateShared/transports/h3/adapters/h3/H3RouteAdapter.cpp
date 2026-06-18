@@ -3,6 +3,8 @@
 #include "GateHttp3Connection.h"
 #include "logging/TraceContext.h"
 
+#include <fstream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -34,6 +36,23 @@ std::unordered_map<std::string, std::string> ParseQueryString(const std::string&
         parsed[part.substr(0, equals)] = part.substr(equals + 1);
     }
     return parsed;
+}
+
+std::optional<std::string> ReadFileBody(const std::string& file_path)
+{
+    std::ifstream input(file_path, std::ios::binary);
+    if (!input)
+    {
+        return std::nullopt;
+    }
+
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    if (!input.good() && !input.eof())
+    {
+        return std::nullopt;
+    }
+    return buffer.str();
 }
 
 } // namespace
@@ -69,10 +88,16 @@ void H3RouteAdapter::ApplyGateResponse(const memochat::gate::routing::GateRespon
 
     if (route_response.body_kind == memochat::gate::routing::GateResponseBodyKind::File)
     {
-        connection->SendResponse(
-            501,
-            R"({"error":501,"message":"H3 file response limitation: file responses are not supported by the G4 adapter"})",
-            "application/json");
+        const std::optional<std::string> file_body = ReadFileBody(route_response.file_path);
+        if (!file_body)
+        {
+            connection->SendResponse(404, R"({"error":404,"message":"file response body not found"})", "application/json");
+            return;
+        }
+
+        const std::string content_type =
+            route_response.content_type.empty() ? "application/octet-stream" : route_response.content_type;
+        connection->SendResponse(route_response.status, *file_body, content_type, route_response.headers);
         return;
     }
 
@@ -80,7 +105,7 @@ void H3RouteAdapter::ApplyGateResponse(const memochat::gate::routing::GateRespon
     {
         const std::string content_type =
             route_response.content_type.empty() ? "application/json" : route_response.content_type;
-        connection->SendResponse(route_response.status, route_response.body, content_type);
+        connection->SendResponse(route_response.status, route_response.body, content_type, route_response.headers);
     }
 }
 

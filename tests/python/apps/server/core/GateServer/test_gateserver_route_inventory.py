@@ -145,6 +145,10 @@ H2_EXPECTED_ROUTES = CORE_SHARED_ROUTES | {
     ("POST", "/get_user_info"),
 }
 
+MAIN_H1_OPTIONAL_PROFILE_ROUTES = {
+    ("POST", "/get_user_info"),
+}
+
 H3_AUTH_ROUTES = {
     "/get_varifycode": "HandleGetVarifyCode",
     "/user_register": "HandleUserRegister",
@@ -273,6 +277,7 @@ class GateServerRouteInventoryTests(unittest.TestCase):
                 continue
             routes.update(extract_logic_routes(path))
             routes.update(extract_route_registry_routes(path))
+        routes -= MAIN_H1_OPTIONAL_PROFILE_ROUTES
         return routes
 
     def h1_legacy_source_routes(self) -> set[tuple[str, str]]:
@@ -499,13 +504,14 @@ class GateServerRouteInventoryTests(unittest.TestCase):
         for route in ("/get_varifycode", "/user_register", "/reset_pwd", "/user_login", "/user_update_profile"):
             self.assertIn(f'MakeNotImplementedResponse("{route}")', auth_source)
 
-    def test_h3_reset_password_uses_shared_auth_service_contract(self):
+    def test_h2_h3_reset_password_use_shared_auth_service_contract(self):
         source = read(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp")
         reset_block = extract_logic_route_block(source, "/reset_pwd")
 
         self.assertNotIn("VerifyGrpcClient::GetInstance()->GetVarifyCode(email)", reset_block)
-        self.assertIn("HandleResetPwd", reset_block)
-        self.assertIn("AuthService", reset_block)
+        self.assertIn("DispatchSharedRoute", reset_block)
+        self.assertIn("RegisterRegister(registry)", source)
+        self.assertIn("RegisterLogin(registry)", source)
 
         h1_auth_service = read(SERVER_CORE / "AccountShared" / "domain" / "services" / "auth" / "AuthService.cpp")
         account_persistence = read(
@@ -515,17 +521,33 @@ class GateServerRouteInventoryTests(unittest.TestCase):
         self.assertIn("UpdatePassword(email, pwd)", h1_auth_service)
         self.assertIn("PostgresMgr::GetInstance()->UpdatePwd(email, password)", account_persistence)
         self.assertIn("PublishCacheInvalidate", h1_auth_service)
-        self.assertIn("PostgresMgr::GetInstance()->UpdatePwd(email, pwd)", h2)
-        self.assertIn('GateAsyncSideEffects::Instance().PublishCacheInvalidate(email, name, "reset_pwd")', h2)
+        self.assertIn("services/auth/AuthService.h", h2)
+        self.assertIn("DispatchAuthRoute", h2)
+        self.assertIn("&AuthService::HandleResetPwd", h2)
+        for token in (
+            "PostgresMgr::GetInstance()->RegUser",
+            "PostgresMgr::GetInstance()->CheckEmail",
+            "PostgresMgr::GetInstance()->UpdatePwd",
+            "PostgresMgr::GetInstance()->CheckPwd",
+            "AuthVerifyClient::Instance().RequestVerifyCode",
+            "GateAsyncSideEffects::Instance().PublishCacheInvalidate",
+            "ChatLoginTicketClaims",
+            "EncodeTicket",
+        ):
+            with self.subTest(forbidden_h2_auth_impl_token=token):
+                self.assertNotIn(token, h2)
 
-    def test_h3_auth_routes_delegate_to_auth_service(self):
+    def test_h3_auth_routes_dispatch_through_shared_registry(self):
         source = read(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp")
 
-        for route, handler in H3_AUTH_ROUTES.items():
+        self.assertIn("RegisterRegister(registry)", source)
+        self.assertIn("RegisterLogin(registry)", source)
+        self.assertIn("H3RouteAdapter::Dispatch", source)
+
+        for route in H3_AUTH_ROUTES:
             with self.subTest(route=route):
                 block = extract_logic_route_block(source, route)
-                self.assertIn(handler, block)
-                self.assertIn("AuthService", block)
+                self.assertIn("DispatchSharedRoute", block)
 
 
 if __name__ == "__main__":

@@ -60,6 +60,8 @@ EXPECTED_GROUPS = {
         "message/PrivateMessageService.h",
         "orchestration/ChatHandlerRegistrars.cpp",
         "orchestration/ChatHandlerRegistrars.h",
+        "orchestration/ChatRuntimeComposition.cpp",
+        "orchestration/ChatRuntimeComposition.h",
         "orchestration/LogicSystem.cpp",
         "orchestration/LogicSystem.h",
         "relation/ChatRelationInternalGrpcService.cpp",
@@ -172,6 +174,7 @@ EXPECTED_GROUPS = {
 
 
 ROOT_ALLOWLIST = {
+    "_TREE.md",
     "CMakeLists.txt",
     "ChatServer.sln",
     "ChatServer.vcxproj",
@@ -185,7 +188,6 @@ ROOT_ALLOWLIST = {
     "chatmessageservice1.ini",
     "chatrelationquery1.ini",
     "chatrelationservice1.ini",
-    "message.proto",
     "message.pb.cc",
     "message.pb.h",
     "message.grpc.pb.cc",
@@ -261,6 +263,7 @@ EXPECTED_MICROSERVICE_TARGETS = {
     },
     "ChatOrchestrationCore": {
         "domain/orchestration/ChatHandlerRegistrars.cpp",
+        "domain/orchestration/ChatRuntimeComposition.cpp",
         "domain/orchestration/LogicSystem.cpp",
     },
     "ChatSessionCore": {
@@ -328,6 +331,22 @@ def text_between(text: str, start_marker: str, end_marker: str) -> str:
     return text[start:end]
 
 
+def logic_header_source() -> str:
+    return (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
+
+
+def logic_source() -> str:
+    return (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
+
+
+def runtime_composition_header() -> str:
+    return (DOMAIN_ORCHESTRATION_DIR / "ChatRuntimeComposition.h").read_text(encoding="utf-8")
+
+
+def runtime_composition_source() -> str:
+    return (DOMAIN_ORCHESTRATION_DIR / "ChatRuntimeComposition.cpp").read_text(encoding="utf-8")
+
+
 def extract_executable_link_block(cmake: str, target_name: str) -> str:
     match = re.search(
         rf"(?:target_link_libraries|chatserver_link_microservice_cores)\(\s*{re.escape(target_name)}\s+(?P<body>.*?)\)",
@@ -372,23 +391,31 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("app/ChatServer.cpp", cmake)
         self.assertIn("target_link_libraries(ChatServer PRIVATE ChatServerCore)", cmake)
 
-    def test_service_local_message_proto_copies_match_common_canonical_proto(self):
+    def test_service_local_message_proto_copies_are_retired(self):
         canonical_proto = COMMON_PROTO_DIR / "message.proto"
         self.assertTrue(canonical_proto.is_file(), "canonical common/proto/message.proto is missing")
-        canonical_bytes = canonical_proto.read_bytes()
 
         for local_proto in (
             CHATSERVER_DIR / "message.proto",
             SERVER_CORE_DIR / "VarifyServer" / "message.proto",
         ):
             with self.subTest(proto=local_proto.relative_to(REPO_ROOT)):
-                self.assertTrue(local_proto.is_file(), "legacy service-local proto copy is missing")
-                self.assertEqual(
-                    canonical_bytes,
-                    local_proto.read_bytes(),
-                    "service-local message.proto copies are compatibility artifacts and must stay byte-for-byte "
-                    "identical to apps/server/core/common/proto/message.proto",
-                )
+                self.assertFalse(local_proto.exists(), "service-local message.proto copy should stay retired")
+
+        start_script = (CHATSERVER_DIR / "start.bat").read_text(encoding="utf-8-sig")
+        vcxproj = (CHATSERVER_DIR / "ChatServer.vcxproj").read_text(encoding="utf-8-sig")
+        filters = (CHATSERVER_DIR / "ChatServer.vcxproj.filters").read_text(encoding="utf-8-sig")
+        for text in (vcxproj, filters):
+            with self.subTest(surface=text[:40]):
+                self.assertIn("common\\proto\\message.proto", text)
+                self.assertNotIn('Include="message.proto"', text)
+        self.assertIn('set "PROTO_ROOT=%SERVER_CORE_DIR%\\common\\proto"', start_script)
+        self.assertIn('set "PROTO_FILE=%PROTO_ROOT%\\message.proto"', start_script)
+        self.assertNotIn('PROTO_FILE=%SCRIPT_DIR%\\message.proto', start_script)
+        self.assertIn("--grpc_out=\"%SCRIPT_DIR%\"", start_script)
+        self.assertIn("--cpp_out=\"%SCRIPT_DIR%\"", start_script)
+        self.assertIn('<ClCompile Include="message.grpc.pb.cc" />', vcxproj)
+        self.assertIn('<ClCompile Include="message.pb.cc" />', vcxproj)
 
     def test_chatserver_core_is_split_into_microservice_preparation_targets(self):
         cmake = read_cmake()
@@ -891,13 +918,16 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("bool AsyncEventDispatcher::PublishEvent", dispatcher_source)
         self.assertIn("return PublishEvent(topic, payload, error);", dispatcher_source)
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
-        self.assertIn("return _async_event_dispatcher->PublishEvent(topic, payload, error);", logic_source)
+        self.assertIn("return _composition->PublishAsyncEvent(topic, payload, error);", logic_source())
+        self.assertIn(
+            "return _async_event_dispatcher->PublishEvent(topic, payload, error);",
+            runtime_composition_source(),
+        )
 
     def test_async_event_dispatcher_uses_repository_ports_for_data_ownership(self):
         dispatcher_header = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.h").read_text(encoding="utf-8")
         dispatcher_source = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.cpp").read_text(encoding="utf-8")
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
+        composition_source = runtime_composition_source()
 
         for token in (
             "ports/IMessageRepository.h",
@@ -939,7 +969,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertEqual([], violations)
 
         async_dispatcher_wiring = text_between(
-            logic_source,
+            composition_source,
             "_async_event_dispatcher = std::make_unique<AsyncEventDispatcher>",
             "_task_dispatcher = std::make_unique<TaskDispatcher>",
         )
@@ -950,7 +980,7 @@ class ChatServerStructureTests(unittest.TestCase):
     def test_async_event_dispatcher_uses_route_and_cache_ports(self):
         dispatcher_header = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.h").read_text(encoding="utf-8")
         dispatcher_source = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.cpp").read_text(encoding="utf-8")
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
+        composition_source = runtime_composition_source()
 
         for token in (
             "ports/ISessionRegistry.h",
@@ -1000,7 +1030,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertEqual([], violations)
 
         async_dispatcher_wiring = text_between(
-            logic_source,
+            composition_source,
             "_async_event_dispatcher = std::make_unique<AsyncEventDispatcher>",
             "_task_dispatcher = std::make_unique<TaskDispatcher>",
         )
@@ -1027,19 +1057,24 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_event_worker_thread.joinable()", runtime_source)
         self.assertIn("_task_worker_thread.joinable()", runtime_source)
 
-        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
-        self.assertIn("class ChatDeliveryRuntime;", logic_header)
-        self.assertIn("std::unique_ptr<ChatDeliveryRuntime> _delivery_runtime", logic_header)
-        self.assertNotIn("_event_worker_thread", logic_header)
-        self.assertNotIn("_task_worker_thread", logic_header)
-        self.assertNotIn("_event_stop", logic_header)
+        composition_header = runtime_composition_header()
+        self.assertIn("class ChatDeliveryRuntime;", composition_header)
+        self.assertIn("std::unique_ptr<ChatDeliveryRuntime> _delivery_runtime", composition_header)
+        self.assertNotIn("_event_worker_thread", composition_header)
+        self.assertNotIn("_task_worker_thread", composition_header)
+        self.assertNotIn("_event_stop", composition_header)
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
-        self.assertIn("_delivery_runtime = std::make_unique<ChatDeliveryRuntime>", logic_source)
-        self.assertIn("_delivery_runtime->Start();", logic_source)
-        self.assertIn("_delivery_runtime->StopAndJoin();", logic_source)
-        self.assertNotIn("std::thread(&LogicSystem::DealAsyncEvents", logic_source)
-        self.assertNotIn("std::thread(&LogicSystem::DealTasks", logic_source)
+        logic_header_text = logic_header_source()
+        self.assertIn("class ChatRuntimeComposition;", logic_header_text)
+        self.assertIn("std::unique_ptr<ChatRuntimeComposition> _composition", logic_header_text)
+        self.assertNotIn("std::unique_ptr<ChatDeliveryRuntime> _delivery_runtime", logic_header_text)
+
+        composition_source = runtime_composition_source()
+        self.assertIn("_delivery_runtime = std::make_unique<ChatDeliveryRuntime>", composition_source)
+        self.assertIn("_delivery_runtime->Start();", composition_source)
+        self.assertIn("_delivery_runtime->StopAndJoin();", composition_source)
+        self.assertNotIn("std::thread(&LogicSystem::DealAsyncEvents", logic_source())
+        self.assertNotIn("std::thread(&LogicSystem::DealTasks", logic_source())
 
     def test_delivery_gateway_uses_named_domain_port(self):
         port_header = CHATSERVER_DIR / "domain" / "ports" / "IDeliveryGateway.h"
@@ -1078,14 +1113,14 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_delivery_gateway->TryPushPayload", task_source)
         self.assertNotIn("_delivery_handler(", task_source)
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
+        composition_source = runtime_composition_source()
         self.assertRegex(
-            logic_source,
+            composition_source,
             r"_message_delivery_service\s*=\s*std::make_unique<MessageDeliveryService>",
         )
-        self.assertIn("_message_delivery_service.get()", logic_source)
+        self.assertIn("_message_delivery_service.get()", composition_source)
         wiring_block = text_between(
-            logic_source,
+            composition_source,
             "_message_delivery_service",
             "_delivery_runtime = std::make_unique<ChatDeliveryRuntime>",
         )
@@ -1119,13 +1154,13 @@ class ChatServerStructureTests(unittest.TestCase):
         )
         self.assertIn("bool ExpediteOutboxRepair(int64_t outbox_id) override", logic_header)
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
+        composition_source = runtime_composition_source()
         wiring_block = text_between(
-            logic_source,
+            composition_source,
             "_task_dispatcher = std::make_unique<TaskDispatcher>",
             "_message_delivery_service->SetTaskPublisher",
         )
-        self.assertIn("this", wiring_block)
+        self.assertIn("&_logic", wiring_block)
         self.assertNotIn("return ExpediteOutboxRepair(outbox_id);", wiring_block)
 
     def test_delivery_route_uses_session_and_online_route_ports(self):
@@ -1182,15 +1217,16 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_online_route_store->SetUserServer", delivery_source)
         self.assertIn("online_route_store->ClearTrackedOnlineRoute", delivery_source)
 
-        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
-        self.assertIn("class IOnlineRouteStore;", logic_header)
-        self.assertIn("std::unique_ptr<IOnlineRouteStore> _online_route_store", logic_header)
+        composition_header = runtime_composition_header()
+        self.assertIn("class IOnlineRouteStore;", composition_header)
+        self.assertIn("std::unique_ptr<IOnlineRouteStore> _online_route_store", composition_header)
+        self.assertNotIn("std::unique_ptr<IOnlineRouteStore> _online_route_store", logic_header_source())
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
-        self.assertIn('#include "RedisOnlineRouteStore.h"', logic_source)
-        self.assertIn("_online_route_store = std::make_unique<RedisOnlineRouteStore>()", logic_source)
+        composition_source = runtime_composition_source()
+        self.assertIn('#include "RedisOnlineRouteStore.h"', composition_source)
+        self.assertIn("_online_route_store = std::make_unique<RedisOnlineRouteStore>()", composition_source)
         delivery_wiring = text_between(
-            logic_source,
+            composition_source,
             "_message_delivery_service",
             "_async_event_dispatcher = std::make_unique<AsyncEventDispatcher>",
         )
@@ -1225,10 +1261,10 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("UserMgr::GetInstance()->SetUserSession", session_source)
         self.assertNotIn("UserMgr::GetInstance()->GetSession", session_source)
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
+        composition_source = runtime_composition_source()
         constructor_block = text_between(
-            logic_source,
-            "LogicSystem::LogicSystem()",
+            composition_source,
+            "ChatRuntimeComposition::ChatRuntimeComposition(LogicSystem& logic)",
             "_delivery_runtime = std::make_unique<ChatDeliveryRuntime>",
         )
         self.assertIn("_online_route_store = std::make_unique<RedisOnlineRouteStore>()", constructor_block)
@@ -1340,17 +1376,19 @@ class ChatServerStructureTests(unittest.TestCase):
             "persistence/ChatSessionRepository.cpp", cmake_set_values(cmake, "CHATSERVER_PERSISTENCE_SOURCES")
         )
 
-        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
-        self.assertIn("class IChatSessionConfig;", logic_header)
-        self.assertIn("class IChatSessionRepository;", logic_header)
-        self.assertIn("std::unique_ptr<IChatSessionConfig> _session_config", logic_header)
-        self.assertIn("std::unique_ptr<IChatSessionRepository> _session_repository", logic_header)
+        composition_header = runtime_composition_header()
+        self.assertIn("class IChatSessionConfig;", composition_header)
+        self.assertIn("class IChatSessionRepository;", composition_header)
+        self.assertIn("std::unique_ptr<IChatSessionConfig> _session_config", composition_header)
+        self.assertIn("std::unique_ptr<IChatSessionRepository> _session_repository", composition_header)
+        self.assertNotIn("std::unique_ptr<IChatSessionConfig> _session_config", logic_header_source())
+        self.assertNotIn("std::unique_ptr<IChatSessionRepository> _session_repository", logic_header_source())
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
-        self.assertIn('#include "ChatSessionConfig.h"', logic_source)
-        self.assertIn('#include "ChatSessionRepository.h"', logic_source)
+        composition_source = runtime_composition_source()
+        self.assertIn('#include "ChatSessionConfig.h"', composition_source)
+        self.assertIn('#include "ChatSessionRepository.h"', composition_source)
         constructor_block = text_between(
-            logic_source,
+            composition_source,
             "_online_route_store = std::make_unique<RedisOnlineRouteStore>()",
             "_delivery_runtime = std::make_unique<ChatDeliveryRuntime>",
         )
@@ -1391,9 +1429,9 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("UserMgr::GetInstance()->GetSession", private_source)
         self.assertNotIn("RedisMgr::GetInstance()->Get(USERIPPREFIX", private_source)
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
+        composition_source = runtime_composition_source()
         constructor_block = text_between(
-            logic_source,
+            composition_source,
             "_message_delivery_service =",
             "_group_message_service =",
         )
@@ -1461,20 +1499,21 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_message_repository->RevokePrivateMessage", private_source)
         self.assertIn("_message_repository->GetPrivateHistory", private_source)
 
-        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
-        self.assertIn("class IMessageRepository;", logic_header)
-        self.assertIn("std::unique_ptr<IMessageRepository> _message_repository", logic_header)
+        composition_header = runtime_composition_header()
+        self.assertIn("class IMessageRepository;", composition_header)
+        self.assertIn("std::unique_ptr<IMessageRepository> _message_repository", composition_header)
+        self.assertNotIn("std::unique_ptr<IMessageRepository> _message_repository", logic_header_source())
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
-        self.assertIn('#include "ChatMessageRepository.h"', logic_source)
+        composition_source = runtime_composition_source()
+        self.assertIn('#include "ChatMessageRepository.h"', composition_source)
         constructor_block = text_between(
-            logic_source,
+            composition_source,
             "_message_repository = std::make_unique<ChatMessageRepository>()",
             "const auto task_bus_backend = memochat::chatruntime::TaskBusBackend()",
         )
         self.assertIn("_message_repository = std::make_unique<ChatMessageRepository>()", constructor_block)
         service_wiring_block = text_between(
-            logic_source,
+            composition_source,
             "_message_delivery_service =",
             "_group_message_service =",
         )
@@ -1535,9 +1574,9 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("MongoMgr::GetInstance()->RevokeGroupMessage", group_source)
         self.assertNotIn("PostgresMgr::GetInstance()->UpsertGroupReadState", group_source)
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
+        composition_source = runtime_composition_source()
         constructor_block = text_between(
-            logic_source,
+            composition_source,
             "_private_message_service = CreatePrivateMessageService",
             "_chat_relation_service = CreateRelationService",
         )
@@ -1642,14 +1681,15 @@ class ChatServerStructureTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, relation_source)
 
-        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
-        self.assertIn("class IRelationRepository;", logic_header)
-        self.assertIn("std::unique_ptr<IRelationRepository> _relation_repository", logic_header)
+        composition_header = runtime_composition_header()
+        self.assertIn("class IRelationRepository;", composition_header)
+        self.assertIn("std::unique_ptr<IRelationRepository> _relation_repository", composition_header)
+        self.assertNotIn("std::unique_ptr<IRelationRepository> _relation_repository", logic_header_source())
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
-        self.assertIn('#include "ChatRelationRepository.h"', logic_source)
+        composition_source = runtime_composition_source()
+        self.assertIn('#include "ChatRelationRepository.h"', composition_source)
         constructor_block = text_between(
-            logic_source,
+            composition_source,
             "_relation_repository = std::make_unique<ChatRelationRepository>()",
             "_delivery_runtime = std::make_unique<ChatDeliveryRuntime>",
         )
@@ -1731,15 +1771,16 @@ class ChatServerStructureTests(unittest.TestCase):
             cmake_set_values(cmake, "CHATSERVER_PERSISTENCE_SOURCES"),
         )
 
-        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
-        self.assertIn("class IRelationBootstrapCache;", logic_header)
-        self.assertIn("std::unique_ptr<IRelationBootstrapCache> _relation_bootstrap_cache", logic_header)
+        composition_header = runtime_composition_header()
+        self.assertIn("class IRelationBootstrapCache;", composition_header)
+        self.assertIn("std::unique_ptr<IRelationBootstrapCache> _relation_bootstrap_cache", composition_header)
+        self.assertNotIn("std::unique_ptr<IRelationBootstrapCache> _relation_bootstrap_cache", logic_header_source())
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
-        self.assertIn('#include "RedisRelationBootstrapCache.h"', logic_source)
-        self.assertIn("_relation_bootstrap_cache = std::make_unique<RedisRelationBootstrapCache>()", logic_source)
+        composition_source = runtime_composition_source()
+        self.assertIn('#include "RedisRelationBootstrapCache.h"', composition_source)
+        self.assertIn("_relation_bootstrap_cache = std::make_unique<RedisRelationBootstrapCache>()", composition_source)
         constructor_block = text_between(
-            logic_source,
+            composition_source,
             "_chat_relation_service = CreateRelationService",
             "_delivery_runtime = std::make_unique<ChatDeliveryRuntime>",
         )
@@ -1997,12 +2038,14 @@ class ChatServerStructureTests(unittest.TestCase):
                 "Endpoint=127.0.0.1:50091",
             )
 
-        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
-        self.assertIn("class IRelationService;", logic_header)
-        self.assertIn("class IRelationSessionService;", logic_header)
-        self.assertIn("std::unique_ptr<IRelationService> _chat_relation_service", logic_header)
-        self.assertIn("std::unique_ptr<IRelationSessionService> _chat_relation_session_service", logic_header)
-        self.assertNotIn("std::unique_ptr<ChatRelationService> _chat_relation_service", logic_header)
+        composition_header = runtime_composition_header()
+        self.assertIn("class IRelationService;", composition_header)
+        self.assertIn("class IRelationSessionService;", composition_header)
+        self.assertIn("std::unique_ptr<IRelationService> _chat_relation_service", composition_header)
+        self.assertIn("std::unique_ptr<IRelationSessionService> _chat_relation_session_service", composition_header)
+        self.assertNotIn("std::unique_ptr<ChatRelationService> _chat_relation_service", composition_header)
+        self.assertNotIn("std::unique_ptr<IRelationService> _chat_relation_service", logic_header_source())
+        self.assertNotIn("std::unique_ptr<IRelationSessionService> _chat_relation_session_service", logic_header_source())
 
         registrar_source = (DOMAIN_ORCHESTRATION_DIR / "ChatHandlerRegistrars.cpp").read_text(encoding="utf-8")
         self.assertIn('#include "ports/IRelationSessionService.h"', registrar_source)
@@ -2057,13 +2100,13 @@ class ChatServerStructureTests(unittest.TestCase):
             "domain/relation/RelationServiceFactory.cpp", cmake_set_values(cmake, "CHATSERVER_RELATION_SOURCES")
         )
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
-        self.assertIn('#include "RelationServiceFactory.h"', logic_source)
-        self.assertNotIn('#include "ChatRelationService.h"', logic_source)
-        self.assertIn("CreateRelationService(*_relation_service_config", logic_source)
-        before_handler_boundary = logic_source.split("CHATSERVER_LEGACY_LOGICSYSTEM_HANDLERS_BEGIN", 1)[0]
+        composition_source = runtime_composition_source()
+        self.assertIn('#include "RelationServiceFactory.h"', composition_source)
+        self.assertNotIn('#include "ChatRelationService.h"', composition_source)
+        self.assertIn("CreateRelationService(*_relation_service_config", composition_source)
+        before_handler_boundary = composition_source.split("CHATSERVER_LEGACY_LOGICSYSTEM_HANDLERS_BEGIN", 1)[0]
         self.assertNotIn("_chat_relation_service = CreateInProcessRelationService(", before_handler_boundary)
-        self.assertNotIn("std::make_unique<ChatRelationService>", logic_source)
+        self.assertNotIn("std::make_unique<ChatRelationService>", composition_source)
 
     def test_relation_service_backend_config_defaults_to_inprocess(self):
         config_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationServiceConfig.h"
@@ -2096,14 +2139,15 @@ class ChatServerStructureTests(unittest.TestCase):
         cmake = read_cmake()
         self.assertIn("config/RelationServiceConfig.cpp", cmake_set_values(cmake, "CHATSERVER_CONFIG_SOURCES"))
 
-        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
-        self.assertIn("class IRelationServiceConfig;", logic_header)
-        self.assertIn("std::unique_ptr<IRelationServiceConfig> _relation_service_config", logic_header)
+        composition_header = runtime_composition_header()
+        self.assertIn("class IRelationServiceConfig;", composition_header)
+        self.assertIn("std::unique_ptr<IRelationServiceConfig> _relation_service_config", composition_header)
+        self.assertNotIn("std::unique_ptr<IRelationServiceConfig> _relation_service_config", logic_header_source())
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
-        self.assertIn('#include "RelationServiceConfig.h"', logic_source)
-        self.assertIn("_relation_service_config = std::make_unique<RelationServiceConfig>()", logic_source)
-        self.assertIn("CreateRelationService(*_relation_service_config", logic_source)
+        composition_source = runtime_composition_source()
+        self.assertIn('#include "RelationServiceConfig.h"', composition_source)
+        self.assertIn("_relation_service_config = std::make_unique<RelationServiceConfig>()", composition_source)
+        self.assertIn("CreateRelationService(*_relation_service_config", composition_source)
 
     def test_relation_internal_grpc_adapter_wraps_synchronous_relation_port_methods(self):
         adapter_header_path = DOMAIN_RELATION_DIR / "ChatRelationInternalGrpcService.h"
@@ -2290,20 +2334,22 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("clients/RelationQueryServiceFactory.cpp", cmake_set_values(cmake, "CHATSERVER_CLIENT_SOURCES"))
         self.assertIn("config/RelationQueryServiceConfig.cpp", cmake_set_values(cmake, "CHATSERVER_CONFIG_SOURCES"))
 
-        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
-        self.assertIn("class IRelationQueryService;", logic_header)
-        self.assertIn("class IRelationQueryServiceConfig;", logic_header)
-        self.assertIn("std::unique_ptr<IRelationQueryServiceConfig> _relation_query_service_config", logic_header)
-        self.assertIn("std::unique_ptr<IRelationQueryService> _relation_query_service_remote", logic_header)
+        composition_header = runtime_composition_header()
+        self.assertIn("class IRelationQueryService;", composition_header)
+        self.assertIn("class IRelationQueryServiceConfig;", composition_header)
+        self.assertIn("std::unique_ptr<IRelationQueryServiceConfig> _relation_query_service_config", composition_header)
+        self.assertIn("std::unique_ptr<IRelationQueryService> _relation_query_service_remote", composition_header)
+        self.assertNotIn("std::unique_ptr<IRelationQueryServiceConfig> _relation_query_service_config", logic_header_source())
+        self.assertNotIn("std::unique_ptr<IRelationQueryService> _relation_query_service_remote", logic_header_source())
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
-        self.assertIn('#include "RelationQueryServiceConfig.h"', logic_source)
-        self.assertIn('#include "RelationQueryServiceFactory.h"', logic_source)
-        self.assertIn("_relation_query_service_config = std::make_unique<RelationQueryServiceConfig>()", logic_source)
-        self.assertIn("SelectRelationQueryService(*_relation_query_service_config", logic_source)
-        self.assertIn("_relation_query_service_remote", logic_source)
-        self.assertIn("relation_query_service", logic_source)
-        self.assertIn("relation_query_service,", logic_source)
+        composition_source = runtime_composition_source()
+        self.assertIn('#include "RelationQueryServiceConfig.h"', composition_source)
+        self.assertIn('#include "RelationQueryServiceFactory.h"', composition_source)
+        self.assertIn("_relation_query_service_config = std::make_unique<RelationQueryServiceConfig>()", composition_source)
+        self.assertIn("SelectRelationQueryService(*_relation_query_service_config", composition_source)
+        self.assertIn("_relation_query_service_remote", composition_source)
+        self.assertIn("relation_query_service", composition_source)
+        self.assertIn("relation_query_service,", composition_source)
 
         adapter_cmake = adapter_cmake_path.read_text(encoding="utf-8")
         self.assertIn("RelationQueryServiceFactoryTest.cpp", adapter_cmake)
@@ -2482,17 +2528,22 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("BuildGroupMessageCommandRequestLocal(session, msg_id, msg_data)", group_handler_block)
         self.assertIn("SendGroupMessageCommandResultLocal", group_handler_block)
 
-        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
-        self.assertIn("class IPrivateMessageService;", logic_header)
-        self.assertIn("class IGroupMessageService;", logic_header)
-        self.assertIn("std::unique_ptr<IPrivateMessageService> _private_message_service", logic_header)
-        self.assertIn("std::unique_ptr<IGroupMessageService> _group_message_service", logic_header)
-        self.assertNotIn("std::unique_ptr<PrivateMessageService> _private_message_service", logic_header)
-        self.assertNotIn("std::unique_ptr<GroupMessageService> _group_message_service", logic_header)
-        self.assertNotIn("class PrivateMessageService;", logic_header)
-        self.assertNotIn("class GroupMessageService;", logic_header)
-        self.assertNotIn("friend class PrivateMessageService;", logic_header)
-        self.assertNotIn("friend class GroupMessageService;", logic_header)
+        composition_header = runtime_composition_header()
+        self.assertIn("class IPrivateMessageService;", composition_header)
+        self.assertIn("class IGroupMessageService;", composition_header)
+        self.assertIn("std::unique_ptr<IPrivateMessageService> _private_message_service", composition_header)
+        self.assertIn("std::unique_ptr<IGroupMessageService> _group_message_service", composition_header)
+        self.assertNotIn("std::unique_ptr<PrivateMessageService> _private_message_service", composition_header)
+        self.assertNotIn("std::unique_ptr<GroupMessageService> _group_message_service", composition_header)
+        self.assertNotIn("class PrivateMessageService;", composition_header)
+        self.assertNotIn("class GroupMessageService;", composition_header)
+        logic_header_text = logic_header_source()
+        self.assertNotIn("std::unique_ptr<IPrivateMessageService> _private_message_service", logic_header_text)
+        self.assertNotIn("std::unique_ptr<IGroupMessageService> _group_message_service", logic_header_text)
+        self.assertNotIn("class PrivateMessageService;", logic_header_text)
+        self.assertNotIn("class GroupMessageService;", logic_header_text)
+        self.assertNotIn("friend class PrivateMessageService;", logic_header_text)
+        self.assertNotIn("friend class GroupMessageService;", logic_header_text)
 
         registrar_source = (DOMAIN_ORCHESTRATION_DIR / "ChatHandlerRegistrars.cpp").read_text(encoding="utf-8")
         self.assertIn('#include "ports/IPrivateMessageService.h"', registrar_source)
@@ -2669,19 +2720,19 @@ class ChatServerStructureTests(unittest.TestCase):
         cmake = read_cmake()
         self.assertIn("domain/message/MessageServiceFactory.cpp", cmake_set_values(cmake, "CHATSERVER_MESSAGE_SOURCES"))
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
-        self.assertIn('#include "MessageServiceFactory.h"', logic_source)
-        self.assertNotIn('#include "PrivateMessageService.h"', logic_source)
-        self.assertNotIn('#include "GroupMessageService.h"', logic_source)
-        self.assertIn("CreatePrivateMessageService(*_message_service_config", logic_source)
-        self.assertIn("CreateGroupMessageService(*_message_service_config", logic_source)
-        self.assertIn("_message_delivery_service.get()", logic_source)
-        self.assertIn("_async_event_dispatcher.get()", logic_source)
-        before_handler_boundary = logic_source.split("CHATSERVER_LEGACY_LOGICSYSTEM_HANDLERS_BEGIN", 1)[0]
+        composition_source = runtime_composition_source()
+        self.assertIn('#include "MessageServiceFactory.h"', composition_source)
+        self.assertNotIn('#include "PrivateMessageService.h"', composition_source)
+        self.assertNotIn('#include "GroupMessageService.h"', composition_source)
+        self.assertIn("CreatePrivateMessageService(*_message_service_config", composition_source)
+        self.assertIn("CreateGroupMessageService(*_message_service_config", composition_source)
+        self.assertIn("_message_delivery_service.get()", composition_source)
+        self.assertIn("_async_event_dispatcher.get()", composition_source)
+        before_handler_boundary = composition_source.split("CHATSERVER_LEGACY_LOGICSYSTEM_HANDLERS_BEGIN", 1)[0]
         self.assertNotIn("_private_message_service = CreateInProcessPrivateMessageService(", before_handler_boundary)
         self.assertNotIn("_group_message_service = CreateInProcessGroupMessageService(", before_handler_boundary)
-        self.assertNotIn("std::make_unique<PrivateMessageService>", logic_source)
-        self.assertNotIn("std::make_unique<GroupMessageService>", logic_source)
+        self.assertNotIn("std::make_unique<PrivateMessageService>", composition_source)
+        self.assertNotIn("std::make_unique<GroupMessageService>", composition_source)
 
     def test_message_services_use_delivery_and_event_ports_instead_of_logicsystem(self):
         private_header = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.h").read_text(encoding="utf-8")
@@ -2707,9 +2758,9 @@ class ChatServerStructureTests(unittest.TestCase):
             self.assertIn("_delivery_gateway->PushPayload", source)
             self.assertIn("_event_publisher->PublishEvent", source)
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
+        composition_source = runtime_composition_source()
         service_wiring_block = text_between(
-            logic_source,
+            composition_source,
             "_message_delivery_service =",
             "_chat_relation_service = CreateRelationService",
         )
@@ -2949,15 +3000,16 @@ class ChatServerStructureTests(unittest.TestCase):
         cmake = read_cmake()
         self.assertIn("config/MessageServiceConfig.cpp", cmake_set_values(cmake, "CHATSERVER_CONFIG_SOURCES"))
 
-        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
-        self.assertIn("class IMessageServiceConfig;", logic_header)
-        self.assertIn("std::unique_ptr<IMessageServiceConfig> _message_service_config", logic_header)
+        composition_header = runtime_composition_header()
+        self.assertIn("class IMessageServiceConfig;", composition_header)
+        self.assertIn("std::unique_ptr<IMessageServiceConfig> _message_service_config", composition_header)
+        self.assertNotIn("std::unique_ptr<IMessageServiceConfig> _message_service_config", logic_header_source())
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
-        self.assertIn('#include "MessageServiceConfig.h"', logic_source)
-        self.assertIn("_message_service_config = std::make_unique<MessageServiceConfig>()", logic_source)
-        self.assertIn("CreatePrivateMessageService(*_message_service_config", logic_source)
-        self.assertIn("CreateGroupMessageService(*_message_service_config", logic_source)
+        composition_source = runtime_composition_source()
+        self.assertIn('#include "MessageServiceConfig.h"', composition_source)
+        self.assertIn("_message_service_config = std::make_unique<MessageServiceConfig>()", composition_source)
+        self.assertIn("CreatePrivateMessageService(*_message_service_config", composition_source)
+        self.assertIn("CreateGroupMessageService(*_message_service_config", composition_source)
 
         for config_name in (
             "config.ini",
@@ -3204,9 +3256,9 @@ class ChatServerStructureTests(unittest.TestCase):
         ):
             self.assertRegex(group_source, rf"_relation_repository\s*->\s*{re.escape(method)}")
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
+        composition_source = runtime_composition_source()
         constructor_block = text_between(
-            logic_source,
+            composition_source,
             "_group_message_service =",
             "_chat_relation_service = CreateRelationService",
         )
@@ -3218,21 +3270,30 @@ class ChatServerStructureTests(unittest.TestCase):
         logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
         registrar_source = (DOMAIN_ORCHESTRATION_DIR / "ChatHandlerRegistrars.cpp").read_text(encoding="utf-8")
 
-        self.assertIn("_chat_session_service = std::make_unique<ChatSessionService>", logic_source)
-        self.assertIn("_chat_relation_service = CreateRelationService(*_relation_service_config", logic_source)
-        self.assertIn("_private_message_service = CreatePrivateMessageService", logic_source)
-        self.assertIn("*_message_service_config", logic_source)
-        self.assertIn("_group_message_service =", logic_source)
-        self.assertIn("_delivery_runtime->Start();", logic_source)
+        composition_source = runtime_composition_source()
+        self.assertIn("_chat_session_service = std::make_unique<ChatSessionService>", composition_source)
+        self.assertIn("_chat_relation_service = CreateRelationService(*_relation_service_config", composition_source)
+        self.assertIn("_private_message_service = CreatePrivateMessageService", composition_source)
+        self.assertIn("*_message_service_config", composition_source)
+        self.assertIn("_group_message_service =", composition_source)
+        self.assertIn("_delivery_runtime->Start();", composition_source)
+        self.assertIn("_composition = std::make_unique<ChatRuntimeComposition>(*this)", logic_source)
+        self.assertNotIn("_chat_session_service = std::make_unique<ChatSessionService>", logic_source)
 
         for registrar in (
-            "ChatSessionServiceRegistrar().Register(*this, _fun_callbacks)",
-            "ChatRelationServiceRegistrar().Register(*this, _fun_callbacks)",
-            "PrivateMessageServiceRegistrar().Register(*this, _fun_callbacks)",
-            "GroupMessageServiceRegistrar().Register(*this, _fun_callbacks)",
-            "AsyncEventDispatcherRegistrar().Register(*this, _fun_callbacks)",
+            "ChatSessionServiceRegistrar().Register(*_composition, _fun_callbacks)",
+            "ChatRelationServiceRegistrar().Register(*_composition, _fun_callbacks)",
+            "PrivateMessageServiceRegistrar().Register(*_composition, _fun_callbacks)",
+            "GroupMessageServiceRegistrar().Register(*_composition, _fun_callbacks)",
+            "AsyncEventDispatcherRegistrar().Register(*_composition, _fun_callbacks)",
         ):
             self.assertIn(registrar, logic_source)
+        self.assertNotIn("Register(*this, _fun_callbacks)", logic_source)
+        self.assertNotIn("logic._", registrar_source)
+        self.assertIn("&composition.SessionService()", registrar_source)
+        self.assertIn("&composition.RelationSessionService()", registrar_source)
+        self.assertIn("&composition.PrivateMessageService()", registrar_source)
+        self.assertIn("&composition.GroupMessageService()", registrar_source)
 
         for service_bind in (
             "&ChatSessionService::HandleLogin",
@@ -3356,11 +3417,13 @@ class ChatServerStructureTests(unittest.TestCase):
         )
         self.assertIn("if (ingress_enabled)\n        {\n            ingress_coordinator =", app_source)
 
-        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
+        composition_source = runtime_composition_source()
         self.assertIn(
-            "if (memochat::chatruntime::IsWorkerEnabled())\n    {\n        _delivery_runtime->Start();", logic_source
+            "if (_delivery_runtime && memochat::chatruntime::IsWorkerEnabled())\n    {\n        _delivery_runtime->Start();",
+            composition_source,
         )
-        self.assertNotIn("_delivery_runtime->Start();\n}", logic_source)
+        self.assertIn("_composition->StartDeliveryRuntimeIfEnabled();", logic_source())
+        self.assertNotIn("_delivery_runtime->Start();\n}", logic_source())
 
         for config_name in (
             "config.ini",

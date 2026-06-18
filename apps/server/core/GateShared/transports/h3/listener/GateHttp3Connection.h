@@ -38,7 +38,10 @@ public:
     void OnStreamWrite(int64_t stream_id);
     void OnStreamWriteComplete(int64_t stream_id, size_t written);
 
-    bool SendResponse(int status, const std::string& body, const std::string& content_type = "application/json");
+    bool SendResponse(int status,
+                      const std::string& body,
+                      const std::string& content_type = "application/json",
+                      const std::unordered_map<std::string, std::string>& headers = {});
     bool SendData(int64_t stream_id, const uint8_t* data, size_t len);
     bool SendHeaders(int64_t stream_id, const std::string& path, const std::string& method = "GET");
 
@@ -102,6 +105,10 @@ public:
     {
         return response_content_type_;
     }
+    std::unordered_map<std::string, std::string> ResponseHeaders() const
+    {
+        return response_headers_;
+    }
     bool IsResponseComplete() const
     {
         return response_complete_.load();
@@ -146,6 +153,7 @@ private:
     std::unordered_map<std::string, std::string> request_headers_;
     std::string response_body_;
     std::string response_content_type_;
+    std::unordered_map<std::string, std::string> response_headers_;
     int response_status_ = 200;
 
     size_t request_body_received_ = 0;

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from dataclasses import dataclass
 from typing import AsyncIterator
 
 import structlog
@@ -166,6 +167,24 @@ def _skill_model_target(skill, request) -> tuple[str, str, str]:
         policy.get("deployment_preference", "any") or "any"
     )
     return prefer_backend, model_name, deployment_preference
+
+
+@dataclass
+class _PreparedTurn:
+    session_id: str
+    skill: object
+    plan_steps: list
+    trace: object
+    langsmith_metadata: dict
+    memory_snapshot: object
+    observations: list[ToolObservation]
+    messages: list[LLMMessage]
+    semantic_lookup: object | None = None
+
+
+@dataclass
+class _EarlyTurnResult:
+    result: HarnessRunResult
 
 
 class AgentHarnessService:
@@ -474,7 +493,7 @@ class AgentHarnessService:
 
         return all_observations
 
-    async def run_turn(self, request) -> HarnessRunResult:
+    async def _prepare_turn(self, request, route: str) -> _PreparedTurn | _EarlyTurnResult:
         session_id = getattr(request, "session_id", "") or uuid.uuid4().hex
         skill = self._planner.resolve_skill(request)
         plan_steps = self._planner.build_plan(request, skill)
@@ -491,7 +510,7 @@ class AgentHarnessService:
             "session_id": session_id,
             "skill": skill.name,
             "plan_steps": len(plan_steps),
-            "route": "/agent/run",
+            "route": route,
         }
 
         await self._trace_store.add_event(
@@ -520,24 +539,28 @@ class AgentHarnessService:
             )
             await self._add_guardrail_event(trace.trace_id, "input", input_guardrails)
         if self._guardrail_service.has_blocking(input_guardrails):
-            return await self._finish_blocked_run(
-                trace.trace_id,
-                session_id,
-                skill.name,
-                "input",
-                input_guardrails,
+            return _EarlyTurnResult(
+                await self._finish_blocked_run(
+                    trace.trace_id,
+                    session_id,
+                    skill.name,
+                    "input",
+                    input_guardrails,
+                )
             )
 
         semantic_lookup = None
         if self._semantic_cache is not None:
             semantic_lookup = await self._semantic_cache.lookup(request, skill, plan_steps)
             if semantic_lookup.hit is not None:
-                return await self._finish_semantic_cache_hit(
-                    trace.trace_id,
-                    session_id,
-                    skill.name,
-                    request,
-                    semantic_lookup.hit,
+                return _EarlyTurnResult(
+                    await self._finish_semantic_cache_hit(
+                        trace.trace_id,
+                        session_id,
+                        skill.name,
+                        request,
+                        semantic_lookup.hit,
+                    )
                 )
 
         memory_started = _now_ms()
@@ -590,12 +613,14 @@ class AgentHarnessService:
             )
             await self._add_guardrail_event(trace.trace_id, "tool_plan", tool_guardrails)
         if self._guardrail_service.has_blocking(tool_guardrails):
-            return await self._finish_blocked_run(
-                trace.trace_id,
-                session_id,
-                skill.name,
-                "tool_plan",
-                tool_guardrails,
+            return _EarlyTurnResult(
+                await self._finish_blocked_run(
+                    trace.trace_id,
+                    session_id,
+                    skill.name,
+                    "tool_plan",
+                    tool_guardrails,
+                )
             )
 
         execution_started = _now_ms()
@@ -655,34 +680,167 @@ class AgentHarnessService:
             + [LLMMessage(role="user", content=user_prompt)]
         )
 
+        return _PreparedTurn(
+            session_id=session_id,
+            skill=skill,
+            plan_steps=plan_steps,
+            trace=trace,
+            langsmith_metadata=langsmith_metadata,
+            memory_snapshot=memory_snapshot,
+            observations=observations,
+            messages=messages,
+            semantic_lookup=semantic_lookup,
+        )
+
+    async def _finish_response(
+        self,
+        prepared: _PreparedTurn,
+        request,
+        response_content: str,
+        response_tokens: int,
+        model: str,
+    ) -> HarnessRunResult:
+        with trace_context(
+            "agent_output_guardrails",
+            run_type="chain",
+            inputs={"uid": request.uid, "skill": prepared.skill.name, "observation_count": len(prepared.observations)},
+            metadata=prepared.langsmith_metadata,
+            tags=["agent", "guardrails"],
+        ) as output_guardrail_run:
+            output_guardrails = self._guardrail_service.check_output(response_content, prepared.observations)
+            set_run_output(
+                output_guardrail_run,
+                {"status": _guardrail_event_status(output_guardrails), "count": len(output_guardrails)},
+            )
+            await self._add_guardrail_event(prepared.trace.trace_id, "output", output_guardrails)
+        if self._guardrail_service.has_blocking(output_guardrails):
+            return await self._finish_blocked_run(
+                prepared.trace.trace_id,
+                prepared.session_id,
+                prepared.skill.name,
+                "output",
+                output_guardrails,
+                observations=[observation.to_summary() for observation in prepared.observations],
+                tokens=response_tokens,
+                model=model,
+            )
+
+        memory_save_started = _now_ms()
+        with trace_context(
+            "agent_memory_writeback",
+            run_type="chain",
+            inputs={"uid": request.uid, "session_id": prepared.session_id},
+            metadata=prepared.langsmith_metadata,
+            tags=["agent", "memory"],
+        ) as memory_save_run:
+            try:
+                await self._memory_service.save_after_response(
+                    request.uid,
+                    prepared.session_id,
+                    request.content,
+                    response_content,
+                )
+                set_run_output(memory_save_run, {"status": "ok"})
+            except Exception as exc:
+                set_run_error(memory_save_run, exc)
+                raise
+        await self._trace_store.add_event(
+            prepared.trace.trace_id,
+            TraceEvent(
+                layer="memory",
+                name="save_context",
+                status="ok",
+                summary="conversation persisted",
+                started_at=memory_save_started,
+                finished_at=_now_ms(),
+            ),
+        )
+
+        feedback_started = _now_ms()
+        feedback_summary = self._feedback_evaluator.build_summary(
+            prepared.skill.name,
+            prepared.observations,
+            response_content,
+        )
+        await self._trace_store.add_event(
+            prepared.trace.trace_id,
+            TraceEvent(
+                layer="feedback",
+                name="evaluate_response",
+                status="ok",
+                summary=feedback_summary,
+                started_at=feedback_started,
+                finished_at=_now_ms(),
+            ),
+        )
+        await self._trace_store.finish_run(
+            prepared.trace.trace_id,
+            status="completed",
+            response_content=response_content,
+            model=model,
+            feedback_summary=feedback_summary,
+            observations=[observation.to_summary() for observation in prepared.observations],
+        )
+        if self._semantic_cache is not None:
+            await self._semantic_cache.store(
+                request,
+                prepared.skill,
+                prepared.plan_steps,
+                answer=response_content,
+                model=model,
+                tokens=response_tokens,
+                trace_id=prepared.trace.trace_id,
+                feedback_summary=feedback_summary,
+                vector=prepared.semantic_lookup.vector if prepared.semantic_lookup is not None else None,
+            )
+
+        trace_ref = self._trace_store.get_trace(prepared.trace.trace_id)
+        events = trace_ref.events if trace_ref else []
+        return HarnessRunResult(
+            session_id=prepared.session_id,
+            content=response_content,
+            tokens=response_tokens,
+            model=model,
+            trace_id=prepared.trace.trace_id,
+            skill=prepared.skill.name,
+            feedback_summary=feedback_summary,
+            observations=[observation.to_summary() for observation in prepared.observations],
+            events=events,
+        )
+
+    async def run_turn(self, request) -> HarnessRunResult:
+        prepared = await self._prepare_turn(request, "/agent/run")
+        if isinstance(prepared, _EarlyTurnResult):
+            return prepared.result
+
         model_started = _now_ms()
         try:
-            prefer_backend, model_name, deployment_preference = _skill_model_target(skill, request)
+            prefer_backend, model_name, deployment_preference = _skill_model_target(prepared.skill, request)
             with trace_context(
                 "agent_model_completion",
                 run_type="llm",
                 inputs={
-                    "message_count": len(messages),
+                    "message_count": len(prepared.messages),
                     "prefer_backend": prefer_backend,
                     "model_name": model_name,
                     "deployment_preference": deployment_preference,
                 },
-                metadata=langsmith_metadata,
+                metadata=prepared.langsmith_metadata,
                 tags=["agent", "llm"],
             ) as model_run:
                 try:
                     response = await self._llm_registry.complete(
-                        messages,
+                        prepared.messages,
                         prefer_backend=prefer_backend,
                         model_name=model_name,
                         deployment_preference=deployment_preference,
-                        max_tokens=_request_max_tokens(request, skill=skill),
+                        max_tokens=_request_max_tokens(request, skill=prepared.skill),
                         temperature=_request_temperature(
                             request,
-                            0.4 if skill.name in {"summarize_thread", "translate_text"} else 0.7,
-                            skill=skill,
+                            0.4 if prepared.skill.name in {"summarize_thread", "translate_text"} else 0.7,
+                            skill=prepared.skill,
                         ),
-                        think=_request_think_enabled(request, skill=skill),
+                        think=_request_think_enabled(request, skill=prepared.skill),
                     )
                     set_run_output(
                         model_run,
@@ -696,9 +854,9 @@ class AgentHarnessService:
                     set_run_error(model_run, exc)
                     raise
         except Exception as exc:
-            logger.error("harness.model_completion.failed", trace_id=trace.trace_id, error=str(exc))
+            logger.error("harness.model_completion.failed", trace_id=prepared.trace.trace_id, error=str(exc))
             await self._trace_store.add_event(
-                trace.trace_id,
+                prepared.trace.trace_id,
                 TraceEvent(
                     layer="execution",
                     name="model_completion",
@@ -710,16 +868,16 @@ class AgentHarnessService:
                 ),
             )
             await self._trace_store.finish_run(
-                trace.trace_id,
+                prepared.trace.trace_id,
                 status="failed",
                 response_content=str(exc),
                 model="",
                 feedback_summary=f"model_failed={type(exc).__name__}",
-                observations=[observation.to_summary() for observation in observations],
+                observations=[observation.to_summary() for observation in prepared.observations],
             )
             raise
         await self._trace_store.add_event(
-            trace.trace_id,
+            prepared.trace.trace_id,
             TraceEvent(
                 layer="execution",
                 name="model_completion",
@@ -731,287 +889,46 @@ class AgentHarnessService:
                 metadata={"tokens": response.usage.total_tokens},
             ),
         )
-
-        with trace_context(
-            "agent_output_guardrails",
-            run_type="chain",
-            inputs={"uid": request.uid, "skill": skill.name, "observation_count": len(observations)},
-            metadata=langsmith_metadata,
-            tags=["agent", "guardrails"],
-        ) as output_guardrail_run:
-            output_guardrails = self._guardrail_service.check_output(response.content, observations)
-            set_run_output(
-                output_guardrail_run,
-                {"status": _guardrail_event_status(output_guardrails), "count": len(output_guardrails)},
-            )
-            await self._add_guardrail_event(trace.trace_id, "output", output_guardrails)
-        if self._guardrail_service.has_blocking(output_guardrails):
-            return await self._finish_blocked_run(
-                trace.trace_id,
-                session_id,
-                skill.name,
-                "output",
-                output_guardrails,
-                observations=[observation.to_summary() for observation in observations],
-                tokens=response.usage.total_tokens or max(len(response.content) // 4, 0),
-                model=response.model,
-            )
-
-        memory_save_started = _now_ms()
-        with trace_context(
-            "agent_memory_writeback",
-            run_type="chain",
-            inputs={"uid": request.uid, "session_id": session_id},
-            metadata=langsmith_metadata,
-            tags=["agent", "memory"],
-        ) as memory_save_run:
-            try:
-                await self._memory_service.save_after_response(
-                    request.uid, session_id, request.content, response.content
-                )
-                set_run_output(memory_save_run, {"status": "ok"})
-            except Exception as exc:
-                set_run_error(memory_save_run, exc)
-                raise
-        await self._trace_store.add_event(
-            trace.trace_id,
-            TraceEvent(
-                layer="memory",
-                name="save_context",
-                status="ok",
-                summary="conversation persisted",
-                started_at=memory_save_started,
-                finished_at=_now_ms(),
-            ),
-        )
-
-        feedback_started = _now_ms()
-        feedback_summary = self._feedback_evaluator.build_summary(skill.name, observations, response.content)
-        await self._trace_store.add_event(
-            trace.trace_id,
-            TraceEvent(
-                layer="feedback",
-                name="evaluate_response",
-                status="ok",
-                summary=feedback_summary,
-                started_at=feedback_started,
-                finished_at=_now_ms(),
-            ),
-        )
         response_tokens = response.usage.total_tokens or max(len(response.content) // 4, 0)
-        await self._trace_store.finish_run(
-            trace.trace_id,
-            status="completed",
-            response_content=response.content,
-            model=response.model,
-            feedback_summary=feedback_summary,
-            observations=[observation.to_summary() for observation in observations],
-        )
-        if self._semantic_cache is not None:
-            await self._semantic_cache.store(
-                request,
-                skill,
-                plan_steps,
-                answer=response.content,
-                model=response.model,
-                tokens=response_tokens,
-                trace_id=trace.trace_id,
-                feedback_summary=feedback_summary,
-                vector=semantic_lookup.vector if semantic_lookup is not None else None,
-            )
-
-        trace_ref = self._trace_store.get_trace(trace.trace_id)
-        events = trace_ref.events if trace_ref else []
-        return HarnessRunResult(
-            session_id=session_id,
-            content=response.content,
-            tokens=response_tokens,
-            model=response.model,
-            trace_id=trace.trace_id,
-            skill=skill.name,
-            feedback_summary=feedback_summary,
-            observations=[observation.to_summary() for observation in observations],
-            events=events,
-        )
+        return await self._finish_response(prepared, request, response.content, response_tokens, response.model)
 
     async def stream_turn(self, request) -> AsyncIterator[dict]:
-        session_id = getattr(request, "session_id", "") or uuid.uuid4().hex
-        skill = self._planner.resolve_skill(request)
-        plan_steps = self._planner.build_plan(request, skill)
         msg_id = uuid.uuid4().hex
 
-        trace = await self._trace_store.start_run(
-            uid=request.uid,
-            session_id=session_id,
-            skill_name=skill.name,
-            request_summary=request.content[:1000],
-            plan_steps=plan_steps,
-        )
-        await self._trace_store.add_event(
-            trace.trace_id,
-            TraceEvent(
-                layer="orchestration",
-                name="plan",
-                status="ok",
-                summary=f"skill={skill.name}, steps={len(plan_steps)}",
-                detail=str([step.to_dict() for step in plan_steps]),
-                started_at=_now_ms(),
-                finished_at=_now_ms(),
-            ),
-        )
-
-        input_guardrails = self._guardrail_service.check_input(request, skill, plan_steps)
-        await self._add_guardrail_event(trace.trace_id, "input", input_guardrails)
-        if self._guardrail_service.has_blocking(input_guardrails):
-            result = await self._finish_blocked_run(
-                trace.trace_id,
-                session_id,
-                skill.name,
-                "input",
-                input_guardrails,
-            )
+        prepared = await self._prepare_turn(request, "/agent/run/stream")
+        if isinstance(prepared, _EarlyTurnResult):
+            result = prepared.result
             yield {
                 "chunk": result.content,
                 "is_final": True,
                 "msg_id": msg_id,
-                "total_tokens": 0,
-                "trace_id": trace.trace_id,
-                "skill": skill.name,
+                "total_tokens": result.tokens,
+                "trace_id": result.trace_id,
+                "skill": result.skill,
                 "feedback_summary": result.feedback_summary,
-                "observations": [],
-                "events": _trace_events_payload(self._trace_store, trace.trace_id),
+                "observations": result.observations,
+                "events": _trace_events_payload(self._trace_store, result.trace_id),
             }
             return
-
-        semantic_lookup = None
-        if self._semantic_cache is not None:
-            semantic_lookup = await self._semantic_cache.lookup(request, skill, plan_steps)
-            if semantic_lookup.hit is not None:
-                result = await self._finish_semantic_cache_hit(
-                    trace.trace_id,
-                    session_id,
-                    skill.name,
-                    request,
-                    semantic_lookup.hit,
-                )
-                yield {
-                    "chunk": result.content,
-                    "is_final": True,
-                    "msg_id": msg_id,
-                    "total_tokens": 0,
-                    "trace_id": trace.trace_id,
-                    "skill": skill.name,
-                    "feedback_summary": result.feedback_summary,
-                    "observations": result.observations,
-                    "events": _trace_events_payload(self._trace_store, trace.trace_id),
-                }
-                return
-
-        memory_started = _now_ms()
-        memory_snapshot = await self._memory_service.load(
-            uid=request.uid,
-            session_id=session_id,
-            include_graph=skill.allow_graph,
-        )
-        await self._trace_store.add_event(
-            trace.trace_id,
-            TraceEvent(
-                layer="memory",
-                name="load_context",
-                status="ok",
-                summary=f"history={len(memory_snapshot.chat_history)}, episodic={len(memory_snapshot.episodic_summaries)}",
-                started_at=memory_started,
-                finished_at=_now_ms(),
-                metadata=_context_pack_metadata(memory_snapshot),
-            ),
-        )
-
-        tool_guardrails = self._guardrail_service.check_tool_plan(request, plan_steps, self._tool_specs())
-        await self._add_guardrail_event(trace.trace_id, "tool_plan", tool_guardrails)
-        if self._guardrail_service.has_blocking(tool_guardrails):
-            result = await self._finish_blocked_run(
-                trace.trace_id,
-                session_id,
-                skill.name,
-                "tool_plan",
-                tool_guardrails,
-            )
-            yield {
-                "chunk": result.content,
-                "is_final": True,
-                "msg_id": msg_id,
-                "total_tokens": 0,
-                "trace_id": trace.trace_id,
-                "skill": skill.name,
-                "feedback_summary": result.feedback_summary,
-                "observations": [],
-                "events": _trace_events_payload(self._trace_store, trace.trace_id),
-            }
-            return
-
-        execution_started = _now_ms()
-        observations = await self._tool_executor.execute(
-            uid=request.uid,
-            content=request.content,
-            plan_steps=plan_steps,
-            target_lang=getattr(request, "target_lang", ""),
-            requested_tools=getattr(request, "requested_tools", []),
-            tool_arguments=getattr(request, "tool_arguments", {}),
-        )
-        await self._trace_store.add_event(
-            trace.trace_id,
-            TraceEvent(
-                layer="execution",
-                name="tool_execution",
-                status="ok",
-                summary=f"observations={len(observations)}",
-                detail="\n".join(observation.to_summary() for observation in observations),
-                started_at=execution_started,
-                finished_at=_now_ms(),
-            ),
-        )
-        stream_langsmith_metadata = {
-            "local_trace_id": trace.trace_id,
-            "session_id": session_id,
-            "skill": skill.name,
-            "plan_steps": len(plan_steps),
-            "route": "/agent/run/stream",
-        }
-        observations = await self._run_react_followup(
-            trace.trace_id,
-            request,
-            skill,
-            plan_steps,
-            observations,
-            stream_langsmith_metadata,
-        )
-
-        system_prompt = self._planner.build_system_prompt(skill, memory_snapshot, observations)
-        user_prompt = self._planner.build_user_prompt(request, observations)
-        messages = (
-            [LLMMessage(role="system", content=system_prompt)]
-            + memory_snapshot.as_messages()
-            + [LLMMessage(role="user", content=user_prompt)]
-        )
 
         accumulated = ""
         model_name = ""
         model_started = _now_ms()
 
         try:
-            prefer_backend, selected_model_name, deployment_preference = _skill_model_target(skill, request)
+            prefer_backend, selected_model_name, deployment_preference = _skill_model_target(prepared.skill, request)
             async for chunk in self._llm_registry.stream(
-                messages,
+                prepared.messages,
                 prefer_backend=prefer_backend,
                 model_name=selected_model_name,
                 deployment_preference=deployment_preference,
-                max_tokens=_request_max_tokens(request, skill=skill),
+                max_tokens=_request_max_tokens(request, skill=prepared.skill),
                 temperature=_request_temperature(
                     request,
-                    0.4 if skill.name in {"summarize_thread", "translate_text"} else 0.7,
-                    skill=skill,
+                    0.4 if prepared.skill.name in {"summarize_thread", "translate_text"} else 0.7,
+                    skill=prepared.skill,
                 ),
-                think=_request_think_enabled(request, skill=skill),
+                think=_request_think_enabled(request, skill=prepared.skill),
             ):
                 if chunk.content:
                     accumulated += chunk.content
@@ -1021,12 +938,12 @@ class AgentHarnessService:
                         "is_final": False,
                         "msg_id": msg_id,
                         "total_tokens": max(len(accumulated) // 4, 0),
-                        "trace_id": trace.trace_id,
-                        "skill": skill.name,
+                        "trace_id": prepared.trace.trace_id,
+                        "skill": prepared.skill.name,
                     }
 
             await self._trace_store.add_event(
-                trace.trace_id,
+                prepared.trace.trace_id,
                 TraceEvent(
                     layer="execution",
                     name="model_completion",
@@ -1039,95 +956,23 @@ class AgentHarnessService:
                 ),
             )
 
-            output_guardrails = self._guardrail_service.check_output(accumulated, observations)
-            await self._add_guardrail_event(trace.trace_id, "output", output_guardrails)
-            if self._guardrail_service.has_blocking(output_guardrails):
-                result = await self._finish_blocked_run(
-                    trace.trace_id,
-                    session_id,
-                    skill.name,
-                    "output",
-                    output_guardrails,
-                    observations=[observation.to_summary() for observation in observations],
-                    tokens=max(len(accumulated) // 4, 0),
-                    model=model_name,
-                )
-                yield {
-                    "chunk": result.content,
-                    "is_final": True,
-                    "msg_id": msg_id,
-                    "total_tokens": result.tokens,
-                    "trace_id": trace.trace_id,
-                    "skill": skill.name,
-                    "feedback_summary": result.feedback_summary,
-                    "observations": [observation.to_summary() for observation in observations],
-                    "events": _trace_events_payload(self._trace_store, trace.trace_id),
-                }
-                return
-
-            memory_save_started = _now_ms()
-            await self._memory_service.save_after_response(request.uid, session_id, request.content, accumulated)
-            await self._trace_store.add_event(
-                trace.trace_id,
-                TraceEvent(
-                    layer="memory",
-                    name="save_context",
-                    status="ok",
-                    summary="conversation persisted",
-                    started_at=memory_save_started,
-                    finished_at=_now_ms(),
-                ),
-            )
-
-            feedback_started = _now_ms()
-            feedback_summary = self._feedback_evaluator.build_summary(skill.name, observations, accumulated)
-            await self._trace_store.add_event(
-                trace.trace_id,
-                TraceEvent(
-                    layer="feedback",
-                    name="evaluate_response",
-                    status="ok",
-                    summary=feedback_summary,
-                    started_at=feedback_started,
-                    finished_at=_now_ms(),
-                ),
-            )
             response_tokens = max(len(accumulated) // 4, 0)
-            await self._trace_store.finish_run(
-                trace.trace_id,
-                status="completed",
-                response_content=accumulated,
-                model=model_name,
-                feedback_summary=feedback_summary,
-                observations=[observation.to_summary() for observation in observations],
-            )
-            if self._semantic_cache is not None:
-                await self._semantic_cache.store(
-                    request,
-                    skill,
-                    plan_steps,
-                    answer=accumulated,
-                    model=model_name,
-                    tokens=response_tokens,
-                    trace_id=trace.trace_id,
-                    feedback_summary=feedback_summary,
-                    vector=semantic_lookup.vector if semantic_lookup is not None else None,
-                )
+            result = await self._finish_response(prepared, request, accumulated, response_tokens, model_name)
             yield {
                 "chunk": "",
                 "is_final": True,
                 "msg_id": msg_id,
-                "total_tokens": response_tokens,
-                "trace_id": trace.trace_id,
-                "skill": skill.name,
-                "feedback_summary": feedback_summary,
-                "observations": [observation.to_summary() for observation in observations],
-                "events": _trace_events_payload(self._trace_store, trace.trace_id),
+                "total_tokens": result.tokens,
+                "trace_id": result.trace_id,
+                "skill": result.skill,
+                "feedback_summary": result.feedback_summary,
+                "observations": result.observations,
+                "events": _trace_events_payload(self._trace_store, result.trace_id),
             }
         except Exception as exc:
             logger.error("harness.stream.failed", error=str(exc))
             await self._trace_store.add_event(
-                trace.trace_id,
+                prepared.trace.trace_id,
                 TraceEvent(
                     layer="execution",
                     name="model_completion",
@@ -1139,21 +984,21 @@ class AgentHarnessService:
                 ),
             )
             await self._trace_store.finish_run(
-                trace.trace_id,
+                prepared.trace.trace_id,
                 status="failed",
                 response_content=str(exc),
                 model=model_name,
                 feedback_summary=f"stream_failed={exc}",
-                observations=[observation.to_summary() for observation in observations],
+                observations=[observation.to_summary() for observation in prepared.observations],
             )
             yield {
                 "chunk": f"发生错误: {exc}",
                 "is_final": True,
                 "msg_id": msg_id,
                 "total_tokens": 0,
-                "trace_id": trace.trace_id,
-                "skill": skill.name,
+                "trace_id": prepared.trace.trace_id,
+                "skill": prepared.skill.name,
                 "feedback_summary": f"stream_failed={exc}",
-                "observations": [observation.to_summary() for observation in observations],
-                "events": _trace_events_payload(self._trace_store, trace.trace_id),
+                "observations": [observation.to_summary() for observation in prepared.observations],
+                "events": _trace_events_payload(self._trace_store, prepared.trace.trace_id),
             }

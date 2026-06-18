@@ -4,10 +4,11 @@
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
 
+#include <cctype>
 #include <fstream>
-#include <sstream>
 #include <filesystem>
 #include <map>
+#include <sstream>
 
 #if MEMOCHAT_ENABLE_HTTP3
 
@@ -87,6 +88,17 @@ struct GateHttp3Listener::Impl : public std::enable_shared_from_this<Impl>
 
 static QUIC_STATUS ConnectionCallback(HQUIC, void*, QUIC_CONNECTION_EVENT*);
 static QUIC_STATUS StreamCallback(HQUIC, void*, QUIC_STREAM_EVENT*);
+
+static bool IsReservedResponseHeader(const std::string& name)
+{
+    std::string lower;
+    lower.reserve(name.size());
+    for (const char c : name)
+    {
+        lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    }
+    return lower == "content-type" || lower == "content-length";
+}
 
 static QUIC_STATUS ListenerCallback(HQUIC, void* Context, QUIC_LISTENER_EVENT* Event)
 {
@@ -436,11 +448,13 @@ static QUIC_STATUS StreamCallback(HQUIC Stream, void* Context, QUIC_STREAM_EVENT
             std::string resp_body;
             int resp_status = 404;
             std::string ct = "application/json";
+            std::unordered_map<std::string, std::string> resp_headers;
             if (conn->IsResponseComplete())
             {
                 resp_body = conn->ResponseBody();
                 resp_status = conn->ResponseStatus();
                 ct = conn->ResponseContentType();
+                resp_headers = conn->ResponseHeaders();
             }
             else
             {
@@ -453,9 +467,15 @@ static QUIC_STATUS StreamCallback(HQUIC Stream, void* Context, QUIC_STREAM_EVENT
             std::ostringstream http_resp;
             http_resp << "HTTP/3 " << resp_status << " \r\n"
                       << "content-type: " << ct << "\r\n"
-                      << "content-length: " << resp_body.size() << "\r\n"
-                      << "\r\n"
-                      << resp_body;
+                      << "content-length: " << resp_body.size() << "\r\n";
+            for (const auto& [name, value] : resp_headers)
+            {
+                if (!IsReservedResponseHeader(name))
+                {
+                    http_resp << name << ": " << value << "\r\n";
+                }
+            }
+            http_resp << "\r\n" << resp_body;
             std::string resp_str = http_resp.str();
 
             QUIC_BUFFER qbuf{};
@@ -536,11 +556,13 @@ static QUIC_STATUS StreamCallback(HQUIC Stream, void* Context, QUIC_STREAM_EVENT
                         std::string resp_body;
                         int resp_status = 404;
                         std::string ct = "application/json";
+                        std::unordered_map<std::string, std::string> resp_headers;
                         if (conn->IsResponseComplete())
                         {
                             resp_body = conn->ResponseBody();
                             resp_status = conn->ResponseStatus();
                             ct = conn->ResponseContentType();
+                            resp_headers = conn->ResponseHeaders();
                         }
                         else
                         {
@@ -553,9 +575,15 @@ static QUIC_STATUS StreamCallback(HQUIC Stream, void* Context, QUIC_STREAM_EVENT
                         std::ostringstream http_resp;
                         http_resp << "HTTP/3 " << resp_status << " \r\n"
                                   << "content-type: " << ct << "\r\n"
-                                  << "content-length: " << resp_body.size() << "\r\n"
-                                  << "\r\n"
-                                  << resp_body;
+                                  << "content-length: " << resp_body.size() << "\r\n";
+                        for (const auto& [name, value] : resp_headers)
+                        {
+                            if (!IsReservedResponseHeader(name))
+                            {
+                                http_resp << name << ": " << value << "\r\n";
+                            }
+                        }
+                        http_resp << "\r\n" << resp_body;
                         std::string resp_str = http_resp.str();
                         QUIC_BUFFER qbuf{};
                         qbuf.Buffer = reinterpret_cast<uint8_t*>(const_cast<char*>(resp_str.data()));
