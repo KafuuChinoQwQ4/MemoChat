@@ -9,6 +9,7 @@ enum class AgentRequestKind
     ListSessions,
     CreateSession,
     DeleteSession,
+    RenameSession,
     History,
     ModelList,
     ApiProviderRegister,

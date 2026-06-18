@@ -11,6 +11,24 @@ RUNTIME_JS = QML_DIR / "qml/runtime/AppWindowRuntime.js"
 QML_QRC = QML_DIR / "resources/qrc/qml-shell.qrc"
 
 
+def function_body(source: str, name: str) -> str:
+    match = re.search(rf"\bfunction\s+{re.escape(name)}\s*\([^)]*\)\s*\{{", source)
+    if not match:
+        raise AssertionError(f"Expected QML function {name}() to exist")
+
+    start = match.end() - 1
+    depth = 0
+    for index in range(start, len(source)):
+        char = source[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start + 1 : index]
+    raise AssertionError(f"Expected QML function {name}() to have a closed body")
+
+
 class MainWindowRuntimeContractTests(unittest.TestCase):
     def test_runtime_helper_exists_and_is_registered(self):
         self.assertTrue(RUNTIME_JS.is_file())
@@ -98,6 +116,45 @@ class MainWindowRuntimeContractTests(unittest.TestCase):
                 self.assertNotIn("property int displayedPage", text)
                 self.assertNotIn("readonly property int noDisplayedPage: -1", text)
                 self.assertNotIn("active: root.chatPageActive", text)
+
+    def test_pet_window_lifecycle_is_bound_to_logged_in_chat_account(self):
+        for qml_path in (SHARED_MAIN, LINUX_MAIN):
+            text = qml_path.read_text(encoding="utf-8")
+            with self.subTest(file=qml_path.name):
+                self.assertIn("property var petWindowRef: null", text)
+                self.assertIn("function petAccountReady()", text)
+                self.assertIn("function bindStartupPetSettingsToCurrentUser()", text)
+                self.assertIn("function destroyPetWindow()", text)
+
+                bind_body = function_body(text, "bindStartupPetSettingsToCurrentUser")
+                self.assertIn("startupPetSettings.bindAccount(shell.currentUserUid, shell.currentUserId)", bind_body)
+                self.assertIn("startupPetSettings.load()", bind_body)
+
+                open_body = function_body(text, "openPetWindow")
+                self.assertIn("if (!root.petAccountReady())", open_body)
+                self.assertIn("return null", open_body)
+                self.assertIn("root.bindStartupPetSettingsToCurrentUser()", open_body)
+
+                toggle_body = function_body(text, "togglePetWindow")
+                self.assertIn("if (!root.petAccountReady())", toggle_body)
+                self.assertIn("return", toggle_body)
+
+                destroy_body = function_body(text, "destroyPetWindow")
+                self.assertIn("startupPetTimer.stop()", destroy_body)
+                self.assertIn("root.petWindowRef = null", destroy_body)
+                self.assertIn("win.petAssetSettings = null", destroy_body)
+                self.assertIn("win.petController = null", destroy_body)
+                self.assertIn("win.agentController = null", destroy_body)
+                self.assertIn("win.destroy()", destroy_body)
+
+                sync_body = function_body(text, "syncWindowsByPage")
+                self.assertLess(sync_body.index("destroyPetWindow()"), sync_body.index("destroyChatWindow()"))
+
+                current_user_body = function_body(text, "onCurrentUserChanged")
+                self.assertIn("if (!root.petAccountReady())", current_user_body)
+                self.assertIn("root.destroyPetWindow()", current_user_body)
+                self.assertIn("root.bindStartupPetSettingsToCurrentUser()", current_user_body)
+                self.assertIn("petWindowRef.petAssetSettings = startupPetSettings", current_user_body)
 
 
 if __name__ == "__main__":

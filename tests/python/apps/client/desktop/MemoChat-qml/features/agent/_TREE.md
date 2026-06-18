@@ -7,6 +7,7 @@
 | 文件 | 作用概括 |
 | --- | --- |
 | `test_agent_controller_boundary.py` | 校验 AI 助手控制器的职责边界 |
+| `test_agent_markdown_provider_contract.py` | 校验 AI 回答 Markdown 渲染和 provider 头像映射契约 |
 | `test_agent_qml_physical_layout_contract.py` | 校验 AI 助手 QML 文件的物理布局契约 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

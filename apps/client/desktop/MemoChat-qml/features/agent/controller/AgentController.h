@@ -119,6 +119,7 @@ public:
     Q_INVOKABLE void createSession();
     Q_INVOKABLE void switchSession(const QString& sessionId);
     Q_INVOKABLE void deleteSession(const QString& sessionId);
+    Q_INVOKABLE void renameSession(const QString& sessionId, const QString& title);
     Q_INVOKABLE void loadHistory(const QString& sessionId);
     Q_INVOKABLE void loadSessions();
     Q_INVOKABLE void switchModel(const QString& backend, const QString& model);

@@ -339,7 +339,7 @@ TEST(Live2DAssetTest, RenderPathResolverHandlesDefaultQrcAndRelativeModels)
 
     const QString fallback = QStringLiteral(":/models/default/default.model3.json");
 
-    EXPECT_EQ(Live2DRenderPathResolver::resolveModelPath(temp.path(), QString(), fallback), fallback);
+    EXPECT_TRUE(Live2DRenderPathResolver::resolveModelPath(temp.path(), QString(), fallback).isEmpty());
     EXPECT_EQ(
         Live2DRenderPathResolver::resolveModelPath(temp.path(), QStringLiteral("qrc:/models/a.model3.json"), fallback),
                                                    QStringLiteral(":/models/a.model3.json"));

@@ -23,6 +23,8 @@ public:
                             memochat::gate::routing::GateResponse& response);
     bool HandleDeleteSession(const memochat::gate::routing::GateRequest& request,
                              memochat::gate::routing::GateResponse& response);
+    bool HandleUpdateSession(const memochat::gate::routing::GateRequest& request,
+                             memochat::gate::routing::GateResponse& response);
     bool HandleListModels(const memochat::gate::routing::GateRequest& request,
                           memochat::gate::routing::GateResponse& response);
     bool HandleRegisterApiProvider(const memochat::gate::routing::GateRequest& request,

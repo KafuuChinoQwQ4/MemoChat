@@ -16,6 +16,7 @@ void PetController::postJson(const QUrl& url, const QJsonObject& payload, const 
     configurePetRequest(request);
     auto* reply = _network.post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
     reply->setProperty("pet_op", op);
+    reply->setProperty("pet_generation", _request_generation);
     connect(reply,
             &QNetworkReply::finished,
             this,
@@ -32,6 +33,7 @@ void PetController::getJson(const QUrl& url, const QString& op)
     configurePetRequest(request);
     auto* reply = _network.get(request);
     reply->setProperty("pet_op", op);
+    reply->setProperty("pet_generation", _request_generation);
     connect(reply,
             &QNetworkReply::finished,
             this,
@@ -97,6 +99,12 @@ void PetController::startStream()
 void PetController::handleJsonReply(QNetworkReply* reply)
 {
     const QString op = reply->property("pet_op").toString();
+    const int replyGeneration = reply->property("pet_generation").toInt();
+    if (replyGeneration != _request_generation)
+    {
+        reply->deleteLater();
+        return;
+    }
     const bool visionOp = op == QStringLiteral("vision_capture") || op == QStringLiteral("vision_segment_capture");
     const auto networkError = reply->error();
     const QString networkErrorText = reply->errorString();

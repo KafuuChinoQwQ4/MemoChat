@@ -152,7 +152,7 @@ Live2DSectionPanel {
             backdrop: root.backdrop
             title: "语音目录"
             text: root.voiceDirectory
-            placeholderText: "resources/live2d/KafuuChino/香风智乃voice"
+            placeholderText: "选择用户导入的语音目录"
             onTextChanged: root.voiceDirectoryEdited(text)
         }
 
@@ -172,7 +172,7 @@ Live2DSectionPanel {
             backdrop: root.backdrop
             title: "默认音色"
             text: root.defaultVoice
-            placeholderText: "Kafuuchino-voice.mp3"
+            placeholderText: "选择默认语音文件"
             onTextChanged: root.defaultVoiceEdited(text)
         }
 

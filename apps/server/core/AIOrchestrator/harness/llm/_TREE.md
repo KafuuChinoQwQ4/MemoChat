@@ -8,6 +8,6 @@
 | --- | --- |
 | `README.md` | LLM 层说明文档。 |
 | `__init__.py` | 包初始化。 |
-| `service.py` | LLM 服务实现。 |
+| `service.py` | LLM 服务实现，负责 provider 选择、动态 API 接入和上下文窗口 token 预算保护。 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

@@ -22,6 +22,10 @@ void PetController::startVoiceTraining(const QVariantMap& request)
     {
         payload.insert(it.key(), it.value());
     }
+    if (payload.value(QStringLiteral("profile_id")).toString().trimmed().isEmpty())
+    {
+        payload[QStringLiteral("profile_id")] = accountProfileId();
+    }
     if (!payload.value(QStringLiteral("consent_confirmed")).toBool(false))
     {
         setError(QStringLiteral("声音训练需要先确认参考音频授权"));

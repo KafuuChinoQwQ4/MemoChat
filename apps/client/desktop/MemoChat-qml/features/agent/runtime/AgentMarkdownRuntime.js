@@ -400,3 +400,386 @@ function highlightedCode(value, language, codeTextColor, keywordCache) {
     var color = codeTextColor || "#314158"
     return "<html><body style=\"margin:0; padding:0; background:transparent; color:" + color + ";\">" + html.join("<br/>") + "</body></html>"
 }
+
+function escapeAttribute(value) {
+    return escapeHtml(value).replace(/'/g, "&#39;")
+}
+
+function isAllowedHref(value) {
+    var text = (value || "").toLowerCase()
+    return text.indexOf("http://") === 0
+        || text.indexOf("https://") === 0
+        || text.indexOf("mailto:") === 0
+        || text.indexOf("qrc:/") === 0
+}
+
+function findUnescaped(value, marker, start) {
+    var index = start
+    while (index < value.length) {
+        index = value.indexOf(marker, index)
+        if (index < 0) {
+            return -1
+        }
+        var backslashes = 0
+        var cursor = index - 1
+        while (cursor >= 0 && value.charAt(cursor) === "\\") {
+            ++backslashes
+            --cursor
+        }
+        if (backslashes % 2 === 0) {
+            return index
+        }
+        index += marker.length
+    }
+    return -1
+}
+
+var LATEX_SYMBOLS = {
+    "alpha": "α",
+    "beta": "β",
+    "gamma": "γ",
+    "delta": "δ",
+    "epsilon": "ε",
+    "theta": "θ",
+    "lambda": "λ",
+    "mu": "μ",
+    "pi": "π",
+    "rho": "ρ",
+    "sigma": "σ",
+    "tau": "τ",
+    "phi": "φ",
+    "omega": "ω",
+    "Gamma": "Γ",
+    "Delta": "Δ",
+    "Theta": "Θ",
+    "Lambda": "Λ",
+    "Pi": "Π",
+    "Sigma": "Σ",
+    "Phi": "Φ",
+    "Omega": "Ω",
+    "times": "×",
+    "cdot": "·",
+    "pm": "±",
+    "le": "≤",
+    "leq": "≤",
+    "ge": "≥",
+    "geq": "≥",
+    "ne": "≠",
+    "neq": "≠",
+    "approx": "≈",
+    "infty": "∞",
+    "sum": "∑",
+    "prod": "∏",
+    "int": "∫",
+    "partial": "∂",
+    "nabla": "∇",
+    "rightarrow": "→",
+    "to": "→",
+    "leftarrow": "←",
+    "Rightarrow": "⇒",
+    "Leftarrow": "⇐"
+}
+
+function readLatexCommand(value, start) {
+    var index = start + 1
+    var name = ""
+    while (index < value.length && /[A-Za-z]/.test(value.charAt(index))) {
+        name += value.charAt(index)
+        ++index
+    }
+    if (name.length === 0 && index < value.length) {
+        name = value.charAt(index)
+        ++index
+    }
+    return { "name": name, "end": index }
+}
+
+function readLatexGroup(value, start) {
+    if (start >= value.length) {
+        return { "text": "", "end": start }
+    }
+    if (value.charAt(start) !== "{") {
+        if (value.charAt(start) === "\\") {
+            var command = readLatexCommand(value, start)
+            return { "text": value.slice(start, command.end), "end": command.end }
+        }
+        return { "text": value.charAt(start), "end": start + 1 }
+    }
+
+    var depth = 0
+    for (var i = start; i < value.length; ++i) {
+        var ch = value.charAt(i)
+        if (ch === "{") {
+            ++depth
+        } else if (ch === "}") {
+            --depth
+            if (depth === 0) {
+                return { "text": value.slice(start + 1, i), "end": i + 1 }
+            }
+        }
+    }
+    return { "text": value.slice(start + 1), "end": value.length }
+}
+
+function skipLatexWhitespace(value, start) {
+    var index = start
+    while (index < value.length && /\s/.test(value.charAt(index))) {
+        ++index
+    }
+    return index
+}
+
+function renderLatexTokens(value) {
+    var input = value || ""
+    var html = ""
+    var i = 0
+
+    while (i < input.length) {
+        var ch = input.charAt(i)
+        if (ch === "\\") {
+            var command = readLatexCommand(input, i)
+            if (command.name === "frac") {
+                var numeratorStart = skipLatexWhitespace(input, command.end)
+                var numerator = readLatexGroup(input, numeratorStart)
+                var denominatorStart = skipLatexWhitespace(input, numerator.end)
+                var denominator = readLatexGroup(input, denominatorStart)
+                html += "<span style=\"white-space:nowrap;\"><sup>" + renderLatexTokens(numerator.text)
+                    + "</sup>/<sub>" + renderLatexTokens(denominator.text) + "</sub></span>"
+                i = denominator.end
+                continue
+            }
+            if (command.name === "sqrt") {
+                var rootStart = skipLatexWhitespace(input, command.end)
+                var root = readLatexGroup(input, rootStart)
+                html += "√(<span style=\"text-decoration:overline;\">" + renderLatexTokens(root.text) + "</span>)"
+                i = root.end
+                continue
+            }
+            if (command.name === "left" || command.name === "right") {
+                i = command.end
+                continue
+            }
+            if (Object.prototype.hasOwnProperty.call(LATEX_SYMBOLS, command.name)) {
+                html += LATEX_SYMBOLS[command.name]
+            } else {
+                html += escapeHtml("\\" + command.name)
+            }
+            i = command.end
+            continue
+        }
+
+        if (ch === "^" || ch === "_") {
+            var groupStart = skipLatexWhitespace(input, i + 1)
+            var group = readLatexGroup(input, groupStart)
+            var tag = ch === "^" ? "sup" : "sub"
+            html += "<" + tag + ">" + renderLatexTokens(group.text) + "</" + tag + ">"
+            i = group.end
+            continue
+        }
+
+        if (ch === "{") {
+            var nested = readLatexGroup(input, i)
+            html += renderLatexTokens(nested.text)
+            i = nested.end
+            continue
+        }
+        if (ch === "}") {
+            ++i
+            continue
+        }
+
+        html += escapeHtml(ch)
+        ++i
+    }
+    return html
+}
+
+function renderInlineMath(value) {
+    var formula = renderLatexTokens((value || "").replace(/\n/g, " "))
+    return "<span style=\"font-family:'Times New Roman','Cambria Math',serif; color:#42526d; background:#eef4ff; border-radius:4px;\">"
+        + formula + "</span>"
+}
+
+function renderMathBlock(value) {
+    var formula = renderLatexTokens(value || "").replace(/\n/g, "<br/>")
+    return "<div style=\"margin:7px 0; padding:8px 10px; text-align:center; background:#eef4ff; border:1px solid #d8e6ff; border-radius:7px;\">"
+        + "<span style=\"font-family:'Times New Roman','Cambria Math',serif; color:#314158;\">"
+        + formula + "</span></div>"
+}
+
+function renderMarkdownRun(value) {
+    var html = escapeHtml(value || "")
+    html = html.replace(/`([^`]+)`/g, "<span style=\"font-family:monospace; background:#eef2f8; color:#314158;\">$1</span>")
+    html = html.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function(match, label, href) {
+        if (!isAllowedHref(href)) {
+            return label
+        }
+        return "<a href=\"" + escapeAttribute(href) + "\">" + label + "</a>"
+    })
+    html = html.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    html = html.replace(/__([^_]+)__/g, "<b>$1</b>")
+    html = html.replace(/~~([^~]+)~~/g, "<s>$1</s>")
+    html = html.replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<i>$2</i>")
+    html = html.replace(/(^|[\s(])_([^_\n]+)_/g, "$1<i>$2</i>")
+    return html
+}
+
+function renderInlineMarkdown(value) {
+    var input = value || ""
+    var result = ""
+    var normal = ""
+    var i = 0
+
+    function flushNormal() {
+        if (normal.length > 0) {
+            result += renderMarkdownRun(normal)
+            normal = ""
+        }
+    }
+
+    while (i < input.length) {
+        if (input.substr(i, 2) === "\\(") {
+            var parenEnd = input.indexOf("\\)", i + 2)
+            if (parenEnd >= 0) {
+                flushNormal()
+                result += renderInlineMath(input.slice(i + 2, parenEnd))
+                i = parenEnd + 2
+                continue
+            }
+        }
+        if (input.charAt(i) === "$" && input.charAt(i + 1) !== "$") {
+            var dollarEnd = findUnescaped(input, "$", i + 1)
+            if (dollarEnd >= 0) {
+                flushNormal()
+                result += renderInlineMath(input.slice(i + 1, dollarEnd))
+                i = dollarEnd + 1
+                continue
+            }
+        }
+        normal += input.charAt(i)
+        ++i
+    }
+    flushNormal()
+    return result
+}
+
+function renderParagraph(lines) {
+    return "<p style=\"margin:0 0 6px 0;\">" + renderInlineMarkdown(lines.join(" ").replace(/\s+/g, " ")) + "</p>"
+}
+
+function renderRichText(value) {
+    var input = value || ""
+    var lines = input.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")
+    var html = []
+    var paragraph = []
+    var listItems = []
+    var orderedList = false
+    var mathLines = []
+    var mathEndMarker = ""
+
+    function flushParagraph() {
+        if (paragraph.length > 0) {
+            html.push(renderParagraph(paragraph))
+            paragraph = []
+        }
+    }
+
+    function flushList() {
+        if (listItems.length === 0) {
+            return
+        }
+        var tag = orderedList ? "ol" : "ul"
+        html.push("<" + tag + " style=\"margin:0 0 6px 18px; padding:0;\">" + listItems.join("") + "</" + tag + ">")
+        listItems = []
+        orderedList = false
+    }
+
+    function flushMath() {
+        if (mathLines.length > 0) {
+            html.push(renderMathBlock(mathLines.join("\n")))
+            mathLines = []
+        }
+        mathEndMarker = ""
+    }
+
+    for (var i = 0; i < lines.length; ++i) {
+        var line = lines[i]
+        var trimmed = line.replace(/^\s+|\s+$/g, "")
+
+        if (mathEndMarker.length > 0) {
+            var mathEnd = trimmed.indexOf(mathEndMarker)
+            if (mathEnd >= 0) {
+                mathLines.push(trimmed.slice(0, mathEnd))
+                flushMath()
+                var rest = trimmed.slice(mathEnd + mathEndMarker.length).replace(/^\s+/, "")
+                if (rest.length > 0) {
+                    paragraph.push(rest)
+                }
+            } else {
+                mathLines.push(line)
+            }
+            continue
+        }
+
+        if (trimmed.length === 0) {
+            flushParagraph()
+            flushList()
+            continue
+        }
+
+        if (trimmed.indexOf("$$") === 0 || trimmed.indexOf("\\[") === 0) {
+            flushParagraph()
+            flushList()
+            var startMarker = trimmed.indexOf("$$") === 0 ? "$$" : "\\["
+            mathEndMarker = startMarker === "$$" ? "$$" : "\\]"
+            var body = trimmed.slice(startMarker.length)
+            var inlineEnd = body.indexOf(mathEndMarker)
+            if (inlineEnd >= 0) {
+                mathLines.push(body.slice(0, inlineEnd))
+                flushMath()
+            } else {
+                mathLines.push(body)
+            }
+            continue
+        }
+
+        var heading = trimmed.match(/^(#{1,4})\s+(.+)$/)
+        if (heading) {
+            flushParagraph()
+            flushList()
+            var size = Math.max(14, 20 - heading[1].length)
+            html.push("<h3 style=\"margin:4px 0 6px 0; font-size:" + size + "px;\">" + renderInlineMarkdown(heading[2]) + "</h3>")
+            continue
+        }
+
+        var quote = trimmed.match(/^>\s?(.*)$/)
+        if (quote) {
+            flushParagraph()
+            flushList()
+            html.push("<blockquote style=\"margin:0 0 6px 0; padding-left:9px; color:#5d6b7f; border-left:3px solid #c5d4ea;\">"
+                      + renderInlineMarkdown(quote[1]) + "</blockquote>")
+            continue
+        }
+
+        var bullet = trimmed.match(/^[-*+]\s+(.+)$/)
+        var ordered = trimmed.match(/^\d+[.)]\s+(.+)$/)
+        if (bullet || ordered) {
+            flushParagraph()
+            var nextOrdered = !!ordered
+            if (listItems.length > 0 && orderedList !== nextOrdered) {
+                flushList()
+            }
+            orderedList = nextOrdered
+            listItems.push("<li>" + renderInlineMarkdown((bullet || ordered)[1]) + "</li>")
+            continue
+        }
+
+        paragraph.push(line)
+    }
+
+    flushParagraph()
+    flushList()
+    flushMath()
+
+    return "<html><body style=\"margin:0; padding:0; background:transparent;\">" + html.join("") + "</body></html>"
+}

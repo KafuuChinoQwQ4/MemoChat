@@ -47,6 +47,7 @@ RUNTIME_FILES = (
     "AgentGameRuntime.js",
     "AgentMarkdownRuntime.js",
     "AgentPaneRuntime.js",
+    "AgentProviderRuntime.js",
 )
 
 

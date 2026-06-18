@@ -22,7 +22,7 @@ SessionLogoutPort AppPortRegistry::makeSessionLogoutPort()
     port.resetPresenceSurfaces = [this]()
     {
         _features.callController.resetCallSurface();
-        _features.petController.stopStream();
+        _features.petController.resetForLogout();
     };
     port.resetConnectionRuntime = [this]()
     {

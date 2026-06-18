@@ -9,6 +9,15 @@ import httpx
 from .base import BaseLLM, LLMMessage, LLMResponse, LLMStreamChunk, LLMUsage
 
 
+def _moonshot_chat_payload(model_name: str, messages: list[LLMMessage], stream: bool, **kwargs) -> dict:
+    return {
+        "model": model_name,
+        "messages": [{"role": message.role, "content": message.content} for message in messages],
+        "stream": stream,
+        "max_completion_tokens": kwargs.get("max_tokens", 2048),
+    }
+
+
 class KimiLLM(BaseLLM):
     _instance: "KimiLLM | None" = None
 
@@ -29,13 +38,7 @@ class KimiLLM(BaseLLM):
 
     async def chat(self, messages: list[LLMMessage], **kwargs) -> LLMResponse:
         client = await self._get_client()
-        payload = {
-            "model": self.model_name,
-            "messages": self._messages_to_dict(messages),
-            "stream": False,
-            "temperature": kwargs.get("temperature", 0.7),
-            "max_tokens": kwargs.get("max_tokens", 2048),
-        }
+        payload = _moonshot_chat_payload(self.model_name, messages, False, **kwargs)
 
         try:
             resp = await client.post(f"{self.base_url}/chat/completions", json=payload)
@@ -57,19 +60,14 @@ class KimiLLM(BaseLLM):
                 finish_reason=choice.get("finish_reason", ""),
             )
         except httpx.HTTPStatusError as e:
-            raise RuntimeError(f"Kimi HTTP error: {e.response.status_code}")
+            error_body = e.response.text[:500] if e.response is not None else ""
+            raise RuntimeError(f"Kimi HTTP error: {e.response.status_code} {error_body}".strip())
         except Exception as e:
             raise RuntimeError(f"Kimi request failed: {e}")
 
     async def chat_stream(self, messages: list[LLMMessage], **kwargs) -> AsyncIterator[LLMStreamChunk]:
         client = await self._get_client()
-        payload = {
-            "model": self.model_name,
-            "messages": self._messages_to_dict(messages),
-            "stream": True,
-            "temperature": kwargs.get("temperature", 0.7),
-            "max_tokens": kwargs.get("max_tokens", 2048),
-        }
+        payload = _moonshot_chat_payload(self.model_name, messages, True, **kwargs)
 
         async with client.stream("POST", f"{self.base_url}/chat/completions", json=payload) as resp:
             resp.raise_for_status()

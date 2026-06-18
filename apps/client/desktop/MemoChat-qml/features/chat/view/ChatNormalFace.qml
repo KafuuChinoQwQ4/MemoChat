@@ -103,6 +103,8 @@ RowLayout {
             chatViewModel: root.chatViewModel
             currentTab: root.chatViewModel.chatTab
             currentDialogUid: root.chatViewModel.currentDialogUid
+            currentUserUid: shell.currentUserUid
+            currentUserId: shell.currentUserId
             dialogsReady: root.chatViewModel.dialogsReady
             contactsReady: contact.contactsReady
             groupsReady: group.groupsReady
@@ -168,6 +170,11 @@ RowLayout {
             onAgentSessionDeleted: function(sessionId) {
                 if (agent) {
                     agent.deleteSession(sessionId)
+                }
+            }
+            onAgentSessionRenamed: function(sessionId, title) {
+                if (agent) {
+                    agent.renameSession(sessionId, title)
                 }
             }
             onAgentGameRoomDeleted: function(roomId) {

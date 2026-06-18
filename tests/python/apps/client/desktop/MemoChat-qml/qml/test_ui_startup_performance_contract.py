@@ -337,6 +337,14 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
         self.assertIn("defaultModelPath()", official_source)
         self.assertIn("resolveModelPath(inputModelPath)", official_source)
 
+    def test_live2d_render_item_treats_empty_model_as_no_model(self):
+        source = read(LIVE2D_CPP)
+
+        self.assertIn("QString emptyStatus()", source)
+        self.assertIn("_model_path.trimmed().isEmpty()", source)
+        self.assertIn("reportStatus(emptyStatus(), QString())", source)
+        self.assertIn("functions->glClear(GL_COLOR_BUFFER_BIT)", source)
+
     def test_main_cpp_forces_opengl_backend_for_official_live2d_renderer(self):
         source = read(MAIN_PLATFORM_BOOTSTRAP_CPP)
 

@@ -121,6 +121,17 @@ public:
         return _stub->DeleteSession(&ctx, req, reply);
     }
 
+    grpc::Status
+    makeUpdateSessionCall(int32_t uid, const std::string& session_id, const std::string& title, ai::AISessionRsp* reply)
+    {
+        grpc::ClientContext ctx;
+        ai::AIUpdateSessionReq req;
+        req.set_uid(uid);
+        req.set_session_id(session_id);
+        req.set_title(title);
+        return _stub->UpdateSession(&ctx, req, reply);
+    }
+
     grpc::Status makeListModelsCall(ai::AIListModelsRsp* reply)
     {
         grpc::ClientContext ctx;
@@ -536,6 +547,37 @@ memochat::json::JsonValue AIServiceClient::DeleteSession(int32_t uid, const std:
 
     root["code"] = reply.code();
     root["message"] = reply.message();
+    return root;
+}
+
+memochat::json::JsonValue
+AIServiceClient::UpdateSession(int32_t uid, const std::string& session_id, const std::string& title)
+{
+    ai::AISessionRsp reply;
+    auto status = _impl->makeUpdateSessionCall(uid, session_id, title, &reply);
+
+    memochat::json::JsonValue root;
+    if (!status.ok())
+    {
+        root["code"] = 500;
+        root["message"] = "AIServer unavailable";
+        return root;
+    }
+
+    root["code"] = reply.code();
+    root["message"] = reply.message();
+    if (reply.has_session())
+    {
+        const auto& s = reply.session();
+        memochat::json::JsonValue session;
+        session["session_id"] = s.session_id();
+        session["title"] = s.title();
+        session["model_type"] = s.model_type();
+        session["model_name"] = s.model_name();
+        session["created_at"] = static_cast<double>(s.created_at());
+        session["updated_at"] = static_cast<double>(s.updated_at());
+        root["session"] = std::move(session);
+    }
     return root;
 }
 

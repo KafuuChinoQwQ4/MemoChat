@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick 2.15
-import "qrc:/qml/components"
 import "."
 
 Item {
@@ -35,6 +34,7 @@ Item {
     property bool canEdit: false
     property bool canRevoke: false
     property bool showRevokeExpiredHint: false
+
     signal openUrlRequested(string url)
     signal replyRequested(string msgId, string senderName, string previewText)
     signal mentionRequested(string mentionText)
@@ -59,6 +59,7 @@ Item {
         }
         return content
     }
+    readonly property string rowIdentity: msgId + "|" + msgType + "|" + content + "|" + fileName
     property int topSpacing: (showAvatar ? 8 : 2) + (showSenderName ? 16 : 0)
     property int bottomSpacing: 2
     readonly property bool imageBubble: msgType === "image"
@@ -72,8 +73,7 @@ Item {
     readonly property real imageContentMaxHeight: 240
     // Single source of truth for how wide an image body may render. The bubble
     // layout reserves this width (see bodyPreferredWidth), so the image body
-    // MUST use the same cap — otherwise a portrait image fits to the 240 height
-    // and a wider 280 cap, stretching the bubble taller/narrower than its box.
+    // must use the same cap.
     readonly property real imageContentRenderWidth: Math.min(imageContentMaxWidth, 180)
     readonly property real replyPreferredWidth: root.isReply
         ? Math.min(root.bubbleContentMaxWidth,
@@ -95,15 +95,27 @@ Item {
         root.bubbleMaxWidth,
         Math.max(root.bubbleMinWidth,
                  Math.max(root.replyPreferredWidth, root.bodyPreferredWidth) + root.bubbleHorizontalPadding * 2))
+    readonly property real bubbleX: root.outgoing
+        ? Math.max(0, root.width - root.avatarSlotWidth - root.bubblePreferredWidth)
+        : root.avatarSlotWidth
+    readonly property real bubbleY: root.timeDividerHeight + root.topSpacing
     readonly property real translationPreferredWidth: Math.min(
         root.bubbleMaxWidth,
         Math.max(120, translationTextMeasure.advanceWidth + 22))
     readonly property real messageHeight: Math.max(bubble.implicitHeight, showAvatar ? avatarSize : 0)
-    readonly property int translationHeight: translationText.length > 0 ? (translationBubble.implicitHeight + 6) : 0
+    readonly property int translationHeight: meta.translationBlockHeight
     readonly property int timeDividerHeight: root.showTimeDivider ? 32 : 0
-    readonly property int stateLabelHeight: stateBadge.active ? 16 : 0
+    readonly property int stateLabelHeight: meta.stateBlockHeight
 
     height: timeDividerHeight + topSpacing + messageHeight + translationHeight + stateLabelHeight + bottomSpacing
+
+    onRowIdentityChanged: resetTransientState()
+
+    function resetTransientState() {
+        if (actionMenu.opened) {
+            actionMenu.close()
+        }
+    }
 
     function openActionMenuAtBubblePoint(pointX, pointY) {
         const boundaryItem = ListView.view ? ListView.view : root
@@ -112,12 +124,8 @@ Item {
         actionMenu.openAt(listPoint.x, listPoint.y, boundaryItem.width, boundaryItem.height)
     }
 
-    // Text width measurers. TextMetrics computes width SYNCHRONOUSLY when text
-    // changes, unlike a hidden Text whose implicitWidth updates on a deferred
-    // scene-graph polish pass. With ListView reuseItems:true, fast scrolling
-    // rebinds a recycled delegate faster than a Text would re-layout, so a short
-    // message briefly sampled the previous (longer) message's stale implicitWidth
-    // and the bubble rendered stretched. TextMetrics has no such transient.
+    // Text width measurers keep bubble sizing independent from rendered Text
+    // implicitWidth, which avoids feedback from a reused row's visual item.
     TextMetrics {
         id: textMeasure
         text: root.content
@@ -204,215 +212,42 @@ Item {
         }
     }
 
-    Rectangle {
+    ChatMessageBubble {
         id: bubble
-        width: root.bubblePreferredWidth
-        height: implicitHeight
-        implicitHeight: bubbleColumn.implicitHeight + root.bubbleVerticalPadding * 2
-        radius: 10
-        color: root.outgoing ? Qt.rgba(0.62, 0.80, 1.0, 0.52) : Qt.rgba(1, 1, 1, 0.50)
-        border.color: root.outgoing ? Qt.rgba(0.44, 0.67, 0.95, 0.82) : Qt.rgba(1, 1, 1, 0.66)
-        anchors.top: parent.top
-        anchors.topMargin: root.timeDividerHeight + root.topSpacing
-        anchors.right: root.outgoing ? parent.right : undefined
-        anchors.rightMargin: root.outgoing ? root.avatarSlotWidth : 0
-        anchors.left: root.outgoing ? undefined : parent.left
-        anchors.leftMargin: root.outgoing ? 0 : root.avatarSlotWidth
-
-        Column {
-            id: bubbleColumn
-            anchors.fill: parent
-            anchors.leftMargin: root.bubbleHorizontalPadding
-            anchors.rightMargin: root.bubbleHorizontalPadding
-            anchors.topMargin: root.bubbleVerticalPadding
-            anchors.bottomMargin: root.bubbleVerticalPadding
-            spacing: root.isReply ? 6 : 0
-
-            Rectangle {
-                visible: root.isReply
-                width: Math.min(root.bubbleContentMaxWidth, replyColumn.implicitWidth + 10)
-                height: replyColumn.implicitHeight + 8
-                radius: 6
-                color: Qt.rgba(0.25, 0.33, 0.46, 0.14)
-                border.color: Qt.rgba(0.44, 0.60, 0.82, 0.40)
-
-                Column {
-                    id: replyColumn
-                    anchors.fill: parent
-                    anchors.margins: 4
-                    spacing: 1
-
-                    Text {
-                        text: root.replySender.length > 0 ? ("回复 " + root.replySender) : "回复"
-                        color: "#4f6788"
-                        font.pixelSize: 11
-                        font.bold: true
-                    }
-                    Text {
-                        text: root.replyPreview
-                        color: "#60718a"
-                        font.pixelSize: 11
-                        wrapMode: Text.Wrap
-                        elide: Text.ElideRight
-                        maximumLineCount: 2
-                    }
-                }
-            }
-
-            Loader {
-                id: contentItem
-                sourceComponent: {
-                    if (root.msgType === "image") {
-                        return imageComp
-                    }
-                    if (root.msgType === "file") {
-                        return fileComp
-                    }
-                    if (root.msgType === "call") {
-                        return callComp
-                    }
-                    return textComp
-                }
-            }
-        }
-
-        TapHandler {
-            acceptedButtons: Qt.RightButton
-            enabled: root.enableContextMenu
-            onTapped: function(eventPoint, button) {
-                if (button !== Qt.RightButton) {
-                    return
-                }
-                if (!root.enableContextMenu) {
-                    return
-                }
-                root.openActionMenuAtBubblePoint(eventPoint.position.x, eventPoint.position.y)
-            }
-        }
-    }
-
-    Text {
-        visible: root.showSenderName
-        anchors.left: root.outgoing ? undefined : bubble.left
-        anchors.right: root.outgoing ? bubble.right : undefined
-        anchors.bottom: bubble.top
-        anchors.bottomMargin: 2
-        text: root.senderName
-        color: "#4f6078"
-        font.pixelSize: 11
-    }
-
-    Rectangle {
-        id: translationBubble
-        visible: root.translationText.length > 0
-        width: root.translationPreferredWidth
-        height: implicitHeight
-        implicitHeight: translationColumn.implicitHeight + 14
-        radius: 9
-        color: Qt.rgba(0.89, 0.94, 1.0, 0.54)
-        border.color: Qt.rgba(0.42, 0.62, 0.86, 0.38)
-        anchors.top: bubble.bottom
-        anchors.topMargin: 6
-        anchors.right: root.outgoing ? parent.right : undefined
-        anchors.rightMargin: root.outgoing ? root.avatarSlotWidth : 0
-        anchors.left: root.outgoing ? undefined : parent.left
-        anchors.leftMargin: root.outgoing ? 0 : root.avatarSlotWidth
-
-        Column {
-            id: translationColumn
-            anchors.fill: parent
-            anchors.margins: 7
-            spacing: 3
-
-            Text {
-                text: "翻译"
-                color: "#4f6788"
-                font.pixelSize: 10
-                font.bold: true
-            }
-
-            Text {
-                id: translationTextItem
-                text: root.translationText
-                width: Math.min(root.bubbleContentMaxWidth, implicitWidth)
-                wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-                color: "#253247"
-                font.pixelSize: 13
-            }
-        }
-    }
-
-    ChatMessageStatusBadge {
-        id: stateBadge
+        bubbleWidth: root.bubblePreferredWidth
+        contentMaxWidth: root.bubbleContentMaxWidth
+        imageMaxWidth: root.imageContentRenderWidth
+        imageMaxHeight: root.imageContentMaxHeight
+        horizontalPadding: root.bubbleHorizontalPadding
+        verticalPadding: root.bubbleVerticalPadding
         outgoing: root.outgoing
+        isReply: root.isReply
+        msgType: root.msgType
+        content: root.content
+        fileName: root.fileName
+        replySender: root.replySender
+        replyPreview: root.replyPreview
+        enableContextMenu: root.enableContextMenu
+        x: root.bubbleX
+        y: root.bubbleY
+        onOpenUrlRequested: function(url) { root.openUrlRequested(url) }
+        onContextMenuRequested: function(pointX, pointY) { root.openActionMenuAtBubblePoint(pointX, pointY) }
+    }
+
+    ChatMessageMeta {
+        id: meta
+        anchors.fill: parent
+        outgoing: root.outgoing
+        showSenderName: root.showSenderName
+        senderName: root.senderName
+        translationText: root.translationText
         messageState: root.messageState
-        anchors.right: bubble.right
-        anchors.top: root.translationText.length > 0 ? translationBubble.bottom : bubble.bottom
-        anchors.topMargin: 3
-    }
-
-    Component {
-        id: textComp
-        ChatMessageTextBody {
-            messageText: root.content
-            maxWidth: root.bubbleContentMaxWidth
-        }
-    }
-
-    Component {
-        id: imageComp
-        ChatMessageImageBody {
-            imageSource: root.content
-            maxWidth: root.imageContentRenderWidth
-            maxHeight: root.imageContentMaxHeight
-        }
-    }
-
-    Component {
-        id: fileComp
-        ChatMessageFileBody {
-            fileName: root.fileName
-            maxWidth: root.bubbleContentMaxWidth
-            width: implicitWidth
-            height: implicitHeight
-            onOpenRequested: root.openUrlRequested(root.content)
-        }
-    }
-
-    Component {
-        id: callComp
-        Rectangle {
-            color: "transparent"
-            width: implicitWidth
-            height: implicitHeight
-            implicitWidth: Math.min(root.bubbleContentMaxWidth, 220)
-            implicitHeight: 62
-
-            Column {
-                anchors.fill: parent
-                spacing: 6
-
-                Text {
-                    text: root.fileName.length > 0 ? root.fileName : "通话邀请"
-                    color: "#233247"
-                    font.pixelSize: 14
-                    font.bold: true
-                }
-
-                GlassButton {
-                    text: "加入通话"
-                    implicitWidth: 92
-                    implicitHeight: 30
-                    cornerRadius: 8
-                    normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
-                    hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
-                    pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
-                    disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
-                    enabled: root.content.length > 0
-                    onClicked: root.openUrlRequested(root.content)
-                }
-            }
-        }
+        bubbleX: bubble.x
+        bubbleY: bubble.y
+        bubbleWidth: bubble.width
+        bubbleHeight: bubble.height
+        contentMaxWidth: root.bubbleContentMaxWidth
+        translationPreferredWidth: root.translationPreferredWidth
     }
 
     ChatMessageActionMenu {

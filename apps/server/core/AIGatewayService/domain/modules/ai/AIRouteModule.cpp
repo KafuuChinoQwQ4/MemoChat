@@ -51,6 +51,13 @@ void AIRouteModule::RegisterRoutes(memochat::gate::routing::RouteRegistry& regis
             return memochat::gate::services::ai::AIService::Instance().HandleDeleteSession(request, response);
         });
     registry.Register(
+        "POST",
+        "/ai/session/update",
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::ai::AIService::Instance().HandleUpdateSession(request, response);
+        });
+    registry.Register(
         "GET",
         "/ai/model/list",
         [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)

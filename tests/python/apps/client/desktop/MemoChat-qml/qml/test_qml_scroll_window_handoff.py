@@ -9,6 +9,9 @@ CHAT_LEFT_PANEL = CHAT_FEATURE_VIEW / "ChatLeftPanel.qml"
 CHAT_CONVERSATION = CHAT_FEATURE_VIEW / "ChatConversationPane.qml"
 CHAT_MESSAGE_LIST_VIEW = CHAT_FEATURE_VIEW / "conversation/ChatMessageListView.qml"
 CHAT_MESSAGE_DELEGATE = CHAT_FEATURE_VIEW / "conversation/ChatMessageDelegate.qml"
+CHAT_MESSAGE_BUBBLE = CHAT_FEATURE_VIEW / "conversation/ChatMessageBubble.qml"
+CHAT_MESSAGE_BODY_LOADER = CHAT_FEATURE_VIEW / "conversation/ChatMessageBodyLoader.qml"
+CHAT_MESSAGE_META = CHAT_FEATURE_VIEW / "conversation/ChatMessageMeta.qml"
 MOMENTS_FEED = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/moments/view/MomentsFeedPane.qml"
 MOMENTS_DELEGATE = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/moments/view/MomentsDelegate.qml"
 MAIN_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/qml/app/Main.qml"
@@ -66,10 +69,25 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
         self.assertIn("ChatMessageListView", conversation)
         self.assertIn("interactive: contentHeight > height", message_list_source)
         self.assertIn("boundsBehavior: Flickable.StopAtBounds", message_list_source)
+        self.assertIn("reuseItems: true", message_list_source)
         message_list_block = message_list_source[
             message_list_source.index("id: messageList") : message_list_source.index("delegate: ChatMessageDelegate")
         ]
         self.assertNotIn("WheelHandler", message_list_block)
+
+    def test_chat_message_delegate_is_split_for_reuse_safe_rows(self):
+        delegate = CHAT_MESSAGE_DELEGATE.read_text(encoding="utf-8")
+        message_list_source = CHAT_MESSAGE_LIST_VIEW.read_text(encoding="utf-8")
+
+        self.assertIn("reuseItems: true", message_list_source)
+        self.assertIn("ChatMessageBubble", delegate)
+        self.assertIn("ChatMessageMeta", delegate)
+        self.assertIn("function resetTransientState()", delegate)
+        self.assertIn("onRowIdentityChanged: resetTransientState()", delegate)
+        self.assertIn("actionMenu.close()", delegate)
+        for token in ("ChatMessageTextBody", "ChatMessageImageBody", "ChatMessageFileBody", "GlassButton"):
+            with self.subTest(token=token):
+                self.assertNotIn(token, delegate)
 
     def test_moments_feed_has_scrollable_stable_delegate_height(self):
         feed = MOMENTS_FEED.read_text(encoding="utf-8")
@@ -83,25 +101,45 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
 
     def test_chat_bubbles_bind_actual_geometry(self):
         delegate = CHAT_MESSAGE_DELEGATE.read_text(encoding="utf-8")
+        bubble = CHAT_MESSAGE_BUBBLE.read_text(encoding="utf-8")
+        body_loader = CHAT_MESSAGE_BODY_LOADER.read_text(encoding="utf-8")
+        meta = CHAT_MESSAGE_META.read_text(encoding="utf-8")
 
-        bubble_start = delegate.index("id: bubble")
-        translation_start = delegate.index("id: translationBubble")
-        file_start = delegate.index("id: fileComp")
-        call_start = delegate.index("id: callComp")
-
+        self.assertIn("readonly property real bubblePreferredWidth", delegate)
         self.assertIn("id: textMeasure", delegate)
         self.assertIn("id: fileMeasure", delegate)
         self.assertIn("id: translationTextMeasure", delegate)
-        self.assertIn("readonly property real bubblePreferredWidth", delegate)
-        self.assertIn("width: root.bubblePreferredWidth", delegate[bubble_start:translation_start])
-        self.assertNotIn("bubbleColumn.implicitWidth", delegate)
-        self.assertIn("height: implicitHeight", delegate[bubble_start:translation_start])
-        self.assertIn("width: root.translationPreferredWidth", delegate[translation_start:file_start])
-        self.assertIn("height: implicitHeight", delegate[translation_start:file_start])
-        self.assertIn("width: implicitWidth", delegate[file_start:call_start])
-        self.assertIn("height: implicitHeight", delegate[file_start:call_start])
-        self.assertIn("width: implicitWidth", delegate[call_start:])
-        self.assertIn("height: implicitHeight", delegate[call_start:])
+        self.assertIn("readonly property real bubbleX", delegate)
+        self.assertIn("readonly property real bubbleY", delegate)
+        self.assertIn("bubbleWidth: root.bubblePreferredWidth", delegate)
+        self.assertNotIn("ChatMessageTextBody", delegate)
+        self.assertNotIn("ChatMessageFileBody", delegate)
+        self.assertNotIn("ChatMessageImageBody", delegate)
+
+        delegate_bubble_block = delegate[
+            delegate.index("ChatMessageBubble {") : delegate.index("ChatMessageMeta {")
+        ]
+        self.assertIn("x: root.bubbleX", delegate_bubble_block)
+        self.assertIn("y: root.bubbleY", delegate_bubble_block)
+        self.assertNotIn("anchors.left", delegate_bubble_block)
+        self.assertNotIn("anchors.right", delegate_bubble_block)
+
+        self.assertIn("width: root.bubbleWidth", bubble)
+        self.assertIn("height: implicitHeight", bubble)
+        self.assertIn("implicitHeight: bubbleColumn.implicitHeight + root.verticalPadding * 2", bubble)
+        self.assertNotIn("bubbleColumn.implicitWidth", bubble)
+
+        self.assertIn("sourceComponent: bodyComponent()", body_loader)
+        self.assertIn("ChatMessageTextBody", body_loader)
+        self.assertIn("ChatMessageImageBody", body_loader)
+        self.assertIn("ChatMessageFileBody", body_loader)
+        self.assertIn("width: implicitWidth", body_loader)
+        self.assertIn("height: implicitHeight", body_loader)
+
+        self.assertIn("id: translationBubble", meta)
+        self.assertIn("width: root.translationPreferredWidth", meta)
+        self.assertIn("height: implicitHeight", meta)
+        self.assertIn("ChatMessageStatusBadge", meta)
 
     def test_login_and_chat_use_mutually_exclusive_top_level_windows(self):
         for path in (MAIN_QML, LINUX_MAIN_QML):

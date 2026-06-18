@@ -84,6 +84,12 @@ message AIDeleteSessionRsp {
     string message = 2;
 }
 
+message AIUpdateSessionReq {
+    int32 uid = 1;
+    string session_id = 2;
+    string title = 3;
+}
+
 // =============================================================================
 // 智能功能
 // =============================================================================
@@ -346,6 +352,7 @@ service AIService {
     rpc CreateSession(AICreateSessionReq) returns (AISessionRsp) {}
     rpc ListSessions(AICreateSessionReq) returns (AISessionRsp) {}
     rpc DeleteSession(AIDeleteSessionReq) returns (AIDeleteSessionRsp) {}
+    rpc UpdateSession(AIUpdateSessionReq) returns (AISessionRsp) {}
 
     // 模型列表
     rpc ListModels(AIListModelsReq) returns (AIListModelsRsp) {}

@@ -12,7 +12,7 @@ void PetController::startSession()
     setError({});
     setBusy(true, QStringLiteral("正在连接桌宠"));
     QJsonObject payload = authPayload();
-    payload[QStringLiteral("profile_id")] = QStringLiteral("default");
+    payload[QStringLiteral("profile_id")] = accountProfileId();
     payload[QStringLiteral("persona")] = QStringLiteral("memo-pet");
     payload[QStringLiteral("provider")] = QStringLiteral("scripted");
     postJson(petUrl(QStringLiteral("/sessions")), payload, QStringLiteral("create_session"));

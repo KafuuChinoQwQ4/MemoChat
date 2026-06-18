@@ -32,6 +32,11 @@ QString errorStatus()
     return QStringLiteral("error");
 }
 
+QString emptyStatus()
+{
+    return QStringLiteral("empty");
+}
+
 class Live2DFboRenderer final : public QQuickFramebufferObject::Renderer
 {
 public:
@@ -86,6 +91,18 @@ public:
             QOpenGLContext::currentContext() ? QOpenGLContext::currentContext()->functions() : nullptr;
         if (!functions)
         {
+            return;
+        }
+
+        if (_model_path.trimmed().isEmpty())
+        {
+            _official_renderer.reset();
+            _render_error.clear();
+            functions->glViewport(0, 0, _item_size.width(), _item_size.height());
+            functions->glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+            functions->glClear(GL_COLOR_BUFFER_BIT);
+            QQuickOpenGLUtils::resetOpenGLState();
+            reportStatus(emptyStatus(), QString());
             return;
         }
 

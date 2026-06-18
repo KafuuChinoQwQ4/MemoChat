@@ -176,6 +176,8 @@ Item {
             Live2DCharacterPane {
                 backdrop: root.backdrop
                 petController: pet
+                currentUserUid: shell.currentUserUid
+                currentUserId: shell.currentUserId
                 onPetPreviewRequested: function(petAssetSettings) {
                     root.petPreviewRequested(petAssetSettings)
                 }

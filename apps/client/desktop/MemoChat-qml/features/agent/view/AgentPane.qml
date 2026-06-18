@@ -371,6 +371,7 @@ Rectangle {
                 errorMsg: root.errorMsg
                 sessions: root.sessions
                 currentSessionId: root.currentSessionId
+                currentModel: root.currentModel
                 selfAvatar: root.selfAvatar
             }
 

@@ -10,6 +10,7 @@ import structlog
 from config import settings
 from harness.cache.semantic_cache import SemanticCacheHit, SemanticCacheService
 from harness.contracts import GuardrailResult, HarnessRunResult, ToolObservation, TraceEvent
+from harness.orchestration.agent_graph import AgentGraphState, AgentTurnGraph
 from harness.ports import (
     FeedbackPort,
     GuardrailPort,
@@ -207,6 +208,11 @@ class AgentHarnessService:
         self._feedback_evaluator = feedback_evaluator
         self._guardrail_service = guardrail_service
         self._semantic_cache = semantic_cache
+        self._turn_graph = AgentTurnGraph(self)
+
+    @property
+    def orchestration_backend(self) -> str:
+        return self._turn_graph.backend
 
     async def _add_guardrail_event(self, trace_id: str, name: str, results: list[GuardrailResult]) -> None:
         started_at = _now_ms()
@@ -366,134 +372,9 @@ class AgentHarnessService:
         except AttributeError:
             return []
 
-    async def _run_react_followup(
-        self,
-        trace_id: str,
-        request,
-        skill,
-        plan_steps,
-        observations: list[ToolObservation],
-        langsmith_metadata: dict | None = None,
-    ) -> list[ToolObservation]:
-        build_followup = getattr(self._planner, "build_react_followup_plan", None)
-        if build_followup is None:
-            return observations
-
-        all_steps = list(plan_steps)
-        all_observations = list(observations)
-        max_rounds = max(settings.harness.max_tool_rounds - len(all_steps), 0)
-        assess = getattr(self._planner, "assess_react_observations", None)
-
-        for round_index in range(1, max_rounds + 1):
-            assessment = assess(request, skill, all_steps, all_observations) if assess is not None else {}
-            if assessment:
-                observe_started = _now_ms()
-                await self._trace_store.add_event(
-                    trace_id,
-                    TraceEvent(
-                        layer="orchestration",
-                        name="react_observe",
-                        status="ok",
-                        summary=(
-                            f"round={round_index}, confidence={assessment.get('confidence', '')}, "
-                            f"needs_followup={assessment.get('needs_followup', False)}"
-                        ),
-                        detail=str(assessment),
-                        started_at=observe_started,
-                        finished_at=_now_ms(),
-                        metadata={"round": round_index, **assessment},
-                    ),
-                )
-
-            followup_steps = build_followup(request, skill, all_steps, all_observations)
-            remaining_steps = max(settings.harness.max_tool_rounds - len(all_steps), 0)
-            followup_steps = followup_steps[:remaining_steps]
-            if not followup_steps:
-                break
-
-            plan_started = _now_ms()
-            await self._trace_store.add_event(
-                trace_id,
-                TraceEvent(
-                    layer="orchestration",
-                    name="react_plan",
-                    status="ok",
-                    summary=f"round={round_index}, followup_steps={len(followup_steps)}",
-                    detail=str([step.to_dict() for step in followup_steps]),
-                    started_at=plan_started,
-                    finished_at=_now_ms(),
-                    metadata={
-                        "round": round_index,
-                        "base_steps": len(all_steps),
-                        "observation_count": len(all_observations),
-                        "method": "plan_execute_plus_react",
-                        "assessment": assessment,
-                    },
-                ),
-            )
-
-            followup_guardrails = self._guardrail_service.check_tool_plan(request, followup_steps, self._tool_specs())
-            await self._add_guardrail_event(trace_id, f"react_tool_plan_round_{round_index}", followup_guardrails)
-            if self._guardrail_service.has_blocking(followup_guardrails):
-                break
-
-            execution_started = _now_ms()
-            with trace_context(
-                "agent_react_tool_followup",
-                run_type="tool",
-                inputs={
-                    "uid": request.uid,
-                    "content": request.content,
-                    "round": round_index,
-                    "followup_steps": [step.to_dict() for step in followup_steps],
-                },
-                metadata={**(langsmith_metadata or {}), "react_round": round_index},
-                tags=["agent", "tools", "react"],
-            ) as tool_run:
-                try:
-                    followup_observations = await self._tool_executor.execute(
-                        uid=request.uid,
-                        content=request.content,
-                        plan_steps=followup_steps,
-                        target_lang=getattr(request, "target_lang", ""),
-                        requested_tools=getattr(request, "requested_tools", []),
-                        tool_arguments=getattr(request, "tool_arguments", {}),
-                    )
-                    set_run_output(
-                        tool_run,
-                        {
-                            "round": round_index,
-                            "observation_count": len(followup_observations),
-                            "tools": [obs.name for obs in followup_observations],
-                        },
-                    )
-                except Exception as exc:
-                    set_run_error(tool_run, exc)
-                    raise
-
-            all_steps.extend(followup_steps)
-            all_observations.extend(followup_observations)
-            await self._trace_store.add_event(
-                trace_id,
-                TraceEvent(
-                    layer="execution",
-                    name="react_tool_execution",
-                    status="ok",
-                    summary=f"round={round_index}, observations={len(followup_observations)}",
-                    detail="\n".join(observation.to_summary() for observation in followup_observations),
-                    started_at=execution_started,
-                    finished_at=_now_ms(),
-                    metadata={
-                        "round": round_index,
-                        "method": "react_followup",
-                        "step_count": len(followup_steps),
-                    },
-                ),
-            )
-
-        return all_observations
-
-    async def _prepare_turn(self, request, route: str) -> _PreparedTurn | _EarlyTurnResult:
+    async def graph_start_trace(self, state: AgentGraphState) -> AgentGraphState:
+        request = state["request"]
+        route = state["route"]
         session_id = getattr(request, "session_id", "") or uuid.uuid4().hex
         skill = self._planner.resolve_skill(request)
         plan_steps = self._planner.build_plan(request, skill)
@@ -523,9 +404,25 @@ class AgentHarnessService:
                 detail=str([step.to_dict() for step in plan_steps]),
                 started_at=_now_ms(),
                 finished_at=_now_ms(),
+                metadata={"graph_backend": self._turn_graph.backend, "graph_node": "start_trace"},
             ),
         )
+        return {
+            **state,
+            "session_id": session_id,
+            "skill": skill,
+            "plan_steps": plan_steps,
+            "trace": trace,
+            "langsmith_metadata": langsmith_metadata,
+        }
 
+    async def graph_input_guardrails(self, state: AgentGraphState) -> AgentGraphState:
+        request = state["request"]
+        session_id = state["session_id"]
+        skill = state["skill"]
+        plan_steps = state["plan_steps"]
+        trace = state["trace"]
+        langsmith_metadata = state["langsmith_metadata"]
         with trace_context(
             "agent_input_guardrails",
             run_type="chain",
@@ -539,30 +436,47 @@ class AgentHarnessService:
             )
             await self._add_guardrail_event(trace.trace_id, "input", input_guardrails)
         if self._guardrail_service.has_blocking(input_guardrails):
-            return _EarlyTurnResult(
-                await self._finish_blocked_run(
+            return {
+                **state,
+                "early_result": await self._finish_blocked_run(
                     trace.trace_id,
                     session_id,
                     skill.name,
                     "input",
                     input_guardrails,
-                )
-            )
+                ),
+            }
+        return state
 
+    async def graph_semantic_cache(self, state: AgentGraphState) -> AgentGraphState:
+        request = state["request"]
+        session_id = state["session_id"]
+        skill = state["skill"]
+        plan_steps = state["plan_steps"]
+        trace = state["trace"]
         semantic_lookup = None
         if self._semantic_cache is not None:
             semantic_lookup = await self._semantic_cache.lookup(request, skill, plan_steps)
             if semantic_lookup.hit is not None:
-                return _EarlyTurnResult(
-                    await self._finish_semantic_cache_hit(
+                return {
+                    **state,
+                    "semantic_lookup": semantic_lookup,
+                    "early_result": await self._finish_semantic_cache_hit(
                         trace.trace_id,
                         session_id,
                         skill.name,
                         request,
                         semantic_lookup.hit,
-                    )
-                )
+                    ),
+                }
+        return {**state, "semantic_lookup": semantic_lookup}
 
+    async def graph_load_memory(self, state: AgentGraphState) -> AgentGraphState:
+        request = state["request"]
+        session_id = state["session_id"]
+        skill = state["skill"]
+        trace = state["trace"]
+        langsmith_metadata = state["langsmith_metadata"]
         memory_started = _now_ms()
         with trace_context(
             "agent_memory_load",
@@ -599,7 +513,15 @@ class AgentHarnessService:
                 metadata=_context_pack_metadata(memory_snapshot),
             ),
         )
+        return {**state, "memory_snapshot": memory_snapshot}
 
+    async def graph_tool_guardrails(self, state: AgentGraphState) -> AgentGraphState:
+        request = state["request"]
+        session_id = state["session_id"]
+        skill = state["skill"]
+        plan_steps = state["plan_steps"]
+        trace = state["trace"]
+        langsmith_metadata = state["langsmith_metadata"]
         with trace_context(
             "agent_tool_plan_guardrails",
             run_type="chain",
@@ -613,16 +535,24 @@ class AgentHarnessService:
             )
             await self._add_guardrail_event(trace.trace_id, "tool_plan", tool_guardrails)
         if self._guardrail_service.has_blocking(tool_guardrails):
-            return _EarlyTurnResult(
-                await self._finish_blocked_run(
+            return {
+                **state,
+                "early_result": await self._finish_blocked_run(
                     trace.trace_id,
                     session_id,
                     skill.name,
                     "tool_plan",
                     tool_guardrails,
-                )
-            )
+                ),
+            }
+        return state
 
+    async def graph_execute_tools(self, state: AgentGraphState) -> AgentGraphState:
+        request = state["request"]
+        skill = state["skill"]
+        plan_steps = state["plan_steps"]
+        trace = state["trace"]
+        langsmith_metadata = state["langsmith_metadata"]
         execution_started = _now_ms()
         with trace_context(
             "agent_tool_execution",
@@ -663,15 +593,175 @@ class AgentHarnessService:
                 finished_at=_now_ms(),
             ),
         )
-        observations = await self._run_react_followup(
-            trace.trace_id,
-            request,
-            skill,
-            plan_steps,
-            observations,
-            langsmith_metadata,
-        )
+        return {
+            **state,
+            "observations": observations,
+            "react_steps": list(plan_steps),
+            "react_round": 0,
+            "react_max_rounds": max(settings.harness.max_tool_rounds - len(plan_steps), 0),
+            "react_done": False,
+        }
 
+    async def graph_react_observe(self, state: AgentGraphState) -> AgentGraphState:
+        build_followup = getattr(self._planner, "build_react_followup_plan", None)
+        if build_followup is None:
+            return {**state, "react_done": True, "react_followup_steps": []}
+
+        round_index = int(state.get("react_round", 0) or 0) + 1
+        if round_index > int(state.get("react_max_rounds", 0) or 0):
+            return {**state, "react_done": True, "react_followup_steps": []}
+
+        request = state["request"]
+        skill = state["skill"]
+        all_steps = list(state.get("react_steps", state["plan_steps"]))
+        all_observations = list(state.get("observations", []))
+        assess = getattr(self._planner, "assess_react_observations", None)
+        assessment = assess(request, skill, all_steps, all_observations) if assess is not None else {}
+        if assessment:
+            observe_started = _now_ms()
+            await self._trace_store.add_event(
+                state["trace"].trace_id,
+                TraceEvent(
+                    layer="orchestration",
+                    name="react_observe",
+                    status="ok",
+                    summary=(
+                        f"round={round_index}, confidence={assessment.get('confidence', '')}, "
+                        f"needs_followup={assessment.get('needs_followup', False)}"
+                    ),
+                    detail=str(assessment),
+                    started_at=observe_started,
+                    finished_at=_now_ms(),
+                    metadata={"round": round_index, **assessment},
+                ),
+            )
+
+        remaining_steps = max(settings.harness.max_tool_rounds - len(all_steps), 0)
+        followup_steps = build_followup(request, skill, all_steps, all_observations)[:remaining_steps]
+        return {
+            **state,
+            "react_round": round_index,
+            "react_assessment": assessment,
+            "react_followup_steps": followup_steps,
+            "react_done": not bool(followup_steps),
+        }
+
+    async def graph_react_plan(self, state: AgentGraphState) -> AgentGraphState:
+        followup_steps = list(state.get("react_followup_steps", []))
+        if not followup_steps:
+            return {**state, "react_done": True}
+
+        plan_started = _now_ms()
+        await self._trace_store.add_event(
+            state["trace"].trace_id,
+            TraceEvent(
+                layer="orchestration",
+                name="react_plan",
+                status="ok",
+                summary=f"round={state.get('react_round', 0)}, followup_steps={len(followup_steps)}",
+                detail=str([step.to_dict() for step in followup_steps]),
+                started_at=plan_started,
+                finished_at=_now_ms(),
+                metadata={
+                    "round": state.get("react_round", 0),
+                    "base_steps": len(state.get("react_steps", state["plan_steps"])),
+                    "observation_count": len(state.get("observations", [])),
+                    "method": "plan_execute_plus_react",
+                    "assessment": state.get("react_assessment", {}),
+                },
+            ),
+        )
+        return state
+
+    async def graph_react_tool_guardrails(self, state: AgentGraphState) -> AgentGraphState:
+        followup_steps = list(state.get("react_followup_steps", []))
+        if not followup_steps:
+            return {**state, "react_done": True}
+
+        request = state["request"]
+        followup_guardrails = self._guardrail_service.check_tool_plan(request, followup_steps, self._tool_specs())
+        await self._add_guardrail_event(
+            state["trace"].trace_id,
+            f"react_tool_plan_round_{state.get('react_round', 0)}",
+            followup_guardrails,
+        )
+        if self._guardrail_service.has_blocking(followup_guardrails):
+            return {**state, "react_done": True, "react_followup_steps": []}
+        return state
+
+    async def graph_react_execute(self, state: AgentGraphState) -> AgentGraphState:
+        request = state["request"]
+        followup_steps = list(state.get("react_followup_steps", []))
+        if not followup_steps:
+            return {**state, "react_done": True}
+
+        round_index = int(state.get("react_round", 0) or 0)
+        execution_started = _now_ms()
+        with trace_context(
+            "agent_react_tool_followup",
+            run_type="tool",
+            inputs={
+                "uid": request.uid,
+                "content": request.content,
+                "round": round_index,
+                "followup_steps": [step.to_dict() for step in followup_steps],
+            },
+            metadata={**state["langsmith_metadata"], "react_round": round_index},
+            tags=["agent", "tools", "react"],
+        ) as tool_run:
+            try:
+                followup_observations = await self._tool_executor.execute(
+                    uid=request.uid,
+                    content=request.content,
+                    plan_steps=followup_steps,
+                    target_lang=getattr(request, "target_lang", ""),
+                    requested_tools=getattr(request, "requested_tools", []),
+                    tool_arguments=getattr(request, "tool_arguments", {}),
+                )
+                set_run_output(
+                    tool_run,
+                    {
+                        "round": round_index,
+                        "observation_count": len(followup_observations),
+                        "tools": [obs.name for obs in followup_observations],
+                    },
+                )
+            except Exception as exc:
+                set_run_error(tool_run, exc)
+                raise
+
+        observations = [*state.get("observations", []), *followup_observations]
+        react_steps = [*state.get("react_steps", state["plan_steps"]), *followup_steps]
+        await self._trace_store.add_event(
+            state["trace"].trace_id,
+            TraceEvent(
+                layer="execution",
+                name="react_tool_execution",
+                status="ok",
+                summary=f"round={round_index}, observations={len(followup_observations)}",
+                detail="\n".join(observation.to_summary() for observation in followup_observations),
+                started_at=execution_started,
+                finished_at=_now_ms(),
+                metadata={
+                    "round": round_index,
+                    "method": "react_followup",
+                    "step_count": len(followup_steps),
+                },
+            ),
+        )
+        return {
+            **state,
+            "observations": observations,
+            "react_steps": react_steps,
+            "react_followup_steps": [],
+            "react_done": False,
+        }
+
+    async def graph_build_messages(self, state: AgentGraphState) -> AgentGraphState:
+        request = state["request"]
+        skill = state["skill"]
+        memory_snapshot = state["memory_snapshot"]
+        observations = state["observations"]
         system_prompt = self._planner.build_system_prompt(skill, memory_snapshot, observations)
         user_prompt = self._planner.build_user_prompt(request, observations)
         messages = (
@@ -679,18 +769,125 @@ class AgentHarnessService:
             + memory_snapshot.as_messages()
             + [LLMMessage(role="user", content=user_prompt)]
         )
+        return {**state, "messages": messages}
 
+    async def _prepare_turn(self, request, route: str) -> _PreparedTurn | _EarlyTurnResult:
+        state = await self._turn_graph.run_prepare(request, route)
+        early_result = state.get("early_result")
+        if early_result is not None:
+            return _EarlyTurnResult(early_result)
+
+        return self._prepared_from_graph_state(state)
+
+    def _prepared_from_graph_state(self, state: AgentGraphState) -> _PreparedTurn:
         return _PreparedTurn(
-            session_id=session_id,
-            skill=skill,
-            plan_steps=plan_steps,
-            trace=trace,
-            langsmith_metadata=langsmith_metadata,
-            memory_snapshot=memory_snapshot,
-            observations=observations,
-            messages=messages,
-            semantic_lookup=semantic_lookup,
+            session_id=state["session_id"],
+            skill=state["skill"],
+            plan_steps=state["plan_steps"],
+            trace=state["trace"],
+            langsmith_metadata=state["langsmith_metadata"],
+            memory_snapshot=state["memory_snapshot"],
+            observations=state["observations"],
+            messages=state["messages"],
+            semantic_lookup=state.get("semantic_lookup"),
         )
+
+    async def graph_model_completion(self, state: AgentGraphState) -> AgentGraphState:
+        request = state["request"]
+        prepared = state["prepared"]
+        model_started = _now_ms()
+        try:
+            prefer_backend, model_name, deployment_preference = _skill_model_target(prepared.skill, request)
+            with trace_context(
+                "agent_model_completion",
+                run_type="llm",
+                inputs={
+                    "message_count": len(prepared.messages),
+                    "prefer_backend": prefer_backend,
+                    "model_name": model_name,
+                    "deployment_preference": deployment_preference,
+                },
+                metadata=prepared.langsmith_metadata,
+                tags=["agent", "llm"],
+            ) as model_run:
+                try:
+                    response = await self._llm_registry.complete(
+                        prepared.messages,
+                        prefer_backend=prefer_backend,
+                        model_name=model_name,
+                        deployment_preference=deployment_preference,
+                        max_tokens=_request_max_tokens(request, skill=prepared.skill),
+                        temperature=_request_temperature(
+                            request,
+                            0.4 if prepared.skill.name in {"summarize_thread", "translate_text"} else 0.7,
+                            skill=prepared.skill,
+                        ),
+                        think=_request_think_enabled(request, skill=prepared.skill),
+                    )
+                    set_run_output(
+                        model_run,
+                        {
+                            "model": response.model,
+                            "tokens": response.usage.total_tokens,
+                            "finish_reason": response.finish_reason,
+                        },
+                    )
+                except Exception as exc:
+                    set_run_error(model_run, exc)
+                    raise
+        except Exception as exc:
+            logger.error("harness.model_completion.failed", trace_id=prepared.trace.trace_id, error=str(exc))
+            await self._trace_store.add_event(
+                prepared.trace.trace_id,
+                TraceEvent(
+                    layer="execution",
+                    name="model_completion",
+                    status="failed",
+                    summary=type(exc).__name__,
+                    detail=str(exc)[:2000],
+                    started_at=model_started,
+                    finished_at=_now_ms(),
+                ),
+            )
+            await self._trace_store.finish_run(
+                prepared.trace.trace_id,
+                status="failed",
+                response_content=str(exc),
+                model="",
+                feedback_summary=f"model_failed={type(exc).__name__}",
+                observations=[observation.to_summary() for observation in prepared.observations],
+            )
+            raise
+        await self._trace_store.add_event(
+            prepared.trace.trace_id,
+            TraceEvent(
+                layer="execution",
+                name="model_completion",
+                status="ok",
+                summary=f"model={response.model}",
+                detail=response.content[:1000],
+                started_at=model_started,
+                finished_at=_now_ms(),
+                metadata={"tokens": response.usage.total_tokens},
+            ),
+        )
+        response_tokens = response.usage.total_tokens or max(len(response.content) // 4, 0)
+        return {
+            **state,
+            "response_content": response.content,
+            "response_tokens": response_tokens,
+            "model": response.model,
+        }
+
+    async def graph_finish_response(self, state: AgentGraphState) -> AgentGraphState:
+        result = await self._finish_response(
+            state["prepared"],
+            state["request"],
+            state.get("response_content", ""),
+            int(state.get("response_tokens", 0) or 0),
+            state.get("model", ""),
+        )
+        return {**state, "result": result}
 
     async def _finish_response(
         self,
@@ -813,84 +1010,8 @@ class AgentHarnessService:
         if isinstance(prepared, _EarlyTurnResult):
             return prepared.result
 
-        model_started = _now_ms()
-        try:
-            prefer_backend, model_name, deployment_preference = _skill_model_target(prepared.skill, request)
-            with trace_context(
-                "agent_model_completion",
-                run_type="llm",
-                inputs={
-                    "message_count": len(prepared.messages),
-                    "prefer_backend": prefer_backend,
-                    "model_name": model_name,
-                    "deployment_preference": deployment_preference,
-                },
-                metadata=prepared.langsmith_metadata,
-                tags=["agent", "llm"],
-            ) as model_run:
-                try:
-                    response = await self._llm_registry.complete(
-                        prepared.messages,
-                        prefer_backend=prefer_backend,
-                        model_name=model_name,
-                        deployment_preference=deployment_preference,
-                        max_tokens=_request_max_tokens(request, skill=prepared.skill),
-                        temperature=_request_temperature(
-                            request,
-                            0.4 if prepared.skill.name in {"summarize_thread", "translate_text"} else 0.7,
-                            skill=prepared.skill,
-                        ),
-                        think=_request_think_enabled(request, skill=prepared.skill),
-                    )
-                    set_run_output(
-                        model_run,
-                        {
-                            "model": response.model,
-                            "tokens": response.usage.total_tokens,
-                            "finish_reason": response.finish_reason,
-                        },
-                    )
-                except Exception as exc:
-                    set_run_error(model_run, exc)
-                    raise
-        except Exception as exc:
-            logger.error("harness.model_completion.failed", trace_id=prepared.trace.trace_id, error=str(exc))
-            await self._trace_store.add_event(
-                prepared.trace.trace_id,
-                TraceEvent(
-                    layer="execution",
-                    name="model_completion",
-                    status="failed",
-                    summary=type(exc).__name__,
-                    detail=str(exc)[:2000],
-                    started_at=model_started,
-                    finished_at=_now_ms(),
-                ),
-            )
-            await self._trace_store.finish_run(
-                prepared.trace.trace_id,
-                status="failed",
-                response_content=str(exc),
-                model="",
-                feedback_summary=f"model_failed={type(exc).__name__}",
-                observations=[observation.to_summary() for observation in prepared.observations],
-            )
-            raise
-        await self._trace_store.add_event(
-            prepared.trace.trace_id,
-            TraceEvent(
-                layer="execution",
-                name="model_completion",
-                status="ok",
-                summary=f"model={response.model}",
-                detail=response.content[:1000],
-                started_at=model_started,
-                finished_at=_now_ms(),
-                metadata={"tokens": response.usage.total_tokens},
-            ),
-        )
-        response_tokens = response.usage.total_tokens or max(len(response.content) // 4, 0)
-        return await self._finish_response(prepared, request, response.content, response_tokens, response.model)
+        state = await self._turn_graph.run_complete(request, prepared)
+        return state["result"]
 
     async def stream_turn(self, request) -> AsyncIterator[dict]:
         msg_id = uuid.uuid4().hex
@@ -957,7 +1078,14 @@ class AgentHarnessService:
             )
 
             response_tokens = max(len(accumulated) // 4, 0)
-            result = await self._finish_response(prepared, request, accumulated, response_tokens, model_name)
+            finish_state = await self._turn_graph.run_finish(
+                request,
+                prepared,
+                accumulated,
+                response_tokens,
+                model_name,
+            )
+            result = finish_state["result"]
             yield {
                 "chunk": "",
                 "is_final": True,

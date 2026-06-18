@@ -12,10 +12,13 @@
         <file alias="features/chat/view/conversation/ChatComposerReplyBar.qml">../view/conversation/ChatComposerReplyBar.qml</file>
         <file alias="features/chat/view/conversation/ChatConversationHeader.qml">../view/conversation/ChatConversationHeader.qml</file>
         <file alias="features/chat/view/conversation/ChatMessageActionMenu.qml">../view/conversation/ChatMessageActionMenu.qml</file>
+        <file alias="features/chat/view/conversation/ChatMessageBodyLoader.qml">../view/conversation/ChatMessageBodyLoader.qml</file>
+        <file alias="features/chat/view/conversation/ChatMessageBubble.qml">../view/conversation/ChatMessageBubble.qml</file>
         <file alias="features/chat/view/conversation/ChatMessageDelegate.qml">../view/conversation/ChatMessageDelegate.qml</file>
         <file alias="features/chat/view/conversation/ChatMessageFileBody.qml">../view/conversation/ChatMessageFileBody.qml</file>
         <file alias="features/chat/view/conversation/ChatMessageImageBody.qml">../view/conversation/ChatMessageImageBody.qml</file>
         <file alias="features/chat/view/conversation/ChatMessageListView.qml">../view/conversation/ChatMessageListView.qml</file>
+        <file alias="features/chat/view/conversation/ChatMessageMeta.qml">../view/conversation/ChatMessageMeta.qml</file>
         <file alias="features/chat/view/conversation/ChatMessageStatusBadge.qml">../view/conversation/ChatMessageStatusBadge.qml</file>
         <file alias="features/chat/view/conversation/ChatMessageTextBody.qml">../view/conversation/ChatMessageTextBody.qml</file>
         <file alias="features/chat/view/conversation/ChatSmartActionPopups.qml">../view/conversation/ChatSmartActionPopups.qml</file>

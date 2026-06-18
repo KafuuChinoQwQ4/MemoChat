@@ -95,6 +95,19 @@ QJsonObject PetController::authPayload() const
     return payload;
 }
 
+QString PetController::accountProfileId() const
+{
+    if (_gateway && _gateway->userMgr())
+    {
+        const int uid = _gateway->userMgr()->GetUid();
+        if (uid > 0)
+        {
+            return QStringLiteral("user_%1").arg(uid);
+        }
+    }
+    return QStringLiteral("default");
+}
+
 QUrl PetController::petUrl(const QString& path) const
 {
     return QUrl(gate_url_prefix.trimmed() + QStringLiteral("/ai/pet") + path);

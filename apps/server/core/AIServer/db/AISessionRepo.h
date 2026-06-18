@@ -16,6 +16,8 @@ public:
 
     bool SoftDelete(const std::string& session_id);
 
+    bool UpdateTitle(int32_t uid, const std::string& session_id, const std::string& title);
+
     std::unique_ptr<ai::AISessionInfo> GetSession(const std::string& session_id);
 
     std::vector<ai::AISessionInfo> ListByUid(int32_t uid);

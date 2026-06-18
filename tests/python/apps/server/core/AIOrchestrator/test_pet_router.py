@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -65,6 +66,16 @@ class _OneShotStreamRuntime(PetRuntime):
             yield await stream.__anext__()
         finally:
             await stream.aclose()
+
+
+def _write_wav(path: Path, duration_sec: float, sample_rate: int = 16000) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    frame_count = int(duration_sec * sample_rate)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate)
+        handle.writeframes(b"\x00\x00" * frame_count)
 
 
 @unittest.skipIf(_IMPORT_ERROR is not None, f"FastAPI/router test dependency unavailable: {_IMPORT_ERROR}")
@@ -166,11 +177,15 @@ class PetRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([item["session_id"] for item in filtered_payload["sessions"]], [first_id])
 
     async def test_voice_training_job_requires_consent_and_returns_prepared_status(self):
+        source_dir = Path(self._voice_training_artifacts.name) / "source"
+        audio_path = source_dir / "Kafuuchino-voice.wav"
+        _write_wav(audio_path, duration_sec=8.0)
+
         missing_consent = await self.client.post(
             "/pet/voice-training/jobs",
             json={
                 "uid": 7,
-                "reference_audio_path": "src/KafuuChino/香风智乃voice/Kafuuchino-voice.mp3",
+                "reference_audio_path": str(audio_path),
                 "consent_confirmed": False,
             },
         )
@@ -183,9 +198,9 @@ class PetRouterTests(unittest.IsolatedAsyncioTestCase):
                 "profile_id": "default",
                 "voice_name": "Kafuuchino-voice",
                 "language": "zh-CN",
-                "reference_audio_path": "src/KafuuChino/香风智乃voice/Kafuuchino-voice.mp3",
-                "reference_audio_directory": "src/KafuuChino/香风智乃voice",
-                "reference_audio_file": "Kafuuchino-voice.mp3",
+                "reference_audio_path": str(audio_path),
+                "reference_audio_directory": str(source_dir),
+                "reference_audio_file": audio_path.name,
                 "consent_confirmed": True,
                 "metadata": {"character": "香风智乃"},
             },

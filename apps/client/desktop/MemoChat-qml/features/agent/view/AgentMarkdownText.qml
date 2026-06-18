@@ -31,11 +31,11 @@ Column {
                 id: paragraphText
                 visible: segmentDelegate.modelData.kind !== "code"
                 width: parent.width
-                text: segmentDelegate.modelData.text || ""
+                text: AgentMarkdownRuntime.renderRichText(segmentDelegate.modelData.text || "")
                 color: root.textColor
                 font.pixelSize: root.textPixelSize
                 wrapMode: TextEdit.Wrap
-                textFormat: Text.PlainText
+                textFormat: TextEdit.RichText
                 readOnly: true
                 selectByMouse: true
                 cursorVisible: false

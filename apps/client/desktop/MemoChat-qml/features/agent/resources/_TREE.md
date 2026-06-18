@@ -1,6 +1,12 @@
 # resources/ 目录树
 
-> 智能体模块的 QML 资源清单。
+> 智能体模块的 QML 和 provider 图标资源清单。
+
+## 子目录
+
+| 子目录 | 作用概括 |
+| --- | --- |
+| [icons/](icons/_TREE.md) | AI provider 头像图标资源 |
 
 ## 文件
 

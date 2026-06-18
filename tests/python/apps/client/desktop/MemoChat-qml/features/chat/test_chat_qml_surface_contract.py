@@ -11,6 +11,7 @@ APP_FEATURE_REGISTRY_H = APP / "composition/AppFeatureRegistry.h"
 QML = CLIENT / "features/chat/view"
 LEGACY_QML = CLIENT / "qml"
 CHAT_BINDING = APP / "controller/AppControllerChatFeatureBinding.cpp"
+AGENT_CONTROLLER = CLIENT / "features/agent/controller"
 CHAT_BINDING_FILES = (
     APP / "controller/AppControllerChatFeatureBinding.cpp",
     APP / "controller/AppChatProjectionBinding.cpp",
@@ -297,6 +298,71 @@ class ChatQmlSurfaceContractTests(unittest.TestCase):
         self.assertIn("property var chatViewModel: null", left_panel)
         self.assertIn("root.chatViewModel.ensureChatListInitialized()", left_panel)
         self.assertIn("root.chatViewModel.ensureGroupsInitialized()", left_panel)
+
+    def test_live2d_entry_card_is_account_bound_and_has_empty_state(self):
+        normal_face = read(QML / "ChatNormalFace.qml")
+        left_panel = read(QML / "ChatLeftPanel.qml")
+        entry = read(QML / "ChatLive2DEntryPane.qml")
+
+        for token in (
+            "property int currentUserUid: 0",
+            'property string currentUserId: ""',
+            "live2dPetSettings.bindAccount(root.currentUserUid, root.currentUserId)",
+            "live2dPetSettings.load()",
+            "root.live2dCharacterName",
+            "root.live2dModelPath",
+            "root.live2dModelImported",
+            "characterName: root.live2dCharacterName",
+            "modelPath: root.live2dModelPath",
+            "hasImportedModel: root.live2dModelImported",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, left_panel)
+
+        self.assertIn("currentUserUid: shell.currentUserUid", normal_face)
+        self.assertIn("currentUserId: shell.currentUserId", normal_face)
+
+        for token in (
+            "property string characterName",
+            "property string modelPath",
+            "property bool hasImportedModel",
+            "未导入角色",
+            "等待导入 Live2D model3.json",
+        ):
+            with self.subTest(entry_token=token):
+                self.assertIn(token, entry)
+
+        for stale_token in ("Kafuu Chino", "resources/live2d/KafuuChino", "香风智乃"):
+            with self.subTest(stale_token=stale_token):
+                self.assertNotIn(stale_token, left_panel + "\n" + entry)
+
+    def test_agent_side_pane_can_rename_sessions_without_model_subtitle(self):
+        side_pane = read(QML / "ChatAgentSidePane.qml")
+        left_panel = read(QML / "ChatLeftPanel.qml")
+        normal_face = read(QML / "ChatNormalFace.qml")
+        controller_header = read(AGENT_CONTROLLER / "AgentController.h")
+        controller_sessions = read(AGENT_CONTROLLER / "AgentControllerSessions.cpp")
+
+        for token in (
+            "signal sessionRenamed(string sessionId, string title)",
+            "function openRenameDialog(entry)",
+            "MenuItem {",
+            'text: "重命名"',
+            "agentRenameDialog.open()",
+            "root.sessionRenamed(sessionId, title)",
+        ):
+            with self.subTest(side_token=token):
+                self.assertIn(token, side_pane)
+
+        self.assertNotIn('"subtitle": session.model_name || currentModelName || "AI 会话"', side_pane)
+        self.assertNotIn("session.model_name || currentModelName", side_pane)
+
+        self.assertIn("signal agentSessionRenamed(string sessionId, string title)", left_panel)
+        self.assertIn("onSessionRenamed: function(sessionId, title) { root.agentSessionRenamed(sessionId, title) }", left_panel)
+        self.assertIn("onAgentSessionRenamed: function(sessionId, title) {", normal_face)
+        self.assertIn("agent.renameSession(sessionId, title)", normal_face)
+        self.assertIn("Q_INVOKABLE void renameSession(const QString& sessionId, const QString& title);", controller_header)
+        self.assertIn("void AgentController::renameSession(const QString& sessionId, const QString& title)", controller_sessions)
 
 
 if __name__ == "__main__":
