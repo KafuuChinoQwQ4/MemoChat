@@ -94,7 +94,7 @@ Live2DSectionPanel {
                     backdrop: root.backdrop
                     title: "角色名"
                     text: root.characterName
-                    placeholderText: "例如 Kafuu Chino"
+                    placeholderText: "例如 自定义角色"
                     onTextChanged: root.characterNameEdited(text)
                 }
 
@@ -111,7 +111,7 @@ Live2DSectionPanel {
                 backdrop: root.backdrop
                 title: "模型根目录"
                 text: root.modelRoot
-                placeholderText: "resources/live2d/KafuuChino/香风智乃live2D"
+                placeholderText: "选择用户导入的 Live2D 模型目录"
                 onTextChanged: root.modelRootEdited(text)
             }
 

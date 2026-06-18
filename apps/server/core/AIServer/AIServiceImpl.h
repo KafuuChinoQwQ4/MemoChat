@@ -40,6 +40,9 @@ public:
                                ai::AIDeleteSessionRsp* reply) override;
 
     grpc::Status
+    UpdateSession(ServerContext* context, const ai::AIUpdateSessionReq* request, ai::AISessionRsp* reply) override;
+
+    grpc::Status
     ListModels(ServerContext* context, const ai::AIListModelsReq* request, ai::AIListModelsRsp* reply) override;
 
     grpc::Status RegisterApiProvider(ServerContext* context,

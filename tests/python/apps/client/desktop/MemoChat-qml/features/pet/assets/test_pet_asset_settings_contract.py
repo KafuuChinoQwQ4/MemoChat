@@ -36,6 +36,7 @@ CLIENT_CMAKE_MANIFESTS = (
 MAIN_CPP = CLIENT_DIR / "app/bootstrap/main.cpp"
 MAIN_QML_TYPE_REGISTRY_CPP = CLIENT_DIR / "app/bootstrap/MainQmlTypeRegistry.cpp"
 CHARACTER_PANE_QML = CLIENT_DIR / "features/pet/view/Live2DCharacterPane.qml"
+CHARACTER_PREVIEW_PANEL_QML = CLIENT_DIR / "features/pet/view/Live2DCharacterPreviewPanel.qml"
 RESOURCE_VOICE_PANEL_QML = CLIENT_DIR / "features/pet/view/Live2DResourceVoicePanel.qml"
 QRC_ROOT = CLIENT_DIR / "resources/qrc"
 QML_QRCS = tuple(sorted(QRC_ROOT.glob("*.qrc"))) + (CLIENT_DIR / "features/pet/resources/pet.qrc",)
@@ -82,13 +83,15 @@ REQUIRED_PROPERTIES = (
     "voiceTrainingProgress",
     "voiceTrainingArtifactPath",
     "voiceTrainingMessage",
+    "accountUid",
+    "accountKey",
     "storagePath",
     "dirty",
     "statusText",
 )
 
 PERSISTED_DRAFT_FIELDS = tuple(
-    prop for prop in REQUIRED_PROPERTIES if prop not in {"storagePath", "dirty", "statusText"}
+    prop for prop in REQUIRED_PROPERTIES if prop not in {"accountUid", "accountKey", "storagePath", "dirty", "statusText"}
 )
 
 REQUIRED_INVOKABLES = (
@@ -98,6 +101,8 @@ REQUIRED_INVOKABLES = (
     "toVariantMap",
     "pickLocalFilePath",
     "pickLocalDirectoryPath",
+    "bindAccount",
+    "clearAccountBinding",
 )
 
 QML_EDITABLE_FIELDS = (
@@ -270,7 +275,7 @@ class PetAssetSettingsContractTests(unittest.TestCase):
             r"qmlRegisterType\s*<\s*PetAssetSettings\s*>\s*\(\s*\"MemoChat\"\s*,\s*1\s*,\s*0\s*,\s*\"PetAssetSettings\"\s*\)",
         )
 
-    def test_pet_asset_settings_uses_app_data_json_storage(self):
+    def test_pet_asset_settings_uses_account_scoped_app_data_json_storage(self):
         self.assertFileExists(PET_ASSET_SETTINGS_CPP)
         source = pet_asset_settings_source()
 
@@ -282,15 +287,45 @@ class PetAssetSettingsContractTests(unittest.TestCase):
             "QFile",
             "QDir",
             'QStringLiteral("schema_version")',
+            "accountStoragePath",
+            "accountKeyFor",
+            "pet/users",
+            "uid_%1",
             "live2d-character-draft.json",
         ):
             self.assertContains(source, token)
 
-        self.assertRegex(source, r"pet[/\\]live2d-character-draft\.json")
+        self.assertRegex(source, r"pet/users")
+        self.assertRegex(source, r"live2d-character-draft\.json")
         self.assertRegex(source, r"QJsonDocument::fromJson\s*\(")
         self.assertRegex(source, r"\.toJson\s*\(")
         self.assertRegex(source, r"\bQIODevice::WriteOnly\b")
         self.assertRegex(source, r"\bQIODevice::ReadOnly\b")
+
+    def test_pet_asset_settings_exposes_account_binding_contract(self):
+        header = read(PET_ASSET_SETTINGS_H)
+        source = pet_asset_settings_source()
+
+        for token in (
+            "Q_PROPERTY(int accountUid READ accountUid NOTIFY settingsChanged)",
+            "Q_PROPERTY(QString accountKey READ accountKey NOTIFY settingsChanged)",
+            "Q_INVOKABLE bool bindAccount(int uid, const QString& userId)",
+            "Q_INVOKABLE void clearAccountBinding()",
+            "int accountUid() const",
+            "QString accountKey() const",
+        ):
+            self.assertContains(header, token)
+
+        for token in (
+            "bool PetAssetSettings::bindAccount",
+            "void PetAssetSettings::clearAccountBinding()",
+            "_account_uid",
+            "_account_key",
+            "_storage_path =",
+            "accountStoragePath",
+            "applyDefaults(false)",
+        ):
+            self.assertContains(source, token)
 
     def test_pet_asset_settings_serializes_declared_draft_fields(self):
         self.assertFileExists(PET_ASSET_SETTINGS_CPP)
@@ -364,29 +399,41 @@ class PetAssetSettingsContractTests(unittest.TestCase):
         ):
             self.assertContains(source, token)
 
-    def test_pet_asset_settings_defaults_to_user_requested_src_character_assets(self):
+    def test_pet_asset_settings_defaults_to_empty_user_imported_character_assets(self):
         source = pet_asset_settings_source()
-        qml = read(CHARACTER_PANE_QML)
+        qml = read_texts(CHARACTER_PANE_QML, CHARACTER_PREVIEW_PANEL_QML, RESOURCE_VOICE_PANEL_QML)
         cmake = client_cmake_text()
 
         for token in (
-            "MEMOCHAT_QML_SOURCE_DIR",
-            f"{DEFAULT_LIVE2D_RESOURCE_ROOT}/香风智乃live2D",
-            f"{DEFAULT_LIVE2D_RESOURCE_ROOT}/香风智乃live2D/香风智乃.model3.json",
-            f"{DEFAULT_LIVE2D_RESOURCE_ROOT}/香风智乃voice",
-            "Kafuuchino-voice.mp3",
+            "_character_name.clear()",
+            "_role_identity.clear()",
+            "_model_root.clear()",
+            "_model_json.clear()",
+            "_motion_directory.clear()",
+            "_expression_directory.clear()",
+            "_voice_directory.clear()",
+            "_default_voice.clear()",
+            "_voice_lip_sync_enabled = false",
+            "_emotion_sound_enabled = false",
+            "等待用户导入模型和参考音频",
         ):
             self.assertContains(source, token)
 
         for token in (
-            f"{DEFAULT_LIVE2D_RESOURCE_ROOT}/香风智乃live2D",
-            f"{DEFAULT_LIVE2D_RESOURCE_ROOT}/香风智乃voice",
-            "Kafuuchino-voice.mp3",
+            'property string characterName: ""',
+            'property string modelRoot: ""',
+            'property string modelJson: ""',
+            'property string voiceDirectory: ""',
+            'property string defaultVoice: ""',
+            "选择用户导入的 Live2D 模型目录",
+            "选择用户导入的语音目录",
+            "选择默认语音文件",
+            '"source": "user-imported"',
         ):
             self.assertContains(qml, token)
 
-        self.assertNotIn("src/KafuuChino", source)
         self.assertNotIn("src/KafuuChino", qml)
+        self.assertNotIn(DEFAULT_LIVE2D_RESOURCE_ROOT, qml)
 
         self.assertContains(cmake, "MEMOCHAT_QML_SOURCE_DIR")
 
@@ -502,13 +549,13 @@ class PetAssetSettingsContractTests(unittest.TestCase):
             "开始声音训练",
             "允许使用参考音频",
             "准备包 ",
-            "src-default",
+            "user-imported",
             "gpt-sovits",
         ):
             self.assertContains(qml, token)
 
-        self.assertContains(qml, f"{DEFAULT_LIVE2D_RESOURCE_ROOT}/香风智乃voice")
-        self.assertContains(qml, "Kafuuchino-voice.mp3")
+        self.assertNotIn(f"{DEFAULT_LIVE2D_RESOURCE_ROOT}/香风智乃voice", qml)
+        self.assertNotIn("Kafuuchino-voice.mp3", qml)
         self.assertNotIn("?.", qml, "QML should avoid optional chaining for Qt 6.8 compatibility")
 
 

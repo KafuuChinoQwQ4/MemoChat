@@ -317,6 +317,54 @@ void PetModel::applyControlEvent(const QJsonObject& event)
     emitChangedIf(changed);
 }
 
+void PetModel::reset()
+{
+    bool changed = false;
+    changed = _sequence != 0 || changed;
+    changed = _schema_version != 0 || changed;
+    changed = !_event_id.isEmpty() || changed;
+    changed = !_turn_id.isEmpty() || changed;
+    changed = _phase != QStringLiteral("idle") || changed;
+    changed = !_speech_text.isEmpty() || changed;
+    changed = !_speech_translation.isEmpty() || changed;
+    changed = !_speech_display_text.isEmpty() || changed;
+    changed = _speech_language != QStringLiteral("zh-CN") || changed;
+    changed = !_speech_turn_id.isEmpty() || changed;
+    changed = _speech_final || changed;
+    changed = !_audio_url.isEmpty() || changed;
+    changed = _audio_state != QStringLiteral("idle") || changed;
+    changed = _emotion != QStringLiteral("neutral") || changed;
+    changed = _expression != QStringLiteral("neutral") || changed;
+    changed = _motion != QStringLiteral("idle") || changed;
+    changed = !qFuzzyCompare(_intensity + 1.0, 1.35) || changed;
+    changed = !qFuzzyCompare(_gaze_x + 1.0, 1.5) || changed;
+    changed = !qFuzzyCompare(_gaze_y + 1.0, 1.5) || changed;
+    changed = !qFuzzyCompare(_lip_sync_value + 1.0, 1.0) || changed;
+
+    _sequence = 0;
+    _schema_version = 0;
+    _event_id.clear();
+    _turn_id.clear();
+    _phase = QStringLiteral("idle");
+    _speech_text.clear();
+    _speech_translation.clear();
+    _speech_display_text.clear();
+    _speech_language = QStringLiteral("zh-CN");
+    _speech_turn_id.clear();
+    _speech_final = false;
+    _audio_url.clear();
+    _audio_state = QStringLiteral("idle");
+    _emotion = QStringLiteral("neutral");
+    _expression = QStringLiteral("neutral");
+    _motion = QStringLiteral("idle");
+    _intensity = 0.35;
+    _gaze_x = 0.5;
+    _gaze_y = 0.5;
+    _lip_sync_value = 0.0;
+
+    emitChangedIf(changed);
+}
+
 void PetModel::clearSpeech()
 {
     if (_speech_text.isEmpty() && _speech_translation.isEmpty() && _speech_display_text.isEmpty() && !_speech_final &&

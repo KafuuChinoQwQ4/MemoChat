@@ -109,6 +109,7 @@ public:
     }
 
     Q_INVOKABLE void applyControlEvent(const QJsonObject& event);
+    Q_INVOKABLE void reset();
     Q_INVOKABLE void clearSpeech();
 
 signals:

@@ -103,6 +103,36 @@ void AgentController::deleteSession(const QString& sessionId)
                                         aiHttpModule());
 }
 
+void AgentController::renameSession(const QString& sessionId, const QString& title)
+{
+    ensureUserScope();
+    const QString trimmedSessionId = sessionId.trimmed();
+    const QString trimmedTitle = title.trimmed();
+    if (trimmedSessionId.isEmpty())
+    {
+        return;
+    }
+    if (trimmedTitle.isEmpty())
+    {
+        setErrorState(QStringLiteral("请输入会话标题。"));
+        return;
+    }
+
+    auto uid = _gateway->userMgr()->GetUid();
+    QJsonObject payload;
+    payload["uid"] = uid;
+    payload["session_id"] = trimmedSessionId;
+    payload["title"] = trimmedTitle;
+
+    ReqId reqId = ID_AI_SESSION_UPDATE;
+    _pending_requests.track(reqId, AgentRequestKind::RenameSession, QString(), uid);
+    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/session/update"),
+                                        payload,
+                                        reqId,
+                                        Modules::LOGINMOD,
+                                        aiHttpModule());
+}
+
 void AgentController::loadHistory(const QString& sessionId)
 {
     ensureUserScope();
@@ -189,6 +219,35 @@ void AgentController::handleSessionRsp(ReqId id, const QString& res, ErrorCodes 
             clearCurrentSession();
         }
         _pendingDeleteSessionId.clear();
+        loadSessions();
+    }
+    else if (kind == AgentRequestKind::RenameSession)
+    {
+        QJsonObject sess = root["session"].toObject();
+        const QString sessionId = sess["session_id"].toString();
+        bool updated = false;
+        if (!sessionId.isEmpty())
+        {
+            for (qsizetype i = 0; i < _sessions.size(); ++i)
+            {
+                QVariantMap item = _sessions.at(i).toMap();
+                if (item.value(QStringLiteral("session_id")).toString() != sessionId)
+                {
+                    continue;
+                }
+                item[QStringLiteral("title")] = sess["title"].toString();
+                item[QStringLiteral("model_type")] = sess["model_type"].toString();
+                item[QStringLiteral("model_name")] = sess["model_name"].toString();
+                item[QStringLiteral("updated_at")] = sess["updated_at"].toVariant();
+                _sessions[i] = item;
+                updated = true;
+                break;
+            }
+        }
+        if (updated)
+        {
+            emit sessionsChanged();
+        }
         loadSessions();
     }
 }

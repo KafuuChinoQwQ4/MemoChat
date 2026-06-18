@@ -30,6 +30,138 @@ def _wrap_thinking(reasoning: str, content: str) -> str:
     return f"<think>{reasoning}</think>{content or ''}"
 
 
+def _is_moonshot_base_url(base_url: str) -> bool:
+    normalized = (base_url or "").lower()
+    return "moonshot" in normalized or "platform.kimi" in normalized
+
+
+def _messages_to_openai_payload(messages: list[LLMMessage]) -> list[dict]:
+    return [{"role": message.role, "content": message.content} for message in messages]
+
+
+def _build_openai_compatible_chat_payload(
+    base_url: str,
+    model_name: str,
+    messages: list[LLMMessage],
+    stream: bool,
+    **kwargs,
+) -> dict:
+    selected_model = str(kwargs.get("model_name") or model_name or "").strip()
+    payload = {
+        "model": selected_model,
+        "messages": _messages_to_openai_payload(messages),
+        "stream": stream,
+    }
+    max_tokens = kwargs.get("max_tokens", 2048)
+    if _is_moonshot_base_url(base_url):
+        payload["max_completion_tokens"] = max_tokens
+    else:
+        payload["temperature"] = kwargs.get("temperature", 0.7)
+        payload["max_tokens"] = max_tokens
+    return payload
+
+
+def _safe_positive_int(value) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return parsed if parsed > 0 else 0
+
+
+def _guess_context_window(model_name: str, base_url: str = "") -> int:
+    normalized_model = str(model_name or "").strip().lower()
+    normalized_provider = f"{base_url} {normalized_model}".lower()
+    if "moonshot" not in normalized_provider and "kimi" not in normalized_provider:
+        return 0
+    match = re.search(r"(\d+)\s*k", normalized_model)
+    if match:
+        return int(match.group(1)) * 1024
+    if "k2" in normalized_model:
+        return 128000
+    return 0
+
+
+def _model_context_window(endpoint: ProviderEndpoint, model_name: str) -> int:
+    selected_model = str(model_name or "").strip()
+    fallback_model = str(endpoint.default_model or "").strip()
+    for model in endpoint.models:
+        if str(model.get("name") or "").strip() == selected_model:
+            context_window = _safe_positive_int(model.get("context_window"))
+            return context_window or _guess_context_window(selected_model, endpoint.base_url)
+    for model in endpoint.models:
+        if fallback_model and str(model.get("name") or "").strip() == fallback_model:
+            context_window = _safe_positive_int(model.get("context_window"))
+            return context_window or _guess_context_window(fallback_model, endpoint.base_url)
+    return _guess_context_window(selected_model or fallback_model, endpoint.base_url)
+
+
+def _estimate_prompt_tokens(messages: list[LLMMessage]) -> int:
+    total = 16
+    for message in messages:
+        content = getattr(message, "content", "")
+        if not isinstance(content, str):
+            content = json.dumps(content, ensure_ascii=False)
+        cjk_chars = sum(1 for char in content if "\u4e00" <= char <= "\u9fff")
+        other_chars = max(0, len(content) - cjk_chars)
+        total += cjk_chars + max(1, (other_chars + 3) // 4) + 8
+    return max(1, total)
+
+
+def _clamp_completion_tokens_for_context(
+    endpoint: ProviderEndpoint,
+    model_name: str,
+    messages: list[LLMMessage],
+    kwargs: dict,
+) -> None:
+    context_window = _model_context_window(endpoint, model_name)
+    if context_window <= 0:
+        return
+
+    requested = _safe_positive_int(kwargs.get("max_tokens", 2048))
+    if requested <= 0:
+        return
+
+    prompt_estimate = _estimate_prompt_tokens(messages)
+    reserve = max(512, min(2048, context_window // 4))
+    max_by_context = context_window - prompt_estimate - reserve
+    if max_by_context < 256:
+        max_by_context = max(64, min(256, context_window // 4))
+    kwargs["max_tokens"] = min(requested, max_by_context)
+
+
+def _normalize_model_selection(
+    prefer_backend: str,
+    model_name: str,
+    endpoints: list[ProviderEndpoint],
+) -> tuple[str, str]:
+    backend = (prefer_backend or "").strip()
+    model = (model_name or "").strip()
+    if not model:
+        return backend, model
+
+    if any(model == str(item.get("name") or "").strip() for endpoint in endpoints for item in endpoint.models):
+        return backend, model
+
+    if ":" not in model:
+        return backend, model
+
+    prefix, raw_model = model.split(":", 1)
+    prefix = prefix.strip()
+    raw_model = raw_model.strip()
+    if not prefix or not raw_model:
+        return backend, model
+
+    for endpoint in endpoints:
+        if endpoint.provider_id != prefix:
+            continue
+        if backend and backend != prefix:
+            return backend, model
+        if any(raw_model == str(item.get("name") or "").strip() for item in endpoint.models):
+            return prefix, raw_model
+    return backend, model
+
+
 class _OpenAICompatibleClient:
     def __init__(
         self,
@@ -54,13 +186,7 @@ class _OpenAICompatibleClient:
 
     async def chat(self, messages: list[LLMMessage], **kwargs) -> LLMResponse:
         client = await self._get_client()
-        payload = {
-            "model": kwargs.get("model_name") or self.model_name,
-            "messages": [{"role": message.role, "content": message.content} for message in messages],
-            "stream": False,
-            "temperature": kwargs.get("temperature", 0.7),
-            "max_tokens": kwargs.get("max_tokens", 2048),
-        }
+        payload = _build_openai_compatible_chat_payload(self.base_url, self.model_name, messages, False, **kwargs)
         self._apply_thinking_payload(payload, kwargs.get("think", False))
         response = await client.post(f"{self.base_url}/chat/completions", json=payload)
         response.raise_for_status()
@@ -84,13 +210,7 @@ class _OpenAICompatibleClient:
 
     async def chat_stream(self, messages: list[LLMMessage], **kwargs) -> AsyncIterator[LLMStreamChunk]:
         client = await self._get_client()
-        payload = {
-            "model": kwargs.get("model_name") or self.model_name,
-            "messages": [{"role": message.role, "content": message.content} for message in messages],
-            "stream": True,
-            "temperature": kwargs.get("temperature", 0.7),
-            "max_tokens": kwargs.get("max_tokens", 2048),
-        }
+        payload = _build_openai_compatible_chat_payload(self.base_url, self.model_name, messages, True, **kwargs)
         self._apply_thinking_payload(payload, kwargs.get("think", False))
         async with client.stream("POST", f"{self.base_url}/chat/completions", json=payload) as response:
             response.raise_for_status()
@@ -139,7 +259,7 @@ class _OpenAICompatibleClient:
                 {
                     "name": model_id,
                     "display": model_id,
-                    "context_window": 0,
+                    "context_window": _guess_context_window(model_id, self.base_url),
                     "supports_thinking": _guess_supports_thinking(model_id),
                 }
             )
@@ -468,35 +588,45 @@ class LLMEndpointRegistry:
                 self._custom_clients.pop(cache_key, None)
         return True
 
+    def _resolve_with_model(
+        self,
+        prefer_backend: str = "",
+        model_name: str = "",
+        deployment_preference: str = "any",
+    ) -> tuple[ProviderEndpoint, str]:
+        endpoints = [endpoint for endpoint in self.list_endpoints() if endpoint.enabled]
+        prefer_backend, model_name = _normalize_model_selection(prefer_backend, model_name, endpoints)
+        if prefer_backend:
+            for endpoint in endpoints:
+                if endpoint.provider_id == prefer_backend:
+                    return endpoint, model_name
+
+        if deployment_preference in {"local_api", "external_api"}:
+            for endpoint in endpoints:
+                if endpoint.deployment == deployment_preference:
+                    return endpoint, model_name
+
+        if model_name:
+            for endpoint in endpoints:
+                if any(model.get("name") == model_name for model in endpoint.models):
+                    return endpoint, model_name
+
+        for endpoint in endpoints:
+            if endpoint.provider_id == settings.llm.default_backend:
+                return endpoint, model_name
+
+        if not endpoints:
+            raise RuntimeError("No enabled LLM endpoint configured")
+        return endpoints[0], model_name
+
     def resolve(
         self,
         prefer_backend: str = "",
         model_name: str = "",
         deployment_preference: str = "any",
     ) -> ProviderEndpoint:
-        endpoints = [endpoint for endpoint in self.list_endpoints() if endpoint.enabled]
-        if prefer_backend:
-            for endpoint in endpoints:
-                if endpoint.provider_id == prefer_backend:
-                    return endpoint
-
-        if deployment_preference in {"local_api", "external_api"}:
-            for endpoint in endpoints:
-                if endpoint.deployment == deployment_preference:
-                    return endpoint
-
-        if model_name:
-            for endpoint in endpoints:
-                if any(model.get("name") == model_name for model in endpoint.models):
-                    return endpoint
-
-        for endpoint in endpoints:
-            if endpoint.provider_id == settings.llm.default_backend:
-                return endpoint
-
-        if not endpoints:
-            raise RuntimeError("No enabled LLM endpoint configured")
-        return endpoints[0]
+        endpoint, _ = self._resolve_with_model(prefer_backend, model_name, deployment_preference)
+        return endpoint
 
     async def complete(
         self,
@@ -506,16 +636,19 @@ class LLMEndpointRegistry:
         deployment_preference: str = "any",
         **kwargs,
     ) -> LLMResponse:
-        endpoint = self.resolve(prefer_backend, model_name, deployment_preference)
+        endpoint, selected_model = self._resolve_with_model(prefer_backend, model_name, deployment_preference)
+        selected_model = selected_model or endpoint.default_model
+        request_kwargs = dict(kwargs)
+        _clamp_completion_tokens_for_context(endpoint, selected_model, messages, request_kwargs)
         if endpoint.provider_id in {"ollama", "openai", "claude", "kimi"}:
             return await self._manager.achat(
                 messages,
                 prefer_backend=endpoint.provider_id,
-                model_name=model_name or endpoint.default_model,
-                **kwargs,
+                model_name=selected_model,
+                **request_kwargs,
             )
-        client = self._get_custom_client(endpoint, model_name or endpoint.default_model)
-        return await client.chat(messages, model_name=model_name or endpoint.default_model, **kwargs)
+        client = self._get_custom_client(endpoint, selected_model)
+        return await client.chat(messages, model_name=selected_model, **request_kwargs)
 
     async def stream(
         self,
@@ -525,18 +658,21 @@ class LLMEndpointRegistry:
         deployment_preference: str = "any",
         **kwargs,
     ) -> AsyncIterator[LLMStreamChunk]:
-        endpoint = self.resolve(prefer_backend, model_name, deployment_preference)
+        endpoint, selected_model = self._resolve_with_model(prefer_backend, model_name, deployment_preference)
+        selected_model = selected_model or endpoint.default_model
+        request_kwargs = dict(kwargs)
+        _clamp_completion_tokens_for_context(endpoint, selected_model, messages, request_kwargs)
         if endpoint.provider_id in {"ollama", "openai", "claude", "kimi"}:
             async for chunk in self._manager.astream(
                 messages,
                 prefer_backend=endpoint.provider_id,
-                model_name=model_name or endpoint.default_model,
-                **kwargs,
+                model_name=selected_model,
+                **request_kwargs,
             ):
                 yield chunk
             return
-        client = self._get_custom_client(endpoint, model_name or endpoint.default_model)
-        async for chunk in client.chat_stream(messages, model_name=model_name or endpoint.default_model, **kwargs):
+        client = self._get_custom_client(endpoint, selected_model)
+        async for chunk in client.chat_stream(messages, model_name=selected_model, **request_kwargs):
             yield chunk
 
     async def close(self) -> None:

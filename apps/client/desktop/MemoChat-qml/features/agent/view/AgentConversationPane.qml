@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "qrc:/qml/components"
+import "../runtime/AgentProviderRuntime.js" as AgentProviderRuntime
 
 Rectangle {
     id: root
@@ -9,6 +10,7 @@ Rectangle {
 
     property var agentController: null
     property var messageModel: null
+    property string currentModel: ""
     property bool loading: false
     property bool streaming: false
     property string errorMsg: ""
@@ -83,6 +85,9 @@ Rectangle {
             createdAt: model.createdAt || 0
             sourcesJson: model.sources || ""
             selfAvatar: root.selfAvatar
+            modelName: model.modelName || root.currentModel || ""
+            providerDisplayName: AgentProviderRuntime.providerDisplayName(model.modelName || root.currentModel || "")
+            aiAvatar: AgentProviderRuntime.providerAvatarSource(model.modelName || root.currentModel || "")
         }
 
         onCountChanged: {

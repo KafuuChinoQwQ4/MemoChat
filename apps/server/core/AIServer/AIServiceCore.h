@@ -30,6 +30,7 @@ public:
     grpc::Status CreateSession(const ai::AICreateSessionReq& req, ai::AISessionRsp* reply);
     grpc::Status ListSessions(const ai::AICreateSessionReq& req, ai::AISessionRsp* reply);
     grpc::Status DeleteSession(const ai::AIDeleteSessionReq& req, ai::AIDeleteSessionRsp* reply);
+    grpc::Status UpdateSession(const ai::AIUpdateSessionReq& req, ai::AISessionRsp* reply);
 
     // 模型
     grpc::Status ListModels(const ai::AIListModelsReq& req, ai::AIListModelsRsp* reply);

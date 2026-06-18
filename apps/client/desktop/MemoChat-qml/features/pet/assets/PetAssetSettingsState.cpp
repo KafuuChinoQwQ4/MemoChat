@@ -209,6 +209,16 @@ bool PetAssetSettings::assignString(QString& target, const QString& value)
     return true;
 }
 
+QString PetAssetSettings::accountKeyFor(int uid, const QString& userId)
+{
+    Q_UNUSED(userId);
+    if (uid <= 0)
+    {
+        return {};
+    }
+    return QStringLiteral("uid_%1").arg(uid);
+}
+
 bool PetAssetSettings::assignInt(int& target, int value, int minimum, int maximum)
 {
     const int bounded = qBound(minimum, value, maximum);
@@ -243,24 +253,23 @@ bool PetAssetSettings::assignBool(bool& target, bool value)
 
 void PetAssetSettings::applyDefaults(bool dirty)
 {
-    _character_name = QStringLiteral("香风智乃");
-    _role_identity = QStringLiteral("Live2D 桌宠助手");
-    _model_root = clientSourcePath(QStringLiteral("resources/live2d/KafuuChino/香风智乃live2D"));
-    _model_json = clientSourcePath(QStringLiteral("resources/live2d/KafuuChino/香风智乃live2D/香风智乃.model3.json"));
-    _motion_directory = _model_root;
-    _expression_directory = _model_root;
-    _voice_directory = clientSourcePath(QStringLiteral("resources/live2d/KafuuChino/香风智乃voice"));
-    _default_voice = QStringLiteral("Kafuuchino-voice.mp3");
-    _idle_motion = QStringLiteral("Idle");
-    _speaking_motion = QStringLiteral("Talk");
-    _fallback_expression = QStringLiteral("脸红");
-    _personality_tags = QStringLiteral("认真, 安静, 可靠, 轻声提醒");
-    _relationship_style = QStringLiteral("熟悉但不过界的桌面同伴");
-    _world_setting = QStringLiteral("以香风智乃素材作为本地默认角色，在 MemoChat 旁边陪用户聊天、学习和整理资料。");
-    _speech_rules =
-        QStringLiteral("使用当前选择的单一语言回复，不混用中文、日语或英语。少说套话，先回应情绪，再给明确建议。");
-    _catchphrases = QStringLiteral("收到，我会记住。\n先别急，我们一步一步来。");
-    _forbidden_rules = QStringLiteral("不要伪装成真人；不要主动索要隐私；不替用户做高风险决定。");
+    _character_name.clear();
+    _role_identity.clear();
+    _model_root.clear();
+    _model_json.clear();
+    _motion_directory.clear();
+    _expression_directory.clear();
+    _voice_directory.clear();
+    _default_voice.clear();
+    _idle_motion.clear();
+    _speaking_motion.clear();
+    _fallback_expression.clear();
+    _personality_tags.clear();
+    _relationship_style.clear();
+    _world_setting.clear();
+    _speech_rules.clear();
+    _catchphrases.clear();
+    _forbidden_rules.clear();
     _tone_index = 0;
     _response_length_index = 1;
     _language_index = 0;
@@ -268,8 +277,8 @@ void PetAssetSettings::applyDefaults(bool dirty)
     _creativity_level = 0.48;
     _voice_speed = 1.0;
     _lip_sync_sensitivity = 0.55;
-    _voice_lip_sync_enabled = true;
-    _emotion_sound_enabled = true;
+    _voice_lip_sync_enabled = false;
+    _emotion_sound_enabled = false;
     _idle_motion_enabled = true;
     _gaze_follow_enabled = true;
     _memory_enabled = true;
@@ -284,7 +293,7 @@ void PetAssetSettings::applyDefaults(bool dirty)
     _voice_training_stage.clear();
     _voice_training_progress = 0;
     _voice_training_artifact_path.clear();
-    _voice_training_message = QStringLiteral("等待确认参考音频权限");
+    _voice_training_message = QStringLiteral("等待用户导入模型和参考音频");
     _dirty = dirty;
     _status_text = dirty ? QStringLiteral("默认草稿待保存") : QStringLiteral("默认草稿已载入");
 }
@@ -358,6 +367,33 @@ void PetAssetSettings::markDirty()
     emit settingsChanged();
 }
 
+bool PetAssetSettings::bindAccount(int uid, const QString& userId)
+{
+    const int normalizedUid = qMax(0, uid);
+    const QString nextAccountKey = accountKeyFor(normalizedUid, userId);
+    const QString nextStoragePath =
+        nextAccountKey.isEmpty() ? defaultStoragePath() : accountStoragePath(nextAccountKey);
+    if (_account_uid == normalizedUid && _account_key == nextAccountKey && _storage_path == nextStoragePath)
+    {
+        return false;
+    }
+
+    _account_uid = normalizedUid;
+    _account_key = nextAccountKey;
+    _storage_path = nextStoragePath;
+    applyDefaults(false);
+    _status_text = _account_key.isEmpty()
+        ? QStringLiteral("已切换到未登录草稿")
+        : QStringLiteral("已切换账号草稿：%1").arg(_account_key);
+    emit settingsChanged();
+    return true;
+}
+
+void PetAssetSettings::clearAccountBinding()
+{
+    bindAccount(0, QString());
+}
+
 QString PetAssetSettings::defaultStoragePath() const
 {
     QString root = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
@@ -366,4 +402,15 @@ QString PetAssetSettings::defaultStoragePath() const
         root = QDir::home().absoluteFilePath(QStringLiteral(".memochat"));
     }
     return QDir(root).absoluteFilePath(QStringLiteral("pet/live2d-character-draft.json"));
+}
+
+QString PetAssetSettings::accountStoragePath(const QString& accountKey) const
+{
+    QString root = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (root.isEmpty())
+    {
+        root = QDir::home().absoluteFilePath(QStringLiteral(".memochat"));
+    }
+    return QDir(root).absoluteFilePath(
+        QStringLiteral("pet/users/%1/live2d-character-draft.json").arg(accountKey));
 }

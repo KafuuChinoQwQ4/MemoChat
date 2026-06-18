@@ -427,7 +427,7 @@ class A2AGameServiceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(tick["status"], "acted")
         self.assertEqual(tick["actor"]["participant_id"], wolf.participant_id)
         self.assertEqual(tick["graph"]["name"], "a2a_game_tick")
-        self.assertIn(tick["graph"]["backend"], {"langgraph", "fallback"})
+        self.assertEqual(tick["graph"]["backend"], "langgraph")
         self.assertEqual(tick["state"].graph["name"], "a2a_game_tick")
 
     async def test_restart_rejects_lobby_and_running_rooms(self):

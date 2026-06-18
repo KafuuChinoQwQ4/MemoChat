@@ -485,7 +485,7 @@ if expected == "high":
         raise SystemExit("high-confidence observation did not visual_react")
     if not summary.get("speak"):
         raise SystemExit("high-confidence observation did not speak")
-    if "我看到你啦" not in speech or "心情还不错" not in speech:
+    if "我看到你啦" not in speech or "心情不错" not in speech:
         raise SystemExit("first detected user contextual greeting was not emitted")
     if summary.get("reason") != "first_user_seen":
         raise SystemExit("high-confidence first observation did not use first_user_seen")

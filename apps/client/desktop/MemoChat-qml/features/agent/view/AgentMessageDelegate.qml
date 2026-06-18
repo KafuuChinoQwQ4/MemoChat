@@ -19,7 +19,11 @@ Item {
     property real avatarSlotWidth: 42
     property string selfAvatar: "qrc:/res/head_1.jpg"
     property string aiAvatar: "qrc:/res/ai_icon.png"
+    property string modelName: ""
+    property string providerDisplayName: ""
     property bool manualThinkingExpanded: false
+    readonly property real aiAvatarIconSize: Math.round(root.avatarSize * 0.74)
+    readonly property int aiAvatarSourceSize: 128
 
     readonly property string displayText: {
         if (root.errorMessage.length > 0) {
@@ -78,13 +82,29 @@ Item {
             visible: !root.isUser
             color: Qt.rgba(0.73, 0.82, 0.92, 0.44)
             border.color: Qt.rgba(1, 1, 1, 0.48)
+            ToolTip.visible: leftAvatarHover.containsMouse && root.providerDisplayName.length > 0
+            ToolTip.text: root.providerDisplayName
 
             Image {
-                anchors.fill: parent
+                id: aiAvatarImage
+                anchors.centerIn: parent
+                width: root.aiAvatarIconSize
+                height: root.aiAvatarIconSize
                 source: root.aiAvatar
-                fillMode: Image.PreserveAspectCrop
+                fillMode: Image.PreserveAspectFit
+                sourceSize.width: root.aiAvatarSourceSize
+                sourceSize.height: root.aiAvatarSourceSize
                 asynchronous: true
                 cache: true
+                smooth: true
+                mipmap: true
+            }
+
+            MouseArea {
+                id: leftAvatarHover
+                anchors.fill: parent
+                hoverEnabled: true
+                acceptedButtons: Qt.NoButton
             }
         }
 

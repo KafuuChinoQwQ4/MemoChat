@@ -14,6 +14,17 @@ using namespace std::chrono;
 
 namespace
 {
+std::string TrimAscii(const std::string& value)
+{
+    const auto start = value.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos)
+    {
+        return "";
+    }
+    const auto end = value.find_last_not_of(" \t\r\n");
+    return value.substr(start, end - start + 1);
+}
+
 void PopulateMemoryItem(const memochat::json::JsonValue& item, ai::AIMemoryItem* out)
 {
     out->set_memory_id(memochat::json::glaze_safe_get<std::string>(item["memory_id"], ""));
@@ -309,6 +320,31 @@ grpc::Status AIServiceCore::DeleteSession(const ai::AIDeleteSessionReq& req, ai:
     {
         reply->set_code(404);
         reply->set_message("session not found");
+    }
+    return grpc::Status::OK;
+}
+
+grpc::Status AIServiceCore::UpdateSession(const ai::AIUpdateSessionReq& req, ai::AISessionRsp* reply)
+{
+    reply->set_code(0);
+    reply->set_message("ok");
+    const std::string title = TrimAscii(req.title());
+    if (req.uid() <= 0 || req.session_id().empty() || title.empty())
+    {
+        reply->set_code(400);
+        reply->set_message("uid, session_id and title are required");
+        return grpc::Status::OK;
+    }
+    if (!_session_repo->UpdateTitle(req.uid(), req.session_id(), title))
+    {
+        reply->set_code(404);
+        reply->set_message("session not found");
+        return grpc::Status::OK;
+    }
+    auto info = _session_repo->GetSession(req.session_id());
+    if (info)
+    {
+        reply->set_allocated_session(info.release());
     }
     return grpc::Status::OK;
 }

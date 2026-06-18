@@ -17,14 +17,17 @@ Item {
     property string pendingDeleteSessionId: ""
     property string pendingDeleteRoomId: ""
     property string pendingDeleteTitle: ""
+    property string pendingRenameSessionId: ""
+    property string pendingRenameTitle: ""
     readonly property bool pendingDeleteIsRoom: pendingDeleteRoomId.length > 0
-    readonly property var agentEntryModel: agentEntries(agentSessions, agentGameRooms, currentModel)
+    readonly property var agentEntryModel: agentEntries(agentSessions, agentGameRooms)
 
     signal newChatRequested()
     signal newSessionRequested()
     signal newGameRequested()
     signal sessionSelected(string sessionId)
     signal sessionDeleted(string sessionId)
+    signal sessionRenamed(string sessionId, string title)
     signal gameRoomSelected(string roomId)
     signal gameRoomDeleted(string roomId)
 
@@ -33,7 +36,7 @@ Item {
         return rulesetId === "multi_ai_chat.test" ? "多 AI 聊天" : "Game 模式"
     }
 
-    function agentEntries(sessions, rooms, currentModelName) {
+    function agentEntries(sessions, rooms) {
         var rows = []
         for (var i = 0; i < (sessions ? sessions.length : 0); ++i) {
             var session = sessions[i] || {}
@@ -41,7 +44,7 @@ Item {
                 "kind": "session",
                 "entry_id": session.session_id || "",
                 "title": session.title || "新会话",
-                "subtitle": session.model_name || currentModelName || "AI 会话",
+                "subtitle": "",
                 "status": i,
                 "session_id": session.session_id || "",
                 "room_id": "",
@@ -78,6 +81,27 @@ Item {
         root.pendingDeleteTitle = entry.title || (entry.kind === "room" ? "对话房间" : "新会话")
         if (root.pendingDeleteSessionId.length > 0 || root.pendingDeleteRoomId.length > 0) {
             agentDeleteDialog.open()
+        }
+    }
+
+    function openRenameDialog(entry) {
+        if (!entry || entry.kind !== "session") {
+            return
+        }
+        root.pendingRenameSessionId = entry.session_id || entry.entry_id || ""
+        root.pendingRenameTitle = entry.title || ""
+        if (root.pendingRenameSessionId.length > 0) {
+            agentRenameTitleField.text = root.pendingRenameTitle === "新会话" ? "" : root.pendingRenameTitle
+            agentRenameDialog.open()
+        }
+    }
+
+    function submitRenameDialog() {
+        const sessionId = root.pendingRenameSessionId
+        const title = (agentRenameTitleField.text || "").replace(/^\s+|\s+$/g, "")
+        if (sessionId.length > 0 && title.length > 0) {
+            root.sessionRenamed(sessionId, title)
+            agentRenameDialog.close()
         }
     }
 
@@ -210,7 +234,7 @@ Item {
 
             delegate: Rectangle {
                 width: ListView.view.width
-                implicitHeight: 62
+                implicitHeight: modelData.kind === "room" ? 62 : 54
                 radius: 10
                 color: {
                     if (modelData.kind === "room" && (modelData.room_id || "") === root.currentGameRoomId) {
@@ -230,9 +254,17 @@ Item {
                     id: sessionHover
                     z: 0
                     anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: {
+                    onClicked: function(mouse) {
+                        if (mouse.button === Qt.RightButton) {
+                            mouse.accepted = true
+                            if (modelData.kind === "session") {
+                                agentSessionContextMenu.popup()
+                            }
+                            return
+                        }
                         if (modelData.kind === "room") {
                             const roomId = modelData.room_id || modelData.id || ""
                             if (roomId.length > 0) {
@@ -244,6 +276,22 @@ Item {
                                 root.sessionSelected(sessionId)
                             }
                         }
+                    }
+                }
+
+                Menu {
+                    id: agentSessionContextMenu
+
+                    MenuItem {
+                        text: "重命名"
+                        enabled: modelData.kind === "session" && !root.busy
+                        onTriggered: root.openRenameDialog(modelData)
+                    }
+
+                    MenuItem {
+                        text: "删除"
+                        enabled: !root.busy
+                        onTriggered: root.openDeleteDialog(modelData)
                     }
                 }
 
@@ -278,6 +326,8 @@ Item {
 
                         Label {
                             Layout.fillWidth: true
+                            Layout.preferredHeight: visible ? implicitHeight : 0
+                            visible: modelData.kind === "room" && (modelData.subtitle || "").length > 0
                             text: modelData.subtitle || ""
                             color: "#6a7b92"
                             font.pixelSize: 11
@@ -351,6 +401,113 @@ Item {
                 color: "#6a7b92"
                 font.pixelSize: 12
                 horizontalAlignment: Text.AlignHCenter
+            }
+        }
+    }
+
+    Popup {
+        id: agentRenameDialog
+        modal: true
+        focus: true
+        width: Math.min(320, parent.width - 32)
+        height: 188
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        Overlay.modal: Rectangle {
+            color: Qt.rgba(20, 28, 40, 0.26)
+        }
+
+        background: Rectangle {
+            radius: 16
+            color: "transparent"
+        }
+
+        onOpened: {
+            agentRenameTitleField.forceActiveFocus()
+            agentRenameTitleField.selectAll()
+        }
+
+        onClosed: {
+            root.pendingRenameSessionId = ""
+            root.pendingRenameTitle = ""
+            agentRenameTitleField.text = ""
+        }
+
+        contentItem: GlassSurface {
+            backdrop: root.backdrop !== null ? root.backdrop : root
+            cornerRadius: 16
+            blurRadius: 20
+            fillColor: Qt.rgba(0.98, 0.99, 1.0, 0.90)
+            strokeColor: Qt.rgba(1, 1, 1, 0.58)
+            glowTopColor: Qt.rgba(1, 1, 1, 0.30)
+            glowBottomColor: Qt.rgba(1, 1, 1, 0.06)
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 18
+                spacing: 12
+
+                Label {
+                    Layout.fillWidth: true
+                    text: "重命名会话"
+                    color: "#263448"
+                    font.pixelSize: 16
+                    font.bold: true
+                    elide: Text.ElideRight
+                }
+
+                TextField {
+                    id: agentRenameTitleField
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 38
+                    selectByMouse: true
+                    placeholderText: "输入会话标题"
+                    font.pixelSize: 14
+                    color: "#263448"
+                    maximumLength: 64
+                    onAccepted: root.submitRenameDialog()
+                    background: Rectangle {
+                        radius: 10
+                        color: Qt.rgba(1, 1, 1, 0.68)
+                        border.color: agentRenameTitleField.activeFocus ? Qt.rgba(0.35, 0.61, 0.90, 0.72)
+                                                                        : Qt.rgba(0.74, 0.80, 0.88, 0.62)
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    GlassButton {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 38
+                        text: "取消"
+                        textPixelSize: 13
+                        cornerRadius: 10
+                        normalColor: Qt.rgba(0.54, 0.60, 0.68, 0.18)
+                        hoverColor: Qt.rgba(0.54, 0.60, 0.68, 0.26)
+                        pressedColor: Qt.rgba(0.54, 0.60, 0.68, 0.34)
+                        onClicked: agentRenameDialog.close()
+                    }
+
+                    GlassButton {
+                        id: agentRenameSaveButton
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 38
+                        text: "保存"
+                        textPixelSize: 13
+                        cornerRadius: 10
+                        normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.20)
+                        hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.30)
+                        pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.38)
+                        enabled: (agentRenameTitleField.text || "").replace(/^\s+|\s+$/g, "").length > 0
+                        opacity: agentRenameSaveButton.enabled ? 1.0 : 0.45
+                        onClicked: root.submitRenameDialog()
+                    }
+                }
             }
         }
     }

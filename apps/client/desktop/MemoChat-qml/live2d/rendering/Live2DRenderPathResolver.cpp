@@ -10,10 +10,12 @@ namespace Live2DRenderPathResolver
 
 QString resolveModelPath(const QString& modelRoot, const QString& modelJson, const QString& defaultModelPath)
 {
+    Q_UNUSED(defaultModelPath);
+
     const QString cleaned = modelJson.trimmed();
     if (cleaned.isEmpty())
     {
-        return defaultModelPath;
+        return {};
     }
     if (cleaned.startsWith(QStringLiteral("qrc:/")))
     {

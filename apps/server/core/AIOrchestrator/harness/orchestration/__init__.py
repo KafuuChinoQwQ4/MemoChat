@@ -6,6 +6,10 @@ def __getattr__(name: str):
         from .agent_service import AgentHarnessService
 
         return AgentHarnessService
+    if name == "AgentTurnGraph":
+        from .agent_graph import AgentTurnGraph
+
+        return AgentTurnGraph
     if name == "PlanningPolicy":
         from .planner import PlanningPolicy
 
@@ -13,4 +17,4 @@ def __getattr__(name: str):
     raise AttributeError(f"module 'harness.orchestration' has no attribute {name!r}")
 
 
-__all__ = ["AgentHarnessService", "PlanningPolicy"]
+__all__ = ["AgentHarnessService", "AgentTurnGraph", "PlanningPolicy"]

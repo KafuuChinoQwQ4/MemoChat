@@ -136,6 +136,7 @@ enum ReqId
     ID_AI_TASK_CANCEL = 1217,
     ID_AI_TASK_RESUME = 1218,
     ID_AI_MODEL_API_DELETE = 1219,
+    ID_AI_SESSION_UPDATE = 1220,
 };
 
 enum ErrorCodes

@@ -142,6 +142,7 @@ void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err,
         case AgentRequestKind::ListSessions:
         case AgentRequestKind::CreateSession:
         case AgentRequestKind::DeleteSession:
+        case AgentRequestKind::RenameSession:
             handleSessionRsp(id, res, err, record.kind);
             break;
         case AgentRequestKind::History:

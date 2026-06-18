@@ -10,5 +10,6 @@
 | `AgentMarkdownRuntime.js` | Markdown 渲染运行时逻辑 |
 | `AgentMultiAiRuntime.js` | 多 AI 协作界面运行时逻辑 |
 | `AgentPaneRuntime.js` | 智能体主面板运行时逻辑 |
+| `AgentProviderRuntime.js` | AI provider 元数据和头像映射逻辑 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

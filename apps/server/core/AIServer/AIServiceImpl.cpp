@@ -59,6 +59,13 @@ grpc::Status AIServiceImpl::DeleteSession(ServerContext* context,
 }
 
 grpc::Status
+AIServiceImpl::UpdateSession(ServerContext* context, const ai::AIUpdateSessionReq* request, ai::AISessionRsp* reply)
+{
+    memolog::SpanScope span("AIService.UpdateSession", "gRPC");
+    return _core->UpdateSession(*request, reply);
+}
+
+grpc::Status
 AIServiceImpl::ListModels(ServerContext* context, const ai::AIListModelsReq* request, ai::AIListModelsRsp* reply)
 {
     memolog::SpanScope span("AIService.ListModels", "gRPC");

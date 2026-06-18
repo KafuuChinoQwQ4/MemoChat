@@ -14,30 +14,32 @@ Rectangle {
 
     property var backdrop: null
     property var petController: null
-    property string characterName: "香风智乃"
-    property string roleIdentity: "Live2D 桌宠助手"
-    property string modelRoot: "resources/live2d/KafuuChino/香风智乃live2D"
-    property string modelJson: "resources/live2d/KafuuChino/香风智乃live2D/香风智乃.model3.json"
-    property string motionDirectory: "resources/live2d/KafuuChino/香风智乃live2D"
-    property string expressionDirectory: "resources/live2d/KafuuChino/香风智乃live2D"
-    property string voiceDirectory: "resources/live2d/KafuuChino/香风智乃voice"
-    property string defaultVoice: "Kafuuchino-voice.mp3"
-    property string idleMotion: "Idle"
-    property string speakingMotion: "Talk"
-    property string fallbackExpression: "脸红"
-    property string personalityTags: "认真, 安静, 可靠, 轻声提醒"
-    property string relationshipStyle: "熟悉但不过界的桌面同伴"
-    property string worldSetting: "以香风智乃素材作为本地默认角色，在 MemoChat 旁边陪用户聊天、学习和整理资料。"
-    property string speechRules: "使用当前选择的单一语言回复，不混用中文、日语或英语。少说套话，先回应情绪，再给明确建议。"
-    property string catchphrases: "收到，我会记住。\n先别急，我们一步一步来。"
-    property string forbiddenRules: "不要伪装成真人；不要主动索要隐私；不替用户做高风险决定。"
+    property int currentUserUid: 0
+    property string currentUserId: ""
+    property string characterName: ""
+    property string roleIdentity: ""
+    property string modelRoot: ""
+    property string modelJson: ""
+    property string motionDirectory: ""
+    property string expressionDirectory: ""
+    property string voiceDirectory: ""
+    property string defaultVoice: ""
+    property string idleMotion: ""
+    property string speakingMotion: ""
+    property string fallbackExpression: ""
+    property string personalityTags: ""
+    property string relationshipStyle: ""
+    property string worldSetting: ""
+    property string speechRules: ""
+    property string catchphrases: ""
+    property string forbiddenRules: ""
     property string draftStatus: ""
     property real emotionLevel: 0.62
     property real creativityLevel: 0.48
     property real voiceSpeed: 1.0
     property real lipSyncSensitivity: 0.55
-    property bool voiceLipSyncEnabled: true
-    property bool emotionSoundEnabled: true
+    property bool voiceLipSyncEnabled: false
+    property bool emotionSoundEnabled: false
     property bool idleMotionEnabled: true
     property bool gazeFollowEnabled: true
     property bool memoryEnabled: true
@@ -52,8 +54,9 @@ Rectangle {
     property string voiceTrainingStage: ""
     property int voiceTrainingProgress: 0
     property string voiceTrainingArtifactPath: ""
-    property string voiceTrainingMessage: "等待确认参考音频权限"
+    property string voiceTrainingMessage: "等待用户导入模型和参考音频"
     property string characterAvatarSource: "qrc:/icons/modelive2d.png"
+    property bool settingsInitialized: false
 
     signal petPreviewRequested(var petAssetSettings)
 
@@ -87,10 +90,38 @@ Rectangle {
     }
 
     Component.onCompleted: {
+        settingsInitialized = true
+        root.bindSettingsToCurrentUser()
+        root.refreshCharacterAvatar()
+        assetValidationTimer.start()
+    }
+
+    onCurrentUserUidChanged: {
+        if (settingsInitialized) {
+            root.bindSettingsToCurrentUser()
+            assetValidationTimer.restart()
+        }
+    }
+
+    onCurrentUserIdChanged: {
+        if (settingsInitialized) {
+            root.bindSettingsToCurrentUser()
+        }
+    }
+
+    function bindSettingsToCurrentUser() {
+        if (root.currentUserUid > 0) {
+            petAssetSettings.bindAccount(root.currentUserUid, root.currentUserId)
+        } else {
+            petAssetSettings.clearAccountBinding()
+        }
         petAssetSettings.load()
         root.applySettingsToDraft()
         root.refreshCharacterAvatar()
-        assetValidationTimer.start()
+    }
+
+    function accountProfileId() {
+        return root.currentUserUid > 0 ? "user_" + root.currentUserUid : "default"
     }
 
     function pathDirectory(path) {
@@ -343,7 +374,7 @@ Rectangle {
         voiceTrainingProgress = 0
         voiceTrainingMessage = "正在提交声音训练准备任务"
         petController.startVoiceTraining({
-            "profile_id": "default",
+            "profile_id": accountProfileId(),
             "voice_name": defaultVoice.length > 0 ? defaultVoice.replace(/\.[^.]+$/, "") : characterName,
             "language": languageCode(),
             "reference_audio_path": referencePath,
@@ -351,7 +382,7 @@ Rectangle {
             "reference_audio_file": defaultVoice,
             "consent_confirmed": voiceTrainingConsent,
             "consent_scope": voiceTrainingConsentScope,
-            "source": "src-default",
+            "source": "user-imported",
             "provider": "gpt-sovits",
             "metadata": {
                 "character": characterName,

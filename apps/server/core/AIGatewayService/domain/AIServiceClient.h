@@ -55,6 +55,8 @@ public:
 
     memochat::json::JsonValue DeleteSession(int32_t uid, const std::string& session_id);
 
+    memochat::json::JsonValue UpdateSession(int32_t uid, const std::string& session_id, const std::string& title);
+
     memochat::json::JsonValue ListModels();
 
     memochat::json::JsonValue RegisterApiProvider(const std::string& provider_name,

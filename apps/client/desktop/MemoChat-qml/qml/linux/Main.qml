@@ -241,10 +241,41 @@ Item {
         return true
     }
 
+    function petAccountReady() {
+        return root.chatPageActive && shell.currentUserUid > 0
+    }
+
+    function bindStartupPetSettingsToCurrentUser() {
+        if (shell.currentUserUid <= 0) {
+            startupPetSettings.clearAccountBinding()
+            return false
+        }
+        startupPetSettings.bindAccount(shell.currentUserUid, shell.currentUserId)
+        startupPetSettings.load()
+        return true
+    }
+
+    function destroyPetWindow() {
+        startupPetTimer.stop()
+        const win = root.petWindowRef
+        if (!win) {
+            return false
+        }
+        root.petWindowRef = null
+        win.petAssetSettings = null
+        win.petController = null
+        win.agentController = null
+        win.visible = false
+        win.hide()
+        win.destroy()
+        return true
+    }
+
     function finishChatWindowShown() {
         if (!chatPageActive) {
             return
         }
+        root.bindStartupPetSettingsToCurrentUser()
         Qt.callLater(function() {
             if (chatPageActive) {
                 shell.beginPostLoginBootstrap()
@@ -343,8 +374,14 @@ Item {
     }
 
     function openPetWindow(petAssetSettings) {
+        if (!root.petAccountReady()) {
+            root.destroyPetWindow()
+            return null
+        }
         if (!petAssetSettings) {
-            startupPetSettings.load()
+            if (!root.bindStartupPetSettingsToCurrentUser()) {
+                return null
+            }
         }
         const win = ensurePetWindow(petAssetSettings)
         if (!win) {
@@ -356,6 +393,11 @@ Item {
     }
 
     function togglePetWindow() {
+        if (!root.petAccountReady()) {
+            root.destroyPetWindow()
+            return
+        }
+        root.bindStartupPetSettingsToCurrentUser()
         const win = ensurePetWindow()
         if (!win) {
             console.warn("Failed to create pet window")
@@ -371,26 +413,25 @@ Item {
     function syncWindowsByPage() {
         const token = ++windowSwitchToken
         if (chatPageActive) {
+            bindStartupPetSettingsToCurrentUser()
             const retiredWindowPending = destroyLoginWindow()
             scheduleWindowHandoff(retiredWindowPending, token, ShellViewModel.ChatPage)
             return
         }
+        destroyPetWindow()
         const retiredWindowPending = destroyChatWindow()
         scheduleWindowHandoff(retiredWindowPending, token, shell.page)
     }
 
     Component.onCompleted: {
-        startupPetSettings.load()
+        bindStartupPetSettingsToCurrentUser()
         syncWindowsByPage()
     }
 
     Component.onDestruction: {
         destroyLoginWindow()
         destroyChatWindow()
-        if (petWindowRef) {
-            petWindowRef.destroy()
-            petWindowRef = null
-        }
+        destroyPetWindow()
     }
 
     Connections {
@@ -399,7 +440,20 @@ Item {
             syncWindowsByPage()
         }
         function onCurrentUserChanged() {
+            if (!root.petAccountReady()) {
+                root.destroyPetWindow()
+                startupPetSettings.clearAccountBinding()
+                return
+            }
+            const previousPetAccountUid = startupPetSettings.accountUid
+            root.bindStartupPetSettingsToCurrentUser()
+            if (petWindowRef && previousPetAccountUid > 0
+                    && previousPetAccountUid !== shell.currentUserUid) {
+                root.destroyPetWindow()
+                return
+            }
             if (petWindowRef) {
+                petWindowRef.petAssetSettings = startupPetSettings
                 petWindowRef.selfAvatar = shell.currentUserIcon
             }
         }

@@ -26,6 +26,15 @@
         <file alias="features/agent/view/AgentPane.qml">../view/AgentPane.qml</file>
         <file alias="features/agent/view/AgentPaneHeader.qml">../view/AgentPaneHeader.qml</file>
         <file alias="features/agent/runtime/AgentPaneRuntime.js">../runtime/AgentPaneRuntime.js</file>
+        <file alias="features/agent/runtime/AgentProviderRuntime.js">../runtime/AgentProviderRuntime.js</file>
+        <file alias="icons/ai_provider_openai.svg">icons/ai_provider_openai.svg</file>
+        <file alias="icons/ai_provider_claude.svg">icons/ai_provider_claude.svg</file>
+        <file alias="icons/ai_provider_gemini.svg">icons/ai_provider_gemini.svg</file>
+        <file alias="icons/ai_provider_deepseek.svg">icons/ai_provider_deepseek.svg</file>
+        <file alias="icons/ai_provider_qwen.svg">icons/ai_provider_qwen.svg</file>
+        <file alias="icons/ai_provider_glm.svg">icons/ai_provider_glm.svg</file>
+        <file alias="icons/ai_provider_kimi.svg">icons/ai_provider_kimi.svg</file>
+        <file alias="icons/ai_provider_generic.svg">icons/ai_provider_generic.svg</file>
         <file alias="features/agent/view/AgentStatusOverlay.qml">../view/AgentStatusOverlay.qml</file>
         <file alias="features/agent/view/AgentTaskPane.qml">../view/AgentTaskPane.qml</file>
         <file alias="features/agent/view/AgentTracePane.qml">../view/AgentTracePane.qml</file>

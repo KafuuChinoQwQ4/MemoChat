@@ -55,6 +55,8 @@ class PetAssetSettings : public QObject
     Q_PROPERTY(
         QString voiceTrainingMessage READ voiceTrainingMessage WRITE setVoiceTrainingMessage NOTIFY settingsChanged)
     Q_PROPERTY(QString live2dAvatarUrl READ live2dAvatarUrl NOTIFY settingsChanged)
+    Q_PROPERTY(int accountUid READ accountUid NOTIFY settingsChanged)
+    Q_PROPERTY(QString accountKey READ accountKey NOTIFY settingsChanged)
     Q_PROPERTY(QString storagePath READ storagePath NOTIFY settingsChanged)
     Q_PROPERTY(bool dirty READ dirty NOTIFY settingsChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY settingsChanged)
@@ -227,6 +229,14 @@ public:
         return _voice_training_message;
     }
     QString live2dAvatarUrl() const;
+    int accountUid() const
+    {
+        return _account_uid;
+    }
+    QString accountKey() const
+    {
+        return _account_key;
+    }
     QString storagePath() const
     {
         return _storage_path;
@@ -247,6 +257,8 @@ public:
     Q_INVOKABLE QString resolveLive2DAvatarUrl(const QString& modelJson, const QString& modelRoot) const;
     Q_INVOKABLE QString pickLocalFilePath(const QString& title, const QString& startPath, const QString& nameFilter);
     Q_INVOKABLE QString pickLocalDirectoryPath(const QString& title, const QString& startPath);
+    Q_INVOKABLE bool bindAccount(int uid, const QString& userId);
+    Q_INVOKABLE void clearAccountBinding();
 
 public slots:
     void setCharacterName(const QString& value);
@@ -296,6 +308,7 @@ signals:
 
 private:
     static bool assignString(QString& target, const QString& value);
+    static QString accountKeyFor(int uid, const QString& userId);
     bool assignInt(int& target, int value, int minimum, int maximum);
     bool assignReal(qreal& target, qreal value, qreal minimum, qreal maximum);
     bool assignBool(bool& target, bool value);
@@ -305,6 +318,7 @@ private:
     void normalizeVoiceTrainingState();
     void markDirty();
     QString defaultStoragePath() const;
+    QString accountStoragePath(const QString& accountKey) const;
 
     QString _character_name;
     QString _role_identity;
@@ -347,6 +361,8 @@ private:
     int _voice_training_progress = 0;
     QString _voice_training_artifact_path;
     QString _voice_training_message;
+    int _account_uid = 0;
+    QString _account_key;
     QString _storage_path;
     bool _dirty = false;
     QString _status_text;

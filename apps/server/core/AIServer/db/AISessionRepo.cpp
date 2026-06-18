@@ -111,6 +111,33 @@ bool AISessionRepo::SoftDelete(const std::string& session_id)
     }
 }
 
+bool AISessionRepo::UpdateTitle(int32_t uid, const std::string& session_id, const std::string& title)
+{
+    int64_t now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+    try
+    {
+        std::lock_guard<std::mutex> lock(_impl->mutex);
+        pqxx::work tx(*_impl->conn);
+        auto r = tx.exec_params(
+            R"(UPDATE ai_session
+               SET title = $1, updated_at = $2
+               WHERE uid = $3 AND session_id = $4 AND deleted_at IS NULL)",
+            title,
+            now,
+            uid,
+            session_id);
+        tx.commit();
+        return r.affected_rows() > 0;
+    }
+    catch (const std::exception& e)
+    {
+        memolog::LogError("ai_session.update_title.failed",
+                          "pg_update_error",
+                          {{"uid", std::to_string(uid)}, {"session_id", session_id}, {"error", e.what()}});
+        return false;
+    }
+}
+
 std::unique_ptr<ai::AISessionInfo> AISessionRepo::GetSession(const std::string& session_id)
 {
     try

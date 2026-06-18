@@ -8,6 +8,7 @@
 | --- | --- |
 | `README.md` | 编排层说明文档。 |
 | `__init__.py` | 包初始化。 |
+| `agent_graph.py` | 基于 LangGraph 的 agent 节点流转图，负责 preparation/completion/finalization 的控制流。 |
 | `agent_service.py` | 智能体编排服务：组织各层执行一次完整运行。 |
 | `planner.py` | 规划策略：根据技能与记忆生成执行计划。 |
 

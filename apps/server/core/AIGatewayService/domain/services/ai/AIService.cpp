@@ -254,6 +254,25 @@ bool AIService::HandleDeleteSession(const memochat::gate::routing::GateRequest& 
     return true;
 }
 
+bool AIService::HandleUpdateSession(const memochat::gate::routing::GateRequest& request,
+                                    memochat::gate::routing::GateResponse& response)
+{
+    memolog::SpanScope span("gate.ai.session.update", "http");
+    json::JsonValue root = json::JsonValue{};
+    json::JsonValue src_root = json::JsonValue{};
+    if (!ParsePostJson(request, response, root, src_root))
+    {
+        return true;
+    }
+
+    const int32_t uid = json::glaze_safe_get<int>(src_root, "uid", 0);
+    const std::string session_id = json::glaze_safe_get<std::string>(src_root, "session_id", "");
+    const std::string title = json::glaze_safe_get<std::string>(src_root, "title", "");
+    auto result = Client().UpdateSession(uid, session_id, title);
+    WriteJson(response, result);
+    return true;
+}
+
 bool AIService::HandleListModels(const memochat::gate::routing::GateRequest& request,
                                  memochat::gate::routing::GateResponse& response)
 {

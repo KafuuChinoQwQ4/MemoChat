@@ -39,6 +39,8 @@ Rectangle {
     property string agentCurrentGameRoomId: ""
     property string agentCurrentModel: ""
     property bool agentBusy: false
+    property int currentUserUid: 0
+    property string currentUserId: ""
     property int momentsSelectedUid: 0
     property string momentsSelectedName: ""
     property real _sessionLastContentY: 0
@@ -46,7 +48,10 @@ Rectangle {
     property real _chatLoadThresholdPx: 48
     property real _chatLoadRearmOffsetPx: 96
     readonly property string live2dAvatarFallback: "qrc:/icons/modelive2d.png"
-    property string live2dAvatarSource: live2dAvatarFallback
+    property string live2dAvatarSource: ""
+    property string live2dCharacterName: ""
+    property string live2dModelPath: ""
+    property bool live2dModelImported: false
 
     PetAssetSettings {
         id: live2dPetSettings
@@ -70,6 +75,7 @@ Rectangle {
     signal agentNewGameRequested()
     signal agentSessionSelected(string sessionId)
     signal agentSessionDeleted(string sessionId)
+    signal agentSessionRenamed(string sessionId, string title)
     signal agentGameRoomSelected(string roomId)
     signal agentGameRoomDeleted(string roomId)
     signal momentFriendSelected(int uid, string displayName)
@@ -81,12 +87,36 @@ Rectangle {
     function currentSessionListView() { return sessionPaneLoader.item ? sessionPaneLoader.item.sessionListView : null }
     function currentSessionModel() { return dialogModel }
     function usesSearchHeader() { return false }
-    function refreshLive2DEntryAvatar() {
+    function trimmed(value) {
+        return (value || "").toString().replace(/^\s+|\s+$/g, "")
+    }
+    function refreshLive2DEntryState() {
+        var modelJson = root.trimmed(live2dPetSettings.modelJson)
+        var modelRoot = root.trimmed(live2dPetSettings.modelRoot)
         var nextAvatar = ""
-        if (live2dPetSettings && live2dPetSettings.resolveLive2DAvatarUrl) {
-            nextAvatar = live2dPetSettings.live2dAvatarUrl
+        root.live2dCharacterName = root.trimmed(live2dPetSettings.characterName)
+        root.live2dModelPath = modelJson.length > 0 ? modelJson : modelRoot
+        root.live2dModelImported = modelJson.length > 0
+        if (root.live2dModelImported && live2dPetSettings && live2dPetSettings.resolveLive2DAvatarUrl) {
+            nextAvatar = live2dPetSettings.resolveLive2DAvatarUrl(modelJson, modelRoot)
         }
-        root.live2dAvatarSource = nextAvatar && nextAvatar.length > 0 ? nextAvatar : root.live2dAvatarFallback
+        root.live2dAvatarSource = nextAvatar && nextAvatar.length > 0 ? nextAvatar : ""
+    }
+    function clearLive2DEntryState() {
+        root.live2dCharacterName = ""
+        root.live2dModelPath = ""
+        root.live2dModelImported = false
+        root.live2dAvatarSource = ""
+    }
+    function bindLive2DEntrySettingsToCurrentUser() {
+        if (root.currentUserUid > 0) {
+            live2dPetSettings.bindAccount(root.currentUserUid, root.currentUserId)
+            live2dPetSettings.load()
+            root.refreshLive2DEntryState()
+            return
+        }
+        live2dPetSettings.clearAccountBinding()
+        root.clearLive2DEntryState()
     }
     function contextualTitle() {
         if (currentTab === ShellViewModel.MomentsTabPage) {
@@ -127,9 +157,7 @@ Rectangle {
         target: live2dPetSettings
         ignoreUnknownSignals: true
         function onSettingsChanged() {
-            if (root.currentTab === ShellViewModel.Live2DTabPage) {
-                root.refreshLive2DEntryAvatar()
-            }
+            root.refreshLive2DEntryState()
         }
     }
 
@@ -177,15 +205,15 @@ Rectangle {
         }
 
         if (currentTab === ShellViewModel.Live2DTabPage) {
-            live2dPetSettings.load()
+            root.bindLive2DEntrySettingsToCurrentUser()
         }
     }
     onCurrentDialogUidChanged: syncCurrentSelection()
+    onCurrentUserUidChanged: root.bindLive2DEntrySettingsToCurrentUser()
+    onCurrentUserIdChanged: root.bindLive2DEntrySettingsToCurrentUser()
     Component.onCompleted: {
         root.ensureCurrentSessionSource()
-        if (currentTab === ShellViewModel.Live2DTabPage) {
-            live2dPetSettings.load()
-        }
+        root.bindLive2DEntrySettingsToCurrentUser()
     }
 
     ColumnLayout {
@@ -390,6 +418,7 @@ Rectangle {
             onNewGameRequested: root.agentNewGameRequested()
             onSessionSelected: function(sessionId) { root.agentSessionSelected(sessionId) }
             onSessionDeleted: function(sessionId) { root.agentSessionDeleted(sessionId) }
+            onSessionRenamed: function(sessionId, title) { root.agentSessionRenamed(sessionId, title) }
             onGameRoomSelected: function(roomId) { root.agentGameRoomSelected(roomId) }
             onGameRoomDeleted: function(roomId) { root.agentGameRoomDeleted(roomId) }
         }
@@ -402,6 +431,9 @@ Rectangle {
             backdrop: root.backdrop !== null ? root.backdrop : root
             avatarSource: root.live2dAvatarSource
             avatarFallback: root.live2dAvatarFallback
+            characterName: root.live2dCharacterName
+            modelPath: root.live2dModelPath
+            hasImportedModel: root.live2dModelImported
         }
     }
 

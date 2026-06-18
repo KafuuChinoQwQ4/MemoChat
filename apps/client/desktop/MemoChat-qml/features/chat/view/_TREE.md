@@ -13,10 +13,10 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
-| `ChatAgentSidePane.qml` | AI 助手侧边窗格 |
+| `ChatAgentSidePane.qml` | AI 助手侧边窗格，含会话/房间列表、删除与会话重命名弹窗 |
 | `ChatConversationPane.qml` | 会话主窗格（消息流 + 输入） |
-| `ChatLeftPanel.qml` | 左侧面板容器 |
-| `ChatLive2DEntryPane.qml` | Live2D 入口窗格 |
+| `ChatLeftPanel.qml` | 左侧面板容器，负责账号态 Live2D 入口数据装配 |
+| `ChatLive2DEntryPane.qml` | Live2D 入口窗格，展示角色导入状态 |
 | `ChatModalLayer.qml` | 聊天页弹窗/模态叠加层 |
 | `ChatNormalFace.qml` | 常规聊天主界面布局（行布局） |
 | `ChatShellContent.qml` | 聊天页整体外壳内容容器 |

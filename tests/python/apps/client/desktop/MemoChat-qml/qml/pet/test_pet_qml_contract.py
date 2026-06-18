@@ -74,6 +74,9 @@ PET_CONTROLLER_WINDOWS_UTILS_H = (
 PET_CONTROLLER_NETWORK_CPP = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/controller/PetControllerNetwork.cpp"
 )
+PET_CONTROLLER_STATE_CPP = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/controller/PetControllerState.cpp"
+)
 PET_CONTROLLER_VISION_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/vision/PetControllerVision.cpp"
 PET_CONTROLLER_WINDOWS_BRIDGE_CPP = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/platform/PetControllerWindowsBridge.cpp"
@@ -106,6 +109,9 @@ PET_CONTROLLER_SESSION_CPP = (
 )
 PET_CONTROLLER_VOICE_TRAINING_CPP = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/speech/PetControllerVoiceTraining.cpp"
+)
+APP_SESSION_LOGOUT_PORT_BINDER_CPP = (
+    REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/composition/AppSessionLogoutPortBinder.cpp"
 )
 
 
@@ -321,6 +327,37 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("if (!_streaming) { startStream(); }", compact)
         self.assertNotIn("if (!_streaming) { const QJsonArray events", compact)
         self.assertIn('const QJsonArray events = root.value(QStringLiteral("events")).toArray();', source)
+
+    def test_pet_controller_logout_resets_account_scoped_runtime(self):
+        source = read_texts(
+            PET_CONTROLLER_H,
+            PET_CONTROLLER_CPP,
+            PET_CONTROLLER_NETWORK_CPP,
+            PET_CONTROLLER_SESSION_CPP,
+            PET_CONTROLLER_STATE_CPP,
+            PET_CONTROLLER_VOICE_TRAINING_CPP,
+        )
+        model_source = read_texts(PET_MODEL_H, PET_MODEL_CPP)
+        logout_binder = APP_SESSION_LOGOUT_PORT_BINDER_CPP.read_text(encoding="utf-8")
+
+        for token in (
+            "Q_INVOKABLE void resetForLogout();",
+            "void PetController::resetForLogout()",
+            "++_request_generation",
+            "_session_id.clear()",
+            "_input_request_in_flight = false",
+            "_vision_request_in_flight = false",
+            "_model.reset()",
+            "accountProfileId()",
+            'payload[QStringLiteral("profile_id")] = accountProfileId()',
+            "pet_generation",
+            "replyGeneration != _request_generation",
+        ):
+            self.assertIn(token, source)
+
+        self.assertIn("Q_INVOKABLE void reset();", model_source)
+        self.assertIn("void PetModel::reset()", model_source)
+        self.assertIn("_features.petController.resetForLogout();", logout_binder)
 
     def test_pet_controller_uses_rolling_vision_segment_buffer(self):
         source = read_texts(
@@ -1009,6 +1046,25 @@ class PetQmlContractTests(unittest.TestCase):
             self.assertIn("petWindowRef.petAssetSettings = settings", source)
             self.assertIn("onPetPreviewRequested: function(petAssetSettings)", source)
             self.assertIn("root.openPetWindow(petAssetSettings)", source)
+
+    def test_live2d_character_pane_binds_owned_settings_to_current_user(self):
+        pane = CHARACTER_PANE_QML.read_text(encoding="utf-8")
+        shell_content = CHAT_SHELL_CONTENT_QML.read_text(encoding="utf-8")
+
+        for token in (
+            "property int currentUserUid: 0",
+            'property string currentUserId: ""',
+            "function bindSettingsToCurrentUser()",
+            "petAssetSettings.bindAccount(root.currentUserUid, root.currentUserId)",
+            "petAssetSettings.load()",
+            "function accountProfileId()",
+            '"profile_id": accountProfileId()',
+        ):
+            self.assertIn(token, pane)
+
+        self.assertNotIn('"profile_id": "default"', pane)
+        self.assertIn("currentUserUid: shell.currentUserUid", shell_content)
+        self.assertIn("currentUserId: shell.currentUserId", shell_content)
 
     def test_pet_autostart_is_disabled_by_default_and_only_starts_from_saved_setting(self):
         pane = CHARACTER_PANE_QML.read_text(encoding="utf-8")

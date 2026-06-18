@@ -46,7 +46,7 @@ class PetVisionSmokeContractTests(unittest.TestCase):
             "visual_react",
             "first_user_seen",
             "我看到你啦",
-            "心情还不错",
+            "心情不错",
             "low_confidence",
             "no_face",
             "cooldown",

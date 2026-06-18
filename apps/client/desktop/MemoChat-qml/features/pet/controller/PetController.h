@@ -239,6 +239,7 @@ public:
     Q_INVOKABLE void interrupt();
     Q_INVOKABLE void stopStream();
     Q_INVOKABLE void clearSpeech();
+    Q_INVOKABLE void resetForLogout();
     Q_INVOKABLE void startVoiceTraining(const QVariantMap& request);
     Q_INVOKABLE void refreshVoiceTrainingJob(const QString& jobId = QString());
     Q_INVOKABLE void openWindowsImeBridge(const QString& initialText = QString());
@@ -299,6 +300,7 @@ private:
     void setStatusText(const QString& statusText);
     void setError(const QString& error);
     QJsonObject authPayload() const;
+    QString accountProfileId() const;
     QJsonObject defaultObservationPayload() const;
     QJsonObject voiceRuntimeMetadata() const;
     void appendVoiceRuntimeMetadata(QJsonObject& metadata) const;
@@ -348,6 +350,7 @@ private:
     bool _vision_request_in_flight = false;
     QSet<QString> _applied_control_event_keys;
     QStringList _applied_control_event_order;
+    int _request_generation = 0;
 };
 
 #endif // PETCONTROLLER_H

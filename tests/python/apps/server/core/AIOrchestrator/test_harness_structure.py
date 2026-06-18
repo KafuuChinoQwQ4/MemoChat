@@ -48,6 +48,7 @@ from harness.handoffs.service import AgentHandoffService
 from harness.interop.service import AgentInteropService
 from harness.layers import list_harness_layers
 from harness.memory.service import MemoryService
+from harness.orchestration.agent_graph import AgentTurnGraph
 from harness.orchestration.agent_service import AgentHarnessService
 from harness.orchestration.planner import PlanningPolicy
 from harness.runtime.message_bus import RedpandaTaskEventPublisher
@@ -1261,6 +1262,20 @@ class HarnessStructureTests(unittest.TestCase):
 
 
 class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_agent_turn_graph_reports_langgraph_backend(self):
+        service = AgentHarnessService(
+            planner=FakePlanner(),
+            llm_registry=FakeLLM(),
+            tool_executor=FakeToolExecutor(),
+            memory_service=FakeMemory(),
+            trace_store=FakeTraceStore(),
+            feedback_evaluator=FakeFeedback(),
+            guardrail_service=GuardrailService(),
+        )
+
+        self.assertIsInstance(service._turn_graph, AgentTurnGraph)
+        self.assertEqual(service.orchestration_backend, "langgraph")
+
     async def test_run_turn_records_core_layer_events(self):
         service = AgentHarnessService(
             planner=FakePlanner(),
@@ -1286,6 +1301,7 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
         result = await service.run_turn(request)
         layers = [event.layer for event in result.events]
         guardrail_names = [event.name for event in result.events if event.layer == "guardrails"]
+        plan_event = next(event for event in result.events if event.name == "plan")
 
         self.assertEqual(result.skill, "knowledge_copilot")
         self.assertIn("orchestration", layers)
@@ -1294,6 +1310,7 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("execution", layers)
         self.assertIn("feedback", layers)
         self.assertEqual(guardrail_names, ["input", "tool_plan", "output"])
+        self.assertEqual(plan_event.metadata["graph_backend"], "langgraph")
 
     async def test_stream_turn_records_same_core_pipeline_events(self):
         service = AgentHarnessService(
