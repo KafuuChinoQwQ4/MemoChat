@@ -127,7 +127,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="message.proto" />
+    <None Include="..\common\proto\message.proto" />
     <None Include="config.ini" />
   </ItemGroup>
 </Project>

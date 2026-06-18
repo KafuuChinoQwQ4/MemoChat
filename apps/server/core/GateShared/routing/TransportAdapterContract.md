@@ -105,7 +105,7 @@ H2 response mapping:
 - `GateResponse.content_type` -> `Http2Response::content_type` when non-empty.
 - `GateResponse.headers` -> `Http2Response::headers`.
 - `GateResponseBodyKind::Inline` -> `Http2Response::body`.
-- `GateResponseBodyKind::File` has no current direct H2 file primitive. G3 must add native file support, define an endpoint-specific inline/redirect contract, or leave that endpoint on a documented legacy adapter path.
+- `GateResponseBodyKind::File` -> adapter reads `file_path` bytes into `Http2Response::body`, using `application/octet-stream` when `content_type` is empty. This is the H2 inline conversion until the transport grows a streaming file primitive.
 
 ## H3 Adapter
 
@@ -113,7 +113,7 @@ Current H3 state:
 
 - H3 request handling uses `GateHttp3Connection`.
 - `GateHttp3Connection` currently exposes request path, method, body, trace id, request id, request headers, query string, query params, and response inspection fields.
-- `GateHttp3Connection::SendResponse(status, body, content_type)` is the current native response path.
+- `GateHttp3Connection::SendResponse(status, body, content_type, headers)` is the current native response path.
 - Auth routes already follow the shared model through `BuildHttp3AuthRequest` and `HandleHttp3AuthRoute`.
 - Most non-auth H3 routes in `GateHttp3ServiceRoutes.cpp` still contain transport-local JSON parsing or direct business/service calls.
 
@@ -134,17 +134,15 @@ H3 response mapping:
 
 - `GateResponse.status` -> `GateHttp3Connection::SendResponse(status, body, content_type)`.
 - `GateResponse.content_type` -> `SendResponse` content type when non-empty, otherwise keep the current default behavior.
-- `GateResponse.headers` currently has no native send path in `GateHttp3Connection::SendResponse`; G4 must add response header support or keep header-dependent endpoints on a documented legacy adapter path.
+- `GateResponse.headers` -> `GateHttp3Connection` response headers, emitted by `GateHttp3Listener` except reserved `content-type` and `content-length`.
 - `GateResponseBodyKind::Inline` -> `SendResponse` body.
-- `GateResponseBodyKind::File` has no current direct H3 file primitive. G4 must add native file support, define an endpoint-specific inline/redirect contract, or leave that endpoint on a documented legacy adapter path.
+- `GateResponseBodyKind::File` -> adapter reads `file_path` bytes and calls `SendResponse(status, bytes, content_type, headers)`, using `application/octet-stream` when `content_type` is empty. This is the H3 inline conversion until the transport grows a streaming file primitive.
 
 ## Legacy Adapter Exceptions
 
 These exceptions are allowed only while explicitly documented and must shrink as shared modules/services become available:
 
 - AI stream and prefix routes may remain as H1 legacy prefix/exact handlers until streaming semantics are represented by a shared service contract.
-- File responses may remain H1-only where H2/H3 lack native file response support.
-- Header-dependent responses may remain transport-specific where H3 lacks native response header support.
 - H2-only `POST /user_logout` remains a H2-only route until a shared module/service owns its behavior.
 - Standalone H1.1 behavior in the H2 process is deferred to G5; G1 does not decide whether that path remains, is removed, or is bridged.
 - Any unmigrated handler that still calls `PostgresMgr`, `MongoMgr`, `RedisMgr`, `VerifyGrpcClient`, `CallService`, `Http2MediaSupport`, `Http2ProfileSupport`, `R18SourceService`, or `AIServiceClient` must be treated as legacy adapter code unless the dependency is behind the shared module/service boundary.

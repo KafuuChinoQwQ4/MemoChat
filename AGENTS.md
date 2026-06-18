@@ -24,6 +24,7 @@
    - `skills/mattpocock/SKILL.md`：用于需要应用项目内 Matt Pocock skills 快照时，尤其是 Superpowers 没覆盖的架构防腐化、领域语言 grilling、zoom-out 代码地图、原型、PRD/issue 切片或 handoff；先读该入口，再只读取相关子 skill。
    - `skills/reflect.md`：用于从用户纠正中学习。
    - `skills/skill-authoring.md`：用于创建、更新、裁剪或复审本项目 skills 和外部 skill 快照入口。
+   - `skills/tree-doc.md`：用于新增、删除、移动、重命名文件或文件夹，或文件职责变化时，实时同步各文件夹根部的 `_TREE.md` 目录树文档。
    - `skills/release.md`：用于发布准备和验证。
    - `skills/icon.md`：用于 SVG/图标资产工作。
 3. 只有在构造委派式或基于产物的阶段提示词时，才使用 `skills/PROMPTS.md`。

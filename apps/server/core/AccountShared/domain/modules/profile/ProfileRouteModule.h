@@ -9,6 +9,7 @@ class ProfileRouteModule final : public memochat::gate::routing::RouteModule
 {
 public:
     void RegisterRoutes(memochat::gate::routing::RouteRegistry& registry) override;
+    static void RegisterUserInfoRoutes(memochat::gate::routing::RouteRegistry& registry);
 };
 
 } // namespace memochat::gate::modules::profile

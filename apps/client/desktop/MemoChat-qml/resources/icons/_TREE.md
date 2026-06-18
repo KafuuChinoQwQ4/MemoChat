@@ -1,0 +1,88 @@
+# icons/ 目录树
+
+> 界面各功能模块所用的图标位图与矢量资源。
+
+## 文件
+
+| 文件 | 作用概括 |
+| --- | --- |
+| `add_friend.png` | 添加好友功能图标 |
+| `add_friend_hover.png` | 添加好友功能图标（悬停态） |
+| `add_friend_normal.png` | 添加好友功能图标（常态） |
+| `addtip.png` | 添加提示图标 |
+| `ai.png` | AI 功能图标 |
+| `ai_icon.png` | AI 功能图标 |
+| `arowdown.png` | 下拉箭头图标 |
+| `chat_icon.png` | 聊天功能图标 |
+| `chat_icon_hover.png` | 聊天功能图标（悬停态） |
+| `chat_icon_press.png` | 聊天功能图标（按下态） |
+| `chat_icon_select_hover.png` | 聊天功能图标（选中悬停态） |
+| `chat_icon_select_press.png` | 聊天功能图标（选中按下态） |
+| `close_search.png` | 关闭搜索图标 |
+| `close_transparent.png` | 透明关闭图标 |
+| `contact_list.png` | 联系人列表功能图标 |
+| `contact_list_hover.png` | 联系人列表功能图标（悬停态） |
+| `contact_list_press.png` | 联系人列表功能图标（按下态） |
+| `female.png` | 女性性别图标 |
+| `filedir.png` | 文件目录功能图标 |
+| `filedir_hover.png` | 文件目录功能图标（悬停态） |
+| `filedir_press.png` | 文件目录功能图标（按下态） |
+| `head_1.jpg` | 默认头像图片 |
+| `head_1.png` | 默认头像图片 |
+| `loading.gif` | 加载中动画 |
+| `male.png` | 男性性别图标 |
+| `modelive2d.png` | Live2D 模型功能图标 |
+| `msg_chat_hover.png` | 消息聊天图标（悬停态） |
+| `msg_chat_normal.png` | 消息聊天图标（常态） |
+| `msg_chat_press.png` | 消息聊天图标（按下态） |
+| `r18.svg` | R18 标识矢量图标 |
+| `red_point.png` | 未读红点提示图标 |
+| `reduce.png` | 缩小/减少图标 |
+| `right_tip.png` | 右侧提示图标 |
+| `search.png` | 搜索功能图标 |
+| `settings.png` | 设置功能图标 |
+| `settings_hover.png` | 设置功能图标（悬停态） |
+| `settings_press.png` | 设置功能图标（按下态） |
+| `settings_select_hover.png` | 设置功能图标（选中悬停态） |
+| `settings_select_press.png` | 设置功能图标（选中按下态） |
+| `smile.png` | 表情/笑脸图标 |
+| `smile_hover.png` | 表情/笑脸图标（悬停态） |
+| `smile_press.png` | 表情/笑脸图标（按下态） |
+| `square.png` | 方块占位图标 |
+| `team.png` | 群组/团队功能图标 |
+| `tipclose.png` | 提示关闭图标 |
+| `unvisible.png` | 密码不可见图标 |
+| `unvisible_hover.png` | 密码不可见图标（悬停态） |
+| `user.png` | 用户功能图标 |
+| `video_chat_hover.png` | 视频聊天图标（悬停态） |
+| `video_chat_normal.png` | 视频聊天图标（常态） |
+| `video_chat_press.png` | 视频聊天图标（按下态） |
+| `visible.png` | 密码可见图标 |
+| `visible_hover.png` | 密码可见图标（悬停态） |
+| `voice_chat_hover.png` | 语音聊天图标（悬停态） |
+| `voice_chat_normal.png` | 语音聊天图标（常态） |
+| `voice_chat_press.png` | 语音聊天图标（按下态） |
+| `一般兑换.png` | 一般兑换功能图标 |
+| `下拉.png` | 下拉功能图标 |
+| `主页.png` | 主页功能图标 |
+| `关闭.png` | 关闭功能图标 |
+| `图片.png` | 图片功能图标 |
+| `导航.png` | 导航功能图标 |
+| `微信图片_20250702234404(1).jpg` | 素材图片 |
+| `性别_男.png` | 男性性别图标 |
+| `性别女.png` | 女性性别图标 |
+| `文件.png` | 文件功能图标 |
+| `无性别.png` | 无性别图标 |
+| `朋友圈.png` | 朋友圈功能图标 |
+| `本地素材备份.png` | 本地素材备份功能图标 |
+| `消息.png` | 消息功能图标 |
+| `源数据分析.png` | 源数据分析功能图标 |
+| `爱心-2.png` | 爱心/点赞功能图标 |
+| `爱心.png` | 爱心/点赞功能图标 |
+| `电话.png` | 电话/通话功能图标 |
+| `表情.png` | 表情功能图标 |
+| `视频.png` | 视频功能图标 |
+| `设置.png` | 设置功能图标 |
+| `评论.png` | 评论功能图标 |
+
+<!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

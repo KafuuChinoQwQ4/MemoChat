@@ -62,7 +62,8 @@ class RegistrationIdentityContractTests(unittest.TestCase):
         self.assertNotIn("SET pwd = $1 WHERE name = $2", update_body)
         self.assertIn("UpdatePassword(email, pwd)", h1_auth)
         self.assertIn("UpdatePwd(email, password)", h1_account)
-        self.assertIn("UpdatePwd(email, pwd)", h2)
+        self.assertIn('&AuthService::HandleResetPwd', h2)
+        self.assertNotIn("UpdatePwd(email, pwd)", h2)
 
     def test_chatserver_postgres_registration_checks_duplicate_email_only(self):
         source = read(SERVER_CORE / "ChatServer/persistence/PostgresDaoUsers.cpp")

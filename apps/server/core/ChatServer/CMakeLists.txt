@@ -87,6 +87,7 @@ set(CHATSERVER_TRANSPORT_SOURCES
 
 set(CHATSERVER_ORCHESTRATION_SOURCES
     domain/orchestration/ChatHandlerRegistrars.cpp
+    domain/orchestration/ChatRuntimeComposition.cpp
     domain/orchestration/LogicSystem.cpp
 )
 

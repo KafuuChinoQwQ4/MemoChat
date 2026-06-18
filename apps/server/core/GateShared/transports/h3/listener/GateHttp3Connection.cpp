@@ -49,11 +49,15 @@ void GateHttp3Connection::OnStreamWriteComplete(int64_t, size_t written)
     (void) written;
 }
 
-bool GateHttp3Connection::SendResponse(int status, const std::string& body, const std::string& content_type)
+bool GateHttp3Connection::SendResponse(int status,
+                                       const std::string& body,
+                                       const std::string& content_type,
+                                       const std::unordered_map<std::string, std::string>& headers)
 {
     response_status_ = status;
     response_body_ = body;
     response_content_type_ = content_type;
+    response_headers_ = headers;
     response_complete_ = true;
     memolog::LogInfo(
         "http3.response.prepare",

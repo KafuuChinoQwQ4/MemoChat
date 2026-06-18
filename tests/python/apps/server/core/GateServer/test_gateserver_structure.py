@@ -523,7 +523,6 @@ AUTH_REDIS_KEY_CONSTRUCTION_PATTERNS = {
 
 AUTH_REDIS_KEY_CALLER_PATHS = (
     ACCOUNT_DOMAIN / "services" / "auth" / "AuthService.cpp",
-    GATE_H2_SUPPORT / "Http2AuthSupport.cpp",
     ACCOUNT_CORE_SUPPORT / "AuthLoginSupport.cpp",
 )
 
@@ -820,12 +819,18 @@ class GateServerStructureTests(unittest.TestCase):
     def test_current_gate_tree_contains_large_files_to_split_later(self):
         large_file_thresholds = {
             GATE_CORE_PERSISTENCE / "PostgresDao.cpp": 1000,
-            GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp": 1000,
         }
         for path, minimum_lines in large_file_thresholds.items():
             with self.subTest(path=path.relative_to(REPO_ROOT)):
                 line_count = len(read(path).splitlines())
                 self.assertGreaterEqual(line_count, minimum_lines)
+
+        h3_routes = GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp"
+        self.assertLess(
+            len(read(h3_routes).splitlines()),
+            180,
+            "H3 route shim should stay a thin transport adapter after shared registry migration",
+        )
 
         media_shim = MEDIA_DOMAIN / "MediaHttpService.cpp"
         media_module = MEDIA_DOMAIN / "modules" / "media" / "MediaRouteModule.cpp"
@@ -1657,9 +1662,15 @@ class GateServerStructureTests(unittest.TestCase):
             "GateResponseBodyKind::Inline",
             "route_response.body",
             "GateResponseBodyKind::File",
+            "ReadFileBody",
+            "route_response.file_path",
+            "response.body = *file_body",
+            "application/octet-stream",
+            "404",
         ):
             with self.subTest(response_mapping_token=token):
                 self.assertIn(token, apply_body)
+        self.assertNotIn("not supported", apply_body.lower())
 
         self.assertIn("TraceContext", dispatch_body)
         self.assertIn("registry.Dispatch", compact_dispatch)
@@ -1671,18 +1682,35 @@ class GateServerStructureTests(unittest.TestCase):
 
         for token in (
             "adapters/h2/H2RouteAdapter.h",
+            "GateRouteProfileRegistrar.h",
             "modules/health/HealthRouteModule.h",
             "RouteRegistry",
             'HealthRouteModule("GateServerHttp2")',
+            "RegisterAccount(routes)",
+            "RegisterAccountUserInfo(routes)",
+            "RegisterCall(routes)",
+            "RegisterMedia(routes)",
+            "RegisterMoments(routes)",
         ):
             with self.subTest(token=token):
                 self.assertIn(token, source)
 
-        for route in ("/healthz", "/readyz"):
+        for route in (
+            "/healthz",
+            "/readyz",
+            "/user_update_profile",
+            "/get_user_info",
+            "/api/call/start",
+            "/api/call/token",
+            "/upload_media_init",
+            "/upload_media_chunk",
+            "/api/moments/publish",
+            "/api/moments/comment/like",
+        ):
             with self.subTest(route=route):
                 self.assertRegex(
                     compact_source,
-                    rf'RegisterHandler\s*\(\s*"GET"\s*,\s*"{re.escape(route)}".*?DispatchSharedRoute\s*\(',
+                    rf'RegisterHandler\s*\(\s*"(?:GET|POST)"\s*,\s*"{re.escape(route)}"\s*,\s*DispatchSharedRoute',
                 )
 
         dispatch_shared_body = extract_function_body(
@@ -1729,11 +1757,17 @@ class GateServerStructureTests(unittest.TestCase):
         adapter_dir = GATE_H3 / "adapters" / "h3"
         header_path = adapter_dir / "H3RouteAdapter.h"
         source_path = adapter_dir / "H3RouteAdapter.cpp"
+        connection_header_path = GATE_H3_LISTENER / "GateHttp3Connection.h"
+        connection_source_path = GATE_H3_LISTENER / "GateHttp3Connection.cpp"
+        listener_source_path = GATE_H3_LISTENER / "GateHttp3Listener.cpp"
 
         self.assertTrue(header_path.exists())
         self.assertTrue(source_path.exists())
 
         source = strip_comments(read(source_path))
+        connection_header = strip_comments(read(connection_header_path))
+        connection_source = strip_comments(read(connection_source_path))
+        listener_source = strip_comments(read(listener_source_path))
 
         request_body = extract_function_body(
             source,
@@ -1767,16 +1801,32 @@ class GateServerStructureTests(unittest.TestCase):
         for token in (
             "route_response.status",
             "route_response.content_type",
+            "route_response.headers",
             "GateResponseBodyKind::Inline",
             "route_response.body",
             "GateResponseBodyKind::File",
+            "ReadFileBody",
+            "route_response.file_path",
             "SendResponse",
-            "501",
+            "404",
+            "application/octet-stream",
         ):
             with self.subTest(response_mapping_token=token):
                 self.assertIn(token, apply_body)
         self.assertIn("file", apply_body.lower())
-        assert_contains_any(self, apply_body.lower(), "H3 file response limitation", ("limitation", "not supported"))
+        self.assertNotIn("file response limitation", apply_body.lower())
+        self.assertNotIn("not supported", apply_body.lower())
+
+        for token in (
+            "ResponseHeaders() const",
+            "response_headers_",
+            "std::unordered_map<std::string, std::string>",
+        ):
+            with self.subTest(h3_connection_header_token=token):
+                self.assertIn(token, connection_header)
+        self.assertIn("response_headers_ = headers", normalize_space(connection_source))
+        self.assertIn("conn->ResponseHeaders()", listener_source)
+        self.assertIn("for (const auto& [name, value] : resp_headers)", listener_source)
 
         self.assertIn("TraceContext::SetTraceId", dispatch_body)
         self.assertIn("TraceContext::SetRequestId", dispatch_body)
@@ -1794,12 +1844,20 @@ class GateServerStructureTests(unittest.TestCase):
 
         for token in (
             '#include "adapters/h3/H3RouteAdapter.h"',
+            '#include "GateRouteProfileRegistrar.h"',
             '#include "modules/health/HealthRouteModule.h"',
             '#include "routing/RouteRegistry.h"',
             "RouteRegistry",
             'HealthRouteModule("GateServer-HTTP3")',
             "SharedRouteRegistry()",
             "H3RouteAdapter::Dispatch",
+            "RegisterRegister(registry)",
+            "RegisterLogin(registry)",
+            "RegisterAccount(registry)",
+            "RegisterAccountUserInfo(registry)",
+            "RegisterCall(registry)",
+            "RegisterMedia(registry)",
+            "RegisterMoments(registry)",
         ):
             with self.subTest(token=token):
                 self.assertIn(token, source)
@@ -1827,7 +1885,7 @@ class GateServerStructureTests(unittest.TestCase):
         self.assertNotIn('root["status"] = "ok"', source)
         self.assertNotIn('root["status"] = "ready"', source)
 
-    def test_h3_current_adapter_surface_and_legacy_business_tokens_are_visible(self):
+    def test_h3_route_shim_uses_shared_registry_without_business_implementation(self):
         connection_header = read(GATE_H3_LISTENER / "GateHttp3Connection.h")
         service_source = read(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp")
 
@@ -1846,22 +1904,37 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertIn(token, connection_header)
 
         for token in (
-            "BuildHttp3AuthRequest",
-            "HandleHttp3AuthRoute",
-            "GateRequest",
-            "GateResponse",
+            "DispatchSharedRoute",
+            "EnsureSharedRouteRegistry",
+            "H3RouteAdapter::Dispatch",
+            "RegisterRegister(registry)",
+            "RegisterLogin(registry)",
+            "RegisterAccount(registry)",
+            "RegisterAccountUserInfo(registry)",
+            "RegisterCall(registry)",
+            "RegisterMedia(registry)",
+            "RegisterMoments(registry)",
         ):
-            with self.subTest(auth_adapter_token=token):
+            with self.subTest(shared_adapter_token=token):
                 self.assertIn(token, service_source)
 
-        legacy_business_tokens = (
+        forbidden_legacy_business_tokens = (
             "PostgresMgr",
             "MongoMgr",
+            "RedisMgr",
+            "CallService",
             "Http2MediaSupport",
+            "Http2ProfileSupport",
+            "AuthLoginSupport",
+            "GateHttp3JsonSupport",
+            "BuildHttp3AuthRequest",
+            "HandleHttp3AuthRoute",
+            "NormalizeMomentItem",
+            "FillCommentLikeJson",
         )
-        for token in legacy_business_tokens:
-            with self.subTest(legacy_business_token=token):
-                self.assertIn(token, service_source)
+        for token in forbidden_legacy_business_tokens:
+            with self.subTest(forbidden_legacy_business_token=token):
+                self.assertNotIn(token, service_source)
 
     def test_gate_response_body_kind_supports_inline_and_file_without_transport_tokens(self):
         response_header = strip_comments(read(SERVER_CORE / "GateShared" / "routing" / "GateResponse.h"))
@@ -1965,10 +2038,13 @@ class GateServerStructureTests(unittest.TestCase):
         self.assertIn("class ProfileRouteModule final", header)
         self.assertIn("public memochat::gate::routing::RouteModule", header)
         self.assertIn("void RegisterRoutes(memochat::gate::routing::RouteRegistry& registry) override", header)
+        self.assertIn("static void RegisterUserInfoRoutes", header)
         assert_registry_registration(self, source, "POST", "/user_update_profile")
+        assert_registry_registration(self, source, "POST", "/get_user_info")
 
         expected_behavior_tokens = (
             "UpdateUserProfile",
+            "GetUserInfo",
             "ubaseinfo_",
             "nameinfo_",
             "InvalidateLoginCacheByUid",
@@ -2097,7 +2173,6 @@ class GateServerStructureTests(unittest.TestCase):
     def test_auth_verify_client_callers_do_not_use_verify_grpc_directly(self):
         caller_paths = (
             ACCOUNT_DOMAIN / "services" / "auth" / "AuthService.cpp",
-            GATE_H2_SUPPORT / "Http2AuthSupport.cpp",
         )
         forbidden_tokens = (
             '#include "VerifyGrpcClient.h"',
@@ -2331,21 +2406,72 @@ class GateServerStructureTests(unittest.TestCase):
             with self.subTest(forbidden_direct_verify_token=token):
                 self.assertNotIn(token, service_source)
 
-    def test_h3_auth_routes_are_thin_auth_service_adapters(self):
-        source = strip_comments(read(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp"))
+    def test_h2_auth_support_is_thin_auth_service_adapter(self):
+        source = strip_comments(read(GATE_H2_SUPPORT / "Http2AuthSupport.cpp"))
+        compact_source = normalize_space(source)
 
-        self.assertIn("services/auth/AuthService.h", source)
-        self.assertIn("memochat::gate::routing::GateRequest", source)
-        self.assertIn("memochat::gate::routing::GateResponse", source)
-        self.assertIn("connection->GetRequestPath()", source)
-        self.assertIn("connection->GetRequestBody()", source)
-        self.assertIn("connection->GetTraceId()", source)
-        self.assertIn("connection->GetRequestId()", source)
-        self.assertIn("connection->GetRequestHeaders()", source)
-        self.assertIn("memolog::TraceContext::SetTraceId(request.trace_id)", source)
-        self.assertIn("memolog::TraceContext::SetRequestId(request.request_id)", source)
+        for token in (
+            "services/auth/AuthService.h",
+            "routing/GateRequest.h",
+            "routing/GateResponse.h",
+            "using AuthHandler",
+            "BuildAuthRequest",
+            "FromGateResponse",
+            "DispatchAuthRoute",
+            "AuthService::Instance()",
+            "HandleUserLogout",
+            "AuthCache::Instance().DeleteHttpToken",
+        ):
+            with self.subTest(required_token=token):
+                self.assertIn(token, source)
+
+        for route, handler in {
+            "/get_varifycode": "HandleGetVarifyCode",
+            "/user_register": "HandleUserRegister",
+            "/reset_pwd": "HandleResetPwd",
+            "/user_login": "HandleUserLogin",
+        }.items():
+            with self.subTest(route=route):
+                self.assertIn(f'DispatchAuthRoute("{route}"', compact_source)
+                self.assertIn(f"&AuthService::{handler}", compact_source)
+
+        forbidden_auth_impl_tokens = (
+            '#include "AuthVerifyClient.h"',
+            '#include "PostgresMgr.h"',
+            '#include "PostgresDao.h"',
+            '#include "GateAsyncSideEffects.h"',
+            '#include "AuthLoginSupport.h"',
+            '#include "auth/ChatLoginTicket.h"',
+            "AuthVerifyClient::Instance().RequestVerifyCode",
+            "PostgresMgr::GetInstance()->RegUser",
+            "PostgresMgr::GetInstance()->GetUserPublicId",
+            "PostgresMgr::GetInstance()->CheckEmail",
+            "PostgresMgr::GetInstance()->UpdatePwd",
+            "PostgresMgr::GetInstance()->CheckPwd",
+            "GateAsyncSideEffects::Instance()",
+            "gateauthsupport::",
+            "ChatLoginTicketClaims",
+            "EncodeTicket",
+            "boost::uuids::random_generator",
+            "CODEPREFIX",
+            "USERTOKENPREFIX",
+        )
+        for token in forbidden_auth_impl_tokens:
+            with self.subTest(forbidden_token=token):
+                self.assertNotIn(token, source)
+
+    def test_h3_auth_routes_dispatch_through_shared_registry_adapter(self):
+        source = strip_comments(read(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp"))
+        compact_source = normalize_space(source)
+
+        self.assertIn("GateRouteProfileRegistrar.h", source)
+        self.assertIn("RegisterRegister(registry)", source)
+        self.assertIn("RegisterLogin(registry)", source)
+        self.assertIn("H3RouteAdapter::Dispatch", source)
 
         forbidden_auth_block_tokens = (
+            "services/auth/AuthService.h",
+            "AuthService",
             "VerifyGrpcClient",
             "RedisMgr",
             "PostgresMgr",
@@ -2357,13 +2483,16 @@ class GateServerStructureTests(unittest.TestCase):
             "boost::uuids::random_generator",
             "gateauthsupport::",
         )
-        for route, handler in H3_AUTH_ROUTES.items():
+        for route in H3_AUTH_ROUTES:
             with self.subTest(route=route):
                 block = extract_logic_route_block(source, route)
-                self.assertIn("AuthService", block)
-                self.assertIn(handler, block)
+                self.assertIn("DispatchSharedRoute", block)
                 for token in forbidden_auth_block_tokens:
                     self.assertNotIn(token, block)
+
+        for token in forbidden_auth_block_tokens:
+            with self.subTest(forbidden_auth_token=token):
+                self.assertNotIn(token, compact_source)
 
     def test_logic_system_bridges_health_routes_through_neutral_registry(self):
         header = read(SERVER_CORE / "GateShared" / "LogicSystem.h")

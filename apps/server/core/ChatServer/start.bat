@@ -4,7 +4,9 @@ setlocal EnableExtensions
 set "SCRIPT_DIR=%~dp0"
 if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 
-set "PROTO_FILE=%SCRIPT_DIR%\message.proto"
+set "SERVER_CORE_DIR=%SCRIPT_DIR%\.."
+set "PROTO_ROOT=%SERVER_CORE_DIR%\common\proto"
+set "PROTO_FILE=%PROTO_ROOT%\message.proto"
 set "PROTOC_PATH=%SCRIPT_DIR%\..\..\vcpkg_installed\x64-windows\tools\protobuf\protoc.exe"
 set "GRPC_PLUGIN_PATH=%SCRIPT_DIR%\..\..\vcpkg_installed\x64-windows\tools\grpc\grpc_cpp_plugin.exe"
 
@@ -32,11 +34,11 @@ if not exist "%GRPC_PLUGIN_PATH%" (
 )
 
 echo [INFO] Generating gRPC code...
-"%PROTOC_PATH%" -I="%SCRIPT_DIR%" --grpc_out="%SCRIPT_DIR%" --plugin=protoc-gen-grpc="%GRPC_PLUGIN_PATH%" "%PROTO_FILE%"
+"%PROTOC_PATH%" -I="%PROTO_ROOT%" --grpc_out="%SCRIPT_DIR%" --plugin=protoc-gen-grpc="%GRPC_PLUGIN_PATH%" "%PROTO_FILE%"
 if errorlevel 1 exit /b 1
 
 echo [INFO] Generating C++ code...
-"%PROTOC_PATH%" -I="%SCRIPT_DIR%" --cpp_out="%SCRIPT_DIR%" "%PROTO_FILE%"
+"%PROTOC_PATH%" -I="%PROTO_ROOT%" --cpp_out="%SCRIPT_DIR%" "%PROTO_FILE%"
 if errorlevel 1 exit /b 1
 
 echo [DONE] Proto code generated.

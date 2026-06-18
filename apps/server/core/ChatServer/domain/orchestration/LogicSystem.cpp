@@ -1,38 +1,18 @@
 #include "LogicSystem.h"
+
+#include "ChatHandlerRegistrars.h"
+#include "ChatRuntimeComposition.h"
 #include "ConfigMgr.h"
+#include "CSession.h"
+#include "MessageDeliveryService.h"
 #include "PostgresMgr.h"
 #include "const.h"
-#include "UserMgr.h"
-#include "ChatMessageRepository.h"
-#include "MessageServiceConfig.h"
-#include "ChatRelationRepository.h"
-#include "RelationQueryServiceConfig.h"
-#include "RelationQueryServiceFactory.h"
-#include "RelationServiceConfig.h"
-#include "ChatSessionConfig.h"
-#include "ChatSessionRepository.h"
-#include "RedisRelationBootstrapCache.h"
-#include "ChatRuntime.h"
-#include "ChatHandlerRegistrars.h"
-#include "AsyncEventDispatcher.h"
-#include "InlineTaskBus.h"
-#include "KafkaAsyncEventBus.h"
-#include "RedisAsyncEventBus.h"
-#include "RabbitMqTaskBus.h"
-#include "ChatDeliveryRuntime.h"
-#include "RelationServiceFactory.h"
-#include "ChatRelationSessionAdapter.h"
-#include "ChatSessionService.h"
-#include "MessageServiceFactory.h"
-#include "MessageDeliveryService.h"
-#include "TaskDispatcher.h"
-#include "RedisOnlineRouteStore.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
-#include <string>
+
 #include <algorithm>
-#include "CServer.h"
-using namespace std;
+#include <exception>
+#include <string>
 
 namespace
 {
@@ -106,133 +86,7 @@ LogicSystem::LogicSystem()
     : _b_stop(false)
     , _p_server(nullptr)
 {
-    _online_route_store = std::make_unique<RedisOnlineRouteStore>();
-    _session_config = std::make_unique<ChatSessionConfig>();
-    _session_repository = std::make_unique<ChatSessionRepository>();
-    _relation_repository = std::make_unique<ChatRelationRepository>();
-    _relation_bootstrap_cache = std::make_unique<RedisRelationBootstrapCache>();
-    _relation_query_service_config = std::make_unique<RelationQueryServiceConfig>();
-    _relation_service_config = std::make_unique<RelationServiceConfig>();
-    _message_service_config = std::make_unique<MessageServiceConfig>();
-    _message_repository = std::make_unique<ChatMessageRepository>();
-    const auto task_bus_backend = memochat::chatruntime::TaskBusBackend();
-    if (task_bus_backend == "rabbitmq" && RabbitMqTaskBus::BuildAvailable())
-    {
-        _task_bus = std::make_shared<RabbitMqTaskBus>();
-        memolog::LogInfo("chat.task_bus.rabbitmq",
-                         "chat task bus backend selected",
-                         {{"configured_backend", task_bus_backend}});
-    }
-    else
-    {
-        if (task_bus_backend == "rabbitmq" && !RabbitMqTaskBus::BuildAvailable())
-        {
-            memolog::LogWarn("chat.task_bus.rabbitmq_unavailable",
-                             "chat task bus rabbitmq backend is not available in current build, fallback to inline",
-                             {{"configured_backend", task_bus_backend}, {"fallback_backend", "inline"}});
-        }
-        else if (task_bus_backend != "inline")
-        {
-            memolog::LogWarn("chat.task_bus.unsupported_backend",
-                             "task bus backend is not implemented yet, fallback to inline",
-                             {{"configured_backend", task_bus_backend}, {"fallback_backend", "inline"}});
-        }
-        _task_bus = std::make_shared<InlineTaskBus>();
-    }
-    const auto async_event_bus_backend = memochat::chatruntime::AsyncEventBusBackend();
-    if (async_event_bus_backend == "kafka" && KafkaAsyncEventBus::BuildAvailable())
-    {
-        _async_event_bus = std::make_shared<KafkaAsyncEventBus>(
-            [this](int64_t outbox_id, int delay_ms, int max_retries, std::string* error)
-            {
-                memochat::json::JsonValue payload(memochat::json::object_t{});
-                payload["outbox_id"] = static_cast<int64_t>(outbox_id);
-                return PublishTask("outbox_repair",
-                                   memochat::chatruntime::TaskRoutingOutboxRepair(),
-                                   payload,
-                                   delay_ms,
-                                   max_retries,
-                                   error);
-            });
-        memolog::LogInfo("chat.async_event_bus.kafka",
-                         "chat async event bus backend selected",
-                         {{"configured_backend", async_event_bus_backend}});
-    }
-    else
-    {
-        if (async_event_bus_backend == "kafka" && !KafkaAsyncEventBus::BuildAvailable())
-        {
-            memolog::LogWarn("chat.async_event_bus.kafka_unavailable",
-                             "chat async event bus kafka backend is not available in current build, fallback to redis",
-                             {{"configured_backend", async_event_bus_backend}, {"fallback_backend", "redis"}});
-        }
-        else if (async_event_bus_backend != "redis")
-        {
-            memolog::LogWarn("chat.async_event_bus.unsupported_backend",
-                             "async event bus backend is not implemented yet, fallback to redis",
-                             {{"configured_backend", async_event_bus_backend}, {"fallback_backend", "redis"}});
-        }
-        _async_event_bus = std::make_shared<RedisAsyncEventBus>();
-    }
-    _message_delivery_service =
-        std::make_unique<MessageDeliveryService>(nullptr, UserMgr::GetInstance().get(), _online_route_store.get());
-    _async_event_dispatcher = std::make_unique<AsyncEventDispatcher>(
-        _async_event_bus,
-        [this]()
-        {
-            return _delivery_runtime && _delivery_runtime->StopRequested();
-        },
-        _message_delivery_service.get(),
-        _message_repository.get(),
-        _relation_repository.get(),
-        UserMgr::GetInstance().get(),
-        _online_route_store.get(),
-        _relation_bootstrap_cache.get());
-    _task_dispatcher = std::make_unique<TaskDispatcher>(
-        _task_bus,
-        [this]()
-        {
-            return _delivery_runtime && _delivery_runtime->StopRequested();
-        },
-        _message_delivery_service.get(),
-        this);
-    _message_delivery_service->SetTaskPublisher(_task_dispatcher.get());
-    _private_message_service = CreatePrivateMessageService(*_message_service_config,
-                                                           UserMgr::GetInstance().get(),
-                                                           _online_route_store.get(),
-                                                           _message_repository.get(),
-                                                           _message_delivery_service.get(),
-                                                           _async_event_dispatcher.get());
-    _group_message_service = CreateGroupMessageService(*_message_service_config,
-                                                       _message_repository.get(),
-                                                       _relation_repository.get(),
-                                                       _message_delivery_service.get(),
-                                                       _async_event_dispatcher.get());
-    _chat_relation_service = CreateRelationService(*_relation_service_config,
-                                                   _relation_repository.get(),
-                                                   _relation_bootstrap_cache.get(),
-                                                   _message_delivery_service.get(),
-                                                   _task_dispatcher.get(),
-                                                   _async_event_dispatcher.get());
-    _chat_relation_session_service = std::make_unique<ChatRelationSessionAdapter>(_chat_relation_service.get());
-    auto* relation_query_service = SelectRelationQueryService(*_relation_query_service_config,
-                                                              _chat_relation_service.get(),
-                                                              _relation_query_service_remote);
-    _chat_session_service = std::make_unique<ChatSessionService>(*this,
-                                                                 UserMgr::GetInstance().get(),
-                                                                 _online_route_store.get(),
-                                                                 relation_query_service,
-                                                                 _session_config.get(),
-                                                                 _session_repository.get());
-    _delivery_runtime = std::make_unique<ChatDeliveryRuntime>(
-        [this]()
-        {
-            DealAsyncEvents();
-        },
-        [this]()
-        {
-            DealTasks();
-        });
+    _composition = std::make_unique<ChatRuntimeComposition>(*this);
     RegisterCallBacks();
     _num_workers = ConfigSizeLocal("LogicSystem", "WorkerCount", kDefaultWorkerCount, 1, kMaxWorkerCount);
     _worker_conds = std::make_unique<std::condition_variable[]>(_num_workers);
@@ -240,18 +94,18 @@ LogicSystem::LogicSystem()
     {
         _worker_threads[i] = std::thread(&LogicSystem::workerLoop, this, i);
     }
-    if (memochat::chatruntime::IsWorkerEnabled())
+    if (_composition)
     {
-        _delivery_runtime->Start();
+        _composition->StartDeliveryRuntimeIfEnabled();
     }
 }
 
 LogicSystem::~LogicSystem()
 {
     _b_stop = true;
-    if (_delivery_runtime)
+    if (_composition)
     {
-        _delivery_runtime->StopAndJoin();
+        _composition->StopDeliveryRuntime();
     }
     for (size_t i = 0; i < _num_workers; ++i)
     {
@@ -266,7 +120,7 @@ LogicSystem::~LogicSystem()
     }
 }
 
-void LogicSystem::PostMsgToQue(shared_ptr<LogicNode> msg)
+void LogicSystem::PostMsgToQue(std::shared_ptr<LogicNode> msg)
 {
     if (_msg_que_size.load(std::memory_order_relaxed) >= MAX_MSG_QUE_SIZE)
     {
@@ -298,7 +152,7 @@ void LogicSystem::SetServer(std::shared_ptr<CServer> pserver)
 
 MessageDeliveryService& LogicSystem::MessageDelivery()
 {
-    return *_message_delivery_service;
+    return _composition->MessageDelivery();
 }
 
 bool LogicSystem::PublishTask(const std::string& task_type,
@@ -308,15 +162,15 @@ bool LogicSystem::PublishTask(const std::string& task_type,
                               int max_retries,
                               std::string* error)
 {
-    if (!_task_dispatcher)
+    if (!_composition)
     {
         if (error)
         {
-            *error = "task_dispatcher_unavailable";
+            *error = "chat_runtime_composition_unavailable";
         }
         return false;
     }
-    return _task_dispatcher->PublishTask(task_type, routing_key, payload, delay_ms, max_retries, error);
+    return _composition->PublishTask(task_type, routing_key, payload, delay_ms, max_retries, error);
 }
 
 bool LogicSystem::ExpediteOutboxRepair(int64_t outbox_id)
@@ -324,7 +178,7 @@ bool LogicSystem::ExpediteOutboxRepair(int64_t outbox_id)
     return PostgresMgr::GetInstance()->ExpediteChatOutboxEventRetry(outbox_id);
 }
 
-size_t LogicSystem::dispatchToWorker(const shared_ptr<LogicNode>& msg)
+size_t LogicSystem::dispatchToWorker(const std::shared_ptr<LogicNode>& msg)
 {
     const size_t worker_id = _next_worker.fetch_add(1, std::memory_order_relaxed) % _num_workers;
     return worker_id;
@@ -334,7 +188,7 @@ void LogicSystem::workerLoop(size_t worker_id)
 {
     for (;;)
     {
-        shared_ptr<LogicNode> msg_node;
+        std::shared_ptr<LogicNode> msg_node;
         {
             std::unique_lock<std::mutex> lock(_worker_mutexes[worker_id]);
             _worker_conds[worker_id].wait(lock,
@@ -391,27 +245,22 @@ bool LogicSystem::PublishAsyncEvent(const std::string& topic,
                                     const memochat::json::JsonValue& payload,
                                     std::string* error)
 {
-    return _async_event_dispatcher->PublishEvent(topic, payload, error);
-}
-
-void LogicSystem::DealTasks()
-{
-    if (_task_dispatcher)
+    if (!_composition)
     {
-        _task_dispatcher->DealTasks();
+        if (error)
+        {
+            *error = "chat_runtime_composition_unavailable";
+        }
+        return false;
     }
-}
-
-void LogicSystem::DealAsyncEvents()
-{
-    _async_event_dispatcher->DealAsyncEvents();
+    return _composition->PublishAsyncEvent(topic, payload, error);
 }
 
 void LogicSystem::RegisterCallBacks()
 {
-    ChatSessionServiceRegistrar().Register(*this, _fun_callbacks);
-    ChatRelationServiceRegistrar().Register(*this, _fun_callbacks);
-    PrivateMessageServiceRegistrar().Register(*this, _fun_callbacks);
-    GroupMessageServiceRegistrar().Register(*this, _fun_callbacks);
-    AsyncEventDispatcherRegistrar().Register(*this, _fun_callbacks);
+    ChatSessionServiceRegistrar().Register(*_composition, _fun_callbacks);
+    ChatRelationServiceRegistrar().Register(*_composition, _fun_callbacks);
+    PrivateMessageServiceRegistrar().Register(*_composition, _fun_callbacks);
+    GroupMessageServiceRegistrar().Register(*_composition, _fun_callbacks);
+    AsyncEventDispatcherRegistrar().Register(*_composition, _fun_callbacks);
 }
