@@ -110,7 +110,7 @@ function roleOptions(rolePresets, rulesetId, customValue, randomHint, randomRule
             continue
         }
         rows.push({
-            "label": item.display_name || item.name || key,
+            "label": item.display_name || key,
             "value": key,
             "hint": item.description || item.rule || item.persona || "",
             "rule": item.rule || item.rules || item.description || item.persona || "",
@@ -214,7 +214,7 @@ function createDraftAgent(seed, index, gameSetupMode, model) {
     var item = seed || {}
     model = model || defaultModel()
     return {
-        "display_name": item.display_name || item.name || ((gameSetupMode ? "玩家 AI " : "AI ") + (index + 1)),
+        "display_name": item.display_name || ((gameSetupMode ? "玩家 AI " : "AI ") + (index + 1)),
         "role_key": gameSetupMode ? (item.role_key || "") : "",
         "environment": item.environment || "",
         "persona": item.persona || "",

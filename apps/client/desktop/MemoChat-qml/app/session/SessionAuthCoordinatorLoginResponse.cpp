@@ -77,8 +77,6 @@ void SessionAuthCoordinator::onLoginHttpFinished(ReqId id, QString res, ErrorCod
 
     ServerInfo server_info;
     server_info.Uid = obj.value("uid").toInt();
-    server_info.Host = obj.value("host").toString();
-    server_info.Port = obj.value("port").toString();
     server_info.Token = obj.value("token").toString();
     server_info.LoginTicket = obj.value("login_ticket").toString();
     server_info.ProtocolVersion = obj.value("protocol_version").toInt(2);
@@ -101,17 +99,6 @@ void SessionAuthCoordinator::onLoginHttpFinished(ReqId id, QString res, ErrorCod
         {
             server_info.Endpoints.push_back(endpoint);
         }
-    }
-    if (server_info.Endpoints.isEmpty() && !server_info.Host.trimmed().isEmpty() &&
-        !server_info.Port.trimmed().isEmpty())
-    {
-        ChatEndpoint fallback;
-        fallback.transport = ChatTransportKind::Tcp;
-        fallback.host = server_info.Host;
-        fallback.port = server_info.Port;
-        fallback.serverName = obj.value("server_name").toString();
-        fallback.priority = 0;
-        server_info.Endpoints.push_back(fallback);
     }
     if (server_info.Uid <= 0 || server_info.Endpoints.isEmpty())
     {

@@ -25,7 +25,7 @@ description: Use when creating, modifying, or reviewing SVG/icon assets for Memo
 创建任何内容前，检查：
 
 - `apps/client/desktop/MemoChat-qml`
-- `apps/client/desktop/MemoChatShared`
+- `apps/client/desktop/MemoChat-qml/shared`
 - `infra/Memo_ops/client/MemoOps-qml`
 - 附近的 `assets`、`icons`、`resources`、`qml.qrc` 或 CMake resource entries
 

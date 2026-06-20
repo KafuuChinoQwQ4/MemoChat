@@ -21,6 +21,7 @@
 | `debugging.md` | 调试工作流指引 |
 | `docker-diagnose.md` | Docker 问题诊断工作流 |
 | `icon.md` | 图标资源处理工作流 |
+| `no-backward-compat.md` | 不向后兼容：删除旧版本/旧客户端/旧数据字段兼容代码的分类与验证流程 |
 | `observability.md` | 可观测性接入工作流 |
 | `parallel-agents.md` | 并行多 agent 协作工作流 |
 | `planner.md` | 规划/拆解任务工作流 |

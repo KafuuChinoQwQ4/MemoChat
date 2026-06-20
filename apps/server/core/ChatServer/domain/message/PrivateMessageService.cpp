@@ -450,7 +450,7 @@ MessageCommandResult PrivateMessageService::PrivateReadAck(const MessageCommandR
     memochat::json::JsonReader reader;
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
-    const int uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
+    const int uid = root["fromuid"].asInt();
     const int peer_uid = root.get("peer_uid", 0).asInt();
     int64_t read_ts = root.get("read_ts", 0).asInt64();
     const auto result = []()

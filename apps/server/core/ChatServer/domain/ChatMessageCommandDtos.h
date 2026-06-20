@@ -373,8 +373,8 @@ inline ChatPrivateForwardRequestDto ChatPrivateForwardRequestFromJsonValue(
     const memochat::json::JsonValue& root)
 {
     ChatPrivateForwardRequestDto request;
-    request.from_uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
-    request.peer_uid = root.isMember("peer_uid") ? root["peer_uid"].asInt() : root["touid"].asInt();
+    request.from_uid = root["fromuid"].asInt();
+    request.peer_uid = root["peer_uid"].asInt();
     request.source_msg_id = root.get("msgid", "").asString();
     request.client_msg_id = root.get("client_msg_id", "").asString();
     return request;
@@ -613,7 +613,7 @@ inline ChatGroupEditRequestDto ChatGroupEditRequestFromJsonValue(const memochat:
 inline ChatGroupForwardRequestDto ChatGroupForwardRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     ChatGroupForwardRequestDto request;
-    request.from_uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
+    request.from_uid = root["fromuid"].asInt();
     request.group_id = root.get("groupid", 0).asInt64();
     request.source_msg_id = root.get("msgid", "").asString();
     request.client_msg_id = root.get("client_msg_id", "").asString();

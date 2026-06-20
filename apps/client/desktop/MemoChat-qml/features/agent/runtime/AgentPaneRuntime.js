@@ -2,7 +2,7 @@
 
 function roomObject(gameState, currentGameRoomId) {
     var room = gameState && gameState.room ? gameState.room : ({})
-    var roomId = room.room_id || room.id || ""
+    var roomId = room.room_id || ""
     if (currentGameRoomId.length > 0 && roomId.length > 0 && roomId !== currentGameRoomId) {
         return ({})
     }

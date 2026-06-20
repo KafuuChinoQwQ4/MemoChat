@@ -183,14 +183,14 @@ TEST(ChatMessageCommandDtosTest, ReadsPrivateForwardRequest)
 TEST(ChatMessageCommandDtosTest, ReadsPrivateForwardAliasesAndDefaults)
 {
     const auto alias = memochat::chat::command::ChatPrivateForwardRequestFromJsonValue(
-        Parse(R"({"uid":13,"touid":23})"));
+        Parse(R"({"fromuid":13,"peer_uid":23})"));
     EXPECT_EQ(alias.from_uid, 13);
     EXPECT_EQ(alias.peer_uid, 23);
     EXPECT_TRUE(alias.source_msg_id.empty());
     EXPECT_TRUE(alias.client_msg_id.empty());
 
     const auto preferred = memochat::chat::command::ChatPrivateForwardRequestFromJsonValue(
-        Parse(R"({"uid":13,"fromuid":14,"touid":23,"peer_uid":24,"msgid":"source-2"})"));
+        Parse(R"({"fromuid":14,"peer_uid":24,"msgid":"source-2"})"));
     EXPECT_EQ(preferred.from_uid, 14);
     EXPECT_EQ(preferred.peer_uid, 24);
     EXPECT_EQ(preferred.source_msg_id, "source-2");
@@ -390,14 +390,14 @@ TEST(ChatMessageCommandDtosTest, ReadsGroupForwardRequest)
 TEST(ChatMessageCommandDtosTest, ReadsGroupForwardAliasesAndDefaults)
 {
     const auto alias =
-        memochat::chat::command::ChatGroupForwardRequestFromJsonValue(Parse(R"({"uid":20})"));
+        memochat::chat::command::ChatGroupForwardRequestFromJsonValue(Parse(R"({"fromuid":20})"));
     EXPECT_EQ(alias.from_uid, 20);
     EXPECT_EQ(alias.group_id, 0);
     EXPECT_TRUE(alias.source_msg_id.empty());
     EXPECT_TRUE(alias.client_msg_id.empty());
 
     const auto preferred = memochat::chat::command::ChatGroupForwardRequestFromJsonValue(
-        Parse(R"({"uid":20,"fromuid":21,"groupid":303,"msgid":"source-g-2"})"));
+        Parse(R"({"fromuid":21,"groupid":303,"msgid":"source-g-2"})"));
     EXPECT_EQ(preferred.from_uid, 21);
     EXPECT_EQ(preferred.group_id, 303);
     EXPECT_EQ(preferred.source_msg_id, "source-g-2");

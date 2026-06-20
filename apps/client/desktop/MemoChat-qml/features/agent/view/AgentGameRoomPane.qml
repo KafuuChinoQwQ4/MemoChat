@@ -139,7 +139,7 @@ ColumnLayout {
                 for (var i = 0; i < source.length; ++i) {
                     var item = source[i] || {}
                     rows.push({
-                        "label": item.display_name || item.name || item.ruleset_id || "规则集",
+                        "label": item.display_name || item.ruleset_id || "规则集",
                         "value": item.ruleset_id || item.id || ""
                     })
                 }

@@ -55,12 +55,12 @@ Item {
             var room = rooms[j] || {}
             rows.push({
                 "kind": "room",
-                "entry_id": room.room_id || room.id || "",
+                "entry_id": room.room_id || "",
                 "title": room.title || room.name || "对话房间",
                 "subtitle": (room.status || "ready") + " · " + root.roomModeLabel(room),
                 "status": (sessions ? sessions.length : 0) + j,
                 "session_id": "",
-                "room_id": room.room_id || room.id || "",
+                "room_id": room.room_id || "",
                 "model_name": ""
             })
         }
@@ -266,7 +266,7 @@ Item {
                             return
                         }
                         if (modelData.kind === "room") {
-                            const roomId = modelData.room_id || modelData.id || ""
+                            const roomId = modelData.room_id || ""
                             if (roomId.length > 0) {
                                 root.gameRoomSelected(roomId)
                             }

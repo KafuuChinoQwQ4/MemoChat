@@ -30,6 +30,8 @@ wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat-Qml-Drogon-linux && source 
 docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
 docker network ls
 docker compose -f infra/deploy/local/docker-compose.yml ps
+# AI stack 是独立 compose 项目(name: memochat-ai),不在上面的本地 infra compose 里：
+docker compose -f apps/server/core/AIOrchestrator/docker-compose.yml ps
 ```
 
 如果 `archlinux` 中 Docker 不可用，检查 `systemctl is-active docker`，然后用 `systemctl enable --now docker` 启动。除非任务明确是旧版迁移或备份检查，否则不要切换到 Docker Desktop。
@@ -46,7 +48,9 @@ docker compose -f infra/deploy/local/docker-compose.yml ps
 - AI Orchestrator `8096`
 - Ollama `11434`，仅当本地启用 Ollama 时要求存在
 - Neo4j `7474/7687`
-- Qdrant `6333/6334`
+- Qdrant `6333`
+
+> AI Orchestrator、Neo4j、Qdrant、Ollama 属独立 compose 项目 `memochat-ai`（`apps/server/core/AIOrchestrator/docker-compose.yml`），由该目录下 `docker compose up -d` 单独启动，不会出现在本地 infra compose 的 `ps` 里——诊断 AI 依赖时查这个 compose 文件。
 - Grafana `3000`
 - Prometheus `9090`
 - Alertmanager `9093`
@@ -65,9 +69,6 @@ docker compose -f infra/deploy/local/docker-compose.yml ps
 - `memochat-rabbitmq`
 - `memochat-redpanda`
 - `memochat-minio`
-- `memochat-qdrant`
-- `memochat-neo4j`
-- `memochat-ai-orchestrator`
 - `memochat-prometheus`
 - `memochat-alertmanager`
 - `memochat-grafana`
@@ -76,6 +77,8 @@ docker compose -f infra/deploy/local/docker-compose.yml ps
 - `memochat-otel-collector`
 - `memochat-influxdb`
 - `memochat-cadvisor`
+
+> AI stack 容器(`memochat-ai-orchestrator`、`memochat-neo4j`、`memochat-qdrant`、可选 `memochat-ollama`)在独立 compose 项目 `memochat-ai` 中,不属于上面这份本地 infra 基线;用 `apps/server/core/AIOrchestrator/docker-compose.yml` 单独检查。
 
 ## 健康检查
 

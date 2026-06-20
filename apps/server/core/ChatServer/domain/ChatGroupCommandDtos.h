@@ -232,7 +232,7 @@ struct ChatGroupReviewApplyResponseDto
 
 inline int ReadFromUidOrUid(const memochat::json::JsonValue& root)
 {
-    return root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
+    return root["fromuid"].asInt();
 }
 
 inline ChatGroupCreateRequestDto ChatGroupCreateRequestFromJsonValue(const memochat::json::JsonValue& root)

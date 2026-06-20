@@ -154,14 +154,14 @@ TEST(ChatGroupCommandDtosTest, ReadsReviewApplyRequestAndAgreeDefault)
 
 TEST(ChatGroupCommandDtosTest, ReadsReadAckAliases)
 {
-    const auto uid_fallback = memochat::chat::group::ChatGroupReadAckRequestFromJsonValue(
-        Parse(R"({"uid":16,"groupid":500,"read_ts":600})"));
-    EXPECT_EQ(uid_fallback.uid, 16);
-    EXPECT_EQ(uid_fallback.group_id, 500);
-    EXPECT_EQ(uid_fallback.read_ts, 600);
+    const auto basic = memochat::chat::group::ChatGroupReadAckRequestFromJsonValue(
+        Parse(R"({"fromuid":16,"groupid":500,"read_ts":600})"));
+    EXPECT_EQ(basic.uid, 16);
+    EXPECT_EQ(basic.group_id, 500);
+    EXPECT_EQ(basic.read_ts, 600);
 
     const auto fromuid_preferred = memochat::chat::group::ChatGroupReadAckRequestFromJsonValue(
-        Parse(R"({"uid":16,"fromuid":17,"groupid":501,"read_ts":601})"));
+        Parse(R"({"fromuid":17,"groupid":501,"read_ts":601})"));
     EXPECT_EQ(fromuid_preferred.uid, 17);
     EXPECT_EQ(fromuid_preferred.group_id, 501);
     EXPECT_EQ(fromuid_preferred.read_ts, 601);
