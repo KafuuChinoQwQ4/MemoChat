@@ -3,6 +3,7 @@
 #include "ChatRuntime.h"
 #include "ChatTaskEnvelope.h"
 #include "IAsyncTaskBus.h"
+#include "MessageDeliveryTaskPayload.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
 
@@ -94,15 +95,16 @@ bool TaskDispatcher::HandleTask(const memochat::json::JsonValue& payload, const 
 {
     if (task_type == "message_delivery_retry" || task_type == "offline_notify" || task_type == "relation_notify")
     {
-        const int recipient_uid = payload.get("recipient_uid", 0).asInt();
-        const short msgid = static_cast<short>(payload.get("msgid", 0).asInt());
-        const int exclude_uid = payload.get("exclude_uid", 0).asInt();
-        if (recipient_uid <= 0 || msgid <= 0 || !payload.isObject() || !payload.isMember("payload"))
+        memochat::chat::delivery::MessageDeliveryTaskPayload task_payload;
+        if (!memochat::chat::delivery::ParseDeliveryTaskPayload(payload, &task_payload))
         {
             return true;
         }
-        return _delivery_gateway &&
-               _delivery_gateway->TryPushPayload({recipient_uid}, msgid, payload["payload"], exclude_uid, false);
+        return _delivery_gateway && _delivery_gateway->TryPushPayload({task_payload.recipient_uid},
+                                                                      static_cast<short>(task_payload.msgid),
+                                                                      task_payload.payload,
+                                                                      task_payload.exclude_uid,
+                                                                      false);
     }
     if (task_type == "outbox_repair")
     {

@@ -4,6 +4,10 @@
 
 # --- GateMediaCore: media storage (local + S3) and media support. ------------
 add_library(GateMediaCore STATIC
+    domain/services/media/MediaPublicDtos.cpp
+    domain/services/media/MediaPublicDtos.h
+    domain/services/media/MediaUploadSessionDto.cpp
+    domain/services/media/MediaUploadSessionDto.h
     core/storage/MediaStorage.cpp
     core/storage/MediaStorage.h
     core/storage/S3MediaStorage.cpp
@@ -15,6 +19,7 @@ memochat_configure_gate_core_lib(GateMediaCore)
 target_include_directories(GateMediaCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/core/storage
     ${CMAKE_CURRENT_SOURCE_DIR}/core/support
+    ${CMAKE_CURRENT_SOURCE_DIR}/domain
 )
 target_link_libraries(GateMediaCore PUBLIC GateInfraCore)
 
@@ -23,6 +28,7 @@ add_library(GateMediaDomain STATIC
     ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/GateRouteProfileRegistrar.h
     domain/profiles/GateMediaProfile.cpp
     domain/modules/media/MediaRouteModule.cpp
+    domain/modules/media/MediaRouteSchemas.cpp
     domain/services/media/MediaService.cpp
     domain/MediaHttpService.cpp
 )

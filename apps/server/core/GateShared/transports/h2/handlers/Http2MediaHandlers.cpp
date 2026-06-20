@@ -2,6 +2,7 @@
 #include "json/GlazeCompat.h"
 #include "Http2MediaHandlers.h"
 #include "Http2MediaSupport.h"
+#include "services/media/MediaPublicDtos.h"
 
 static memochat::json::JsonValue MakeMediaError(int error_code, const std::string& message)
 {
@@ -62,14 +63,19 @@ void Http2MediaHandlers::HandleUploadMediaInit(const Http2Request& req, Http2Res
         return;
     }
 
-    const int uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
-    const std::string token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
-    const std::string media_type = memochat::json::glaze_safe_get<std::string>(root, "media_type", "file");
-    const std::string file_name = memochat::json::glaze_safe_get<std::string>(root, "file_name", "");
-    const std::string mime = memochat::json::glaze_safe_get<std::string>(root, "mime", "");
-    const int64_t file_size = memochat::json::glaze_safe_get<int64_t>(root, "file_size", 0LL);
+    memochat::media::MediaUploadInitRequestDto upload_request;
+    if (!memochat::media::DecodeMediaUploadInitRequest(req.body, &upload_request))
+    {
+        resp.SetJsonBody(memochat::json::glaze_stringify(MakeMediaError(1, "invalid json")));
+        return;
+    }
 
-    auto result = Http2MediaSupport::HandleUploadMediaInit(uid, token, media_type, file_name, mime, file_size);
+    auto result = Http2MediaSupport::HandleUploadMediaInit(upload_request.uid,
+                                                           upload_request.token,
+                                                           upload_request.media_type,
+                                                           upload_request.file_name,
+                                                           upload_request.mime,
+                                                           upload_request.file_size);
     memochat::json::JsonValue out = MakeMediaResponse(result);
     resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }
@@ -88,11 +94,17 @@ void Http2MediaHandlers::HandleUploadMediaChunk(const Http2Request& req, Http2Re
     if (Http2MediaSupport::ParseJsonBody(body_str, root))
     {
         json_chunk = true;
-        uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
-        token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
-        upload_id = memochat::json::glaze_safe_get<std::string>(root, "upload_id", "");
-        index = memochat::json::glaze_safe_get<int>(root, "index", -1);
-        chunk_data_base64 = memochat::json::glaze_safe_get<std::string>(root, "data_base64", "");
+        memochat::media::MediaUploadChunkJsonRequestDto chunk_request;
+        if (!memochat::media::DecodeMediaUploadChunkJsonRequest(body_str, &chunk_request))
+        {
+            resp.SetJsonBody(memochat::json::glaze_stringify(MakeMediaError(1, "invalid json")));
+            return;
+        }
+        uid = chunk_request.uid;
+        token = chunk_request.token;
+        upload_id = chunk_request.upload_id;
+        index = chunk_request.index;
+        chunk_data_base64 = chunk_request.data_base64;
     }
     else
     {
@@ -151,11 +163,16 @@ void Http2MediaHandlers::HandleUploadMediaComplete(const Http2Request& req, Http
         return;
     }
 
-    const int uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
-    const std::string token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
-    const std::string upload_id = memochat::json::glaze_safe_get<std::string>(root, "upload_id", "");
+    memochat::media::MediaUploadCompleteRequestDto upload_request;
+    if (!memochat::media::DecodeMediaUploadCompleteRequest(req.body, &upload_request))
+    {
+        resp.SetJsonBody(memochat::json::glaze_stringify(MakeMediaError(1, "invalid json")));
+        return;
+    }
 
-    auto result = Http2MediaSupport::HandleUploadMediaComplete(uid, token, upload_id);
+    auto result = Http2MediaSupport::HandleUploadMediaComplete(upload_request.uid,
+                                                               upload_request.token,
+                                                               upload_request.upload_id);
     memochat::json::JsonValue out = MakeMediaResponse(result);
     resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }
@@ -169,14 +186,19 @@ void Http2MediaHandlers::HandleUploadMedia(const Http2Request& req, Http2Respons
         return;
     }
 
-    const int uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
-    const std::string token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
-    const std::string media_type = memochat::json::glaze_safe_get<std::string>(root, "media_type", "file");
-    const std::string file_name = memochat::json::glaze_safe_get<std::string>(root, "file_name", "");
-    const std::string mime = memochat::json::glaze_safe_get<std::string>(root, "mime", "");
-    const std::string data_base64 = memochat::json::glaze_safe_get<std::string>(root, "data_base64", "");
+    memochat::media::MediaUploadSimpleRequestDto upload_request;
+    if (!memochat::media::DecodeMediaUploadSimpleRequest(req.body, &upload_request))
+    {
+        resp.SetJsonBody(memochat::json::glaze_stringify(MakeMediaError(1, "invalid json")));
+        return;
+    }
 
-    auto result = Http2MediaSupport::HandleUploadMediaSimple(uid, token, media_type, file_name, mime, data_base64);
+    auto result = Http2MediaSupport::HandleUploadMediaSimple(upload_request.uid,
+                                                             upload_request.token,
+                                                             upload_request.media_type,
+                                                             upload_request.file_name,
+                                                             upload_request.mime,
+                                                             upload_request.data_base64);
     memochat::json::JsonValue out = MakeMediaResponse(result);
     resp.SetJsonBody(memochat::json::glaze_stringify(out));
 }

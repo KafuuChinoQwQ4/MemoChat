@@ -6,6 +6,10 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
+| `CallPublicDtos.cpp` | 通话公共请求与固定成功响应 DTO 编解码实现 |
+| `CallPublicDtos.h` | 通话公共请求与固定成功响应 DTO 声明 |
+| `CallSessionCacheDto.cpp` | 通话会话 Redis 缓存 DTO 编解码实现 |
+| `CallSessionCacheDto.h` | 通话会话 Redis 缓存 DTO 声明 |
 | `CallService.cpp` | 通话核心服务实现 |
 | `CallService.h` | 通话核心服务声明 |
 

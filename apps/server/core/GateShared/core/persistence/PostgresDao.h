@@ -1,4 +1,6 @@
 #pragma once
+#include "CallSessionTypes.h"
+#include "MomentTypes.h"
 #include "const.h"
 #include <atomic>
 #include <condition_variable>
@@ -205,33 +207,6 @@ struct UserInfo
     int sex = 0;
 };
 
-struct CallUserProfile
-{
-    int uid = 0;
-    std::string user_id;
-    std::string name;
-    std::string nick;
-    std::string icon;
-};
-
-struct CallSessionInfo
-{
-    std::string call_id;
-    std::string room_name;
-    std::string call_type;
-    int caller_uid = 0;
-    int callee_uid = 0;
-    std::string state;
-    int64_t started_at_ms = 0;
-    int64_t accepted_at_ms = 0;
-    int64_t ended_at_ms = 0;
-    int64_t expires_at_ms = 0;
-    int duration_sec = 0;
-    std::string reason;
-    std::string trace_id;
-    int64_t updated_at_ms = 0;
-};
-
 struct MediaAssetInfo
 {
     int64_t media_id = 0;
@@ -246,45 +221,6 @@ struct MediaAssetInfo
     int64_t created_at_ms = 0;
     int64_t deleted_at_ms = 0;
     int status = 1;
-};
-
-struct MomentInfo
-{
-    int64_t moment_id = 0;
-    int uid = 0;
-    int visibility = 0; // 0=public, 1=friends, 2=private
-    std::string location;
-    int64_t created_at = 0;
-    int64_t deleted_at = 0;
-    int like_count = 0;
-    int comment_count = 0;
-};
-
-struct MomentLikeInfo
-{
-    int64_t id = 0;
-    int64_t moment_id = 0;
-    int uid = 0;
-    std::string user_nick;
-    std::string user_icon;
-    int64_t created_at = 0;
-};
-
-struct MomentCommentInfo
-{
-    int64_t id = 0;
-    int64_t moment_id = 0;
-    int uid = 0;
-    std::string user_nick;
-    std::string user_icon;
-    std::string content;
-    int reply_uid = 0;
-    std::string reply_nick;
-    int64_t created_at = 0;
-    int64_t deleted_at = 0;
-    int like_count = 0;
-    bool has_liked = false;
-    std::vector<MomentLikeInfo> likes;
 };
 
 class PostgresDao

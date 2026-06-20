@@ -22,10 +22,17 @@
 add_library(GateAccountCore STATIC
     core/cache/AuthCache.cpp
     core/cache/AuthCache.h
+    core/support/AuthLoginCacheProfileDto.cpp
+    core/support/AuthLoginCacheProfileDto.h
     core/support/AuthLoginSupport.cpp
     core/support/AuthLoginSupport.h
+    core/support/AuthPublicDtos.cpp
+    core/support/AuthPublicDtos.h
+    core/support/AuthUserInfo.h
     core/support/Http2ProfileSupport.cpp
     core/support/Http2ProfileSupport.h
+    core/async/GateAsyncSideEffectDtos.cpp
+    core/async/GateAsyncSideEffectDtos.h
     core/async/GateAsyncSideEffects.cpp
     core/async/GateAsyncSideEffects.h
 )
@@ -42,6 +49,7 @@ add_library(GateAuthDomain STATIC
     ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/GateRouteProfileRegistrar.h
     domain/profiles/GateAuthProfile.cpp
     domain/modules/auth/AuthRouteModule.cpp
+    domain/modules/auth/AuthRouteSchemas.cpp
     domain/services/account/AccountPersistence.cpp
     domain/services/auth/AuthService.cpp
 )
@@ -54,6 +62,7 @@ add_library(GateAccountDomain STATIC
     ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/GateRouteProfileRegistrar.h
     domain/profiles/GateAccountProfile.cpp
     domain/modules/profile/ProfileRouteModule.cpp
+    domain/modules/profile/ProfileRouteSchemas.cpp
 )
 memochat_configure_gate_app_lib(GateAccountDomain)
 target_include_directories(GateAccountDomain PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/domain)

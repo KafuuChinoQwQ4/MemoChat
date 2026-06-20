@@ -1,9 +1,13 @@
 ﻿#include "PrivateMessageService.h"
 
 #include "ChatGrpcClient.h"
+#include "ChatHistoryCommandDtos.h"
+#include "ChatHistoryOutputDtos.h"
+#include "ChatMessageCommandDtos.h"
 #include "ChatRuntime.h"
 #include "CSession.h"
 #include "MessageServiceUtil.h"
+#include "ports/OnlineRouteResolver.h"
 #include "logging/Logger.h"
 
 #include <algorithm>
@@ -16,115 +20,13 @@ namespace
 {
 using memochat::chat::message::JsonToWireString;
 using memochat::chat::message::NowMs;
-
-enum class OnlineRouteKind
-{
-    Offline,
-    Local,
-    Remote,
-    Stale
-};
-
-struct OnlineRouteDecision
-{
-    OnlineRouteKind kind = OnlineRouteKind::Offline;
-    std::shared_ptr<CSession> session;
-    std::string redis_server;
-    bool local_session_found = false;
-};
-
-OnlineRouteDecision
-ResolveOnlineRouteLocal(int uid, ISessionRegistry* session_registry, IOnlineRouteStore* online_route_store)
-{
-    OnlineRouteDecision route;
-    if (uid <= 0 || !session_registry || !online_route_store)
-    {
-        return route;
-    }
-
-    const auto self_name = online_route_store->SelfServerName();
-    const auto uid_str = std::to_string(uid);
-
-    auto session = session_registry->FindSession(uid);
-    memolog::LogInfo(
-        "chat.private.route.debug",
-        "resolve online route start",
-        {{"uid", uid_str}, {"self_server", self_name}, {"local_session_found", session ? "true" : "false"}});
-
-    if (session)
-    {
-        route.kind = OnlineRouteKind::Local;
-        route.session = session;
-        route.redis_server = self_name;
-        route.local_session_found = true;
-        online_route_store->RepairOnlineRoute(uid, session);
-        memolog::LogInfo("chat.private.route.debug",
-                         "resolved to local session",
-                         {{"uid", uid_str}, {"self_server", self_name}});
-        return route;
-    }
-
-    auto redis_server = online_route_store->FindUserServer(uid);
-    const bool redis_has_key = !redis_server.empty();
-    memolog::LogInfo(
-        "chat.private.route.debug",
-        "checking redis for online status",
-        {{"uid", uid_str}, {"redis_key_found", redis_has_key ? "true" : "false"}, {"redis_server", redis_server}});
-
-    if (!redis_has_key || redis_server.empty())
-    {
-        redis_server = online_route_store->ResolveServerFromOnlineSets(uid);
-        memolog::LogInfo("chat.private.route.debug",
-                         "checked online sets",
-                         {{"uid", uid_str}, {"found_server", redis_server}});
-        if (redis_server.empty())
-        {
-            memolog::LogInfo("chat.private.route.debug", "user not found in redis", {{"uid", uid_str}});
-            return route;
-        }
-    }
-
-    route.redis_server = redis_server;
-    if (redis_server != self_name)
-    {
-        route.kind = OnlineRouteKind::Remote;
-        memolog::LogInfo("chat.private.route.debug",
-                         "resolved to remote server",
-                         {{"uid", uid_str}, {"target_server", redis_server}});
-        return route;
-    }
-
-    auto reloaded_server = online_route_store->FindUserServer(uid);
-    if (!reloaded_server.empty())
-    {
-        route.redis_server = reloaded_server;
-        if (reloaded_server != self_name)
-        {
-            route.kind = OnlineRouteKind::Remote;
-            return route;
-        }
-    }
-
-    route.kind = OnlineRouteKind::Stale;
-    online_route_store->ClearTrackedOnlineRoute(uid, self_name);
-    return route;
-}
-
-const char* RouteResultNameLocal(OnlineRouteKind kind)
-{
-    switch (kind)
-    {
-        case OnlineRouteKind::Local:
-            return "local";
-        case OnlineRouteKind::Remote:
-            return "remote";
-        case OnlineRouteKind::Stale:
-            return "stale";
-        case OnlineRouteKind::Offline:
-        default:
-            return "offline";
-    }
-}
+namespace ChatHistoryCommand = memochat::chat::history;
+namespace ChatHistoryOutput = memochat::chat::history::output;
+namespace ChatMessageCommand = memochat::chat::command;
+using memochat::chat::routing::OnlineRouteDecision;
+using memochat::chat::routing::OnlineRouteKind;
+using memochat::chat::routing::OnlineRouteResultName;
+using memochat::chat::routing::ResolveOnlineRoute;
 
 std::string JsonToCompactStringLocal(const memochat::json::JsonValue& value)
 {
@@ -152,7 +54,7 @@ void LogPrivateRouteLocal(const std::string& event,
                                            {"to_uid", std::to_string(to_uid)},
                                            {"msg_id", msg_id},
                                            {"redis_server", route.redis_server},
-                                           {"route_result", RouteResultNameLocal(route.kind)},
+                                           {"route_result", OnlineRouteResultName(route.kind)},
                                            {"local_session_found", route.local_session_found ? "true" : "false"},
                                            {"grpc_status", grpc_status},
                                            {"notify_delivered", notify_delivered ? "true" : "false"}};
@@ -220,19 +122,20 @@ MessageCommandResult PrivateMessageService::TextChatMessage(const MessageCommand
     const bool kafka_shadow =
         kafka_backend && !kafka_primary && memochat::chatruntime::FeatureEnabled("chat_private_kafka_shadow");
 
-    memochat::json::JsonValue rtvalue;
-    rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["fromuid"] = uid;
-    rtvalue["touid"] = touid;
+    ChatMessageCommand::ChatPrivateSendResponseDto rtdto;
+    rtdto.error = ErrorCodes::Success;
+    rtdto.fromuid = uid;
+    rtdto.touid = touid;
 
-    const auto result = [&rtvalue]()
+    const auto result = [&rtdto]()
     {
-        return MessageCommandResult{ID_TEXT_CHAT_MSG_RSP, JsonToCompactStringLocal(rtvalue)};
+        return MessageCommandResult{ID_TEXT_CHAT_MSG_RSP,
+                                    JsonToCompactStringLocal(ChatMessageCommand::ToJsonValue(rtdto))};
     };
 
     if (uid <= 0 || touid <= 0 || !arrays.is_array() || arrays.empty())
     {
-        rtvalue["error"] = ErrorCodes::Error_Json;
+        rtdto.error = ErrorCodes::Error_Json;
         return result();
     }
 
@@ -265,7 +168,7 @@ MessageCommandResult PrivateMessageService::TextChatMessage(const MessageCommand
         }
         if (msg.msg_id.empty() || msg.content.empty())
         {
-            rtvalue["error"] = ErrorCodes::Error_Json;
+            rtdto.error = ErrorCodes::Error_Json;
             return result();
         }
         if (first_msg_id.empty())
@@ -274,52 +177,29 @@ MessageCommandResult PrivateMessageService::TextChatMessage(const MessageCommand
         }
         pending_messages.push_back(msg);
 
-        memochat::json::JsonValue element;
-        element["msgid"] = msg.msg_id;
-        element["content"] = msg.content;
-        element["created_at"] = static_cast<int64_t>(msg.created_at);
-        if (msg.reply_to_server_msg_id > 0)
-        {
-            element["reply_to_server_msg_id"] = static_cast<int64_t>(msg.reply_to_server_msg_id);
-        }
-        if (!msg.forward_meta_json.empty())
-        {
-            memochat::json::JsonValue forward_meta;
-            if (ParseJsonObjectLocal(msg.forward_meta_json, forward_meta))
-            {
-                element["forward_meta"] = forward_meta;
-            }
-        }
-        if (msg.edited_at_ms > 0)
-        {
-            element["edited_at_ms"] = static_cast<int64_t>(msg.edited_at_ms);
-        }
-        if (msg.deleted_at_ms > 0)
-        {
-            element["deleted_at_ms"] = static_cast<int64_t>(msg.deleted_at_ms);
-        }
-        append(normalized, element);
+        append(normalized,
+               ChatHistoryOutput::ToJsonValue(ChatHistoryOutput::ChatPrivateOfflinePushMessageFromInfo(msg)));
     }
 
     const auto accept_ts = NowMs();
-    rtvalue["client_msg_id"] = first_msg_id;
-    rtvalue["accept_node"] = memochat::chatruntime::SelfServerName();
-    rtvalue["accept_ts"] = static_cast<int64_t>(accept_ts);
-    rtvalue["status"] = kafka_primary ? "accepted" : "persisted";
+    rtdto.client_msg_id = first_msg_id;
+    rtdto.accept_node = memochat::chatruntime::SelfServerName();
+    rtdto.accept_ts = static_cast<int64_t>(accept_ts);
+    rtdto.status = kafka_primary ? "accepted" : "persisted";
     if (!kafka_primary)
     {
-        rtvalue["text_array"] = normalized;
+        rtdto.text_array = normalized;
     }
 
-    memochat::json::JsonValue event_payload;
-    event_payload["fromuid"] = uid;
-    event_payload["touid"] = touid;
-    event_payload["trace_id"] = root.get("trace_id", "").asString();
-    event_payload["request_id"] = root.get("request_id", "").asString();
-    event_payload["span_id"] = root.get("span_id", "").asString();
-    event_payload["event_id"] = first_msg_id;
-    event_payload["accept_node"] = memochat::chatruntime::SelfServerName();
-    event_payload["accept_ts"] = static_cast<int64_t>(accept_ts);
+    auto event_payload = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateSendEventDto{
+        .fromuid = uid,
+        .touid = touid,
+        .trace_id = root.get("trace_id", "").asString(),
+        .request_id = root.get("request_id", "").asString(),
+        .span_id = root.get("span_id", "").asString(),
+        .event_id = first_msg_id,
+        .accept_node = memochat::chatruntime::SelfServerName(),
+        .accept_ts = static_cast<int64_t>(accept_ts)});
     event_payload["text_array"] = normalized;
 
     if (kafka_primary || kafka_shadow)
@@ -330,8 +210,8 @@ MessageCommandResult PrivateMessageService::TextChatMessage(const MessageCommand
         {
             if (kafka_primary)
             {
-                rtvalue["error"] = ErrorCodes::RPCFailed;
-                rtvalue["status"] = "failed";
+                rtdto.error = ErrorCodes::RPCFailed;
+                rtdto.status = "failed";
                 return result();
             }
             memolog::LogWarn("chat.private.shadow_publish_failed",
@@ -349,12 +229,13 @@ MessageCommandResult PrivateMessageService::TextChatMessage(const MessageCommand
     {
         if (!_message_repository || !_message_repository->SavePrivateMessage(msg))
         {
-            rtvalue["error"] = ErrorCodes::RPCFailed;
-            rtvalue["status"] = "failed";
+            rtdto.error = ErrorCodes::RPCFailed;
+            rtdto.status = "failed";
             return result();
         }
     }
 
+    const memochat::json::JsonValue rtvalue = ChatMessageCommand::ToJsonValue(rtdto);
     const bool notify_delivered =
         _delivery_gateway &&
         _delivery_gateway->TryPushPayload({touid}, ID_NOTIFY_TEXT_CHAT_MSG_REQ, rtvalue, uid, false);
@@ -386,20 +267,19 @@ MessageCommandResult PrivateMessageService::ForwardPrivateMessage(const MessageC
     memochat::json::JsonReader reader;
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
-    const int from_uid = root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
-    const int peer_uid = root.isMember("peer_uid") ? root["peer_uid"].asInt() : root["touid"].asInt();
-    const std::string source_msg_id = root.get("msgid", "").asString();
-    std::string client_msg_id = root.get("client_msg_id", "").asString();
+    const auto command = ChatMessageCommand::ChatPrivateForwardRequestFromJsonValue(root);
+    const int from_uid = command.from_uid;
+    const int peer_uid = command.peer_uid;
+    const std::string& source_msg_id = command.source_msg_id;
+    std::string client_msg_id = command.client_msg_id;
 
-    memochat::json::JsonValue rtvalue;
-    rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["fromuid"] = from_uid;
-    rtvalue["peer_uid"] = peer_uid;
-    rtvalue["touid"] = peer_uid;
-    if (!client_msg_id.empty())
-    {
-        rtvalue["client_msg_id"] = client_msg_id;
-    }
+    memochat::json::JsonValue rtvalue =
+        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateForwardResultDto{
+            .error = ErrorCodes::Success,
+            .fromuid = from_uid,
+            .peer_uid = peer_uid,
+            .touid = peer_uid,
+            .client_msg_id = client_msg_id});
 
     const auto result = [&rtvalue]()
     {
@@ -485,18 +365,21 @@ MessageCommandResult PrivateMessageService::ForwardPrivateMessage(const MessageC
         return result();
     }
 
-    memochat::json::JsonValue msg_obj;
-    msg_obj["msgid"] = info.msg_id;
-    msg_obj["content"] = info.content;
-    msg_obj["created_at"] = static_cast<int64_t>(now_ms);
-    if (info.reply_to_server_msg_id > 0)
-    {
-        msg_obj["reply_to_server_msg_id"] = static_cast<int64_t>(info.reply_to_server_msg_id);
-    }
-    msg_obj["forward_meta"] = forward_meta;
-    rtvalue["msg"] = msg_obj;
-    append(rtvalue["text_array"], msg_obj);
-    rtvalue["created_at"] = static_cast<int64_t>(now_ms);
+    const memochat::json::JsonValue msg_obj =
+        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateForwardMessageDto{
+            .msgid = info.msg_id,
+            .content = info.content,
+            .created_at = now_ms,
+            .reply_to_server_msg_id = info.reply_to_server_msg_id,
+            .forward_meta = forward_meta});
+    rtvalue = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateForwardResultDto{
+        .error = ErrorCodes::Success,
+        .fromuid = from_uid,
+        .peer_uid = peer_uid,
+        .touid = peer_uid,
+        .client_msg_id = client_msg_id,
+        .created_at = now_ms,
+        .msg = msg_obj});
 
     TextChatMsgReq text_msg_req;
     text_msg_req.set_fromuid(from_uid);
@@ -505,7 +388,7 @@ MessageCommandResult PrivateMessageService::ForwardPrivateMessage(const MessageC
     text_msg->set_msgid(info.msg_id);
     text_msg->set_msgcontent(info.content);
 
-    const auto route = ResolveOnlineRouteLocal(peer_uid, _session_registry, _online_route_store);
+    const auto route = ResolveOnlineRoute(peer_uid, _session_registry, _online_route_store);
     if (route.kind == OnlineRouteKind::Offline || route.kind == OnlineRouteKind::Stale)
     {
         LogPrivateRouteLocal("chat.private.forward.route", from_uid, peer_uid, info.msg_id, route, "skipped", false);
@@ -588,12 +471,12 @@ MessageCommandResult PrivateMessageService::PrivateReadAck(const MessageCommandR
     }
     _message_repository->UpsertPrivateReadState(uid, peer_uid, read_ts);
 
-    memochat::json::JsonValue notify;
-    notify["error"] = ErrorCodes::Success;
-    notify["event"] = "private_read_ack";
-    notify["fromuid"] = uid;
-    notify["peer_uid"] = peer_uid;
-    notify["read_ts"] = static_cast<int64_t>(read_ts);
+    const auto notify = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateReadAckEventDto{
+        .error = ErrorCodes::Success,
+        .event = "private_read_ack",
+        .fromuid = uid,
+        .peer_uid = peer_uid,
+        .read_ts = read_ts});
     _delivery_gateway->PushPayload({peer_uid}, ID_NOTIFY_PRIVATE_READ_ACK_REQ, notify);
     return result();
 }
@@ -610,19 +493,21 @@ MessageCommandResult PrivateMessageService::EditPrivateMessage(const MessageComm
     memochat::json::JsonReader reader;
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
-    const int uid = root["fromuid"].asInt();
-    const int peer_uid = root["peer_uid"].asInt();
-    const std::string target_msg_id = root.get("msgid", "").asString();
-    const std::string content = root.get("content", "").asString();
+    const auto command = ChatMessageCommand::ChatPrivateEditRequestFromJsonValue(root);
+    const int uid = command.uid;
+    const int peer_uid = command.peer_uid;
+    const std::string& target_msg_id = command.msgid;
+    const std::string& content = command.content;
     const int64_t now_ms = NowMs();
 
-    memochat::json::JsonValue rtvalue;
-    rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["fromuid"] = uid;
-    rtvalue["peer_uid"] = peer_uid;
-    rtvalue["msgid"] = target_msg_id;
-    rtvalue["content"] = content;
-    rtvalue["edited_at_ms"] = static_cast<int64_t>(now_ms);
+    memochat::json::JsonValue rtvalue =
+        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateMessageChangedResultDto{
+            .error = ErrorCodes::Success,
+            .fromuid = uid,
+            .peer_uid = peer_uid,
+            .msgid = target_msg_id,
+            .content = content,
+            .changed_at_ms = now_ms});
     const auto result = [&rtvalue]()
     {
         return MessageCommandResult{ID_EDIT_PRIVATE_MSG_RSP,
@@ -651,14 +536,15 @@ MessageCommandResult PrivateMessageService::EditPrivateMessage(const MessageComm
         return result();
     }
 
-    memochat::json::JsonValue notify;
-    notify["error"] = ErrorCodes::Success;
-    notify["event"] = "private_msg_edited";
-    notify["fromuid"] = uid;
-    notify["peer_uid"] = peer_uid;
-    notify["msgid"] = target_msg_id;
-    notify["content"] = content;
-    notify["edited_at_ms"] = static_cast<int64_t>(now_ms);
+    const memochat::json::JsonValue notify =
+        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateMessageChangedEventDto{
+            .error = ErrorCodes::Success,
+            .event = "private_msg_edited",
+            .fromuid = uid,
+            .peer_uid = peer_uid,
+            .msgid = target_msg_id,
+            .content = content,
+            .changed_at_ms = now_ms});
     _delivery_gateway->PushPayload({uid, peer_uid}, ID_NOTIFY_PRIVATE_MSG_CHANGED_REQ, notify);
     return result();
 }
@@ -676,18 +562,21 @@ MessageCommandResult PrivateMessageService::RevokePrivateMessage(const MessageCo
     memochat::json::JsonReader reader;
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
-    const int uid = root["fromuid"].asInt();
-    const int peer_uid = root["peer_uid"].asInt();
-    const std::string target_msg_id = root.get("msgid", "").asString();
+    const auto command = ChatMessageCommand::ChatPrivateRevokeRequestFromJsonValue(root);
+    const int uid = command.uid;
+    const int peer_uid = command.peer_uid;
+    const std::string& target_msg_id = command.msgid;
     const int64_t now_ms = NowMs();
 
-    memochat::json::JsonValue rtvalue;
-    rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["fromuid"] = uid;
-    rtvalue["peer_uid"] = peer_uid;
-    rtvalue["msgid"] = target_msg_id;
-    rtvalue["content"] = "[消息已撤回]";
-    rtvalue["deleted_at_ms"] = static_cast<int64_t>(now_ms);
+    memochat::json::JsonValue rtvalue =
+        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateMessageChangedResultDto{
+            .error = ErrorCodes::Success,
+            .fromuid = uid,
+            .peer_uid = peer_uid,
+            .msgid = target_msg_id,
+            .content = "[消息已撤回]",
+            .changed_at_ms = now_ms,
+            .deleted = true});
     const auto result = [&rtvalue]()
     {
         return MessageCommandResult{ID_REVOKE_PRIVATE_MSG_RSP,
@@ -716,14 +605,16 @@ MessageCommandResult PrivateMessageService::RevokePrivateMessage(const MessageCo
         return result();
     }
 
-    memochat::json::JsonValue notify;
-    notify["error"] = ErrorCodes::Success;
-    notify["event"] = "private_msg_revoked";
-    notify["fromuid"] = uid;
-    notify["peer_uid"] = peer_uid;
-    notify["msgid"] = target_msg_id;
-    notify["content"] = "[消息已撤回]";
-    notify["deleted_at_ms"] = static_cast<int64_t>(now_ms);
+    const memochat::json::JsonValue notify =
+        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateMessageChangedEventDto{
+            .error = ErrorCodes::Success,
+            .event = "private_msg_revoked",
+            .fromuid = uid,
+            .peer_uid = peer_uid,
+            .msgid = target_msg_id,
+            .content = "[消息已撤回]",
+            .changed_at_ms = now_ms,
+            .deleted = true});
     _delivery_gateway->PushPayload({uid, peer_uid}, ID_NOTIFY_PRIVATE_MSG_CHANGED_REQ, notify);
     return result();
 }
@@ -741,16 +632,17 @@ MessageCommandResult PrivateMessageService::PrivateHistory(const MessageCommandR
     memochat::json::JsonReader reader;
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
-    const int uid = root["fromuid"].asInt();
-    const int peer_uid = root["peer_uid"].asInt();
-    const int64_t before_ts = root.get("before_ts", 0).asInt64();
-    const std::string before_msg_id = root.get("before_msg_id", "").asString();
-    const int limit = root.get("limit", 20).asInt();
+    const auto command = ChatHistoryCommand::ChatPrivateHistoryRequestFromJsonValue(root);
+    const int uid = command.uid;
+    const int peer_uid = command.peer_uid;
+    const int64_t before_ts = command.before_ts;
+    const std::string& before_msg_id = command.before_msg_id;
+    const int limit = command.limit;
 
-    memochat::json::JsonValue rtvalue;
-    rtvalue["error"] = ErrorCodes::Success;
-    rtvalue["peer_uid"] = peer_uid;
-    rtvalue["has_more"] = false;
+    memochat::json::JsonValue rtvalue = ChatHistoryCommand::ToJsonValue(ChatHistoryCommand::ChatPrivateHistoryResponseDto{
+        .error = ErrorCodes::Success,
+        .peer_uid = peer_uid,
+        .has_more = false});
     rtvalue["messages"] = memochat::json::arrayValue;
     const auto result = [&rtvalue]()
     {
@@ -779,33 +671,8 @@ MessageCommandResult PrivateMessageService::PrivateHistory(const MessageCommandR
         {
             continue;
         }
-        memochat::json::JsonValue item;
-        item["msgid"] = one->msg_id;
-        item["content"] = one->content;
-        item["fromuid"] = one->from_uid;
-        item["touid"] = one->to_uid;
-        item["created_at"] = static_cast<int64_t>(one->created_at);
-        if (one->reply_to_server_msg_id > 0)
-        {
-            item["reply_to_server_msg_id"] = static_cast<int64_t>(one->reply_to_server_msg_id);
-        }
-        if (!one->forward_meta_json.empty())
-        {
-            memochat::json::JsonReader forward_reader;
-            memochat::json::JsonValue forward_meta;
-            if (forward_reader.parse(one->forward_meta_json, forward_meta))
-            {
-                item["forward_meta"] = forward_meta;
-            }
-        }
-        if (one->edited_at_ms > 0)
-        {
-            item["edited_at_ms"] = static_cast<int64_t>(one->edited_at_ms);
-        }
-        if (one->deleted_at_ms > 0)
-        {
-            item["deleted_at_ms"] = static_cast<int64_t>(one->deleted_at_ms);
-        }
+        const memochat::json::JsonValue item =
+            ChatHistoryOutput::ToJsonValue(ChatHistoryOutput::ChatPrivateHistoryMessageFromInfo(*one));
         append(rtvalue["messages"], item);
         if (one->from_uid == peer_uid && one->created_at > max_peer_read_ts)
         {

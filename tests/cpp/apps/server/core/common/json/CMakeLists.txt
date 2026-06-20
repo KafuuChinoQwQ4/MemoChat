@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 add_executable(json_gtest_glaze_compat_test
     main.cpp
     GlazeCompatTest.cpp
+    TypedJsonCodecTest.cpp
 )
 
 target_link_libraries(json_gtest_glaze_compat_test PRIVATE

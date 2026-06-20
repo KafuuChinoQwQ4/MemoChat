@@ -1,6 +1,7 @@
 #include "modules/profile/ProfileRouteModule.h"
 
 #include "AuthLoginSupport.h"
+#include "AuthPublicDtos.h"
 #include "PostgresMgr.h"
 #include "RedisMgr.h"
 #include "const.h"
@@ -26,27 +27,26 @@ bool HandleUserUpdateProfile(const memochat::gate::routing::GateRequest& request
 {
     memochat::json::JsonValue root;
     memochat::json::JsonValue src_root;
-    memochat::json::JsonReader reader;
-    if (!reader.parse(request.body, src_root))
+    gateauthsupport::ProfileUpdateRequestDto profile_request;
+    if (!gateauthsupport::DecodeProfileUpdateRequest(request.body, &profile_request, &src_root))
     {
         root["error"] = ErrorCodes::Error_Json;
         WriteJson(response, root);
         return true;
     }
 
-    if (!isMember(src_root, "uid") || !isMember(src_root, "nick") || !isMember(src_root, "desc") ||
-        !isMember(src_root, "icon"))
+    if (!gateauthsupport::HasProfileUpdateRequiredFields(src_root))
     {
         root["error"] = ErrorCodes::Error_Json;
         WriteJson(response, root);
         return true;
     }
 
-    const auto uid = src_root["uid"].asInt();
-    const auto name = src_root.get("name", "").asString();
-    const auto nick = src_root["nick"].asString();
-    const auto desc = src_root["desc"].asString();
-    const auto icon = src_root["icon"].asString();
+    const auto uid = profile_request.uid;
+    const auto name = profile_request.name;
+    const auto nick = profile_request.nick;
+    const auto desc = profile_request.desc;
+    const auto icon = profile_request.icon;
     if (uid <= 0 || nick.empty())
     {
         root["error"] = ErrorCodes::Error_Json;
@@ -68,12 +68,14 @@ bool HandleUserUpdateProfile(const memochat::gate::routing::GateRequest& request
     }
     gateauthsupport::InvalidateLoginCacheByUid(uid);
 
-    root["error"] = ErrorCodes::Success;
-    root["uid"] = uid;
-    root["name"] = name;
-    root["nick"] = nick;
-    root["desc"] = desc;
-    root["icon"] = icon;
+    gateauthsupport::ProfileUpdateResponseDto profile_response;
+    profile_response.error = ErrorCodes::Success;
+    profile_response.uid = uid;
+    profile_response.name = name;
+    profile_response.nick = nick;
+    profile_response.desc = desc;
+    profile_response.icon = icon;
+    root = gateauthsupport::ProfileUpdateResponseToJsonValue(profile_response);
     WriteJson(response, root);
     return true;
 }
@@ -82,16 +84,15 @@ bool HandleGetUserInfo(const memochat::gate::routing::GateRequest& request,
                        memochat::gate::routing::GateResponse& response)
 {
     memochat::json::JsonValue root;
-    memochat::json::JsonValue src_root;
-    memochat::json::JsonReader reader;
-    if (!reader.parse(request.body, src_root))
+    gateauthsupport::GetUserInfoRequestDto user_info_request;
+    if (!gateauthsupport::DecodeGetUserInfoRequest(request.body, &user_info_request))
     {
         root["error"] = ErrorCodes::Error_Json;
         WriteJson(response, root);
         return true;
     }
 
-    const int uid = src_root.get("uid", 0).asInt();
+    const int uid = user_info_request.uid;
     if (uid <= 0)
     {
         root["error"] = ErrorCodes::UidInvalid;
@@ -107,15 +108,17 @@ bool HandleGetUserInfo(const memochat::gate::routing::GateRequest& request,
         return true;
     }
 
-    root["error"] = ErrorCodes::Success;
-    root["uid"] = user_info.uid;
-    root["user_id"] = user_info.user_id;
-    root["name"] = user_info.name;
-    root["email"] = user_info.email;
-    root["nick"] = user_info.nick;
-    root["icon"] = user_info.icon;
-    root["desc"] = user_info.desc;
-    root["sex"] = user_info.sex;
+    gateauthsupport::UserInfoResponseDto user_info_response;
+    user_info_response.error = ErrorCodes::Success;
+    user_info_response.uid = user_info.uid;
+    user_info_response.user_id = user_info.user_id;
+    user_info_response.name = user_info.name;
+    user_info_response.email = user_info.email;
+    user_info_response.nick = user_info.nick;
+    user_info_response.icon = user_info.icon;
+    user_info_response.desc = user_info.desc;
+    user_info_response.sex = user_info.sex;
+    root = gateauthsupport::UserInfoResponseToJsonValue(user_info_response);
     WriteJson(response, root);
     return true;
 }

@@ -8,5 +8,6 @@
 | --- | --- |
 | `AuthRouteModule.cpp` | 认证路由模块实现 |
 | `AuthRouteModule.h` | 认证路由模块声明 |
+| `AuthRouteSchemas.cpp` | 认证稳定 JSON 路由的只读 schema descriptor 旁列表 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

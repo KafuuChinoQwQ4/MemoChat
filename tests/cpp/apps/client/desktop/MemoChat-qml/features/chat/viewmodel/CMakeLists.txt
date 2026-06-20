@@ -22,7 +22,7 @@ add_executable(chat_view_model_gtest
 )
 set_target_properties(chat_view_model_gtest PROPERTIES AUTOMOC ON)
 set_target_properties(chat_view_model_gtest PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )

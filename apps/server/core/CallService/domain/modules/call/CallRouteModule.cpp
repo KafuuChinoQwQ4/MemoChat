@@ -1,5 +1,6 @@
 #include "modules/call/CallRouteModule.h"
 
+#include "CallPublicDtos.h"
 #include "CallService.h"
 #include "const.h"
 #include "json/GlazeCompat.h"
@@ -89,11 +90,13 @@ bool HangupCall(const memochat::json::JsonValue& src_root, memochat::json::JsonV
 
 bool PostToken(const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id)
 {
-    const int uid = memochat::json::glaze_safe_get<int>(src_root, "uid", 0);
-    const std::string token = memochat::json::glaze_safe_get<std::string>(src_root, "token", "");
-    const std::string call_id = memochat::json::glaze_safe_get<std::string>(src_root, "call_id", "");
-    const std::string role = memochat::json::glaze_safe_get<std::string>(src_root, "role", "");
-    return CallService::GetInstance()->GetToken(uid, token, call_id, role, root, trace_id);
+    const memochat::call::CallTokenRequestDto token_request = memochat::call::CallTokenRequestFromJsonValue(src_root);
+    return CallService::GetInstance()->GetToken(token_request.uid,
+                                                token_request.token,
+                                                token_request.call_id,
+                                                token_request.role,
+                                                root,
+                                                trace_id);
 }
 
 bool HandleGetToken(const memochat::gate::routing::GateRequest& request,

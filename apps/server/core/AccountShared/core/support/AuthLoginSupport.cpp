@@ -1,5 +1,6 @@
 ﻿#include "AuthLoginSupport.h"
 #include "AuthCache.h"
+#include "AuthLoginCacheProfileDto.h"
 #include "json/GlazeCompat.h"
 #include "ConfigMgr.h"
 #include "PostgresDao.h"
@@ -191,48 +192,28 @@ bool TryLoadCachedLoginProfile(const std::string& email, const std::string& pwd,
     {
         return false;
     }
-    memochat::json::JsonValue root;
-    if (!memochat::json::reader_parse(cached_json, root) || !memochat::json::glaze_is_object(root))
+    UserInfo cached_user;
+    if (!DecodeLoginCacheProfile(cached_json, &cached_user))
     {
         return false;
     }
-    const auto cached_pwd = memochat::json::glaze_safe_get<std::string>(root["pwd"], "");
-    if (cached_pwd.empty())
+    if (pwd != cached_user.pwd && DecodeLegacyXorPwd(pwd) != cached_user.pwd)
     {
         return false;
     }
-    if (pwd != cached_pwd && DecodeLegacyXorPwd(pwd) != cached_pwd)
-    {
-        return false;
-    }
-    userInfo.pwd = cached_pwd;
-    userInfo.name = memochat::json::glaze_safe_get<std::string>(root["name"], "");
-    userInfo.email = memochat::json::glaze_safe_get<std::string>(root["email"], "");
-    userInfo.uid = memochat::json::glaze_safe_get<int64_t>(root["uid"], 0LL);
-    userInfo.user_id = memochat::json::glaze_safe_get<std::string>(root["user_id"], "");
-    userInfo.nick = memochat::json::glaze_safe_get<std::string>(root["nick"], "");
-    userInfo.icon = memochat::json::glaze_safe_get<std::string>(root["icon"], "");
-    userInfo.desc = memochat::json::glaze_safe_get<std::string>(root["desc"], "");
-    userInfo.sex = memochat::json::glaze_safe_get<int64_t>(root["sex"], 0LL);
+    userInfo = cached_user;
     return userInfo.uid > 0;
 }
 
 void CacheLoginProfile(const std::string& email, const UserInfo& userInfo)
 {
-    memochat::json::JsonValue root{};
-    root["uid"] = userInfo.uid;
-    root["pwd"] = userInfo.pwd;
-    root["name"] = userInfo.name;
-    root["email"] = userInfo.email;
-    root["user_id"] = userInfo.user_id;
-    root["nick"] = userInfo.nick;
-    root["icon"] = userInfo.icon;
-    root["desc"] = userInfo.desc;
-    root["sex"] = userInfo.sex;
+    std::string cache_body;
+    if (!EncodeLoginCacheProfile(userInfo, &cache_body))
+    {
+        return;
+    }
     const auto ttl = GetLoginCacheTtlSec();
-    memochat::gate::core::AuthCache::Instance().StoreLoginProfileJson(email,
-                                                                      memochat::json::glaze_stringify(root),
-                                                                      ttl);
+    memochat::gate::core::AuthCache::Instance().StoreLoginProfileJson(email, cache_body, ttl);
     if (userInfo.uid > 0)
     {
         memochat::gate::core::AuthCache::Instance().StoreLoginProfileUid(userInfo.uid, email, ttl);

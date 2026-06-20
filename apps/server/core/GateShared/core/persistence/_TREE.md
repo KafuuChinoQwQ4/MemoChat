@@ -6,6 +6,8 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
+| `CallSessionTypes.h` | 通话用户资料与通话会话持久化结构声明。 |
+| `MomentTypes.h` | 朋友圈动态、内容、点赞和评论的轻量持久化结构声明。 |
 | `MongoDao.cpp` | MongoDB 数据访问对象实现。 |
 | `MongoDao.h` | Mongo DAO 接口声明。 |
 | `MongoMgr.cpp` | MongoDB 连接管理实现。 |

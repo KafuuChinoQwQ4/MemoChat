@@ -12,6 +12,7 @@
 | [`json/`](json/_TREE.md) | Glaze JSON 序列化兼容层 |
 | [`logging/`](logging/_TREE.md) | 日志、脱敏与 OpenTelemetry 遥测 |
 | [`proto/`](proto/_TREE.md) | 跨服务共享的 gRPC/protobuf 定义 |
+| [`reflection/`](reflection/_TREE.md) | C++26 标准反射编译期字段元信息辅助层 |
 | [`runtime/`](runtime/_TREE.md) | 运行时配置与 IO 上下文池等基础设施 |
 
 ## 文件

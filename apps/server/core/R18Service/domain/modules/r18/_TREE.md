@@ -8,5 +8,6 @@
 | --- | --- |
 | `R18RouteModule.cpp` | R18 路由模块实现 |
 | `R18RouteModule.h` | R18 路由模块声明 |
+| `R18RouteSchemas.cpp` | R18 稳定 action 路由只读 schema descriptor 列表 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

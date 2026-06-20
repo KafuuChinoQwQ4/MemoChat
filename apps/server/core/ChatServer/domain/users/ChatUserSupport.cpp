@@ -1,12 +1,12 @@
 #include "ChatUserSupport.h"
 
+#include "ChatUserProfileDto.h"
 #include "PostgresMgr.h"
 #include "RedisMgr.h"
 #include "data.h"
 
 #include <cctype>
 #include <iostream>
-#include "json/GlazeCompat.h"
 
 namespace chatusersupport
 {
@@ -35,26 +35,14 @@ void GetUserByUid(const std::string& uid_str, memochat::json::JsonValue& rtvalue
         return;
     }
 
-    memochat::json::JsonValue redis_root;
-    redis_root["uid"] = user_info->uid;
-    redis_root["user_id"] = user_info->user_id;
-    redis_root["pwd"] = user_info->pwd;
-    redis_root["name"] = user_info->name;
-    redis_root["email"] = user_info->email;
-    redis_root["nick"] = user_info->nick;
-    redis_root["desc"] = user_info->desc;
-    redis_root["sex"] = user_info->sex;
-    redis_root["icon"] = user_info->icon;
-    RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
+    const ChatUserProfileDto profile = ChatUserProfileFromUserInfo(*user_info);
+    std::string cache_body;
+    if (EncodeChatUserProfileCache(profile, &cache_body))
+    {
+        RedisMgr::GetInstance()->Set(base_key, cache_body);
+    }
 
-    rtvalue["uid"] = user_info->uid;
-    rtvalue["user_id"] = user_info->user_id;
-    rtvalue["name"] = user_info->name;
-    rtvalue["email"] = user_info->email;
-    rtvalue["nick"] = user_info->nick;
-    rtvalue["desc"] = user_info->desc;
-    rtvalue["sex"] = user_info->sex;
-    rtvalue["icon"] = user_info->icon;
+    AppendChatUserProfileToJsonValue(profile, rtvalue, false, true);
 }
 
 void GetUserByName(const std::string& name, memochat::json::JsonValue& rtvalue)
@@ -65,16 +53,9 @@ void GetUserByName(const std::string& name, memochat::json::JsonValue& rtvalue)
     std::string info_str;
     if (RedisMgr::GetInstance()->Get(base_key, info_str))
     {
-        memochat::json::JsonReader reader;
-        memochat::json::JsonValue root;
-        reader.parse(info_str, root);
-        rtvalue["uid"] = root["uid"].asInt();
-        rtvalue["user_id"] = root["user_id"].asString();
-        rtvalue["name"] = root["name"].asString();
-        rtvalue["email"] = root["email"].asString();
-        rtvalue["nick"] = root["nick"].asString();
-        rtvalue["desc"] = root["desc"].asString();
-        rtvalue["sex"] = root["sex"].asInt();
+        ChatUserProfileDto profile;
+        DecodeChatUserProfileCache(info_str, &profile);
+        AppendChatUserProfileToJsonValue(profile, rtvalue, false, false);
         return;
     }
 
@@ -85,25 +66,14 @@ void GetUserByName(const std::string& name, memochat::json::JsonValue& rtvalue)
         return;
     }
 
-    memochat::json::JsonValue redis_root;
-    redis_root["uid"] = user_info->uid;
-    redis_root["user_id"] = user_info->user_id;
-    redis_root["pwd"] = user_info->pwd;
-    redis_root["name"] = user_info->name;
-    redis_root["email"] = user_info->email;
-    redis_root["nick"] = user_info->nick;
-    redis_root["desc"] = user_info->desc;
-    redis_root["sex"] = user_info->sex;
-    RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
+    const ChatUserProfileDto profile = ChatUserProfileFromUserInfo(*user_info);
+    std::string cache_body;
+    if (EncodeChatUserProfileCache(profile, &cache_body))
+    {
+        RedisMgr::GetInstance()->Set(base_key, cache_body);
+    }
 
-    rtvalue["uid"] = user_info->uid;
-    rtvalue["user_id"] = user_info->user_id;
-    rtvalue["pwd"] = user_info->pwd;
-    rtvalue["name"] = user_info->name;
-    rtvalue["email"] = user_info->email;
-    rtvalue["nick"] = user_info->nick;
-    rtvalue["desc"] = user_info->desc;
-    rtvalue["sex"] = user_info->sex;
+    AppendChatUserProfileToJsonValue(profile, rtvalue, true, false);
 }
 
 bool GetBaseInfo(const std::string& base_key, int uid, std::shared_ptr<UserInfo>& userinfo)
@@ -111,18 +81,9 @@ bool GetBaseInfo(const std::string& base_key, int uid, std::shared_ptr<UserInfo>
     std::string info_str;
     if (RedisMgr::GetInstance()->Get(base_key, info_str))
     {
-        memochat::json::JsonReader reader;
-        memochat::json::JsonValue root;
-        reader.parse(info_str, root);
-        userinfo->uid = root["uid"].asInt();
-        userinfo->user_id = root["user_id"].asString();
-        userinfo->name = root["name"].asString();
-        userinfo->pwd = root["pwd"].asString();
-        userinfo->email = root["email"].asString();
-        userinfo->nick = root["nick"].asString();
-        userinfo->desc = root["desc"].asString();
-        userinfo->sex = root["sex"].asInt();
-        userinfo->icon = root["icon"].asString();
+        ChatUserProfileDto profile;
+        DecodeChatUserProfileCache(info_str, &profile);
+        FillUserInfoFromChatUserProfile(profile, *userinfo);
         return true;
     }
 
@@ -133,17 +94,12 @@ bool GetBaseInfo(const std::string& base_key, int uid, std::shared_ptr<UserInfo>
     }
     userinfo = user_info;
 
-    memochat::json::JsonValue redis_root;
-    redis_root["uid"] = uid;
-    redis_root["user_id"] = userinfo->user_id;
-    redis_root["pwd"] = userinfo->pwd;
-    redis_root["name"] = userinfo->name;
-    redis_root["email"] = userinfo->email;
-    redis_root["nick"] = userinfo->nick;
-    redis_root["desc"] = userinfo->desc;
-    redis_root["sex"] = userinfo->sex;
-    redis_root["icon"] = userinfo->icon;
-    RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
+    const ChatUserProfileDto profile = ChatUserProfileFromUserInfo(*userinfo);
+    std::string cache_body;
+    if (EncodeChatUserProfileCache(profile, &cache_body))
+    {
+        RedisMgr::GetInstance()->Set(base_key, cache_body);
+    }
     return true;
 }
 

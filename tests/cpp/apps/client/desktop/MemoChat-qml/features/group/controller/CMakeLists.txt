@@ -47,7 +47,7 @@ add_executable(group_controller_gtest
 )
 set_target_properties(group_controller_gtest PROPERTIES AUTOMOC ON)
 set_target_properties(group_controller_gtest PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )
@@ -85,7 +85,7 @@ add_executable(group_management_event_service_gtest
 )
 set_target_properties(group_management_event_service_gtest PROPERTIES AUTOMOC ON)
 set_target_properties(group_management_event_service_gtest PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )
@@ -112,7 +112,7 @@ add_executable(group_management_effect_applier_gtest
 )
 set_target_properties(group_management_effect_applier_gtest PROPERTIES AUTOMOC ON)
 set_target_properties(group_management_effect_applier_gtest PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )
@@ -141,7 +141,7 @@ add_executable(group_management_response_service_gtest
 )
 set_target_properties(group_management_response_service_gtest PROPERTIES AUTOMOC ON)
 set_target_properties(group_management_response_service_gtest PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )
@@ -172,7 +172,7 @@ add_executable(group_response_error_service_gtest
 )
 set_target_properties(group_response_error_service_gtest PROPERTIES AUTOMOC ON)
 set_target_properties(group_response_error_service_gtest PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )

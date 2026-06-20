@@ -5,15 +5,64 @@ project(MemoChatServer LANGUAGES CXX)
 option(BUILD_SERVER_SERVICES "Build backend service executables" ON)
 option(MEMOCHAT_AUTO_DEPLOY_RUNTIME "Copy built server executables into infra/Memo_ops/runtime/services during build" OFF)
 option(MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE "Build the legacy standalone GateServerHttp2 executable" OFF)
+option(MEMOCHAT_ENABLE_CPP26_REFLECTION "Enable experimental C++26 static reflection for supported server targets" OFF)
 
-# Require C++23 for std::expected, std::unreachable, std::byteswap (glaze library requires C++23).
+# Require at least C++23 for std::expected, std::unreachable, std::byteswap (glaze library requires C++23).
 # Must be set BEFORE any add_subdirectory() calls so it takes effect for all targets.
 if(NOT DEFINED MEMOCHAT_CXX_STANDARD)
-    set(MEMOCHAT_CXX_STANDARD "23" CACHE STRING "C++ standard used by MemoChat targets")
+    set(MEMOCHAT_CXX_STANDARD "26" CACHE STRING "C++ standard used by MemoChat targets")
 endif()
 set(CMAKE_CXX_STANDARD ${MEMOCHAT_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+add_library(memochat_cpp26_reflection INTERFACE)
+if(MEMOCHAT_ENABLE_CPP26_REFLECTION)
+    if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        message(FATAL_ERROR "MEMOCHAT_ENABLE_CPP26_REFLECTION requires GNU g++ because C++26 reflection is compiler-specific and experimental.")
+    endif()
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16)
+        message(FATAL_ERROR "MEMOCHAT_ENABLE_CPP26_REFLECTION requires g++ >= 16.")
+    endif()
+    if(NOT "${MEMOCHAT_CXX_STANDARD}" STREQUAL "26")
+        message(FATAL_ERROR "MEMOCHAT_ENABLE_CPP26_REFLECTION requires MEMOCHAT_CXX_STANDARD=26.")
+    endif()
+
+    include(CheckCXXSourceCompiles)
+    set(_MEMOCHAT_REFLECTION_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")
+    string(APPEND CMAKE_REQUIRED_FLAGS " -freflection")
+    check_cxx_source_compiles([=[
+#include <meta>
+#include <cstddef>
+
+struct Probe {
+    int id;
+    const char* name;
+};
+
+consteval std::size_t CountFields()
+{
+    return std::meta::nonstatic_data_members_of(^^Probe, std::meta::access_context::current()).size();
+}
+
+static_assert(CountFields() == 2);
+
+int main()
+{
+    return 0;
+}
+]=] MEMOCHAT_CPP26_REFLECTION_PROBE_OK)
+    set(CMAKE_REQUIRED_FLAGS "${_MEMOCHAT_REFLECTION_REQUIRED_FLAGS}")
+    if(NOT MEMOCHAT_CPP26_REFLECTION_PROBE_OK)
+        message(FATAL_ERROR "MEMOCHAT_ENABLE_CPP26_REFLECTION was requested, but the compiler failed the <meta> -freflection probe.")
+    endif()
+
+    target_compile_options(memochat_cpp26_reflection INTERFACE -freflection)
+    target_compile_definitions(memochat_cpp26_reflection INTERFACE MEMOCHAT_ENABLE_CPP26_REFLECTION=1 GLZ_REFLECTION26=1)
+    message(STATUS "C++26 static reflection: enabled for server targets via -freflection")
+else()
+    target_compile_definitions(memochat_cpp26_reflection INTERFACE MEMOCHAT_ENABLE_CPP26_REFLECTION=0)
+endif()
 
 if(MSVC)
     if(DEFINED VCPKG_TARGET_TRIPLET AND VCPKG_TARGET_TRIPLET MATCHES "static")
@@ -306,6 +355,7 @@ target_include_directories(memochat_server_deps INTERFACE
     "${MEMOCHAT_VCPKG_TRIPLET_DIR}/include/bsoncxx/v_noabi"
 )
 target_link_libraries(memochat_server_deps INTERFACE
+    memochat_cpp26_reflection
     memochat_logging
     memochat_runtime
     memochat_proto

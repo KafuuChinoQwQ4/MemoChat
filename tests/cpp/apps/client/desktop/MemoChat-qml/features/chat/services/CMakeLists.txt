@@ -77,7 +77,7 @@ add_executable(chat_dialog_list_response_service_gtest
 )
 set_target_properties(chat_dialog_list_response_service_gtest PROPERTIES AUTOMOC ON)
 set_target_properties(chat_dialog_list_response_service_gtest PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )
@@ -110,7 +110,7 @@ add_executable(chat_protocol_router_gtest
 )
 set_target_properties(chat_protocol_router_gtest PROPERTIES AUTOMOC ON)
 set_target_properties(chat_protocol_router_gtest PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )
@@ -150,7 +150,7 @@ if(EXISTS "${UPLOADED_ATTACHMENT_DISPATCH_SERVICE_SOURCE}" AND EXISTS "${UPLOADE
     )
     set_target_properties(uploaded_attachment_dispatch_service_gtest PROPERTIES AUTOMOC ON)
     set_target_properties(uploaded_attachment_dispatch_service_gtest PROPERTIES
-        CXX_STANDARD 23
+        CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
     )
@@ -188,7 +188,7 @@ if(EXISTS "${MESSAGE_MUTATION_COMMAND_SERVICE_SOURCE}" AND EXISTS "${MESSAGE_MUT
     )
     set_target_properties(message_mutation_command_service_gtest PROPERTIES AUTOMOC ON)
     set_target_properties(message_mutation_command_service_gtest PROPERTIES
-        CXX_STANDARD 23
+        CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
     )
@@ -225,7 +225,7 @@ if(EXISTS "${INCOMING_MESSAGE_ROUTER_SOURCE}" AND EXISTS "${INCOMING_MESSAGE_ROU
     )
     set_target_properties(incoming_message_router_gtest PROPERTIES AUTOMOC ON)
     set_target_properties(incoming_message_router_gtest PROPERTIES
-        CXX_STANDARD 23
+        CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
     )
@@ -285,7 +285,7 @@ if(EXISTS "${PRIVATE_CHAT_SEND_SERVICE_SOURCE}" AND EXISTS "${PRIVATE_CHAT_SEND_
     )
     set_target_properties(private_chat_send_service_gtest PROPERTIES AUTOMOC ON)
     set_target_properties(private_chat_send_service_gtest PROPERTIES
-        CXX_STANDARD 23
+        CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
     )
@@ -348,7 +348,7 @@ if(EXISTS "${PRIVATE_CHAT_HISTORY_SERVICE_SOURCE}" AND EXISTS "${PRIVATE_CHAT_HI
     )
     set_target_properties(private_chat_history_service_gtest PROPERTIES AUTOMOC ON)
     set_target_properties(private_chat_history_service_gtest PROPERTIES
-        CXX_STANDARD 23
+        CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
     )
@@ -406,7 +406,7 @@ if(EXISTS "${PRIVATE_CHAT_HISTORY_REQUEST_SERVICE_SOURCE}" AND EXISTS "${PRIVATE
     )
     set_target_properties(private_chat_history_request_service_gtest PROPERTIES AUTOMOC ON)
     set_target_properties(private_chat_history_request_service_gtest PROPERTIES
-        CXX_STANDARD 23
+        CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
     )
@@ -471,7 +471,7 @@ if(EXISTS "${PRIVATE_CHAT_EVENT_SERVICE_SOURCE}" AND EXISTS "${PRIVATE_CHAT_EVEN
     )
     set_target_properties(private_chat_event_service_gtest PROPERTIES AUTOMOC ON)
     set_target_properties(private_chat_event_service_gtest PROPERTIES
-        CXX_STANDARD 23
+        CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
     )

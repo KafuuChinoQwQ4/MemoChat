@@ -3,6 +3,8 @@
 #include "RedisMgr.h"
 #include "const.h"
 #include "json/GlazeCompat.h"
+#include "r18/R18PublicDtos.h"
+#include "r18/R18SourceRecordCodec.h"
 #include "r18/R18SourceService.h"
 #include "support/UserTokenValidator.h"
 
@@ -33,11 +35,9 @@ std::string QueryParam(const memochat::gate::routing::GateRequest& request,
     return it == request.query.end() ? fallback : it->second;
 }
 
-bool RequireAuth(const JsonValue& src, JsonValue& root, int& uid, std::string& token)
+template <typename AuthRequest> bool RequireAuth(const AuthRequest& request, JsonValue& root)
 {
-    uid = static_cast<int>(memochat::json::glaze_safe_get<int64_t>(src, "uid", 0LL));
-    token = memochat::json::glaze_safe_get<std::string>(src, "token", "");
-    if (!ValidateUserToken(uid, token))
+    if (!ValidateUserToken(request.uid, request.token))
     {
         root["error"] = ErrorCodes::TokenInvalid;
         root["message"] = "token invalid";
@@ -51,23 +51,6 @@ void WriteOk(JsonValue& root, const JsonValue& data)
     root["error"] = ErrorCodes::Success;
     root["message"] = "";
     root["data"] = data;
-}
-
-JsonValue ToSourceJson(const memochat::r18::R18SourceRecord& rec)
-{
-    JsonValue source;
-    source["id"] = rec.id;
-    source["name"] = rec.name;
-    source["version"] = rec.version;
-    source["path"] = rec.path;
-    source["format"] = rec.format;
-    source["source_url"] = rec.source_url;
-    source["catalog_url"] = rec.catalog_url;
-    source["enabled"] = rec.enabled;
-    source["builtin"] = rec.builtin;
-    source["status"] = rec.status;
-    source["message"] = rec.message;
-    return source;
 }
 
 void WriteJson(memochat::gate::routing::GateResponse& response, const JsonValue& root, const char* content_type)
@@ -144,9 +127,8 @@ bool R18Service::HandleImportSource(const memochat::gate::routing::GateRequest& 
         response,
         [](const JsonValue& src, JsonValue& root, const std::string&)
         {
-            int uid = 0;
-            std::string token;
-            if (!RequireAuth(src, root, uid, token))
+            const auto auth = memochat::r18::R18AuthRequestFromJsonValue(src);
+            if (!RequireAuth(auth, root))
             {
                 return true;
             }
@@ -172,7 +154,7 @@ bool R18Service::HandleImportSource(const memochat::gate::routing::GateRequest& 
             }
 
             JsonValue data;
-            data["source"] = ToSourceJson(rec);
+            data["source"] = memochat::r18::R18SourceRecordToJsonValue(rec);
             WriteOk(root, data);
             return true;
         });
@@ -185,27 +167,26 @@ bool R18Service::HandleEnableSource(const memochat::gate::routing::GateRequest& 
                              response,
                              [](const JsonValue& src, JsonValue& root, const std::string&)
                              {
-                                 int uid = 0;
-                                 std::string token;
-                                 if (!RequireAuth(src, root, uid, token))
+                                 const auto body = memochat::r18::R18SourceToggleRequestFromJsonValue(src);
+                                 if (!RequireAuth(body, root))
                                  {
                                      return true;
                                  }
 
-                                 const std::string source_id =
-                                     memochat::json::glaze_safe_get<std::string>(src, "source_id", "");
                                  std::string error;
-                                 if (!memochat::r18::R18SourceService::Instance().EnableSource(source_id, true, &error))
+                                 if (!memochat::r18::R18SourceService::Instance().EnableSource(body.source_id,
+                                                                                               true,
+                                                                                               &error))
                                  {
                                      root["error"] = ErrorCodes::Error_Json;
                                      root["message"] = error;
                                      return true;
                                  }
 
-                                 JsonValue data;
-                                 data["source_id"] = source_id;
-                                 data["enabled"] = true;
-                                 WriteOk(root, data);
+                                 memochat::r18::R18SourceToggleResponseDto toggle_response;
+                                 toggle_response.source_id = body.source_id;
+                                 toggle_response.enabled = true;
+                                 WriteOk(root, memochat::r18::R18SourceToggleResponseToJsonValue(toggle_response));
                                  return true;
                              });
 }
@@ -218,26 +199,24 @@ bool R18Service::HandleDisableSource(const memochat::gate::routing::GateRequest&
         response,
         [](const JsonValue& src, JsonValue& root, const std::string&)
         {
-            int uid = 0;
-            std::string token;
-            if (!RequireAuth(src, root, uid, token))
+            const auto body = memochat::r18::R18SourceToggleRequestFromJsonValue(src);
+            if (!RequireAuth(body, root))
             {
                 return true;
             }
 
-            const std::string source_id = memochat::json::glaze_safe_get<std::string>(src, "source_id", "");
             std::string error;
-            if (!memochat::r18::R18SourceService::Instance().EnableSource(source_id, false, &error))
+            if (!memochat::r18::R18SourceService::Instance().EnableSource(body.source_id, false, &error))
             {
                 root["error"] = ErrorCodes::Error_Json;
                 root["message"] = error;
                 return true;
             }
 
-            JsonValue data;
-            data["source_id"] = source_id;
-            data["enabled"] = false;
-            WriteOk(root, data);
+            memochat::r18::R18SourceToggleResponseDto toggle_response;
+            toggle_response.source_id = body.source_id;
+            toggle_response.enabled = false;
+            WriteOk(root, memochat::r18::R18SourceToggleResponseToJsonValue(toggle_response));
             return true;
         });
 }
@@ -250,18 +229,18 @@ bool R18Service::HandleSearch(const memochat::gate::routing::GateRequest& reques
         response,
         [](const JsonValue& src, JsonValue& root, const std::string&)
         {
-            int uid = 0;
-            std::string token;
-            if (!RequireAuth(src, root, uid, token))
+            const auto body = memochat::r18::R18SearchRequestFromJsonValue(src);
+            if (!RequireAuth(body, root))
             {
                 return true;
             }
 
-            const std::string source_id =
-                memochat::json::glaze_safe_get<std::string>(src, "source_id", kDefaultR18SourceId);
-            const std::string keyword = memochat::json::glaze_safe_get<std::string>(src, "keyword", "");
-            const int page = static_cast<int>(memochat::json::glaze_safe_get<int64_t>(src, "page", 1LL));
-            WriteOk(root, memochat::r18::R18SourceService::Instance().Search(source_id, keyword, page, uid, token));
+            WriteOk(root,
+                    memochat::r18::R18SourceService::Instance().Search(body.source_id,
+                                                                       body.keyword,
+                                                                       body.page,
+                                                                       body.uid,
+                                                                       body.token));
             return true;
         });
 }
@@ -274,17 +253,17 @@ bool R18Service::HandleComicDetail(const memochat::gate::routing::GateRequest& r
         response,
         [](const JsonValue& src, JsonValue& root, const std::string&)
         {
-            int uid = 0;
-            std::string token;
-            if (!RequireAuth(src, root, uid, token))
+            const auto body = memochat::r18::R18ComicDetailRequestFromJsonValue(src);
+            if (!RequireAuth(body, root))
             {
                 return true;
             }
 
-            const std::string source_id =
-                memochat::json::glaze_safe_get<std::string>(src, "source_id", kDefaultR18SourceId);
-            const std::string comic_id = memochat::json::glaze_safe_get<std::string>(src, "comic_id", "");
-            WriteOk(root, memochat::r18::R18SourceService::Instance().Detail(source_id, comic_id, uid, token));
+            WriteOk(root,
+                    memochat::r18::R18SourceService::Instance().Detail(body.source_id,
+                                                                       body.comic_id,
+                                                                       body.uid,
+                                                                       body.token));
             return true;
         });
 }
@@ -297,17 +276,17 @@ bool R18Service::HandleChapterPages(const memochat::gate::routing::GateRequest& 
         response,
         [](const JsonValue& src, JsonValue& root, const std::string&)
         {
-            int uid = 0;
-            std::string token;
-            if (!RequireAuth(src, root, uid, token))
+            const auto body = memochat::r18::R18ChapterPagesRequestFromJsonValue(src);
+            if (!RequireAuth(body, root))
             {
                 return true;
             }
 
-            const std::string source_id =
-                memochat::json::glaze_safe_get<std::string>(src, "source_id", kDefaultR18SourceId);
-            const std::string chapter_id = memochat::json::glaze_safe_get<std::string>(src, "chapter_id", "");
-            WriteOk(root, memochat::r18::R18SourceService::Instance().Pages(source_id, chapter_id, uid, token));
+            WriteOk(root,
+                    memochat::r18::R18SourceService::Instance().Pages(body.source_id,
+                                                                      body.chapter_id,
+                                                                      body.uid,
+                                                                      body.token));
             return true;
         });
 }
@@ -319,18 +298,17 @@ bool R18Service::HandleFavoriteToggle(const memochat::gate::routing::GateRequest
                              response,
                              [](const JsonValue& src, JsonValue& root, const std::string&)
                              {
-                                 int uid = 0;
-                                 std::string token;
-                                 if (!RequireAuth(src, root, uid, token))
+                                 const auto body = memochat::r18::R18FavoriteToggleRequestFromJsonValue(src);
+                                 if (!RequireAuth(body, root))
                                  {
                                      return true;
                                  }
 
-                                 JsonValue data;
-                                 data["source_id"] = memochat::json::glaze_safe_get<std::string>(src, "source_id", "");
-                                 data["comic_id"] = memochat::json::glaze_safe_get<std::string>(src, "comic_id", "");
-                                 data["favorited"] = memochat::json::glaze_safe_get<bool>(src, "favorited", true);
-                                 WriteOk(root, data);
+                                 memochat::r18::R18FavoriteToggleResponseDto favorite_response;
+                                 favorite_response.source_id = body.source_id;
+                                 favorite_response.comic_id = body.comic_id;
+                                 favorite_response.favorited = body.favorited;
+                                 WriteOk(root, memochat::r18::R18FavoriteToggleResponseToJsonValue(favorite_response));
                                  return true;
                              });
 }
@@ -342,20 +320,18 @@ bool R18Service::HandleHistoryUpdate(const memochat::gate::routing::GateRequest&
                              response,
                              [](const JsonValue& src, JsonValue& root, const std::string&)
                              {
-                                 int uid = 0;
-                                 std::string token;
-                                 if (!RequireAuth(src, root, uid, token))
+                                 const auto body = memochat::r18::R18HistoryUpdateRequestFromJsonValue(src);
+                                 if (!RequireAuth(body, root))
                                  {
                                      return true;
                                  }
 
-                                 JsonValue data;
-                                 data["source_id"] = memochat::json::glaze_safe_get<std::string>(src, "source_id", "");
-                                 data["comic_id"] = memochat::json::glaze_safe_get<std::string>(src, "comic_id", "");
-                                 data["chapter_id"] =
-                                     memochat::json::glaze_safe_get<std::string>(src, "chapter_id", "");
-                                 data["page_index"] = memochat::json::glaze_safe_get<int64_t>(src, "page_index", 0LL);
-                                 WriteOk(root, data);
+                                 memochat::r18::R18HistoryUpdateResponseDto history_response;
+                                 history_response.source_id = body.source_id;
+                                 history_response.comic_id = body.comic_id;
+                                 history_response.chapter_id = body.chapter_id;
+                                 history_response.page_index = body.page_index;
+                                 WriteOk(root, memochat::r18::R18HistoryUpdateResponseToJsonValue(history_response));
                                  return true;
                              });
 }

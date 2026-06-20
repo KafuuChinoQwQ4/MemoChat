@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ChatRelationGroupDtos.h"
 #include "data.h"
 #include "json/GlazeCompat.h"
 
@@ -14,15 +15,14 @@ namespace memochat::chat::message::GroupResponseFormatter
 
 // Group permission bits, used to derive the boolean can_* response flags.
 // (Message-layer copy; previously the kPerm*Local constants in GroupMessageService.cpp.)
-inline constexpr int64_t kPermChangeGroupInfo = 1LL << 0;
-inline constexpr int64_t kPermDeleteMessages = 1LL << 1;
-inline constexpr int64_t kPermInviteUsers = 1LL << 2;
-inline constexpr int64_t kPermManageAdmins = 1LL << 3;
-inline constexpr int64_t kPermPinMessages = 1LL << 4;
-inline constexpr int64_t kPermBanUsers = 1LL << 5;
-inline constexpr int64_t kPermManageTopics = 1LL << 6;
-inline constexpr int64_t kDefaultAdminPermBits =
-    kPermChangeGroupInfo | kPermDeleteMessages | kPermInviteUsers | kPermPinMessages | kPermBanUsers;
+inline constexpr int64_t kPermChangeGroupInfo = memochat::chat::output::kGroupPermChangeGroupInfo;
+inline constexpr int64_t kPermDeleteMessages = memochat::chat::output::kGroupPermDeleteMessages;
+inline constexpr int64_t kPermInviteUsers = memochat::chat::output::kGroupPermInviteUsers;
+inline constexpr int64_t kPermManageAdmins = memochat::chat::output::kGroupPermManageAdmins;
+inline constexpr int64_t kPermPinMessages = memochat::chat::output::kGroupPermPinMessages;
+inline constexpr int64_t kPermBanUsers = memochat::chat::output::kGroupPermBanUsers;
+inline constexpr int64_t kPermManageTopics = memochat::chat::output::kGroupPermManageTopics;
+inline constexpr int64_t kDefaultAdminPermBits = memochat::chat::output::kDefaultAdminPermBits;
 
 // Append the seven boolean can_* permission flags derived from `permission_bits`.
 // Inserts the keys in the same order they were previously written inline.

@@ -3,6 +3,7 @@
 #include "RedisMgr.h"
 #include "const.h"
 #include "AuthLoginSupport.h"
+#include "AuthPublicDtos.h"
 #include "logging/Logger.h"
 #include "json/GlazeCompat.h"
 
@@ -29,19 +30,19 @@ memochat::json::JsonValue MakeError(int error_code, const std::string& message)
 ProfileResult HandleUserUpdateProfile(const memochat::json::JsonValue& req)
 {
     ProfileResult result;
-    if (!memochat::json::glaze_has_key(req, "uid") || !memochat::json::glaze_has_key(req, "nick") ||
-        !memochat::json::glaze_has_key(req, "desc") || !memochat::json::glaze_has_key(req, "icon"))
+    if (!gateauthsupport::HasProfileUpdateRequiredFields(req))
     {
         result.error = 1;
         result.message = "missing required fields";
         return result;
     }
 
-    const auto uid = memochat::json::glaze_safe_get<int>(req, "uid", 0);
-    const auto name = memochat::json::glaze_safe_get<std::string>(req, "name", "");
-    const auto nick = memochat::json::glaze_safe_get<std::string>(req, "nick", "");
-    const auto desc = memochat::json::glaze_safe_get<std::string>(req, "desc", "");
-    const auto icon = memochat::json::glaze_safe_get<std::string>(req, "icon", "");
+    const auto profile_request = gateauthsupport::ProfileUpdateRequestFromJsonValue(req);
+    const auto uid = profile_request.uid;
+    const auto name = profile_request.name;
+    const auto nick = profile_request.nick;
+    const auto desc = profile_request.desc;
+    const auto icon = profile_request.icon;
 
     if (uid <= 0 || nick.empty())
     {
@@ -65,11 +66,14 @@ ProfileResult HandleUserUpdateProfile(const memochat::json::JsonValue& req)
     gateauthsupport::InvalidateLoginCacheByUid(uid);
 
     result.error = 0;
-    result.data["uid"] = uid;
-    result.data["name"] = name;
-    result.data["nick"] = nick;
-    result.data["desc"] = desc;
-    result.data["icon"] = icon;
+    gateauthsupport::ProfileUpdateResponseDto profile_response;
+    profile_response.error = 0;
+    profile_response.uid = uid;
+    profile_response.name = name;
+    profile_response.nick = nick;
+    profile_response.desc = desc;
+    profile_response.icon = icon;
+    result.data = gateauthsupport::ProfileUpdateResponseToJsonValue(profile_response);
 
     memolog::LogInfo("http2.user_update_profile",
                      "user profile updated via HTTP2 handler",
@@ -94,14 +98,17 @@ ProfileResult HandleGetUserInfo(int uid)
         return result;
     }
     result.error = 0;
-    result.data["uid"] = user_info.uid;
-    result.data["user_id"] = user_info.user_id;
-    result.data["name"] = user_info.name;
-    result.data["email"] = user_info.email;
-    result.data["nick"] = user_info.nick;
-    result.data["icon"] = user_info.icon;
-    result.data["desc"] = user_info.desc;
-    result.data["sex"] = user_info.sex;
+    gateauthsupport::UserInfoResponseDto user_info_response;
+    user_info_response.error = 0;
+    user_info_response.uid = user_info.uid;
+    user_info_response.user_id = user_info.user_id;
+    user_info_response.name = user_info.name;
+    user_info_response.email = user_info.email;
+    user_info_response.nick = user_info.nick;
+    user_info_response.icon = user_info.icon;
+    user_info_response.desc = user_info.desc;
+    user_info_response.sex = user_info.sex;
+    result.data = gateauthsupport::UserInfoResponseToJsonValue(user_info_response);
     return result;
 }
 

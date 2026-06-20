@@ -1,4 +1,5 @@
 #include "AIServiceClient.h"
+#include "services/ai/AIPublicDtos.h"
 #include "ConfigMgr.h"
 #include "logging/Logger.h"
 #include <boost/uuid/uuid.hpp>
@@ -6,6 +7,55 @@
 #include <boost/uuid/random_generator.hpp>
 
 using namespace memochat::json;
+
+namespace
+{
+
+memochat::gate::services::ai::AISimpleResponseDto MakeSimpleResponse(int code, const std::string& message)
+{
+    memochat::gate::services::ai::AISimpleResponseDto response;
+    response.code = code;
+    response.message = message;
+    return response;
+}
+
+memochat::gate::services::ai::AIModelInfoResponseDto ModelInfoToResponseDto(const ai::ModelInfo& model)
+{
+    memochat::gate::services::ai::AIModelInfoResponseDto response;
+    response.model_type = model.model_type();
+    response.model_name = model.model_name();
+    response.display_name = model.display_name();
+    response.is_enabled = model.is_enabled();
+    response.context_window = static_cast<int64_t>(model.context_window());
+    response.supports_thinking = model.supports_thinking();
+    return response;
+}
+
+memochat::gate::services::ai::AIKnowledgeBaseInfoResponseDto KnowledgeBaseToResponseDto(
+    const ai::AIKbInfo& kb)
+{
+    memochat::gate::services::ai::AIKnowledgeBaseInfoResponseDto response;
+    response.kb_id = kb.kb_id();
+    response.name = kb.name();
+    response.chunk_count = kb.chunk_count();
+    response.created_at = static_cast<int64_t>(kb.created_at());
+    response.status = kb.status();
+    return response;
+}
+
+memochat::gate::services::ai::AISessionInfoResponseDto SessionInfoToResponseDto(const ai::AISessionInfo& s)
+{
+    memochat::gate::services::ai::AISessionInfoResponseDto response;
+    response.session_id = s.session_id();
+    response.title = s.title();
+    response.model_type = s.model_type();
+    response.model_name = s.model_name();
+    response.created_at = static_cast<double>(s.created_at());
+    response.updated_at = static_cast<double>(s.updated_at());
+    return response;
+}
+
+} // namespace
 
 class AIServiceClient::Impl
 {
@@ -307,41 +357,29 @@ memochat::json::JsonValue AIServiceClient::Chat(int32_t uid,
     ai::AIChatRsp reply;
     auto status = _impl->makeChatCall(uid, session_id, content, model_type, model_name, metadata_json, &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "AIServer unavailable";
         std::map<std::string, std::string> fields = {{"uid", std::to_string(uid)}, {"error", status.error_message()}};
         memolog::LogError("gate.ai.chat.grpc_failed", "AIServer gRPC call failed", fields);
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "AIServer unavailable"));
     }
 
-    root["code"] = reply.code();
-    root["message"] = reply.message();
-    root["session_id"] = reply.session_id();
-    root["content"] = reply.ai_content();
-    root["tokens"] = static_cast<double>(reply.tokens_used());
-    root["model"] = reply.model_name();
-    root["trace_id"] = reply.trace_id();
-    root["skill"] = reply.skill();
-    root["feedback_summary"] = reply.feedback_summary();
-    array_t observations;
+    memochat::gate::services::ai::AIChatResponseDto response;
+    response.code = reply.code();
+    response.message = reply.message();
+    response.session_id = reply.session_id();
+    response.content = reply.ai_content();
+    response.tokens = static_cast<double>(reply.tokens_used());
+    response.model = reply.model_name();
+    response.trace_id = reply.trace_id();
+    response.skill = reply.skill();
+    response.feedback_summary = reply.feedback_summary();
     for (const auto& observation : reply.observations())
     {
-        observations.push_back(observation);
+        response.observations.push_back(observation);
     }
-    root["observations"] = std::move(observations);
-    memochat::json::JsonValue events;
-    if (!reply.events_json().empty() && memochat::json::reader_parse(reply.events_json(), events))
-    {
-        root["events"] = events;
-    }
-    else
-    {
-        root["events"] = array_t{};
-    }
-    return root;
+    return memochat::gate::services::ai::AIChatResponseToJsonValue(response, reply.events_json());
 }
 
 void AIServiceClient::ChatStream(int32_t uid,
@@ -427,18 +465,17 @@ memochat::json::JsonValue AIServiceClient::Smart(int32_t uid,
                                        deployment_preference,
                                        &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "AIServer unavailable";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "AIServer unavailable"));
     }
 
-    root["code"] = reply.code();
-    root["message"] = reply.message();
-    root["result"] = reply.result();
-    return root;
+    memochat::gate::services::ai::AISmartResponseDto response;
+    response.code = reply.code();
+    response.message = reply.message();
+    response.result = reply.result();
+    return memochat::gate::services::ai::AISmartResponseToJsonValue(response);
 }
 
 memochat::json::JsonValue AIServiceClient::GetHistory(int32_t uid, const std::string& session_id, int limit, int offset)
@@ -446,27 +483,24 @@ memochat::json::JsonValue AIServiceClient::GetHistory(int32_t uid, const std::st
     ai::AIHistoryRsp reply;
     auto status = _impl->makeGetHistoryCall(uid, session_id, limit, offset, &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "AIServer unavailable";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "AIServer unavailable"));
     }
 
-    root["code"] = reply.code();
-    array_t messages;
+    memochat::gate::services::ai::AIHistoryResponseDto response;
+    response.code = reply.code();
     for (const auto& msg : reply.messages())
     {
-        memochat::json::JsonValue m;
-        m["msg_id"] = msg.msg_id();
-        m["role"] = msg.role();
-        m["content"] = msg.content();
-        m["created_at"] = static_cast<double>(msg.created_at());
-        messages.push_back(m.impl());
+        memochat::gate::services::ai::AIHistoryMessageResponseDto item;
+        item.msg_id = msg.msg_id();
+        item.role = msg.role();
+        item.content = msg.content();
+        item.created_at = static_cast<double>(msg.created_at());
+        response.messages.push_back(std::move(item));
     }
-    root["messages"] = std::move(messages);
-    return root;
+    return memochat::gate::services::ai::AIHistoryResponseToJsonValue(response);
 }
 
 memochat::json::JsonValue
@@ -475,29 +509,20 @@ AIServiceClient::CreateSession(int32_t uid, const std::string& model_type, const
     ai::AISessionRsp reply;
     auto status = _impl->makeCreateSessionCall(uid, model_type, model_name, &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "AIServer unavailable";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "AIServer unavailable"));
     }
 
-    root["code"] = reply.code();
-    root["message"] = reply.message();
+    memochat::gate::services::ai::AISessionResponseDto response;
+    response.code = reply.code();
+    response.message = reply.message();
     if (reply.has_session())
     {
-        const auto& s = reply.session();
-        memochat::json::JsonValue session;
-        session["session_id"] = s.session_id();
-        session["title"] = s.title();
-        session["model_type"] = s.model_type();
-        session["model_name"] = s.model_name();
-        session["created_at"] = static_cast<double>(s.created_at());
-        session["updated_at"] = static_cast<double>(s.updated_at());
-        root["session"] = std::move(session);
+        response.session = SessionInfoToResponseDto(reply.session());
     }
-    return root;
+    return memochat::gate::services::ai::AISessionResponseToJsonValue(response, reply.has_session());
 }
 
 memochat::json::JsonValue
@@ -506,30 +531,20 @@ AIServiceClient::ListSessions(int32_t uid, const std::string& model_type, const 
     ai::AISessionRsp reply;
     auto status = _impl->makeListSessionsCall(uid, model_type, model_name, &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "AIServer unavailable";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "AIServer unavailable"));
     }
 
-    root["code"] = reply.code();
-    root["message"] = reply.message();
-    array_t sessions;
+    memochat::gate::services::ai::AISessionListResponseDto response;
+    response.code = reply.code();
+    response.message = reply.message();
     for (const auto& s : reply.sessions())
     {
-        memochat::json::JsonValue sess;
-        sess["session_id"] = s.session_id();
-        sess["title"] = s.title();
-        sess["model_type"] = s.model_type();
-        sess["model_name"] = s.model_name();
-        sess["created_at"] = static_cast<double>(s.created_at());
-        sess["updated_at"] = static_cast<double>(s.updated_at());
-        sessions.push_back(sess.impl());
+        response.sessions.push_back(SessionInfoToResponseDto(s));
     }
-    root["sessions"] = std::move(sessions);
-    return root;
+    return memochat::gate::services::ai::AISessionListResponseToJsonValue(response);
 }
 
 memochat::json::JsonValue AIServiceClient::DeleteSession(int32_t uid, const std::string& session_id)
@@ -537,17 +552,13 @@ memochat::json::JsonValue AIServiceClient::DeleteSession(int32_t uid, const std:
     ai::AIDeleteSessionRsp reply;
     auto status = _impl->makeDeleteSessionCall(uid, session_id, &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "AIServer unavailable";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "AIServer unavailable"));
     }
-
-    root["code"] = reply.code();
-    root["message"] = reply.message();
-    return root;
+    return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+        MakeSimpleResponse(reply.code(), reply.message()));
 }
 
 memochat::json::JsonValue
@@ -556,29 +567,20 @@ AIServiceClient::UpdateSession(int32_t uid, const std::string& session_id, const
     ai::AISessionRsp reply;
     auto status = _impl->makeUpdateSessionCall(uid, session_id, title, &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "AIServer unavailable";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "AIServer unavailable"));
     }
 
-    root["code"] = reply.code();
-    root["message"] = reply.message();
+    memochat::gate::services::ai::AISessionResponseDto response;
+    response.code = reply.code();
+    response.message = reply.message();
     if (reply.has_session())
     {
-        const auto& s = reply.session();
-        memochat::json::JsonValue session;
-        session["session_id"] = s.session_id();
-        session["title"] = s.title();
-        session["model_type"] = s.model_type();
-        session["model_name"] = s.model_name();
-        session["created_at"] = static_cast<double>(s.created_at());
-        session["updated_at"] = static_cast<double>(s.updated_at());
-        root["session"] = std::move(session);
+        response.session = SessionInfoToResponseDto(reply.session());
     }
-    return root;
+    return memochat::gate::services::ai::AISessionResponseToJsonValue(response, reply.has_session());
 }
 
 memochat::json::JsonValue AIServiceClient::ListModels()
@@ -586,41 +588,23 @@ memochat::json::JsonValue AIServiceClient::ListModels()
     ai::AIListModelsRsp reply;
     auto status = _impl->makeListModelsCall(&reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "AIServer unavailable";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "AIServer unavailable"));
     }
 
-    root["code"] = reply.code();
-    array_t models;
+    memochat::gate::services::ai::AIModelListResponseDto response;
+    response.code = reply.code();
     for (const auto& m : reply.models())
     {
-        memochat::json::JsonValue model;
-        model["model_type"] = m.model_type();
-        model["model_name"] = m.model_name();
-        model["display_name"] = m.display_name();
-        model["is_enabled"] = m.is_enabled();
-        model["context_window"] = static_cast<double>(m.context_window());
-        model["supports_thinking"] = m.supports_thinking();
-        models.push_back(model.impl());
+        response.models.push_back(ModelInfoToResponseDto(m));
     }
-    root["models"] = std::move(models);
     if (reply.has_default_model())
     {
-        const auto& dm = reply.default_model();
-        memochat::json::JsonValue default_model;
-        default_model["model_type"] = dm.model_type();
-        default_model["model_name"] = dm.model_name();
-        default_model["display_name"] = dm.display_name();
-        default_model["is_enabled"] = dm.is_enabled();
-        default_model["context_window"] = static_cast<double>(dm.context_window());
-        default_model["supports_thinking"] = dm.supports_thinking();
-        root["default_model"] = std::move(default_model);
+        response.default_model = ModelInfoToResponseDto(reply.default_model());
     }
-    return root;
+    return memochat::gate::services::ai::AIModelListResponseToJsonValue(response, reply.has_default_model());
 }
 
 memochat::json::JsonValue AIServiceClient::RegisterApiProvider(const std::string& provider_name,
@@ -631,31 +615,21 @@ memochat::json::JsonValue AIServiceClient::RegisterApiProvider(const std::string
     ai::AIRegisterApiProviderRsp reply;
     auto status = _impl->makeRegisterApiProviderCall(provider_name, base_url, api_key, adapter, &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "AIServer unavailable";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "AIServer unavailable"));
     }
 
-    root["code"] = reply.code();
-    root["message"] = reply.message();
-    root["provider_id"] = reply.provider_id();
-    array_t models;
+    memochat::gate::services::ai::AIRegisterApiProviderResponseDto response;
+    response.code = reply.code();
+    response.message = reply.message();
+    response.provider_id = reply.provider_id();
     for (const auto& m : reply.models())
     {
-        memochat::json::JsonValue model;
-        model["model_type"] = m.model_type();
-        model["model_name"] = m.model_name();
-        model["display_name"] = m.display_name();
-        model["is_enabled"] = m.is_enabled();
-        model["context_window"] = static_cast<double>(m.context_window());
-        model["supports_thinking"] = m.supports_thinking();
-        models.push_back(model.impl());
+        response.models.push_back(ModelInfoToResponseDto(m));
     }
-    root["models"] = std::move(models);
-    return root;
+    return memochat::gate::services::ai::AIRegisterApiProviderResponseToJsonValue(response);
 }
 
 memochat::json::JsonValue AIServiceClient::DeleteApiProvider(const std::string& provider_id)
@@ -663,19 +637,20 @@ memochat::json::JsonValue AIServiceClient::DeleteApiProvider(const std::string& 
     ai::AIDeleteApiProviderRsp reply;
     auto status = _impl->makeDeleteApiProviderCall(provider_id, &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "AIServer unavailable";
-        root["provider_id"] = provider_id;
-        return root;
+        memochat::gate::services::ai::AIDeleteApiProviderResponseDto response;
+        response.code = 500;
+        response.message = "AIServer unavailable";
+        response.provider_id = provider_id;
+        return memochat::gate::services::ai::AIDeleteApiProviderResponseToJsonValue(response);
     }
 
-    root["code"] = reply.code();
-    root["message"] = reply.message();
-    root["provider_id"] = reply.provider_id();
-    return root;
+    memochat::gate::services::ai::AIDeleteApiProviderResponseDto response;
+    response.code = reply.code();
+    response.message = reply.message();
+    response.provider_id = reply.provider_id();
+    return memochat::gate::services::ai::AIDeleteApiProviderResponseToJsonValue(response);
 }
 
 memochat::json::JsonValue AIServiceClient::KbUpload(int32_t uid,
@@ -686,19 +661,17 @@ memochat::json::JsonValue AIServiceClient::KbUpload(int32_t uid,
     ai::AIKbUploadRsp reply;
     auto status = _impl->makeKbUploadCall(uid, file_name, file_type, base64_content, &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "upload failed";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(500, "upload failed"));
     }
 
-    root["code"] = reply.code();
-    root["message"] = reply.message();
-    root["chunks"] = reply.chunks();
-    root["kb_id"] = reply.kb_id();
-    return root;
+    memochat::gate::services::ai::AIKbUploadResponseDto response;
+    response.code = reply.code();
+    response.message = reply.message();
+    response.chunks = reply.chunks();
+    response.kb_id = reply.kb_id();
+    return memochat::gate::services::ai::AIKbUploadResponseToJsonValue(response);
 }
 
 memochat::json::JsonValue AIServiceClient::KbSearch(int32_t uid, const std::string& query, int top_k)
@@ -706,26 +679,22 @@ memochat::json::JsonValue AIServiceClient::KbSearch(int32_t uid, const std::stri
     ai::AIKbSearchRsp reply;
     auto status = _impl->makeKbSearchCall(uid, query, top_k, &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "search failed";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(500, "search failed"));
     }
 
-    root["code"] = reply.code();
-    array_t chunks;
+    memochat::gate::services::ai::AIKbSearchResponseDto response;
+    response.code = reply.code();
     for (const auto& c : reply.chunks())
     {
-        memochat::json::JsonValue chunk;
-        chunk["content"] = c.content();
-        chunk["score"] = c.score();
-        chunk["source"] = c.source();
-        chunks.push_back(chunk.impl());
+        memochat::gate::services::ai::AIKbSearchChunkResponseDto chunk;
+        chunk.content = c.content();
+        chunk.score = c.score();
+        chunk.source = c.source();
+        response.chunks.push_back(std::move(chunk));
     }
-    root["chunks"] = std::move(chunks);
-    return root;
+    return memochat::gate::services::ai::AIKbSearchResponseToJsonValue(response);
 }
 
 memochat::json::JsonValue AIServiceClient::ListKb(int32_t uid)
@@ -733,28 +702,18 @@ memochat::json::JsonValue AIServiceClient::ListKb(int32_t uid)
     ai::AIKbListRsp reply;
     auto status = _impl->makeListKbCall(uid, &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "list failed";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(500, "list failed"));
     }
 
-    root["code"] = reply.code();
-    array_t kbs;
+    memochat::gate::services::ai::AIKnowledgeBaseListResponseDto response;
+    response.code = reply.code();
     for (const auto& kb : reply.knowledge_bases())
     {
-        memochat::json::JsonValue k;
-        k["kb_id"] = kb.kb_id();
-        k["name"] = kb.name();
-        k["chunk_count"] = kb.chunk_count();
-        k["created_at"] = static_cast<double>(kb.created_at());
-        k["status"] = kb.status();
-        kbs.push_back(k.impl());
+        response.knowledge_bases.push_back(KnowledgeBaseToResponseDto(kb));
     }
-    root["knowledge_bases"] = std::move(kbs);
-    return root;
+    return memochat::gate::services::ai::AIKnowledgeBaseListResponseToJsonValue(response);
 }
 
 memochat::json::JsonValue AIServiceClient::DeleteKb(int32_t uid, const std::string& kb_id)
@@ -762,38 +721,25 @@ memochat::json::JsonValue AIServiceClient::DeleteKb(int32_t uid, const std::stri
     ai::AIKbDeleteRsp reply;
     auto status = _impl->makeDeleteKbCall(uid, kb_id, &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "delete failed";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(500, "delete failed"));
     }
 
-    root["code"] = reply.code();
-    root["message"] = reply.message();
-    return root;
+    return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+        MakeSimpleResponse(reply.code(), reply.message()));
 }
 
 static memochat::json::JsonValue MemoryItemToJson(const ai::AIMemoryItem& item)
 {
-    memochat::json::JsonValue value;
-    value["memory_id"] = item.memory_id();
-    value["type"] = item.type();
-    value["source"] = item.source();
-    value["content"] = item.content();
-    value["created_at"] = static_cast<double>(item.created_at());
-    value["updated_at"] = static_cast<double>(item.updated_at());
-    memochat::json::JsonValue metadata;
-    if (!item.metadata_json().empty() && memochat::json::reader_parse(item.metadata_json(), metadata))
-    {
-        value["metadata"] = metadata;
-    }
-    else
-    {
-        value["metadata"] = memochat::json::JsonValue{};
-    }
-    return value;
+    memochat::gate::services::ai::AIMemoryItemResponseDto dto;
+    dto.memory_id = item.memory_id();
+    dto.type = item.type();
+    dto.source = item.source();
+    dto.content = item.content();
+    dto.created_at = static_cast<double>(item.created_at());
+    dto.updated_at = static_cast<double>(item.updated_at());
+    return memochat::gate::services::ai::AIMemoryItemResponseToJsonValue(dto, item.metadata_json());
 }
 
 memochat::json::JsonValue AIServiceClient::MemoryList(int32_t uid)
@@ -801,16 +747,14 @@ memochat::json::JsonValue AIServiceClient::MemoryList(int32_t uid)
     ai::AIMemoryListRsp reply;
     auto status = _impl->makeMemoryListCall(uid, &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "memory list failed";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "memory list failed"));
     }
 
-    root["code"] = reply.code();
-    root["message"] = reply.message();
+    memochat::json::JsonValue root = memochat::gate::services::ai::AISimpleResponseToJsonValue(
+        MakeSimpleResponse(reply.code(), reply.message()));
     array_t memories;
     for (const auto& memory : reply.memories())
     {
@@ -825,16 +769,14 @@ memochat::json::JsonValue AIServiceClient::MemoryCreate(int32_t uid, const std::
     ai::AIMemoryRsp reply;
     auto status = _impl->makeMemoryCreateCall(uid, content, &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "memory create failed";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "memory create failed"));
     }
 
-    root["code"] = reply.code();
-    root["message"] = reply.message();
+    memochat::json::JsonValue root = memochat::gate::services::ai::AISimpleResponseToJsonValue(
+        MakeSimpleResponse(reply.code(), reply.message()));
     if (reply.has_memory())
     {
         root["memory"] = MemoryItemToJson(reply.memory());
@@ -847,59 +789,37 @@ memochat::json::JsonValue AIServiceClient::MemoryDelete(int32_t uid, const std::
     ai::AIMemoryRsp reply;
     auto status = _impl->makeMemoryDeleteCall(uid, memory_id, &reply);
 
-    memochat::json::JsonValue root;
     if (!status.ok())
     {
-        root["code"] = 500;
-        root["message"] = "memory delete failed";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "memory delete failed"));
     }
-
-    root["code"] = reply.code();
-    root["message"] = reply.message();
-    return root;
+    return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+        MakeSimpleResponse(reply.code(), reply.message()));
 }
 
 static memochat::json::JsonValue AgentTaskItemToJson(const ai::AIAgentTaskItem& item)
 {
-    memochat::json::JsonValue value;
-    value["task_id"] = item.task_id();
-    value["title"] = item.title();
-    value["status"] = item.status();
-    value["trace_id"] = item.trace_id();
-    value["description"] = item.description();
-    value["priority"] = item.priority();
-    value["error"] = item.error();
-    value["created_at"] = static_cast<double>(item.created_at());
-    value["updated_at"] = static_cast<double>(item.updated_at());
-    value["completed_at"] = static_cast<double>(item.completed_at());
-    value["cancelled_at"] = static_cast<double>(item.cancelled_at());
-
-    memochat::json::JsonValue payload;
-    value["payload"] = (!item.payload_json().empty() && memochat::json::reader_parse(item.payload_json(), payload))
-                           ? payload
-                           : memochat::json::JsonValue{};
-    memochat::json::JsonValue result;
-    value["result"] = (!item.result_json().empty() && memochat::json::reader_parse(item.result_json(), result))
-                          ? result
-                          : memochat::json::JsonValue{};
-    memochat::json::JsonValue checkpoints;
-    value["checkpoints"] =
-        (!item.checkpoints_json().empty() && memochat::json::reader_parse(item.checkpoints_json(), checkpoints))
-            ? checkpoints
-            : memochat::json::JsonValue(memochat::json::array_t{});
-    memochat::json::JsonValue metadata;
-    value["metadata"] = (!item.metadata_json().empty() && memochat::json::reader_parse(item.metadata_json(), metadata))
-                            ? metadata
-                            : memochat::json::JsonValue{};
-    return value;
+    memochat::gate::services::ai::AIAgentTaskItemResponseDto dto;
+    dto.task_id = item.task_id();
+    dto.title = item.title();
+    dto.status = item.status();
+    dto.trace_id = item.trace_id();
+    dto.description = item.description();
+    dto.priority = item.priority();
+    dto.error = item.error();
+    dto.created_at = static_cast<double>(item.created_at());
+    dto.updated_at = static_cast<double>(item.updated_at());
+    dto.completed_at = static_cast<double>(item.completed_at());
+    dto.cancelled_at = static_cast<double>(item.cancelled_at());
+    return memochat::gate::services::ai::AIAgentTaskItemResponseToJsonValue(
+        dto, item.payload_json(), item.result_json(), item.checkpoints_json(), item.metadata_json());
 }
 
 static memochat::json::JsonValue AgentTaskRspToJson(const ai::AIAgentTaskRsp& reply)
 {
-    memochat::json::JsonValue root;
-    root["code"] = reply.code();
-    root["message"] = reply.message();
+    memochat::json::JsonValue root = memochat::gate::services::ai::AISimpleResponseToJsonValue(
+        memochat::gate::services::ai::AISimpleResponseDto{reply.code(), reply.message()});
     if (reply.has_task())
     {
         root["task"] = AgentTaskItemToJson(reply.task());
@@ -934,10 +854,8 @@ memochat::json::JsonValue AIServiceClient::AgentTaskCreate(int32_t uid,
                                                  &reply);
     if (!status.ok())
     {
-        memochat::json::JsonValue root;
-        root["code"] = 500;
-        root["message"] = "task create failed";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "task create failed"));
     }
     return AgentTaskRspToJson(reply);
 }
@@ -948,10 +866,8 @@ memochat::json::JsonValue AIServiceClient::AgentTaskList(int32_t uid, int limit)
     auto status = _impl->makeAgentTaskListCall(uid, limit, &reply);
     if (!status.ok())
     {
-        memochat::json::JsonValue root;
-        root["code"] = 500;
-        root["message"] = "task list failed";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "task list failed"));
     }
     return AgentTaskRspToJson(reply);
 }
@@ -962,10 +878,8 @@ memochat::json::JsonValue AIServiceClient::AgentTaskGet(const std::string& task_
     auto status = _impl->makeAgentTaskGetCall(task_id, &reply);
     if (!status.ok())
     {
-        memochat::json::JsonValue root;
-        root["code"] = 500;
-        root["message"] = "task get failed";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "task get failed"));
     }
     return AgentTaskRspToJson(reply);
 }
@@ -976,10 +890,8 @@ memochat::json::JsonValue AIServiceClient::AgentTaskCancel(const std::string& ta
     auto status = _impl->makeAgentTaskCancelCall(task_id, &reply);
     if (!status.ok())
     {
-        memochat::json::JsonValue root;
-        root["code"] = 500;
-        root["message"] = "task cancel failed";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "task cancel failed"));
     }
     return AgentTaskRspToJson(reply);
 }
@@ -990,10 +902,8 @@ memochat::json::JsonValue AIServiceClient::AgentTaskResume(const std::string& ta
     auto status = _impl->makeAgentTaskResumeCall(task_id, &reply);
     if (!status.ok())
     {
-        memochat::json::JsonValue root;
-        root["code"] = 500;
-        root["message"] = "task resume failed";
-        return root;
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "task resume failed"));
     }
     return AgentTaskRspToJson(reply);
 }
