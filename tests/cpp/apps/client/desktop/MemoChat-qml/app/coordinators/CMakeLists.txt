@@ -34,7 +34,7 @@ add_executable(media_pending_attachment_runner_gtest
 )
 set_target_properties(media_pending_attachment_runner_gtest PROPERTIES AUTOMOC ON)
 set_target_properties(media_pending_attachment_runner_gtest PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )
@@ -69,7 +69,7 @@ add_executable(media_coordinator_gtest
 )
 set_target_properties(media_coordinator_gtest PROPERTIES AUTOMOC ON)
 set_target_properties(media_coordinator_gtest PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )

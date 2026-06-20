@@ -2,6 +2,8 @@
 #include "json/GlazeCompat.h"
 #include "ConfigMgr.h"
 #include "MediaStorage.h"
+#include "services/media/MediaPublicDtos.h"
+#include "services/media/MediaUploadSessionDto.h"
 #include "PostgresMgr.h"
 #include "RedisMgr.h"
 #include "const.h"
@@ -349,30 +351,31 @@ MediaResult HandleUploadMediaInit(int uid,
         return result;
     }
 
-    memochat::json::JsonValue session;
-    session["uid"] = uid;
-    session["upload_id"] = upload_id;
-    session["media_type"] = safe_type;
-    session["file_name"] = safe_name;
-    session["mime"] = safe_mime;
-    session["file_size"] = static_cast<int64_t>(file_size);
-    session["chunk_size"] = chunk_size;
-    session["total_chunks"] = total_chunks;
-    session["created_at"] = static_cast<int64_t>(NowMsLocal());
-    session["expires_at"] = static_cast<int64_t>(NowMsLocal() + static_cast<int64_t>(cfg.session_expire_sec) * 1000);
-    session["storage_provider"] = cfg.storage_provider;
-    if (!SaveJsonFileLocal(SessionPathForLocal(upload_id), session))
+    memochat::media::MediaUploadSessionDto session;
+    session.uid = uid;
+    session.upload_id = upload_id;
+    session.media_type = safe_type;
+    session.file_name = safe_name;
+    session.mime = safe_mime;
+    session.file_size = static_cast<int64_t>(file_size);
+    session.chunk_size = chunk_size;
+    session.total_chunks = total_chunks;
+    session.created_at = static_cast<int64_t>(NowMsLocal());
+    session.expires_at = static_cast<int64_t>(NowMsLocal() + static_cast<int64_t>(cfg.session_expire_sec) * 1000);
+    session.storage_provider = cfg.storage_provider;
+    if (!SaveJsonFileLocal(SessionPathForLocal(upload_id), memochat::media::MediaUploadSessionToJsonValue(session)))
     {
         result.error = ErrorCodes::MediaUploadFailed;
         result.message = "create upload session failed";
         return result;
     }
 
+    memochat::media::MediaUploadInitResponseDto response_dto;
+    response_dto.upload_id = upload_id;
+    response_dto.chunk_size = chunk_size;
+    response_dto.total_chunks = total_chunks;
     result.error = ErrorCodes::Success;
-    result.data["upload_id"] = upload_id;
-    result.data["chunk_size"] = chunk_size;
-    result.data["total_chunks"] = total_chunks;
-    result.data["uploaded_chunks"] = memochat::json::glaze_make_array();
+    result.data = memochat::media::MediaUploadInitResponseToJsonValue(response_dto);
     return result;
 }
 
@@ -416,20 +419,22 @@ MediaResult HandleUploadMediaChunkBytes(int uid,
         return result;
     }
 
-    memochat::json::JsonValue session;
-    if (!LoadJsonFileLocal(SessionPathForLocal(upload_id), session))
+    memochat::json::JsonValue session_json;
+    memochat::media::MediaUploadSessionDto session;
+    if (!LoadJsonFileLocal(SessionPathForLocal(upload_id), session_json) ||
+        !memochat::media::MediaUploadSessionFromJsonValue(session_json, &session))
     {
         result.error = ErrorCodes::MediaUploadFailed;
         result.message = "upload session not found";
         return result;
     }
-    if (memochat::json::glaze_safe_get<int>(session, "uid", 0) != uid)
+    if (session.uid != uid)
     {
         result.error = ErrorCodes::TokenInvalid;
         result.message = "session uid mismatch";
         return result;
     }
-    int64_t expires_at = memochat::json::glaze_safe_get<int64_t>(session, "expires_at", 0LL);
+    int64_t expires_at = session.expires_at;
     if (expires_at > 0 && NowMsLocal() > expires_at)
     {
         result.error = ErrorCodes::MediaUploadFailed;
@@ -437,8 +442,8 @@ MediaResult HandleUploadMediaChunkBytes(int uid,
         return result;
     }
 
-    int total_chunks = memochat::json::glaze_safe_get<int>(session, "total_chunks", 0);
-    int chunk_size = memochat::json::glaze_safe_get<int>(session, "chunk_size", 0);
+    int total_chunks = session.total_chunks;
+    int chunk_size = session.chunk_size;
     if (index >= total_chunks || total_chunks <= 0 || chunk_size <= 0)
     {
         result.error = ErrorCodes::Error_Json;
@@ -474,10 +479,12 @@ MediaResult HandleUploadMediaChunkBytes(int uid,
     ofs.write(chunk_data.data(), static_cast<std::streamsize>(chunk_data.size()));
     ofs.close();
 
+    memochat::media::MediaUploadChunkResponseDto response_dto;
+    response_dto.upload_id = upload_id;
+    response_dto.index = index;
+    response_dto.size = static_cast<int64_t>(chunk_data.size());
     result.error = ErrorCodes::Success;
-    result.data["upload_id"] = upload_id;
-    result.data["index"] = index;
-    result.data["size"] = static_cast<int64_t>(chunk_data.size());
+    result.data = memochat::media::MediaUploadChunkResponseToJsonValue(response_dto);
     return result;
 }
 
@@ -491,29 +498,32 @@ MediaResult HandleUploadMediaStatus(int uid, const std::string& token, const std
         return result;
     }
 
-    memochat::json::JsonValue session;
-    if (!LoadJsonFileLocal(SessionPathForLocal(upload_id), session))
+    memochat::json::JsonValue session_json;
+    memochat::media::MediaUploadSessionDto session;
+    if (!LoadJsonFileLocal(SessionPathForLocal(upload_id), session_json) ||
+        !memochat::media::MediaUploadSessionFromJsonValue(session_json, &session))
     {
         result.error = ErrorCodes::MediaUploadFailed;
         result.message = "upload session not found";
         return result;
     }
-    if (memochat::json::glaze_safe_get<int>(session, "uid", 0) != uid)
+    if (session.uid != uid)
     {
         result.error = ErrorCodes::TokenInvalid;
         result.message = "session uid mismatch";
         return result;
     }
 
-    result.error = ErrorCodes::Success;
-    result.data["upload_id"] = upload_id;
-    result.data["total_chunks"] = memochat::json::glaze_safe_get<int>(session, "total_chunks", 0);
-    result.data["chunk_size"] = memochat::json::glaze_safe_get<int>(session, "chunk_size", 0);
-    auto& uploaded_chunks = result.data["uploaded_chunks"] = memochat::json::glaze_make_array();
+    memochat::media::MediaUploadStatusResponseDto response_dto;
+    response_dto.upload_id = upload_id;
+    response_dto.total_chunks = session.total_chunks;
+    response_dto.chunk_size = session.chunk_size;
     for (int idx : ListUploadedChunkIndexesLocal(ChunkDirForLocal(upload_id)))
     {
-        memochat::json::glaze_array_append(uploaded_chunks, idx);
+        response_dto.uploaded_chunks.push_back(idx);
     }
+    result.error = ErrorCodes::Success;
+    result.data = memochat::media::MediaUploadStatusResponseToJsonValue(response_dto);
     return result;
 }
 
@@ -527,27 +537,29 @@ MediaResult HandleUploadMediaComplete(int uid, const std::string& token, const s
         return result;
     }
 
-    memochat::json::JsonValue session;
-    if (!LoadJsonFileLocal(SessionPathForLocal(upload_id), session))
+    memochat::json::JsonValue session_json;
+    memochat::media::MediaUploadSessionDto session;
+    if (!LoadJsonFileLocal(SessionPathForLocal(upload_id), session_json) ||
+        !memochat::media::MediaUploadSessionFromJsonValue(session_json, &session))
     {
         result.error = ErrorCodes::MediaUploadFailed;
         result.message = "upload session not found";
         return result;
     }
-    if (memochat::json::glaze_safe_get<int>(session, "uid", 0) != uid)
+    if (session.uid != uid)
     {
         result.error = ErrorCodes::TokenInvalid;
         result.message = "session uid mismatch";
         return result;
     }
 
-    int total_chunks = memochat::json::glaze_safe_get<int>(session, "total_chunks", 0);
-    int chunk_size = memochat::json::glaze_safe_get<int>(session, "chunk_size", 0);
-    int64_t file_size = memochat::json::glaze_safe_get<int64_t>(session, "file_size", 0LL);
-    std::string file_name = memochat::json::glaze_safe_get<std::string>(session, "file_name", "");
-    std::string media_type = memochat::json::glaze_get_string(session, "media_type", "file");
-    std::string mime = memochat::json::glaze_safe_get<std::string>(session, "mime", "");
-    std::string storage_provider = memochat::json::glaze_get_string(session, "storage_provider", "local");
+    int total_chunks = session.total_chunks;
+    int chunk_size = session.chunk_size;
+    int64_t file_size = session.file_size;
+    std::string file_name = session.file_name;
+    std::string media_type = session.media_type;
+    std::string mime = session.mime;
+    std::string storage_provider = session.storage_provider;
     if (total_chunks <= 0 || chunk_size <= 0 || file_size <= 0 || file_name.empty())
     {
         result.error = ErrorCodes::MediaUploadFailed;
@@ -641,13 +653,15 @@ MediaResult HandleUploadMediaComplete(int uid, const std::string& token, const s
     std::filesystem::remove(SessionPathForLocal(upload_id), ec);
     std::filesystem::remove_all(chunk_dir, ec);
 
+    memochat::media::MediaUploadAssetResponseDto response_dto;
+    response_dto.media_key = media_key;
+    response_dto.media_type = media_type;
+    response_dto.file_name = file_name;
+    response_dto.mime = mime;
+    response_dto.size = static_cast<int64_t>(merged_size);
+    response_dto.url = std::string("/media/download?asset=") + media_key;
     result.error = ErrorCodes::Success;
-    result.data["media_key"] = media_key;
-    result.data["media_type"] = media_type;
-    result.data["file_name"] = file_name;
-    result.data["mime"] = mime;
-    result.data["size"] = static_cast<int64_t>(merged_size);
-    result.data["url"] = std::string("/media/download?asset=") + media_key;
+    result.data = memochat::media::MediaUploadAssetResponseToJsonValue(response_dto);
     return result;
 }
 
@@ -739,13 +753,15 @@ MediaResult HandleUploadMediaSimple(int uid,
     }
 
     std::filesystem::remove_all(temp_dir, ec);
+    memochat::media::MediaUploadAssetResponseDto response_dto;
+    response_dto.media_key = media_key;
+    response_dto.media_type = safe_type;
+    response_dto.file_name = safe_name;
+    response_dto.mime = safe_mime;
+    response_dto.size = static_cast<int64_t>(binary.size());
+    response_dto.url = std::string("/media/download?asset=") + media_key;
     result.error = ErrorCodes::Success;
-    result.data["media_key"] = media_key;
-    result.data["media_type"] = safe_type;
-    result.data["file_name"] = safe_name;
-    result.data["mime"] = safe_mime;
-    result.data["size"] = static_cast<int64_t>(binary.size());
-    result.data["url"] = std::string("/media/download?asset=") + media_key;
+    result.data = memochat::media::MediaUploadAssetResponseToJsonValue(response_dto);
     return result;
 }
 

@@ -8,7 +8,7 @@ add_executable(app_chat_connection_policy_gtest
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/app/connection/AppChatConnectionPolicy.cpp
 )
 set_target_properties(app_chat_connection_policy_gtest PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )

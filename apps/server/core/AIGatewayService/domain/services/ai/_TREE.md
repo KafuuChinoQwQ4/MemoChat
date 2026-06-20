@@ -6,6 +6,8 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
+| `AIPublicDtos.cpp` | AI 网关公共请求与稳定响应 DTO 编解码实现 |
+| `AIPublicDtos.h` | AI 网关公共请求与稳定响应 DTO 声明 |
 | `AIService.cpp` | AI 业务服务实现：处理 AI 请求并对接下游能力。 |
 | `AIService.h` | AI 业务服务接口声明。 |
 

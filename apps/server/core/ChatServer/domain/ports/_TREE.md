@@ -1,6 +1,6 @@
 # ports/ 目录树
 
-> 领域端口（六边形架构）：定义会话、消息、关系、投递、事件、在线路由、仓储与会话注册表等所有跨层依赖的纯接口，由 persistence/clients/messaging 等提供实现。
+> 领域端口（六边形架构）：定义会话、消息、关系、投递、事件、在线路由、仓储与会话注册表等所有跨层依赖的纯接口，由 persistence/clients/messaging 等提供实现。另含基于这些端口的共享纯逻辑（如在线路由解析），供各投递路径复用。
 
 ## 文件
 
@@ -27,5 +27,6 @@
 | `IRelationServiceConfig.h` | 关系服务配置端口 |
 | `IRelationSessionService.h` | 关系会话服务端口 |
 | `ISessionRegistry.h` | 会话注册表端口 |
+| `OnlineRouteResolver.h` | 在线路由解析：跨投递路径复用的共享纯逻辑（枚举/决策结构/解析函数），基于 ISessionRegistry 与 IOnlineRouteStore 端口 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

@@ -53,6 +53,7 @@ add_library(GateInfraCore STATIC
     config/ConfigMgr.cpp
     config/ConfigMgr.h
     config/const.h
+    persistence/CallSessionTypes.h
     persistence/PostgresDao.cpp
     persistence/PostgresDaoAccount.cpp
     persistence/PostgresDao.h

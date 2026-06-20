@@ -10,6 +10,10 @@
 
 # --- GateR18Core: R18 source service implementation. --------------------------
 add_library(GateR18Core STATIC
+    domain/services/r18/R18PublicDtos.cpp
+    domain/services/r18/R18PublicDtos.h
+    domain/services/r18/R18SourceRecordCodec.cpp
+    domain/services/r18/R18SourceRecordCodec.h
     domain/services/r18/R18SourceService.cpp
     domain/services/r18/R18SourceService.h
 )
@@ -23,6 +27,7 @@ add_library(GateR18Domain STATIC
     domain/profiles/GateR18Profile.cpp
     domain/GateR18Routes.cpp
     domain/modules/r18/R18RouteModule.cpp
+    domain/modules/r18/R18RouteSchemas.cpp
     domain/services/r18/R18Service.cpp
 )
 memochat_configure_gate_app_lib(GateR18Domain)

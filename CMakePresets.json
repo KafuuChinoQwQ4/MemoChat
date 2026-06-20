@@ -80,6 +80,7 @@
         "BUILD_TESTS": "ON",
         "MEMOCHAT_AUTO_FORMAT": "ON",
         "MEMOCHAT_CXX_STANDARD": "26",
+        "MEMOCHAT_ENABLE_CPP26_REFLECTION": "ON",
         "MEMOCHAT_AUTO_DEPLOY_RUNTIME": "OFF",
         "MEMOCHAT_ENABLE_LIVE2D_NATIVE": "ON",
         "MEMOCHAT_LIVE2D_SDK_ROOT": "/data/third_party/live2d/CubismSdkForNative-current",

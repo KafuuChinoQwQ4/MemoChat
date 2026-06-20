@@ -1,5 +1,7 @@
 #include "r18/R18SourceService.h"
 
+#include "r18/R18SourceRecordCodec.h"
+
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast.hpp>
@@ -185,40 +187,6 @@ bool LooksLikeJavaScript(const std::string& file_name, const std::string& manife
 bool IsBuiltinSourceId(const std::string& id)
 {
     return id == kMockSourceId || id == kJmSourceId;
-}
-
-JsonValue ToJson(const R18SourceRecord& source)
-{
-    JsonValue item;
-    item["id"] = source.id;
-    item["name"] = source.name;
-    item["version"] = source.version;
-    item["path"] = source.path;
-    item["format"] = source.format;
-    item["source_url"] = source.source_url;
-    item["catalog_url"] = source.catalog_url;
-    item["enabled"] = source.enabled;
-    item["builtin"] = source.builtin;
-    item["status"] = source.status;
-    item["message"] = source.message;
-    return item;
-}
-
-R18SourceRecord FromJson(const JsonValue& item)
-{
-    R18SourceRecord rec;
-    rec.id = json::glaze_safe_get<std::string>(item, "id", "");
-    rec.name = json::glaze_safe_get<std::string>(item, "name", rec.id);
-    rec.version = json::glaze_safe_get<std::string>(item, "version", "0.0.0");
-    rec.path = json::glaze_safe_get<std::string>(item, "path", "");
-    rec.format = json::glaze_safe_get<std::string>(item, "format", "native-zip");
-    rec.source_url = json::glaze_safe_get<std::string>(item, "source_url", "");
-    rec.catalog_url = json::glaze_safe_get<std::string>(item, "catalog_url", "");
-    rec.enabled = json::glaze_safe_get<bool>(item, "enabled", false);
-    rec.builtin = json::glaze_safe_get<bool>(item, "builtin", false);
-    rec.status = json::glaze_safe_get<std::string>(item, "status", "staged");
-    rec.message = json::glaze_safe_get<std::string>(item, "message", "");
-    return rec;
 }
 
 std::string StringValue(const JsonValue& value)
@@ -949,7 +917,7 @@ JsonValue R18SourceService::ListSources()
         const auto it = sources_.find(id);
         if (it != sources_.end())
         {
-            json::glaze_append(arr, ToJson(it->second));
+            json::glaze_append(arr, R18SourceRecordToJsonValue(it->second));
         }
     };
     append_source(kJmSourceId);
@@ -958,7 +926,7 @@ JsonValue R18SourceService::ListSources()
     {
         if (id != kJmSourceId && id != kMockSourceId)
         {
-            json::glaze_append(arr, ToJson(source));
+            json::glaze_append(arr, R18SourceRecordToJsonValue(source));
         }
     }
     return arr;
@@ -1288,7 +1256,11 @@ void R18SourceService::LoadManifestLocked(const std::filesystem::path& manifest_
     }
     for (const auto& item_json : *arr)
     {
-        const R18SourceRecord rec = FromJson(JsonValue(item_json));
+        R18SourceRecord rec;
+        if (!R18SourceRecordFromJsonValue(JsonValue(item_json), &rec))
+        {
+            continue;
+        }
         if (!rec.id.empty() && !rec.builtin && !IsBuiltinSourceId(rec.id))
         {
             sources_[rec.id] = rec;
@@ -1304,7 +1276,7 @@ void R18SourceService::SaveLocked()
     {
         if (!source.builtin)
         {
-            json::glaze_append(root["sources"], ToJson(source));
+            json::glaze_append(root["sources"], R18SourceRecordToJsonValue(source));
         }
     }
     std::ofstream out(data_root_ / "sources.json", std::ios::binary | std::ios::trunc);

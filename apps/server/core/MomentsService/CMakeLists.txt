@@ -8,6 +8,11 @@ add_library(GateMomentsDomain STATIC
     ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/GateRouteProfileRegistrar.h
     domain/profiles/GateMomentsProfile.cpp
     domain/modules/moments/MomentsRouteModule.cpp
+    domain/modules/moments/MomentsRouteSchemas.cpp
+    domain/services/moments/MomentsOutputDtos.cpp
+    domain/services/moments/MomentsOutputDtos.h
+    domain/services/moments/MomentsPublicDtos.cpp
+    domain/services/moments/MomentsPublicDtos.h
     domain/services/moments/MomentsService.cpp
     domain/MomentsRouteModules.cpp
     domain/MomentsRouteModules.h

@@ -1,13 +1,16 @@
 #include "ChatTaskEnvelope.h"
 
+#include "json/TypedJsonCodec.h"
 #include "logging/TraceContext.h"
+
+#include <algorithm>
+#include <chrono>
+#include <memory>
 
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <algorithm>
-#include <chrono>
-#include "json/GlazeCompat.h"
-#include <memory>
+
+#include <glaze/glaze.hpp>
 
 namespace
 {
@@ -21,6 +24,50 @@ int64_t NowMsTaskEnvelope()
 std::string NewTaskId()
 {
     return boost::uuids::to_string(boost::uuids::random_generator()());
+}
+
+struct TaskEnvelopeWireDto
+{
+    std::string task_id;
+    std::string task_type;
+    std::string trace_id;
+    std::string request_id;
+    int64_t created_at_ms = 0;
+    int64_t available_at_ms = 0;
+    int retry_count = 0;
+    int max_retries = 0;
+    std::string routing_key;
+    glz::generic_json<> payload = memochat::json::object_t{};
+};
+
+TaskEnvelopeWireDto ToWireDto(const TaskEnvelope& envelope)
+{
+    TaskEnvelopeWireDto dto;
+    dto.task_id = envelope.task_id;
+    dto.task_type = envelope.task_type;
+    dto.trace_id = envelope.trace_id;
+    dto.request_id = envelope.request_id;
+    dto.created_at_ms = envelope.created_at_ms;
+    dto.available_at_ms = envelope.available_at_ms;
+    dto.retry_count = envelope.retry_count;
+    dto.max_retries = envelope.max_retries;
+    dto.routing_key = envelope.routing_key;
+    dto.payload = envelope.payload.impl();
+    return dto;
+}
+
+void FromWireDto(const TaskEnvelopeWireDto& dto, TaskEnvelope& envelope)
+{
+    envelope.task_id = dto.task_id;
+    envelope.task_type = dto.task_type;
+    envelope.trace_id = dto.trace_id;
+    envelope.request_id = dto.request_id;
+    envelope.created_at_ms = dto.created_at_ms;
+    envelope.available_at_ms = dto.available_at_ms;
+    envelope.retry_count = dto.retry_count;
+    envelope.max_retries = dto.max_retries;
+    envelope.routing_key = dto.routing_key;
+    envelope.payload = memochat::json::JsonValue(dto.payload);
 }
 } // namespace
 
@@ -97,38 +144,16 @@ TaskEnvelope BuildTaskEnvelope(const std::string& task_type,
 
 bool ParseTaskEnvelope(const std::string& serialized, TaskEnvelope& envelope)
 {
-    memochat::json::JsonValue root;
-    std::string errors;
-    if (!memochat::json::glaze_parse(root, serialized, &errors) || !root.is_object())
+    TaskEnvelopeWireDto dto;
+    if (!memochat::json::ReadTypedJson(serialized, &dto))
     {
         return false;
     }
-    envelope.task_id = memochat::json::glaze_safe_get<std::string>(root, "task_id", "");
-    envelope.task_type = memochat::json::glaze_safe_get<std::string>(root, "task_type", "");
-    envelope.trace_id = memochat::json::glaze_safe_get<std::string>(root, "trace_id", "");
-    envelope.request_id = memochat::json::glaze_safe_get<std::string>(root, "request_id", "");
-    envelope.created_at_ms = memochat::json::glaze_safe_get<int64_t>(root, "created_at_ms", int64_t{0});
-    envelope.available_at_ms = memochat::json::glaze_safe_get<int64_t>(root, "available_at_ms", int64_t{0});
-    envelope.retry_count = memochat::json::glaze_safe_get<int>(root, "retry_count", 0);
-    envelope.max_retries = memochat::json::glaze_safe_get<int>(root, "max_retries", 0);
-    envelope.routing_key = memochat::json::glaze_safe_get<std::string>(root, "routing_key", "");
-    envelope.payload = memochat::json::glaze_get(root, "payload", memochat::json::object_t{});
+    FromWireDto(dto, envelope);
     return true;
 }
 
 std::string SerializeTaskEnvelope(const TaskEnvelope& envelope)
 {
-    memochat::json::JsonValue root(memochat::json::object_t{});
-    root["task_id"] = envelope.task_id;
-    root["task_type"] = envelope.task_type;
-    root["trace_id"] = envelope.trace_id;
-    root["request_id"] = envelope.request_id;
-    root["created_at_ms"] = static_cast<int64_t>(envelope.created_at_ms);
-    root["available_at_ms"] = static_cast<int64_t>(envelope.available_at_ms);
-    root["retry_count"] = envelope.retry_count;
-    root["max_retries"] = envelope.max_retries;
-    root["routing_key"] = envelope.routing_key;
-    root["payload"] = envelope.payload;
-
-    return memochat::json::writeString(root);
+    return memochat::json::WriteTypedJsonOrEmptyObject(ToWireDto(envelope));
 }

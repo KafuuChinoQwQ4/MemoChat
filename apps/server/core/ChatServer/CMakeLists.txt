@@ -97,6 +97,7 @@ set(CHATSERVER_SESSION_SOURCES
 )
 
 set(CHATSERVER_USER_SUPPORT_SOURCES
+    domain/users/ChatUserProfileDto.cpp
     domain/users/ChatUserSupport.cpp
 )
 
@@ -108,6 +109,10 @@ set(CHATSERVER_RELATION_SOURCES
 
 set(CHATSERVER_RELATION_SESSION_ADAPTER_SOURCES
     domain/relation/ChatRelationSessionAdapter.cpp
+)
+
+set(CHATSERVER_DELIVERY_PAYLOAD_SOURCES
+    domain/delivery/MessageDeliveryTaskPayload.cpp
 )
 
 set(CHATSERVER_MESSAGE_SOURCES
@@ -226,12 +231,18 @@ target_link_libraries(ChatSessionCore PUBLIC
     ChatUserSupportCore
 )
 
+add_library(ChatDeliveryPayloadCore STATIC
+    ${CHATSERVER_DELIVERY_PAYLOAD_SOURCES}
+)
+chatserver_core_target(ChatDeliveryPayloadCore)
+
 add_library(ChatRelationCore STATIC
     ${CHATSERVER_RELATION_SOURCES}
 )
 chatserver_core_target(ChatRelationCore)
 target_link_libraries(ChatRelationCore PUBLIC
     ChatAppCore
+    ChatDeliveryPayloadCore
     ChatPersistenceCore
     ChatUserSupportCore
 )
@@ -253,6 +264,7 @@ target_link_libraries(ChatMessageCore PUBLIC
     ChatAppCore
     ChatClientCore
     ChatConfigCore
+    ChatDeliveryPayloadCore
     ChatMessagingCore
     ChatPersistenceCore
     ChatRelationCore
@@ -265,6 +277,7 @@ add_library(ChatDeliveryCore STATIC
 chatserver_core_target(ChatDeliveryCore)
 target_link_libraries(ChatDeliveryCore PUBLIC
     ChatAppCore
+    ChatDeliveryPayloadCore
     ChatMessagingCore
     ChatPersistenceCore
 )
@@ -278,6 +291,7 @@ set(CHATSERVER_INTERNAL_CORE_TARGETS
     ChatClientCore
     ChatConfigCore
     ChatDeliveryCore
+    ChatDeliveryPayloadCore
     ChatInfrastructureCore
     ChatMessageCore
     ChatMessagingCore
@@ -353,6 +367,7 @@ chatserver_link_microservice_cores(ChatDeliveryWorker
     ChatClientCore
     ChatConfigCore
     ChatDeliveryCore
+    ChatDeliveryPayloadCore
     ChatInfrastructureCore
     ChatMessageCore
     ChatMessagingCore
@@ -382,6 +397,7 @@ chatserver_link_microservice_cores(ChatRelationQueryService
     ChatAppCore
     ChatClientCore
     ChatConfigCore
+    ChatDeliveryPayloadCore
     ChatInfrastructureCore
     ChatMessagingCore
     ChatPersistenceCore
@@ -407,6 +423,7 @@ chatserver_link_microservice_cores(ChatRelationServiceWorker
     ChatClientCore
     ChatConfigCore
     ChatDeliveryCore
+    ChatDeliveryPayloadCore
     ChatInfrastructureCore
     ChatMessagingCore
     ChatPersistenceCore
@@ -432,6 +449,7 @@ chatserver_link_microservice_cores(ChatMessageService
     ChatClientCore
     ChatConfigCore
     ChatDeliveryCore
+    ChatDeliveryPayloadCore
     ChatInfrastructureCore
     ChatMessageCore
     ChatMessagingCore

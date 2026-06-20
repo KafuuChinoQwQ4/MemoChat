@@ -19,6 +19,8 @@
 | `AIServiceCore.h` | AI 服务核心接口声明。 |
 | `AIServiceImpl.cpp` | AI 服务的具体业务实现。 |
 | `AIServiceImpl.h` | AI 服务实现接口声明。 |
+| `AIServiceJsonDtos.cpp` | AIServer 稳定 JSON 映射 DTO 与 protobuf/上下文桥接实现。 |
+| `AIServiceJsonDtos.h` | AIServer 稳定 JSON 映射 DTO 与桥接接口声明。 |
 | `AIServiceJsonMapper.cpp` | AI 服务请求/响应与 JSON 的映射实现。 |
 | `AIServiceJsonMapper.h` | JSON 映射接口声明。 |
 | `CMakeLists.txt` | AIServer 构建目标定义。 |

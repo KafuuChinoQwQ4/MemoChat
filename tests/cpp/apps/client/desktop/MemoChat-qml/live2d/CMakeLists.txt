@@ -49,6 +49,12 @@ target_compile_definitions(live2d_asset_gtest PRIVATE
     LIVE2D_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures/live2d"
 )
 
+set_target_properties(live2d_asset_gtest PROPERTIES
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+
 add_dependencies(gtest_tests live2d_asset_gtest)
 
 include(GoogleTest)

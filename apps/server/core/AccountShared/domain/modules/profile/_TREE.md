@@ -8,5 +8,6 @@
 | --- | --- |
 | `ProfileRouteModule.cpp` | 资料更新与用户信息读取路由模块实现 |
 | `ProfileRouteModule.h` | 资料路由模块声明 |
+| `ProfileRouteSchemas.cpp` | 资料路由只读 schema descriptor 列表。 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

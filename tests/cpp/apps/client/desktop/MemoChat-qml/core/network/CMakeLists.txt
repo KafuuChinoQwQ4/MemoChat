@@ -8,7 +8,7 @@ add_executable(chat_frame_codec_gtest
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core/network/ChatFrameCodec.cpp
 )
 set_target_properties(chat_frame_codec_gtest PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )
@@ -36,7 +36,7 @@ add_executable(chat_message_dispatcher_group_payload_gtest
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core/network/ChatMessageDispatcherGroupPayload.cpp
 )
 set_target_properties(chat_message_dispatcher_group_payload_gtest PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )
@@ -64,7 +64,7 @@ add_executable(chat_message_dispatcher_group_history_gtest
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core/network/ChatMessageDispatcherGroupPayload.cpp
 )
 set_target_properties(chat_message_dispatcher_group_history_gtest PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )

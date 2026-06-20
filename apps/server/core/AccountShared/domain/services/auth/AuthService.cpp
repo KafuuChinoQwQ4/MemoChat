@@ -2,6 +2,7 @@
 
 #include "AuthCache.h"
 #include "AuthLoginSupport.h"
+#include "AuthPublicDtos.h"
 #include "AuthVerifyClient.h"
 #include "GateAsyncSideEffects.h"
 #include "GateWorkerPool.h"
@@ -45,8 +46,8 @@ bool AuthService::HandleGetVarifyCode(const memochat::gate::routing::GateRequest
 {
     memochat::json::JsonValue root;
     memochat::json::JsonValue src_root;
-    memochat::json::JsonReader reader;
-    if (!reader.parse(request.body, src_root))
+    gateauthsupport::AuthEmailRequestDto get_varify_code_request;
+    if (!gateauthsupport::DecodeAuthEmailRequest(request.body, &get_varify_code_request, &src_root))
     {
         memolog::LogWarn("gate.get_varifycode.invalid_json", "request json parse failed");
         root["error"] = ErrorCodes::Error_Json;
@@ -54,7 +55,7 @@ bool AuthService::HandleGetVarifyCode(const memochat::gate::routing::GateRequest
         return true;
     }
 
-    if (!isMember(src_root, "email"))
+    if (!gateauthsupport::HasAuthEmailRequiredFields(src_root))
     {
         memolog::LogWarn("gate.get_varifycode.invalid_body", "email is missing");
         root["error"] = ErrorCodes::Error_Json;
@@ -62,7 +63,7 @@ bool AuthService::HandleGetVarifyCode(const memochat::gate::routing::GateRequest
         return true;
     }
 
-    const auto email = src_root["email"].asString();
+    const auto email = get_varify_code_request.email;
     const auto result = memochat::gate::core::AuthVerifyClient::Instance().RequestVerifyCode(email);
     root["error"] = result.error;
     root["email"] = src_root["email"];
@@ -77,9 +78,8 @@ bool AuthService::HandleResetPwd(const memochat::gate::routing::GateRequest& req
                                  memochat::gate::routing::GateResponse& response)
 {
     memochat::json::JsonValue root;
-    memochat::json::JsonValue src_root;
-    memochat::json::JsonReader reader;
-    if (!reader.parse(request.body, src_root))
+    gateauthsupport::AuthResetPasswordRequestDto reset_pwd_request;
+    if (!gateauthsupport::DecodeAuthResetPasswordRequest(request.body, &reset_pwd_request))
     {
         memolog::LogWarn("gate.reset_pwd.invalid_json", "request json parse failed");
         root["error"] = ErrorCodes::Error_Json;
@@ -87,12 +87,12 @@ bool AuthService::HandleResetPwd(const memochat::gate::routing::GateRequest& req
         return true;
     }
 
-    const auto email = src_root["email"].asString();
-    const auto name = src_root["user"].asString();
-    const auto pwd = src_root["passwd"].asString();
+    const auto email = reset_pwd_request.email;
+    const auto name = reset_pwd_request.user;
+    const auto pwd = reset_pwd_request.passwd;
 
     std::string varify_code;
-    if (!AuthCache::Instance().GetVerificationCode(src_root["email"].asString(), varify_code))
+    if (!AuthCache::Instance().GetVerificationCode(email, varify_code))
     {
         memolog::LogWarn("gate.reset_pwd.failed", "verify code expired", {{"email", email}});
         root["error"] = ErrorCodes::VarifyExpired;
@@ -100,7 +100,7 @@ bool AuthService::HandleResetPwd(const memochat::gate::routing::GateRequest& req
         return true;
     }
 
-    if (varify_code != src_root["varifycode"].asString())
+    if (varify_code != reset_pwd_request.varifycode)
     {
         memolog::LogWarn("gate.reset_pwd.failed", "verify code mismatch", {{"email", email}});
         root["error"] = ErrorCodes::VarifyCodeErr;
@@ -128,11 +128,13 @@ bool AuthService::HandleResetPwd(const memochat::gate::routing::GateRequest& req
     memolog::LogInfo("gate.reset_pwd", "password updated", {{"email", email}});
     gateauthsupport::InvalidateLoginCacheByEmail(email);
     GateAsyncSideEffects::Instance().PublishCacheInvalidate(email, name, "reset_pwd");
-    root["error"] = 0;
-    root["email"] = email;
-    root["user"] = name;
-    root["passwd"] = pwd;
-    root["varifycode"] = src_root["varifycode"].asString();
+    gateauthsupport::AuthResetPasswordResponseDto reset_response;
+    reset_response.error = 0;
+    reset_response.email = email;
+    reset_response.user = name;
+    reset_response.passwd = pwd;
+    reset_response.varifycode = reset_pwd_request.varifycode;
+    root = gateauthsupport::AuthResetPasswordResponseToJsonValue(reset_response);
     WriteJson(response, root);
     return true;
 }
@@ -141,9 +143,8 @@ bool AuthService::HandleUserRegister(const memochat::gate::routing::GateRequest&
                                      memochat::gate::routing::GateResponse& response)
 {
     memochat::json::JsonValue root;
-    memochat::json::JsonValue src_root;
-    memochat::json::JsonReader reader;
-    if (!reader.parse(request.body, src_root))
+    gateauthsupport::AuthRegisterRequestDto register_request;
+    if (!gateauthsupport::DecodeAuthRegisterRequest(request.body, &register_request))
     {
         memolog::LogWarn("gate.user_register.invalid_json", "request json parse failed");
         root["error"] = ErrorCodes::Error_Json;
@@ -151,11 +152,11 @@ bool AuthService::HandleUserRegister(const memochat::gate::routing::GateRequest&
         return true;
     }
 
-    const auto email = src_root["email"].asString();
-    const auto name = src_root["user"].asString();
-    const auto pwd = src_root["passwd"].asString();
-    const auto confirm = src_root["confirm"].asString();
-    const auto icon = src_root["icon"].asString();
+    const auto email = register_request.email;
+    const auto name = register_request.user;
+    const auto pwd = register_request.passwd;
+    const auto confirm = register_request.confirm;
+    const auto icon = register_request.icon;
 
     if (pwd != confirm)
     {
@@ -166,7 +167,7 @@ bool AuthService::HandleUserRegister(const memochat::gate::routing::GateRequest&
     }
 
     std::string varify_code;
-    if (!AuthCache::Instance().GetVerificationCode(src_root["email"].asString(), varify_code))
+    if (!AuthCache::Instance().GetVerificationCode(email, varify_code))
     {
         memolog::LogWarn("gate.user_register.failed", "verify code expired", {{"email", email}});
         root["error"] = ErrorCodes::VarifyExpired;
@@ -174,7 +175,7 @@ bool AuthService::HandleUserRegister(const memochat::gate::routing::GateRequest&
         return true;
     }
 
-    if (varify_code != src_root["varifycode"].asString())
+    if (varify_code != register_request.varifycode)
     {
         memolog::LogWarn("gate.user_register.failed", "verify code mismatch", {{"email", email}});
         root["error"] = ErrorCodes::VarifyCodeErr;
@@ -192,28 +193,31 @@ bool AuthService::HandleUserRegister(const memochat::gate::routing::GateRequest&
         return true;
     }
 
-    root["error"] = 0;
-    root["uid"] = uid;
-    root["user_id"] = account_persistence.GetUserPublicId(uid);
-    root["email"] = email;
-    root["user"] = name;
-    root["passwd"] = pwd;
-    root["confirm"] = confirm;
-    root["icon"] = icon;
-    root["varifycode"] = src_root["varifycode"].asString();
+    const std::string user_id = account_persistence.GetUserPublicId(uid);
+    gateauthsupport::AuthRegisterResponseDto register_response;
+    register_response.error = 0;
+    register_response.uid = uid;
+    register_response.user_id = user_id;
+    register_response.email = email;
+    register_response.user = name;
+    register_response.passwd = pwd;
+    register_response.confirm = confirm;
+    register_response.icon = icon;
+    register_response.varifycode = register_request.varifycode;
+    root = gateauthsupport::AuthRegisterResponseToJsonValue(register_response);
     gateauthsupport::UserInfo cached_user;
     cached_user.uid = uid;
-    cached_user.user_id = root["user_id"].asString();
+    cached_user.user_id = user_id;
     cached_user.name = name;
     cached_user.email = email;
     cached_user.pwd = pwd;
     cached_user.nick = name;
     cached_user.icon = icon;
     cached_user.desc = "";
-    cached_user.sex = src_root.get("sex", 0).asInt();
+    cached_user.sex = register_request.sex;
     gateauthsupport::CacheLoginProfile(email, cached_user);
     GateAsyncSideEffects::Instance()
-        .PublishUserProfileChanged(uid, root["user_id"].asString(), email, name, name, icon, cached_user.sex);
+        .PublishUserProfileChanged(uid, user_id, email, name, name, icon, cached_user.sex);
     memolog::LogInfo("gate.user_register", "user registered", {{"email", email}, {"uid", std::to_string(uid)}});
     WriteJson(response, root);
     return true;
@@ -224,10 +228,9 @@ bool AuthService::HandleUserLogin(const memochat::gate::routing::GateRequest& re
 {
     const auto login_start_ms = gateauthsupport::NowMs();
     memochat::json::JsonValue root;
-    memochat::json::JsonValue src_root;
     root["trace_id"] = request.trace_id;
-    memochat::json::JsonReader reader;
-    if (!reader.parse(request.body, src_root))
+    gateauthsupport::AuthLoginRequestDto login_request;
+    if (!gateauthsupport::DecodeAuthLoginRequest(request.body, &login_request))
     {
         memolog::LogWarn("gate.user_login.invalid_json", "request json parse failed");
         root["error"] = ErrorCodes::Error_Json;
@@ -235,9 +238,9 @@ bool AuthService::HandleUserLogin(const memochat::gate::routing::GateRequest& re
         return true;
     }
 
-    const auto email = src_root["email"].asString();
-    const auto pwd = src_root["passwd"].asString();
-    const auto client_ver = src_root.get("client_ver", "").asString();
+    const auto email = login_request.email;
+    const auto pwd = login_request.passwd;
+    const auto client_ver = login_request.client_ver;
     root["min_version"] = gateauthsupport::MinClientVersion();
     root["feature_group_chat"] = true;
     memolog::LogInfo("gate.user_login.version_check",
@@ -359,48 +362,50 @@ bool AuthService::HandleUserLogin(const memochat::gate::routing::GateRequest& re
     root["port"] = route_nodes.front().port;
     root["login_ticket"] = login_ticket;
     root["ticket_expire_ms"] = static_cast<int64_t>(claims.expire_at_ms);
-    memochat::json::JsonValue user_profile(memochat::json::object_t{});
-    user_profile["uid"] = userInfo.uid;
-    user_profile["user_id"] = userInfo.user_id;
-    user_profile["name"] = userInfo.name;
-    user_profile["nick"] = userInfo.nick;
-    user_profile["icon"] = userInfo.icon;
-    user_profile["desc"] = userInfo.desc;
-    user_profile["email"] = userInfo.email;
-    user_profile["sex"] = userInfo.sex;
-    root["user_profile"] = user_profile;
+    gateauthsupport::AuthLoginUserProfileDto user_profile_dto;
+    user_profile_dto.uid = userInfo.uid;
+    user_profile_dto.user_id = userInfo.user_id;
+    user_profile_dto.name = userInfo.name;
+    user_profile_dto.nick = userInfo.nick;
+    user_profile_dto.icon = userInfo.icon;
+    user_profile_dto.desc = userInfo.desc;
+    user_profile_dto.email = userInfo.email;
+    user_profile_dto.sex = userInfo.sex;
+    root["user_profile"] = gateauthsupport::AuthLoginUserProfileToJsonValue(user_profile_dto);
 
     memochat::json::JsonValue chat_endpoints_arr(memochat::json::array_t{});
     for (const auto& route_node : route_nodes)
     {
         if (!route_node.quic_host.empty() && !route_node.quic_port.empty())
         {
-            memochat::json::JsonValue quic_endpoint;
-            quic_endpoint["transport"] = "quic";
-            quic_endpoint["host"] = route_node.quic_host;
-            quic_endpoint["port"] = route_node.quic_port;
-            quic_endpoint["server_name"] = route_node.name;
-            quic_endpoint["priority"] = route_node.priority;
-            memochat::json::glaze_array_append(chat_endpoints_arr, quic_endpoint);
+            memochat::json::glaze_array_append(
+                chat_endpoints_arr,
+                gateauthsupport::AuthChatEndpointToJsonValue(gateauthsupport::AuthChatEndpointDto{
+                    .transport = "quic",
+                    .host = route_node.quic_host,
+                    .port = route_node.quic_port,
+                    .server_name = route_node.name,
+                    .priority = route_node.priority}));
         }
-        memochat::json::JsonValue endpoint;
-        endpoint["transport"] = "tcp";
-        endpoint["host"] = route_node.host;
-        endpoint["port"] = route_node.port;
-        endpoint["server_name"] = route_node.name;
-        endpoint["priority"] = route_node.priority;
-        memochat::json::glaze_array_append(chat_endpoints_arr, endpoint);
+        memochat::json::glaze_array_append(
+            chat_endpoints_arr,
+            gateauthsupport::AuthChatEndpointToJsonValue(gateauthsupport::AuthChatEndpointDto{
+                .transport = "tcp",
+                .host = route_node.host,
+                .port = route_node.port,
+                .server_name = route_node.name,
+                .priority = route_node.priority}));
     }
     root["chat_endpoints"] = chat_endpoints_arr;
 
-    memochat::json::JsonValue stage_metrics(memochat::json::object_t{});
-    stage_metrics["mysql_check_pwd_ms"] = static_cast<int64_t>(mysql_check_pwd_ms);
-    stage_metrics["route_select_ms"] = static_cast<int64_t>(route_select_ms);
-    stage_metrics["ticket_issue_ms"] = static_cast<int64_t>(ticket_issue_ms);
-    stage_metrics["user_login_total_ms"] = static_cast<int64_t>(gateauthsupport::NowMs() - login_start_ms);
-    stage_metrics["route_source"] = route_source;
-    stage_metrics["status_route_detail"] = status_route_detail;
-    root["stage_metrics"] = stage_metrics;
+    gateauthsupport::AuthLoginStageMetricsDto stage_metrics_dto;
+    stage_metrics_dto.mysql_check_pwd_ms = static_cast<int64_t>(mysql_check_pwd_ms);
+    stage_metrics_dto.route_select_ms = static_cast<int64_t>(route_select_ms);
+    stage_metrics_dto.ticket_issue_ms = static_cast<int64_t>(ticket_issue_ms);
+    stage_metrics_dto.user_login_total_ms = static_cast<int64_t>(gateauthsupport::NowMs() - login_start_ms);
+    stage_metrics_dto.route_source = route_source;
+    stage_metrics_dto.status_route_detail = status_route_detail;
+    root["stage_metrics"] = gateauthsupport::AuthLoginStageMetricsToJsonValue(stage_metrics_dto);
     memolog::LogInfo("gate.user_login",
                      "user login succeeded",
                      {{"uid", std::to_string(userInfo.uid)},

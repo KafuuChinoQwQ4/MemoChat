@@ -5,6 +5,7 @@
 #include "ChatRuntime.h"
 #include "CSession.h"
 #include "IAsyncEventBus.h"
+#include "ports/OnlineRouteResolver.h"
 #include "logging/Logger.h"
 
 #include <algorithm>
@@ -15,90 +16,10 @@
 
 namespace
 {
-enum class OnlineRouteKind
-{
-    Offline,
-    Local,
-    Remote,
-    Stale
-};
-
-struct OnlineRouteDecision
-{
-    OnlineRouteKind kind = OnlineRouteKind::Offline;
-    std::shared_ptr<CSession> session;
-    std::string redis_server;
-    bool local_session_found = false;
-};
-
-OnlineRouteDecision
-ResolveOnlineRouteAsync(int uid, ISessionRegistry* session_registry, IOnlineRouteStore* online_route_store)
-{
-    OnlineRouteDecision route;
-    if (uid <= 0 || !session_registry || !online_route_store)
-    {
-        return route;
-    }
-
-    const auto self_name = online_route_store->SelfServerName();
-    auto session = session_registry->FindSession(uid);
-    if (session)
-    {
-        route.kind = OnlineRouteKind::Local;
-        route.session = session;
-        route.redis_server = self_name;
-        route.local_session_found = true;
-        online_route_store->RepairOnlineRoute(uid, session);
-        return route;
-    }
-
-    auto redis_server = online_route_store->FindUserServer(uid);
-    if (redis_server.empty())
-    {
-        redis_server = online_route_store->ResolveServerFromOnlineSets(uid);
-        if (redis_server.empty())
-        {
-            return route;
-        }
-    }
-    route.redis_server = redis_server;
-    if (redis_server != self_name)
-    {
-        route.kind = OnlineRouteKind::Remote;
-        return route;
-    }
-
-    const auto reloaded_server = online_route_store->FindUserServer(uid);
-    if (!reloaded_server.empty())
-    {
-        route.redis_server = reloaded_server;
-        if (reloaded_server != self_name)
-        {
-            route.kind = OnlineRouteKind::Remote;
-            return route;
-        }
-    }
-
-    route.kind = OnlineRouteKind::Stale;
-    online_route_store->ClearTrackedOnlineRoute(uid, self_name);
-    return route;
-}
-
-const char* RouteResultNameAsync(OnlineRouteKind kind)
-{
-    switch (kind)
-    {
-        case OnlineRouteKind::Local:
-            return "local";
-        case OnlineRouteKind::Remote:
-            return "remote";
-        case OnlineRouteKind::Stale:
-            return "stale";
-        case OnlineRouteKind::Offline:
-        default:
-            return "offline";
-    }
-}
+using memochat::chat::routing::OnlineRouteDecision;
+using memochat::chat::routing::OnlineRouteKind;
+using memochat::chat::routing::OnlineRouteResultName;
+using memochat::chat::routing::ResolveOnlineRoute;
 
 int64_t NowMsAsync()
 {
@@ -154,7 +75,7 @@ void LogPrivateRouteAsync(const std::string& event,
                                            {"to_uid", std::to_string(to_uid)},
                                            {"msg_id", msg_id},
                                            {"redis_server", route.redis_server},
-                                           {"route_result", RouteResultNameAsync(route.kind)},
+                                           {"route_result", OnlineRouteResultName(route.kind)},
                                            {"local_session_found", route.local_session_found ? "true" : "false"},
                                            {"grpc_status", grpc_status},
                                            {"notify_delivered", notify_delivered ? "true" : "false"}};
@@ -276,7 +197,7 @@ void AsyncEventDispatcher::NotifyMessageStatus(const memochat::json::JsonValue& 
     {
         return;
     }
-    const auto route = ResolveOnlineRouteAsync(uid, _session_registry, _online_route_store);
+    const auto route = ResolveOnlineRoute(uid, _session_registry, _online_route_store);
     const auto serialized = JsonToCompactStringAsync(payload);
     if (route.kind == OnlineRouteKind::Local && route.session)
     {
@@ -367,7 +288,7 @@ void AsyncEventDispatcher::HandlePrivateAsyncEvent(const memochat::json::JsonVal
         notify_payload["text_array"].append(one);
     }
 
-    const auto route = ResolveOnlineRouteAsync(to_uid, _session_registry, _online_route_store);
+    const auto route = ResolveOnlineRoute(to_uid, _session_registry, _online_route_store);
     if (route.kind == OnlineRouteKind::Local && route.session)
     {
         route.session->Send(JsonToCompactStringAsync(notify_payload), ID_NOTIFY_TEXT_CHAT_MSG_REQ);

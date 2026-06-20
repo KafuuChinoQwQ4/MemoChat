@@ -1,6 +1,7 @@
 ﻿#include "ChatSessionService.h"
 
 #include "ChatGrpcClient.h"
+#include "ChatHistoryOutputDtos.h"
 #include "CServer.h"
 #include "CSession.h"
 #include "ChatUserSupport.h"
@@ -469,43 +470,16 @@ void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& se
                 memochat::json::JsonValue text_array(memochat::json::array_t{});
                 for (const auto& msg : sender_msgs)
                 {
-                    memochat::json::JsonValue element;
-                    element["msgid"] = msg->msg_id;
-                    element["content"] = msg->content;
-                    element["created_at"] = static_cast<int64_t>(msg->created_at);
-                    if (msg->reply_to_server_msg_id > 0)
-                    {
-                        element["reply_to_server_msg_id"] = static_cast<int64_t>(msg->reply_to_server_msg_id);
-                    }
-                    if (!msg->forward_meta_json.empty())
-                    {
-                        memochat::json::JsonValue forward_meta;
-                        memochat::json::JsonCharReaderBuilder builder;
-                        std::unique_ptr<memochat::json::JsonCharReader> reader(builder.newCharReader());
-                        if (reader->parse(msg->forward_meta_json.data(),
-                                          msg->forward_meta_json.data() + msg->forward_meta_json.size(),
-                                          &forward_meta,
-                                          nullptr))
-                        {
-                            element["forward_meta"] = forward_meta;
-                        }
-                    }
-                    if (msg->edited_at_ms > 0)
-                    {
-                        element["edited_at_ms"] = static_cast<int64_t>(msg->edited_at_ms);
-                    }
-                    if (msg->deleted_at_ms > 0)
-                    {
-                        element["deleted_at_ms"] = static_cast<int64_t>(msg->deleted_at_ms);
-                    }
+                    const memochat::json::JsonValue element = memochat::chat::history::output::ToJsonValue(
+                        memochat::chat::history::output::ChatPrivateOfflinePushMessageFromInfo(*msg));
                     append(text_array, element);
                 }
 
-                memochat::json::JsonValue notify;
-                notify["error"] = ErrorCodes::Success;
-                notify["fromuid"] = sender_uid;
-                notify["touid"] = uid;
-                notify["text_array"] = text_array;
+                const memochat::json::JsonValue notify = memochat::chat::history::output::ToJsonValue(
+                    memochat::chat::history::output::ChatPrivateOfflinePushNotifyDto{.error = ErrorCodes::Success,
+                                                                                     .fromuid = sender_uid,
+                                                                                     .touid = uid,
+                                                                                     .text_array = text_array});
 
                 session->Send(JsonValueToWireString(notify), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
                 pushed_total += static_cast<int>(sender_msgs.size());

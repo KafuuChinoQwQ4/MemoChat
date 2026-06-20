@@ -6,8 +6,12 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
+| `R18PublicDtos.cpp` | R18 公开接口请求 DTO 的兼容解析实现 |
+| `R18PublicDtos.h` | R18 公开接口请求 DTO 声明 |
 | `R18Service.cpp` | R18 业务服务实现 |
 | `R18Service.h` | R18 业务服务声明 |
+| `R18SourceRecordCodec.cpp` | R18 内容源记录 JSON DTO 编解码实现 |
+| `R18SourceRecordCodec.h` | R18 内容源记录 JSON DTO 声明 |
 | `R18SourceService.cpp` | R18 内容源接入服务实现 |
 | `R18SourceService.h` | R18 内容源接入服务声明 |
 

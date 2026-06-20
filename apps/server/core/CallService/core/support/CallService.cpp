@@ -1,5 +1,7 @@
 #include "CallService.h"
 
+#include "CallPublicDtos.h"
+#include "CallSessionCacheDto.h"
 #include "ChatGrpcClient.h"
 #include "ConfigMgr.h"
 #include "PostgresMgr.h"
@@ -34,6 +36,71 @@ int64_t NowMs()
 std::string NewId()
 {
     return boost::uuids::to_string(boost::uuids::random_generator()());
+}
+
+std::string DisplayName(const CallUserProfile& profile)
+{
+    return profile.nick.empty() ? profile.name : profile.nick;
+}
+
+memochat::call::CallEventResponseDto MakeCallEventResponseDto(const std::string& event_type,
+                                                              const CallSessionInfo& session,
+                                                              const CallUserProfile& caller,
+                                                              const CallUserProfile& callee,
+                                                              const std::string& reason,
+                                                              const std::string& livekit_url)
+{
+    memochat::call::CallEventResponseDto response;
+    response.error = ErrorCodes::Success;
+    response.event_type = event_type;
+    response.call_id = session.call_id;
+    response.room_name = session.room_name;
+    response.call_type = session.call_type;
+    response.caller_uid = session.caller_uid;
+    response.callee_uid = session.callee_uid;
+    response.caller_name = DisplayName(caller);
+    response.callee_name = DisplayName(callee);
+    response.caller_icon = caller.icon;
+    response.callee_icon = callee.icon;
+    response.started_at = session.started_at_ms;
+    response.accepted_at = session.accepted_at_ms;
+    response.ended_at = session.ended_at_ms;
+    response.expires_at = session.expires_at_ms;
+    response.state = session.state;
+    response.reason = reason.empty() ? session.reason : reason;
+    response.trace_id = session.trace_id;
+    response.livekit_url = livekit_url;
+    return response;
+}
+
+memochat::call::CallStartResponseDto MakeCallStartResponseDto(const memochat::call::CallEventResponseDto& event,
+                                                              int peer_uid,
+                                                              const CallUserProfile& peer)
+{
+    memochat::call::CallStartResponseDto response;
+    response.error = event.error;
+    response.event_type = event.event_type;
+    response.call_id = event.call_id;
+    response.room_name = event.room_name;
+    response.call_type = event.call_type;
+    response.caller_uid = event.caller_uid;
+    response.callee_uid = event.callee_uid;
+    response.caller_name = event.caller_name;
+    response.callee_name = event.callee_name;
+    response.caller_icon = event.caller_icon;
+    response.callee_icon = event.callee_icon;
+    response.started_at = event.started_at;
+    response.accepted_at = event.accepted_at;
+    response.ended_at = event.ended_at;
+    response.expires_at = event.expires_at;
+    response.state = event.state;
+    response.reason = event.reason;
+    response.trace_id = event.trace_id;
+    response.livekit_url = event.livekit_url;
+    response.peer_uid = peer_uid;
+    response.peer_name = DisplayName(peer);
+    response.peer_icon = peer.icon;
+    return response;
 }
 
 bool ValidateGateUserToken(int uid, const std::string& token)
@@ -179,9 +246,10 @@ bool CallService::ParseAuthRequest(const memochat::json::JsonValue& request,
                                    std::string& token,
                                    std::string& call_id) const
 {
-    uid = memochat::json::glaze_safe_get<int>(request, "uid", 0);
-    token = memochat::json::glaze_safe_get<std::string>(request, "token", "");
-    call_id = memochat::json::glaze_safe_get<std::string>(request, "call_id", "");
+    const memochat::call::CallAuthRequestDto auth_request = memochat::call::CallAuthRequestFromJsonValue(request);
+    uid = auth_request.uid;
+    token = auth_request.token;
+    call_id = auth_request.call_id;
     return uid > 0 && !token.empty();
 }
 
@@ -190,24 +258,9 @@ bool CallService::LoadSession(const std::string& call_id, CallSessionInfo& sessi
     std::string json_value;
     if (RedisMgr::GetInstance()->Get(std::string(CALL_SESSION_PREFIX) + call_id, json_value))
     {
-        memochat::json::JsonValue root;
-        if (memochat::json::glaze_parse(root, json_value))
+        if (memochat::call::DecodeCallSessionCache(json_value, &session))
         {
-            session.call_id = memochat::json::glaze_safe_get<std::string>(root, "call_id", "");
-            session.room_name = memochat::json::glaze_safe_get<std::string>(root, "room_name", "");
-            session.call_type = memochat::json::glaze_safe_get<std::string>(root, "call_type", "");
-            session.caller_uid = memochat::json::glaze_safe_get<int>(root, "caller_uid", 0);
-            session.callee_uid = memochat::json::glaze_safe_get<int>(root, "callee_uid", 0);
-            session.state = memochat::json::glaze_safe_get<std::string>(root, "state", "");
-            session.started_at_ms = memochat::json::glaze_safe_get<int64_t>(root, "started_at_ms", 0);
-            session.accepted_at_ms = memochat::json::glaze_safe_get<int64_t>(root, "accepted_at_ms", 0);
-            session.ended_at_ms = memochat::json::glaze_safe_get<int64_t>(root, "ended_at_ms", 0);
-            session.expires_at_ms = memochat::json::glaze_safe_get<int64_t>(root, "expires_at_ms", 0);
-            session.duration_sec = memochat::json::glaze_safe_get<int>(root, "duration_sec", 0);
-            session.reason = memochat::json::glaze_safe_get<std::string>(root, "reason", "");
-            session.trace_id = memochat::json::glaze_safe_get<std::string>(root, "trace_id", "");
-            session.updated_at_ms = memochat::json::glaze_safe_get<int64_t>(root, "updated_at_ms", 0);
-            return !session.call_id.empty();
+            return true;
         }
     }
     return PostgresMgr::GetInstance()->GetCallSession(call_id, session);
@@ -215,22 +268,11 @@ bool CallService::LoadSession(const std::string& call_id, CallSessionInfo& sessi
 
 bool CallService::SaveSession(const CallSessionInfo& session, int ttl_seconds) const
 {
-    memochat::json::JsonValue root = memochat::json::make_document();
-    root["call_id"] = session.call_id;
-    root["room_name"] = session.room_name;
-    root["call_type"] = session.call_type;
-    root["caller_uid"] = session.caller_uid;
-    root["callee_uid"] = session.callee_uid;
-    root["state"] = session.state;
-    root["started_at_ms"] = session.started_at_ms;
-    root["accepted_at_ms"] = session.accepted_at_ms;
-    root["ended_at_ms"] = session.ended_at_ms;
-    root["expires_at_ms"] = session.expires_at_ms;
-    root["duration_sec"] = session.duration_sec;
-    root["reason"] = session.reason;
-    root["trace_id"] = session.trace_id;
-    root["updated_at_ms"] = session.updated_at_ms;
-    const std::string payload = memochat::json::glaze_stringify(root);
+    std::string payload;
+    if (!memochat::call::EncodeCallSessionCache(session, &payload))
+    {
+        return false;
+    }
     if (ttl_seconds > 0)
     {
         RedisMgr::GetInstance()->SetEx(std::string(CALL_SESSION_PREFIX) + session.call_id, payload, ttl_seconds);
@@ -307,27 +349,9 @@ memochat::json::JsonValue CallService::BuildEventPayload(const std::string& even
                                                          const std::string& reason) const
 {
     const auto cfg = LoadConfig();
-    memochat::json::JsonValue payload = memochat::json::make_document();
-    payload["error"] = ErrorCodes::Success;
-    payload["event_type"] = event_type;
-    payload["call_id"] = session.call_id;
-    payload["room_name"] = session.room_name;
-    payload["call_type"] = session.call_type;
-    payload["caller_uid"] = session.caller_uid;
-    payload["callee_uid"] = session.callee_uid;
-    payload["caller_name"] = caller.nick.empty() ? caller.name : caller.nick;
-    payload["callee_name"] = callee.nick.empty() ? callee.name : callee.nick;
-    payload["caller_icon"] = caller.icon;
-    payload["callee_icon"] = callee.icon;
-    payload["started_at"] = session.started_at_ms;
-    payload["accepted_at"] = session.accepted_at_ms;
-    payload["ended_at"] = session.ended_at_ms;
-    payload["expires_at"] = session.expires_at_ms;
-    payload["state"] = session.state;
-    payload["reason"] = reason.empty() ? session.reason : reason;
-    payload["trace_id"] = session.trace_id;
-    payload["livekit_url"] = cfg.livekit_url;
-    return payload;
+    const memochat::call::CallEventResponseDto response =
+        MakeCallEventResponseDto(event_type, session, caller, callee, reason, cfg.livekit_url);
+    return memochat::call::CallEventResponseToJsonValue(response);
 }
 
 std::string CallService::CreateToken(const CallSessionInfo& session, int uid, const std::string& role) const
@@ -368,7 +392,8 @@ bool CallService::StartCall(const memochat::json::JsonValue& request,
         return true;
     }
     int uid = 0;
-    int peer_uid = memochat::json::glaze_safe_get<int>(request, "peer_uid", 0);
+    const memochat::call::CallStartRequestDto start_request = memochat::call::CallStartRequestFromJsonValue(request);
+    int peer_uid = start_request.peer_uid;
     std::string token;
     std::string unused_call_id;
     if (!ParseAuthRequest(request, uid, token, unused_call_id) || !ValidateGateUserToken(uid, token) || peer_uid <= 0 ||
@@ -377,7 +402,7 @@ bool CallService::StartCall(const memochat::json::JsonValue& request,
         response["error"] = ErrorCodes::TokenInvalid;
         return true;
     }
-    const std::string call_type = memochat::json::glaze_safe_get<std::string>(request, "call_type", "");
+    const std::string call_type = start_request.call_type;
     if (call_type != "voice" && call_type != "video")
     {
         response["error"] = ErrorCodes::Error_Json;
@@ -425,11 +450,10 @@ bool CallService::StartCall(const memochat::json::JsonValue& request,
     SaveSession(session, cfg.ring_timeout_sec + 600);
     SetRingingState(session, std::max(cfg.ring_timeout_sec + 5, cfg.busy_key_ttl_sec));
 
-    response = BuildEventPayload("call.state_sync", session, caller, callee);
-    response["peer_uid"] = peer_uid;
-    response["peer_name"] = callee.nick.empty() ? callee.name : callee.nick;
-    response["peer_icon"] = callee.icon;
-    response["livekit_url"] = cfg.livekit_url;
+    const memochat::call::CallEventResponseDto event_response =
+        MakeCallEventResponseDto("call.state_sync", session, caller, callee, "", cfg.livekit_url);
+    response = memochat::call::CallStartResponseToJsonValue(
+        MakeCallStartResponseDto(event_response, peer_uid, callee));
 
     NotifyUsers({peer_uid}, BuildEventPayload("call.invite", session, caller, callee));
     memolog::LogInfo("call.start.dispatched",
@@ -482,7 +506,6 @@ bool CallService::AcceptCall(const memochat::json::JsonValue& request,
     ClearBusyState(session);
     SetActiveState(session);
     response = BuildEventPayload("call.accepted", session, caller, callee);
-    response["livekit_url"] = LoadConfig().livekit_url;
     NotifyUsers({session.caller_uid, session.callee_uid}, response);
     return true;
 }
@@ -658,12 +681,14 @@ bool CallService::GetToken(int uid,
     session.updated_at_ms = NowMs();
     session.trace_id = trace_id.empty() ? session.trace_id : trace_id;
     SaveSession(session, 86400);
-    response["error"] = ErrorCodes::Success;
-    response["call_id"] = session.call_id;
-    response["room_name"] = session.room_name;
-    response["role"] = role.empty() ? (is_caller ? "caller" : "callee") : role;
-    response["livekit_url"] = LoadConfig().livekit_url;
-    response["token"] = CreateToken(session, uid, memochat::json::glaze_safe_get<std::string>(response, "role", ""));
-    response["trace_id"] = session.trace_id;
+    memochat::call::CallTokenResponseDto token_response;
+    token_response.error = ErrorCodes::Success;
+    token_response.call_id = session.call_id;
+    token_response.room_name = session.room_name;
+    token_response.role = role.empty() ? (is_caller ? "caller" : "callee") : role;
+    token_response.livekit_url = LoadConfig().livekit_url;
+    token_response.token = CreateToken(session, uid, token_response.role);
+    token_response.trace_id = session.trace_id;
+    response = memochat::call::CallTokenResponseToJsonValue(token_response);
     return true;
 }

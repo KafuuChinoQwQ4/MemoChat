@@ -4,6 +4,10 @@
 
 # --- GateCallCore: call session/token service. -------------------------------
 add_library(GateCallCore STATIC
+    core/support/CallPublicDtos.cpp
+    core/support/CallPublicDtos.h
+    core/support/CallSessionCacheDto.cpp
+    core/support/CallSessionCacheDto.h
     core/support/CallService.cpp
     core/support/CallService.h
 )
@@ -16,6 +20,7 @@ add_library(GateCallDomain STATIC
     ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/GateRouteProfileRegistrar.h
     domain/profiles/GateCallProfile.cpp
     domain/modules/call/CallRouteModule.cpp
+    domain/modules/call/CallRouteSchemas.cpp
 )
 memochat_configure_gate_app_lib(GateCallDomain)
 target_include_directories(GateCallDomain PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/domain)

@@ -1,6 +1,9 @@
 #pragma once
 
 #include "routing/RouteModule.h"
+#include "routing/RouteSchema.h"
+
+#include <vector>
 
 namespace memochat::gate::modules::auth
 {
@@ -19,6 +22,8 @@ public:
     static void RegisterRegisterRoutes(
         memochat::gate::routing::RouteRegistry& registry); // /get_varifycode,/user_register,/reset_pwd
     static void RegisterLoginRoutes(memochat::gate::routing::RouteRegistry& registry); // /user_login
+
+    static std::vector<memochat::gate::routing::RouteSchemaDescriptor> RouteSchemas();
 };
 
 } // namespace memochat::gate::modules::auth

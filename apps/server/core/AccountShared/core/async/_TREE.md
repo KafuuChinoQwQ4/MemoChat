@@ -6,6 +6,8 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
+| `GateAsyncSideEffectDtos.cpp` | Gate 异步副作用 payload/envelope DTO 编解码实现 |
+| `GateAsyncSideEffectDtos.h` | Gate 异步副作用 payload/envelope DTO 声明 |
 | `GateAsyncSideEffects.cpp` | 异步副作用钩子实现 |
 | `GateAsyncSideEffects.h` | 异步副作用钩子声明 |
 

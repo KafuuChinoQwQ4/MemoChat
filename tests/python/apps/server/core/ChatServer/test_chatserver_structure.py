@@ -980,6 +980,7 @@ class ChatServerStructureTests(unittest.TestCase):
     def test_async_event_dispatcher_uses_route_and_cache_ports(self):
         dispatcher_header = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.h").read_text(encoding="utf-8")
         dispatcher_source = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.cpp").read_text(encoding="utf-8")
+        resolver_source = (CHATSERVER_DIR / "domain" / "ports" / "OnlineRouteResolver.h").read_text(encoding="utf-8")
         composition_source = runtime_composition_source()
 
         for token in (
@@ -995,6 +996,9 @@ class ChatServerStructureTests(unittest.TestCase):
         ):
             self.assertIn(token, dispatcher_header)
 
+        # Online-route resolution is shared across delivery paths via the
+        # OnlineRouteResolver seam; the session/route-store port calls live there
+        # now, and the dispatcher reaches them through the shared resolver.
         for token in (
             "session_registry->FindSession",
             "online_route_store->SelfServerName",
@@ -1002,9 +1006,14 @@ class ChatServerStructureTests(unittest.TestCase):
             "online_route_store->FindUserServer",
             "online_route_store->ResolveServerFromOnlineSets",
             "online_route_store->ClearTrackedOnlineRoute",
+        ):
+            self.assertIn(token, resolver_source)
+
+        for token in (
+            'ports/OnlineRouteResolver.h',
             "relation_bootstrap_cache->Invalidate",
-            "ResolveOnlineRouteAsync(uid, _session_registry, _online_route_store)",
-            "ResolveOnlineRouteAsync(to_uid, _session_registry, _online_route_store)",
+            "ResolveOnlineRoute(uid, _session_registry, _online_route_store)",
+            "ResolveOnlineRoute(to_uid, _session_registry, _online_route_store)",
             "InvalidateRelationBootstrapCacheAsync(uid, _relation_bootstrap_cache)",
         ):
             self.assertIn(token, dispatcher_source)
@@ -1210,12 +1219,18 @@ class ChatServerStructureTests(unittest.TestCase):
         delivery_source = (DOMAIN_MESSAGE_DIR / "MessageDeliveryService.cpp").read_text(encoding="utf-8")
         self.assertNotIn('#include "UserMgr.h"', delivery_source)
         self.assertNotIn('#include "RedisMgr.h"', delivery_source)
-        self.assertIn("session_registry->FindSession(uid)", delivery_source)
-        self.assertIn("online_route_store->RepairOnlineRoute", delivery_source)
-        self.assertIn("online_route_store->FindUserServer", delivery_source)
+        # Online-route resolution is shared via the OnlineRouteResolver seam; the
+        # session/route-store port calls live there, reached through the resolver.
+        self.assertIn("ports/OnlineRouteResolver.h", delivery_source)
+        self.assertIn("ResolveOnlineRoute(uid, _session_registry, _online_route_store)", delivery_source)
+        resolver_source = (CHATSERVER_DIR / "domain" / "ports" / "OnlineRouteResolver.h").read_text(encoding="utf-8")
+        self.assertIn("session_registry->FindSession(uid)", resolver_source)
+        self.assertIn("online_route_store->RepairOnlineRoute", resolver_source)
+        self.assertIn("online_route_store->FindUserServer", resolver_source)
+        self.assertIn("online_route_store->ClearTrackedOnlineRoute", resolver_source)
+        # The group-member fallback branch still resolves/sets routes directly.
         self.assertIn("_online_route_store->ResolveServerFromOnlineSets", delivery_source)
         self.assertIn("_online_route_store->SetUserServer", delivery_source)
-        self.assertIn("online_route_store->ClearTrackedOnlineRoute", delivery_source)
 
         composition_header = runtime_composition_header()
         self.assertIn("class IOnlineRouteStore;", composition_header)
@@ -1420,11 +1435,17 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("RepairOnlineRouteStateLocal", private_source)
         self.assertNotIn("ClearTrackedOnlineRouteLocal", private_source)
 
-        self.assertIn("session_registry->FindSession(uid)", private_source)
-        self.assertIn("online_route_store->RepairOnlineRoute(uid, session)", private_source)
-        self.assertIn("online_route_store->FindUserServer(uid)", private_source)
-        self.assertIn("online_route_store->ResolveServerFromOnlineSets(uid)", private_source)
-        self.assertIn("online_route_store->ClearTrackedOnlineRoute(uid, self_name)", private_source)
+        # Online-route resolution is shared via the OnlineRouteResolver seam; the
+        # session/route-store port calls live there, reached through the resolver.
+        self.assertIn("ports/OnlineRouteResolver.h", private_source)
+        self.assertIn("ResolveOnlineRoute(peer_uid, _session_registry, _online_route_store)", private_source)
+        resolver_source = (CHATSERVER_DIR / "domain" / "ports" / "OnlineRouteResolver.h").read_text(encoding="utf-8")
+        self.assertIn("session_registry->FindSession(uid)", resolver_source)
+        self.assertIn("online_route_store->RepairOnlineRoute(uid, session)", resolver_source)
+        self.assertIn("online_route_store->FindUserServer(uid)", resolver_source)
+        self.assertIn("online_route_store->ResolveServerFromOnlineSets(uid)", resolver_source)
+        self.assertIn("online_route_store->ClearTrackedOnlineRoute(uid, self_name)", resolver_source)
+        # The forward-delivery follow-up still clears a stale tracked route directly.
         self.assertIn("_online_route_store->ClearTrackedOnlineRoute(peer_uid, route.redis_server)", private_source)
         self.assertNotIn("UserMgr::GetInstance()->GetSession", private_source)
         self.assertNotIn("RedisMgr::GetInstance()->Get(USERIPPREFIX", private_source)
@@ -2509,7 +2530,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_delivery_gateway->TryPushPayload({touid}, ID_NOTIFY_TEXT_CHAT_MSG_REQ", private_command_block)
         self.assertNotIn("route.session->Send", private_command_block)
         self.assertNotIn("ChatGrpcClient::GetInstance()->NotifyTextChatMsg", private_command_block)
-        self.assertNotIn("const auto route = ResolveOnlineRouteLocal", private_command_block)
+        self.assertNotIn("const auto route = ResolveOnlineRoute", private_command_block)
 
         private_handler_block = text_between(
             private_source,

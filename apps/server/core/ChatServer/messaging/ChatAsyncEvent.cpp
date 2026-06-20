@@ -1,11 +1,13 @@
 #include "ChatAsyncEvent.h"
 
 #include "ChatRuntime.h"
+#include "json/TypedJsonCodec.h"
 
 #include <algorithm>
-#include "json/GlazeCompat.h"
 #include <memory>
 #include <utility>
+
+#include <glaze/glaze.hpp>
 
 namespace
 {
@@ -13,6 +15,41 @@ namespace
 memochat::json::JsonValue CloneJson(const memochat::json::JsonValue& value)
 {
     return memochat::json::JsonValue(value);
+}
+
+struct AsyncEventEnvelopeWireDto
+{
+    std::string event_id;
+    std::string topic;
+    std::string partition_key;
+    std::string trace_id;
+    std::string request_id;
+    int retry_count = 0;
+    glz::generic_json<> payload = memochat::json::object_t{};
+};
+
+AsyncEventEnvelopeWireDto ToWireDto(const AsyncEventEnvelope& envelope)
+{
+    AsyncEventEnvelopeWireDto dto;
+    dto.event_id = envelope.event_id;
+    dto.topic = envelope.topic;
+    dto.partition_key = envelope.partition_key;
+    dto.trace_id = envelope.trace_id;
+    dto.request_id = envelope.request_id;
+    dto.retry_count = envelope.retry_count;
+    dto.payload = envelope.payload.impl();
+    return dto;
+}
+
+void FromWireDto(const AsyncEventEnvelopeWireDto& dto, AsyncEventEnvelope& envelope)
+{
+    envelope.event_id = dto.event_id;
+    envelope.topic = dto.topic;
+    envelope.partition_key = dto.partition_key;
+    envelope.trace_id = dto.trace_id;
+    envelope.request_id = dto.request_id;
+    envelope.retry_count = dto.retry_count;
+    envelope.payload = memochat::json::JsonValue(dto.payload);
 }
 } // namespace
 
@@ -86,34 +123,16 @@ AsyncEventEnvelope BuildAsyncEventEnvelope(const std::string& topic, const memoc
 
 bool ParseAsyncEventEnvelope(const std::string& serialized, AsyncEventEnvelope& envelope)
 {
-    memochat::json::JsonValue root;
-    std::string errors;
-    if (!memochat::json::glaze_parse(root, serialized, &errors) || !root.is_object())
+    AsyncEventEnvelopeWireDto dto;
+    if (!memochat::json::ReadTypedJson(serialized, &dto))
     {
         return false;
     }
-
-    auto mk = memochat::json::make_member_ref(root);
-    envelope.event_id = memochat::json::glaze_safe_get<std::string>(mk, "event_id", "");
-    envelope.topic = memochat::json::glaze_safe_get<std::string>(mk, "topic", "");
-    envelope.partition_key = memochat::json::glaze_safe_get<std::string>(mk, "partition_key", "");
-    envelope.trace_id = memochat::json::glaze_safe_get<std::string>(mk, "trace_id", "");
-    envelope.request_id = memochat::json::glaze_safe_get<std::string>(mk, "request_id", "");
-    envelope.retry_count = memochat::json::glaze_safe_get<int>(mk, "retry_count", 0);
-    envelope.payload = mk["payload"].asValue();
+    FromWireDto(dto, envelope);
     return true;
 }
 
 std::string SerializeAsyncEventEnvelope(const AsyncEventEnvelope& envelope)
 {
-    memochat::json::JsonValue root(memochat::json::object_t{});
-    root["event_id"] = envelope.event_id;
-    root["topic"] = envelope.topic;
-    root["partition_key"] = envelope.partition_key;
-    root["trace_id"] = envelope.trace_id;
-    root["request_id"] = envelope.request_id;
-    root["retry_count"] = envelope.retry_count;
-    root["payload"] = envelope.payload;
-
-    return memochat::json::writeString(root);
+    return memochat::json::WriteTypedJsonOrEmptyObject(ToWireDto(envelope));
 }

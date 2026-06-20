@@ -21,6 +21,12 @@ target_include_directories(image_cropper_geometry_gtest PRIVATE
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/core/media
 )
 
+set_target_properties(image_cropper_geometry_gtest PROPERTIES
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+
 add_dependencies(gtest_tests image_cropper_geometry_gtest)
 
 include(GoogleTest)

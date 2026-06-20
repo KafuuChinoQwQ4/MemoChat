@@ -8,7 +8,7 @@ add_executable(moments_entry_parser_gtest
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/moments/parsing/MomentsEntryParser.cpp
 )
 set_target_properties(moments_entry_parser_gtest PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )

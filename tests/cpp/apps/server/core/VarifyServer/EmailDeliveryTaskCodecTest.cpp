@@ -14,12 +14,27 @@ TEST(EmailDeliveryTaskCodecTest, SerializesEmailTaskAsJsonObject)
 
     const std::string body = varifyservice::SerializeEmailTask(task);
 
+    EXPECT_EQ(body, R"({"email":"user@example.com","code":"123456","trace_id":"trace-1","retry_count":2})");
+
     memochat::json::JsonValue root;
     ASSERT_TRUE(memochat::json::reader_parse(body, root));
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(root, "email", ""), "user@example.com");
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(root, "code", ""), "123456");
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(root, "trace_id", ""), "trace-1");
     EXPECT_EQ(memochat::json::glaze_safe_get<int>(root, "retry_count", -1), 2);
+}
+
+TEST(EmailDeliveryTaskCodecTest, ParsesLegacyPayloadWithMissingRetryCountAsZero)
+{
+    varifyservice::EmailDeliveryTaskPayload parsed;
+
+    ASSERT_TRUE(varifyservice::ParseEmailTask(R"({"email":"user@example.com","code":"123456","trace_id":"trace-3"})",
+                                             &parsed));
+
+    EXPECT_EQ(parsed.email, "user@example.com");
+    EXPECT_EQ(parsed.code, "123456");
+    EXPECT_EQ(parsed.trace_id, "trace-3");
+    EXPECT_EQ(parsed.retry_count, 0);
 }
 
 TEST(EmailDeliveryTaskCodecTest, ParsesSerializedEmailTask)

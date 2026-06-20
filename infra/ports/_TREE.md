@@ -6,6 +6,7 @@
 
 | 子目录 | 作用概括 |
 | --- | --- |
+| [`glaze/`](glaze/_TREE.md) | Glaze JSON 库的 vcpkg overlay 端口定义。 |
 | [`h2o/`](h2o/_TREE.md) | h2o HTTP 库的 vcpkg 自定义端口。 |
 | [`nghttp2/`](nghttp2/_TREE.md) | nghttp2 库的 vcpkg 自定义端口。 |
 

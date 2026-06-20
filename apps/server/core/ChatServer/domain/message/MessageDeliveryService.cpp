@@ -3,7 +3,9 @@
 #include "ChatGrpcClient.h"
 #include "ChatRuntime.h"
 #include "CSession.h"
+#include "delivery/MessageDeliveryTaskPayload.h"
 #include "MessageDeliveryPayload.h"
+#include "ports/OnlineRouteResolver.h"
 #include "logging/Logger.h"
 
 #include "json/GlazeCompat.h"
@@ -12,74 +14,9 @@
 
 namespace
 {
-enum class OnlineRouteKind
-{
-    Offline,
-    Local,
-    Remote,
-    Stale
-};
-
-struct OnlineRouteDecision
-{
-    OnlineRouteKind kind = OnlineRouteKind::Offline;
-    std::shared_ptr<CSession> session;
-    std::string redis_server;
-    bool local_session_found = false;
-};
-
-OnlineRouteDecision
-ResolveOnlineRouteDelivery(int uid, ISessionRegistry* session_registry, IOnlineRouteStore* online_route_store)
-{
-    OnlineRouteDecision route;
-    if (uid <= 0 || !session_registry || !online_route_store)
-    {
-        return route;
-    }
-
-    const auto self_name = online_route_store->SelfServerName();
-    auto session = session_registry->FindSession(uid);
-    if (session)
-    {
-        route.kind = OnlineRouteKind::Local;
-        route.session = session;
-        route.redis_server = self_name;
-        route.local_session_found = true;
-        online_route_store->RepairOnlineRoute(uid, session);
-        return route;
-    }
-
-    auto redis_server = online_route_store->FindUserServer(uid);
-    if (redis_server.empty())
-    {
-        redis_server = online_route_store->ResolveServerFromOnlineSets(uid);
-        if (redis_server.empty())
-        {
-            return route;
-        }
-    }
-    route.redis_server = redis_server;
-    if (redis_server != self_name)
-    {
-        route.kind = OnlineRouteKind::Remote;
-        return route;
-    }
-
-    auto reloaded_server = online_route_store->FindUserServer(uid);
-    if (!reloaded_server.empty())
-    {
-        route.redis_server = reloaded_server;
-        if (reloaded_server != self_name)
-        {
-            route.kind = OnlineRouteKind::Remote;
-            return route;
-        }
-    }
-
-    route.kind = OnlineRouteKind::Stale;
-    online_route_store->ClearTrackedOnlineRoute(uid, self_name);
-    return route;
-}
+using memochat::chat::routing::OnlineRouteDecision;
+using memochat::chat::routing::OnlineRouteKind;
+using memochat::chat::routing::ResolveOnlineRoute;
 
 enum class DeliveryAttemptResult
 {
@@ -94,13 +31,11 @@ memochat::json::JsonValue BuildDeliveryTaskPayload(int recipient_uid,
                                                    int exclude_uid,
                                                    const char* reason)
 {
-    memochat::json::JsonValue task(memochat::json::object_t{});
-    task["recipient_uid"] = recipient_uid;
-    task["msgid"] = msgid;
-    task["exclude_uid"] = exclude_uid;
-    task["reason"] = reason;
-    task["payload"] = payload;
-    return task;
+    return memochat::chat::delivery::BuildDeliveryTaskPayloadJson(recipient_uid,
+                                                                  msgid,
+                                                                  payload,
+                                                                  exclude_uid,
+                                                                  reason == nullptr ? "" : reason);
 }
 } // namespace
 
@@ -166,7 +101,7 @@ bool MessageDeliveryService::TryPushPayload(const std::vector<int>& recipients,
     {
         for (int uid : uniq)
         {
-            auto route = ResolveOnlineRouteDelivery(uid, _session_registry, _online_route_store);
+            auto route = ResolveOnlineRoute(uid, _session_registry, _online_route_store);
             if (route.kind == OnlineRouteKind::Local && route.session)
             {
                 route.session->Send(payload_str, msgid);
@@ -249,7 +184,7 @@ bool MessageDeliveryService::TryPushPayload(const std::vector<int>& recipients,
 
     for (int uid : uniq)
     {
-        const auto route = ResolveOnlineRouteDelivery(uid, _session_registry, _online_route_store);
+        const auto route = ResolveOnlineRoute(uid, _session_registry, _online_route_store);
         if (route.kind == OnlineRouteKind::Local && route.session)
         {
             route.session->Send(payload_str, msgid);

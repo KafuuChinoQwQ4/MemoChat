@@ -9,6 +9,9 @@ add_library(GateAiDomain STATIC
     ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/GateRouteProfileRegistrar.h
     domain/profiles/GateAiProfile.cpp
     domain/modules/ai/AIRouteModule.cpp
+    domain/modules/ai/AIRouteSchemas.cpp
+    domain/services/ai/AIPublicDtos.cpp
+    domain/services/ai/AIPublicDtos.h
     domain/services/ai/AIService.cpp
     domain/AIServiceClient.cpp
     domain/AIRouteModules.cpp
