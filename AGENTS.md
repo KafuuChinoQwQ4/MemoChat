@@ -14,6 +14,7 @@
    - `skills/ai-rag.md`：用于 AIOrchestrator、Ollama、Qdrant、Neo4j、MCP bridge、知识库和 RAG 工作。
    - `skills/qml-ui.md`：用于 MemoChat QML、MemoOps QML、图标、资源和客户端 UI 检查。
    - `skills/qml-platform-compat.md`：用于 QML 的平台专用兼容路径、WSLg/Linux 透明圆角、Windows/macOS 路径保留或共享 UI 兼容分支。
+   - `skills/no-backward-compat.md`：用于删除旧版本/旧客户端/旧数据字段兼容代码（双读、旧字段别名、旧协议 key、历史迁移读），或新增/改字段时决定是否保留回退。MemoChat 不向后兼容（3.0 不兼容 2.0）；注意区分要删的旧兼容与要保留的平台适配/错误兜底/强制更新机制。
    - `skills/task.md`：用于普通实现工作流。
    - `skills/clarify-first.md`：用于任务目标、约束或改法不清楚时，先向用户收集更多信息再执行。
    - `skills/withtest.md`：用于实现加 CI/CD 可保留测试、迭代式运行时测试、单元/功能/压力/边界/异常/并发安全/数据驱动测试。

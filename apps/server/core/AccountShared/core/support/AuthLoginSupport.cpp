@@ -87,17 +87,6 @@ int GetLoginCacheTtlSec()
     return std::max(60, std::atoi(ttl.c_str()));
 }
 
-std::string DecodeLegacyXorPwd(const std::string& input)
-{
-    unsigned int xor_code = static_cast<unsigned int>(input.size() % 255);
-    std::string decoded = input;
-    for (size_t i = 0; i < decoded.size(); ++i)
-    {
-        decoded[i] = static_cast<char>(static_cast<unsigned char>(decoded[i]) ^ xor_code);
-    }
-    return decoded;
-}
-
 } // namespace gateauthsupport
 
 namespace gateauthsupport
@@ -197,7 +186,7 @@ bool TryLoadCachedLoginProfile(const std::string& email, const std::string& pwd,
     {
         return false;
     }
-    if (pwd != cached_user.pwd && DecodeLegacyXorPwd(pwd) != cached_user.pwd)
+    if (pwd != cached_user.pwd)
     {
         return false;
     }

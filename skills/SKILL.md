@@ -21,6 +21,7 @@ description: Use when a non-trivial MemoChat task needs project-specific skill r
    - `skills/planner.md`：创建可复用 `.ai/<name>/prompt.md` 和 `tasks.json`。
    - `skills/skill-authoring.md`：创建、更新、裁剪或复审项目 skill。
    - `skills/tree-doc.md`：新增/删除/移动/重命名文件或文件夹，或文件职责变化时，同步各文件夹的 `_TREE.md` 目录树文档。
+   - `skills/no-backward-compat.md`：删除旧版本兼容代码（旧客户端/旧数据字段、双读、旧字段别名、旧协议 key），或新增/改字段时决定是否保留回退。MemoChat 不向后兼容。
 3. 根据触及领域只读相关领域 skill：
    - Docker/端口/MCP：`skills/docker-diagnose.md`
    - 数据/迁移/缓存/对象存储/图/向量：`skills/db-migration.md`

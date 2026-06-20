@@ -29,14 +29,9 @@ bool isAiRequest(const QUrl& url, const QString& module)
     return path == QStringLiteral("/ai") || path.startsWith(QStringLiteral("/ai/"));
 }
 
-QString gateConfigValue(const QSettings& settings, const QString& lowerKey, const QString& upperKey)
+QString gateConfigValue(const QSettings& settings, const QString& key)
 {
-    QString value = settings.value(lowerKey).toString().trimmed();
-    if (value.isEmpty())
-    {
-        value = settings.value(upperKey).toString().trimmed();
-    }
-    return value;
+    return settings.value(key).toString().trimmed();
 }
 
 int parsePort(const QString& value, int fallback)
@@ -116,7 +111,7 @@ QVector<QUrl> gateProtocolFallbackUrls(const QUrl& url)
 {
     const QString path = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("config.ini"));
     QSettings settings(path, QSettings::IniFormat);
-    QString gateHost = gateConfigValue(settings, QStringLiteral("GateServer/host"), QStringLiteral("GateServer/Host"));
+    QString gateHost = gateConfigValue(settings, QStringLiteral("GateServer/host"));
     if (gateHost.isEmpty())
     {
         gateHost = QStringLiteral("127.0.0.1");
@@ -126,18 +121,17 @@ QVector<QUrl> gateProtocolFallbackUrls(const QUrl& url)
         gateHost = QStringLiteral("127.0.0.1");
     }
     const int configuredPort = parsePort(
-        gateConfigValue(settings, QStringLiteral("GateServer/port"), QStringLiteral("GateServer/Port")), 8080);
+        gateConfigValue(settings, QStringLiteral("GateServer/port")), 8080);
     const int h1DirectPort =
         parsePort(gateConfigValue(settings,
-                                  QStringLiteral("GateServer/http_port"), QStringLiteral("GateServer/HttpPort")),
+                                  QStringLiteral("GateServer/http_port")),
                                   configuredPort);
     const int h2Port = parsePort(
-        gateConfigValue(settings, QStringLiteral("GateServer/http2_port"), QStringLiteral("GateServer/Http2Port")), 0);
+        gateConfigValue(settings, QStringLiteral("GateServer/http2_port")), 0);
     const int h3Port = parsePort(
-        gateConfigValue(settings, QStringLiteral("GateServer/http3_port"), QStringLiteral("GateServer/Http3Port")), 0);
+        gateConfigValue(settings, QStringLiteral("GateServer/http3_port")), 0);
     const QString preferred = gateConfigValue(settings,
-                                              QStringLiteral("GateServer/preferred_http_protocol"),
-                                                             QStringLiteral("GateServer/PreferredHttpProtocol"));
+                                              QStringLiteral("GateServer/preferred_http_protocol"));
 
     if (url.host().compare(gateHost, Qt::CaseInsensitive) != 0)
     {

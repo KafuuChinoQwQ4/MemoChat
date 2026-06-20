@@ -39,7 +39,7 @@ ColumnLayout {
 
     function roomId() {
         var room = roomObject()
-        return room.room_id || room.id || currentGameRoomId || ""
+        return room.room_id || currentGameRoomId || ""
     }
 
     function participants() {
@@ -67,7 +67,7 @@ ColumnLayout {
         var ps = participants()
         for (var i = 0; i < ps.length; ++i) {
             var participant = ps[i] || {}
-            if ((participant.participant_id || participant.id || "") === participantId) {
+            if ((participant.participant_id || "") === participantId) {
                 return participant
             }
         }
@@ -79,7 +79,7 @@ ColumnLayout {
         if ((participant.kind || "") === "self" && root.selfName.length > 0) {
             return root.selfName
         }
-        return participant.display_name || participant.name || participantId || "系统"
+        return participant.display_name || participantId || "系统"
     }
 
     function participantKind(participantId) {
@@ -92,13 +92,13 @@ ColumnLayout {
         for (var i = 0; i < ps.length; ++i) {
             var participant = ps[i] || {}
             if ((participant.kind || "") === "self") {
-                return participant.participant_id || participant.id || ""
+                return participant.participant_id || ""
             }
         }
         for (var j = 0; j < ps.length; ++j) {
             var item = ps[j] || {}
             if ((item.kind || "") === "human") {
-                return item.participant_id || item.id || ""
+                return item.participant_id || ""
             }
         }
         return ""
@@ -141,7 +141,7 @@ ColumnLayout {
         var type = event.event_type || event.type || "event"
         if (type === "participant_joined" && root.selfName.length > 0 && root.isSelfEvent(event)) {
             var participant = participantById(event.actor_participant_id || "")
-            var storedName = participant.display_name || participant.name || ""
+            var storedName = participant.display_name || ""
             if (storedName.length > 0 && body.indexOf(storedName) === 0) {
                 return root.selfName + body.slice(storedName.length)
             }

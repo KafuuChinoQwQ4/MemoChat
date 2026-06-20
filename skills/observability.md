@@ -52,12 +52,14 @@ process_resident_memory_bytes
 container_cpu_usage_seconds_total
 ```
 
-Loki：
+Loki（先用标签发现确认当前服务名，再查询——服务随微服务化演进，别假设固定名）：
 
 ```text
-{service="GateServer"} |= "error"
-{service="ChatServer"} |= "warn"
-{service=~"GateServer|ChatServer|VarifyServer"}
+# 先列出实际的 service 标签值
+{job=~".+"} | label_values(service)
+# 再按需查（示例服务名，以上一步实际结果为准）
+{service="ChatServer"} |= "error"
+{service=~"AccountService1|LoginService1|VarifyServer1"} |= "warn"
 ```
 
 Tempo：

@@ -142,23 +142,7 @@ std::string VarifyServiceImpl::ExtractPeerIP(grpc::ServerContext* context)
 bool VarifyServiceImpl::ResolveVerifyCode(const std::string& email, std::string* out_code)
 {
     const std::string canonical_key = BuildVerifyCodeKey(email);
-    if (VarifyRedisMgr::Instance().Get(canonical_key, *out_code))
-    {
-        return true;
-    }
-
-    if (VarifyRedisMgr::Instance().Get(email, *out_code))
-    {
-        int64_t ttl = VarifyRedisMgr::Instance().TTL(email);
-        if (ttl <= 0)
-            ttl = config_.code_ttl_sec;
-        VarifyRedisMgr::Instance().SetEx(canonical_key, *out_code, static_cast<int>(ttl));
-        VarifyRedisMgr::Instance().Del(email);
-        memolog::LogWarn("varify.code.legacy_key_migrated", "migrated legacy verify-code key", {{"email", email}});
-        return true;
-    }
-
-    return false;
+    return VarifyRedisMgr::Instance().Get(canonical_key, *out_code);
 }
 
 bool VarifyServiceImpl::StoreVerifyCode(const std::string& email, const std::string& code, int ttl_sec)

@@ -358,8 +358,6 @@ bool AuthService::HandleUserLogin(const memochat::gate::routing::GateRequest& re
     root["uid"] = userInfo.uid;
     root["user_id"] = userInfo.user_id;
     root["token"] = http_token;
-    root["host"] = route_nodes.front().host;
-    root["port"] = route_nodes.front().port;
     root["login_ticket"] = login_ticket;
     root["ticket_expire_ms"] = static_cast<int64_t>(claims.expire_at_ms);
     gateauthsupport::AuthLoginUserProfileDto user_profile_dto;

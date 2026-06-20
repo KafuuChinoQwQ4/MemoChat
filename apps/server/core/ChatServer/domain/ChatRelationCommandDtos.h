@@ -175,7 +175,7 @@ struct ChatRelationStateEventDto
 
 inline int ReadFromUidOrUid(const memochat::json::JsonValue& root)
 {
-    return root.isMember("fromuid") ? root["fromuid"].asInt() : root["uid"].asInt();
+    return root["fromuid"].asInt();
 }
 
 inline int64_t ReadGroupIdAlias(const memochat::json::JsonValue& root)
@@ -284,7 +284,7 @@ inline ChatDeleteFriendRequestDto ChatDeleteFriendRequestFromJsonValue(const mem
 {
     ChatDeleteFriendRequestDto request;
     request.uid = ReadFromUidOrUid(root);
-    request.friend_uid = root.isMember("friend_uid") ? root["friend_uid"].asInt() : root["touid"].asInt();
+    request.friend_uid = root["friend_uid"].asInt();
     return request;
 }
 

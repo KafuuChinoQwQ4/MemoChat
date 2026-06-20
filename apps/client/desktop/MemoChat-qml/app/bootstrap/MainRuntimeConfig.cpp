@@ -27,10 +27,6 @@ void configureGateUrlPrefixes(const QString& configPath)
     QString gateHost = settings.value("GateServer/host").toString().trimmed();
     if (gateHost.isEmpty())
     {
-        gateHost = settings.value("GateServer/Host").toString().trimmed();
-    }
-    if (gateHost.isEmpty())
-    {
         gateHost = QStringLiteral("127.0.0.1");
     }
     if (gateHost.compare(QStringLiteral("localhost"), Qt::CaseInsensitive) == 0)
@@ -41,18 +37,10 @@ void configureGateUrlPrefixes(const QString& configPath)
     QString gatePort = settings.value("GateServer/port").toString().trimmed();
     if (gatePort.isEmpty())
     {
-        gatePort = settings.value("GateServer/Port").toString().trimmed();
-    }
-    if (gatePort.isEmpty())
-    {
         gatePort = QStringLiteral("8080");
     }
 
     QString mediaGatePort = settings.value("GateServer/http_port").toString().trimmed();
-    if (mediaGatePort.isEmpty())
-    {
-        mediaGatePort = settings.value("GateServer/HttpPort").toString().trimmed();
-    }
     if (mediaGatePort.isEmpty())
     {
         mediaGatePort = gatePort;

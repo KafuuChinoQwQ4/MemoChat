@@ -173,7 +173,6 @@ buildPublishPayload(QJsonObject authPayload, const QString& location, int visibi
     payload["visibility"] = visibility;
 
     QJsonArray itemsArr;
-    QString firstTextContent;
     for (const auto& itemVar : items)
     {
         const QVariantMap itemMap = itemVar.toMap();
@@ -182,18 +181,9 @@ buildPublishPayload(QJsonObject authPayload, const QString& location, int visibi
         {
             itemObj[it.key()] = QJsonValue::fromVariant(it.value());
         }
-        if (firstTextContent.isEmpty() &&
-            itemMap.value(QStringLiteral("media_type")).toString() == QStringLiteral("text"))
-        {
-            firstTextContent = itemMap.value(QStringLiteral("content")).toString();
-        }
         itemsArr.append(itemObj);
     }
     payload["items"] = itemsArr;
-    if (!firstTextContent.trimmed().isEmpty())
-    {
-        payload["content"] = firstTextContent;
-    }
 
     return payload;
 }

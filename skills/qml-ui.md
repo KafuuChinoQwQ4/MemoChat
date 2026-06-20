@@ -10,7 +10,7 @@ description: Use when implementing or reviewing MemoChat QML UI, MemoOps UI, sha
 ## 相关区域
 
 - `apps/client/desktop/MemoChat-qml`
-- `apps/client/desktop/MemoChatShared`
+- `apps/client/desktop/MemoChat-qml/shared`
 - `apps/client/desktop/CMakeLists.txt`
 - `infra/Memo_ops/client/MemoOps-qml`
 - `infra/Memo_ops/config/memoops-qml.ini`

@@ -51,7 +51,7 @@ Item {
     Layout.minimumHeight: 0
 
     function participantId(participant) {
-        return participant.participant_id || participant.id || ""
+        return participant.participant_id || ""
     }
 
     function participantStrategy(participant) {
@@ -107,7 +107,7 @@ Item {
             return
         }
         root.editingParticipant = participant
-        editorNameField.text = participant.display_name || participant.name || "AI"
+        editorNameField.text = participant.display_name || "AI"
         editorPersonaField.text = participant.persona || ""
         var skill = root.participantSkill(participant)
         editorSkillCombo.currentIndex = root.optionIndex(root.skillOptions, skill, "writer")

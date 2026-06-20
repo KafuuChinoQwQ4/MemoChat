@@ -64,7 +64,7 @@ Rectangle {
                     Layout.fillWidth: true
                     text: (participantDelegate.modelData.kind || "") === "self" && root.selfName.length > 0
                           ? root.selfName
-                          : (participantDelegate.modelData.display_name || participantDelegate.modelData.name || "成员")
+                          : (participantDelegate.modelData.display_name || "成员")
                     color: "#263448"
                     font.pixelSize: 12
                     font.bold: true

@@ -28,8 +28,8 @@ ColumnLayout {
     function participantName(participantId) {
         for (var i = 0; i < root.participants.length; ++i) {
             var p = root.participants[i]
-            if ((p.participant_id || p.id || "") === participantId) {
-                return p.display_name || p.name || participantId
+            if ((p.participant_id || "") === participantId) {
+                return p.display_name || participantId
             }
         }
         return participantId || "系统"
@@ -61,7 +61,7 @@ ColumnLayout {
         if (index < 0 || index >= root.participants.length) {
             return ""
         }
-        return root.participants[index].participant_id || root.participants[index].id || ""
+        return root.participants[index].participant_id || ""
     }
 
     function actionTypeAt(index) {
@@ -173,7 +173,7 @@ ColumnLayout {
                     anchors.margins: 9
                     spacing: 3
 
-                    Label { Layout.fillWidth: true; text: participantDelegate.modelData.display_name || participantDelegate.modelData.name || "玩家"; color: "#243145"; font.pixelSize: 13; font.bold: true; elide: Text.ElideRight }
+                    Label { Layout.fillWidth: true; text: participantDelegate.modelData.display_name || "玩家"; color: "#243145"; font.pixelSize: 13; font.bold: true; elide: Text.ElideRight }
                     Label { Layout.fillWidth: true; text: (participantDelegate.modelData.kind || participantDelegate.modelData.type || "participant") + " · " + (participantDelegate.modelData.status || "ready"); color: "#65758b"; font.pixelSize: 11; elide: Text.ElideRight }
                     Label { Layout.fillWidth: true; text: participantDelegate.modelData.role_key || participantDelegate.modelData.role || "role"; color: "#4d6d88"; font.pixelSize: 11; elide: Text.ElideRight }
                 }
@@ -303,7 +303,7 @@ ColumnLayout {
                         var rows = []
                         for (var i = 0; i < root.participants.length; ++i) {
                             var p = root.participants[i]
-                            rows.push({ "label": p.display_name || p.name || p.participant_id || "玩家", "value": p.participant_id || p.id || "" })
+                            rows.push({ "label": p.display_name || p.participant_id || "玩家", "value": p.participant_id || "" })
                         }
                         if (rows.length === 0) rows.push({ "label": "选择行动者", "value": "" })
                         return rows

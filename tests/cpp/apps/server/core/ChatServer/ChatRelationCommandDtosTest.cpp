@@ -192,12 +192,12 @@ TEST(ChatRelationCommandDtosTest, ReadsAuthFriendApplyRequestAndLabels)
 TEST(ChatRelationCommandDtosTest, PreservesRelationAliasPrecedence)
 {
     const auto deleted = memochat::chat::relation::ChatDeleteFriendRequestFromJsonValue(
-        Parse(R"({"uid":1,"fromuid":2,"touid":3,"friend_uid":4})"));
+        Parse(R"({"fromuid":2,"friend_uid":4})"));
     EXPECT_EQ(deleted.uid, 2);
     EXPECT_EQ(deleted.friend_uid, 4);
 
     const auto dialog =
-        memochat::chat::relation::ChatDialogListRequestFromJsonValue(Parse(R"({"uid":1,"fromuid":9})"));
+        memochat::chat::relation::ChatDialogListRequestFromJsonValue(Parse(R"({"fromuid":9})"));
     EXPECT_EQ(dialog.uid, 9);
 }
 
@@ -290,7 +290,7 @@ TEST(ChatRelationCommandDtosTest, ReadsSyncDraftAliasesPresenceAndDraftClamp)
 TEST(ChatRelationCommandDtosTest, ReadsPinDialogAliasesAndClampsRank)
 {
     const auto negative = memochat::chat::relation::ChatPinDialogRequestFromJsonValue(
-        Parse(R"({"uid":1,"dialog_type":"private","peer_uid":8,"pinned_rank":-5})"));
+        Parse(R"({"fromuid":1,"dialog_type":"private","peer_uid":8,"pinned_rank":-5})"));
     EXPECT_EQ(negative.uid, 1);
     EXPECT_EQ(negative.peer_uid, 8);
     EXPECT_EQ(negative.pinned_rank, 0);
