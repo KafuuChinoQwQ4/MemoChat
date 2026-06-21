@@ -10,6 +10,7 @@
 #include <memory>
 #include <atomic>
 #include <ctime>
+#include <exec/task.hpp> // exec::task<> —— 读循环协程返回类型
 #include "const.h"
 #include "MsgNode.h"
 
@@ -35,8 +36,6 @@ public:
     virtual void Send(std::string msg, short msgid);
     virtual void Close();
     std::shared_ptr<CSession> SharedSelf();
-    void AsyncReadBody(int length);
-    void AsyncReadHead(int total_len);
     void NotifyOffline(int uid);
     void DetachServer();
 
@@ -49,11 +48,13 @@ public:
     void DealExceptionSession();
 
 private:
-    void asyncReadFull(std::size_t maxLength,
-                       std::function<void(const boost::system::error_code&, std::size_t)> handler);
-    void asyncReadLen(std::size_t read_len,
-                      std::size_t total_len,
-                      std::function<void(const boost::system::error_code&, std::size_t)> handler);
+    // 读循环协程:取代原 AsyncReadHead⇄AsyncReadBody 互递归 lambda。
+    // co_await async_read 定长 head/body,投递 LogicSystem,直到 Close/对端断连。
+    // 用 exec::start_detached 启动(协程首行持 self 续命,完成时自释放 op state)。
+    // ⚠️ 错误分支 catch boost::system::system_error(asioexec boost 模式抛该型,
+    // 非 std::system_error);异常必须在协程内吞掉,不得逃逸(否则 start_detached
+    // 的 set_error → std::terminate)。详见 common/runtime/AsioCoScheduler.h。
+    exec::task<void> ReadLoop();
 
     void HandleWrite(const boost::system::error_code& error, std::shared_ptr<CSession> shared_self);
     tcp::socket _socket;

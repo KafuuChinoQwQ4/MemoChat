@@ -505,3 +505,53 @@ target_include_directories(chatserver_send_path_golden_gtest PRIVATE
 add_dependencies(gtest_tests chatserver_send_path_golden_gtest)
 
 gtest_discover_tests(chatserver_send_path_golden_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
+# CSession 读循环协程化(P1b)生命周期/不泄漏验收。链 ChatServerCore 拿到 CSession
+# 及其传递依赖;测试走 _server=nullptr 干净分支,不触达 Redis/gRPC 单例,无需 Docker。
+add_executable(chatserver_csession_lifetime_gtest
+    main.cpp
+    CSessionLifetimeTest.cpp
+)
+
+target_link_libraries(chatserver_csession_lifetime_gtest PRIVATE
+    GTest_TestLib
+    ChatServerCore
+    memochat_proto
+    memochat_server_deps
+)
+
+target_include_directories(chatserver_csession_lifetime_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/domain
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/infrastructure
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/transport
+)
+
+add_dependencies(gtest_tests chatserver_csession_lifetime_gtest)
+
+gtest_discover_tests(chatserver_csession_lifetime_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
+# CServer accept/timer 循环协程化(P2)停机/不泄漏验收。聚焦 TimerLoop 路径
+# (StartTimer/StopTimer),不触达 AsioIOServicePool 线程池,无需 Docker。
+add_executable(chatserver_cserver_lifetime_gtest
+    main.cpp
+    CServerLifetimeTest.cpp
+)
+
+target_link_libraries(chatserver_cserver_lifetime_gtest PRIVATE
+    GTest_TestLib
+    ChatServerCore
+    memochat_proto
+    memochat_server_deps
+)
+
+target_include_directories(chatserver_cserver_lifetime_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/domain
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/infrastructure
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/transport
+)
+
+add_dependencies(gtest_tests chatserver_cserver_lifetime_gtest)
+
+gtest_discover_tests(chatserver_cserver_lifetime_gtest TEST_DISCOVERY_MODE POST_BUILD)

@@ -21,6 +21,7 @@ add_subdirectory(cpp/apps/server/core/common/proto                         ${CMA
 add_subdirectory(cpp/apps/server/core/common/logging                       ${CMAKE_CURRENT_BINARY_DIR}/logging)
 add_subdirectory(cpp/apps/server/core/common/json                          ${CMAKE_CURRENT_BINARY_DIR}/json)
 add_subdirectory(cpp/apps/server/core/common/reflection                    ${CMAKE_CURRENT_BINARY_DIR}/reflection)
+add_subdirectory(cpp/apps/server/core/common/runtime                       ${CMAKE_CURRENT_BINARY_DIR}/runtime)
 add_subdirectory(cpp/apps/server/core/AccountShared                        ${CMAKE_CURRENT_BINARY_DIR}/accountshared)
 add_subdirectory(cpp/apps/server/core/CallService                          ${CMAKE_CURRENT_BINARY_DIR}/callservice)
 add_subdirectory(cpp/apps/server/core/AIGatewayService                     ${CMAKE_CURRENT_BINARY_DIR}/aigatewayservice)

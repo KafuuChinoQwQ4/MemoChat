@@ -21,6 +21,12 @@
         "protobuf",
         "hiredis",
         "glaze",
+        {
+          "name": "stdexec",
+          "features": [
+            "asio"
+          ]
+        },
         "boost-asio",
         "boost-beast",
         "boost-filesystem",
