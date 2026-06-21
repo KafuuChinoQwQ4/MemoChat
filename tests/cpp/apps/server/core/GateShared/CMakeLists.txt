@@ -68,7 +68,31 @@ target_include_directories(gateshared_cross_module_route_schema_catalog_gtest PR
 
 add_dependencies(gtest_tests gateshared_cross_module_route_schema_catalog_gtest)
 
+# CServer accept 循环协程化(P3)启动/lifetime/不泄漏验收。链 GateRuntimeCore 拿到
+# GateShared CServer + HttpConnection;测试用临时-owner 调用模式坐实传值 self 协程参数
+# 覆盖启动窗口(不 bad_weak_ptr→terminate)+ accept 生效 + io_context 析构后不泄漏。
+# 只用进程内 AsioIOServicePool + loopback socket,不触达 LogicSystem/Redis/gRPC,无需 Docker。
+add_executable(gateshared_cserver_lifetime_gtest
+    main.cpp
+    CServerLifetimeTest.cpp
+)
+
+target_link_libraries(gateshared_cserver_lifetime_gtest PRIVATE
+    GTest_TestLib
+    GateRuntimeCore
+    memochat_server_deps
+)
+
+target_include_directories(gateshared_cserver_lifetime_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/server/core/GateShared
+    ${CMAKE_SOURCE_DIR}/apps/server/core/GateShared/core
+    ${CMAKE_SOURCE_DIR}/apps/server/core/common
+)
+
+add_dependencies(gtest_tests gateshared_cserver_lifetime_gtest)
+
 include(GoogleTest)
 gtest_discover_tests(gateshared_route_schema_gtest TEST_DISCOVERY_MODE POST_BUILD)
 gtest_discover_tests(gateshared_route_schema_catalog_gtest TEST_DISCOVERY_MODE POST_BUILD)
 gtest_discover_tests(gateshared_cross_module_route_schema_catalog_gtest TEST_DISCOVERY_MODE POST_BUILD)
+gtest_discover_tests(gateshared_cserver_lifetime_gtest TEST_DISCOVERY_MODE POST_BUILD)
