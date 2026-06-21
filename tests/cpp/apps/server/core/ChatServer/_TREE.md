@@ -7,6 +7,8 @@
 | 文件 | 作用概括 |
 | --- | --- |
 | `CMakeLists.txt` | 注册该测试目标的 CMake 配置 |
+| `CSessionLifetimeTest.cpp` | 验证 CSession 读循环协程化后对端断连即析构、协程帧不泄漏 session |
+| `CServerLifetimeTest.cpp` | 验证 CServer accept/timer 循环协程化后 StopTimer 取消 TimerLoop、CServer 析构不泄漏 |
 | `ChatEnvelopeCodecTest.cpp` | 验证 Chat 内部任务/事件 envelope 的 typed JSON 编解码与字段清单 |
 | `ChatGroupCommandDtosTest.cpp` | 验证 Chat 群组简单命令 request DTO 的兼容字段提取和字段清单 |
 | `ChatHistoryCommandDtosTest.cpp` | 验证 Chat 历史消息 request DTO 的游标字段提取和字段清单 |

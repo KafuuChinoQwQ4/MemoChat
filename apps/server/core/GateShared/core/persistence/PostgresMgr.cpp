@@ -75,7 +75,7 @@ bool PostgresMgr::GetUserInfo(int uid, UserInfo& user_info)
     return _dao.GetUserInfo(uid, user_info);
 }
 
-bool PostgresMgr::TestProcedure(const std::string& email, int& uid, string& name)
+bool PostgresMgr::TestProcedure(const std::string& email, int& uid, std::string& name)
 {
     return _dao.TestProcedure(email, uid, name);
 }

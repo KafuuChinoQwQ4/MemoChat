@@ -380,7 +380,7 @@ bool PostgresDao::GetUserInfo(int uid, UserInfo& user_info)
     }
 }
 
-bool PostgresDao::TestProcedure(const std::string& email, int& uid, string& name)
+bool PostgresDao::TestProcedure(const std::string& email, int& uid, std::string& name)
 {
     auto con = pool_->getConnection();
     if (con == nullptr)

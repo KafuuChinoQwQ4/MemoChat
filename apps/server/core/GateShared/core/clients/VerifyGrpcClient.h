@@ -89,7 +89,7 @@ public:
     }
 
 private:
-    atomic<bool> b_stop_;
+    std::atomic<bool> b_stop_;
     size_t poolSize_;
     std::string host_;
     std::string port_;

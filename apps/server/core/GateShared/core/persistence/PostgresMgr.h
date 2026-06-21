@@ -21,7 +21,7 @@ public:
     bool InsertMediaAsset(const MediaAssetInfo& asset);
     bool GetMediaAssetByKey(const std::string& media_key, MediaAssetInfo& asset);
     bool GetUserInfo(int uid, UserInfo& user_info);
-    bool TestProcedure(const std::string& email, int& uid, string& name);
+    bool TestProcedure(const std::string& email, int& uid, std::string& name);
 
     // Moments operations
     bool AddMoment(const MomentInfo& moment, int64_t* moment_id = nullptr);
