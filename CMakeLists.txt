@@ -40,7 +40,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Options to control what gets built
 option(BUILD_CLIENT "Build MemoChat QML client" ON)
-option(BUILD_SERVER "Build all backend servers (GateServer, GateServerHttp2, ChatServer, VarifyServer)" ON)
+option(BUILD_SERVER "Build all backend servers (GateServer, ChatServer, VarifyServer)" ON)
 option(BUILD_OPS "Build MemoOps monitoring platform" ON)
 option(BUILD_TESTS "Build unit tests with Google Test" ON)
 option(MEMOCHAT_ENABLE_CPP26_REFLECTION "Enable experimental C++26 static reflection for supported server targets" OFF)
@@ -102,9 +102,6 @@ if(BUILD_SERVER)
         ChatServer
         VarifyServer
     )
-    if(TARGET GateServerHttp2)
-        add_dependencies(build-all GateServerHttp2)
-    endif()
 endif()
 
 if(BUILD_CLIENT)

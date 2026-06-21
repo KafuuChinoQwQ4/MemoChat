@@ -77,12 +77,9 @@ class MomentsMediaBucketContractTests(unittest.TestCase):
 
     def test_gate_configs_define_moments_bucket(self):
         # GateServer monolith retired: its main config.ini/gate2.ini are gone; the moments bucket
-        # config now lives in the focused MediaService gateway ini, while the legacy H1/H2 transport
-        # compat configs moved under GateShared. Runtime GateServer1/2 dirs are kept.
+        # config now lives in the focused MediaService gateway ini. Runtime GateServer1/2 dirs are kept.
         config_paths = [
             SERVER_CORE / "MediaService/mediagateway.ini",
-            SERVER_CORE / "GateShared/transports/h1/legacy_standalone/config.ini",
-            SERVER_CORE / "GateShared/transports/h2/config.ini",
             REPO_ROOT / "infra/Memo_ops/runtime/services/GateServer1/config.ini",
             REPO_ROOT / "infra/Memo_ops/runtime/services/GateServer2/config.ini",
         ]

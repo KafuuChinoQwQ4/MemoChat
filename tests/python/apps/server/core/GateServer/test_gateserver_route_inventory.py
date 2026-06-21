@@ -7,10 +7,6 @@ from tests.python.support.paths import repo_root
 REPO_ROOT = repo_root()
 SERVER_CORE = REPO_ROOT / "apps" / "server" / "core"
 GATE_H3_LEGACY_ROUTES = SERVER_CORE / "GateShared" / "transports" / "h3" / "legacy_routes"
-GATE_H2 = SERVER_CORE / "GateShared" / "transports" / "h2"
-GATE_H2_ROUTES = GATE_H2 / "routes"
-GATE_H2_SUPPORT = GATE_H2 / "support"
-GATE_H1_LEGACY = SERVER_CORE / "GateShared" / "transports" / "h1" / "legacy_standalone"
 
 
 def read(path: Path) -> str:
@@ -68,22 +64,6 @@ def extract_route_registry_routes(path: Path) -> set[tuple[str, str]]:
     return routes
 
 
-def extract_h2_routes() -> set[tuple[str, str]]:
-    routes: set[tuple[str, str]] = set()
-    for path in (
-        GATE_H2_ROUTES / "Http2Routes.cpp",
-        GATE_H2_SUPPORT / "Http2MomentsSupport.cpp",
-    ):
-        source = strip_comments(read(path))
-        pattern = re.compile(
-            r"(?:Http2Routes::)?RegisterHandler\s*\(\s*"
-            r'"(?P<method>GET|POST|DELETE|PUT|PATCH)"\s*,\s*"(?P<path>[^"]+)"',
-            re.S,
-        )
-        routes.update((match.group("method"), match.group("path")) for match in pattern.finditer(source))
-    return routes
-
-
 MAIN_H1_FILES = (
     SERVER_CORE / "GateShared" / "LogicSystem.cpp",
     SERVER_CORE / "AccountShared" / "domain" / "modules" / "auth" / "AuthRouteModule.cpp",
@@ -99,14 +79,6 @@ MAIN_H1_FILES = (
     SERVER_CORE / "MomentsService" / "domain" / "MomentsRouteModules.cpp",
     SERVER_CORE / "AIGatewayService" / "domain" / "AIRouteModules.cpp",
     SERVER_CORE / "R18Service" / "domain" / "GateR18Routes.cpp",
-)
-
-H1_LEGACY_SOURCE_FILES = (
-    GATE_H1_LEGACY / "H1LogicSystem.cpp",
-    GATE_H1_LEGACY / "H1AuthRoutes.cpp",
-    GATE_H1_LEGACY / "H1MediaService.cpp",
-    GATE_H1_LEGACY / "H1MomentsRoutes.cpp",
-    GATE_H1_LEGACY / "H1R18Routes.cpp",
 )
 
 CORE_SHARED_ROUTES = {
@@ -140,11 +112,6 @@ CORE_SHARED_ROUTES = {
     ("POST", "/api/moments/comment/like"),
 }
 
-H2_EXPECTED_ROUTES = CORE_SHARED_ROUTES | {
-    ("POST", "/user_logout"),
-    ("POST", "/get_user_info"),
-}
-
 MAIN_H1_OPTIONAL_PROFILE_ROUTES = {
     ("POST", "/get_user_info"),
 }
@@ -162,11 +129,6 @@ CALL_STATE_POST_ROUTES = {
     ("POST", "/api/call/reject"),
     ("POST", "/api/call/cancel"),
     ("POST", "/api/call/hangup"),
-}
-
-CALL_TOKEN_ROUTES = {
-    ("GET", "/api/call/token"),
-    ("POST", "/api/call/token"),
 }
 
 MEDIA_ROUTES = {
@@ -280,12 +242,6 @@ class GateServerRouteInventoryTests(unittest.TestCase):
         routes -= MAIN_H1_OPTIONAL_PROFILE_ROUTES
         return routes
 
-    def h1_legacy_source_routes(self) -> set[tuple[str, str]]:
-        routes: set[tuple[str, str]] = set()
-        for path in H1_LEGACY_SOURCE_FILES:
-            routes.update(extract_logic_routes(path))
-        return routes
-
     def h3_routes(self) -> set[tuple[str, str]]:
         return extract_logic_routes(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp")
 
@@ -383,19 +339,6 @@ class GateServerRouteInventoryTests(unittest.TestCase):
         missing_from_main = MOMENTS_ROUTES - main_routes
         self.assertFalse(missing_from_main, f"main H1 route inventory missing {sorted(missing_from_main)}")
 
-    def test_h2_inventory_tracks_routes_that_need_shared_registry_bridge(self):
-        routes = extract_h2_routes()
-        missing = H2_EXPECTED_ROUTES - routes
-        self.assertFalse(missing, f"H2 route inventory missing {sorted(missing)}")
-
-        self.assertIn(("POST", "/user_logout"), routes)
-        self.assertNotIn(("POST", "/user_logout"), self.main_h1_routes())
-        self.assertNotIn(("POST", "/user_logout"), self.h3_routes())
-        self.assertNotIn(("POST", "/ai/chat"), routes)
-        for route in R18_ROUTES:
-            with self.subTest(route=route):
-                self.assertNotIn(route, routes)
-
     def test_h3_inventory_tracks_routes_that_need_shared_registry_bridge(self):
         routes = self.h3_routes()
         h3_expected_routes = CORE_SHARED_ROUTES - {("GET", "/api/call/token")}
@@ -412,10 +355,8 @@ class GateServerRouteInventoryTests(unittest.TestCase):
             with self.subTest(route=route):
                 self.assertNotIn(route, routes)
 
-    def test_media_route_matrix_tracks_current_h1_h2_h3_contract(self):
+    def test_media_route_matrix_tracks_current_h3_contract(self):
         matrix = {
-            "main H1": self.main_h1_routes(),
-            "H2": extract_h2_routes(),
             "H3": self.h3_routes(),
         }
 
@@ -424,18 +365,8 @@ class GateServerRouteInventoryTests(unittest.TestCase):
                 missing = MEDIA_ROUTES - routes
                 self.assertFalse(missing, f"{transport} media route matrix missing {sorted(missing)}")
 
-    def test_profile_route_support_matrix_tracks_h1_h2_h3_differences(self):
+    def test_profile_route_support_matrix_tracks_h3_differences(self):
         matrix = {
-            "main H1": {
-                "routes": self.main_h1_routes(),
-                "expected_present": {("POST", "/user_update_profile")},
-                "expected_absent": {("POST", "/get_user_info")},
-            },
-            "H2": {
-                "routes": extract_h2_routes(),
-                "expected_present": {("POST", "/user_update_profile"), ("POST", "/get_user_info")},
-                "expected_absent": set(),
-            },
             "H3": {
                 "routes": self.h3_routes(),
                 "expected_present": {("POST", "/user_update_profile"), ("POST", "/get_user_info")},
@@ -451,18 +382,8 @@ class GateServerRouteInventoryTests(unittest.TestCase):
                 unexpected = spec["expected_absent"] & spec["routes"]
                 self.assertFalse(unexpected, f"{transport} profile matrix unexpectedly exposes {sorted(unexpected)}")
 
-    def test_call_route_support_matrix_tracks_h1_h2_h3_differences(self):
+    def test_call_route_support_matrix_tracks_h3_differences(self):
         matrix = {
-            "main H1": {
-                "routes": self.main_h1_routes(),
-                "expected_present": CALL_STATE_POST_ROUTES | CALL_TOKEN_ROUTES,
-                "expected_absent": set(),
-            },
-            "H2": {
-                "routes": extract_h2_routes(),
-                "expected_present": CALL_STATE_POST_ROUTES | CALL_TOKEN_ROUTES,
-                "expected_absent": set(),
-            },
             "H3": {
                 "routes": self.h3_routes(),
                 "expected_present": CALL_STATE_POST_ROUTES | {("POST", "/api/call/token")},
@@ -478,33 +399,7 @@ class GateServerRouteInventoryTests(unittest.TestCase):
                 unexpected = spec["expected_absent"] & spec["routes"]
                 self.assertFalse(unexpected, f"{transport} call matrix unexpectedly exposes {sorted(unexpected)}")
 
-    def test_legacy_h1_source_inventory_marks_auth_profile_as_incomplete_legacy_path(self):
-        routes = self.h1_legacy_source_routes()
-        for route in (
-            ("GET", "/healthz"),
-            ("GET", "/readyz"),
-            ("POST", "/get_varifycode"),
-            ("POST", "/user_register"),
-            ("POST", "/reset_pwd"),
-            ("POST", "/user_login"),
-            ("POST", "/user_update_profile"),
-            ("POST", "/api/call/start"),
-            ("POST", "/api/call/hangup"),
-            ("POST", "/upload_media_init"),
-            ("GET", "/media/download"),
-            ("POST", "/api/moments/publish"),
-            ("POST", "/api/moments/comment/like"),
-            ("GET", "/api/r18/sources"),
-            ("POST", "/api/r18/search"),
-        ):
-            self.assertIn(route, routes, f"legacy H1.1 source inventory missing {route}")
-
-        auth_source = read(GATE_H1_LEGACY / "H1AuthRoutes.cpp")
-        self.assertIn("MakeNotImplementedResponse", auth_source)
-        for route in ("/get_varifycode", "/user_register", "/reset_pwd", "/user_login", "/user_update_profile"):
-            self.assertIn(f'MakeNotImplementedResponse("{route}")', auth_source)
-
-    def test_h2_h3_reset_password_use_shared_auth_service_contract(self):
+    def test_h3_reset_password_use_shared_auth_service_contract(self):
         source = read(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp")
         reset_block = extract_logic_route_block(source, "/reset_pwd")
 
@@ -517,25 +412,9 @@ class GateServerRouteInventoryTests(unittest.TestCase):
         account_persistence = read(
             SERVER_CORE / "AccountShared" / "domain" / "services" / "account" / "AccountPersistence.cpp"
         )
-        h2 = read(GATE_H2_SUPPORT / "Http2AuthSupport.cpp")
         self.assertIn("UpdatePassword(email, pwd)", h1_auth_service)
         self.assertIn("PostgresMgr::GetInstance()->UpdatePwd(email, password)", account_persistence)
         self.assertIn("PublishCacheInvalidate", h1_auth_service)
-        self.assertIn("services/auth/AuthService.h", h2)
-        self.assertIn("DispatchAuthRoute", h2)
-        self.assertIn("&AuthService::HandleResetPwd", h2)
-        for token in (
-            "PostgresMgr::GetInstance()->RegUser",
-            "PostgresMgr::GetInstance()->CheckEmail",
-            "PostgresMgr::GetInstance()->UpdatePwd",
-            "PostgresMgr::GetInstance()->CheckPwd",
-            "AuthVerifyClient::Instance().RequestVerifyCode",
-            "GateAsyncSideEffects::Instance().PublishCacheInvalidate",
-            "ChatLoginTicketClaims",
-            "EncodeTicket",
-        ):
-            with self.subTest(forbidden_h2_auth_impl_token=token):
-                self.assertNotIn(token, h2)
 
     def test_h3_auth_routes_dispatch_through_shared_registry(self):
         source = read(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp")

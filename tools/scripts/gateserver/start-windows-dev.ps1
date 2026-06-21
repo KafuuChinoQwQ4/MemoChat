@@ -135,7 +135,7 @@ if (-not $SkipClient) {
     Write-Step "启动 QML 客户端..."
 
     $clientDir = "$ProjectRoot\client\MemoChat-qml"
-    $clientExe = "$ServicesDir\GateServerHttp2\MemoChatQml.exe"
+    $clientExe = "$clientDir\MemoChatQml.exe"
 
     if (Test-Path $clientExe) {
         Start-Process -FilePath $clientExe

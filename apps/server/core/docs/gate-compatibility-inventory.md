@@ -8,11 +8,6 @@ GateServer monolith 退役、各业务域剥离为聚焦微服务后保留的协
 
 以下目录是 legacy transport 兼容代码,按协议划分:
 
-- `GateShared/transports/h1/legacy_standalone/**` —— HTTP/1.1 独立网关(opt-in,默认不编译,
-  由 `MEMOCHAT_BUILD_LEGACY_GATE_HTTP1_STANDALONE` 控制)。含 H1 监听器、连接、worker 池,
-  以及 Auth/Media/Moments/R18 的 H1 路由实现。
-- `GateShared/transports/h2/**` —— HTTP/2 独立 handler 与 routes(`handlers/`、`routes/`),
-  保留 Auth/Call/Media/Profile 的 H2 兼容处理。
 - `GateShared/transports/h3/legacy_routes/**` —— HTTP/3 legacy 路由
   (`GateHttp3ServiceRoutes`)。
 
