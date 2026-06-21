@@ -6,7 +6,6 @@ from tests.python.support.paths import repo_root
 REPO_ROOT = repo_root()
 SERVER_CORE = REPO_ROOT / "apps" / "server" / "core"
 GATE_H3_LEGACY_ROUTES = SERVER_CORE / "GateShared" / "transports" / "h3" / "legacy_routes"
-GATE_H2_HANDLERS = SERVER_CORE / "GateShared" / "transports" / "h2" / "handlers"
 
 
 def read_text(path):
@@ -68,58 +67,14 @@ def extract_function_region(source: str, start_pattern: str, next_pattern: str |
 
 
 class MediaUploadContractTest(unittest.TestCase):
-    def test_direct_gate_and_h1_raise_beast_request_body_limit_for_media_chunks(self):
-        direct = read_text(SERVER_CORE / "GateShared" / "HttpConnection.cpp")
-        h1 = read_text(SERVER_CORE / "GateShared" / "transports" / "h1" / "legacy_standalone" / "H1Connection.cpp")
+    def test_direct_gate_raises_beast_request_body_limit_for_media_chunks(self):
+        source = read_text(SERVER_CORE / "GateShared" / "HttpConnection.cpp")
 
-        for source in (direct, h1):
-            with self.subTest(source=source[:32]):
-                self.assertIn("http::request_parser<http::dynamic_body>", source)
-                self.assertIn("kMediaRequestBodyLimitBytes", source)
-                self.assertIn("parser->body_limit(kMediaRequestBodyLimitBytes);", source)
-                self.assertIn("self->_request = parser->release();", source)
-                self.assertRegex(source, r"64ULL\s*\*\s*1024ULL\s*\*\s*1024ULL")
-
-    def test_h1_media_routes_are_migrated_to_shared_support(self):
-        source = read_text(
-            SERVER_CORE / "GateShared" / "transports" / "h1" / "legacy_standalone" / "H1MediaService.cpp"
-        )
-
-        self.assertNotIn("MakeMediaNotImplementedResponse", source)
-        self.assertNotIn("not migrated", source)
-        for route in (
-            "/upload_media_init",
-            "/upload_media_chunk",
-            "/upload_media_status",
-            "/upload_media_complete",
-            "/upload_media",
-            "/media/download",
-        ):
-            self.assertIn(f'"{route}"', source)
-
-        self.assertIn("Http2MediaSupport::HandleUploadMediaInit", source)
-        self.assertIn("Http2MediaSupport::HandleUploadMediaChunkBytes", source)
-        self.assertIn("Http2MediaSupport::HandleUploadMediaComplete", source)
-        self.assertIn("Http2MediaSupport::HandleMediaDownloadInfo", source)
-        self.assertIn("connection->SetFileResponse", source)
-
-    def test_h1_media_response_starts_from_object_not_result_data_variant(self):
-        source = read_text(
-            SERVER_CORE / "GateShared" / "transports" / "h1" / "legacy_standalone" / "H1MediaService.cpp"
-        )
-        response_func = re.search(
-            r"memochat::json::JsonValue MakeMediaResponse\(const Http2MediaSupport::MediaResult& result\)"
-            r"(?P<body>.*?)\n\}",
-            source,
-            re.S,
-        )
-        self.assertIsNotNone(response_func)
-        body = response_func.group("body")
-
-        self.assertIn("memochat::json::glaze_empty_object()", body)
-        self.assertIn("memochat::json::glaze_is_object(result.data)", body)
-        self.assertIn("memochat::json::getMemberNames(result.data)", body)
-        self.assertNotIn("JsonValue root = result.data", body)
+        self.assertIn("http::request_parser<http::dynamic_body>", source)
+        self.assertIn("kMediaRequestBodyLimitBytes", source)
+        self.assertIn("parser->body_limit(kMediaRequestBodyLimitBytes);", source)
+        self.assertIn("self->_request = parser->release();", source)
+        self.assertRegex(source, r"64ULL\s*\*\s*1024ULL\s*\*\s*1024ULL")
 
     def test_shared_media_support_has_raw_binary_chunk_helper(self):
         header = read_text(SERVER_CORE / "MediaService" / "core" / "support" / "Http2MediaSupport.h")
@@ -185,21 +140,6 @@ class MediaUploadContractTest(unittest.TestCase):
         self.assertIn("root.asString()", load_func.group("body"))
         self.assertIn("root = decoded", load_func.group("body"))
 
-    def test_h2_raw_binary_chunk_route_uses_bytes_helper(self):
-        source = read_text(GATE_H2_HANDLERS / "Http2MediaHandlers.cpp")
-        func = re.search(
-            r"void Http2MediaHandlers::HandleUploadMediaChunk\(.*?\n\}(?=\n\nvoid Http2MediaHandlers::HandleUploadMediaStatus)",
-            source,
-            re.S,
-        )
-        self.assertIsNotNone(func)
-        body = func.group(0)
-
-        self.assertIn("json_chunk", body)
-        self.assertIn("HandleUploadMediaChunk(", body)
-        self.assertIn("HandleUploadMediaChunkBytes", body)
-        self.assertNotIn("chunk_data_base64 = body_str", body)
-
     def test_h3_media_routes_dispatch_to_shared_registry_adapter(self):
         source = read_text(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp")
         compact = normalize_space(strip_comments(source))
@@ -230,26 +170,21 @@ class MediaUploadContractTest(unittest.TestCase):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, source)
 
-    def test_h2_h3_media_download_file_responses_are_owned_by_adapters(self):
+    def test_h3_media_download_file_responses_are_owned_by_adapter(self):
         source = read_text(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp")
-        h2_adapter = read_text(
-            SERVER_CORE / "GateShared" / "transports" / "h2" / "adapters" / "h2" / "H2RouteAdapter.cpp"
-        )
         h3_adapter = read_text(
             SERVER_CORE / "GateShared" / "transports" / "h3" / "adapters" / "h3" / "H3RouteAdapter.cpp"
         )
 
         self.assertNotIn("MediaResponseJson", source)
         self.assertNotIn("Http2MediaSupport", source)
-        for adapter in (h2_adapter, h3_adapter):
-            with self.subTest(adapter=adapter[:80]):
-                self.assertIn("GateResponseBodyKind::File", adapter)
-                self.assertIn("ReadFileBody", adapter)
-                self.assertIn("route_response.file_path", adapter)
-                self.assertIn("application/octet-stream", adapter)
-                self.assertIn("404", adapter)
-                self.assertNotIn("file response limitation", adapter)
-                self.assertNotIn("not supported", adapter)
+        self.assertIn("GateResponseBodyKind::File", h3_adapter)
+        self.assertIn("ReadFileBody", h3_adapter)
+        self.assertIn("route_response.file_path", h3_adapter)
+        self.assertIn("application/octet-stream", h3_adapter)
+        self.assertIn("404", h3_adapter)
+        self.assertNotIn("file response limitation", h3_adapter)
+        self.assertNotIn("not supported", h3_adapter)
 
     def test_current_h1_media_upload_json_responses_remain_text_json(self):
         source = read_text(SERVER_CORE / "MediaService" / "domain" / "services" / "media" / "MediaService.cpp")

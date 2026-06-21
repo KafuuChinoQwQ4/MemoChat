@@ -31,14 +31,10 @@
 | `GateServerH1Routes.cpp` | Gate 的 HTTP/1 路由装配实现。 |
 | `GateWorkerPool.cpp` | 工作线程池实现。 |
 | `GateWorkerPool.h` | 工作线程池接口声明。 |
-| `H2oServer.cpp` | 基于 h2o 的服务器实现。 |
-| `H2oServer.h` | h2o 服务器接口声明。 |
 | `HttpConnection.cpp` | HTTP 连接处理实现。 |
 | `HttpConnection.h` | HTTP 连接接口声明。 |
 | `LogicSystem.cpp` | 业务逻辑分发系统实现。 |
 | `LogicSystem.h` | 逻辑分发系统接口声明（单例）。 |
-| `NgHttp2Server.cpp` | 基于 nghttp2 的服务器实现。 |
-| `NgHttp2Server.h` | nghttp2 服务器接口声明。 |
 | `PropertySheet.props` | （Windows）构建属性表。 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

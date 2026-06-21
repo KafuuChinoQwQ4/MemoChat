@@ -11,7 +11,6 @@ SHARED_CLIENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml/shared"
 # retired; the H2/H3 legacy transport compat shims live under GateShared.
 ACCOUNT_CORE = REPO_ROOT / "apps/server/core/AccountShared/core"
 ACCOUNT_DOMAIN = REPO_ROOT / "apps/server/core/AccountShared/domain"
-GATE_H2_SUPPORT = REPO_ROOT / "apps/server/core/GateShared/transports/h2/support"
 GATE_H3_LEGACY_ROUTES = REPO_ROOT / "apps/server/core/GateShared/transports/h3/legacy_routes"
 
 
@@ -127,7 +126,6 @@ class UserAvatarProfileContractTests(unittest.TestCase):
         support_h = read(ACCOUNT_CORE / "support/AuthLoginSupport.h")
         support_cpp = read(ACCOUNT_CORE / "support/AuthLoginSupport.cpp")
         h1_auth_service = read(ACCOUNT_DOMAIN / "services/auth/AuthService.cpp")
-        h2 = read(GATE_H2_SUPPORT / "Http2AuthSupport.cpp")
         h3 = read(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp")
 
         self.assertIn("bool RefreshLoginProfileFromDb(const std::string& email, UserInfo& userInfo);", support_h)
@@ -136,8 +134,7 @@ class UserAvatarProfileContractTests(unittest.TestCase):
         self.assertIn("userInfo.icon = dbUserInfo.icon;", refresh)
         self.assertIn("CacheLoginProfile(email, userInfo);", refresh)
 
-        for source in (h1_auth_service, h2):
-            self.assertIn("gateauthsupport::RefreshLoginProfileFromDb(email, userInfo);", source)
+        self.assertIn("gateauthsupport::RefreshLoginProfileFromDb(email, userInfo);", h1_auth_service)
         self.assertIn("AuthService::HandleUserLogin", h3)
 
 

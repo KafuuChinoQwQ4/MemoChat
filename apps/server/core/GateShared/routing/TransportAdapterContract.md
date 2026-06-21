@@ -78,35 +78,6 @@ H1 response mapping:
 - `GateResponseBodyKind::Inline` -> H1 inline body.
 - `GateResponseBodyKind::File` -> `HttpConnection::SetFileResponse(file_path, content_type)`.
 
-## H2 Adapter
-
-Current H2 state:
-
-- `Http2Routes::RegisterHandler(method, path, handler)` owns the H2 route table and `Http2Routes::HandleRequest` dispatches to registered handlers.
-- `Http2Request` currently exposes `method`, `path`, `query`, `body`, `remote_addr`, `trace_id`, and `headers`.
-- `Http2Response` currently exposes `status_code`, `status_message`, `body`, `content_type`, `headers`, `SetJsonBody`, `SetStatus`, and `SetHeader`.
-- H2 route handlers still call transport-local auth/profile/call/media support in several places.
-- `POST /user_logout` exists as a H2-only route today.
-
-G3 conversion rules:
-
-- Add a H2 adapter that converts `Http2Request` to `GateRequest`.
-- Parse `Http2Request::query` into `GateRequest::query`.
-- Map `remote_addr` to `remote_address`.
-- Preserve `trace_id`; add request id only if H2 exposes one in a later slice.
-- Keep `RegisterHandler` as the native route registration surface while migrated handlers delegate to the H2 adapter or shared service.
-- Prefer `RouteRegistry` dispatch whenever the route already has a shared H1 module/service contract.
-- Do not keep a duplicate H2 business handler for a migrated shared route.
-- Keep H2-only `/user_logout` documented as H2-only until it is either migrated into a shared module/service or intentionally retired.
-
-H2 response mapping:
-
-- `GateResponse.status` -> `Http2Response::SetStatus(status, status_message)`.
-- `GateResponse.content_type` -> `Http2Response::content_type` when non-empty.
-- `GateResponse.headers` -> `Http2Response::headers`.
-- `GateResponseBodyKind::Inline` -> `Http2Response::body`.
-- `GateResponseBodyKind::File` -> adapter reads `file_path` bytes into `Http2Response::body`, using `application/octet-stream` when `content_type` is empty. This is the H2 inline conversion until the transport grows a streaming file primitive.
-
 ## H3 Adapter
 
 Current H3 state:

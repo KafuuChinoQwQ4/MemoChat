@@ -4,7 +4,6 @@ project(MemoChatServer LANGUAGES CXX)
 
 option(BUILD_SERVER_SERVICES "Build backend service executables" ON)
 option(MEMOCHAT_AUTO_DEPLOY_RUNTIME "Copy built server executables into infra/Memo_ops/runtime/services during build" OFF)
-option(MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE "Build the legacy standalone GateServerHttp2 executable" OFF)
 option(MEMOCHAT_ENABLE_CPP26_REFLECTION "Enable experimental C++26 static reflection for supported server targets" OFF)
 
 # Require at least C++23 for std::expected, std::unreachable, std::byteswap (glaze library requires C++23).
@@ -107,6 +106,7 @@ find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(hiredis CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+find_package(stdexec CONFIG REQUIRED)
 find_package(bsoncxx CONFIG REQUIRED)
 find_package(mongocxx CONFIG REQUIRED)
 find_package(libpqxx CONFIG REQUIRED)
@@ -366,6 +366,7 @@ target_link_libraries(memochat_server_deps INTERFACE
     gRPC::grpc++_reflection
     protobuf::libprotobuf
     hiredis::hiredis
+    STDEXEC::asioexec
     ${MEMOCHAT_SPDLOG_TARGET}
 )
 target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_KAFKA=${MEMOCHAT_ENABLE_KAFKA} MEMOCHAT_ENABLE_RABBITMQ=${MEMOCHAT_ENABLE_RABBITMQ} MEMOCHAT_ENABLE_HTTP3=${MEMOCHAT_ENABLE_HTTP3} MEMOCHAT_HAVE_NGHTTP2=${MEMOCHAT_HAVE_NGHTTP2})
@@ -646,19 +647,13 @@ if(BUILD_SERVER_SERVICES)
     add_subdirectory(LoginService)
     add_subdirectory(AccountService)
 
-    # --- Shared gate runtime framework + legacy/compat transports. These depend
+    # --- Shared gate runtime framework + compat transports. These depend
     # on the domain-core/domain targets defined above (GateServerCore aggregate,
     # GateAppCore compat). Default-buildable: GateRuntimeCore, GateServerHttp3,
-    # GateServerHttp1.1, R18 plugin helpers. Opt-in: GateServerHttp2.
+    # R18 plugin helpers.
     add_subdirectory(GateShared)
-    add_subdirectory(GateShared/transports/h1/legacy_standalone)
     add_subdirectory(GateShared/plugins/r18)
     add_subdirectory(GateShared/transports/h3)
-    if(MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE AND libh2o_FOUND)
-        add_subdirectory(GateShared/transports/h2)
-    elseif(MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE)
-        message(WARNING "MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE=ON but libh2o was not found; skipping GateServerHttp2")
-    endif()
 
     add_subdirectory(VarifyServer)
     add_subdirectory(AIServer)

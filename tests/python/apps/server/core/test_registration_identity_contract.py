@@ -7,7 +7,6 @@ from tests.python.support.paths import repo_root
 REPO_ROOT = repo_root()
 SERVER_CORE = REPO_ROOT / "apps/server/core"
 GATE_ACCOUNT_DAO = SERVER_CORE / "GateShared/core/persistence/PostgresDaoAccount.cpp"
-GATE_H2_SUPPORT = SERVER_CORE / "GateShared/transports/h2/support"
 SCHEMA_FILES = (
     REPO_ROOT / "apps/server/migrations/postgresql/business/001_baseline.sql",
     REPO_ROOT / "infra/deploy/local/init/postgresql/001-business.sql",
@@ -54,7 +53,6 @@ class RegistrationIdentityContractTests(unittest.TestCase):
         update_body = compact(function_body(dao, "bool PostgresDao::UpdatePwd"))
         h1_auth = read(SERVER_CORE / "AccountShared/domain/services/auth/AuthService.cpp")
         h1_account = read(SERVER_CORE / "AccountShared/domain/services/account/AccountPersistence.cpp")
-        h2 = read(GATE_H2_SUPPORT / "Http2AuthSupport.cpp")
 
         self.assertIn('SELECT 1 FROM \\"user\\" WHERE email = $1 LIMIT 1', check_body)
         self.assertNotIn("WHERE name = $1", check_body)
@@ -62,8 +60,6 @@ class RegistrationIdentityContractTests(unittest.TestCase):
         self.assertNotIn("SET pwd = $1 WHERE name = $2", update_body)
         self.assertIn("UpdatePassword(email, pwd)", h1_auth)
         self.assertIn("UpdatePwd(email, password)", h1_account)
-        self.assertIn('&AuthService::HandleResetPwd', h2)
-        self.assertNotIn("UpdatePwd(email, pwd)", h2)
 
     def test_chatserver_postgres_registration_checks_duplicate_email_only(self):
         source = read(SERVER_CORE / "ChatServer/persistence/PostgresDaoUsers.cpp")

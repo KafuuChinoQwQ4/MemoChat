@@ -41,30 +41,8 @@ ACCOUNT_CORE_SUPPORT = ACCOUNT_CORE / "support"
 GATE_H3 = GATE_SERVER / "transports" / "h3"
 GATE_H3_LISTENER = GATE_H3 / "listener"
 GATE_H3_LEGACY_ROUTES = GATE_H3 / "legacy_routes"
-GATE_H2 = GATE_SERVER / "transports" / "h2"
-GATE_H2_ROUTES = GATE_H2 / "routes"
-GATE_H2_HANDLERS = GATE_H2 / "handlers"
-GATE_H2_SUPPORT = GATE_H2 / "support"
-GATE_H1_LEGACY = GATE_SERVER / "transports" / "h1" / "legacy_standalone"
 GATE_R18_PLUGINS = GATE_SERVER / "plugins" / "r18"
-LEGACY_GATE_HTTP1_OPTION = "MEMOCHAT_BUILD_LEGACY_GATE_HTTP1_STANDALONE"
-LEGACY_GATE_HTTP2_OPTION = "MEMOCHAT_BUILD_LEGACY_GATE_HTTP2_STANDALONE"
 EMBEDDED_GATE_HTTP2_OPTION = "MEMOCHAT_BUILD_EMBEDDED_GATE_HTTP2"
-EMBEDDED_GATE_HTTP2_SOURCES = (
-    "NgHttp2Server.cpp",
-    "transports/h2/adapters/h2/H2RouteAdapter.cpp",
-    "transports/h2/routes/Http2Routes.cpp",
-    "transports/h2/handlers/Http2Handlers.cpp",
-    "transports/h2/handlers/Http2AuthHandlers.cpp",
-    "transports/h2/support/Http2AuthSupport.cpp",
-    "transports/h2/handlers/Http2CallHandlers.cpp",
-    "transports/h2/support/Http2CallSupport.cpp",
-    "transports/h2/handlers/Http2MediaHandlers.cpp",
-    "transports/h2/handlers/Http2ProfileHandlers.cpp",
-    "transports/h2/support/Http2MomentsSupport.cpp",
-    "transports/h2/support/Http2MediaSupport.h",
-    "transports/h2/support/Http2ProfileSupport.h",
-)
 H5_STALE_GATE_ARTIFACTS = (
     "message.proto",
     "message.pb.cc",
@@ -536,20 +514,12 @@ class GateServerStructureTests(unittest.TestCase):
         source = read(SERVER_CORE / "CMakeLists.txt")
 
         self.assertIn("add_subdirectory(GateShared/core)", source)
-        self.assertIn("add_subdirectory(GateShared/transports/h1/legacy_standalone)", source)
         self.assertIn("add_subdirectory(GateShared/plugins/r18)", source)
         self.assertIn("add_subdirectory(GateShared/transports/h3)", source)
         self.assertIn("add_subdirectory(GateShared)", source)
         self.assertTrue(GATE_CORE.exists(), "GateServerCore implementation should now live under GateServer/core")
         self.assertTrue(
             GATE_H3.exists(), "GateServerHttp3 implementation should now live under GateServer/transports/h3"
-        )
-        self.assertTrue(
-            GATE_H2.exists(), "GateServerHttp2 implementation should now live under GateShared/transports/h2"
-        )
-        self.assertTrue(
-            GATE_H1_LEGACY.exists(),
-            "GateServerHttp1.1 implementation should now live under GateServer/transports/h1/legacy_standalone",
         )
         self.assertTrue(GATE_R18_PLUGINS.exists(), "R18 helper targets should now live under GateServer/plugins/r18")
         self.assertFalse(
@@ -577,85 +547,15 @@ class GateServerStructureTests(unittest.TestCase):
         # per-service domain libraries, so they are now processed AFTER GateShared
         # and after the microservice subdirectories.
         self.assertLess(
-            source.index("add_subdirectory(GateShared)"),
-            source.index("add_subdirectory(GateShared/transports/h1/legacy_standalone)"),
-        )
-        self.assertLess(
             source.index("add_subdirectory(GateShared)"), source.index("add_subdirectory(GateShared/plugins/r18)")
         )
-        h1_subdir_window = extract_line_window(
-            source, "add_subdirectory(GateShared/transports/h1/legacy_standalone)", before=4, after=1
-        )
-        self.assertIn("legacy", h1_subdir_window.lower())
-        self.assertIn("R18", h1_subdir_window)
-
-    def test_root_cmake_gates_legacy_h2_standalone_subdirectory_behind_opt_in_and_libh2o(self):
-        source = read(SERVER_CORE / "CMakeLists.txt")
-        compact = normalize_space(source)
-
-        self.assertRegex(
-            compact,
-            rf"option\s*\(\s*{LEGACY_GATE_HTTP2_OPTION}\b[^)]*\bOFF\s*\)",
-        )
-        legacy_h2_block = extract_cmake_if_block(source, f"{LEGACY_GATE_HTTP2_OPTION} AND libh2o_FOUND")
-        self.assertIn("add_subdirectory(GateShared/transports/h2)", legacy_h2_block)
-        self.assertIn(LEGACY_GATE_HTTP2_OPTION, legacy_h2_block)
-        self.assertIn("libh2o_FOUND", legacy_h2_block)
-
-        outside_legacy_h2_gate = strip_cmake_comments(source.replace(legacy_h2_block, ""))
-        self.assertNotRegex(
-            outside_legacy_h2_gate,
-            r"\badd_subdirectory\s*\(\s*GateShared/transports/h2\s*\)",
-            "GateServerHttp2 must only be processed through the legacy standalone opt-in gate",
-        )
-        self.assertNotIn("FATAL_ERROR", legacy_h2_block)
-
-    def test_legacy_h1_standalone_executable_is_opt_in_and_default_off(self):
-        source = read(GATE_H1_LEGACY / "CMakeLists.txt")
-        compact = normalize_space(source)
-
-        self.assertRegex(
-            compact,
-            rf"option\s*\(\s*{LEGACY_GATE_HTTP1_OPTION}\b[^)]*\bOFF\s*\)",
-        )
-        legacy_block = extract_cmake_if_block(source, LEGACY_GATE_HTTP1_OPTION)
-        self.assertIn("add_executable(GateServerHttp1.1", legacy_block)
-        self.assertIn("memochat_configure_server_target(GateServerHttp1.1)", legacy_block)
-        self.assertIn("target_link_libraries(GateServerHttp1.1", legacy_block)
-        self.assertIn("target_include_directories(GateServerHttp1.1", legacy_block)
-        self.assertNotIn("R18PluginHost", legacy_block)
-        self.assertNotIn("R18MockSourcePlugin", legacy_block)
-
-        outside_legacy_gate = source.replace(legacy_block, "")
-        self.assertNotIn("add_executable(GateServerHttp1.1", outside_legacy_gate)
 
     def test_r18_plugin_helper_targets_stay_outside_legacy_standalone_gate(self):
-        source = read(GATE_H1_LEGACY / "CMakeLists.txt")
-        legacy_block = extract_cmake_if_block(source, LEGACY_GATE_HTTP1_OPTION)
-
-        self.assertNotIn("R18PluginHost", legacy_block)
-        self.assertNotIn("R18MockSourcePlugin", legacy_block)
-
         plugin_cmake = read(GATE_R18_PLUGINS / "CMakeLists.txt")
         self.assertIn("add_executable(R18PluginHost", plugin_cmake)
         self.assertIn("add_library(R18MockSourcePlugin SHARED", plugin_cmake)
         self.assertIn("target_compile_features(R18PluginHost", plugin_cmake)
         self.assertIn("target_compile_features(R18MockSourcePlugin", plugin_cmake)
-
-    def test_legacy_h1_readme_documents_opt_in_and_plugin_helper_ownership(self):
-        readme_path = GATE_H1_LEGACY / "README.md"
-        self.assertTrue(readme_path.exists())
-        source = read(readme_path)
-        lower_source = source.lower()
-
-        self.assertIn("legacy", lower_source)
-        self.assertIn("opt-in", lower_source)
-        self.assertIn("production", lower_source)
-        self.assertIn("default", lower_source)
-        self.assertIn("gateserver", lower_source)
-        self.assertIn("R18PluginHost", source)
-        self.assertIn("R18MockSourcePlugin", source)
-        self.assertIn("GateServer/plugins/r18", source)
 
     def test_default_ops_surfaces_do_not_list_legacy_h1_standalone_service(self):
         source = read(REPO_ROOT / "infra" / "Memo_ops" / "server" / "ops_server" / "routes" / "system.py")
@@ -783,21 +683,6 @@ class GateServerStructureTests(unittest.TestCase):
 
         # The retired monolith must not leave an embedded HTTP/2 opt-in behind.
         self.assertNotIn(EMBEDDED_GATE_HTTP2_OPTION, source)
-
-    def test_standalone_h2_target_builds_adapter_and_shared_health_registry_sources(self):
-        source = read(GATE_H2 / "CMakeLists.txt")
-
-        self.assertIn("add_executable(GateServerHttp2", source)
-        self.assertIn("adapters/h2/H2RouteAdapter.cpp", source)
-        self.assertIn("routes/Http2Routes.cpp", source)
-        self.assertIn("handlers/Http2AuthHandlers.cpp", source)
-        self.assertIn("support/Http2AuthSupport.cpp", source)
-        self.assertIn("standalone/main.cpp", source)
-        self.assertIn("../../routing/RouteRegistry.cpp", source)
-        self.assertIn("../../modules/health/HealthRouteModule.cpp", source)
-        self.assertIn("${CMAKE_CURRENT_SOURCE_DIR}/../..", source)
-        self.assertIn("${CMAKE_CURRENT_SOURCE_DIR}/../../../common", source)
-        self.assertNotIn("${CMAKE_CURRENT_SOURCE_DIR}/common", source)
 
     def test_standalone_h3_target_builds_named_adapter_source(self):
         source = read(GATE_H3 / "CMakeLists.txt")
@@ -1439,13 +1324,9 @@ class GateServerStructureTests(unittest.TestCase):
 
     def test_route_registration_surfaces_are_still_transport_specific(self):
         logic_header = read(SERVER_CORE / "GateShared" / "LogicSystem.h")
-        h2_header = read(GATE_H2_ROUTES / "Http2Routes.h")
-        h1_header = read(GATE_H1_LEGACY / "H1LogicSystem.h")
 
         self.assertIn("std::shared_ptr<HttpConnection>", logic_header)
         self.assertIn("std::shared_ptr<GateHttp3Connection>", logic_header)
-        self.assertIn("static void RegisterHandler(const std::string& method", h2_header)
-        self.assertIn("std::shared_ptr<H1Connection>", h1_header)
 
     def test_neutral_routing_contract_files_exist_and_stay_transport_neutral(self):
         routing_dir = SERVER_CORE / "GateShared" / "routing"
@@ -1502,7 +1383,6 @@ class GateServerStructureTests(unittest.TestCase):
             "GateRequest Mapping",
             "GateResponse Mapping",
             "H1 Adapter",
-            "H2 Adapter",
             "H3 Adapter",
             "Legacy Adapter Exceptions",
             "Later Slice Gates",
@@ -1565,160 +1445,6 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertIn("_route_registry.Dispatch(request, response)", compact)
                 self.assertLess(compact.index(handler_map), compact.index("_route_registry.Dispatch"))
                 self.assertLess(compact.index(prefix_map), compact.index("_route_registry.Dispatch"))
-
-    def test_h2_routes_keep_current_adapter_source_shape_and_map_dispatch(self):
-        header = strip_comments(read(GATE_H2_ROUTES / "Http2Routes.h"))
-        source = strip_comments(read(GATE_H2_ROUTES / "Http2Routes.cpp"))
-        compact_source = normalize_space(source)
-
-        request_match = re.search(r"struct\s+Http2Request\s*\{(?P<body>.*?)\};", header, re.S)
-        self.assertIsNotNone(request_match)
-        request_body = request_match.group("body")
-        for field in ("method", "path", "query", "body", "remote_addr", "trace_id", "headers"):
-            with self.subTest(request_field=field):
-                self.assertRegex(request_body, rf"\b{re.escape(field)}\b")
-
-        response_match = re.search(r"struct\s+Http2Response\s*\{(?P<body>.*?)\n\};", header, re.S)
-        self.assertIsNotNone(response_match)
-        response_body = response_match.group("body")
-        for field in ("status_code", "status_message", "body", "content_type", "headers"):
-            with self.subTest(response_field=field):
-                self.assertRegex(response_body, rf"\b{re.escape(field)}\b")
-
-        self.assertIn("static void HandleRequest(const Http2Request& req, Http2Response& resp)", header)
-        self.assertIn(
-            "static void RegisterHandler(const std::string& method, const std::string& path, Http2Handler handler)",
-            header,
-        )
-        self.assertIn("void Http2Routes::RegisterHandler", source)
-        self.assertIn("void Http2Routes::HandleRequest", source)
-        self.assertIn("static std::unordered_map<RouteKey, Http2Handler, RouteKeyHash> g_routes", source)
-        self.assertIn("g_routes[{method, path}] = std::move(handler)", compact_source)
-        self.assertIn("auto it = g_routes.find(key)", compact_source)
-        self.assertIn("it->second(req, resp)", compact_source)
-
-    def test_h2_route_adapter_owns_request_response_and_registry_dispatch_mapping(self):
-        adapter_dir = GATE_H2 / "adapters" / "h2"
-        header_path = adapter_dir / "H2RouteAdapter.h"
-        source_path = adapter_dir / "H2RouteAdapter.cpp"
-
-        self.assertTrue(header_path.exists())
-        self.assertTrue(source_path.exists())
-
-        header = strip_comments(read(header_path))
-        raw_source = read(source_path)
-        source = strip_comments(read(source_path))
-        combined = header + "\n" + source
-        compact_header = normalize_space(header)
-
-        self.assertTrue(raw_source.startswith('#include "WinCompat.h"'))
-        self.assertIn("namespace memochat::gate::adapters::h2", combined)
-        self.assertIn("class H2RouteAdapter", header)
-        self.assertRegex(
-            compact_header,
-            r"static memochat::gate::routing::GateRequest BuildGateRequest\s*\(\s*const Http2Request&",
-        )
-        self.assertRegex(
-            compact_header,
-            r"static void ApplyGateResponse\s*\(\s*const memochat::gate::routing::GateResponse&",
-        )
-        self.assertRegex(
-            compact_header,
-            r"static bool Dispatch\s*\(\s*const Http2Request&",
-        )
-
-        request_body = extract_function_body(
-            source,
-            r"memochat::gate::routing::GateRequest\s+H2RouteAdapter::BuildGateRequest\s*\(",
-        )
-        apply_body = extract_function_body(
-            source,
-            r"void\s+H2RouteAdapter::ApplyGateResponse\s*\(",
-        )
-        dispatch_body = extract_function_body(
-            source,
-            r"bool\s+H2RouteAdapter::Dispatch\s*\(",
-        )
-        compact_dispatch = normalize_space(dispatch_body)
-
-        for token in (
-            "request.method",
-            "request.path",
-            "request.query",
-            "request.headers",
-            "request.body",
-            "request.trace_id",
-            "request.remote_addr",
-            "remote_address",
-        ):
-            with self.subTest(request_mapping_token=token):
-                self.assertIn(token, request_body)
-
-        for token in (
-            "route_response.status",
-            "SetStatus",
-            "route_response.content_type",
-            "route_response.headers",
-            "GateResponseBodyKind::Inline",
-            "route_response.body",
-            "GateResponseBodyKind::File",
-            "ReadFileBody",
-            "route_response.file_path",
-            "response.body = *file_body",
-            "application/octet-stream",
-            "404",
-        ):
-            with self.subTest(response_mapping_token=token):
-                self.assertIn(token, apply_body)
-        self.assertNotIn("not supported", apply_body.lower())
-
-        self.assertIn("TraceContext", dispatch_body)
-        self.assertIn("registry.Dispatch", compact_dispatch)
-        self.assertLess(compact_dispatch.index("TraceContext"), compact_dispatch.index("registry.Dispatch"))
-
-    def test_h2_health_routes_delegate_through_shared_registry_adapter(self):
-        source = strip_comments(read(GATE_H2_ROUTES / "Http2Routes.cpp"))
-        compact_source = normalize_space(source)
-
-        for token in (
-            "adapters/h2/H2RouteAdapter.h",
-            "GateRouteProfileRegistrar.h",
-            "modules/health/HealthRouteModule.h",
-            "RouteRegistry",
-            'HealthRouteModule("GateServerHttp2")',
-            "RegisterAccount(routes)",
-            "RegisterAccountUserInfo(routes)",
-            "RegisterCall(routes)",
-            "RegisterMedia(routes)",
-            "RegisterMoments(routes)",
-        ):
-            with self.subTest(token=token):
-                self.assertIn(token, source)
-
-        for route in (
-            "/healthz",
-            "/readyz",
-            "/user_update_profile",
-            "/get_user_info",
-            "/api/call/start",
-            "/api/call/token",
-            "/upload_media_init",
-            "/upload_media_chunk",
-            "/api/moments/publish",
-            "/api/moments/comment/like",
-        ):
-            with self.subTest(route=route):
-                self.assertRegex(
-                    compact_source,
-                    rf'RegisterHandler\s*\(\s*"(?:GET|POST)"\s*,\s*"{re.escape(route)}"\s*,\s*DispatchSharedRoute',
-                )
-
-        dispatch_shared_body = extract_function_body(
-            source,
-            r"void\s+DispatchSharedRoute\s*\(",
-        )
-        self.assertIn("H2RouteAdapter::Dispatch", dispatch_shared_body)
-        self.assertIn("SharedRouteRegistry()", dispatch_shared_body)
 
     def test_h3_route_adapter_files_exist_and_declare_contract(self):
         adapter_dir = GATE_H3 / "adapters" / "h3"
@@ -2405,60 +2131,6 @@ class GateServerStructureTests(unittest.TestCase):
         for token in ("VerifyGrpcClient", "->GetVarifyCode(", "GetVarifyRsp"):
             with self.subTest(forbidden_direct_verify_token=token):
                 self.assertNotIn(token, service_source)
-
-    def test_h2_auth_support_is_thin_auth_service_adapter(self):
-        source = strip_comments(read(GATE_H2_SUPPORT / "Http2AuthSupport.cpp"))
-        compact_source = normalize_space(source)
-
-        for token in (
-            "services/auth/AuthService.h",
-            "routing/GateRequest.h",
-            "routing/GateResponse.h",
-            "using AuthHandler",
-            "BuildAuthRequest",
-            "FromGateResponse",
-            "DispatchAuthRoute",
-            "AuthService::Instance()",
-            "HandleUserLogout",
-            "AuthCache::Instance().DeleteHttpToken",
-        ):
-            with self.subTest(required_token=token):
-                self.assertIn(token, source)
-
-        for route, handler in {
-            "/get_varifycode": "HandleGetVarifyCode",
-            "/user_register": "HandleUserRegister",
-            "/reset_pwd": "HandleResetPwd",
-            "/user_login": "HandleUserLogin",
-        }.items():
-            with self.subTest(route=route):
-                self.assertIn(f'DispatchAuthRoute("{route}"', compact_source)
-                self.assertIn(f"&AuthService::{handler}", compact_source)
-
-        forbidden_auth_impl_tokens = (
-            '#include "AuthVerifyClient.h"',
-            '#include "PostgresMgr.h"',
-            '#include "PostgresDao.h"',
-            '#include "GateAsyncSideEffects.h"',
-            '#include "AuthLoginSupport.h"',
-            '#include "auth/ChatLoginTicket.h"',
-            "AuthVerifyClient::Instance().RequestVerifyCode",
-            "PostgresMgr::GetInstance()->RegUser",
-            "PostgresMgr::GetInstance()->GetUserPublicId",
-            "PostgresMgr::GetInstance()->CheckEmail",
-            "PostgresMgr::GetInstance()->UpdatePwd",
-            "PostgresMgr::GetInstance()->CheckPwd",
-            "GateAsyncSideEffects::Instance()",
-            "gateauthsupport::",
-            "ChatLoginTicketClaims",
-            "EncodeTicket",
-            "boost::uuids::random_generator",
-            "CODEPREFIX",
-            "USERTOKENPREFIX",
-        )
-        for token in forbidden_auth_impl_tokens:
-            with self.subTest(forbidden_token=token):
-                self.assertNotIn(token, source)
 
     def test_h3_auth_routes_dispatch_through_shared_registry_adapter(self):
         source = strip_comments(read(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp"))
