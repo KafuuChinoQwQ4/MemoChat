@@ -79,8 +79,7 @@ TEST(AsioExecProdPath, PathA_TaskStickyOnIoContextScheduler)
     std::atomic<int> mismatches{0};
 
     IoContextScheduler io_sched{&ctx};
-    auto [result] =
-        stdexec::sync_wait(stdexec::on(io_sched, CoroOnIoContext(timer, io_tid, mismatches))).value();
+    auto [result] = stdexec::sync_wait(stdexec::on(io_sched, CoroOnIoContext(timer, io_tid, mismatches))).value();
 
     EXPECT_EQ(result, 42);
     EXPECT_EQ(mismatches.load(), 0) << "协程没有全程跑在 io_context 线程上";
@@ -93,8 +92,7 @@ TEST(AsioExecProdPath, PathA_TaskStickyOnIoContextScheduler)
 // 路径 B:exec::basic_task<T, inline_task_context>(无亲和),无需外部 scheduler。
 // co_await asio op 后续体留在 completion(=io_context)线程。
 // ---------------------------------------------------------------------------
-template <typename T>
-using inline_task = exec::basic_task<T, exec::__task::inline_task_context<T>>;
+template <typename T> using inline_task = exec::basic_task<T, exec::__task::inline_task_context<T>>;
 
 inline_task<int> CoroInline(net::steady_timer& timer, std::thread::id io_tid, std::atomic<int>& mismatches)
 {
@@ -184,7 +182,11 @@ TEST(AsioExecProdPath, PathA_ReadLoopStaysOnIoContextThread)
     tcp::socket client(ctx);
 
     std::promise<void> connected;
-    acceptor.async_accept(server, [&](const boost::system::error_code&) { connected.set_value(); });
+    acceptor.async_accept(server,
+                          [&](const boost::system::error_code&)
+                          {
+                              connected.set_value();
+                          });
     client.async_connect(ep, [](const boost::system::error_code&) {});
     connected.get_future().wait();
 
@@ -228,12 +230,13 @@ TEST(AsioExecProdPath, PathA_ReadLoopStaysOnIoContextThread)
 struct UnwindFlag
 {
     std::atomic<bool>* unwound_;
-    ~UnwindFlag() { unwound_->store(true); }
+    ~UnwindFlag()
+    {
+        unwound_->store(true);
+    }
 };
 
-exec::task<void> TimerLoopCancellable(net::steady_timer& timer,
-                                      std::atomic<int>& rounds,
-                                      std::atomic<bool>& unwound)
+exec::task<void> TimerLoopCancellable(net::steady_timer& timer, std::atomic<int>& rounds, std::atomic<bool>& unwound)
 {
     auto self_guard = UnwindFlag{&unwound}; // cancel 时应析构
     while (true)
@@ -248,7 +251,11 @@ TEST(AsioExecProdPath, TimerCancelStopsCoroutineGracefully)
 {
     net::io_context ctx;
     auto work = net::make_work_guard(ctx);
-    std::thread io_thread([&] { ctx.run(); });
+    std::thread io_thread(
+        [&]
+        {
+            ctx.run();
+        });
 
     net::steady_timer timer(ctx);
     std::atomic<int> rounds{0};
@@ -261,7 +268,11 @@ TEST(AsioExecProdPath, TimerCancelStopsCoroutineGracefully)
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     // 取消:operation_aborted → set_stopped → 协程展开退出。
-    net::post(ctx, [&] { timer.cancel(); });
+    net::post(ctx,
+              [&]
+              {
+                  timer.cancel();
+              });
 
     // 等协程展开(unwound 置位),最多 ~1s。
     bool released = false;
@@ -300,7 +311,11 @@ TEST(AsioExecProdPath, AcceptorCancelStopsCoroutineGracefully)
 {
     net::io_context ctx;
     auto work = net::make_work_guard(ctx);
-    std::thread io_thread([&] { ctx.run(); });
+    std::thread io_thread(
+        [&]
+        {
+            ctx.run();
+        });
 
     tcp::acceptor acceptor(ctx, tcp::endpoint(tcp::v4(), 0));
     std::atomic<int> accepted{0};
@@ -311,7 +326,11 @@ TEST(AsioExecProdPath, AcceptorCancelStopsCoroutineGracefully)
 
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-    net::post(ctx, [&] { acceptor.cancel(); });
+    net::post(ctx,
+              [&]
+              {
+                  acceptor.cancel();
+              });
 
     bool released = false;
     for (int i = 0; i < 100; ++i)

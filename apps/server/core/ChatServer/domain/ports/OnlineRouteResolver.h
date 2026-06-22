@@ -33,13 +33,14 @@ struct OnlineRouteDecision
     bool local_session_found = false;
 };
 
-// Single source of truth for "where is uid reachable right now?" used by every
-// delivery path (synchronous push, async event fan-out, ...). Pure decision
-// logic over the session-registry and online-route-store seams; performs the
-// self-healing route repair/clear side effects those seams already own, but no
-// I/O of its own. Callers branch on `kind` and send accordingly.
+// PURE decision: "where is uid reachable right now?" — reads the session-registry
+// and online-route-store seams and returns the decision, performing NO writes.
+// This is the test surface: a fake store can assert DecideOnlineRoute never
+// mutates across all four kinds. Most callers want ResolveOnlineRoute (decide +
+// self-heal); reach for this directly only when the self-healing writes must be
+// suppressed or applied separately.
 inline OnlineRouteDecision
-ResolveOnlineRoute(int uid, ISessionRegistry* session_registry, IOnlineRouteStore* online_route_store)
+DecideOnlineRoute(int uid, ISessionRegistry* session_registry, IOnlineRouteStore* online_route_store)
 {
     OnlineRouteDecision route;
     if (uid <= 0 || !session_registry || !online_route_store)
@@ -55,7 +56,6 @@ ResolveOnlineRoute(int uid, ISessionRegistry* session_registry, IOnlineRouteStor
         route.session = session;
         route.redis_server = self_name;
         route.local_session_found = true;
-        online_route_store->RepairOnlineRoute(uid, session);
         return route;
     }
 
@@ -87,7 +87,41 @@ ResolveOnlineRoute(int uid, ISessionRegistry* session_registry, IOnlineRouteStor
     }
 
     route.kind = OnlineRouteKind::Stale;
-    online_route_store->ClearTrackedOnlineRoute(uid, self_name);
+    return route;
+}
+
+// Self-healing writes implied by a resolved route, applied as an explicit, named
+// step (no longer buried inside the decision branches): a Local route re-anchors
+// the tracked online route to this node; a Stale route clears the dangling track.
+// Idempotent and safe to call once per decision; Remote/Offline are no-ops.
+inline void ApplyOnlineRouteSelfHeal(const OnlineRouteDecision& route, int uid, IOnlineRouteStore* online_route_store)
+{
+    if (uid <= 0 || !online_route_store)
+    {
+        return;
+    }
+    if (route.kind == OnlineRouteKind::Local && route.session)
+    {
+        const auto& session = route.session;
+        online_route_store->RepairOnlineRoute(uid, session);
+    }
+    else if (route.kind == OnlineRouteKind::Stale)
+    {
+        const auto self_name = online_route_store->SelfServerName();
+        online_route_store->ClearTrackedOnlineRoute(uid, self_name);
+    }
+}
+
+// Single source of truth for "where is uid reachable right now?" used by every
+// delivery path (synchronous push, async event fan-out, ...). Deep entry that
+// composes the pure DecideOnlineRoute with the self-healing route repair/clear
+// the online-route-store seam owns — preserving the original behavior (Local
+// re-anchors the route, Stale clears it) in one place. Callers branch on `kind`.
+inline OnlineRouteDecision
+ResolveOnlineRoute(int uid, ISessionRegistry* session_registry, IOnlineRouteStore* online_route_store)
+{
+    OnlineRouteDecision route = DecideOnlineRoute(uid, session_registry, online_route_store);
+    ApplyOnlineRouteSelfHeal(route, uid, online_route_store);
     return route;
 }
 

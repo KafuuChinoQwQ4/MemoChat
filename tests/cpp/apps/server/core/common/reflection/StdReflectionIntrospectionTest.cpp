@@ -94,4 +94,3 @@ TEST(StdReflectionIntrospectionTest, ListsLoginTicketClaimFieldsWithoutOwningJso
     GTEST_SKIP() << "C++26 reflection is disabled for this target";
 #endif
 }
-

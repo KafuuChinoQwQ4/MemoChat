@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from langgraph.graph import END, StateGraph
-
 from harness.games.contracts import GameState
 from harness.games.rules import GameRuleEngine
+from langgraph.graph import END, StateGraph
 
 StateResolver = Callable[[str], GameState]
 EngineResolver = Callable[[str], GameRuleEngine]

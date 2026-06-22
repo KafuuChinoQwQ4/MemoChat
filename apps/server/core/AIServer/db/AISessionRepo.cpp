@@ -12,8 +12,6 @@
 #include <mutex>
 #include <sstream>
 
-using namespace std::chrono;
-
 namespace
 {
 
@@ -61,7 +59,9 @@ AISessionRepo::~AISessionRepo() = default;
 std::string AISessionRepo::Create(int32_t uid, const std::string& model_type, const std::string& model_name)
 {
     std::string session_id = GenUuid();
-    int64_t now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+    int64_t now =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count();
 
     try
     {
@@ -91,7 +91,9 @@ std::string AISessionRepo::Create(int32_t uid, const std::string& model_type, co
 
 bool AISessionRepo::SoftDelete(const std::string& session_id)
 {
-    int64_t now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+    int64_t now =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count();
     try
     {
         std::lock_guard<std::mutex> lock(_impl->mutex);
@@ -113,7 +115,9 @@ bool AISessionRepo::SoftDelete(const std::string& session_id)
 
 bool AISessionRepo::UpdateTitle(int32_t uid, const std::string& session_id, const std::string& title)
 {
-    int64_t now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+    int64_t now =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count();
     try
     {
         std::lock_guard<std::mutex> lock(_impl->mutex);
@@ -213,7 +217,9 @@ bool AISessionRepo::SaveMessage(const std::string& session_id,
                                 int64_t tokens_used)
 {
     std::string msg_id = GenUuid();
-    int64_t now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+    int64_t now =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count();
 
     try
     {

@@ -29,9 +29,8 @@ void FillUserInfoFromChatUserProfile(const ChatUserProfileDto& profile, UserInfo
 bool EncodeChatUserProfileCache(const ChatUserProfileDto& profile, std::string* out, std::string* error_out = nullptr);
 bool DecodeChatUserProfileCache(std::string_view body, ChatUserProfileDto* out, std::string* error_out = nullptr);
 
-memochat::json::JsonValue ChatUserProfileToJsonValue(const ChatUserProfileDto& profile,
-                                                     bool include_pwd,
-                                                     bool include_icon);
+memochat::json::JsonValue
+ChatUserProfileToJsonValue(const ChatUserProfileDto& profile, bool include_pwd, bool include_icon);
 void AppendChatUserProfileToJsonValue(const ChatUserProfileDto& profile,
                                       memochat::json::JsonValue& out,
                                       bool include_pwd,

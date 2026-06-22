@@ -115,21 +115,6 @@ Window {
                                                           root.modelProviderAvailable())
     }
 
-    function cameraDiagnosticText() {
-        return PetControlRuntime.cameraDiagnosticText(root.cameraEnabled,
-                                                     root.cameraCaptureStatus)
-    }
-
-    function cloudVisionDiagnosticText() {
-        return PetControlRuntime.cloudVisionDiagnosticText(root.localOnlyMode,
-                                                          root.cloudVisionEnabled,
-                                                          root.modelProviderAvailable())
-    }
-
-    function retentionDiagnosticText() {
-        return PetControlRuntime.retentionDiagnosticText(root.debugRetentionEnabled)
-    }
-
     function requestLocalOnlyMode(checked) {
         if (checked && root.cloudVisionEnabled) {
             root.cloudVisionToggled(false)
@@ -143,13 +128,6 @@ Window {
             return
         }
         root.cloudVisionToggled(checked)
-    }
-
-    function sendQuickText(text) {
-        if (!root.petController || text.length === 0) {
-            return
-        }
-        root.petController.sendText(text)
     }
 
     function requestLive2DAction(action) {
@@ -211,25 +189,11 @@ Window {
                         onClicked: root.chatRequested()
                     }
 
-                    GridLayout {
+                    PetMenuButton {
                         Layout.fillWidth: true
-                        columns: 2
-                        rowSpacing: 8
-                        columnSpacing: 8
-
-                        PetMenuButton {
-                            Layout.fillWidth: true
-                            text: "打招呼"
-                            enabled: root.petController
-                            onClicked: root.sendQuickText("向我打个招呼")
-                        }
-
-                        PetMenuButton {
-                            Layout.fillWidth: true
-                            text: "打断"
-                            enabled: root.petController && root.petController.sessionId.length > 0
-                            onClicked: root.petController.interrupt()
-                        }
+                        text: "打断"
+                        enabled: root.petController && root.petController.sessionId.length > 0
+                        onClicked: root.petController.interrupt()
                     }
 
                     Rectangle {
@@ -281,15 +245,6 @@ Window {
                         onToggled: function(checked) { root.cameraToggled(checked) }
                     }
 
-                    Label {
-                        Layout.fillWidth: true
-                        visible: root.cameraEnabled
-                        text: root.cameraCaptureStatus
-                        color: "#9fb0c3"
-                        font.pixelSize: 11
-                        elide: Text.ElideRight
-                    }
-
                     OptionSwitch {
                         Layout.fillWidth: true
                         text: "云视觉"
@@ -310,29 +265,6 @@ Window {
                         text: "语音回复"
                         checked: root.voiceReplyEnabled
                         onToggled: function(checked) { root.voiceReplyToggled(checked) }
-                    }
-
-                    OptionSwitch {
-                        Layout.fillWidth: true
-                        text: "调试"
-                        checked: root.debugPanelVisible
-                        onToggled: function(checked) { root.debugToggled(checked) }
-                    }
-
-                    OptionSwitch {
-                        Layout.fillWidth: true
-                        visible: root.debugPanelVisible
-                        text: "调试保留"
-                        checked: root.debugRetentionEnabled
-                        onToggled: function(checked) { root.debugRetentionToggled(checked) }
-                    }
-
-                    PetVisionPrivacyCard {
-                        cameraDiagnosticText: root.cameraDiagnosticText()
-                        cloudVisionDiagnosticText: root.cloudVisionDiagnosticText()
-                        retentionDiagnosticText: root.retentionDiagnosticText()
-                        cloudVisionEnabled: root.cloudVisionRuntimeEnabled()
-                        debugRetentionEnabled: root.debugRetentionEnabled
                     }
 
                     ColumnLayout {

@@ -382,9 +382,8 @@ bool PetAssetSettings::bindAccount(int uid, const QString& userId)
     _account_key = nextAccountKey;
     _storage_path = nextStoragePath;
     applyDefaults(false);
-    _status_text = _account_key.isEmpty()
-        ? QStringLiteral("已切换到未登录草稿")
-        : QStringLiteral("已切换账号草稿：%1").arg(_account_key);
+    _status_text = _account_key.isEmpty() ? QStringLiteral("已切换到未登录草稿")
+                                          : QStringLiteral("已切换账号草稿：%1").arg(_account_key);
     emit settingsChanged();
     return true;
 }
@@ -411,6 +410,5 @@ QString PetAssetSettings::accountStoragePath(const QString& accountKey) const
     {
         root = QDir::home().absoluteFilePath(QStringLiteral(".memochat"));
     }
-    return QDir(root).absoluteFilePath(
-        QStringLiteral("pet/users/%1/live2d-character-draft.json").arg(accountKey));
+    return QDir(root).absoluteFilePath(QStringLiteral("pet/users/%1/live2d-character-draft.json").arg(accountKey));
 }

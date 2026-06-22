@@ -12,16 +12,31 @@ std::vector<memochat::gate::routing::RouteSchemaDescriptor> MomentsRouteModule::
     using memochat::gate::routing::MakeRouteSchema;
 
     return {
-        MakeRouteSchema<svc::MomentPublishRequestDto, svc::MomentIdResponseDto>(
-            "POST", "/api/moments/publish", "moments.publish", "MomentPublishRequestDto", "MomentIdResponseDto"),
-        MakeRouteSchema<svc::MomentListRequestDto, svc::MomentListResponseDto>(
-            "POST", "/api/moments/list", "moments.list", "MomentListRequestDto", "MomentListResponseDto"),
-        MakeRouteSchema<svc::MomentIdRequestDto, svc::MomentDetailResponseDto>(
-            "POST", "/api/moments/detail", "moments.detail", "MomentIdRequestDto", "MomentDetailResponseDto"),
-        MakeRouteSchema<svc::MomentIdRequestDto, svc::MomentIdResponseDto>(
-            "POST", "/api/moments/delete", "moments.delete", "MomentIdRequestDto", "MomentIdResponseDto"),
-        MakeRouteSchema<svc::MomentLikeRequestDto, svc::MomentLikeResponseDto>(
-            "POST", "/api/moments/like", "moments.like", "MomentLikeRequestDto", "MomentLikeResponseDto"),
+        MakeRouteSchema<svc::MomentPublishRequestDto, svc::MomentIdResponseDto>("POST",
+                                                                                "/api/moments/publish",
+                                                                                "moments.publish",
+                                                                                "MomentPublishRequestDto",
+                                                                                "MomentIdResponseDto"),
+        MakeRouteSchema<svc::MomentListRequestDto, svc::MomentListResponseDto>("POST",
+                                                                               "/api/moments/list",
+                                                                               "moments.list",
+                                                                               "MomentListRequestDto",
+                                                                               "MomentListResponseDto"),
+        MakeRouteSchema<svc::MomentIdRequestDto, svc::MomentDetailResponseDto>("POST",
+                                                                               "/api/moments/detail",
+                                                                               "moments.detail",
+                                                                               "MomentIdRequestDto",
+                                                                               "MomentDetailResponseDto"),
+        MakeRouteSchema<svc::MomentIdRequestDto, svc::MomentIdResponseDto>("POST",
+                                                                           "/api/moments/delete",
+                                                                           "moments.delete",
+                                                                           "MomentIdRequestDto",
+                                                                           "MomentIdResponseDto"),
+        MakeRouteSchema<svc::MomentLikeRequestDto, svc::MomentLikeResponseDto>("POST",
+                                                                               "/api/moments/like",
+                                                                               "moments.like",
+                                                                               "MomentLikeRequestDto",
+                                                                               "MomentLikeResponseDto"),
         MakeRouteSchema<svc::MomentCommentRequestDto, svc::MomentCommentMutationResponseDto>(
             "POST",
             "/api/moments/comment",

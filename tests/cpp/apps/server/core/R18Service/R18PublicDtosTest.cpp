@@ -46,8 +46,8 @@ memochat::json::JsonValue Parse(std::string_view body)
 TEST(R18PublicDtosTest, DecodesSourceToggleRequest)
 {
     memochat::r18::R18SourceToggleRequestDto request;
-    ASSERT_TRUE(memochat::r18::DecodeR18SourceToggleRequest(
-        R"({"uid":42,"token":"tok","source_id":"builtin"})", &request));
+    ASSERT_TRUE(
+        memochat::r18::DecodeR18SourceToggleRequest(R"({"uid":42,"token":"tok","source_id":"builtin"})", &request));
 
     EXPECT_EQ(request.uid, 42);
     EXPECT_EQ(request.token, "tok");

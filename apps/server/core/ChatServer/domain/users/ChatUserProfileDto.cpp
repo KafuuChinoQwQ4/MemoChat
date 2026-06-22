@@ -78,9 +78,8 @@ bool DecodeChatUserProfileCache(std::string_view body, ChatUserProfileDto* out, 
     }
 }
 
-memochat::json::JsonValue ChatUserProfileToJsonValue(const ChatUserProfileDto& profile,
-                                                     bool include_pwd,
-                                                     bool include_icon)
+memochat::json::JsonValue
+ChatUserProfileToJsonValue(const ChatUserProfileDto& profile, bool include_pwd, bool include_icon)
 {
     memochat::json::JsonValue out(memochat::json::object_t{});
     AppendChatUserProfileToJsonValue(profile, out, include_pwd, include_icon);

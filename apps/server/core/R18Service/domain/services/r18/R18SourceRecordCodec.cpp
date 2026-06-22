@@ -88,9 +88,7 @@ memochat::json::JsonValue R18SourceRecordToJsonValue(const R18SourceRecord& reco
     return value;
 }
 
-bool R18SourceRecordFromJsonValue(const memochat::json::JsonValue& value,
-                                  R18SourceRecord* out,
-                                  std::string* error_out)
+bool R18SourceRecordFromJsonValue(const memochat::json::JsonValue& value, R18SourceRecord* out, std::string* error_out)
 {
     return DecodeR18SourceRecord(memochat::json::glaze_stringify(value), out, error_out);
 }

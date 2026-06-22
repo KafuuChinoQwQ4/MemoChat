@@ -28,8 +28,8 @@ memochat::json::JsonValue MakeMessagePayload()
 
 TEST(MessageDeliveryTaskPayloadTest, BuildsTypedTaskPayloadJsonWithDynamicNestedPayload)
 {
-    const memochat::json::JsonValue task = memochat::chat::delivery::BuildDeliveryTaskPayloadJson(
-        42, 1001, MakeMessagePayload(), 7, "rpc_failed");
+    const memochat::json::JsonValue task =
+        memochat::chat::delivery::BuildDeliveryTaskPayloadJson(42, 1001, MakeMessagePayload(), 7, "rpc_failed");
 
     ASSERT_TRUE(task.isObject());
     EXPECT_EQ(task["recipient_uid"].asInt(), 42);
@@ -42,8 +42,8 @@ TEST(MessageDeliveryTaskPayloadTest, BuildsTypedTaskPayloadJsonWithDynamicNested
 
 TEST(MessageDeliveryTaskPayloadTest, ParsesTypedTaskPayloadJson)
 {
-    const memochat::json::JsonValue task = memochat::chat::delivery::BuildDeliveryTaskPayloadJson(
-        42, 1001, MakeMessagePayload(), 7, "offline");
+    const memochat::json::JsonValue task =
+        memochat::chat::delivery::BuildDeliveryTaskPayloadJson(42, 1001, MakeMessagePayload(), 7, "offline");
 
     memochat::chat::delivery::MessageDeliveryTaskPayload parsed;
     ASSERT_TRUE(memochat::chat::delivery::ParseDeliveryTaskPayload(task, &parsed));

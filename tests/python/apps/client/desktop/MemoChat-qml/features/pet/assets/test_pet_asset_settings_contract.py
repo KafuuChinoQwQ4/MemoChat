@@ -91,7 +91,9 @@ REQUIRED_PROPERTIES = (
 )
 
 PERSISTED_DRAFT_FIELDS = tuple(
-    prop for prop in REQUIRED_PROPERTIES if prop not in {"accountUid", "accountKey", "storagePath", "dirty", "statusText"}
+    prop
+    for prop in REQUIRED_PROPERTIES
+    if prop not in {"accountUid", "accountKey", "storagePath", "dirty", "statusText"}
 )
 
 REQUIRED_INVOKABLES = (

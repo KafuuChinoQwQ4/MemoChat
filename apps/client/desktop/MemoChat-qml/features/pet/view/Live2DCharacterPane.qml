@@ -493,8 +493,6 @@ Rectangle {
                             text: root.assetStatusLabel()
                             colorBase: root.assetStatusColor()
                         }
-                        Live2DStatusChip { text: "语音" ; colorBase: root.accentGreen }
-                        Live2DStatusChip { text: "人设" ; colorBase: root.accentRose }
 
                         Label {
                             Layout.fillWidth: true

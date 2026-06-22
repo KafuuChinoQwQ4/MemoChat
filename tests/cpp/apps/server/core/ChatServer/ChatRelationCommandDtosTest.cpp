@@ -35,21 +35,11 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::relation::Ch
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::relation::ChatDialogListResponseDto>(
     std::array<std::string_view, 3>{"error", "uid", "dialogs"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::relation::ChatSyncDraftRequestDto>(
-    std::array<std::string_view, 7>{"uid",
-                                    "dialog_type",
-                                    "peer_uid",
-                                    "group_id",
-                                    "draft_text",
-                                    "has_mute_state",
-                                    "mute_state"}));
+    std::array<std::string_view,
+               7>{"uid", "dialog_type", "peer_uid", "group_id", "draft_text", "has_mute_state", "mute_state"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::relation::ChatSyncDraftResponseDto>(
-    std::array<std::string_view, 7>{"error",
-                                    "uid",
-                                    "dialog_type",
-                                    "peer_uid",
-                                    "draft_text",
-                                    "mute_state",
-                                    "group_id"}));
+    std::array<std::string_view,
+               7>{"error", "uid", "dialog_type", "peer_uid", "draft_text", "mute_state", "group_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::relation::ChatPinDialogRequestDto>(
     std::array<std::string_view, 5>{"uid", "dialog_type", "peer_uid", "group_id", "pinned_rank"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::relation::ChatPinDialogResponseDto>(
@@ -191,13 +181,12 @@ TEST(ChatRelationCommandDtosTest, ReadsAuthFriendApplyRequestAndLabels)
 
 TEST(ChatRelationCommandDtosTest, PreservesRelationAliasPrecedence)
 {
-    const auto deleted = memochat::chat::relation::ChatDeleteFriendRequestFromJsonValue(
-        Parse(R"({"fromuid":2,"friend_uid":4})"));
+    const auto deleted =
+        memochat::chat::relation::ChatDeleteFriendRequestFromJsonValue(Parse(R"({"fromuid":2,"friend_uid":4})"));
     EXPECT_EQ(deleted.uid, 2);
     EXPECT_EQ(deleted.friend_uid, 4);
 
-    const auto dialog =
-        memochat::chat::relation::ChatDialogListRequestFromJsonValue(Parse(R"({"fromuid":9})"));
+    const auto dialog = memochat::chat::relation::ChatDialogListRequestFromJsonValue(Parse(R"({"fromuid":9})"));
     EXPECT_EQ(dialog.uid, 9);
 }
 
@@ -237,10 +226,10 @@ TEST(ChatRelationCommandDtosTest, WritesDialogListResponsePayload)
     EXPECT_FALSE(invalid_json.isMember("dialogs"));
 
     memochat::json::JsonValue empty_dialogs(memochat::json::array_t{});
-    const memochat::chat::relation::ChatDialogListResponseDto empty{.error = 0,
-                                                                    .uid = 7,
-                                                                    .dialogs = std::optional<memochat::json::JsonValue>{
-                                                                        empty_dialogs}};
+    const memochat::chat::relation::ChatDialogListResponseDto empty{
+        .error = 0,
+        .uid = 7,
+        .dialogs = std::optional<memochat::json::JsonValue>{empty_dialogs}};
     const auto empty_json = memochat::chat::relation::ToJsonValue(empty);
     EXPECT_EQ(empty_json["error"].asInt(), 0);
     EXPECT_EQ(empty_json["uid"].asInt(), 7);
@@ -253,7 +242,9 @@ TEST(ChatRelationCommandDtosTest, WritesDialogListResponsePayload)
     dialog["dialog_type"] = "private";
     dialogs.append(dialog);
     const memochat::chat::relation::ChatDialogListResponseDto response{
-        .error = 0, .uid = 8, .dialogs = std::optional<memochat::json::JsonValue>{dialogs}};
+        .error = 0,
+        .uid = 8,
+        .dialogs = std::optional<memochat::json::JsonValue>{dialogs}};
     const auto response_json = memochat::chat::relation::ToJsonValue(response);
     EXPECT_EQ(response_json["error"].asInt(), 0);
     EXPECT_EQ(response_json["uid"].asInt(), 8);
@@ -320,14 +311,13 @@ TEST(ChatRelationCommandDtosTest, WritesSyncDraftResponsePayload)
     EXPECT_FALSE(private_json.isMember("mute_state"));
     EXPECT_FALSE(private_json.isMember("group_id"));
 
-    const memochat::chat::relation::ChatSyncDraftResponseDto group_response{
-        .error = 0,
-        .uid = 9,
-        .dialog_type = "group",
-        .peer_uid = 0,
-        .draft_text = "group-draft",
-        .mute_state = std::optional<int>{1},
-        .group_id = std::optional<int64_t>{99}};
+    const memochat::chat::relation::ChatSyncDraftResponseDto group_response{.error = 0,
+                                                                            .uid = 9,
+                                                                            .dialog_type = "group",
+                                                                            .peer_uid = 0,
+                                                                            .draft_text = "group-draft",
+                                                                            .mute_state = std::optional<int>{1},
+                                                                            .group_id = std::optional<int64_t>{99}};
     const auto group_json = memochat::chat::relation::ToJsonValue(group_response);
 
     EXPECT_EQ(group_json["error"].asInt(), 0);
@@ -399,8 +389,7 @@ TEST(ChatRelationCommandDtosTest, WritesAuthFriendApplyResponsePayload)
     EXPECT_EQ(response_json["uid"].asInt(), 42);
     EXPECT_EQ(response_json["user_id"].asString(), "alice-id");
 
-    const memochat::chat::relation::ChatAuthFriendApplyResponseDto missing_profile{
-        .error = 1001};
+    const memochat::chat::relation::ChatAuthFriendApplyResponseDto missing_profile{.error = 1001};
     const auto missing_profile_json = memochat::chat::relation::ToJsonValue(missing_profile);
     EXPECT_EQ(missing_profile_json["error"].asInt(), 1001);
     EXPECT_FALSE(missing_profile_json.isMember("name"));
@@ -413,15 +402,15 @@ TEST(ChatRelationCommandDtosTest, WritesAuthFriendApplyResponsePayload)
 
 TEST(ChatRelationCommandDtosTest, WritesAddFriendApplyNotifyPayload)
 {
-    const memochat::chat::relation::ChatAddFriendApplyNotifyDto notify{
-        .error = 0,
-        .applyuid = 11,
-        .name = "Alice",
-        .desc = "",
-        .icon = std::optional<std::string>{"alice.png"},
-        .sex = std::optional<int>{1},
-        .nick = std::optional<std::string>{"Ali"},
-        .user_id = std::optional<std::string>{"alice-id"}};
+    const memochat::chat::relation::ChatAddFriendApplyNotifyDto notify{.error = 0,
+                                                                       .applyuid = 11,
+                                                                       .name = "Alice",
+                                                                       .desc = "",
+                                                                       .icon = std::optional<std::string>{"alice.png"},
+                                                                       .sex = std::optional<int>{1},
+                                                                       .nick = std::optional<std::string>{"Ali"},
+                                                                       .user_id =
+                                                                           std::optional<std::string>{"alice-id"}};
     const auto notify_json = memochat::chat::relation::ToJsonValue(notify);
 
     EXPECT_EQ(notify_json["error"].asInt(), 0);
@@ -433,8 +422,10 @@ TEST(ChatRelationCommandDtosTest, WritesAddFriendApplyNotifyPayload)
     EXPECT_EQ(notify_json["nick"].asString(), "Ali");
     EXPECT_EQ(notify_json["user_id"].asString(), "alice-id");
 
-    const memochat::chat::relation::ChatAddFriendApplyNotifyDto without_profile{
-        .error = 0, .applyuid = 12, .name = "Bob", .desc = ""};
+    const memochat::chat::relation::ChatAddFriendApplyNotifyDto without_profile{.error = 0,
+                                                                                .applyuid = 12,
+                                                                                .name = "Bob",
+                                                                                .desc = ""};
     const auto without_profile_json = memochat::chat::relation::ToJsonValue(without_profile);
     EXPECT_EQ(without_profile_json["applyuid"].asInt(), 12);
     EXPECT_FALSE(without_profile_json.isMember("icon"));
@@ -445,15 +436,15 @@ TEST(ChatRelationCommandDtosTest, WritesAddFriendApplyNotifyPayload)
 
 TEST(ChatRelationCommandDtosTest, WritesAuthFriendApplyNotifyPayload)
 {
-    const memochat::chat::relation::ChatAuthFriendApplyNotifyDto notify{
-        .error = 0,
-        .fromuid = 31,
-        .touid = 42,
-        .name = std::optional<std::string>{"Alice"},
-        .nick = std::optional<std::string>{"Ali"},
-        .icon = std::optional<std::string>{"alice.png"},
-        .sex = std::optional<int>{2},
-        .user_id = std::optional<std::string>{"alice-id"}};
+    const memochat::chat::relation::ChatAuthFriendApplyNotifyDto notify{.error = 0,
+                                                                        .fromuid = 31,
+                                                                        .touid = 42,
+                                                                        .name = std::optional<std::string>{"Alice"},
+                                                                        .nick = std::optional<std::string>{"Ali"},
+                                                                        .icon = std::optional<std::string>{"alice.png"},
+                                                                        .sex = std::optional<int>{2},
+                                                                        .user_id =
+                                                                            std::optional<std::string>{"alice-id"}};
     const auto notify_json = memochat::chat::relation::ToJsonValue(notify);
 
     EXPECT_EQ(notify_json["error"].asInt(), 0);
@@ -465,8 +456,9 @@ TEST(ChatRelationCommandDtosTest, WritesAuthFriendApplyNotifyPayload)
     EXPECT_EQ(notify_json["sex"].asInt(), 2);
     EXPECT_EQ(notify_json["user_id"].asString(), "alice-id");
 
-    const memochat::chat::relation::ChatAuthFriendApplyNotifyDto missing_profile{
-        .error = 1001, .fromuid = 32, .touid = 43};
+    const memochat::chat::relation::ChatAuthFriendApplyNotifyDto missing_profile{.error = 1001,
+                                                                                 .fromuid = 32,
+                                                                                 .touid = 43};
     const auto missing_profile_json = memochat::chat::relation::ToJsonValue(missing_profile);
     EXPECT_EQ(missing_profile_json["error"].asInt(), 1001);
     EXPECT_EQ(missing_profile_json["fromuid"].asInt(), 32);

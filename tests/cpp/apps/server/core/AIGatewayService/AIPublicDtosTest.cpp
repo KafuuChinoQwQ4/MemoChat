@@ -27,31 +27,19 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIKbSearchRequestDto>(
     std::array<std::string_view, 3>{"uid", "query", "top_k"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AITaskCreateRequestDto>(
-    std::array<std::string_view, 8>{"uid",
-                                    "title",
-                                    "content",
-                                    "session_id",
-                                    "model_type",
-                                    "model_name",
-                                    "skill_name",
-                                    "metadata_json"}));
+    std::array<std::string_view,
+               8>{"uid", "title", "content", "session_id", "model_type", "model_name", "skill_name", "metadata_json"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AISimpleResponseDto>(
     std::array<std::string_view, 2>{"code", "message"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIModelInfoResponseDto>(
-    std::array<std::string_view, 6>{"model_type",
-                                    "model_name",
-                                    "display_name",
-                                    "is_enabled",
-                                    "context_window",
-                                    "supports_thinking"}));
+    std::array<std::string_view,
+               6>{"model_type", "model_name", "display_name", "is_enabled", "context_window", "supports_thinking"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIModelListResponseDto>(
     std::array<std::string_view, 3>{"code", "models", "default_model"}));
-static_assert(
-    memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIRegisterApiProviderResponseDto>(
-        std::array<std::string_view, 4>{"code", "message", "provider_id", "models"}));
-static_assert(
-    memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIDeleteApiProviderResponseDto>(
-        std::array<std::string_view, 3>{"code", "message", "provider_id"}));
+static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIRegisterApiProviderResponseDto>(
+    std::array<std::string_view, 4>{"code", "message", "provider_id", "models"}));
+static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIDeleteApiProviderResponseDto>(
+    std::array<std::string_view, 3>{"code", "message", "provider_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIKbUploadResponseDto>(
     std::array<std::string_view, 4>{"code", "message", "chunks", "kb_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIKbSearchChunkResponseDto>(
@@ -186,8 +174,8 @@ TEST(AIPublicDtosTest, DecodesProviderAndKbRequests)
     EXPECT_EQ(provider.api_key, "key");
     EXPECT_EQ(provider.adapter, "openai_compatible");
 
-    const auto kb_search = memochat::gate::services::ai::AIKbSearchRequestFromJsonValue(
-        Parse(R"({"uid":42,"query":"memo","top_k":8})"));
+    const auto kb_search =
+        memochat::gate::services::ai::AIKbSearchRequestFromJsonValue(Parse(R"({"uid":42,"query":"memo","top_k":8})"));
     EXPECT_EQ(kb_search.uid, 42);
     EXPECT_EQ(kb_search.query, "memo");
     EXPECT_EQ(kb_search.top_k, 8);
@@ -195,8 +183,8 @@ TEST(AIPublicDtosTest, DecodesProviderAndKbRequests)
 
 TEST(AIPublicDtosTest, DecodesMemoryAndTaskRequests)
 {
-    const auto memory = memochat::gate::services::ai::AIMemoryDeleteRequestFromJsonValue(
-        Parse(R"({"uid":42,"memory_id":"mem-1"})"));
+    const auto memory =
+        memochat::gate::services::ai::AIMemoryDeleteRequestFromJsonValue(Parse(R"({"uid":42,"memory_id":"mem-1"})"));
     EXPECT_EQ(memory.uid, 42);
     EXPECT_EQ(memory.memory_id, "mem-1");
 
@@ -350,8 +338,7 @@ TEST(AIPublicDtosTest, WritesKnowledgeBaseResponsesWithExistingWireFields)
     upload.chunks = 3;
     upload.kb_id = "kb-1";
 
-    const memochat::json::JsonValue upload_json =
-        memochat::gate::services::ai::AIKbUploadResponseToJsonValue(upload);
+    const memochat::json::JsonValue upload_json = memochat::gate::services::ai::AIKbUploadResponseToJsonValue(upload);
     EXPECT_EQ(upload_json["code"].asInt(), 0);
     EXPECT_EQ(upload_json["message"].asString(), "ok");
     EXPECT_EQ(upload_json["chunks"].asInt(), 3);
@@ -361,8 +348,7 @@ TEST(AIPublicDtosTest, WritesKnowledgeBaseResponsesWithExistingWireFields)
     search.code = 0;
     search.chunks.push_back({"chunk", 0.75, "source.md"});
 
-    const memochat::json::JsonValue search_json =
-        memochat::gate::services::ai::AIKbSearchResponseToJsonValue(search);
+    const memochat::json::JsonValue search_json = memochat::gate::services::ai::AIKbSearchResponseToJsonValue(search);
     EXPECT_EQ(search_json["code"].asInt(), 0);
     ASSERT_TRUE(search_json["chunks"].isArray());
     ASSERT_EQ(search_json["chunks"].size(), 1);
@@ -567,8 +553,11 @@ TEST(AIPublicDtosTest, WritesAgentTaskItemScalarShellThenDynamicTreesInWireOrder
     item.completed_at = 3;
     item.cancelled_at = 0;
 
-    const auto json = memochat::gate::services::ai::AIAgentTaskItemResponseToJsonValue(
-        item, R"({"step":1})", R"({"ok":true})", R"([{"cp":1}])", R"({"src":"x"})");
+    const auto json = memochat::gate::services::ai::AIAgentTaskItemResponseToJsonValue(item,
+                                                                                       R"({"step":1})",
+                                                                                       R"({"ok":true})",
+                                                                                       R"([{"cp":1}])",
+                                                                                       R"({"src":"x"})");
     EXPECT_EQ(json["task_id"].asString(), "task-1");
     EXPECT_EQ(json["title"].asString(), "Plan trip");
     EXPECT_EQ(json["status"].asString(), "completed");
@@ -600,8 +589,7 @@ TEST(AIPublicDtosTest, AgentTaskItemEmptyDynamicJsonUsesLegacyFallbacks)
     memochat::gate::services::ai::AIAgentTaskItemResponseDto item;
     item.task_id = "task-2";
 
-    const auto json =
-        memochat::gate::services::ai::AIAgentTaskItemResponseToJsonValue(item, "", "", "", "");
+    const auto json = memochat::gate::services::ai::AIAgentTaskItemResponseToJsonValue(item, "", "", "", "");
     // payload/result/metadata fall back to JSON null; checkpoints to empty array.
     EXPECT_TRUE(json["payload"].isNull()) << json.toStyledString();
     EXPECT_TRUE(json["result"].isNull()) << json.toStyledString();

@@ -33,8 +33,7 @@ namespace net = boost::asio;
 using tcp = net::ip::tcp;
 
 // 建一对已连接的 loopback socket:返回 {server_side, client_side}。
-std::pair<tcp::socket, tcp::socket> MakeConnectedPair(net::io_context& server_ctx,
-                                                      net::io_context& client_ctx)
+std::pair<tcp::socket, tcp::socket> MakeConnectedPair(net::io_context& server_ctx, net::io_context& client_ctx)
 {
     tcp::acceptor acceptor(server_ctx, tcp::endpoint(tcp::v4(), 0));
     auto ep = acceptor.local_endpoint();
@@ -43,7 +42,11 @@ std::pair<tcp::socket, tcp::socket> MakeConnectedPair(net::io_context& server_ct
     tcp::socket client(client_ctx);
 
     // 同步建连:client_ctx 不在本测试里 run(),用阻塞 connect;accept 用阻塞接受。
-    std::thread connector([&] { client.connect(ep); });
+    std::thread connector(
+        [&]
+        {
+            client.connect(ep);
+        });
     acceptor.accept(server);
     connector.join();
 
@@ -68,7 +71,11 @@ TEST(CSessionLifetime, ReadLoopReleasesSessionOnPeerClose)
     auto [server_sock, client_sock] = MakeConnectedPair(session_ctx, client_ctx);
 
     auto work = net::make_work_guard(session_ctx);
-    std::thread io_thread([&] { session_ctx.run(); });
+    std::thread io_thread(
+        [&]
+        {
+            session_ctx.run();
+        });
 
     std::weak_ptr<CSession> weak;
     {

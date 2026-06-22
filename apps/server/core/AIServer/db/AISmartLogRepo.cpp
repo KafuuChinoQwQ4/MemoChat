@@ -7,8 +7,6 @@
 #include <chrono>
 #include <sstream>
 
-using namespace std::chrono;
-
 namespace
 {
 
@@ -52,7 +50,9 @@ void AISmartLogRepo::LogSmartUsage(int32_t uid,
                                    int output_tokens,
                                    const std::string& model_name)
 {
-    int64_t now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+    int64_t now =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count();
     try
     {
         pqxx::work tx(*_impl->conn);

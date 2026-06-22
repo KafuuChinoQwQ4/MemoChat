@@ -40,13 +40,22 @@ TEST(RouteSchemaCatalogTest, CatalogPreservesModuleAndRouteOrder)
 
     RouteSchemaCatalog catalog;
     catalog.Add("media",
-                {MakeRouteSchema<MediaRequestDto, MediaResponseDto>(
-                     "POST", "/media/status", "media.status", "MediaRequestDto", "MediaResponseDto"),
-                 MakeRouteSchema<MediaRequestDto, MediaResponseDto>(
-                     "POST", "/media/upload", "media.upload", "MediaRequestDto", "MediaResponseDto")});
+                {MakeRouteSchema<MediaRequestDto, MediaResponseDto>("POST",
+                                                                    "/media/status",
+                                                                    "media.status",
+                                                                    "MediaRequestDto",
+                                                                    "MediaResponseDto"),
+                 MakeRouteSchema<MediaRequestDto, MediaResponseDto>("POST",
+                                                                    "/media/upload",
+                                                                    "media.upload",
+                                                                    "MediaRequestDto",
+                                                                    "MediaResponseDto")});
     catalog.Add("auth",
-                {MakeRouteSchema<AuthRequestDto, AuthResponseDto>(
-                    "POST", "/auth/login", "auth.login", "AuthRequestDto", "AuthResponseDto")});
+                {MakeRouteSchema<AuthRequestDto, AuthResponseDto>("POST",
+                                                                  "/auth/login",
+                                                                  "auth.login",
+                                                                  "AuthRequestDto",
+                                                                  "AuthResponseDto")});
 
     ASSERT_EQ(catalog.Modules().size(), 2U);
     EXPECT_EQ(catalog.Modules()[0].module, "media");
@@ -68,8 +77,11 @@ TEST(RouteSchemaCatalogTest, RendersDeterministicCatalogSnapshot)
 
     RouteSchemaCatalog catalog;
     catalog.Add("media",
-                {MakeRouteSchema<MediaRequestDto, MediaResponseDto>(
-                    "POST", "/media/status", "media.status", "MediaRequestDto", "MediaResponseDto")});
+                {MakeRouteSchema<MediaRequestDto, MediaResponseDto>("POST",
+                                                                    "/media/status",
+                                                                    "media.status",
+                                                                    "MediaRequestDto",
+                                                                    "MediaResponseDto")});
     catalog.Add("auth", {MakeRouteSchemaWithoutBody("GET", "/auth/health", "auth.health")});
 
     const std::string snapshot = RenderRouteSchemaCatalogSnapshot(catalog);
@@ -104,8 +116,11 @@ TEST(RouteSchemaCatalogTest, RendersDeterministicCatalogJsonWithEscaping)
     RouteSchemaCatalog catalog;
     // The request type_name carries a backslash and a double-quote to exercise JSON escaping.
     catalog.Add("media",
-                {MakeRouteSchema<MediaRequestDto, MediaResponseDto>(
-                    "POST", "/media/status", "media.status", "Weird\\\"Name", "MediaResponseDto")});
+                {MakeRouteSchema<MediaRequestDto, MediaResponseDto>("POST",
+                                                                    "/media/status",
+                                                                    "media.status",
+                                                                    "Weird\\\"Name",
+                                                                    "MediaResponseDto")});
 
     const std::string json = RenderRouteSchemaCatalogJson(catalog);
 
@@ -125,11 +140,11 @@ TEST(RouteSchemaCatalogTest, FindsDuplicateRoutePathsAcrossModules)
 
     RouteSchemaCatalog catalog;
     catalog.Add("media",
-                {MakeRouteSchema<MediaRequestDto, MediaResponseDto>(
-                    "POST", "/x", "media.x", "MediaRequestDto", "MediaResponseDto")});
+                {MakeRouteSchema<MediaRequestDto,
+                                 MediaResponseDto>("POST", "/x", "media.x", "MediaRequestDto", "MediaResponseDto")});
     catalog.Add("auth",
-                {MakeRouteSchema<AuthRequestDto, AuthResponseDto>(
-                    "POST", "/x", "auth.x", "AuthRequestDto", "AuthResponseDto")});
+                {MakeRouteSchema<AuthRequestDto,
+                                 AuthResponseDto>("POST", "/x", "auth.x", "AuthRequestDto", "AuthResponseDto")});
 
     const auto duplicates = FindDuplicateRoutePaths(catalog);
     ASSERT_EQ(duplicates.size(), 1U);
@@ -137,11 +152,14 @@ TEST(RouteSchemaCatalogTest, FindsDuplicateRoutePathsAcrossModules)
 
     RouteSchemaCatalog unique;
     unique.Add("media",
-               {MakeRouteSchema<MediaRequestDto, MediaResponseDto>(
-                   "POST", "/media/a", "media.a", "MediaRequestDto", "MediaResponseDto")});
+               {MakeRouteSchema<MediaRequestDto, MediaResponseDto>("POST",
+                                                                   "/media/a",
+                                                                   "media.a",
+                                                                   "MediaRequestDto",
+                                                                   "MediaResponseDto")});
     unique.Add("auth",
-               {MakeRouteSchema<AuthRequestDto, AuthResponseDto>(
-                   "POST", "/auth/b", "auth.b", "AuthRequestDto", "AuthResponseDto")});
+               {MakeRouteSchema<AuthRequestDto,
+                                AuthResponseDto>("POST", "/auth/b", "auth.b", "AuthRequestDto", "AuthResponseDto")});
 
     EXPECT_TRUE(FindDuplicateRoutePaths(unique).empty());
 }

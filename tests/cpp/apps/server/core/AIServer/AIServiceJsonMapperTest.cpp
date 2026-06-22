@@ -13,8 +13,8 @@
 
 #if MEMOCHAT_ENABLE_CPP26_REFLECTION
 static_assert(memochat::reflection::FieldNamesEqual<ai_service_json_mapper::AIModelInfoJsonDto>(
-    std::array<std::string_view, 6>{
-        "model_type", "model_name", "display_name", "is_enabled", "context_window", "supports_thinking"}));
+    std::array<std::string_view,
+               6>{"model_type", "model_name", "display_name", "is_enabled", "context_window", "supports_thinking"}));
 static_assert(memochat::reflection::FieldNamesEqual<ai_service_json_mapper::AIModelListJsonDto>(
     std::array<std::string_view, 4>{"code", "models", "default_model", "has_default_model"}));
 static_assert(memochat::reflection::FieldNamesEqual<ai_service_json_mapper::AIRegisterApiProviderJsonDto>(
@@ -28,13 +28,8 @@ static_assert(memochat::reflection::FieldNamesEqual<ai_service_json_mapper::AIKb
 static_assert(memochat::reflection::FieldNamesEqual<ai_service_json_mapper::AIChatMessageJsonDto>(
     std::array<std::string_view, 4>{"msg_id", "role", "content", "created_at"}));
 static_assert(memochat::reflection::FieldNamesEqual<ai_service_json_mapper::ConversationContextJsonDto>(
-    std::array<std::string_view, 7>{"session_id",
-                                    "uid",
-                                    "model_type",
-                                    "model_name",
-                                    "created_at",
-                                    "last_active_at",
-                                    "messages"}));
+    std::array<std::string_view,
+               7>{"session_id", "uid", "model_type", "model_name", "created_at", "last_active_at", "messages"}));
 #endif
 
 namespace

@@ -54,8 +54,16 @@ TEST(AsioExecSpike, TimerAsSenderRunsToCompletion)
     bool fired = false;
     // sync_wait 在调用线程上驱动:需要 io_context 自己 run 来完成。
     // 这里用一个后台线程跑 io_context,主线程 sync_wait sender。
-    std::thread io_thread([&] { ctx.run(); });
-    stdexec::sync_wait(std::move(sender) | stdexec::then([&] { fired = true; }));
+    std::thread io_thread(
+        [&]
+        {
+            ctx.run();
+        });
+    stdexec::sync_wait(std::move(sender) | stdexec::then(
+                                               [&]
+                                               {
+                                                   fired = true;
+                                               }));
     io_thread.join();
 
     EXPECT_TRUE(fired);
@@ -85,14 +93,17 @@ TEST(AsioExecSpike, TaskCoAwaitsTimer)
 {
     net::io_context ctx;
     auto work = net::make_work_guard(ctx);
-    std::thread io_thread([&] { ctx.run(); });
+    std::thread io_thread(
+        [&]
+        {
+            ctx.run();
+        });
 
     net::steady_timer timer(ctx);
     exec::single_thread_context sched_ctx;
 
     // stdexec::on(scheduler, coro) 给协程一个 associated scheduler,再 sync_wait。
-    auto [rounds] =
-        stdexec::sync_wait(stdexec::on(sched_ctx.get_scheduler(), WaitTwice(timer))).value();
+    auto [rounds] = stdexec::sync_wait(stdexec::on(sched_ctx.get_scheduler(), WaitTwice(timer))).value();
 
     EXPECT_EQ(rounds, 2);
 
@@ -127,7 +138,11 @@ TEST(AsioExecSpike, EchoOverLoopbackSocket)
 {
     net::io_context ctx;
     auto work = net::make_work_guard(ctx);
-    std::thread io_thread([&] { ctx.run(); });
+    std::thread io_thread(
+        [&]
+        {
+            ctx.run();
+        });
 
     // 建一对已连接的 loopback socket。
     tcp::acceptor acceptor(ctx, tcp::endpoint(tcp::v4(), 0));
@@ -138,11 +153,17 @@ TEST(AsioExecSpike, EchoOverLoopbackSocket)
 
     // 同步建连(spike 简化:用 future 等 accept/connect)。
     std::promise<void> connected;
-    acceptor.async_accept(server, [&](const boost::system::error_code& ec) {
-        ASSERT_FALSE(ec);
-        connected.set_value();
-    });
-    client.async_connect(server_ep, [](const boost::system::error_code& ec) { ASSERT_FALSE(ec); });
+    acceptor.async_accept(server,
+                          [&](const boost::system::error_code& ec)
+                          {
+                              ASSERT_FALSE(ec);
+                              connected.set_value();
+                          });
+    client.async_connect(server_ep,
+                         [](const boost::system::error_code& ec)
+                         {
+                             ASSERT_FALSE(ec);
+                         });
     connected.get_future().wait();
 
     exec::single_thread_context sched_ctx;
@@ -152,8 +173,7 @@ TEST(AsioExecSpike, EchoOverLoopbackSocket)
     exec::async_scope scope;
     scope.spawn(stdexec::on(sched, EchoServerOnce(std::move(server))));
 
-    auto [echoed] =
-        stdexec::sync_wait(stdexec::on(sched, EchoClientOnce(std::move(client), "PING"))).value();
+    auto [echoed] = stdexec::sync_wait(stdexec::on(sched, EchoClientOnce(std::move(client), "PING"))).value();
 
     stdexec::sync_wait(scope.on_empty());
 
@@ -178,7 +198,11 @@ TEST(AsioExecSpike, ErrorCodeBecomesException)
 {
     net::io_context ctx;
     auto work = net::make_work_guard(ctx);
-    std::thread io_thread([&] { ctx.run(); });
+    std::thread io_thread(
+        [&]
+        {
+            ctx.run();
+        });
 
     tcp::acceptor acceptor(ctx, tcp::endpoint(tcp::v4(), 0));
     auto ep = acceptor.local_endpoint();
@@ -186,7 +210,11 @@ TEST(AsioExecSpike, ErrorCodeBecomesException)
     tcp::socket server(ctx);
 
     std::promise<void> connected;
-    acceptor.async_accept(server, [&](const boost::system::error_code&) { connected.set_value(); });
+    acceptor.async_accept(server,
+                          [&](const boost::system::error_code&)
+                          {
+                              connected.set_value();
+                          });
     client.async_connect(ep, [](const boost::system::error_code&) {});
     connected.get_future().wait();
 

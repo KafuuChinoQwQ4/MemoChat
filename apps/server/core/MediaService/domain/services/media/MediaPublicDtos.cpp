@@ -151,9 +151,7 @@ bool DecodeMediaUploadChunkJsonRequest(std::string_view body,
     return true;
 }
 
-bool DecodeMediaUploadCompleteRequest(std::string_view body,
-                                      MediaUploadCompleteRequestDto* out,
-                                      std::string* error_out)
+bool DecodeMediaUploadCompleteRequest(std::string_view body, MediaUploadCompleteRequestDto* out, std::string* error_out)
 {
     if (out == nullptr)
     {

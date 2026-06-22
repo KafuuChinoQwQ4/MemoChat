@@ -28,8 +28,8 @@ TEST(EmailDeliveryTaskCodecTest, ParsesLegacyPayloadWithMissingRetryCountAsZero)
 {
     varifyservice::EmailDeliveryTaskPayload parsed;
 
-    ASSERT_TRUE(varifyservice::ParseEmailTask(R"({"email":"user@example.com","code":"123456","trace_id":"trace-3"})",
-                                             &parsed));
+    ASSERT_TRUE(
+        varifyservice::ParseEmailTask(R"({"email":"user@example.com","code":"123456","trace_id":"trace-3"})", &parsed));
 
     EXPECT_EQ(parsed.email, "user@example.com");
     EXPECT_EQ(parsed.code, "123456");

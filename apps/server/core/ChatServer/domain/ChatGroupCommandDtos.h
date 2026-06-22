@@ -17,9 +17,8 @@ inline constexpr int64_t kGroupPermManageAdmins = 1LL << 3;
 inline constexpr int64_t kGroupPermPinMessages = 1LL << 4;
 inline constexpr int64_t kGroupPermBanUsers = 1LL << 5;
 inline constexpr int64_t kGroupPermManageTopics = 1LL << 6;
-inline constexpr int64_t kDefaultAdminPermBits =
-    kGroupPermChangeGroupInfo | kGroupPermDeleteMessages | kGroupPermInviteUsers | kGroupPermPinMessages |
-    kGroupPermBanUsers;
+inline constexpr int64_t kDefaultAdminPermBits = kGroupPermChangeGroupInfo | kGroupPermDeleteMessages |
+                                                 kGroupPermInviteUsers | kGroupPermPinMessages | kGroupPermBanUsers;
 
 struct ChatGroupCreateRequestDto
 {
@@ -273,20 +272,24 @@ inline void MergeGroupPermissionFlag(const memochat::json::JsonValue& root,
     }
 }
 
-inline void MergeGroupPermissionFlags(const memochat::json::JsonValue& root,
-                                      bool& has_permission_bits,
-                                      int64_t& permission_bits)
+inline void
+MergeGroupPermissionFlags(const memochat::json::JsonValue& root, bool& has_permission_bits, int64_t& permission_bits)
 {
-    MergeGroupPermissionFlag(
-        root, "can_change_group_info", kGroupPermChangeGroupInfo, has_permission_bits, permission_bits);
-    MergeGroupPermissionFlag(
-        root, "can_delete_messages", kGroupPermDeleteMessages, has_permission_bits, permission_bits);
+    MergeGroupPermissionFlag(root,
+                             "can_change_group_info",
+                             kGroupPermChangeGroupInfo,
+                             has_permission_bits,
+                             permission_bits);
+    MergeGroupPermissionFlag(root,
+                             "can_delete_messages",
+                             kGroupPermDeleteMessages,
+                             has_permission_bits,
+                             permission_bits);
     MergeGroupPermissionFlag(root, "can_invite_users", kGroupPermInviteUsers, has_permission_bits, permission_bits);
     MergeGroupPermissionFlag(root, "can_manage_admins", kGroupPermManageAdmins, has_permission_bits, permission_bits);
     MergeGroupPermissionFlag(root, "can_pin_messages", kGroupPermPinMessages, has_permission_bits, permission_bits);
     MergeGroupPermissionFlag(root, "can_ban_users", kGroupPermBanUsers, has_permission_bits, permission_bits);
-    MergeGroupPermissionFlag(
-        root, "can_manage_topics", kGroupPermManageTopics, has_permission_bits, permission_bits);
+    MergeGroupPermissionFlag(root, "can_manage_topics", kGroupPermManageTopics, has_permission_bits, permission_bits);
 }
 
 inline ChatGroupListRequestDto ChatGroupListRequestFromJsonValue(const memochat::json::JsonValue& root)
@@ -296,8 +299,7 @@ inline ChatGroupListRequestDto ChatGroupListRequestFromJsonValue(const memochat:
     return request;
 }
 
-inline ChatGroupInviteMemberRequestDto ChatGroupInviteMemberRequestFromJsonValue(
-    const memochat::json::JsonValue& root)
+inline ChatGroupInviteMemberRequestDto ChatGroupInviteMemberRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     ChatGroupInviteMemberRequestDto request;
     request.from_uid = root["fromuid"].asInt();
@@ -316,8 +318,7 @@ inline ChatGroupApplyJoinRequestDto ChatGroupApplyJoinRequestFromJsonValue(const
     return request;
 }
 
-inline ChatGroupReviewApplyRequestDto ChatGroupReviewApplyRequestFromJsonValue(
-    const memochat::json::JsonValue& root)
+inline ChatGroupReviewApplyRequestDto ChatGroupReviewApplyRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     ChatGroupReviewApplyRequestDto request;
     request.reviewer_uid = root["fromuid"].asInt();
@@ -335,8 +336,8 @@ inline ChatGroupReadAckRequestDto ChatGroupReadAckRequestFromJsonValue(const mem
     return request;
 }
 
-inline ChatGroupAnnouncementUpdateRequestDto ChatGroupAnnouncementUpdateRequestFromJsonValue(
-    const memochat::json::JsonValue& root)
+inline ChatGroupAnnouncementUpdateRequestDto
+ChatGroupAnnouncementUpdateRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     ChatGroupAnnouncementUpdateRequestDto request;
     request.uid = root["fromuid"].asInt();
@@ -345,8 +346,7 @@ inline ChatGroupAnnouncementUpdateRequestDto ChatGroupAnnouncementUpdateRequestF
     return request;
 }
 
-inline ChatGroupIconUpdateRequestDto ChatGroupIconUpdateRequestFromJsonValue(
-    const memochat::json::JsonValue& root)
+inline ChatGroupIconUpdateRequestDto ChatGroupIconUpdateRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     ChatGroupIconUpdateRequestDto request;
     request.uid = root["fromuid"].asInt();
@@ -386,8 +386,7 @@ inline ChatGroupSetAdminRequestDto ChatGroupSetAdminRequestFromJsonValue(const m
     return request;
 }
 
-inline ChatGroupMemberActionRequestDto ChatGroupMemberActionRequestFromJsonValue(
-    const memochat::json::JsonValue& root)
+inline ChatGroupMemberActionRequestDto ChatGroupMemberActionRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     ChatGroupMemberActionRequestDto request;
     request.uid = root["fromuid"].asInt();

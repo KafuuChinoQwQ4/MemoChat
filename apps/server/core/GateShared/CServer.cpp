@@ -18,8 +18,7 @@ void CServer::Start()
 {
     // 启动 accept 循环协程,钉在 acceptor 绑定的 _ioc(Gate 主 io_context)上。
     // self 在此处(临时 CServer 仍存活时)求值并以传值参数存入协程帧,覆盖 spawn→首行窗口。
-    exec::start_detached(
-        stdexec::on(memochat::runtime::IoContextScheduler{&_ioc}, AcceptLoop(shared_from_this())));
+    exec::start_detached(stdexec::on(memochat::runtime::IoContextScheduler{&_ioc}, AcceptLoop(shared_from_this())));
 }
 
 // accept 循环协程:取代原 Start→async_accept→{success: new_con->Start()+Start(); error: Start()} 递归。

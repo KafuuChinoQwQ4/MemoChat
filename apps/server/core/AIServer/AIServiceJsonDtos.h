@@ -87,8 +87,7 @@ AIKbDeleteJsonDto AIKbDeleteFromJsonValue(const memochat::json::JsonValue& resul
 
 void PopulateModelInfo(const AIModelInfoJsonDto& dto, ai::ModelInfo* out);
 void PopulateModelListReply(const AIModelListJsonDto& dto, ai::AIListModelsRsp* reply);
-void PopulateRegisterApiProviderReply(const AIRegisterApiProviderJsonDto& dto,
-                                      ai::AIRegisterApiProviderRsp* reply);
+void PopulateRegisterApiProviderReply(const AIRegisterApiProviderJsonDto& dto, ai::AIRegisterApiProviderRsp* reply);
 void PopulateKbListReply(const AIKnowledgeBaseListJsonDto& dto, ai::AIKbListRsp* reply);
 void PopulateKbDeleteReply(const AIKbDeleteJsonDto& dto, ai::AIKbDeleteRsp* reply);
 

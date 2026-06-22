@@ -128,9 +128,9 @@ TEST(MediaUploadSessionDtoTest, RejectsInvalidSession)
     EXPECT_FALSE(memochat::media::DecodeMediaUploadSession(
         R"({"uid":7,"upload_id":"upload-4","file_name":"file.bin","file_size":1,"chunk_size":1,"total_chunks":0})",
         &session));
-    EXPECT_FALSE(memochat::media::DecodeMediaUploadSession(R"({"uid":7})",
-                                                           static_cast<memochat::media::MediaUploadSessionDto*>(
-                                                               nullptr)));
+    EXPECT_FALSE(
+        memochat::media::DecodeMediaUploadSession(R"({"uid":7})",
+                                                  static_cast<memochat::media::MediaUploadSessionDto*>(nullptr)));
 }
 
 TEST(MediaUploadSessionDtoTest, BridgesSessionToAndFromJsonValue)

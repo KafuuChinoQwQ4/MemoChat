@@ -23,12 +23,6 @@ bool ParseEmailTask(const std::string& body, EmailDeliveryTaskPayload* out);
 template <> struct glz::meta<varifyservice::EmailDeliveryTaskPayload>
 {
     using T = varifyservice::EmailDeliveryTaskPayload;
-    static constexpr auto value = glz::object("email",
-                                              &T::email,
-                                              "code",
-                                              &T::code,
-                                              "trace_id",
-                                              &T::trace_id,
-                                              "retry_count",
-                                              &T::retry_count);
+    static constexpr auto value =
+        glz::object("email", &T::email, "code", &T::code, "trace_id", &T::trace_id, "retry_count", &T::retry_count);
 };

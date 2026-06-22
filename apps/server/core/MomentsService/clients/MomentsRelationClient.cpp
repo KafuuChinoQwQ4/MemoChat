@@ -65,7 +65,9 @@ std::vector<int> MomentsRelationClient::FilterFriendUids(int viewer_uid, const s
         std::unique_ptr<Json::CharReader> reader(reader_builder.newCharReader());
         if (!reader->parse(body.data(), body.data() + body.size(), &root, &errors))
         {
-            memolog::LogWarn("gate.moments.relation.parse_failed", "FilterFriendUids parse failed", {{"error", errors}});
+            memolog::LogWarn("gate.moments.relation.parse_failed",
+                             "FilterFriendUids parse failed",
+                             {{"error", errors}});
             return result;
         }
         if (root.isMember("friend_uids") && root["friend_uids"].isArray())

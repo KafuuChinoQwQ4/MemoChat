@@ -101,4 +101,3 @@ TEST(AuthLoginCacheProfileDtoTest, ReportsNullEncodeOutput)
     EXPECT_FALSE(gateauthsupport::EncodeLoginCacheProfile(MakeUser(), nullptr, &error));
     EXPECT_EQ(error, "output pointer is null");
 }
-

@@ -206,8 +206,7 @@ void PopulateModelListReply(const AIModelListJsonDto& dto, ai::AIListModelsRsp* 
     }
 }
 
-void PopulateRegisterApiProviderReply(const AIRegisterApiProviderJsonDto& dto,
-                                      ai::AIRegisterApiProviderRsp* reply)
+void PopulateRegisterApiProviderReply(const AIRegisterApiProviderJsonDto& dto, ai::AIRegisterApiProviderRsp* reply)
 {
     if (reply == nullptr)
     {

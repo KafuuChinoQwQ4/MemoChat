@@ -91,12 +91,8 @@ bool HangupCall(const memochat::json::JsonValue& src_root, memochat::json::JsonV
 bool PostToken(const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id)
 {
     const memochat::call::CallTokenRequestDto token_request = memochat::call::CallTokenRequestFromJsonValue(src_root);
-    return CallService::GetInstance()->GetToken(token_request.uid,
-                                                token_request.token,
-                                                token_request.call_id,
-                                                token_request.role,
-                                                root,
-                                                trace_id);
+    return CallService::GetInstance()
+        ->GetToken(token_request.uid, token_request.token, token_request.call_id, token_request.role, root, trace_id);
 }
 
 bool HandleGetToken(const memochat::gate::routing::GateRequest& request,

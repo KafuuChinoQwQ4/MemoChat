@@ -53,7 +53,15 @@ SOURCE_ROOTS = ("apps", "infra", "tests", "tools")
 
 
 def repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    current = Path(__file__).resolve()
+    for candidate in (current.parent, *current.parents):
+        if (
+            (candidate / "CMakeLists.txt").is_file()
+            and (candidate / "CMakePresets.json").is_file()
+            and (candidate / "pytest.ini").is_file()
+        ):
+            return candidate
+    raise RuntimeError(f"Could not find MemoChat repository root from {current}")
 
 
 def is_excluded(path: Path) -> bool:

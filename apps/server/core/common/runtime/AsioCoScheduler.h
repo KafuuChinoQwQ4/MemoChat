@@ -47,8 +47,7 @@ struct IoContextScheduler
 
     boost::asio::io_context* ctx_ = nullptr;
 
-    template <typename Receiver>
-    struct OpState
+    template <typename Receiver> struct OpState
     {
         boost::asio::io_context* ctx_;
         Receiver receiver_;
@@ -68,13 +67,11 @@ struct IoContextScheduler
     {
         using sender_concept = stdexec::sender_t;
         using completion_signatures =
-            stdexec::completion_signatures<stdexec::set_value_t(),
-                                           stdexec::set_error_t(std::exception_ptr)>;
+            stdexec::completion_signatures<stdexec::set_value_t(), stdexec::set_error_t(std::exception_ptr)>;
 
         boost::asio::io_context* ctx_;
 
-        template <typename Receiver>
-        auto connect(Receiver receiver) const
+        template <typename Receiver> auto connect(Receiver receiver) const
         {
             return OpState<Receiver>{ctx_, std::move(receiver)};
         }
@@ -83,8 +80,7 @@ struct IoContextScheduler
         struct Env
         {
             boost::asio::io_context* ctx_;
-            template <typename Tag>
-            auto query(stdexec::get_completion_scheduler_t<Tag>) const noexcept
+            template <typename Tag> auto query(stdexec::get_completion_scheduler_t<Tag>) const noexcept
             {
                 return IoContextScheduler{ctx_};
             }

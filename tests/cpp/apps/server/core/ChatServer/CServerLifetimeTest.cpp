@@ -31,7 +31,11 @@ TEST(CServerLifetime, StopTimerCancelsTimerLoopAndReleasesServer)
 {
     net::io_context server_ctx; // CServer 的 acceptor + timer 绑定的 io_context
     auto work = net::make_work_guard(server_ctx);
-    std::thread io_thread([&] { server_ctx.run(); });
+    std::thread io_thread(
+        [&]
+        {
+            server_ctx.run();
+        });
 
     std::weak_ptr<CServer> weak;
     {
@@ -39,10 +43,10 @@ TEST(CServerLifetime, StopTimerCancelsTimerLoopAndReleasesServer)
         auto server = std::make_shared<CServer>(server_ctx, /*port=*/0);
         weak = server;
 
-        server->StartTimer(); // spawn TimerLoop → co_await async_wait(首轮 60s,挂起)
+        server->StartTimer(); // spawn TimerLoop(shared_from_this()) → co_await async_wait(首轮 60s,挂起)
 
-        // 给 io 线程时间跑 TimerLoop 首行 shared_from_this()(此刻本地强引用 server 仍持有)
-        // + 挂到 async_wait 上。
+        // 给 io 线程时间把 TimerLoop 挂到 async_wait 上。self 是传值协程参数,StartTimer() 在本地强
+        // 引用 server 仍持有时求值 shared_from_this() 并存入协程帧,帧自 spawn 即续命(与 GateShared 统一)。
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         EXPECT_FALSE(weak.expired()) << "TimerLoop 协程帧应已自持 server";
 
@@ -72,6 +76,47 @@ TEST(CServerLifetime, StopTimerCancelsTimerLoopAndReleasesServer)
         io_thread.join();
 
     EXPECT_TRUE(weak.expired());
+}
+
+// 生产停机顺序验收:StopTimer() 在 io_context.stop() 之前,协程帧有机会被分发展开。
+// 对应 ChatServer.cpp signal handler 的修后顺序。
+TEST(CServerLifetime, ProductionShutdownOrder_StopTimerBeforeIoContextStop)
+{
+    net::io_context server_ctx;
+    auto work = net::make_work_guard(server_ctx);
+    std::thread io_thread(
+        [&]
+        {
+            server_ctx.run();
+        });
+
+    std::weak_ptr<CServer> weak;
+    {
+        auto server = std::make_shared<CServer>(server_ctx, /*port=*/0);
+        weak = server;
+        server->StartTimer();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        // 生产顺序: 先 StopTimer(取消协程) 再 io_context.stop()
+        server->StopTimer();
+        work.reset();
+        server_ctx.stop();
+    }
+
+    bool released = false;
+    for (int i = 0; i < 200; ++i)
+    {
+        if (weak.expired())
+        {
+            released = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    EXPECT_TRUE(released) << "生产停机顺序下 CServer 未能正常析构";
+
+    if (io_thread.joinable())
+        io_thread.join();
 }
 
 } // namespace

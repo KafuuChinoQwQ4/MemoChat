@@ -91,7 +91,9 @@ void H3RouteAdapter::ApplyGateResponse(const memochat::gate::routing::GateRespon
         const std::optional<std::string> file_body = ReadFileBody(route_response.file_path);
         if (!file_body)
         {
-            connection->SendResponse(404, R"({"error":404,"message":"file response body not found"})", "application/json");
+            connection->SendResponse(404,
+                                     R"({"error":404,"message":"file response body not found"})",
+                                     "application/json");
             return;
         }
 

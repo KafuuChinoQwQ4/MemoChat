@@ -49,9 +49,8 @@ public:
                      int delay_ms,
                      int max_retries,
                      std::string* error = nullptr);
-    bool PublishAsyncEvent(const std::string& topic,
-                           const memochat::json::JsonValue& payload,
-                           std::string* error = nullptr);
+    bool
+    PublishAsyncEvent(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error = nullptr);
     void DealTasks();
     void DealAsyncEvents();
     void StartDeliveryRuntimeIfEnabled();

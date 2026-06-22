@@ -74,9 +74,7 @@ PET_CONTROLLER_WINDOWS_UTILS_H = (
 PET_CONTROLLER_NETWORK_CPP = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/controller/PetControllerNetwork.cpp"
 )
-PET_CONTROLLER_STATE_CPP = (
-    REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/controller/PetControllerState.cpp"
-)
+PET_CONTROLLER_STATE_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/controller/PetControllerState.cpp"
 PET_CONTROLLER_VISION_CPP = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/vision/PetControllerVision.cpp"
 PET_CONTROLLER_WINDOWS_BRIDGE_CPP = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/pet/platform/PetControllerWindowsBridge.cpp"

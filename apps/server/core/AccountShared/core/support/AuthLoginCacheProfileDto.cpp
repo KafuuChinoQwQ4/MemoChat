@@ -68,4 +68,3 @@ bool DecodeLoginCacheProfile(std::string_view body, UserInfo* out, std::string* 
 }
 
 } // namespace gateauthsupport
-

@@ -36,8 +36,7 @@ struct ChatPrivateHistoryResponseDto
     bool has_more = false;
 };
 
-inline ChatPrivateHistoryRequestDto ChatPrivateHistoryRequestFromJsonValue(
-    const memochat::json::JsonValue& root)
+inline ChatPrivateHistoryRequestDto ChatPrivateHistoryRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     ChatPrivateHistoryRequestDto request;
     request.uid = root["fromuid"].asInt();

@@ -157,8 +157,7 @@ void AgentController::handleGameResponse(const QString& op, const QJsonObject& r
             for (const QVariant& roomVar : _game_rooms)
             {
                 const QJsonObject room = jsonObjectFromVariant(roomVar);
-                const QString roomId =
-                    room.value(QStringLiteral("room_id")).toString();
+                const QString roomId = room.value(QStringLiteral("room_id")).toString();
                 if (roomId != deletedRoomId)
                 {
                     remainingRooms.append(roomVar);
@@ -186,8 +185,7 @@ void AgentController::handleGameResponse(const QString& op, const QJsonObject& r
     {
         _game_state = stateObject.toVariantMap();
         const QJsonObject room = stateObject.value(QStringLiteral("room")).toObject();
-        const QString roomId =
-            room.value(QStringLiteral("room_id")).toString();
+        const QString roomId = room.value(QStringLiteral("room_id")).toString();
         if (!roomId.isEmpty())
         {
             _current_game_room_id = roomId;

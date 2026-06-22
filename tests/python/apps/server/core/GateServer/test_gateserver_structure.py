@@ -1897,9 +1897,7 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertNotIn(token, source)
 
     def test_auth_verify_client_callers_do_not_use_verify_grpc_directly(self):
-        caller_paths = (
-            ACCOUNT_DOMAIN / "services" / "auth" / "AuthService.cpp",
-        )
+        caller_paths = (ACCOUNT_DOMAIN / "services" / "auth" / "AuthService.cpp",)
         forbidden_tokens = (
             '#include "VerifyGrpcClient.h"',
             '#include "../GateServerCore/VerifyGrpcClient.h"',

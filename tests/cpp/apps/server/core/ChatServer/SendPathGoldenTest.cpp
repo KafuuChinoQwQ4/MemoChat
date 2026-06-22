@@ -77,10 +77,7 @@ public:
     {
         return true;
     }
-    bool SaveGroupMessage(const GroupMessageInfo&,
-                          int64_t* out_server_msg_id,
-                          int64_t* out_group_seq,
-                          int64_t) override
+    bool SaveGroupMessage(const GroupMessageInfo&, int64_t* out_server_msg_id, int64_t* out_group_seq, int64_t) override
     {
         if (out_server_msg_id)
         {
@@ -96,12 +93,8 @@ public:
     {
         return false;
     }
-    bool GetGroupHistory(int64_t,
-                         int64_t,
-                         int64_t,
-                         int,
-                         std::vector<std::shared_ptr<GroupMessageInfo>>&,
-                         bool&) override
+    bool
+    GetGroupHistory(int64_t, int64_t, int64_t, int, std::vector<std::shared_ptr<GroupMessageInfo>>&, bool&) override
     {
         return true;
     }
@@ -182,50 +175,143 @@ public:
     }
 
     // ---- inert remainder ----
-    bool GetUidByUserId(const std::string&, int&) override { return false; }
-    bool RefreshDialogsForOwner(int) override { return true; }
-    bool GetDialogMetaByOwner(int, std::vector<std::shared_ptr<DialogMetaInfo>>&) override { return true; }
-    bool GetPrivateDialogRuntime(int, int, DialogRuntimeInfo&) override { return true; }
-    bool GetGroupDialogRuntime(int, int64_t, DialogRuntimeInfo&) override { return true; }
-    bool GetUserGroupList(int, std::vector<std::shared_ptr<GroupInfo>>&) override { return true; }
+    bool GetUidByUserId(const std::string&, int&) override
+    {
+        return false;
+    }
+    bool RefreshDialogsForOwner(int) override
+    {
+        return true;
+    }
+    bool GetDialogMetaByOwner(int, std::vector<std::shared_ptr<DialogMetaInfo>>&) override
+    {
+        return true;
+    }
+    bool GetPrivateDialogRuntime(int, int, DialogRuntimeInfo&) override
+    {
+        return true;
+    }
+    bool GetGroupDialogRuntime(int, int64_t, DialogRuntimeInfo&) override
+    {
+        return true;
+    }
+    bool GetUserGroupList(int, std::vector<std::shared_ptr<GroupInfo>>&) override
+    {
+        return true;
+    }
     bool GetPendingGroupApplyForReviewer(int, std::vector<std::shared_ptr<GroupApplyInfo>>&, int) override
     {
         return true;
     }
-    bool GetGroupIdByCode(const std::string&, int64_t&) override { return false; }
-    bool AddFriendApply(int, int) override { return true; }
-    bool ReplaceApplyTags(int, int, const std::vector<std::string>&) override { return true; }
-    bool AuthFriendApply(int, int) override { return true; }
-    bool AddFriend(int, int, const std::string&) override { return true; }
-    std::vector<std::string> GetApplyTags(int, int) override { return {}; }
-    bool ReplaceFriendTags(int, int, const std::vector<std::string>&) override { return true; }
-    bool DeleteFriend(int, int) override { return true; }
-    bool IsPrivateFriend(int, int) override { return true; }
-    std::vector<int> FilterFriendUids(int, const std::vector<int>&) override { return {}; }
-    bool IsGroupMember(int64_t, int) override { return true; }
-    bool CreateGroup(int, const std::string&, const std::string&, int, const std::vector<int>&, int64_t& out_group_id, std::string& out_group_code) override
+    bool GetGroupIdByCode(const std::string&, int64_t&) override
+    {
+        return false;
+    }
+    bool AddFriendApply(int, int) override
+    {
+        return true;
+    }
+    bool ReplaceApplyTags(int, int, const std::vector<std::string>&) override
+    {
+        return true;
+    }
+    bool AuthFriendApply(int, int) override
+    {
+        return true;
+    }
+    bool AddFriend(int, int, const std::string&) override
+    {
+        return true;
+    }
+    std::vector<std::string> GetApplyTags(int, int) override
+    {
+        return {};
+    }
+    bool ReplaceFriendTags(int, int, const std::vector<std::string>&) override
+    {
+        return true;
+    }
+    bool DeleteFriend(int, int) override
+    {
+        return true;
+    }
+    bool IsPrivateFriend(int, int) override
+    {
+        return true;
+    }
+    std::vector<int> FilterFriendUids(int, const std::vector<int>&) override
+    {
+        return {};
+    }
+    bool IsGroupMember(int64_t, int) override
+    {
+        return true;
+    }
+    bool CreateGroup(int,
+                     const std::string&,
+                     const std::string&,
+                     int,
+                     const std::vector<int>&,
+                     int64_t& out_group_id,
+                     std::string& out_group_code) override
     {
         out_group_id = create_group_id;
         out_group_code = create_group_code;
         return create_group_ok;
     }
-    bool InviteGroupMember(int64_t, int, int, const std::string&) override { return true; }
-    bool ApplyJoinGroup(int64_t, int, const std::string&) override { return true; }
+    bool InviteGroupMember(int64_t, int, int, const std::string&) override
+    {
+        return true;
+    }
+    bool ApplyJoinGroup(int64_t, int, const std::string&) override
+    {
+        return true;
+    }
     bool ReviewGroupApply(int64_t, int, bool, std::shared_ptr<GroupApplyInfo>& out_apply) override
     {
         out_apply = review_apply;
         return review_ok;
     }
-    bool UpdateGroupAnnouncement(int64_t, int, const std::string&) override { return true; }
-    bool UpdateGroupIcon(int64_t, int, const std::string&) override { return true; }
-    bool SetGroupAdmin(int64_t, int, int, bool, int64_t) override { return true; }
-    bool MuteGroupMember(int64_t, int, int, int64_t) override { return true; }
-    bool KickGroupMember(int64_t, int, int) override { return true; }
-    bool QuitGroup(int64_t, int) override { return true; }
-    bool DissolveGroup(int64_t, int) override { return true; }
-    bool UpsertDialogDraft(int, const std::string&, int, int64_t, const std::string&) override { return true; }
-    bool UpsertDialogMuteState(int, const std::string&, int, int64_t, int) override { return true; }
-    bool UpsertDialogPinned(int, const std::string&, int, int64_t, int) override { return true; }
+    bool UpdateGroupAnnouncement(int64_t, int, const std::string&) override
+    {
+        return true;
+    }
+    bool UpdateGroupIcon(int64_t, int, const std::string&) override
+    {
+        return true;
+    }
+    bool SetGroupAdmin(int64_t, int, int, bool, int64_t) override
+    {
+        return true;
+    }
+    bool MuteGroupMember(int64_t, int, int, int64_t) override
+    {
+        return true;
+    }
+    bool KickGroupMember(int64_t, int, int) override
+    {
+        return true;
+    }
+    bool QuitGroup(int64_t, int) override
+    {
+        return true;
+    }
+    bool DissolveGroup(int64_t, int) override
+    {
+        return true;
+    }
+    bool UpsertDialogDraft(int, const std::string&, int, int64_t, const std::string&) override
+    {
+        return true;
+    }
+    bool UpsertDialogMuteState(int, const std::string&, int, int64_t, int) override
+    {
+        return true;
+    }
+    bool UpsertDialogPinned(int, const std::string&, int, int64_t, int) override
+    {
+        return true;
+    }
 };
 
 MessageCommandRequest MakeRequest(const std::string& payload_json)
@@ -267,8 +353,8 @@ TEST(SendPathGoldenTest, PrivatePersistedSuccessRoot)
     StubEventPublisher publisher;
     PrivateMessageService service(nullptr, nullptr, &repo, &delivery, &publisher);
 
-    const auto result = service.TextChatMessage(MakeRequest(
-        R"({"fromuid":10,"touid":20,"text_array":[{"msgid":"m-1","content":"hello"}]})"));
+    const auto result = service.TextChatMessage(
+        MakeRequest(R"({"fromuid":10,"touid":20,"text_array":[{"msgid":"m-1","content":"hello"}]})"));
     const JsonValue out = Parse(result.payload_json);
 
     // persisted (redis default, kafka off) success branch
@@ -292,8 +378,8 @@ TEST(SendPathGoldenTest, PrivatePersistedRepoFailRoot)
     StubEventPublisher publisher;
     PrivateMessageService service(nullptr, nullptr, &repo, &delivery, &publisher);
 
-    const auto result = service.TextChatMessage(MakeRequest(
-        R"({"fromuid":10,"touid":20,"text_array":[{"msgid":"m-2","content":"hi"}]})"));
+    const auto result = service.TextChatMessage(
+        MakeRequest(R"({"fromuid":10,"touid":20,"text_array":[{"msgid":"m-2","content":"hi"}]})"));
     const JsonValue out = Parse(result.payload_json);
 
     EXPECT_NE(out["error"].asInt(), 0); // RPCFailed
@@ -348,8 +434,8 @@ TEST(SendPathGoldenTest, GroupPersistedSuccessRoot)
     StubEventPublisher publisher;
     GroupMessageService service(&repo, &relation, &delivery, &publisher);
 
-    const auto result = service.GroupChatMessage(MakeRequest(
-        R"({"fromuid":10,"groupid":900,"msg":{"msgid":"g-1","msgtype":"text","content":"hey"}})"));
+    const auto result = service.GroupChatMessage(
+        MakeRequest(R"({"fromuid":10,"groupid":900,"msg":{"msgid":"g-1","msgtype":"text","content":"hey"}})"));
     const JsonValue out = Parse(result.payload_json);
 
     EXPECT_EQ(out["error"].asInt(), 0);
@@ -387,8 +473,8 @@ TEST(SendPathGoldenTest, GroupPersistedRepoFailRoot)
     StubEventPublisher publisher;
     GroupMessageService service(&repo, &relation, &delivery, &publisher);
 
-    const auto result = service.GroupChatMessage(MakeRequest(
-        R"({"fromuid":10,"groupid":900,"msg":{"msgid":"g-2","msgtype":"text","content":"hey"}})"));
+    const auto result = service.GroupChatMessage(
+        MakeRequest(R"({"fromuid":10,"groupid":900,"msg":{"msgid":"g-2","msgtype":"text","content":"hey"}})"));
     const JsonValue out = Parse(result.payload_json);
 
     EXPECT_NE(out["error"].asInt(), 0); // RPCFailed
@@ -411,8 +497,8 @@ TEST(SendPathGoldenTest, GroupMutedMemberRoot)
     StubEventPublisher publisher;
     GroupMessageService service(&repo, &relation, &delivery, &publisher);
 
-    const auto result = service.GroupChatMessage(MakeRequest(
-        R"({"fromuid":10,"groupid":900,"msg":{"msgid":"g-3","msgtype":"text","content":"hey"}})"));
+    const auto result = service.GroupChatMessage(
+        MakeRequest(R"({"fromuid":10,"groupid":900,"msg":{"msgid":"g-3","msgtype":"text","content":"hey"}})"));
     const JsonValue out = Parse(result.payload_json);
 
     EXPECT_NE(out["error"].asInt(), 0); // GroupMuted

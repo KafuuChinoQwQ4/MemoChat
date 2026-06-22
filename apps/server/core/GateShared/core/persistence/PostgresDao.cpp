@@ -3,9 +3,41 @@
 #include "db/PqxxCompat.h"
 #include <algorithm>
 #include <cstdlib>
+#include <unordered_map>
 
 namespace
 {
+// Batch-fetch (nick, icon) for a set of uids from the account database.
+// Returns empty map on error or empty input.
+std::unordered_map<int, std::pair<std::string, std::string>> FetchUserProfiles(const std::string& conn_str,
+                                                                               const std::vector<int>& uids)
+{
+    std::unordered_map<int, std::pair<std::string, std::string>> result;
+    if (conn_str.empty() || uids.empty())
+        return result;
+    std::string uid_list;
+    for (size_t i = 0; i < uids.size(); ++i)
+    {
+        if (i > 0)
+            uid_list += ',';
+        uid_list += std::to_string(uids[i]);
+    }
+    try
+    {
+        pqxx::connection con(conn_str);
+        pqxx::read_transaction txn(con);
+        const auto rows = txn.exec("SELECT uid, COALESCE(nick,'') AS nick, COALESCE(icon,'') AS icon "
+                                   "FROM \"user\" WHERE uid IN (" +
+                                   uid_list + ")");
+        for (const auto& row : rows)
+            result[row["uid"].as<int>()] = {row["nick"].c_str(), row["icon"].c_str()};
+    }
+    catch (const std::exception&)
+    {
+    }
+    return result;
+}
+
 std::string BuildConnectionString()
 {
     auto& cfg = ConfigMgr::Inst();
@@ -961,10 +993,8 @@ bool PostgresDao::GetMomentLikes(int64_t moment_id, int limit, std::vector<Momen
     try
     {
         pqxx::read_transaction txn(*con->_con);
-        const auto rows = txn.exec_params("SELECT ml.id, ml.moment_id, ml.uid, ml.created_at, "
-                                          "       COALESCE(u.nick, '') AS user_nick, COALESCE(u.icon, '') AS user_icon "
+        const auto rows = txn.exec_params("SELECT ml.id, ml.moment_id, ml.uid, ml.created_at "
                                           "FROM moments_like ml "
-                                          "LEFT JOIN \"user\" u ON ml.uid = u.uid "
                                           "WHERE ml.moment_id = $1 ORDER BY ml.created_at DESC LIMIT $2",
                                           moment_id,
                                           limit + 1);
@@ -981,10 +1011,22 @@ bool PostgresDao::GetMomentLikes(int64_t moment_id, int limit, std::vector<Momen
             info.id = row["id"].as<int64_t>();
             info.moment_id = row["moment_id"].as<int64_t>();
             info.uid = row["uid"].as<int>();
-            info.user_nick = row["user_nick"].is_null() ? "" : row["user_nick"].c_str();
-            info.user_icon = row["user_icon"].is_null() ? "" : row["user_icon"].c_str();
             info.created_at = row["created_at"].as<int64_t>();
             likes.push_back(info);
+        }
+
+        std::vector<int> uids;
+        for (const auto& lk : likes)
+            uids.push_back(lk.uid);
+        const auto profiles = FetchUserProfiles(account_connection_string_, uids);
+        for (auto& lk : likes)
+        {
+            auto it = profiles.find(lk.uid);
+            if (it != profiles.end())
+            {
+                lk.user_nick = it->second.first;
+                lk.user_icon = it->second.second;
+            }
         }
 
         return true;
@@ -1108,13 +1150,9 @@ bool PostgresDao::GetMomentComments(int64_t moment_id,
         if (last_comment_id <= 0)
         {
             rows = txn.exec_params(
-                "SELECT mc.id, mc.moment_id, mc.uid, mc.content, mc.reply_uid, mc.created_at, mc.deleted_at, "
-                "       COALESCE(u.nick, '') AS user_nick, COALESCE(u.icon, '') AS user_icon, "
-                "       COALESCE(ru.nick, '') AS reply_nick "
+                "SELECT mc.id, mc.moment_id, mc.uid, mc.content, mc.reply_uid, mc.created_at, mc.deleted_at "
                 "FROM moments_comment mc "
-                "LEFT JOIN \"user\" u ON mc.uid = u.uid "
-                "LEFT JOIN \"user\" ru ON mc.reply_uid = ru.uid "
-                "WHERE mc.moment_id = $1 AND mc.deleted_at = 0 "
+                "WHERE mc.moment_id = $1 AND (mc.deleted_at = 0 OR mc.deleted_at IS NULL) "
                 "ORDER BY mc.created_at ASC LIMIT $2",
                 moment_id,
                 limit + 1);
@@ -1122,13 +1160,9 @@ bool PostgresDao::GetMomentComments(int64_t moment_id,
         else
         {
             rows = txn.exec_params(
-                "SELECT mc.id, mc.moment_id, mc.uid, mc.content, mc.reply_uid, mc.created_at, mc.deleted_at, "
-                "       COALESCE(u.nick, '') AS user_nick, COALESCE(u.icon, '') AS user_icon, "
-                "       COALESCE(ru.nick, '') AS reply_nick "
+                "SELECT mc.id, mc.moment_id, mc.uid, mc.content, mc.reply_uid, mc.created_at, mc.deleted_at "
                 "FROM moments_comment mc "
-                "LEFT JOIN \"user\" u ON mc.uid = u.uid "
-                "LEFT JOIN \"user\" ru ON mc.reply_uid = ru.uid "
-                "WHERE mc.moment_id = $1 AND mc.deleted_at = 0 AND mc.id > $2 "
+                "WHERE mc.moment_id = $1 AND (mc.deleted_at = 0 OR mc.deleted_at IS NULL) AND mc.id > $2 "
                 "ORDER BY mc.created_at ASC LIMIT $3",
                 moment_id,
                 last_comment_id,
@@ -1149,12 +1183,33 @@ bool PostgresDao::GetMomentComments(int64_t moment_id,
             info.uid = row["uid"].as<int>();
             info.content = row["content"].is_null() ? "" : row["content"].c_str();
             info.reply_uid = row["reply_uid"].as<int>();
-            info.user_nick = row["user_nick"].is_null() ? "" : row["user_nick"].c_str();
-            info.user_icon = row["user_icon"].is_null() ? "" : row["user_icon"].c_str();
-            info.reply_nick = row["reply_nick"].is_null() ? "" : row["reply_nick"].c_str();
             info.created_at = row["created_at"].as<int64_t>();
             info.deleted_at = row["deleted_at"].as<int64_t>();
             comments.push_back(info);
+        }
+
+        std::vector<int> uids;
+        for (const auto& cm : comments)
+        {
+            uids.push_back(cm.uid);
+            if (cm.reply_uid > 0)
+                uids.push_back(cm.reply_uid);
+        }
+        const auto profiles = FetchUserProfiles(account_connection_string_, uids);
+        for (auto& cm : comments)
+        {
+            auto it = profiles.find(cm.uid);
+            if (it != profiles.end())
+            {
+                cm.user_nick = it->second.first;
+                cm.user_icon = it->second.second;
+            }
+            if (cm.reply_uid > 0)
+            {
+                auto rit = profiles.find(cm.reply_uid);
+                if (rit != profiles.end())
+                    cm.reply_nick = rit->second.first;
+            }
         }
 
         return true;
@@ -1287,10 +1342,8 @@ bool PostgresDao::GetMomentCommentLikes(int64_t comment_id,
     try
     {
         pqxx::read_transaction txn(*con->_con);
-        const auto rows = txn.exec_params("SELECT mcl.id, mcl.comment_id, mcl.uid, mcl.created_at, "
-                                          "       COALESCE(u.nick, '') AS user_nick, COALESCE(u.icon, '') AS user_icon "
+        const auto rows = txn.exec_params("SELECT mcl.id, mcl.comment_id, mcl.uid, mcl.created_at "
                                           "FROM moments_comment_like mcl "
-                                          "LEFT JOIN \"user\" u ON mcl.uid = u.uid "
                                           "WHERE mcl.comment_id = $1 ORDER BY mcl.created_at DESC LIMIT $2",
                                           comment_id,
                                           limit + 1);
@@ -1307,10 +1360,22 @@ bool PostgresDao::GetMomentCommentLikes(int64_t comment_id,
             info.id = row["id"].as<int64_t>();
             info.moment_id = row["comment_id"].as<int64_t>();
             info.uid = row["uid"].as<int>();
-            info.user_nick = row["user_nick"].is_null() ? "" : row["user_nick"].c_str();
-            info.user_icon = row["user_icon"].is_null() ? "" : row["user_icon"].c_str();
             info.created_at = row["created_at"].as<int64_t>();
             likes.push_back(info);
+        }
+
+        std::vector<int> uids;
+        for (const auto& lk : likes)
+            uids.push_back(lk.uid);
+        const auto profiles = FetchUserProfiles(account_connection_string_, uids);
+        for (auto& lk : likes)
+        {
+            auto it = profiles.find(lk.uid);
+            if (it != profiles.end())
+            {
+                lk.user_nick = it->second.first;
+                lk.user_icon = it->second.second;
+            }
         }
 
         return true;

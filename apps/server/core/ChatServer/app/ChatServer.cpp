@@ -24,7 +24,6 @@
 #include "logging/TelemetryConfig.h"
 #include <cstdlib>
 
-using namespace std;
 bool bstop = false;
 std::condition_variable cond_quit;
 std::mutex mutex_quit;
@@ -232,8 +231,14 @@ int main(int argc, char** argv)
 #endif
         );
         signals.async_wait(
-            [&io_context, pool, &server](auto, auto)
+            [&io_context, pool, &server, &ingress_coordinator](auto, auto)
             {
+                // StopTimer/acceptor cancel 必须在 io_context.stop() 之前:
+                // 协程帧的取消 completion 需要 io_context 还在跑才能被分发展开。
+                if (ingress_coordinator)
+                {
+                    ingress_coordinator->Stop();
+                }
                 io_context.stop();
                 pool->Stop();
                 server->Shutdown();
@@ -243,10 +248,6 @@ int main(int argc, char** argv)
         io_context.run();
 
         grpc_server_thread.join();
-        if (ingress_coordinator)
-        {
-            ingress_coordinator->Stop();
-        }
         memolog::LogInfo("service.stop", "ChatServer stopped");
         return 0;
     }

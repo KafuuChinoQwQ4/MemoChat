@@ -73,9 +73,8 @@ memochat::call::CallEventResponseDto MakeCallEventResponseDto(const std::string&
     return response;
 }
 
-memochat::call::CallStartResponseDto MakeCallStartResponseDto(const memochat::call::CallEventResponseDto& event,
-                                                              int peer_uid,
-                                                              const CallUserProfile& peer)
+memochat::call::CallStartResponseDto
+MakeCallStartResponseDto(const memochat::call::CallEventResponseDto& event, int peer_uid, const CallUserProfile& peer)
 {
     memochat::call::CallStartResponseDto response;
     response.error = event.error;
@@ -452,8 +451,7 @@ bool CallService::StartCall(const memochat::json::JsonValue& request,
 
     const memochat::call::CallEventResponseDto event_response =
         MakeCallEventResponseDto("call.state_sync", session, caller, callee, "", cfg.livekit_url);
-    response = memochat::call::CallStartResponseToJsonValue(
-        MakeCallStartResponseDto(event_response, peer_uid, callee));
+    response = memochat::call::CallStartResponseToJsonValue(MakeCallStartResponseDto(event_response, peer_uid, callee));
 
     NotifyUsers({peer_uid}, BuildEventPayload("call.invite", session, caller, callee));
     memolog::LogInfo("call.start.dispatched",

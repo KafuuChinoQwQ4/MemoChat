@@ -325,14 +325,11 @@ memochat::json::JsonValue AISessionInfoResponseToJsonValue(const AISessionInfoRe
 memochat::json::JsonValue AISessionResponseToJsonValue(const AISessionResponseDto& response, bool include_session);
 memochat::json::JsonValue AISessionListResponseToJsonValue(const AISessionListResponseDto& response);
 memochat::json::JsonValue AIHistoryResponseToJsonValue(const AIHistoryResponseDto& response);
-memochat::json::JsonValue AIRegisterApiProviderResponseToJsonValue(
-    const AIRegisterApiProviderResponseDto& response);
-memochat::json::JsonValue AIDeleteApiProviderResponseToJsonValue(
-    const AIDeleteApiProviderResponseDto& response);
+memochat::json::JsonValue AIRegisterApiProviderResponseToJsonValue(const AIRegisterApiProviderResponseDto& response);
+memochat::json::JsonValue AIDeleteApiProviderResponseToJsonValue(const AIDeleteApiProviderResponseDto& response);
 memochat::json::JsonValue AIKbUploadResponseToJsonValue(const AIKbUploadResponseDto& response);
 memochat::json::JsonValue AIKbSearchResponseToJsonValue(const AIKbSearchResponseDto& response);
-memochat::json::JsonValue AIKnowledgeBaseListResponseToJsonValue(
-    const AIKnowledgeBaseListResponseDto& response);
+memochat::json::JsonValue AIKnowledgeBaseListResponseToJsonValue(const AIKnowledgeBaseListResponseDto& response);
 
 // Smart non-streaming response: pure scalar shell, no dynamic tail.
 memochat::json::JsonValue AISmartResponseToJsonValue(const AISmartResponseDto& response);
@@ -340,8 +337,7 @@ memochat::json::JsonValue AISmartResponseToJsonValue(const AISmartResponseDto& r
 // Chat non-streaming response: serializes the scalar shell, then appends the
 // dynamic `events` member parsed from events_json (empty/invalid -> empty array),
 // preserving the existing wire order (...observations, events).
-memochat::json::JsonValue AIChatResponseToJsonValue(const AIChatResponseDto& response,
-                                                    const std::string& events_json);
+memochat::json::JsonValue AIChatResponseToJsonValue(const AIChatResponseDto& response, const std::string& events_json);
 
 // Memory item: serializes the scalar shell, then appends the dynamic `metadata`
 // member parsed from metadata_json (empty/invalid -> JSON null).

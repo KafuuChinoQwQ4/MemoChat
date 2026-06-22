@@ -345,14 +345,12 @@ memochat::json::JsonValue AIHistoryResponseToJsonValue(const AIHistoryResponseDt
     return TypedJsonToJsonValue(response);
 }
 
-memochat::json::JsonValue AIRegisterApiProviderResponseToJsonValue(
-    const AIRegisterApiProviderResponseDto& response)
+memochat::json::JsonValue AIRegisterApiProviderResponseToJsonValue(const AIRegisterApiProviderResponseDto& response)
 {
     return TypedJsonToJsonValue(response);
 }
 
-memochat::json::JsonValue AIDeleteApiProviderResponseToJsonValue(
-    const AIDeleteApiProviderResponseDto& response)
+memochat::json::JsonValue AIDeleteApiProviderResponseToJsonValue(const AIDeleteApiProviderResponseDto& response)
 {
     return TypedJsonToJsonValue(response);
 }
@@ -367,8 +365,7 @@ memochat::json::JsonValue AIKbSearchResponseToJsonValue(const AIKbSearchResponse
     return TypedJsonToJsonValue(response);
 }
 
-memochat::json::JsonValue AIKnowledgeBaseListResponseToJsonValue(
-    const AIKnowledgeBaseListResponseDto& response)
+memochat::json::JsonValue AIKnowledgeBaseListResponseToJsonValue(const AIKnowledgeBaseListResponseDto& response)
 {
     return TypedJsonToJsonValue(response);
 }
@@ -378,8 +375,7 @@ memochat::json::JsonValue AISmartResponseToJsonValue(const AISmartResponseDto& r
     return TypedJsonToJsonValue(response);
 }
 
-memochat::json::JsonValue AIChatResponseToJsonValue(const AIChatResponseDto& response,
-                                                    const std::string& events_json)
+memochat::json::JsonValue AIChatResponseToJsonValue(const AIChatResponseDto& response, const std::string& events_json)
 {
     memochat::json::JsonValue root = TypedJsonToJsonValue(response);
     // events is appended after the scalar shell to preserve the wire order

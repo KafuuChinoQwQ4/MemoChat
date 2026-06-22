@@ -97,9 +97,7 @@ bool MomentsReadBool(const memochat::json::JsonValue& obj, const char* key, bool
     return fallback;
 }
 
-std::string MomentsReadString(const memochat::json::JsonValue& obj,
-                              const char* key,
-                              const std::string& fallback)
+std::string MomentsReadString(const memochat::json::JsonValue& obj, const char* key, const std::string& fallback)
 {
     const memochat::json::JsonValue value = ReadMember(obj, key);
     const std::string text = value.asString();

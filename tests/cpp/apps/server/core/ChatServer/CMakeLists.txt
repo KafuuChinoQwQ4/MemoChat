@@ -555,3 +555,27 @@ target_include_directories(chatserver_cserver_lifetime_gtest PRIVATE
 add_dependencies(gtest_tests chatserver_cserver_lifetime_gtest)
 
 gtest_discover_tests(chatserver_cserver_lifetime_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
+# OnlineRouteResolver DecideOnlineRoute 四分支纯决策单测(无写操作断言)
+add_executable(chatserver_online_route_resolver_gtest
+    main.cpp
+    OnlineRouteResolverTest.cpp
+)
+
+target_link_libraries(chatserver_online_route_resolver_gtest PRIVATE
+    GTest_TestLib
+    ChatServerCore
+    memochat_proto
+    memochat_server_deps
+)
+
+target_include_directories(chatserver_online_route_resolver_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/domain
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/domain/ports
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/transport
+)
+
+add_dependencies(gtest_tests chatserver_online_route_resolver_gtest)
+
+gtest_discover_tests(chatserver_online_route_resolver_gtest TEST_DISCOVERY_MODE POST_BUILD)

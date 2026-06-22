@@ -26,24 +26,18 @@ CServer::~CServer()
 
 void CServer::Start()
 {
-    // 启动 accept 循环协程,钉在 acceptor 绑定的 _io_context 上。
-    // start_detached op state 自持;AcceptLoop 首行持 self 续命(ChatIngressCoordinator
-    // 的 _tcp_server 强引用覆盖 spawn→首行窗口)。
     exec::start_detached(
-        stdexec::on(memochat::runtime::IoContextScheduler{&_io_context}, AcceptLoop()));
+        stdexec::on(memochat::runtime::IoContextScheduler{&_io_context}, AcceptLoop(shared_from_this())));
 }
 
-// accept 循环协程:取代原 StartAccept→HandleAccept→StartAccept 递归。
-exec::task<void> CServer::AcceptLoop()
+exec::task<void> CServer::AcceptLoop(std::shared_ptr<CServer> self)
 {
     namespace net = boost::asio;
     using exec::asio::use_sender;
 
-    auto self = shared_from_this(); // 首行续命
+    (void) self;
     while (!_stopping.load())
     {
-        // 每条新连接的 socket 绑到轮询选出的 io_context(与 acceptor 的 _io_context 不必同一个);
-        // session 的读循环会在它自己的 io_context 上跑(见 CSession::Start)。
         try
         {
             auto& io_context = AsioIOServicePool::GetInstance()->GetIOService();
@@ -55,8 +49,6 @@ exec::task<void> CServer::AcceptLoop()
             }
             catch (const boost::system::system_error& e)
             {
-                // accept 失败(非取消):对齐原 HandleAccept 的 else 分支 —— acceptor 已关则退出,
-                // 否则继续下一轮重试。取消(operation_aborted)走 set_stopped,不进这里(协程直接退出)。
                 std::cout << "session accept failed, error is " << e.what() << std::endl;
                 if (!_acceptor.is_open())
                 {
@@ -78,9 +70,6 @@ exec::task<void> CServer::AcceptLoop()
         }
         catch (const std::exception& e)
         {
-            // 兜底:异常**不得**逃逸到 start_detached(否则 set_error → std::terminate)。
-            // 单条连接的装配失败(make_shared/Start/insert 抛 bad_alloc 等)不应拖垮整个
-            // accept 循环 —— 放弃该连接,继续接受下一个(优于原回调版让异常逃出 io_context::run)。
             std::cout << "AcceptLoop exception is " << e.what() << std::endl;
         }
     }
@@ -123,30 +112,25 @@ bool CServer::CheckValid(std::string uuid)
 
 void CServer::StartTimer()
 {
-    // 启动心跳 timer 循环协程,钉在 timer 绑定的 _io_context 上。
     exec::start_detached(
-        stdexec::on(memochat::runtime::IoContextScheduler{&_io_context}, TimerLoop()));
+        stdexec::on(memochat::runtime::IoContextScheduler{&_io_context}, TimerLoop(shared_from_this())));
 }
 
-// 心跳 timer 循环协程:取代原 on_timer 自递归 async_wait。
-// 首轮 co_await 等到构造时设的 60s 到期;每轮处理完 expires_after(60s) 续约。
-exec::task<void> CServer::TimerLoop()
+exec::task<void> CServer::TimerLoop(std::shared_ptr<CServer> self)
 {
     namespace net = boost::asio;
     using exec::asio::use_sender;
 
-    auto self = shared_from_this(); // 首行续命
+    (void) self; // 帧持有 self 续命(传值参数)
     while (!_stopping.load())
     {
         try
         {
-            // 取消(StopTimer 的 _timer.cancel())→ operation_aborted → set_stopped → 协程退出
-            //(set_stopped 不是异常,不会被下面的 catch 捕获,直接结束协程)。
             co_await _timer.async_wait(use_sender);
         }
         catch (const boost::system::system_error& e)
         {
-            // timer 错误(非取消):对齐原 on_timer 的 if(ec){log;return;} —— 记录并退出循环。
+            // timer 错误(非取消):记录并退出。
             std::cout << "timer error: " << e.what() << std::endl;
             co_return;
         }
@@ -156,9 +140,7 @@ exec::task<void> CServer::TimerLoop()
             co_return;
         }
 
-        // 一轮心跳巡检 + Redis 计数。这里的 Redis/Config 调用可能抛 std::exception
-        // (连接抖动、bad_alloc 等);**必须**兜住,否则逃逸 start_detached → std::terminate。
-        // 兜住后续约下一轮,保持心跳循环存活(优于原 on_timer 让异常逃出 io_context::run)。
+        // 一轮心跳巡检 + Redis 计数。
         try
         {
             std::vector<std::pair<std::string, std::weak_ptr<CSession>>> expired;
@@ -204,15 +186,6 @@ exec::task<void> CServer::TimerLoop()
 
 void CServer::StopTimer()
 {
-    // 停机:置 _stopping + 取消 acceptor/timer + 同步释放真实资源(关 acceptor fd、detach/close
-    // 所有 session)。
-    // ⚠️ 协程优雅退出的前提是 io_context 仍在 run —— cancel() 把 operation_aborted 作为 completion
-    // 投递回 io_context,由 run 中的线程跑出 set_stopped 让 AcceptLoop/TimerLoop 展开退出。
-    // 但生产停机顺序(app/ChatServer.cpp:signal handler 先 io_context.stop(),run() 返回后才调
-    // 本函数)下 io_context 已停,该 completion 不再被分发,两个协程帧在进程退出时由 OS 回收
-    // (良性,与原回调版停机后未决 handler 同样被弃)。真正要紧的资源(监听 fd、session 连接)
-    // 在下方同步关闭,不依赖协程退出。若将来要做"协程全部排空再退"的优雅停机,需把 cancel 改到
-    // io_context.stop() 之前、于 io 线程发起(见 .ai/callback-to-coroutine/a/logs/phase2-cserver.result.md)。
     _stopping.store(true);
     boost::system::error_code ignored;
     _timer.cancel();

@@ -31,8 +31,7 @@ memochat::gate::services::ai::AIModelInfoResponseDto ModelInfoToResponseDto(cons
     return response;
 }
 
-memochat::gate::services::ai::AIKnowledgeBaseInfoResponseDto KnowledgeBaseToResponseDto(
-    const ai::AIKbInfo& kb)
+memochat::gate::services::ai::AIKnowledgeBaseInfoResponseDto KnowledgeBaseToResponseDto(const ai::AIKbInfo& kb)
 {
     memochat::gate::services::ai::AIKnowledgeBaseInfoResponseDto response;
     response.kb_id = kb.kb_id();
@@ -557,8 +556,7 @@ memochat::json::JsonValue AIServiceClient::DeleteSession(int32_t uid, const std:
         return memochat::gate::services::ai::AISimpleResponseToJsonValue(
             MakeSimpleResponse(500, "AIServer unavailable"));
     }
-    return memochat::gate::services::ai::AISimpleResponseToJsonValue(
-        MakeSimpleResponse(reply.code(), reply.message()));
+    return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(reply.code(), reply.message()));
 }
 
 memochat::json::JsonValue
@@ -726,8 +724,7 @@ memochat::json::JsonValue AIServiceClient::DeleteKb(int32_t uid, const std::stri
         return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(500, "delete failed"));
     }
 
-    return memochat::gate::services::ai::AISimpleResponseToJsonValue(
-        MakeSimpleResponse(reply.code(), reply.message()));
+    return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(reply.code(), reply.message()));
 }
 
 static memochat::json::JsonValue MemoryItemToJson(const ai::AIMemoryItem& item)
@@ -749,12 +746,11 @@ memochat::json::JsonValue AIServiceClient::MemoryList(int32_t uid)
 
     if (!status.ok())
     {
-        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
-            MakeSimpleResponse(500, "memory list failed"));
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(500, "memory list failed"));
     }
 
-    memochat::json::JsonValue root = memochat::gate::services::ai::AISimpleResponseToJsonValue(
-        MakeSimpleResponse(reply.code(), reply.message()));
+    memochat::json::JsonValue root =
+        memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(reply.code(), reply.message()));
     array_t memories;
     for (const auto& memory : reply.memories())
     {
@@ -775,8 +771,8 @@ memochat::json::JsonValue AIServiceClient::MemoryCreate(int32_t uid, const std::
             MakeSimpleResponse(500, "memory create failed"));
     }
 
-    memochat::json::JsonValue root = memochat::gate::services::ai::AISimpleResponseToJsonValue(
-        MakeSimpleResponse(reply.code(), reply.message()));
+    memochat::json::JsonValue root =
+        memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(reply.code(), reply.message()));
     if (reply.has_memory())
     {
         root["memory"] = MemoryItemToJson(reply.memory());
@@ -794,8 +790,7 @@ memochat::json::JsonValue AIServiceClient::MemoryDelete(int32_t uid, const std::
         return memochat::gate::services::ai::AISimpleResponseToJsonValue(
             MakeSimpleResponse(500, "memory delete failed"));
     }
-    return memochat::gate::services::ai::AISimpleResponseToJsonValue(
-        MakeSimpleResponse(reply.code(), reply.message()));
+    return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(reply.code(), reply.message()));
 }
 
 static memochat::json::JsonValue AgentTaskItemToJson(const ai::AIAgentTaskItem& item)
@@ -812,8 +807,11 @@ static memochat::json::JsonValue AgentTaskItemToJson(const ai::AIAgentTaskItem& 
     dto.updated_at = static_cast<double>(item.updated_at());
     dto.completed_at = static_cast<double>(item.completed_at());
     dto.cancelled_at = static_cast<double>(item.cancelled_at());
-    return memochat::gate::services::ai::AIAgentTaskItemResponseToJsonValue(
-        dto, item.payload_json(), item.result_json(), item.checkpoints_json(), item.metadata_json());
+    return memochat::gate::services::ai::AIAgentTaskItemResponseToJsonValue(dto,
+                                                                            item.payload_json(),
+                                                                            item.result_json(),
+                                                                            item.checkpoints_json(),
+                                                                            item.metadata_json());
 }
 
 static memochat::json::JsonValue AgentTaskRspToJson(const ai::AIAgentTaskRsp& reply)
@@ -854,8 +852,7 @@ memochat::json::JsonValue AIServiceClient::AgentTaskCreate(int32_t uid,
                                                  &reply);
     if (!status.ok())
     {
-        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
-            MakeSimpleResponse(500, "task create failed"));
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(500, "task create failed"));
     }
     return AgentTaskRspToJson(reply);
 }
@@ -866,8 +863,7 @@ memochat::json::JsonValue AIServiceClient::AgentTaskList(int32_t uid, int limit)
     auto status = _impl->makeAgentTaskListCall(uid, limit, &reply);
     if (!status.ok())
     {
-        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
-            MakeSimpleResponse(500, "task list failed"));
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(500, "task list failed"));
     }
     return AgentTaskRspToJson(reply);
 }
@@ -878,8 +874,7 @@ memochat::json::JsonValue AIServiceClient::AgentTaskGet(const std::string& task_
     auto status = _impl->makeAgentTaskGetCall(task_id, &reply);
     if (!status.ok())
     {
-        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
-            MakeSimpleResponse(500, "task get failed"));
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(500, "task get failed"));
     }
     return AgentTaskRspToJson(reply);
 }
@@ -890,8 +885,7 @@ memochat::json::JsonValue AIServiceClient::AgentTaskCancel(const std::string& ta
     auto status = _impl->makeAgentTaskCancelCall(task_id, &reply);
     if (!status.ok())
     {
-        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
-            MakeSimpleResponse(500, "task cancel failed"));
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(500, "task cancel failed"));
     }
     return AgentTaskRspToJson(reply);
 }
@@ -902,8 +896,7 @@ memochat::json::JsonValue AIServiceClient::AgentTaskResume(const std::string& ta
     auto status = _impl->makeAgentTaskResumeCall(task_id, &reply);
     if (!status.ok())
     {
-        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
-            MakeSimpleResponse(500, "task resume failed"));
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(500, "task resume failed"));
     }
     return AgentTaskRspToJson(reply);
 }

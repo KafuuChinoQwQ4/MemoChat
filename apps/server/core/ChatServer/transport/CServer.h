@@ -23,16 +23,8 @@ public:
     void StopTimer();
 
 private:
-    // accept 循环协程:取代原 StartAccept→HandleAccept→StartAccept 递归。
-    // while co_await acceptor.async_accept;accept 后 session->Start()+登记 _sessions。
-    // 取消:StopTimer 的 _acceptor.cancel() → operation_aborted → set_stopped → 协程退出
-    // (前提:io_context 仍在 run;若停机时已 io_context.stop(),挂起的协程在进程退出时被
-    // OS 回收,真实资源由 StopTimer 同步 close/detach 释放——详见 CServer.cpp StopTimer 注释)。
-    exec::task<void> AcceptLoop();
-    // 心跳 timer 循环协程:取代原 on_timer 自递归 async_wait。
-    // while co_await _timer.async_wait;检查心跳过期;expires_after(60s)。
-    // 取消同 AcceptLoop:_timer.cancel() → set_stopped → 协程退出(同样以 io_context 在 run 为前提)。
-    exec::task<void> TimerLoop();
+    exec::task<void> AcceptLoop(std::shared_ptr<CServer> self); // self 传值覆盖 spawn→首行窗口
+    exec::task<void> TimerLoop(std::shared_ptr<CServer> self);  // self 传值覆盖 spawn→首行窗口
     boost::asio::io_context& _io_context;
     short _port;
     tcp::acceptor _acceptor;

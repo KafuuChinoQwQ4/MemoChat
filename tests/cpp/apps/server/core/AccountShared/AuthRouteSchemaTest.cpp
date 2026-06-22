@@ -84,8 +84,8 @@ TEST(AuthRouteSchemaTest, BuildsFieldInventoriesFromAuthDtos)
     ASSERT_EQ(schemas.size(), 2U);
 
     ExpectFields(schemas[0].request, {"email", "user", "passwd", "confirm", "icon", "varifycode", "sex"});
-    ExpectFields(
-        schemas[0].response, {"error", "uid", "user_id", "email", "user", "passwd", "confirm", "icon", "varifycode"});
+    ExpectFields(schemas[0].response,
+                 {"error", "uid", "user_id", "email", "user", "passwd", "confirm", "icon", "varifycode"});
 
     ExpectFields(schemas[1].request, {"email", "user", "passwd", "varifycode"});
     ExpectFields(schemas[1].response, {"error", "email", "user", "passwd", "varifycode"});

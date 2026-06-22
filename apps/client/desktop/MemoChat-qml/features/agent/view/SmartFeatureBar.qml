@@ -7,6 +7,7 @@ Rectangle {
     id: root
     color: "transparent"
 
+    property Item backdrop: null
     property var smartResult: null
     property bool busy: false
     property string statusText: ""
@@ -18,78 +19,100 @@ Rectangle {
     signal translateRequested()
     signal clearResultRequested()
 
-    property string _pendingSummary: ""
-    property string _pendingSuggest: ""
-    property string _pendingTranslate: ""
+    // 单一「智能」入口：把摘要/建议回复/翻译收纳进弹出菜单，整行更清爽
+    GlassButton {
+        id: smartEntry
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        width: 84
+        height: 30
+        text: root.busy ? "✨ 处理中" : "✨ 智能 ▾"
+        textPixelSize: 12
+        cornerRadius: 8
+        enabled: !root.busy
+        normalColor: Qt.rgba(0.40, 0.62, 0.92, 0.20)
+        hoverColor: Qt.rgba(0.40, 0.62, 0.92, 0.30)
+        pressedColor: Qt.rgba(0.40, 0.62, 0.92, 0.40)
+        disabledColor: Qt.rgba(0.52, 0.57, 0.64, 0.16)
+        onClicked: smartMenuPopup.open()
+    }
 
-    RowLayout {
-        anchors.fill: parent
-        anchors.leftMargin: root.compactMode ? 0 : 12
-        anchors.rightMargin: root.compactMode ? 0 : 12
-        spacing: root.compactMode ? 6 : 8
+    Popup {
+        id: smartMenuPopup
+        width: 152
+        height: smartMenuColumn.implicitHeight + 16
+        // 输入栏位于窗口底部，菜单向上弹出，右对齐入口按钮
+        x: Math.round(smartEntry.x + smartEntry.width - width)
+        y: Math.round(smartEntry.y - height - 6)
+        padding: 0
+        modal: false
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-        Item {
-            Layout.fillWidth: true
-            visible: !root.compactMode
+        background: Rectangle {
+            color: "transparent"
         }
 
-        GlassButton {
-            Layout.preferredWidth: root.compactMode ? 76 : 80
-            Layout.preferredHeight: 30
-            text: "📝 摘要"
-            textPixelSize: 12
-            cornerRadius: 8
-            enabled: !root.busy
-            normalColor: Qt.rgba(0.54, 0.70, 0.93, 0.18)
-            hoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.28)
-            pressedColor: Qt.rgba(0.54, 0.70, 0.93, 0.38)
-            onClicked: {
-                root.summaryRequested()
+        contentItem: GlassSurface {
+            backdrop: root.backdrop
+            cornerRadius: 12
+            blurRadius: 20
+            fillColor: Qt.rgba(0.98, 0.99, 1.0, 0.88)
+            strokeColor: Qt.rgba(1, 1, 1, 0.58)
+            glowTopColor: Qt.rgba(1, 1, 1, 0.28)
+            glowBottomColor: Qt.rgba(1, 1, 1, 0.06)
+
+            ColumnLayout {
+                id: smartMenuColumn
+                anchors.fill: parent
+                anchors.margins: 8
+                spacing: 6
+
+                GlassButton {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 32
+                    text: "📝 摘要"
+                    textPixelSize: 13
+                    cornerRadius: 8
+                    normalColor: Qt.rgba(0.54, 0.70, 0.93, 0.18)
+                    hoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.28)
+                    pressedColor: Qt.rgba(0.54, 0.70, 0.93, 0.38)
+                    onClicked: {
+                        smartMenuPopup.close()
+                        root.summaryRequested()
+                    }
+                }
+
+                GlassButton {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 32
+                    text: "💡 建议回复"
+                    textPixelSize: 13
+                    cornerRadius: 8
+                    normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.18)
+                    hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.28)
+                    pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.38)
+                    onClicked: {
+                        smartMenuPopup.close()
+                        root.suggestRequested()
+                    }
+                }
+
+                GlassButton {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 32
+                    text: "🌐 翻译"
+                    textPixelSize: 13
+                    cornerRadius: 8
+                    normalColor: Qt.rgba(0.54, 0.70, 0.93, 0.18)
+                    hoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.28)
+                    pressedColor: Qt.rgba(0.54, 0.70, 0.93, 0.38)
+                    onClicked: {
+                        smartMenuPopup.close()
+                        root.translateRequested()
+                    }
+                }
             }
-        }
-
-        GlassButton {
-            Layout.preferredWidth: root.compactMode ? 92 : 96
-            Layout.preferredHeight: 30
-            text: "💡 建议回复"
-            textPixelSize: 12
-            cornerRadius: 8
-            enabled: !root.busy
-            normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.18)
-            hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.28)
-            pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.38)
-            onClicked: {
-                root.suggestRequested()
-            }
-        }
-
-        GlassButton {
-            Layout.preferredWidth: root.compactMode ? 76 : 80
-            Layout.preferredHeight: 30
-            text: "🌐 翻译"
-            textPixelSize: 12
-            cornerRadius: 8
-            enabled: !root.busy
-            normalColor: Qt.rgba(0.54, 0.70, 0.93, 0.18)
-            hoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.28)
-            pressedColor: Qt.rgba(0.54, 0.70, 0.93, 0.38)
-            onClicked: {
-                root.translateRequested()
-            }
-        }
-
-        Item {
-            Layout.fillWidth: true
-            visible: !root.compactMode
-        }
-
-        Label {
-            Layout.maximumWidth: 160
-            text: root.busy ? "AI 处理中" : root.statusText
-            color: "#6a7b92"
-            font.pixelSize: 11
-            elide: Text.ElideRight
-            visible: !root.compactMode && text.length > 0
         }
     }
 

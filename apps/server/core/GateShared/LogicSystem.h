@@ -37,6 +37,14 @@ public:
 
 private:
     LogicSystem();
+    bool DispatchH1(const std::string& path,
+                    std::shared_ptr<HttpConnection> con,
+                    const std::map<std::string, HttpHandler>& exact,
+                    const std::vector<std::pair<std::string, HttpHandler>>& prefix,
+                    std::string_view method,
+                    std::string_view dispatch_event,
+                    std::string_view prefix_event,
+                    std::string_view not_found_event);
     std::map<std::string, HttpHandler> _post_handlers;
     std::map<std::string, HttpHandler> _get_handlers;
     std::map<std::string, HttpHandler> _delete_handlers;

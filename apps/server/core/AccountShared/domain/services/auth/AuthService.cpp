@@ -216,8 +216,7 @@ bool AuthService::HandleUserRegister(const memochat::gate::routing::GateRequest&
     cached_user.desc = "";
     cached_user.sex = register_request.sex;
     gateauthsupport::CacheLoginProfile(email, cached_user);
-    GateAsyncSideEffects::Instance()
-        .PublishUserProfileChanged(uid, user_id, email, name, name, icon, cached_user.sex);
+    GateAsyncSideEffects::Instance().PublishUserProfileChanged(uid, user_id, email, name, name, icon, cached_user.sex);
     memolog::LogInfo("gate.user_register", "user registered", {{"email", email}, {"uid", std::to_string(uid)}});
     WriteJson(response, root);
     return true;
@@ -378,21 +377,20 @@ bool AuthService::HandleUserLogin(const memochat::gate::routing::GateRequest& re
         {
             memochat::json::glaze_array_append(
                 chat_endpoints_arr,
-                gateauthsupport::AuthChatEndpointToJsonValue(gateauthsupport::AuthChatEndpointDto{
-                    .transport = "quic",
-                    .host = route_node.quic_host,
-                    .port = route_node.quic_port,
-                    .server_name = route_node.name,
-                    .priority = route_node.priority}));
+                gateauthsupport::AuthChatEndpointToJsonValue(
+                    gateauthsupport::AuthChatEndpointDto{.transport = "quic",
+                                                         .host = route_node.quic_host,
+                                                         .port = route_node.quic_port,
+                                                         .server_name = route_node.name,
+                                                         .priority = route_node.priority}));
         }
-        memochat::json::glaze_array_append(
-            chat_endpoints_arr,
-            gateauthsupport::AuthChatEndpointToJsonValue(gateauthsupport::AuthChatEndpointDto{
-                .transport = "tcp",
-                .host = route_node.host,
-                .port = route_node.port,
-                .server_name = route_node.name,
-                .priority = route_node.priority}));
+        memochat::json::glaze_array_append(chat_endpoints_arr,
+                                           gateauthsupport::AuthChatEndpointToJsonValue(
+                                               gateauthsupport::AuthChatEndpointDto{.transport = "tcp",
+                                                                                    .host = route_node.host,
+                                                                                    .port = route_node.port,
+                                                                                    .server_name = route_node.name,
+                                                                                    .priority = route_node.priority}));
     }
     root["chat_endpoints"] = chat_endpoints_arr;
 

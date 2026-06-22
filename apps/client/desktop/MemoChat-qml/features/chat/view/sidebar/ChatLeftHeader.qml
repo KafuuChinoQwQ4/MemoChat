@@ -18,8 +18,19 @@ Rectangle {
     signal joinGroupRequested()
     signal openApplyRequested()
 
-    color: Qt.rgba(1, 1, 1, 0.10)
-    border.color: Qt.rgba(1, 1, 1, 0.30)
+    // 背景由外层圆角玻璃板提供，此处保持透明，避免直角底板盖住圆角
+    color: "transparent"
+
+    // 顶栏与下方列表之间的细分隔线（两侧内缩，不触及圆角）
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: 10
+        anchors.rightMargin: 10
+        height: 1
+        color: Qt.rgba(1, 1, 1, 0.22)
+    }
 
     RowLayout {
         anchors.fill: parent
